@@ -33,24 +33,27 @@ func TestPrintNextSteps_DoctrinePosture(t *testing.T) {
 	out := buf.String()
 	bin := getBinaryName()
 
-	// Step 1: Web cert trust URLs with external IP and HTTP port
+	// Step 1: User Workstation (1a scripts, 1b close browsers)
 	assert.Contains(t, out, "Next Steps:")
-	assert.Contains(t, out, "1. Trust the gateway CA for HTTPS")
+	assert.Contains(t, out, "1. User Workstation")
+	assert.Contains(t, out, "a. Trust the gateway CA for HTTPS")
+	assert.Contains(t, out, "Linux/macOS")
 	assert.Contains(t, out, "curl -fsSL http://192.168.1.100:8080/web-cert.sh | sh")
+	assert.Contains(t, out, "Windows")
 	assert.Contains(t, out, "irm http://192.168.1.100:8080/web-cert.ps1 | iex")
+	assert.Contains(t, out, "b. Close all web browser windows on the remote workstation")
 
-	// Step 2: Enroll
-	assert.Contains(t, out, "2. Enroll CLI credentials:")
+	// Step 2: This Terminal (enroll)
+	assert.Contains(t, out, "2. This Terminal")
 	assert.Contains(t, out, bin+" auth enroll")
 
-	// Step 3: Connect remote operators with Local/Remote Host labels
-	assert.Contains(t, out, "3. Connect remote operators:")
+	// Step 3: Operators with Local/Remote Host labels
+	assert.Contains(t, out, "3. Operators")
 	assert.Contains(t, out, "Local Host:")
 	assert.Contains(t, out, bin+" operator deploy --hosts <host1,host2>")
 	assert.Contains(t, out, bin+" operator stream --hosts <host1,host2>")
 	assert.Contains(t, out, "Remote Host:")
-	assert.Contains(t, out, bin+" gw security pki enroll -e 192.168.1.100")
-	assert.Contains(t, out, bin+" operator start")
+	assert.Contains(t, out, bin+" operator start -e 192.168.1.100")
 
 	// Console UI
 	assert.Contains(t, out, "Console UI:")
@@ -74,9 +77,9 @@ func TestPrintNextSteps_ConsensusPosture(t *testing.T) {
 	out := buf.String()
 
 	// All postures now produce the same output (no posture-specific steps)
-	assert.Contains(t, out, "1. Trust the gateway CA for HTTPS")
-	assert.Contains(t, out, "2. Enroll CLI credentials:")
-	assert.Contains(t, out, "3. Connect remote operators:")
+	assert.Contains(t, out, "1. User Workstation")
+	assert.Contains(t, out, "2. This Terminal")
+	assert.Contains(t, out, "3. Operators")
 
 	// External IP interpolated correctly
 	assert.Contains(t, out, "http://10.0.0.50:8080/web-cert.sh")
@@ -97,9 +100,9 @@ func TestPrintNextSteps_NotaryPosture(t *testing.T) {
 	out := buf.String()
 
 	// All postures now produce the same output (no posture-specific steps)
-	assert.Contains(t, out, "1. Trust the gateway CA for HTTPS")
-	assert.Contains(t, out, "2. Enroll CLI credentials:")
-	assert.Contains(t, out, "3. Connect remote operators:")
+	assert.Contains(t, out, "1. User Workstation")
+	assert.Contains(t, out, "2. This Terminal")
+	assert.Contains(t, out, "3. Operators")
 
 	// External IP interpolated correctly
 	assert.Contains(t, out, "http://172.16.0.1:8080/web-cert.sh")
@@ -113,7 +116,7 @@ func TestPrintNextSteps_NotaryPosture(t *testing.T) {
 
 func TestPrintNextSteps_StepNumberingPerPosture(t *testing.T) {
 	// All three postures produce the same step numbering:
-	// 1=Web cert, 2=Enroll, 3=Remote operators
+	// 1=Web cert, 2=Close browser, 3=Enroll, 4=Remote operators
 	postures := []struct {
 		name    string
 		posture governance.GovernancePosture
@@ -130,9 +133,9 @@ func TestPrintNextSteps_StepNumberingPerPosture(t *testing.T) {
 			out := buf.String()
 
 			// Verify step numbering is sequential: 1, 2, 3
-			assert.Contains(t, out, "  1. Trust the gateway CA")
-			assert.Contains(t, out, "  2. Enroll CLI credentials:")
-			assert.Contains(t, out, "  3. Connect remote operators:")
+			assert.Contains(t, out, "  1. User Workstation")
+			assert.Contains(t, out, "  2. This Terminal")
+			assert.Contains(t, out, "  3. Operators")
 		})
 	}
 }
@@ -151,10 +154,10 @@ func TestPrintNextSteps_ExternalIPInterpolation(t *testing.T) {
 			printNextSteps(cmd, &governance.DoctrinePosture{}, ip)
 			out := buf.String()
 
-			// The IP should appear in web-cert URL and PKI enroll
+			// The IP should appear in web-cert URL and operator start -e
 			assert.Contains(t, out, "http://"+ip+":8080/web-cert.sh")
 			assert.Contains(t, out, "http://"+ip+":8080/web-cert.ps1")
-			assert.Contains(t, out, "pki enroll -e "+ip)
+			assert.Contains(t, out, "operator start -e "+ip)
 		})
 	}
 }
@@ -185,8 +188,7 @@ func TestPrintNextSteps_BinaryNameInterpolation(t *testing.T) {
 	assert.Contains(t, out, bin+" auth enroll")
 	assert.Contains(t, out, bin+" operator deploy")
 	assert.Contains(t, out, bin+" operator stream")
-	assert.Contains(t, out, bin+" gw security pki enroll")
-	assert.Contains(t, out, bin+" operator start")
+	assert.Contains(t, out, bin+" operator start -e")
 }
 
 func TestPrintNextSteps_AllPosturesContainCommonSections(t *testing.T) {
@@ -201,9 +203,12 @@ func TestPrintNextSteps_AllPosturesContainCommonSections(t *testing.T) {
 
 	commonSubstrings := []string{
 		"Next Steps:",
+		"User Workstation",
 		"Trust the gateway CA",
-		"Enroll CLI credentials",
-		"Connect remote operators",
+		"Close all web browser windows",
+		"This Terminal",
+		"auth enroll",
+		"Operators",
 		"Console UI:",
 	}
 

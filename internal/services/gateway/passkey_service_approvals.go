@@ -29,14 +29,15 @@ import (
 // endpoint — see handleApprovalChallenge and handleApprovalVerify for the annotated
 // sub-handlers.
 func (h *PasskeyHandler) handleApprovalAction(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, constants.APIPaths.ApprovalsPrefix)
-	parts := strings.Split(path, "/")
-	if len(parts) < 1 {
-		h.responder.Error(w, http.StatusBadRequest, "invalid request path")
+	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
+	if !ok || userID == "" {
+		h.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
-	if len(parts) < 2 {
+	path := strings.TrimPrefix(r.URL.Path, constants.APIPaths.ApprovalsPrefix)
+	parts := strings.Split(path, "/")
+	if len(parts) < 1 || parts[0] == "" {
 		h.responder.Error(w, http.StatusBadRequest, "invalid request path")
 		return
 	}
@@ -45,12 +46,6 @@ func (h *PasskeyHandler) handleApprovalAction(w http.ResponseWriter, r *http.Req
 	action := ""
 	if len(parts) > 1 {
 		action = parts[1]
-	}
-
-	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
-	if !ok || userID == "" {
-		h.responder.Error(w, http.StatusUnauthorized, "unauthorized")
-		return
 	}
 
 	switch action {

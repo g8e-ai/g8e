@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-07-08
-Version: v1.3.8
+Last Updated: 2026-07-11
+Version: v1.3.11
 
 This document explains how to authenticate and authorize actions in the g8e platform. The platform is built as a zero-trust execution environment where every action is verified before execution.
 
@@ -57,9 +57,8 @@ This ensures that sensitive session identifiers are never exposed in browser his
 
 Since the Gateway uses self-signed certificates, you must trust the platform's Root CA before browser-based operations work:
 
-- **Linux**: `curl -fsSL http://<gateway-ip>:8080/bootstrap-ca | sh`
-- **macOS**: `curl -fsSL http://<gateway-ip>:8080/bootstrap-ca-macos | sh`
-- **Windows**: `irm http://<gateway-ip>:8080/bootstrap-ca.ps1 | iex`
+- **Linux/macOS**: `curl -fsSL http://<gateway-ip>:8080/web-cert.sh | sh`
+- **Windows**: `irm http://<gateway-ip>:8080/web-cert.ps1 | iex`
 
 **Important**: After running a trust script, restart all browsers for the CA to be recognized.
 
@@ -76,7 +75,7 @@ The g8e Console uses WebAuthn passkeys for browser authentication. Passkeys prov
 1. Navigate to the Console at `https://<gateway-ip>:8443/console/`
 2. Register a passkey during first-time setup
 3. Use your passkey to authenticate on subsequent visits
-4. The Console issues a session cookie (`g8e_web_session_cookie`) for authenticated sessions
+4. The Console issues a session cookie (`g8e_web_session_cookie`) for authenticated sessions, valid for 24 hours
 
 **Passkey Management:**
 
@@ -100,6 +99,7 @@ The platform supports authentication via external Identity Providers (IdPs) for 
 - JWT tokens are validated against configured JWKS endpoints
 - Users are provisioned Just-In-Time (JIT) on first successful authentication
 - JWT roles are mapped to internal authorization personas
+- JIT-provisioned users can register a WebAuthn passkey via dedicated bootstrap endpoints, allowing them to transition from JWT-only auth to browser-based passkey auth
 
 ### 1.5 Operator Authentication
 
@@ -108,7 +108,7 @@ Operators (remote execution containers) authenticate via mTLS certificates. The 
 1. Creates an operator document in the database
 2. Persists an operator session
 3. Signs a certificate with the session ID embedded in the identity
-4. Writes credentials to `/root/.g8e/pki/`
+4. Writes credentials to the platform PKI directory (`.g8e/pki/`)
 
 **Headless Enrollment:**
 
@@ -153,7 +153,7 @@ Consensus provides cryptographic attestation from multiple tribunal members:
 - Each tribunal member independently evaluates the payload
 - Members sign their decision with their Ed25519 private key
 - The Warden verifies signatures and counts affirmative votes against a quorum threshold
-- Duplicate signers are prevented by the `RequireDistinct` option
+- Duplicate signers are rejected to prevent single-member vote stuffing
 
 ### 2.4 Layer 3: Notary (Human Authorization)
 
@@ -168,10 +168,10 @@ Notary ensures explicit human authorization for sensitive actions:
 5. CLI waits for approval via SSE stream
 6. Once approved, transaction proceeds
 
-**Two-Layer Authorization:**
+**Authorization Factors:**
 
-- **Layer 1**: Passkey authorization (always required)
-- **Layer 2**: mTLS transport authentication (for CLI callers)
+- **Factor 1**: Passkey authorization (always required)
+- **Factor 2**: mTLS transport authentication (for CLI callers)
 
 **Approval Windows:**
 
@@ -269,9 +269,11 @@ Vault operations are managed via CLI commands:
 **Configuration:**
 
 Vault paths can be configured via:
-- CLI flags: `--vault-dir`, `--vault-key`
-- Environment variables: `G8E_VAULT_DIR`, `G8E_VAULT_KEY`
-- Default configuration: embedded in binary
+- CLI flags: `--vault-dir`, `--vault-key`, `--vault-require-unlock`
+- Environment variables: `G8E_VAULT_DIR`, `G8E_VAULT_KEY`, `G8E_VAULT_REQUIRE_UNLOCK`
+- Default paths: `.g8e/vault/` for vault data, `.g8e/secrets/key` for the vault key
+
+When `--vault-require-unlock` is set, the gateway fails to start if the vault cannot be unlocked with the provided key. This enforces mandatory encryption at rest for production deployments.
 
 ---
 

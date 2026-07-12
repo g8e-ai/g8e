@@ -102,7 +102,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.42.0.10", "--execution-vault"]
+    command: ["operator", "start", "-e", "10.42.0.10", "--execution-vault"]
 
   agent-sigint:
     build:

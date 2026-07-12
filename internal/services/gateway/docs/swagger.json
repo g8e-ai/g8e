@@ -124,14 +124,14 @@
         },
         "/.well-known/g8e/pki/trust-windows": {
             "get": {
-                "description": "Returns the Windows CA trust bootstrap script (alias endpoint)",
+                "description": "Alias for /web-cert.ps1 — returns the Windows CA trust script",
                 "produces": [
                     "text/plain"
                 ],
                 "tags": [
                     "bootstrap"
                 ],
-                "summary": "Bootstrap CA Windows script (alias)",
+                "summary": "Web cert trust script alias (Windows)",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -927,16 +927,16 @@
                 }
             }
         },
-        "/bootstrap-ca": {
+        "/web-cert.sh": {
             "get": {
-                "description": "Returns the Linux CA trust bootstrap script",
+                "description": "Returns the Linux/macOS CA trust script for remote workstations",
                 "produces": [
                     "text/plain"
                 ],
                 "tags": [
                     "bootstrap"
                 ],
-                "summary": "Bootstrap CA Linux script",
+                "summary": "Web cert trust script (Linux/macOS)",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -947,36 +947,16 @@
                 }
             }
         },
-        "/bootstrap-ca-macos": {
+        "/web-cert.ps1": {
             "get": {
-                "description": "Returns the macOS CA trust bootstrap script",
+                "description": "Returns the Windows CA trust script for remote workstations",
                 "produces": [
                     "text/plain"
                 ],
                 "tags": [
                     "bootstrap"
                 ],
-                "summary": "Bootstrap CA macOS script",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
-        "/bootstrap-ca.ps1": {
-            "get": {
-                "description": "Returns the Windows CA trust bootstrap script",
-                "produces": [
-                    "text/plain"
-                ],
-                "tags": [
-                    "bootstrap"
-                ],
-                "summary": "Bootstrap CA Windows script",
+                "summary": "Web cert trust script (Windows)",
                 "responses": {
                     "200": {
                         "description": "OK",

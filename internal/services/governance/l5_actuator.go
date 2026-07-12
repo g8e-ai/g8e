@@ -27,7 +27,6 @@ import (
 	govtypes "github.com/g8e-ai/g8e/internal/governance"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
-	execution "github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -47,6 +46,14 @@ type TransactionAuditStore interface {
 	DocSet(collection, id string, data json.RawMessage) error
 }
 
+// Rehydratable is implemented by payload messages that support sovereignty
+// rehydration. The ScrubbingService rehydrates the payload bytes in place
+// before execution dispatch.
+type Rehydratable interface {
+	GetPayload() []byte
+	SetPayload([]byte)
+}
+
 // L5Actuator is the execution gateway. It is the final stop for all GovernanceEnvelope envelopes.
 //
 // Defense-in-depth note: L5Actuator does NOT re-verify L2 or L3 proofs. By design,
@@ -58,11 +65,9 @@ type TransactionAuditStore interface {
 // boundary — two independent components with distinct responsibilities.
 type L5Actuator struct {
 	Logger            *slog.Logger
-	Execution         *execution.ExecutionService
 	SQLAuditStore     *storage.SQLAuditStore
 	ConsoleAuditStore TransactionAuditStore
 	StateRootProvider StateRootProvider
-	Ctx               context.Context
 	ExecutionHandler  ExecutionHandler
 	Scrubbing         *scrubbing.ScrubbingService
 
@@ -154,10 +159,7 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 
 	// 3.5. Rehydrate payload if Scrubbing is available
 	if w.Scrubbing != nil && cmdMsg != nil {
-		if rehydratable, ok := cmdMsg.(interface {
-			GetPayload() []byte
-			SetPayload([]byte)
-		}); ok {
+		if rehydratable, ok := cmdMsg.(Rehydratable); ok {
 			p := rehydratable.GetPayload()
 			if len(p) > 0 {
 				rehydrated, rehydrateErr := w.Scrubbing.RehydratePayload(p)
@@ -301,26 +303,9 @@ func (w *L5Actuator) LogReceipt(env *govtypes.GovernanceEnvelope, r *operatorv1.
 		return docErr
 	}
 
-	record := models.ActionReceiptRecord{
-		TransactionID:     r.TransactionId,
-		TransactionHash:   r.TransactionHash,
-		OperatorID:        env.OperatorId,
-		OperatorSessionID: env.OperatorSessionId,
-		ActionType:        constants.ActionType(env.ActionType),
-		TargetResource:    env.TargetResource,
-		Status:            r.Status,
-		ResultSummary:     r.ResultSummary,
-		StateRootBefore:   r.StateRootBefore,
-		StateRootAfter:    r.StateRootAfter,
-		ExecutedAt:        time.UnixMilli(r.ExecutedAtUnixMs),
-		SignerKeyID:       r.SignerKeyId,
-		Signature:         r.Signature,
-		L2Valid:           r.L2Status == operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
-		L3Valid:           r.L3Status == operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
-		Timestamp:         time.Now().UTC(),
-	}
+	record := buildReceiptRecord(env, r)
 
-	if err := w.SQLAuditStore.RecordActionReceipt(&record); err != nil {
+	if err := w.SQLAuditStore.RecordActionReceipt(record); err != nil {
 		if w.Logger != nil {
 			w.Logger.Error("Failed to record ActionReceipt in audit store", string(constants.ConnectionStateError), err)
 		}
@@ -338,7 +323,29 @@ func (w *L5Actuator) logReceiptDocument(env *govtypes.GovernanceEnvelope, r *ope
 		return nil
 	}
 
-	record := models.ActionReceiptRecord{
+	record := buildReceiptRecord(env, r)
+
+	body, err := json.Marshal(record)
+	if err != nil {
+		if w.Logger != nil {
+			w.Logger.Error("Failed to marshal action receipt record", string(constants.ConnectionStateError), err, "message_id", r.TransactionId)
+		}
+		return fmt.Errorf("%w: %w", constants.ErrL5ActuatorMarshalReceipt, err)
+	}
+
+	if err := w.ConsoleAuditStore.DocSet(marshaler.CollectionName(constants.CollectionConsoleAudit), r.TransactionId, body); err != nil {
+		if w.Logger != nil {
+			w.Logger.Error("Failed to record action receipt document", string(constants.ConnectionStateError), err, "message_id", r.TransactionId)
+		}
+		return err
+	}
+	return nil
+}
+
+// buildReceiptRecord constructs an ActionReceiptRecord from a GovernanceEnvelope and ActionReceipt.
+// This is the single source of truth for record construction, used by both LogReceipt and logReceiptDocument.
+func buildReceiptRecord(env *govtypes.GovernanceEnvelope, r *operatorv1.ActionReceipt) *models.ActionReceiptRecord {
+	return &models.ActionReceiptRecord{
 		TransactionID:     r.TransactionId,
 		TransactionHash:   r.TransactionHash,
 		OperatorID:        env.OperatorId,
@@ -356,22 +363,6 @@ func (w *L5Actuator) logReceiptDocument(env *govtypes.GovernanceEnvelope, r *ope
 		L3Valid:           r.L3Status == operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
 		Timestamp:         time.Now().UTC(),
 	}
-
-	body, err := json.Marshal(record)
-	if err != nil {
-		if w.Logger != nil {
-			w.Logger.Error("Failed to marshal action receipt record", string(constants.ConnectionStateError), err, "message_id", r.TransactionId)
-		}
-		return fmt.Errorf("%w: %w", constants.ErrL5ActuatorMarshalReceipt, err)
-	}
-
-	if err := w.ConsoleAuditStore.DocSet(marshaler.CollectionName(constants.CollectionConsoleAudit), r.TransactionId, body); err != nil {
-		if w.Logger != nil {
-			w.Logger.Error("Failed to record action receipt document", string(constants.ConnectionStateError), err, "message_id", r.TransactionId)
-		}
-		return err
-	}
-	return nil
 }
 
 // Wait blocks until all in-flight transactions have finished executing.

@@ -722,7 +722,7 @@ paths:
       - pki
   /.well-known/g8e/pki/trust-windows:
     get:
-      description: Returns the Windows CA trust bootstrap script (alias endpoint)
+      description: Alias for /web-cert.ps1 — returns the Windows CA trust script
       produces:
       - text/plain
       responses:
@@ -730,7 +730,7 @@ paths:
           description: OK
           schema:
             type: string
-      summary: Bootstrap CA Windows script (alias)
+      summary: Web cert trust script alias (Windows)
       tags:
       - bootstrap
   /api/v1/approvals:
@@ -1281,9 +1281,9 @@ paths:
       summary: Get current user
       tags:
       - users
-  /bootstrap-ca:
+  /web-cert.sh:
     get:
-      description: Returns the Linux CA trust bootstrap script
+      description: Returns the Linux/macOS CA trust script for remote workstations
       produces:
       - text/plain
       responses:
@@ -1291,12 +1291,12 @@ paths:
           description: OK
           schema:
             type: string
-      summary: Bootstrap CA Linux script
+      summary: Web cert trust script (Linux/macOS)
       tags:
       - bootstrap
-  /bootstrap-ca-macos:
+  /web-cert.ps1:
     get:
-      description: Returns the macOS CA trust bootstrap script
+      description: Returns the Windows CA trust script for remote workstations
       produces:
       - text/plain
       responses:
@@ -1304,20 +1304,7 @@ paths:
           description: OK
           schema:
             type: string
-      summary: Bootstrap CA macOS script
-      tags:
-      - bootstrap
-  /bootstrap-ca.ps1:
-    get:
-      description: Returns the Windows CA trust bootstrap script
-      produces:
-      - text/plain
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: string
-      summary: Bootstrap CA Windows script
+      summary: Web cert trust script (Windows)
       tags:
       - bootstrap
   /console/:

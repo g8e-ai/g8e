@@ -528,7 +528,8 @@ func TestPKIController_HandleTrustScriptWindows(t *testing.T) {
 		assert.Equal(t, "application/x-powershell", rr.Header().Get("Content-Type"))
 		assert.NotEmpty(t, rr.Body.Bytes())
 		script := rr.Body.String()
-		assert.Contains(t, script, "CA bundle installed")
+		assert.Contains(t, script, "CA bundle downloaded")
+		assert.Contains(t, script, "LocalMachine")
 		assert.NotContains(t, script, "Downloading g8e Node")
 	})
 
@@ -613,7 +614,8 @@ func TestPKIController_HandleTrustScriptWindowsAlias(t *testing.T) {
 				assert.Equal(t, "application/x-powershell", rr.Header().Get("Content-Type"))
 				assert.NotEmpty(t, rr.Body.Bytes())
 				script := rr.Body.String()
-				assert.Contains(t, script, "CA bundle installed")
+				assert.Contains(t, script, "CA bundle downloaded")
+				assert.Contains(t, script, "LocalMachine")
 				assert.NotContains(t, script, "Downloading g8e Node")
 			},
 		},

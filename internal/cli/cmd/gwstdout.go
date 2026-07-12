@@ -16,23 +16,29 @@ func printNextSteps(cmd *cobra.Command, _ governance.GovernancePosture, external
 	cmd.Println("Next Steps:")
 	cmd.Println()
 
-	// Step 1: Trust the gateway CA (for remote workstations accessing HTTPS)
-	cmd.Println("  1. Trust the gateway CA for HTTPS (run on each remote workstation):")
-	cmd.Printf("       curl -fsSL http://%s:%d/web-cert.sh | sh   (Linux/macOS)\n", externalIP, httpPort)
-	cmd.Printf("       irm http://%s:%d/web-cert.ps1 | iex        (Windows)\n", externalIP, httpPort)
+	// Step 1: User Workstation
+	cmd.Println("  1. User Workstation")
+	cmd.Println("     a. Trust the gateway CA for HTTPS (run on your workstation):")
+	cmd.Println()
+	cmd.Println("          Linux/macOS")
+	cmd.Printf("          curl -fsSL http://%s:%d/web-cert.sh | sh\n", externalIP, httpPort)
+	cmd.Println()
+	cmd.Println("          Windows")
+	cmd.Printf("          irm http://%s:%d/web-cert.ps1 | iex\n", externalIP, httpPort)
+	cmd.Println()
+	cmd.Println("     b. Close all web browser windows on the remote workstation")
 	cmd.Println()
 
-	// Step 2: Enroll CLI credentials
-	cmd.Println("  2. Enroll CLI credentials:")
+	// Step 2: This Terminal
+	cmd.Println("  2. This Terminal")
 	cmd.Printf("       %s auth enroll\n", bin)
 	cmd.Println()
 
-	// Step 3: Connect remote operators
-	cmd.Println("  3. Connect remote operators:")
+	// Step 3: Operators
+	cmd.Println("  3. Operators")
 	cmd.Printf("       Local Host:   %s operator deploy --hosts <host1,host2>\n", bin)
 	cmd.Printf("                     %s operator stream --hosts <host1,host2>\n", bin)
-	cmd.Printf("       Remote Host:  %s gw security pki enroll -e %s\n", bin, externalIP)
-	cmd.Printf("                     %s operator start\n", bin)
+	cmd.Printf("       Remote Host:  %s operator start -e %s\n", bin, externalIP)
 	cmd.Println()
 
 	// Console UI

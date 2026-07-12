@@ -116,7 +116,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.62.0.10", "--execution-vault"]
+    command: ["operator", "start", "-e", "10.62.0.10", "--execution-vault"]
 
   # ── Real g8e agent (runs demos scenarios via docker compose run) ───
   # One real agent container — personas are set inside the scenario code, not

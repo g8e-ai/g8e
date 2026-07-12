@@ -63,15 +63,15 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.parse_version.outputs.tag }}
-          name: g8e-protocol Python v${{ steps.parse_version.outputs.version }}
+          name: g8e Python v${{ steps.parse_version.outputs.version }}
           body: |
-            ## g8e-protocol Python Package v${{ steps.parse_version.outputs.version }}
+            ## g8e Python Package v${{ steps.parse_version.outputs.version }}
 
             Official Python protocol library for the g8e zero-trust execution platform.
 
             ### Installation
             ```bash
-            pip install g8e-protocol==${{ steps.parse_version.outputs.version }}
+            pip install g8e==${{ steps.parse_version.outputs.version }}
             ```
 
             ### Changes

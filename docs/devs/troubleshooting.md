@@ -227,9 +227,8 @@ The gateway uses self-signed certificates. Browser-based WebAuthn
 registration and console access require the platform Root CA to be trusted
 by the operating system. Run the appropriate trust script for your platform:
 
-- **Linux**: `curl -fsSL http://<gateway-ip>:8080/bootstrap-ca | sh`
-- **macOS**: `curl -fsSL http://<gateway-ip>:8080/bootstrap-ca-macos | sh`
-- **Windows**: `irm http://<gateway-ip>:8080/bootstrap-ca.ps1 | iex`
+- **Linux/macOS**: `curl -fsSL http://<gateway-ip>:8080/web-cert.sh | sh`
+- **Windows**: `irm http://<gateway-ip>:8080/web-cert.ps1 | iex`
 
 After running any trust script, **restart all open browsers**. Browsers
 cache certificate trust state, and WebAuthn registration will fail if the

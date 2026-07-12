@@ -85,7 +85,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   frontend-app:
     image: nginx@sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa

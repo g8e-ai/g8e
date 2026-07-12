@@ -588,7 +588,7 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 	caBundleURL := constants.APIPaths.WellKnownPKICABundle
 	localCAPath := filepath.ToSlash(paths.Infra.CaCertPath)
 
-	script := fmt.Sprintf(`$ErrorActionPreference = "Continue"
+	script := fmt.Sprintf(`$ErrorActionPreference = "Stop"
 
 $GatewayHost = "%s"
 $GatewayPort = "%s"
@@ -600,19 +600,63 @@ $LocalDir = Split-Path -Parent $LocalCAPath
 if (-not (Test-Path $LocalDir)) {
     New-Item -ItemType Directory -Path $LocalDir -Force | Out-Null
 }
+
+# Use Invoke-WebRequest with explicit HTTP (no SSL needed for bootstrap port)
 try {
-    Invoke-RestMethod -Uri $CABundleUrl -OutFile $LocalCAPath
+    Invoke-WebRequest -Uri $CABundleUrl -OutFile $LocalCAPath -UseBasicParsing
 } catch {
     Write-Host "[g8e] ERROR: Failed to download CA bundle: $_"
-    return
+    exit 1
 }
 
 if (-not (Test-Path $LocalCAPath)) {
     Write-Host "[g8e] ERROR: Failed to download CA bundle"
-    return
+    exit 1
 }
 
-Write-Host "[g8e] CA bundle installed to ${LocalCAPath}"
+Write-Host "[g8e] CA bundle downloaded to ${LocalCAPath}"
+
+# Install the CA certificate into the Windows trust store (LocalMachine\Root)
+Write-Host "[g8e] Installing CA certificate into Windows trust store..."
+Write-Host "[g8e] Administrator privileges may be required."
+
+# Try using Import-Certificate (PowerShell 5.1+)
+$installed = $false
+try {
+    $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2 $LocalCAPath
+    $store = New-Object System.Security.Cryptography.X509Certificates.X509Store "Root","LocalMachine"
+    $store.Open("ReadWrite")
+    $store.Add($cert)
+    $store.Close()
+    $installed = $true
+    Write-Host "[g8e] CA certificate installed to LocalMachine\Root via .NET"
+} catch {
+    Write-Host "[g8e] .NET method failed: $_, trying certutil..."
+}
+
+if (-not $installed) {
+    try {
+        $result = certutil -addstore -f "Root" $LocalCAPath 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $installed = $true
+            Write-Host "[g8e] CA certificate installed to LocalMachine\Root via certutil"
+        } else {
+            Write-Host "[g8e] certutil failed with exit code $LASTEXITCODE"
+            Write-Host $result
+        }
+    } catch {
+        Write-Host "[g8e] certutil failed: $_"
+    }
+}
+
+if (-not $installed) {
+    Write-Host "[g8e] ERROR: Could not install CA certificate automatically."
+    Write-Host "[g8e] The CA bundle is at ${LocalCAPath}. Install it manually:"
+    Write-Host "[g8e]   certutil -addstore -f Root ${LocalCAPath}"
+    exit 1
+}
+
+Write-Host "[g8e] CA certificate trusted system-wide."
 Write-Host "[g8e] IMPORTANT: Please restart all open browsers for changes to take effect."
 `, gatewayHost, port, caBundleURL, localCAPath)
 

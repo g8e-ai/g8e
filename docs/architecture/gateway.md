@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-07-06
-Version: v1.3.7
+Last Updated: 2026-07-12
+Version: v1.3.11
 
 The g8e Protocol platform is composed of two logically distinct roles, both implemented by the reference g8e Node:
 
@@ -87,10 +87,10 @@ By passing `--posture doctrine`, `--posture consensus`, or `--posture notary`, t
     - **Notary** (`--posture notary`): L1 Doctrine / L2 Consensus / L3 Notary strictly enforced.
 - **Capabilities**:
     - **Gateway API**: `POST /api/v1/governance/envelopes` is the only customer-facing mutation entry point.
-    - **Document Store**: JSON document CRUD on a Collection/ID pattern via `/api/v1/db/*`.
+    - **Document Store**: JSON document CRUD on a Collection/ID pattern via `/api/v1/data/*`.
     - **KV Store**: TTL-aware ephemeral state with `GLOB` pattern scanning via `/api/v1/kv/*`.
-    - **Blob Store**: Binary persistence for attachments and certificate material via `/api/v1/blob/*`.
-    - **Pub/Sub Broker**: High-performance WebSocket fan-out via `/ws/v1/pubsub`. Mutation channels (`cmd:*`) are governed.
+    - **Blob Store**: Binary persistence for attachments and certificate material via `/api/v1/blobs/*`.
+    - **Pub/Sub Broker**: High-performance WebSocket fan-out via `/api/v1/pubsub/stream`. Mutation channels (`cmd:*`) are governed.
     - **Root CA / PKI**: Issues mTLS certificates via CSR-based enrollment with SPIFFE URI SAN identity.
     - **Audit Authority**: Append-only encrypted log of every event and signed `ActionReceipt`.
     - **Unified MCP Endpoint**: Single-URL JSON-RPC dispatch contract for MCP protocol communication via `internal/services/mcp/mcp_endpoint.go`.
@@ -99,7 +99,7 @@ By passing `--posture doctrine`, `--posture consensus`, or `--posture notary`, t
 
 The g8e Gateway exposes two logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port. See [Network Architecture](./network.md) for detailed port topology, authentication requirements, and port constraints.
 
-**HTTP Port (8080)**: Plain HTTP for bootstrap enrollment and PKI discovery endpoints only. This port serves the platform trust scripts (e.g., `/bootstrap-ca`, `/bootstrap-ca-macos`, `/bootstrap-ca.ps1`) required for self-signed CA trust. No MCP routes are available on this port.
+**HTTP Port (8080)**: Plain HTTP for bootstrap enrollment and PKI discovery endpoints only. This port serves the platform trust scripts (e.g., `/web-cert.sh`, `/web-cert.ps1`) required for self-signed CA trust. No MCP routes are available on this port.
 
 **HTTPS Port (8443)**: mTLS for all routes including API, public, enrollment, and MCP endpoints. MCP endpoints require mTLS authentication (or JWT when JWKS is configured). The public HTTPS router also serves Swagger UI at `/swagger/*` and the OpenAPI specification at `/swagger/doc.json`, providing interactive API documentation.
 
@@ -111,15 +111,15 @@ The gateway builds two distinct HTTP routers in `internal/services/gateway/gatew
 
 ### Bootstrap HTTP Router (`buildHTTPRouter`)
 
-Served on the HTTP port (8080), this router handles only bootstrap and PKI discovery endpoints. It registers health, state, bootstrap enrollment, CSR signing, CA bundle discovery, trust script download, node binary download, and deploy script routes. All other requests are redirected to HTTPS with a `301 Moved Permanently` response. The redirect validates the host via `isSafeHost` to prevent open redirect vulnerabilities and normalizes path components to prevent path traversal. The router is wrapped with `pathTraversalGuard` and `rateLimitMiddleware`.
+Served on the HTTP port (8080), this router handles only bootstrap and PKI discovery endpoints. It registers health, state, bootstrap enrollment, CLI and device enrollment, PKI apps enrollment, CSR signing, CA bundle and fingerprint discovery, trust script download (Linux and Windows), node binary download, and deploy script routes. Unregistered paths return a 404 response. The router is wrapped with `pathTraversalGuard` and `rateLimitMiddleware`.
 
 ### Public HTTPS Router (`buildPublicRouter`)
 
-Served on the HTTPS port (8443), this router handles all API, MCP, passkey, console, and management routes. It is wrapped with `pathTraversalGuard` and `auth.Middleware` at the outermost layer. The `RouteAuthRegistry` in `internal/services/gateway/gateway_auth.go` classifies every route by its auth requirement.
+Served on the HTTPS port (8443), this router handles all API, MCP, passkey, console, and management routes. It is wrapped with `corsMiddleware`, `pathTraversalGuard`, and `auth.Middleware` at the outermost layer. The `corsMiddleware` applies CORS headers based on configured `AllowedOrigins`, handling OPTIONS preflight requests and reflecting allowed origins. The `RouteAuthRegistry` in `internal/services/gateway/gateway_auth.go` classifies every route by its auth requirement.
 
 The public HTTPS router registers the following route categories:
 
-**Public Routes (no authentication)**: Health, state, Swagger UI (`/swagger/`, `/swagger/index.html`, `/swagger/doc.json`), CA bundle and fingerprint discovery, CRL, blob store, console SPA (`/console/`), landing page, login/logout, bootstrap enrollment, CLI and device enrollment, PKI apps and devices enrollment.
+**Public Routes (no authentication)**: Health, state, Swagger UI (`/swagger/`, `/swagger/index.html`, `/swagger/doc.json`), CA bundle and fingerprint discovery, CRL, blob store, console SPA (`/console/`), landing page, login/logout, bootstrap enrollment, CLI and device enrollment, PKI apps and devices enrollment, enrollment token validation, and the OOB approval page redirect.
 
 **MCP/A2A Routes**: Registered via `registerMCPRoutes` on the public mux. When JWKS is configured, MCP routes are wrapped with `JWTAuthMiddleware`; otherwise they rely on mTLS via the outer `auth.Middleware`. Registered paths include `/mcp` (unified MCP JSON-RPC endpoint) and `/api/v1/a2a/call` (A2A endpoint).
 
@@ -127,15 +127,13 @@ The public HTTPS router registers the following route categories:
 
 **JIT Passkey Routes (JWT-authenticated)**: When JWKS is configured, `/api/v1/auth/passkeys/jit-register/challenge` and `/api/v1/auth/passkeys/jit-register/verify` allow OIDC/JIT users with zero credentials to register their first passkey. These routes are wrapped with `JWTAuthMiddleware`.
 
-**mTLS-Only Routes**: Data settings, operator management (list, terminate, bind, unbind, target, reauth), governance signers, app policies, app revocation, tribunal management (list, delete), tribunal deliberate, governance envelopes (rate-limited), audit receipts, events, export, summary, and report, SSE push, database, KV store, pub/sub publish and stream, PKI management (CSR sign, apps delegated, certificates revoke, revocation bundle), user management, and passkey CLI status.
+**mTLS-Only Routes**: Data settings, operator management (list, terminate, bind, unbind, target, reauth), governance signers, app policies, app revocation, tribunal management (list, delete), tribunal deliberate, governance envelopes (rate-limited), audit receipts, events, export, summary, and report, SSE push, database, KV store, pub/sub publish and stream, PKI management (CSR sign, apps delegated, certificates revoke, revocation bundle), user management, passkey CLI status, and enrollment token generation.
 
 **WebSession-Protected Routes**: Browser-facing routes under `/api/v1/users/`, `/api/v1/auth/sessions/`, `/api/v1/approvals`, `/api/v1/auth/passkeys` are classified as `RouteAuthWebSession` in the `RouteAuthRegistry`, requiring a valid web session cookie. These include user profile (`/api/v1/users/me`), web session info (`/api/v1/auth/sessions/me`), OOB approval actions and listing, and passkey credential listing and revocation.
 
 **Dual-Auth Routes**: SSE stream (`/api/v1/sse/stream`) and SSE events (`/api/v1/sse/events`) are classified as `RouteAuthDual`, accepting either mTLS or web session cookie authentication.
 
-**CLI Approval Endpoints**: The `/api/v1/approvals/status/` and `/api/v1/approvals/pending` endpoints are registered as `RouteAuthMTLS` exact paths in the `RouteAuthRegistry`, taking priority over the `/api/v1/approvals` `RouteAuthWebSession` prefix. They require mTLS authentication and are used by CLI clients for post-SSE verification of approval state and listing pending suspended transactions.
-
-**OOB Approval UI**: The `/api/v1/approve/{txHash}` page route redirects to the console SPA with a URL-encoded approval hash fragment (`/console/#approve={url-encoded-txHash}`), enabling auto-trigger of the WebAuthn approval flow upon successful login.
+**CLI Approval Endpoints**: The `/api/v1/approvals/status/` and `/api/v1/approvals/pending` endpoints are registered as `RouteAuthMTLS` exact paths in the `RouteAuthRegistry`, taking priority over the `/api/v1/approvals` `RouteAuthWebSession` prefix. They require mTLS authentication and are used by CLI clients for post-SSE verification of approval state and listing pending suspended transactions. The `/api/v1/approve/{txHash}` page route is also classified as `RouteAuthNone` (public), redirecting to the console SPA with a URL-encoded approval hash fragment (`/console/#approve={url-encoded-txHash}`), enabling auto-trigger of the WebAuthn approval flow upon successful login.
 
 ### RouteAuthRegistry
 
@@ -284,11 +282,11 @@ The main health endpoint on the HTTPS port (`handleHealth`) performs full readin
 - Platform settings document availability
 - State root calculation success
 
-The response (`HealthResponse`) includes `status`, `mode`, `version`, `governance_ready` (whether the governance pipeline is initialized), and `state_merkle_root` (the current state root). This endpoint is classified as `RouteAuthNone` in the `RouteAuthRegistry` to bypass authentication middleware for monitoring purposes.
+The response (`HealthResponse`) includes `status`, `mode`, `version`, `pid` (OS process ID), `governance_ready` (whether the governance pipeline is initialized), and `state_merkle_root` (the current state root). This endpoint is classified as `RouteAuthNone` in the `RouteAuthRegistry` to bypass authentication middleware for monitoring purposes.
 
 ### Bootstrap Health Check (HTTP)
 
-The bootstrap health endpoint on the HTTP port (`handleBootstrapHealth`) is a lighter check that verifies only the `isReady` callback. It skips platform settings and state root verification, making it suitable for initialization monitoring before the database is fully configured. The response includes `status`, `mode`, `version`, and `governance_ready`.
+The bootstrap health endpoint on the HTTP port (`handleBootstrapHealth`) is a lighter check that verifies only the `isReady` callback. It skips platform settings and state root verification, making it suitable for initialization monitoring before the database is fully configured. The response includes `status`, `mode`, `version`, `pid`, and `governance_ready`.
 
 ---
 
@@ -344,12 +342,12 @@ The g8e Gateway (g8eg) provides JWT authentication and Just-In-Time (JIT) user p
 The JWT authentication logic is implemented in `internal/services/gateway/gateway_auth.go` via the `JWTAuthMiddleware` function.
 
 **Step 1: Inbound HTTP Handshake and JWT Verification**
-The g8e Gateway (g8eg) intercepts inbound `Authorization: Bearer <JWT>` tokens on public MCP endpoints before routing to downstream execution logic. The middleware cryptographically verifies the JWT signature using JWKS or static public keys, validates `exp` and `iss` claims, and extracts identity claims (`sub`, `tenant_id`, `roles`).
+The g8e Gateway (g8eg) intercepts inbound `Authorization: Bearer <JWT>` tokens on public MCP endpoints before routing to downstream execution logic. The middleware cryptographically verifies the JWT signature using JWKS, validates `exp`, `nbf`, `iss`, and `aud` claims, and extracts identity claims (`sub`, `tenant_id`, `roles`).
 
 **Step 2: Edge Validation and JIT Account Management**
 Following successful token validation, the g8e Gateway (g8eg) ensures the user exists locally and maps their roles:
 - **JIT Provisioning**: Checks the SQLite `users` collection for the `sub` (User ID) via `userSvc.GetBySub`. If the user does not exist, provisions the user account subject to platform owner authorization.
-- **Persona Mapping**: Loads declarative Persona manifests (e.g., YAML definitions representing `security-analyst`, `admin`). Evaluates the JWT `roles` against these manifests via `personaSvc.MapRolesToPersona` to determine the active `binding_persona`.
+- **Persona Mapping**: Loads declarative Persona definitions (e.g., `security-analyst`, `admin`) from the `personas` collection in the document store. Evaluates the JWT `roles` against these persona definitions via `personaSvc.MapRolesToPersona` to determine the active `binding_persona`.
 - **Context Injection**: Stores the resolved `binding_persona` and `tenant_id` into the request context.
 
 **Step 3: Enriched Pub/Sub Handoff (GovernanceEnvelope)**
@@ -410,6 +408,15 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 | Passkey HTTP Handlers | `internal/services/gateway/passkey_service_http.go` |
 | Console SPA | `internal/services/gateway/console/console.go` |
 | OOB Approval Handlers | `internal/services/gateway/passkey_service_approvals.go` |
+| Auth Controller | `internal/services/gateway/auth_controller.go` |
+| PKI Controller | `internal/services/gateway/pki_controller.go` |
+| DB Controller | `internal/services/gateway/db_controller.go` |
+| Admin Controller | `internal/services/gateway/admin_controller.go` |
+| Operator Controller | `internal/services/gateway/operator_controller.go` |
+| Enrollment Token Service | `internal/services/gateway/enrollment_token_service.go` |
+| Registration Service | `internal/services/gateway/registration_service.go` |
+| CORS Middleware | `internal/services/gateway/gateway_http_cors.go` |
+| JWT Native | `internal/services/gateway/jwt_native.go` |
 | L4 Warden | `internal/services/governance/l4_warden.go` |
 | L5 Actuator | `internal/services/governance/l5_actuator.go` |
 | PKI / CertStore | `internal/services/gateway/gateway_certs.go` |
@@ -434,7 +441,7 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 
 | Collection | Description |
 |---|---|
-| **Authentication & Sessions** | `users`, `web_sessions`, `operator_sessions`, `cli_sessions`, `bound_sessions`, `passkey_challenges` |
+| **Authentication & Sessions** | `users`, `web_sessions`, `operator_sessions`, `cli_sessions`, `bound_sessions`, `passkey_challenges`, `enrollment_tokens` |
 | **Organizations & Tenants** | `organizations` |
 | **Audit & Security** | `login_audit`, `auth_admin_audit`, `account_locks`, `console_audit`, `revoked_certificates` |
 | **Operators & Usage** | `operators`, `operator_usage` |
@@ -447,7 +454,7 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 
 ### Agent Integration
 
-The g8e Gateway provides zero-config ingress for agentic CLI coding tools (Claude Code, Codex, Cursor, VS Code, Cline) through the MCP agent subcommands.
+The g8e Gateway provides zero-config ingress for agentic CLI coding tools (Claude Code, Codex, Cursor, VS Code) through the MCP agent subcommands.
 
 ### Agent Subcommands
 
@@ -496,4 +503,4 @@ The browser utility (`internal/cli/platform/browser.go`) provides cross-platform
 
 - [**g8e Protocol**](../../protocol/docs/spec.md) - The wire contract and governance hierarchy.
 - [**g8e Operator**](./operator.md) - Sovereign host-side execution agent and MCP server.
-- [**CLI Reference**](../guides/cli.md) - Complete CLI command documentation including agent integration.
+- [**Getting Started**](../guides/getting_started.md) - CLI commands, agent integration, and setup guides.
