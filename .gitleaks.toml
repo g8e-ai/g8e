@@ -1,0 +1,58 @@
+title = "g8e custom gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Skip vendored dependencies"
+paths = [
+  '''vendor/.*''',
+]
+
+[[allowlists]]
+description = "Skip test fixtures and demo data"
+paths = [
+  '''internal/services/gateway/pki/issued/.*''',
+  '''demos/.*/target-data/.*''',
+]
+
+[[allowlists]]
+description = "Skip known false-positive constant names"
+regexes = [
+  '''X-G8E-Operator-API-Key''',
+  '''OPERATOR_API_KEY_HEADER''',
+  '''envG8EOperatorID''',
+  '''envG8EUserID''',
+  '''BCRYPT_.*KEY_BLOB.*''',
+  '''NCRYPT_PKCS8_PRIVATE_KEY_BLOB''',
+  '''DHPRIVKEY_VER3''',
+  '''T_BCRYPT_DSA_KEY_BLOB_V2''',
+  '''TPBCRYPT_DSA_KEY_BLOB_V2''',
+  '''TBCRYPT_DSA_KEY_BLOB_V2''',
+  '''szOID_CERT_STRONG_KEY_OS_1''',
+  '''Rfc3565KeyWrapBlob''',
+]
+
+[[allowlists]]
+description = "Skip test log fixtures with fake api keys"
+paths = [
+  '''internal/services/mcp/log_stream_filter_test\.go''',
+  '''internal/services/mcp/native_handlers_test\.go''',
+  '''internal/cli/cmd/mcp_test\.go''',
+  '''internal/services/gateway/auth_bootstrap_test\.go''',
+  '''services/g8eo/internal/services/auth/bootstrap_test\.go''',
+]
+
+[[allowlists]]
+description = "Skip WebAuthn authenticator data in test fixtures"
+paths = [
+  '''internal/services/gateway/auth_.*test\.go''',
+  '''test/.*''',
+]
+
+[[allowlists]]
+description = "Skip demo/test private keys"
+paths = [
+  '''internal/services/gateway/pki/.*''',
+  '''demos/.*/config/.*''',
+]
