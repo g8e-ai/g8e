@@ -219,6 +219,9 @@ func TestCopyFile_DestinationInNonExistentDir(t *testing.T) {
 }
 
 func TestCopyFile_PreservesFileMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows - Unix file modes not supported")
+	}
 	src := filepath.Join(t.TempDir(), "src.sh")
 	dst := filepath.Join(t.TempDir(), "dst.sh")
 	require.NoError(t, os.WriteFile(src, []byte("#!/bin/sh\n"), 0o755))

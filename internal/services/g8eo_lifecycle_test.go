@@ -22,6 +22,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -37,6 +38,9 @@ import (
 )
 
 func TestG8eoService_Start_SuccessFlow(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("skipping on non-Linux - OS keychain not available in CI")
+	}
 	t.Parallel()
 	// 1. Setup mock client server for bootstrap
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
