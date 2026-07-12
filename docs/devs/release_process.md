@@ -2,7 +2,7 @@
 
 This document is the definitive checklist for updating all version-bearing files and documentation when bumping a g8e release. The protocol (Go + Python) and the platform binary share the same version number — there are no separate protocol releases.
 
-> **`make release` handles version syncing, tests, and builds.** It does NOT touch git. After reviewing the changes, commit them and run `make release-tag` to tag and push. See [Release Workflow](#release-workflow).
+> **`make release` handles version syncing, tests, and builds.** It does NOT touch git. The release prep changes are committed and opened as a PR. After the PR is merged, run `make release-tag` on the merged main branch to tag and push. See [Release Workflow](#release-workflow).
 
 ## How to Use This Document
 
@@ -12,7 +12,8 @@ This document is the definitive checklist for updating all version-bearing files
 4. Update `CHANGELOG.md` and create release notes (see [Manual Updates](#manual-updates))
 5. Review release content for [documentation accuracy](#content-accuracy-review) — protocol specs, architecture docs, and guides must reflect any code refactors or behavioral changes shipped in this release
 6. Run the [Verification](#verification) section to catch any missed files
-7. Commit all changes and run `make release-tag` to tag and push
+7. Commit all changes and open a PR — review, approve, and merge the PR on GitHub
+8. After merge, pull main and run `make release-tag` to tag and push (see [Release Workflow](#release-workflow))
 
 ---
 
@@ -316,9 +317,12 @@ grep -rnE 'oldCommandName|OldEndpointPath|OLD_CONSTANT' docs/ protocol/docs/ --i
 - [ ] **4. `docs/release_notes/vX.Y.x/vX.Y.Z.md`** — Create new release notes file
 - [ ] **5. Documentation headers** — Update version/date headers **only** in docs that were actually reviewed or modified in this release (use `git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/` to identify them). Do not blanket-bump all headers. See [Section C](#c-documentation-with-version--date-headers) for the full list of files that carry headers.
 - [ ] **6. Content review** — Complete the [Content Accuracy Review](#content-accuracy-review). Only update docs to fix inaccuracies or document missing features — do not rewrite accurate docs.
-- [ ] **7. Commit and tag** — `git add -A && git commit -m "release: vX.Y.Z"` then `make release-tag`
+- [ ] **7. Commit and open PR** — `git add -A && git commit -m "release: vX.Y.Z"`, push, and open a PR on GitHub
+- [ ] **8. Merge and tag** — After the PR is merged, pull main and run `make release-tag` to create and push tags
 
 **Only 2 files need manual version edits** (VERSION + CHANGELOG). The Python package files are auto-synced. Release notes and doc header updates are content-driven, not mechanical version bumps.
+
+> **Workflow note:** All release prep (steps 1–7) happens on a feature branch and is merged via PR. Tagging and pushing (step 8) happens on the merged main branch, not on the feature branch.
 
 ---
 
@@ -376,7 +380,9 @@ The protocol (Go + Python) and platform binary share a single version number. Th
 3. Builds binaries
 4. Prints next-step instructions
 
-### `make release-tag` — Tag & Push (run after committing)
+### `make release-tag` — Tag & Push (run after PR merge)
+
+> **Run this on the merged main branch**, not on the feature branch. The tags must point at the merge commit on main.
 
 1. Verifies working tree is clean
 2. Verifies Python versions match `VERSION`
@@ -407,7 +413,7 @@ For critical security issues or production bugs:
 2. Set `VERSION` and run `make release`
 3. Update `CHANGELOG.md` and release notes
 4. Complete the [Content Accuracy Review](#content-accuracy-review) for the touched areas
-5. Commit and run `make release-tag`
+5. Commit, open a PR, merge, then run `make release-tag` on main
 
 ---
 
@@ -416,9 +422,11 @@ For critical security issues or production bugs:
 The only git operations not automated by `make release` / `make release-tag` are:
 
 - Staging and committing the release-prep changes (`git add`, `git commit`)
-- Pushing the branch before tagging (`git push`)
+- Pushing the branch and opening a PR (`git push`, GitHub PR)
+- Merging the PR on GitHub
+- Pulling main after merge (`git checkout main && git pull`)
 
-`make release-tag` handles tag creation and tag pushing automatically.
+`make release-tag` handles tag creation and tag pushing automatically — run it on the merged main branch.
 
 ---
 
