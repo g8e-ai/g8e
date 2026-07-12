@@ -69,6 +69,18 @@ func NewSecretManager(db *sqliteutil.DB, secretsDir string, logger *slog.Logger)
 	}, nil
 }
 
+// NewSecretManagerWithKeystore creates a SecretManager using a pre-initialized keystore.
+// This is used for testing to bypass OS keychain dependencies.
+func NewSecretManagerWithKeystore(db *sqliteutil.DB, secretsDir string, logger *slog.Logger, ks *keystore.Keystore) (*SecretManager, error) {
+	return &SecretManager{
+		db:                  db,
+		secretsDir:          secretsDir,
+		bootstrapDigestPath: filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest),
+		logger:              logger,
+		keystore:            ks,
+	}, nil
+}
+
 // GetKeystore returns the underlying Keystore instance.
 func (m *SecretManager) GetKeystore() *keystore.Keystore {
 	return m.keystore
