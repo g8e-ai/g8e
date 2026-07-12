@@ -18,7 +18,10 @@ package system
 
 import (
 	"fmt"
+	"math"
 	"os"
+	"os/exec"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -65,8 +68,11 @@ func GetCPUPercent() float64 {
 }
 
 func GetMemoryPercent() float64 {
-	// macOS memory monitoring requires host_statistics64 Mach traps
-	return 0.0
+	details := GetMemoryDetails()
+	if details.TotalMB == 0 {
+		return 0.0
+	}
+	return details.Percent
 }
 
 func GetDiskPercent() float64 {
@@ -126,12 +132,68 @@ func GetMemoryDetails() models.HeartbeatMemoryDetails {
 
 	totalMB := int64(totalBytes / (1024 * 1024))
 
+	freePages, inactivePages, err := parseVMStat()
+	if err != nil {
+		return models.HeartbeatMemoryDetails{
+			TotalMB: totalMB,
+		}
+	}
+
+	pageSize := int64(unix.Getpagesize())
+	availableBytes := (freePages + inactivePages) * pageSize
+	availableMB := availableBytes / (1024 * 1024)
+	usedMB := totalMB - availableMB
+	if usedMB < 0 {
+		usedMB = 0
+	}
+
+	percent := 0.0
+	if totalBytes > 0 {
+		percent = float64(totalBytes-uint64(availableBytes)) / float64(totalBytes) * 100.0
+	}
+
 	return models.HeartbeatMemoryDetails{
 		TotalMB:     totalMB,
-		AvailableMB: 0, // Requires host_statistics64 Mach trap
-		UsedMB:      0,
-		Percent:     0.0,
+		AvailableMB: availableMB,
+		UsedMB:      usedMB,
+		Percent:     math.Round(percent*10) / 10,
 	}
+}
+
+// parseVMStat runs vm_stat and extracts free and inactive page counts.
+func parseVMStat() (freePages, inactivePages int64, err error) {
+	output, err := exec.Command("vm_stat").Output()
+	if err != nil {
+		return 0, 0, err
+	}
+
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "Pages free:"):
+			freePages = parseVMStatPages(line)
+		case strings.HasPrefix(line, "Pages inactive:"):
+			inactivePages = parseVMStatPages(line)
+		}
+	}
+
+	if freePages == 0 && inactivePages == 0 {
+		return 0, 0, fmt.Errorf("could not parse vm_stat output")
+	}
+	return freePages, inactivePages, nil
+}
+
+// parseVMStatPages extracts the page count from a vm_stat line like
+// "Pages free:                             12345."
+func parseVMStatPages(line string) int64 {
+	colon := strings.Index(line, ":")
+	if colon < 0 {
+		return 0
+	}
+	value := strings.TrimSpace(strings.TrimSuffix(line[colon+1:], "."))
+	value = strings.ReplaceAll(value, ",", "")
+	n, _ := strconv.ParseInt(value, 10, 64)
+	return n
 }
 
 func getInitProcessName() string {

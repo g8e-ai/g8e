@@ -40,8 +40,6 @@ func TestNewKeychainKeyring(t *testing.T) {
 }
 
 func TestKeychainKeyring_StoreRetrieveDelete(t *testing.T) {
-	t.Parallel()
-
 	if _, err := exec.LookPath("security"); err != nil {
 		t.Skip("security command not available, skipping keychain keyring test")
 	}
@@ -70,8 +68,6 @@ func TestKeychainKeyring_StoreRetrieveDelete(t *testing.T) {
 }
 
 func TestKeychainKeyring_RetrieveNotFound(t *testing.T) {
-	t.Parallel()
-
 	if _, err := exec.LookPath("security"); err != nil {
 		t.Skip("security command not available, skipping keychain keyring test")
 	}
@@ -88,8 +84,6 @@ func TestKeychainKeyring_RetrieveNotFound(t *testing.T) {
 }
 
 func TestKeychainKeyring_DeleteIdempotent(t *testing.T) {
-	t.Parallel()
-
 	if _, err := exec.LookPath("security"); err != nil {
 		t.Skip("security command not available, skipping keychain keyring test")
 	}

@@ -587,25 +587,22 @@ func TestNetworkIdentity_GetAllIPs_EmptyIdentity(t *testing.T) {
 func TestGetExternalInterfaceIP_WithMockInterfaces(t *testing.T) {
 	t.Parallel()
 
-	// Test with mock interfaces that have a non-loopback IPv4 address
 	mockInterfaces := []net.Interface{
-		{
-			Name: "eth0",
-		},
+		{Name: "eth0"},
 	}
 
-	// Mock the Addrs() call by using a custom implementation
-	// We'll test the function directly with a mock that returns specific interfaces
 	getInterfaces := func() ([]net.Interface, error) {
 		return mockInterfaces, nil
 	}
 
-	// Since we can't easily mock Addrs() without more complex refactoring,
-	// the mock Interface's Addrs() delegates to the real OS.
-	// On some platforms (e.g. macOS), this returns real IPs.
-	// We only verify the function returns a non-empty value.
-	result := getExternalInterfaceIPWithFunc(getInterfaces)
-	assert.NotEmpty(t, result)
+	mockAddrs := func(iface net.Interface) ([]net.Addr, error) {
+		return []net.Addr{
+			&net.IPNet{IP: net.ParseIP("10.0.0.5"), Mask: net.CIDRMask(24, 32)},
+		}, nil
+	}
+
+	result := getExternalInterfaceIPWithFunc(getInterfaces, mockAddrs)
+	assert.Equal(t, "10.0.0.5", result)
 }
 
 func TestGetExternalInterfaceIP_ErrorOnInterfaces(t *testing.T) {
@@ -616,7 +613,7 @@ func TestGetExternalInterfaceIP_ErrorOnInterfaces(t *testing.T) {
 		return nil, assert.AnError
 	}
 
-	result := getExternalInterfaceIPWithFunc(getInterfaces)
+	result := getExternalInterfaceIPWithFunc(getInterfaces, defaultInterfaceAddrs)
 	// Should return localhost on error
 	assert.Equal(t, "localhost", result)
 }
@@ -629,7 +626,7 @@ func TestGetExternalInterfaceIP_NoNonLoopbackInterfaces(t *testing.T) {
 		return []net.Interface{}, nil
 	}
 
-	result := getExternalInterfaceIPWithFunc(getInterfaces)
+	result := getExternalInterfaceIPWithFunc(getInterfaces, defaultInterfaceAddrs)
 	// Should return localhost when no non-loopback interfaces found
 	assert.Equal(t, "localhost", result)
 }

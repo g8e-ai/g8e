@@ -514,7 +514,9 @@ func TestGetProjectRoot(t *testing.T) {
 		root := getProjectRoot()
 		expected, err := filepath.EvalSymlinks(tmpDir)
 		require.NoError(t, err)
-		assert.Equal(t, expected, root)
+		actual, err := filepath.EvalSymlinks(root)
+		require.NoError(t, err)
+		assert.Equal(t, expected, actual)
 	})
 
 	t.Run("falls back to executable path when cwd fails", func(t *testing.T) {

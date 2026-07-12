@@ -208,7 +208,7 @@ func TestHeartbeatService_Build(t *testing.T) {
 		assert.GreaterOrEqual(t, heartbeat.PerformanceMetrics.CPUPercent, 0.0)
 		assert.GreaterOrEqual(t, heartbeat.PerformanceMetrics.MemoryPercent, 0.0)
 		assert.GreaterOrEqual(t, heartbeat.PerformanceMetrics.DiskPercent, 0.0)
-		assert.GreaterOrEqual(t, heartbeat.PerformanceMetrics.MemoryUsedMB, 0)
+		assert.Positive(t, heartbeat.PerformanceMetrics.MemoryUsedMB)
 		assert.Positive(t, heartbeat.PerformanceMetrics.MemoryTotalMB)
 		assert.GreaterOrEqual(t, heartbeat.PerformanceMetrics.DiskUsedGB, 0.0)
 		assert.Greater(t, heartbeat.PerformanceMetrics.DiskTotalGB, 0.0)

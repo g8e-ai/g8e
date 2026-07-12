@@ -34,26 +34,35 @@ import (
 // This allows dependency injection for testing.
 type netInterfacesFunc func() ([]net.Interface, error)
 
+// interfaceAddrsFunc is a function type for getting addresses of a network interface.
+// This allows dependency injection for testing.
+type interfaceAddrsFunc func(iface net.Interface) ([]net.Addr, error)
+
 // defaultNetInterfaces is the default implementation using net.Interfaces.
 func defaultNetInterfaces() ([]net.Interface, error) {
 	return net.Interfaces()
 }
 
+// defaultInterfaceAddrs is the default implementation using net.Interface.Addrs.
+func defaultInterfaceAddrs(iface net.Interface) ([]net.Addr, error) {
+	return iface.Addrs()
+}
+
 // GetExternalInterfaceIP returns the first non-loopback IPv4 address found on the host.
 // This is used for the Operator Bootstrap endpoint which remote operators rely on.
 func GetExternalInterfaceIP() string {
-	return getExternalInterfaceIPWithFunc(defaultNetInterfaces)
+	return getExternalInterfaceIPWithFunc(defaultNetInterfaces, defaultInterfaceAddrs)
 }
 
-// getExternalInterfaceIPWithFunc is the testable implementation that accepts a netInterfaces function.
-func getExternalInterfaceIPWithFunc(getInterfaces netInterfacesFunc) string {
+// getExternalInterfaceIPWithFunc is the testable implementation that accepts injectable functions.
+func getExternalInterfaceIPWithFunc(getInterfaces netInterfacesFunc, getAddrs interfaceAddrsFunc) string {
 	ifaces, err := getInterfaces()
 	if err != nil {
 		return "localhost"
 	}
 
 	for _, iface := range ifaces {
-		addrs, err := iface.Addrs()
+		addrs, err := getAddrs(iface)
 		if err != nil {
 			continue
 		}
