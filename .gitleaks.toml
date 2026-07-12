@@ -43,6 +43,24 @@ paths = [
 ]
 
 [[allowlists]]
+description = "Skip historical services directory (env var constants, not secrets)"
+paths = [
+  '''services/.*''',
+]
+
+[[allowlists]]
+description = "Skip historical python protocol env var constants"
+paths = [
+  '''protocol/python/g8e_protocol/.*''',
+]
+
+[[allowlists]]
+description = "Skip demo SSH keys and profiles"
+paths = [
+  '''demo/profiles/.*''',
+]
+
+[[allowlists]]
 description = "Skip known false-positive constant names"
 regexes = [
   '''X-G8E-Operator-API-Key''',

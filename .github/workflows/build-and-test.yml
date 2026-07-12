@@ -76,7 +76,7 @@ jobs:
 
       - name: Verify Version Sync
         run: |
-          VERSION=$(cat VERSION | tr -d '\n' | sed 's/^v//')
+          VERSION=$(cat VERSION | tr -d '\n\r' | sed 's/^v//')
           PY_VERSION=$(grep -E '^version = ' protocol/python/pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
           PY_INIT_VERSION=$(grep -E '^__version__ = ' protocol/python/g8e/__init__.py | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
           if [ "$PY_VERSION" != "$VERSION" ] || [ "$PY_INIT_VERSION" != "$VERSION" ]; then
@@ -141,7 +141,7 @@ jobs:
 
       - name: Verify version
         run: |
-          VERSION=$(cat VERSION | tr -d '\n' | sed 's/^v//')
+          VERSION=$(cat VERSION | tr -d '\n\r' | sed 's/^v//')
           python -c "import g8e; assert g8e.__version__ == '$VERSION', f'Version mismatch: {g8e.__version__} != $VERSION'"
           echo "Python version sync OK: $VERSION"
 
