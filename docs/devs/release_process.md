@@ -249,9 +249,7 @@ The following doc directories intentionally do **not** carry release `Version:` 
 
 ### E. Go Protocol Module
 
-| File | Notes |
-|------|-------|
-| `protocol/go.mod` | No version field to update. The Go module version is derived from git tags (`protocol/vX.Y.Z`), created by `make release-tag`. |
+The Go protocol code is part of the root module `github.com/g8e-ai/g8e`. There is no separate `protocol/go.mod` to update. The Go module version is derived from git tags (`vX.Y.Z`), created by `make release-tag`. External consumers use `go get github.com/g8e-ai/g8e@vX.Y.Z`.
 
 ### F. Build & CI Files (No Version Update Required)
 
@@ -374,7 +372,7 @@ The protocol (Go + Python) and platform binary share a single version number. Th
 ### `make release` — Prep (no git operations)
 
 1. Syncs `protocol/python/pyproject.toml` and `protocol/python/g8e/__init__.py` from `VERSION`
-2. Runs protocol tests
+2. Runs the full test suite (`make test`)
 3. Builds binaries
 4. Prints next-step instructions
 
@@ -386,13 +384,16 @@ The protocol (Go + Python) and platform binary share a single version number. Th
 4. Creates `vX.Y.Z` and `protocol/vX.Y.Z` tags on the current commit
 5. Pushes both tags to origin
 
+The `protocol/v*` tag triggers the Python PyPI release workflow only. The Go module is versioned by the `v*` tag.
+
 ### CI Workflows Triggered by Tags
 
 | Tag | Workflow | What It Does |
 |-----|----------|-------------|
-| `vX.Y.Z` | `.github/workflows/release-binary.yml` | Builds all platforms, creates GitHub release with binary assets |
-| `protocol/vX.Y.Z` | `.github/workflows/release-go-protocol.yml` | Creates GitHub release for Go module |
+| `vX.Y.Z` | `.github/workflows/release-binary.yml` | Builds all platforms, creates GitHub release with binary assets and `go get` install instructions |
 | `protocol/vX.Y.Z` | `.github/workflows/release-python-protocol.yml` | Builds and publishes Python package to PyPI |
+
+The `protocol/v*` tag is used only as a trigger for the Python PyPI release workflow. It is NOT used for Go module versioning — the Go module is part of the root module and is versioned by `v*` tags.
 
 Additionally, `.github/workflows/build-and-test.yml` includes a version sync check that fails CI if `pyproject.toml` or `__init__.py` don't match `VERSION`.
 

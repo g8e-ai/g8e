@@ -6,7 +6,6 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/fxamacker/cbor/v2 v2.9.2
-	github.com/g8e-ai/g8e/protocol v0.0.0
 	github.com/go-git/go-git/v5 v5.19.1
 	github.com/go-webauthn/webauthn v0.17.4
 	github.com/gorilla/websocket v1.5.3
@@ -17,8 +16,6 @@ require (
 	golang.org/x/crypto v0.53.0
 	modernc.org/sqlite v1.53.0
 )
-
-replace github.com/g8e-ai/g8e/protocol => ./protocol
 
 require (
 	dario.cat/mergo v1.0.2 // indirect
@@ -61,7 +58,7 @@ require (
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	golang.org/x/mod v0.37.0 // indirect
-	google.golang.org/grpc v1.81.1 // indirect
+	google.golang.org/grpc v1.81.1
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 

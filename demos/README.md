@@ -409,7 +409,7 @@ This creates one `.tar` file per image in the specified output directory.
 
 ### Step 3: Transfer to Air-Gapped Machine
 
-Copy the entire repository (including `vendor/` directories) and the exported
+Copy the entire repository (including the `vendor/` directory) and the exported
 image directory to the air-gapped machine via your approved transfer mechanism
 (e.g., secure USB, DLP-approved file transfer).
 
@@ -439,7 +439,7 @@ make test-airgap
 ```
 
 This checks that:
-- `vendor/` and `protocol/vendor/` directories exist
+- `vendor/` directory exists
 - The vendored build compiles without network access
 - `demos/images.json` manifest is present
 - No unpinned image references remain in compose files

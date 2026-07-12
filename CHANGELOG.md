@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## v1.5.x
+
+| Version | Date | Description | Notes |
+|---------|------|-------------|-------|
+| 1.5.0 | 2026-07-12 | Go protocol module merge. Merges the separate `github.com/g8e-ai/g8e/protocol` Go module into the root `github.com/g8e-ai/g8e` module, simplifying dependency management and versioning for external consumers. | [v1.5.0](docs/release_notes/v1.5.x/v1.5.0.md) |
+
 ## v1.4.x
 
 | Version | Date | Description | Notes |

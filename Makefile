@@ -58,11 +58,11 @@ TEST_COUNT := -count=1
 COVERAGE_THRESHOLD := 75
 
 # =============================================================================
-# COVERAGE EXCLUSIONS — single source of truth
+# TEST & COVERAGE EXCLUSIONS — single source of truth
 # =============================================================================
-# Packages excluded from both test runs and coverage profile.
-# Each pattern is matched against Go import paths and coverage profile file paths.
-EXCLUDE_PKGS := \
+# Packages excluded from test runs (and implicitly from coverage too).
+# Each pattern is matched against Go import paths.
+TEST_EXCLUDE_PKGS := \
 	mocks \
 	/test/ \
 	/cmd/g8e \
@@ -79,6 +79,15 @@ EXCLUDE_PKGS := \
 	/internal/services/gateway/scripts \
 	/internal/services/storage/storagetest
 
+# Packages excluded from the coverage profile but NOT from test discovery.
+# These compile and may be tested, but their statements should not affect
+# the coverage threshold (e.g. generated protobuf code, example programs).
+COVERAGE_ONLY_EXCLUDE_PKGS := \
+	g8e-ai/g8e/protocol/
+
+# All packages excluded from coverage: test exclusions + coverage-only exclusions.
+COVERAGE_EXCLUDE_PKGS := $(TEST_EXCLUDE_PKGS) $(COVERAGE_ONLY_EXCLUDE_PKGS)
+
 # Files excluded from coverage only (belong to otherwise-tested packages).
 EXCLUDE_FILES := \
 	internal/cli/cmd/demos.go \
@@ -92,12 +101,13 @@ EXCLUDE_FILES := \
 	internal/cli/cmd/mcp_backup.go
 
 # Grep chains derived from the lists above — do not edit directly.
-_PKG_GREP  := $(foreach p,$(EXCLUDE_PKGS),| grep -v "$(p)")
-_FILE_GREP := $(foreach f,$(EXCLUDE_FILES),| grep -v "$(f)")
-_COV_GREP  := $(_PKG_GREP) $(_FILE_GREP)
+_TEST_PKG_GREP := $(foreach p,$(TEST_EXCLUDE_PKGS),| grep -v "$(p)")
+_COV_PKG_GREP  := $(foreach p,$(COVERAGE_EXCLUDE_PKGS),| grep -v "$(p)")
+_FILE_GREP     := $(foreach f,$(EXCLUDE_FILES),| grep -v "$(f)")
+_COV_GREP      := $(_COV_PKG_GREP) $(_FILE_GREP)
 
 # Packages passed to go test.
-TEST_PKGS := $$(go list ./... $(_PKG_GREP))
+TEST_PKGS := $$(go list ./... $(_TEST_PKG_GREP))
 
 # Filter coverage.out (the raw profile) to remove excluded paths, then report %.
 # We operate on the profile data — not on the formatted output of go tool cover.
@@ -133,7 +143,7 @@ help:
 	@echo ""
 	@echo "Release:"
 	@echo "  release          Sync version, run tests, build binaries (no git ops)"
-	@echo "  release-tag      Tag & push v<VERSION> + protocol/v<VERSION> (run after commit)"
+	@echo "  release-tag      Tag & push v<VERSION> + protocol/v<VERSION> (Python release trigger)"
 	@echo ""
 	@echo "Protocol Generation:"
 	@echo "  generate      Generate all protocol artifacts (proto)"
@@ -470,7 +480,6 @@ test-airgap:
 	@echo "Running air-gap verification..."
 	@echo "  1. Verifying vendor directories exist..."
 	@test -d vendor/ || { echo "ERROR: vendor/ directory missing — run 'go mod vendor'"; exit 1; }
-	@test -d protocol/vendor/ || { echo "ERROR: protocol/vendor/ directory missing — run 'go mod vendor' in protocol/"; exit 1; }
 	@echo "  2. Building with vendored modules (-mod=vendor)..."
 	@go build -mod=vendor ./... || { echo "ERROR: vendored build failed"; exit 1; }
 	@echo "  3. Verifying images.json manifest exists..."
@@ -651,11 +660,11 @@ _ci-test:
 # from VERSION, runs tests, and builds binaries — but does NOT touch git.
 # Review the changes, commit, then run `make release-tag` to tag and push.
 #
-# The protocol/v* tag is required by the Go module proxy — a module at
-# github.com/g8e-ai/g8e/protocol needs protocol/vX.Y.Z tags to be `go get`-able.
-# The root binary always builds against ./protocol via the replace directive
-# in go.mod, so its `require ... v0.0.0` placeholder is intentional and never
-# bumped.
+# The protocol/v* tag triggers the Python PyPI release workflow.
+# The Go module is now part of the root module (github.com/g8e-ai/g8e)
+# and is versioned by the v* tag. External consumers use:
+#   go get github.com/g8e-ai/g8e@vX.Y.Z
+# The protocol/v* tag is NOT used for Go module versioning.
 
 .PHONY: release
 release:
@@ -681,9 +690,9 @@ release:
 	else \
 		echo "  __init__.py already in sync."; \
 	fi; \
-	echo "Running protocol tests..."; \
-	(cd protocol && go test -race -count=1 ./...); \
-	echo "  protocol tests passed."; \
+	echo "Running full test suite..."; \
+	$(MAKE) test; \
+	echo "  full test suite passed."; \
 	echo "Building binaries..."; \
 	$(MAKE) build; \
 	echo ""; \
@@ -695,10 +704,10 @@ release:
 release-tag:
 	@VERSION=$$(cat VERSION | tr -d '\n' | sed 's/^v//'); \
 	TAG="v$$VERSION"; \
-	PROTO_TAG="protocol/v$$VERSION"; \
+	PYTHON_TAG="protocol/v$$VERSION"; \
 	PY_VERSION=$$(grep -E '^version = ' protocol/python/pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
 	PY_INIT_VERSION=$$(grep -E '^__version__ = ' protocol/python/g8e/__init__.py | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
-	echo "=== release-tag: $$TAG + $$PROTO_TAG ==="; \
+	echo "=== release-tag: $$TAG + $$PYTHON_TAG ==="; \
 	if [ -n "$$(git status --porcelain)" ]; then \
 		echo "Error: working tree is dirty; commit or stash before tagging."; exit 1; \
 	fi; \
@@ -709,9 +718,9 @@ release-tag:
 	if git rev-parse -q --verify "refs/tags/$$TAG" >/dev/null; then \
 		echo "Error: tag $$TAG already exists."; exit 1; \
 	fi; \
-	if git rev-parse -q --verify "refs/tags/$$PROTO_TAG" >/dev/null; then \
-		echo "Error: tag $$PROTO_TAG already exists."; exit 1; \
+	if git rev-parse -q --verify "refs/tags/$$PYTHON_TAG" >/dev/null; then \
+		echo "Error: tag $$PYTHON_TAG already exists."; exit 1; \
 	fi; \
-	git tag "$$TAG" && git tag "$$PROTO_TAG"; \
-	git push origin "$$TAG" && git push origin "$$PROTO_TAG"; \
-	echo "Pushed $$TAG + $$PROTO_TAG — binary, Go protocol, and Python protocol releases will run in CI."
+	git tag "$$TAG" && git tag "$$PYTHON_TAG"; \
+	git push origin "$$TAG" && git push origin "$$PYTHON_TAG"; \
+	echo "Pushed $$TAG + $$PYTHON_TAG — binary and Python protocol releases will run in CI."

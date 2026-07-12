@@ -58,6 +58,11 @@ jobs:
           body: |
             ## g8e v${{ steps.parse_version.outputs.version }}
 
+            ### Go Module
+            ```bash
+            go get github.com/g8e-ai/g8e@v${{ steps.parse_version.outputs.version }}
+            ```
+
             ### Changes
             See [CHANGELOG.md](https://github.com/g8e-ai/g8e/blob/main/CHANGELOG.md) for details.
           draft: false
