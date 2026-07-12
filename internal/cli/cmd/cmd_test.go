@@ -64,7 +64,6 @@ func TestGatewayCommandSubcommands(t *testing.T) {
 
 		expectedSubcommands := []string{
 			"start",
-			"serve",
 			"stop",
 			"status",
 			"restart",
@@ -160,7 +159,7 @@ func TestOperatorCommandSubcommands(t *testing.T) {
 
 		expectedSubcommands := []string{
 			"list",
-			"run",
+			"start",
 			"cp",
 			"scp",
 			"deploy",

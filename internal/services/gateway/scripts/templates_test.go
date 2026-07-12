@@ -127,7 +127,7 @@ func TestRenderLinuxDeployScript_TemplateContainsDeployLogic(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	assert.Contains(t, out, "operator run")
+	assert.Contains(t, out, "operator start")
 	assert.Contains(t, out, "10.0.0.1")
 }
 

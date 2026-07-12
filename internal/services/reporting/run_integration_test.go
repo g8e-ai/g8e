@@ -362,8 +362,10 @@ func TestRun_LockedVault_KeyFileNotFound(t *testing.T) {
 
 func TestRun_MissingExecutionVault(t *testing.T) {
 	opts, _ := setupReportingEnv(t, true)
-	// Use a path in a nonexistent directory so SQLite can't create the DB.
-	opts.ExecutionVaultDBPath = filepath.Join("/nonexistent-dir-xyz", "test.db")
+	// Use a file as parent directory so SQLite can't create the DB (cross-platform).
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
+	opts.ExecutionVaultDBPath = filepath.Join(blocker, "test.db")
 
 	_, err := Run(context.Background(), opts)
 	require.NoError(t, err)
@@ -374,7 +376,9 @@ func TestRun_MissingExecutionVault(t *testing.T) {
 
 func TestRun_MissingReplayStore(t *testing.T) {
 	opts, _ := setupReportingEnv(t, true)
-	opts.ReplayStoreDBPath = filepath.Join("/nonexistent-dir-xyz", "test.db")
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
+	opts.ReplayStoreDBPath = filepath.Join(blocker, "test.db")
 
 	_, err := Run(context.Background(), opts)
 	require.NoError(t, err)
@@ -384,7 +388,9 @@ func TestRun_MissingReplayStore(t *testing.T) {
 
 func TestRun_MissingSuspendedTxStore(t *testing.T) {
 	opts, _ := setupReportingEnv(t, true)
-	opts.SuspendedTransactionDBPath = filepath.Join("/nonexistent-dir-xyz", "test.db")
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
+	opts.SuspendedTransactionDBPath = filepath.Join(blocker, "test.db")
 
 	_, err := Run(context.Background(), opts)
 	require.NoError(t, err)
@@ -408,7 +414,9 @@ func TestRun_CancelledContext(t *testing.T) {
 
 func TestRun_BadOutDir(t *testing.T) {
 	opts, _ := setupReportingEnv(t, false)
-	opts.OutDir = filepath.Join("/dev/null", "cannot-create-here")
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
+	opts.OutDir = filepath.Join(blocker, "cannot-create-here")
 
 	_, err := Run(context.Background(), opts)
 	require.Error(t, err)

@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Operator
 
-Last Updated: 2026-07-06
-Version: v1.3.7
+Last Updated: 2026-07-12
+Version: v1.4.0
 
 ---
 
@@ -21,7 +21,7 @@ The reference implementation is a single Go codebase that compiles into the g8e 
 The g8e binary uses a single cobra command tree. Gateway and Operator modes are invoked via subcommands.
 
 #### Gateway Mode (PDP)
-A Gateway enforces governance postures across all connected Operators. Start a gateway worker with `gw start` (managed) or `gateway serve` (foreground), specifying a posture via `--posture`:
+A Gateway enforces governance postures across all connected Operators. Start a gateway worker with `gw start` (background) or `gw start --follow` (foreground), specifying a posture via `--posture`:
 - `--posture doctrine`, Enforces L1 hard gates; audits L2/L3.
 - `--posture consensus`, Enforces L1/L2; audits L3. Requires `--tribunal-id` and `--tribunal-url` to connect to an enrolled Tribunal service for L2 deliberation.
 - `--posture notary`, Enforces L1/L2/L3 strictly.
@@ -29,22 +29,23 @@ A Gateway enforces governance postures across all connected Operators. Start a g
 Additional Gateway mode flags for consensus posture:
 - `--tribunal-id <id>`, ID of the TribunalPolicy for L2 consensus.
 - `--tribunal-url <url>`, URL of the Tribunal service for L2 deliberation.
+- `--tribunal-bootstrap <path>`, Path to a JSON file that seeds a TribunalPolicy and trusted signers at startup.
 
 #### Operator Mode (PEP)
-An Operator executes tools on a host and connects back to a Gateway. Start an operator worker with `operator run`:
-- `operator run -e, --endpoint <host>`, Connects to the specified Gateway.
-- `operator run -k, --key <path>`, Specifies the Operator private key.
-- `operator run --cert <path>`, Specifies the Operator certificate.
-- `operator run --trust-bundle <path>`, Specifies the trust bundle PEM file for mTLS validation.
-- `operator run --working-dir <path>`, Working directory for command execution.
-- `operator run -c, --cloud`, Cloud operator mode.
-- `operator run --provider <provider>`, Cloud provider (aws, gcp, azure).
-- `operator run -s, --execution-vault`, Enable execution vault (data stays in working directory).
-- `operator run -G, --no-git`, Disable Git integration.
-- `operator run -l, --log <level>`, Log level: info, error, debug.
-- `operator run --heartbeat-interval <seconds>`, Heartbeat interval in seconds (default: 30).
+An Operator executes tools on a host and connects back to a Gateway. Start an operator worker with `operator start`:
+- `operator start -e, --endpoint <host>`, Connects to the specified Gateway.
+- `operator start -k, --key <path>`, Specifies the Operator private key.
+- `operator start --cert <path>`, Specifies the Operator certificate.
+- `operator start --trust-bundle <path>`, Specifies the trust bundle PEM file for mTLS validation.
+- `operator start --working-dir <path>`, Working directory for command execution.
+- `operator start -c, --cloud`, Cloud operator mode.
+- `operator start --provider <provider>`, Cloud provider (aws, gcp, azure).
+- `operator start -s, --execution-vault`, Enable execution vault (data stays in working directory).
+- `operator start -G, --no-git`, Disable Git integration.
+- `operator start -l, --log <level>`, Log level: info, error, debug.
+- `operator start --heartbeat-interval <seconds>`, Heartbeat interval in seconds (default: 30).
 
-The binary always starts in CLI mode. Use `gw start` or `operator run` subcommands to launch worker processes.
+Running the binary with no arguments launches the Tactical Governance Console (TUI). Use `gw start` or `operator start` subcommands to launch worker processes.
 
 ---
 
@@ -82,6 +83,7 @@ The Makefile provides several build targets:
 - `make build-linux`, Builds the g8e binary for Linux (amd64, arm64, 386).
 - `make build-windows`, Builds the g8e binary for Windows (amd64, arm64).
 - `make build-darwin`, Builds the g8e binary for Darwin (amd64, arm64).
+- `make build-compressed`, Builds the g8e binary for the current platform and compresses it with UPX (requires UPX installed).
 - `make build-docker`, Builds the g8e binary for linux/amd64 inside a Docker container.
 - `make build-linux-docker`, Builds the g8e binary for Linux (amd64, arm64, 386) inside a Docker container.
 - `make build-windows-docker`, Builds the g8e binary for Windows (amd64, arm64) inside a Docker container.
@@ -151,7 +153,7 @@ The Operator must implement a singular verification gate that enforces:
 - **Freshness**: Validate `expires_at` is not passed and `nonce` is not in the replay store.
 - **State Binding**: Verify `state_merkle_root` matches the host's current local ledger root.
 - **L1Doctrine (Hard Gates)**: Enforce technical bedrock threat detection rules, forbidden patterns, and MITRE ATT&CK heuristics on the typed payload.
-- **L2Consensus**: Verify Tribunal deliberation votes (Ed25519 signatures) against a locally trusted SignerStore and the TribunalPolicy stored in the TribunalStoreService. Under `consensus` posture, the gateway delegates L2 deliberation to an enrolled Tribunal service rather than self-signing.
+- **L2Consensus**: Verify Tribunal deliberation votes (Ed25519 signatures) against a locally trusted signer store and the active TribunalPolicy. Under `consensus` posture, the gateway delegates L2 deliberation to an enrolled Tribunal service rather than self-signing.
 - **L3Notary**: Validate authorization proofs (mTLS certificate fingerprints for CLI sessions, WebAuthn proofs for web sessions).
 - **L4Warden**: Pre-dispatch verification of all preceding proofs and state roots.
 
@@ -161,7 +163,7 @@ Any verification failure must result in a typed rejection and audit entry. No fa
 
 The Operator must implement a single execution boundary permitted to mutate host state:
 
-- **Pre-execution Receipt**: Sign an ActionReceipt with status `EXECUTING` and commit it to the SQLAuditStore. Abort execution if this write fails.
+- **Pre-execution Receipt**: Sign an ActionReceipt with status `EXECUTING` and commit it to the encrypted audit log. Abort execution if this write fails.
 - **Execution**: Dispatch the verified payload to the appropriate handler (shell, file edit, etc.).
 - **Sovereign Execution Boundary**: Process output to scrub sensitive PII, credentials, and connection strings before data leaves the boundary.
 - **Post-execution Receipt**: Update the receipt to `COMPLETED` or `FAILED`, capture the new `state_root_after`, sign the result, and publish it back to the Gateway.
@@ -180,10 +182,10 @@ The Operator must establish workload identity via mTLS:
 
 The Operator must maintain the host as the authoritative source of truth:
 
-- **SQLAuditStore**: Append-only, encrypted SQLite log of every event and signed ActionReceipt. Fail-closed: reject events missing a valid operator_session_id. Requires encryption vault for data-at-rest protection (encryption is mandatory).
-- **GitLedgerService**: Git-backed version control for file mutations. Implements two-phase commit (LedgerHashBefore / LedgerHashAfter) and supports restoration to any prior state within the session. Requires encryption vault (encryption is mandatory).
-- **ExecutionVaultService**: SQLite storage for command execution results and file diffs. Requires encryption vault (encryption is mandatory).
-- **CanonicalDBService**: (Gateway mode only) Unified SQLite persistence for state roots, nonces, trusted signers, app policies, and suspended transactions. Requires encryption vault (encryption is mandatory).
+- **Encrypted Audit Log**: Append-only, encrypted log of every event and signed ActionReceipt. Fail-closed: reject events missing a valid operator session ID. Encryption at rest is mandatory.
+- **Git-backed Ledger**: Git-based version control for file mutations. Implements two-phase commit (hash before / hash after) and supports restoration to any prior state within the session. Encryption at rest is mandatory.
+- **Execution Vault**: Encrypted storage for command execution results and file diffs. Encryption at rest is mandatory.
+- **Canonical State Store**: (Gateway mode only) Unified encrypted persistence for state roots, nonces, trusted signers, app policies, and suspended transactions. Encryption at rest is mandatory.
 
 #### 6. Outbound-Only Connectivity
 
@@ -210,7 +212,7 @@ Your implementation must enforce these core invariants:
 4. **Expiry Enforcement**: Transactions must be rejected if they have expired.
 5. **Fail-Closed Execution**: Any verification failure must result in a typed rejection and audit entry. No fallback paths or silent retries.
 6. **Sovereignty**: Sensitive data must be scrubbed before leaving the execution boundary.
-7. **Local-First Audit**: All audit entries must be written to the host-local SQLAuditStore before execution.
+7. **Local-First Audit**: All audit entries must be written to the host-local encrypted audit log before execution.
 
 ### Sovereign Execution Boundary
 
@@ -239,7 +241,7 @@ The GovernanceEnvelope schema is defined in the protocol protobuf files. Your im
 3. **Support the canonical request payload mappings** for all first-class event types.
 4. **Handle L2 votes** from Tribunal deliberation, verifying the quorum of Ed25519 signatures against the TribunalPolicy.
 
-Refer to the protocol schema definitions in the `protocol/proto/` directory for the canonical schema definitions.
+Refer to the protocol schema definitions in the protocol protobuf files for the canonical schema definitions.
 
 ---
 
@@ -276,7 +278,7 @@ The vault is automatically unlocked when starting the Gateway or Operator. To ma
 
 ### Vault Configuration
 
-When starting the Gateway with `gw start` or `gateway serve`, the vault can be configured via CLI flags or environment variables:
+When starting the Gateway with `gw start` or `gw start --follow`, the vault can be configured via CLI flags or environment variables:
 
 - `--vault-dir <dir>`: Directory for vault data (default: `.g8e/vault`)
 - `--vault-key <path>`: Path to vault private key (default: `.g8e/secrets/key`)

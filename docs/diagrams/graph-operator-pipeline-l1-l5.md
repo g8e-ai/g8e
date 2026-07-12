@@ -6,32 +6,7 @@ First appeared in commit `8992215d`. Depicts the full five-layer interlock seque
 graph TD
     Start["Signed GovernanceEnvelope<br/>(Incoming Transaction)"]
 
-    subgraph L4Warden ["L4 Warden: pre-dispatch verification"]
-        direction TB
-        Replay{"Nonce, Expiry, Replay<br/>Durable SQLite reservation"}
-        L1{"L1: Doctrine<br/>Forbidden patterns, MITRE threat analysis"}
-        State{"State Root<br/>Merkle root match"}
-        L2{"L2: Consensus<br/>Ed25519 tribunal signatures"}
-        L3{"L3: Notary<br/>Human-presence proof"}
-
-        FailClosed["Fail Closed<br/>Typed sentinel error, audit entry"]
-        Verified["VerifiedTransaction"]
-
-        Replay -- "Reserved" --> L1
-        Replay -- "Replayed or expired" ---> FailClosed
-
-        L1 -- "Passed" --> State
-        L1 -- "Violated" ---> FailClosed
-
-        State -- "Matched" --> L2
-        State -- "Mismatch" ---> FailClosed
-
-        L2 -- "Quorum met" --> L3
-        L2 -- "Invalid or missing" ---> FailClosed
-
-        L3 -- "Authorized" --> Verified
-        L3 -- "Denied" ---> FailClosed
-    end
+    Warden["L4 Warden<br/>Pre-dispatch verification<br/>Nonce, Expiry, Replay - L1 Doctrine - State Root - L2 Consensus - L3 Notary"]
 
     subgraph L5Actuator ["L5 Actuator: execution boundary"]
         direction TB
@@ -44,9 +19,9 @@ graph TD
         Cap --> Exec --> Dissolve --> Receipt --> AuditLog
     end
 
-    Start --> Replay
-    Verified --> Cap
-    FailClosed --> BlockAudit["Blocked transaction audit entry"]
+    Start --> Warden
+    Warden -- "VerifiedTransaction" --> Cap
+    Warden -- "Fail Closed<br/>(typed sentinel error, audit entry)" --> BlockAudit["Blocked transaction audit entry"]
     AuditLog --> Done["Recorded, Signed, Audited"]
     BlockAudit --> Done
 ```

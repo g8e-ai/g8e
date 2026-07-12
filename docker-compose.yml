@@ -66,7 +66,7 @@ services:
       g8e-gateway:
         condition: service_healthy
     # g8e.local resolves to the gateway container via the g8e-net network alias
-    command: ["operator", "run", "-e", "g8e.local"]
+    command: ["operator", "start", "-e", "g8e.local"]
     restart: "no"
     deploy:
       resources:

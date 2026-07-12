@@ -34,7 +34,7 @@ func TestGatewayCmdStructure(t *testing.T) {
 		cmd := gatewayCmd()
 		require.NotNil(t, cmd)
 
-		expectedSubcommands := []string{"start", "serve", "stop", "status", "restart", "logs", "settings", "reset", "clean", "data", "security"}
+		expectedSubcommands := []string{"start", "stop", "status", "restart", "logs", "settings", "reset", "clean", "data", "security", "tunnel"}
 		for _, subcmd := range expectedSubcommands {
 			found := false
 			for _, c := range cmd.Commands() {
@@ -78,27 +78,6 @@ func TestGatewayStartCmdFlags(t *testing.T) {
 		flag := cmd.Flags().Lookup("posture")
 		require.NotNil(t, flag)
 		assert.Equal(t, "doctrine", flag.DefValue)
-	})
-}
-
-func TestGatewayServeCmdFlags(t *testing.T) {
-	t.Run("serve command has all expected flags", func(t *testing.T) {
-		cmd := gatewayServeCmd()
-		require.NotNil(t, cmd)
-
-		expectedFlags := []string{
-			"posture", "http-port", "https-port", "data-dir", "pki-dir", "secrets-dir",
-			"vault-dir", "vault-key", "vault-require-unlock",
-			"passkey-rp-id", "passkey-rp-name",
-			"rate-limit-rps", "rate-limit-burst",
-			"log", "cert-mode", "network-identity-file",
-			"tribunal-id", "tribunal-url",
-			"mcp-downstream-url", "a2a-downstream-url",
-		}
-		for _, flagName := range expectedFlags {
-			flag := cmd.Flags().Lookup(flagName)
-			assert.NotNil(t, flag, "gateway serve should have --%s flag", flagName)
-		}
 	})
 }
 

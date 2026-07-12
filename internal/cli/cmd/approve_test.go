@@ -152,6 +152,9 @@ func TestEnrollCmdWithConfigErrorPaths(t *testing.T) {
 		tmpDir := t.TempDir()
 		cfg := setupTestConfig(t, tmpDir)
 
+		config.SetEndpointOverride("127.0.0.1:65535")
+		t.Cleanup(func() { config.SetEndpointOverride("") })
+
 		loader := func(string) (*config.Config, error) {
 			return cfg, nil
 		}

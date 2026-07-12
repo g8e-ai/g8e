@@ -204,7 +204,7 @@ const (
 	// WebSessionTTL defines the lifetime of a web session.
 	WebSessionTTL = 24 * time.Hour
 	// WebSessionCookieName is the name of the browser session cookie used by the unified auth middleware.
-	WebSessionCookieName = "g8e_session"
+	WebSessionCookieName = "g8e_web_session_cookie"
 )
 
 // App enrollment type constants define the valid app_type values for external app enrollment.

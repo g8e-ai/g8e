@@ -628,7 +628,7 @@ func CheckOperatorRunningAtURL(operatorURL string) error {
 		hostPort = "127.0.0.1" + hostPort[9:]
 	}
 	// Try to connect to the port
-	conn, err := net.Dial(string(constants.NetworkProtocolTCP), hostPort)
+	conn, err := net.DialTimeout(string(constants.NetworkProtocolTCP), hostPort, 5*time.Second)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrServiceUnavailable, err)
 	}

@@ -9,7 +9,7 @@ g8e is a zero-trust execution platform for agentic infrastructure. Mutations are
 - **GovernanceEnvelope**: Canonical wire format for all mutations (protojson)
 - **5-layer verification**: L1 (Technical Bedrock) → L2 (Consensus) → L3 (Notary) → L4 (Warden) → L5 (Actuator)
 - **Data sovereignty**: Raw data stays on the Operator host; platform state is host-native under `.g8e/`
-- **BYO clients**: UI-less by design; the CLI (`./g8e`) is the default interface
+- **BYO clients**: The CLI (`./g8e`) is the default interface; MCP stdio for AI IDE integration; Console SPA and TUI for governance management
 
 See [g8e Protocol](../../protocol/docs/spec.md), [Gateway](../architecture/gateway.md), [Operator](../architecture/operator.md).
 
@@ -38,10 +38,10 @@ Startup sequence: binary check/build → root of trust generation (first boot) �
 ## Paths & State
 
 **Source paths** (git root):
-- `protocol/` - Protobuf schemas and JSON constants (SSOT)
+- `protocol/` - Protobuf schemas and JSON protocol constants
 - `cmd/g8e/` - Binary entrypoint
 - `internal/cli/cmd/` - Cobra command tree
-- `internal/cli/serve/` - Foreground worker bodies
+- `internal/cli/serve/` - Gateway and operator boot sequences
 - `internal/` - Internal Go packages
 - `internal/pkg/` - Shared internal packages (e.g., SSH utilities)
 - `docs/` - Documentation
@@ -81,7 +81,7 @@ Startup sequence: binary check/build → root of trust generation (first boot) �
 - Tier 1 (Unit) tests: mocks and stubs, no external dependencies (no files, network, or DB)
 - Tier 2 (Integration) and Tier 3 (E2E) tests: real database, pub/sub, and LLM calls
 - Keep test infrastructure separated from production code
-- Run tests via `./g8e test` (unit, integration, e2e, coverage, lint, agent, chaos, summary)
+- Run tests via `./g8e test` (unit, integration, e2e, coverage, lint, chaos, summary)
 - Document what the system does, not what it should do
 - Cross-link rather than repeat
 - Present tense, active voice, direct and specific
@@ -156,13 +156,13 @@ Several services have dependencies that cannot be passed to the constructor beca
 
 Go constants in `internal/constants/` are SSOT. JSON files in `protocol/constants/` are reference documentation and external protocol definitions.
 
-**Doctrines:** Stored in `protocol/constants/doctrine/` as canonical JSON, loaded by L1Doctrine at startup.
+**Doctrines:** Stored in `protocol/constants/doctrine/` as canonical JSON, validated by `make validate-doctrines`. L1Doctrine uses protobuf field options and hardcoded threat detectors at runtime; the JSON files are reference schemas.
 
 Adding doctrines: update JSON → `make validate-doctrines` → restart Operator.
 
 See [Constants Reference](../../protocol/docs/constants.md) and [Protocol Spec](../../protocol/docs/spec.md).
 
-**Code generation:** `make generate` (protobuf from `.proto` files) · `make proto` (alias)
+**Code generation:** `make proto` (protobuf from `.proto` files) · `make generate` (alias)
 
 ## Native Tools
 
@@ -182,7 +182,7 @@ MCP tools compiled into the g8e binary that execute within the Operator's execut
 | Concern | Location |
 |---|---|
 | Protobuf schemas | `protocol/proto/` |
-| Constants (JSON SSOT) | `protocol/constants/` |
+| Constants (JSON reference) | `protocol/constants/` |
 | Go registry files | `internal/constants/` |
 | Governance layers | `internal/services/governance/` |
 | CLI entry points | `cmd/g8e/` → `internal/cli/cmd/` |

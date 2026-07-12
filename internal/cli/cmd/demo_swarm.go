@@ -77,7 +77,7 @@ func runSwarmScenario(demoDir, scenario string) (scenarioResult, error) {
 			hasErrors = true
 		}
 
-		demoPrintln("  ── Step 4: Run governed recon mission via agent-harness ────────")
+		demoPrintln("  ── Step 4: Run governed recon mission via scenarios run ─────────")
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.UseRun = true
 		if err := demoStep(demoDir, "swarm-recon-mission via agent",
@@ -154,7 +154,7 @@ func runSwarmScenario(demoDir, scenario string) (scenarioResult, error) {
 			hasErrors = true
 		}
 
-		demoPrintln("  ── Step 3: Attempt weapon release via agent-harness (L1 block) ──")
+		demoPrintln("  ── Step 3: Attempt weapon release via scenarios run (L1 block) ──")
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.UseRun = true
 		if err := demoStep(demoDir, "swarm-weapon-release-block via agent",

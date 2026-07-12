@@ -12,7 +12,7 @@ g8e is a sovereign execution platform that delivers frontier AI reasoning to the
   <img src="docs/media/jit-mcp-with-receipts.png" alt="JIT MCP with governance receipts" width="720" />
 </p>
 
-**Quick Links** · [Getting Started](docs/guides/getting_started.md) · [Position Paper](docs/core/position_paper.md) · [Protocol Spec](protocol/docs/spec.md) · [CLI Reference](docs/guides/cli.md) · [MCP Integration](protocol/docs/mcp.md) · [Compliance](docs/reference/compliance-alignment.md)
+**Quick Links** · [Getting Started](docs/guides/getting_started.md) · [Position Paper](docs/core/position_paper.md) · [Protocol Spec](protocol/docs/spec.md) · [Build Gateway](docs/guides/build_gateway.md) · [MCP Integration](protocol/docs/mcp.md) · [Compliance](docs/reference/compliance-alignment.md)
 
 ## The Sovereignty Inversion
 
@@ -183,7 +183,7 @@ graph TD
     Start --> L1
 ```
 
-1. **L1 Doctrine**: Deterministic static analysis. Enforces rules against forbidden patterns and MITRE ATT&CK indicators. Active for every action. See [Doctrine Configuration](docs/guides/cli.md#doctrine-configuration).
+1. **L1 Doctrine**: Deterministic static analysis. Enforces rules against forbidden patterns and MITRE ATT&CK indicators. Active for every action. See [Gateway Postures](docs/guides/build_gateway.md#gateway-mode-flags).
 2. **L2 Consensus**: Multi-agent deliberation. An enrolled Tribunal service evaluates the envelope and produces signed votes over the canonical SHA-256 transaction hash. The gateway delegates L2 deliberation to the Tribunal and never self-signs. See [Consensus Layer](protocol/docs/spec.md#l2-consensus).
 3. **L3 Notary**: Hardware-bound human authorization. Utilizes WebAuthn/FIDO2 passkey assertions computed over the transaction hash. See [Authentication](docs/architecture/auth.md).
 4. **L4 Warden**: Fail-closed verification authority. Re-verifies all proofs against local state, signatures, freshness, and the state Merkle root. See [Warden Layer](protocol/docs/spec.md#l4-warden).
@@ -236,7 +236,7 @@ The binary is available for linux, darwin, and windows on amd64 and arm64 archit
 ./g8e gw data audit list --operator-session-id <session-id>
 ```
 
-For complete CLI usage, see the [CLI Reference](docs/guides/cli.md).
+For complete CLI usage, see the [Getting Started Guide](docs/guides/getting_started.md).
 
 ### Posture Configurations
 
@@ -248,7 +248,7 @@ The gateway supports three posture configurations:
 | `consensus` | enforced | enforced | audited |
 | `notary` | enforced | enforced | enforced |
 
-L4 Warden and L5 Actuator layers are always active in all configurations. See [Posture Configuration](docs/guides/cli.md#posture-configuration) for setup details.
+L4 Warden and L5 Actuator layers are always active in all configurations. See [Governance Postures](docs/guides/getting_started.md#governance-postures) for setup details.
 
 ## Compliance and Standards
 
@@ -256,7 +256,7 @@ The g8e platform is designed for environments requiring zero trust architecture 
 
 ## Status
 
-**v1.3.6**: Current release. Includes core protocol, gateway and operator roles, five-layer pipeline with Tribunal-based L2 consensus, PKI/mTLS identity, WebAuthn notary, MCP/A2A protocol translation, LFAA audit vault, native tools, JIT execution capabilities, bound vs observed state tiering, and multi-platform support. The gateway delegates L2 deliberation to an enrolled Tribunal service under consensus and notary postures. The L4 Warden verifies L2 consensus before L3 notary. The g8e Console SPA provides a browser-based dashboard for passkey management, interactive L3 transaction approval, and real-time SSE audit streaming. Browser-based passkey enrollment via the console SPA is the sole registration path. A layered L3 authorization model requires passkey proof for all callers, with mTLS transport authentication as an additional layer for CLI sessions. The CLI approval flow opens a browser for WebAuthn ceremonies and polls transaction status via mTLS.
+**v1.4.0**: Current release. Includes core protocol, gateway and operator roles, five-layer pipeline with Tribunal-based L2 consensus, PKI/mTLS identity, WebAuthn notary, MCP/A2A protocol translation, LFAA audit vault, native tools, JIT execution capabilities, bound vs observed state tiering, and multi-platform support. The gateway delegates L2 deliberation to an enrolled Tribunal service under consensus and notary postures. The L4 Warden verifies L2 consensus before L3 notary. The g8e Console SPA provides a browser-based dashboard for passkey management, interactive L3 transaction approval, and real-time SSE audit streaming. Browser-based passkey enrollment via the console SPA is the sole registration path. One-time enrollment tokens secure the passkey enrollment flow. A layered L3 authorization model requires passkey proof for all callers, with mTLS transport authentication as an additional layer for CLI sessions. The CLI approval flow opens a browser for WebAuthn ceremonies and receives transaction status via SSE notifications. CORS support enables cross-origin browser access. Environment variable resolution allows gateway flags to be set without CLI arguments. The gateway supports foreground mode for development and Docker deployments. New `g8e gui` and `g8e tunnel` command suites enable external frontend enrollment and Cloudflare Tunnel management. The L5 Actuator is refactored to use a cleaner `ExecutionHandler` interface. OpenAPI/Swagger annotations are added across gateway endpoints. The `operator run` command is renamed to `operator start`, and running `g8e` with no arguments now launches the TUI by default.
 
 ## Documentation
 
@@ -264,15 +264,16 @@ The g8e platform is designed for environments requiring zero trust architecture 
 
 #### Guides
 - [Getting Started](docs/guides/getting_started.md)
-- [CLI Reference](docs/guides/cli.md)
 - [Build Gateway](docs/guides/build_gateway.md)
 - [Build Operator](docs/guides/build_operator.md)
 - [Build Applications](docs/guides/build_apps.md)
 - [Connect Applications to Gateway](docs/guides/connect_apps_to_gateway.md)
 - [Connect Operator to Gateway](docs/guides/connect_operator_to_gateway.md)
-- [Build Agentic Systems](docs/guides/build_agentic_system.md)
 - [Air Gap Deployment](docs/guides/air_gap.md)
 - [Docker Gateway](docs/guides/docker_gateway.md)
+- [Cloudflare Tunnel Integration](docs/guides/cloudflare_tunnel.md)
+- [Lovable Frontend Integration](docs/guides/lovable.md)
+- [Live Swarm Demo](docs/guides/live-swarm-demo.md)
 
 #### Architecture
 - [Gateway Architecture](docs/architecture/gateway.md)
@@ -283,6 +284,7 @@ The g8e platform is designed for environments requiring zero trust architecture 
 - [Network Model](docs/architecture/network.md)
 - [Server-Sent Events](docs/architecture/sse.md)
 - [Governance](docs/architecture/governance.md)
+- [Scripts](docs/architecture/scripts.md)
 
 #### Reference
 - [Compliance Alignment](docs/reference/compliance-alignment.md)
@@ -299,6 +301,7 @@ The g8e platform is designed for environments requiring zero trust architecture 
 - [A2A Protocol](protocol/docs/a2a.md)
 - [Constants Reference](protocol/docs/constants.md)
 - [MCP JSON-RPC Schema](protocol/docs/mcp_jsonrpc_schema.json)
+- [API Reference](protocol/docs/reference/)
 
 ---
 

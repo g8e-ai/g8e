@@ -16,61 +16,12 @@ package platform
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 )
-
-func TestNetworkIdentityArgs(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name         string
-		identityData []byte
-		expectArgs   bool
-		checkPerms   bool
-	}{
-		{
-			name:         "writes file with private permissions",
-			identityData: []byte(`{"IPs":["192.0.2.10"]}`),
-			expectArgs:   true,
-			checkPerms:   true,
-		},
-		{
-			name:         "no data returns nil",
-			identityData: nil,
-			expectArgs:   false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			pm := &ProcessManager{runtimeDir: t.TempDir()}
-			args, err := pm.networkIdentityArgs(tt.identityData)
-			require.NoError(t, err)
-
-			if !tt.expectArgs {
-				assert.Nil(t, args)
-				return
-			}
-
-			expectedPath := filepath.Join(pm.runtimeDir, constants.NetworkIdentityFilename)
-			assert.Equal(t, []string{"--network-identity-file", expectedPath}, args)
-
-			if tt.checkPerms && runtime.GOOS != "windows" {
-				info, err := os.Stat(expectedPath)
-				require.NoError(t, err)
-				assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm())
-			}
-		})
-	}
-}
 
 func TestWriteNetworkIdentityFile_ErrorOnInvalidRuntimeDir(t *testing.T) {
 	t.Parallel()

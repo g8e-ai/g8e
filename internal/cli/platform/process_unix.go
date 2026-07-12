@@ -168,7 +168,7 @@ func (pm *ProcessManager) findOperatorProcess() int {
 
 // findOperatorProcessWithExecutor finds the PID using a provided CommandExecutor (for testing)
 func (pm *ProcessManager) findOperatorProcessWithExecutor(executor CommandExecutor) int {
-	pattern := fmt.Sprintf("g8e gateway serve.*--data-dir %s", pm.dataDir)
+	pattern := fmt.Sprintf("g8e gw start.*--data-dir %s", pm.dataDir)
 	cmd := executor.Command("pgrep", "-f", pattern)
 	output, err := executor.Output(cmd)
 	if err != nil {

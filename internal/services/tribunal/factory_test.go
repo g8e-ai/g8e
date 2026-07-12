@@ -18,6 +18,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -113,7 +114,9 @@ func TestSaveMemberKey_CreatesDirectoryAndFile(t *testing.T) {
 
 	info, err := os.Stat(keyPath)
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm(), "key file should have private permissions")
+	if runtime.GOOS != "windows" {
+		assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm(), "key file should have private permissions")
+	}
 
 	seedHex, err := os.ReadFile(keyPath)
 	require.NoError(t, err)

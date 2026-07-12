@@ -139,10 +139,9 @@ func TestIsSafeHost(t *testing.T) {
 	}
 }
 
-func TestCatchAllRedirect(t *testing.T) {
+func TestHTTPRouterNoRedirect(t *testing.T) {
 
-	h, cfg := setupTestHTTPHandler(t)
-	cfg.Gateway.HTTPSPort = 8443
+	h, _ := setupTestHTTPHandler(t)
 
 	router := h.buildHTTPRouter()
 
@@ -151,35 +150,24 @@ func TestCatchAllRedirect(t *testing.T) {
 		reqHost        string
 		reqPath        string
 		expectedStatus int
-		expectedLoc    string
 	}{
 		{
-			name:           "Redirect safe host localhost",
+			name:           "Unregistered path returns 404 not redirect",
 			reqHost:        "localhost",
 			reqPath:        "/some/path?foo=bar",
-			expectedStatus: http.StatusMovedPermanently,
-			expectedLoc:    "https://localhost:8443/some/path?foo=bar",
+			expectedStatus: http.StatusNotFound,
 		},
 		{
-			name:           "Redirect safe host with port",
+			name:           "Unregistered path with port returns 404",
 			reqHost:        "localhost:8080",
 			reqPath:        "/some/path",
-			expectedStatus: http.StatusMovedPermanently,
-			expectedLoc:    "https://localhost:8443/some/path",
+			expectedStatus: http.StatusNotFound,
 		},
 		{
-			name:           "Fallback for unsafe host",
+			name:           "Unregistered path with unsafe host returns 404",
 			reqHost:        "evil.com",
 			reqPath:        "/some/path",
-			expectedStatus: http.StatusMovedPermanently,
-			expectedLoc:    "https://localhost:8443/some/path",
-		},
-		{
-			name:           "Prevent path injection redirect",
-			reqHost:        "localhost",
-			reqPath:        "//evil.com/some/path",
-			expectedStatus: http.StatusTemporaryRedirect, // Go's ServeMux intercepts and cleans double slashes with a 307
-			expectedLoc:    "/evil.com/some/path",
+			expectedStatus: http.StatusNotFound,
 		},
 	}
 
@@ -192,7 +180,7 @@ func TestCatchAllRedirect(t *testing.T) {
 			router.ServeHTTP(rr, req)
 
 			assert.Equal(t, tc.expectedStatus, rr.Code)
-			assert.Equal(t, tc.expectedLoc, rr.Header().Get("Location"))
+			assert.Empty(t, rr.Header().Get("Location"))
 		})
 	}
 }

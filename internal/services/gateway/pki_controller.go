@@ -476,12 +476,12 @@ func (c *PKIController) handlePKIAppsDelegated(w http.ResponseWriter, r *http.Re
 	})
 }
 
-// @Summary		Bootstrap CA Linux script
-// @Description	Returns the Linux CA trust bootstrap script
+// @Summary		Web cert trust script (Linux/macOS)
+// @Description	Returns a combined Linux/macOS CA trust script for remote workstations
 // @Tags			bootstrap
 // @Produce		text/plain
 // @Success		200	{string}	string
-// @Router			/bootstrap-ca [get]
+// @Router			/web-cert.sh [get]
 func (c *PKIController) handleTrustScriptLinux(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
@@ -502,9 +502,6 @@ func (c *PKIController) handleTrustScriptLinux(w http.ResponseWriter, r *http.Re
 	port := c.gatewayHTTPPort()
 	caBundleURL := constants.APIPaths.WellKnownPKICABundle
 	localCAPath := filepath.ToSlash(paths.Infra.CaCertPath)
-	remoteBinaryName := constants.BinaryNameLinux
-	binaryURL := constants.APIPaths.WellKnownBinPrefix + remoteBinaryName
-	localBinaryName := constants.BinaryImageName
 
 	script := fmt.Sprintf(`#!/bin/sh
 set -e
@@ -513,8 +510,6 @@ GATEWAY_HOST="%s"
 GATEWAY_PORT="%s"
 CA_BUNDLE_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}%s"
 LOCAL_CA_PATH="%s"
-NODE_BINARY_NAME="%s"
-NODE_BINARY_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}%s"
 
 echo "[g8e] Fetching platform CA bundle from ${CA_BUNDLE_URL}..."
 mkdir -p "$(dirname "${LOCAL_CA_PATH}")"
@@ -527,95 +522,24 @@ fi
 
 echo "[g8e] CA bundle installed to ${LOCAL_CA_PATH}"
 
-echo "[g8e] Downloading g8e Node from ${NODE_BINARY_URL}..."
-curl -fsSL "${NODE_BINARY_URL}" -o "${NODE_BINARY_NAME}"
-chmod +x "${NODE_BINARY_NAME}"
-
-if [ ! -f "${NODE_BINARY_NAME}" ]; then
-    echo "[g8e] ERROR: Failed to download g8e Node"
-    exit 1
-fi
-
-echo "[g8e] Node Binary downloaded to ${NODE_BINARY_NAME}"
-echo "[g8e] IMPORTANT: Please restart all open browsers for changes to take effect."
-echo "[g8e] You can now run: ./${NODE_BINARY_NAME} -e ${GATEWAY_HOST} auth enroll"
-`, gatewayHost, port, caBundleURL, localCAPath, localBinaryName, binaryURL)
-
-	w.Header().Set(constants.HeaderContentType, constants.HeaderValueShell)
-	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
-	w.Header().Set(constants.HeaderXFrameOptions, constants.HeaderValueDeny)
-	w.WriteHeader(http.StatusOK)
-	// #nosec G705 - Script is generated from controlled format strings with validated parameters,
-	// and response is marked as shell content (not HTML), so XSS is not applicable.
-	_, _ = w.Write([]byte(script))
-}
-
-// @Summary		Bootstrap CA macOS script
-// @Description	Returns the macOS CA trust bootstrap script
-// @Tags			bootstrap
-// @Produce		text/plain
-// @Success		200	{string}	string
-// @Router			/bootstrap-ca-macos [get]
-func (c *PKIController) handleTrustScriptMacos(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
-		return
-	}
-
-	// Extract the gateway host from the request
-	gatewayHost := r.Header.Get("X-Forwarded-Host")
-	if gatewayHost == "" {
-		gatewayHost = r.Host
-	}
-
-	// Remove port if present
-	if h, _, err := net.SplitHostPort(gatewayHost); err == nil {
-		gatewayHost = h
-	}
-
-	port := c.gatewayHTTPPort()
-	caBundleURL := constants.APIPaths.WellKnownPKICABundle
-	remoteBinaryName := constants.BinaryNameDarwin
-	binaryURL := constants.APIPaths.WellKnownBinPrefix + remoteBinaryName
-	localBinaryName := constants.BinaryImageName
-
-	script := fmt.Sprintf(`#!/bin/sh
-set -e
-
-GATEWAY_HOST="%s"
-GATEWAY_PORT="%s"
-CA_BUNDLE_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}%s"
-TEMP_CA_PATH="/tmp/g8e-ca.crt"
-NODE_BINARY_NAME="%s"
-NODE_BINARY_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}%s"
-
-echo "[g8e] Fetching platform CA bundle from ${CA_BUNDLE_URL}..."
-curl -fsSL "${CA_BUNDLE_URL}" -o "${TEMP_CA_PATH}"
-
-if [ ! -f "${TEMP_CA_PATH}" ]; then
-    echo "[g8e] ERROR: Failed to download CA bundle"
-    exit 1
-fi
-
-echo "[g8e] Installing CA bundle to macOS Keychain..."
+OS_NAME=$(uname -s)
+echo "[g8e] Installing CA bundle to system trust store (${OS_NAME})..."
 echo "[g8e] Sudo password may be required to trust the certificate."
-sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "${TEMP_CA_PATH}"
 
-echo "[g8e] CA bundle installed and trusted."
-
-echo "[g8e] Downloading g8e Node from ${NODE_BINARY_URL}..."
-curl -fsSL "${NODE_BINARY_URL}" -o "${NODE_BINARY_NAME}"
-chmod +x "${NODE_BINARY_NAME}"
-
-if [ ! -f "${NODE_BINARY_NAME}" ]; then
-    echo "[g8e] ERROR: Failed to download g8e Node"
-    exit 1
+if [ "${OS_NAME}" = "Darwin" ]; then
+    sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "${LOCAL_CA_PATH}"
+elif command -v update-ca-certificates >/dev/null 2>&1; then
+    sudo cp "${LOCAL_CA_PATH}" /usr/local/share/ca-certificates/g8e-ca-bundle.crt
+    sudo update-ca-certificates
+elif command -v trust >/dev/null 2>&1; then
+    sudo trust anchor "${LOCAL_CA_PATH}"
+else
+    echo "[g8e] WARNING: Could not detect system trust store tool."
+    echo "[g8e] The CA bundle is at ${LOCAL_CA_PATH} — install it manually if needed."
 fi
-
-echo "[g8e] Node Binary downloaded to ${NODE_BINARY_NAME}"
+echo "[g8e] CA bundle trusted system-wide."
 echo "[g8e] IMPORTANT: Please restart all open browsers for changes to take effect."
-echo "[g8e] You can now run: ./${NODE_BINARY_NAME} -e ${GATEWAY_HOST} auth enroll"
-`, gatewayHost, port, caBundleURL, localBinaryName, binaryURL)
+`, gatewayHost, port, caBundleURL, localCAPath)
 
 	w.Header().Set(constants.HeaderContentType, constants.HeaderValueShell)
 	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
@@ -626,12 +550,12 @@ echo "[g8e] You can now run: ./${NODE_BINARY_NAME} -e ${GATEWAY_HOST} auth enrol
 	_, _ = w.Write([]byte(script))
 }
 
-// @Summary		Bootstrap CA Windows script
-// @Description	Returns the Windows CA trust bootstrap script
+// @Summary		Web cert trust script (Windows)
+// @Description	Returns the Windows CA trust script for remote workstations
 // @Tags			bootstrap
 // @Produce		text/plain
 // @Success		200	{string}	string
-// @Router			/bootstrap-ca.ps1 [get]
+// @Router			/web-cert.ps1 [get]
 func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
@@ -663,57 +587,78 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 	port := c.gatewayHTTPPort()
 	caBundleURL := constants.APIPaths.WellKnownPKICABundle
 	localCAPath := filepath.ToSlash(paths.Infra.CaCertPath)
-	remoteBinaryName := constants.BinaryNameWindows
-	binaryURL := constants.APIPaths.WellKnownBinPrefix + remoteBinaryName
-	localBinaryName := constants.BinaryImageNameWindows
 
-	script := fmt.Sprintf(`$ErrorActionPreference = "Continue"
+	script := fmt.Sprintf(`$ErrorActionPreference = "Stop"
 
 $GatewayHost = "%s"
 $GatewayPort = "%s"
 $CABundleUrl = "http://${GatewayHost}:${GatewayPort}%s"
 $LocalCAPath = "%s"
-$NodeBinaryName = "%s"
-$NodeBinaryUrl = "http://${GatewayHost}:${GatewayPort}%s"
 
 Write-Host "[g8e] Fetching platform CA bundle from ${CABundleUrl}..."
 $LocalDir = Split-Path -Parent $LocalCAPath
 if (-not (Test-Path $LocalDir)) {
     New-Item -ItemType Directory -Path $LocalDir -Force | Out-Null
 }
+
+# Use Invoke-WebRequest with explicit HTTP (no SSL needed for bootstrap port)
 try {
-    Invoke-RestMethod -Uri $CABundleUrl -OutFile $LocalCAPath
+    Invoke-WebRequest -Uri $CABundleUrl -OutFile $LocalCAPath -UseBasicParsing
 } catch {
     Write-Host "[g8e] ERROR: Failed to download CA bundle: $_"
-    return
+    exit 1
 }
 
 if (-not (Test-Path $LocalCAPath)) {
     Write-Host "[g8e] ERROR: Failed to download CA bundle"
-    return
+    exit 1
 }
 
-Write-Host "[g8e] CA bundle installed to ${LocalCAPath}"
+Write-Host "[g8e] CA bundle downloaded to ${LocalCAPath}"
 
-# Download g8e Node
-Write-Host "[g8e] Downloading g8e Node from ${NodeBinaryUrl}..."
+# Install the CA certificate into the Windows trust store (LocalMachine\Root)
+Write-Host "[g8e] Installing CA certificate into Windows trust store..."
+Write-Host "[g8e] Administrator privileges may be required."
+
+# Try using Import-Certificate (PowerShell 5.1+)
+$installed = $false
 try {
-    Invoke-RestMethod -Uri $NodeBinaryUrl -OutFile $NodeBinaryName
+    $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2 $LocalCAPath
+    $store = New-Object System.Security.Cryptography.X509Certificates.X509Store "Root","LocalMachine"
+    $store.Open("ReadWrite")
+    $store.Add($cert)
+    $store.Close()
+    $installed = $true
+    Write-Host "[g8e] CA certificate installed to LocalMachine\Root via .NET"
 } catch {
-    Write-Host "[g8e] ERROR: Failed to download g8e Node: $_"
-    return
+    Write-Host "[g8e] .NET method failed: $_, trying certutil..."
 }
 
-if (-not (Test-Path $NodeBinaryName)) {
-    Write-Host "[g8e] ERROR: Failed to download g8e Node"
-    return
+if (-not $installed) {
+    try {
+        $result = certutil -addstore -f "Root" $LocalCAPath 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $installed = $true
+            Write-Host "[g8e] CA certificate installed to LocalMachine\Root via certutil"
+        } else {
+            Write-Host "[g8e] certutil failed with exit code $LASTEXITCODE"
+            Write-Host $result
+        }
+    } catch {
+        Write-Host "[g8e] certutil failed: $_"
+    }
 }
 
-Write-Host "[g8e] Node Binary downloaded to ${NodeBinaryName}"
+if (-not $installed) {
+    Write-Host "[g8e] ERROR: Could not install CA certificate automatically."
+    Write-Host "[g8e] The CA bundle is at ${LocalCAPath}. Install it manually:"
+    Write-Host "[g8e]   certutil -addstore -f Root ${LocalCAPath}"
+    exit 1
+}
 
+Write-Host "[g8e] CA certificate trusted system-wide."
 Write-Host "[g8e] IMPORTANT: Please restart all open browsers for changes to take effect."
-Write-Host "[g8e] You can now run: .\\${NodeBinaryName} -e ${GatewayHost} auth enroll"
-`, gatewayHost, port, caBundleURL, localCAPath, localBinaryName, binaryURL)
+`, gatewayHost, port, caBundleURL, localCAPath)
 
 	w.Header().Set(constants.HeaderContentType, constants.HeaderValuePowerShell)
 	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
@@ -724,8 +669,8 @@ Write-Host "[g8e] You can now run: .\\${NodeBinaryName} -e ${GatewayHost} auth e
 	_, _ = w.Write([]byte(script))
 }
 
-// @Summary		Bootstrap CA Windows script (alias)
-// @Description	Returns the Windows CA trust bootstrap script (alias endpoint)
+// @Summary		Web cert trust script (Windows alias)
+// @Description	Returns the Windows CA trust script (alias endpoint)
 // @Tags			bootstrap
 // @Produce		text/plain
 // @Success		200	{string}	string

@@ -42,7 +42,7 @@ const (
 	// Requires a verified client certificate with valid operator/CLI/app identity.
 	RouteAuthMTLS
 	// RouteAuthWebSession: web session cookie only (users/me, auth/sessions/me, passkeys management, approvals browser).
-	// Validates the g8e_session cookie and stamps context with user_id + web_session_id.
+	// Validates the web_session cookie and stamps context with user_id + web_session_id.
 	RouteAuthWebSession
 	// RouteAuthDual: mTLS OR web session cookie (SSE stream, SSE events).
 	// Tries mTLS first (stronger auth); falls back to cookie if no cert present.
@@ -81,10 +81,9 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addPrefix(constants.APIPaths.WellKnownPKIPrefix, RouteAuthNone)
 	r.addPrefix(constants.APIPaths.WellKnownBinPrefix, RouteAuthNone)
 
-	// Trust script endpoints (public for initial bootstrap)
-	r.addExact(constants.APIPaths.BootstrapCALinux, RouteAuthNone)
-	r.addExact(constants.APIPaths.BootstrapCAMacos, RouteAuthNone)
-	r.addExact(constants.APIPaths.BootstrapCAWindows, RouteAuthNone)
+	// Web cert trust script endpoints (public for remote workstations)
+	r.addExact(constants.APIPaths.WebCertLinux, RouteAuthNone)
+	r.addExact(constants.APIPaths.WebCertWindows, RouteAuthNone)
 	r.addExact(constants.APIPaths.WellKnownTrustWindows, RouteAuthNone)
 
 	// Deploy script endpoints (public for initial deployment)

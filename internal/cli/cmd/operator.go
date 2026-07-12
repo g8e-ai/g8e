@@ -42,7 +42,7 @@ func operatorCmd() *cobra.Command {
 
 	cmd.AddCommand(
 		operatorListCmd(),
-		operatorRunCmd(),
+		operatorStartCmd(),
 		operatorCpCmd(),
 		operatorScpCmd(),
 		operatorDeployCmd(),
@@ -101,7 +101,7 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 	return cmd
 }
 
-func operatorRunCmd() *cobra.Command {
+func operatorStartCmd() *cobra.Command {
 	var key string
 	var clientCert string
 	var trustBundle string
@@ -114,9 +114,9 @@ func operatorRunCmd() *cobra.Command {
 	var heartbeatInterval int
 
 	cmd := &cobra.Command{
-		Use:   "run",
-		Short: "Run the g8e Operator in foreground (worker mode)",
-		Long:  `Run the g8e Operator in foreground as a worker. This connects to the Gateway and executes commands. This is the re-exec target for remote deployment and can also be run directly for debugging.`,
+		Use:   "start",
+		Short: "Start the g8e Operator in foreground (worker mode)",
+		Long:  `Start the g8e Operator in foreground as a worker. This connects to the Gateway and executes commands. This is the re-exec target for remote deployment and can also be run directly for debugging.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			endpoint, _ := cmd.Flags().GetString("endpoint")
 			opts := serve.ServeOperatorOptions{

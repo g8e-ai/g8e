@@ -4,12 +4,12 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-07-06
-Version: v1.3.7
+Last Updated: 2026-07-12
+Version: v1.4.0
 
 The **g8e Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
-The reference implementation of a g8e-compliant Policy Execution Point (PEP) is the g8e Node. It functions as both a **g8e Operator** and a **Model Context Protocol (MCP) Server**. The same Go codebase provides the logic for both the g8e Gateway (PDP) and the g8e Operator (PEP), differentiated by CLI subcommands (`gw serve` vs `operator run`):
+The reference implementation of a g8e-compliant Policy Execution Point (PEP) is the g8e Node. It functions as both a **g8e Operator** and a **Model Context Protocol (MCP) Server**. The same Go codebase provides the logic for both the g8e Gateway (PDP) and the g8e Operator (PEP), differentiated by CLI subcommands (`gw start` vs `operator start`):
 
 - **g8e Gateway (PDP)**: When run in Gateway mode (utilizing `L1Doctrine`, `L2Consensus`, and `L3Notary` as a central authority), it acts as the central Policy Decision Point (PDP) with platform persistence and pub/sub brokering.
 - **g8e Operator (PEP)**: When run as a host agent, it acts as the Policy Execution Point (PEP) and MCP server, enforcing local verification before host mutation.
@@ -37,7 +37,7 @@ The **L1Doctrine** layer provides foundational hard gates. It utilizes Protobuf 
 The **L2Consensus** layer verifies the intent of the request via a Byzantine Fault Tolerant (BFT) quorum. It validates Ed25519 signatures from independent reasoning agents (the **Tribunal**) against the Operator's locally trusted signer store. This ensures that no single upstream agent can unilaterally mutate the host.
 
 ### L3: Notary (Authorization)
-The **L3Notary** layer enforces human-in-the-loop authorization. For web-based sessions, it validates FIDO2/WebAuthn (Passkey) proofs. For CLI sessions, it validates mTLS certificate fingerprints and cryptographic signatures over the transaction hash. For operator sessions (outbound mode), it validates mTLS certificate fingerprints and cryptographic signatures without CLI session or certificate revocation checks (passkey auth is not available for operators). Mutations are blocked until a valid L3 proof is presented. Non-mutation actions (as classified by the action type's intrinsic mutation property) do not require L3 proof. L3 approval notifications use Server-Sent Events (SSE) for real-time delivery: the Gateway emits an `approval.completed` event scoped to the submitting user when a passkey approval is verified, and CLI clients subscribe to the SSE stream rather than polling.
+The **L3Notary** layer enforces human-in-the-loop authorization. For web-based sessions, it validates FIDO2/WebAuthn (Passkey) proofs. For CLI sessions, it validates mTLS certificate fingerprints and cryptographic signatures over the transaction hash. For operator sessions (outbound mode), it validates mTLS certificate fingerprints and cryptographic signatures without CLI session or certificate revocation checks (passkey auth is not available for operators). Mutations are blocked until a valid L3 proof is presented. Non-mutation actions (as classified by the action type's intrinsic mutation property) do not require L3 proof. L3 approval notifications use Server-Sent Events (SSE) for real-time delivery: the Gateway emits an `approval.completed` event scoped to the submitting user when a passkey approval is verified, and CLI clients subscribe to the SSE stream rather than polling. See [SSE Streaming](./sse.md) for the full SSE architecture.
 
 ### L4: Warden (Pre-dispatch Gate)
 The **L4Warden** is the final verification gate before execution. It enforces:
@@ -126,7 +126,7 @@ The g8e Operator is fully isolated from Identity Providers (IdP). The g8e Gatewa
 
 ### Local-First Audit Architecture (LFAA)
 The host is the authoritative source of truth for all mutations.
-- **Audit Vault**: An append-only SQLite log of every event and signed `ActionReceipt`. It is fail-closed: events missing a valid operator session ID are rejected. All sensitive content fields are encrypted at rest using the vault subsystem (mandatory since v1.0.10).
+- **Audit Vault**: An append-only SQLite log of every event and signed `ActionReceipt`. It is fail-closed: events missing a valid operator session ID are rejected. All sensitive content fields are [encrypted at rest](./encryption.md) using the vault subsystem (mandatory since v1.0.10).
 - **Scrubbed vs. Raw Logs**: Sensitive data scrubbing separates logs into a **Scrubbed Vault** (safe for AI reading) and a **Raw Vault** (unscrubbed forensic record for human security audits).
 - **Git-Backed Ledger**: Implements a two-phase commit (`state_root_before` / `state_root_after`) for file mutations using native `go-git`. Files are mirrored and can be restored to any prior state. The ledger also encrypts mirrored files at rest when the vault is unlocked (mandatory since v1.0.10).
 
@@ -228,6 +228,9 @@ Query the audit vault to verify governance enforcement:
 # Generate a compliance report (JSON)
 ./g8e audit report
 
+# Export the full receipts bundle for archival
+./g8e audit export --out receipts.json
+
 # Aggregate summary by event type and receipt status
 ./g8e audit summary
 ```
@@ -262,4 +265,9 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 - [Network Architecture](./network.md) for SPIFFE ID formats, PKI hierarchy, mTLS enforcement, and port topology
 - [Governance](./governance.md) for posture configuration and tribunal setup
 - [Auth Architecture](./auth.md) for enrollment, passkey, and session management details
-- [CLI Guide](../guides/cli.md) for command reference and usage examples
+- [Getting Started](../guides/getting_started.md) for initial setup and usage examples
+- [Connect Operator to Gateway](../guides/connect_operator_to_gateway.md) for remote operator enrollment
+- [SSE Streaming](./sse.md) for real-time event delivery architecture
+- [Scripts](./scripts.md) for bootstrap and deploy script reference
+- [Storage Architecture](./storage.md) for audit vault and ledger internals
+- [Encryption](./encryption.md) for encryption at rest details

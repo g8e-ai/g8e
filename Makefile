@@ -16,6 +16,8 @@
 
 SHELL := /bin/bash
 export PATH := $(HOME)/go/bin:$(PATH)
+GOTOOLCHAIN ?= auto
+export GOTOOLCHAIN
 TMPDIR ?= /tmp
 .DEFAULT_GOAL := help
 
@@ -566,8 +568,8 @@ clean:
 	@rm -rf bin/
 	@rm -f *.sha256 *.test coverage.out coverage_filtered.out buf
 	@rm -rf .g8e-harness-*/
-	@go clean -cache
-	@go clean -modcache
+	@GOTOOLCHAIN=local go clean -cache
+	@GOTOOLCHAIN=local go clean -modcache
 	@echo "Clean complete."
 
 .PHONY: clean-harness

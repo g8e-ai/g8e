@@ -208,6 +208,14 @@ func (b *GatewayWebSocketHandler) RegisterHandler(channel string, handler func(s
 
 // HandleWebSocket upgrades the HTTP connection and passes it to a new session handler.
 // Extracts mTLS identity for topic ACL enforcement (Plan §5).
+// @Summary		WebSocket pub/sub
+// @Description	Upgrades to a WebSocket connection for bidirectional publish/subscribe messaging.
+// @Description	Requires mTLS authentication. Topic ACLs enforce that subscribers can only
+// @Description	subscribe to channels matching their mTLS workload identity.
+// @Tags			pubsub
+// @Produce		text/event-stream
+// @Success		101	{string}	string	"WebSocket Upgrade"
+// @Router			/ws/v1/pubsub [get]
 func (b *GatewayWebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	ws, err := wsUpgrader.Upgrade(w, r, nil)
 	if err != nil {

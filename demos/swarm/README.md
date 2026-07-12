@@ -123,7 +123,7 @@ The demo includes simulated battlefield intelligence in `target-data/`:
 
 ## Demo Scenarios
 
-The swarm demo includes 3 real scenarios integrated into the `g8e demos run` CLI command. Each scenario submits a real `GovernanceEnvelope` through the gateway via mTLS using the agent-harness.
+The swarm demo includes 3 real scenarios integrated into the `g8e demos run` CLI command. Each scenario submits a real `GovernanceEnvelope` through the gateway via mTLS using `demos scenarios run`.
 
 ### Scenario 1: Authorized Recon Mission (Governed Drone Deployment)
 ```bash

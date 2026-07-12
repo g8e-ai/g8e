@@ -450,38 +450,7 @@ func TestRunAgentHarness_ConfigLoadError(t *testing.T) {
 
 		err := runAgentHarness(cmd, []string{})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "agent run: load config")
-	})
-}
-
-func TestRunAgentHarnessAudit_ConfigLoadError(t *testing.T) {
-	t.Run("returns error when config file does not exist", func(t *testing.T) {
-		chdirTemp(t)
-
-		harnessConfigPath = filepath.Join(t.TempDir(), "nonexistent-config.json")
-		harnessMTLSURL = ""
-		harnessPublicURL = ""
-		harnessCert = ""
-		harnessKey = ""
-		harnessCA = ""
-		harnessAPIKey = ""
-		harnessSessionID = ""
-		harnessOutDir = ""
-		harnessL3Mode = ""
-		harnessEnsemble = 3
-		harnessVerbose = false
-		harnessPhase = "all"
-		harnessConsensusSeed = ""
-		harnessTribunalID = ""
-
-		cmd := &cobra.Command{}
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		err := runAgentHarnessAudit(cmd, []string{})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "agent audit: load config")
+		assert.Contains(t, err.Error(), "scenarios run: load config")
 	})
 }
 

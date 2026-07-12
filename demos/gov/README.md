@@ -8,7 +8,7 @@ The gov demo demonstrates:
 
 - **CUI exfiltration detection** via classification marking patterns and CMMC access control rules
 - **Two-layer defense**: network isolation (Layer 1) + doctrine enforcement (Layer 2)
-- **Agent-harness mTLS transactions** submitting real GovernanceEnvelopes through the gateway
+- **Demo scenario mTLS transactions** submitting real GovernanceEnvelopes through the gateway
 - **Network isolation** preventing unauthorized access from net_untrusted to net_secure
 - **Audit trail integrity** with hash-chained ledger receipts
 
@@ -91,7 +91,7 @@ The scenario runs a 5-step flow:
 
 1. **Gateway health check** — confirms the g8e gateway is live
 2. **Operator enrollment verification** — confirms mTLS certs exist
-3. **Agent-harness mTLS transaction** — submits a `gov-cui-exfil-block` scenario via the real gateway; L1 doctrine blocks the CUI exfiltration payload at confidence >= 0.95
+3. **Demo scenario mTLS transaction** — submits a `gov-cui-exfil-block` scenario via the real gateway; L1 doctrine blocks the CUI exfiltration payload at confidence >= 0.95
 4. **Audit log tail** — verifies doctrine rejection in gateway logs
 5. **Network isolation proof** — bad-actor on net_untrusted has no route to net_secure (supplementary proof)
 

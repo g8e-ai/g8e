@@ -99,6 +99,7 @@ type HealthResponse struct {
 	Status          constants.GatewayMode `json:"status"`
 	Mode            constants.GatewayMode `json:"mode"`
 	Version         string                `json:"version"`
+	PID             int                   `json:"pid"`
 	GovernanceReady bool                  `json:"governance_ready"`
 	StateMerkleRoot string                `json:"state_merkle_root,omitempty"`
 }

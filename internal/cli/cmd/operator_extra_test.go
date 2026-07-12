@@ -62,11 +62,11 @@ func TestOperatorCpCmdExecution(t *testing.T) {
 	})
 }
 
-func TestOperatorRunCmdFlags(t *testing.T) {
-	t.Run("run command has all expected flags", func(t *testing.T) {
+func TestOperatorStartCmdFlags(t *testing.T) {
+	t.Run("start command has all expected flags", func(t *testing.T) {
 		root := &cobra.Command{Use: "g8e"}
 		root.PersistentFlags().StringP("endpoint", "e", "", "Gateway endpoint")
-		cmd := operatorRunCmd()
+		cmd := operatorStartCmd()
 		root.AddCommand(cmd)
 		_ = cmd.ParseFlags([]string{})
 
@@ -76,14 +76,14 @@ func TestOperatorRunCmdFlags(t *testing.T) {
 		}
 		for _, flagName := range expectedFlags {
 			flag := cmd.Flags().Lookup(flagName)
-			assert.NotNil(t, flag, "operator run should have --%s flag", flagName)
+			assert.NotNil(t, flag, "operator start should have --%s flag", flagName)
 		}
 	})
 
-	t.Run("run command endpoint has shorthand 'e'", func(t *testing.T) {
+	t.Run("start command endpoint has shorthand 'e'", func(t *testing.T) {
 		root := &cobra.Command{Use: "g8e"}
 		root.PersistentFlags().StringP("endpoint", "e", "", "Gateway endpoint")
-		cmd := operatorRunCmd()
+		cmd := operatorStartCmd()
 		root.AddCommand(cmd)
 		_ = cmd.ParseFlags([]string{})
 
@@ -91,8 +91,8 @@ func TestOperatorRunCmdFlags(t *testing.T) {
 		assert.NotNil(t, flag)
 	})
 
-	t.Run("run command heartbeat defaults to 30", func(t *testing.T) {
-		cmd := operatorRunCmd()
+	t.Run("start command heartbeat defaults to 30", func(t *testing.T) {
+		cmd := operatorStartCmd()
 		flag := cmd.Flags().Lookup("heartbeat-interval")
 		require.NotNil(t, flag)
 		assert.Equal(t, "30", flag.DefValue)

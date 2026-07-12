@@ -17,7 +17,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/g8e-ai/g8e/internal/config"
@@ -209,58 +208,12 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
 
-	mux.HandleFunc(constants.APIPaths.BootstrapCALinux, h.pkiController.handleTrustScriptLinux)
-	mux.HandleFunc(constants.APIPaths.BootstrapCAMacos, h.pkiController.handleTrustScriptMacos)
-	mux.HandleFunc(constants.APIPaths.BootstrapCAWindows, h.pkiController.handleTrustScriptWindows)
+	mux.HandleFunc(constants.APIPaths.WebCertLinux, h.pkiController.handleTrustScriptLinux)
+	mux.HandleFunc(constants.APIPaths.WebCertWindows, h.pkiController.handleTrustScriptWindows)
 	mux.HandleFunc("/.well-known/g8e/pki/trust-windows", h.pkiController.handleTrustScriptWindowsAlias)
 	mux.HandleFunc("/.well-known/g8e/bin/", h.pkiController.handleNodeBinaryDownload)
 	mux.HandleFunc(constants.APIPaths.DeployScriptLinux, h.pkiController.handleDeployScriptLinux)
 	mux.HandleFunc(constants.APIPaths.DeployScriptWindows, h.pkiController.handleDeployScriptWindows)
-
-	// Catch-all redirect to HTTPS for all other routes
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		host := r.Host
-		if h, _, err := net.SplitHostPort(host); err == nil {
-			host = h
-		}
-
-		if !isSafeHost(host, h.cfg) {
-			if h.cfg != nil && h.cfg.Endpoint != "" {
-				host = h.cfg.Endpoint
-			} else {
-				host = "localhost"
-			}
-		}
-
-		var httpsPort int
-		if h.cfg != nil && h.cfg.Gateway.HTTPSPort != 0 {
-			httpsPort = h.cfg.Gateway.HTTPSPort
-		} else {
-			httpsPort = constants.Ports.OperatorHttps
-		}
-
-		var targetHost string
-		if httpsPort == 443 {
-			targetHost = host
-		} else {
-			targetHost = net.JoinHostPort(host, strconv.Itoa(httpsPort))
-		}
-
-		path := r.URL.Path
-		if path == "" {
-			path = "/"
-		}
-		for strings.HasPrefix(path, "//") {
-			path = path[1:]
-		}
-
-		target := "https://" + targetHost + path
-		if r.URL.RawQuery != "" {
-			target += "?" + r.URL.RawQuery
-		}
-
-		http.Redirect(w, r, target, http.StatusMovedPermanently) // #nosec G710
-	})
 
 	// Wrap with rate limiting
 	return h.pathTraversalGuard(h.rateLimitMiddleware(mux))

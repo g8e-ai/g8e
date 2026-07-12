@@ -10,7 +10,7 @@ The Go module requires Go 1.26 and depends on `google.golang.org/grpc` and `goog
 
 ### Python
 
-The Python package requires Python 3.10 or later and depends on `pydantic>=2.0.0` and `protobuf>=4.0.0`. Install with `pip install g8e-protocol`.
+The Python package requires Python 3.10 or later and depends on `pydantic>=2.0.0` and `protobuf>=4.0.0`. Install with `pip install g8e`.
 
 ## Directory Structure
 
@@ -131,7 +131,7 @@ The `models/` directory contains JSON Schema files that define the structure for
 
 ### Python Package
 
-The Python package is in `python/` and installs as `g8e-protocol`. The import namespace is `g8e`.
+The Python package is in `python/` and installs as `g8e`. The import namespace is `g8e`.
 
 - **`g8e.constants`**: Runtime loader for JSON protocol constants. Loads all constant registries from `constants/` at import time. Exports `EVENTS`, `STATUS`, `MSG`, `COLLECTIONS`, `KV`, `CHANNELS`, `PUBSUB`, `INTENTS`, `PROMPTS`, `TIMESTAMP`, `HEADERS`, `DOCUMENT_IDS`, `PLATFORM`, `AGENTS`, `NETWORK`, `API_PATHS`, and the `ComponentName` StrEnum (`CLIENT`, `G8EE`, `G8EO`, `OPERATOR`). Also exports HTTP header name constants for session, context, and identity propagation.
 - **`g8e.enums`**: Dynamic enum generation from protocol constants. Generates `StrEnum` and `IntEnum` classes from the `STATUS` and `EVENTS` dicts at access time using `__getattr__`. Integer-valued categories produce `IntEnum`; all others produce `StrEnum`. Enum member names are SCREAMING_SNAKE_CASE; values preserve the raw protocol wire format. Exports `EventType` and all status category enums.

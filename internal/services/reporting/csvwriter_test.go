@@ -121,7 +121,11 @@ func TestWriteCSV(t *testing.T) {
 	})
 
 	t.Run("returns error on invalid path", func(t *testing.T) {
-		_, err := writeCSV("/nonexistent/path/file.csv", ReceiptRow{}.Columns(), nil)
+		dir := t.TempDir()
+		blocker := filepath.Join(dir, "blocker")
+		require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
+
+		_, err := writeCSV(filepath.Join(blocker, "file.csv"), ReceiptRow{}.Columns(), nil)
 		require.Error(t, err)
 	})
 }

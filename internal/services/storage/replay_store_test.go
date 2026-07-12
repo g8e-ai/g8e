@@ -283,6 +283,10 @@ func TestReplayStore_CleanupStaleReserved_Success(t *testing.T) {
 	_, err := rs.ReserveNonce(nonce, expiresAt)
 	require.NoError(t, err)
 
+	// Brief sleep to ensure time.Now() in CleanupStaleReserved advances past
+	// the reserved_at timestamp (Windows clock resolution is ~15ms).
+	time.Sleep(20 * time.Millisecond)
+
 	// Cleanup with a very short duration (should remove the reserved nonce)
 	err = rs.CleanupStaleReserved(1 * time.Nanosecond)
 	require.NoError(t, err)
@@ -337,6 +341,10 @@ func TestReplayStore_CleanupStaleReserved_MultipleNonces(t *testing.T) {
 		_, err := rs.ReserveNonce(nonce, expiresAt)
 		require.NoError(t, err)
 	}
+
+	// Brief sleep to ensure time.Now() in CleanupStaleReserved advances past
+	// all reserved_at timestamps (Windows clock resolution is ~15ms).
+	time.Sleep(20 * time.Millisecond)
 
 	// Cleanup all as stale
 	err := rs.CleanupStaleReserved(1 * time.Nanosecond)

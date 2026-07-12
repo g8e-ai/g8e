@@ -175,7 +175,7 @@ Any file in the output that carries a version/date header should have that heade
 > | Format | Example | Files |
 > |--------|---------|-------|
 > | Plain | `Version: vX.Y.Z` / `Last Updated: YYYY-MM-DD` | most architecture, guide, reference, and protocol docs |
-> | Bold | `**Version:** vX.Y.Z` / `**Last Updated:** YYYY-MM-DD` | `docs/guides/build_agentic_system.md` |
+> | Bold | `**Version:** vX.Y.Z` / `**Last Updated:** YYYY-MM-DD` | (none currently) |
 > | Document Version (no `v`) | `**Document Version:** X.Y.Z` | `docs/reference/compliance-alignment.md` |
 > | Date only (no version line) | `Last Updated: YYYY-MM-DD` | `protocol/docs/a2a.md`, `protocol/docs/mcp.md` |
 
@@ -192,35 +192,34 @@ Any file in the output that carries a version/date header should have that heade
 | 12 | `docs/architecture/sse.md` |
 | 13 | `docs/architecture/storage.md` |
 
-#### Guide Docs (`docs/guides/`) — 10 files
+#### Guide Docs (`docs/guides/`) — 9 files
 
 | # | File | Note |
 |---|------|------|
 | 14 | `docs/guides/air_gap.md` | |
-| 15 | `docs/guides/build_agentic_system.md` | **bold** header format |
-| 16 | `docs/guides/build_apps.md` | |
-| 17 | `docs/guides/build_gateway.md` | |
-| 18 | `docs/guides/build_operator.md` | |
-| 19 | `docs/guides/cli.md` | |
-| 20 | `docs/guides/connect_apps_to_gateway.md` | |
-| 21 | `docs/guides/connect_operator_to_gateway.md` | |
-| 22 | `docs/guides/docker_gateway.md` | |
-| 23 | `docs/guides/getting_started.md` | |
+| 15 | `docs/guides/build_apps.md` | |
+| 16 | `docs/guides/build_gateway.md` | |
+| 17 | `docs/guides/build_operator.md` | |
+| 18 | `docs/guides/cli.md` | |
+| 19 | `docs/guides/connect_apps_to_gateway.md` | |
+| 20 | `docs/guides/connect_operator_to_gateway.md` | |
+| 21 | `docs/guides/docker_gateway.md` | |
+| 22 | `docs/guides/getting_started.md` | |
 
 #### Reference Docs (`docs/reference/`) — 2 files
 
 | # | File | Note |
 |---|------|------|
-| 24 | `docs/reference/glossary.md` | plain `Version:` header |
-| 25 | `docs/reference/compliance-alignment.md` | `**Document Version:**` (no `v` prefix) |
+| 23 | `docs/reference/glossary.md` | plain `Version:` header |
+| 24 | `docs/reference/compliance-alignment.md` | `**Document Version:**` (no `v` prefix) |
 
 #### Protocol Docs (`protocol/docs/`) — 3 files
 
 | # | File | Note |
 |---|------|------|
-| 26 | `protocol/docs/spec.md` | has both `Version:` and `Last Updated:` |
-| 27 | `protocol/docs/a2a.md` | `Last Updated:` only — update the date |
-| 28 | `protocol/docs/mcp.md` | `Last Updated:` only — update the date |
+| 25 | `protocol/docs/spec.md` | has both `Version:` and `Last Updated:` |
+| 26 | `protocol/docs/a2a.md` | `Last Updated:` only — update the date |
+| 27 | `protocol/docs/mcp.md` | `Last Updated:` only — update the date |
 
 #### Update Pattern for Each Modified Doc
 

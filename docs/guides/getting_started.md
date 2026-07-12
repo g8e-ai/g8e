@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-07-10
-Version: v1.3.11
+Last Updated: 2026-07-12
+Version: v1.4.0
 
 ---
 
@@ -41,7 +41,7 @@ Everything, including the Go compiler and build dependencies, runs inside the co
 | Go | 1.26.5, required to build from source |
 | Make | Any recent version, required to run build targets |
 | Git | Any recent version, required to clone the repository |
-| Python | 3.11+, optional, required only for demo environments and protocol library development |
+| Python | 3.11+, optional, required only for protocol library development |
 
 > **Don't have `make` or `go` installed?** Run the setup script for your platform to detect and install them automatically (see [scripts.md](../architecture/scripts.md) for details):
 > - **Linux:** `bash scripts/linux-setup.sh`
@@ -280,7 +280,7 @@ The CLI displays configurations for `g8e.local` (mTLS), IP Address (mTLS), and S
 
 ## Industry Demos
 
-The `demos/` directory contains Docker Compose environments for seven demo environments: **Healthcare** (HIPAA/PHI), **Finance** (trading controls), **Government** (CUI/CMMC), **Secure Data** (governed data migration with two-operator chain-of-custody), **DoW** (Department of War tactical edge with SIGINT, EO/IR, and PNT fusion sensors), **Swarm** (drone swarm with 20 autonomous operators), and **DHS** (persistent sovereign capability with coalition data-plane governance, cross-domain release control, and cryptographically receipted destruction). Each demo is hermetically sealed with its own networks, volumes, and doctrine rules.
+The `demos/` directory contains Docker Compose environments for eight demo environments: **Healthcare** (HIPAA/PHI), **Finance** (trading controls), **Government** (CUI/CMMC), **Secure Data** (governed data migration with two-operator chain-of-custody), **DoW** (Department of War tactical edge with SIGINT, EO/IR, and PNT fusion sensors), **Swarm** (drone swarm with 20 autonomous operators), **DHS** (persistent sovereign capability with coalition data-plane governance, cross-domain release control, and cryptographically receipted destruction), and **Frontend** (third-party frontend enrollment with CORS, passkey, and SSE protection). Each demo is hermetically sealed with its own networks, volumes, and doctrine rules.
 
 ### What the demos use Docker for
 
@@ -292,18 +292,17 @@ Each demo spins up a full isolated stack via Docker Compose:
 - **Target system**, mock EHR/trading/classified-doc API on `net_secure`
 - **Observability**, log aggregator and audit viewer on `net_mgmt`
 
-All g8e services (gateway, operator, agent runtime) use `demos/Dockerfile` with `build: context: ..`, which copies the pre-built binary from `demos/bin/g8e` into a Debian-based image. Auxiliary services (agent runtime, LLM backend, bad actor, observability) use Alpine or slim base images. The secure-data demo deploys two gateway-operator pairs (source and destination domains) on separate subnets. The DoW demo deploys three sensor agent containers (SIGINT, EO/IR, PNT fusion) with SWaP resource limits on all g8e containers. The swarm demo deploys a single gateway with 20 operator containers. The DHS demo deploys a real `agent-coalition` container running `agent-harness` scenarios, a real `datasvc` Python HTTP actuator on `net_secure`, and display-only source connectors modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries.
+All g8e services (gateway, operator, agent runtime) use the root `Dockerfile` with `build: context: ..`, which performs a multi-stage Go build inside Docker. No pre-built binary is required. Auxiliary services (target systems, sensors, bad actors, observability) use Alpine, Python, Nginx, or other base images. The secure-data demo deploys two gateway-operator pairs (source and destination domains) on separate subnets. The DoW demo deploys three sensor agent containers (SIGINT, EO/IR, PNT fusion) with SWaP resource limits on all g8e containers. The swarm demo deploys a single gateway with 20 operator containers. The DHS demo deploys a real `agent-coalition` container running `demos scenarios run`, a real `datasvc` Python HTTP actuator on `net_secure`, and display-only source connectors modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries.
 
 All demos use the `/api/v1/health` endpoint for gateway health checks.
 
-The `g8e` demos CLI checks for a local binary at `demos/bin/g8e` and prints a warning if it is not found. This binary is required: `demos/Dockerfile` copies it into the container image. Run `make build` before starting any demo to produce the binary at `demos/bin/g8e`.
+The `g8e` demos CLI checks for a local binary at `demos/bin/g8e` and prints a warning if it is not found. This binary is not required for Docker Compose builds, which compile from source using the root `Dockerfile`.
 
 ### Prerequisites for demos
 
 - Docker 24.0+ with Docker Compose v2
-- Go 1.26+ (or a pre-built `demos/bin/g8e` binary)
 
-Run `make build` before starting any demo. The build target compiles the g8e binary and copies it to `demos/bin/g8e`. The `demos/Dockerfile` copies this binary into each container image.
+No pre-build step is required. Docker Compose builds the g8e binary from source inside each container using the root `Dockerfile` multi-stage build.
 
 ### Run a demo
 
@@ -372,10 +371,11 @@ docker compose down -v
 | swarm | 1 | Authorized recon mission (governed drone deployment) |
 | swarm | 2 | Weapons safety doctrine block |
 | swarm | 3 | Navigation boundary violation block |
+| frontend | 1 | Third-party frontend enrollment |
 
 ### Demo port mappings
 
-Each demo uses distinct host ports to allow simultaneous deployment:
+Each demo uses distinct host ports to allow simultaneous deployment. The frontend demo shares ports with secure-data and cannot run at the same time:
 
 | Demo | HTTP | HTTPS | Demo UI |
 |---|---|---|---|
@@ -387,6 +387,7 @@ Each demo uses distinct host ports to allow simultaneous deployment:
 | swarm | 8085 | 8448 | 5005 |
 | dow | 8086 | 8449 | - |
 | dhs | 8087 | 8450 | - |
+| frontend | 8083 | 8446 | 3003 |
 
 ---
 
@@ -421,7 +422,6 @@ After the gateway is running and the CLI is authenticated:
 - **[Connect Operator to Gateway](connect_operator_to_gateway.md)**, Enrollment, mTLS configuration, and session management
 - **[Connect Apps to Gateway](connect_apps_to_gateway.md)**, Integrate application-layer adapters
 - **[Docker Gateway Guide](docker_gateway.md)**, Docker-specific configuration, volumes, and production considerations
-- **[CLI Reference](cli.md)**, Full command-line interface reference
 - **[Architecture](../architecture/gateway.md)**, Platform architecture and 5-layer verification sequence
 - **[MCP Protocol](../../protocol/docs/mcp.md)**, Connect AI clients via Model Context Protocol
 - **[A2A Protocol](../../protocol/docs/a2a.md)**, Agent-to-agent communication patterns

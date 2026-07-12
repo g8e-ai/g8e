@@ -15,6 +15,7 @@ package storage
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -79,9 +80,13 @@ func TestNewSuspendedTransactionService_NilConfig(t *testing.T) {
 func TestNewSuspendedTransactionService_InvalidDBPath(t *testing.T) {
 	t.Parallel()
 
-	// Use an invalid path that should fail
+	// Create a file to use as parent directory — os.MkdirAll will fail because
+	// the path component is a file, not a directory. This is cross-platform.
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
+
 	config := &SuspendedTransactionConfig{
-		DBPath: "/invalid/path/that/does/not/exist/suspended.db",
+		DBPath: filepath.Join(blocker, "suspended.db"),
 	}
 
 	logger := testutil.NewTestLogger()

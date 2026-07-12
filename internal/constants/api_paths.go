@@ -118,10 +118,9 @@ var APIPaths = struct {
 	WellKnownBinPrefix      string `json:"well_known_bin_prefix"`
 	WellKnownPKIPrefix      string `json:"well_known_pki_prefix"`
 	WellKnownTrustWindows   string `json:"well_known_trust_windows"`
-	// Bootstrap scripts
-	BootstrapCALinux   string `json:"bootstrap_ca_linux"`
-	BootstrapCAMacos   string `json:"bootstrap_ca_macos"`
-	BootstrapCAWindows string `json:"bootstrap_ca_windows"`
+	// Web cert trust scripts (for remote workstations)
+	WebCertLinux   string `json:"web_cert_linux"`
+	WebCertWindows string `json:"web_cert_windows"`
 	// Deploy scripts
 	DeployScriptLinux   string `json:"deploy_script_linux"`
 	DeployScriptWindows string `json:"deploy_script_windows"`
@@ -240,10 +239,9 @@ var APIPaths = struct {
 	WellKnownBinPrefix:      "/.well-known/g8e/bin/",
 	WellKnownPKIPrefix:      "/.well-known/g8e/pki/",
 	WellKnownTrustWindows:   "/.well-known/g8e/pki/trust-windows",
-	// Bootstrap scripts
-	BootstrapCALinux:   "/bootstrap-ca",
-	BootstrapCAMacos:   "/bootstrap-ca-macos",
-	BootstrapCAWindows: "/bootstrap-ca.ps1",
+	// Web cert trust scripts (for remote workstations)
+	WebCertLinux:   "/web-cert.sh",
+	WebCertWindows: "/web-cert.ps1",
 	// Deploy scripts
 	DeployScriptLinux:   "/" + DeployScriptFilenameLinux,
 	DeployScriptWindows: "/" + DeployScriptFilenameWindows,

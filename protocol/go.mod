@@ -1,6 +1,6 @@
 module github.com/g8e-ai/g8e/protocol
 
-go 1.26
+go 1.26.5
 
 require (
 	google.golang.org/grpc v1.81.1

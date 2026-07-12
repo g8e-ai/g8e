@@ -112,6 +112,15 @@ func (c *Client) ConnectOnce(ctx context.Context, handler EventHandler) error {
 		return fmt.Errorf("sse client: SSE returned %d", resp.StatusCode)
 	}
 
+	// Close the response body when the context is cancelled to unblock
+	// any pending reads in parseSSEStream. Without this, scanner.Scan()
+	// can block indefinitely on platforms where the HTTP transport does
+	// not immediately close the connection on context cancellation.
+	stop := context.AfterFunc(ctx, func() {
+		resp.Body.Close()
+	})
+	defer stop()
+
 	return parseSSEStream(ctx, resp.Body, handler)
 }
 

@@ -61,7 +61,6 @@ type WindowsProcessChecker interface {
 // single struct definition, eliminating the previous triple-duplication.
 type OperatorStartOptions struct {
 	serve.GatewayConfig
-	IdentityData []byte
 }
 
 type ProcessManager struct {
@@ -122,19 +121,6 @@ func (pm *ProcessManager) CreateDirectories() error {
 		}
 	}
 	return nil
-}
-
-func (pm *ProcessManager) networkIdentityArgs(identityData []byte) ([]string, error) {
-	if len(identityData) == 0 {
-		return nil, nil
-	}
-
-	identityFile, err := pm.WriteNetworkIdentityFile(identityData)
-	if err != nil {
-		return nil, err
-	}
-
-	return []string{"--network-identity-file", identityFile}, nil
 }
 
 func (pm *ProcessManager) WriteNetworkIdentityFile(identityData []byte) (string, error) {
@@ -257,7 +243,7 @@ func (pm *ProcessManager) getOperatorBinary() (string, error) {
 
 func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, error) {
 	args := []string{
-		"gateway", "serve",
+		"gw", "start", "--follow",
 		"--posture", string(opts.Posture),
 		"--data-dir", opts.DataDir,
 		"--pki-dir", opts.PKIDir,
@@ -317,12 +303,6 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 	if opts.RateLimitBurst > 0 {
 		args = append(args, "--rate-limit-burst", strconv.Itoa(opts.RateLimitBurst))
 	}
-
-	identityArgs, err := pm.networkIdentityArgs(opts.IdentityData)
-	if err != nil {
-		return nil, err
-	}
-	args = append(args, identityArgs...)
 
 	return args, nil
 }

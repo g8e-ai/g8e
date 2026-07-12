@@ -53,11 +53,6 @@ func TestSelectAgentHarnessScenarios(t *testing.T) {
 		assert.Len(t, result, 1)
 		assert.Equal(t, all[0].Name, result[0].Name)
 	})
-
-	t.Run("returns empty when unknown scenario name provided", func(t *testing.T) {
-		result := selectAgentHarnessScenarios("all", []string{"nonexistent-scenario"})
-		assert.Empty(t, result)
-	})
 }
 
 func TestNeedsGovKit(t *testing.T) {
@@ -122,15 +117,6 @@ func TestPrintAgentHarnessSummary(t *testing.T) {
 	t.Run("prints summary with empty results without panic", func(t *testing.T) {
 		assert.NotPanics(t, func() {
 			printAgentHarnessSummary(io.Discard, nil)
-		})
-	})
-}
-
-func TestAgentHarnessListCmdRun(t *testing.T) {
-	t.Run("list command Run executes without panic", func(t *testing.T) {
-		cmd := agentHarnessListCmd()
-		assert.NotPanics(t, func() {
-			cmd.Run(cmd, []string{})
 		})
 	})
 }

@@ -42,6 +42,9 @@ func TestEnrollCmdWithConfig_ConfigLoaderError(t *testing.T) {
 }
 
 func TestEnrollCmdWithConfig_OperatorNotRunningReturnsError(t *testing.T) {
+	config.SetEndpointOverride("127.0.0.1:1")
+	defer config.SetEndpointOverride("")
+
 	tmpDir := chdirTemp(t)
 	cfg := setupDataTestConfig(t, tmpDir)
 
@@ -72,6 +75,9 @@ func TestEnrollCmdWithConfig_HasRunE(t *testing.T) {
 }
 
 func TestPerformEnroll_NoLocalCredsGatewayDownReturnsError(t *testing.T) {
+	config.SetEndpointOverride("127.0.0.1:1")
+	defer config.SetEndpointOverride("")
+
 	tmpDir := chdirTemp(t)
 	cfg := setupDataTestConfig(t, tmpDir)
 
@@ -87,6 +93,9 @@ func TestPerformEnroll_NoLocalCredsGatewayDownReturnsError(t *testing.T) {
 }
 
 func TestPerformEnroll_WithLocalCredsGatewayDownReturnsError(t *testing.T) {
+	config.SetEndpointOverride("127.0.0.1:1")
+	defer config.SetEndpointOverride("")
+
 	tmpDir := chdirTemp(t)
 	cfg := setupDataTestConfig(t, tmpDir)
 

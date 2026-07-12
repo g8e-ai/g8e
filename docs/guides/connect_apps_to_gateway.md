@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-07-06
-Version: v1.3.7
+Last Updated: 2026-07-12
+Version: v1.4.0
 
 ---
 
@@ -100,7 +100,7 @@ The Gateway provides a unified health endpoint across all services for consisten
 
 MCP is a JSON-RPC 2.0 protocol for AI tool invocation. The Gateway translates MCP tool calls into governance envelopes, runs them through L1/L2/L3 verification, and dispatches to downstream MCP servers or local execution.
 
-The Gateway provides a unified MCP endpoint architecture with a comprehensive input validation framework that enforces fail-closed security principles for all tool inputs.
+The Gateway provides a unified MCP endpoint architecture with input validation that enforces fail-closed security for all tool inputs.
 
 #### Native Tools
 
@@ -247,7 +247,7 @@ curl -X POST https://localhost:8443/api/v1/a2a/call \
 
 ### 3. Direct Governance Envelope
 
-For maximum control, applications can submit canonical JSON `GovernanceEnvelope` transactions directly. This is the only customer-facing mutation API on the Gateway.
+Applications can submit canonical JSON `GovernanceEnvelope` transactions directly. This is the only customer-facing mutation API on the Gateway.
 
 #### Envelope Submission
 
@@ -282,12 +282,7 @@ wscat -c wss://localhost:8443/api/v1/pubsub/stream \
 
 #### Subscribe Protocol
 
-```json
-{
-  "type": "subscribe",
-  "channel": "cmd:operator-id:operator-session-id"
-}
-```
+The WebSocket pub/sub protocol uses protobuf-encoded `PubSubMessage` frames. To subscribe, send a message with the `subscribe` action and the desired channel name. The broker confirms with a `subscribed` acknowledgment frame before delivering any messages.
 
 ---
 
@@ -376,7 +371,7 @@ For web-based interactions:
 2. Follow on-screen prompts to register a passkey
 3. Use the passkey for subsequent authentication
 
-Web sessions use WebAuthn signatures as L3 proof via PasskeyService.
+Web sessions use WebAuthn signatures as L3 proof.
 
 ### CSR-Based Enrollment
 
@@ -411,7 +406,156 @@ For device enrollment, use the `/api/v1/pki/devices/enroll` endpoint (see PKI se
 
 #### Application Enrollment
 
-Applications enroll via delegated credential enrollment to obtain an app identity (`spiffe://g8e.local/app/<appname>`). See the PKI section for CSR signing details.
+Applications enroll via the `/api/v1/pki/apps/enroll` endpoint to obtain an app identity (`spiffe://g8e.local/app/<appname>`). For delegated credential enrollment (where a human CLI session vouches for the app), use the `/api/v1/pki/apps/delegated` endpoint with mTLS authentication.
+
+---
+
+## GUI Enrollment
+
+The `g8e gui` command manages external frontend application enrollment (React, Lovable, custom apps) with the g8e Gateway. Enrollment persists the frontend's origin in a local enrollment file and verifies that the running gateway was started with the correct `--cors-origin` and `--passkey-rp-origin` flags for that origin. The gateway is not restarted during enrollment; it must be started with the right flags beforehand.
+
+After enrollment, the frontend can:
+- Authenticate users via WebAuthn passkeys
+- Receive SSE (Server-Sent Events) live streams
+- Make authenticated API calls with session cookies
+
+### Prerequisites
+
+- g8e Gateway running with CORS and passkey RP origin flags set for the frontend origin (e.g., `g8e gw start --cors-origin https://my-app.lovable.app --passkey-rp-origin https://my-app.lovable.app`)
+- Frontend application served on a known origin (e.g., `http://localhost:3003`, `https://my-app.lovable.app`)
+
+### Commands
+
+#### `g8e gui enroll`
+
+Enroll a frontend application origin with the gateway.
+
+```bash
+g8e gui enroll --origin <url> [flags]
+```
+
+Flags:
+- `--origin` (required) — Frontend application origin URL (e.g., `https://my-app.lovable.app`)
+- `--passkey-rp-id` — Passkey RP ID (defaults to the origin's hostname)
+- `--passkey-rp-name` — Passkey RP display name (default: `g8e`)
+- `--public-base-url` — Public base URL for the gateway (e.g., `https://console.g8e.ai`)
+
+The command:
+1. Validates the origin URL
+2. Sends a CORS preflight request to the running gateway to verify the origin is in its allowed origins
+3. If `--public-base-url` is provided, verifies the gateway is reachable at that URL
+4. Persists the origin to `gui_enrollments.json` in the g8e runtime directory
+5. Outputs a TypeScript configuration snippet for the frontend developer
+
+If the gateway is not running or does not have the origin configured, the command fails with an error indicating which flags to use when starting the gateway.
+
+#### `g8e gui show`
+
+Display all enrolled frontend origins and configuration snippets.
+
+```bash
+g8e gui show
+g8e gui show --json    # machine-readable JSON output for scripting
+g8e gui list           # alias for "show"
+```
+
+#### `g8e gui remove`
+
+Remove an enrolled frontend application origin from the enrollment file.
+
+```bash
+g8e gui remove --origin <url>
+```
+
+Flags:
+- `--origin` (required) — Frontend application origin URL to remove
+
+The command:
+1. Validates the origin URL
+2. Removes the origin from `gui_enrollments.json` in the g8e runtime directory
+
+The gateway's CORS and passkey RP configuration is unchanged. To stop accepting the origin, restart the gateway without the corresponding `--cors-origin` and `--passkey-rp-origin` flags.
+
+Returns `not found` error if the origin is not enrolled.
+
+#### `g8e gui verify`
+
+Verify gateway connectivity and CORS configuration for a frontend origin.
+
+```bash
+g8e gui verify --origin <url>
+```
+
+Checks enrollment status and prints a verification checklist with gateway endpoint URLs for manual testing, including health, CORS preflight, SSE, and WebAuthn passkey endpoints.
+
+### Frontend Integration Checklist
+
+After enrollment, the frontend developer must:
+
+- **CORS**: All `fetch` calls must include `credentials: 'include'`
+- **Passkey RP**: The RP ID must match the gateway's hostname (derived from the origin or set via `--passkey-rp-id`)
+- **SSE**: `EventSource` must use `withCredentials: true`
+- **Session cookie**: The gateway sets `g8e_web_session_cookie` with `SameSite=None; Secure` for cross-origin configurations (`SameSite=Lax` for same-origin)
+
+#### Key Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/v1/health` | GET | Health check (no auth) |
+| `/api/v1/auth/bootstrap/status` | GET | Check if passkey is registered |
+| `/api/v1/auth/passkeys/console/register/challenge` | POST | Begin passkey registration |
+| `/api/v1/auth/passkeys/console/register/verify` | POST | Verify passkey registration |
+| `/api/v1/auth/passkeys/console/authenticate/challenge` | POST | Begin passkey authentication |
+| `/api/v1/auth/passkeys/console/authenticate/verify` | POST | Verify passkey authentication |
+| `/api/v1/users/me` | GET | Get current user (requires session) |
+| `/api/v1/sse/stream?web_session_id=<id>` | GET | SSE live events (requires session) |
+| `/api/v1/approvals` | GET | List pending approvals (requires session) |
+
+### Example: Lovable Integration
+
+```bash
+# Enroll a Lovable app
+g8e gui enroll --origin https://my-app.lovable.app
+
+# The command outputs a TypeScript snippet:
+# const API_BASE_URL = 'https://localhost:8443';
+# const PASSKEY_RP_ID = 'my-app.lovable.app';
+# const PASSKEY_RP_NAME = 'g8e';
+```
+
+Paste the configuration snippet into your Lovable project and follow the [Lovable Frontend Integration](lovable.md) guide for the full component architecture.
+
+### Example: Custom React App
+
+```bash
+# Enroll a local React dev server
+g8e gui enroll --origin http://localhost:3000
+
+# Verify connectivity
+g8e gui verify --origin http://localhost:3000
+```
+
+### GUI Enrollment Troubleshooting
+
+#### CORS Errors
+
+If the browser blocks requests with CORS errors:
+- Verify the origin is enrolled: `g8e gui show`
+- Verify the gateway was started with `--cors-origin` and `--passkey-rp-origin` flags for this origin
+- Check that `credentials: 'include'` is set on all fetch calls
+
+#### Passkey RP Mismatch
+
+If WebAuthn registration fails with "RP ID does not match":
+- The RP ID must be a registrable domain suffix of the origin's hostname
+- Use `--passkey-rp-id` to set a custom RP ID (e.g., `g8e gui enroll --origin https://app.example.com --passkey-rp-id example.com`)
+
+#### SSE Connection Refused
+
+If SSE connections fail:
+- Verify the session is authenticated (passkey authentication completed)
+- Check that `withCredentials: true` is set on the `EventSource`
+- The `web_session_id` parameter must match the session ID from authentication
 
 ---
 
@@ -463,11 +607,11 @@ When a standard AI client requests a mutation without L3 proof, the Gateway susp
 ### Suspension Flow
 
 1. Client submits MCP/A2A request without L3 proof.
-2. Gateway stores transaction in `suspended_transactions` table.
+2. Gateway stores the transaction in a suspended state.
 3. Gateway returns approval URL: `https://localhost:8443/api/v1/approve/{tx_hash}`.
 4. User opens URL in browser and authenticates with passkey.
 5. User approves transaction via WebAuthn.
-6. Gateway calls `ResumeWithL3Proof` to attach the L3 proof and resubmit the envelope through the verification pipeline.
+6. Gateway attaches the L3 proof and resubmits the envelope through the verification pipeline.
 7. Transaction proceeds to execution and the signed receipt is returned.
 
 ### Approval API
@@ -517,7 +661,7 @@ curl https://localhost:8443/api/v1/audit/receipts?operator_session_id=op-session
 ### Export Audit Receipts
 
 ```bash
-curl https://localhost:8443/api/v1/audit/receipts/export?operator_session_id=op-session-abc \
+curl https://localhost:8443/api/v1/audit/receipts/export?since=2026-01-01T00:00:00Z&limit=100 \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -o audit-export.json
@@ -595,6 +739,7 @@ curl -k https://localhost:8443/api/v1/health
 - **[Build Operator](build_operator.md)** - Build a custom g8e-compatible g8e Operator
 - **[Connect Operator to Gateway](connect_operator_to_gateway.md)** - Deploy and use a g8e Operator
 - **[Build Apps](build_apps.md)** - Build g8e-compatible applications using a Gateway
+- **[Lovable Frontend Integration](lovable.md)** - Full component architecture for Lovable apps
 - **[MCP Protocol](../../protocol/docs/mcp.md)** - Detailed MCP protocol specification
 - **[A2A Protocol](../../protocol/docs/a2a.md)** - Detailed A2A protocol specification
 - **[Gateway Architecture](../architecture/gateway.md)** - Gateway architecture and internals

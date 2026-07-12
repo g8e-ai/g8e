@@ -160,6 +160,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   ├── gateway.CLISessionService [SHARED]
 │   │   ├── gateway.OperatorSessionService [SHARED]
 │   │   ├── gateway.CanonicalDBService [SHARED]
+│   │   ├── gateway.EnrollmentTokenService (created in HTTPHandler constructor, manages enrollment token lifecycle with TTL-based cleanup)
 │   │   ├── response.Writer
 │   │   └── actuatorKeyReader (fileActuatorKeyReader, reads actuator public key from disk)
 │   ├── gateway.AdminController (app policies, tribunals, app revocation)
@@ -280,6 +281,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - **`RouteAuthRegistry`** classifies every route by its authentication mode (`RouteAuthNone`, `RouteAuthMTLS`, `RouteAuthWebSession`, `RouteAuthDual`). Exact paths are matched with highest priority, then prefix matches. Unknown routes default to `RouteAuthMTLS` (fail-closed). When JWKS is enabled, MCP/A2A and JIT passkey routes are reclassified to `RouteAuthNone` (JWT middleware handles auth).
 - **`PrivilegedRouteRegistry`** blocks app certificates from governance envelope submission and query endpoints. Only operator and CLI auth are accepted on these routes.
 - **`gateway_http_middleware.go`**: `rateLimitMiddleware` applies per-IP token bucket rate limiting with 5-minute stale entry cleanup. `pathTraversalGuard` rejects requests containing `..` path segments before ServeMux normalization. `isPrivateIP` reports whether an IP address is in a private network range, used by the HTTP router's safe-host check.
+- **`gateway_http_cors.go`**: CORS middleware for handling cross-origin requests from enrolled frontend applications. Validates origins against the gateway's configured allowed origins list.
 - **`gateway_http_sse.go`**: SSE event bridge with three endpoints. `POST /api/v1/sse/push` for event production, `GET /api/v1/sse/events` for polling, `GET /api/v1/sse/stream` for SSE streaming. Events are routed by `web_session_id`, `cli_session_id`, or `user_id`.
 - **`gateway_http_health.go`**: Health check endpoint (`/health`) returns platform settings and state root status. Landing page handler redirects `/` to `/console/`. Bootstrap health check on the HTTP port returns a simplified health response.
 - **`gateway/docs/`**: Embedded OpenAPI/Swagger specifications (`docs.go` embeds `swagger.json` and `swagger.yaml`) served at `/swagger/` with Swagger UI.
@@ -305,20 +307,21 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 
 The `g8e` binary (`internal/cli/cmd/main.go`) registers the following subcommands on the root Cobra command:
 
-- **`gw`** (alias `gateway`): Gateway lifecycle management. Subcommands: `start` (background process), `serve` (foreground worker, hidden, re-exec target for `start`), `stop`, `status`, `restart`, `logs`, `settings`, `reset`, `clean`. Also includes `data` and `security` subcommand groups.
+- **`gw`** (alias `gateway`): Gateway lifecycle management. Subcommands: `start` (background process), `serve` (foreground worker, hidden, re-exec target for `start`), `stop`, `status`, `restart`, `logs`, `settings`, `reset`, `clean`. Also includes `data`, `security`, and `tunnel` subcommand groups.
   - **`data`**: Administer the local platform over mTLS. Subcommands: `users`, `operators`, `settings`, `store`, `audit`.
   - **`security`**: Security validation checks. Subcommands: `validate`, `pki`.
+  - **`tunnel`**: Manage Cloudflare Tunnel for public gateway access. Subcommands: `create`, `run`, `status`.
 - **`auth`**: Authentication and session management. Subcommands: `enroll` (CSR-based enrollment with passkey registration), `logout`, `approve` (interactive OOB approval of suspended transactions via passkey).
 - **`mcp`**: MCP protocol operations. Subcommands: `stdio` (run g8e as an MCP server over stdio), `agent` (agent integration commands for AI coding tools). `agent` subcommands: `list` (list supported agent binaries), `show` (print MCP client configuration for a specific agent), `run` (launch an agent with g8e MCP configuration).
-- **`operator`**: Manage Operator instances. Subcommands: `list`, `run`, `cp`, `scp`, `deploy`, `stream`.
+- **`operator`**: Manage Operator instances. Subcommands: `list`, `start`, `cp`, `scp`, `deploy`, `stream`.
 - **`vault`**: Encryption vault management. Subcommands: `init`, `unlock`, `rekey`, `status`, `reset`, `export`, `import`.
-- **`test`**: Run test suites. Subcommands: `unit`, `integration`, `e2e`, `coverage`, `lint`, `agent`, `chaos`, `summary`.
-- **`demos`**: Demo scenario management. Subcommands: `list`, `start`, `stop`, `status`, `clean`, `rebuild`, `reset`, `run`, `pull`.
+- **`test`**: Run test suites. Subcommands: `unit`, `integration`, `e2e`, `coverage`, `lint`, `chaos`, `summary`.
+- **`demos`** (alias `demo`): Demo scenario management. Subcommands: `list`, `start`, `stop`, `status`, `clean`, `rebuild`, `reset`, `run`, `pull`, `export`, `import`, `images`, `scenarios` (with `list` and `run` subcommands).
 - **`audit`**: Run audit reports for compliance. Subcommands: `receipts`, `export`, `report`, `events`, `summary`.
 - **`report`**: Generate CSV evidence reports. Subcommands: `all`, `verify`.
 - **`swagger`**: Manage Swagger/OpenAPI documentation. Subcommands: `init`, `serve`, `validate`.
 - **`tui`**: Launch the Tactical Governance Console (TUI). Requires a running gateway, enrolled CLI credentials, and mTLS client configuration.
-- **`agent`** (alias `agent-harness`): Universal agent harness for a real g8e Gateway/Operator. Subcommands: `list` (list available scenarios), `run` (run scenarios against a real Gateway/Operator), `audit` (audit signed receipts from the Operator). Also registered as a `test` subcommand.
+- **`gui`**: Enroll external frontend applications with the g8e Gateway. Subcommands: `enroll`, `show`, `verify`, `remove`.
 
 ## MCP Native Tools
 
@@ -368,6 +371,7 @@ The reporting system operates as a self-contained, offline verification utility 
 
 - **`internal/cli/platform/`**: Cross-platform process management for operator subprocesses. `process.go` provides core process lifecycle. `process_unix.go` and `process_windows.go` provide platform-specific process discovery and signal handling. `browser.go` provides cross-platform browser opening for console URLs.
 - **`internal/cli/stream/`**: SSH and subprocess streaming for remote operator management. `stream.go` provides the streaming CLI command. `stream_ssh.go` provides SSH connection management for remote log streaming and command execution.
+- **`internal/cli/sse/`**: Server-Sent Events client for CLI consumption of gateway SSE streams. `client.go` provides the SSE client implementation used by the TUI for real-time updates.
 
 ## Test Infrastructure (Not Production)
 
@@ -413,23 +417,37 @@ The following packages are test-only and are not part of the production dependen
 - `test/e2e/auth_e2e_test.go` - E2E authentication flow tests (build tag: `e2e`)
 - `test/e2e/gateway_e2e_test.go` - E2E gateway lifecycle and health tests (build tag: `e2e`)
 - `test/e2e/mcp_stdio_e2e_test.go` - E2E MCP stdio config output, JSON-RPC parsing, config template validation (build tag: `e2e`)
+- `test/e2e/main_test.go` - E2E test main entry point and fixture setup (build tag: `e2e`)
 
 ## Agent Harness & Demos
 
 **`internal/tools/agent_harness/`** - Reference client for real governance envelope submission
 - `client/client.go` - mTLS client: `StateRoot`, `RegisterSigner`, `Approve` (uses `constants.APIPaths.*`)
+- `client/client_test.go` - Client unit tests
 - `client/envelope.go` - `SubmitMaximal`: builds real `GovernanceEnvelope` with L1/L2/L3, submits over mTLS
+- `client/envelope_test.go` - Envelope construction and submission tests
 - `client/audit.go` - `AuditReceipts`, `ExportReceipts`, `DiscoverOperator` (parses cert SAN for offline session discovery)
+- `client/audit_test.go` - Audit client tests
 - `client/protocols.go` - JSON-RPC request/response types and A2A protobuf envelope encoding for MCP/A2A protocol ingress
+- `client/protocols_test.go` - Protocol encoding/decoding tests
+- `client/mtls_test.go` - mTLS client setup and certificate verification tests
 - `config/config.go` - Harness configuration: auth material (client cert/key/CA bundle), gateway URL, posture selection
 - `scenarios/governance.go` - Governance scenarios: consensus, notary, delegation, veto, OOB approval
+- `scenarios/governance_test.go` - Governance scenario tests
 - `scenarios/dow_cross_cue.go` - DoW scenarios: `dow-cross-cue` (real slew envelope) and `dow-bft-veto` (veto envelope)
+- `scenarios/dow_cross_cue_test.go` - DoW scenario tests
 - `scenarios/dhs_sovereign.go` - DHS sovereign operations scenarios: multi-step governance workflow with tribunal consensus
+- `scenarios/dhs_sovereign_test.go` - DHS sovereign scenario tests
 - `scenarios/mcp_a2a.go` - MCP and A2A protocol scenarios: plain MCP, mTLS MCP, A2A JSON, A2A mTLS, A2A protobuf
+- `scenarios/mcp_a2a_test.go` - MCP/A2A protocol scenario tests
 - `scenarios/gov_finance.go` - Gov/finance doctrine scenarios: `gov-cui-exfil-block` and `finance-unauthorized-trade`
+- `scenarios/gov_finance_test.go` - Gov/finance scenario tests
 - `scenarios/secure_data.go` - Secure-data scenarios: `secure-data-migration` (consensus), `secure-data-bypass-attempt` (doctrine), `secure-data-cross-tenant` (doctrine)
+- `scenarios/secure_data_test.go` - Secure-data scenario tests
 - `scenarios/swarm.go` - Swarm scenarios: `swarm-recon-mission` (consensus: governed drone deployment), `swarm-weapon-release-block` (doctrine: weapon release blocked), `swarm-restricted-airspace-block` (doctrine: restricted airspace blocked)
+- `scenarios/swarm_test.go` - Swarm scenario tests
 - `scenarios/scenario.go` - Scenario registry, `Execute`, `Posture` types
+- `scenarios/scenario_test.go` - Scenario registry and execution tests
 
 **`demos/dow/`** - Department of War tactical edge demo
 - `gimbal.py` - Mock gimbal HTTP server on `net_secure` (records slew commands to `/var/gimbal/slews.jsonl`)
@@ -452,6 +470,14 @@ The following packages are test-only and are not part of the production dependen
 **`demos/swarm/`** - Drone swarm tactical demo
 - `drone_simulator.py` - Mock drone telemetry and command simulation
 
+**`demos/frontend/`** - Third-party frontend enrollment demo
+- `app/` - Frontend application source
+- `compose.yml` - Docker Compose configuration for frontend demo environment
+
+**`demos/live-swarm/`** - Live drone swarm demo with tribunal bootstrap
+- `drone_cmd.py` - Drone command interface
+- `tribunal-bootstrap.json` - Tribunal bootstrap configuration
+
 **`demos/finance/`** - Financial data governance demo
 
 **`demos/gov/`** - Government operations demo
@@ -459,7 +485,7 @@ The following packages are test-only and are not part of the production dependen
 **`demos/secure-data/`** - Secure data handling demo
 
 **CLI Demo Scenario Files** (`internal/cli/cmd/`):
-- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, pull). Contains `harnessConfig` struct, `defaultHarnessConfig`, `harnessRun` helper for building docker compose exec/run commands for agent-harness scenarios, and `runTwoLayerScenario` reusable orchestrator. `demoVerbose` flag (set by `-v`/`--verbose`), `demoStep` suppresses output when non-verbose, `demoPrintln`/`demoPrintf` (verbose-aware print helpers), `scenarioCounts` map (healthcare: 4, gov: 1, finance: 1, secure-data: 3, dow: 3, dhs: 5, swarm: 3), `printDemoEndpoints` (prints available endpoints per org).
+- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, pull, export, import, images, scenarios). Contains `harnessConfig` struct, `defaultHarnessConfig`, `harnessRun` helper for building docker compose exec/run commands for demo scenarios, and `runTwoLayerScenario` reusable orchestrator. `demoVerbose` flag (set by `-v`/`--verbose`), `demoStep` suppresses output when non-verbose, `demoPrintln`/`demoPrintf` (verbose-aware print helpers), `scenarioCounts` map (healthcare: 4, gov: 1, finance: 1, secure-data: 3, dow: 3, dhs: 5, swarm: 3, frontend: 1), `printDemoEndpoints` (prints available endpoints per org).
 - `demo_gov.go` - Gov demo scenario (uses `runTwoLayerScenario` with `harnessRun`)
 - `demo_finance.go` - Finance demo scenario (uses `runTwoLayerScenario` with `harnessRun`)
 - `demo_healthcare.go` - Healthcare demo scenarios (4 scenarios, each calls `harnessRun`)
@@ -467,4 +493,11 @@ The following packages are test-only and are not part of the production dependen
 - `demo_dow.go` - DoW demo scenarios (3 scenarios, each calls `harnessRun`)
 - `demo_dhs.go` - DHS demo scenarios (5 scenarios, each calls `dhsHarnessRun` → `harnessRun`). Contains `dhsHarnessConfig`, `dhsHarnessRun`, `dhsScenarioStep`, `extractFirstTxHash`, `ensureDHSPosture` helpers.
 - `demo_swarm.go` - Swarm demo scenarios (3 scenarios, each calls `harnessRun`): authorized recon mission, weapons safety doctrine block, navigation boundary violation block.
+- `demo_frontend.go` - Frontend demo scenario (1 scenario: third-party frontend enrollment via `runFrontendScenario`).
+- `scenarios_run.go` - `demos scenarios run` subcommand and `runAgentHarness` execution logic. Contains flag definitions, `applyAgentHarnessFlags`, `selectAgentHarnessScenarios`, `needsGovKit`, `setupGovKit`, `printAgentHarnessSummary`.
 - `demos_test.go` - Tests for demo CLI commands, `scenarioCounts`, `printDemoEndpoints`, `harnessRun`/`defaultHarnessConfig` unit tests, `defaultHarnessConfig`/`harnessRun` unit tests, and source-file assertions (`TestDemoScenarioFilesCallHarnessRun`, `TestNoGatewayBypassInDemoFiles`, `TestNoSqliteBackdoorInScenarioFiles`, `TestNoCopyPasteInScenarioFiles`). Also tests `TestDemoPrintln`, `TestDemosPullCmd`, `TestCheckDockerAvailable`, `TestToDockerPath`, `TestDefaultHarnessConfig`, `TestHarnessRun`.
+- `demos_helpers_test.go` - Shared test helpers for demo command tests.
+- `demos_integration_test.go` - Integration tests for demo CLI commands.
+- `demos_docker_error_paths_test.go` - Docker error path tests for demo commands.
+- `demos_run_error_paths_test.go` - Run error path tests for demo scenarios.
+- `demo_dhs_test.go` - Tests for DHS demo scenario helpers.

@@ -45,6 +45,19 @@ import (
 	"github.com/g8e-ai/g8e/protocol"
 )
 
+// @Summary		Push SSE event
+// @Description	Appends an event to the SSE event store and publishes it to the pub/sub channel.
+// @Description	Requires mTLS app workload identity. Exactly one routing target must be set:
+// @Description	web_session_id, cli_session_id, or user_id.
+// @Tags			telemetry
+// @Accept			json
+// @Produce		json
+// @Param			payload	body		models.SSEPushPayload	true	"SSE push payload"
+// @Success		200		{object}	models.SSEPushResponse
+// @Failure		400		{string}	string			"Bad Request"
+// @Failure		401		{string}	string			"Unauthorized — mTLS required"
+// @Failure		403		{string}	string			"Forbidden — not app workload or unauthorized target"
+// @Router			/api/v1/sse/push [post]
 func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -348,6 +361,20 @@ func (h *HTTPHandler) authorizeSSERoute(route SSERoute, r *http.Request) (string
 	}
 }
 
+// @Summary		Poll SSE events
+// @Description	Polls stored SSE events since a given ID. Dual auth: mTLS for CLI/operator, web session
+// @Description	cookie for browser. Exactly one routing target must be set via query string.
+// @Tags			telemetry
+// @Produce		json
+// @Param			web_session_id	query		string	false	"Web session ID"
+// @Param			cli_session_id	query		string	false	"CLI session ID"
+// @Param			user_id			query		string	false	"User ID"
+// @Param			since_id		query		int		false	"Return events after this ID"
+// @Param			limit			query		int		false	"Maximum events to return"
+// @Success		200			{object}	models.SSEEventsResponse
+// @Failure		400			{string}	string				"Bad Request"
+// @Failure		403			{string}	string				"Forbidden — unauthorized"
+// @Router			/api/v1/sse/events [get]
 func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -386,6 +413,20 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 	})
 }
 
+// @Summary		Stream SSE events
+// @Description	Streams events via Server-Sent Events (text/event-stream). Dual auth: mTLS for
+// @Description	CLI/operator, web session cookie for browser. Supports Last-Event-ID header for
+// @Description	reconnection. Exactly one routing target must be set via query string.
+// @Tags			telemetry
+// @Produce		text/event-stream
+// @Param			web_session_id	query		string	false	"Web session ID"
+// @Param			cli_session_id	query		string	false	"CLI session ID"
+// @Param			user_id			query		string	false	"User ID"
+// @Param			since_id		query		int		false	"Replay events after this ID"
+// @Success		200			{string}	string			"SSE stream"
+// @Failure		400			{string}	string			"Bad Request"
+// @Failure		403			{string}	string			"Forbidden — unauthorized"
+// @Router			/api/v1/sse/stream [get]
 func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")

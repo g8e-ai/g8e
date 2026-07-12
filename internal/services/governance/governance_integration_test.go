@@ -70,7 +70,6 @@ func TestGovernanceFlow(t *testing.T) {
 	actuator.ExecutionHandler = handler
 	actuator.SigningKey = priv
 	actuator.KeyID = nodeID
-	actuator.Ctx = context.Background()
 
 	vt := &VerifiedTransaction{
 		Envelope:   env,
