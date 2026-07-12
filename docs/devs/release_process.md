@@ -1,16 +1,18 @@
 # g8e Release Process — Version & Documentation Updates
 
-This document is the definitive checklist for updating all version-bearing files and documentation when bumping a g8e release. Every file listed here must be updated and verified before the release is handed off for tagging.
+This document is the definitive checklist for updating all version-bearing files and documentation when bumping a g8e release. The protocol (Go + Python) and the platform binary share the same version number — there are no separate protocol releases.
 
-> **Git is maintainer-only.** This document covers *content and version updates only*. No permanent git operations (`git add`, `git commit`, `git tag`, `git push`) are part of this process — those are performed manually by the release owner. See [Out of Scope: Maintainer Git Steps](#out-of-scope-maintainer-git-steps). Read-only inspection (`git status`, `git diff`) is fine for sanity-checking, but is not required by this checklist.
+> **`make release` handles version syncing, tests, and builds.** It does NOT touch git. After reviewing the changes, commit them and run `make release-tag` to tag and push. See [Release Workflow](#release-workflow).
 
 ## How to Use This Document
 
 1. Determine the new version number (see [Versioning Rules](#versioning-rules))
-2. Work through the [Version-Bearing Files](#version-bearing-files) section top-to-bottom
-3. Review release content for [documentation accuracy](#content-accuracy-review) — protocol specs, architecture docs, and guides must reflect any code refactors or behavioral changes shipped in this release
-4. Run the [Verification](#verification) section to catch any missed files
-5. Hand off to the maintainer for git tagging (out of scope here)
+2. Set `VERSION` to the new version (the single source of truth)
+3. Run `make release` — this auto-syncs `pyproject.toml` and `__init__.py`, runs protocol tests, and builds binaries
+4. Update `CHANGELOG.md` and create release notes (see [Manual Updates](#manual-updates))
+5. Review release content for [documentation accuracy](#content-accuracy-review) — protocol specs, architecture docs, and guides must reflect any code refactors or behavioral changes shipped in this release
+6. Run the [Verification](#verification) section to catch any missed files
+7. Commit all changes and run `make release-tag` to tag and push
 
 ---
 
@@ -37,20 +39,18 @@ Throughout this document, **`vX.Y.Z`** refers to the new release version (e.g., 
 
 ## Version-Bearing Files
 
-The following files contain version strings that must be updated on every release. They are grouped by category.
+The following files contain version strings. `VERSION` is the single source of truth — `make release` auto-syncs all derived files from it.
 
 ### A. Core Version Files
 
-These are the canonical files that define the platform and protocol versions.
+| # | File | How It's Updated | Format |
+|---|------|-----------------|--------|
+| 1 | `VERSION` | **Manual** — set to new version | `vX.Y.Z\n` (with trailing newline, no trailing spaces) |
+| 2 | `CHANGELOG.md` | **Manual** — add new section below `## [Unreleased]` | `## [X.Y.Z] - YYYY-MM-DD` (no `v` prefix) |
+| 3 | `protocol/python/pyproject.toml` | **Auto** — `make release` syncs from `VERSION` | `version = "X.Y.Z"` (no `v` prefix) |
+| 4 | `protocol/python/g8e/__init__.py` | **Auto** — `make release` syncs from `VERSION` | `__version__ = "X.Y.Z"` (no `v` prefix) |
 
-| # | File | What to Update | Format |
-|---|------|---------------|--------|
-| 1 | `VERSION` | Entire file contents | `vX.Y.Z\n` (with trailing newline, no trailing spaces) |
-| 2 | `CHANGELOG.md` | Add new section below the `## [Unreleased]` block | `## [X.Y.Z] - YYYY-MM-DD` (no `v` prefix) |
-| 3 | `protocol/python/pyproject.toml` | `version` field in `[project]` section | `version = "X.Y.Z"` (no `v` prefix) |
-| 4 | `protocol/python/g8e/__init__.py` | `__version__` constant | `__version__ = "X.Y.Z"` (no `v` prefix) — **must match `pyproject.toml`** |
-
-> ⚠️ Items 3 and 4 are the Python package version and **must always be identical**. A mismatch will produce an inconsistent published package.
+> ⚠️ Items 3 and 4 are auto-synced by `make release` and verified by `make release-tag` and CI. A mismatch will fail the release.
 
 #### CHANGELOG.md Template
 
@@ -251,16 +251,16 @@ The following doc directories intentionally do **not** carry release `Version:` 
 
 | File | Notes |
 |------|-------|
-| `protocol/go.mod` | No version field to update. The Go module version is derived from git tags (`protocol/vX.Y.Z`), which the maintainer creates. |
+| `protocol/go.mod` | No version field to update. The Go module version is derived from git tags (`protocol/vX.Y.Z`), created by `make release-tag`. |
 
 ### F. Build & CI Files (No Version Update Required)
 
 The following files read the version dynamically from `VERSION` at build time and do **not** require manual updates:
 
-- `Makefile` — Reads `VERSION` via `$(shell cat VERSION)`
+- `Makefile` — Reads `VERSION` via `$(shell cat VERSION)`; `make release` syncs Python files; `make release-tag` tags and pushes
 - `Dockerfile` / `Dockerfile.operator` — Receive version as build arg
 - `docker-compose.yml` — References build context, not version
-- `.github/workflows/*.yml` — Triggered by git tags, no hardcoded version
+- `.github/workflows/*.yml` — Triggered by git tags, no hardcoded version. CI includes a version sync check that fails if Python files don't match `VERSION`.
 
 ---
 
@@ -308,19 +308,19 @@ grep -rnE 'oldCommandName|OldEndpointPath|OLD_CONSTANT' docs/ protocol/docs/ --i
 
 ---
 
-## Complete Update Checklist
+## Manual Updates
 
-When preparing a release, work through this checklist in order:
+`make release` handles version syncing, tests, and builds automatically. The following must still be done manually:
 
 - [ ] **1. `VERSION`** — Set to `vX.Y.Z`
-- [ ] **2. `CHANGELOG.md`** — Add `## [X.Y.Z] - YYYY-MM-DD` section (no `v` prefix)
-- [ ] **3. `protocol/python/pyproject.toml`** — Set `version = "X.Y.Z"` (no `v` prefix)
-- [ ] **4. `protocol/python/g8e/__init__.py`** — Set `__version__ = "X.Y.Z"` (must match item 3)
-- [ ] **5. `docs/release_notes/vX.Y.x/vX.Y.Z.md`** — Create new release notes file
-- [ ] **6–28. Documentation headers** — Update version/date headers **only** in docs that were actually reviewed or modified in this release (use `git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/` to identify them). Do not blanket-bump all headers. See [Section C](#c-documentation-with-version--date-headers) for the full list of files that carry headers.
-- [ ] **Content review** — Complete the [Content Accuracy Review](#content-accuracy-review). Only update docs to fix inaccuracies or document missing features — do not rewrite accurate docs.
+- [ ] **2. `make release`** — Auto-syncs `pyproject.toml` + `__init__.py`, runs protocol tests, builds binaries
+- [ ] **3. `CHANGELOG.md`** — Add `## [X.Y.Z] - YYYY-MM-DD` section (no `v` prefix)
+- [ ] **4. `docs/release_notes/vX.Y.x/vX.Y.Z.md`** — Create new release notes file
+- [ ] **5. Documentation headers** — Update version/date headers **only** in docs that were actually reviewed or modified in this release (use `git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/` to identify them). Do not blanket-bump all headers. See [Section C](#c-documentation-with-version--date-headers) for the full list of files that carry headers.
+- [ ] **6. Content review** — Complete the [Content Accuracy Review](#content-accuracy-review). Only update docs to fix inaccuracies or document missing features — do not rewrite accurate docs.
+- [ ] **7. Commit and tag** — `git add -A && git commit -m "release: vX.Y.Z"` then `make release-tag`
 
-**Total: 5 core files to update on every release** (VERSION, CHANGELOG, Python package ×2, release notes), plus version/date header updates **only in docs actually modified** in the release, plus a targeted content review fixing inaccuracies and documenting missing features in docs affected by code changes.
+**Only 2 files need manual version edits** (VERSION + CHANGELOG). The Python package files are auto-synced. Release notes and doc header updates are content-driven, not mechanical version bumps.
 
 ---
 
@@ -342,9 +342,10 @@ head -n 20 CHANGELOG.md
 # 3. Verify release notes file exists
 ls "docs/release_notes/${RELEASE_VERSION%.*}.x/${RELEASE_VERSION}.md"
 
-# 4. Verify Python package version matches in BOTH files (must be identical)
+# 4. Verify Python package version matches VERSION (make release should have synced these)
 grep -n '^version' protocol/python/pyproject.toml
 grep -n '__version__' protocol/python/g8e/__init__.py
+# Both should show X.Y.Z matching RELEASE_NUM
 
 # 5. Find any doc version header (plain, bold, or "Document Version") NOT on the new
 #    version — should return nothing for docs modified in this release. Docs NOT modified
@@ -362,22 +363,38 @@ grep -rniE '^(\*\*)?last updated:' docs/ protocol/docs/ --include='*.md' --exclu
   | grep -v "$RELEASE_DATE"
 ```
 
-If step 4 shows a mismatch between the two Python files, reconcile them. Steps 5 and 6 will show old versions/dates for docs not modified in this release — that is expected and correct. Only investigate results for docs that *were* modified in this release (per the git diff).
+If step 4 shows a mismatch, run `make release` again to re-sync. Steps 5 and 6 will show old versions/dates for docs not modified in this release — that is expected and correct. Only investigate results for docs that *were* modified in this release (per the git diff).
 
 ---
 
-## Protocol Release Notes (If Applicable)
+## Release Workflow
 
-Protocol packages (Go and Python) may be released independently of platform releases. If protocol changes are included:
+The protocol (Go + Python) and platform binary share a single version number. There are no separate protocol releases. The `make release` / `make release-tag` workflow handles everything:
 
-1. The Go and Python packages must use the same version number
-2. The Python version is set in `protocol/python/pyproject.toml` **and** `protocol/python/g8e/__init__.py` (covered by the checklist above — keep them identical)
-3. The Go module version derives from the git tag (`protocol/vX.Y.Z`), created by the maintainer
-4. The `protocol/vX.Y.Z` tag triggers both release workflows:
-   - **Go**: `.github/workflows/release-go-protocol.yml`
-   - **Python**: `.github/workflows/release-python-protocol.yml`
+### `make release` — Prep (no git operations)
 
-This is informational — tag creation is a [maintainer git step](#out-of-scope-maintainer-git-steps).
+1. Syncs `protocol/python/pyproject.toml` and `protocol/python/g8e/__init__.py` from `VERSION`
+2. Runs protocol tests
+3. Builds binaries
+4. Prints next-step instructions
+
+### `make release-tag` — Tag & Push (run after committing)
+
+1. Verifies working tree is clean
+2. Verifies Python versions match `VERSION`
+3. Verifies tags don't already exist
+4. Creates `vX.Y.Z` and `protocol/vX.Y.Z` tags on the current commit
+5. Pushes both tags to origin
+
+### CI Workflows Triggered by Tags
+
+| Tag | Workflow | What It Does |
+|-----|----------|-------------|
+| `vX.Y.Z` | `.github/workflows/release-binary.yml` | Builds all platforms, creates GitHub release with binary assets |
+| `protocol/vX.Y.Z` | `.github/workflows/release-go-protocol.yml` | Creates GitHub release for Go module |
+| `protocol/vX.Y.Z` | `.github/workflows/release-python-protocol.yml` | Builds and publishes Python package to PyPI |
+
+Additionally, `.github/workflows/build-and-test.yml` includes a version sync check that fails CI if `pyproject.toml` or `__init__.py` don't match `VERSION`.
 
 ---
 
@@ -386,22 +403,21 @@ This is informational — tag creation is a [maintainer git step](#out-of-scope-
 For critical security issues or production bugs:
 
 1. Apply the minimal fix necessary to the appropriate branch
-2. Work through the [Complete Update Checklist](#complete-update-checklist) above
-3. Complete the [Content Accuracy Review](#content-accuracy-review) for the touched areas
-4. Hand off to the maintainer for tagging and release
+2. Set `VERSION` and run `make release`
+3. Update `CHANGELOG.md` and release notes
+4. Complete the [Content Accuracy Review](#content-accuracy-review) for the touched areas
+5. Commit and run `make release-tag`
 
 ---
 
-## Out of Scope: Maintainer Git Steps
+## Out of Scope: Manual Git Steps
 
-The following are performed **manually by the release owner** and are deliberately **not** part of this checklist. Do not run them as part of preparing the release content:
+The only git operations not automated by `make release` / `make release-tag` are:
 
-- Staging and committing the release-prep changes
-- Creating the release tag (`vX.Y.Z`) and any protocol tag (`protocol/vX.Y.Z`)
-- Pushing branches and tags
-- Publishing the GitHub release
+- Staging and committing the release-prep changes (`git add`, `git commit`)
+- Pushing the branch before tagging (`git push`)
 
-The job of this document is to leave the working tree fully and correctly updated so the maintainer can perform those git steps with confidence.
+`make release-tag` handles tag creation and tag pushing automatically.
 
 ---
 
