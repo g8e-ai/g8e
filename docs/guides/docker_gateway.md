@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
-Last Updated: 2026-07-08
-Version: v1.3.8
+Last Updated: 2026-07-12
+Version: v1.4.0
 
 This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
 
@@ -26,10 +26,10 @@ docker run -d \
   -p 8443:8443 \
   -v g8e-data:/root/.g8e \
   g8e-gateway:latest \
-  gw serve --posture doctrine
+  gw start -f --posture doctrine
 ```
 
-The `gw serve` subcommand runs the gateway in foreground mode, blocking until shutdown. It is a hidden subcommand that serves as the re-exec target for `gw start`. For direct `docker run` usage, `gw serve` is suitable because it runs the gateway in the foreground without spawning a subprocess. The root `docker-compose.yml` uses `gw start -f` instead, which runs the gateway in the foreground directly (same process, no subprocess). Both approaches keep the container running.
+The `-f` flag runs the gateway in the foreground instead of spawning a background subprocess. This is required for container usage so the process does not exit immediately. The root `docker-compose.yml` also uses `gw start -f`.
 
 ## Docker Compose Deployment
 
@@ -38,7 +38,7 @@ The repository includes a root `docker-compose.yml` that deploys both the Gatewa
 ### Core Services
 
 - **g8e-gateway**: Provides the persistence layer and governance enforcement. Starts via the `gw start -f` CLI subcommand, which defaults to `doctrine` posture.
-- **g8e-operator**: Connects to the gateway to provide execution capabilities. Uses the `operator start -e g8e.local` command with `extra_hosts` mapping `g8e.local` to the host gateway, ensuring the operator resolves the gateway by the hostname matching its certificate SANs.
+- **g8e-operator**: Connects to the gateway to provide execution capabilities. Uses the `operator start -e g8e.local` command. The gateway registers `g8e.local` as a network alias on the shared `g8e-net` bridge network, so the operator resolves the gateway by the hostname matching its certificate SANs.
 
 The operator service depends on the gateway health check passing before starting (`depends_on` with `condition: service_healthy`).
 
@@ -82,6 +82,7 @@ Functional demo environments are located in the `demos/` directory. These config
 - **Department of War (DoW)**: Tactical edge operations with SWaP-constrained sensors, BFT spoofing defense, and autonomous SIGINT-to-EO/IR cross-cueing.
 - **Swarm**: Drone swarm simulation with 20 autonomous operators, battlefield intelligence, and doctrine-based weapons control.
 - **DHS**: Persistent sovereign capability for coalition data handling with USPER PII minimization, cross-domain release control, and consensus posture.
+- **Frontend**: Third-party frontend application enrollment with WebAuthn passkey authentication, CORS, and SSE live event streaming.
 
 To run a demo:
 
@@ -106,7 +107,7 @@ Custom ports are configured via CLI flags or environment variables:
 ```bash
 docker run -d \
   g8e-gateway:latest \
-  gw serve --posture doctrine --http-port 3000 --https-port 3443
+  gw start -f --posture doctrine --http-port 3000 --https-port 3443
 ```
 
 **Compose Example:**
@@ -119,7 +120,7 @@ services:
     command: ["gw", "start", "-f", "--posture", "consensus"]
 ```
 
-The `gw start` and `gw serve` subcommands accept the same `--posture`, `--http-port`, and `--https-port` flags. The `-f` flag (available only on `gw start`) runs the gateway in the foreground instead of the background — Ctrl+C stops the gateway directly. Container ports remain 8080 and 8443; only the host-side mapping changes.
+The `gw start` subcommand accepts `--posture`, `--http-port`, and `--https-port` flags. The `-f` flag runs the gateway in the foreground instead of the background, which is required for container usage. Container ports remain 8080 and 8443; only the host-side mapping changes.
 
 ### Data Persistence
 
@@ -132,7 +133,7 @@ The gateway maintains state in `/root/.g8e` within the container. This directory
 Mount a persistent volume to preserve state across container lifecycles:
 
 ```bash
-docker run -v g8e-data:/root/.g8e g8e-gateway:latest gw serve --posture doctrine
+docker run -v g8e-data:/root/.g8e g8e-gateway:latest gw start -f --posture doctrine
 ```
 
 ### Governance Posture
@@ -191,4 +192,4 @@ docker exec g8e-gateway /g8e gw status
 - **Resource Constraints**: The root `docker-compose.yml` defines CPU and memory limits (2 CPUs / 1G per service with 0.5 CPU / 256M reservations). Adjust these for production workloads.
 - **Vault Management**: The vault must be initialized for production operations. Use `G8E_VAULT_REQUIRE_UNLOCK=true` to ensure the gateway only starts when the vault is available.
 - **Certificates**: By default, the gateway generates self-signed certificates. For production, provide valid certificates via the `--pki-dir` volume or use `--cert-mode full` with appropriate hostnames.
-- **Operator Connectivity**: The operator connects to the gateway via `g8e.local`, resolved through Docker `extra_hosts` mapping to `host-gateway`. Ensure this hostname matches the gateway certificate SANs in production deployments.
+- **Operator Connectivity**: The operator connects to the gateway via `g8e.local`, resolved through the Docker network alias on the shared bridge network. Ensure this hostname matches the gateway certificate SANs in production deployments.

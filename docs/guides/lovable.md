@@ -5,8 +5,8 @@ parent: Guides
 
 # Lovable Frontend Integration
 
-Last Updated: 2026-07-11
-Version: v1.3.11
+Last Updated: 2026-07-12
+Version: v1.4.0
 
 ---
 
@@ -18,7 +18,7 @@ The guide is structured as a prompt you can paste directly into your Lovable AI 
 
 ### Steps at a Glance
 
-1. **[Configure the Cloudflare Tunnel](#cloudflare-tunnel)** — Expose the local g8e Gateway to the internet via `console.g8e.ai`
+1. **[Configure the Cloudflare Tunnel](./cloudflare_tunnel.md)** — Expose the local g8e Gateway to the internet via `console.g8e.ai`
 2. **[Configure the Gateway](#gateway-side-configuration)** — Set CORS origins, passkey RP ID/name/origins, and public base URL
 3. **[Enroll the Frontend](#frontend-enrollment)** — Run `g8e gui enroll` to validate CORS and generate a TypeScript config snippet
 4. **[Review the API Reference](#api-reference)** — Understand the public and authenticated endpoints (or auto-discover via `/swagger/doc.json`)
@@ -40,77 +40,13 @@ The guide is structured as a prompt you can paste directly into your Lovable AI 
 
 ## 1. Cloudflare Tunnel
 
-A Cloudflare Tunnel securely exposes the local g8e Gateway to the internet without opening firewall ports. `cloudflared` maintains an outbound-only encrypted connection to Cloudflare's edge, which terminates TLS with a public CA certificate and forwards traffic to the gateway's HTTPS listener on `localhost:8443`.
+A Cloudflare Tunnel securely exposes the local g8e Gateway to the internet so the Lovable frontend can reach it from the browser. The tunnel routes `console.g8e.ai` through Cloudflare's edge to the gateway's HTTPS listener on `localhost:8443`, with HTTP/2 enabled for SSE streaming performance.
 
-Key points for this integration:
-
-- **Hostname**: `console.g8e.ai` routes through the tunnel to `https://localhost:8443`
-- **Origin TLS**: The gateway uses a self-signed internal certificate; `cloudflared` connects with `originServerName: g8e.local` and the gateway's CA bundle
-- **HTTP/2**: The tunnel uses HTTP/2 to the origin for multiplexed streaming (important for SSE)
-- **Public URL**: The `--public-base-url` flag on the gateway must match the tunnel hostname (`https://console.g8e.ai`) so that passkey RP origins and approval links resolve correctly
-
-#### Create the Tunnel
-
-```bash
-# Authenticate with your Cloudflare account
-cloudflared tunnel login
-
-# Create a named tunnel
-cloudflared tunnel create g8e
-
-# Route DNS to the tunnel (creates CNAME console.g8e.ai → <tunnel-id>.cfargotunnel.com)
-cloudflared tunnel route dns g8e console.g8e.ai
-```
-
-Note the tunnel ID from the output. The credentials file is saved to `~/.cloudflared/<tunnel-id>.json`.
-
-#### Configure `config.yml`
-
-Create or edit `~/.cloudflared/config.yml`:
-
-```yaml
-tunnel: <your-tunnel-id>
-credentials-file: ~/.cloudflared/<your-tunnel-id>.json
-
-ingress:
-  - hostname: console.g8e.ai
-    service: https://localhost:8443
-    originRequest:
-      originServerName: g8e.local
-      originCaPool: ./.g8e/pki/g8eg-ca-bundle.pem
-      http2Origin: true
-  - service: http_status:404
-```
-
-#### Run the Tunnel
-
-```bash
-# Start the tunnel (in a separate terminal from the gateway)
-cloudflared tunnel run g8e
-
-# Verify the tunnel is connected
-cloudflared tunnel info g8e
-```
-
-#### Verify End-to-End
-
-```bash
-# Check the health endpoint through the tunnel
-curl -s https://console.g8e.ai/api/v1/health
-```
-
-Expected response:
-
-```json
-{"status":"ok","mode":"gateway","version":"...","pid":12345,"governance_ready":true,"state_merkle_root":"..."}
-```
-
-> For full setup instructions — running `cloudflared` as a systemd service, optional Cloudflare Access policies, and troubleshooting — see the [Cloudflare Tunnel Integration guide](./cloudflare_tunnel.md).
+**Full setup instructions** (tunnel creation, `config.yml`, systemd service, Cloudflare Access policies, and troubleshooting) are in the [Cloudflare Tunnel Integration guide](./cloudflare_tunnel.md).
 
 ### Prerequisites
 
-- g8e Gateway running with CORS and passkey RP configured (see [Cloudflare Tunnel Integration](./cloudflare_tunnel.md))
-- `console.g8e.ai` resolving through Cloudflare Tunnel to `localhost:8443`
+- g8e Gateway running behind a Cloudflare Tunnel at `https://console.g8e.ai` (see [Cloudflare Tunnel Integration](./cloudflare_tunnel.md))
 - A [Lovable](https://lovable.dev) account
 
 ---

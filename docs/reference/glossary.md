@@ -4,8 +4,8 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 2026-07-06
-Version: v1.3.7
+Last Updated: 2026-07-12
+Version: v1.4.0
 
 Core terminology for the g8e protocol, g8e Gateway, g8e Operator, and ecosystem integration (MCP, A2A). Terms are organized alphabetically.
 
@@ -31,19 +31,27 @@ A field in the **GovernanceEnvelope** (`acting_app_id`) that identifies the appl
 
 ## Capability
 
-A just-in-time, single-action, self-dissolving permission derived from a verified governance envelope. The L5 Actuator mints a capability before execution and dissolves it immediately after, enforcing zero standing privileges. The capability binds the action type, target resource, transaction hash, and expiry. Downstream handlers can extract and verify the capability via `CapabilityFromContext(ctx)`. Implemented in `internal/services/governance/capability.go`.
+A just-in-time, single-action, self-dissolving permission derived from a verified governance envelope. The L5 Actuator mints a capability before execution and dissolves it immediately after, enforcing zero standing privileges. The capability binds the action type, target resource, transaction hash, and expiry. Downstream handlers can extract and verify the capability via `CapabilityFromContext`. Implemented in `internal/services/governance/capability.go`.
 
 ---
 
 ## Coordination Store
 
-The embedded SQLite database used by the g8e Gateway for durable storage of users, operators, and platform data. The g8e Gateway running in gateway mode is the single source of truth, a single SQLite database in WAL mode shared by all components via the g8e Gateway's document store, KV, and pub/sub APIs. BYO agentic clients and other components are stateless with respect to persistence and access all data through the g8e Gateway's HTTP API. Collections include users, operators, organizations, operator_sessions, cli_sessions, web_sessions, bound_sessions, cases, investigations, tasks, memories, personas, app_policies, trusted_signers, tribunals, revoked_certificates, reputation_state, reputation_commitments, stake_resolutions, agent_activity_metadata, and others. The database includes a `state_tier` column to distinguish bound-state from observed-state entries.
+The embedded SQLite database used by the g8e Gateway for durable storage of users, operators, and platform data. The g8e Gateway running in gateway mode is the single source of truth: a single SQLite database in WAL mode shared by all components via the g8e Gateway's document store, KV, and pub/sub APIs. BYO agentic clients and other components are stateless with respect to persistence and access all data through the g8e Gateway's HTTP API.
+
+Collections include users, operators, organizations, operator_sessions, cli_sessions, web_sessions, bound_sessions, cases, investigations, tasks, memories, personas, app_policies, trusted_signers, tribunals, enrollment_tokens, revoked_certificates, reputation_state, reputation_commitments, stake_resolutions, agent_activity_metadata, and others. The database includes a `state_tier` column to distinguish bound-state from observed-state entries.
 
 ---
 
 ## Encrypted KV Adapter
 
 A bridge between the canonical gateway DB's KVStoreService and the storage.TokenStore interface expected by ScrubbingService. Values are encrypted at rest via the vault. Entries are written as `state_tier='observed'` so they do not participate in the bound state root hash. This replaced the standalone TokenStoreService and its separate `token_store.db` file. Implemented in `internal/services/gateway/encrypted_kv_adapter.go`.
+
+---
+
+## Enrollment Token
+
+A one-time, cryptographically random token used for secure passkey enrollment. The gateway generates a 32-byte token with a 5-minute TTL and persists it with the user's session identifiers. The CLI opens a browser with the token in the URL fragment, and the console SPA submits it to the public validation endpoint. The token is consumed on first use and cleaned up after expiration, preventing exposure of raw session identifiers in browser history or referrer headers. Implemented in `internal/services/gateway/enrollment_token_service.go`.
 
 ---
 
@@ -117,16 +125,16 @@ L1 is foundationally active for every command and cannot be bypassed.
 
 ## L2 Consensus (L2Consensus)
 
-The second layer of g8e governance (Consensus). A multi-agent consensus system where independent agents vote on command candidates. L2 ensures every command executed is backed by a cryptographic quorum. In the g8e protocol, this is represented by an Ed25519 signature over the `transaction_hash|decision` in the `GovernanceEnvelope`. This signature is verified by the L4 Warden. L2 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, notary).
+The second layer of g8e governance (Consensus). A multi-agent consensus system where independent agents vote on command candidates. L2 ensures every command executed is backed by a cryptographic quorum. The Tribunal service deliberates on each governance envelope and produces signed votes. In the g8e protocol, an L2 vote is an Ed25519 signature over the `transaction_hash|decision` in the `GovernanceEnvelope`. Votes are verified by the L4 Warden against the tribunal policy's quorum requirement. L2 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, notary).
 
 ---
 
 ## L3 Notary (L3Notary)
 
 The third layer of g8e governance (Authorization), focusing on human oversight. Every state-changing mutation requires explicit human authorization. The L3 notary uses a layered authorization model with three implementations:
-- **Gateway Notary** (`gatewayNotary`): The unified notary for gateway mode. Layer 1 requires passkey (WebAuthn) authorization for all callers; proofs without a `credential_id` are rejected with `ErrPasskeyProofRequired`. Layer 2 performs CLI mTLS session verification (user match, session validity, certificate fingerprint match) when the proof includes an `mtls_cert_fingerprint` (CLI callers). Browser-only proofs skip Layer 2. Implemented by `NewGatewayL3Notary` in `internal/services/governance/l3_notary.go`.
-- **Outbound Notary** (`outboundNotary`): The notary for outbound mode. Performs suspended transaction lookup and Ed25519 signature verification over the transaction hash. The signature is verified against the `ApprovalPublicKey` stored on the suspended transaction. Implemented by `NewOutboundL3Notary`.
-- **CLI Notary** (`cliNotary`): The notary for gateway CLI mode without a passkey verifier. Performs CLI session verification followed by suspended transaction and Ed25519 signature verification. Implemented by `NewCLIL3Notary`.
+- **Gateway Notary**: The unified notary for gateway mode. Layer 1 requires passkey (WebAuthn) authorization for all callers; proofs without a `credential_id` are rejected. Layer 2 performs CLI mTLS session verification (user match, session validity, certificate fingerprint match) when the proof includes an `mtls_cert_fingerprint` (CLI callers). Browser-only proofs skip Layer 2. Implemented by `NewGatewayL3Notary` in `internal/services/governance/l3_notary.go`.
+- **Outbound Notary**: The notary for outbound mode. Performs suspended transaction lookup and Ed25519 signature verification over the transaction hash. The signature is verified against the `ApprovalPublicKey` stored on the suspended transaction. Implemented by `NewOutboundL3Notary`.
+- **CLI Notary**: The notary for gateway CLI mode without a passkey verifier. Performs CLI session verification followed by suspended transaction and Ed25519 signature verification. Implemented by `NewCLIL3Notary`.
 The CLI approval flow opens a browser to the console SPA for WebAuthn ceremony and subscribes to the gateway's SSE stream for the `approval.completed` event, then verifies the approval status via the mTLS endpoint (`/api/v1/approvals/status/{tx_hash}`). CLI credentials (mTLS) are required for L3 approval flows. The L4 Warden verifies L3 proofs before allowing execution to proceed. L3 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, notary).
 
 ---
@@ -214,13 +222,13 @@ A field in the **GovernanceEnvelope** (`requestor_user_id`) that identifies the 
 
 ## Observed-State Root
 
-A separate Merkle root commitment computed over observed-tier KV and blob entries in the canonical gateway DB. Observed-state rows (those with `state_tier='observed'`) are excluded from the bound state root to prevent churning in-flight envelopes. The observed-state root does not gate transaction admission but is chained into the audit ledger so observed evidence is tamper-evident without breaking the bound root. Computed by `StateRootService.calculateObservedStateRoot()` in `internal/services/gateway/state_root_service.go`.
+A separate Merkle root commitment computed over observed-tier KV and blob entries in the canonical gateway DB. Observed-state rows (those with `state_tier='observed'`) are excluded from the bound state root to prevent churning in-flight envelopes. The observed-state root does not gate transaction admission but is chained into the audit ledger so observed evidence is tamper-evident without breaking the bound root. Computed by `StateRootService` in `internal/services/gateway/state_root_service.go`.
 
 ---
 
 ## Scrubbed Vault
 
-The local SQLite database on the g8e Operator managed by the **Sovereign Execution Boundary**. It stores command outputs where sensitive data (credentials, PII, network identifiers) has been replaced with safe placeholders like `{{UEI_N}}`. This ensures that raw sensitive data never leaves the sovereign host. The vault mode is controlled by `VaultModeScrubbed` and `VaultModeRaw` constants.
+The local SQLite database on the g8e Operator managed by the **Sovereign Execution Boundary**. It stores command outputs where sensitive data (credentials, PII, network identifiers) has been replaced with safe placeholders like `{{UEI_N}}`. This ensures that raw sensitive data never leaves the sovereign host.
 
 ---
 
@@ -235,7 +243,7 @@ The data sovereignty and scrubbing system running within the g8e Operator (PEP),
 
 ## SSE (Server-Sent Events)
 
-The streaming protocol used to push real-time events from the g8e Gateway to clients. Used for command execution results and heartbeat updates. All clients (CLI, browser, operator) use the unified `/api/v1/sse/stream` endpoint. Approval requests are returned inline in the MCP or A2A response with an `approval_url` field, not pushed via SSE.
+The streaming protocol used to push real-time events from the g8e Gateway to clients. Used for command execution results, heartbeat updates, and approval completion notifications. All clients (CLI, browser, operator) use the unified `/api/v1/sse/stream` endpoint. Approval requests are returned inline in the MCP or A2A response with an `approval_url` field, not pushed via SSE. Approval completions are delivered as `approval.completed` events on the SSE stream.
 
 ---
 
@@ -260,6 +268,12 @@ The ability to restore files to any previous state using the Ledger's git histor
 ## Tool Calling Loop
 
 The execution pattern where BYO AI clients generate tool calls to interact with the g8e Operator via MCP or A2A protocols, receive results, and generate subsequent calls based on the outcomes. The g8e Operator exposes host tools as an MCP Server, enabling standard AI clients to execute commands through the governance envelope.
+
+---
+
+## Tribunal
+
+A multi-member deliberation service that produces L2 consensus votes for governance envelopes. Each tribunal member is an enrolled principal with its own Ed25519 key. The tribunal policy defines the member set, quorum threshold, and whether distinct signatures are required. When the gateway operates under consensus or notary posture, the tribunal deliberates on each envelope and signs a vote indicating whether the action is safe. The gateway bootstraps the tribunal at startup from a policy stored in the coordination store. Implemented in `internal/services/tribunal/service.go`.
 
 ---
 

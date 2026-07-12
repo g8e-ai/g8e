@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## v1.4.x
+
+| Version | Date | Description | Notes |
+|---------|------|-------------|-------|
+| 1.4.0 | 2026-07-12 | Frontend enrollment, Cloudflare Tunnel, L5 Actuator refactor, and Swagger annotations. Adds `g8e gui` and `g8e tunnel` command suites, `operator start` rename, default TUI launch, consolidated web-cert trust scripts, OpenAPI annotations across gateway endpoints, and Windows build fixes. | [v1.4.0](docs/release_notes/v1.4.x/v1.4.0.md) |
+
 ## v1.3.x
 
 | Version | Date | Description | Notes |

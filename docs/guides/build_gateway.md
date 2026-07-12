@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Gateway
 
-Last Updated: 2026-07-10
-Version: v1.3.10
+Last Updated: 2026-07-12
+Version: v1.4.0
 
 ---
 
@@ -50,6 +50,7 @@ The Makefile provides several build targets:
 - `make build-linux` - Builds g8e Node for Linux (amd64, arm64, 386).
 - `make build-windows` - Builds g8e Node for Windows (amd64, arm64).
 - `make build-darwin` - Builds g8e Node for Darwin (amd64, arm64).
+- `make build-compressed` - Builds g8e Node then compresses with UPX (requires UPX installed).
 - `make clean` - Removes compiled g8e Nodes and test artifacts.
 
 ### Build in Docker (no local Go required)
@@ -140,7 +141,7 @@ To start the gateway, use the CLI gateway command:
 - `--a2a-downstream-url <url>` - URL of a downstream A2A server to proxy execution to (default: none)
 - `--public-base-url <url>` - Public base URL for approval links and host validation behind reverse proxies or Cloudflare Tunnels (e.g., `https://demo.g8e.ai`)
 - `--cors-origin <origin>` - Allowed CORS origin for cross-origin browser access (repeatable, e.g., `https://lovable.dev`)
-- `-f, --follow` - Follow log output after starting (like tail -f)
+- `-f, --follow` - Run gateway in foreground instead of background (Ctrl+C stops gateway)
 
 ---
 
@@ -224,8 +225,8 @@ Your implementation must enforce these core invariants:
 
 The gateway must support three operating modes:
 
-- **Doctrine Mode**: Enforce L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2/L3 signatures not required. This is the default mode.
-- **Consensus Mode**: Enforce L1 and L2 (multi-model Byzantine consensus). L3 signature not required.
+- **Doctrine Mode**: Enforce L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2/L3 signatures audited but not required. This is the default mode.
+- **Consensus Mode**: Enforce L1 and L2 (multi-model Byzantine consensus). L3 signature audited but not required.
 - **Notary Mode**: Enforce L1, L2, and L3 (human-in-the-loop via WebAuthn/FIDO2).
 
 ### Session Types
@@ -238,16 +239,16 @@ The gateway must enforce strict separation between session types:
 
 Session routing must be disjoint. A web_session_id can never receive events intended for a cli_session_id.
 
-### Multiplexed Port Contract
+### Two-Port Architecture
 
-The gateway must support two logical protocol surfaces with distinct authentication requirements:
+The gateway exposes two ports with distinct transport and authentication properties:
 
-| Surface | Auth | Purpose |
-|---|---|---|
-| **Public Port** | TLS (no client cert) | Browser login, WebAuthn challenge, PKI discovery |
-| **mTLS API + Pub/Sub** | TLS + RequireAndVerifyClientCert | Envelope submission, persistence, pub/sub |
+| Port | Transport | Client Cert | Purpose |
+|---|---|---|---|
+| **HTTP 8080** | Plain HTTP | None | Health checks, state endpoint, bootstrap, PKI discovery, CSR signing, deploy scripts |
+| **HTTPS 8443** | TLS 1.3 | Verified when present | API, pub/sub, console, MCP, A2A, governance, audit |
 
-Surfaces with different TLS client-auth requirements MUST NOT share a port. Sharing would force `tls.VerifyClientCertIfGiven` and downgrade the mTLS execution boundary to an L7 check. The reference implementation enforces this by validating port assignments during initialization.
+The HTTPS port uses `tls.VerifyClientCertIfGiven`: client certificates are accepted and verified when present, but not required at the TLS layer. This allows browser clients (console, WebAuthn flows) to reach public routes without a client certificate. mTLS enforcement for protected routes happens at the application layer via route classification: each route is assigned an auth mode (none, mTLS, web session, or dual), and requests are fail-closed for unknown routes.
 
 ---
 
@@ -273,6 +274,8 @@ The CLI provides tiered test subcommands:
 ./g8e test e2e          # Tier 3: live platform E2E (requires running gateway)
 ./g8e test coverage     # Tests with coverage report
 ./g8e test lint         # Static analysis
+./g8e test chaos        # Generate governance events for chaos testing
+./g8e test summary      # View chaos test summary from test vault
 ```
 
 The integration and E2E suites verify:
@@ -392,13 +395,28 @@ The `-f` flag follows log output (like `tail -f`). Use without `-f` to view hist
 
 ### Data Query
 
-Query the gateway's data store for operators, users, and audit events:
+Query the gateway's data store for operators, users, settings, documents, and audit events:
 
 ```bash
 ./g8e gw data operators
 ./g8e gw data users
+./g8e gw data settings
+./g8e gw data store --collection <name> [--document-id <id>]
 ./g8e gw data audit list --operator-session-id <session-id>
+./g8e gw data audit summary [--operator-session-id <session-id>]
 ```
+
+### Cloudflare Tunnel
+
+Manage a Cloudflare Tunnel to expose the local gateway to the internet without opening firewall ports:
+
+```bash
+./g8e gw tunnel create --name <tunnel-name> --hostname <your-domain>  # Create tunnel and route DNS
+./g8e gw tunnel run                                                   # Start tunnel (foreground)
+./g8e gw tunnel status                                                # Check tunnel connectivity
+```
+
+Requires `cloudflared` installed and a Cloudflare account with a registered domain. See [Cloudflare Tunnel](cloudflare_tunnel.md) for detailed setup.
 
 ---
 

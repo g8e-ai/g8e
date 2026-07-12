@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-07-06
-Version: v1.3.7
+Last Updated: 2026-07-12
+Version: v1.4.0
 
 ---
 
@@ -105,7 +105,7 @@ Generate an mTLS client certificate from the Gateway via CSR-based enrollment:
 ./g8e auth enroll
 ```
 
-This generates a local keypair, submits a CSR to the Gateway CA, and stores the signed certificate in `.g8e/cli.crt` with the private key in `.g8e/cli.key`. On non-Windows platforms, enrollment also opens a browser to register a WebAuthn passkey. The Gateway must be running before enrollment (`./g8e gw start`).
+This generates a local keypair, submits a CSR to the Gateway CA, and stores the signed certificate in `.g8e/cli.crt` with the private key in `.g8e/cli.key`. Enrollment opens a browser to register a WebAuthn passkey on all platforms. On Windows, the CLI key is generated in the Windows Certificate Store and the signed certificate is imported for Windows Hello native API access. The Gateway must be running before enrollment (`./g8e gw start`).
 
 ### Step 2: Fetch State Root
 
@@ -1043,44 +1043,6 @@ The g8e protocol does not care what language your ensemble is written in, what L
 you use, or how many agents you run. It cares that your envelopes are correctly signed,
 bound to the current state root, and pass all L1/L2/L3 gates. Everything above that line is
 yours to design.
-
----
-
-## Testing
-
-Applications should test against the reference g8e Gateway to ensure compatibility:
-
-```bash
-./g8e gw start
-./g8e test e2e
-```
-
-Verify that:
-- Envelopes are accepted by the Gateway
-- Receipts are returned with valid Ed25519 signatures
-- Mutations are executed on connected Operators
-- Audit entries are written to the audit vault
-- The transaction hash matches the envelope ID
-
----
-
-## Security Considerations
-
-### No Privileged Channels
-
-Applications must not attempt to establish privileged communication channels with the g8e Gateway or g8e Operators. All communication must go through public ingress paths.
-
-### Fail-Closed Behavior
-
-Applications must handle verification failures gracefully. If the g8e Gateway rejects an envelope, the application must not retry with modified parameters or attempt fallback paths.
-
-### Certificate Management
-
-Applications must manage their mTLS certificates securely. Certificates should be stored securely and rotated before expiry.
-
-### State Root Validation
-
-Applications must validate the state root returned by the g8e Gateway (via health endpoint) before using it in envelope construction. This prevents man-in-the-middle attacks.
 
 ---
 

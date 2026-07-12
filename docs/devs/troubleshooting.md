@@ -1,7 +1,7 @@
 # Developer Troubleshooting
 
-Last Updated: 2026-07-06
-Version: v1.3.7
+Last Updated: 2026-07-12
+Version: v1.4.0
 
 This page covers common setup failures, runtime friction, and operational
 caveats for contributors working on g8e from a fresh checkout. The platform

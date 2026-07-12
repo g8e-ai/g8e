@@ -5,8 +5,8 @@ parent: Guides
 
 # Air-Gap Architecture
 
-Last Updated: 2026-07-10
-Version: v1.3.11
+Last Updated: 2026-07-12
+Version: v1.4.0
 
 The g8e platform operates in environments without internet connectivity. The platform supports air-gapped deployments with zero runtime external network dependencies, using the g8e Gateway, the g8e Operator, and fully vendored Go dependencies (`vendor/` and `protocol/vendor/`). The platform supports both binary deployment and containerized deployment via Docker.
 
@@ -94,7 +94,7 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 2. **Package Runtime Configurations**: Archive the build artifacts and the protocol schemas:
    - The compiled `bin/g8e` g8e Node.
    - The protocol configuration files under the `protocol/` directory.
-3. **Optional Container Build**: For containerized deployments, use the demo configurations in `demos/healthcare`, `demos/gov`, `demos/finance`, `demos/secure-data`, `demos/dow`, `demos/dhs`, or `demos/swarm` as reference. The `demos/Dockerfile` copies the pre-built binary into a minimal image; no compilation happens inside the container. The root `docker-compose.yml` defines both `g8e-gateway` and `g8e-operator` services using the root `Dockerfile` (which compiles from source using vendored modules) with different command-line flags.
+3. **Optional Container Build**: For containerized deployments, use the demo configurations in `demos/healthcare`, `demos/gov`, `demos/finance`, `demos/secure-data`, `demos/dow`, `demos/dhs`, `demos/swarm`, or `demos/frontend` as reference. The `demos/Dockerfile` copies the pre-built binary into a minimal image; no compilation happens inside the container. The root `docker-compose.yml` defines both `g8e-gateway` and `g8e-operator` services using the root `Dockerfile` (which compiles from source using vendored modules) with different command-line flags.
 4. **Pre-Pull Docker Images (Containerized Deployments)**: For air-gapped Docker deployments, pre-pull all external images on the connected host:
    ```bash
    g8e demos pull
