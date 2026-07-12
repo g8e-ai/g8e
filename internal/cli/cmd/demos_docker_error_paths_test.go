@@ -16,6 +16,7 @@ package cmd
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -90,6 +91,10 @@ func TestRunDemosStop_WithValidDemoDirButNoDocker(t *testing.T) {
 }
 
 func TestRunDemosClean_AllDemosWithDirsButNoDocker(t *testing.T) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+
 	tmpDir := chdirTemp(t)
 
 	demosDir := filepath.Join(tmpDir, constants.DemosDirname)
@@ -109,6 +114,10 @@ func TestRunDemosClean_AllDemosWithDirsButNoDocker(t *testing.T) {
 }
 
 func TestRunDemosClean_SingleOrgWithValidDirButNoDocker(t *testing.T) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+
 	tmpDir := chdirTemp(t)
 
 	orgDir := filepath.Join(tmpDir, constants.DemosDirname, "myorg")

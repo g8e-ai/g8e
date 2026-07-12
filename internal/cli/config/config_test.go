@@ -119,9 +119,9 @@ func TestLoad(t *testing.T) {
 		config, err := Load("")
 		require.NoError(t, err)
 		assert.NotNil(t, config)
-		resolvedDir, err := filepath.EvalSymlinks(tempDir)
+		actualWd, err := os.Getwd()
 		require.NoError(t, err)
-		assert.Equal(t, resolvedDir, config.ProjectRoot)
+		assert.Equal(t, actualWd, config.ProjectRoot)
 	})
 
 	t.Run("always uses embedded defaults regardless of file presence", func(t *testing.T) {
@@ -409,9 +409,9 @@ func TestLoadWithPaths(t *testing.T) {
 		config, err := LoadWithPaths("", pathsData)
 		require.NoError(t, err)
 		assert.NotNil(t, config)
-		resolvedDir, err := filepath.EvalSymlinks(tempDir)
+		actualWd, err := os.Getwd()
 		require.NoError(t, err)
-		assert.Equal(t, resolvedDir, config.ProjectRoot)
+		assert.Equal(t, actualWd, config.ProjectRoot)
 	})
 
 	t.Run("returns error for invalid JSON", func(t *testing.T) {
@@ -731,19 +731,19 @@ func TestLoadIntegration(t *testing.T) {
 
 		// Verify it loaded from embedded defaults
 		assert.NotNil(t, config.Paths)
-		resolvedDir, err := filepath.EvalSymlinks(tempDir)
+		actualWd, err := os.Getwd()
 		require.NoError(t, err)
-		assert.Equal(t, resolvedDir, config.ProjectRoot)
+		assert.Equal(t, actualWd, config.ProjectRoot)
 
 		// Verify embedded default paths are resolved relative to tempDir
-		assert.Equal(t, filepath.Join(resolvedDir, ".g8e"), config.RuntimeDir)
-		assert.Equal(t, filepath.Join(resolvedDir, ".g8e/pki"), config.PKIDir)
-		assert.Equal(t, filepath.Join(resolvedDir, ".g8e/secrets"), config.SecretsDir)
+		assert.Equal(t, filepath.Join(actualWd, ".g8e"), config.RuntimeDir)
+		assert.Equal(t, filepath.Join(actualWd, ".g8e/pki"), config.PKIDir)
+		assert.Equal(t, filepath.Join(actualWd, ".g8e/secrets"), config.SecretsDir)
 
 		// Verify protocol paths are relative
-		assert.Equal(t, filepath.Join(resolvedDir, ".g8e/protocol"), config.Paths.Infra.ProtocolDir)
-		assert.Equal(t, filepath.Join(resolvedDir, ".g8e/protocol/constants"), config.Paths.Infra.ProtocolConstantsDir)
-		assert.Equal(t, filepath.Join(resolvedDir, ".g8e/protocol/models"), config.Paths.Infra.ProtocolModelsDir)
+		assert.Equal(t, filepath.Join(actualWd, ".g8e/protocol"), config.Paths.Infra.ProtocolDir)
+		assert.Equal(t, filepath.Join(actualWd, ".g8e/protocol/constants"), config.Paths.Infra.ProtocolConstantsDir)
+		assert.Equal(t, filepath.Join(actualWd, ".g8e/protocol/models"), config.Paths.Infra.ProtocolModelsDir)
 
 		// Verify port values from constants
 		assert.Equal(t, constants.Ports.OperatorHttps, config.OperatorHTTPSPort())
