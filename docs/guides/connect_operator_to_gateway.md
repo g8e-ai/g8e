@@ -5,7 +5,7 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-07-10
+Last Updated: 2026-07-12
 Version: v1.3.11
 
 ---
@@ -82,7 +82,7 @@ Hosts are specified as positional arguments or via `--hosts <file>` (one host pe
 ./g8e operator scp <user@host:path>
 ```
 
-This command uses SCP to copy the operator binary to a remote host. Supports common SCP flags including `-P` for SSH port, `-i` for identity file, `-r` for recursive copy, `-p` to preserve attributes, `-v` for verbose output, and `-C` for compression. Use `--prompt` to interactively configure options.
+This command uses SCP to copy the operator binary to a remote host. Supports common SCP flags including `-P` for SSH port, `-i` for identity file, `-r` for recursive copy, `--preserve` to preserve file attributes, `-v` for verbose output, and `-C` for compression. Use `--prompt` to interactively configure options.
 
 #### 3. CSR-Based Enrollment
 
@@ -139,7 +139,7 @@ Check status:
 This reports:
 - Gateway running state (RUNNING or STOPPED)
 - Gateway endpoint URLs (Operator Bootstrap, Public API, Console UI, MCP HTTP)
-- Process PID (when detected via ProcessManager fallback)
+- Process PID (when available)
 
 ---
 

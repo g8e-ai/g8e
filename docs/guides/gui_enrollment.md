@@ -5,13 +5,13 @@ parent: Guides
 
 # GUI Enrollment
 
-Last Updated: 2026-07-11
+Last Updated: 2026-07-12
 
 ---
 
 ## Overview
 
-The `g8e gui` command enrolls external frontend applications (React, Lovable, custom apps) with the g8e Gateway. Enrollment registers the frontend's origin with the gateway's CORS allowed origins and passkey relying party (RP) origins, then restarts the gateway so the new configuration takes effect.
+The `g8e gui` command manages external frontend application enrollment (React, Lovable, custom apps) with the g8e Gateway. Enrollment persists the frontend's origin in a local enrollment file and verifies that the running gateway was started with the correct `--cors-origin` and `--passkey-rp-origin` flags for that origin. The gateway is not restarted during enrollment; it must be started with the right flags beforehand.
 
 After enrollment, the frontend can:
 - Authenticate users via WebAuthn passkeys
@@ -20,7 +20,7 @@ After enrollment, the frontend can:
 
 ## Prerequisites
 
-- g8e Gateway running (`g8e gw start`)
+- g8e Gateway running with CORS and passkey RP origin flags set for the frontend origin (e.g., `g8e gw start --cors-origin https://my-app.lovable.app --passkey-rp-origin https://my-app.lovable.app`)
 - Frontend application served on a known origin (e.g., `http://localhost:3003`, `https://my-app.lovable.app`)
 
 ## Commands
@@ -35,16 +35,18 @@ g8e gui enroll --origin <url> [flags]
 
 Flags:
 - `--origin` (required) — Frontend application origin URL (e.g., `https://my-app.lovable.app`)
-- `--passkey-rp-id` — Passkey RP ID (defaults to gateway's hostname from origin)
+- `--passkey-rp-id` — Passkey RP ID (defaults to the origin's hostname)
 - `--passkey-rp-name` — Passkey RP display name (default: `g8e`)
 - `--public-base-url` — Public base URL for the gateway (e.g., `https://console.g8e.ai`)
-- `--no-restart` — Skip gateway restart (save enrollment only)
 
 The command:
 1. Validates the origin URL
-2. Persists the origin to `.g8e/gui_enrollments.json`
-3. Restarts the gateway with the origin added to CORS and passkey RP origins
-4. Outputs a TypeScript configuration snippet for the frontend developer
+2. Sends a CORS preflight request to the running gateway to verify the origin is in its allowed origins
+3. If `--public-base-url` is provided, verifies the gateway is reachable at that URL
+4. Persists the origin to `gui_enrollments.json` in the g8e runtime directory
+5. Outputs a TypeScript configuration snippet for the frontend developer
+
+If the gateway is not running or does not have the origin configured, the command fails with an error indicating which flags to use when starting the gateway.
 
 ### `g8e gui show`
 
@@ -58,20 +60,20 @@ g8e gui list           # alias for "show"
 
 ### `g8e gui remove`
 
-Remove an enrolled frontend application origin from the enrollment file and restart the gateway.
+Remove an enrolled frontend application origin from the enrollment file.
 
 ```bash
-g8e gui remove --origin <url> [flags]
+g8e gui remove --origin <url>
 ```
 
 Flags:
 - `--origin` (required) — Frontend application origin URL to remove
-- `--no-restart` — Skip gateway restart (save enrollment only)
 
 The command:
 1. Validates the origin URL
-2. Removes the origin from `.g8e/gui_enrollments.json`
-3. Restarts the gateway with the updated CORS and passkey RP origins
+2. Removes the origin from `gui_enrollments.json` in the g8e runtime directory
+
+The gateway's CORS and passkey RP configuration is unchanged. To stop accepting the origin, restart the gateway without the corresponding `--cors-origin` and `--passkey-rp-origin` flags.
 
 Returns `not found` error if the origin is not enrolled.
 
@@ -83,7 +85,7 @@ Verify gateway connectivity and CORS configuration for a frontend origin.
 g8e gui verify --origin <url>
 ```
 
-Prints a verification checklist with endpoint URLs for manual testing.
+Checks enrollment status and prints a verification checklist with gateway endpoint URLs for manual testing, including health, CORS preflight, SSE, and WebAuthn passkey endpoints.
 
 ## Frontend Integration Checklist
 
@@ -92,7 +94,7 @@ After enrollment, the frontend developer must:
 - **CORS**: All `fetch` calls must include `credentials: 'include'`
 - **Passkey RP**: The RP ID must match the gateway's hostname (derived from the origin or set via `--passkey-rp-id`)
 - **SSE**: `EventSource` must use `withCredentials: true`
-- **Session cookie**: The gateway sets `g8e_web_session_cookie` with `SameSite=None; Secure`
+- **Session cookie**: The gateway sets `g8e_web_session_cookie` with `SameSite=None; Secure` for cross-origin configurations (`SameSite=Lax` for same-origin)
 
 ### Key Endpoints
 
@@ -138,7 +140,7 @@ g8e gui verify --origin http://localhost:3000
 
 If the browser blocks requests with CORS errors:
 - Verify the origin is enrolled: `g8e gui show`
-- Verify the gateway was restarted after enrollment
+- Verify the gateway was started with `--cors-origin` and `--passkey-rp-origin` flags for this origin
 - Check that `credentials: 'include'` is set on all fetch calls
 
 ### Passkey RP Mismatch

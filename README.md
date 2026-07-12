@@ -270,7 +270,6 @@ The g8e platform is designed for environments requiring zero trust architecture 
 - [Build Applications](docs/guides/build_apps.md)
 - [Connect Applications to Gateway](docs/guides/connect_apps_to_gateway.md)
 - [Connect Operator to Gateway](docs/guides/connect_operator_to_gateway.md)
-- [Build Agentic Systems](docs/guides/build_agentic_system.md)
 - [Air Gap Deployment](docs/guides/air_gap.md)
 - [Docker Gateway](docs/guides/docker_gateway.md)
 

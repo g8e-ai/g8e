@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-07-06
-Version: v1.3.7
+Last Updated: 2026-07-12
+Version: v1.3.11
 
 ---
 
@@ -100,7 +100,7 @@ The Gateway provides a unified health endpoint across all services for consisten
 
 MCP is a JSON-RPC 2.0 protocol for AI tool invocation. The Gateway translates MCP tool calls into governance envelopes, runs them through L1/L2/L3 verification, and dispatches to downstream MCP servers or local execution.
 
-The Gateway provides a unified MCP endpoint architecture with a comprehensive input validation framework that enforces fail-closed security principles for all tool inputs.
+The Gateway provides a unified MCP endpoint architecture with input validation that enforces fail-closed security for all tool inputs.
 
 #### Native Tools
 
@@ -247,7 +247,7 @@ curl -X POST https://localhost:8443/api/v1/a2a/call \
 
 ### 3. Direct Governance Envelope
 
-For maximum control, applications can submit canonical JSON `GovernanceEnvelope` transactions directly. This is the only customer-facing mutation API on the Gateway.
+Applications can submit canonical JSON `GovernanceEnvelope` transactions directly. This is the only customer-facing mutation API on the Gateway.
 
 #### Envelope Submission
 
@@ -282,12 +282,7 @@ wscat -c wss://localhost:8443/api/v1/pubsub/stream \
 
 #### Subscribe Protocol
 
-```json
-{
-  "type": "subscribe",
-  "channel": "cmd:operator-id:operator-session-id"
-}
-```
+The WebSocket pub/sub protocol uses protobuf-encoded `PubSubMessage` frames. To subscribe, send a message with the `subscribe` action and the desired channel name. The broker confirms with a `subscribed` acknowledgment frame before delivering any messages.
 
 ---
 
@@ -376,7 +371,7 @@ For web-based interactions:
 2. Follow on-screen prompts to register a passkey
 3. Use the passkey for subsequent authentication
 
-Web sessions use WebAuthn signatures as L3 proof via PasskeyService.
+Web sessions use WebAuthn signatures as L3 proof.
 
 ### CSR-Based Enrollment
 
@@ -411,7 +406,7 @@ For device enrollment, use the `/api/v1/pki/devices/enroll` endpoint (see PKI se
 
 #### Application Enrollment
 
-Applications enroll via delegated credential enrollment to obtain an app identity (`spiffe://g8e.local/app/<appname>`). See the PKI section for CSR signing details.
+Applications enroll via the `/api/v1/pki/apps/enroll` endpoint to obtain an app identity (`spiffe://g8e.local/app/<appname>`). For delegated credential enrollment (where a human CLI session vouches for the app), use the `/api/v1/pki/apps/delegated` endpoint with mTLS authentication.
 
 ---
 
@@ -463,11 +458,11 @@ When a standard AI client requests a mutation without L3 proof, the Gateway susp
 ### Suspension Flow
 
 1. Client submits MCP/A2A request without L3 proof.
-2. Gateway stores transaction in `suspended_transactions` table.
+2. Gateway stores the transaction in a suspended state.
 3. Gateway returns approval URL: `https://localhost:8443/api/v1/approve/{tx_hash}`.
 4. User opens URL in browser and authenticates with passkey.
 5. User approves transaction via WebAuthn.
-6. Gateway calls `ResumeWithL3Proof` to attach the L3 proof and resubmit the envelope through the verification pipeline.
+6. Gateway attaches the L3 proof and resubmits the envelope through the verification pipeline.
 7. Transaction proceeds to execution and the signed receipt is returned.
 
 ### Approval API
@@ -517,7 +512,7 @@ curl https://localhost:8443/api/v1/audit/receipts?operator_session_id=op-session
 ### Export Audit Receipts
 
 ```bash
-curl https://localhost:8443/api/v1/audit/receipts/export?operator_session_id=op-session-abc \
+curl https://localhost:8443/api/v1/audit/receipts/export?since=2026-01-01T00:00:00Z&limit=100 \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -o audit-export.json
