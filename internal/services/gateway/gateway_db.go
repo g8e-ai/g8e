@@ -35,6 +35,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/vault"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 )
 
 // gatewaySchema is the canonical Operator SQLite schema, embedded at compile time
@@ -245,7 +246,7 @@ func (s *CanonicalDBService) initStateRoot() error {
 		_, err = s.db.ExecWithRetry(
 			"INSERT INTO state_root (id, root, updated_at) VALUES (1, ?, ?)",
 			root,
-			sqliteutil.FormatTimestamp(time.Now().UTC()),
+			timesvc.FormatTimestamp(time.Now().UTC()),
 		)
 		if err != nil {
 			return fmt.Errorf("canonicalDB: init state root: insert: %w", err)

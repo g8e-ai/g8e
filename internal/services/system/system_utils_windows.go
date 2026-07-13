@@ -162,14 +162,6 @@ func getWindowsVersion() string {
 	return fmt.Sprintf("%d.%d.%d", version.MajorVersion, version.MinorVersion, version.BuildNumber)
 }
 
-func getDistroName() string {
-	return "Windows"
-}
-
-func getDistroVersion() string {
-	return getWindowsVersion()
-}
-
 func GetUserDetails(shell string) models.HeartbeatUserDetails {
 	if shell == "" {
 		shell = "cmd.exe"

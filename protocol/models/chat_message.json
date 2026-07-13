@@ -1,0 +1,135 @@
+{
+  "_comment": "Canonical chat API wire shapes for POST /chat. ChatMessageRequest is the request body, ChatStartedResponse is the response. ResourceCreationRequest is a sub-model of ChatMessageRequest.",
+
+  "_authority": "client",
+  "_consumers": ["agent"],
+
+  "resource_creation_request": {
+    "_description": "Typed request to create new case and investigation resources. Serialized from ResourceCreationRequest (protocol/python/g8e/models/internal_api.py).",
+    "create_case": {
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Whether to create a new case"
+    },
+    "case_title": {
+      "type": "string",
+      "required": false,
+      "description": "Title for the new case"
+    }
+  },
+
+  "chat_message_request": {
+    "_description": "Request body for POST /chat. Serialized from ChatMessageRequest (protocol/python/g8e/models/internal_api.py). Excludes null fields on the wire.",
+
+    "context": {
+      "type": "object",
+      "required": true,
+      "description": "Request context. Conforms to request_context.json shape.",
+      "_ref": "request_context.json#request_context"
+    },
+    "message": {
+      "type": "string",
+      "required": true,
+      "description": "User message text"
+    },
+    "attachments": {
+      "type": "array",
+      "required": false,
+      "default": [],
+      "description": "List of attachment objects"
+    },
+    "sentinel_mode": {
+      "type": "boolean",
+      "required": false,
+      "default": true,
+      "description": "Whether sentinel mode is enabled"
+    },
+    "resource_creation": {
+      "type": "object",
+      "required": false,
+      "description": "Optional resource creation request. Conforms to resource_creation_request shape above.",
+      "_ref": "#resource_creation_request"
+    },
+
+    "llm_primary_provider": {
+      "type": "string",
+      "required": false,
+      "description": "Override: primary LLM provider"
+    },
+    "llm_assistant_provider": {
+      "type": "string",
+      "required": false,
+      "description": "Override: assistant LLM provider"
+    },
+    "llm_lite_provider": {
+      "type": "string",
+      "required": false,
+      "description": "Override: lite LLM provider"
+    },
+    "llm_primary_model": {
+      "type": "string",
+      "required": false,
+      "description": "Override: primary LLM model name"
+    },
+    "llm_assistant_model": {
+      "type": "string",
+      "required": false,
+      "description": "Override: assistant LLM model name"
+    },
+    "llm_lite_model": {
+      "type": "string",
+      "required": false,
+      "description": "Override: lite LLM model name"
+    },
+    "llm_primary_api_key": {
+      "type": "string",
+      "required": false,
+      "description": "Override: primary LLM API key"
+    },
+    "llm_primary_endpoint": {
+      "type": "string",
+      "required": false,
+      "description": "Override: primary LLM endpoint URL"
+    },
+    "llm_assistant_api_key": {
+      "type": "string",
+      "required": false,
+      "description": "Override: assistant LLM API key"
+    },
+    "llm_assistant_endpoint": {
+      "type": "string",
+      "required": false,
+      "description": "Override: assistant LLM endpoint URL"
+    },
+    "llm_lite_api_key": {
+      "type": "string",
+      "required": false,
+      "description": "Override: lite LLM API key"
+    },
+    "llm_lite_endpoint": {
+      "type": "string",
+      "required": false,
+      "description": "Override: lite LLM endpoint URL"
+    }
+  },
+
+  "chat_started_response": {
+    "_description": "Response for POST /chat. Serialized from ChatStartedResponse (protocol/python/g8e/models/internal_api.py).",
+    "success": {
+      "type": "boolean",
+      "required": true,
+      "description": "Whether the chat was started successfully"
+    },
+    "case_id": {
+      "type": "string",
+      "required": true,
+      "description": "Case ID for the chat session"
+    },
+    "investigation_id": {
+      "type": "string",
+      "required": true,
+      "description": "Investigation ID for the chat session"
+    }
+  }
+}

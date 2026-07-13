@@ -17,10 +17,10 @@ Go/protobuf/JVM consumers.
 from __future__ import annotations
 
 import re
-from enum import StrEnum, IntEnum
+from enum import IntEnum
 from functools import lru_cache
 
-from g8e.constants import STATUS, EVENTS
+from g8e.constants import STATUS, EVENTS, StrEnum
 
 
 # Categories that use integer values

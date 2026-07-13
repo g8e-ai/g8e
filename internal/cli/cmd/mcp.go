@@ -1129,12 +1129,11 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		return "", nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
 	}
 
-	// Get home directory with cross-platform fallback
-	homeDir := os.Getenv("HOME")
-	if homeDir == "" {
-		var err error
-		homeDir, err = os.UserHomeDir()
-		if err != nil {
+	// Get home directory: prefer os.UserHomeDir() (cross-platform), fall back to HOME env
+	homeDir, err := os.UserHomeDir()
+	if err != nil || homeDir == "" {
+		homeDir = os.Getenv("HOME")
+		if homeDir == "" {
 			return "", nil, fmt.Errorf("%w: %w", constants.ErrMCPGetHomeDirectory, err)
 		}
 	}

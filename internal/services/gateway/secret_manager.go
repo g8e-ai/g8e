@@ -31,6 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 )
 
 var requiredBootstrapSecrets = []string{
@@ -60,6 +61,18 @@ func NewSecretManager(db *sqliteutil.DB, secretsDir string, logger *slog.Logger)
 	if err := ks.EnforcePermissions(); err != nil {
 		return nil, fmt.Errorf("secret_manager: init: permissions: %w", err)
 	}
+	return &SecretManager{
+		db:                  db,
+		secretsDir:          secretsDir,
+		bootstrapDigestPath: filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest),
+		logger:              logger,
+		keystore:            ks,
+	}, nil
+}
+
+// NewSecretManagerWithKeystore creates a SecretManager using a pre-initialized keystore.
+// This is used for testing to bypass OS keychain dependencies.
+func NewSecretManagerWithKeystore(db *sqliteutil.DB, secretsDir string, logger *slog.Logger, ks *keystore.Keystore) (*SecretManager, error) {
 	return &SecretManager{
 		db:                  db,
 		secretsDir:          secretsDir,
@@ -138,7 +151,7 @@ func (m *SecretManager) cleanupStaleAppSettings() error {
 
 	_, err = m.db.ExecWithRetry(
 		"UPDATE documents SET data = ?, updated_at = ? WHERE collection = 'settings' AND id = 'platform_settings'",
-		string(newData), sqliteutil.NowTimestamp(),
+		string(newData), timesvc.NowTimestamp(),
 	)
 	if err != nil {
 		return fmt.Errorf("secret_manager: cleanup stale app settings: update: %w", err)
@@ -224,7 +237,7 @@ func (m *SecretManager) createAppSettings(now time.Time) error {
 		return fmt.Errorf("secret_manager: create app settings: marshal: %w", err)
 	}
 
-	nowStr := sqliteutil.FormatTimestamp(now)
+	nowStr := timesvc.FormatTimestamp(now)
 	_, err = m.db.ExecWithRetry(
 		`INSERT INTO documents (collection, id, data, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?)`,
@@ -313,7 +326,7 @@ type bootstrapDigestRef struct {
 func (m *SecretManager) writeDigestManifestFromEncryptedFiles(now time.Time) error {
 	manifest := bootstrapDigestManifest{
 		Version:   1,
-		UpdatedAt: now.UTC().Format(time.RFC3339Nano),
+		UpdatedAt: timesvc.FormatTimestamp(now),
 		Secrets:   make(map[string]bootstrapDigestRef, len(requiredBootstrapSecrets)),
 	}
 
@@ -392,11 +405,11 @@ func (m *SecretManager) rejectPreexistingBootstrapState() error {
 func (m *SecretManager) warmAppSettingsCache(dataJSON string, now time.Time) {
 	cacheKey := "g8e:cache:doc:settings:platform_settings"
 	cacheTTL := 3600
-	nowStr := sqliteutil.FormatTimestamp(now)
+	nowStr := timesvc.FormatTimestamp(now)
 	_, err := m.db.ExecWithRetry(
 		`INSERT INTO kv_store (key, value, created_at, expires_at)
 		 VALUES (?, ?, ?, ?)`,
-		cacheKey, dataJSON, nowStr, sqliteutil.FormatTimestamp(now.Add(time.Duration(cacheTTL)*time.Second)),
+		cacheKey, dataJSON, nowStr, timesvc.FormatTimestamp(now.Add(time.Duration(cacheTTL)*time.Second)),
 	)
 	if err != nil {
 		m.logger.Warn("[SecretManager] Failed to warm cache for platform_settings", "error", err)
@@ -603,7 +616,7 @@ func (m *SecretManager) GetCLIPrivateKey() (ed25519.PrivateKey, error) {
 // StoreSessionToken stores a session token with TTL in the keystore.
 // The token is stored with a timestamp for TTL validation.
 func (m *SecretManager) StoreSessionToken(token string, ttl time.Duration) error {
-	expiresAt := time.Now().UTC().Add(ttl).Format(time.RFC3339Nano)
+	expiresAt := timesvc.FormatTimestamp(time.Now().UTC().Add(ttl))
 	tokenData := fmt.Sprintf("%s|%s", token, expiresAt)
 	return m.keystore.EncryptSecret(constants.SecretsFileSessionToken, tokenData)
 }
@@ -623,7 +636,7 @@ func (m *SecretManager) GetSessionToken() (string, error) {
 
 	token := parts[0]
 	expiresAtStr := parts[1]
-	expiresAt, err := time.Parse(time.RFC3339Nano, expiresAtStr)
+	expiresAt, err := timesvc.ParseTimestamp(expiresAtStr)
 	if err != nil {
 		return "", fmt.Errorf("secret_manager: get session token: parse expiry: %w", err)
 	}

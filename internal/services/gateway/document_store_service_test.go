@@ -25,6 +25,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -78,7 +79,7 @@ func TestDocGet_Success(t *testing.T) {
 
 	// Insert a document directly
 	now := time.Now().UTC()
-	nowStr := sqliteutil.FormatTimestamp(now)
+	nowStr := timesvc.FormatTimestamp(now)
 	_, err := svc.db.Exec(
 		"INSERT INTO documents (collection, id, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
 		"users", "u1", `{"name":"alice","role":"admin"}`, nowStr, nowStr,
@@ -267,7 +268,7 @@ func TestDocSetWithTimestamps_CustomTimestamps(t *testing.T) {
 func TestDocSetWithTimestamps_ZeroTimestamps(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
-	before := time.Now().UTC()
+	before := time.Now().UTC().Truncate(time.Microsecond)
 
 	data := mustDocJSON(t, map[string]string{"name": "iris"})
 	err := svc.DocSetWithTimestamps("users", "u12", data, time.Time{}, time.Time{})
@@ -764,7 +765,7 @@ func TestDocQuery_EmptyFilterOp(t *testing.T) {
 
 func TestScanDocument_Success(t *testing.T) {
 	now := time.Now().UTC()
-	nowStr := sqliteutil.FormatTimestamp(now)
+	nowStr := timesvc.FormatTimestamp(now)
 
 	doc, err := scanDocument("users", "u1", `{"name":"alice"}`, nowStr, nowStr)
 	require.NoError(t, err)
@@ -784,7 +785,7 @@ func TestScanDocument_InvalidTimestamp(t *testing.T) {
 
 func TestScanDocument_InvalidData(t *testing.T) {
 	now := time.Now().UTC()
-	nowStr := sqliteutil.FormatTimestamp(now)
+	nowStr := timesvc.FormatTimestamp(now)
 
 	_, err := scanDocument("users", "u1", `{invalid json}`, nowStr, nowStr)
 	require.Error(t, err)

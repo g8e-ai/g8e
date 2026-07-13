@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/go-webauthn/webauthn/protocol"
 )
@@ -33,7 +34,7 @@ type Document struct {
 }
 
 // ForWire serializes Document to a JSON-encodable map for the HTTP response boundary.
-// Timestamps are formatted as RFC3339Nano UTC strings. The caller's data fields are
+// Timestamps are formatted as fixed-microsecond UTC strings. The caller's data fields are
 // merged with system fields (id, created_at, updated_at).
 func (d *Document) ForWire() map[string]json.RawMessage {
 	// The +3 is for system fields: id, created_at, updated_at.
@@ -50,8 +51,8 @@ func (d *Document) ForWire() map[string]json.RawMessage {
 		out[k] = v
 	}
 	out["id"], _ = json.Marshal(d.ID)
-	out["created_at"], _ = json.Marshal(d.CreatedAt.UTC().Format(time.RFC3339Nano))
-	out["updated_at"], _ = json.Marshal(d.UpdatedAt.UTC().Format(time.RFC3339Nano))
+	out["created_at"], _ = json.Marshal(timesvc.FormatTimestamp(d.CreatedAt))
+	out["updated_at"], _ = json.Marshal(timesvc.FormatTimestamp(d.UpdatedAt))
 	return out
 }
 

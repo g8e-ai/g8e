@@ -72,9 +72,9 @@ func TestDBDiscoverTopologyTool_Execute_EmptyDatabase(t *testing.T) {
 	dbPath := filepath.Join(tmpDir, "empty.db")
 	db, err := sql.Open("sqlite", dbPath)
 	require.NoError(t, err)
+	defer db.Close()
 	_, err = db.Exec("PRAGMA journal_mode=WAL")
 	require.NoError(t, err)
-	require.NoError(t, db.Close())
 
 	req := DBDiscoverTopologyRequest{DatabasePath: dbPath}
 	args, err := json.Marshal(req)

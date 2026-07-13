@@ -24,6 +24,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 )
 
 const (
@@ -158,9 +159,9 @@ func (s *EnrollmentTokenService) ValidateAndConsumeToken(token string) (*models.
 //
 // Note: This relies on lexicographic string comparison of RFC3339 timestamps,
 // which works correctly for UTC values (lexicographic order matches chronological
-// order). This assumes expires_at is always stored as RFC3339Nano UTC.
+// order). This assumes expires_at is always stored as fixed-microsecond UTC.
 func (s *EnrollmentTokenService) CleanupExpiredTokens() error {
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	now := timesvc.NowTimestamp()
 	filters := []models.DocFilter{
 		{Field: "expires_at", Op: "<", Value: json.RawMessage(`"` + now + `"`)},
 	}

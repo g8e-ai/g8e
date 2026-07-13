@@ -1,0 +1,473 @@
+{
+  "_comment": "Canonical Heartbeat wire shape. The Operator (g8eo) is the authority - it sends heartbeats to the client at regular intervals. The client stores the latest snapshot in operator_document.latest_heartbeat_snapshot. Serialized from Heartbeat (internal/models/heartbeat.go).",
+
+  "_authority": "operator (g8eo)",
+  "_consumers": ["client", "agent"],
+
+  "heartbeat_system_identity": {
+    "_description": "System identity information.",
+    "hostname": {
+      "type": "string",
+      "required": true,
+      "description": "Machine hostname"
+    },
+    "os": {
+      "type": "string",
+      "required": true,
+      "description": "Operating system. See status.json platform."
+    },
+    "architecture": {
+      "type": "string",
+      "required": true,
+      "description": "CPU architecture (e.g. amd64, arm64)"
+    },
+    "pwd": {
+      "type": "string",
+      "required": true,
+      "description": "Current working directory"
+    },
+    "current_user": {
+      "type": "string",
+      "required": true,
+      "description": "Current OS username"
+    },
+    "cpu_count": {
+      "type": "integer",
+      "required": true,
+      "description": "Number of logical CPUs"
+    },
+    "memory_mb": {
+      "type": "integer",
+      "required": true,
+      "description": "Total system memory in MB"
+    }
+  },
+
+  "heartbeat_network_interface": {
+    "_description": "Single network interface entry.",
+    "name": {
+      "type": "string",
+      "required": true,
+      "description": "Interface name"
+    },
+    "ip": {
+      "type": "string",
+      "required": true,
+      "description": "IP address"
+    },
+    "mtu": {
+      "type": "integer",
+      "required": true,
+      "description": "Maximum transmission unit"
+    }
+  },
+
+  "heartbeat_network_info": {
+    "_description": "Network configuration and connectivity status.",
+    "http_port": {
+      "type": "integer",
+      "required": true,
+      "description": "HTTP port the Operator listens on"
+    },
+    "https_port": {
+      "type": "integer",
+      "required": true,
+      "description": "HTTPS port the Operator listens on"
+    },
+    "interfaces": {
+      "type": "array",
+      "items": "string",
+      "required": true,
+      "description": "List of network interface names"
+    },
+    "connectivity_status": {
+      "type": "array",
+      "required": true,
+      "description": "Per-interface connectivity status. Each item conforms to heartbeat_network_interface shape."
+    }
+  },
+
+  "heartbeat_capability_flags": {
+    "_description": "Operator capability flags.",
+    "execution_vault_enabled": {
+      "type": "boolean",
+      "required": true,
+      "description": "Whether the execution vault is enabled"
+    },
+    "git_available": {
+      "type": "boolean",
+      "required": true,
+      "description": "Whether git is available on the host"
+    },
+    "ledger_enabled": {
+      "type": "boolean",
+      "required": true,
+      "description": "Whether the ledger mirror is enabled"
+    }
+  },
+
+  "heartbeat_version_info": {
+    "_description": "Operator version information.",
+    "operator_version": {
+      "type": "string",
+      "required": true,
+      "description": "Operator binary version string"
+    },
+    "status": {
+      "type": "string",
+      "required": true,
+      "description": "Version stability status. See status.json version.stability."
+    }
+  },
+
+  "heartbeat_uptime_info": {
+    "_description": "Operator uptime information.",
+    "uptime": {
+      "type": "string",
+      "required": true,
+      "description": "Human-readable uptime string"
+    },
+    "uptime_seconds": {
+      "type": "integer",
+      "required": true,
+      "description": "Uptime in seconds"
+    }
+  },
+
+  "heartbeat_performance_metrics": {
+    "_description": "Real-time performance metrics.",
+    "cpu_percent": {
+      "type": "number",
+      "required": true,
+      "description": "CPU usage percentage"
+    },
+    "memory_percent": {
+      "type": "number",
+      "required": true,
+      "description": "Memory usage percentage"
+    },
+    "disk_percent": {
+      "type": "number",
+      "required": true,
+      "description": "Disk usage percentage"
+    },
+    "network_latency": {
+      "type": "number",
+      "required": true,
+      "description": "Network latency in milliseconds"
+    },
+    "memory_used_mb": {
+      "type": "integer",
+      "required": true,
+      "description": "Used memory in MB"
+    },
+    "memory_total_mb": {
+      "type": "integer",
+      "required": true,
+      "description": "Total memory in MB"
+    },
+    "disk_used_gb": {
+      "type": "number",
+      "required": true,
+      "description": "Used disk space in GB"
+    },
+    "disk_total_gb": {
+      "type": "number",
+      "required": true,
+      "description": "Total disk space in GB"
+    }
+  },
+
+  "heartbeat_os_details": {
+    "_description": "OS kernel and distribution details.",
+    "kernel": {
+      "type": "string",
+      "required": true,
+      "description": "Kernel version string"
+    },
+    "distro": {
+      "type": "string",
+      "required": true,
+      "description": "Distribution name"
+    },
+    "version": {
+      "type": "string",
+      "required": true,
+      "description": "Distribution version"
+    }
+  },
+
+  "heartbeat_user_details": {
+    "_description": "OS user details.",
+    "username": {
+      "type": "string",
+      "required": true,
+      "description": "OS username"
+    },
+    "uid": {
+      "type": "integer",
+      "required": true,
+      "description": "User ID"
+    },
+    "gid": {
+      "type": "integer",
+      "required": true,
+      "description": "Group ID"
+    },
+    "home": {
+      "type": "string",
+      "required": true,
+      "description": "Home directory path"
+    },
+    "name": {
+      "type": "string",
+      "required": true,
+      "description": "Full name"
+    },
+    "shell": {
+      "type": "string",
+      "required": true,
+      "description": "Login shell path"
+    }
+  },
+
+  "heartbeat_disk_details": {
+    "_description": "Disk usage details.",
+    "total_gb": {
+      "type": "number",
+      "required": true,
+      "description": "Total disk space in GB"
+    },
+    "used_gb": {
+      "type": "number",
+      "required": true,
+      "description": "Used disk space in GB"
+    },
+    "free_gb": {
+      "type": "number",
+      "required": true,
+      "description": "Free disk space in GB"
+    },
+    "percent": {
+      "type": "number",
+      "required": true,
+      "description": "Disk usage percentage"
+    }
+  },
+
+  "heartbeat_memory_details": {
+    "_description": "Memory usage details.",
+    "total_mb": {
+      "type": "integer",
+      "required": true,
+      "description": "Total memory in MB"
+    },
+    "available_mb": {
+      "type": "integer",
+      "required": true,
+      "description": "Available memory in MB"
+    },
+    "used_mb": {
+      "type": "integer",
+      "required": true,
+      "description": "Used memory in MB"
+    },
+    "percent": {
+      "type": "number",
+      "required": true,
+      "description": "Memory usage percentage"
+    }
+  },
+
+  "heartbeat_environment": {
+    "_description": "Execution environment details.",
+    "pwd": {
+      "type": "string",
+      "required": true,
+      "description": "Current working directory"
+    },
+    "lang": {
+      "type": "string",
+      "required": true,
+      "description": "Language locale"
+    },
+    "timezone": {
+      "type": "string",
+      "required": true,
+      "description": "System timezone"
+    },
+    "term": {
+      "type": "string",
+      "required": true,
+      "description": "Terminal type"
+    },
+    "is_container": {
+      "type": "boolean",
+      "required": true,
+      "description": "Whether the Operator is running inside a container"
+    },
+    "container_runtime": {
+      "type": "string",
+      "required": true,
+      "description": "Container runtime (e.g. docker, podman). Empty when is_container is false."
+    },
+    "container_signals": {
+      "type": "array",
+      "items": "string",
+      "required": true,
+      "description": "Container detection signals"
+    },
+    "init_system": {
+      "type": "string",
+      "required": true,
+      "description": "Init system (e.g. systemd, init)"
+    }
+  },
+
+  "heartbeat_fingerprint_details": {
+    "_description": "Structured fingerprint sub-fields.",
+    "os": {
+      "type": "string",
+      "required": true,
+      "description": "Operating system. See status.json platform."
+    },
+    "architecture": {
+      "type": "string",
+      "required": true,
+      "description": "CPU architecture"
+    },
+    "cpu_count": {
+      "type": "integer",
+      "required": true,
+      "description": "Number of logical CPUs"
+    },
+    "machine_id": {
+      "type": "string",
+      "required": false,
+      "description": "Machine identifier (omitted when empty)"
+    }
+  },
+
+  "heartbeat": {
+    "_description": "Full heartbeat payload sent by the Operator. Serialized from Heartbeat (internal/models/heartbeat.go).",
+
+    "event_type": {
+      "type": "string",
+      "required": true,
+      "description": "Event type. See status.json event.type."
+    },
+    "source_component": {
+      "type": "string",
+      "required": true,
+      "description": "Component that sent the heartbeat. See status.json component.name."
+    },
+    "operator_id": {
+      "type": "string",
+      "required": true,
+      "description": "Operator identifier"
+    },
+    "operator_session_id": {
+      "type": "string",
+      "required": true,
+      "description": "Operator session identifier"
+    },
+    "case_id": {
+      "type": "string",
+      "required": true,
+      "description": "Active case ID (empty when no case is bound)"
+    },
+    "investigation_id": {
+      "type": "string",
+      "required": true,
+      "description": "Active investigation ID (empty when no investigation is bound)"
+    },
+    "timestamp": {
+      "type": "string",
+      "required": true,
+      "description": "Heartbeat timestamp"
+    },
+    "heartbeat_type": {
+      "type": "string",
+      "required": true,
+      "description": "Heartbeat trigger type. Values: automatic, bootstrap, requested."
+    },
+
+    "system_identity": {
+      "type": "object",
+      "required": true,
+      "description": "System identity. Conforms to heartbeat_system_identity shape.",
+      "_ref": "#heartbeat_system_identity"
+    },
+    "network_info": {
+      "type": "object",
+      "required": true,
+      "description": "Network info. Conforms to heartbeat_network_info shape.",
+      "_ref": "#heartbeat_network_info"
+    },
+    "version_info": {
+      "type": "object",
+      "required": true,
+      "description": "Version info. Conforms to heartbeat_version_info shape.",
+      "_ref": "#heartbeat_version_info"
+    },
+    "uptime_info": {
+      "type": "object",
+      "required": true,
+      "description": "Uptime info. Conforms to heartbeat_uptime_info shape.",
+      "_ref": "#heartbeat_uptime_info"
+    },
+    "performance_metrics": {
+      "type": "object",
+      "required": true,
+      "description": "Performance metrics. Conforms to heartbeat_performance_metrics shape.",
+      "_ref": "#heartbeat_performance_metrics"
+    },
+    "os_details": {
+      "type": "object",
+      "required": true,
+      "description": "OS details. Conforms to heartbeat_os_details shape.",
+      "_ref": "#heartbeat_os_details"
+    },
+    "user_details": {
+      "type": "object",
+      "required": true,
+      "description": "User details. Conforms to heartbeat_user_details shape.",
+      "_ref": "#heartbeat_user_details"
+    },
+    "disk_details": {
+      "type": "object",
+      "required": true,
+      "description": "Disk details. Conforms to heartbeat_disk_details shape.",
+      "_ref": "#heartbeat_disk_details"
+    },
+    "memory_details": {
+      "type": "object",
+      "required": true,
+      "description": "Memory details. Conforms to heartbeat_memory_details shape.",
+      "_ref": "#heartbeat_memory_details"
+    },
+    "environment": {
+      "type": "object",
+      "required": true,
+      "description": "Environment. Conforms to heartbeat_environment shape.",
+      "_ref": "#heartbeat_environment"
+    },
+    "capability_flags": {
+      "type": "object",
+      "required": true,
+      "description": "Capability flags. Conforms to heartbeat_capability_flags shape.",
+      "_ref": "#heartbeat_capability_flags"
+    },
+    "fingerprint_details": {
+      "type": "object",
+      "required": false,
+      "description": "Structured fingerprint details. Conforms to heartbeat_fingerprint_details shape. Omitted when empty.",
+      "_ref": "#heartbeat_fingerprint_details"
+    },
+    "system_fingerprint": {
+      "type": "string",
+      "required": false,
+      "description": "SHA256 fingerprint of the Operator host. Omitted when empty."
+    }
+  }
+}

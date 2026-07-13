@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-07-12
-Version: v1.4.0
+Last Updated: 2026-07-13
+Version: v1.5.0
 
 This document explains how to authenticate and authorize actions in the g8e platform. The platform is built as a zero-trust execution environment where every action is verified before execution.
 
@@ -34,7 +34,7 @@ There are three enrollment scenarios:
 
 | Scenario | When It Happens | How It Works |
 |----------|----------------|--------------|
-| **First-time setup** | Gateway never bootstrapped | CLI connects over plain HTTP to discovery port, Gateway bootstraps itself |
+| **First-time setup** | Gateway never bootstrapped | CLI connects over plain HTTP to the gateway HTTP port, Gateway bootstraps itself |
 | **New CLI on existing gateway** | Gateway exists, no local credentials | CLI connects over plain HTTP, Gateway enrolls CLI |
 | **Re-enrollment** | Credentials exist, need rotation | CLI uses existing mTLS cert to request new cert |
 
@@ -64,7 +64,7 @@ Since the Gateway uses self-signed certificates, you must trust the platform's R
 
 **Windows-Specific Behavior:**
 
-On Windows, the CLI uses the Windows Certificate Store for key generation. The `--tpm` flag requests TPM-backed keys via Windows Hello for Business. This is separate from browser-based WebAuthn passkeys.
+On Windows, the CLI uses the Windows Certificate Store for key generation. The `--tpm` flag requests TPM-backed keys via Windows Hello for Business, though software-backed keys are currently used as a fallback. This is separate from browser-based WebAuthn passkeys.
 
 ### 1.2 Browser Authentication (Passkeys)
 
@@ -271,7 +271,7 @@ Vault operations are managed via CLI commands:
 Vault paths can be configured via:
 - CLI flags: `--vault-dir`, `--vault-key`, `--vault-require-unlock`
 - Environment variables: `G8E_VAULT_DIR`, `G8E_VAULT_KEY`, `G8E_VAULT_REQUIRE_UNLOCK`
-- Default paths: `.g8e/vault/` for vault data, `.g8e/secrets/key` for the vault key
+- Default paths: `.g8e/vault/` for vault data, `.g8e/vault/key` for the vault key
 
 When `--vault-require-unlock` is set, the gateway fails to start if the vault cannot be unlocked with the provided key. This enforces mandatory encryption at rest for production deployments.
 

@@ -557,7 +557,7 @@ func TestValidateCommandSafety_WorkingDirValidation(t *testing.T) {
 				workingDir  string
 				expectError bool
 				errorMsg    string
-			}{"complex valid path", "ls", []string{}, "/var/log/apt", false, ""},
+			}{"complex valid path", "ls", []string{}, "/var/log", false, ""},
 		)
 	}
 

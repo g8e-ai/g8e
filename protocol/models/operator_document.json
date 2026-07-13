@@ -46,15 +46,10 @@
         "required": false,
         "description": "Current active Operator session identifier. Set when g8eo authenticates. Cleared on termination."
       },
-      "web_session_id": {
+      "bound_web_session_id": {
         "type": "string",
         "required": false,
-        "description": "Browser session the Operator is currently bound to. Set during bind. Cleared on unbind."
-      },
-      "cli_session_id": {
-        "type": "string",
-        "required": false,
-        "description": "CLI session the Operator is currently bound to. Set during bind. Cleared on unbind."
+        "description": "Browser session the Operator is currently bound to. Set during bind. Cleared on unbind. Maps to Go struct field BoundWebSessionID."
       }
     },
 
@@ -69,21 +64,6 @@
         "type": "string",
         "required": false,
         "description": "Certificate serial number"
-      },
-      "operator_cert_not_before": {
-        "type": "string",
-        "format": "iso8601",
-        "required": false
-      },
-      "operator_cert_not_after": {
-        "type": "string",
-        "format": "iso8601",
-        "required": false
-      },
-      "operator_cert_created_at": {
-        "type": "string",
-        "format": "iso8601",
-        "required": false
       }
     },
 
@@ -110,17 +90,6 @@
         "format": "iso8601",
         "required": false,
         "description": "When the Operator process first authenticated with client"
-      },
-      "terminated_at": {
-        "type": "string",
-        "format": "iso8601",
-        "required": false
-      },
-      "first_deployed": {
-        "type": "string",
-        "format": "iso8601",
-        "required": false,
-        "description": "When this Operator slot was first ever activated (persisted across resets)"
       },
       "claimed_at": {
         "type": "string",
@@ -162,32 +131,10 @@
         "values": ["aws", "gcp", "azure"],
         "description": "Cloud provider. Only set when operator_type is cloud. See status.json cloud.subtype."
       },
-      "slot_cost": {
-        "type": "integer",
-        "required": true,
-        "default": 1,
-        "description": "Number of Operator slots this instance consumes"
-      },
       "consumed_by_operator_id": {
         "type": "string",
         "required": false,
         "description": "For slot documents: the operator_id of the g8eo process that claimed this slot"
-      }
-    },
-
-    "investigation_context": {
-      "_description": "Active investigation/case context. Set when the Operator is bound to an investigation web session.",
-      "case_id": {
-        "type": "string",
-        "required": false
-      },
-      "investigation_id": {
-        "type": "string",
-        "required": false
-      },
-      "task_id": {
-        "type": "string",
-        "required": false
       }
     },
 
@@ -197,11 +144,6 @@
         "type": "string",
         "required": false,
         "description": "SHA256 fingerprint of the Operator host. Copied from latest_heartbeat_snapshot.system_fingerprint."
-      },
-      "fingerprint_details": {
-        "type": "object",
-        "required": false,
-        "description": "Structured fingerprint sub-fields. Copied from latest_heartbeat_snapshot.fingerprint_details."
       }
     },
 
@@ -225,39 +167,6 @@
         "type": "object",
         "required": false,
         "description": "Most recent heartbeat metrics snapshot. Shape matches HeartbeatSnapshot (defined in protocol/proto/operator.proto): nested objects for system_identity, performance, network, uptime, etc. Strictly enforced across the wire."
-      }
-    },
-
-    "error_termination": {
-      "error_message": {
-        "type": "string",
-        "required": false
-      },
-      "termination_reason": {
-        "type": "string",
-        "required": false
-      },
-      "stop_reason": {
-        "type": "string",
-        "required": false
-      },
-      "shutdown_reason": {
-        "type": "string",
-        "required": false
-      }
-    },
-
-    "cloud_intents": {
-      "granted_intents": {
-        "type": "array",
-        "required": true,
-        "default": [],
-        "description": "Granted AWS/cloud intent permissions. Always an array, empty when no intents are granted. Items are GrantedIntent objects with TTL.",
-        "items": {
-          "name":       { "type": "string", "required": true, "description": "Intent name from protocol/constants/intents.json" },
-          "granted_at": { "type": "string", "format": "iso8601", "required": true },
-          "expires_at": { "type": "string", "format": "iso8601", "required": true }
-        }
       }
     }
   },

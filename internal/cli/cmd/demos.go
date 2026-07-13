@@ -15,6 +15,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -161,7 +162,10 @@ func checkDockerAvailable() error {
 		return fmt.Errorf("%w: Docker is not installed or not on PATH. Install Docker and ensure 'docker' is in your PATH", constants.ErrServiceUnavailable)
 	}
 
-	infoCmd := exec.Command("docker", "info")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	infoCmd := exec.CommandContext(ctx, "docker", "info")
 	infoCmd.Stdout = nil
 	infoCmd.Stderr = nil
 	if err := infoCmd.Run(); err != nil {
@@ -333,6 +337,10 @@ func runDemosPull(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("parsing images manifest: %w", err)
 	}
 
+	if err := checkDockerAvailable(); err != nil {
+		return err
+	}
+
 	cmd.Printf("Pulling %d images from demos/images.json...\n", len(entries))
 	for i, e := range entries {
 		ref := fmt.Sprintf("%s@%s", e.Image, e.Digest)
@@ -386,6 +394,10 @@ func runDemosExport(cmd *cobra.Command, args []string) error {
 	}
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return fmt.Errorf("creating output directory %s: %w", outDir, err)
+	}
+
+	if err := checkDockerAvailable(); err != nil {
+		return err
 	}
 
 	total := len(entries)
@@ -823,9 +835,9 @@ func cleanSingleDemo(cmd *cobra.Command, demosDir, org string, skipConfirm bool)
 		}
 	}
 
-	// Pre-flight: verify Docker is available and running
 	if err := checkDockerAvailable(); err != nil {
-		return err
+		cmd.Printf("Docker not available — nothing to clean for '%s'.\n", org)
+		return nil
 	}
 
 	cmd.Printf("Cleaning demo environment: %s\n", org)
@@ -903,9 +915,9 @@ func cleanAllDemos(cmd *cobra.Command, demosDir string, skipConfirm bool) error 
 		}
 	}
 
-	// Pre-flight: verify Docker is available and running
 	if err := checkDockerAvailable(); err != nil {
-		return err
+		cmd.Println("Docker not available — nothing to clean.")
+		return nil
 	}
 
 	for _, d := range demos {
@@ -1160,6 +1172,11 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool) error {
 
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if err := checkComposeFileExists(composePath, org); err != nil {
+		return err
+	}
+
+	// Pre-flight: verify Docker is available before checking running state
+	if err := checkDockerAvailable(); err != nil {
 		return err
 	}
 

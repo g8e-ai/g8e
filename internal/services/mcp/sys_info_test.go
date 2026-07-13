@@ -101,10 +101,10 @@ func TestGetLoadAverage_Parsing(t *testing.T) {
 
 func TestSysInfoTool_Execute_Timeout(t *testing.T) {
 	tool := &SysInfoTool{}
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
+	// Use a deadline in the past so the context is already expired
+	// deterministically, without relying on timer resolution or sleep.
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
 	defer cancel()
-
-	time.Sleep(2 * time.Nanosecond)
 
 	_, err := tool.Execute(ctx, json.RawMessage("{}"))
 	require.Error(t, err)

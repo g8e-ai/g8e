@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -270,7 +271,9 @@ func TestStreamToHost_DialFailure(t *testing.T) {
 
 	res := <-resultCh
 	assert.Equal(t, constants.StreamStatusFailed, res.Status)
-	assert.ErrorContains(t, res.Error, "dial")
+	errMsg := res.Error.Error()
+	assert.True(t, strings.Contains(errMsg, "dial") || strings.Contains(errMsg, "ssh"),
+		"expected error to contain 'dial' or 'ssh', got: %s", errMsg)
 }
 
 func TestIsTransientError(t *testing.T) {

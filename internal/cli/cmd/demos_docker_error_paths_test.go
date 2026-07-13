@@ -15,9 +15,12 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,7 +28,28 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
+// dockerAvailable returns true if the docker binary is on PATH and the daemon
+// responds to "docker info" within 5 seconds.  It is used by tests in this
+// file to decide whether to skip: error-path tests skip when Docker IS
+// available (they exercise the no-Docker failure mode), while success-path
+// tests skip when Docker is NOT available.
+func dockerAvailable() bool {
+	if _, err := exec.LookPath("docker"); err != nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "docker", "info")
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	return cmd.Run() == nil
+}
+
 func TestRunDemosStatus_WithValidDemoDirButNoDocker(t *testing.T) {
+	if dockerAvailable() {
+		t.Skip("test exercises the no-Docker error path")
+	}
+
 	tmpDir := chdirTemp(t)
 
 	orgDir := filepath.Join(tmpDir, constants.DemosDirname, "myorg")
@@ -42,6 +66,10 @@ func TestRunDemosStatus_WithValidDemoDirButNoDocker(t *testing.T) {
 }
 
 func TestRunDemosRebuild_WithValidDemoDirButNoDocker(t *testing.T) {
+	if dockerAvailable() {
+		t.Skip("test exercises the no-Docker error path")
+	}
+
 	tmpDir := chdirTemp(t)
 
 	orgDir := filepath.Join(tmpDir, constants.DemosDirname, "myorg")
@@ -58,6 +86,10 @@ func TestRunDemosRebuild_WithValidDemoDirButNoDocker(t *testing.T) {
 }
 
 func TestRunDemosStart_WithValidDemoDirButNoDocker(t *testing.T) {
+	if dockerAvailable() {
+		t.Skip("test exercises the no-Docker error path")
+	}
+
 	tmpDir := chdirTemp(t)
 
 	orgDir := filepath.Join(tmpDir, constants.DemosDirname, "myorg")
@@ -74,6 +106,10 @@ func TestRunDemosStart_WithValidDemoDirButNoDocker(t *testing.T) {
 }
 
 func TestRunDemosStop_WithValidDemoDirButNoDocker(t *testing.T) {
+	if dockerAvailable() {
+		t.Skip("test exercises the no-Docker error path")
+	}
+
 	tmpDir := chdirTemp(t)
 
 	orgDir := filepath.Join(tmpDir, constants.DemosDirname, "myorg")
@@ -90,6 +126,10 @@ func TestRunDemosStop_WithValidDemoDirButNoDocker(t *testing.T) {
 }
 
 func TestRunDemosClean_AllDemosWithDirsButNoDocker(t *testing.T) {
+	if !dockerAvailable() {
+		t.Skip("docker not available")
+	}
+
 	tmpDir := chdirTemp(t)
 
 	demosDir := filepath.Join(tmpDir, constants.DemosDirname)
@@ -109,6 +149,10 @@ func TestRunDemosClean_AllDemosWithDirsButNoDocker(t *testing.T) {
 }
 
 func TestRunDemosClean_SingleOrgWithValidDirButNoDocker(t *testing.T) {
+	if !dockerAvailable() {
+		t.Skip("docker not available")
+	}
+
 	tmpDir := chdirTemp(t)
 
 	orgDir := filepath.Join(tmpDir, constants.DemosDirname, "myorg")
@@ -125,6 +169,10 @@ func TestRunDemosClean_SingleOrgWithValidDirButNoDocker(t *testing.T) {
 }
 
 func TestRunDemosReset_WithValidDemoDirButNoDocker(t *testing.T) {
+	if dockerAvailable() {
+		t.Skip("test exercises the no-Docker error path")
+	}
+
 	tmpDir := chdirTemp(t)
 
 	orgDir := filepath.Join(tmpDir, constants.DemosDirname, "myorg")
@@ -141,6 +189,10 @@ func TestRunDemosReset_WithValidDemoDirButNoDocker(t *testing.T) {
 }
 
 func TestRunDemosRun_WithValidDemoDirButNoDocker(t *testing.T) {
+	if dockerAvailable() {
+		t.Skip("test exercises the no-Docker error path")
+	}
+
 	tmpDir := chdirTemp(t)
 
 	orgDir := filepath.Join(tmpDir, constants.DemosDirname, "myorg")
@@ -157,6 +209,10 @@ func TestRunDemosRun_WithValidDemoDirButNoDocker(t *testing.T) {
 }
 
 func TestRunDemosPull_WithValidManifestButNoDocker(t *testing.T) {
+	if dockerAvailable() {
+		t.Skip("test exercises the no-Docker error path")
+	}
+
 	tmpDir := chdirTemp(t)
 
 	demosDir := filepath.Join(tmpDir, constants.DemosDirname)
@@ -174,6 +230,10 @@ func TestRunDemosPull_WithValidManifestButNoDocker(t *testing.T) {
 }
 
 func TestRunDemosExport_WithValidManifestWithEntriesCreatesDir(t *testing.T) {
+	if dockerAvailable() {
+		t.Skip("test exercises the no-Docker error path")
+	}
+
 	tmpDir := chdirTemp(t)
 
 	demosDir := filepath.Join(tmpDir, constants.DemosDirname)

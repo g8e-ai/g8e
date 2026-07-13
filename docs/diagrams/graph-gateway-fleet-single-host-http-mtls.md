@@ -1,11 +1,11 @@
 # Graph: Gateway to Single-Host Fleet (mTLS Streamable HTTP)
 
-First appeared in commit `8e12e57f`. Adds "mTLS, Streamable HTTP" annotation on the MCP client edge and lists Devin as a supported client.
+First appeared in commit `8e12e57f`. Adds "mTLS, Streamable HTTP" annotation on the MCP client edge and lists Windsurf as a supported client.
 
 ```mermaid
 graph TD
     subgraph Clients ["Any AI client, agent-agnostic"]
-        C1["MCP client<br/>(Claude / Cursor / Devin)"]
+        C1["MCP client<br/>(Claude / Cursor / Windsurf)"]
         C2["Agentic ensemble<br/>(A2A / tool calls)"]
     end
 

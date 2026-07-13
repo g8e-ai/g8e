@@ -568,8 +568,8 @@ func TestHandleLogStreamFilter(t *testing.T) {
 }
 
 func TestHandleSysOOMDetect(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("skipping on Windows - dmesg not available")
+	if runtime.GOOS != "linux" {
+		t.Skip("skipping on non-Linux - dmesg/proc not available")
 	}
 
 	handler, err := NewNativeToolHandler(nil)
@@ -670,8 +670,8 @@ func TestHandleConfigDiffMask(t *testing.T) {
 }
 
 func TestHandleProcMetricTop(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("skipping on Windows - /proc not available")
+	if runtime.GOOS != "linux" {
+		t.Skip("skipping on non-Linux - /proc not available")
 	}
 
 	handler, err := NewNativeToolHandler(nil)
@@ -858,8 +858,8 @@ func TestHandleProcSignalSafe(t *testing.T) {
 }
 
 func TestHandleNetSocketAudit(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("skipping on Windows - /proc not available")
+	if runtime.GOOS != "linux" {
+		t.Skip("skipping on non-Linux - /proc not available")
 	}
 
 	handler, err := NewNativeToolHandler(nil)
@@ -1847,6 +1847,9 @@ func TestHandleFSDiskUsage(t *testing.T) {
 	})
 
 	t.Run("missing path (defaults to all filesystems)", func(t *testing.T) {
+		if runtime.GOOS != "linux" {
+			t.Skip("skipping on non-Linux - /proc/mounts not available")
+		}
 		req := map[string]interface{}{}
 		reqJSON, _ := json.Marshal(req)
 
@@ -1891,8 +1894,8 @@ func TestHandleSysTimeClock(t *testing.T) {
 }
 
 func TestHandleProcTree(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("skipping on Windows - /proc not available")
+	if runtime.GOOS != "linux" {
+		t.Skip("skipping on non-Linux - /proc not available")
 	}
 
 	handler, err := NewNativeToolHandler(nil)

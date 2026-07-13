@@ -202,7 +202,7 @@ func TestDetector_DetectWindowsIdentity(t *testing.T) {
 		t.Skip("Skipping Windows identity test on non-Windows system")
 	}
 
-	winID, err := detector.detectWindowsIdentity()
+	winID, err := detector.detectWindowsIdentity(context.Background())
 	require.NoError(t, err)
 	assert.NotNil(t, winID)
 }
@@ -587,24 +587,22 @@ func TestNetworkIdentity_GetAllIPs_EmptyIdentity(t *testing.T) {
 func TestGetExternalInterfaceIP_WithMockInterfaces(t *testing.T) {
 	t.Parallel()
 
-	// Test with mock interfaces that have a non-loopback IPv4 address
 	mockInterfaces := []net.Interface{
-		{
-			Name: "eth0",
-		},
+		{Name: "eth0"},
 	}
 
-	// Mock the Addrs() call by using a custom implementation
-	// We'll test the function directly with a mock that returns specific interfaces
 	getInterfaces := func() ([]net.Interface, error) {
 		return mockInterfaces, nil
 	}
 
-	// Since we can't easily mock Addrs() without more complex refactoring,
-	// we'll test the error path and fallback behavior
-	result := getExternalInterfaceIPWithFunc(getInterfaces)
-	// With empty interfaces (no Addrs), should return localhost
-	assert.Equal(t, "localhost", result)
+	mockAddrs := func(iface net.Interface) ([]net.Addr, error) {
+		return []net.Addr{
+			&net.IPNet{IP: net.ParseIP("10.0.0.5"), Mask: net.CIDRMask(24, 32)},
+		}, nil
+	}
+
+	result := getExternalInterfaceIPWithFunc(getInterfaces, mockAddrs)
+	assert.Equal(t, "10.0.0.5", result)
 }
 
 func TestGetExternalInterfaceIP_ErrorOnInterfaces(t *testing.T) {
@@ -615,7 +613,7 @@ func TestGetExternalInterfaceIP_ErrorOnInterfaces(t *testing.T) {
 		return nil, assert.AnError
 	}
 
-	result := getExternalInterfaceIPWithFunc(getInterfaces)
+	result := getExternalInterfaceIPWithFunc(getInterfaces, defaultInterfaceAddrs)
 	// Should return localhost on error
 	assert.Equal(t, "localhost", result)
 }
@@ -628,7 +626,7 @@ func TestGetExternalInterfaceIP_NoNonLoopbackInterfaces(t *testing.T) {
 		return []net.Interface{}, nil
 	}
 
-	result := getExternalInterfaceIPWithFunc(getInterfaces)
+	result := getExternalInterfaceIPWithFunc(getInterfaces, defaultInterfaceAddrs)
 	// Should return localhost when no non-loopback interfaces found
 	assert.Equal(t, "localhost", result)
 }
@@ -639,7 +637,7 @@ func TestDetector_DetectWindowsIdentity_WithMockExecutor(t *testing.T) {
 	detector := NewDetector(logger)
 
 	// Mock successful hostname and systeminfo commands
-	executor := func(name string, args ...string) ([]byte, error) {
+	executor := func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		switch name {
 		case "hostname":
 			return []byte("TESTHOST"), nil
@@ -650,7 +648,7 @@ func TestDetector_DetectWindowsIdentity_WithMockExecutor(t *testing.T) {
 		}
 	}
 
-	winID, err := detector.detectWindowsIdentityWithExecutor(executor)
+	winID, err := detector.detectWindowsIdentityWithExecutor(context.Background(), executor)
 	require.NoError(t, err)
 	assert.Equal(t, "TESTHOST", winID.NetBIOSName)
 	assert.Equal(t, "TESTHOST.example.com", winID.ADFQDN)
@@ -662,11 +660,11 @@ func TestDetector_DetectWindowsIdentity_HostnameError(t *testing.T) {
 	detector := NewDetector(logger)
 
 	// Mock hostname command failure
-	executor := func(name string, args ...string) ([]byte, error) {
+	executor := func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return nil, assert.AnError
 	}
 
-	winID, err := detector.detectWindowsIdentityWithExecutor(executor)
+	winID, err := detector.detectWindowsIdentityWithExecutor(context.Background(), executor)
 	require.Error(t, err)
 	assert.Empty(t, winID.NetBIOSName)
 }
@@ -677,7 +675,7 @@ func TestDetector_DetectWindowsIdentity_SysteminfoError(t *testing.T) {
 	detector := NewDetector(logger)
 
 	// Mock successful hostname but failed systeminfo
-	executor := func(name string, args ...string) ([]byte, error) {
+	executor := func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		switch name {
 		case "hostname":
 			return []byte("TESTHOST"), nil
@@ -688,7 +686,7 @@ func TestDetector_DetectWindowsIdentity_SysteminfoError(t *testing.T) {
 		}
 	}
 
-	winID, err := detector.detectWindowsIdentityWithExecutor(executor)
+	winID, err := detector.detectWindowsIdentityWithExecutor(context.Background(), executor)
 	require.Error(t, err)
 	assert.Equal(t, "TESTHOST", winID.NetBIOSName)
 	assert.Empty(t, winID.ADFQDN)
@@ -700,7 +698,7 @@ func TestDetector_DetectWindowsIdentity_WorkgroupDomain(t *testing.T) {
 	detector := NewDetector(logger)
 
 	// Mock WORKGROUP domain (should not set ADFQDN)
-	executor := func(name string, args ...string) ([]byte, error) {
+	executor := func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		switch name {
 		case "hostname":
 			return []byte("TESTHOST"), nil
@@ -711,7 +709,7 @@ func TestDetector_DetectWindowsIdentity_WorkgroupDomain(t *testing.T) {
 		}
 	}
 
-	winID, err := detector.detectWindowsIdentityWithExecutor(executor)
+	winID, err := detector.detectWindowsIdentityWithExecutor(context.Background(), executor)
 	require.NoError(t, err)
 	assert.Equal(t, "TESTHOST", winID.NetBIOSName)
 	assert.Empty(t, winID.ADFQDN)
@@ -723,7 +721,7 @@ func TestDetector_DetectWindowsIdentity_NoDomainLine(t *testing.T) {
 	detector := NewDetector(logger)
 
 	// Mock systeminfo without Domain line
-	executor := func(name string, args ...string) ([]byte, error) {
+	executor := func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		switch name {
 		case "hostname":
 			return []byte("TESTHOST"), nil
@@ -734,7 +732,7 @@ func TestDetector_DetectWindowsIdentity_NoDomainLine(t *testing.T) {
 		}
 	}
 
-	winID, err := detector.detectWindowsIdentityWithExecutor(executor)
+	winID, err := detector.detectWindowsIdentityWithExecutor(context.Background(), executor)
 	require.NoError(t, err)
 	assert.Equal(t, "TESTHOST", winID.NetBIOSName)
 	assert.Empty(t, winID.ADFQDN)
@@ -746,7 +744,7 @@ func TestDetector_DetectWindowsIdentity_EmptyHostname(t *testing.T) {
 	detector := NewDetector(logger)
 
 	// Mock empty hostname
-	executor := func(name string, args ...string) ([]byte, error) {
+	executor := func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		switch name {
 		case "hostname":
 			return []byte(""), nil
@@ -757,7 +755,7 @@ func TestDetector_DetectWindowsIdentity_EmptyHostname(t *testing.T) {
 		}
 	}
 
-	winID, err := detector.detectWindowsIdentityWithExecutor(executor)
+	winID, err := detector.detectWindowsIdentityWithExecutor(context.Background(), executor)
 	require.NoError(t, err)
 	assert.Empty(t, winID.NetBIOSName)
 	assert.Empty(t, winID.ADFQDN)
@@ -769,7 +767,7 @@ func TestDetector_DetectWindowsIdentity_WhitespaceHostname(t *testing.T) {
 	detector := NewDetector(logger)
 
 	// Mock hostname with whitespace
-	executor := func(name string, args ...string) ([]byte, error) {
+	executor := func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		switch name {
 		case "hostname":
 			return []byte("  TESTHOST  "), nil
@@ -780,7 +778,7 @@ func TestDetector_DetectWindowsIdentity_WhitespaceHostname(t *testing.T) {
 		}
 	}
 
-	winID, err := detector.detectWindowsIdentityWithExecutor(executor)
+	winID, err := detector.detectWindowsIdentityWithExecutor(context.Background(), executor)
 	require.NoError(t, err)
 	assert.Equal(t, "TESTHOST", winID.NetBIOSName)
 	assert.Equal(t, "TESTHOST.example.com", winID.ADFQDN)
@@ -809,7 +807,7 @@ func TestDefaultCommandExecutor(t *testing.T) {
 	t.Parallel()
 	// Test the default implementation with a simple command
 	// Use 'echo' which should be available on all systems
-	output, err := defaultCommandExecutor("echo", "test")
+	output, err := defaultCommandExecutor(context.Background(), "echo", "test")
 	if err == nil {
 		assert.NotNil(t, output)
 	}
@@ -829,7 +827,7 @@ func TestDetector_DetectWindowsIdentity_PublicWrapper(t *testing.T) {
 	// We verify the function signature and that it's callable
 	if runtime.GOOS == "windows" {
 		// On Windows, test the real implementation
-		winID, err := detector.detectWindowsIdentity()
+		winID, err := detector.detectWindowsIdentity(context.Background())
 		// May fail if commands aren't available, but should not panic
 		if err == nil {
 			assert.NotNil(t, winID)

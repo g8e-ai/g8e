@@ -659,7 +659,7 @@ paths:
       - public
   /.well-known/g8e/bin/{filename}:
     get:
-      description: Downloads the g8e node binary for the current platform (internal
+      description: Downloads the g8e binary file binary for the current platform (internal
         endpoint)
       produces:
       - application/octet-stream

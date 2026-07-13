@@ -24,10 +24,12 @@ import (
 )
 
 func TestGooseGovernanceConfig(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
 
 	homeDir, err := os.UserHomeDir()
 	require.NoError(t, err)
+	require.NotEmpty(t, homeDir)
 
 	configDir := filepath.Join(homeDir, ".goose")
 	err = os.MkdirAll(configDir, 0755)

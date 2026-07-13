@@ -56,6 +56,7 @@ func TestNewGatewayModeService(t *testing.T) {
 
 		ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 		require.NoError(t, err)
+		t.Cleanup(func() { ls.Stop(context.Background()) })
 		assert.NotNil(t, ls)
 		assert.NotNil(t, ls.server)
 		assert.NotNil(t, ls.pki)
@@ -82,6 +83,7 @@ func TestGatewayModeService_StateManagement(t *testing.T) {
 
 	ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 	require.NoError(t, err)
+	t.Cleanup(func() { ls.Stop(context.Background()) })
 
 	t.Run("Initial state", func(t *testing.T) {
 		assert.False(t, ls.IsRunning())
@@ -139,6 +141,7 @@ func TestNewGatewayModeServiceForTest(t *testing.T) {
 
 	ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 	require.NoError(t, err)
+	t.Cleanup(func() { ls.Stop(context.Background()) })
 	assert.NotNil(t, ls)
 	assert.Equal(t, db, ls.db)
 	assert.Equal(t, pubsub, ls.pubsub)
@@ -166,6 +169,7 @@ func TestGatewayModeService_Getters(t *testing.T) {
 
 	ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 	require.NoError(t, err)
+	t.Cleanup(func() { ls.Stop(context.Background()) })
 
 	t.Run("GetDB returns non-nil", func(t *testing.T) {
 		assert.NotNil(t, ls.GetDB())
@@ -219,6 +223,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 
 		ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 		require.NoError(t, err)
+		t.Cleanup(func() { ls.Stop(context.Background()) })
 
 		assert.True(t, ls.IsGovernanceReady())
 	})
@@ -245,6 +250,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 
 		ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 		require.NoError(t, err)
+		t.Cleanup(func() { ls.Stop(context.Background()) })
 
 		assert.True(t, ls.IsGovernanceReady())
 	})
@@ -271,6 +277,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 
 		ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 		require.NoError(t, err)
+		t.Cleanup(func() { ls.Stop(context.Background()) })
 
 		assert.False(t, ls.IsGovernanceReady())
 	})
@@ -297,6 +304,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 
 		ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 		require.NoError(t, err)
+		t.Cleanup(func() { ls.Stop(context.Background()) })
 
 		// Add a trusted signer
 		signer := map[string]interface{}{
@@ -335,6 +343,7 @@ func TestGatewayModeService_GetGovernanceDeps(t *testing.T) {
 
 	ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 	require.NoError(t, err)
+	t.Cleanup(func() { ls.Stop(context.Background()) })
 
 	deps := ls.GetGovernanceDeps()
 	assert.NotNil(t, deps)
@@ -470,6 +479,7 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 
 	ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 	require.NoError(t, err)
+	t.Cleanup(func() { ls.Stop(context.Background()) })
 
 	t.Run("Valid heartbeat updates operator document", func(t *testing.T) {
 		// Seed an operator document
@@ -545,6 +555,7 @@ func TestGatewayModeService_RenewServiceCertWithIdentity(t *testing.T) {
 
 	ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 	require.NoError(t, err)
+	t.Cleanup(func() { ls.Stop(context.Background()) })
 
 	// Test the renewal function - it may fail if PKI is not fully initialized,
 	// but we're testing that it doesn't panic and handles errors gracefully
@@ -575,6 +586,7 @@ func TestGatewayModeService_RunServiceCertRenewalLoop(t *testing.T) {
 
 	ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 	require.NoError(t, err)
+	t.Cleanup(func() { ls.Stop(context.Background()) })
 
 	// Test with an already-cancelled context - should return promptly
 	ctx, cancel := context.WithCancel(context.Background())

@@ -32,6 +32,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/keystore/keystoretest"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -584,7 +585,7 @@ func TestSecretManager_CleanupStaleAppSettings(t *testing.T) {
 	require.NoError(t, err)
 	_, err = db.Exec(
 		"INSERT INTO documents (collection, id, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-		"settings", "platform_settings", string(settingsJSON), sqliteutil.NowTimestamp(), sqliteutil.NowTimestamp(),
+		"settings", "platform_settings", string(settingsJSON), timesvc.NowTimestamp(), timesvc.NowTimestamp(),
 	)
 	require.NoError(t, err)
 

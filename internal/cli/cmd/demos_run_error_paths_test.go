@@ -27,6 +27,11 @@ import (
 
 // chdirTemp creates a temp dir, chdirs into it, and restores the original
 // working directory on cleanup.
+//
+// WARNING: This function mutates process-global state via os.Chdir.
+// Tests using chdirTemp must NOT call t.Parallel(), and no other test in
+// this package should chdir concurrently. The functions under test rely on
+// os.Getwd(), so chdir is unavoidable.
 func chdirTemp(t *testing.T) string {
 	t.Helper()
 	originalWd, err := os.Getwd()

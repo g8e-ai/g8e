@@ -20,6 +20,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -551,6 +552,9 @@ func TestPerformanceMetrics(t *testing.T) {
 
 	t.Run("system.GetUptimeSeconds positive", func(t *testing.T) {
 		t.Parallel()
+		if runtime.GOOS != "linux" {
+			t.Skip("skipping on non-Linux - /proc/uptime not available")
+		}
 		assert.Positive(t, system.GetUptimeSeconds())
 	})
 

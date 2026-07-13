@@ -380,6 +380,10 @@
       "_go_const": "EventOperatorAuditDirectCommandResultRecorded",
       "value": "g8e.v1.operator.audit.direct.command.result.recorded"
     },
+    "OperatorAuditMcpCallRecorded": {
+      "_go_const": "EventOperatorAuditMcpCallRecorded",
+      "value": "g8e.v1.operator.audit.mcp.call.recorded"
+    },
     "OperatorAuditUserRecorded": {
       "_go_const": "EventOperatorAuditUserRecorded",
       "value": "g8e.v1.operator.audit.user.recorded"
@@ -696,38 +700,6 @@
       "_go_const": "EventOperatorHistoryFetchRequested",
       "value": "g8e.v1.operator.history.fetch.requested"
     },
-    "OperatorIntentApprovalGranted": {
-      "_go_const": "EventOperatorIntentApprovalGranted",
-      "value": "g8e.v1.operator.intent.approval.granted"
-    },
-    "OperatorIntentApprovalRejected": {
-      "_go_const": "EventOperatorIntentApprovalRejected",
-      "value": "g8e.v1.operator.intent.approval.rejected"
-    },
-    "OperatorIntentApprovalRequested": {
-      "_go_const": "EventOperatorIntentApprovalRequested",
-      "value": "g8e.v1.operator.intent.approval.requested"
-    },
-    "OperatorIntentDenied": {
-      "_go_const": "EventOperatorIntentDenied",
-      "value": "g8e.v1.operator.intent.denied"
-    },
-    "OperatorIntentGranted": {
-      "_go_const": "EventOperatorIntentGranted",
-      "value": "g8e.v1.operator.intent.granted"
-    },
-    "OperatorIntentRequested": {
-      "_go_const": "EventOperatorIntentRequested",
-      "value": "g8e.v1.operator.intent.requested"
-    },
-    "OperatorIntentRevokeRequested": {
-      "_go_const": "EventOperatorIntentRevokeRequested",
-      "value": "g8e.v1.operator.intent.revoke.requested"
-    },
-    "OperatorIntentRevoked": {
-      "_go_const": "EventOperatorIntentRevoked",
-      "value": "g8e.v1.operator.intent.revoked"
-    },
     "OperatorLogsFetchCompleted": {
       "_go_const": "EventOperatorLogsFetchCompleted",
       "value": "g8e.v1.operator.logs.fetch.completed"
@@ -783,6 +755,14 @@
     "OperatorNetworkPortCheckStarted": {
       "_go_const": "EventOperatorNetworkPortCheckStarted",
       "value": "g8e.v1.operator.network.port.check.started"
+    },
+    "OperatorNotaryApprovalRequested": {
+      "_go_const": "EventOperatorNotaryApprovalRequested",
+      "value": "g8e.v1.operator.notary.approval.requested"
+    },
+    "OperatorNotaryTransactionExpired": {
+      "_go_const": "EventOperatorNotaryTransactionExpired",
+      "value": "g8e.v1.operator.notary.transaction.expired"
     },
     "OperatorPanelListUpdated": {
       "_go_const": "EventOperatorPanelListUpdated",
@@ -972,8 +952,8 @@
       "_go_const": "EventPlatformNotification",
       "value": "g8e.v1.platform.notification"
     },
-    "PlatformSentinelModeChanged": {
-      "_go_const": "EventPlatformSentinelModeChanged",
+    "PlatformVaultModeChanged": {
+      "_go_const": "EventPlatformVaultModeChanged",
       "value": "g8e.v1.platform.sentinel.mode.changed"
     },
     "PlatformSseConnectionClosed": {

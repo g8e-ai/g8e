@@ -4,7 +4,8 @@ title: MCP Protocol
 
 # MCP Protocol
 
-Last Updated: 2026-07-03
+Last Updated: 2026-07-13
+Version: v1.5.0
 
 The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer governance verification sequence (L1Doctrine/L2Consensus/L3Notary/L4Warden/L5Actuator), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
@@ -251,7 +252,7 @@ The downstream's `tools/list` is passed through unmodified so the AI sees the re
 MCP clients connect to the gateway via:
 
 - **JSON-RPC 2.0**: Standard JSON-RPC over HTTP to gateway endpoints
-- **Authentication**: mTLS certificate (RequireAndVerifyClientCert) for MCP ingress routes
+- **Authentication**: The `/mcp` endpoint is accessible on both the HTTP port (8080, no mTLS, loopback origin protection) and the HTTPS port (8443, mTLS with RequireAndVerifyClientCert). Production deployments should use the HTTPS port for external clients; the HTTP port is intended for local loopback use.
 
 ### Tool Invocation
 
@@ -274,21 +275,13 @@ Invoke MCP tools via JSON-RPC POST to the unified `/mcp` endpoint. A2A skill inv
 
 ### Tool Discovery
 
-The gateway provides merged tool discovery that combines native tools with downstream MCP server tools:
+The gateway provides tool discovery with native tools or downstream proxy:
 
-- `tools/list`: Returns available tools with schemas (native tools merged with downstream tools when downstream is configured, native tools only when no downstream)
+- `tools/list`: Returns available tools with schemas (native tools when no downstream is configured, proxied from the downstream server when configured)
 - `prompts/list`: Returns available prompt templates
 - `resources/list`: Returns available resources
 
-When a downstream MCP server is configured, the gateway:
-1. Proxies the `tools/list` request to the downstream server
-2. Parses the downstream response
-3. Merges native tools with downstream tools (deduplicating by tool name)
-4. Returns the combined tool list to the client
-
-If the downstream server is unavailable (circuit open, connection error, or invalid response), the gateway falls back to returning only native tools. This ensures clients always have access to native tools even when downstream services are degraded.
-
-The unified endpoint uses a functional options pattern for configuration and improved test coverage. Discovery endpoints are proxied from the downstream server when configured. Tool calls are wrapped in GovernanceEnvelope before verification.
+When a downstream MCP server is configured, the gateway proxies `tools/list`, `resources/list`, and `prompts/list` to the downstream server and returns the raw response. If the circuit breaker is open or the downstream is unreachable, the proxy call fails and the error propagates to the client. Tool calls are wrapped in GovernanceEnvelope before verification.
 
 ### Tool Schema
 
@@ -409,7 +402,7 @@ The Operator runs in gateway mode with three posture options:
 
 ### Port Configuration
 
-Default ports (configurable via flags or paths.json):
+Default ports (configurable via flags or `constants.Ports`):
 
 | Port | Purpose | Auth |
 |---|---|---|
@@ -459,7 +452,7 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 | Concern | File |
 |---|---|
 | Governance proxy (agent run) | `internal/cli/cmd/mcp.go` (runMCPAgentRun) |
-| Gateway entry | `internal/cli/cmd/gateway.go` (gatewayStartCmd, gatewayServeCmd) |
+| Gateway entry | `internal/cli/cmd/gateway.go` (gatewayCmd, gatewayStartCmd) |
 | Gateway service | `internal/services/gateway/gateway_service.go` |
 | HTTP routing | `internal/services/gateway/gateway_http_router.go` |
 | MCP/A2A translation | `internal/services/mcp/gateway.go` |
@@ -503,7 +496,7 @@ To add a new native tool to the Operator, follow this sequence:
    - `Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error)`: Implements the tool logic
 3. **Add input validation**: If the tool accepts user input, add validation logic in `internal/services/mcp/validation.go` following the fail-closed security principles. The validation framework enforces SQL query validation, URL validation, protocol validation, and request forgery protection.
 4. **Register tool**: Add your tool to the tools list in `RegisterNativeTools()` in `internal/services/mcp/native_tool_registry.go`. The registry validates tool name format and input schema at registration time.
-5. **Test**: Add unit tests in `internal/services/mcp/native_handlers_test.go` and validation tests in `internal/services/mcp/validation_test.go`. Use table-driven tests for deterministic behavior enumeration.
+5. **Test**: Add unit tests in `internal/services/mcp/native_handlers_test.go`, validation tests in `internal/services/mcp/validation_test.go`, and registry tests in `internal/services/mcp/native_tool_registry_test.go` (tool registration, interface compliance, duplicate detection). Use table-driven tests for deterministic behavior enumeration.
 
 The tool automatically becomes available via the MCP tools/list endpoint when no downstream MCP server is configured. The registry performs runtime validation of tool names (must be valid identifiers) and input schemas (must have type "object" with valid properties structure).
 

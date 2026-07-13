@@ -1,0 +1,70 @@
+{
+  "_comment": "Canonical WebAuthn client response wire shapes. WebAuthnAttestationResponse is the client response for registration verification. WebAuthnAssertionResponse is the client response for authentication verification. Serialized from WebAuthnAttestationResponse and WebAuthnAssertionResponse (internal/models/webauthn.go).",
+
+  "_authority": "client (browser)",
+  "_consumers": ["client (gateway passkey service)", "cli (auth package)"],
+
+  "webauthn_attestation_response": {
+    "_description": "Client response for WebAuthn registration verification.",
+    "id": {
+      "type": "string",
+      "required": true,
+      "description": "Credential ID (base64url-encoded)"
+    },
+    "rawId": {
+      "type": "string",
+      "required": true,
+      "description": "Raw credential ID (base64url-encoded)"
+    },
+    "clientDataJSON": {
+      "type": "string",
+      "required": true,
+      "description": "Client data JSON (base64url-encoded)"
+    },
+    "attestationObject": {
+      "type": "string",
+      "required": true,
+      "description": "Attestation object (base64url-encoded CBOR)"
+    },
+    "transports": {
+      "type": "array",
+      "items": "string",
+      "required": false,
+      "description": "Authenticator transport methods. Omitted when empty. Values: usb, nfc, internal, hybrid."
+    }
+  },
+
+  "webauthn_assertion_response": {
+    "_description": "Client response for WebAuthn authentication verification.",
+    "id": {
+      "type": "string",
+      "required": true,
+      "description": "Credential ID (base64url-encoded)"
+    },
+    "rawId": {
+      "type": "string",
+      "required": true,
+      "description": "Raw credential ID (base64url-encoded)"
+    },
+    "clientDataJSON": {
+      "type": "string",
+      "required": true,
+      "description": "Client data JSON (base64url-encoded)"
+    },
+    "authenticatorData": {
+      "type": "string",
+      "required": true,
+      "description": "Authenticator data (base64url-encoded)"
+    },
+    "signature": {
+      "type": "string",
+      "required": true,
+      "description": "Signature (base64url-encoded)"
+    },
+    "userHandle": {
+      "type": "string",
+      "required": false,
+      "description": "User handle (base64url-encoded). Omitted when not provided."
+    }
+  }
+}

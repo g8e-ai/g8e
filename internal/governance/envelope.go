@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
+	"github.com/g8e-ai/g8e/internal/timesvc"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
@@ -81,7 +81,7 @@ func GenerateMessageID(env *GovernanceEnvelope) (string, error) {
 	// 6. expires_at (timestamp) - UTC RFC3339 format
 	if env.ExpiresAt != nil {
 		expiresAt := env.ExpiresAt.AsTime()
-		canonical.WriteString(expiresAt.UTC().Format(time.RFC3339Nano))
+		canonical.WriteString(timesvc.FormatTimestamp(expiresAt))
 		canonical.WriteByte('|')
 	}
 

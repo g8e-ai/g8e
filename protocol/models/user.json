@@ -1,13 +1,15 @@
 {
   "_comment": "Canonical User document shape. client is the authority - it creates and owns this document in SQLite. agent ensembles read it via Operator KV cache (cache-aside) for auth context. A field mismatch breaks authentication, web session validation, and API key checks.",
 
+  "_comment.zero_pii": "ZERO-PII ARCHITECTURE: This schema contains NO personally identifiable information. The platform persists only the public key (passkey credentials). Email and name are NOT stored - users are identified solely by their cryptographic credentials. Aligned with Go User struct (internal/models/auth.go).",
+
   "_authority": "client (SQLite)",
   "_consumers": ["agent", "client internal services (auth, web session, API key validation)"],
   "_collection": "users",
   "_cache_aside": "operator KV - keyed by g8e:doc:users:{user_id}. Write-through on every user write. SQLite is source of truth.",
 
   "user": {
-    "_description": "Full user document as stored in client SQLite.",
+    "_description": "Full user document as stored in client SQLite. Serialized from User (internal/models/auth.go).",
 
     "core_identity": {
       "id": {
@@ -16,102 +18,61 @@
         "required": true,
         "description": "Unique user identifier (UUID v4). Used as organization_id in single-user orgs."
       },
-      "email": {
-        "type": "string",
-        "required": true,
-        "description": "User email address. Stored lowercase. Unique."
-      },
-      "name": {
-        "type": "string",
-        "required": true,
-        "description": "Display name. Defaults to email prefix if not provided."
-      },
-      "password_hash": {
+      "webauthn_user_id": {
         "type": "string",
         "required": false,
-        "description": "Hashed password. Null for SSO users."
+        "description": "GUID for WebAuthn v4 compliance (Windows Hello). Omitted when empty."
       }
     },
 
     "organization": {
       "organization_id": {
         "type": "string",
-        "required": true,
-        "description": "Organization this user belongs to. Equals user.id for single-user orgs."
+        "required": false,
+        "description": "Organization this user belongs to. Equals user.id for single-user orgs. Omitted when empty."
       },
       "roles": {
         "type": "array",
         "items": "string",
-        "required": true,
-        "default": ["user"],
-        "description": "RBAC roles assigned to this user. See status.js UserRole. Values: user, admin, owner, operator."
+        "required": false,
+        "description": "RBAC roles assigned to this user. Values: user, admin, owner, operator. Omitted when empty."
       }
     },
 
-    "operator_linkage": {
-      "operator_id": {
+    "status": {
+      "status": {
         "type": "string",
         "required": false,
-        "description": "Primary Operator ID currently associated with this user. Updated by client on Operator activation."
+        "description": "User account status. See status.json user.status. Omitted when empty."
       },
-      "operator_status": {
-        "type": "string",
+      "is_bootstrap": {
+        "type": "boolean",
         "required": false,
-        "description": "Status of the linked operator. See status.json operator.status."
+        "description": "Identifies the ephemeral local-owner identity created by ./g8e gw start -a over loopback. Not a privilege tier - marks an identity retired automatically on first real mTLS login. Omitted when false."
       }
     },
 
     "auth": {
       "provider": {
         "type": "string",
-        "required": true,
+        "required": false,
         "default": "passkey",
         "values": ["passkey"],
-        "description": "Authentication provider. passkey = FIDO2/WebAuthn passwordless."
+        "description": "Authentication provider. passkey = FIDO2/WebAuthn passwordless. Omitted when empty."
       },
       "passkey_credentials": {
         "type": "array",
         "required": false,
         "default": [],
-        "description": "Registered FIDO2/WebAuthn passkey credentials. Each entry: { id, public_key, counter, transports, created_at, last_used_at }. Stored as encrypted JSON array. Never exposed to clients."
-      },
-      "passkey_challenge": {
-        "type": "string",
-        "required": false,
-        "default": null,
-        "description": "Ephemeral base64url challenge for in-progress WebAuthn ceremony. Cleared on completion or expiry."
-      },
-      "passkey_challenge_expires_at": {
-        "type": "string",
-        "format": "iso8601",
-        "required": false,
-        "default": null,
-        "description": "Expiry timestamp for the current passkey challenge."
-      },
-      "sessions": {
-        "type": "array",
-        "required": false,
-        "default": [],
-        "description": "Active web session tokens. Managed by client web session service."
+        "description": "Registered FIDO2/WebAuthn passkey credentials. Each entry conforms to passkey_credential.json shape. Stored as encrypted JSON array. Never exposed to clients. Omitted when empty."
       }
     },
 
-    "timestamps": {
-      "created_at": {
-        "type": "string",
-        "format": "iso8601",
-        "required": true
-      },
-      "updated_at": {
-        "type": "string",
-        "format": "iso8601",
-        "required": true
-      },
-      "last_login": {
-        "type": "string",
-        "format": "iso8601",
-        "required": false
-      }
+    "local_os_user": {
+      "type": "object",
+      "required": false,
+      "description": "Local OS user account information. Conforms to local_os_user.json shape. Omitted when not set.",
+      "_ref": "local_os_user.json#local_os_user"
     }
   }
 }

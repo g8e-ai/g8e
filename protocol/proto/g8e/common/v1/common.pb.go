@@ -473,7 +473,7 @@ type GovernanceEnvelope struct {
 	ActingAppId       string                 `protobuf:"bytes,26,opt,name=acting_app_id,json=actingAppId,proto3" json:"acting_app_id,omitempty"`             // The app/tool acting on behalf of the user (delegate)
 	// Intent & Payload
 	// event_type is the canonical pub/sub routing key from protocol/constants/events.json
-	// (e.g., "operator.command.requested", "operator.heartbeat").
+	// (e.g., "g8e.v1.operator.command.requested", "g8e.v1.operator.heartbeat.sent").
 	// Distinct from action_type: event_type routes the message, action_type classifies the intent.
 	EventType  string           `protobuf:"bytes,8,opt,name=event_type,json=eventType,proto3" json:"event_type,omitempty"`
 	Payload    []byte           `protobuf:"bytes,9,opt,name=payload,proto3" json:"payload,omitempty"`                          // Raw protobuf payload

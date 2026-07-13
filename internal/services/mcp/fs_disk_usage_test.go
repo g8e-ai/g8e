@@ -542,11 +542,11 @@ func TestFSDiskUsageTool_UsedPercentCalculation(t *testing.T) {
 			mockStat := &mockStatFS{
 				stat: syscall.Statfs_t{
 					Blocks: tt.blocks,
-					Bsize:  int64(tt.bsize),
 					Bfree:  tt.bfree,
 					Bavail: tt.bfree,
 				},
 			}
+			setStatfsBsize(&mockStat.stat, tt.bsize)
 
 			result, err := getDiskUsageForPath("/test", mockStat)
 			require.NoError(t, err)
@@ -592,11 +592,11 @@ func TestFSDiskUsageTool_Invariants(t *testing.T) {
 			mockStat := &mockStatFS{
 				stat: syscall.Statfs_t{
 					Blocks: tt.blocks,
-					Bsize:  int64(tt.bsize),
 					Bfree:  tt.bfree,
 					Bavail: tt.bavail,
 				},
 			}
+			setStatfsBsize(&mockStat.stat, tt.bsize)
 
 			result, err := getDiskUsageForPath("/test", mockStat)
 			require.NoError(t, err)
@@ -656,11 +656,11 @@ func TestFSDiskUsageTool_BavailVsBfree(t *testing.T) {
 			mockStat := &mockStatFS{
 				stat: syscall.Statfs_t{
 					Blocks: tt.blocks,
-					Bsize:  int64(tt.bsize),
 					Bfree:  tt.bfree,
 					Bavail: tt.bavail,
 				},
 			}
+			setStatfsBsize(&mockStat.stat, tt.bsize)
 
 			result, err := getDiskUsageForPath("/test", mockStat)
 			require.NoError(t, err)

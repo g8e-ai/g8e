@@ -261,6 +261,7 @@ func TestWriteAgentConfig_GeminiWritesSettingsFile(t *testing.T) {
 func TestWriteAgentConfig_GeminiMergesExistingSettings(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
+	t.Setenv("USERPROFILE", tmpHome)
 
 	geminiDir := filepath.Join(tmpHome, ".gemini")
 	require.NoError(t, os.MkdirAll(geminiDir, 0o755))

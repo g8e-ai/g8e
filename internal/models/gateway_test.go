@@ -76,7 +76,7 @@ func TestDocumentForWire_IDIsJSONString(t *testing.T) {
 	assert.Equal(t, "doc-3", idVal)
 }
 
-func TestDocumentForWire_TimestampsAreRFC3339NanoUTC(t *testing.T) {
+func TestDocumentForWire_TimestampsAreFixedMicrosecondUTC(t *testing.T) {
 	t.Parallel()
 
 	ts := time.Date(2026, 1, 15, 14, 30, 45, 123456789, time.UTC)
@@ -90,11 +90,11 @@ func TestDocumentForWire_TimestampsAreRFC3339NanoUTC(t *testing.T) {
 
 	var createdStr string
 	require.NoError(t, json.Unmarshal(out["created_at"], &createdStr))
-	assert.Equal(t, "2026-01-15T14:30:45.123456789Z", createdStr)
+	assert.Equal(t, "2026-01-15T14:30:45.123456Z", createdStr)
 
 	var updatedStr string
 	require.NoError(t, json.Unmarshal(out["updated_at"], &updatedStr))
-	assert.Equal(t, "2026-01-15T14:30:45.123456789Z", updatedStr)
+	assert.Equal(t, "2026-01-15T14:30:45.123456Z", updatedStr)
 }
 
 func TestDocumentForWire_TimestampsConvertedToUTC(t *testing.T) {

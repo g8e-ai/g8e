@@ -104,7 +104,7 @@ message GovernanceEnvelope {
 
   // Intent & Payload
   // event_type is the canonical pub/sub routing key from protocol/constants/events.json
-  // (e.g., "operator.command.requested", "operator.heartbeat").
+  // (e.g., "g8e.v1.operator.command.requested", "g8e.v1.operator.heartbeat.sent").
   // Distinct from action_type: event_type routes the message, action_type classifies the intent.
   string event_type = 8;
   bytes payload = 9;                       // Raw protobuf payload

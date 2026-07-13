@@ -1,0 +1,92 @@
+{
+  "_comment": "Canonical RequestContext and BoundOperator wire shapes. RequestContext is embedded in API request bodies instead of headers. It carries session identity, investigation context, and bound operator metadata. BoundOperator is a sub-model representing an Operator bound to a session.",
+
+  "_authority": "client",
+  "_consumers": ["agent", "client internal services"],
+
+  "bound_operator": {
+    "_description": "Represents a bound Operator in the request context. Serialized from BoundOperator (protocol/python/g8e/models/context.py).",
+    "operator_id": {
+      "type": "string",
+      "required": true,
+      "description": "Unique Operator identifier"
+    },
+    "operator_session_id": {
+      "type": "string",
+      "required": false,
+      "description": "Operator session identifier"
+    },
+    "bound_web_session_id": {
+      "type": "string",
+      "required": false,
+      "description": "Web session ID this Operator is bound to"
+    },
+    "status": {
+      "type": "string",
+      "required": false,
+      "description": "Operator status"
+    }
+  },
+
+  "request_context": {
+    "_description": "Request context embedded in API request bodies. Serialized from RequestContext (protocol/python/g8e/models/context.py). Excludes null fields on the wire.",
+
+    "web_session_id": {
+      "type": "string",
+      "required": false,
+      "description": "Web user session ID. Required for CLIENT source when cli_session_id is absent."
+    },
+    "cli_session_id": {
+      "type": "string",
+      "required": false,
+      "description": "CLI session ID. Required for CLIENT source when web_session_id is absent."
+    },
+    "user_id": {
+      "type": "string",
+      "required": false,
+      "description": "User identifier. Required for CLIENT source."
+    },
+    "organization_id": {
+      "type": "string",
+      "required": false,
+      "description": "Organization identifier"
+    },
+    "case_id": {
+      "type": "string",
+      "required": false,
+      "description": "Current case ID"
+    },
+    "investigation_id": {
+      "type": "string",
+      "required": false,
+      "description": "Current investigation ID"
+    },
+    "task_id": {
+      "type": "string",
+      "required": false,
+      "description": "Current task ID"
+    },
+    "bound_operators": {
+      "type": "array",
+      "items": "BoundOperator",
+      "required": false,
+      "default": [],
+      "description": "List of all bound operators. Each item conforms to the bound_operator shape above."
+    },
+    "execution_id": {
+      "type": "string",
+      "required": false,
+      "description": "Unique execution identifier"
+    },
+    "source_component": {
+      "type": "string",
+      "required": true,
+      "description": "Component that created this context. See status.json component.name."
+    },
+    "system_fingerprint": {
+      "type": "string",
+      "required": false,
+      "description": "System fingerprint of the caller"
+    }
+  }
+}

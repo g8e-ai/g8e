@@ -1,7 +1,7 @@
 # Governance
 
-Last Updated: 2026-07-06
-Version: v1.3.7
+Last Updated: 2026-07-13
+Version: v1.5.0
 
 ## Overview
 
@@ -318,13 +318,13 @@ If any stage fails, the nonce reservation is released and the transaction is rej
    - **File Operations**: Scoped reads, writes, and edits.
    - **Protocol Egress**: MCP or A2A tool calls via the MCP Gateway.
    - **Synchronous handlers**: `EVAL_ANSWER`, `MCP_CALL`, and `A2A_CALL` return results directly as the receipt summary.
+   Execution handlers scrub sensitive host data from results (stdout, stderr, file content) before returning them to the Actuator. The Actuator receives already-scrubbed output.
 6. **Result Capture**: Output, errors, and updated Merkle roots are captured.
 7. **Final Receipt**: A final action receipt is generated, containing:
    - Execution results (or failure summary)
    - State root before and after
    - Operator signature (Ed25519 over canonical receipt JSON)
    - L2 and L3 status reflecting posture enforcement
-8. **Sovereignty Scrubbing**: Sensitive host data is scrubbed from the result before returning it to the gateway.
 
 **Outcome**: Signed final receipt is generated and anchored to the local ledger.
 
@@ -636,4 +636,6 @@ This end-to-end process ensures that every transaction is governed, verified, ex
 ## Related Documentation
 
 - [Gateway Architecture](./gateway.md): Gateway mode, MCP endpoints, and 5-layer verification sequence.
+- [Operator Architecture](./operator.md): Operator-side verification pipeline, execution boundary, and local audit vault.
+- [Authentication & Authorization](./auth.md): mTLS identity binding, passkey enrollment, and session management.
 - [Encryption](./encryption.md): Cryptographic primitives used throughout the pipeline.

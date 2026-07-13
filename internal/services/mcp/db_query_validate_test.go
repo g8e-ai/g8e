@@ -28,6 +28,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func mustMarshalArgs(t *testing.T, dbPath, query string) json.RawMessage {
+	t.Helper()
+	b, err := json.Marshal(map[string]string{"database_path": dbPath, "query": query})
+	require.NoError(t, err)
+	return b
+}
+
 func TestDBQueryValidateTool_Name(t *testing.T) {
 	tool := &DBQueryValidateTool{}
 	require.Equal(t, "db_query_validate", tool.Name())
@@ -118,7 +125,7 @@ func TestDBQueryValidateTool_Execute_NonSELECTQuery(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args := json.RawMessage(`{"database_path": "/tmp/test.db", "query": "` + tt.query + `"}`)
+			args := mustMarshalArgs(t, "/tmp/test.db", tt.query)
 			result, err := tool.Execute(ctx, args)
 			require.NoError(t, err)
 			require.Len(t, result.Content, 1)
@@ -138,7 +145,7 @@ func TestDBQueryValidateTool_Execute_NonSELECTLowercase(t *testing.T) {
 	tool := &DBQueryValidateTool{}
 	ctx := context.Background()
 
-	args := json.RawMessage(`{"database_path": "/tmp/test.db", "query": "delete from users"}`)
+	args := mustMarshalArgs(t, "/tmp/test.db", "delete from users")
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
@@ -156,7 +163,7 @@ func TestDBQueryValidateTool_Execute_TrailingSemicolon(t *testing.T) {
 	tool := &DBQueryValidateTool{}
 	ctx := context.Background()
 
-	args := json.RawMessage(`{"database_path": "/tmp/test.db", "query": "SELECT * FROM users;"}`)
+	args := mustMarshalArgs(t, "/tmp/test.db", "SELECT * FROM users;")
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
@@ -175,7 +182,7 @@ func TestDBQueryValidateTool_Execute_TrailingSemicolonWithSpaces(t *testing.T) {
 	tool := &DBQueryValidateTool{}
 	ctx := context.Background()
 
-	args := json.RawMessage(`{"database_path": "/tmp/test.db", "query": "SELECT * FROM users;   "}`)
+	args := mustMarshalArgs(t, "/tmp/test.db", "SELECT * FROM users;   ")
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
@@ -201,12 +208,12 @@ func TestDBQueryValidateTool_Execute_DatabaseOpenFailure(t *testing.T) {
 	// Create a valid database first
 	db, err := sql.Open("sqlite", dbPath)
 	require.NoError(t, err)
+	defer db.Close()
 	_, err = db.Exec(`CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)`)
 	require.NoError(t, err)
-	db.Close()
 
 	// Now test that the tool can open it in read-only mode
-	args := json.RawMessage(`{"database_path": "` + dbPath + `", "query": "SELECT * FROM users WHERE id = 1"}`)
+	args := mustMarshalArgs(t, dbPath, "SELECT * FROM users WHERE id = 1")
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
@@ -240,7 +247,7 @@ func TestDBQueryValidateTool_Execute_ValidIndexedQuery(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test indexed query
-	args := json.RawMessage(`{"database_path": "` + dbPath + `", "query": "SELECT * FROM users WHERE email = 'test@example.com'"}`)
+	args := mustMarshalArgs(t, dbPath, "SELECT * FROM users WHERE email = 'test@example.com'")
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
@@ -273,7 +280,7 @@ func TestDBQueryValidateTool_Execute_PrimaryKeyLookup(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test primary key lookup
-	args := json.RawMessage(`{"database_path": "` + dbPath + `", "query": "SELECT * FROM users WHERE id = 1"}`)
+	args := mustMarshalArgs(t, dbPath, "SELECT * FROM users WHERE id = 1")
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
@@ -307,7 +314,7 @@ func TestDBQueryValidateTool_Execute_FullTableScan(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test query that may cause full table scan
-	args := json.RawMessage(`{"database_path": "` + dbPath + `", "query": "SELECT * FROM users"}`)
+	args := mustMarshalArgs(t, dbPath, "SELECT * FROM users")
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
@@ -341,7 +348,7 @@ func TestDBQueryValidateTool_Execute_FullTableScanWithNonIndexedWhere(t *testing
 	require.NoError(t, err)
 
 	// Test query with WHERE on non-indexed column
-	args := json.RawMessage(`{"database_path": "` + dbPath + `", "query": "SELECT * FROM users WHERE name = 'John'"}`)
+	args := mustMarshalArgs(t, dbPath, "SELECT * FROM users WHERE name = 'John'")
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
@@ -386,7 +393,7 @@ func TestDBQueryValidateTool_Execute_ComplexQueryWithJoin(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test indexed join query
-	args := json.RawMessage(`{"database_path": "` + dbPath + `", "query": "SELECT u.name, o.total FROM users u JOIN orders o ON u.id = o.user_id WHERE u.id = 1"}`)
+	args := mustMarshalArgs(t, dbPath, "SELECT u.name, o.total FROM users u JOIN orders o ON u.id = o.user_id WHERE u.id = 1")
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
@@ -419,7 +426,7 @@ func TestDBQueryValidateTool_Execute_QueryWithOrderBy(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test query with ORDER BY on indexed column
-	args := json.RawMessage(`{"database_path": "` + dbPath + `", "query": "SELECT * FROM users WHERE id = 1 ORDER BY name"}`)
+	args := mustMarshalArgs(t, dbPath, "SELECT * FROM users WHERE id = 1 ORDER BY name")
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
@@ -451,7 +458,7 @@ func TestDBQueryValidateTool_Execute_QueryWithLimit(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test query with LIMIT (even without WHERE, LIMIT can prevent full scan in some cases)
-	args := json.RawMessage(`{"database_path": "` + dbPath + `", "query": "SELECT * FROM users LIMIT 10"}`)
+	args := mustMarshalArgs(t, dbPath, "SELECT * FROM users LIMIT 10")
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
@@ -485,7 +492,7 @@ func TestDBQueryValidateTool_Execute_InvalidSQLSyntax(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test invalid SQL syntax
-	args := json.RawMessage(`{"database_path": "` + dbPath + `", "query": "SELECT * FROM nonexistent_table"}`)
+	args := mustMarshalArgs(t, dbPath, "SELECT * FROM nonexistent_table")
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
@@ -520,7 +527,7 @@ func TestDBQueryValidateTool_Execute_ContextCancellation(t *testing.T) {
 	// Cancel context before executing
 	cancel()
 
-	args := json.RawMessage(`{"database_path": "` + dbPath + `", "query": "SELECT * FROM users"}`)
+	args := mustMarshalArgs(t, dbPath, "SELECT * FROM users")
 	_, err = tool.Execute(ctx, args)
 	require.Error(t, err)
 }
@@ -544,7 +551,7 @@ func TestDBQueryValidateTool_Execute_WhitespaceInQuery(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test query with leading/trailing whitespace
-	args := json.RawMessage(`{"database_path": "` + dbPath + `", "query": "  SELECT * FROM users WHERE id = 1  "}`)
+	args := mustMarshalArgs(t, dbPath, "  SELECT * FROM users WHERE id = 1  ")
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
@@ -583,7 +590,7 @@ func TestDBQueryValidateTool_Execute_SelectWithSubquery(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test query with subquery
-	args := json.RawMessage(`{"database_path": "` + dbPath + `", "query": "SELECT * FROM users WHERE id IN (SELECT user_id FROM orders WHERE total > 100)"}`)
+	args := mustMarshalArgs(t, dbPath, "SELECT * FROM users WHERE id IN (SELECT user_id FROM orders WHERE total > 100)")
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
@@ -619,7 +626,7 @@ func TestDBQueryValidateTool_Execute_AggregateQuery(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test aggregate query with GROUP BY on indexed column
-	args := json.RawMessage(`{"database_path": "` + dbPath + `", "query": "SELECT status, COUNT(*) FROM users WHERE status = 'active' GROUP BY status"}`)
+	args := mustMarshalArgs(t, dbPath, "SELECT status, COUNT(*) FROM users WHERE status = 'active' GROUP BY status")
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
@@ -656,7 +663,7 @@ func TestDBQueryValidateTool_Execute_ReadOnlyDatabase(t *testing.T) {
 	defer os.Chmod(dbPath, 0644)
 
 	// Test that read-only mode works
-	args := json.RawMessage(`{"database_path": "` + dbPath + `", "query": "SELECT * FROM users WHERE id = 1"}`)
+	args := mustMarshalArgs(t, dbPath, "SELECT * FROM users WHERE id = 1")
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)

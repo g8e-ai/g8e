@@ -34,11 +34,13 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// PubSubMessage is the client-to-server WebSocket frame for pub/sub operations.
+// Clients send this message to subscribe, unsubscribe, or publish on a channel.
 type PubSubMessage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Action        string                 `protobuf:"bytes,1,opt,name=action,proto3" json:"action,omitempty"`
-	Channel       string                 `protobuf:"bytes,2,opt,name=channel,proto3" json:"channel,omitempty"`
-	Data          []byte                 `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
+	Action        string                 `protobuf:"bytes,1,opt,name=action,proto3" json:"action,omitempty"`   // Operation to perform: "subscribe", "psubscribe", "unsubscribe", or "publish".
+	Channel       string                 `protobuf:"bytes,2,opt,name=channel,proto3" json:"channel,omitempty"` // Target channel name. Follows the convention "{prefix}:{operator_id}:{session_id}".
+	Data          []byte                 `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`       // Payload bytes for publish actions. Empty for subscribe/unsubscribe.
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -94,12 +96,14 @@ func (x *PubSubMessage) GetData() []byte {
 	return nil
 }
 
+// PubSubEvent is the server-to-client WebSocket frame delivered to subscribers.
+// The broker emits events for message delivery, subscription acknowledgments, and errors.
 type PubSubEvent struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
-	Channel       string                 `protobuf:"bytes,2,opt,name=channel,proto3" json:"channel,omitempty"`
-	Pattern       string                 `protobuf:"bytes,3,opt,name=pattern,proto3" json:"pattern,omitempty"`
-	Data          []byte                 `protobuf:"bytes,4,opt,name=data,proto3" json:"data,omitempty"`
+	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`       // Event type: "message", "pmessage", "subscribed", "unsubscribed", or "error".
+	Channel       string                 `protobuf:"bytes,2,opt,name=channel,proto3" json:"channel,omitempty"` // Channel the event pertains to.
+	Pattern       string                 `protobuf:"bytes,3,opt,name=pattern,proto3" json:"pattern,omitempty"` // Pattern matched for pmessage events. Empty for direct channel deliveries.
+	Data          []byte                 `protobuf:"bytes,4,opt,name=data,proto3" json:"data,omitempty"`       // Message payload for message/pmessage events. Empty for acknowledgment events.
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

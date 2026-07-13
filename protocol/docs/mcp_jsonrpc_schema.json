@@ -59,7 +59,7 @@
       "type": "object"
     },
     "InitializeResult": {
-      "description": "The server's response to an initialize request. The gateway echoes the client's requested protocolVersion, or defaults to 2025-06-18. Server info is name='g8e-gateway', version='1.0'.",
+      "description": "The server's response to an initialize request. The gateway echoes the client's requested protocolVersion, or defaults to 2025-06-18. Server info is name='g8e-gateway', version='1.0'. Note: serverInfo.version is the MCP server implementation version (mcpServerVersion constant), intentionally separate from the g8e platform version (currently v1.5.0).",
       "properties": {
         "protocolVersion": {
           "type": "string",
@@ -121,7 +121,7 @@
       "type": "object"
     },
     "ListToolsResult": {
-      "description": "The result of a tools/list request. When no downstream MCP server is configured, returns native tools compiled into the Operator. When a downstream is configured, native tools are merged with downstream tools (native tools take precedence on name conflicts).",
+      "description": "The result of a tools/list request. When no downstream MCP server is configured, returns native tools compiled into the Operator. When a downstream is configured, the gateway proxies tools/list to the downstream server and returns the raw response.",
       "properties": {
         "tools": {
           "type": "array",
@@ -438,7 +438,7 @@
         },
         "execution_id": { "type": "string", "description": "Optional unique execution ID." }
       },
-      "required": ["skill_name", "payload"],
+      "required": ["skill_name"],
       "type": "object"
     },
     "A2ACallResult": {
@@ -469,7 +469,7 @@
         },
         "execution_id": { "type": "string" }
       },
-      "required": ["skill_name", "payload"],
+      "required": ["skill_name"],
       "type": "object"
     },
     "A2ASuspensionResponse": {

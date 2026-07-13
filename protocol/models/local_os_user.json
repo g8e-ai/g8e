@@ -1,0 +1,35 @@
+{
+  "_comment": "Canonical LocalOSUser wire shape. Represents local OS user account information. Embedded in BootstrapRequest, CLIEnrollRequest, and User. Serialized from LocalOSUser (internal/models/auth.go).",
+
+  "_authority": "operator (g8eo)",
+  "_consumers": ["client"],
+
+  "local_os_user": {
+    "_description": "Local OS user account information. All fields are optional and omitted when empty.",
+    "domain": {
+      "type": "string",
+      "required": false,
+      "description": "Windows domain or empty. Omitted when empty."
+    },
+    "username": {
+      "type": "string",
+      "required": false,
+      "description": "OS username. Omitted when empty."
+    },
+    "uid": {
+      "type": "string",
+      "required": false,
+      "description": "User ID (POSIX). Omitted when empty."
+    },
+    "gid": {
+      "type": "string",
+      "required": false,
+      "description": "Group ID (POSIX). Omitted when empty."
+    },
+    "sid": {
+      "type": "string",
+      "required": false,
+      "description": "Windows SID. Omitted when empty."
+    }
+  }
+}

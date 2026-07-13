@@ -70,7 +70,12 @@ AGENTS = _load_protocol_json("agents.json")
 NETWORK = _load_protocol_json("network.json")
 API_PATHS = _load_protocol_json("api_paths.json")
 
-from enum import StrEnum
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum
+    class StrEnum(str, Enum):
+        pass
 
 # Helper to get Component names (formerly ComponentName enum)
 class ComponentName(StrEnum):

@@ -49,6 +49,9 @@ func TestProcSignalSafeTool_Execute_Integration(t *testing.T) {
 	pid := cmd.Process.Pid
 
 	t.Run("SIGTERM", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("POSIX signals not supported on Windows")
+		}
 		args := json.RawMessage(string(mustMarshal(t, map[string]interface{}{
 			"pid":    pid,
 			"signal": "SIGTERM",
@@ -68,6 +71,9 @@ func TestProcSignalSafeTool_Execute_Integration(t *testing.T) {
 	})
 
 	t.Run("SIGINT", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("POSIX signals not supported on Windows")
+		}
 		// Start a new process
 		var cmd2 *exec.Cmd
 		if runtime.GOOS == "windows" {

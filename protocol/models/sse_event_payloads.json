@@ -1,0 +1,292 @@
+{
+  "_comment": "Canonical SSE event payload shapes for AI chat events. These are the data payloads carried inside SessionEventWire or BackgroundEventWire envelopes. All models are serialized from protocol/python/g8e/models/events.py and exclude null fields on the wire.",
+
+  "_authority": "client",
+  "_consumers": ["agent", "cli"],
+
+  "ai_processing_stopped_payload": {
+    "_description": "Payload for ai_processing_stopped events.",
+    "reason": {
+      "type": "string",
+      "required": true,
+      "description": "Reason the AI processing stopped"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "iso8601",
+      "required": true,
+      "description": "UTC timestamp"
+    }
+  },
+
+  "ai_tool_lifecycle_payload": {
+    "_description": "Payload for ai_tool_lifecycle events tracking tool execution lifecycle.",
+    "tool_name": {
+      "type": "string",
+      "required": true,
+      "description": "Name of the tool"
+    },
+    "display_label": {
+      "type": "string",
+      "required": false,
+      "description": "Display label for the tool"
+    },
+    "display_icon": {
+      "type": "string",
+      "required": false,
+      "description": "Display icon for the tool"
+    },
+    "display_detail": {
+      "type": "string",
+      "required": false,
+      "description": "Display detail text"
+    },
+    "category": {
+      "type": "string",
+      "required": false,
+      "description": "Tool category"
+    },
+    "execution_id": {
+      "type": "string",
+      "required": true,
+      "description": "Execution identifier"
+    },
+    "status": {
+      "type": "string",
+      "required": true,
+      "description": "Tool lifecycle status"
+    },
+    "query": {
+      "type": "string",
+      "required": false,
+      "description": "Tool query/input"
+    },
+    "content": {
+      "type": "string",
+      "required": false,
+      "description": "Tool content/output"
+    },
+    "results": {
+      "type": "array",
+      "required": false,
+      "description": "Tool results as a list of JSON objects"
+    },
+    "error": {
+      "type": "string",
+      "required": false,
+      "description": "Error message if the tool failed"
+    },
+    "port": {
+      "type": "string",
+      "required": false,
+      "description": "Port associated with the tool execution"
+    },
+    "host": {
+      "type": "string",
+      "required": false,
+      "description": "Host associated with the tool execution"
+    },
+    "is_open": {
+      "type": "boolean",
+      "required": false,
+      "description": "Whether the tool session is open"
+    },
+    "timestamp": {
+      "type": "string",
+      "required": false,
+      "description": "Event timestamp"
+    }
+  },
+
+  "chat_citations_ready_payload": {
+    "_description": "Payload for chat_citations_ready events.",
+    "grounding_metadata": {
+      "type": "object",
+      "required": true,
+      "description": "Grounding metadata for citations"
+    },
+    "timestamp": {
+      "type": "string",
+      "required": false,
+      "description": "Event timestamp"
+    }
+  },
+
+  "chat_error_payload": {
+    "_description": "Payload for chat_error events.",
+    "error": {
+      "type": "string",
+      "required": true,
+      "description": "Error message"
+    },
+    "timestamp": {
+      "type": "string",
+      "required": false,
+      "description": "Event timestamp"
+    }
+  },
+
+  "chat_processing_started_payload": {
+    "_description": "Payload for chat_processing_started events.",
+    "agent_mode": {
+      "type": "string",
+      "required": true,
+      "description": "Agent mode (e.g. triage, primary, assistant)"
+    },
+    "timestamp": {
+      "type": "string",
+      "required": false,
+      "description": "Event timestamp"
+    }
+  },
+
+  "chat_response_chunk_payload": {
+    "_description": "Payload for chat_response_chunk events (streaming).",
+    "content": {
+      "type": "string",
+      "required": true,
+      "description": "Content chunk text"
+    },
+    "timestamp": {
+      "type": "string",
+      "required": false,
+      "description": "Event timestamp"
+    }
+  },
+
+  "chat_response_complete_payload": {
+    "_description": "Payload for chat_response_complete events.",
+    "content": {
+      "type": "string",
+      "required": true,
+      "description": "Full response content"
+    },
+    "finish_reason": {
+      "type": "string",
+      "required": true,
+      "description": "Reason the response finished (e.g. stop, length)"
+    },
+    "has_citations": {
+      "type": "boolean",
+      "required": true,
+      "description": "Whether the response has citations"
+    },
+    "grounding_metadata": {
+      "type": "object",
+      "required": true,
+      "description": "Grounding metadata for citations"
+    },
+    "token_usage": {
+      "type": "object",
+      "required": true,
+      "description": "Token usage statistics"
+    },
+    "agent_mode": {
+      "type": "string",
+      "required": true,
+      "description": "Agent mode that produced the response"
+    },
+    "timestamp": {
+      "type": "string",
+      "required": false,
+      "description": "Event timestamp"
+    }
+  },
+
+  "chat_retry_payload": {
+    "_description": "Payload for chat_retry events.",
+    "attempt": {
+      "type": "integer",
+      "required": true,
+      "description": "Current retry attempt number"
+    },
+    "max_attempts": {
+      "type": "integer",
+      "required": true,
+      "description": "Maximum retry attempts"
+    },
+    "timestamp": {
+      "type": "string",
+      "required": false,
+      "description": "Event timestamp"
+    }
+  },
+
+  "chat_thinking_payload": {
+    "_description": "Payload for chat_thinking events.",
+    "thinking": {
+      "type": "string",
+      "required": true,
+      "description": "Thinking/reasoning text. May be null."
+    },
+    "action_type": {
+      "type": "string",
+      "required": true,
+      "description": "Action type being considered"
+    },
+    "timestamp": {
+      "type": "string",
+      "required": false,
+      "description": "Event timestamp"
+    }
+  },
+
+  "chat_turn_complete_payload": {
+    "_description": "Payload for chat_turn_complete events.",
+    "turn": {
+      "type": "integer",
+      "required": true,
+      "description": "Turn number"
+    },
+    "timestamp": {
+      "type": "string",
+      "required": false,
+      "description": "Event timestamp"
+    }
+  },
+
+  "triage_clarification_questions_payload": {
+    "_description": "Payload for triage_clarification_questions events.",
+    "questions": {
+      "type": "array",
+      "items": "string",
+      "required": true,
+      "description": "List of clarification questions"
+    },
+    "complexity": {
+      "type": "string",
+      "required": true,
+      "description": "Assessed complexity level"
+    },
+    "complexity_confidence": {
+      "type": "string",
+      "required": true,
+      "description": "Confidence in complexity assessment"
+    },
+    "intent": {
+      "type": "string",
+      "required": true,
+      "description": "Assessed intent"
+    },
+    "intent_confidence": {
+      "type": "string",
+      "required": true,
+      "description": "Confidence in intent assessment"
+    },
+    "intent_summary": {
+      "type": "string",
+      "required": true,
+      "description": "Summary of the assessed intent"
+    },
+    "request_posture": {
+      "type": "string",
+      "required": true,
+      "description": "Recommended request posture"
+    },
+    "posture_confidence": {
+      "type": "string",
+      "required": true,
+      "description": "Confidence in posture recommendation"
+    }
+  }
+}

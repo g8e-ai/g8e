@@ -25,6 +25,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 )
 
 // DocumentStoreService provides collection/ID-based document CRUD operations.
@@ -79,7 +80,7 @@ func (s *DocumentStoreService) DocCreate(collection, id string, data json.RawMes
 	}
 
 	now := time.Now().UTC()
-	nowStr := sqliteutil.FormatTimestamp(now)
+	nowStr := timesvc.FormatTimestamp(now)
 
 	_, err = s.db.ExecWithRetry(
 		`INSERT INTO documents (collection, id, data, created_at, updated_at)
@@ -124,14 +125,14 @@ func (s *DocumentStoreService) DocSetWithTimestamps(collection, id string, data 
 	}
 
 	now := time.Now().UTC()
-	createdAtStr := sqliteutil.FormatTimestamp(now)
-	updatedAtStr := sqliteutil.FormatTimestamp(now)
+	createdAtStr := timesvc.FormatTimestamp(now)
+	updatedAtStr := timesvc.FormatTimestamp(now)
 
 	if !createdAt.IsZero() {
-		createdAtStr = sqliteutil.FormatTimestamp(createdAt)
+		createdAtStr = timesvc.FormatTimestamp(createdAt)
 	}
 	if !updatedAt.IsZero() {
-		updatedAtStr = sqliteutil.FormatTimestamp(updatedAt)
+		updatedAtStr = timesvc.FormatTimestamp(updatedAt)
 	}
 
 	_, err = s.db.ExecWithRetry(
@@ -192,7 +193,7 @@ func (s *DocumentStoreService) DocUpdate(collection, id string, fields json.RawM
 	}
 
 	now := time.Now().UTC()
-	nowStr := sqliteutil.FormatTimestamp(now)
+	nowStr := timesvc.FormatTimestamp(now)
 
 	_, err = s.db.ExecWithRetry(
 		"UPDATE documents SET data = ?, updated_at = ? WHERE collection = ? AND id = ?",
@@ -376,11 +377,11 @@ func (s *DocumentStoreService) DocQuery(collection string, filters []models.DocF
 
 // scanDocument converts raw database row data into a typed Document with native time.Time timestamps.
 func scanDocument(collection, id, dataJSON, createdAtStr, updatedAtStr string) (*models.Document, error) {
-	createdAt, err := sqliteutil.ParseTimestamp(createdAtStr)
+	createdAt, err := timesvc.ParseTimestamp(createdAtStr)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreParseCreatedAt, err)
 	}
-	updatedAt, err := sqliteutil.ParseTimestamp(updatedAtStr)
+	updatedAt, err := timesvc.ParseTimestamp(updatedAtStr)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreParseUpdatedAt, err)
 	}

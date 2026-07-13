@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-07-12
-Version: v1.4.0
+Last Updated: 2026-07-13
+Version: v1.5.0
 
 ---
 
@@ -259,7 +259,7 @@ curl -X POST https://localhost:8443/api/v1/governance/envelopes \
   -d @envelope.json
 ```
 
-The envelope `id` must match the deterministic `transaction_hash` computed from critical envelope fields (action_type, target_resource, payload, state_merkle_root, nonce, expires_at, intent_data, requestor_user_id, acting_app_id). The Gateway rejects envelopes with mismatched IDs.
+The envelope `id` must match the deterministic transaction hash computed from critical envelope fields. The Gateway rejects envelopes with mismatched IDs.
 
 ---
 
@@ -282,7 +282,7 @@ wscat -c wss://localhost:8443/api/v1/pubsub/stream \
 
 #### Subscribe Protocol
 
-The WebSocket pub/sub protocol uses protobuf-encoded `PubSubMessage` frames. To subscribe, send a message with the `subscribe` action and the desired channel name. The broker confirms with a `subscribed` acknowledgment frame before delivering any messages.
+To subscribe, send a message with the `subscribe` action and the desired channel name. The broker confirms with a `subscribed` acknowledgment frame before delivering any messages.
 
 ---
 
@@ -333,6 +333,30 @@ The document store uses the `/api/v1/data/{collection}/{id}` pattern for CRUD op
 #### Governed Collections
 
 Direct `/api/v1/data/` mutations are restricted to platform infrastructure collections. Governed collections (cases, investigations, tasks, memories, reputation_state, reputation_commitments, stake_resolutions, agent_activity_metadata) must use `POST /api/v1/governance/envelopes` for mutations.
+
+---
+
+## Protocol Library for Client Development
+
+Applications connecting to the g8e Gateway can use the g8e Protocol Library to construct `GovernanceEnvelope` transactions, parse `ActionReceipt` responses, and access protocol constants. The library is published as both a Go module and a Python package, both sharing the same version number as the platform binary.
+
+### Go Module
+
+```bash
+go get github.com/g8e-ai/g8e@v1.5.0
+```
+
+The Go module provides protobuf types for envelope construction and receipt parsing, SPIFFE workload identity helpers, and JSON constant registries.
+
+### Python Package
+
+```bash
+pip install g8e==1.5.0
+```
+
+The Python package provides event type constants, request context models, and HTTP header constants for gateway communication. Requires Python 3.10+.
+
+See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference, usage examples, and package contents.
 
 ---
 
@@ -743,3 +767,4 @@ curl -k https://localhost:8443/api/v1/health
 - **[MCP Protocol](../../protocol/docs/mcp.md)** - Detailed MCP protocol specification
 - **[A2A Protocol](../../protocol/docs/a2a.md)** - Detailed A2A protocol specification
 - **[Gateway Architecture](../architecture/gateway.md)** - Gateway architecture and internals
+- **[Protocol Library](../architecture/protocol.md)** - Go module and Python package API reference, constants, models, and usage examples

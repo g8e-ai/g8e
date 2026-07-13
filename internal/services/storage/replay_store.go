@@ -22,6 +22,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 )
 
 // NonceRow represents a single nonce record for export.
@@ -146,10 +147,10 @@ func (rs *SQLReplayStore) ListNonces(limit, offset int) ([]*NonceRow, error) {
 			Nonce:  row.nonce,
 			Status: row.status,
 		}
-		n.ReservedAt, _ = sqliteutil.ParseTimestamp(row.reservedAtStr)
-		n.ExpiresAt, _ = sqliteutil.ParseTimestamp(row.expiresAtStr)
+		n.ReservedAt, _ = timesvc.ParseTimestamp(row.reservedAtStr)
+		n.ExpiresAt, _ = timesvc.ParseTimestamp(row.expiresAtStr)
 		if row.usedAtStr.Valid {
-			t, _ := sqliteutil.ParseTimestamp(row.usedAtStr.String)
+			t, _ := timesvc.ParseTimestamp(row.usedAtStr.String)
 			n.UsedAt = &t
 		}
 		results = append(results, n)
@@ -172,8 +173,8 @@ func (rs *SQLReplayStore) ReserveNonce(nonce string, expiresAt time.Time) (bool,
 	}
 
 	// Attempt atomic insert - UNIQUE constraint violation indicates replay
-	reservedAt := sqliteutil.FormatTimestamp(time.Now().UTC())
-	expiresAtStr := sqliteutil.FormatTimestamp(expiresAt.UTC())
+	reservedAt := timesvc.FormatTimestamp(time.Now().UTC())
+	expiresAtStr := timesvc.FormatTimestamp(expiresAt.UTC())
 
 	_, err := rs.db.ExecWithRetry(
 		"INSERT INTO nonce_usage (nonce, reserved_at, expires_at, status) VALUES (?, ?, ?, 'reserved')",
@@ -203,7 +204,7 @@ func (rs *SQLReplayStore) ReserveNonce(nonce string, expiresAt time.Time) (bool,
 
 // FinalizeNonce marks a reserved nonce as fully consumed.
 func (rs *SQLReplayStore) FinalizeNonce(nonce string) error {
-	usedAt := sqliteutil.FormatTimestamp(time.Now().UTC())
+	usedAt := timesvc.FormatTimestamp(time.Now().UTC())
 
 	result, err := rs.db.ExecWithRetry(
 		"UPDATE nonce_usage SET used_at = ?, status = 'used' WHERE nonce = ? AND status = 'reserved'",
@@ -251,7 +252,7 @@ func (rs *SQLReplayStore) ReleaseNonce(nonce string) error {
 
 // cleanupExpiredNonces removes nonces that have expired.
 func (rs *SQLReplayStore) cleanupExpiredNonces() error {
-	now := sqliteutil.FormatTimestamp(time.Now().UTC())
+	now := timesvc.FormatTimestamp(time.Now().UTC())
 	_, err := rs.db.ExecWithRetry("DELETE FROM nonce_usage WHERE expires_at < ?", now)
 	if err != nil {
 		return fmt.Errorf("failed to delete expired nonces: %w", err)
@@ -263,7 +264,7 @@ func (rs *SQLReplayStore) cleanupExpiredNonces() error {
 // for too long (e.g., due to a crash before finalization).
 func (rs *SQLReplayStore) CleanupStaleReserved(maxReservedDuration time.Duration) error {
 	cutoff := time.Now().UTC().Add(-maxReservedDuration)
-	cutoffStr := sqliteutil.FormatTimestamp(cutoff)
+	cutoffStr := timesvc.FormatTimestamp(cutoff)
 
 	_, err := rs.db.ExecWithRetry(
 		"DELETE FROM nonce_usage WHERE status = 'reserved' AND reserved_at < ?",
@@ -278,7 +279,7 @@ func (rs *SQLReplayStore) CleanupStaleReserved(maxReservedDuration time.Duration
 // Prune removes old nonce records to prevent unbounded growth.
 func (rs *SQLReplayStore) Prune(retentionDays int) error {
 	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
-	cutoffStr := sqliteutil.FormatTimestamp(cutoff)
+	cutoffStr := timesvc.FormatTimestamp(cutoff)
 
 	_, err := rs.db.ExecWithRetry("DELETE FROM nonce_usage WHERE used_at < ?", cutoffStr)
 	if err != nil {

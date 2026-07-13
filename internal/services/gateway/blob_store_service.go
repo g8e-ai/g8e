@@ -20,6 +20,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 )
 
 // BlobStoreService provides binary blob storage with optional TTL expiration.
@@ -49,13 +50,13 @@ type BlobRecord struct {
 // Negative ttlSeconds means the blob is immediately expired (will never be returned by BlobGet).
 // An existing blob at the same namespace/id is replaced.
 func (s *BlobStoreService) BlobPut(namespace, id string, data []byte, contentType string, ttlSeconds int) error {
-	now := sqliteutil.NowTimestamp()
+	now := timesvc.NowTimestamp()
 	var expiresAt *string
 	if ttlSeconds > 0 {
-		exp := sqliteutil.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
+		exp := timesvc.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
 		expiresAt = &exp
 	} else if ttlSeconds < 0 {
-		exp := sqliteutil.FormatTimestamp(time.Now().Add(-1 * time.Second))
+		exp := timesvc.FormatTimestamp(time.Now().Add(-1 * time.Second))
 		expiresAt = &exp
 	}
 
@@ -79,13 +80,13 @@ func (s *BlobStoreService) BlobPut(namespace, id string, data []byte, contentTyp
 // Observed-state blobs are excluded from the bound freshness root and are
 // hashed separately in the observed-state commitment.
 func (s *BlobStoreService) BlobPutObserved(namespace, id string, data []byte, contentType string, ttlSeconds int) error {
-	now := sqliteutil.NowTimestamp()
+	now := timesvc.NowTimestamp()
 	var expiresAt *string
 	if ttlSeconds > 0 {
-		exp := sqliteutil.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
+		exp := timesvc.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
 		expiresAt = &exp
 	} else if ttlSeconds < 0 {
-		exp := sqliteutil.FormatTimestamp(time.Now().Add(-1 * time.Second))
+		exp := timesvc.FormatTimestamp(time.Now().Add(-1 * time.Second))
 		expiresAt = &exp
 	}
 
@@ -113,7 +114,7 @@ func (s *BlobStoreService) BlobGet(namespace, id string) ([]byte, string, bool) 
 	var contentType string
 	err := s.db.QueryRowWithRetry(
 		"SELECT data, content_type FROM blobs WHERE namespace = ? AND id = ? AND (expires_at IS NULL OR expires_at > ?)",
-		namespace, id, sqliteutil.NowTimestamp(),
+		namespace, id, timesvc.NowTimestamp(),
 	).Scan(&data, &contentType)
 	if err != nil {
 		return nil, "", false
@@ -128,12 +129,12 @@ func (s *BlobStoreService) BlobMeta(namespace, id string) (*BlobRecord, bool) {
 	var createdAtStr string
 	err := s.db.QueryRowWithRetry(
 		"SELECT id, namespace, size, content_type, created_at FROM blobs WHERE namespace = ? AND id = ? AND (expires_at IS NULL OR expires_at > ?)",
-		namespace, id, sqliteutil.NowTimestamp(),
+		namespace, id, timesvc.NowTimestamp(),
 	).Scan(&rec.ID, &rec.Namespace, &rec.Size, &rec.ContentType, &createdAtStr)
 	if err != nil {
 		return nil, false
 	}
-	t, err := sqliteutil.ParseTimestamp(createdAtStr)
+	t, err := timesvc.ParseTimestamp(createdAtStr)
 	if err != nil {
 		s.logger.Error("failed to parse blob creation time", "error", err, "timestamp", createdAtStr)
 		return nil, false
@@ -174,7 +175,7 @@ func (s *BlobStoreService) BlobDeleteNamespace(namespace string) (int64, error) 
 
 // RunMaintenance removes expired blobs from the database.
 func (s *BlobStoreService) RunMaintenance() error {
-	now := sqliteutil.NowTimestamp()
+	now := timesvc.NowTimestamp()
 	_, err := s.db.ExecWithRetry("DELETE FROM blobs WHERE expires_at IS NOT NULL AND expires_at < ?", now)
 	if err != nil {
 		return fmt.Errorf("blob_store: cleanup: %w", constants.ErrBlobStoreCleanupFailed)

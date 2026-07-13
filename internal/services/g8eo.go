@@ -32,6 +32,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/gateway"
 	"github.com/g8e-ai/g8e/internal/services/governance"
+	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
@@ -56,6 +57,7 @@ type G8eoService struct {
 
 	pubSubClient pubsub.PubSubClient
 	tlsConfig    *certs.TLSConfig
+	testKeystore *keystore.Keystore
 
 	ledger         *storage.GitLedgerService
 	historyHandler *storage.HistoryHandler
@@ -99,6 +101,14 @@ func (vs *G8eoService) SetPubSubClient(client pubsub.PubSubClient) {
 	vs.pubSubClient = client
 }
 
+// SetKeystore injects a pre-initialized keystore for testing, allowing
+// cross-platform tests to bypass OS keychain dependencies.
+func (vs *G8eoService) SetKeystore(ks *keystore.Keystore) {
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
+	vs.testKeystore = ks
+}
+
 func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.mu.Lock()
 	defer vs.mu.Unlock()
@@ -134,14 +144,24 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	if vaultKeyPath == "" {
 		vaultKeyPath = paths.Infra.VaultKeyPath
 	}
-	gatewayDB, err := gateway.OpenCanonicalDBService(dataDir, secretsDir, vs.config.VaultDir, vs.logger, false, vaultKeyPath, vs.config.VaultRequireUnlock, nil)
+	testMode := false
+	var testKs *keystore.Keystore
+	if vs.testKeystore != nil {
+		testMode = true
+		testKs = vs.testKeystore
+	}
+	gatewayDB, err := gateway.OpenCanonicalDBService(dataDir, secretsDir, vs.config.VaultDir, vs.logger, testMode, vaultKeyPath, vs.config.VaultRequireUnlock, testKs)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrGatewayDatabaseServiceNotConfigured, err)
 	}
 	vs.gatewayDB = gatewayDB
 	vs.logger.Info("Gateway database initialized (canonical state root)")
 
-	vs.secretManager, err = gateway.NewSecretManager(vs.gatewayDB.GetDB(), secretsDir, vs.logger)
+	if vs.testKeystore != nil {
+		vs.secretManager, err = gateway.NewSecretManagerWithKeystore(vs.gatewayDB.GetDB(), secretsDir, vs.logger, vs.testKeystore)
+	} else {
+		vs.secretManager, err = gateway.NewSecretManager(vs.gatewayDB.GetDB(), secretsDir, vs.logger)
+	}
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrKeyNotFound, err)
 	}

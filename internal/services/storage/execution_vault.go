@@ -25,6 +25,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/vault"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 )
 
 // ExecutionVault defines the interface for execution log and file diff storage.
@@ -240,7 +241,7 @@ func (ev *ExecutionVaultService) StoreExecution(ctx context.Context, record *mod
 
 	_, err := ev.db.ExecWithRetry(query,
 		record.ID,
-		sqliteutil.FormatTimestamp(record.TimestampUTC),
+		timesvc.FormatTimestamp(record.TimestampUTC),
 		record.Command,
 		record.ExitCode,
 		record.DurationMs,
@@ -316,7 +317,7 @@ func (ev *ExecutionVaultService) GetExecution(ctx context.Context, executionID s
 		return nil, fmt.Errorf("execution_vault: query execution: %w", err)
 	}
 
-	record.TimestampUTC, err = sqliteutil.ParseTimestamp(timestampStr)
+	record.TimestampUTC, err = timesvc.ParseTimestamp(timestampStr)
 	if err != nil {
 		ev.logger.Warn("Failed to parse execution timestamp", "raw", timestampStr, string(constants.ConnectionStateError), err)
 	}
@@ -402,7 +403,7 @@ func (ev *ExecutionVaultService) StoreFileDiff(ctx context.Context, record *mode
 
 	_, err := ev.db.ExecWithRetry(query,
 		record.ID,
-		sqliteutil.FormatTimestamp(record.TimestampUTC),
+		timesvc.FormatTimestamp(record.TimestampUTC),
 		record.FilePath,
 		record.Operation,
 		record.LedgerHashBefore,
@@ -475,7 +476,7 @@ func (ev *ExecutionVaultService) GetFileDiff(ctx context.Context, diffID string)
 	}
 
 	var parseErr error
-	record.TimestampUTC, parseErr = sqliteutil.ParseTimestamp(timestampStr)
+	record.TimestampUTC, parseErr = timesvc.ParseTimestamp(timestampStr)
 	if parseErr != nil {
 		ev.logger.Warn("Failed to parse file diff timestamp", "raw", timestampStr, string(constants.ConnectionStateError), parseErr)
 	}
@@ -572,7 +573,7 @@ func (ev *ExecutionVaultService) GetFileDiffsBySession(ctx context.Context, oper
 
 	var records []*models.FileDiffRecord
 	for _, row := range rows {
-		ts, tsErr := sqliteutil.ParseTimestamp(row.timestampStr)
+		ts, tsErr := timesvc.ParseTimestamp(row.timestampStr)
 		if tsErr != nil {
 			ev.logger.Warn("Failed to parse file diff timestamp", "raw", row.timestampStr, string(constants.ConnectionStateError), tsErr)
 		}
@@ -649,7 +650,7 @@ func (ev *ExecutionVaultService) ListExecutions(ctx context.Context, limit, offs
 
 	var records []*models.ExecutionRecord
 	for _, row := range rows {
-		row.record.TimestampUTC, _ = sqliteutil.ParseTimestamp(row.timestampStr)
+		row.record.TimestampUTC, _ = timesvc.ParseTimestamp(row.timestampStr)
 		if row.stdoutHash.Valid {
 			row.record.StdoutHash = row.stdoutHash.String
 		}
@@ -724,7 +725,7 @@ func (ev *ExecutionVaultService) ListFileDiffs(ctx context.Context, limit, offse
 
 	var records []*models.FileDiffRecord
 	for _, row := range rows {
-		row.record.TimestampUTC, _ = sqliteutil.ParseTimestamp(row.timestampStr)
+		row.record.TimestampUTC, _ = timesvc.ParseTimestamp(row.timestampStr)
 		if row.hashBefore.Valid {
 			row.record.LedgerHashBefore = row.hashBefore.String
 		}
@@ -755,7 +756,7 @@ func (ev *ExecutionVaultService) ListFileDiffs(ctx context.Context, limit, offse
 // executionVaultPrune returns a PruneFunc for retention and size-based pruning.
 func executionVaultPrune(config *ExecutionVaultConfig) sqliteutil.PruneFunc {
 	return func(ctx context.Context, db *sqliteutil.DB, logger *slog.Logger) error {
-		cutoff := sqliteutil.FormatTimestamp(time.Now().AddDate(0, 0, -config.RetentionDays))
+		cutoff := timesvc.FormatTimestamp(time.Now().AddDate(0, 0, -config.RetentionDays))
 
 		result, err := db.ExecWithRetry("DELETE FROM execution_log WHERE timestamp_utc < ?", cutoff)
 		if err != nil {

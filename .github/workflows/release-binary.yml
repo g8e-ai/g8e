@@ -27,6 +27,9 @@ jobs:
     name: Release Binary
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      version: ${{ steps.parse_version.outputs.version }}
+      tag: ${{ steps.parse_version.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -50,6 +53,22 @@ jobs:
       - name: Build all platforms
         run: make build-all
 
+      - name: Generate SHA256 checksums
+        run: |
+          cd bin
+          sha256sum g8e-* > checksums-sha256.txt
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign binaries
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          for bin in bin/g8e-*; do
+            cosign sign-blob --yes "$bin" --output-signature "$bin.sig"
+          done
+
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v3
         with:
@@ -58,6 +77,16 @@ jobs:
           body: |
             ## g8e v${{ steps.parse_version.outputs.version }}
 
+            ### Go Module
+            ```bash
+            go get github.com/g8e-ai/g8e@v${{ steps.parse_version.outputs.version }}
+            ```
+
+            ### Verify Binary Signatures
+            ```bash
+            cosign verify-blob --signature g8e-<os>-<arch>.sig g8e-<os>-<arch>
+            ```
+
             ### Changes
             See [CHANGELOG.md](https://github.com/g8e-ai/g8e/blob/main/CHANGELOG.md) for details.
           draft: false
@@ -65,3 +94,31 @@ jobs:
           generate_release_notes: true
           files: |
             bin/g8e-*
+            bin/g8e-*.sig
+            bin/checksums-sha256.txt
+
+  verify-install:
+    name: Verify Go Install (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: release
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.5'
+          cache: false
+
+      - name: Fresh go install
+        run: |
+          go install github.com/g8e-ai/g8e/cmd/g8e@v${{ needs.release.outputs.version }}
+          g8e --version
+          g8e --help
+          echo "Fresh go install verified successfully"

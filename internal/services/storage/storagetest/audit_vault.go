@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/pathutil"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
@@ -436,7 +437,7 @@ func (avs *TestSQLAuditStore) GetOperatorSession(id string) (*storage.OperatorSe
 		return nil, fmt.Errorf("%w: %w", constants.ErrAuditStoreGetSessionFailed, err)
 	}
 
-	session.CreatedAt, _ = sqliteutil.ParseTimestamp(createdAtStr)
+	session.CreatedAt, _ = timesvc.ParseTimestamp(createdAtStr)
 
 	if title.Valid {
 		session.Title = title.String
@@ -521,7 +522,7 @@ func (avs *TestSQLAuditStore) RecordEvents(events []*storage.Event) error {
 
 			_, err = stmt.Exec(
 				event.OperatorSessionID,
-				sqliteutil.FormatTimestamp(event.Timestamp),
+				timesvc.FormatTimestamp(event.Timestamp),
 				event.Type,
 				contentTextBytes,
 				event.CommandRaw,
@@ -559,7 +560,7 @@ func (avs *TestSQLAuditStore) RecordChaosEvent(event *ChaosEvent) (int64, error)
 
 	result, err := avs.db.ExecWithRetry(query,
 		event.OperatorSessionID,
-		sqliteutil.FormatTimestamp(event.Timestamp),
+		timesvc.FormatTimestamp(event.Timestamp),
 		event.ChaosID,
 		event.Category,
 		event.Outcome,
@@ -606,7 +607,7 @@ func (avs *TestSQLAuditStore) RecordChaosEvents(events []*ChaosEvent) error {
 		for _, event := range events {
 			_, err := stmt.Exec(
 				event.OperatorSessionID,
-				sqliteutil.FormatTimestamp(event.Timestamp),
+				timesvc.FormatTimestamp(event.Timestamp),
 				event.ChaosID,
 				event.Category,
 				event.Outcome,
@@ -672,7 +673,7 @@ func (avs *TestSQLAuditStore) RecordEvent(event *storage.Event) (int64, error) {
 
 		result, err := tx.Exec(query,
 			event.OperatorSessionID,
-			sqliteutil.FormatTimestamp(event.Timestamp),
+			timesvc.FormatTimestamp(event.Timestamp),
 			event.Type,
 			contentTextBytes,
 			event.CommandRaw,
@@ -754,7 +755,7 @@ func (avs *TestSQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRe
 		record.ExecutedAt.UnixMilli(),
 		record.SignerKeyID,
 		record.Signature,
-		sqliteutil.FormatTimestamp(record.Timestamp),
+		timesvc.FormatTimestamp(record.Timestamp),
 	)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordReceiptFailed, err)
@@ -799,7 +800,7 @@ func (avs *TestSQLAuditStore) GetActionReceipt(transactionID string) (*models.Ac
 	}
 
 	r.ExecutedAt = time.UnixMilli(executedAtMs)
-	r.Timestamp, _ = sqliteutil.ParseTimestamp(timestampStr)
+	r.Timestamp, _ = timesvc.ParseTimestamp(timestampStr)
 
 	return &r, nil
 }
@@ -855,7 +856,7 @@ func (avs *TestSQLAuditStore) ListActionReceipts(operatorSessionID string, limit
 	var results []*models.ActionReceiptRecord
 	for _, row := range rows {
 		row.record.ExecutedAt = time.UnixMilli(row.executedAtMs)
-		row.record.Timestamp, _ = sqliteutil.ParseTimestamp(row.timestampStr)
+		row.record.Timestamp, _ = timesvc.ParseTimestamp(row.timestampStr)
 		results = append(results, &row.record)
 	}
 
@@ -889,7 +890,7 @@ func (avs *TestSQLAuditStore) ListActionReceiptsSince(since time.Time, limit int
 		timestampStr string
 	}
 
-	rows, err := sqliteutil.MaterializeRows(avs.db, query, []interface{}{sqliteutil.FormatTimestamp(since), limit}, func(r *sql.Rows) (receiptRow, error) {
+	rows, err := sqliteutil.MaterializeRows(avs.db, query, []interface{}{timesvc.FormatTimestamp(since), limit}, func(r *sql.Rows) (receiptRow, error) {
 		var row receiptRow
 		err := r.Scan(
 			&row.record.TransactionID, &row.record.TransactionHash, &row.record.OperatorID, &row.record.OperatorSessionID,
@@ -906,7 +907,7 @@ func (avs *TestSQLAuditStore) ListActionReceiptsSince(since time.Time, limit int
 	var results []*models.ActionReceiptRecord
 	for _, row := range rows {
 		row.record.ExecutedAt = time.UnixMilli(row.executedAtMs)
-		row.record.Timestamp, _ = sqliteutil.ParseTimestamp(row.timestampStr)
+		row.record.Timestamp, _ = timesvc.ParseTimestamp(row.timestampStr)
 		results = append(results, &row.record)
 	}
 
@@ -995,7 +996,7 @@ func (avs *TestSQLAuditStore) GetEvents(operatorSessionID string, limit, offset 
 
 	var events []*storage.Event
 	for _, row := range rows {
-		row.event.Timestamp, _ = sqliteutil.ParseTimestamp(row.timestampStr)
+		row.event.Timestamp, _ = timesvc.ParseTimestamp(row.timestampStr)
 
 		if row.encryptedFlag == 1 && avs.encryptionVault.IsUnlocked() {
 			if len(row.contentTextBytes) > 0 {
@@ -1160,7 +1161,7 @@ func (avs *TestSQLAuditStore) IsGitAvailable() bool {
 // for events, orphaned sessions, and orphaned file mutations.
 func auditVaultPrune(config *TestSQLAuditStoreConfig) sqliteutil.PruneFunc {
 	return func(ctx context.Context, db *sqliteutil.DB, logger *slog.Logger) error {
-		cutoff := sqliteutil.FormatTimestamp(time.Now().AddDate(0, 0, -config.RetentionDays))
+		cutoff := timesvc.FormatTimestamp(time.Now().AddDate(0, 0, -config.RetentionDays))
 
 		// 1. Delete file mutations for old events first (satisfy FK constraints)
 		_, err := db.ExecWithRetry(`

@@ -5,8 +5,8 @@ parent: Guides
 
 # Cloudflare Tunnel Integration
 
-Last Updated: 2026-07-12
-Version: v1.4.0
+Last Updated: 2026-07-13
+Version: v1.5.0
 
 ---
 
@@ -68,7 +68,7 @@ This command:
 | `--https-port` | `8443` | Gateway HTTPS port |
 | `--config-dir` | `~/.cloudflared` | cloudflared config directory |
 | `--ca-bundle` | (none) | Path to CA bundle for origin TLS verification (see below) |
-| `--origin-server-name` | `g8e.local` | Origin server name for TLS SNI (used with `--ca-bundle`) |
+| `--origin-server-name` | (none) | Origin server name for TLS SNI (used with `--ca-bundle`) |
 | `--skip-dns` | `false` | Skip DNS routing if the CNAME already exists |
 
 ### Origin TLS Verification
@@ -190,7 +190,7 @@ curl -s https://console.g8e.ai/api/v1/health
 Expected response:
 
 ```json
-{"status":"ok","mode":"gateway","version":"v1.4.0","pid":12345,"governance_ready":true,"state_merkle_root":"..."}
+{"status":"ok","mode":"gateway","version":"v1.5.0","pid":12345,"governance_ready":true,"state_merkle_root":"..."}
 ```
 
 Open the console in a browser:
@@ -308,3 +308,10 @@ cloudflared --version
 wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -O /tmp/cloudflared.deb
 sudo dpkg -i /tmp/cloudflared.deb
 ```
+
+---
+
+## See Also
+
+- **[Lovable Frontend Integration](./lovable.md)**: Build a g8e Governance Console UI with Lovable.
+- **[Protocol Library](../architecture/protocol.md)**: Go module and Python package API reference for building g8e-compatible clients and services.

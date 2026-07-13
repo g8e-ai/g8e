@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 )
 
 // KVStoreService provides key/value storage with optional TTL expiration.
@@ -44,7 +45,7 @@ func (s *KVStoreService) KVGet(key string) (string, bool) {
 	var value string
 	err := s.db.QueryRowWithRetry(
 		"SELECT value FROM kv_store WHERE key = ? AND (expires_at IS NULL OR expires_at > ?)",
-		key, sqliteutil.NowTimestamp(),
+		key, timesvc.NowTimestamp(),
 	).Scan(&value)
 	if err != nil {
 		return "", false
@@ -54,10 +55,10 @@ func (s *KVStoreService) KVGet(key string) (string, bool) {
 
 // KVSet stores a key/value pair. ttlSeconds <= 0 means no expiration.
 func (s *KVStoreService) KVSet(key, value string, ttlSeconds int) error {
-	now := sqliteutil.NowTimestamp()
+	now := timesvc.NowTimestamp()
 	var expiresAt *string
 	if ttlSeconds > 0 {
-		exp := sqliteutil.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
+		exp := timesvc.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
 		expiresAt = &exp
 	}
 
@@ -74,10 +75,10 @@ func (s *KVStoreService) KVSet(key, value string, ttlSeconds int) error {
 // Observed-state entries are excluded from the bound freshness root and are
 // hashed separately in the observed-state commitment. ttlSeconds <= 0 means no expiration.
 func (s *KVStoreService) KVSetObserved(key, value string, ttlSeconds int) error {
-	now := sqliteutil.NowTimestamp()
+	now := timesvc.NowTimestamp()
 	var expiresAt *string
 	if ttlSeconds > 0 {
-		exp := sqliteutil.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
+		exp := timesvc.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
 		expiresAt = &exp
 	}
 
@@ -109,7 +110,7 @@ func (s *KVStoreService) KVDeletePattern(pattern string) (int64, error) {
 func (s *KVStoreService) KVKeys(pattern string) ([]string, error) {
 	keys, err := sqliteutil.MaterializeRows(s.db,
 		"SELECT key FROM kv_store WHERE key GLOB ? AND (expires_at IS NULL OR expires_at > ?)",
-		[]interface{}{pattern, sqliteutil.NowTimestamp()},
+		[]interface{}{pattern, timesvc.NowTimestamp()},
 		func(r *sql.Rows) (string, error) {
 			var k string
 			if err := r.Scan(&k); err != nil {
@@ -133,7 +134,7 @@ func (s *KVStoreService) KVScan(pattern string, cursor, count int) (int, []strin
 	// Fetch count+1 to detect whether a next page exists
 	keys, err := sqliteutil.MaterializeRows(s.db,
 		"SELECT key FROM kv_store WHERE key GLOB ? AND (expires_at IS NULL OR expires_at > ?) ORDER BY key LIMIT ? OFFSET ?",
-		[]interface{}{pattern, sqliteutil.NowTimestamp(), count + 1, cursor},
+		[]interface{}{pattern, timesvc.NowTimestamp(), count + 1, cursor},
 		func(r *sql.Rows) (string, error) {
 			var k string
 			if err := r.Scan(&k); err != nil {
@@ -169,7 +170,7 @@ func (s *KVStoreService) KVTTL(key string) int {
 	if !expiresAt.Valid {
 		return -1
 	}
-	exp, err := time.Parse(time.RFC3339Nano, expiresAt.String)
+	exp, err := timesvc.ParseTimestamp(expiresAt.String)
 	if err != nil {
 		return -2
 	}
@@ -182,7 +183,7 @@ func (s *KVStoreService) KVTTL(key string) int {
 
 // KVExpire sets a TTL on an existing key. Returns false if key not found.
 func (s *KVStoreService) KVExpire(key string, ttlSeconds int) bool {
-	exp := sqliteutil.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
+	exp := timesvc.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
 	result, err := s.db.ExecWithRetry(
 		"UPDATE kv_store SET expires_at = ? WHERE key = ?", exp, key,
 	)
@@ -195,7 +196,7 @@ func (s *KVStoreService) KVExpire(key string, ttlSeconds int) bool {
 
 // RunMaintenance removes expired KV entries from the database.
 func (s *KVStoreService) RunMaintenance() error {
-	now := sqliteutil.NowTimestamp()
+	now := timesvc.NowTimestamp()
 	_, err := s.db.ExecWithRetry("DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?", now)
 	if err != nil {
 		return fmt.Errorf("failed to cleanup expired kv entries: %w", err)

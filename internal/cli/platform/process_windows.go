@@ -89,7 +89,7 @@ func (pm *ProcessManager) isProcessRunning(pid int) bool {
 	if err != nil {
 		return false
 	}
-	defer checker.CloseHandle(handle)
+	defer func() { _ = checker.CloseHandle(handle) }()
 
 	var exitCode uint32
 	err = checker.GetExitCodeProcess(handle, &exitCode)

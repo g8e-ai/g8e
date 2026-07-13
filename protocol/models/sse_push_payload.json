@@ -1,0 +1,71 @@
+{
+  "_comment": "Canonical SSE push payload and event row shapes. SSEPushPayload is the wire envelope for pushing SSE events from the gateway to CLI clients. SSEEventRow is the persisted row in the sse_events table. Serialized from SSEPushPayload and SSEEventRow (internal/models/gateway.go).",
+
+  "_authority": "client (gateway)",
+  "_consumers": ["cli"],
+
+  "sse_push_payload": {
+    "_description": "Wire envelope for SSE push events. Producers set exactly one of web_session_id, cli_session_id, or user_id as the routing key.",
+
+    "web_session_id": {
+      "type": "string",
+      "required": true,
+      "description": "Web session ID for routing. Empty when routing by cli_session_id or user_id."
+    },
+    "cli_session_id": {
+      "type": "string",
+      "required": true,
+      "description": "CLI session ID for routing. Empty when routing by web_session_id or user_id."
+    },
+    "user_id": {
+      "type": "string",
+      "required": true,
+      "description": "User ID for routing. Empty when routing by session ID."
+    },
+    "event": {
+      "type": "object",
+      "required": true,
+      "description": "Typed event JSON payload"
+    }
+  },
+
+  "sse_event_row": {
+    "_description": "A single row from the sse_events table. Exactly one of the three routing ID fields is populated per row.",
+
+    "id": {
+      "type": "integer",
+      "required": true,
+      "description": "Row ID (auto-increment)"
+    },
+    "web_session_id": {
+      "type": "string",
+      "required": false,
+      "description": "Web session ID. Omitted when not set."
+    },
+    "cli_session_id": {
+      "type": "string",
+      "required": false,
+      "description": "CLI session ID. Omitted when not set."
+    },
+    "user_id": {
+      "type": "string",
+      "required": false,
+      "description": "User ID. Omitted when not set."
+    },
+    "event_type": {
+      "type": "string",
+      "required": true,
+      "description": "Event type identifier"
+    },
+    "payload": {
+      "type": "string",
+      "required": true,
+      "description": "Event payload as JSON string"
+    },
+    "created_at": {
+      "type": "string",
+      "required": true,
+      "description": "Row creation timestamp"
+    }
+  }
+}

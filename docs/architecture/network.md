@@ -1,7 +1,7 @@
 # Network Architecture
 
-Last Updated: 2026-07-12
-Version: v1.4.0
+Last Updated: 2026-07-13
+Version: v1.5.0
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
 
@@ -52,12 +52,12 @@ Each system component receives a SPIFFE ID, embedded as a Uniform Resource Ident
 
 | Workload Type | SPIFFE ID Format | Reference |
 | :--- | :--- | :--- |
-| **g8e Operator** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` | `protocol/workload_identity.go:37-39` |
-| **CLI / BYO Client** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` | `protocol/workload_identity.go:48-50` |
-| **Application / Agent** | `spiffe://g8e.local/app/<operator_id>` | `protocol/workload_identity.go:59-61` |
-| **User (Human Delegator)** | `spiffe://g8e.local/user/<user_id>` | `protocol/workload_identity.go:70-72` |
-| **g8e Gateway** | `spiffe://g8e.local/hub/operator-listen` | `protocol/workload_identity.go:81-83` |
-| **Gateway Peer** | `spiffe://g8e.local/gateway/<gateway_id>` | `protocol/workload_identity.go:165-167` |
+| **g8e Operator** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` | `protocol/workload_identity.go` |
+| **CLI / BYO Client** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` | `protocol/workload_identity.go` |
+| **Application / Agent** | `spiffe://g8e.local/app/<operator_id>` | `protocol/workload_identity.go` |
+| **User (Human Delegator)** | `spiffe://g8e.local/user/<user_id>` | `protocol/workload_identity.go` |
+| **g8e Gateway** | `spiffe://g8e.local/hub/operator-listen` | `protocol/workload_identity.go` |
+| **Gateway Peer** | `spiffe://g8e.local/gateway/<gateway_id>` | `protocol/workload_identity.go` |
 
 ---
 
@@ -104,7 +104,7 @@ Since the g8e Gateway acts as a self-signed CA, clients must explicitly trust th
 
 ### No-DNS / Direct IP Configuration
 
-The platform supports setup without requiring `/etc/hosts` changes or DNS configuration. If `g8e.local` resolution fails, the system automatically falls back to direct IP access using the machine's external interface IP. This is implemented in `internal/cli/cmd/mcp.go:279-341`.
+The platform supports setup without requiring `/etc/hosts` changes or DNS configuration. If `g8e.local` resolution fails, the system automatically falls back to direct IP access using the machine's external interface IP. This is implemented in `internal/cli/cmd/mcp.go`.
 
 ### Windows Certificate Store Enrollment
 
@@ -127,13 +127,13 @@ Default ports are defined in `protocol/constants/ports.json`:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **HTTP (Bootstrap)** | `8080` (plain HTTP) | No TLS | Health checks, trust establishment scripts, CA discovery, enrollment, deploy scripts, and node binary distribution. All other requests are redirected to HTTPS. |
-| **HTTPS (Merged API + Console)** | `8443` (hybrid TLS) | mTLS / WebSession / Public | The primary execution boundary. Includes the g8e Console, browser WebAuthn endpoints, CA bundle and CRL endpoints, and all mTLS-guarded operator API and MCP routes. |
+| **HTTP (Bootstrap)** | `8080` (plain HTTP) | No TLS | Health checks, state endpoint, trust establishment scripts, CA discovery, enrollment, deploy scripts, and node binary distribution. Unregistered paths return 404. |
+| **HTTPS (Merged API + Console)** | `8443` (hybrid TLS) | mTLS / WebSession / JWT / Public | The primary execution boundary. Includes the g8e Console, browser WebAuthn endpoints, CA bundle and CRL endpoints, all mTLS-guarded operator API and MCP routes, and JWT-authenticated A2A ingress when JWKS is configured. |
 
 ### Port Constraints
 
-- **HTTP Surface** (`8080`): Serves plain HTTP for health checks, state endpoint, trust scripts (`/web-cert.sh`, `/web-cert.ps1`), CA bundle and fingerprint discovery, enrollment endpoints, deploy scripts, and node binary distribution. All other requests are redirected to HTTPS via a permanent 301 redirect.
-- **HTTPS Surface** (`8443`): Uses `tls.VerifyClientCertIfGiven`, overriding the stricter `tls.RequireAndVerifyClientCert` default from `PKIAuthority.TLSConfig()`. Operates with application-layer mTLS validation. All governed execution endpoints and operator routes require a verified SPIFFE identity via client certificate, while public routes (the Console SPA, static assets, CA bundle, CRL, and WebAuthn browser endpoints) are accessible directly.
+- **HTTP Surface** (`8080`): Serves plain HTTP for health checks, state endpoint, trust scripts (`/web-cert.sh`, `/web-cert.ps1`), CA bundle and fingerprint discovery, enrollment endpoints, deploy scripts, and node binary distribution. Unregistered paths return 404; there is no redirect to HTTPS.
+- **HTTPS Surface** (`8443`): Uses `tls.VerifyClientCertIfGiven`, overriding the stricter `tls.RequireAndVerifyClientCert` default from `PKIAuthority.TLSConfig()`. Operates with application-layer mTLS validation. All governed execution endpoints and operator routes require a verified SPIFFE identity via client certificate, while public routes (the Console SPA, static assets, CA bundle, CRL, and WebAuthn browser endpoints) are accessible directly. When JWKS is configured, MCP and A2A endpoints accept JWT authentication as an alternative to mTLS for BYO clients.
 - **Collision Prevention**: The gateway fails startup if multiple logical surfaces are assigned to the same port, ensuring no downgrade of the mTLS execution boundary.
 
 ---
@@ -156,7 +156,7 @@ The platform defines a dedicated gateway peer PKI tier for federated gateway-to-
 
 ### No-DNS Fallback
 
-When `g8e.local` does not resolve via system DNS, the CLI falls back to the machine's external interface IP. This fallback is implemented in `internal/cli/cmd/mcp.go` using `network.GetExternalInterfaceIP()` from `internal/services/network/identity.go`.
+When `g8e.local` does not resolve via system DNS, the CLI falls back to the machine's external interface IP. This fallback is implemented in `internal/cli/cmd/mcp.go` using the network identity detection in `internal/services/network/identity.go`.
 
 ### Local Operator Delivery
 
@@ -174,7 +174,7 @@ The g8e Operator uses dial-out WebSocket pub/sub connections with zero inbound p
 
 ### WebSocket Pub/Sub
 
-The gateway provides a WebSocket fan-out via `/api/v1/pubsub/stream`, authenticated by `WebSocketAuth` middleware. The channel naming convention is `cmd:<operator_id>:<operator_session_id>` for commands and `results:<operator_id>:<operator_session_id>` for results. All channels require mTLS authentication.
+The gateway provides a WebSocket fan-out via `/api/v1/pubsub/stream`, authenticated by mTLS middleware. The channel naming convention is `cmd:<operator_id>:<operator_session_id>` for commands and `results:<operator_id>:<operator_session_id>` for results. All channels require mTLS authentication, and topic ACLs enforce that subscribers can only subscribe to channels matching their mTLS workload identity.
 
 ### Server-Sent Events (SSE)
 
@@ -184,6 +184,7 @@ The gateway provides real-time event streaming from app workloads to browser and
 
 The platform provides zero-config ingress for agentic CLI coding tools through:
 - **MCP stdio proxy**: Bridges stdio MCP transport to the gateway mTLS HTTPS endpoint, handling L3 approval SSE notifications and browser opening.
+- **A2A protocol**: Agent-to-Agent execution via `/api/v1/a2a/call`, supporting JWT authentication when JWKS is configured for BYO client integration.
 
 ---
 
