@@ -287,7 +287,7 @@ The protocol defines canonical event types in `../../protocol/constants/events.j
 - `PlatformConsoleLogConnectedConfirmed`, `PlatformConsoleLogEntryReceived`
 - `PlatformExternalServiceConfigured`
 - `PlatformNotification`
-- `PlatformSentinelModeChanged`
+- `PlatformVaultModeChanged`
 - `PlatformSseConnectionClosed`, `PlatformSseConnectionError`, `PlatformSseConnectionEstablished`, `PlatformSseConnectionFailed`, `PlatformSseConnectionOpened`, `PlatformSseKeepaliveSent`
 - `PlatformTelemetryAuditLogged`, `PlatformTelemetryErrorLogged`, `PlatformTelemetryHealthReported`, `PlatformTelemetryPerformanceRecorded`
 - `PlatformTerminalClosed`, `PlatformTerminalMaximized`, `PlatformTerminalMinimized`, `PlatformTerminalOpened`
@@ -384,8 +384,8 @@ CLI flags:
 - `--vault-dir <dir>`: Directory for vault data (default: `.g8e/secrets/vault`)
 - `--vault-key <path>`: Path to vault private key (default: auto-generated in vault dir)
 - `--vault-require-unlock`: Require vault to be unlocked at startup (fail if vault cannot be unlocked)
-- `--http-port <port>`: HTTP port for bootstrap and MCP routes (default: 8080)
-- `--https-port <port>`: HTTPS port for mTLS API and public surface (default: 8443)
+- `--http-port <port>`: HTTP port for bootstrap and MCP routes (flag default: 0, auto-resolved from `constants.Ports`; effective default: 8080)
+- `--https-port <port>`: HTTPS port for mTLS API and public surface (flag default: 0, auto-resolved from `constants.Ports`; effective default: 8443)
 - `--passkey-rp-id <id>`: RP ID for passkey operations (default: localhost)
 - `--passkey-rp-name <name>`: RP Name for passkey operations (default: g8e)
 - `--rate-limit-rps <n>`: Gateway requests per second limit (set to 0 to disable)

@@ -5,6 +5,7 @@ title: MCP Protocol
 # MCP Protocol
 
 Last Updated: 2026-07-13
+Version: v1.5.0
 
 The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer governance verification sequence (L1Doctrine/L2Consensus/L3Notary/L4Warden/L5Actuator), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
@@ -251,7 +252,7 @@ The downstream's `tools/list` is passed through unmodified so the AI sees the re
 MCP clients connect to the gateway via:
 
 - **JSON-RPC 2.0**: Standard JSON-RPC over HTTP to gateway endpoints
-- **Authentication**: mTLS certificate (RequireAndVerifyClientCert) for MCP ingress routes
+- **Authentication**: The `/mcp` endpoint is accessible on both the HTTP port (8080, no mTLS, loopback origin protection) and the HTTPS port (8443, mTLS with RequireAndVerifyClientCert). Production deployments should use the HTTPS port for external clients; the HTTP port is intended for local loopback use.
 
 ### Tool Invocation
 
@@ -401,7 +402,7 @@ The Operator runs in gateway mode with three posture options:
 
 ### Port Configuration
 
-Default ports (configurable via flags or paths.json):
+Default ports (configurable via flags or `constants.Ports`):
 
 | Port | Purpose | Auth |
 |---|---|---|
@@ -495,7 +496,7 @@ To add a new native tool to the Operator, follow this sequence:
    - `Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error)`: Implements the tool logic
 3. **Add input validation**: If the tool accepts user input, add validation logic in `internal/services/mcp/validation.go` following the fail-closed security principles. The validation framework enforces SQL query validation, URL validation, protocol validation, and request forgery protection.
 4. **Register tool**: Add your tool to the tools list in `RegisterNativeTools()` in `internal/services/mcp/native_tool_registry.go`. The registry validates tool name format and input schema at registration time.
-5. **Test**: Add unit tests in `internal/services/mcp/native_handlers_test.go` and validation tests in `internal/services/mcp/validation_test.go`. Use table-driven tests for deterministic behavior enumeration.
+5. **Test**: Add unit tests in `internal/services/mcp/native_handlers_test.go`, validation tests in `internal/services/mcp/validation_test.go`, and registry tests in `internal/services/mcp/native_tool_registry_test.go` (tool registration, interface compliance, duplicate detection). Use table-driven tests for deterministic behavior enumeration.
 
 The tool automatically becomes available via the MCP tools/list endpoint when no downstream MCP server is configured. The registry performs runtime validation of tool names (must be valid identifiers) and input schemas (must have type "object" with valid properties structure).
 

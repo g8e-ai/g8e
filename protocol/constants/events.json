@@ -952,8 +952,8 @@
       "_go_const": "EventPlatformNotification",
       "value": "g8e.v1.platform.notification"
     },
-    "PlatformSentinelModeChanged": {
-      "_go_const": "EventPlatformSentinelModeChanged",
+    "PlatformVaultModeChanged": {
+      "_go_const": "EventPlatformVaultModeChanged",
       "value": "g8e.v1.platform.sentinel.mode.changed"
     },
     "PlatformSseConnectionClosed": {

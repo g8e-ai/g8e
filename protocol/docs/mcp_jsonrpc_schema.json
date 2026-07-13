@@ -59,7 +59,7 @@
       "type": "object"
     },
     "InitializeResult": {
-      "description": "The server's response to an initialize request. The gateway echoes the client's requested protocolVersion, or defaults to 2025-06-18. Server info is name='g8e-gateway', version='1.0'.",
+      "description": "The server's response to an initialize request. The gateway echoes the client's requested protocolVersion, or defaults to 2025-06-18. Server info is name='g8e-gateway', version='1.0'. Note: serverInfo.version is the MCP server implementation version (mcpServerVersion constant), intentionally separate from the g8e platform version (currently v1.5.0).",
       "properties": {
         "protocolVersion": {
           "type": "string",

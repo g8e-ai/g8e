@@ -4,8 +4,8 @@
 ## Table of Contents
 
 - [g8e/pubsub/v1/pubsub.proto](#g8e_pubsub_v1_pubsub-proto)
-    - [PubSubMessage](#g8e-pubsub-v1-PubSubMessage)
     - [PubSubEvent](#g8e-pubsub-v1-PubSubEvent)
+    - [PubSubMessage](#g8e-pubsub-v1-PubSubMessage)
   
 - [Scalar Value Types](#scalar-value-types)
 
@@ -15,25 +15,6 @@
 <p align="right"><a href="#top">Top</a></p>
 
 ## g8e/pubsub/v1/pubsub.proto
-
-
-
-<a name="g8e-pubsub-v1-PubSubMessage"></a>
-
-### PubSubMessage
-PubSubMessage is the client-to-server WebSocket frame for pub/sub operations.
-Clients send this message to subscribe, unsubscribe, or publish on a channel.
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| action | [string](#string) |  | Operation to perform: &#34;subscribe&#34;, &#34;psubscribe&#34;, &#34;unsubscribe&#34;, or &#34;publish&#34;. |
-| channel | [string](#string) |  | Target channel name. Follows the convention &#34;{prefix}:{operator_id}:{session_id}&#34;. |
-| data | [bytes](#bytes) |  | Payload bytes for publish actions. Empty for subscribe/unsubscribe. |
-
-
-
-
 
 
 
@@ -52,6 +33,22 @@ The broker emits events for message delivery, subscription acknowledgments, and 
 | data | [bytes](#bytes) |  | Message payload for message/pmessage events. Empty for acknowledgment events. |
 
 
+
+
+
+
+<a name="g8e-pubsub-v1-PubSubMessage"></a>
+
+### PubSubMessage
+PubSubMessage is the client-to-server WebSocket frame for pub/sub operations.
+Clients send this message to subscribe, unsubscribe, or publish on a channel.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| action | [string](#string) |  | Operation to perform: &#34;subscribe&#34;, &#34;psubscribe&#34;, &#34;unsubscribe&#34;, or &#34;publish&#34;. |
+| channel | [string](#string) |  | Target channel name. Follows the convention &#34;{prefix}:{operator_id}:{session_id}&#34;. |
+| data | [bytes](#bytes) |  | Payload bytes for publish actions. Empty for subscribe/unsubscribe. |
 
 
 
