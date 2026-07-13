@@ -1,9 +1,9 @@
 # g8e Scripts
 
-Last Updated: 2026-07-12
+Last Updated: 2026-07-13
 Version: v1.5.0
 
-g8e provides platform-specific bootstrap scripts for local development and gateway-served deploy scripts for remote operator installation. The `g8e demos` CLI also supports air-gapped image export and import for demo environments.
+g8e provides platform-specific bootstrap scripts for local development, gateway-served deploy scripts for remote operator installation, and smoke test scripts that verify SDK importability in clean environments. The `g8e demos` CLI also supports air-gapped image export and import for demo environments.
 
 ## Overview
 
@@ -12,6 +12,8 @@ g8e provides platform-specific bootstrap scripts for local development and gatew
 | Dev bootstrap | `linux-setup.sh` | Fresh-clone to working binary on Linux |
 | Dev bootstrap | `macos-setup.sh` | Fresh-clone to working binary on macOS |
 | Dev bootstrap | `windows-setup.ps1` | Fresh-clone to working binary on Windows |
+| Smoke test | `smoke-test-go.sh` | Verifies the Go module imports in a clean project |
+| Smoke test | `smoke-test-python.sh` | Verifies the Python package installs and imports in a clean venv |
 | Remote deploy | `g8e-deploy.sh` | Served by gateway; downloads binary on Linux/macOS hosts |
 | Remote deploy | `g8e-deploy.ps1` | Served by gateway; downloads binary on Windows hosts |
 | Air-gapped deploy | `g8e demos` CLI | Pull, export, import, and list Docker images for air-gapped demo deployments |
@@ -28,10 +30,9 @@ After the script completes, open a new terminal or source your profile and verif
 
 ### What Each Script Does
 
-1. **Validates dependencies**: Checks for `make` and `go`, and verifies the Go version meets the minimum required version (currently 1.26).
-2. **Installs missing tooling**: Prompts interactively and installs via the platform-appropriate package manager (`apt-get`, `dnf`, `pacman`, `zypper`, `brew`, `winget`, or `choco`).
-3. **Builds the binary**: Runs `make build` to produce the `g8e` binary.
-4. **Adds to PATH**: Adds the repository root to the shell profile or Windows user PATH so `g8e` is available in new terminal sessions.
+1. **Validates and installs dependencies**: Checks for `make` and `go`, verifies the Go version meets the minimum required version (currently 1.26), and prompts interactively to install missing tooling via the platform-appropriate package manager (`apt-get`, `dnf`, `pacman`, `zypper`, `brew`, `winget`, or `choco`).
+2. **Builds the binary**: Runs `make build` to produce the `g8e` binary.
+3. **Adds to PATH**: Adds the repository root to the shell profile or Windows user PATH so `g8e` is available in new terminal sessions.
 
 ### Requirements
 
@@ -40,6 +41,19 @@ After the script completes, open a new terminal or source your profile and verif
 - **Make**: validated by the scripts; installed if missing.
 - **Homebrew**: required on macOS for automatic dependency installation.
 - **winget or Chocolatey**: required on Windows for automatic dependency installation.
+
+## Smoke Test Scripts
+
+Two smoke test scripts verify that the published Go and Python packages work in clean environments, mirroring the README quickstart. CI runs both on every pull request.
+
+### Usage
+
+Run `bash scripts/smoke-test-go.sh` to verify the Go SDK and `bash scripts/smoke-test-python.sh` to verify the Python package. Both scripts create isolated temporary environments, import public packages, and clean up on exit.
+
+### What Each Script Does
+
+- **`smoke-test-go.sh`**: Creates a temporary Go module, adds a replace directive pointing at the local repository, imports the protocol package, and builds a minimal binary.
+- **`smoke-test-python.sh`**: Creates a clean virtual environment, installs the Python package in editable mode, verifies README imports and example scripts, then removes the environment.
 
 ## Remote Deploy Scripts (Gateway-Served)
 
@@ -71,4 +85,5 @@ See [Demos README](../../demos/README.md#air-gapped-deployment) for the full air
 - [Developer Guide](../devs/devs.md)
 - [Build Gateway](../guides/build_gateway.md)
 - [Build Operator](../guides/build_operator.md)
+- [Air Gap Guide](../guides/air_gap.md)
 - [Demos README](../../demos/README.md)

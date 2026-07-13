@@ -5,7 +5,7 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-07-12
+Last Updated: 2026-07-13
 Version: v1.5.0
 
 ---
@@ -259,7 +259,7 @@ curl -X POST https://localhost:8443/api/v1/governance/envelopes \
   -d @envelope.json
 ```
 
-The envelope `id` must match the deterministic `transaction_hash` computed from critical envelope fields (action_type, target_resource, payload, state_merkle_root, nonce, expires_at, intent_data, requestor_user_id, acting_app_id). The Gateway rejects envelopes with mismatched IDs.
+The envelope `id` must match the deterministic transaction hash computed from critical envelope fields. The Gateway rejects envelopes with mismatched IDs.
 
 ---
 
@@ -282,7 +282,7 @@ wscat -c wss://localhost:8443/api/v1/pubsub/stream \
 
 #### Subscribe Protocol
 
-The WebSocket pub/sub protocol uses protobuf-encoded `PubSubMessage` frames. To subscribe, send a message with the `subscribe` action and the desired channel name. The broker confirms with a `subscribed` acknowledgment frame before delivering any messages.
+To subscribe, send a message with the `subscribe` action and the desired channel name. The broker confirms with a `subscribed` acknowledgment frame before delivering any messages.
 
 ---
 
@@ -346,28 +346,7 @@ Applications connecting to the g8e Gateway can use the g8e Protocol Library to c
 go get github.com/g8e-ai/g8e@v1.5.0
 ```
 
-Import the protobuf types for envelope construction and receipt parsing:
-
-```go
-import (
-    commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-    operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
-    "github.com/g8e-ai/g8e/protocol"
-)
-
-// Construct an envelope
-envelope := &commonv1.GovernanceEnvelope{
-    EventType:       "g8e.v1.operator.command.requested",
-    ActionType:      "EXECUTE_BASH",
-    OperatorId:      "op-456",
-    OperatorSessionId: "session-789",
-}
-
-// Generate SPIFFE workload identity for mTLS
-wid := protocol.NewWorkloadIdentity()
-cliSPIFFE := wid.CLISPIFFEID("user-123", "session-789")
-// spiffe://g8e.local/cli/user-123/session-789
-```
+The Go module provides protobuf types for envelope construction and receipt parsing, SPIFFE workload identity helpers, and JSON constant registries.
 
 ### Python Package
 
@@ -375,19 +354,9 @@ cliSPIFFE := wid.CLISPIFFEID("user-123", "session-789")
 pip install g8e==1.5.0
 ```
 
-```python
-from g8e.constants import EVENTS, ComponentName, WEB_SESSION_ID_HEADER
-from g8e.enums import EventType
-from g8e.models import RequestContext
+The Python package provides event type constants, request context models, and HTTP header constants for gateway communication. Requires Python 3.10+.
 
-# Access event type constants for envelope construction
-print(EventType.OPERATOR_COMMAND_REQUESTED)  # "g8e.v1.operator.command.requested"
-
-# Build HTTP headers for gateway communication
-headers = {WEB_SESSION_ID_HEADER: "web-session-xyz"}
-```
-
-Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference and usage examples.
+See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference, usage examples, and package contents.
 
 ---
 

@@ -5,16 +5,16 @@ parent: Guides
 
 # Build a g8e Gateway
 
-Last Updated: 2026-07-12
+Last Updated: 2026-07-13
 Version: v1.5.0
 
 ---
 
 ## Overview
 
-A g8e-compatible g8e Gateway implements the central Policy Decision Point (PDP) of the platform. It provides PKI management, persistence, messaging, admission APIs, and protocol translation for MCP/A2A requests.
+A g8e Gateway implements the central Policy Decision Point (PDP) of the platform. It provides PKI management, persistence, messaging, admission APIs, and protocol translation for MCP/A2A requests.
 
-The reference implementation is the g8e Node running in gateway mode. The same g8e Node operates in two modes: g8e Operator mode (connects to a remote gateway) and g8e Gateway mode (acts as the platform's central persistence and pub/sub broker). Custom gateway implementations must implement the same protocol contracts and invariants.
+The reference implementation is the g8e binary file running in gateway mode. The same g8e binary file operates in two modes: g8e Operator mode (connects to a remote gateway) and g8e Gateway mode (acts as the platform's central persistence and pub/sub broker). Custom gateway implementations must implement the same protocol contracts and invariants.
 
 ---
 
@@ -32,25 +32,25 @@ The reference implementation is the g8e Node running in gateway mode. The same g
 
 ### Build from Source
 
-Clone the repository and build the g8e Node:
+Clone the repository and build the g8e binary file:
 
 ```bash
 git clone https://github.com/g8e-ai/g8e.git && cd g8e
 make build
 ```
 
-This produces the `g8e` g8e Node in the repository root and platform-specific binaries in the `bin/` directory. All dependencies are resolved at build time; the compiled binary is statically linked (`CGO_ENABLED=0`) and has zero runtime dependencies. No Go toolchain, OpenSSL, or other external tools are needed on the target host.
+This produces the `g8e` binary in the repository root and platform-specific binaries in the `bin/` directory. All dependencies are resolved at build time; the compiled binary is statically linked (`CGO_ENABLED=0`) and has zero runtime dependencies. No Go toolchain, OpenSSL, or other external tools are needed on the target host.
 
 ### Build Targets
 
 The Makefile provides several build targets:
 
-- `make build` - Builds the g8e Node for the current platform.
-- `make build-all` - Builds the g8e Node for all platforms (linux, windows, darwin).
-- `make build-linux` - Builds g8e Node for Linux (amd64, arm64, 386).
-- `make build-windows` - Builds g8e Node for Windows (amd64, arm64).
-- `make build-darwin` - Builds g8e Node for Darwin (amd64, arm64).
-- `make build-compressed` - Builds g8e Node then compresses with UPX (requires UPX installed).
+- `make build` - Builds the g8e binary file for the current platform.
+- `make build-all` - Builds the g8e binary file for all platforms (linux, windows, darwin).
+- `make build-linux` - Builds g8e binary file for Linux (amd64, arm64, 386).
+- `make build-windows` - Builds g8e binary file for Windows (amd64, arm64).
+- `make build-darwin` - Builds g8e binary file for Darwin (amd64, arm64).
+- `make build-compressed` - Builds g8e binary file then compresses with UPX (requires UPX installed).
 - `make clean` - Removes compiled g8e Nodes and test artifacts.
 
 ### Build in Docker (no local Go required)
@@ -125,7 +125,7 @@ To start the gateway, use the CLI gateway command:
 - `--pki-dir <dir>` - Directory for TLS certificates (default: .g8e/pki)
 - `--secrets-dir <dir>` - Directory for platform secrets (default: .g8e/secrets)
 - `--vault-dir <dir>` - Directory for vault data (default: .g8e/vault)
-- `--vault-key <path>` - Path to vault private key (default: .g8e/secrets/vault.key)
+- `--vault-key <path>` - Path to vault private key (default: .g8e/secrets/key)
 - `--vault-require-unlock` - Require vault to be unlocked at startup (fail if vault cannot be unlocked)
 - `--passkey-rp-id <id>` - RP ID for passkey operations (default: localhost)
 - `--passkey-rp-name <name>` - RP Name for passkey operations (default: g8e)
@@ -157,24 +157,9 @@ The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to yo
 go get github.com/g8e-ai/g8e@v1.5.0
 ```
 
-Import the protobuf types and SPIFFE workload identity helpers:
+Import the protobuf types and SPIFFE workload identity helpers from the Go module. The package provides governance envelope definitions, the Operator gRPC service, pub/sub message types, and workload identity helpers for SPIFFE URI SAN generation and validation across all identity types (Operator, CLI, App, User, Hub, GatewayPeer).
 
-```go
-import (
-    commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-    operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
-    pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
-    "github.com/g8e-ai/g8e/protocol"
-)
-```
-
-The Go package provides:
-- **`protocol/proto/g8e/common/v1`**: `GovernanceEnvelope`, `GovernanceMetadata`, `L1Metadata`, `L2Metadata` (with `L2Vote`), `L3Metadata` (with `L3Proof`), `Component` enum
-- **`protocol/proto/g8e/operator/v1`**: `OperatorService` gRPC service definition, `CommandRequested`, `ActionReceipt`, and all typed payload/result messages
-- **`protocol/proto/g8e/pubsub/v1`**: `PubSubMessage`, `PubSubEvent` for WebSocket pub/sub broker implementation
-- **`protocol`**: `WorkloadIdentity` for SPIFFE URI SAN generation and validation across all identity types (Operator, CLI, App, User, Hub, GatewayPeer)
-
-See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference, and `protocol/examples/` for complete Go example programs.
+See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference and example programs.
 
 ### Python Package
 
@@ -190,7 +175,7 @@ The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dyn
 
 ## Custom Gateway Implementation
 
-To build a custom g8e-compatible g8e Gateway, your implementation must satisfy the following protocol contracts.
+To build a custom g8e-compatible gateway, your implementation must satisfy the following protocol contracts.
 
 ### Required Capabilities
 
@@ -303,7 +288,7 @@ The GovernanceEnvelope schema is defined in the protocol protobuf files. Your im
 2. **Implement the typed payload validation** defined in the protocol schemas.
 3. **Support the canonical request payload mappings** for all first-class event types.
 
-Refer to `protocol/proto/g8e/` for the canonical schema definitions.
+Refer to the [Protocol Library documentation](../architecture/protocol.md) for the canonical schema definitions.
 
 ---
 
@@ -338,7 +323,7 @@ For comprehensive testing including all unit and integration tests, use:
 make test
 ```
 
-For CI-quality testing with coverage enforcement (75% threshold):
+For the full CI pipeline (lint, vulnerability scanning, proto verification, and tests with 75% coverage enforcement):
 
 ```bash
 make ci
@@ -466,5 +451,5 @@ Requires `cloudflared` installed and a Cloudflare account with a registered doma
 ## Next Steps
 
 - **[Connect Apps to Gateway](connect_apps_to_gateway.md)** - Connect to, authenticate, use, maintain, and pull reports from a Gateway.
-- **[Build Operator](build_operator.md)** - Build a custom g8e-compatible g8e Operator.
+- **[Build Operator](build_operator.md)** - Build a custom g8e-compatible Operator.
 - **[Protocol Library](../architecture/protocol.md)** - Go module and Python package API reference, constants, models, and usage examples.

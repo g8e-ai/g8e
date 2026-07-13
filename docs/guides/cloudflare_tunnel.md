@@ -5,7 +5,7 @@ parent: Guides
 
 # Cloudflare Tunnel Integration
 
-Last Updated: 2026-07-12
+Last Updated: 2026-07-13
 Version: v1.5.0
 
 ---
@@ -68,7 +68,7 @@ This command:
 | `--https-port` | `8443` | Gateway HTTPS port |
 | `--config-dir` | `~/.cloudflared` | cloudflared config directory |
 | `--ca-bundle` | (none) | Path to CA bundle for origin TLS verification (see below) |
-| `--origin-server-name` | `g8e.local` | Origin server name for TLS SNI (used with `--ca-bundle`) |
+| `--origin-server-name` | (none) | Origin server name for TLS SNI (used with `--ca-bundle`) |
 | `--skip-dns` | `false` | Skip DNS routing if the CNAME already exists |
 
 ### Origin TLS Verification
@@ -190,7 +190,7 @@ curl -s https://console.g8e.ai/api/v1/health
 Expected response:
 
 ```json
-{"status":"ok","mode":"gateway","version":"v1.4.0","pid":12345,"governance_ready":true,"state_merkle_root":"..."}
+{"status":"ok","mode":"gateway","version":"v1.5.0","pid":12345,"governance_ready":true,"state_merkle_root":"..."}
 ```
 
 Open the console in a browser:

@@ -123,7 +123,7 @@ source ~/drone_env/bin/activate
 pip install mavsdk
 ```
 
-**What to expect:** `make build` produces `bin/g8e-linux-amd64` and `demos/bin/g8e`. The pip install pulls in the MAVSDK Python library.
+**What to expect:** `make build` produces `bin/g8e-linux-amd64`, copies it to `./g8e` at the repo root, and also to `demos/bin/g8e`. The pip install pulls in the MAVSDK Python library.
 
 > **Note:** Only `mavsdk` is needed. `asyncio` is Python stdlib, and the `mcp` SDK is unnecessary in this architecture.
 
@@ -281,7 +281,6 @@ This opens the same browser page and waits for approval via SSE. Good to show on
 | Approval TTL | **2 minutes** | Don't linger narrating while a suspension is pending; it expires and the agent must re-issue the call |
 | Notification | **SSE (real-time)** | The stdio proxy receives approval completion instantly via SSE. Use the brief gap to show the signed receipt in the browser |
 | Every `tools/call` is a mutation | **Yes** | Even a read-only `drone_cmd.py status` requires a passkey tap in notary posture. Keep the scripted flow to 2-3 tool calls or the recording becomes a passkey montage |
-| Approval window | **2 minutes** | If you don't approve within 2 minutes the TTL expires and the agent must re-issue the call |
 
 ---
 

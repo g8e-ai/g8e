@@ -5,7 +5,7 @@ parent: Guides
 
 # Lovable Frontend Integration
 
-Last Updated: 2026-07-12
+Last Updated: 2026-07-13
 Version: v1.5.0
 
 ---
@@ -18,17 +18,17 @@ The guide is structured as a prompt you can paste directly into your Lovable AI 
 
 ### Steps at a Glance
 
-1. **[Configure the Cloudflare Tunnel](./cloudflare_tunnel.md)** — Expose the local g8e Gateway to the internet via `console.g8e.ai`
-2. **[Configure the Gateway](#gateway-side-configuration)** — Set CORS origins, passkey RP ID/name/origins, and public base URL
-3. **[Enroll the Frontend](#frontend-enrollment)** — Run `g8e gui enroll` to validate CORS and generate a TypeScript config snippet
-4. **[Review the API Reference](#api-reference)** — Understand the public and authenticated endpoints (or auto-discover via `/swagger/doc.json`)
-5. **[Define TypeScript Types](#typescript-types)** — Mirror the g8e gateway's data models in the frontend
-6. **[Build Pages and Components](#pages-and-components)** — AuthContext, Login, Dashboard, ApprovalFlow, URL hash handling
-7. **[Define WebAuthn Flow Requirements](#webauthn-flow-requirements)** — Registration, authentication, and approval ceremonies
-8. **[Define SSE Requirements](#sse-live-audit-stream)** — Live event streaming with auto-reconnect and polling fallback
-9. **[Apply UI/UX Guidelines](#uiux-guidelines)** — Dark theme, monospace hashes, toast notifications, responsive layout
-10. **[Handle Errors](#error-handling)** — 401 redirects, `needs_setup`, enrollment token errors, WebAuthn availability
-11. **[Verify the Integration](#verification-checklist)** — CORS headers, preflight, passkey flows, cookie attributes, SSE, approvals
+1. **[Configure the Cloudflare Tunnel](./cloudflare_tunnel.md)** - Expose the local g8e Gateway to the internet via `console.g8e.ai`
+2. **[Configure the Gateway](#gateway-side-configuration)** - Set CORS origins, passkey RP ID/name/origins, and public base URL
+3. **[Enroll the Frontend](#frontend-enrollment)** - Run `g8e gui enroll` to validate CORS and generate a TypeScript config snippet
+4. **[Review the API Reference](#api-reference)** - Understand the public and authenticated endpoints (or auto-discover via `/swagger/doc.json`)
+5. **[Define TypeScript Types](#typescript-types)** - Mirror the g8e gateway's data models in the frontend
+6. **[Build Pages and Components](#pages-and-components)** - AuthContext, Login, Dashboard, ApprovalFlow, URL hash handling
+7. **[Define WebAuthn Flow Requirements](#webauthn-flow-requirements)** - Registration, authentication, and approval ceremonies
+8. **[Define SSE Requirements](#sse-live-audit-stream)** - Live event streaming with auto-reconnect and polling fallback
+9. **[Apply UI/UX Guidelines](#uiux-guidelines)** - Dark theme, monospace hashes, toast notifications, responsive layout
+10. **[Handle Errors](#error-handling)** - 401 redirects, `needs_setup`, enrollment token errors, WebAuthn availability
+11. **[Verify the Integration](#verification-checklist)** - CORS headers, preflight, passkey flows, cookie attributes, SSE, approvals
 
 ### Architecture
 
@@ -53,7 +53,7 @@ A Cloudflare Tunnel securely exposes the local g8e Gateway to the internet so th
 
 ## 2. Gateway-Side Configuration
 
-The gateway must be started with CORS and passkey RP settings that match your Lovable app's origin. The passkey RP ID **must** match the domain where WebAuthn ceremonies are performed — that's the Lovable app's origin, not the gateway's domain. The browser's WebAuthn API enforces that the RP ID is a registrable domain suffix of the current page's origin.
+The gateway must be started with CORS and passkey RP settings that match your Lovable app's origin. The passkey RP ID **must** match the domain where WebAuthn ceremonies are performed, that's the Lovable app's origin, not the gateway's domain. The browser's WebAuthn API enforces that the RP ID is a registrable domain suffix of the current page's origin.
 
 ```bash
 ./g8e gw start \
@@ -77,10 +77,10 @@ export G8E_ALLOWED_ORIGINS=https://your-app.lovable.app,https://your-custom-doma
 
 Key flags:
 
-- `--passkey-rp-id` — The WebAuthn Relying Party ID. Use the Lovable app's registrable domain (`lovable.app`) so passkeys work across Lovable subdomains. The browser rejects WebAuthn ceremonies if the RP ID doesn't match the current page's origin.
-- `--passkey-rp-origin` — The origin where WebAuthn ceremonies are performed (the Lovable app URL). The gateway adds this to its allowed RP origins list.
-- `--cors-origin` — The Lovable app origin. Allows cross-origin requests with credentials. Repeat for each origin (preview URLs, production URLs, custom domains).
-- `--public-base-url` — The public URL of the gateway (the tunnel hostname). Used for approval redirect links and host validation.
+- `--passkey-rp-id` - The WebAuthn Relying Party ID. Use the Lovable app's registrable domain (`lovable.app`) so passkeys work across Lovable subdomains. The browser rejects WebAuthn ceremonies if the RP ID doesn't match the current page's origin.
+- `--passkey-rp-origin` - The origin where WebAuthn ceremonies are performed (the Lovable app URL). The gateway adds this to its allowed RP origins list.
+- `--cors-origin` - The Lovable app origin. Allows cross-origin requests with credentials. Repeat for each origin (preview URLs, production URLs, custom domains).
+- `--public-base-url` - The public URL of the gateway (the tunnel hostname). Used for approval redirect links and host validation.
 
 > **Important:** Add every origin your Lovable app may use (preview URLs, production URLs, custom domains). The gateway reflects exact-match origins in CORS headers and sets `SameSite=None` on session cookies when `AllowedOrigins` is non-empty.
 
@@ -108,9 +108,9 @@ Copy the outputted snippet into the Lovable project as the starting point for AP
 
 ### Other `g8e gui` Subcommands
 
-- **`g8e gui show`** (alias: `list`) — Lists all enrolled origins and regenerates config snippets. Supports `--json` for scripting.
-- **`g8e gui verify --origin <url>`** — Checks enrollment status and prints a verification checklist (CORS headers, passkey registration, session cookie, SSE stream, authenticated API calls).
-- **`g8e gui remove --origin <url>`** — Removes an origin from the enrollment file.
+- **`g8e gui show`** (alias: `list`) - Lists all enrolled origins and regenerates config snippets. Supports `--json` for scripting.
+- **`g8e gui verify --origin <url>`** - Checks enrollment status and prints a verification checklist (CORS headers, passkey registration, session cookie, SSE stream, authenticated API calls).
+- **`g8e gui remove --origin <url>`** - Removes an origin from the enrollment file.
 
 ---
 
@@ -128,7 +128,7 @@ Copy the outputted snippet into the Lovable project as the starting point for AP
 
 ### Project Overview
 
-Build a **g8e Governance Console** — a React + TypeScript + TailwindCSS single-page application that serves as the web UI for the g8e platform. The app communicates with the g8e gateway API at `https://console.g8e.ai` via cross-origin fetch requests with credentials.
+Build a **g8e Governance Console** - a React + TypeScript + TailwindCSS single-page application that serves as the web UI for the g8e platform. The app communicates with the g8e gateway API at `https://console.g8e.ai` via cross-origin fetch requests with credentials.
 
 ### Critical Configuration
 
@@ -140,7 +140,7 @@ const API_BASE_URL = 'https://console.g8e.ai';
 
 #### Fetch Requirements
 
-**Every** `fetch` call to the API MUST include `credentials: 'include'`. This is non-negotiable — the g8e gateway uses a `g8e_web_session_cookie` (HttpOnly, Secure, SameSite=None) for browser authentication. Without `credentials: 'include'`, the cookie is not sent cross-origin and all authenticated requests will return 401.
+**Every** `fetch` call to the API MUST include `credentials: 'include'`. This is non-negotiable: the g8e gateway uses a `g8e_web_session_cookie` (HttpOnly, Secure, SameSite=None) for browser authentication. Without `credentials: 'include'`, the cookie is not sent cross-origin and all authenticated requests will return 401.
 
 #### WebAuthn Library
 
@@ -226,7 +226,7 @@ interface UserMeResponse {
 
 // Passkey
 interface PasskeyCredential {
-  id: string; // base64-encoded byte array — convert to base64url for display
+  id: string; // base64-encoded byte array - convert to base64url for display
   public_key: string; // base64-encoded COSE key
   attestation_type: string;
   transport?: string[];
@@ -393,7 +393,7 @@ After authentication, show:
 
 When user clicks "Approve" on a transaction:
 
-1. `GET /api/v1/approvals/{txHash}/challenge` — returns WebAuthn PublicKeyCredentialRequestOptions
+1. `GET /api/v1/approvals/{txHash}/challenge` - returns WebAuthn PublicKeyCredentialRequestOptions
 2. Decode the challenge and allowedCredentials from base64url to ArrayBuffers
 3. Call `navigator.credentials.get({ publicKey: decodedOptions })`
 4. Encode the assertion response fields to base64url
@@ -405,8 +405,8 @@ When user clicks "Approve" on a transaction:
 
 On app load, check `window.location.hash` for:
 
-- `#approve={txHash}` — if user is logged in, auto-trigger the approval flow for this transaction. If not logged in, store it and trigger after login.
-- `#register=1&token={enrollmentToken}` — validate the enrollment token via `POST /api/v1/auth/enrollment-token/validate`, then auto-trigger passkey registration with the returned user ID and CLI session ID.
+- `#approve={txHash}` - if user is logged in, auto-trigger the approval flow for this transaction. If not logged in, store it and trigger after login.
+- `#register=1&token={enrollmentToken}` - validate the enrollment token via `POST /api/v1/auth/enrollment-token/validate`, then auto-trigger passkey registration with the returned user ID and CLI session ID.
 
 After processing, clean the URL with `history.replaceState`.
 
@@ -499,7 +499,7 @@ If `EventSource` does not send cookies cross-origin, fall back to polling `GET /
 
 ### WebSocket Note
 
-The gateway also exposes a WebSocket pub/sub endpoint at `/ws/v1/pubsub`, but it requires mTLS authentication and is not available to browser clients. Use SSE for all browser-based real-time telemetry.
+The gateway also exposes a WebSocket pub/sub endpoint at `/ws/pubsub`, but it requires mTLS authentication and is not available to browser clients. Use SSE for all browser-based real-time telemetry.
 
 ---
 
@@ -512,7 +512,7 @@ The gateway also exposes a WebSocket pub/sub endpoint at `/ws/v1/pubsub`, but it
 - **Confirmation dialogs** before destructive actions (revoke passkey)
 - **Toast notifications** for success/error feedback on all async operations
 - **Loading states** on all buttons during async operations
-- **Responsive layout** — max-width 720px centered on desktop, full-width on mobile
+- **Responsive layout** - max-width 720px centered on desktop, full-width on mobile
 - **Header bar**: "g8e Console" title (accent color) + current user display name on the right
 - **Footer**: "g8e Gateway (c) 2026 Lateralus Labs, LLC."
 
@@ -525,29 +525,6 @@ The gateway also exposes a WebSocket pub/sub endpoint at `/ws/v1/pubsub`, but it
 - **Enrollment token validation**: Handle 410 (expired) and 409 (already used) with specific error messages
 - **WebAuthn API not available**: Show a browser compatibility warning
 - **Network errors**: Show a retry-able error state
-
----
-
-## JWT Identity Provider Integration (Optional)
-
-If you use an external identity provider (IdP) such as Clerk, Auth0, or Supabase for JWT-based authentication, configure the gateway to validate JWTs from the IdP's JWKS endpoint:
-
-```bash
-./g8e gw start \
-  --jwks-url https://your-idp.example.com/.well-known/jwks.json \
-  --jwt-role-claim roles \
-  --jwt-issuer https://your-idp.example.com \
-  --jwt-audience g8e-gateway
-```
-
-When JWKS is configured, the gateway automatically accepts JWT bearer tokens for MCP and A2A endpoints instead of requiring mTLS. The gateway maps JWT role claims to g8e personas (admin, operator, observer, agent) via the role-to-persona mapping configuration. JIT (just-in-time) provisioning creates a g8e user record on first successful JWT authentication.
-
-| IdP | JWKS URL | Role Claim | Notes |
-|---|---|---|---|
-| Clerk | `https://<domain>.clerk.accounts.dev/.well-known/jwks.json` | `roles` | Custom claim setup required in Clerk dashboard |
-| Auth0 | `https://<domain>.auth0.com/.well-known/jwks.json` | `permissions` or custom namespace | Use `--jwt-role-claim permissions` or `--jwt-role-claim https://g8e.ai/roles` |
-| Supabase | `https://<project>.supabase.co/auth/v1/.well-known/jwks.json` | `user_metadata.roles` | Requires custom JWT claims via Supabase Edge Function |
-
 
 ---
 
@@ -606,8 +583,8 @@ After the Lovable AI agent generates the app, verify:
 
 ## See Also
 
-- [Cloudflare Tunnel Integration](./cloudflare_tunnel.md) — Setting up the tunnel between Cloudflare and the g8e Gateway
-- [Connect Apps to Gateway](./connect_apps_to_gateway.md) — General application connectivity patterns
-- [Architecture: Auth](../architecture/auth.md) — WebAuthn passkey authentication architecture
-- [Architecture: Gateway](../architecture/gateway.md) — Gateway service architecture
-- [Protocol Library](../architecture/protocol.md) — Go module and Python package API reference for building g8e-compatible clients and services
+- [Cloudflare Tunnel Integration](./cloudflare_tunnel.md) - Setting up the tunnel between Cloudflare and the g8e Gateway
+- [Connect Apps to Gateway](./connect_apps_to_gateway.md) - General application connectivity patterns
+- [Architecture: Auth](../architecture/auth.md) - WebAuthn passkey authentication architecture
+- [Architecture: Gateway](../architecture/gateway.md) - Gateway service architecture
+- [Protocol Library](../architecture/protocol.md) - Go module and Python package API reference for building g8e-compatible clients and services

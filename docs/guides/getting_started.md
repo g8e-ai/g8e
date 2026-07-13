@@ -5,7 +5,7 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-07-12
+Last Updated: 2026-07-13
 Version: v1.5.0
 
 ---
@@ -285,7 +285,7 @@ See [Connect Operator to Gateway](./connect_operator_to_gateway.md) for full enr
 
 ### Run the gateway and operator in Docker
 
-The root `docker-compose.yml` defines both a `g8e-gateway` service and a `g8e-operator` service on a shared bridge network (`g8e-net`). The operator enrolls with the gateway over `g8e.local`, which resolves to the host gateway IP via `extra_hosts`. The gateway health check must pass before the operator starts, enforced by `depends_on` with `condition: service_healthy`.
+The root `docker-compose.yml` defines both a `g8e-gateway` service and a `g8e-operator` service on a shared bridge network (`g8e-net`). The gateway registers a network alias `g8e.local` on `g8e-net`, so the operator can enroll by connecting to `g8e.local` without DNS or `/etc/hosts` configuration. The gateway health check must pass before the operator starts, enforced by `depends_on` with `condition: service_healthy`.
 
 ```bash
 docker compose up -d

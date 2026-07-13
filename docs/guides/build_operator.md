@@ -5,7 +5,7 @@ parent: Guides
 
 # Build a g8e Operator
 
-Last Updated: 2026-07-12
+Last Updated: 2026-07-13
 Version: v1.5.0
 
 ---
@@ -153,7 +153,7 @@ import (
 ```
 
 The Go package provides:
-- **`protocol/proto/g8e/common/v1`**: `GovernanceEnvelope`, `GovernanceMetadata`, `L1Metadata`, `L2Metadata` (with `L2Vote`), `L3Metadata` (with `L3Proof`), `Component` enum — the core types for envelope construction and verification
+- **`protocol/proto/g8e/common/v1`**: `GovernanceEnvelope`, `GovernanceMetadata`, `L1Metadata`, `L2Metadata` (with `L2Vote`), `L3Metadata` (with `L3Proof`), `Component` enum, the core types for envelope construction and verification
 - **`protocol/proto/g8e/operator/v1`**: `OperatorService` gRPC service definition, `CommandRequested`, `FileEditRequested`, `ActionReceipt`, `CommandResult`, and all typed payload/result messages for L5 Actuator execution
 - **`protocol`**: `WorkloadIdentity` for SPIFFE URI SAN generation and validation. Operators use `OperatorSPIFFEID("org_id", "op_id", "session_id")` to generate `spiffe://g8e.local/operator/<org_id>/<op_id>/<session_id>` and `MatchesOperator` to validate identities on mTLS handshakes
 

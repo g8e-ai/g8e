@@ -5,7 +5,7 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-07-12
+Last Updated: 2026-07-13
 Version: v1.5.0
 
 ---
@@ -232,22 +232,9 @@ Operators and CLI clients connecting to the g8e Gateway can use the g8e Protocol
 go get github.com/g8e-ai/g8e@v1.5.0
 ```
 
-Import the protobuf types and SPIFFE workload identity helpers for operator enrollment and mTLS connection:
+The module provides protobuf types for governance envelopes, operator messages, and common protocol structures. It also includes SPIFFE workload identity helpers for generating operator, CLI, and gateway identities used in mTLS enrollment.
 
-```go
-import (
-    commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-    operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
-    "github.com/g8e-ai/g8e/protocol"
-)
-
-// Generate operator SPIFFE identity for mTLS enrollment
-wid := protocol.NewWorkloadIdentity()
-operatorSPIFFE := wid.OperatorSPIFFEID("org-123", "op-456", "session-789")
-// spiffe://g8e.local/operator/org-123/op-456/session-789
-```
-
-See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference and `protocol/examples/workload_identity/main.go` for a complete SPIFFE identity example.
+See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
 
 ### Python Package
 

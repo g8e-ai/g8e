@@ -4,7 +4,7 @@ title: g8e Protocol Library
 
 # g8e Protocol Library
 
-Last Updated: 2026-07-12
+Last Updated: 2026-07-13
 Version: v1.5.0
 
 The g8e Protocol Library is the canonical wire contract for all mutations in the g8e zero-trust execution platform. It provides protobuf schema definitions, JSON constant registries, JSON model schemas, Pydantic models, dynamic enum generation, SPIFFE workload identity helpers, and example programs for building g8e-compatible clients and services.
@@ -43,6 +43,7 @@ The protocol is published as two independent packages — a Go module (part of t
   - [Release Workflow](#release-workflow)
   - [CI Workflows](#ci-workflows)
   - [Version Sync Enforcement](#version-sync-enforcement)
+- [Conformance Tests](#conformance-tests)
 - [Directory Structure](#directory-structure)
 - [References](#references)
 
@@ -112,58 +113,15 @@ Example programs are in `protocol/examples/`:
 
 #### Governance Envelope Construction
 
-`protocol/examples/governance_envelope/main.go` demonstrates constructing a `GovernanceEnvelope` with L1, L2, and L3 governance metadata, a `CommandRequested` payload, and protojson round-trip serialization:
+`protocol/examples/governance_envelope/main.go` demonstrates constructing a `GovernanceEnvelope` with L1, L2, and L3 governance metadata, a `CommandRequested` payload, and protojson round-trip serialization. The example imports `commonv1` and `operatorv1` from the generated proto packages, populates identity and intent fields on the envelope, attaches a `CommandRequested` payload, and serializes/deserializes the result.
 
-```go
-import (
-    commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-    operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
-)
-
-envelope := &commonv1.GovernanceEnvelope{
-    EventType:       "g8e.v1.operator.command.requested",
-    ActionType:      "EXECUTE_BASH",
-    OperatorId:      "op-456",
-    OperatorSessionId: "session-789",
-    // ... identity, state, and governance fields
-}
-
-cmd := &operatorv1.CommandRequested{
-    Command:       "ls -la",
-    ExecutionId:   "exec-123",
-    Justification: "List directory contents",
-}
-```
-
-Run it:
-
-```bash
-cd protocol/examples/governance_envelope
-go run main.go
-```
+Run it from `protocol/examples/governance_envelope` with `go run main.go`.
 
 #### Workload Identity
 
-`protocol/examples/workload_identity/main.go` demonstrates SPIFFE workload identity generation, validation, extraction, and URL parsing for all six identity types:
+`protocol/examples/workload_identity/main.go` demonstrates SPIFFE workload identity generation, validation, extraction, and URL parsing for all six identity types. The example creates a `WorkloadIdentity` helper, generates SPIFFE IDs for each type, validates them with the corresponding `Matches*` methods, and extracts component IDs using the `Extract*` methods.
 
-```go
-import "github.com/g8e-ai/g8e/protocol"
-
-wid := protocol.NewWorkloadIdentity()
-operatorSPIFFE := wid.OperatorSPIFFEID("org-123", "op-456", "session-789")
-// spiffe://g8e.local/operator/org-123/op-456/session-789
-
-if wid.MatchesOperator(operatorSPIFFE, "org-123", "op-456", "session-789") {
-    // valid
-}
-```
-
-Run it:
-
-```bash
-cd protocol/examples/workload_identity
-go run main.go
-```
+Run it from `protocol/examples/workload_identity` with `go run main.go`.
 
 ### Go Development
 
@@ -203,7 +161,7 @@ pip install g8e==X.Y.Z
 
 ### Python Package Contents
 
-The Python package is in `protocol/python/` and installs as `g8e`. The import namespace is `g8e`.
+The Python package is in `protocol/python/` and installs as `g8e`. The import namespace is `g8e`. The package includes a `py.typed` marker for PEP 561 type-checker support. Unit tests are in `protocol/python/tests/` and cover constants loading, enum generation, model validation, and version sync.
 
 - **`g8e/__init__.py`**: Package init exporting `__version__`
 - **`g8e/constants.py`**: Runtime loader for JSON protocol constants from `protocol/constants/`
@@ -214,7 +172,6 @@ The Python package is in `protocol/python/` and installs as `g8e`. The import na
   - `events.py`: SSE event wire models and AI event payload models
   - `internal_api.py`: `ChatMessageRequest`, `ChatStartedResponse`, `ResourceCreationRequest`
   - `settings.py`: `PlatformSettings`, `G8eeUserSettings`, and nested settings models
-- **`g8e/models/errors.py`**: Python error code and category enums
 
 ### Python Constants Module
 
@@ -253,20 +210,13 @@ The `g8e.enums` module dynamically generates `StrEnum` and `IntEnum` classes fro
 - Enums are built lazily via `__getattr__` and cached with `lru_cache`
 - Access enums by PascalCase name: `g8e.enums.OperatorToolName`, `g8e.enums.EventType`
 
-```python
-from g8e.enums import EventType
-
-# Access event type enum members
-print(EventType.OPERATOR_COMMAND_REQUESTED)  # "g8e.v1.operator.command.requested"
-```
-
 ### Python Models Module
 
 The `g8e.models` package provides Pydantic v2 models for protocol data structures. All models extend `G8eBaseModel`, which configures `populate_by_name` and `extra="ignore"`, and defaults `exclude_none` on serialization. The `UTCDatetime` annotated type serializes datetimes to ISO 8601 with a `Z` suffix.
 
 | Submodule | Key Models |
 |-----------|------------|
-| `g8e.models.base` | `G8eBaseModel`, `UTCDatetime`, re-exports of `Field`, `ConfigDict`, `field_validator`, `model_validator` |
+| `g8e.models.base` | `G8eBaseModel`, `UTCDatetime`, re-exports of `Field`, `ConfigDict`, `field_validator`, `model_validator`, `ValidationError` |
 | `g8e.models.context` | `RequestContext`, `BoundOperator` — `RequestContext` validates session identity for `CLIENT` source components, requiring either `web_session_id` or `cli_session_id` and a `user_id` |
 | `g8e.models.events` | `SessionEventWire`, `BackgroundEventWire`, and AI event payload models for chat processing, tool lifecycle, citations, errors, thinking, turn completion, retry, and triage clarification |
 | `g8e.models.internal_api` | `ChatMessageRequest`, `ChatStartedResponse`, `ResourceCreationRequest` |
@@ -278,69 +228,15 @@ Example scripts are in `protocol/python/examples/`:
 
 #### Constants Example
 
-```python
-from g8e.constants import (
-    EVENTS, STATUS, COLLECTIONS,
-    ComponentName,
-    HTTP_AUTHORIZATION_HEADER,
-    WEB_SESSION_ID_HEADER,
-)
+`protocol/python/examples/constants_example.py` demonstrates loading event, status, and collection constants, using the `ComponentName` enum, and building HTTP header dicts from the exported header string constants.
 
-# Access event constants
-print(EVENTS['events']['OperatorCommandRequested']['value'])
-
-# Use component enum
-print(ComponentName.CLIENT)  # "client"
-
-# Build HTTP headers
-headers = {
-    HTTP_AUTHORIZATION_HEADER: "Bearer token-abc-123",
-    WEB_SESSION_ID_HEADER: "web-session-xyz",
-}
-```
-
-Run it:
-
-```bash
-cd protocol/python
-pip install -e .
-python examples/constants_example.py
-```
+Run it from `protocol/python` after `pip install -e .` with `python examples/constants_example.py`.
 
 #### Models Example
 
-```python
-from g8e.constants import ComponentName
-from g8e.models import RequestContext, BoundOperator, PlatformSettings
+`protocol/python/examples/models_example.py` demonstrates constructing a `RequestContext` with bound operators, serializing it to a JSON dict, creating `PlatformSettings` with governance flags, and exercising `RequestContext` validation for the `CLIENT` source component.
 
-context = RequestContext(
-    web_session_id="web-session-abc-123",
-    user_id="user-xyz-456",
-    source_component=ComponentName.CLIENT,
-    bound_operators=[
-        BoundOperator(operator_id="op-1", operator_session_id="s-1", status="active"),
-    ],
-)
-
-# Serialize to dict
-context_dict = context.model_dump(mode="json")
-
-# Platform settings
-settings = PlatformSettings(
-    governance_enabled=True,
-    l1_doctrine_enabled=True,
-    l2_consensus_enabled=True,
-    l3_notary_enabled=True,
-)
-```
-
-Run it:
-
-```bash
-cd protocol/python
-pip install -e .
-python examples/models_example.py
-```
+Run it from `protocol/python` after `pip install -e .` with `python examples/models_example.py`.
 
 ### Python Environment Configuration
 
@@ -392,7 +288,7 @@ The `protocol/constants/` directory contains JSON files that serve as the author
 
 ### JSON Model Schemas
 
-The `protocol/models/` directory contains JSON Schema files that define the structure for protocol data structures, including: `account_lock.json`, `app_policy.json`, `bound_session.json`, `case.json`, `cli_session.json`, `conversation.json`, `operator_session.json`, `organization.json`, `passkey_challenge.json`, `persona.json`, `platform_settings.json`, `reputation_commitment.json`, `security_constraints.json`, `task.json`, `tribunal.json`, `user.json`, `web_session.json`, and more.
+The `protocol/models/` directory contains JSON Schema files that define the structure for protocol data structures, including: `account_lock.json`, `app_policy.json`, `bound_session.json`, `case.json`, `cli_session.json`, `conversation.json`, `operator_session.json`, `organization.json`, `passkey_challenge.json`, `persona.json`, `platform_settings.json`, `reputation_commitment.json`, `security_constraints.json`, `task.json`, `tribunal.json`, `user.json`, `web_session.json`, and more. The directory also contains `errors.py`, which defines Python error code and category enums.
 
 Per-agent-role model schemas are in `models/agents/` (`primary.json`, `assistant.json`, `lite.json`, `triage.json`, `title_generator.json`, `agent_harness.json`).
 
@@ -415,8 +311,8 @@ Protobuf code generation uses [buf](https://buf.build). The generation config is
 Install buf and protoc plugins:
 
 ```bash
-make install-buf      # installs buf v1.70.0
-make install-protoc   # installs protoc compiler
+make buf-install      # installs buf v1.70.0
+make protoc-install   # installs protoc compiler (optional; buf ships its own)
 ```
 
 ### Generating Code
@@ -487,8 +383,8 @@ Pushing the tags triggers two CI workflows:
 
 | Tag | Workflow File | What It Does |
 |-----|---------------|-------------|
-| `vX.Y.Z` | `.github/workflows/release-binary.yml` | Builds platform binaries for all OS/arch combinations, creates GitHub release with binary assets and `go get` install instructions |
-| `protocol/vX.Y.Z` | `.github/workflows/release-python-protocol.yml` | Builds Python sdist + wheel, publishes to [PyPI](https://pypi.org/project/g8e/), creates GitHub release with `pip install` instructions |
+| `vX.Y.Z` | `.github/workflows/release-binary.yml` | Builds platform binaries for all OS/arch combinations, signs them with cosign, creates GitHub release with binary assets, SHA256 checksums, signatures, and `go get` install instructions. A verify-install job confirms `go install` works on Ubuntu, macOS, and Windows. |
+| `protocol/vX.Y.Z` | `.github/workflows/release-python-protocol.yml` | Builds Python sdist + wheel, publishes to [PyPI](https://pypi.org/project/g8e/), creates GitHub release with `pip install` instructions. A verify-install job confirms fresh PyPI install and import on Ubuntu, macOS, and Windows. |
 
 #### Python Protocol CI Details
 
@@ -496,10 +392,12 @@ The Python protocol workflow (`.github/workflows/release-python-protocol.yml`):
 
 1. Checks out the repository with full history
 2. Sets up Python 3.14
-3. Builds the package: `python -m build` (produces sdist + wheel in `protocol/python/dist/`)
-4. Validates with `twine check dist/*`
-5. Publishes to PyPI using trusted publishing (OIDC `id-token: write`)
-6. Creates a GitHub release with auto-generated release notes
+3. Validates package metadata (name, version, license, authors, classifiers, URLs)
+4. Builds the package: `python -m build` (produces sdist + wheel in `protocol/python/dist/`)
+5. Validates with `twine check dist/*`
+6. Publishes to PyPI using trusted publishing (OIDC `id-token: write`)
+7. Creates a GitHub release with auto-generated release notes
+8. Verifies fresh PyPI install and imports on Ubuntu, macOS, and Windows
 
 ### Version Sync Enforcement
 
@@ -511,6 +409,17 @@ The Go module version is not stored in a file — it is derived entirely from gi
 
 ---
 
+## Conformance Tests
+
+Cross-language conformance tests in `protocol/conformance/` validate that protocol constants and models are identical across the Python package and Go implementation. The JSON files in `protocol/constants/` and `protocol/models/` are the single source of truth; both Go code and the Python package consume them.
+
+- **`test_constants.py`**: Verifies JSON structural integrity, `_go_const` and `_python_const` field presence, value uniqueness, event namespace conventions, and Python-JSON parity for all 20+ protocol constant files.
+- **`test_models.py`**: Verifies model schema integrity, `PlatformSettings` field parity between Python and JSON schema, `RequestContext` validation rules, and serialization round-trip behavior.
+
+A `conformance` CI job in `.github/workflows/build-and-test.yml` runs these tests on every push and PR using Python 3.14. See [Conformance Tests](../../protocol/conformance/README.md) for details.
+
+---
+
 ## Directory Structure
 
 ```
@@ -519,6 +428,7 @@ protocol/
   workload_identity.go       SPIFFE workload identity generation and validation
   workload_identity_test.go  Unit tests for workload identity helpers
   Makefile                   Test, format, vet, lint, and OpenAPI targets
+  LICENSE                    Apache 2.0 license
   proto/                     Protobuf schema definitions and generated Go code
     buf.yaml                 Buf module config (buf.build/g8e/platform)
     g8e/common/v1/           Common governance types (common.proto, common.pb.go)
@@ -526,15 +436,20 @@ protocol/
     g8e/pubsub/v1/           Pub/sub message types (pubsub.proto, pubsub.pb.go)
   constants/                 JSON protocol constant registries
     doctrine/                L1 Doctrine pattern registries
-  models/                    JSON model schemas and Python error enums
+  models/                    JSON model schemas
     agents/                  Per-agent-role model schemas
     errors.py                Python error code and category enums
+  conformance/               Cross-language conformance tests
+    test_constants.py        Constant file structural integrity and parity tests
+    test_models.py           Model schema parity and validation tests
   python/                    Python package (g8e)
     g8e/                     Import namespace (g8e)
       __init__.py            Package version
       constants.py           Runtime loader for JSON protocol constants
       enums.py               Dynamic StrEnum/IntEnum generation from STATUS and EVENTS
+      py.typed               PEP 561 marker for type-checker support
       models/                Pydantic v2 models for protocol data structures
+    tests/                   Python package unit tests
     examples/                Python example scripts
     pyproject.toml           Package metadata and dependencies
     README.md                Python package README
