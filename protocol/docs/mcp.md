@@ -4,7 +4,7 @@ title: MCP Protocol
 
 # MCP Protocol
 
-Last Updated: 2026-07-03
+Last Updated: 2026-07-13
 
 The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer governance verification sequence (L1Doctrine/L2Consensus/L3Notary/L4Warden/L5Actuator), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
@@ -274,21 +274,13 @@ Invoke MCP tools via JSON-RPC POST to the unified `/mcp` endpoint. A2A skill inv
 
 ### Tool Discovery
 
-The gateway provides merged tool discovery that combines native tools with downstream MCP server tools:
+The gateway provides tool discovery with native tools or downstream proxy:
 
-- `tools/list`: Returns available tools with schemas (native tools merged with downstream tools when downstream is configured, native tools only when no downstream)
+- `tools/list`: Returns available tools with schemas (native tools when no downstream is configured, proxied from the downstream server when configured)
 - `prompts/list`: Returns available prompt templates
 - `resources/list`: Returns available resources
 
-When a downstream MCP server is configured, the gateway:
-1. Proxies the `tools/list` request to the downstream server
-2. Parses the downstream response
-3. Merges native tools with downstream tools (deduplicating by tool name)
-4. Returns the combined tool list to the client
-
-If the downstream server is unavailable (circuit open, connection error, or invalid response), the gateway falls back to returning only native tools. This ensures clients always have access to native tools even when downstream services are degraded.
-
-The unified endpoint uses a functional options pattern for configuration and improved test coverage. Discovery endpoints are proxied from the downstream server when configured. Tool calls are wrapped in GovernanceEnvelope before verification.
+When a downstream MCP server is configured, the gateway proxies `tools/list`, `resources/list`, and `prompts/list` to the downstream server and returns the raw response. If the circuit breaker is open or the downstream is unreachable, the proxy call fails and the error propagates to the client. Tool calls are wrapped in GovernanceEnvelope before verification.
 
 ### Tool Schema
 
@@ -459,7 +451,7 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 | Concern | File |
 |---|---|
 | Governance proxy (agent run) | `internal/cli/cmd/mcp.go` (runMCPAgentRun) |
-| Gateway entry | `internal/cli/cmd/gateway.go` (gatewayStartCmd, gatewayServeCmd) |
+| Gateway entry | `internal/cli/cmd/gateway.go` (gatewayCmd, gatewayStartCmd) |
 | Gateway service | `internal/services/gateway/gateway_service.go` |
 | HTTP routing | `internal/services/gateway/gateway_http_router.go` |
 | MCP/A2A translation | `internal/services/mcp/gateway.go` |

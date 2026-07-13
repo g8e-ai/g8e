@@ -46,7 +46,7 @@ It binds identity, intent, state, and governance proofs into one transaction.
 | cli_session_id | [string](#string) |  |  |
 | requestor_user_id | [string](#string) |  | The human user who authorized the action (delegator) |
 | acting_app_id | [string](#string) |  | The app/tool acting on behalf of the user (delegate) |
-| event_type | [string](#string) |  | Intent &amp; Payload event_type is the canonical pub/sub routing key from protocol/constants/events.json (e.g., &#34;operator.command.requested&#34;, &#34;operator.heartbeat&#34;). Distinct from action_type: event_type routes the message, action_type classifies the intent. |
+| event_type | [string](#string) |  | Intent &amp; Payload event_type is the canonical pub/sub routing key from protocol/constants/events.json (e.g., &#34;g8e.v1.operator.command.requested&#34;, &#34;g8e.v1.operator.heartbeat.sent&#34;). Distinct from action_type: event_type routes the message, action_type classifies the intent. |
 | payload | [bytes](#bytes) |  | Raw protobuf payload |
 | intent_data | [google.protobuf.Struct](#google-protobuf-Struct) |  | Structured JSON-first view |
 | action_type | [string](#string) |  | action_type is the UAP-compatible action classification (e.g., EXECUTE_BASH, FILE_EDIT). Included in the transaction hash canonicalization. |

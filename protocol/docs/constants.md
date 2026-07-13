@@ -18,17 +18,20 @@ Canonical collection names for the operator embedded SQLite database, typed as `
 - `CollectionPasskeyChallenges`, `CollectionPersonas`, `CollectionAgentActivityMetadata`
 - `CollectionReputationState`, `CollectionReputationCommitments`, `CollectionStakeResolutions`
 - `CollectionRevokedCertificates`, `CollectionTrustedSigners`, `CollectionAppPolicies`
-- `CollectionTribunals`
+- `CollectionTribunals`, `CollectionEnrollmentTokens`
 
 ### Event Types (`events.go`)
 
-Typed event identifiers for the pub/sub system, typed as `EventType`. The file defines approximately 280 individual event constants organized across the following categories:
+Typed event identifiers for the pub/sub system, typed as `EventType`. The file defines approximately 300 individual event constants organized across the following categories:
 
 - App Case: `EventAppCaseCreated`, `EventAppCaseUpdated`, `EventAppCaseAssigned`, `EventAppCaseEscalated`, `EventAppCaseResolved`, `EventAppCaseClosed`, `EventAppCaseSelected`, `EventAppCaseCleared`, `EventAppCaseSwitched`, `EventAppCaseCreationRequested`, `EventAppCaseUpdateRequested`
 - App Task: `EventAppTaskCreated`, `EventAppTaskUpdated`, `EventAppTaskAssigned`, `EventAppTaskStarted`, `EventAppTaskCompleted`, `EventAppTaskFailed`
 - App Investigation: `EventAppInvestigationCreated`, `EventAppInvestigationUpdated`, `EventAppInvestigationLoaded`, `EventAppInvestigationRequested`, `EventAppInvestigationStarted`, `EventAppInvestigationClosed`, `EventAppInvestigationEscalated`, plus list request/response and status update variants, and chat message events (`user`, `ai`, `system`)
 - Operator Heartbeat: `EventOperatorHeartbeatSent`, `EventOperatorHeartbeatRequested`, `EventOperatorHeartbeatReceived`, `EventOperatorHeartbeatMissed`
-- Operator Command: `EventOperatorCommandRequested`, `EventOperatorCommandStarted`, `EventOperatorCommandCompleted`, `EventOperatorCommandFailed`, `EventOperatorCommandCancelled`, `EventOperatorCommandExecution`, `EventOperatorCommandResult`, `EventOperatorCommandOutputReceived`, plus status update variants (queued, running, completed, failed, cancelled) and cancel lifecycle events
+- Operator Eval: `EventOperatorEvalAnswerRequested`
+- Operator Shutdown: `EventOperatorShutdownRequested`, `EventOperatorShutdownAcknowledged`
+- Operator Panel/Context: `EventOperatorPanelListUpdated`, `EventOperatorContextChanged`, `EventOperatorSlotInitializationFailed`
+- Operator Command: `EventOperatorCommandRequested`, `EventOperatorCommandStarted`, `EventOperatorCommandCompleted`, `EventOperatorCommandFailed`, `EventOperatorCommandCancelled`, `EventOperatorCommandExecution`, `EventOperatorCommandResult`, `EventOperatorCommandOutputReceived`, plus status update variants (queued, running, completed, failed, cancelled) and cancel lifecycle events (requested, acknowledged, failed)
 - Operator Command Approval: `EventOperatorCommandApprovalRequested`, `EventOperatorCommandApprovalGranted`, `EventOperatorCommandApprovalRejected`, `EventOperatorCommandApprovalPreparing`
 - Operator Stream Approval: `EventOperatorStreamApprovalRequested`, `EventOperatorStreamApprovalGranted`, `EventOperatorStreamApprovalRejected`
 - Operator File Edit: requested, started, completed, failed, timeout, and approval lifecycle events (requested, granted, rejected, feedback)
@@ -60,9 +63,15 @@ Typed event identifiers for the pub/sub system, typed as `EventType`. The file d
 - Platform External Service: configured
 - Platform Telemetry: health reported, performance recorded, error logged, audit logged
 - Platform Console Log: entry received, connected confirmed
+- AI Tribunal Session: started, completed, disabled, generation failed, model not configured, provider unavailable, system error, auditor failed, warden blocked
+- AI Tribunal Voting: pass completed, consensus reached/not reached/failed, round started/completed, round 2 started/consensus reached/consensus failed, dissent recorded, audit started/completed
+- App Memory: `EventAppMemoryCreated`, `EventAppMemoryUpdated`
+- App Case/Investigation Deletion: `EventAppCaseDeleted`, `EventAppInvestigationDeleted`
+- AI LLM Chat Thinking Stopped: `EventAiLLMChatIterationThinkingStopped`
+- AI Reputation: `EventAiReputationStateUpdated`, `EventReputationStateUpdated`
 - Source: `EventSourceUserChat`, `EventSourceUserTerminal`, `EventSourceAiPrimary`, `EventSourceAiAssistant`, `EventSourceAiTriage`, `EventSourceSystem`
 
-The file also provides a hierarchical `Event` struct accessor (`Event.Operator.*`) that groups operator event constants into nested sub-structs by domain (e.g., `Event.Operator.Command.ApprovalRequested`, `Event.Operator.FileEdit.Completed`, `Event.Operator.NetworkPing.Received`).
+The file also provides a hierarchical `Event` struct accessor (`Event.Operator.*`) that groups operator event constants into nested sub-structs by domain (e.g., `Event.Operator.Command.ApprovalRequested`, `Event.Operator.FileEdit.Completed`, `Event.Operator.NetworkPing.Received`). Top-level operator fields include `Bound`, `Unbound`, `ContextChanged`, `DeviceRegistered`, `PanelListUpdated`, `ShutdownAcknowledged`, `ShutdownRequested`, `SlotInitializationFailed`, `TerminalApprovalDenied`, `TerminalAuthStateChanged`, `TerminalThinkingAppend`, `TerminalThinkingComplete`, and `BootstrapConfigReceived`.
 
 ### API Paths (`api_paths.go`)
 
@@ -76,13 +85,13 @@ HTTP route paths for the Gateway REST API, defined as a struct `APIPaths` with J
 - Operator: `Operators`, `OperatorsByID`, `OperatorsBind`, `OperatorsUnbind`, `OperatorsTarget`, `OperatorsReauth`
 - Data: `DataSettings`, `DataDB`, `DataBlobs`, `DataPrefix`, `DataItems`, `DataBlobsPrefix`, `QueryPrefix` (`/_query`)
 - KV: `KV` (`/api/v1/kv/`), `KVPrefix` (`/api/v1/kv/`)
-- PubSub: `PubSubPublish`, `PubSubStream`
+- PubSub: `PubSubPublish`, `PubSubStream`, `PubSubWebSocket` (`/ws/pubsub`)
 - SSE: `SSEPush`, `SSEEvents`, `SSEStream`
 - PKI: `PKICSRSign`, `PKIDevicesEnroll`, `PKIAppsEnroll`, `PKIAppsDelegated`, `PKICertificatesRevoke`, `PKIRevocationBundle`, `PKICRL`, `PKICABundle`, `PKIFingerprint`
-- Audit: `AuditReceipts`, `AuditReceiptsExport`, `AuditEvents`, `AuditSummary`, `AuditReport`
+- Audit: `AuditReceipts`, `AuditReceiptsExport`, `AuditEvents`, `AuditSummary`, `AuditReport`, `AuditStream`
 - User: `Users`, `UsersMe`
-- Auth: `AuthLogout`, `AuthBootstrap`, `AuthBootstrapStatus`, `AuthCLIEnroll`, `AuthDeviceEnroll`, `AuthPasskeys`, `AuthPasskeysByID`, `AuthPasskeysJITRegisterChallenge`, `AuthPasskeysJITRegisterVerify`, `AuthPasskeysJITPrefix`, `AuthPasskeysPrefix`, `AuthPasskeysCLIStatus`, `AuthPasskeysConsoleRegisterChallenge`, `AuthPasskeysConsoleRegisterVerify`, `AuthPasskeysConsoleAuthenticateChallenge`, `AuthPasskeysConsoleAuthenticateVerify`, `AuthPasskeysConsolePrefix`, `AuthSessionsMe`
-- Approval: `Approvals`, `ApprovalsByID`, `ApprovalsPrefix`, `ApprovePage`, `ApprovePagePrefix`
+- Auth: `AuthLogout`, `AuthBootstrap`, `AuthBootstrapStatus`, `AuthCLIEnroll`, `AuthDeviceEnroll`, `AuthPasskeys`, `AuthPasskeysByID`, `AuthPasskeysJITRegisterChallenge`, `AuthPasskeysJITRegisterVerify`, `AuthPasskeysJITPrefix`, `AuthPasskeysPrefix`, `AuthPasskeysCLIStatus`, `AuthPasskeysConsoleRegisterChallenge`, `AuthPasskeysConsoleRegisterVerify`, `AuthPasskeysConsoleAuthenticateChallenge`, `AuthPasskeysConsoleAuthenticateVerify`, `AuthPasskeysConsolePrefix`, `AuthSessionsMe`, `AuthEnrollmentTokenGenerate`, `AuthEnrollmentTokenValidate`
+- Approval: `Approvals`, `ApprovalsByID`, `ApprovalsPrefix`, `ApprovePage`, `ApprovePagePrefix`, `ApprovalsCLIStatus`, `ApprovalsCLIList`
 - Admin: `AdminAppPoliciesBySigner`, `AdminAppsRevoke`, `AdminAppPoliciesPrefix`, `AdminTribunals`, `AdminTribunalsByID`, `AdminTribunalsPrefix`
 - Tribunal: `TribunalDeliberate` (`/tribunal/v1/deliberate`)
 - Well-known: `WellKnownPKICABundle`, `WellKnownPKIFingerprint`, `WellKnownBinPrefix`, `WellKnownPKIPrefix`, `WellKnownTrustWindows`
@@ -101,7 +110,8 @@ Pub/sub channel names and wire protocol constants for inter-component communicat
 - Governance: `ChannelGovernance`, `ChannelOperatorIntent`, `ChannelOperatorDevice`
 - SSE: `ChannelSseEvent`
 - Wire protocol actions: `PubSubActionSubscribe`, `PubSubActionPSubscribe`, `PubSubActionUnsubscribe`, `PubSubActionPublish`
-- Wire protocol events: `PubSubEventMessage`, `PubSubEventPMessage`, `PubSubEventSubscribed`
+- Wire protocol events: `PubSubEventMessage`, `PubSubEventPMessage`, `PubSubEventSubscribed`, `PubSubEventUnsubscribed`, `PubSubEventError`
+- SSE event types: `SSEEventTypeApprovalCompleted` (`approval.completed`)
 
 ### Intents (`intents.go`)
 
@@ -146,7 +156,7 @@ Internal enumeration constants, each defined as a typed string:
 - `SystemHealth`: `SystemHealthDegraded`, `SystemHealthHealthy`, `SystemHealthUnhealthy`, `SystemHealthUnknown`
 - `NetworkProtocol`: `NetworkProtocolTCP`, `NetworkProtocolUDP`
 - `Environment`: `EnvironmentDev`, `EnvironmentProduction`, `EnvironmentTest`
-- `VersionStability`: `VersionStabilityBeta`, `VersionStabilityDev`, `VersionStabilityStable`
+- `VersionStability`: `VersionStabilityBeta`, `VersionStabilityDev`, `VersionStabilityStable`, `VersionStabilityUnstable`, `VersionStabilityDeprecated`
 - `UserRole`: `UserRoleAdmin`, `UserRoleOperator`, `UserRoleOwner`, `UserRoleUser`
 - `CAType`: `CATypeRoot`, `CATypeHub`, `CATypeOperator`, `CATypeGatewayPeer`
 - `ServiceName`: `ServiceNameOperatorGateway`
@@ -157,9 +167,21 @@ Internal enumeration constants, each defined as a typed string:
 - `AuthAuditResult`: `AuthAuditResultFailure`, `AuthAuditResultInvalidAPIKey`, `AuthAuditResultSuccess`
 - `ToolDisplayCategory`: `ToolDisplayCategoryExecution`, `ToolDisplayCategoryFile`, `ToolDisplayCategoryGeneral`, `ToolDisplayCategoryNetwork`, `ToolDisplayCategorySearch`
 - `SessionKeyPrefix`: `SessionKeyPrefixCLI`, `SessionKeyPrefixOperator`, `SessionKeyPrefixWeb`
-- `SuspendedTxStatus`: `SuspendedTxStatusPending`, `SuspendedTxStatusApproved`
+- `SuspendedTxStatus`: `SuspendedTxStatusPending`, `SuspendedTxStatusApproved`, `SuspendedTxStatusExpiredOrNotFound`
 - `HistoryActor`: `HistoryActorNone`, `HistoryActorG8EO`, `HistoryActorSystem`, `HistoryActorUser`
 - `AISource`: `AISourceTerminalAnchored`, `AISourceTerminalDirect`, `AISourceToolCall`
+- `ComponentStatus`: `ComponentStatusActive`, `ComponentStatusError`, `ComponentStatusInactive`, `ComponentStatusMaintenance`, `ComponentStatusDegraded`
+- `WorkflowType`: `WorkflowTypeG8eBound`, `WorkflowTypeG8eCloudBound`, `WorkflowTypeG8eNotBound`, `WorkflowTypeTriage`, `WorkflowTypeInvestigation`
+- `AITaskId`: `AITaskIDAgentContinue`, `AITaskIDChat`, `AITaskIDCommand`, `AITaskIDDirectCommand`, `AITaskIDFetchFileDiff`, `AITaskIDFetchFileHistory`, `AITaskIDFetchHistory`, `AITaskIDFetchLogs`, `AITaskIDFileEdit`, `AITaskIDFsList`, `AITaskIDFsRead`, `AITaskIDIntentGrant`, `AITaskIDIntentRevoke`, `AITaskIDPortCheck`, `AITaskIDRecursiveGrep`, `AITaskIDRestoreFile`, plus additional task ID aliases for chat, case, memory, command execution, direct command, file operation, recursive grep, and investigation query
+- `TribunalMember`: `TribunalMemberAxiom`, `TribunalMemberConcord`, `TribunalMemberVariance`, `TribunalMemberPragma`, `TribunalMemberNemesis`
+- `TribunalAuditMode`: `TribunalAuditModeUnanimous`, `TribunalAuditModeMajority`, `TribunalAuditModeTied`
+- `TribunalAuditStatus`: `TribunalAuditStatusOk`, `TribunalAuditStatusRevised`, `TribunalAuditStatusSwap`
+- `AuditorReason`: `AuditorReasonOk`, `AuditorReasonRevised`, `AuditorReasonRevisedFromDissent`, `AuditorReasonSwappedToDissenter`, `AuditorReasonWhitelistViolation`, `AuditorReasonNoValidRevision`, `AuditorReasonAuditorError`, `AuditorReasonEmptyResponse`
+- `TieBreakReason`: `TieBreakReasonShortest`, `TieBreakReasonExcludedNemesis`
+- `ReasoningAgent`: `ReasoningAgentSage`, `ReasoningAgentDash`
+- `ErrorCode`: typed string constants for g8e error codes (`G8E-1000` through `G8E-1900`), covering generic errors, config errors, auth errors, database errors, pubsub errors, storage errors, API errors, validation errors, business logic errors, and service unavailable errors
+- `ErrorCategory`: `ErrorCategoryValidation`, `ErrorCategoryBusinessLogic`, `ErrorCategoryConfiguration`, `ErrorCategoryAuth`, `ErrorCategoryPermission`, `ErrorCategoryResourceNotFound`, `ErrorCategoryConflict`, `ErrorCategoryRateLimit`, `ErrorCategoryServiceUnavailable`, `ErrorCategoryExternalService`, `ErrorCategoryTimeout`, `ErrorCategoryDatabase`, `ErrorCategoryNetwork`, `ErrorCategoryPubSub`, `ErrorCategoryStorage`, `ErrorCategoryInternal`, `ErrorCategoryDependency`
+- `ErrorSeverity`: `ErrorSeverityLow`, `ErrorSeverityMedium`, `ErrorSeverityHigh`, `ErrorSeverityCritical`, `ErrorSeverityInfo`
 
 ### Headers and Auth Constants (`auth.go`)
 
@@ -170,11 +192,11 @@ HTTP header names and authentication-related constants:
 - System: `HeaderRequestID`, `HeaderSourceComponent`, `HeaderSystemFingerprint`, `HeaderXAccelBuffering`
 - Proxy: `HeaderXForwardedFor`, `HeaderXForwardedHost`, `HeaderXForwardedProto`, `HeaderXProxyOrganizationID`, `HeaderXProxyUserID`, `HeaderXRequestTimestamp`
 - Security: `HeaderXContentTypeOptions`, `HeaderXFrameOptions`, `HeaderContentSecurityPolicy`
-- Standard: `HeaderAuthorization`, `HeaderContentType`, `HeaderAccept`, `HeaderAcceptLanguage`, `HeaderCacheControl`, `HeaderCookie`, `HeaderUserAgent`, `HeaderPragma`, `HeaderSetCookie`
+- Standard: `HeaderAuthorization`, `HeaderContentType`, `HeaderAccept`, `HeaderAcceptLanguage`, `HeaderCacheControl`, `HeaderCookie`, `HeaderUserAgent`, `HeaderPragma`, `HeaderSetCookie`, `HeaderConnection`, `HeaderVary`
 - Content: `HeaderContentDisposition`, `HeaderContentLanguage`, `HeaderContentLength`
 - SSE: `HeaderLastEventID`
 - AJAX: `HeaderRequestedWith`
-- CORS: `HeaderAccessControlAllowCredentials`, `HeaderAccessControlAllowOrigin`, `HeaderAccessControlRequestHeaders`, `HeaderAccessControlRequestMethod`
+- CORS: `HeaderAccessControlAllowCredentials`, `HeaderAccessControlAllowOrigin`, `HeaderAccessControlAllowHeaders`, `HeaderAccessControlAllowMethods`, `HeaderAccessControlMaxAge`, `HeaderAccessControlRequestHeaders`, `HeaderAccessControlRequestMethod`
 
 Additional constants in `auth.go`:
 
@@ -183,10 +205,12 @@ Additional constants in `auth.go`:
 - WebAuthn types: `WebAuthnTypePublicKey`, `WebAuthnAttestationNone`, `WebAuthnResidentKeyRequired`, `WebAuthnUserVerificationRequired`
 - PKI leaf types: `LeafTypeOperator`, `LeafTypeApp`, `LeafTypeHub`, `LeafTypeCLI`
 - JSON-RPC 2.0: `JSONRPCVersion`, `JSONRPCFieldVersion`, `JSONRPCFieldMethod`, `JSONRPCFieldParams`, `JSONRPCFieldID`, `JSONRPCFieldResult`, `JSONRPCFieldError`, `JSONRPCFieldCode`, `JSONRPCFieldMessage`, `JSONRPCFieldData`, `JSONRPCErrorCodeInternal`
-- Header values: `HeaderValueNoSniff`, `HeaderValueDeny`, `HeaderValueCSPNone`, `HeaderValueKeepAlive`, `HeaderValueNoCache`, `HeaderValueTextEvent`, `HeaderValueApplicationJSON`, `HeaderValueXHTML`, `HeaderValueXML`, `HeaderValueOctetStream`, `HeaderValuePEM`, `HeaderValueCRL`, `HeaderValueShell`, `HeaderValuePowerShell`
-- Context keys (typed `ContextKey`): `ContextKeyUserID`, `ContextKeyAppID`, `ContextKeyTenantID`, `ContextKeyBindingPersona`, `ContextKeyOperatorID`, `ContextKeyOperatorSessionID`, `ContextKeyCapability`
+- Header values: `HeaderValueNoSniff`, `HeaderValueDeny`, `HeaderValueCSPNone`, `HeaderValueKeepAlive`, `HeaderValueNoCache`, `HeaderValueTextEvent`, `HeaderValueApplicationJSON`, `HeaderValueXHTML`, `HeaderValueXML`, `HeaderValueOctetStream`, `HeaderValuePEM`, `HeaderValueCRL`, `HeaderValueShell`, `HeaderValuePowerShell`, `HeaderValueCORSPreflightMaxAge` (`3600`)
+- Context keys (typed `ContextKey`): `ContextKeyUserID`, `ContextKeyAppID`, `ContextKeyTenantID`, `ContextKeyBindingPersona`, `ContextKeyOperatorID`, `ContextKeyOperatorSessionID`, `ContextKeyCapability`, `ContextKeyWebSessionID`, `ContextKeyCLISessionID`
 - Auth error reasons (typed `AuthErrorReason`): `AuthErrorReasonTTLExceeded`, `AuthErrorReasonRetiredByRealLogin`, `AuthErrorReasonIdentityDisabled`, `AuthErrorReasonInvalidSession`, `AuthErrorReasonSessionExpired`, `AuthErrorReasonCertificateRevoked`, `AuthErrorReasonIdentityMismatch`, `AuthErrorReasonAppPolicyNotFound`, `AuthErrorReasonRateLimitExceeded`, `AuthErrorReasonPayloadTooLarge`, `AuthErrorReasonCollectionNotAllowed`, `AuthErrorReasonJWTInvalid`, `AuthErrorReasonJWTMissingSubject`
-- Session TTL: `WebSessionTTL` (24 hours)
+- Session TTL: `WebSessionTTL` (24 hours), `WebSessionCookieName` (`g8e_web_session_cookie`)
+- App enrollment types: `AppTypeMCPClient`, `AppTypeA2AGateway`, `AppTypeCustom`, `AppTypeTribunalMember`
+- Certificate renewal: `AppCertMinValidity` (7 days)
 
 ### Action Types (`action_types.go`)
 
@@ -200,14 +224,20 @@ Mutation action types: `ActionTypeA2aCall`, `ActionTypeCancel`, `ActionTypeExecu
 
 Filesystem paths for Operator data, certificates, ledger, system paths, and configuration. This is the largest constant file in the package, containing:
 
-- System paths: Linux filesystem paths (`/etc`, `/proc`, `/var`, `/dev`, `/boot`, `/tmp`, `/opt`, `/home`, `/usr`, `/bin`, `/sbin`, `/lib`), including specific files (`/etc/passwd`, `/etc/hosts`, `/etc/resolv.conf`, `/proc/meminfo`, `/proc/loadavg`, etc.)
+- System paths: Linux filesystem paths (`/etc`, `/proc`, `/var`, `/dev`, `/boot`, `/tmp`, `/opt`, `/home`, `/usr`, `/bin`, `/sbin`, `/lib`, `/sys`, `/`), including specific files (`/etc/passwd`, `/etc/shadow`, `/etc/group`, `/etc/gshadow`, `/etc/sudoers`, `/etc/ssh/sshd_config`, `/etc/hosts`, `/etc/resolv.conf`, `/etc/fstab`, `/etc/hostname`, `/etc/machine-id`, `/proc/meminfo`, `/proc/loadavg`, `/proc/mounts`, `/proc/net/tcp`, `/proc/net/udp`, `/proc/uptime`, `/proc/stat`, `/proc/version`, `/proc/1/cmdline`, `/etc/os-release`, etc.), root shell paths (`/root/.ssh/`, `/root/.bashrc`, `/root/.bash_profile`, `/root/.profile`), and macOS paths (`/Library/Preferences/SystemConfiguration/preferences.plist`)
 - SSH paths: `PathEtcSshKnownHosts`, `PathEtcSshSshKnownHosts`, `PathHomeSshKnownHosts`, `PathWindowsSshKnownHosts`, `PathWindowsProgramDataSsh`
-- Windows paths: `PathWindowsSystemRoot`, `PathWindowsHostsFile`, `PathWindowsRegistryCryptography`, `PathWindowsRegistryMachineGuid`, Git Bash paths (`PathWindowsGitBinBash`, `PathWindowsGitUsrBinBash`, `PathWindowsGitBinSh`, `PathWindowsMsys64Bash`, `PathWindowsCygwin64Bash`)
-- PKI filesystem constants: directory names (`PkiDirname`, `PkiSubdirRoot`, `PkiSubdirAuthorities`, `PkiSubdirIssued`, `PkiSubdirTrust`, `PkiSubdirRevocation`, `PkiSubdirBinaries`, `PkiSubdirClient`, `PkiSubdirHub`, `PkiSubdirGatewayPeer`, `PkiSubdirApps`, `PkiSubdirTrustedSigners`), file extensions (`FileExtCert`, `FileExtKey`, `FileExtPEM`, `FileExtJSON`), and filenames for CA certificates, bundles, operator credentials, gateway credentials, and bootstrap certificates
-- Database filenames: `DbFilename` (`g8e.db`), `VaultKeyFilename`, `VaultHeaderFilename`, `SuspendedTxFilename`, `ReceiptsFilename`, `ReceiptsExportFilename`
-- Secrets filenames: `SecretsFileSessionEncryptionKey`, `SecretsFileBootstrapDigest`, `SecretsFileActuatorSigningKey`, `SecretsFileActuatorKeyID`, `SecretsFileAuditorHMACKey`, `SecretsFileNotarySigningKey`, `SecretsFileOperatorPrivateKey`, `SecretsFileCLIPrivateKey`, `SecretsFileSessionToken`
-- Demos: `DemosDirname`, `DemosComposeFile`, `DemosBinDirname`, `DemosBinaryName`, `DemosTargetDataDir`, `DemosDoctrineDir`, `DemosPARequestsFile`, `DemosHIPAADoctrineFile`, `DemosSecureDataDoctrineFile`, `DemosOrgHealthcare`, `DemosOrgFinance`, `DemosOrgGov`, `DemosOrgSecureData`
-- Runtime directories: `RuntimeDirname` (`.g8e`), `DataDirname`, `VaultDirname`, `SecretsDirname`, `LedgerDirname`, `SshDirname`, `PidDirname`
+- Windows paths: `PathWindowsSystemRoot`, `PathWindowsHostsFile`, `PathWindowsRegistryCryptography`, `PathWindowsRegistryMachineGuid`, Git Bash paths (`PathWindowsGitBinBash`, `PathWindowsGitUsrBinBash`, `PathWindowsGitBinSh`, `PathWindowsMsys64Bash`, `PathWindowsCygwin64Bash`), and Windows temp cert constants (`WindowsTempCertImportPrefix`, `WindowsTempCATrustPrefix`, `WindowsTempCertFilename`)
+- PKI filesystem constants: directory names (`PkiDirname`, `PkiSubdirRoot`, `PkiSubdirAuthorities`, `PkiSubdirIssued`, `PkiSubdirTrust`, `PkiSubdirRevocation`, `PkiSubdirBinaries`, `PkiSubdirClient`, `PkiSubdirHub`, `PkiSubdirGatewayPeer`, `PkiSubdirApps`, `PkiSubdirTrustedSigners`), file extensions (`FileExtCert`, `FileExtKey`, `FileExtPEM`, `FileExtJSON`), CA and bundle filenames (`PkiFileRootCA`, `PkiFileRootCAKey`, `PkiFileHubCA`, `PkiFileOperatorCA`, `PkiFileGatewayPeerCA`, `PkiFileGatewayBundle`, `PkiFileRootBundle`, `PkiFileOperatorBundle`, `PkiFileTrustDomainJSON`, `PkiFileWardenPub`, `PkiFileBootstrapCA`, `PkiFileBootstrapBundle`), operator credentials (`PkiFileOperatorCert`, `PkiFileOperatorKey`, `PkiFileOperatorChain`), gateway credentials (`PkiFileGatewayCert`, `PkiFileGatewayKey`, `PkiFileGatewayChain`), peer certificates (`PeerCertFilename`, `PeerKeyFilename`, `PeerChainFilename`, `PeerSubdir`), and CLI credentials (`CliCertFilename`, `CliKeyFilename`, `CredentialsFilename`)
+- Database filenames: `DbFilename` (`g8e.db`), `VaultKeyFilename`, `VaultNewKeyFilename`, `VaultHeaderFilename`, `SuspendedTxFilename`, `ReceiptsFilename`, `ReceiptsExportFilename`, `ReplayStoreDBFilename`, `ExecutionVaultDBFilename`, `LocalStateDBFilename`, `AuditVaultDBFilename`, `MasterKeyFilename`, `PublicKeySuffix`
+- Secrets filenames: `SecretsFileSessionEncryptionKey`, `SecretsFileBootstrapDigest`, `SecretsFileActuatorSigningKey`, `SecretsFileActuatorKeyID`, `SecretsFileAuditorHMACKey`, `SecretsFileNotarySigningKey`, `SecretsFileOperatorPrivateKey`, `SecretsFileCLIPrivateKey`, `SecretsFileSessionToken`, `SecretsFileTribunalMemberKeyPrefix`
+- Demos: `DemosDirname`, `DemosComposeFile`, `DemosBinDirname`, `DemosBinaryName`, `DemosTargetDataDir`, `DemosDoctrineDir`, `DemosPARequestsFile`, `DemosHIPAADoctrineFile`, `DemosSecureDataDoctrineFile`, `DemosDoWDoctrineFile`, `DemosDHSDoctrineFile`, `DemosSwarmDoctrineFile`, `DemosImagesManifestFile`, `DemosOrgHealthcare`, `DemosOrgFinance`, `DemosOrgGov`, `DemosOrgSecureData`, `DemosOrgDoW`, `DemosOrgDHS`, `DemosOrgSwarm`, `DemosOrgFrontend`
+- Container paths: Docker exec paths for demo environments (`ContainerRootG8E`, `ContainerPKIDir`, `ContainerOperatorCert`, `ContainerOperatorKey`, `ContainerCABundle`, `ContainerDataDir`, `ContainerAuditVaultDB`, `ContainerExecutionVaultDB`, `ContainerLedgerFilesDir`, `ContainerDoctrineDir`, `ContainerEnsembleSeed`, and verification script paths)
+- Local binary names: `LocalBinaryName` (`./g8e`), `LocalBinaryNameWindows` (`./g8e.exe`), `BinaryImageName`, `BinaryImageNameWindows`
+- Deploy script filenames: `DeployScriptFilenameLinux` (`g8e-deploy.sh`), `DeployScriptFilenameWindows` (`g8e-deploy.ps1`)
+- Component filenames: `SwaggerFilename`, `ComplianceReportFilename`, `GatewayIDFilename`, `ActuatorPubJSONFilename`, `ActuatorPubPEMFilename`, `NetworkIdentityFilename`, `OperatorPIDFilename`, `OperatorPostureFilename`, `OperatorBinaryFilename`, `OperatorLogFilename`
+- Runtime directories: `RuntimeDirname` (`.g8e`), `DataDirname`, `VaultDirname`, `SecretsDirname`, `LedgerDirname`, `PidDirname`, `DocsDirname`, `ProtocolDirname`, `ProtocolConstantsDirname`, `ProtocolModelsDirname`, `BinDirname`, `LogDirname`
+- Ledger directories: `FilesDirname`, `SessionsDirname`, `GitDirname`, `GitignoreFilename`, `GoModFilename`
+- SSH config: `SshConfigFilename`, `SshDirname`, `SshConfigBasename`, `SshKnownHostsBasename`, `SshKeyEd25519`, `SshKeyECDSA`, `SshKeyRSA`
 - Agent config directories: `AgentConfigDirCursor`, `AgentConfigDirDevin`, `AgentConfigDirGemini`, `AgentConfigDirGoose`, `AgentConfigDirVSCode`, `AgentConfigDirCodeium`, `AgentConfigDirTabby`, `AgentConfigDirContinue`
 - Agent config files: `AgentConfigFileMCP`, `AgentConfigFileMCPDevin`, `AgentConfigFileSettings`, `AgentConfigFileAider`
 - File permission modes: `PermDirPrivate` (0700), `PermDirStandard` (0755), `PermFilePrivate` (0600), `PermFilePublic` (0644)
@@ -215,7 +245,12 @@ Filesystem paths for Operator data, certificates, ledger, system paths, and conf
 - Grep limits: `FsGrepDefaultMaxMatches` (100), `FsGrepMaxMatches` (500), `FsGrepScannerInitialBufSize` (64 KiB), `FsGrepScannerMaxBufSize` (1 MiB)
 - Execution limits: `ExecutionMaxStreamSize` (10 MB), `ExecutionMaxLines` (50), `ExecutionPreviewLength` (300), `FileEditMaxSize` (50 MB)
 - Reporting: `ReportsDirname` and CSV output filenames for receipts, sessions, events, file mutations, executions, file diffs, commitments, ledger commits, ledger merkle root, replay nonces, suspended transactions, verification summary, and manifest
-- Miscellaneous: `SwaggerFilename`, `ComplianceReportFilename`, `TmpFileSuffix`, `BackupFileSuffixPattern`, `SQLiteWALSuffix`, `SQLiteSHMSuffix`, `EnvPathDefault`, and test-specific constants
+- CLI default paths: `DefaultVaultDirDesc`, `DefaultVaultKeyDesc`, `DefaultOperatorKeyDesc`, `DefaultClientKeyDesc`, `DefaultOperatorCertDesc`, `DefaultClientCertDesc`, `DefaultDataDir`, `DefaultPKIDir`, `DefaultSecretsDir`
+- Tribunal bootstrap: `TribunalBootstrapConfigFilename` (`tribunal-bootstrap.json`)
+- API path constants: `APIPathAuthDeviceEnroll`, `APIPathPKIDevicesEnroll`, `WellKnownPKICABundle`
+- File suffixes: `TmpFileSuffix`, `BackupFileSuffixPattern`, `SQLiteWALSuffix`, `SQLiteSHMSuffix`
+- Environment path: `EnvPathDefault`, `PathParentDir`
+- Test-specific constants: isolated test environment filenames and paths for certs, keys, databases, and gateway config
 
 ### Ports (`ports.go`)
 
@@ -234,25 +269,24 @@ Unix shell exit codes for command execution:
 
 - `ExitCodeSuccess` (0), `ExitCodeGeneral` (1), `ExitCodeUsage` (2), `ExitCodeTimeout` (124), `ExitCodeCannotExecute` (126), `ExitCodeCommandNotFound` (127), `ExitCodeKilled` (137), `ExitCodeNone` (-1)
 
+Windows process exit codes:
+
+- `StillActiveExitCode` (259): indicates a Windows process is still running, equivalent to the Windows STILL_ACTIVE macro
+
 ### Errors (`errors.go`)
 
-Platform error variables defined as `error` values using `errors.New()`. The file contains approximately 50 error variables including:
-
-- `ErrUserNotFound`, `ErrNoPasskeysRegistered`, `ErrInvalidJSONBody`, `ErrUserIDRequired`, `ErrMethodNotAllowed`, `ErrForbidden`, `ErrInternal`, `ErrNotFound`, `ErrAlreadyExists`, `ErrConstraintViolation`, `ErrDatabaseLocked`, `ErrServiceUnavailable`, `ErrDatabaseReplay`, `ErrDuplicateColumn`, `ErrProcessKilled`, `ErrTrustBundleStale`, `ErrKeyNotFound`, `ErrExpired`, `ErrAgentNotFound`, `ErrAgentNotInPath`, `ErrAgentNotSupported`, `ErrConfigFileExists`, `ErrEndpointRequired`, `ErrGatewayURLRequired`, `ErrConfigLoadFailed`, `ErrCSRGenerationFailed`, `ErrEnrollmentFailed`, `ErrMissingCertificate`, `ErrDirCreateFailed`, `ErrPKIDirRequired`, `ErrCertSaveFailed`, and additional error variables for CLI operations, enrollment, and configuration validation.
+Platform error variables defined as `error` values using `errors.New()`. The file contains over 200 error variables covering standard platform errors, keystore errors, ledger errors, CLI approval errors, notary errors, CLI authentication errors, HTTP client errors, process manager errors, filesystem errors, FsGrep errors, pubsub client errors, execution service errors, MCP service errors, MCP registry errors, MCP validation errors, MCP OOM detection errors, MCP SSH known hosts errors, MCP git ops errors, MCP TLS cert inspect errors, run shell command errors, network identity detection errors, system utils errors, audit service errors, audit store errors, execution vault errors, pubsub service errors, scrubbing service errors, gateway service errors, gateway approval errors, MCP native handler errors, SQLite validation errors, SQLite utility errors, SQLite compression errors, passkey bootstrap errors, enrollment token errors, passkey credential validation errors, Windows-specific errors, data command errors, test command errors, and vault command/crypto errors.
 
 ### Environment Variables (`env_vars.go`)
 
 Typed environment variable names, typed as `EnvVarKey` and grouped in a struct `EnvVar`:
 
-- `TribunalID` (`G8E_TRIBUNAL_ID`)
-- `TribunalURL` (`G8E_TRIBUNAL_URL`)
-- `VaultDir` (`G8E_VAULT_DIR`)
-- `VaultKey` (`G8E_VAULT_KEY`)
-- `VaultRequireUnlock` (`G8E_VAULT_REQUIRE_UNLOCK`)
-- `Shell` (`SHELL`)
-- `Lang` (`LANG`)
-- `Term` (`TERM`)
-- `TZ` (`TZ`)
+- `TribunalID` (`G8E_TRIBUNAL_ID`), `TribunalURL` (`G8E_TRIBUNAL_URL`), `TribunalBootstrap` (`G8E_TRIBUNAL_BOOTSTRAP`)
+- `VaultDir` (`G8E_VAULT_DIR`), `VaultKey` (`G8E_VAULT_KEY`), `VaultRequireUnlock` (`G8E_VAULT_REQUIRE_UNLOCK`)
+- `OperatorSessionID` (`G8E_OPERATOR_SESSION_ID`)
+- `PasskeyRpID` (`G8E_PASSKEY_RP_ID`), `PasskeyRpName` (`G8E_PASSKEY_RP_NAME`), `PasskeyRpOrigins` (`G8E_PASSKEY_RP_ORIGINS`)
+- `PublicBaseURL` (`G8E_PUBLIC_BASE_URL`), `AllowedOrigins` (`G8E_ALLOWED_ORIGINS`)
+- `Shell` (`SHELL`), `Lang` (`LANG`), `Term` (`TERM`), `TZ` (`TZ`)
 
 ### Field Paths (`field_paths.go`)
 
@@ -310,9 +344,8 @@ Service-level constants for MCP tool execution:
 - `DefaultDiskProfileDepth` (2)
 - `DefaultNetworkTimeout` (5 seconds)
 - `DefaultHTTPTimeout` (10 seconds)
-- `SSHKeepaliveRequestType` (`keepalive@g8e`)
-- `SSHKeepaliveInterval` (15 seconds)
-- `SSHKeepaliveMaxMissed` (3)
+- `SSHKeepaliveRequestType` (`keepalive@g8e`), `SSHKeepaliveInterval` (15 seconds), `SSHKeepaliveMaxMissed` (3)
+- `SSHMaxRetries` (3), `SSHCaptureMaxBytes` (64 KiB), `SSHPreflightVerifyCommand` (`true`), `SSHProxyAddrLabel` (`proxy`)
 
 ### Network (`network.go`)
 
@@ -334,9 +367,11 @@ Output formatting constants:
 Platform event identifiers and binary/architecture constants:
 
 - Platform event string constants mirroring `events.go` platform events (usage, notification, auth, SSE, terminal, vault mode, external service, telemetry, console log)
-- Binary names: `BinaryNameWindows`, `BinaryNameLinux`, `BinaryNameDarwin`
+- Binary names: `BinaryNameWindows` (`g8e-windows-amd64.exe`), `BinaryNameLinux` (`g8e-linux-amd64`), `BinaryNameDarwin` (`g8e-darwin-amd64`)
 - Architectures: `ArchAMD64`, `ArchARM64`, `Arch386`
 - Operating systems: `OSLinux`, `OSDarwin`, `OSWindows`
+- Governance posture names: `PostureDoctrine` (`doctrine`), `PostureConsensus` (`consensus`), `PostureNotary` (`notary`)
+- Log level names: `LogLevelInfo`, `LogLevelError`, `LogLevelDebug`, `LogLevelDefault`
 
 ### Prompts (`prompts.go`)
 
