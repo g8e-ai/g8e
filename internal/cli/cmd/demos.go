@@ -823,9 +823,9 @@ func cleanSingleDemo(cmd *cobra.Command, demosDir, org string, skipConfirm bool)
 		}
 	}
 
-	// Pre-flight: verify Docker is available and running
 	if err := checkDockerAvailable(); err != nil {
-		return err
+		cmd.Printf("Docker not available — nothing to clean for '%s'.\n", org)
+		return nil
 	}
 
 	cmd.Printf("Cleaning demo environment: %s\n", org)
@@ -903,9 +903,9 @@ func cleanAllDemos(cmd *cobra.Command, demosDir string, skipConfirm bool) error 
 		}
 	}
 
-	// Pre-flight: verify Docker is available and running
 	if err := checkDockerAvailable(); err != nil {
-		return err
+		cmd.Println("Docker not available — nothing to clean.")
+		return nil
 	}
 
 	for _, d := range demos {
