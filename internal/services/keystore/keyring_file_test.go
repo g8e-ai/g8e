@@ -138,12 +138,12 @@ func TestFileKeyring_DeleteIdempotent(t *testing.T) {
 func TestFileKeyring_WithRealKeystore(t *testing.T) {
 	t.Parallel()
 
-	secretsDir := testutil.TempDir(t)
+	fileSvc, secretsDir := setupTestFileService(t)
 	logger := testutil.NewTestLogger()
 	keyring, err := newFileKeyring(secretsDir)
 	require.NoError(t, err)
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := NewWithKeyringAndFS(logger, keyring, fileSvc)
 	require.NoError(t, err)
 
 	err = ks.Initialize()

@@ -16,18 +16,16 @@ package keystore
 import (
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
-// New creates a new Keystore instance with the libsecret keyring.
+// NewWithFS creates a new Keystore instance with the libsecret keyring
+// and the provided RuntimeFileService for file I/O.
 // Falls back to file-based storage if libsecret is not available.
-// Production callers should pass paths.Infra.SecretsDir for secretsDir.
-func New(secretsDir string, logger *slog.Logger) (*Keystore, error) {
-	if err := os.MkdirAll(secretsDir, constants.PermDirPrivate); err != nil {
-		return nil, fmt.Errorf("keystore: create secrets directory: %w", err)
-	}
+func NewWithFS(fileSvc fs.RuntimeFileService, logger *slog.Logger) (*Keystore, error) {
+	secretsDir := fileSvc.Resolve(constants.SecretsDirname)
 
 	keyring, err := newLibsecretKeyring()
 	if err != nil {
@@ -39,8 +37,8 @@ func New(secretsDir string, logger *slog.Logger) (*Keystore, error) {
 	}
 
 	return &Keystore{
-		logger:     logger,
-		secretsDir: secretsDir,
-		keyring:    keyring,
+		logger:  logger,
+		keyring: keyring,
+		fileSvc: fileSvc,
 	}, nil
 }

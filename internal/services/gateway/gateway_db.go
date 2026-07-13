@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/storage"
@@ -92,7 +93,7 @@ type CanonicalDBService struct {
 // vaultKeyPath is the path to the vault private key file (hex-encoded).
 // vaultRequireUnlock requires the vault to be unlocked before starting.
 // testKeystore is an optional keystore instance for test mode (prevents race conditions in parallel tests).
-func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, logger *slog.Logger, testMode bool, vaultKeyPath string, vaultRequireUnlock bool, testKeystore *keystore.Keystore) (*CanonicalDBService, error) {
+func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, logger *slog.Logger, testMode bool, vaultKeyPath string, vaultRequireUnlock bool, testKeystore *keystore.Keystore, fileSvc fs.RuntimeFileService) (*CanonicalDBService, error) {
 	dbPath := filepath.Join(dataDir, constants.DbFilename)
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 
@@ -185,12 +186,12 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 	svc.BlobStore = NewBlobStoreService(db, logger)
 
 	if testMode {
-		if err := svc.initTestSchema(secretsDir, testKeystore); err != nil {
+		if err := svc.initTestSchema(secretsDir, testKeystore, fileSvc); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 		}
 	} else {
-		if err := svc.initSchema(secretsDir); err != nil {
+		if err := svc.initSchema(secretsDir, fileSvc); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 		}
@@ -210,7 +211,7 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 	return svc, nil
 }
 
-func (s *CanonicalDBService) initTestSchema(secretsDir string, testKeystore *keystore.Keystore) error {
+func (s *CanonicalDBService) initTestSchema(secretsDir string, testKeystore *keystore.Keystore, fileSvc fs.RuntimeFileService) error {
 	_, err := s.db.ExecWithRetry(gatewaySchema)
 	if err != nil {
 		return fmt.Errorf("canonicalDB: init test schema: %w", err)
@@ -219,11 +220,10 @@ func (s *CanonicalDBService) initTestSchema(secretsDir string, testKeystore *key
 		return constants.ErrTestKeystoreNil
 	}
 	sm := &SecretManager{
-		db:                  s.db,
-		secretsDir:          secretsDir,
-		bootstrapDigestPath: filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest),
-		logger:              s.logger,
-		keystore:            testKeystore,
+		db:       s.db,
+		logger:   s.logger,
+		fileSvc:  fileSvc,
+		keystore: testKeystore,
 	}
 	if err := sm.InitAppSettings(); err != nil {
 		return fmt.Errorf("canonicalDB: init test schema: app settings: %w", err)
@@ -282,13 +282,13 @@ func (s *CanonicalDBService) RunMaintenance(ctx context.Context) {
 	}
 }
 
-func (s *CanonicalDBService) initSchema(secretsDir string) error {
+func (s *CanonicalDBService) initSchema(secretsDir string, fileSvc fs.RuntimeFileService) error {
 	_, err := s.db.ExecWithRetry(gatewaySchema)
 	if err != nil {
 		return fmt.Errorf("canonicalDB: init schema: %w", err)
 	}
 
-	sm, err := NewSecretManager(s.db, secretsDir, s.logger)
+	sm, err := NewSecretManager(s.db, fileSvc, s.logger)
 	if err != nil {
 		return fmt.Errorf("canonicalDB: init schema: secret manager: %w", err)
 	}
