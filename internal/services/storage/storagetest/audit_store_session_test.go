@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,9 +34,10 @@ func TestSQLAuditStore_Session(t *testing.T) {
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, vaultDir, privKey)
+	fileSvc := NewTestFileSvc(t, tempDir)
 
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
+		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -46,7 +48,7 @@ func TestSQLAuditStore_Session(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -73,9 +75,10 @@ func TestSQLAuditStore_MultipleSessions(t *testing.T) {
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, vaultDir, privKey)
+	fileSvc := NewTestFileSvc(t, tempDir)
 
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
+		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -86,7 +89,7 @@ func TestSQLAuditStore_MultipleSessions(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -125,9 +128,10 @@ func TestSQLAuditStore_GetSessionNotFound(t *testing.T) {
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, vaultDir, privKey)
+	fileSvc := NewTestFileSvc(t, tempDir)
 
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
+		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -138,7 +142,7 @@ func TestSQLAuditStore_GetSessionNotFound(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -155,9 +159,10 @@ func TestSQLAuditStore_SessionWithNullFields(t *testing.T) {
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, vaultDir, privKey)
+	fileSvc := NewTestFileSvc(t, tempDir)
 
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
+		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -168,7 +173,7 @@ func TestSQLAuditStore_SessionWithNullFields(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	defer avs.Close()
 

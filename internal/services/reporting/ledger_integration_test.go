@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -40,12 +41,15 @@ func setupTestGitLedger(t *testing.T) *storage.GitLedgerService {
 	require.NoError(t, os.MkdirAll(vaultDir, 0o700))
 	v := createTestVault(t, vaultDir, privKey)
 
-	ledgerDir := filepath.Join(testutil.TempDir(t), "ledger")
+	baseDir := testutil.TempDir(t)
+	fileSvc, err := fs.NewRuntimeFileService(baseDir, testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+
 	ledger, err := storage.NewGitLedgerService(&storage.LedgerConfig{
-		BaseDir:         ledgerDir,
 		GitPath:         "git",
 		EncryptionVault: v,
-	}, testutil.NewTestLogger())
+	}, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 
 	return ledger

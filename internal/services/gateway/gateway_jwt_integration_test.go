@@ -129,7 +129,6 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	dbDir := testutil.TempDir(t)
-	pkiDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
 	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
@@ -142,7 +141,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	sm, err := NewSecretManagerWithKeystore(db.db, fileSvc, logger, ks)
 	require.NoError(t, err)
 
-	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
+	pki := newPKIAuthority(fileSvc, db, sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
@@ -282,7 +281,6 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	dbDir := testutil.TempDir(t)
-	pkiDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
 	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
@@ -295,7 +293,7 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 	sm, err := NewSecretManagerWithKeystore(db.db, fileSvc, logger, ks)
 	require.NoError(t, err)
 
-	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
+	pki := newPKIAuthority(fileSvc, db, sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
@@ -450,7 +448,6 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	dbDir := testutil.TempDir(t)
-	pkiDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
 	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
@@ -463,7 +460,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	sm, err := NewSecretManagerWithKeystore(db.db, fileSvc, logger, ks)
 	require.NoError(t, err)
 
-	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
+	pki := newPKIAuthority(fileSvc, db, sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
@@ -616,7 +613,6 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	dbDir := testutil.TempDir(t)
-	pkiDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
 	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
@@ -626,7 +622,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 	sm, err := NewSecretManagerWithKeystore(db.db, fileSvc, logger, ks)
 	require.NoError(t, err)
 
-	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
+	pki := newPKIAuthority(fileSvc, db, sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 

@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
@@ -40,7 +41,9 @@ func setupBootstrapLedger(t *testing.T) (*GitLedgerService, string) {
 	t.Helper()
 	gitPath := testGitPath(t)
 	tempDir := testutil.TempDir(t)
-	ledgerDir := filepath.Join(tempDir, "ledger")
+
+	fileSvc, _ := newTestFileSvc(t)
+	ledgerDir := fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.LedgerDirname))
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -58,7 +61,7 @@ func setupBootstrapLedger(t *testing.T) (*GitLedgerService, string) {
 		GitPath:         gitPath,
 		EncryptionVault: testVault,
 	}
-	svc, err := NewGitLedgerService(config, testutil.NewTestLogger())
+	svc, err := NewGitLedgerService(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	require.NotNil(t, svc)
 
@@ -243,14 +246,14 @@ func TestBootstrap_InitGitRepoIdempotent(t *testing.T) {
 	t.Parallel()
 	svc, ledgerDir := setupBootstrapLedger(t)
 
-	filesDir := filepath.Join(ledgerDir, constants.FilesDirname)
+	filesRelPath := filepath.Join(constants.DataDirname, constants.LedgerDirname, constants.FilesDirname)
 
 	// The repo was already initialized during bootstrap. Calling again must not fail.
-	err := svc.initGitRepo(filesDir)
+	err := svc.initGitRepo(filesRelPath)
 	require.NoError(t, err)
 
 	// Verify the repo is still valid
-	repo, err := git.PlainOpen(filesDir)
+	repo, err := git.PlainOpen(filepath.Join(ledgerDir, constants.FilesDirname))
 	require.NoError(t, err)
 	ref, err := repo.Head()
 	require.NoError(t, err)
@@ -264,7 +267,9 @@ func TestBootstrap_ReconstructionOverExistingDir(t *testing.T) {
 	t.Parallel()
 	gitPath := testGitPath(t)
 	tempDir := testutil.TempDir(t)
-	ledgerDir := filepath.Join(tempDir, "ledger")
+
+	fileSvc, _ := newTestFileSvc(t)
+	ledgerDir := fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.LedgerDirname))
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -284,7 +289,7 @@ func TestBootstrap_ReconstructionOverExistingDir(t *testing.T) {
 	}
 
 	// First construction bootstraps the directory
-	svc1, err := NewGitLedgerService(config, testutil.NewTestLogger())
+	svc1, err := NewGitLedgerService(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 
 	// Capture the initial commit hash
@@ -292,7 +297,7 @@ func TestBootstrap_ReconstructionOverExistingDir(t *testing.T) {
 	require.NoError(t, err)
 
 	// Second construction over the same directory must succeed
-	svc2, err := NewGitLedgerService(config, testutil.NewTestLogger())
+	svc2, err := NewGitLedgerService(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 
 	// The initial commit should still be the HEAD (initGitRepo is idempotent)
@@ -308,7 +313,7 @@ func TestBootstrap_ReconstructionOverExistingDir(t *testing.T) {
 // TestBootstrap_NilConfigReturnsError verifies that a nil config is rejected.
 func TestBootstrap_NilConfigReturnsError(t *testing.T) {
 	t.Parallel()
-	svc, err := NewGitLedgerService(nil, testutil.NewTestLogger())
+	svc, err := NewGitLedgerService(nil, testutil.NewTestLogger(), nil)
 	require.Error(t, err)
 	assert.Nil(t, svc)
 	assert.Contains(t, err.Error(), "config")
@@ -321,7 +326,7 @@ func TestBootstrap_NilVaultReturnsError(t *testing.T) {
 		BaseDir: testutil.TempDir(t),
 		GitPath: "/usr/bin/git",
 	}
-	svc, err := NewGitLedgerService(config, testutil.NewTestLogger())
+	svc, err := NewGitLedgerService(config, testutil.NewTestLogger(), nil)
 	require.Error(t, err)
 	assert.Nil(t, svc)
 	assert.Contains(t, err.Error(), "vault")
@@ -355,7 +360,9 @@ func TestBootstrap_BootstrapFailureOnUnwritableBaseDir(t *testing.T) {
 		GitPath:         testGitPath(t),
 		EncryptionVault: testVault,
 	}
-	svc, err := NewGitLedgerService(config, testutil.NewTestLogger())
+	fileSvc, err := fs.NewRuntimeFileService(blocker, testutil.NewTestLogger())
+	require.NoError(t, err)
+	svc, err := NewGitLedgerService(config, testutil.NewTestLogger(), fileSvc)
 	require.Error(t, err)
 	assert.Nil(t, svc)
 }

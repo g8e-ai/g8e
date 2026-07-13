@@ -167,7 +167,7 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 		GitPath:         "git",
 		EncryptionVault: v,
 	}
-	ledger, ledgerErr := storage.NewGitLedgerService(ledgerCfg, logger)
+	ledger, ledgerErr := storage.NewGitLedgerService(ledgerCfg, logger, fileSvc)
 	if ledgerErr != nil {
 		logger.Warn("Git ledger unavailable; ledger reports will be skipped", "error", ledgerErr)
 		ledger = nil

@@ -57,8 +57,10 @@ func TestSQLAuditStore_BootstrapWithURL(t *testing.T) {
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, vaultDir, privKey)
 
+	fileSvc := NewTestFileSvc(t, tempDir)
+
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
+		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 constants.LedgerDirname,
 		MaxDBSizeMB:               100,
@@ -70,23 +72,22 @@ func TestSQLAuditStore_BootstrapWithURL(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	require.NotNil(t, avs)
 	defer avs.Close()
 
 	// Verify directory structure was created
-	assert.DirExists(t, tempDir)
-	assert.DirExists(t, filepath.Join(tempDir, constants.LedgerDirname))
-	assert.DirExists(t, filepath.Join(tempDir, constants.LedgerDirname, "files"))
+	assert.DirExists(t, fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.LedgerDirname)))
+	assert.DirExists(t, fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.LedgerDirname, "files")))
 
 	// Verify database was created
-	assert.FileExists(t, filepath.Join(tempDir, "test.db"))
+	assert.FileExists(t, fileSvc.Resolve(filepath.Join(constants.DataDirname, "test.db")))
 
 	// Verify git was initialized
-	assert.DirExists(t, filepath.Join(tempDir, constants.LedgerDirname, constants.GitDirname))
+	assert.DirExists(t, fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.LedgerDirname, constants.GitDirname)))
 
-	assert.Equal(t, tempDir, avs.GetDataDir())
+	assert.Equal(t, fileSvc.Resolve(constants.DataDirname), avs.GetDataDir())
 }
 
 func TestSQLAuditStore_GetDataDir(t *testing.T) {
@@ -98,8 +99,10 @@ func TestSQLAuditStore_GetDataDir(t *testing.T) {
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, vaultDir, privKey)
 
+	fileSvc := NewTestFileSvc(t, tempDir)
+
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
+		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 constants.LedgerDirname,
 		MaxDBSizeMB:               100,
@@ -110,11 +113,11 @@ func TestSQLAuditStore_GetDataDir(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	defer avs.Close()
 
-	assert.Equal(t, tempDir, avs.GetDataDir())
+	assert.Equal(t, fileSvc.Resolve(constants.DataDirname), avs.GetDataDir())
 
 	// Nil service
 	var nilService *TestSQLAuditStore
@@ -130,8 +133,10 @@ func TestSQLAuditStore_GetLedgerPath(t *testing.T) {
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, vaultDir, privKey)
 
+	fileSvc := NewTestFileSvc(t, tempDir)
+
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
+		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 constants.LedgerDirname,
 		MaxDBSizeMB:               100,
@@ -142,7 +147,7 @@ func TestSQLAuditStore_GetLedgerPath(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -193,7 +198,7 @@ func TestSQLAuditStore_GetEncryptionVault(t *testing.T) {
 		DataDir: tempDir,
 		DBPath:  "test1.db",
 	}
-	avs1, err := NewTestSQLAuditStore(config1, logger)
+	avs1, err := NewTestSQLAuditStore(config1, logger, nil)
 	require.Error(t, err)
 	require.Nil(t, avs1)
 	assert.Contains(t, err.Error(), "EncryptionVault is required")
@@ -206,12 +211,14 @@ func TestSQLAuditStore_GetEncryptionVault(t *testing.T) {
 	require.NoError(t, err)
 	defer v.Close()
 
+	fileSvc := NewTestFileSvc(t, tempDir)
+
 	config2 := &TestSQLAuditStoreConfig{
-		DataDir:         tempDir,
+		DataDir:         fileSvc.Resolve(constants.DataDirname),
 		DBPath:          "test2.db",
 		EncryptionVault: v,
 	}
-	avs2, err := NewTestSQLAuditStore(config2, logger)
+	avs2, err := NewTestSQLAuditStore(config2, logger, fileSvc)
 	require.NoError(t, err)
 	defer avs2.Close()
 	assert.Equal(t, v, avs2.GetEncryptionVault())
@@ -230,8 +237,10 @@ func TestSQLAuditStore_CloseIdempotent(t *testing.T) {
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, vaultDir, privKey)
 
+	fileSvc := NewTestFileSvc(t, tempDir)
+
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
+		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 constants.LedgerDirname,
 		MaxDBSizeMB:               100,
@@ -242,7 +251,7 @@ func TestSQLAuditStore_CloseIdempotent(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 
 	// Close multiple times should not panic
@@ -262,8 +271,10 @@ func TestSQLAuditStore_WALMode(t *testing.T) {
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, vaultDir, privKey)
 
+	fileSvc := NewTestFileSvc(t, tempDir)
+
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
+		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 constants.LedgerDirname,
 		MaxDBSizeMB:               100,
@@ -274,12 +285,12 @@ func TestSQLAuditStore_WALMode(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	defer avs.Close()
 
 	// WAL mode should create additional files
-	dbPath := filepath.Join(tempDir, "test.db")
+	dbPath := fileSvc.Resolve(filepath.Join(constants.DataDirname, "test.db"))
 	assert.FileExists(t, dbPath)
 
 	// WAL file should be created after some activity

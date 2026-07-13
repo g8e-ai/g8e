@@ -213,11 +213,11 @@ file path (defaults to stdout).`,
 			}
 
 			// Write to file
-			if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(outPath), constants.PermDirStandard); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 			}
-			if err := os.WriteFile(outPath, resp, 0644); err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrFileEditWriteFileFailed, err)
+			if err := os.WriteFile(outPath, resp, constants.PermFilePublic); err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 			}
 
 			cmd.Printf("Receipts export written to: %s (%d bytes)\n", outPath, len(resp))
@@ -285,13 +285,13 @@ directory for the report file.`,
 			}
 
 			// Write report to file
-			if err := os.MkdirAll(outDir, 0755); err != nil {
+			if err := os.MkdirAll(outDir, constants.PermDirStandard); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 			}
 
 			jsonPath := filepath.Join(outDir, constants.ComplianceReportFilename)
-			if err := os.WriteFile(jsonPath, resp, 0644); err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrFileEditWriteFileFailed, err)
+			if err := os.WriteFile(jsonPath, resp, constants.PermFilePublic); err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 			}
 
 			cmd.Println("Compliance report written:")

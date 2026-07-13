@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
@@ -33,7 +34,9 @@ import (
 func setupTestLedger(t *testing.T) (*GitLedgerService, string) {
 	gitPath := testGitPath(t)
 	tempDir := testutil.TempDir(t)
-	ledgerDir := filepath.Join(tempDir, "ledger")
+
+	fileSvc, _ := newTestFileSvc(t)
+	ledgerDir := fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.LedgerDirname))
 
 	// Create vault but do NOT unlock it (encryption disabled)
 	_, privKey, err := ed25519.GenerateKey(nil)
@@ -54,7 +57,7 @@ func setupTestLedger(t *testing.T) (*GitLedgerService, string) {
 		GitPath:         gitPath,
 		EncryptionVault: testVault,
 	}
-	lms, err := NewGitLedgerService(ledgerConfig, logger)
+	lms, err := NewGitLedgerService(ledgerConfig, logger, fileSvc)
 	require.NoError(t, err)
 	require.NotNil(t, lms)
 
@@ -65,7 +68,9 @@ func setupTestLedger(t *testing.T) (*GitLedgerService, string) {
 func setupTestLedgerWithEncryption(t *testing.T) (*GitLedgerService, string) {
 	gitPath := testGitPath(t)
 	tempDir := testutil.TempDir(t)
-	ledgerDir := filepath.Join(tempDir, "ledger")
+
+	fileSvc, _ := newTestFileSvc(t)
+	ledgerDir := fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.LedgerDirname))
 
 	// Create vault and unlock it (encryption enabled)
 	_, privKey, err := ed25519.GenerateKey(nil)
@@ -87,7 +92,7 @@ func setupTestLedgerWithEncryption(t *testing.T) (*GitLedgerService, string) {
 		GitPath:         gitPath,
 		EncryptionVault: testVault,
 	}
-	lms, err := NewGitLedgerService(ledgerConfig, logger)
+	lms, err := NewGitLedgerService(ledgerConfig, logger, fileSvc)
 	require.NoError(t, err)
 	require.NotNil(t, lms)
 
@@ -105,7 +110,7 @@ func TestLedgerService_NewService(t *testing.T) {
 
 func TestLedgerService_NewServiceWithNilConfig(t *testing.T) {
 	t.Parallel()
-	lms, err := NewGitLedgerService(nil, testutil.NewTestLogger())
+	lms, err := NewGitLedgerService(nil, testutil.NewTestLogger(), nil)
 	require.Error(t, err)
 	assert.Nil(t, lms)
 }
@@ -186,7 +191,7 @@ func TestLedgerService_MirrorFileWrite_ExistingFile(t *testing.T) {
 
 func TestLedgerService_MirrorFileWrite_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
+	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger(), nil)
 
 	result, err := lms.LedgerFileWrite("operator_session", "/some/file")
 	require.NoError(t, err) // Graceful degradation: returns nil, nil when git not ready
@@ -251,7 +256,7 @@ func TestLedgerService_MirrorFileDelete_NonExistentFile(t *testing.T) {
 
 func TestLedgerService_MirrorFileDelete_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
+	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger(), nil)
 
 	result, err := lms.MirrorFileDelete("operator_session", "/some/file")
 	require.NoError(t, err)
@@ -296,7 +301,7 @@ func TestLedgerService_MirrorFileCreate(t *testing.T) {
 
 func TestLedgerService_MirrorFileCreate_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
+	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger(), nil)
 
 	result, err := lms.MirrorFileCreate("operator_session", "/some/file")
 	require.NoError(t, err)
@@ -305,7 +310,7 @@ func TestLedgerService_MirrorFileCreate_DisabledVault(t *testing.T) {
 
 func TestLedgerService_CompleteMirrorCreate_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
+	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger(), nil)
 
 	err := lms.CompleteMirrorCreate(&LedgerResult{}, "operator_session")
 	require.NoError(t, err)
@@ -508,7 +513,7 @@ func TestLedgerService_GetFileHistory_NilReceiver(t *testing.T) {
 
 func TestLedgerService_GetFileHistory_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
+	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger(), nil)
 
 	history, err := lms.GetFileHistory("/some/file", 10, "session")
 	require.Error(t, err)
@@ -566,7 +571,7 @@ func TestLedgerService_GetFileAtCommit(t *testing.T) {
 
 func TestLedgerService_GetFileAtCommit_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
+	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger(), nil)
 
 	content, err := lms.GetFileAtCommit("/some/file", "abc123", "session")
 	require.Error(t, err)
@@ -612,7 +617,7 @@ func TestLedgerService_RestoreFileFromCommit_DisabledVault(t *testing.T) {
 		BaseDir: testutil.TempDir(t),
 		GitPath: "/usr/bin/git",
 	}
-	_, err := NewGitLedgerService(config, testutil.NewTestLogger())
+	_, err := NewGitLedgerService(config, testutil.NewTestLogger(), nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "ledger encryption vault is required")
 }
@@ -824,7 +829,7 @@ func TestLedgerService_GetStateMerkleRoot_NilReceiver(t *testing.T) {
 
 func TestLedgerService_GetStateMerkleRoot_DisabledVault(t *testing.T) {
 	t.Parallel()
-	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
+	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger(), nil)
 
 	root, err := lms.GetStateMerkleRoot()
 	require.NoError(t, err)

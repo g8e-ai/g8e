@@ -256,7 +256,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 			GitPath:         gitPath,
 			EncryptionVault: encryptionVault,
 		}
-		ledger, err := storage.NewGitLedgerService(ledgerConfig, vs.logger)
+		ledger, err := storage.NewGitLedgerService(ledgerConfig, vs.logger, vs.fileSvc)
 		if err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrLedgerConfigRequired, err)
 		}

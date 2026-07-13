@@ -161,7 +161,7 @@ func TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser(t *testing.T) {
 
 	// Create PKI (required for fail-closed revocation check)
 	sm := newTestSecretManager(t, db.db, fileSvc)
-	pki := newPKIAuthority(dbDir, filepath.Join(dbDir, "pki"), db, sm, logger)
+	pki := newPKIAuthority(fileSvc, db, sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
@@ -239,7 +239,7 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsInvalidSignature(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 
 	sm := newTestSecretManager(t, db.db, fileSvc)
-	pki := newPKIAuthority(dbDir, filepath.Join(dbDir, "pki"), db, sm, logger)
+	pki := newPKIAuthority(fileSvc, db, sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
@@ -347,7 +347,7 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsRevokedCertificate(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 
 	sm := newTestSecretManager(t, db.db, fileSvc)
-	pki := newPKIAuthority(dbDir, filepath.Join(dbDir, "pki"), db, sm, logger)
+	pki := newPKIAuthority(fileSvc, db, sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 

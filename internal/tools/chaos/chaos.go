@@ -49,6 +49,7 @@ import (
 	govpkg "github.com/g8e-ai/g8e/internal/governance"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/pathutil"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/storage"
@@ -370,26 +371,36 @@ func Run(cfg Config) error {
 	}
 
 	// Use shared test vault directory for persistent inspection
-	dataDir := cfg.DataDir
+	var baseDir string
 	var testVaultDir string
-	if dataDir == "" {
+	if cfg.DataDir == "" {
 		testVaultDir = paths.Infra.TestVaultDir
-		if err := os.MkdirAll(testVaultDir, 0755); err != nil {
+		if err := os.MkdirAll(testVaultDir, constants.PermDirStandard); err != nil {
 			return fmt.Errorf("%w: %v", constants.ErrDirCreateFailed, err)
 		}
 
 		// Create unique subdirectory for this test run
 		testRunID := fmt.Sprintf("%s-chaos-test", time.Now().Format("20060102-150405"))
-		dataDir = filepath.Join(testVaultDir, testRunID)
-		if err := os.MkdirAll(dataDir, 0755); err != nil {
+		baseDir = filepath.Join(testVaultDir, testRunID)
+		if err := os.MkdirAll(baseDir, constants.PermDirStandard); err != nil {
 			return fmt.Errorf("%w: %v", constants.ErrDirCreateFailed, err)
 		}
 	} else {
-		// If user specified a directory, ensure it exists
-		if err := os.MkdirAll(dataDir, 0755); err != nil {
+		baseDir = cfg.DataDir
+		if err := os.MkdirAll(baseDir, constants.PermDirStandard); err != nil {
 			return fmt.Errorf("%w: %v", constants.ErrDirCreateFailed, err)
 		}
 	}
+
+	// Construct fileSvc for .g8e/ I/O within the test run directory
+	fileSvc, err := fs.NewRuntimeFileService(baseDir, logger)
+	if err != nil {
+		return fmt.Errorf("failed to create file service: %w", err)
+	}
+	if err := fileSvc.CreateRuntimeTree(context.Background()); err != nil {
+		return fmt.Errorf("failed to create runtime tree: %w", err)
+	}
+	dataDir := fileSvc.Resolve(constants.DataDirname)
 
 	pkiDir := cfg.PKIDir
 	if pkiDir == "" {
@@ -419,8 +430,8 @@ func Run(cfg Config) error {
 	trustedSigners := map[string]ed25519.PublicKey{keyID: pubKey}
 
 	// ── vault ────────────────────────────────────────────────────────────────
-	vaultDir := filepath.Join(dataDir, "vault")
-	if err := os.MkdirAll(vaultDir, 0700); err != nil {
+	vaultDir := fileSvc.Resolve(filepath.Join(constants.DataDirname, "vault"))
+	if err := fileSvc.MkdirAll(context.Background(), filepath.Join(constants.DataDirname, "vault"), constants.PermDirPrivate); err != nil {
 		return fmt.Errorf("%w: %v", constants.ErrDirCreateFailed, err)
 	}
 	_, vaultPrivKey, err := ed25519.GenerateKey(nil)
@@ -459,7 +470,7 @@ func Run(cfg Config) error {
 		GitPath:                   gitPath,
 		EncryptionVault:           encryptionVault,
 	}
-	av, err := storagetest.NewTestSQLAuditStore(avCfg, logger)
+	av, err := storagetest.NewTestSQLAuditStore(avCfg, logger, fileSvc)
 	if err != nil {
 		return fmt.Errorf("failed to initialize audit vault: %w", err)
 	}
@@ -499,7 +510,7 @@ func Run(cfg Config) error {
 	// Initialize Ledger (nil for chaos tester - no actual ledger needed)
 	// Use pathutil.SafeJoin for cross-platform safety when joining with absolute paths.Infra.RuntimeDir
 	ledgerBaseDir := pathutil.SafeJoin(paths.Infra.RuntimeDir, constants.DataDirname, constants.LedgerDirname)
-	ledger, _ := storage.NewGitLedgerService(&storage.LedgerConfig{BaseDir: ledgerBaseDir, EncryptionVault: nil}, logger)
+	ledger, _ := storage.NewGitLedgerService(&storage.LedgerConfig{BaseDir: ledgerBaseDir, EncryptionVault: nil}, logger, fileSvc)
 
 	// Initialize L1 Doctrine for threat detection
 	doctrine := governance.NewL1Doctrine()

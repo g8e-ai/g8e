@@ -39,8 +39,8 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/services/auth"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 // ParseCertPEM parses a PEM-encoded certificate file and returns the x509 certificate.
@@ -102,31 +102,23 @@ func GenerateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 	return string(csrPEM), privKey, nil
 }
 
-// CertPaths holds the filesystem paths needed by enrollment and renewal functions.
-// It decouples these functions from the global paths.Infra singleton.
-type CertPaths struct {
-	PkiTrustDir       string
-	OperatorKeyPath   string
-	OperatorCertPath  string
-	CaCertPath        string
-	TrustedSignersDir string
-}
-
 // PerformAutomaticEnrollment handles automatic enrollment with a Gateway when -e flag is provided.
 // It fetches the trust bundle, generates a CSR, enrolls with the Gateway, and saves certificates.
 // Returns the operator session ID so the caller can set it at the top level.
-func PerformAutomaticEnrollment(ctx context.Context, gatewayIP string, certPaths CertPaths, logger *slog.Logger) (sessionID string, err error) {
-	// Create PKI directory
-	if err := os.MkdirAll(certPaths.PkiTrustDir, 0700); err != nil {
+func PerformAutomaticEnrollment(ctx context.Context, gatewayIP string, fileSvc fs.RuntimeFileService, logger *slog.Logger) (sessionID string, err error) {
+	// Create PKI trust directory
+	if err := fileSvc.MkdirAll(ctx, filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust), constants.PermDirPrivate); err != nil {
 		return "", fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 	}
 
 	// Remove any stale certs so enrollment always issues fresh ones tied to
 	// the current gateway PKI (e.g. after gateway restart/regen).
-	if err := os.Remove(certPaths.OperatorKeyPath); err != nil && !os.IsNotExist(err) {
+	opKeyRelPath := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorKey)
+	if err := fileSvc.Remove(ctx, opKeyRelPath); err != nil {
 		return "", fmt.Errorf("enrollment: remove stale operator key: %w", err)
 	}
-	if err := os.Remove(certPaths.OperatorCertPath); err != nil && !os.IsNotExist(err) {
+	opCertRelPath := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert)
+	if err := fileSvc.Remove(ctx, opCertRelPath); err != nil {
 		return "", fmt.Errorf("enrollment: remove stale operator cert: %w", err)
 	}
 
@@ -139,10 +131,11 @@ func PerformAutomaticEnrollment(ctx context.Context, gatewayIP string, certPaths
 	}
 
 	// Save trust bundle
-	if err := os.WriteFile(certPaths.CaCertPath, trustBundle, 0644); err != nil {
+	caBundleRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+	if err := fileSvc.WriteFile(ctx, caBundleRelPath, trustBundle, constants.PermFilePublic); err != nil {
 		return "", fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 	}
-	logger.Info("Trust bundle saved", "path", certPaths.CaCertPath)
+	logger.Info("Trust bundle saved", "path", fileSvc.Resolve(caBundleRelPath))
 
 	// Generate system fingerprint for enrollment
 	systemFp, err := auth.GenerateSystemFingerprint(logger)
@@ -227,8 +220,8 @@ func PerformAutomaticEnrollment(ctx context.Context, gatewayIP string, certPaths
 		Type:  "EC PRIVATE KEY",
 		Bytes: keyBytes,
 	})
-	logger.Info("Saving operator private key", "path", certPaths.OperatorKeyPath)
-	if err := os.WriteFile(certPaths.OperatorKeyPath, keyPEM, 0600); err != nil {
+	logger.Info("Saving operator private key", "path", fileSvc.Resolve(opKeyRelPath))
+	if err := fileSvc.WriteFile(ctx, opKeyRelPath, keyPEM, constants.PermFilePrivate); err != nil {
 		return "", fmt.Errorf("%w: %w", constants.ErrKeyWriteFailed, err)
 	}
 	logger.Info("Operator private key saved successfully")
@@ -238,15 +231,15 @@ func PerformAutomaticEnrollment(ctx context.Context, gatewayIP string, certPaths
 	if enrollResp.OperatorCertChain != "" {
 		certContent += "\n" + enrollResp.OperatorCertChain
 	}
-	logger.Info("Saving operator certificate", "path", certPaths.OperatorCertPath)
-	if err := os.WriteFile(certPaths.OperatorCertPath, []byte(certContent), 0600); err != nil {
+	logger.Info("Saving operator certificate", "path", fileSvc.Resolve(opCertRelPath))
+	if err := fileSvc.WriteFile(ctx, opCertRelPath, []byte(certContent), constants.PermFilePrivate); err != nil {
 		return "", fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 	logger.Info("Operator certificate saved successfully")
 
 	// Update trust bundle if Gateway returned a new one
 	if enrollResp.HubTrustBundle != "" {
-		if err := os.WriteFile(certPaths.CaCertPath, []byte(enrollResp.HubTrustBundle), 0644); err != nil {
+		if err := fileSvc.WriteFile(ctx, caBundleRelPath, []byte(enrollResp.HubTrustBundle), constants.PermFilePublic); err != nil {
 			return "", fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 		}
 		logger.Info("Updated trust bundle from Gateway")
@@ -254,14 +247,15 @@ func PerformAutomaticEnrollment(ctx context.Context, gatewayIP string, certPaths
 
 	// Save Actuator public key to trusted_signers so the operator can verify L2 signatures.
 	if enrollResp.ActuatorKeyID != "" && enrollResp.ActuatorPubKey != "" {
-		if err := os.MkdirAll(certPaths.TrustedSignersDir, 0700); err != nil {
+		trustedSignersRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrustedSigners)
+		if err := fileSvc.MkdirAll(ctx, trustedSignersRelPath, constants.PermDirPrivate); err != nil {
 			return "", fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
-		signerPath := filepath.Join(certPaths.TrustedSignersDir, enrollResp.ActuatorKeyID+constants.PublicKeySuffix)
-		if err := os.WriteFile(signerPath, []byte(enrollResp.ActuatorPubKey), 0600); err != nil {
+		signerRelPath := filepath.Join(trustedSignersRelPath, enrollResp.ActuatorKeyID+constants.PublicKeySuffix)
+		if err := fileSvc.WriteFile(ctx, signerRelPath, []byte(enrollResp.ActuatorPubKey), constants.PermFilePrivate); err != nil {
 			return "", fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 		}
-		logger.Info("Actuator public key saved", "path", signerPath)
+		logger.Info("Actuator public key saved", "path", fileSvc.Resolve(signerRelPath))
 	}
 
 	logger.Info("Enrollment successful", "operator_id", enrollResp.OperatorID, "operator_session_id", enrollResp.OperatorSessionID)
@@ -280,7 +274,7 @@ func checkCertExpiry(certFile string) (bool, error) {
 
 // fetchAndSaveTrustBundle fetches the trust bundle from the given endpoint URL,
 // saves it to caCertPath, and returns the PEM bytes.
-func fetchAndSaveTrustBundle(ctx context.Context, trustBundleURL, caCertPath string) ([]byte, error) {
+func fetchAndSaveTrustBundle(ctx context.Context, trustBundleURL string, fileSvc fs.RuntimeFileService) ([]byte, error) {
 	client := &http.Client{Timeout: 15 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, trustBundleURL, nil)
 	if err != nil {
@@ -305,7 +299,8 @@ func fetchAndSaveTrustBundle(ctx context.Context, trustBundleURL, caCertPath str
 		return nil, fmt.Errorf("%w: trust bundle response body was empty", constants.ErrEmptyTrustBundle)
 	}
 
-	if err := os.WriteFile(caCertPath, body, 0644); err != nil {
+	caBundleRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+	if err := fileSvc.WriteFile(ctx, caBundleRelPath, body, constants.PermFilePublic); err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 	}
 
@@ -387,7 +382,7 @@ func submitRenewal(ctx context.Context, client *http.Client, enrollURL, opCSR, c
 
 // saveRenewedCerts writes the renewed operator cert and key to disk and returns
 // the PEM-encoded key and cert content for in-memory reload.
-func saveRenewedCerts(certFile, keyFile string, certContent string, opKey *ecdsa.PrivateKey) (keyPEM []byte, err error) {
+func saveRenewedCerts(ctx context.Context, fileSvc fs.RuntimeFileService, certFile, keyFile string, certContent string, opKey *ecdsa.PrivateKey) (keyPEM []byte, err error) {
 	keyBytes, err := x509.MarshalECPrivateKey(opKey)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrKeyParseFailed, err)
@@ -398,11 +393,19 @@ func saveRenewedCerts(certFile, keyFile string, certContent string, opKey *ecdsa
 		Bytes: keyBytes,
 	})
 
-	if err := os.WriteFile(keyFile, keyPEM, 0600); err != nil {
+	keyRelPath, err := fileSvc.Rel(keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrKeyWriteFailed, err)
+	}
+	if err := fileSvc.WriteFile(ctx, keyRelPath, keyPEM, constants.PermFilePrivate); err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrKeyWriteFailed, err)
 	}
 
-	if err := os.WriteFile(certFile, []byte(certContent), 0600); err != nil {
+	certRelPath, err := fileSvc.Rel(certFile)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+	}
+	if err := fileSvc.WriteFile(ctx, certRelPath, []byte(certContent), constants.PermFilePrivate); err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 
@@ -411,7 +414,7 @@ func saveRenewedCerts(certFile, keyFile string, certContent string, opKey *ecdsa
 
 // RenewOperatorCertificate performs automatic re-enrollment for the Operator certificate.
 // This is a fail-closed operation: if renewal fails, it returns an error.
-func RenewOperatorCertificate(ctx context.Context, cfg *config.Config, clientCertFile, clientKeyFile string, clientIdentity *certs.ClientIdentity) error {
+func RenewOperatorCertificate(ctx context.Context, cfg *config.Config, fileSvc fs.RuntimeFileService, clientCertFile, clientKeyFile string, clientIdentity *certs.ClientIdentity) error {
 	expiringSoon, err := checkCertExpiry(clientCertFile)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertParseFailed, err)
@@ -444,7 +447,7 @@ func RenewOperatorCertificate(ctx context.Context, cfg *config.Config, clientCer
 
 	// Fetch and save trust bundle using a timeout client
 	trustBundleURL := fmt.Sprintf("%s%s", cfg.Endpoint, constants.WellKnownPKICABundle)
-	caPEM, err := fetchAndSaveTrustBundle(ctx, trustBundleURL, paths.Infra.CaCertPath)
+	caPEM, err := fetchAndSaveTrustBundle(ctx, trustBundleURL, fileSvc)
 	if err != nil {
 		return err
 	}
@@ -468,7 +471,7 @@ func RenewOperatorCertificate(ctx context.Context, cfg *config.Config, clientCer
 		certContent += "\n" + regResp.OperatorCertChain
 	}
 
-	keyPEM, err := saveRenewedCerts(clientCertFile, clientKeyFile, certContent, opKey)
+	keyPEM, err := saveRenewedCerts(ctx, fileSvc, clientCertFile, clientKeyFile, certContent, opKey)
 	if err != nil {
 		return err
 	}
@@ -486,12 +489,12 @@ func RenewOperatorCertificate(ctx context.Context, cfg *config.Config, clientCer
 
 // RunClientCertRenewalLoop runs a background goroutine that periodically checks
 // and renews the client certificate if it is expiring soon.
-func RunClientCertRenewalLoop(ctx context.Context, cfg *config.Config, clientCertFile, clientKeyFile string, logger *slog.Logger, clientIdentity *certs.ClientIdentity) {
+func RunClientCertRenewalLoop(ctx context.Context, cfg *config.Config, fileSvc fs.RuntimeFileService, clientCertFile, clientKeyFile string, logger *slog.Logger, clientIdentity *certs.ClientIdentity) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
 	// Check immediately on startup
-	if err := RenewOperatorCertificate(ctx, cfg, clientCertFile, clientKeyFile, clientIdentity); err != nil {
+	if err := RenewOperatorCertificate(ctx, cfg, fileSvc, clientCertFile, clientKeyFile, clientIdentity); err != nil {
 		logger.Error("Failed to renew client certificate on startup", string(constants.ConnectionStateError), err)
 	}
 
@@ -501,7 +504,7 @@ func RunClientCertRenewalLoop(ctx context.Context, cfg *config.Config, clientCer
 			logger.Info("Client certificate renewal loop stopped")
 			return
 		case <-ticker.C:
-			if err := RenewOperatorCertificate(ctx, cfg, clientCertFile, clientKeyFile, clientIdentity); err != nil {
+			if err := RenewOperatorCertificate(ctx, cfg, fileSvc, clientCertFile, clientKeyFile, clientIdentity); err != nil {
 				logger.Error("Failed to renew client certificate", string(constants.ConnectionStateError), err)
 			} else {
 				logger.Info("Client certificate renewal check completed")
@@ -512,35 +515,42 @@ func RunClientCertRenewalLoop(ctx context.Context, cfg *config.Config, clientCer
 
 // LoadTrustBundle attempts to read a trust bundle from:
 // 1. Explicit path provided via --trust-bundle
-// 2. Local PKI path (from paths.Infra.CaCertPath)
+// 2. Local PKI path (resolved via fileSvc)
 // Returns true on the first valid PEM found, which is installed via
 // trustStore.SetCA. Returns false if no valid trust bundle is found.
-func LoadTrustBundle(logger *slog.Logger, explicitPath string, trustStore *certs.TrustStore) bool {
-	pathsToCheck := []string{}
-
+func LoadTrustBundle(ctx context.Context, logger *slog.Logger, explicitPath string, fileSvc fs.RuntimeFileService, trustStore *certs.TrustStore) bool {
+	// Check explicit path first (arbitrary path, use os.ReadFile)
 	if explicitPath != "" {
-		pathsToCheck = append(pathsToCheck, explicitPath)
+		pemData, err := os.ReadFile(explicitPath)
+		if err == nil {
+			logger.Info("Loading trust bundle from explicit path", "path", explicitPath, "bytes", len(pemData))
+			pool := x509.NewCertPool()
+			if pool.AppendCertsFromPEM(pemData) {
+				LogCertBundle(logger, "trust-bundle", pemData)
+				trustStore.SetCA(pemData)
+				logger.Info("CA certificate loaded from explicit path")
+				return true
+			}
+			logger.Warn("CA file exists but contains invalid certificate", "path", explicitPath)
+		}
 	}
 
-	pathsToCheck = append(pathsToCheck, paths.Infra.CaCertPath)
-
-	for _, path := range pathsToCheck {
-		pemData, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		logger.Info("Loading trust bundle from local path", "path", path, "bytes", len(pemData))
-		pool := x509.NewCertPool()
-		if !pool.AppendCertsFromPEM(pemData) {
-			logger.Warn("CA file exists but contains invalid certificate", "path", path)
-			continue
-		}
-		LogCertBundle(logger, "trust-bundle", pemData)
-		trustStore.SetCA(pemData)
-		logger.Info("CA certificate loaded from local file")
-		return true
+	// Check default .g8e/ path via fileSvc
+	defaultRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+	pemData, err := fileSvc.ReadFile(ctx, defaultRel)
+	if err != nil {
+		return false
 	}
-	return false
+	logger.Info("Loading trust bundle from local path", "path", fileSvc.Resolve(defaultRel), "bytes", len(pemData))
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(pemData) {
+		logger.Warn("CA file exists but contains invalid certificate", "path", fileSvc.Resolve(defaultRel))
+		return false
+	}
+	LogCertBundle(logger, "trust-bundle", pemData)
+	trustStore.SetCA(pemData)
+	logger.Info("CA certificate loaded from local file")
+	return true
 }
 
 // LogCertBundle parses every PEM certificate in pemData and logs its details.
@@ -584,29 +594,26 @@ func LogCertBundle(logger *slog.Logger, label string, pemData []byte) {
 
 // ExportActuatorPublicKey writes the Actuator's public key to both PEM and JSON formats
 // in the PKI directory for receipt verification by the evals harness.
-func ExportActuatorPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID string, logger *slog.Logger) error {
-	if pkiDir == "" {
-		return constants.ErrPKIDirRequired
-	}
-	if err := os.MkdirAll(pkiDir, 0700); err != nil {
+func ExportActuatorPublicKey(fileSvc fs.RuntimeFileService, pubKey ed25519.PublicKey, keyID string, logger *slog.Logger) error {
+	if err := fileSvc.MkdirAll(context.Background(), constants.PkiDirname, constants.PermDirPrivate); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 	}
 
 	// Write PEM format
-	pemPath := filepath.Join(pkiDir, constants.ActuatorPubPEMFilename)
+	pemRelPath := filepath.Join(constants.PkiDirname, constants.ActuatorPubPEMFilename)
 	pemData := pem.EncodeToMemory(&pem.Block{
 		Type:  "PUBLIC KEY",
 		Bytes: pubKey,
 	})
-	if err := os.WriteFile(pemPath, pemData, 0600); err != nil {
+	if err := fileSvc.WriteFile(context.Background(), pemRelPath, pemData, constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 	if logger != nil {
-		logger.Info("Actuator public key exported", "path", pemPath, "format", "PEM")
+		logger.Info("Actuator public key exported", "path", fileSvc.Resolve(pemRelPath), "format", "PEM")
 	}
 
 	// Write JSON format
-	jsonPath := filepath.Join(pkiDir, constants.ActuatorPubJSONFilename)
+	jsonRelPath := filepath.Join(constants.PkiDirname, constants.ActuatorPubJSONFilename)
 	jsonData := models.ActuatorPublicKeyExport{
 		KeyID:     keyID,
 		PublicKey: hex.EncodeToString(pubKey),
@@ -616,11 +623,11 @@ func ExportActuatorPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID stri
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrJSONMarshalFailed, err)
 	}
-	if err := os.WriteFile(jsonPath, jsonBytes, 0600); err != nil {
+	if err := fileSvc.WriteFile(context.Background(), jsonRelPath, jsonBytes, constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 	if logger != nil {
-		logger.Info("Actuator public key exported", "path", jsonPath, "format", "JSON")
+		logger.Info("Actuator public key exported", "path", fileSvc.Resolve(jsonRelPath), "format", "JSON")
 	}
 
 	return nil

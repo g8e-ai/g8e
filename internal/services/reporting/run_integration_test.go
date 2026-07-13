@@ -41,13 +41,16 @@ func setupReportingEnv(t *testing.T, seed bool) (Options, string) {
 	t.Helper()
 
 	root := testutil.TempDir(t)
-	dataDir := filepath.Join(root, "data")
 	runtimeDir := filepath.Join(root, "runtime")
 	vaultDir := filepath.Join(root, "vault")
 	ledgerDir := filepath.Join(root, "runtime", "ledger")
 	outDir := filepath.Join(root, "reports")
 
-	require.NoError(t, os.MkdirAll(dataDir, 0o755))
+	fileSvc, err := fs.NewRuntimeFileService(root, testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	dataDir := fileSvc.Resolve(constants.DataDirname)
+
 	require.NoError(t, os.MkdirAll(runtimeDir, 0o755))
 	require.NoError(t, os.MkdirAll(vaultDir, 0o700))
 
@@ -76,7 +79,7 @@ func setupReportingEnv(t *testing.T, seed bool) (Options, string) {
 		PruneIntervalMinutes: 60,
 		EncryptionVault:      v,
 	}
-	store, err := storage.NewSQLAuditStore(auditCfg, testutil.NewTestLogger())
+	store, err := storage.NewSQLAuditStore(auditCfg, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { store.Close() })
 

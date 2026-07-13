@@ -45,11 +45,11 @@ func setupTestHistoryHandler(t *testing.T) (*HistoryHandler, *SQLAuditStore, *va
 	logger := testutil.NewTestLogger()
 
 	ledgerConfig := &LedgerConfig{
-		BaseDir:         filepath.Join(tempDir, "ledger"),
+		BaseDir:         filepath.Join(dataDir, constants.LedgerDirname),
 		GitPath:         gitPath,
 		EncryptionVault: testVault,
 	}
-	lms, err := NewGitLedgerService(ledgerConfig, logger)
+	lms, err := NewGitLedgerService(ledgerConfig, logger, fileSvc)
 	require.NoError(t, err)
 
 	auditStoreConfig := &AuditStoreConfig{

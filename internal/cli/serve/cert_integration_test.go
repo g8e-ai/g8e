@@ -32,7 +32,6 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -41,8 +40,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/paths"
-	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -103,7 +101,7 @@ func signCSRIntegration(t *testing.T, csrPEM []byte, caCert *x509.Certificate, c
 
 // writeExpiringCertPair creates a cert+key pair where the cert expires within 24h,
 // writes them to temp files, and returns the paths. The cert is signed by the given CA.
-func writeExpiringCertPair(t *testing.T, caCert *x509.Certificate, caKey *ecdsa.PrivateKey) (certPath, keyPath string) {
+func writeExpiringCertPair(t *testing.T, fileSvc fs.RuntimeFileService, caCert *x509.Certificate, caKey *ecdsa.PrivateKey) (certPath, keyPath string) {
 	t.Helper()
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
@@ -124,11 +122,12 @@ func writeExpiringCertPair(t *testing.T, caCert *x509.Certificate, caKey *ecdsa.
 	require.NoError(t, err)
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 
-	dir := testutil.TempDir(t)
-	certPath = filepath.Join(dir, constants.TestClientCrtFilename)
-	keyPath = filepath.Join(dir, constants.TestClientKeyFilename)
-	require.NoError(t, os.WriteFile(certPath, certPEM, 0600))
-	require.NoError(t, os.WriteFile(keyPath, keyPEM, 0600))
+	certRel := filepath.Join(constants.PkiDirname, constants.TestClientCrtFilename)
+	keyRel := filepath.Join(constants.PkiDirname, constants.TestClientKeyFilename)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, certPEM, constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), keyRel, keyPEM, constants.PermFilePrivate))
+	certPath = fileSvc.Resolve(certRel)
+	keyPath = fileSvc.Resolve(keyRel)
 	return certPath, keyPath
 }
 
@@ -238,20 +237,14 @@ func TestPerformAutomaticEnrollment(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			restorePorts(t)
-			require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
+			fileSvc := newTestFileSvc(t)
 
 			caPEM, caKey, caCert := generateTestCAIntegration(t)
 			srv := enrollmentTestServer(t, caPEM, caCert, caKey, tt.trustStatus, tt.enrollStatus, tt.enrollBody)
 
 			constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-			_, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", CertPaths{
-				PkiTrustDir:       paths.Infra.PkiTrustDir,
-				OperatorKeyPath:   paths.Infra.OperatorKeyPath,
-				OperatorCertPath:  paths.Infra.OperatorCertPath,
-				CaCertPath:        paths.Infra.CaCertPath,
-				TrustedSignersDir: paths.Infra.TrustedSignersDir,
-			}, testLogger())
+			_, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", fileSvc, testLogger())
 
 			if tt.wantErr != nil {
 				require.Error(t, err)
@@ -261,12 +254,18 @@ func TestPerformAutomaticEnrollment(t *testing.T) {
 			require.NoError(t, err)
 
 			if tt.checkSuccess {
-				_, err = os.Stat(paths.Infra.OperatorKeyPath)
-				assert.NoError(t, err, "operator key should be saved")
-				_, err = os.Stat(paths.Infra.OperatorCertPath)
-				assert.NoError(t, err, "operator cert should be saved")
-				_, err = os.Stat(paths.Infra.CaCertPath)
-				assert.NoError(t, err, "CA bundle should be saved")
+				opKeyRel := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorKey)
+				opCertRel := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert)
+				caBundleRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+				exists, err := fileSvc.FileExists(context.Background(), opKeyRel)
+				assert.NoError(t, err)
+				assert.True(t, exists, "operator key should be saved")
+				exists, err = fileSvc.FileExists(context.Background(), opCertRel)
+				assert.NoError(t, err)
+				assert.True(t, exists, "operator cert should be saved")
+				exists, err = fileSvc.FileExists(context.Background(), caBundleRel)
+				assert.NoError(t, err)
+				assert.True(t, exists, "CA bundle should be saved")
 			}
 		})
 	}
@@ -274,7 +273,7 @@ func TestPerformAutomaticEnrollment(t *testing.T) {
 
 func TestPerformAutomaticEnrollment_ActuatorPublicKeySaved(t *testing.T) {
 	restorePorts(t)
-	require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
+	fileSvc := newTestFileSvc(t)
 
 	caPEM, caKey, caCert := generateTestCAIntegration(t)
 	actuatorPub, _, err := ed25519.GenerateKey(rand.Reader)
@@ -311,19 +310,14 @@ func TestPerformAutomaticEnrollment_ActuatorPublicKeySaved(t *testing.T) {
 
 	constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-	sessionID, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", CertPaths{
-		PkiTrustDir:       paths.Infra.PkiTrustDir,
-		OperatorKeyPath:   paths.Infra.OperatorKeyPath,
-		OperatorCertPath:  paths.Infra.OperatorCertPath,
-		CaCertPath:        paths.Infra.CaCertPath,
-		TrustedSignersDir: paths.Infra.TrustedSignersDir,
-	}, testLogger())
+	sessionID, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", fileSvc, testLogger())
 	require.NoError(t, err)
 	assert.Equal(t, "sess-001", sessionID)
 
-	signerPath := filepath.Join(paths.Infra.TrustedSignersDir, "act-001"+constants.PublicKeySuffix)
-	_, err = os.Stat(signerPath)
-	assert.NoError(t, err, "actuator public key should be saved to trusted_signers")
+	signerRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrustedSigners, "act-001"+constants.PublicKeySuffix)
+	exists, err := fileSvc.FileExists(context.Background(), signerRel)
+	assert.NoError(t, err)
+	assert.True(t, exists, "actuator public key should be saved to trusted_signers")
 }
 
 // ---------------------------------------------------------------------------
@@ -444,20 +438,17 @@ func TestRenewOperatorCertificate_Network(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			restorePorts(t)
-			require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
-			if tt.trustStatus == http.StatusOK && (tt.trustBody == nil || len(tt.trustBody) > 0) {
-				require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.CaCertPath), 0700))
-			}
+			fileSvc := newTestFileSvc(t)
 
 			caPEM, caKey, caCert := generateTestCAIntegration(t)
-			certPath, keyPath := writeExpiringCertPair(t, caCert, caKey)
+			certPath, keyPath := writeExpiringCertPair(t, fileSvc, caCert, caKey)
 
 			srv := renewalTestServer(t, caPEM, caCert, caKey, tt.trustStatus, tt.enrollStatus, tt.trustBody, tt.enrollBody)
 
 			cfg := &config.Config{Endpoint: srv.URL}
 			ci := certs.NewClientIdentity(tls.Certificate{})
 
-			err := RenewOperatorCertificate(context.Background(), cfg, certPath, keyPath, ci)
+			err := RenewOperatorCertificate(context.Background(), cfg, fileSvc, certPath, keyPath, ci)
 
 			if tt.wantErr != nil {
 				require.Error(t, err)
@@ -467,11 +458,15 @@ func TestRenewOperatorCertificate_Network(t *testing.T) {
 			require.NoError(t, err)
 
 			if tt.checkRenewed {
-				savedCert, err := os.ReadFile(certPath)
+				certRel, err := fileSvc.Rel(certPath)
+				require.NoError(t, err)
+				savedCert, err := fileSvc.ReadFile(context.Background(), certRel)
 				require.NoError(t, err)
 				assert.Contains(t, string(savedCert), "BEGIN CERTIFICATE")
 
-				savedKey, err := os.ReadFile(keyPath)
+				keyRel, err := fileSvc.Rel(keyPath)
+				require.NoError(t, err)
+				savedKey, err := fileSvc.ReadFile(context.Background(), keyRel)
 				require.NoError(t, err)
 				assert.Contains(t, string(savedKey), "EC PRIVATE KEY")
 			}
@@ -485,11 +480,10 @@ func TestRenewOperatorCertificate_Network(t *testing.T) {
 
 func TestRunClientCertRenewalLoop_RenewalTriggerWithExpiringCert(t *testing.T) {
 	restorePorts(t)
-	require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.CaCertPath), 0700))
+	fileSvc := newTestFileSvc(t)
 
 	caPEM, caKey, caCert := generateTestCAIntegration(t)
-	certPath, keyPath := writeExpiringCertPair(t, caCert, caKey)
+	certPath, keyPath := writeExpiringCertPair(t, fileSvc, caCert, caKey)
 
 	srv := renewalTestServer(t, caPEM, caCert, caKey, http.StatusOK, http.StatusOK, nil, nil)
 
@@ -501,7 +495,7 @@ func TestRunClientCertRenewalLoop_RenewalTriggerWithExpiringCert(t *testing.T) {
 	done := make(chan struct{})
 
 	go func() {
-		RunClientCertRenewalLoop(ctx, cfg, certPath, keyPath, logger, ci)
+		RunClientCertRenewalLoop(ctx, cfg, fileSvc, certPath, keyPath, logger, ci)
 		close(done)
 	}()
 
@@ -513,7 +507,9 @@ func TestRunClientCertRenewalLoop_RenewalTriggerWithExpiringCert(t *testing.T) {
 		t.Fatal("RunClientCertRenewalLoop did not stop after context cancellation")
 	}
 
-	savedCert, err := os.ReadFile(certPath)
+	certRel, err := fileSvc.Rel(certPath)
+	require.NoError(t, err)
+	savedCert, err := fileSvc.ReadFile(context.Background(), certRel)
 	require.NoError(t, err)
 	assert.Contains(t, string(savedCert), "BEGIN CERTIFICATE",
 		"cert should have been renewed on startup before context cancellation")
@@ -525,51 +521,52 @@ func TestRunClientCertRenewalLoop_RenewalTriggerWithExpiringCert(t *testing.T) {
 
 func TestFetchAndSaveTrustBundle(t *testing.T) {
 	caPEM := generateTestCertPEM(t, time.Now(), time.Now().Add(365*24*time.Hour))
+	caBundleRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
 
 	t.Run("Success_SavesBodyAndReturnsPEM", func(t *testing.T) {
+		fileSvc := newTestFileSvc(t)
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write(caPEM)
 		}))
 		t.Cleanup(srv.Close)
 
-		caPath := filepath.Join(testutil.TempDir(t), constants.TestCABundleFilename)
-		body, err := fetchAndSaveTrustBundle(context.Background(), srv.URL, caPath)
+		body, err := fetchAndSaveTrustBundle(context.Background(), srv.URL, fileSvc)
 		require.NoError(t, err)
 		assert.Equal(t, caPEM, body)
 
-		saved, err := os.ReadFile(caPath)
+		saved, err := fileSvc.ReadFile(context.Background(), caBundleRel)
 		require.NoError(t, err)
 		assert.Equal(t, caPEM, saved)
 	})
 
 	t.Run("HTTPError_ReturnsHTTPStatusError", func(t *testing.T) {
+		fileSvc := newTestFileSvc(t)
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
 		t.Cleanup(srv.Close)
 
-		caPath := filepath.Join(testutil.TempDir(t), constants.TestCABundleFilename)
-		_, err := fetchAndSaveTrustBundle(context.Background(), srv.URL, caPath)
+		_, err := fetchAndSaveTrustBundle(context.Background(), srv.URL, fileSvc)
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, constants.ErrHTTPStatusError))
 	})
 
 	t.Run("EmptyBody_ReturnsEmptyTrustBundle", func(t *testing.T) {
+		fileSvc := newTestFileSvc(t)
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
 		t.Cleanup(srv.Close)
 
-		caPath := filepath.Join(testutil.TempDir(t), constants.TestCABundleFilename)
-		_, err := fetchAndSaveTrustBundle(context.Background(), srv.URL, caPath)
+		_, err := fetchAndSaveTrustBundle(context.Background(), srv.URL, fileSvc)
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, constants.ErrEmptyTrustBundle))
 	})
 
 	t.Run("UnreachableServer_ReturnsFailedToReadTrustBundle", func(t *testing.T) {
-		caPath := filepath.Join(testutil.TempDir(t), constants.TestCABundleFilename)
-		_, err := fetchAndSaveTrustBundle(context.Background(), "http://127.0.0.1:0", caPath)
+		fileSvc := newTestFileSvc(t)
+		_, err := fetchAndSaveTrustBundle(context.Background(), "http://127.0.0.1:0", fileSvc)
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, constants.ErrFailedToReadTrustBundle))
 	})
@@ -709,7 +706,7 @@ func TestSubmitRenewal(t *testing.T) {
 
 func TestPerformAutomaticEnrollment_HubTrustBundleOverwritesCAFile(t *testing.T) {
 	restorePorts(t)
-	require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
+	fileSvc := newTestFileSvc(t)
 
 	caPEM, caKey, caCert := generateTestCAIntegration(t)
 	hubBundlePEM := generateTestCertPEM(t, time.Now(), time.Now().Add(365*24*time.Hour))
@@ -743,16 +740,11 @@ func TestPerformAutomaticEnrollment_HubTrustBundleOverwritesCAFile(t *testing.T)
 
 	constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-	_, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", CertPaths{
-		PkiTrustDir:       paths.Infra.PkiTrustDir,
-		OperatorKeyPath:   paths.Infra.OperatorKeyPath,
-		OperatorCertPath:  paths.Infra.OperatorCertPath,
-		CaCertPath:        paths.Infra.CaCertPath,
-		TrustedSignersDir: paths.Infra.TrustedSignersDir,
-	}, testLogger())
+	_, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", fileSvc, testLogger())
 	require.NoError(t, err)
 
-	savedCA, err := os.ReadFile(paths.Infra.CaCertPath)
+	caBundleRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+	savedCA, err := fileSvc.ReadFile(context.Background(), caBundleRel)
 	require.NoError(t, err)
 	assert.Equal(t, string(hubBundlePEM), string(savedCA),
 		"CA file should be overwritten with HubTrustBundle when provided")
@@ -760,7 +752,7 @@ func TestPerformAutomaticEnrollment_HubTrustBundleOverwritesCAFile(t *testing.T)
 
 func TestPerformAutomaticEnrollment_CertChainAppendedToOperatorCert(t *testing.T) {
 	restorePorts(t)
-	require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
+	fileSvc := newTestFileSvc(t)
 
 	caPEM, caKey, caCert := generateTestCAIntegration(t)
 	intermediatePEM := generateTestCertPEM(t, time.Now(), time.Now().Add(365*24*time.Hour))
@@ -794,16 +786,11 @@ func TestPerformAutomaticEnrollment_CertChainAppendedToOperatorCert(t *testing.T
 
 	constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-	_, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", CertPaths{
-		PkiTrustDir:       paths.Infra.PkiTrustDir,
-		OperatorKeyPath:   paths.Infra.OperatorKeyPath,
-		OperatorCertPath:  paths.Infra.OperatorCertPath,
-		CaCertPath:        paths.Infra.CaCertPath,
-		TrustedSignersDir: paths.Infra.TrustedSignersDir,
-	}, testLogger())
+	_, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", fileSvc, testLogger())
 	require.NoError(t, err)
 
-	savedCert, err := os.ReadFile(paths.Infra.OperatorCertPath)
+	opCertRel := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert)
+	savedCert, err := fileSvc.ReadFile(context.Background(), opCertRel)
 	require.NoError(t, err)
 	savedStr := string(savedCert)
 	assert.Contains(t, savedStr, "BEGIN CERTIFICATE")
@@ -819,7 +806,7 @@ func TestPerformAutomaticEnrollment_CertChainAppendedToOperatorCert(t *testing.T
 
 func TestPerformAutomaticEnrollment_MalformedJSONResponse(t *testing.T) {
 	restorePorts(t)
-	require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
+	fileSvc := newTestFileSvc(t)
 
 	caPEM, _, _ := generateTestCAIntegration(t)
 
@@ -839,13 +826,7 @@ func TestPerformAutomaticEnrollment_MalformedJSONResponse(t *testing.T) {
 
 	constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-	_, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", CertPaths{
-		PkiTrustDir:       paths.Infra.PkiTrustDir,
-		OperatorKeyPath:   paths.Infra.OperatorKeyPath,
-		OperatorCertPath:  paths.Infra.OperatorCertPath,
-		CaCertPath:        paths.Infra.CaCertPath,
-		TrustedSignersDir: paths.Infra.TrustedSignersDir,
-	}, testLogger())
+	_, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", fileSvc, testLogger())
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrResponseParseFailed))
 }

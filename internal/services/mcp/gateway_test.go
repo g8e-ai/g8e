@@ -33,6 +33,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/storage/storagetest"
@@ -302,6 +303,10 @@ func TestGatewayService_RunMaintenance_AuditsExpiredTransactions(t *testing.T) {
 	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
+	fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -309,8 +314,8 @@ func TestGatewayService_RunMaintenance_AuditsExpiredTransactions(t *testing.T) {
 
 	// Create audit store
 	auditConfig := &storage.AuditStoreConfig{
-		DataDir:                   tempDir,
-		DBPath:                    filepath.Join(tempDir, "audit.db"),
+		DataDir:                   fileSvc.Resolve(constants.DataDirname),
+		DBPath:                    "audit.db",
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
@@ -318,7 +323,7 @@ func TestGatewayService_RunMaintenance_AuditsExpiredTransactions(t *testing.T) {
 		HeadTailSize:              51200,
 		EncryptionVault:           testVault,
 	}
-	auditStore, err := storage.NewSQLAuditStore(auditConfig, slog.Default())
+	auditStore, err := storage.NewSQLAuditStore(auditConfig, slog.Default(), fileSvc)
 	require.NoError(t, err)
 	defer auditStore.Close()
 
@@ -1035,6 +1040,10 @@ func TestGatewayService_StoreSuspendedTransaction(t *testing.T) {
 		tempDir := testutil.TempDir(t)
 		vaultDir := filepath.Join(tempDir, "vault")
 
+		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+		require.NoError(t, err)
+		require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+
 		// Create test vault
 		_, privKey, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
@@ -1042,8 +1051,8 @@ func TestGatewayService_StoreSuspendedTransaction(t *testing.T) {
 
 		// Create audit store
 		auditConfig := &storage.AuditStoreConfig{
-			DataDir:                   tempDir,
-			DBPath:                    filepath.Join(tempDir, "audit.db"),
+			DataDir:                   fileSvc.Resolve(constants.DataDirname),
+			DBPath:                    "audit.db",
 			MaxDBSizeMB:               100,
 			RetentionDays:             7,
 			PruneIntervalMinutes:      60,
@@ -1051,7 +1060,7 @@ func TestGatewayService_StoreSuspendedTransaction(t *testing.T) {
 			HeadTailSize:              51200,
 			EncryptionVault:           testVault,
 		}
-		auditStore, err := storage.NewSQLAuditStore(auditConfig, slog.Default())
+		auditStore, err := storage.NewSQLAuditStore(auditConfig, slog.Default(), fileSvc)
 		require.NoError(t, err)
 		defer auditStore.Close()
 

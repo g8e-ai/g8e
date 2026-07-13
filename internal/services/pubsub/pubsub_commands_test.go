@@ -819,9 +819,10 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 			require.NoError(t, testVault.Unlock(vaultPrivKey))
 			defer testVault.Close()
 
+			fileSvc := storagetest.NewTestFileSvc(t, tmpDir)
 			gitPath, _ := exec.LookPath("git")
 			avCfg := &storagetest.TestSQLAuditStoreConfig{
-				DataDir:                   tmpDir,
+				DataDir:                   fileSvc.Resolve(constants.DataDirname),
 				DBPath:                    "g8e.db",
 				LedgerDir:                 "ledger",
 				MaxDBSizeMB:               2048,
@@ -833,7 +834,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 				EncryptionVault:           testVault,
 			}
 
-			auditStore, err := storagetest.NewTestSQLAuditStore(avCfg, logger)
+			auditStore, err := storagetest.NewTestSQLAuditStore(avCfg, logger, fileSvc)
 			require.NoError(t, err)
 			defer auditStore.Close()
 
@@ -889,9 +890,10 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 			require.NoError(t, testVault.Unlock(vaultPrivKey))
 			defer testVault.Close()
 
+			fileSvc := storagetest.NewTestFileSvc(t, tmpDir)
 			gitPath, _ := exec.LookPath("git")
 			avCfg := &storagetest.TestSQLAuditStoreConfig{
-				DataDir:                   tmpDir,
+				DataDir:                   fileSvc.Resolve(constants.DataDirname),
 				DBPath:                    "g8e.db",
 				LedgerDir:                 "ledger",
 				MaxDBSizeMB:               2048,
@@ -903,7 +905,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 				EncryptionVault:           testVault,
 			}
 
-			auditStore, err := storagetest.NewTestSQLAuditStore(avCfg, logger)
+			auditStore, err := storagetest.NewTestSQLAuditStore(avCfg, logger, fileSvc)
 			require.NoError(t, err)
 			defer auditStore.Close()
 
@@ -958,9 +960,10 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 			require.NoError(t, testVault.Unlock(vaultPrivKey))
 			defer testVault.Close()
 
+			fileSvc := storagetest.NewTestFileSvc(t, tmpDir)
 			gitPath, _ := exec.LookPath("git")
 			avCfg := &storagetest.TestSQLAuditStoreConfig{
-				DataDir:                   tmpDir,
+				DataDir:                   fileSvc.Resolve(constants.DataDirname),
 				DBPath:                    "g8e.db",
 				LedgerDir:                 "ledger",
 				MaxDBSizeMB:               2048,
@@ -972,7 +975,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 				EncryptionVault:           testVault,
 			}
 
-			auditStore, err := storagetest.NewTestSQLAuditStore(avCfg, logger)
+			auditStore, err := storagetest.NewTestSQLAuditStore(avCfg, logger, fileSvc)
 			require.NoError(t, err)
 			defer auditStore.Close()
 
@@ -1050,9 +1053,10 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 		require.NoError(t, testVault.Unlock(vaultPrivKey))
 		defer testVault.Close()
 
+		fileSvc := storagetest.NewTestFileSvc(t, tmpDir)
 		gitPath, _ := exec.LookPath("git")
 		avCfg := &storagetest.TestSQLAuditStoreConfig{
-			DataDir:                   tmpDir,
+			DataDir:                   fileSvc.Resolve(constants.DataDirname),
 			DBPath:                    "g8e.db",
 			LedgerDir:                 "ledger",
 			MaxDBSizeMB:               2048,
@@ -1064,7 +1068,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 			EncryptionVault:           testVault,
 		}
 
-		auditStore, err := storagetest.NewTestSQLAuditStore(avCfg, logger)
+		auditStore, err := storagetest.NewTestSQLAuditStore(avCfg, logger, fileSvc)
 		require.NoError(t, err)
 		defer auditStore.Close()
 

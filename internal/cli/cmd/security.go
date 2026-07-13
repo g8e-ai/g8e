@@ -14,8 +14,11 @@
 package cmd
 
 import (
+	"context"
 	"crypto/x509"
+	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -25,8 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
-	"github.com/g8e-ai/g8e/internal/pathutil"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 func securityCmd() *cobra.Command {
@@ -58,77 +60,115 @@ and confirms that the CA bundle is properly configured for mTLS.`,
 			cmd.Println("Running platform security validation...")
 			failed := false
 
+			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
+			}
+			ctx := context.Background()
+
 			// Check PKI directory structure
 			cmd.Println("\n=== PKI Directory Structure ===")
-			var pkiFiles []string
+			type pathEntry struct {
+				displayPath string
+				relPath     string
+			}
+			var pkiEntries []pathEntry
 			if pkiDir == "" {
-				// Use precomputed paths from paths.Infra
-				pkiFiles = []string{
-					paths.Infra.RootCAPath,
-					paths.Infra.RootCAKeyPath,
-					paths.Infra.CaCertPath,
-					paths.Infra.WardenPubPath,
+				pkiEntries = []pathEntry{
+					{fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA)), filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA)},
+					{fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCAKey)), filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCAKey)},
+					{fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)), filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)},
+					{fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiFileWardenPub)), filepath.Join(constants.PkiDirname, constants.PkiFileWardenPub)},
 				}
 			} else {
-				// Use custom pkiDir from flag
-				pkiFiles = []string{
-					filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA),
-					filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCAKey),
-					filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle),
-					filepath.Join(pkiDir, constants.PkiFileWardenPub),
+				pkiEntries = []pathEntry{
+					{filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA), ""},
+					{filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCAKey), ""},
+					{filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle), ""},
+					{filepath.Join(pkiDir, constants.PkiFileWardenPub), ""},
 				}
 			}
-			for _, file := range pkiFiles {
-				if _, err := os.Stat(file); err != nil {
-					if os.IsNotExist(err) {
-						cmd.Printf("  [FAIL] %s missing\n", file)
-					} else {
-						cmd.Printf("  [FAIL] %s: %v\n", file, err)
+			for _, entry := range pkiEntries {
+				var exists bool
+				if entry.relPath != "" {
+					exists, err = fileSvc.FileExists(ctx, entry.relPath)
+					if err != nil {
+						cmd.Printf("  [FAIL] %s: %v\n", entry.displayPath, err)
+						failed = true
+						continue
 					}
-					failed = true
 				} else {
-					cmd.Printf("  [OK]   %s exists\n", file)
+					_, statErr := os.Stat(entry.displayPath)
+					exists = statErr == nil
+				}
+				if exists {
+					cmd.Printf("  [OK]   %s exists\n", entry.displayPath)
+				} else {
+					cmd.Printf("  [FAIL] %s missing\n", entry.displayPath)
+					failed = true
 				}
 			}
 
 			// Check secrets directory
 			cmd.Println("\n=== Secrets Directory ===")
-			var secretFiles []string
+			var secretEntries []pathEntry
 			if secretsDir == "" {
-				// Use precomputed paths from paths.Infra
-				secretFiles = []string{
-					paths.Infra.SessionEncKeyPath,
-					paths.Infra.BootstrapDigestPath,
+				secretEntries = []pathEntry{
+					{fileSvc.Resolve(filepath.Join(constants.SecretsDirname, constants.SecretsFileSessionEncryptionKey)), filepath.Join(constants.SecretsDirname, constants.SecretsFileSessionEncryptionKey)},
+					{fileSvc.Resolve(filepath.Join(constants.SecretsDirname, constants.SecretsFileBootstrapDigest)), filepath.Join(constants.SecretsDirname, constants.SecretsFileBootstrapDigest)},
 				}
 			} else {
-				// Use custom secretsDir from flag
-				secretFiles = []string{
-					filepath.Join(secretsDir, constants.SecretsFileSessionEncryptionKey),
-					filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest),
+				secretEntries = []pathEntry{
+					{filepath.Join(secretsDir, constants.SecretsFileSessionEncryptionKey), ""},
+					{filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest), ""},
 				}
 			}
-			for _, file := range secretFiles {
-				if _, err := os.Stat(file); err != nil {
-					if os.IsNotExist(err) {
-						cmd.Printf("  [FAIL] %s missing\n", file)
-					} else {
-						cmd.Printf("  [FAIL] %s: %v\n", file, err)
+			for _, entry := range secretEntries {
+				var exists bool
+				if entry.relPath != "" {
+					exists, err = fileSvc.FileExists(ctx, entry.relPath)
+					if err != nil {
+						cmd.Printf("  [FAIL] %s: %v\n", entry.displayPath, err)
+						failed = true
+						continue
 					}
-					failed = true
 				} else {
-					cmd.Printf("  [OK]   %s exists\n", file)
+					_, statErr := os.Stat(entry.displayPath)
+					exists = statErr == nil
+				}
+				if exists {
+					cmd.Printf("  [OK]   %s exists\n", entry.displayPath)
+				} else {
+					cmd.Printf("  [FAIL] %s missing\n", entry.displayPath)
+					failed = true
 				}
 			}
 
 			// Validate root CA certificate
 			cmd.Println("\n=== Certificate Validation ===")
-			var rootCAPath string
+			var rootCARelPath string
+			var rootCADisplayPath string
 			if pkiDir == "" {
-				rootCAPath = paths.Infra.RootCAPath
+				rootCARelPath = filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA)
+				rootCADisplayPath = fileSvc.Resolve(rootCARelPath)
 			} else {
-				rootCAPath = filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA)
+				rootCADisplayPath = filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA)
 			}
-			if certData, err := os.ReadFile(rootCAPath); err == nil {
+			var certData []byte
+			if rootCARelPath != "" {
+				certData, err = fileSvc.ReadFile(ctx, rootCARelPath)
+				if err != nil && !errors.Is(err, constants.ErrNotFound) {
+					cmd.Printf("  [FAIL] failed to read root_ca.crt: %v\n", err)
+					failed = true
+				}
+			} else {
+				certData, err = os.ReadFile(rootCADisplayPath)
+				if err != nil && !os.IsNotExist(err) {
+					cmd.Printf("  [FAIL] failed to read root_ca.crt: %v\n", err)
+					failed = true
+				}
+			}
+			if certData != nil {
 				certPool := x509.NewCertPool()
 				if !certPool.AppendCertsFromPEM(certData) {
 					cmd.Printf("  [FAIL] root_ca.crt is not a valid PEM certificate\n")
@@ -136,9 +176,6 @@ and confirms that the CA bundle is properly configured for mTLS.`,
 				} else {
 					cmd.Printf("  [OK]   root_ca.crt is valid PEM\n")
 				}
-			} else if !os.IsNotExist(err) {
-				cmd.Printf("  [FAIL] failed to read root_ca.crt: %v\n", err)
-				failed = true
 			}
 
 			// Check port availability (standard ports)
@@ -160,13 +197,29 @@ and confirms that the CA bundle is properly configured for mTLS.`,
 
 			// Check TLS configuration
 			cmd.Println("\n=== TLS Configuration ===")
-			var trustBundlePath string
+			var trustBundleRelPath string
+			var trustBundleDisplayPath string
 			if pkiDir == "" {
-				trustBundlePath = paths.Infra.CaCertPath
+				trustBundleRelPath = filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+				trustBundleDisplayPath = fileSvc.Resolve(trustBundleRelPath)
 			} else {
-				trustBundlePath = filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+				trustBundleDisplayPath = filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
 			}
-			if trustData, err := os.ReadFile(trustBundlePath); err == nil {
+			var trustData []byte
+			if trustBundleRelPath != "" {
+				trustData, err = fileSvc.ReadFile(ctx, trustBundleRelPath)
+				if err != nil && !errors.Is(err, constants.ErrNotFound) {
+					cmd.Printf("  [FAIL] failed to read trust bundle: %v\n", err)
+					failed = true
+				}
+			} else {
+				trustData, err = os.ReadFile(trustBundleDisplayPath)
+				if err != nil && !os.IsNotExist(err) {
+					cmd.Printf("  [FAIL] failed to read trust bundle: %v\n", err)
+					failed = true
+				}
+			}
+			if trustData != nil {
 				certPool := x509.NewCertPool()
 				if certPool.AppendCertsFromPEM(trustData) {
 					cmd.Printf("  [OK]   Trust bundle is valid PEM\n")
@@ -174,9 +227,6 @@ and confirms that the CA bundle is properly configured for mTLS.`,
 					cmd.Printf("  [FAIL] Trust bundle is not valid PEM\n")
 					failed = true
 				}
-			} else if !os.IsNotExist(err) {
-				cmd.Printf("  [FAIL] failed to read trust bundle: %v\n", err)
-				failed = true
 			}
 
 			cmd.Println("\n=== Summary ===")
@@ -189,8 +239,8 @@ and confirms that the CA bundle is properly configured for mTLS.`,
 		},
 	}
 
-	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", "PKI directory (default: "+paths.Infra.PkiDir+")")
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", "", "Secrets directory (default: "+paths.Infra.SecretsDir+")")
+	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", "PKI directory (default: "+constants.RuntimeDirname+"/"+constants.PkiDirname+")")
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", "", "Secrets directory (default: "+constants.RuntimeDirname+"/"+constants.SecretsDirname+")")
 
 	return cmd
 }
@@ -238,13 +288,17 @@ func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, e
 				return fmt.Errorf("security: load config: %w", err)
 			}
 
-			// Use outputDir if specified, otherwise use project root
+			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
+			}
+			ctx := context.Background()
+
 			var pkiDir string
 			if outputDir != "" {
-				// Use pathutil.SafeJoin for cross-platform safety when joining with absolute paths.Infra.PkiDir
-				pkiDir = pathutil.SafeJoin(outputDir, paths.Infra.PkiDir)
+				pkiDir = filepath.Join(outputDir, constants.RuntimeDirname, constants.PkiDirname)
 			} else {
-				pkiDir = paths.Infra.PkiDir
+				pkiDir = fileSvc.Resolve(constants.PkiDirname)
 			}
 
 			cmd.Println("Generating CSR for enrollment...")
@@ -269,8 +323,14 @@ func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, e
 				return fmt.Errorf("security: enroll: %w", constants.ErrMissingCertificate)
 			}
 
-			if err := os.MkdirAll(pkiDir, constants.PermDirPrivate); err != nil {
-				return fmt.Errorf("security: create PKI dir: %w: %w", constants.ErrDirCreateFailed, err)
+			if outputDir == "" {
+				if err := fileSvc.MkdirAll(ctx, constants.PkiDirname, constants.PermDirPrivate); err != nil {
+					return fmt.Errorf("security: create PKI dir: %w: %w", constants.ErrDirCreateFailed, err)
+				}
+			} else {
+				if err := os.MkdirAll(pkiDir, constants.PermDirPrivate); err != nil {
+					return fmt.Errorf("security: create PKI dir: %w: %w", constants.ErrDirCreateFailed, err)
+				}
 			}
 
 			certPath := filepath.Join(pkiDir, constants.PkiFileOperatorCert)
@@ -281,18 +341,36 @@ func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, e
 				return fmt.Errorf("security: save cert and key: %w", err)
 			}
 
-			if err := os.WriteFile(chainPath, []byte(regResp.OperatorCertChain), constants.PermFilePrivate); err != nil {
-				return fmt.Errorf("security: save chain: %w: %w", constants.ErrChainSaveFailed, err)
+			if outputDir == "" {
+				chainRelPath := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorChain)
+				if err := fileSvc.WriteFile(ctx, chainRelPath, []byte(regResp.OperatorCertChain), constants.PermFilePrivate); err != nil {
+					return fmt.Errorf("security: save chain: %w: %w", constants.ErrChainSaveFailed, err)
+				}
+			} else {
+				if err := os.WriteFile(chainPath, []byte(regResp.OperatorCertChain), constants.PermFilePrivate); err != nil {
+					return fmt.Errorf("security: save chain: %w: %w", constants.ErrChainSaveFailed, err)
+				}
 			}
 
 			if regResp.HubTrustBundle != "" {
 				trustDir := filepath.Join(pkiDir, constants.PkiSubdirTrust)
-				if err := os.MkdirAll(trustDir, constants.PermDirPrivate); err != nil {
-					return fmt.Errorf("security: create trust dir: %w: %w", constants.ErrDirCreateFailed, err)
-				}
-				bundlePath := filepath.Join(trustDir, constants.PkiFileGatewayBundle)
-				if err := os.WriteFile(bundlePath, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
-					return fmt.Errorf("security: save trust bundle: %w: %w", constants.ErrTrustSaveFailed, err)
+				if outputDir == "" {
+					trustRelDir := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust)
+					if err := fileSvc.MkdirAll(ctx, trustRelDir, constants.PermDirPrivate); err != nil {
+						return fmt.Errorf("security: create trust dir: %w: %w", constants.ErrDirCreateFailed, err)
+					}
+					bundleRelPath := filepath.Join(trustRelDir, constants.PkiFileGatewayBundle)
+					if err := fileSvc.WriteFile(ctx, bundleRelPath, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
+						return fmt.Errorf("security: save trust bundle: %w: %w", constants.ErrTrustSaveFailed, err)
+					}
+				} else {
+					if err := os.MkdirAll(trustDir, constants.PermDirPrivate); err != nil {
+						return fmt.Errorf("security: create trust dir: %w: %w", constants.ErrDirCreateFailed, err)
+					}
+					bundlePath := filepath.Join(trustDir, constants.PkiFileGatewayBundle)
+					if err := os.WriteFile(bundlePath, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
+						return fmt.Errorf("security: save trust bundle: %w: %w", constants.ErrTrustSaveFailed, err)
+					}
 				}
 			}
 

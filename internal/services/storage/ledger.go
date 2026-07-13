@@ -14,8 +14,9 @@
 package storage
 
 import (
+	"context"
+	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -29,6 +30,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/storer"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	vault "github.com/g8e-ai/g8e/internal/services/vault"
 )
 
@@ -43,9 +45,11 @@ type LedgerConfig struct {
 
 // GitLedgerService maintains a git-backed version control of all files modified by the operator.
 type GitLedgerService struct {
-	config *LedgerConfig
-	logger *slog.Logger
-	mu     sync.Mutex
+	config      *LedgerConfig
+	logger      *slog.Logger
+	fileSvc     fs.RuntimeFileService
+	baseRelPath string
+	mu          sync.Mutex
 }
 
 // LedgerResult contains the result of a file ledger operation.
@@ -86,7 +90,7 @@ type LedgerCommit struct {
 // The base directory, files/ git repo, and sessions/ directory are eagerly
 // initialized at construction time so the ledger is ready before any
 // transactions occur.
-func NewGitLedgerService(config *LedgerConfig, logger *slog.Logger) (*GitLedgerService, error) {
+func NewGitLedgerService(config *LedgerConfig, logger *slog.Logger, fileSvc fs.RuntimeFileService) (*GitLedgerService, error) {
 	if config == nil {
 		return nil, fmt.Errorf("ledger: %w", constants.ErrLedgerConfigRequired)
 	}
@@ -96,8 +100,10 @@ func NewGitLedgerService(config *LedgerConfig, logger *slog.Logger) (*GitLedgerS
 	}
 
 	s := &GitLedgerService{
-		config: config,
-		logger: logger,
+		config:      config,
+		logger:      logger,
+		fileSvc:     fileSvc,
+		baseRelPath: filepath.Join(constants.DataDirname, constants.LedgerDirname),
 	}
 
 	if err := s.bootstrap(); err != nil {
@@ -110,28 +116,29 @@ func NewGitLedgerService(config *LedgerConfig, logger *slog.Logger) (*GitLedgerS
 // bootstrap creates the base directory structure and initializes the default
 // files/ git repo and sessions/ directory eagerly at construction time.
 func (s *GitLedgerService) bootstrap() error {
-	if err := os.MkdirAll(s.config.BaseDir, 0755); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	filesRelPath := filepath.Join(s.baseRelPath, constants.FilesDirname)
+	sessionsRelPath := filepath.Join(s.baseRelPath, constants.SessionsDirname)
+
+	dirs := []string{
+		s.baseRelPath,
+		filesRelPath,
+		sessionsRelPath,
 	}
 
-	filesDir := filepath.Join(s.config.BaseDir, constants.FilesDirname)
-	if err := os.MkdirAll(filesDir, 0755); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	for _, dir := range dirs {
+		if err := s.fileSvc.MkdirAll(context.Background(), dir, constants.PermDirStandard); err != nil {
+			return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+		}
 	}
 
-	if err := s.initGitRepo(filesDir); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
-	}
-
-	sessionsDir := filepath.Join(s.config.BaseDir, constants.SessionsDirname)
-	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+	if err := s.initGitRepo(filesRelPath); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	s.logger.Info("Ledger bootstrapped",
 		"base_dir", s.config.BaseDir,
-		"files_dir", filesDir,
-		"sessions_dir", sessionsDir)
+		"files_dir", s.fileSvc.Resolve(filesRelPath),
+		"sessions_dir", s.fileSvc.Resolve(sessionsRelPath))
 
 	return nil
 }
@@ -154,47 +161,50 @@ func (s *GitLedgerService) gitReady() bool {
 // GetSessionLedgerPath returns the ledger path for a specific session, initializing it if needed.
 func (s *GitLedgerService) GetSessionLedgerPath(operatorSessionID string) (string, error) {
 	if operatorSessionID == "" {
-		return filepath.Join(s.config.BaseDir, constants.FilesDirname), nil
+		return s.fileSvc.Resolve(filepath.Join(s.baseRelPath, constants.FilesDirname)), nil
 	}
 
-	sessionsRoot := filepath.Join(s.config.BaseDir, constants.SessionsDirname)
-	sessionPath := filepath.Join(sessionsRoot, operatorSessionID)
+	sessionRelPath := filepath.Join(s.baseRelPath, constants.SessionsDirname, operatorSessionID)
+	gitRelPath := filepath.Join(sessionRelPath, constants.GitDirname)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	_, err := os.Stat(filepath.Join(sessionPath, constants.GitDirname))
-	if err == nil {
-		return sessionPath, nil
+	exists, _ := s.fileSvc.FileExists(context.Background(), gitRelPath)
+	if exists {
+		return s.fileSvc.Resolve(sessionRelPath), nil
 	}
 
-	if err := os.MkdirAll(sessionPath, 0755); err != nil {
+	if err := s.fileSvc.MkdirAll(context.Background(), sessionRelPath, constants.PermDirStandard); err != nil {
 		return "", fmt.Errorf("ledger: %w", constants.ErrInternal)
 	}
 
-	if err := s.initGitRepo(sessionPath); err != nil {
+	if err := s.initGitRepo(sessionRelPath); err != nil {
 		return "", fmt.Errorf("ledger: %w", constants.ErrInternal)
 	}
 
+	sessionPath := s.fileSvc.Resolve(sessionRelPath)
 	s.logger.Info("Initialized new session ledger", "operator_session_id", operatorSessionID, "path", sessionPath)
 	return sessionPath, nil
 }
 
 // initGitRepo initializes a git repository in the specified directory using native go-git.
-func (s *GitLedgerService) initGitRepo(path string) error {
-	gitDir := filepath.Join(path, constants.GitDirname)
+func (s *GitLedgerService) initGitRepo(relPath string) error {
+	gitRelPath := filepath.Join(relPath, constants.GitDirname)
 
-	if _, err := os.Stat(gitDir); err == nil {
+	exists, _ := s.fileSvc.FileExists(context.Background(), gitRelPath)
+	if exists {
 		return nil
 	}
 
-	repo, err := git.PlainInit(path, false)
+	absPath := s.fileSvc.Resolve(relPath)
+	repo, err := git.PlainInit(absPath, false)
 	if err != nil {
 		return fmt.Errorf("ledger: %w", constants.ErrInternal)
 	}
 
-	gitignore := filepath.Join(path, constants.GitignoreFilename)
-	if err := os.WriteFile(gitignore, []byte("# g8e Ledger\n"), 0600); err != nil {
+	gitignoreRelPath := filepath.Join(relPath, constants.GitignoreFilename)
+	if err := s.fileSvc.WriteFile(context.Background(), gitignoreRelPath, []byte("# g8e Ledger\n"), constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("ledger: %w", constants.ErrInternal)
 	}
 
@@ -272,17 +282,13 @@ func (s *GitLedgerService) getGitRelativePath(filePath string) string {
 // ── File copy ───────────────────────────────────────────────────────────
 
 // copyToLedger copies a file from the host to the ledger, encrypting it if the vault is unlocked.
-// It uses streaming for unencrypted files to prevent OOM.
 func (s *GitLedgerService) copyToLedger(srcPath, dstPath string) (err error) {
-	dstDir := filepath.Dir(dstPath)
-	if err := os.MkdirAll(dstDir, 0755); err != nil {
+	relDstPath, err := s.fileSvc.Rel(dstPath)
+	if err != nil {
 		return fmt.Errorf("ledger: %w", constants.ErrInternal)
 	}
 
 	if s.config.EncryptionVault != nil && s.config.EncryptionVault.IsUnlocked() {
-		// For encrypted files, we currently read the whole content since the Vault API
-		// only supports byte-slice encryption (AES-GCM).
-		// We limit the size to prevent OOM.
 		info, err := os.Stat(srcPath)
 		if err != nil {
 			return fmt.Errorf("ledger: %w", constants.ErrStatFailed)
@@ -303,34 +309,18 @@ func (s *GitLedgerService) copyToLedger(srcPath, dstPath string) (err error) {
 			return fmt.Errorf("ledger: %w", constants.ErrInternal)
 		}
 
-		if err := os.WriteFile(dstPath+".enc", encrypted, 0600); err != nil {
+		if err := s.fileSvc.WriteFile(context.Background(), relDstPath+".enc", encrypted, constants.PermFilePrivate); err != nil {
 			return fmt.Errorf("ledger: %w", constants.ErrInternal)
 		}
 		return nil
 	}
 
-	// For unencrypted files, use streaming
-	srcFile, err := os.Open(srcPath)
+	content, err := os.ReadFile(srcPath)
 	if err != nil {
 		return fmt.Errorf("ledger: %w", constants.ErrFileOpenFailed)
 	}
-	defer func() {
-		if cerr := srcFile.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("ledger: %w", constants.ErrInternal)
-		}
-	}()
 
-	dstFile, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
-	if err != nil {
-		return fmt.Errorf("ledger: %w", constants.ErrInternal)
-	}
-	defer func() {
-		if cerr := dstFile.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("ledger: %w", constants.ErrInternal)
-		}
-	}()
-
-	if _, err := io.Copy(dstFile, srcFile); err != nil {
+	if err := s.fileSvc.WriteFile(context.Background(), relDstPath, content, constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("ledger: %w", constants.ErrInternal)
 	}
 
@@ -469,7 +459,8 @@ func (s *GitLedgerService) CompleteMirrorDelete(result *LedgerResult, operatorSe
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if err := os.Remove(result.LedgerPath); err != nil && !os.IsNotExist(err) {
+	relLedgerPath, _ := s.fileSvc.Rel(result.LedgerPath)
+	if err := s.fileSvc.Remove(context.Background(), relLedgerPath); err != nil && !errors.Is(err, constants.ErrNotFound) {
 		s.logger.Warn("Failed to remove mirror file", "path", result.LedgerPath, string(constants.ConnectionStateError), err)
 	}
 
@@ -578,7 +569,7 @@ func (s *GitLedgerService) GetStateMerkleRoot() (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	ledgerDir := filepath.Join(s.config.BaseDir, constants.FilesDirname)
+	ledgerDir := s.fileSvc.Resolve(filepath.Join(s.baseRelPath, constants.FilesDirname))
 	repo, err := git.PlainOpen(ledgerDir)
 	if err != nil {
 		return "", fmt.Errorf("ledger: %w", constants.ErrInternal)
@@ -792,7 +783,7 @@ func (s *GitLedgerService) RestoreFileFromCommit(filePath, commitHash, operatorS
 
 	_, _ = s.snapshotLedger(ledgerDir, fmt.Sprintf("Pre-restoration state: %s", filePath))
 
-	if err := os.WriteFile(filePath, []byte(content), 0600); err != nil {
+	if err := os.WriteFile(filePath, []byte(content), constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("ledger: %w", constants.ErrInternal)
 	}
 
