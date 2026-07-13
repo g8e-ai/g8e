@@ -33,6 +33,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/execution"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	gateway "github.com/g8e-ai/g8e/internal/services/gateway"
 	govsvc "github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
@@ -80,7 +81,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	}
 
 	// Create log directory and file
-	if err := os.MkdirAll(paths.Infra.LogDir, 0700); err != nil {
+	if err := os.MkdirAll(paths.Infra.LogDir, constants.PermDirPrivate); err != nil {
 		return fmt.Errorf("gateway: create log directory: %w", err)
 	}
 
@@ -93,6 +94,15 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	logger, err := ConfigureLoggerWithOutput(cfg.LogLevel, logHandle)
 	if err != nil {
 		return fmt.Errorf("gateway: configure logger: %w", err)
+	}
+
+	// Construct RuntimeFileService and create the .g8e/ runtime directory tree
+	fileSvc, err := fs.NewRuntimeFileService("", logger)
+	if err != nil {
+		return fmt.Errorf("gateway: create file service: %w", err)
+	}
+	if err := fileSvc.CreateRuntimeTree(context.Background()); err != nil {
+		return fmt.Errorf("gateway: create runtime tree: %w", err)
 	}
 
 	// Apply defaults for empty directory flags (constants are now absolute)
@@ -140,7 +150,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	}
 	gatewayCfg.Version = vi.Version
 
-	svc, err := gateway.NewGatewayModeService(gatewayCfg, logger)
+	svc, err := gateway.NewGatewayModeService(gatewayCfg, fileSvc, logger)
 	if err != nil {
 		return fmt.Errorf("gateway: create service: %w", err)
 	}
@@ -191,7 +201,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	// Initialize In-Process Execution Gateway
 	logger.Info("Initializing in-process execution Gateway...")
 	execSvc := execution.NewExecutionService(gatewayCfg, logger)
-	fileSvc := execution.NewFileEditService(gatewayCfg, logger)
+	fileEditSvc := execution.NewFileEditService(gatewayCfg, logger)
 
 	// Git for ledger (embedded go-git)
 	gatewayCfg.GitPath = system.GitEmbedded
@@ -238,7 +248,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 			Config:             gatewayCfg,
 			Logger:             logger,
 			Execution:          execSvc,
-			FileEdit:           fileSvc,
+			FileEdit:           fileEditSvc,
 			PubSubClient:       loopbackClient,
 			ResultsService:     nil, // Results handled via direct loopback publish if needed
 			ExecutionVault:     nil, // Not used in gateway mode

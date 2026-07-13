@@ -35,7 +35,7 @@ func (fs *localFS) EnforceDirPermissions(ctx context.Context, relPath string, mo
 			return err
 		}
 		if err := os.Chmod(path, mode); err != nil {
-			return fmt.Errorf("fs: enforce dir permissions %s: %w", path, err)
+			return fmt.Errorf("%w: %s: %w", constants.ErrEnforcePermissions, path, err)
 		}
 		return nil
 	})

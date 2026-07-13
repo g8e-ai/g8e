@@ -40,6 +40,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/network"
@@ -57,6 +58,7 @@ import (
 type GatewayModeService struct {
 	cfg    *config.Config
 	logger *slog.Logger
+	fileSvc fs.RuntimeFileService
 
 	db                 *CanonicalDBService
 	pubsub             *GatewayWebSocketHandler
@@ -91,6 +93,7 @@ type GatewayModeService struct {
 type gatewayServiceBuilder struct {
 	cfg    *config.Config
 	logger *slog.Logger
+	fileSvc fs.RuntimeFileService
 
 	// Pre-built components (test only). When nil, build() constructs them.
 	preBuiltDB     *CanonicalDBService
@@ -103,8 +106,8 @@ type gatewayServiceBuilder struct {
 }
 
 // newGatewayServiceBuilder creates a builder for production use.
-func newGatewayServiceBuilder(cfg *config.Config, logger *slog.Logger) *gatewayServiceBuilder {
-	return &gatewayServiceBuilder{cfg: cfg, logger: logger}
+func newGatewayServiceBuilder(cfg *config.Config, fileSvc fs.RuntimeFileService, logger *slog.Logger) *gatewayServiceBuilder {
+	return &gatewayServiceBuilder{cfg: cfg, logger: logger, fileSvc: fileSvc}
 }
 
 // withPreBuiltDB sets a pre-built CanonicalDBService (test only).
@@ -134,7 +137,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	db := b.preBuiltDB
 	if db == nil {
 		var err error
-		db, err = OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, cfg.Gateway.VaultDir, logger, false, cfg.Gateway.VaultKeyPath, cfg.Gateway.VaultRequireUnlock, nil)
+		db, err = OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.VaultDir, logger, false, cfg.Gateway.VaultKeyPath, cfg.Gateway.VaultRequireUnlock, nil, b.fileSvc)
 		if err != nil {
 			return nil, fmt.Errorf("gateway: failed to initialize database: %w", err)
 		}
@@ -146,7 +149,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	}
 
 	// --- Secret manager ---
-	sm, err := NewSecretManager(db.db, cfg.Gateway.SecretsDir, logger)
+	sm, err := NewSecretManager(db.db, b.fileSvc, logger)
 	if err != nil && !b.testMode {
 		return nil, fmt.Errorf("gateway: initialize secret manager: %w", err)
 	}
@@ -272,6 +275,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	ls := &GatewayModeService{
 		cfg:                cfg,
 		logger:             logger,
+		fileSvc:            b.fileSvc,
 		db:                 db,
 		pubsub:             pubsub,
 		auth:               auth,
@@ -298,8 +302,8 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 }
 
 // NewGatewayModeService creates a new gateway mode service.
-func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayModeService, error) {
-	return newGatewayServiceBuilder(cfg, logger).build()
+func NewGatewayModeService(cfg *config.Config, fileSvc fs.RuntimeFileService, logger *slog.Logger) (*GatewayModeService, error) {
+	return newGatewayServiceBuilder(cfg, fileSvc, logger).build()
 }
 
 type networkIdentityDetector interface {
@@ -392,8 +396,8 @@ func detectBasicNonLoopbackIPv4Addresses() []net.IP {
 
 // newGatewayModeServiceForTest assembles a GatewayModeService from pre-built components.
 // Used in tests where the DB and pub/sub broker are constructed independently.
-func newGatewayModeServiceForTest(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, pubsub *GatewayWebSocketHandler) (*GatewayModeService, error) {
-	return newGatewayServiceBuilder(cfg, logger).
+func newGatewayModeServiceForTest(cfg *config.Config, fileSvc fs.RuntimeFileService, logger *slog.Logger, db *CanonicalDBService, pubsub *GatewayWebSocketHandler) (*GatewayModeService, error) {
+	return newGatewayServiceBuilder(cfg, fileSvc, logger).
 		withPreBuiltDB(db).
 		withPreBuiltPubsub(pubsub).
 		withTestMode().
@@ -509,7 +513,7 @@ func (ls *GatewayModeService) GetSecretManager() (*SecretManager, error) {
 	if ls.sm != nil {
 		return ls.sm, nil
 	}
-	return NewSecretManager(ls.db.db, ls.cfg.Gateway.SecretsDir, ls.logger)
+	return NewSecretManager(ls.db.db, ls.fileSvc, ls.logger)
 }
 
 // GetPKIAuthority returns the underlying PKI authority.

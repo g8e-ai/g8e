@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os"
 	"sync"
 	"time"
 
@@ -30,6 +29,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/services/auth"
 	"github.com/g8e-ai/g8e/internal/services/execution"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/gateway"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
@@ -42,6 +42,7 @@ import (
 type G8eoService struct {
 	config *config.Config
 	logger *slog.Logger
+	fileSvc fs.RuntimeFileService
 
 	bootstrap         *auth.BootstrapService
 	secretManager     *gateway.SecretManager
@@ -109,6 +110,14 @@ func (vs *G8eoService) SetKeystore(ks *keystore.Keystore) {
 	vs.testKeystore = ks
 }
 
+// SetFileService injects a RuntimeFileService for file I/O within the .g8e/ directory.
+// If not set before Start(), the service constructs one from config.WorkDir.
+func (vs *G8eoService) SetFileService(fileSvc fs.RuntimeFileService) {
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
+	vs.fileSvc = fileSvc
+}
+
 func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.mu.Lock()
 	defer vs.mu.Unlock()
@@ -120,6 +129,17 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.ctx, vs.cancel = context.WithCancel(ctx)
 	vs.logger.Info("g8e Operator initializing (Outbound Mode)",
 		"posture", vs.config.Posture)
+
+	var err error
+	if vs.fileSvc == nil {
+		vs.fileSvc, err = fs.NewRuntimeFileService(vs.config.WorkDir, vs.logger)
+		if err != nil {
+			return fmt.Errorf("%w: init file service: %w", constants.ErrInternal, err)
+		}
+		if err := vs.fileSvc.CreateRuntimeTree(ctx); err != nil {
+			return fmt.Errorf("%w: create runtime tree: %w", constants.ErrInternal, err)
+		}
+	}
 
 	bootstrapConfig, err := vs.bootstrap.RequestBootstrapConfig(ctx)
 	if err != nil {
@@ -135,7 +155,6 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Initialize SecretManager for loading signing keys (Actuator and Consensus)
 	// This must be initialized before storage services to provide keystore for encrypted token storage
-	secretsDir := vs.config.SecretsDir
 
 	// Initialize CanonicalDBService for canonical state root calculation
 	// This ensures outbound mode uses the same state root schema as gateway mode
@@ -150,7 +169,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		testMode = true
 		testKs = vs.testKeystore
 	}
-	gatewayDB, err := gateway.OpenCanonicalDBService(dataDir, secretsDir, vs.config.VaultDir, vs.logger, testMode, vaultKeyPath, vs.config.VaultRequireUnlock, testKs)
+	gatewayDB, err := gateway.OpenCanonicalDBService(dataDir, vs.config.VaultDir, vs.logger, testMode, vaultKeyPath, vs.config.VaultRequireUnlock, testKs, vs.fileSvc)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrGatewayDatabaseServiceNotConfigured, err)
 	}
@@ -158,9 +177,9 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.logger.Info("Gateway database initialized (canonical state root)")
 
 	if vs.testKeystore != nil {
-		vs.secretManager, err = gateway.NewSecretManagerWithKeystore(vs.gatewayDB.GetDB(), secretsDir, vs.logger, vs.testKeystore)
+		vs.secretManager, err = gateway.NewSecretManagerWithKeystore(vs.gatewayDB.GetDB(), vs.fileSvc, vs.logger, vs.testKeystore)
 	} else {
-		vs.secretManager, err = gateway.NewSecretManager(vs.gatewayDB.GetDB(), secretsDir, vs.logger)
+		vs.secretManager, err = gateway.NewSecretManager(vs.gatewayDB.GetDB(), vs.fileSvc, vs.logger)
 	}
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrKeyNotFound, err)
@@ -298,11 +317,8 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		return fmt.Errorf("%w: %w", constants.ErrKeyReadFailed, err)
 	}
 
-	// Load trusted L2 signers from filesystem (create directory if it doesn't exist)
+	// Load trusted L2 signers from filesystem
 	trustedSignersDir := paths.Infra.TrustedSignersDir
-	if err := os.MkdirAll(trustedSignersDir, constants.PermDirPrivate); err != nil {
-		return fmt.Errorf("%w: failed to create trusted signers directory: %w", constants.ErrDirCreateFailed, err)
-	}
 	signerStore, err := governance.NewFilesystemSignerStore(trustedSignersDir, vs.logger)
 	if err != nil {
 		return fmt.Errorf("%w: failed to load trusted signers: %w", constants.ErrPathNotFound, err)

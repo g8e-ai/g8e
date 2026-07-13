@@ -130,10 +130,10 @@ func (fs *localFS) Resolve(relPath string) string {
 func (fs *localFS) Rel(absPath string) (string, error) {
 	rel, err := filepath.Rel(fs.runtimeDir, absPath)
 	if err != nil {
-		return "", fmt.Errorf("fs: rel %s: %w", absPath, err)
+		return "", fmt.Errorf("%w: %s: %w", constants.ErrPathValidation, absPath, err)
 	}
 	if !fs.isWithinRuntimeDir(absPath) {
-		return "", fmt.Errorf("fs: path %s is outside runtime dir %s", absPath, fs.runtimeDir)
+		return "", fmt.Errorf("%w: %s is outside runtime dir %s", constants.ErrPathValidation, absPath, fs.runtimeDir)
 	}
 	return rel, nil
 }
@@ -220,7 +220,7 @@ func (fs *localFS) Remove(ctx context.Context, relPath string) error {
 	}
 	absPath := fs.Resolve(relPath)
 	if err := os.Remove(absPath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("fs: remove %s: %w", relPath, err)
+		return fmt.Errorf("%w: %s: %w", constants.ErrFileRemoveFailed, relPath, err)
 	}
 	return nil
 }
@@ -232,7 +232,7 @@ func (fs *localFS) RemoveAll(ctx context.Context, relPath string) error {
 	}
 	absPath := fs.Resolve(relPath)
 	if err := os.RemoveAll(absPath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("fs: remove all %s: %w", relPath, err)
+		return fmt.Errorf("%w: %s: %w", constants.ErrDirRemoveFailed, relPath, err)
 	}
 	return nil
 }

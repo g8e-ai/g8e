@@ -17,7 +17,7 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -28,7 +28,7 @@ import (
 )
 
 // setupTestFS creates a RuntimeFileService backed by a temp directory.
-// It calls paths.InitWithBase so paths.Infra is populated for EnsureRuntimeTree.
+// It calls paths.InitWithBase so paths.Infra is populated for CreateRuntimeTree.
 func setupTestFS(t *testing.T) RuntimeFileService {
 	t.Helper()
 	baseDir := testutil.TempDir(t)
@@ -131,7 +131,7 @@ func TestWriteFile_NoTempFilesRemain(t *testing.T) {
 	entries, err := os.ReadDir(absDir)
 	require.NoError(t, err)
 	for _, e := range entries {
-		assert.False(t, filepath.HasPrefix(e.Name(), ".g8e-tmp-"),
+		assert.False(t, strings.HasPrefix(e.Name(), ".g8e-tmp-"),
 			"temp file remains: %s", e.Name())
 	}
 }

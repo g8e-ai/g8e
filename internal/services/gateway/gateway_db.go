@@ -93,7 +93,7 @@ type CanonicalDBService struct {
 // vaultKeyPath is the path to the vault private key file (hex-encoded).
 // vaultRequireUnlock requires the vault to be unlocked before starting.
 // testKeystore is an optional keystore instance for test mode (prevents race conditions in parallel tests).
-func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, logger *slog.Logger, testMode bool, vaultKeyPath string, vaultRequireUnlock bool, testKeystore *keystore.Keystore, fileSvc fs.RuntimeFileService) (*CanonicalDBService, error) {
+func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger, testMode bool, vaultKeyPath string, vaultRequireUnlock bool, testKeystore *keystore.Keystore, fileSvc fs.RuntimeFileService) (*CanonicalDBService, error) {
 	dbPath := filepath.Join(dataDir, constants.DbFilename)
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 
@@ -186,12 +186,12 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 	svc.BlobStore = NewBlobStoreService(db, logger)
 
 	if testMode {
-		if err := svc.initTestSchema(secretsDir, testKeystore, fileSvc); err != nil {
+		if err := svc.initTestSchema(testKeystore, fileSvc); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 		}
 	} else {
-		if err := svc.initSchema(secretsDir, fileSvc); err != nil {
+		if err := svc.initSchema(fileSvc); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 		}
@@ -211,7 +211,7 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 	return svc, nil
 }
 
-func (s *CanonicalDBService) initTestSchema(secretsDir string, testKeystore *keystore.Keystore, fileSvc fs.RuntimeFileService) error {
+func (s *CanonicalDBService) initTestSchema(testKeystore *keystore.Keystore, fileSvc fs.RuntimeFileService) error {
 	_, err := s.db.ExecWithRetry(gatewaySchema)
 	if err != nil {
 		return fmt.Errorf("canonicalDB: init test schema: %w", err)
@@ -282,7 +282,7 @@ func (s *CanonicalDBService) RunMaintenance(ctx context.Context) {
 	}
 }
 
-func (s *CanonicalDBService) initSchema(secretsDir string, fileSvc fs.RuntimeFileService) error {
+func (s *CanonicalDBService) initSchema(fileSvc fs.RuntimeFileService) error {
 	_, err := s.db.ExecWithRetry(gatewaySchema)
 	if err != nil {
 		return fmt.Errorf("canonicalDB: init schema: %w", err)

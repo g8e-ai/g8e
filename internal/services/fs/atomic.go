@@ -29,7 +29,7 @@ import (
 // used in keystore.go and secret_manager.go).
 //
 // Parent directories are created with PermDirStandard (0755) as a safety net.
-// EnsureRuntimeTree should be called at startup to create the full directory
+// CreateRuntimeTree should be called at startup to create the full directory
 // tree with correct permissions.
 func (fs *localFS) WriteFile(ctx context.Context, relPath string, data []byte, mode os.FileMode) error {
 	if err := ctx.Err(); err != nil {
