@@ -62,6 +62,7 @@ type GatewayModeService struct {
 	pubsub             *GatewayWebSocketHandler
 	auth               *AuthService
 	pki                *PKIAuthority
+	sm                 *SecretManager
 	reg                *RegistrationService
 	passkey            *PasskeyHandler
 	userSvc            *UserService
@@ -276,6 +277,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		auth:               auth,
 		pki:                pki,
 		reg:                reg,
+		sm:                 sm,
 		passkey:            passkeyHandler,
 		userSvc:            userSvc,
 		cliSessionSvc:      cliSessionSvc,
@@ -500,8 +502,13 @@ func (ls *GatewayModeService) GetDB() *CanonicalDBService {
 	return ls.db
 }
 
-// GetSecretManager returns the secret manager.
+// GetSecretManager returns the cached secret manager. If the manager was not
+// initialized during build() (e.g., test mode where keychain init is skipped),
+// it falls back to creating a new instance.
 func (ls *GatewayModeService) GetSecretManager() (*SecretManager, error) {
+	if ls.sm != nil {
+		return ls.sm, nil
+	}
 	return NewSecretManager(ls.db.db, ls.cfg.Gateway.SecretsDir, ls.logger)
 }
 
