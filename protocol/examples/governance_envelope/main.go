@@ -24,6 +24,7 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/g8e-ai/g8e/internal/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
@@ -31,20 +32,17 @@ import (
 func main() {
 	// Create a governance envelope for a command execution
 	envelope := &commonv1.GovernanceEnvelope{
-		Id:                "hash-123",
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().Add(5 * time.Minute)),
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
 		OperatorId:        "op-456",
 		OperatorSessionId: "session-789",
-		WebSessionId:      "web-xyz",
 		CliSessionId:      "cli-123",
 		EventType:         "g8e.v1.operator.command.requested",
 		ActionType:        "EXECUTE_BASH",
 		TargetResource:    "/home/user",
 		StateMerkleRoot:   "root-hash-abc",
 		Nonce:             "nonce-xyz",
-		TransactionHash:   "hash-123",
 		ProtocolVersion:   "1.0",
 		CaseId:            "case-456",
 		InvestigationId:   "inv-789",
@@ -78,10 +76,8 @@ func main() {
 			},
 			L3: &commonv1.L3Metadata{
 				Proof: &commonv1.L3Proof{
-					ClientDataJson:    `{"challenge":"abc"}`,
-					AuthenticatorData: "auth-data",
-					Signature:         "sig-xyz",
-					CredentialId:      "cred-123",
+					MtlsCertFingerprint: "sha256:ab:cd:ef:01:23:45:67:89:ab:cd:ef:01:23:45:67:89:ab:cd:ef:01:23:45:67:89:ab:cd:ef:01:23:45:67:89",
+					CliSignature:        "ed25519:9f3a2b1c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a",
 				},
 			},
 		},
@@ -105,6 +101,15 @@ func main() {
 		log.Fatalf("Failed to marshal command: %v", err)
 	}
 	envelope.Payload = cmdBytes
+
+	// Compute the canonical transaction hash from the envelope's critical fields.
+	// The Id and TransactionHash must both equal this computed value.
+	txHash, err := governance.GenerateMessageID(envelope)
+	if err != nil {
+		log.Fatalf("Failed to compute transaction hash: %v", err)
+	}
+	envelope.Id = txHash
+	envelope.TransactionHash = txHash
 
 	// Convert envelope to protojson (canonical wire format)
 	marshaler := protojson.MarshalOptions{UseProtoNames: false}
@@ -136,6 +141,7 @@ func main() {
 	fmt.Printf("\nParsed Command: %s\n", parsedCmd.Command)
 	fmt.Printf("Execution ID: %s\n", parsedCmd.ExecutionId)
 	fmt.Printf("Justification: %s\n", parsedCmd.Justification)
+	fmt.Printf("Transaction Hash: %s\n", parsedEnvelope.TransactionHash)
 	fmt.Printf("Requestor User ID: %s\n", parsedEnvelope.RequestorUserId)
 	fmt.Printf("Acting App ID: %s\n", parsedEnvelope.ActingAppId)
 }

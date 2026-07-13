@@ -28,15 +28,16 @@ go run ./examples/governance_envelope/
 
 ## MCP Server Configurations
 
-Three configuration templates are provided:
+Four configuration templates are provided:
 
 | File | Transport | Use Case |
 |---|---|---|
 | `g8e_gateway_mcp_config.json` | HTTP + mTLS (literal cert paths) | Production with DNS or `/etc/hosts` configured for `g8e.local` |
 | `g8e_gateway_mcp_config_env.json` | HTTP + mTLS (env-var cert paths) | Containerized deployments where cert paths are injected at runtime |
-| `g8e_stdio_mcp_config.json` | Stdio (subprocess) | Local development with native tools and L1 inline doctrine; no gateway required |
+| `g8e_stdio_mcp_config.json` | Stdio (subprocess) | Stdio proxy to the gateway with full L1-L5 governance; requires a running gateway |
+| `g8e_agent_mcp_config.json` | Stdio (subprocess) | Agent-specific config written by `g8e mcp agent run` with native tool exclusion for governance |
 
-The canonical schema is defined in `internal/services/mcp/config.go`. Use `g8e mcp agent show <agent>` to generate agent-specific configurations.
+The canonical schemas are defined in `internal/services/mcp/config.go` (gateway and stdio) and `internal/cli/cmd/mcp.go` (agent). Use `g8e mcp agent show <agent>` to generate agent-specific configurations, or `g8e mcp agent run <agent>` to launch an agent with governance automatically.
 
 ## Workload Identity
 

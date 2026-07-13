@@ -1,0 +1,60 @@
+{
+  "_comment": "Canonical SSE event wire envelope shapes. SessionEventWire routes events to a specific web or CLI session. BackgroundEventWire routes events to a user without session binding. Both wrap an SSE event body with type and data.",
+
+  "_authority": "client",
+  "_consumers": ["agent", "cli"],
+
+  "sse_event_body": {
+    "_description": "Inner event body shared by both wire envelopes. Contains the event type string and a data payload object.",
+    "type": {
+      "type": "string",
+      "required": true,
+      "description": "Event type identifier"
+    },
+    "data": {
+      "type": "object",
+      "required": true,
+      "description": "Event payload as a JSON object"
+    }
+  },
+
+  "session_event_wire": {
+    "_description": "SSE envelope routing an event to a specific web or CLI session. Serialized from SessionEventWire (protocol/python/g8e/models/events.py). Excludes null fields on the wire.",
+    "web_session_id": {
+      "type": "string",
+      "required": false,
+      "description": "Web session ID for routing. Exactly one of web_session_id or cli_session_id is set."
+    },
+    "cli_session_id": {
+      "type": "string",
+      "required": false,
+      "description": "CLI session ID for routing. Exactly one of web_session_id or cli_session_id is set."
+    },
+    "user_id": {
+      "type": "string",
+      "required": true,
+      "description": "User identifier"
+    },
+    "event": {
+      "type": "object",
+      "required": true,
+      "description": "SSE event body. Conforms to sse_event_body shape above.",
+      "_ref": "#sse_event_body"
+    }
+  },
+
+  "background_event_wire": {
+    "_description": "SSE envelope routing a background event to a user without session binding. Serialized from BackgroundEventWire (protocol/python/g8e/models/events.py).",
+    "user_id": {
+      "type": "string",
+      "required": true,
+      "description": "User identifier"
+    },
+    "event": {
+      "type": "object",
+      "required": true,
+      "description": "SSE event body. Conforms to sse_event_body shape above.",
+      "_ref": "#sse_event_body"
+    }
+  }
+}
