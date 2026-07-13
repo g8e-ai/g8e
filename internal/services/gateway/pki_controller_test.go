@@ -41,6 +41,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -75,19 +76,15 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 
 	dbDir := testutil.TempDir(t)
 	pkiDir := testutil.TempDir(t)
-	secretsDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
 
-	ks := newTestKeystore(t, secretsDir, logger)
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks)
+	ks := newTestKeystore(t, fileSvc, logger)
+	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
 	require.NoError(t, err, "failed to open gateway DB service")
 	t.Cleanup(func() { db.Close() })
 
-	sm := &SecretManager{
-		db:         db.db,
-		secretsDir: secretsDir,
-		logger:     logger,
-		keystore:   ks,
-	}
+	sm, err := NewSecretManagerWithKeystore(db.db, fileSvc, logger, ks)
+	require.NoError(t, err)
 
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
 	require.NoError(t, pki.InitializePKI(nil), "failed to ensure PKI")

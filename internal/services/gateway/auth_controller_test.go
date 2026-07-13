@@ -28,6 +28,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/storage"
@@ -52,18 +53,14 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 
 	dbDir := testutil.TempDir(t)
 	pkiDir := testutil.TempDir(t)
-	secretsDir := testutil.TempDir(t)
-	ks := newTestKeystore(t, secretsDir, logger)
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks)
+	fileSvc := newTestFileSvc(t)
+	ks := newTestKeystore(t, fileSvc, logger)
+	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	sm := &SecretManager{
-		db:         db.db,
-		secretsDir: secretsDir,
-		logger:     logger,
-		keystore:   ks,
-	}
+	sm, err := NewSecretManagerWithKeystore(db.db, fileSvc, logger, ks)
+	require.NoError(t, err)
 
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
 	err = pki.InitializePKI(nil)
@@ -72,7 +69,7 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
 	resp := response.NewWriter(logger)
-	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "", "", "")
+	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, paths.Infra.SecretsDir, nil, "", "", "")
 	cliSessionSvc := NewCLISessionService(db, logger)
 	operatorSessionSvc := NewOperatorSessionService(db, logger)
 	webSessionSvc := NewWebSessionService(db, logger)
@@ -141,7 +138,8 @@ func setupTestPasskeyService(t *testing.T) (*PasskeyHandler, *UserService, stora
 	logger := testutil.NewTestLogger()
 
 	dbDir := testutil.TempDir(t)
-	db, err := openTestDB(t, dbDir, testutil.TempDir(t), filepath.Join(dbDir, constants.VaultDirname), logger)
+	fileSvc := newTestFileSvc(t)
+	db, err := openTestDB(t, dbDir, filepath.Join(dbDir, constants.VaultDirname), fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
