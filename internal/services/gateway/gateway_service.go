@@ -736,6 +736,15 @@ func (ls *GatewayModeService) Stop(ctx context.Context) error {
 	defer ls.mu.Unlock()
 
 	if !ls.running {
+		// Even if the service was never started, resources like the
+		// suspended transaction service are opened during build() and
+		// must be closed to avoid leaking file handles (especially on
+		// Windows where open files cannot be deleted from TempDir).
+		if ls.suspendedTxCloser != nil {
+			if err := ls.suspendedTxCloser.Close(); err != nil {
+				ls.logger.Error("Suspended transaction service close error", "state", string(constants.ConnectionStateError), "error", err)
+			}
+		}
 		return nil
 	}
 
@@ -810,7 +819,10 @@ func (ls *GatewayModeService) runServiceCertRenewalLoop(ctx context.Context) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
-	// Check immediately on startup
+	// Check immediately on startup, but only if the context is still active
+	if ctx.Err() != nil {
+		return
+	}
 	if err := ls.renewServiceCertWithIdentity(ctx); err != nil {
 		ls.logger.Error("Failed to renew service certificate on startup", "state", string(constants.ConnectionStateError), "error", err)
 	}

@@ -268,7 +268,7 @@ func TestDocSetWithTimestamps_CustomTimestamps(t *testing.T) {
 func TestDocSetWithTimestamps_ZeroTimestamps(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
-	before := time.Now().UTC()
+	before := time.Now().UTC().Truncate(time.Microsecond)
 
 	data := mustDocJSON(t, map[string]string{"name": "iris"})
 	err := svc.DocSetWithTimestamps("users", "u12", data, time.Time{}, time.Time{})

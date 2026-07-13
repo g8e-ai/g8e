@@ -515,7 +515,7 @@ func Run(cfg Config) error {
 		l3Notary,
 		doctrine,
 		knownActionTypes,
-		"notary",
+		"doctrine",
 		nil, // Clock defaults to RealClock
 	)
 

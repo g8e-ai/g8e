@@ -465,7 +465,7 @@ test-unit:
 .PHONY: test-integration
 test-integration:
 	@echo "Running Tier 2 (In-Process Integration) tests..."
-	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./...
+	@go test -p=1 -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./...
 
 # Tier 3: Docker E2E Tests - requires Docker
 .PHONY: test-docker
