@@ -1,0 +1,196 @@
+{
+  "_comment": "Canonical filesystem list wire shapes. FsListRequest is the request for directory listing. FsListResult is the result. FsListEntry is a single directory entry. Serialized from FsListRequest, FsListResult, FsListEntry (internal/models/fs_list.go).",
+
+  "_authority": "operator (g8eo)",
+  "_consumers": ["client", "agent"],
+
+  "fs_list_entry": {
+    "_description": "A single file/directory entry with readdirplus-style metadata.",
+    "name": {
+      "type": "string",
+      "required": true,
+      "description": "Entry name"
+    },
+    "path": {
+      "type": "string",
+      "required": true,
+      "description": "Full path"
+    },
+    "is_dir": {
+      "type": "boolean",
+      "required": true,
+      "description": "Whether the entry is a directory"
+    },
+    "size": {
+      "type": "integer",
+      "required": true,
+      "description": "Size in bytes"
+    },
+    "mode": {
+      "type": "string",
+      "required": true,
+      "description": "File mode (e.g. 0644)"
+    },
+    "mod_time": {
+      "type": "integer",
+      "required": true,
+      "description": "Modification time as Unix timestamp"
+    },
+    "is_symlink": {
+      "type": "boolean",
+      "required": false,
+      "description": "Whether the entry is a symlink. Omitted when false."
+    },
+    "symlink_target": {
+      "type": "string",
+      "required": false,
+      "description": "Symlink target path. Omitted when not a symlink."
+    },
+    "owner": {
+      "type": "string",
+      "required": false,
+      "description": "File owner. Omitted when empty."
+    },
+    "group": {
+      "type": "string",
+      "required": false,
+      "description": "File group. Omitted when empty."
+    },
+    "inode": {
+      "type": "integer",
+      "required": false,
+      "description": "Inode number. Omitted when zero."
+    },
+    "nlink": {
+      "type": "integer",
+      "required": false,
+      "description": "Number of hard links. Omitted when zero."
+    }
+  },
+
+  "fs_list_request": {
+    "_description": "Request to list directory contents.",
+    "execution_id": {
+      "type": "string",
+      "required": true,
+      "description": "Execution identifier"
+    },
+    "case_id": {
+      "type": "string",
+      "required": true,
+      "description": "Case ID"
+    },
+    "task_id": {
+      "type": "string",
+      "required": false,
+      "description": "Task ID. Omitted when empty."
+    },
+    "investigation_id": {
+      "type": "string",
+      "required": true,
+      "description": "Investigation ID"
+    },
+    "path": {
+      "type": "string",
+      "required": true,
+      "description": "Directory path to list"
+    },
+    "max_depth": {
+      "type": "integer",
+      "required": true,
+      "description": "Maximum recursion depth"
+    },
+    "max_entries": {
+      "type": "integer",
+      "required": true,
+      "description": "Maximum number of entries to return"
+    },
+    "requested_by": {
+      "type": "string",
+      "required": true,
+      "description": "Requester identifier"
+    }
+  },
+
+  "fs_list_result": {
+    "_description": "Result of a directory listing operation.",
+    "execution_id": {
+      "type": "string",
+      "required": true,
+      "description": "Execution identifier"
+    },
+    "case_id": {
+      "type": "string",
+      "required": true,
+      "description": "Case ID"
+    },
+    "task_id": {
+      "type": "string",
+      "required": false,
+      "description": "Task ID. Omitted when empty."
+    },
+    "investigation_id": {
+      "type": "string",
+      "required": true,
+      "description": "Investigation ID"
+    },
+    "status": {
+      "type": "string",
+      "required": true,
+      "description": "Execution status. Values: EXECUTION_STATUS_EXECUTING, EXECUTION_STATUS_COMPLETED, EXECUTION_STATUS_FAILED."
+    },
+    "path": {
+      "type": "string",
+      "required": true,
+      "description": "Directory path that was listed"
+    },
+    "entries": {
+      "type": "array",
+      "required": true,
+      "description": "Directory entries. Each item conforms to fs_list_entry shape."
+    },
+    "total_count": {
+      "type": "integer",
+      "required": true,
+      "description": "Total number of entries found"
+    },
+    "truncated": {
+      "type": "boolean",
+      "required": true,
+      "description": "Whether the result was truncated due to max_entries"
+    },
+    "start_time": {
+      "type": "string",
+      "format": "iso8601",
+      "required": false,
+      "description": "Operation start time. Omitted when zero."
+    },
+    "end_time": {
+      "type": "string",
+      "format": "iso8601",
+      "required": false,
+      "description": "Operation end time. Omitted when zero."
+    },
+    "duration_seconds": {
+      "type": "number",
+      "required": true,
+      "description": "Operation duration in seconds"
+    },
+    "error_message": {
+      "type": "string",
+      "required": false,
+      "description": "Error message. Omitted when empty."
+    },
+    "error_type": {
+      "type": "string",
+      "required": false,
+      "description": "Error type. Omitted when empty."
+    },
+    "system_info": {
+      "type": "object",
+      "required": false,
+      "description": "Execution system info. Conforms to terminal_output.json#execution_system_info. Omitted when not set.",
+      "_ref": "terminal_output.json#execution_system_info"
+    }
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "_comment": "Canonical filesystem grep wire shapes. FsGrepMatch is a single match result. FsGrepResult is the result of a grep operation. Serialized from FsGrepMatch (internal/models/wire.go) and the grep result shape.",
+
+  "_authority": "operator (g8eo)",
+  "_consumers": ["client", "agent"],
+
+  "fs_grep_match": {
+    "_description": "A single grep match result.",
+    "path": {
+      "type": "string",
+      "required": true,
+      "description": "File path containing the match"
+    },
+    "line_number": {
+      "type": "integer",
+      "required": true,
+      "description": "Line number of the match (1-indexed)"
+    },
+    "content": {
+      "type": "string",
+      "required": true,
+      "description": "Matched line content"
+    },
+    "before": {
+      "type": "array",
+      "items": "string",
+      "required": false,
+      "description": "Context lines before the match. Omitted when empty."
+    },
+    "after": {
+      "type": "array",
+      "items": "string",
+      "required": false,
+      "description": "Context lines after the match. Omitted when empty."
+    }
+  },
+
+  "fs_grep_result": {
+    "_description": "Result of a grep operation.",
+    "execution_id": {
+      "type": "string",
+      "required": true,
+      "description": "Execution identifier"
+    },
+    "case_id": {
+      "type": "string",
+      "required": true,
+      "description": "Case ID"
+    },
+    "task_id": {
+      "type": "string",
+      "required": false,
+      "description": "Task ID. Omitted when empty."
+    },
+    "investigation_id": {
+      "type": "string",
+      "required": true,
+      "description": "Investigation ID"
+    },
+    "status": {
+      "type": "string",
+      "required": true,
+      "description": "Execution status. Values: EXECUTION_STATUS_EXECUTING, EXECUTION_STATUS_COMPLETED, EXECUTION_STATUS_FAILED."
+    },
+    "path": {
+      "type": "string",
+      "required": true,
+      "description": "Root path searched"
+    },
+    "pattern": {
+      "type": "string",
+      "required": true,
+      "description": "Search pattern (regex or literal)"
+    },
+    "matches": {
+      "type": "array",
+      "required": true,
+      "description": "Match results. Each item conforms to fs_grep_match shape."
+    },
+    "total_count": {
+      "type": "integer",
+      "required": true,
+      "description": "Total number of matches found"
+    },
+    "truncated": {
+      "type": "boolean",
+      "required": true,
+      "description": "Whether the result was truncated due to max_matches"
+    },
+    "duration_seconds": {
+      "type": "number",
+      "required": true,
+      "description": "Operation duration in seconds"
+    },
+    "error_message": {
+      "type": "string",
+      "required": false,
+      "description": "Error message. Omitted when empty."
+    },
+    "error_type": {
+      "type": "string",
+      "required": false,
+      "description": "Error type. Omitted when empty."
+    }
+  }
+}

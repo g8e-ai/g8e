@@ -1,0 +1,160 @@
+{
+  "_comment": "Canonical execution metadata wire shapes. TerminalOutput captures terminal output from command execution. ExecutionSystemInfo captures system info at execution time. MemoryInfo captures memory state. ExecutionEnvironmentInfo captures the execution environment. Serialized from TerminalOutput, ExecutionSystemInfo, MemoryInfo, ExecutionEnvironmentInfo (internal/models/base.go).",
+
+  "_authority": "operator (g8eo)",
+  "_consumers": ["client", "agent"],
+
+  "terminal_output": {
+    "_description": "Terminal output from command execution.",
+    "command": {
+      "type": "string",
+      "required": true,
+      "description": "Command that was executed"
+    },
+    "command_with_args": {
+      "type": "string",
+      "required": true,
+      "description": "Command with arguments as a single string"
+    },
+    "combined_output": {
+      "type": "string",
+      "required": true,
+      "description": "Combined stdout and stderr output"
+    },
+    "last_lines": {
+      "type": "array",
+      "items": "string",
+      "required": true,
+      "description": "Last N lines of combined output"
+    },
+    "truncated_stdout": {
+      "type": "boolean",
+      "required": true,
+      "description": "Whether stdout was truncated"
+    },
+    "truncated_stderr": {
+      "type": "boolean",
+      "required": true,
+      "description": "Whether stderr was truncated"
+    },
+    "original_stdout_lines": {
+      "type": "integer",
+      "required": true,
+      "description": "Number of original stdout lines before truncation"
+    },
+    "original_stderr_lines": {
+      "type": "integer",
+      "required": true,
+      "description": "Number of original stderr lines before truncation"
+    },
+    "total_original_lines": {
+      "type": "integer",
+      "required": true,
+      "description": "Total original lines before truncation"
+    }
+  },
+
+  "memory_info": {
+    "_description": "Memory state at execution time. Field names match /proc/meminfo keys.",
+    "MemTotal": {
+      "type": "integer",
+      "required": true,
+      "description": "Total memory in KB"
+    },
+    "MemFree": {
+      "type": "integer",
+      "required": true,
+      "description": "Free memory in KB"
+    },
+    "MemAvailable": {
+      "type": "integer",
+      "required": true,
+      "description": "Available memory in KB"
+    },
+    "Buffers": {
+      "type": "integer",
+      "required": true,
+      "description": "Buffer cache in KB"
+    },
+    "Cached": {
+      "type": "integer",
+      "required": true,
+      "description": "Page cache in KB"
+    },
+    "SwapTotal": {
+      "type": "integer",
+      "required": true,
+      "description": "Total swap in KB"
+    },
+    "SwapFree": {
+      "type": "integer",
+      "required": true,
+      "description": "Free swap in KB"
+    }
+  },
+
+  "execution_system_info": {
+    "_description": "System info captured at execution time.",
+    "hostname": {
+      "type": "string",
+      "required": true,
+      "description": "Machine hostname"
+    },
+    "os": {
+      "type": "string",
+      "required": true,
+      "description": "Operating system. See status.json platform."
+    },
+    "architecture": {
+      "type": "string",
+      "required": true,
+      "description": "CPU architecture"
+    },
+    "num_cpu": {
+      "type": "integer",
+      "required": true,
+      "description": "Number of logical CPUs"
+    },
+    "go_version": {
+      "type": "string",
+      "required": true,
+      "description": "Go runtime version"
+    },
+    "current_user": {
+      "type": "string",
+      "required": true,
+      "description": "Current OS username"
+    },
+    "load_average": {
+      "type": "array",
+      "items": "number",
+      "required": false,
+      "description": "System load averages (1, 5, 15 minute). Omitted when empty."
+    },
+    "memory": {
+      "type": "object",
+      "required": false,
+      "description": "Memory info. Conforms to memory_info shape. Omitted when not set.",
+      "_ref": "#memory_info"
+    }
+  },
+
+  "execution_environment_info": {
+    "_description": "Execution environment info.",
+    "component_name": {
+      "type": "string",
+      "required": true,
+      "description": "Component name. See status.json component.name."
+    },
+    "project_id": {
+      "type": "string",
+      "required": true,
+      "description": "Project identifier"
+    },
+    "max_memory_mb": {
+      "type": "integer",
+      "required": true,
+      "description": "Maximum memory in MB"
+    }
+  }
+}
