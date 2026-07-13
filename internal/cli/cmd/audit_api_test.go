@@ -24,13 +24,14 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 var errMockNetwork = errors.New("network failure")
 
 func setupAuditAPITestEnv(t *testing.T) *config.Config {
 	t.Helper()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := setupTestConfig(t, tmpDir)
 
 	creds := &auth.Credentials{
@@ -177,7 +178,7 @@ func TestAuditReceiptsCmd_API_ClientFactoryError(t *testing.T) {
 
 func TestAuditExportCmd_API_MockHappyPath(t *testing.T) {
 	cfg := setupAuditAPITestEnv(t)
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	exportData := `{"receipts":[],"export_time":"2026-01-01T00:00:00Z"}`
 	mockClient := &mockAPIClient{
@@ -229,7 +230,7 @@ func TestAuditExportCmd_API_GetError(t *testing.T) {
 
 func TestAuditReportCmd_API_MockHappyPath(t *testing.T) {
 	cfg := setupAuditAPITestEnv(t)
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	reportJSON := `{"success":true,"report":{"generated_at":"2026-01-01T00:00:00Z","operator_session_id":"op-sess-test","events":[],"events_count":5,"receipts":[],"receipts_count":3,"total_records":8}}`
 	mockClient := &mockAPIClient{
@@ -255,7 +256,7 @@ func TestAuditReportCmd_API_MockHappyPath(t *testing.T) {
 
 func TestAuditReportCmd_API_InvalidJSON(t *testing.T) {
 	cfg := setupAuditAPITestEnv(t)
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	mockClient := &mockAPIClient{
 		getResp: []byte(`not json {{{`),
@@ -278,7 +279,7 @@ func TestAuditReportCmd_API_InvalidJSON(t *testing.T) {
 
 func TestAuditReportCmd_API_GetError(t *testing.T) {
 	cfg := setupAuditAPITestEnv(t)
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	mockClient := &mockAPIClient{
 		getErr: errMockNetwork,

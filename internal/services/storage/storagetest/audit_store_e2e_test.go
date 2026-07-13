@@ -36,7 +36,7 @@ import (
 // ============================================================================
 
 func TestSQLAuditStore_EndToEnd_AuditTrail(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault
@@ -170,7 +170,7 @@ func TestSQLAuditStore_EndToEnd_AuditTrail(t *testing.T) {
 }
 
 func TestSQLAuditStore_EndToEnd_MultipleTransactions(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault
@@ -282,7 +282,7 @@ func TestSQLAuditStore_EndToEnd_MultipleTransactions(t *testing.T) {
 }
 
 func TestSQLAuditStore_Consistency_EventReceiptLinkage(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault

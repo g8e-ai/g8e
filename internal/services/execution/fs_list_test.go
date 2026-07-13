@@ -26,14 +26,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 func TestFsListService_ExecuteFsList(t *testing.T) {
 	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	workDir := t.TempDir()
+	workDir := testutil.TempDir(t)
 	require.NoError(t, os.WriteFile(filepath.Join(workDir, "sentinel.txt"), []byte("x"), 0644))
 	service := NewFsListService(workDir, logger)
 
@@ -58,7 +60,7 @@ func TestFsListService_ExecuteFsList(t *testing.T) {
 	t.Run("lists temp directory with file metadata", func(t *testing.T) {
 		t.Parallel()
 		// Create temp directory with test files
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 
 		// Create test files
 		testFile := filepath.Join(tmpDir, "test.txt")
@@ -105,7 +107,7 @@ func TestFsListService_ExecuteFsList(t *testing.T) {
 
 	t.Run("respects max_entries limit", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 
 		// Create 10 files
 		for i := 0; i < 10; i++ {
@@ -131,7 +133,7 @@ func TestFsListService_ExecuteFsList(t *testing.T) {
 
 	t.Run("recursive listing with max_depth", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 
 		// Create nested structure: tmpDir/a/b/c.txt
 		subA := filepath.Join(tmpDir, "a")
@@ -187,7 +189,8 @@ func TestFsListService_ExecuteFsList(t *testing.T) {
 
 	t.Run("handles file path (not directory)", func(t *testing.T) {
 		t.Parallel()
-		tmpFile, err := os.CreateTemp("", "fslist-file-*")
+		require.NoError(t, os.MkdirAll(constants.TestTempDirname, constants.PermDirStandard))
+		tmpFile, err := os.CreateTemp(constants.TestTempDirname, "fslist-file-*")
 		require.NoError(t, err)
 		tmpFile.Close()
 		defer os.Remove(tmpFile.Name())

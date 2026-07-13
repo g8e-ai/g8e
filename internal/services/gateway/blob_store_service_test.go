@@ -29,8 +29,8 @@ import (
 func setupBlobStoreTest(t *testing.T) (*BlobStoreService, *CanonicalDBService) {
 	t.Helper()
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(dbDir, constants.VaultDirname)
 
 	db, err := openTestDB(t, dbDir, secretsDir, vaultDir, logger)

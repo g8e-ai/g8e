@@ -38,9 +38,9 @@ func TestNewGatewayModeService(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	// Ensure directories are set for tests to avoid SQLITE_CANTOPEN
-	cfg.Gateway.DataDir = t.TempDir()
-	cfg.Gateway.PKIDir = t.TempDir()
-	cfg.Gateway.SecretsDir = t.TempDir()
+	cfg.Gateway.DataDir = testutil.TempDir(t)
+	cfg.Gateway.PKIDir = testutil.TempDir(t)
+	cfg.Gateway.SecretsDir = testutil.TempDir(t)
 
 	t.Run("Default configuration with self-signed certs", func(t *testing.T) {
 		db, err := openTestDB(t, cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, filepath.Join(cfg.Gateway.DataDir, "vault"), logger)
@@ -50,8 +50,8 @@ func TestNewGatewayModeService(t *testing.T) {
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
 
-		cfg.Gateway.PKIDir = t.TempDir()
-		cfg.Gateway.SecretsDir = t.TempDir()
+		cfg.Gateway.PKIDir = testutil.TempDir(t)
+		cfg.Gateway.SecretsDir = testutil.TempDir(t)
 		cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
 		ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
@@ -68,9 +68,9 @@ func TestGatewayModeService_StateManagement(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	cfg.Gateway.DataDir = t.TempDir()
-	cfg.Gateway.PKIDir = t.TempDir()
-	cfg.Gateway.SecretsDir = t.TempDir()
+	cfg.Gateway.DataDir = testutil.TempDir(t)
+	cfg.Gateway.PKIDir = testutil.TempDir(t)
+	cfg.Gateway.SecretsDir = testutil.TempDir(t)
 
 	db, err := openTestDB(t, cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, filepath.Join(cfg.Gateway.DataDir, "vault"), logger)
 	require.NoError(t, err)
@@ -124,9 +124,9 @@ func TestNewGatewayModeServiceForTest(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := testutil.TempDir(t)
+	pkiDir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -152,9 +152,9 @@ func TestGatewayModeService_Getters(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := testutil.TempDir(t)
+	pkiDir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -206,9 +206,9 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		cfg.Gateway.Posture = config.PostureDoctrine
 		logger := testutil.NewTestLogger()
 
-		dbDir := t.TempDir()
-		pkiDir := t.TempDir()
-		secretsDir := t.TempDir()
+		dbDir := testutil.TempDir(t)
+		pkiDir := testutil.TempDir(t)
+		secretsDir := testutil.TempDir(t)
 		db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
@@ -233,9 +233,9 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		cfg.Gateway.Posture = ""
 		logger := testutil.NewTestLogger()
 
-		dbDir := t.TempDir()
-		pkiDir := t.TempDir()
-		secretsDir := t.TempDir()
+		dbDir := testutil.TempDir(t)
+		pkiDir := testutil.TempDir(t)
+		secretsDir := testutil.TempDir(t)
 		db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
@@ -260,9 +260,9 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		cfg.Gateway.Posture = config.PostureNotary
 		logger := testutil.NewTestLogger()
 
-		dbDir := t.TempDir()
-		pkiDir := t.TempDir()
-		secretsDir := t.TempDir()
+		dbDir := testutil.TempDir(t)
+		pkiDir := testutil.TempDir(t)
+		secretsDir := testutil.TempDir(t)
 		db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
@@ -287,9 +287,9 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		cfg.Gateway.Posture = config.PostureNotary
 		logger := testutil.NewTestLogger()
 
-		dbDir := t.TempDir()
-		pkiDir := t.TempDir()
-		secretsDir := t.TempDir()
+		dbDir := testutil.TempDir(t)
+		pkiDir := testutil.TempDir(t)
+		secretsDir := testutil.TempDir(t)
 		db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
@@ -326,9 +326,9 @@ func TestGatewayModeService_GetGovernanceDeps(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := testutil.TempDir(t)
+	pkiDir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -361,9 +361,9 @@ func TestGatewayModeService_StartStop(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := testutil.TempDir(t)
+	pkiDir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -427,9 +427,9 @@ func TestGatewayModeService_StopWhenNotRunning(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := testutil.TempDir(t)
+	pkiDir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -462,9 +462,9 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := testutil.TempDir(t)
+	pkiDir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -538,9 +538,9 @@ func TestGatewayModeService_RenewServiceCertWithIdentity(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := testutil.TempDir(t)
+	pkiDir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -569,9 +569,9 @@ func TestGatewayModeService_RunServiceCertRenewalLoop(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := testutil.TempDir(t)
+	pkiDir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })

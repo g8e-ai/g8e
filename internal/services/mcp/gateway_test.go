@@ -40,6 +40,7 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 type fakeEnvelopeProcessor struct {
@@ -298,7 +299,7 @@ func TestGatewayService_ResumeWithL3Proof_ExpiredTransaction(t *testing.T) {
 
 func TestGatewayService_RunMaintenance_AuditsExpiredTransactions(t *testing.T) {
 	t.Parallel()
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault
@@ -1031,7 +1032,7 @@ func TestGatewayService_StoreSuspendedTransaction(t *testing.T) {
 
 	t.Run("records approval requested event", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		vaultDir := filepath.Join(tempDir, "vault")
 
 		// Create test vault

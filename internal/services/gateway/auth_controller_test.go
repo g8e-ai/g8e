@@ -50,9 +50,9 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := testutil.TempDir(t)
+	pkiDir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 	ks := newTestKeystore(t, secretsDir, logger)
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks)
 	require.NoError(t, err)
@@ -140,8 +140,8 @@ func setupTestPasskeyService(t *testing.T) (*PasskeyHandler, *UserService, stora
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	db, err := openTestDB(t, dbDir, t.TempDir(), filepath.Join(dbDir, constants.VaultDirname), logger)
+	dbDir := testutil.TempDir(t)
+	db, err := openTestDB(t, dbDir, testutil.TempDir(t), filepath.Join(dbDir, constants.VaultDirname), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -248,7 +248,7 @@ func TestAuthControllerReadBody(t *testing.T) {
 func TestFileActuatorKeyReader(t *testing.T) {
 	t.Run("Success - reads valid actuator key file", func(t *testing.T) {
 		// Create a temporary file with valid actuator key data
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		keyFile := filepath.Join(tmpDir, constants.ActuatorPubJSONFilename)
 		keyData := `{"key_id":"test-key-id","public_key":"test-public-key"}`
 		require.NoError(t, os.WriteFile(keyFile, []byte(keyData), 0644))
@@ -270,7 +270,7 @@ func TestFileActuatorKeyReader(t *testing.T) {
 	})
 
 	t.Run("Failure - invalid JSON in file", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		keyFile := filepath.Join(tmpDir, constants.ActuatorPubJSONFilename)
 		require.NoError(t, os.WriteFile(keyFile, []byte("{invalid json"), 0644))
 
@@ -281,7 +281,7 @@ func TestFileActuatorKeyReader(t *testing.T) {
 	})
 
 	t.Run("Success - missing required fields returns empty values", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		keyFile := filepath.Join(tmpDir, constants.ActuatorPubJSONFilename)
 		require.NoError(t, os.WriteFile(keyFile, []byte(`{"key_id":"test-id"}`), 0644))
 

@@ -23,6 +23,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // mockProcess is a mock implementation of the process interface
@@ -118,7 +119,7 @@ func (m *mockTickerFactory) NewTicker(d time.Duration) ticker {
 }
 
 func TestIsProcessRunningWithFinder(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -197,7 +198,7 @@ func TestIsProcessRunningWithFinder(t *testing.T) {
 }
 
 func TestFindProcessOnPortWithFactory(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -286,7 +287,7 @@ func TestFindProcessOnPortWithFactory(t *testing.T) {
 }
 
 func TestFindOperatorProcessWithExecutor(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -350,7 +351,7 @@ func TestFindOperatorProcessWithExecutor(t *testing.T) {
 }
 
 func TestStopProcessWithDeps(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)

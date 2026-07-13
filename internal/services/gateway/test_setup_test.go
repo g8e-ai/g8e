@@ -80,9 +80,9 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := testutil.TempDir(t)
+	pkiDir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 
 	ks := newTestKeystore(t, secretsDir, logger)
 

@@ -37,9 +37,9 @@ func TestDetector_DetectIPs(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, ips)
 
-	// Should always include localhost
+	// Should always include IPv4 localhost
 	assert.Contains(t, ips, "127.0.0.1")
-	assert.Contains(t, ips, "::1")
+	assert.NotContains(t, ips, "::1")
 }
 
 func TestDetector_DetectHostnames(t *testing.T) {
@@ -166,11 +166,14 @@ func TestNetworkIdentity_GetAllDNSNames(t *testing.T) {
 func TestNetworkIdentity_GetAllIPs(t *testing.T) {
 	t.Parallel()
 	identity := &NetworkIdentity{
-		IPs: []string{"192.168.1.1", "10.0.0.1", "127.0.0.1"},
+		IPs: []string{"192.168.1.1", "10.0.0.1", "127.0.0.1", "2001:db8::1", "::1"},
 	}
 
 	ips := identity.GetAllIPs()
 	assert.Len(t, ips, 3)
+	for _, ip := range ips {
+		assert.NotNil(t, ip.To4(), "should only return IPv4 addresses")
+	}
 }
 
 func TestNetworkIdentity_FormatForDisplay(t *testing.T) {
@@ -398,22 +401,17 @@ func TestDetector_DetectIPs_ExcludesLoopback(t *testing.T) {
 	ips, err := detector.detectIPs()
 	require.NoError(t, err)
 
-	// Verify loopback is explicitly added, not from interface detection
-	// The function adds 127.0.0.1 and ::1 at the end
+	// Verify IPv4 loopback is explicitly added, not from interface detection
+	// The function adds 127.0.0.1 at the end (IPv6 ::1 is not included)
 	ipv4LoopbackCount := 0
-	ipv6LoopbackCount := 0
 	for _, ip := range ips {
 		if ip == "127.0.0.1" {
 			ipv4LoopbackCount++
 		}
-		if ip == "::1" {
-			ipv6LoopbackCount++
-		}
 	}
 
-	// Should have exactly one of each (the explicitly added ones)
+	// Should have exactly one (the explicitly added one)
 	assert.Equal(t, 1, ipv4LoopbackCount)
-	assert.Equal(t, 1, ipv6LoopbackCount)
 }
 
 func TestDetector_DetectDNSPTRs_SkipsLocal(t *testing.T) {

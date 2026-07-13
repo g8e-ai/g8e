@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestGetBinaryName(t *testing.T) {
@@ -279,7 +280,7 @@ func TestDetectIdentity(t *testing.T) {
 }
 
 func TestReExecArgsMatchStartCmdFlags(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := platform.NewProcessManager(tmpDir)
 	require.NoError(t, err)
 

@@ -67,7 +67,7 @@ func TestNewOperatorPubSubService(t *testing.T) {
 func TestNewOperatorPubSubService_StartsWithoutTrustedSignersButRejectsL2(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg.PKIDir = filepath.Join(tmpDir, "pki")
 	cfg.Gateway.Posture = config.PostureConsensus // Set Consensus posture to enforce L2
 	svc, err := NewOperatorPubSubService(CommandServiceConfig{
@@ -801,7 +801,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 			t.Parallel()
 
 			// Set up TestSQLAuditStore with encryption at rest for this subtest
-			tmpDir := t.TempDir()
+			tmpDir := testutil.TempDir(t)
 			vaultDir := filepath.Join(tmpDir, "vault")
 			vaultPrivKey := make([]byte, 32)
 			_, _ = rand.Read(vaultPrivKey)
@@ -871,7 +871,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 			t.Parallel()
 
 			// Set up TestSQLAuditStore with encryption at rest for this subtest
-			tmpDir := t.TempDir()
+			tmpDir := testutil.TempDir(t)
 			vaultDir := filepath.Join(tmpDir, "vault")
 			vaultPrivKey := make([]byte, 32)
 			_, _ = rand.Read(vaultPrivKey)
@@ -940,7 +940,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 			t.Parallel()
 
 			// Set up TestSQLAuditStore with encryption at rest for this subtest
-			tmpDir := t.TempDir()
+			tmpDir := testutil.TempDir(t)
 			vaultDir := filepath.Join(tmpDir, "vault")
 			vaultPrivKey := make([]byte, 32)
 			_, _ = rand.Read(vaultPrivKey)
@@ -1032,7 +1032,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 		t.Parallel()
 
 		// Set up TestSQLAuditStore with encryption at rest for this subtest
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		vaultDir := filepath.Join(tmpDir, "vault")
 		vaultPrivKey := make([]byte, 32)
 		_, _ = rand.Read(vaultPrivKey)

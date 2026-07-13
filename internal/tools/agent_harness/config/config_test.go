@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestDefault(t *testing.T) {
@@ -44,7 +45,7 @@ func TestDefault(t *testing.T) {
 }
 
 func TestLoadFile(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	configPath := filepath.Join(tmpDir, "config.json")
 
 	// Create a test config file
@@ -120,7 +121,7 @@ func TestLoadFile_NonExistent(t *testing.T) {
 }
 
 func TestLoadFile_InvalidJSON(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	configPath := filepath.Join(tmpDir, "invalid.json")
 
 	if err := os.WriteFile(configPath, []byte("invalid json"), 0o644); err != nil {
@@ -135,7 +136,7 @@ func TestLoadFile_InvalidJSON(t *testing.T) {
 }
 
 func TestLoadFile_PartialOverlay(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	configPath := filepath.Join(tmpDir, "partial.json")
 
 	// Create a partial config with only some fields

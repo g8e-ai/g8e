@@ -26,6 +26,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func mustMarshalArgs(t *testing.T, dbPath, query string) json.RawMessage {
@@ -202,7 +203,7 @@ func TestDBQueryValidateTool_Execute_DatabaseOpenFailure(t *testing.T) {
 
 	// SQLite creates databases on the fly, so testing open failure is difficult.
 	// Instead, test that the tool handles read-only mode correctly.
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// Create a valid database first
@@ -228,7 +229,7 @@ func TestDBQueryValidateTool_Execute_ValidIndexedQuery(t *testing.T) {
 	tool := &DBQueryValidateTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// Create test database with indexed table
@@ -265,7 +266,7 @@ func TestDBQueryValidateTool_Execute_PrimaryKeyLookup(t *testing.T) {
 	tool := &DBQueryValidateTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// Create test database
@@ -298,7 +299,7 @@ func TestDBQueryValidateTool_Execute_FullTableScan(t *testing.T) {
 	tool := &DBQueryValidateTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// Create test database
@@ -333,7 +334,7 @@ func TestDBQueryValidateTool_Execute_FullTableScanWithNonIndexedWhere(t *testing
 	tool := &DBQueryValidateTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// Create test database without primary key or indexes
@@ -367,7 +368,7 @@ func TestDBQueryValidateTool_Execute_ComplexQueryWithJoin(t *testing.T) {
 	tool := &DBQueryValidateTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// Create test database with indexed foreign keys
@@ -411,7 +412,7 @@ func TestDBQueryValidateTool_Execute_QueryWithOrderBy(t *testing.T) {
 	tool := &DBQueryValidateTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// Create test database
@@ -443,7 +444,7 @@ func TestDBQueryValidateTool_Execute_QueryWithLimit(t *testing.T) {
 	tool := &DBQueryValidateTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// Create test database
@@ -477,7 +478,7 @@ func TestDBQueryValidateTool_Execute_InvalidSQLSyntax(t *testing.T) {
 	tool := &DBQueryValidateTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// Create test database
@@ -510,7 +511,7 @@ func TestDBQueryValidateTool_Execute_ContextCancellation(t *testing.T) {
 	tool := &DBQueryValidateTool{}
 	ctx, cancel := context.WithCancel(context.Background())
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// Create test database
@@ -536,7 +537,7 @@ func TestDBQueryValidateTool_Execute_WhitespaceInQuery(t *testing.T) {
 	tool := &DBQueryValidateTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// Create test database
@@ -568,7 +569,7 @@ func TestDBQueryValidateTool_Execute_SelectWithSubquery(t *testing.T) {
 	tool := &DBQueryValidateTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// Create test database
@@ -607,7 +608,7 @@ func TestDBQueryValidateTool_Execute_AggregateQuery(t *testing.T) {
 	tool := &DBQueryValidateTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// Create test database
@@ -643,7 +644,7 @@ func TestDBQueryValidateTool_Execute_ReadOnlyDatabase(t *testing.T) {
 	tool := &DBQueryValidateTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	// Create test database

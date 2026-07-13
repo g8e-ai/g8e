@@ -31,13 +31,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestL5ActuatorRecordActionReceiptCalled(t *testing.T) {
 	actuator, _ := newTestActuator(t)
 
 	// Create a real AuditVault with test database
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 
 	// Create vault for encryption
 	_, privKey, err := ed25519.GenerateKey(nil)

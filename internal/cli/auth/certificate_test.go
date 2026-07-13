@@ -30,7 +30,7 @@ import (
 
 func TestSaveCertAndKey_Success(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	certFile := filepath.Join(tmpDir, "cert.pem")
 	keyFile := filepath.Join(tmpDir, "key.pem")
 
@@ -54,7 +54,7 @@ func TestSaveCertAndKey_Success(t *testing.T) {
 
 func TestSaveCertAndKey_NoChain(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	certFile := filepath.Join(tmpDir, "cert.pem")
 	keyFile := filepath.Join(tmpDir, "key.pem")
 
@@ -73,7 +73,7 @@ func TestSaveCertAndKey_NoChain(t *testing.T) {
 
 func TestSaveCertAndKey_CreatesDirectory(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	subDir := filepath.Join(tmpDir, "subdir", "nested")
 	certFile := filepath.Join(subDir, "cert.pem")
 	keyFile := filepath.Join(subDir, "key.pem")
@@ -94,7 +94,7 @@ func TestSaveCertAndKey_MkdirError(t *testing.T) {
 	t.Parallel()
 
 	// Create a file where we expect a directory
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	blockingFile := filepath.Join(tmpDir, "subdir")
 	require.NoError(t, os.WriteFile(blockingFile, []byte("block"), 0600))
 
@@ -113,7 +113,7 @@ func TestSaveCertAndKey_MkdirError(t *testing.T) {
 
 func TestParseCertPEM_Success(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	certFile := filepath.Join(tmpDir, "cert.pem")
 
 	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
@@ -127,7 +127,7 @@ func TestParseCertPEM_Success(t *testing.T) {
 
 func TestParseCertPEM_InvalidPEM(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	certFile := filepath.Join(tmpDir, "cert.pem")
 
 	require.NoError(t, os.WriteFile(certFile, []byte("invalid-pem-data"), 0600))
@@ -140,7 +140,7 @@ func TestParseCertPEM_InvalidPEM(t *testing.T) {
 
 func TestParseCertPEM_NonCertificatePEM(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	certFile := filepath.Join(tmpDir, "cert.pem")
 
 	// Write a private key PEM instead of a certificate
@@ -206,7 +206,7 @@ func TestIsCertExpiringSoon_ExactlyAtThreshold(t *testing.T) {
 
 func TestCheckCertExpiry_Expiring(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	certFile := filepath.Join(tmpDir, "cert.pem")
 
 	// Note: The isCertExpiringSoon function is tested separately with modified certificates.
@@ -224,7 +224,7 @@ func TestCheckCertExpiry_Expiring(t *testing.T) {
 
 func TestCheckCertExpiry_NotExpiring(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	certFile := filepath.Join(tmpDir, "cert.pem")
 
 	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
@@ -237,7 +237,7 @@ func TestCheckCertExpiry_NotExpiring(t *testing.T) {
 
 func TestCheckCertExpiry_InvalidFile(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	certFile := filepath.Join(tmpDir, "cert.pem")
 
 	require.NoError(t, os.WriteFile(certFile, []byte("invalid-pem"), 0600))
@@ -249,7 +249,7 @@ func TestCheckCertExpiry_InvalidFile(t *testing.T) {
 
 func TestAutoRenewCertificate_NotExpiring(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -271,7 +271,7 @@ func TestAutoRenewCertificate_NotExpiring(t *testing.T) {
 
 func TestAutoRenewCertificate_UnknownCertType(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -289,7 +289,7 @@ func TestAutoRenewCertificate_ExpiringCert(t *testing.T) {
 	t.Parallel()
 
 	// Create a certificate that expires in 12 hours (within renewal threshold)
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -316,7 +316,7 @@ func TestAutoRenewCertificate_ExpiringCert(t *testing.T) {
 func TestAutoRenewCertificate_OperatorType(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,

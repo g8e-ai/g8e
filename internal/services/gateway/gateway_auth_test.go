@@ -377,8 +377,8 @@ func TestAuthService_Middleware_DualAuthDispatch(t *testing.T) {
 func TestAuthIntegrity_AppPolicyDenyByDefault(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })

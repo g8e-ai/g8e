@@ -105,7 +105,7 @@ func TestNewDarwin_WithKeychain(t *testing.T) {
 		t.Skip("security command not available, skipping keychain keyring test")
 	}
 
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 
 	ks, err := New(secretsDir, logger)

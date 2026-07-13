@@ -28,6 +28,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestAuditCmd(t *testing.T) {
@@ -372,7 +373,7 @@ func TestAuditReceiptsCmd_ConfigLoadFailure(t *testing.T) {
 
 func TestAuditReceiptsCmd_APIClientFailure(t *testing.T) {
 	t.Run("receipts fails when API client creation fails", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		originalWd, _ := os.Getwd()
 		os.Chdir(tmpDir)
 		defer os.Chdir(originalWd)
@@ -412,7 +413,7 @@ func TestAuditReceiptsCmd_APIClientFailure(t *testing.T) {
 
 func TestAuditReceiptsCmd_CredentialsLoadFailure(t *testing.T) {
 	t.Run("receipts fails when credentials file is corrupted", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupAuditTestConfig(t, tmpDir)
 		originalWd, _ := os.Getwd()
 		os.Chdir(tmpDir)
@@ -437,7 +438,7 @@ func TestAuditReceiptsCmd_CredentialsLoadFailure(t *testing.T) {
 
 func TestAuditReceiptsCmd_NoCredentials(t *testing.T) {
 	t.Run("receipts fails when no credentials exist", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupAuditTestConfig(t, tmpDir)
 		originalWd, _ := os.Getwd()
 		os.Chdir(tmpDir)
@@ -527,7 +528,7 @@ func TestAuditReceiptsCmd_TableDriven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpDir := t.TempDir()
+			tmpDir := testutil.TempDir(t)
 			cfg := setupAuditTestConfig(t, tmpDir)
 			originalWd, _ := os.Getwd()
 			os.Chdir(tmpDir)
@@ -646,7 +647,7 @@ func TestAuditExportCmd_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("export fails when not authenticated", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupAuditTestConfig(t, tmpDir)
 		originalWd, _ := os.Getwd()
 		os.Chdir(tmpDir)
@@ -667,7 +668,7 @@ func TestAuditExportCmd_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("export fails with corrupted credentials", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupAuditTestConfig(t, tmpDir)
 		originalWd, _ := os.Getwd()
 		os.Chdir(tmpDir)
@@ -707,7 +708,7 @@ func TestAuditReportCmd_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("report fails when not authenticated", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupAuditTestConfig(t, tmpDir)
 		originalWd, _ := os.Getwd()
 		os.Chdir(tmpDir)
@@ -747,7 +748,7 @@ func TestAuditEventsCmd_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("events fails when not authenticated", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupAuditTestConfig(t, tmpDir)
 		originalWd, _ := os.Getwd()
 		os.Chdir(tmpDir)
@@ -768,7 +769,7 @@ func TestAuditEventsCmd_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("events fails with invalid limit (zero)", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupAuditTestConfig(t, tmpDir)
 		originalWd, _ := os.Getwd()
 		os.Chdir(tmpDir)
@@ -790,7 +791,7 @@ func TestAuditEventsCmd_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("events fails with invalid limit (too high)", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupAuditTestConfig(t, tmpDir)
 		originalWd, _ := os.Getwd()
 		os.Chdir(tmpDir)
@@ -831,7 +832,7 @@ func TestAuditSummaryCmd_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("summary fails when not authenticated", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupAuditTestConfig(t, tmpDir)
 		originalWd, _ := os.Getwd()
 		os.Chdir(tmpDir)

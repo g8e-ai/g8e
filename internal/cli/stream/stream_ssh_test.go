@@ -35,6 +35,7 @@ import (
 	"github.com/stretchr/testify/require"
 	sshlib "golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // mockSSHServer is a minimal SSH server for testing streamToHost.
@@ -146,7 +147,7 @@ func TestStreamToHost_Success(t *testing.T) {
 	defer cancel()
 
 	// Set HOME to temp dir so resolveHost finds our key
-	home := t.TempDir()
+	home := testutil.TempDir(t)
 	t.Setenv("HOME", home)
 	sshDir := filepath.Join(home, ".ssh")
 	err = os.MkdirAll(sshDir, 0700)
@@ -232,7 +233,7 @@ func TestStreamToHost_DialFailure(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set HOME to temp dir so resolveHost finds our key
-	home := t.TempDir()
+	home := testutil.TempDir(t)
 	t.Setenv("HOME", home)
 	sshDir := filepath.Join(home, ".ssh")
 	err = os.MkdirAll(sshDir, 0700)
@@ -302,7 +303,7 @@ func TestIsTransientError(t *testing.T) {
 }
 
 func TestBuildAuthMethods_WithPassphrase(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	keyPath := filepath.Join(dir, "id_rsa_encrypted")
 
 	// Generate an RSA key
@@ -379,7 +380,7 @@ func TestProxyConn(t *testing.T) {
 }
 
 func TestParseConfig_ProxyCommand(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	configPath := filepath.Join(dir, "config")
 	configContent := `Host bastion
   ProxyCommand ssh -W %h:%p jumpuser@jumphost
@@ -409,7 +410,7 @@ Host *.internal
 }
 
 func TestResolveHost_ProxyCommand(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	configPath := filepath.Join(dir, "config")
 	configContent := `Host proxyhost
   ProxyCommand ssh -W %h:%p jump@bastion
@@ -432,7 +433,7 @@ func TestPreFlightCheck_ContextCancelled(t *testing.T) {
 	cancel()
 
 	// Need to provide a valid key to get past auth method check
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	keyPath := filepath.Join(dir, "id_rsa")
 	generateTestSSHKey(t, keyPath)
 
@@ -468,7 +469,7 @@ func TestPreFlightCheck_NoAuthMethods(t *testing.T) {
 
 func TestPreFlightCheck_InvalidKeyFile(t *testing.T) {
 	ctx := context.Background()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	badKey := filepath.Join(dir, "bad_key")
 	require.NoError(t, os.WriteFile(badKey, []byte("not a valid key"), 0600))
 

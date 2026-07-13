@@ -26,6 +26,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestApproveCmdStructure(t *testing.T) {
@@ -61,7 +62,7 @@ func TestApproveCmdWithConfig(t *testing.T) {
 	})
 
 	t.Run("approve fails when CLI key file does not exist", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupTestConfig(t, tmpDir)
 
 		loader := func(string) (*config.Config, error) {
@@ -76,7 +77,7 @@ func TestApproveCmdWithConfig(t *testing.T) {
 	})
 
 	t.Run("approve fails with invalid PEM key", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupTestConfig(t, tmpDir)
 
 		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), []byte("not a pem"), 0o600))
@@ -93,7 +94,7 @@ func TestApproveCmdWithConfig(t *testing.T) {
 	})
 
 	t.Run("approve fails with extra data after PEM", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupTestConfig(t, tmpDir)
 
 		keyData := append([]byte("-----BEGIN PRIVATE KEY-----\naGVsbG8=\n-----END PRIVATE KEY-----\n"), []byte("extra data")...)
@@ -113,7 +114,7 @@ func TestApproveCmdWithConfig(t *testing.T) {
 
 func TestApproveCmdWithValidKeyFile(t *testing.T) {
 	t.Run("approve fails when cert file does not exist after key is read", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupTestConfig(t, tmpDir)
 
 		_, privKey, err := ed25519.GenerateKey(nil)
@@ -149,7 +150,7 @@ func TestEnrollCmdWithConfigErrorPaths(t *testing.T) {
 	})
 
 	t.Run("enroll fails when operator not running", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupTestConfig(t, tmpDir)
 
 		config.SetEndpointOverride("127.0.0.1:65535")

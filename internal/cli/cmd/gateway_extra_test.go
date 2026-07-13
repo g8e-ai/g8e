@@ -20,6 +20,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestGatewayCmdStructure(t *testing.T) {
@@ -83,7 +84,7 @@ func TestGatewayStartCmdFlags(t *testing.T) {
 
 func TestGatewayLogsCmdNoLogFile(t *testing.T) {
 	t.Run("logs command reports no log file when none exists", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 
 		originalWd, _ := os.Getwd()
 		os.Chdir(tmpDir)

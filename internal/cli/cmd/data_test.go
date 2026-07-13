@@ -31,6 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestDataCmd(t *testing.T) {
@@ -128,7 +129,7 @@ func TestDataCommandsRequireAuthentication(t *testing.T) {
 			cmd.SetErr(&buf)
 
 			originalWd, _ := os.Getwd()
-			tmpDir := t.TempDir()
+			tmpDir := testutil.TempDir(t)
 			os.Chdir(tmpDir)
 			defer os.Chdir(originalWd)
 
@@ -224,7 +225,7 @@ func TestDataAuditSummaryCmd(t *testing.T) {
 	})
 
 	t.Run("summary fails when database does not exist", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		setupDataTestConfig(t, tmpDir)
 
 		cmd := dataAuditSummaryCmd()
@@ -242,7 +243,7 @@ func TestDataAuditSummaryCmd(t *testing.T) {
 	})
 
 	t.Run("summary succeeds with empty database", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		setupDataTestConfig(t, tmpDir)
 
 		// Initialize global paths to use tmpDir
@@ -291,7 +292,7 @@ func TestDataStoreCmdFlagValidation(t *testing.T) {
 	})
 
 	t.Run("store list mode with collection flag", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		setupDataTestConfig(t, tmpDir)
 
 		cmd := dataStoreCmd()
@@ -325,7 +326,7 @@ func TestDataAuditListCmdFlagValidation(t *testing.T) {
 	})
 
 	t.Run("audit list with operator-session-id flag", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		setupDataTestConfig(t, tmpDir)
 
 		cmd := dataAuditListCmd()
@@ -523,7 +524,7 @@ func TestDataDocFilterTypes(t *testing.T) {
 
 func TestDataAuditSummaryWithSessionFilter(t *testing.T) {
 	t.Run("summary with session filter constructs correct query", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		setupDataTestConfig(t, tmpDir)
 
 		// Initialize global paths to use tmpDir
@@ -572,7 +573,7 @@ func TestDataAuditSummaryWithSessionFilter(t *testing.T) {
 	})
 
 	t.Run("summary without session filter includes all events", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		setupDataTestConfig(t, tmpDir)
 
 		// Initialize global paths to use tmpDir
@@ -620,7 +621,7 @@ func TestDataAuditSummaryWithSessionFilter(t *testing.T) {
 
 func TestDataAuditSummaryOutputFormatting(t *testing.T) {
 	t.Run("summary formats output correctly with multiple event types", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		setupDataTestConfig(t, tmpDir)
 
 		// Initialize global paths to use tmpDir
@@ -673,7 +674,7 @@ func TestDataAuditSummaryOutputFormatting(t *testing.T) {
 
 func TestDataStoreCommandModes(t *testing.T) {
 	t.Run("store command defaults to list mode when document-id not provided", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		setupDataTestConfig(t, tmpDir)
 
 		cmd := dataStoreCmd()
@@ -694,7 +695,7 @@ func TestDataStoreCommandModes(t *testing.T) {
 	})
 
 	t.Run("store command uses document mode when document-id provided", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		setupDataTestConfig(t, tmpDir)
 
 		cmd := dataStoreCmd()

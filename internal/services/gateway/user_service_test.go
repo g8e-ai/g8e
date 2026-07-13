@@ -31,7 +31,7 @@ import (
 // newTestDocumentStoreService creates a DocumentStoreService with a test DB.
 func newTestDocumentStoreService(t *testing.T) *DocumentStoreService {
 	t.Helper()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "user_service_test.db")
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 	db, err := sqliteutil.OpenDB(cfg, testutil.NewTestLogger())

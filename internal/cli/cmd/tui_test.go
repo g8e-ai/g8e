@@ -31,6 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // --- helpers ---
@@ -66,7 +67,7 @@ func stubTUIDeps(t *testing.T, cfg *config.Config) tuiDeps {
 // setupTUITestConfig creates a minimal config in a temp directory for hermetic tests.
 func setupTUITestConfig(t *testing.T) *config.Config {
 	t.Helper()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	return setupTestConfig(t, tmpDir)
 }
 
@@ -283,7 +284,7 @@ func TestTUI_SSEURLConstruction(t *testing.T) {
 
 func TestTUI_RealConfigNoGateway(t *testing.T) {
 	t.Run("fails with gateway not reachable when using real config and no gateway", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupTestConfig(t, tmpDir)
 
 		deps := tuiDeps{
@@ -306,7 +307,7 @@ func TestTUI_RealConfigNoGateway(t *testing.T) {
 
 func TestTUI_RealCredentialsNotEnrolled(t *testing.T) {
 	t.Run("fails with not enrolled when credentials file does not exist", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupTestConfig(t, tmpDir)
 
 		// Ensure no credentials file exists
@@ -333,7 +334,7 @@ func TestTUI_RealCredentialsNotEnrolled(t *testing.T) {
 
 func TestTUI_RealCredentialsCorruptJSON(t *testing.T) {
 	t.Run("fails with ErrFailedToLoadCredentials when credentials file is corrupt", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupTestConfig(t, tmpDir)
 
 		credsDir := filepath.Dir(cfg.CredentialsFile())

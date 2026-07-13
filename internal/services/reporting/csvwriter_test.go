@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestUTCRFC3339(t *testing.T) {
@@ -75,7 +76,7 @@ func TestBoolStr(t *testing.T) {
 
 func TestWriteCSV(t *testing.T) {
 	t.Run("writes header and rows", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		path := filepath.Join(dir, "test.csv")
 
 		rows := []Row{
@@ -102,7 +103,7 @@ func TestWriteCSV(t *testing.T) {
 	})
 
 	t.Run("writes only header when rows is empty", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		path := filepath.Join(dir, "empty.csv")
 
 		res, err := writeCSV(path, SessionRow{}.Columns(), nil)
@@ -121,7 +122,7 @@ func TestWriteCSV(t *testing.T) {
 	})
 
 	t.Run("returns error on invalid path", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		blocker := filepath.Join(dir, "blocker")
 		require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
 

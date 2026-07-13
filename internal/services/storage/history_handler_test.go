@@ -32,7 +32,7 @@ import (
 func setupTestHistoryHandler(t *testing.T) (*HistoryHandler, *SQLAuditStore, *vault.Vault, string) {
 	t.Helper()
 	gitPath := testGitPath(t)
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 
 	// Create vault for encryption
 	_, privKey, err := ed25519.GenerateKey(nil)

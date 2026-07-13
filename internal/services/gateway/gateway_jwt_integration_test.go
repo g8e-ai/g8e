@@ -128,9 +128,9 @@ func TestGateway_JWTIntegration(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := testutil.TempDir(t)
+	pkiDir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 	ks := newTestKeystore(t, secretsDir, logger)
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks)
 	require.NoError(t, err)
@@ -285,9 +285,9 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := testutil.TempDir(t)
+	pkiDir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 	ks := newTestKeystore(t, secretsDir, logger)
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks)
 	require.NoError(t, err)
@@ -457,9 +457,9 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := testutil.TempDir(t)
+	pkiDir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 	ks := newTestKeystore(t, secretsDir, logger)
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks)
 	require.NoError(t, err)
@@ -627,9 +627,9 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := testutil.TempDir(t)
+	pkiDir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 	ks := newTestKeystore(t, secretsDir, logger)
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks)
 	require.NoError(t, err)

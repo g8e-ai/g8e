@@ -31,6 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -86,7 +87,7 @@ func TestRunStream_InvalidArch_Subprocess(t *testing.T) {
 		return
 	}
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	cmd := exec.Command(os.Args[0], "-test.run=TestRunStream_InvalidArch_Subprocess")
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_STREAM_BAD_ARCH=1",
@@ -114,7 +115,7 @@ func TestRunStream_NodeBinaryMissing_Subprocess(t *testing.T) {
 		return
 	}
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	cmd := exec.Command(os.Args[0], "-test.run=TestRunStream_NodeBinaryMissing_Subprocess")
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_STREAM_NO_BIN=1",
@@ -158,7 +159,7 @@ func TestRunStream_HostsFileNotFound_Subprocess(t *testing.T) {
 		return
 	}
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	cmd := exec.Command(os.Args[0], "-test.run=TestRunStream_HostsFileNotFound_Subprocess")
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_STREAM_BAD_HOSTS_FILE=1",
@@ -196,7 +197,7 @@ func TestRunStream_ValidNodeBinary_UnreachableHost_Subprocess(t *testing.T) {
 		return
 	}
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=TestRunStream_ValidNodeBinary_UnreachableHost_Subprocess", "-test.timeout=12s")

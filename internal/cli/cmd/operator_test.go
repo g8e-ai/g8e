@@ -24,6 +24,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestOperatorCmd(t *testing.T) {
@@ -491,7 +492,7 @@ func TestCopyFile(t *testing.T) {
 				t.Skipf("Test skipped on %s", tt.skipOn)
 			}
 
-			tmpDir := t.TempDir()
+			tmpDir := testutil.TempDir(t)
 			srcFile, dstFile := tt.setup(tmpDir)
 
 			if tt.srcContent != nil {

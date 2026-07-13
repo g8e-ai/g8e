@@ -25,6 +25,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestRunDemosList(t *testing.T) {
@@ -35,7 +36,7 @@ func TestRunDemosList(t *testing.T) {
 		defer os.Chdir(originalWd)
 
 		// Change to a temporary directory without demos
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		err = os.Chdir(tmpDir)
 		require.NoError(t, err)
 
@@ -52,7 +53,7 @@ func TestRunDemosList(t *testing.T) {
 		defer os.Chdir(originalWd)
 
 		// Create a temporary directory with demos structure
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
@@ -93,7 +94,7 @@ func TestRunDemosList(t *testing.T) {
 		defer os.Chdir(originalWd)
 
 		// Create a temporary directory with demos structure
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
@@ -142,7 +143,7 @@ func TestRunDemosList(t *testing.T) {
 		defer os.Chdir(originalWd)
 
 		// Create a temporary directory with demos structure
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
@@ -189,7 +190,7 @@ func TestRunDemosStart(t *testing.T) {
 		require.NoError(t, err)
 		defer os.Chdir(originalWd)
 
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
@@ -209,7 +210,7 @@ func TestRunDemosStart(t *testing.T) {
 		require.NoError(t, err)
 		defer os.Chdir(originalWd)
 
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
@@ -235,7 +236,7 @@ func TestRunDemosStop(t *testing.T) {
 		require.NoError(t, err)
 		defer os.Chdir(originalWd)
 
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
@@ -255,7 +256,7 @@ func TestRunDemosStop(t *testing.T) {
 		require.NoError(t, err)
 		defer os.Chdir(originalWd)
 
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
@@ -281,7 +282,7 @@ func TestRunDemosStatus(t *testing.T) {
 		require.NoError(t, err)
 		defer os.Chdir(originalWd)
 
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
@@ -301,7 +302,7 @@ func TestRunDemosStatus(t *testing.T) {
 		require.NoError(t, err)
 		defer os.Chdir(originalWd)
 
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
@@ -327,7 +328,7 @@ func TestRunDemosClean(t *testing.T) {
 		require.NoError(t, err)
 		defer os.Chdir(originalWd)
 
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
@@ -347,7 +348,7 @@ func TestRunDemosClean(t *testing.T) {
 		require.NoError(t, err)
 		defer os.Chdir(originalWd)
 
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
@@ -373,7 +374,7 @@ func TestRunDemosRun(t *testing.T) {
 		require.NoError(t, err)
 		defer os.Chdir(originalWd)
 
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
@@ -393,7 +394,7 @@ func TestRunDemosRun(t *testing.T) {
 		require.NoError(t, err)
 		defer os.Chdir(originalWd)
 
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
@@ -417,7 +418,7 @@ func TestRunDemosRun(t *testing.T) {
 		require.NoError(t, err)
 		defer os.Chdir(originalWd)
 
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
@@ -444,7 +445,7 @@ func TestRunDemosRun(t *testing.T) {
 		require.NoError(t, err)
 		defer os.Chdir(originalWd)
 
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)

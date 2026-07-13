@@ -25,11 +25,12 @@ import (
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestVerifyPasskeyRegistration_NetworkError(t *testing.T) {
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,

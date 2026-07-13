@@ -99,7 +99,7 @@ func TestFetchRootCAFingerprint_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -119,7 +119,7 @@ func TestFetchRootCAFingerprint_Success(t *testing.T) {
 func TestFetchRootCAFingerprint_HTTPError(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,

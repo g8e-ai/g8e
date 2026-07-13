@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestRunChaosErrorHandling(t *testing.T) {
@@ -42,7 +43,7 @@ func TestRunChaosErrorHandling(t *testing.T) {
 
 		// Change to a temp directory to avoid affecting real filesystem
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		defer os.Chdir(originalWd)
 
@@ -56,7 +57,7 @@ func TestRunChaosErrorHandling(t *testing.T) {
 		require.NotNil(t, cmd)
 
 		// Use a valid temporary directory
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		chaosCount = 1
 		chaosDataDir = tmpDir
 		chaosPKIDir = ""

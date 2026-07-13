@@ -22,6 +22,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -92,7 +93,7 @@ func TestExpandPath(t *testing.T) {
 
 func TestLoad(t *testing.T) {
 	t.Run("loads config from any directory using embedded defaults", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		config, err := Load(tempDir)
 		require.NoError(t, err)
@@ -106,7 +107,7 @@ func TestLoad(t *testing.T) {
 	})
 
 	t.Run("uses current directory when project root is empty", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		// Change to temp directory and load with empty project root
 		originalWd, err := os.Getwd()
@@ -125,7 +126,7 @@ func TestLoad(t *testing.T) {
 	})
 
 	t.Run("always uses embedded defaults regardless of file presence", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		// Create protocol/constants directory with a paths.json file
 		// This should be ignored since we always use embedded defaults
@@ -153,7 +154,7 @@ func TestLoad(t *testing.T) {
 
 func TestConfig_TrustBundlePath(t *testing.T) {
 	t.Run("returns absolute path as-is", func(t *testing.T) {
-		caPath := filepath.Join(t.TempDir(), "absolute", "path", "to", "ca.pem")
+		caPath := filepath.Join(testutil.TempDir(t), "absolute", "path", "to", "ca.pem")
 		config := &Config{
 			ProjectRoot: "/project/root",
 			Paths: &PathsConfig{
@@ -361,7 +362,7 @@ func TestDefaultConstants(t *testing.T) {
 
 func TestLoadWithPaths(t *testing.T) {
 	t.Run("loads config with custom paths from struct", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		customPaths := DefaultInfraPaths()
 		customPaths.Host = "test-host"
@@ -393,7 +394,7 @@ func TestLoadWithPaths(t *testing.T) {
 	})
 
 	t.Run("uses current directory when project root is empty", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		originalWd, err := os.Getwd()
 		require.NoError(t, err)
@@ -415,7 +416,7 @@ func TestLoadWithPaths(t *testing.T) {
 	})
 
 	t.Run("returns error for invalid JSON", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		invalidJSON := `{"host": invalid}`
 
@@ -426,8 +427,8 @@ func TestLoadWithPaths(t *testing.T) {
 	})
 
 	t.Run("resolves absolute paths as-is", func(t *testing.T) {
-		tempDir := t.TempDir()
-		absPath := filepath.Join(t.TempDir(), "absolute", "path", "to", "cert.pem")
+		tempDir := testutil.TempDir(t)
+		absPath := filepath.Join(testutil.TempDir(t), "absolute", "path", "to", "cert.pem")
 
 		customPaths := DefaultInfraPaths()
 		customPaths.Infra.CACertPath = absPath
@@ -440,7 +441,7 @@ func TestLoadWithPaths(t *testing.T) {
 	})
 
 	t.Run("resolves relative paths relative to project root", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		customPaths := DefaultInfraPaths()
 		customPaths.Infra.CACertPath = "relative/ca.pem"
@@ -453,7 +454,7 @@ func TestLoadWithPaths(t *testing.T) {
 	})
 
 	t.Run("handles empty infra fields gracefully", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		customPaths := DefaultInfraPaths()
 		customPaths.Infra.AppCertDir = ""
@@ -522,7 +523,8 @@ func TestResolveInfraPaths(t *testing.T) {
 
 	t.Run("preserves absolute paths unchanged", func(t *testing.T) {
 		projectRoot := "/project/root"
-		absPath := filepath.Join(os.TempDir(), "absolute")
+		cwd, _ := os.Getwd()
+		absPath := filepath.Join(cwd, constants.TestTempDirname, "absolute")
 		paths := &PathsConfig{
 			Infra: struct {
 				AppCertDir           string `json:"app_cert_dir"`
@@ -714,7 +716,7 @@ func TestLoadIntegration(t *testing.T) {
 		// This test verifies the self-sovereign binary behavior:
 		// The binary always uses embedded default paths regardless of directory structure.
 
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		// Change to temp directory (simulating running binary from empty directory)
 		originalWd, err := os.Getwd()

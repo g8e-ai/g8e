@@ -36,6 +36,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 var errMockEnroll = errors.New("enrollment server error")
@@ -98,8 +99,8 @@ func generateTestPEMCert(t *testing.T) []byte {
 // --- PKI Enroll ---
 
 func TestSecurityPKIEnrollCmd_API_MockHappyPath(t *testing.T) {
-	cfg := setupTestConfig(t, t.TempDir())
-	tmpDir := t.TempDir()
+	cfg := setupTestConfig(t, testutil.TempDir(t))
+	tmpDir := testutil.TempDir(t)
 
 	mockEnroll := func(_ *config.Config, _, _, _, _ string) (*auth.RegistrationResponse, error) {
 		return &auth.RegistrationResponse{
@@ -128,8 +129,8 @@ func TestSecurityPKIEnrollCmd_API_MockHappyPath(t *testing.T) {
 }
 
 func TestSecurityPKIEnrollCmd_API_MockHappyPathWithTrustBundle(t *testing.T) {
-	cfg := setupTestConfig(t, t.TempDir())
-	tmpDir := t.TempDir()
+	cfg := setupTestConfig(t, testutil.TempDir(t))
+	tmpDir := testutil.TempDir(t)
 
 	mockEnroll := func(_ *config.Config, _, _, _, _ string) (*auth.RegistrationResponse, error) {
 		return &auth.RegistrationResponse{
@@ -157,7 +158,7 @@ func TestSecurityPKIEnrollCmd_API_MockHappyPathWithTrustBundle(t *testing.T) {
 }
 
 func TestSecurityPKIEnrollCmd_API_MissingEndpoint(t *testing.T) {
-	cfg := setupTestConfig(t, t.TempDir())
+	cfg := setupTestConfig(t, testutil.TempDir(t))
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	mockEnroll := func(_ *config.Config, _, _, _, _ string) (*auth.RegistrationResponse, error) {
@@ -196,7 +197,7 @@ func TestSecurityPKIEnrollCmd_API_ConfigLoadError(t *testing.T) {
 }
 
 func TestSecurityPKIEnrollCmd_API_EnrollError(t *testing.T) {
-	cfg := setupTestConfig(t, t.TempDir())
+	cfg := setupTestConfig(t, testutil.TempDir(t))
 
 	mockEnroll := func(_ *config.Config, _, _, _, _ string) (*auth.RegistrationResponse, error) {
 		return nil, errMockEnroll
@@ -216,7 +217,7 @@ func TestSecurityPKIEnrollCmd_API_EnrollError(t *testing.T) {
 }
 
 func TestSecurityPKIEnrollCmd_API_MissingCertInResponse(t *testing.T) {
-	cfg := setupTestConfig(t, t.TempDir())
+	cfg := setupTestConfig(t, testutil.TempDir(t))
 
 	mockEnroll := func(_ *config.Config, _, _, _, _ string) (*auth.RegistrationResponse, error) {
 		return &auth.RegistrationResponse{
@@ -265,7 +266,7 @@ func TestSecurityPKIEnrollCmd_API_PKICommandStructure(t *testing.T) {
 // --- Security Validate with valid PEM ---
 
 func TestSecurityValidateCmd_API_ValidPEMSuccess(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pkiDir := filepath.Join(tmpDir, "pki")
 	secretsDir := filepath.Join(tmpDir, "secrets")
 
@@ -297,7 +298,7 @@ func TestSecurityValidateCmd_API_ValidPEMSuccess(t *testing.T) {
 }
 
 func TestSecurityValidateCmd_API_InvalidPEM(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pkiDir := filepath.Join(tmpDir, "pki")
 	secretsDir := filepath.Join(tmpDir, "secrets")
 
@@ -327,7 +328,7 @@ func TestSecurityValidateCmd_API_InvalidPEM(t *testing.T) {
 }
 
 func TestSecurityValidateCmd_API_PortCheckOutput(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pkiDir := filepath.Join(tmpDir, "pki")
 	secretsDir := filepath.Join(tmpDir, "secrets")
 

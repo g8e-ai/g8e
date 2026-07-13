@@ -38,6 +38,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func generateTestCert(t *testing.T) (certPEM, keyPEM []byte, privKey *ecdsa.PrivateKey) {
@@ -98,7 +99,7 @@ func generateTestCA(t *testing.T) (caCertPEM []byte) {
 func setupTestConfig(t *testing.T) (*config.Config, string) {
 	t.Helper()
 
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 
 	projectRoot := filepath.Join(tempDir, "project")
 	require.NoError(t, os.MkdirAll(projectRoot, 0755))

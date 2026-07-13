@@ -419,6 +419,10 @@ const (
 	TestNestedDirname           = "nested"
 	TestDeepDirname             = "deep"
 
+	// TestTempDirname is the CWD-relative base directory for test temp dirs,
+	// replacing system TEMP to keep all test artifacts under the project root.
+	TestTempDirname = ".g8e-test-tmp"
+
 	// Test path constants for gateway config and tribunal bootstrap tests
 	TestPathVarLibDataDir       = "/var/lib/g8e/data"
 	TestPathVarLibPKIDir        = "/var/lib/g8e/pki"

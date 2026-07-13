@@ -36,6 +36,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // mockAPIClient implements apiClient for testing.
@@ -74,7 +75,7 @@ func (m *mockAPIClient) Delete(path string) ([]byte, error) {
 // setupApproveAPITestEnv creates a full test environment with valid key, cert, and credentials.
 func setupApproveAPITestEnv(t *testing.T) (*config.Config, ed25519.PrivateKey) {
 	t.Helper()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := setupTestConfig(t, tmpDir)
 
 	_, priv, err := ed25519.GenerateKey(nil)

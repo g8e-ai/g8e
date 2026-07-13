@@ -29,6 +29,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -1139,7 +1140,7 @@ func TestDeriveSeedPublicKey_MatchesKnownSeed(t *testing.T) {
 func TestBootstrapTribunalPolicy_NilServiceReturnsError(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	configPath := filepath.Join(tmpDir, constants.TribunalBootstrapConfigFilename)
 	err := os.WriteFile(configPath, []byte(`{
 		"tribunal_id": "test-tribunal",
@@ -1166,7 +1167,7 @@ func TestBootstrapTribunalPolicy_MissingFile(t *testing.T) {
 func TestBootstrapTribunalPolicy_MalformedJSON(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	configPath := filepath.Join(tmpDir, constants.TribunalBootstrapConfigFilename)
 	err := os.WriteFile(configPath, []byte(`{not valid json}`), 0600)
 	require.NoError(t, err)
@@ -1199,7 +1200,7 @@ func TestBootstrapTribunalPolicy_InvalidConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpDir := t.TempDir()
+			tmpDir := testutil.TempDir(t)
 			configPath := filepath.Join(tmpDir, constants.TribunalBootstrapConfigFilename)
 			err := os.WriteFile(configPath, []byte(tt.config), 0600)
 			require.NoError(t, err)

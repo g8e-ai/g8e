@@ -32,7 +32,7 @@ import (
 // setupTestLedger creates a test environment for GitLedgerService with encryption disabled.
 func setupTestLedger(t *testing.T) (*GitLedgerService, string) {
 	gitPath := testGitPath(t)
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	ledgerDir := filepath.Join(tempDir, "ledger")
 
 	// Create vault but do NOT unlock it (encryption disabled)
@@ -64,7 +64,7 @@ func setupTestLedger(t *testing.T) (*GitLedgerService, string) {
 // setupTestLedgerWithEncryption creates a test environment for GitLedgerService with encryption enabled.
 func setupTestLedgerWithEncryption(t *testing.T) (*GitLedgerService, string) {
 	gitPath := testGitPath(t)
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	ledgerDir := filepath.Join(tempDir, "ledger")
 
 	// Create vault and unlock it (encryption enabled)
@@ -609,7 +609,7 @@ func TestLedgerService_RestoreFileFromCommit_DisabledVault(t *testing.T) {
 	t.Parallel()
 	// Test with config that has no vault (encryption disabled)
 	config := &LedgerConfig{
-		BaseDir: t.TempDir(),
+		BaseDir: testutil.TempDir(t),
 		GitPath: "/usr/bin/git",
 	}
 	_, err := NewGitLedgerService(config, testutil.NewTestLogger())

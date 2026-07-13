@@ -38,6 +38,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // generateTestCertificateWithSPIFFE generates a test certificate with a SPIFFE URI SAN
@@ -212,7 +213,7 @@ func enrollResponse(t *testing.T, agentName string) []byte {
 func TestEnrollAgentApp_Idempotency_ValidCert(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -245,7 +246,7 @@ func TestEnrollAgentApp_Idempotency_ValidCert(t *testing.T) {
 func TestEnrollAgentApp_Idempotency_ExpiringCert(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -298,7 +299,7 @@ func TestEnrollAgentApp_Idempotency_ExpiringCert(t *testing.T) {
 func TestEnrollAgentApp_NoCert(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -347,7 +348,7 @@ func TestEnrollAgentApp_NoCert(t *testing.T) {
 func TestEnrollAgentApp_NoURISAN(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -413,7 +414,7 @@ func TestEnrollAgentApp_NoURISAN(t *testing.T) {
 func TestEnrollAgentApp_InvalidCert(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -453,7 +454,7 @@ func TestEnrollAgentApp_InvalidCert(t *testing.T) {
 func TestEnrollAgentApp_EnrollmentError(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -482,7 +483,7 @@ func TestEnrollAgentApp_EnrollmentError(t *testing.T) {
 func TestEnrollAgentApp_GatewayUnreachable(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -512,7 +513,7 @@ func TestEnrollAgentApp_GatewayUnreachable(t *testing.T) {
 func TestEnrollAgentApp_NoCLICredentials(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -541,7 +542,7 @@ func TestEnrollAgentApp_NoCLICredentials(t *testing.T) {
 func TestEnrollAgentApp_MissingCLICert(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -570,7 +571,7 @@ func TestEnrollAgentApp_MissingCLICert(t *testing.T) {
 func TestEnrollAgentApp_MissingCABundle(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -596,7 +597,7 @@ func TestEnrollAgentApp_MissingCABundle(t *testing.T) {
 func TestEnrollAgentApp_WrongSPIFFEID(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -637,7 +638,7 @@ func TestEnrollAgentApp_WrongSPIFFEID(t *testing.T) {
 func TestCheckExistingAppCert_NoFile(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	certFile := filepath.Join(tmpDir, "nonexistent-cert.pem")
 
 	appID, ok := checkExistingAppCert(certFile, "test-agent")
@@ -650,7 +651,7 @@ func TestCheckExistingAppCert_NoFile(t *testing.T) {
 func TestCheckExistingAppCert_InvalidPEM(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	certFile := filepath.Join(tmpDir, "invalid-cert.pem")
 	require.NoError(t, os.WriteFile(certFile, []byte("not-valid-pem"), 0600))
 
@@ -664,7 +665,7 @@ func TestCheckExistingAppCert_InvalidPEM(t *testing.T) {
 func TestCheckExistingAppCert_InvalidCertificate(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	certFile := filepath.Join(tmpDir, "invalid-cert.pem")
 	// Write a PEM block that's not a valid certificate
 	invalidPEM := pem.EncodeToMemory(&pem.Block{
@@ -683,7 +684,7 @@ func TestCheckExistingAppCert_InvalidCertificate(t *testing.T) {
 func TestCheckExistingAppCert_ExpiringSoon(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	certFile := filepath.Join(tmpDir, "expiring-cert.pem")
 	agentName := "test-agent"
 
@@ -701,7 +702,7 @@ func TestCheckExistingAppCert_ExpiringSoon(t *testing.T) {
 func TestCheckExistingAppCert_ValidWithCorrectSPIFFE(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	certFile := filepath.Join(tmpDir, "valid-cert.pem")
 	agentName := "test-agent"
 
@@ -720,7 +721,7 @@ func TestCheckExistingAppCert_ValidWithCorrectSPIFFE(t *testing.T) {
 func TestCheckExistingAppCert_ValidWithWrongSPIFFE(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	certFile := filepath.Join(tmpDir, "valid-cert.pem")
 	agentName := "test-agent"
 
@@ -738,7 +739,7 @@ func TestCheckExistingAppCert_ValidWithWrongSPIFFE(t *testing.T) {
 func TestCheckExistingAppCert_ExactlyAtThreshold(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	certFile := filepath.Join(tmpDir, "threshold-cert.pem")
 	agentName := "test-agent"
 
@@ -756,7 +757,7 @@ func TestCheckExistingAppCert_ExactlyAtThreshold(t *testing.T) {
 func TestCheckExistingAppCert_JustAboveThreshold(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	certFile := filepath.Join(tmpDir, "valid-cert.pem")
 	agentName := "test-agent"
 

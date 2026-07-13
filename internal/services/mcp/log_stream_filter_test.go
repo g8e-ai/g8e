@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestLogStreamFilterTool_Name(t *testing.T) {
@@ -145,7 +146,7 @@ func TestLogStreamFilterTool_Execute_InvalidRegex(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a temporary log file
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	logFile := filepath.Join(tmpDir, "test.log")
 	err := os.WriteFile(logFile, []byte("test line\n"), 0644)
 	require.NoError(t, err)
@@ -167,7 +168,7 @@ func TestLogStreamFilterTool_Execute_Success(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a temporary log file with sample content
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	logFile := filepath.Join(tmpDir, "test.log")
 	content := `2024-01-01 10:00:00 INFO Application started
 2024-01-01 10:00:01 ERROR Failed to connect to database
@@ -204,7 +205,7 @@ func TestLogStreamFilterTool_Execute_NoMatches(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a temporary log file
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	logFile := filepath.Join(tmpDir, "test.log")
 	content := `2024-01-01 10:00:00 INFO Application started
 2024-01-01 10:00:01 INFO Processing request
@@ -236,7 +237,7 @@ func TestLogStreamFilterTool_Execute_Limit(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a temporary log file with many matching lines
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	logFile := filepath.Join(tmpDir, "test.log")
 	var content strings.Builder
 	for i := 0; i < 50; i++ {
@@ -306,7 +307,7 @@ func TestLogStreamFilterTool_Execute_ContextCancellation(t *testing.T) {
 	cancel()
 
 	// Create a temporary log file
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	logFile := filepath.Join(tmpDir, "test.log")
 	content := `2024-01-01 10:00:00 INFO Application started
 2024-01-01 10:00:01 ERROR Failed to connect
@@ -331,7 +332,7 @@ func TestLogStreamFilterTool_Execute_Scrubbing(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a temporary log file with sensitive data
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	logFile := filepath.Join(tmpDir, "test.log")
 	content := `2024-01-01 10:00:00 ERROR password=secret123 authentication failed
 2024-01-01 10:00:01 ERROR api_key=abc123def456 rate limit exceeded
@@ -372,7 +373,7 @@ func TestLogStreamFilterTool_Execute_ComplexRegex(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a temporary log file
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	logFile := filepath.Join(tmpDir, "test.log")
 	content := `2024-01-01 10:00:00 [INFO] Application started
 2024-01-01 10:00:01 [WARN] Memory usage high
@@ -408,7 +409,7 @@ func TestLogStreamFilterTool_Execute_CaseInsensitive(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a temporary log file with mixed case
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	logFile := filepath.Join(tmpDir, "test.log")
 	content := `2024-01-01 10:00:00 error Application started
 2024-01-01 10:00:01 ERROR Database failed
@@ -440,7 +441,7 @@ func TestLogStreamFilterTool_Execute_EmptyFile(t *testing.T) {
 	ctx := context.Background()
 
 	// Create an empty temporary log file
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	logFile := filepath.Join(tmpDir, "test.log")
 	err := os.WriteFile(logFile, []byte(""), 0644)
 	require.NoError(t, err)
@@ -468,7 +469,7 @@ func TestLogStreamFilterTool_Execute_AbsolutePath(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a temporary log file
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	logFile := filepath.Join(tmpDir, "test.log")
 	content := `2024-01-01 10:00:00 ERROR Test error
 `

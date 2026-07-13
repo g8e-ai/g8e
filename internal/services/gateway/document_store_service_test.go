@@ -34,7 +34,7 @@ import (
 // for unit testing DocumentStoreService without pulling in the full CanonicalDBService.
 func newDocumentStoreTestDB(t *testing.T) *sqliteutil.DB {
 	t.Helper()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "document_store_test.db")
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 	db, err := sqliteutil.OpenDB(cfg, testutil.NewTestLogger())

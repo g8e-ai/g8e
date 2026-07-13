@@ -22,11 +22,12 @@ import (
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestSaveAndLoadCredentials(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     filepath.Join(tmpDir, ".g8e/run"),
@@ -56,7 +57,7 @@ func TestSaveAndLoadCredentials(t *testing.T) {
 
 func TestLoadCredentials_NotFound(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -72,7 +73,7 @@ func TestLoadCredentials_NotFound(t *testing.T) {
 
 func TestLoadCredentials_InvalidJSON(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -93,7 +94,7 @@ func TestLoadCredentials_InvalidJSON(t *testing.T) {
 
 func TestDeleteCredentials_Success(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -150,7 +151,7 @@ func TestDeleteCredentials_Success(t *testing.T) {
 
 func TestDeleteCredentials_NonExistentFiles(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -184,7 +185,7 @@ func TestDeleteCredentials_NonExistentFiles(t *testing.T) {
 func TestSaveCredentials_WriteError(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -216,7 +217,7 @@ func TestSaveCredentials_WriteError(t *testing.T) {
 func TestLoadCredentials_ReadError(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -242,7 +243,7 @@ func TestSaveCredentials_MkdirError(t *testing.T) {
 	t.Parallel()
 
 	// Create a file where we expect a directory
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	blockingFile := filepath.Join(tmpDir, "credentials")
 	require.NoError(t, os.WriteFile(blockingFile, []byte("block"), 0600))
 
@@ -270,7 +271,7 @@ func TestSaveCredentials_MkdirError(t *testing.T) {
 func TestDeleteCredentials_RemoveError(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,

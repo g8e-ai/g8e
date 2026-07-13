@@ -31,7 +31,7 @@ import (
 )
 
 func TestNewWithKeyring(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -42,7 +42,7 @@ func TestNewWithKeyring(t *testing.T) {
 }
 
 func TestNewWithKeyring_CreatesSecretsDir(t *testing.T) {
-	baseDir := t.TempDir()
+	baseDir := testutil.TempDir(t)
 	secretsDir := filepath.Join(baseDir, "secrets")
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
@@ -56,7 +56,7 @@ func TestNewWithKeyring_CreatesSecretsDir(t *testing.T) {
 }
 
 func TestKeystore_Initialize_GeneratesNewKey(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -72,7 +72,7 @@ func TestKeystore_Initialize_GeneratesNewKey(t *testing.T) {
 }
 
 func TestKeystore_Initialize_RetrievesExistingKey(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -95,7 +95,7 @@ func TestKeystore_Initialize_RetrievesExistingKey(t *testing.T) {
 }
 
 func TestKeystore_Initialize_RejectsInvalidKeyLength(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -112,7 +112,7 @@ func TestKeystore_Initialize_RejectsInvalidKeyLength(t *testing.T) {
 }
 
 func TestKeystore_EncryptSecret(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -130,7 +130,7 @@ func TestKeystore_EncryptSecret(t *testing.T) {
 }
 
 func TestKeystore_EncryptSecret_Atomically(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -147,7 +147,7 @@ func TestKeystore_EncryptSecret_Atomically(t *testing.T) {
 }
 
 func TestKeystore_DecryptSecret(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -165,7 +165,7 @@ func TestKeystore_DecryptSecret(t *testing.T) {
 }
 
 func TestKeystore_DecryptSecret_MissingFile(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -179,7 +179,7 @@ func TestKeystore_DecryptSecret_MissingFile(t *testing.T) {
 }
 
 func TestKeystore_DecryptSecret_CorruptedFile(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -198,7 +198,7 @@ func TestKeystore_DecryptSecret_CorruptedFile(t *testing.T) {
 }
 
 func TestKeystore_DeleteSecret(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -218,7 +218,7 @@ func TestKeystore_DeleteSecret(t *testing.T) {
 }
 
 func TestKeystore_DeleteSecret_Nonexistent(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -231,7 +231,7 @@ func TestKeystore_DeleteSecret_Nonexistent(t *testing.T) {
 }
 
 func TestKeystore_Purge(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -257,7 +257,7 @@ func TestKeystore_Purge(t *testing.T) {
 }
 
 func TestKeystore_EnsurePermissions(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -290,7 +290,7 @@ func TestKeystore_EnsurePermissions(t *testing.T) {
 }
 
 func TestKeystore_KeyringName(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -301,7 +301,7 @@ func TestKeystore_KeyringName(t *testing.T) {
 }
 
 func TestKeystore_Encrypt(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -317,7 +317,7 @@ func TestKeystore_Encrypt(t *testing.T) {
 }
 
 func TestKeystore_Decrypt(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -335,7 +335,7 @@ func TestKeystore_Decrypt(t *testing.T) {
 }
 
 func TestKeystore_EncryptDecrypt_RoundTrip(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -364,7 +364,7 @@ func TestKeystore_EncryptDecrypt_RoundTrip(t *testing.T) {
 }
 
 func TestKeystore_Decrypt_InvalidBase64(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -378,7 +378,7 @@ func TestKeystore_Decrypt_InvalidBase64(t *testing.T) {
 }
 
 func TestKeystore_Decrypt_InvalidJSON(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -393,7 +393,7 @@ func TestKeystore_Decrypt_InvalidJSON(t *testing.T) {
 }
 
 func TestKeystore_Decrypt_UnsupportedVersion(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -416,7 +416,7 @@ func TestKeystore_Decrypt_UnsupportedVersion(t *testing.T) {
 }
 
 func TestKeystore_Decrypt_InvalidCiphertext(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -439,7 +439,7 @@ func TestKeystore_Decrypt_InvalidCiphertext(t *testing.T) {
 }
 
 func TestKeystore_Encrypt_EmptyPlaintext(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -457,7 +457,7 @@ func TestKeystore_Encrypt_EmptyPlaintext(t *testing.T) {
 }
 
 func TestKeystore_Encrypt_LargePlaintext(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -479,7 +479,7 @@ func TestKeystore_Encrypt_LargePlaintext(t *testing.T) {
 }
 
 func TestKeystore_DecryptSecret_InvalidJSON(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 
@@ -498,7 +498,7 @@ func TestKeystore_DecryptSecret_InvalidJSON(t *testing.T) {
 }
 
 func TestKeystore_DecryptSecret_UnsupportedVersion(t *testing.T) {
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := keystoretest.NewMemoryKeyring()
 

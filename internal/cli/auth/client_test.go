@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestGenerateCSR(t *testing.T) {
@@ -241,7 +242,7 @@ func TestIsCertificateVerificationError(t *testing.T) {
 }
 
 func TestSaveCredentials(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 
 	cfg := &config.Config{}
 	cfg.CredentialsDir = tempDir
@@ -289,7 +290,7 @@ func TestSaveCredentials(t *testing.T) {
 }
 
 func TestLoadCredentials(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 
 	cfg := &config.Config{}
 	cfg.CredentialsDir = tempDir
@@ -343,7 +344,7 @@ func TestLoadCredentials(t *testing.T) {
 }
 
 func TestDeleteCredentials(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 
 	cfg := &config.Config{}
 	cfg.CredentialsDir = tempDir
@@ -384,7 +385,7 @@ func TestDeleteCredentials(t *testing.T) {
 }
 
 func TestSaveCertAndKey(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 
 	certFile := filepath.Join(tempDir, "cert.pem")
 	keyFile := filepath.Join(tempDir, "key.pem")
@@ -519,7 +520,7 @@ func TestParseCertPEM(t *testing.T) {
 		Bytes: certDER,
 	})
 
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	certFile := filepath.Join(tempDir, "cert.pem")
 
 	t.Run("valid certificate", func(t *testing.T) {
@@ -641,7 +642,7 @@ func TestCheckCertExpiry(t *testing.T) {
 		Bytes: certDER,
 	})
 
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	certFile := filepath.Join(tempDir, "cert.pem")
 
 	t.Run("expiring certificate", func(t *testing.T) {

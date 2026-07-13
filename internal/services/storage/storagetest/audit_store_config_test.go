@@ -49,7 +49,7 @@ func TestSQLAuditStore_BootstrapWithURL(t *testing.T) {
 	gitPath := testGitPath(t)
 
 	// Create temporary directory for test
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault
@@ -90,7 +90,7 @@ func TestSQLAuditStore_BootstrapWithURL(t *testing.T) {
 }
 
 func TestSQLAuditStore_GetDataDir(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault
@@ -122,7 +122,7 @@ func TestSQLAuditStore_GetDataDir(t *testing.T) {
 }
 
 func TestSQLAuditStore_GetLedgerPath(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault
@@ -185,7 +185,7 @@ func TestSQLAuditStore_DefaultConfig(t *testing.T) {
 }
 
 func TestSQLAuditStore_GetEncryptionVault(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 
 	// 1. Constructor should return error when vault is nil
@@ -222,7 +222,7 @@ func TestSQLAuditStore_GetEncryptionVault(t *testing.T) {
 }
 
 func TestSQLAuditStore_CloseIdempotent(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault
@@ -254,7 +254,7 @@ func TestSQLAuditStore_CloseIdempotent(t *testing.T) {
 }
 
 func TestSQLAuditStore_WALMode(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault

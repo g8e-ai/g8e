@@ -24,6 +24,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestAuthCmd(t *testing.T) {
@@ -58,7 +59,7 @@ func TestLogoutCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -88,7 +89,7 @@ func TestLogoutCmd(t *testing.T) {
 	})
 
 	t.Run("logout succeeds when no session exists", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 
 		// Set HOME to tmpDir to ensure credentials are read from temp directory
 		originalHome := os.Getenv("HOME")
@@ -149,7 +150,7 @@ func TestLogoutCmd(t *testing.T) {
 	t.Run("logout deletes credentials when session exists", func(t *testing.T) {
 		// Test the underlying auth.DeleteCredentials function directly
 		// since config.Load always uses the real home directory
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupTestConfig(t, tmpDir)
 
 		// Create credentials directory (but not the credentials file itself)

@@ -36,7 +36,7 @@ import (
 func setupReportingExecutionVault(t *testing.T) *storage.ExecutionVaultService {
 	t.Helper()
 
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -80,7 +80,7 @@ func setupReportingExecutionVault(t *testing.T) *storage.ExecutionVaultService {
 
 func TestReportExecutions_EmptyStore(t *testing.T) {
 	ev := setupReportingExecutionVault(t)
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	res, err := reportExecutions(context.Background(), outDir, ev)
 	require.NoError(t, err)
@@ -138,7 +138,7 @@ func TestReportExecutions_WithRecords(t *testing.T) {
 
 	ev.Wait()
 
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	res, err := reportExecutions(ctx, outDir, ev)
 	require.NoError(t, err)
 	assert.Equal(t, 2, res.RowCount)
@@ -164,7 +164,7 @@ func TestReportExecutions_WithRecords(t *testing.T) {
 
 func TestReportExecutions_CancelledContext(t *testing.T) {
 	ev := setupReportingExecutionVault(t)
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -175,7 +175,7 @@ func TestReportExecutions_CancelledContext(t *testing.T) {
 }
 
 func TestReportExecutions_NilService(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	_, err := reportExecutions(context.Background(), outDir, nil)
 	require.Error(t, err)
@@ -197,7 +197,7 @@ func TestReportExecutions_ExitCodeNone(t *testing.T) {
 	require.NoError(t, err)
 	ev.Wait()
 
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	res, err := reportExecutions(ctx, outDir, ev)
 	require.NoError(t, err)
 	assert.Equal(t, 1, res.RowCount)
@@ -220,7 +220,7 @@ func TestReportExecutions_ExitCodeNone(t *testing.T) {
 
 func TestReportFileDiffs_EmptyStore(t *testing.T) {
 	ev := setupReportingExecutionVault(t)
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	res, err := reportFileDiffs(context.Background(), outDir, ev)
 	require.NoError(t, err)
@@ -279,7 +279,7 @@ func TestReportFileDiffs_WithRecords(t *testing.T) {
 
 	ev.Wait()
 
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	res, err := reportFileDiffs(ctx, outDir, ev)
 	require.NoError(t, err)
 	assert.Equal(t, 2, res.RowCount)
@@ -307,7 +307,7 @@ func TestReportFileDiffs_WithRecords(t *testing.T) {
 
 func TestReportFileDiffs_CancelledContext(t *testing.T) {
 	ev := setupReportingExecutionVault(t)
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -318,7 +318,7 @@ func TestReportFileDiffs_CancelledContext(t *testing.T) {
 }
 
 func TestReportFileDiffs_NilService(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	_, err := reportFileDiffs(context.Background(), outDir, nil)
 	require.Error(t, err)

@@ -29,7 +29,7 @@ import (
 
 func TestNewSecureHTTPClient_Success(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	trustBundlePath := filepath.Join(tmpDir, "trust-bundle.pem")
 
 	// Generate a test CA certificate
@@ -59,7 +59,7 @@ func TestNewSecureHTTPClient_Success(t *testing.T) {
 
 func TestNewSecureHTTPClient_MissingTrustBundlePath(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -77,7 +77,7 @@ func TestNewSecureHTTPClient_MissingTrustBundlePath(t *testing.T) {
 
 func TestNewSecureHTTPClient_InvalidPEM(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	trustBundlePath := filepath.Join(tmpDir, "trust-bundle.pem")
 
 	require.NoError(t, os.WriteFile(trustBundlePath, []byte("invalid-pem-data"), 0600))

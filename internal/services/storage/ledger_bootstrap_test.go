@@ -39,7 +39,7 @@ import (
 func setupBootstrapLedger(t *testing.T) (*GitLedgerService, string) {
 	t.Helper()
 	gitPath := testGitPath(t)
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	ledgerDir := filepath.Join(tempDir, "ledger")
 
 	_, privKey, err := ed25519.GenerateKey(nil)
@@ -263,7 +263,7 @@ func TestBootstrap_InitGitRepoIdempotent(t *testing.T) {
 func TestBootstrap_ReconstructionOverExistingDir(t *testing.T) {
 	t.Parallel()
 	gitPath := testGitPath(t)
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	ledgerDir := filepath.Join(tempDir, "ledger")
 
 	_, privKey, err := ed25519.GenerateKey(nil)
@@ -318,7 +318,7 @@ func TestBootstrap_NilConfigReturnsError(t *testing.T) {
 func TestBootstrap_NilVaultReturnsError(t *testing.T) {
 	t.Parallel()
 	config := &LedgerConfig{
-		BaseDir: t.TempDir(),
+		BaseDir: testutil.TempDir(t),
 		GitPath: "/usr/bin/git",
 	}
 	svc, err := NewGitLedgerService(config, testutil.NewTestLogger())
@@ -336,12 +336,12 @@ func TestBootstrap_BootstrapFailureOnUnwritableBaseDir(t *testing.T) {
 	// Create a file to block directory creation — os.MkdirAll will fail because
 	// the path component is a file, not a directory. This is cross-platform,
 	// unlike chmod 0555 which doesn't prevent writes on Windows.
-	blocker := filepath.Join(t.TempDir(), "blocker")
+	blocker := filepath.Join(testutil.TempDir(t), "blocker")
 	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	vaultDir := filepath.Join(t.TempDir(), "vault")
+	vaultDir := filepath.Join(testutil.TempDir(t), "vault")
 	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 	vHeader, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)

@@ -34,6 +34,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -41,7 +42,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestResolveKeyPath_DefaultOperatorKey(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
 	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.OperatorKeyPath), 0700))
 	require.NoError(t, os.WriteFile(paths.Infra.OperatorKeyPath, []byte("fake key"), 0600))
 
@@ -50,7 +51,7 @@ func TestResolveKeyPath_DefaultOperatorKey(t *testing.T) {
 }
 
 func TestResolveKeyPath_FallsBackToClientKey(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	require.NoError(t, paths.InitWithBase(tmpDir))
 	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.ClientOperatorKeyPath), 0700))
 	require.NoError(t, os.WriteFile(paths.Infra.ClientOperatorKeyPath, []byte("fake key"), 0600))
@@ -60,14 +61,14 @@ func TestResolveKeyPath_FallsBackToClientKey(t *testing.T) {
 }
 
 func TestResolveKeyPath_NoFilesFound(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
 
 	result := resolveKeyPath("", testLogger())
 	assert.Equal(t, "", result)
 }
 
 func TestResolveKeyPath_OperatorKeyTakesPrecedenceOverClientKey(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	require.NoError(t, paths.InitWithBase(tmpDir))
 	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.OperatorKeyPath), 0700))
 	require.NoError(t, os.WriteFile(paths.Infra.OperatorKeyPath, []byte("op key"), 0600))
@@ -80,7 +81,7 @@ func TestResolveKeyPath_OperatorKeyTakesPrecedenceOverClientKey(t *testing.T) {
 }
 
 func TestResolveKeyPath_ExplicitOverridesDefaults(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	require.NoError(t, paths.InitWithBase(tmpDir))
 	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.OperatorKeyPath), 0700))
 	require.NoError(t, os.WriteFile(paths.Infra.OperatorKeyPath, []byte("op key"), 0600))
@@ -95,7 +96,7 @@ func TestResolveKeyPath_ExplicitOverridesDefaults(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestResolveCertPath_DefaultOperatorCert(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
 	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.OperatorCertPath), 0700))
 	require.NoError(t, os.WriteFile(paths.Infra.OperatorCertPath, []byte("fake cert"), 0600))
 
@@ -104,7 +105,7 @@ func TestResolveCertPath_DefaultOperatorCert(t *testing.T) {
 }
 
 func TestResolveCertPath_FallsBackToClientCert(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	require.NoError(t, paths.InitWithBase(tmpDir))
 	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.ClientOperatorCertPath), 0700))
 	require.NoError(t, os.WriteFile(paths.Infra.ClientOperatorCertPath, []byte("fake cert"), 0600))
@@ -114,14 +115,14 @@ func TestResolveCertPath_FallsBackToClientCert(t *testing.T) {
 }
 
 func TestResolveCertPath_NoFilesFound(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
 
 	result := resolveCertPath("", testLogger())
 	assert.Equal(t, "", result)
 }
 
 func TestResolveCertPath_OperatorCertTakesPrecedenceOverClientCert(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	require.NoError(t, paths.InitWithBase(tmpDir))
 	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.OperatorCertPath), 0700))
 	require.NoError(t, os.WriteFile(paths.Infra.OperatorCertPath, []byte("op cert"), 0600))
@@ -134,7 +135,7 @@ func TestResolveCertPath_OperatorCertTakesPrecedenceOverClientCert(t *testing.T)
 }
 
 func TestResolveCertPath_ExplicitOverridesDefaults(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	require.NoError(t, paths.InitWithBase(tmpDir))
 	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.OperatorCertPath), 0700))
 	require.NoError(t, os.WriteFile(paths.Infra.OperatorCertPath, []byte("op cert"), 0600))
@@ -172,7 +173,7 @@ func generateTestKeyCertPair(t *testing.T) (string, string) {
 	require.NoError(t, err)
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	certPath := filepath.Join(dir, constants.TestClientCrtFilename)
 	keyPath := filepath.Join(dir, constants.TestClientKeyFilename)
 	require.NoError(t, os.WriteFile(certPath, certPEM, 0600))
@@ -193,7 +194,7 @@ func TestLoadClientCertPair_Success(t *testing.T) {
 func TestLoadClientCertPair_NonExistentCertFile(t *testing.T) {
 	_, keyPath := generateTestKeyCertPair(t)
 
-	_, _, err := loadClientCertPair(filepath.Join(t.TempDir(), constants.TestNonExistentCrtFilename), keyPath)
+	_, _, err := loadClientCertPair(filepath.Join(testutil.TempDir(t), constants.TestNonExistentCrtFilename), keyPath)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrReadClientCert))
 }
@@ -201,13 +202,13 @@ func TestLoadClientCertPair_NonExistentCertFile(t *testing.T) {
 func TestLoadClientCertPair_NonExistentKeyFile(t *testing.T) {
 	certPath, _ := generateTestKeyCertPair(t)
 
-	_, _, err := loadClientCertPair(certPath, filepath.Join(t.TempDir(), constants.TestNonExistentKeyFilename))
+	_, _, err := loadClientCertPair(certPath, filepath.Join(testutil.TempDir(t), constants.TestNonExistentKeyFilename))
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrReadPrivateKey))
 }
 
 func TestLoadClientCertPair_InvalidCertPEM(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	invalidCert := filepath.Join(dir, constants.TestInvalidCrtFilename)
 	require.NoError(t, os.WriteFile(invalidCert, []byte("not a PEM file"), 0600))
 
@@ -221,7 +222,7 @@ func TestLoadClientCertPair_InvalidCertPEM(t *testing.T) {
 func TestLoadClientCertPair_InvalidKeyPEM(t *testing.T) {
 	certPath, _ := generateTestKeyCertPair(t)
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	invalidKey := filepath.Join(dir, constants.TestInvalidKeyFilename)
 	require.NoError(t, os.WriteFile(invalidKey, []byte("not a PEM file"), 0600))
 
@@ -240,7 +241,7 @@ func TestLoadClientCertPair_MismatchedKeyCertPair(t *testing.T) {
 }
 
 func TestLoadClientCertPair_EmptyCertFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	emptyCert := filepath.Join(dir, constants.TestClientCrtFilename)
 	require.NoError(t, os.WriteFile(emptyCert, []byte{}, 0600))
 
@@ -255,7 +256,7 @@ func TestLoadClientCertPair_EmptyCertFile(t *testing.T) {
 func TestLoadClientCertPair_EmptyKeyFile(t *testing.T) {
 	certPath, _ := generateTestKeyCertPair(t)
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	emptyKey := filepath.Join(dir, constants.TestClientKeyFilename)
 	require.NoError(t, os.WriteFile(emptyKey, []byte{}, 0600))
 
@@ -266,7 +267,7 @@ func TestLoadClientCertPair_EmptyKeyFile(t *testing.T) {
 }
 
 func TestLoadClientCertPair_CertPathIsDirectory(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	_, keyPath := generateTestKeyCertPair(t)
 
 	_, _, err := loadClientCertPair(dir, keyPath)
@@ -277,7 +278,7 @@ func TestLoadClientCertPair_CertPathIsDirectory(t *testing.T) {
 
 func TestLoadClientCertPair_KeyPathIsDirectory(t *testing.T) {
 	certPath, _ := generateTestKeyCertPair(t)
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 
 	_, _, err := loadClientCertPair(certPath, dir)
 	require.Error(t, err)
@@ -286,7 +287,7 @@ func TestLoadClientCertPair_KeyPathIsDirectory(t *testing.T) {
 }
 
 func TestLoadClientCertPair_BothPathsNonExistent(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	nonExistentCert := filepath.Join(dir, constants.TestNonExistentCrtFilename)
 	nonExistentKey := filepath.Join(dir, constants.TestNonExistentKeyFilename)
 
@@ -313,7 +314,7 @@ func TestLoadClientCertPair_CertPEMMatchesFileContent(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestResolveKeyPath_WhitespaceExplicitPathReturnedAsIs(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
 
 	result := resolveKeyPath("   ", testLogger())
 	assert.Equal(t, "   ", result,
@@ -321,7 +322,7 @@ func TestResolveKeyPath_WhitespaceExplicitPathReturnedAsIs(t *testing.T) {
 }
 
 func TestResolveCertPath_WhitespaceExplicitPathReturnedAsIs(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
 
 	result := resolveCertPath("   ", testLogger())
 	assert.Equal(t, "   ", result,
@@ -329,7 +330,7 @@ func TestResolveCertPath_WhitespaceExplicitPathReturnedAsIs(t *testing.T) {
 }
 
 func TestResolveKeyPath_OnlyClientKeyExists(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
 	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.ClientOperatorKeyPath), 0700))
 	require.NoError(t, os.WriteFile(paths.Infra.ClientOperatorKeyPath, []byte("client key"), 0600))
 
@@ -338,7 +339,7 @@ func TestResolveKeyPath_OnlyClientKeyExists(t *testing.T) {
 }
 
 func TestResolveCertPath_OnlyClientCertExists(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
 	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.ClientOperatorCertPath), 0700))
 	require.NoError(t, os.WriteFile(paths.Infra.ClientOperatorCertPath, []byte("client cert"), 0600))
 

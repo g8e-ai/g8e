@@ -73,9 +73,9 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := testutil.TempDir(t)
+	pkiDir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 
 	ks := newTestKeystore(t, secretsDir, logger)
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks)

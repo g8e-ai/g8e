@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestSecurityCmd(t *testing.T) {
@@ -54,7 +55,7 @@ func TestSecurityValidateCmd(t *testing.T) {
 
 func TestSecurityValidateWithTestEnvironment(t *testing.T) {
 	t.Run("validate checks PKI directory structure", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		pkiDir := filepath.Join(tmpDir, "pki")
 		secretsDir := filepath.Join(tmpDir, "secrets")
 
@@ -87,7 +88,7 @@ func TestSecurityValidateWithTestEnvironment(t *testing.T) {
 	})
 
 	t.Run("validate fails with missing PKI directory", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		pkiDir := filepath.Join(tmpDir, "pki")
 		secretsDir := filepath.Join(tmpDir, "secrets")
 
@@ -108,7 +109,7 @@ func TestSecurityValidateWithTestEnvironment(t *testing.T) {
 	})
 
 	t.Run("validate fails with missing secrets directory", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		pkiDir := filepath.Join(tmpDir, "pki")
 		secretsDir := filepath.Join(tmpDir, "secrets")
 

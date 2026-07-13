@@ -32,7 +32,7 @@ import (
 
 func TestFileKeyring_StoreMasterKey_InvalidKeyLength(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	keyring, err := newFileKeyring(secretsDir)
 	require.NoError(t, err)
 
@@ -43,7 +43,7 @@ func TestFileKeyring_StoreMasterKey_InvalidKeyLength(t *testing.T) {
 
 func TestFileKeyring_RetrieveMasterKey_InvalidBase64(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	keyring, err := newFileKeyring(secretsDir)
 	require.NoError(t, err)
 
@@ -57,7 +57,7 @@ func TestFileKeyring_RetrieveMasterKey_InvalidBase64(t *testing.T) {
 
 func TestFileKeyring_RetrieveMasterKey_EmptyFile(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	keyring, err := newFileKeyring(secretsDir)
 	require.NoError(t, err)
 
@@ -77,7 +77,7 @@ func TestFileKeyring_RetrieveMasterKey_PermissionDenied(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root can read any file")
 	}
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	keyring, err := newFileKeyring(secretsDir)
 	require.NoError(t, err)
 
@@ -91,7 +91,7 @@ func TestFileKeyring_RetrieveMasterKey_PermissionDenied(t *testing.T) {
 
 func TestFileKeyring_StoreAndRetrieve_RoundTrip(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	keyring, err := newFileKeyring(secretsDir)
 	require.NoError(t, err)
 
@@ -111,7 +111,7 @@ func TestKeystore_NewWithKeyring_MkdirFail(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	keyring := newMemoryKeyring()
 
-	filePath := filepath.Join(t.TempDir(), "notadir")
+	filePath := filepath.Join(testutil.TempDir(t), "notadir")
 	require.NoError(t, os.WriteFile(filePath, []byte("x"), 0644))
 
 	_, err := NewWithKeyring(filePath, logger, keyring)
@@ -121,7 +121,7 @@ func TestKeystore_NewWithKeyring_MkdirFail(t *testing.T) {
 
 func TestKeystore_Initialize_RetrieveError(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	retrieveErr := errors.New("retrieve failed")
 	keyring := &errorKeyring{retrieveErr: retrieveErr}
@@ -136,7 +136,7 @@ func TestKeystore_Initialize_RetrieveError(t *testing.T) {
 
 func TestKeystore_Encrypt_RetrieveError(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	retrieveErr := errors.New("retrieve failed")
 	keyring := &errorKeyring{retrieveErr: retrieveErr}
@@ -151,7 +151,7 @@ func TestKeystore_Encrypt_RetrieveError(t *testing.T) {
 
 func TestKeystore_EncryptSecret_RetrieveError(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	retrieveErr := errors.New("retrieve failed")
 	keyring := &errorKeyring{retrieveErr: retrieveErr}
@@ -166,7 +166,7 @@ func TestKeystore_EncryptSecret_RetrieveError(t *testing.T) {
 
 func TestKeystore_Decrypt_RetrieveError(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	retrieveErr := errors.New("retrieve failed")
 	keyring := &errorKeyring{retrieveErr: retrieveErr}
@@ -180,7 +180,7 @@ func TestKeystore_Decrypt_RetrieveError(t *testing.T) {
 
 func TestKeystore_Purge_DeleteMasterKeyError(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := &errorKeyring{deleteErr: errors.New("delete failed")}
 
@@ -194,7 +194,7 @@ func TestKeystore_Purge_DeleteMasterKeyError(t *testing.T) {
 
 func TestKeystore_EnforcePermissions_DeletedDir(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := newMemoryKeyring()
 
@@ -210,7 +210,7 @@ func TestKeystore_EnforcePermissions_DeletedDir(t *testing.T) {
 
 func TestKeystore_Purge_WithSecrets(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := newMemoryKeyring()
 
@@ -289,7 +289,7 @@ func (m *simpleMemoryKeyring) DeleteMasterKey() error {
 
 func TestKeystore_Initialize_StoreError(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := &errorKeyring{storeErr: errors.New("store failed")}
 
@@ -303,7 +303,7 @@ func TestKeystore_Initialize_StoreError(t *testing.T) {
 
 func TestKeystore_EnforcePermissions_ReadDirError(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := newMemoryKeyring()
 
@@ -319,7 +319,7 @@ func TestKeystore_EnforcePermissions_ReadDirError(t *testing.T) {
 
 func TestKeystore_Purge_ReadDirError(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := newMemoryKeyring()
 
@@ -335,7 +335,7 @@ func TestKeystore_Purge_ReadDirError(t *testing.T) {
 
 func TestKeystore_DecryptSecret_CorruptCiphertext(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := newMemoryKeyring()
 
@@ -361,7 +361,7 @@ func TestKeystore_DecryptSecret_CorruptCiphertext(t *testing.T) {
 
 func TestKeystore_EncryptSecret_MarshalError(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := &errorKeyring{storeErr: errors.New("store failed")}
 
@@ -374,7 +374,7 @@ func TestKeystore_EncryptSecret_MarshalError(t *testing.T) {
 
 func TestKeystore_DeleteSecret_Error(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	keyring := newMemoryKeyring()
 

@@ -322,7 +322,7 @@ func resolveLocalhostCertificateIdentity(detector networkIdentityDetector, logge
 	netIdentity, err := detector.DetectAll(ctx)
 	if err != nil {
 		logger.Warn("Failed to detect localhost identities, using defaults", "error", err)
-		return []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}, []string{"localhost"}, nil
+		return []net.IP{net.ParseIP("127.0.0.1")}, []string{"localhost"}, nil
 	}
 
 	var extraIPs []net.IP
@@ -473,7 +473,7 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 	tlsConfig := pki.TLSConfig()
 	tlsConfig.ClientAuth = tls.VerifyClientCertIfGiven
 	ls.server = &http.Server{
-		Addr:              fmt.Sprintf(":%d", cfg.Gateway.HTTPPort),
+		Addr:              fmt.Sprintf("0.0.0.0:%d", cfg.Gateway.HTTPPort),
 		Handler:           ls.handler.buildHTTPRouter(),
 		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
 		ReadTimeout:       cfg.Gateway.ReadTimeout,
@@ -484,7 +484,7 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 
 	// HTTPS server: mTLS for all routes (API, public, enrollment)
 	ls.publicServer = &http.Server{
-		Addr:              fmt.Sprintf(":%d", cfg.Gateway.HTTPSPort),
+		Addr:              fmt.Sprintf("0.0.0.0:%d", cfg.Gateway.HTTPSPort),
 		Handler:           ls.handler,
 		TLSConfig:         tlsConfig,
 		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
@@ -667,7 +667,7 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 		}
 
 		// Update server Addr if it was dynamic
-		if s.Addr == ":0" {
+		if s.Addr == "0.0.0.0:0" {
 			s.Addr = ln.Addr().String()
 		}
 

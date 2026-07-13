@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestCommandErrorHandling(t *testing.T) {
@@ -29,7 +30,7 @@ func TestCommandErrorHandling(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		defer os.Chdir(originalWd)
 
@@ -48,7 +49,7 @@ func TestCommandErrorHandling(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		defer os.Chdir(originalWd)
 

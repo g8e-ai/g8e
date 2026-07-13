@@ -125,7 +125,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 
 	t.Run("command with working directory", func(t *testing.T) {
 		t.Parallel()
-		workDir := t.TempDir()
+		workDir := testutil.TempDir(t)
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:      "test-req-5",
 			CaseID:           "test-case-5",
@@ -142,7 +142,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 		assert.NotNil(t, result)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		// On Windows, bash might return a Posix-style path (e.g. /c/Users/...)
-		// while t.TempDir() returns a Windows path (e.g. C:\Users\...)
+		// while testutil.TempDir(t) returns a Windows path (e.g. C:\Users\...)
 		// Normalize both to forward slashes for comparison
 		actualStdout := filepath.ToSlash(strings.TrimSpace(result.Stdout))
 		// On Windows with Git Bash, paths might be mapped (e.g. C:/Users/... to /c/Users/... or /tmp/...)

@@ -58,15 +58,15 @@ func TestNewRegistrationService(t *testing.T) {
 func TestPKIPhase2_CalculateSerialFromPEM(t *testing.T) {
 
 	// Test that calculateSerialFromPEM correctly extracts serial from a certificate
-	dataDir := t.TempDir()
+	dataDir := testutil.TempDir(t)
 	pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
+	dbDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(dataDir, constants.VaultDirname)
 	db, err := openTestDB(t, dataDir, dbDir, vaultDir, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	smDir := t.TempDir()
+	smDir := testutil.TempDir(t)
 	sm := newTestSecretManager(t, db.db, smDir)
 
 	pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
@@ -138,15 +138,15 @@ func TestSessionOperatorBindKey(t *testing.T) {
 func TestPKIPhase3_CLI_CSR_Optional(t *testing.T) {
 	t.Run("RegisterDeviceCSR accepts enrollment without CLI CSR (operator-only)", func(t *testing.T) {
 
-		dataDir := t.TempDir()
+		dataDir := testutil.TempDir(t)
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
+		dbDir := testutil.TempDir(t)
 		vaultDir := filepath.Join(dataDir, constants.VaultDirname)
 		db, err := openTestDB(t, dataDir, dbDir, vaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		smDir := t.TempDir()
+		smDir := testutil.TempDir(t)
 		sm := newTestSecretManager(t, db.db, smDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
@@ -686,15 +686,15 @@ func TestRegistrationService_SetTargetContext_HappyPath(t *testing.T) {
 func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 
 	t.Run("Missing system_fingerprint returns error", func(t *testing.T) {
-		dataDir := t.TempDir()
+		dataDir := testutil.TempDir(t)
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
+		dbDir := testutil.TempDir(t)
 		vaultDir := filepath.Join(dataDir, constants.VaultDirname)
 		db, err := openTestDB(t, dataDir, dbDir, vaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		smDir := t.TempDir()
+		smDir := testutil.TempDir(t)
 		sm := newTestSecretManager(t, db.db, smDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
@@ -720,15 +720,15 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 	})
 
 	t.Run("Missing user_id returns error", func(t *testing.T) {
-		dataDir := t.TempDir()
+		dataDir := testutil.TempDir(t)
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
+		dbDir := testutil.TempDir(t)
 		vaultDir := filepath.Join(dataDir, constants.VaultDirname)
 		db, err := openTestDB(t, dataDir, dbDir, vaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		smDir := t.TempDir()
+		smDir := testutil.TempDir(t)
 		sm := newTestSecretManager(t, db.db, smDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
@@ -754,15 +754,15 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 	})
 
 	t.Run("Missing CSR returns error", func(t *testing.T) {
-		dataDir := t.TempDir()
+		dataDir := testutil.TempDir(t)
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
+		dbDir := testutil.TempDir(t)
 		vaultDir := filepath.Join(dataDir, constants.VaultDirname)
 		db, err := openTestDB(t, dataDir, dbDir, vaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		smDir := t.TempDir()
+		smDir := testutil.TempDir(t)
 		sm := newTestSecretManager(t, db.db, smDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
@@ -787,15 +787,15 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 	})
 
 	t.Run("Invalid system_fingerprint returns error", func(t *testing.T) {
-		dataDir := t.TempDir()
+		dataDir := testutil.TempDir(t)
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
+		dbDir := testutil.TempDir(t)
 		vaultDir := filepath.Join(dataDir, constants.VaultDirname)
 		db, err := openTestDB(t, dataDir, dbDir, vaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		smDir := t.TempDir()
+		smDir := testutil.TempDir(t)
 		sm := newTestSecretManager(t, db.db, smDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
@@ -824,15 +824,15 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 func TestRegistrationService_CompleteRegistration(t *testing.T) {
 
 	t.Run("Invalid CSR PEM format returns error", func(t *testing.T) {
-		dataDir := t.TempDir()
+		dataDir := testutil.TempDir(t)
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
+		dbDir := testutil.TempDir(t)
 		vaultDir := filepath.Join(dataDir, constants.VaultDirname)
 		db, err := openTestDB(t, dataDir, dbDir, vaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		smDir := t.TempDir()
+		smDir := testutil.TempDir(t)
 		sm := newTestSecretManager(t, db.db, smDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
@@ -860,15 +860,15 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 	})
 
 	t.Run("Wrong CSR block type returns error", func(t *testing.T) {
-		dataDir := t.TempDir()
+		dataDir := testutil.TempDir(t)
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
+		dbDir := testutil.TempDir(t)
 		vaultDir := filepath.Join(dataDir, constants.VaultDirname)
 		db, err := openTestDB(t, dataDir, dbDir, vaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		smDir := t.TempDir()
+		smDir := testutil.TempDir(t)
 		sm := newTestSecretManager(t, db.db, smDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
@@ -901,15 +901,15 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 	})
 
 	t.Run("Missing CSR returns error", func(t *testing.T) {
-		dataDir := t.TempDir()
+		dataDir := testutil.TempDir(t)
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
+		dbDir := testutil.TempDir(t)
 		vaultDir := filepath.Join(dataDir, constants.VaultDirname)
 		db, err := openTestDB(t, dataDir, dbDir, vaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		smDir := t.TempDir()
+		smDir := testutil.TempDir(t)
 		sm := newTestSecretManager(t, db.db, smDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)

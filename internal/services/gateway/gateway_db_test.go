@@ -57,8 +57,8 @@ func TestGatewaySchema(t *testing.T) {
 }
 
 func TestCanonicalDBService_GetDB(t *testing.T) {
-	dataDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dataDir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 
 	ks := newTestKeystore(t, secretsDir, logger)
@@ -70,8 +70,8 @@ func TestCanonicalDBService_GetDB(t *testing.T) {
 }
 
 func TestCanonicalDBService_Wait(t *testing.T) {
-	dataDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dataDir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 
 	ks := newTestKeystore(t, secretsDir, logger)
@@ -86,8 +86,8 @@ func TestCanonicalDBService_Wait(t *testing.T) {
 }
 
 func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
-	dataDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dataDir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 
 	ks := newTestKeystore(t, secretsDir, logger)
@@ -115,8 +115,8 @@ func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
 
 func newTestDB(t *testing.T) *CanonicalDBService {
 	t.Helper()
-	dir := t.TempDir()
-	secretsDir := t.TempDir()
+	dir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	ks := newTestKeystore(t, secretsDir, logger)
 	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), logger, true, "", false, ks)
@@ -281,8 +281,8 @@ func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSchemaIdempotent(t *testing.T) {
-	dir := t.TempDir()
-	secretsDir := t.TempDir()
+	dir := testutil.TempDir(t)
+	secretsDir := testutil.TempDir(t)
 
 	logger := testutil.NewTestLogger()
 	ks1 := newTestKeystore(t, secretsDir, logger)
@@ -308,9 +308,9 @@ func TestSchemaIdempotent(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCreateDataDir(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dir := filepath.Join(tmpDir, "nested", "deep", "data")
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 
 	logger := testutil.NewTestLogger()
 	ks := newTestKeystore(t, secretsDir, logger)

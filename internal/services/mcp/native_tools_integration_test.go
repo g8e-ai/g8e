@@ -47,6 +47,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/uuid"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // TestNativeToolsIntegration_DatabaseTools tests database native tools
@@ -70,7 +71,7 @@ func TestNativeToolsIntegration_DatabaseTools(t *testing.T) {
 	require.NoError(t, err, "failed to setup mTLS client. Run './g8e login'")
 
 	t.Run("db_discover_topology", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		dbPath := filepath.Join(tmpDir, "test.db")
 
 		// Create test database with schema
@@ -110,7 +111,7 @@ func TestNativeToolsIntegration_DatabaseTools(t *testing.T) {
 	})
 
 	t.Run("db_query_validate_full_scan_rejection", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		dbPath := filepath.Join(tmpDir, "test.db")
 
 		db, err := sql.Open("sqlite", dbPath)
@@ -139,7 +140,7 @@ func TestNativeToolsIntegration_DatabaseTools(t *testing.T) {
 	})
 
 	t.Run("db_isolated_read_only_select", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		dbPath := filepath.Join(tmpDir, "test.db")
 
 		db, err := sql.Open("sqlite", dbPath)
@@ -171,7 +172,7 @@ func TestNativeToolsIntegration_DatabaseTools(t *testing.T) {
 	})
 
 	t.Run("db_isolated_read_rejects_mutation", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		dbPath := filepath.Join(tmpDir, "test.db")
 
 		req := DBIsolatedReadRequest{
@@ -205,7 +206,7 @@ func TestNativeToolsIntegration_LogTools(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("log_stream_filter_with_scrubbing", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		logPath := filepath.Join(tmpDir, "test.log")
 
 		// Create log with sensitive data
@@ -457,7 +458,7 @@ func TestNativeToolsIntegration_Concurrency(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("concurrent_db_reads", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		dbPath := filepath.Join(tmpDir, "test.db")
 
 		db, err := sql.Open("sqlite", dbPath)
@@ -532,7 +533,7 @@ func TestNativeToolsIntegration_PropertyBasedTests(t *testing.T) {
 
 	t.Run("db_isolated_read_never_mutates", func(t *testing.T) {
 		// Property: db_isolated_read must never mutate the database
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		dbPath := filepath.Join(tmpDir, "test.db")
 
 		db, err := sql.Open("sqlite", dbPath)
@@ -603,7 +604,7 @@ func TestNativeToolsIntegration_PropertyBasedTests(t *testing.T) {
 
 	t.Run("log_stream_filter_always_scrubs_secrets", func(t *testing.T) {
 		// Property: log_stream_filter must always redact sensitive patterns
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		logPath := filepath.Join(tmpDir, "test.log")
 
 		sensitivePatterns := []string{
@@ -658,7 +659,7 @@ func TestNativeToolsIntegration_NegativeControls(t *testing.T) {
 
 	t.Run("missing_required_parameters", func(t *testing.T) {
 		// Test that tools reject missing required parameters
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		tests := []struct {
 			toolName string
 			args     json.RawMessage

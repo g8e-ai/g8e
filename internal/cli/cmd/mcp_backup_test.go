@@ -20,10 +20,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestBackupConfigFile(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	configPath := filepath.Join(tmpDir, "test.json")
 	err := os.WriteFile(configPath, []byte("{}"), 0644)
@@ -42,7 +43,7 @@ func TestBackupConfigFile(t *testing.T) {
 }
 
 func TestBackupConfigFile_NoExistingFile(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	configPath := filepath.Join(tmpDir, "nonexistent.json")
 	err := BackupConfigFile(configPath)

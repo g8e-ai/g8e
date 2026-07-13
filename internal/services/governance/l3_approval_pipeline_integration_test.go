@@ -28,6 +28,7 @@ import (
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // TestL3ApprovalPipeline_CLI_Browser_Passkey verifies the full CLI → browser →
@@ -39,7 +40,7 @@ import (
 //  4. L3 notary verifies the proof using the layered model (passkey Layer 1 + mTLS Layer 2)
 func TestL3ApprovalPipeline_CLI_Browser_Passkey(t *testing.T) {
 	logger := slog.Default()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	storeCfg := &storage.SuspendedTransactionConfig{
 		DBPath: filepath.Join(tmpDir, "suspended.db"),
@@ -126,7 +127,7 @@ func TestL3ApprovalPipeline_CLI_Browser_Passkey(t *testing.T) {
 // rejects the L3 proof when the passkey verifier denies the WebAuthn assertion.
 func TestL3ApprovalPipeline_CLI_Browser_PasskeyDenied(t *testing.T) {
 	logger := slog.Default()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	storeCfg := &storage.SuspendedTransactionConfig{
 		DBPath: filepath.Join(tmpDir, "suspended.db"),
@@ -188,7 +189,7 @@ func TestL3ApprovalPipeline_CLI_Browser_PasskeyDenied(t *testing.T) {
 // where no mTLS certificate fingerprint is present (pure web session approval).
 func TestL3ApprovalPipeline_BrowserOnly_NoMTLS(t *testing.T) {
 	logger := slog.Default()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	storeCfg := &storage.SuspendedTransactionConfig{
 		DBPath: filepath.Join(tmpDir, "suspended.db"),

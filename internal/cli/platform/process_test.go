@@ -24,10 +24,11 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestNewProcessManager(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
@@ -52,7 +53,7 @@ func TestNewProcessManager(t *testing.T) {
 }
 
 func TestEnsureDirectories(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -82,7 +83,7 @@ func TestEnsureDirectories(t *testing.T) {
 }
 
 func TestFindAvailablePort(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -123,7 +124,7 @@ func TestFindAvailablePort(t *testing.T) {
 }
 
 func TestReadPID(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -169,7 +170,7 @@ func TestReadPID(t *testing.T) {
 }
 
 func TestWritePID(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -213,7 +214,7 @@ func TestWritePID(t *testing.T) {
 }
 
 func TestDeletePID(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -244,7 +245,7 @@ func TestDeletePID(t *testing.T) {
 }
 
 func TestIsProcessRunning(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -270,7 +271,7 @@ func TestIsProcessRunning(t *testing.T) {
 }
 
 func TestOperatorStatus(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -332,7 +333,7 @@ func TestOperatorStatus(t *testing.T) {
 }
 
 func TestStopOperator(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -374,7 +375,7 @@ func TestStopOperator(t *testing.T) {
 }
 
 func TestGetLogPath(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -389,7 +390,7 @@ func TestGetLogPath(t *testing.T) {
 }
 
 func TestGetOperatorNodeBinary(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -411,7 +412,7 @@ func TestGetOperatorNodeBinary(t *testing.T) {
 }
 
 func TestReset(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -458,7 +459,7 @@ func TestReset(t *testing.T) {
 }
 
 func TestClean(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -486,7 +487,7 @@ func TestClean(t *testing.T) {
 }
 
 func TestStopProcess(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -504,7 +505,7 @@ func TestStopProcess(t *testing.T) {
 }
 
 func TestTailLog(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	logFile := filepath.Join(tmpDir, "test.log")
 
 	// Create a log file with some content
@@ -544,7 +545,7 @@ func TestConstants(t *testing.T) {
 }
 
 func TestProcessManagerConcurrency(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -576,7 +577,7 @@ func TestProcessManagerConcurrency(t *testing.T) {
 }
 
 func TestProcessManagerDirectoryPermissions(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -604,7 +605,7 @@ func TestProcessManagerDirectoryPermissions(t *testing.T) {
 }
 
 func TestProcessManagerErrorHandling(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -627,7 +628,7 @@ func TestProcessManagerErrorHandling(t *testing.T) {
 }
 
 func TestWritePIDPermissions(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -658,7 +659,7 @@ func TestWritePIDPermissions(t *testing.T) {
 }
 
 func TestReadPIDEmptyFile(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -681,7 +682,7 @@ func TestReadPIDEmptyFile(t *testing.T) {
 }
 
 func TestReadPIDWhitespace(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -707,7 +708,7 @@ func TestReadPIDWhitespace(t *testing.T) {
 }
 
 func TestFindAvailablePortInvalidPort(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -722,7 +723,7 @@ func TestFindAvailablePortInvalidPort(t *testing.T) {
 }
 
 func TestDeletePIDNonExistent(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -739,7 +740,7 @@ func TestDeletePIDNonExistent(t *testing.T) {
 }
 
 func TestIsProcessRunningNegativePID(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -752,7 +753,7 @@ func TestIsProcessRunningNegativePID(t *testing.T) {
 }
 
 func TestGetOperatorNodeBinaryPath(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -774,7 +775,7 @@ func TestGetOperatorNodeBinaryPath(t *testing.T) {
 }
 
 func TestCleanWithNonExistentRuntime(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -787,7 +788,7 @@ func TestCleanWithNonExistentRuntime(t *testing.T) {
 }
 
 func TestCheckPortAvailable(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -821,7 +822,7 @@ func TestCheckPortAvailable(t *testing.T) {
 }
 
 func TestWritePosture(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -859,7 +860,7 @@ func TestWritePosture(t *testing.T) {
 }
 
 func TestReadPosture(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -906,7 +907,7 @@ func TestReadPosture(t *testing.T) {
 }
 
 func TestDeletePosture(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
@@ -937,7 +938,7 @@ func TestDeletePosture(t *testing.T) {
 }
 
 func TestReadPosturePublic(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)

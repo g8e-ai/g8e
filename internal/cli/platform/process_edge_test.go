@@ -8,10 +8,11 @@ import (
 	g8econfig "github.com/g8e-ai/g8e/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestBuildReExecArgs(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	pm, err := NewProcessManager(tmpDir)
 	require.NoError(t, err)

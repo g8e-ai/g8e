@@ -21,6 +21,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestDemosScenariosCmd(t *testing.T) {
@@ -145,7 +146,7 @@ func TestApplyAgentHarnessFlags(t *testing.T) {
 	})
 
 	t.Run("applyAgentHarnessFlags sets out directory", func(t *testing.T) {
-		testOutDir := t.TempDir()
+		testOutDir := testutil.TempDir(t)
 		harnessOutDir = testOutDir
 		cfg := config.Default()
 		applyAgentHarnessFlags(&cfg)

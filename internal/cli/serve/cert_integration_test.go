@@ -44,6 +44,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -123,7 +124,7 @@ func writeExpiringCertPair(t *testing.T, caCert *x509.Certificate, caKey *ecdsa.
 	require.NoError(t, err)
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	certPath = filepath.Join(dir, constants.TestClientCrtFilename)
 	keyPath = filepath.Join(dir, constants.TestClientKeyFilename)
 	require.NoError(t, os.WriteFile(certPath, certPEM, 0600))
@@ -237,7 +238,7 @@ func TestPerformAutomaticEnrollment(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			restorePorts(t)
-			require.NoError(t, paths.InitWithBase(t.TempDir()))
+			require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
 
 			caPEM, caKey, caCert := generateTestCAIntegration(t)
 			srv := enrollmentTestServer(t, caPEM, caCert, caKey, tt.trustStatus, tt.enrollStatus, tt.enrollBody)
@@ -273,7 +274,7 @@ func TestPerformAutomaticEnrollment(t *testing.T) {
 
 func TestPerformAutomaticEnrollment_ActuatorPublicKeySaved(t *testing.T) {
 	restorePorts(t)
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
 
 	caPEM, caKey, caCert := generateTestCAIntegration(t)
 	actuatorPub, _, err := ed25519.GenerateKey(rand.Reader)
@@ -443,7 +444,7 @@ func TestRenewOperatorCertificate_Network(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			restorePorts(t)
-			require.NoError(t, paths.InitWithBase(t.TempDir()))
+			require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
 			if tt.trustStatus == http.StatusOK && (tt.trustBody == nil || len(tt.trustBody) > 0) {
 				require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.CaCertPath), 0700))
 			}
@@ -484,7 +485,7 @@ func TestRenewOperatorCertificate_Network(t *testing.T) {
 
 func TestRunClientCertRenewalLoop_RenewalTriggerWithExpiringCert(t *testing.T) {
 	restorePorts(t)
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
 	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.CaCertPath), 0700))
 
 	caPEM, caKey, caCert := generateTestCAIntegration(t)
@@ -532,7 +533,7 @@ func TestFetchAndSaveTrustBundle(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		caPath := filepath.Join(t.TempDir(), constants.TestCABundleFilename)
+		caPath := filepath.Join(testutil.TempDir(t), constants.TestCABundleFilename)
 		body, err := fetchAndSaveTrustBundle(context.Background(), srv.URL, caPath)
 		require.NoError(t, err)
 		assert.Equal(t, caPEM, body)
@@ -548,7 +549,7 @@ func TestFetchAndSaveTrustBundle(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		caPath := filepath.Join(t.TempDir(), constants.TestCABundleFilename)
+		caPath := filepath.Join(testutil.TempDir(t), constants.TestCABundleFilename)
 		_, err := fetchAndSaveTrustBundle(context.Background(), srv.URL, caPath)
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, constants.ErrHTTPStatusError))
@@ -560,14 +561,14 @@ func TestFetchAndSaveTrustBundle(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		caPath := filepath.Join(t.TempDir(), constants.TestCABundleFilename)
+		caPath := filepath.Join(testutil.TempDir(t), constants.TestCABundleFilename)
 		_, err := fetchAndSaveTrustBundle(context.Background(), srv.URL, caPath)
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, constants.ErrEmptyTrustBundle))
 	})
 
 	t.Run("UnreachableServer_ReturnsFailedToReadTrustBundle", func(t *testing.T) {
-		caPath := filepath.Join(t.TempDir(), constants.TestCABundleFilename)
+		caPath := filepath.Join(testutil.TempDir(t), constants.TestCABundleFilename)
 		_, err := fetchAndSaveTrustBundle(context.Background(), "http://127.0.0.1:0", caPath)
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, constants.ErrFailedToReadTrustBundle))
@@ -708,7 +709,7 @@ func TestSubmitRenewal(t *testing.T) {
 
 func TestPerformAutomaticEnrollment_HubTrustBundleOverwritesCAFile(t *testing.T) {
 	restorePorts(t)
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
 
 	caPEM, caKey, caCert := generateTestCAIntegration(t)
 	hubBundlePEM := generateTestCertPEM(t, time.Now(), time.Now().Add(365*24*time.Hour))
@@ -759,7 +760,7 @@ func TestPerformAutomaticEnrollment_HubTrustBundleOverwritesCAFile(t *testing.T)
 
 func TestPerformAutomaticEnrollment_CertChainAppendedToOperatorCert(t *testing.T) {
 	restorePorts(t)
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
 
 	caPEM, caKey, caCert := generateTestCAIntegration(t)
 	intermediatePEM := generateTestCertPEM(t, time.Now(), time.Now().Add(365*24*time.Hour))
@@ -818,7 +819,7 @@ func TestPerformAutomaticEnrollment_CertChainAppendedToOperatorCert(t *testing.T
 
 func TestPerformAutomaticEnrollment_MalformedJSONResponse(t *testing.T) {
 	restorePorts(t)
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, paths.InitWithBase(testutil.TempDir(t)))
 
 	caPEM, _, _ := generateTestCAIntegration(t)
 

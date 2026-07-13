@@ -70,7 +70,7 @@ func TestBootstrap_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -97,7 +97,7 @@ func TestBootstrap_Success(t *testing.T) {
 func TestBootstrap_HTTPError(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -142,7 +142,7 @@ func TestBootstrap_ErrorResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -171,7 +171,7 @@ func TestBootstrap_InvalidJSONResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -213,7 +213,7 @@ func TestBootstrap_FingerprintVerification(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -267,7 +267,7 @@ func TestEnrollWithGateway_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -306,7 +306,7 @@ func TestEnrollWithGateway_NonSuccessResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -354,7 +354,7 @@ func TestCLIEnroll_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -376,7 +376,7 @@ func TestCLIEnroll_Success(t *testing.T) {
 func TestCLIEnroll_HTTPError(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -419,7 +419,7 @@ func TestCLIEnroll_ErrorResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -446,7 +446,7 @@ func TestCLIEnroll_InvalidJSONResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -468,7 +468,7 @@ func TestCLIEnroll_InvalidJSONResponse(t *testing.T) {
 func TestEnrollWithGateway_HTTPError(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -499,7 +499,7 @@ func TestEnrollWithGateway_BadStatusCode(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -543,7 +543,7 @@ func TestEnrollWithGateway_FingerprintVerification(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -583,7 +583,7 @@ func TestCheckBootstrapStatus_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -609,7 +609,7 @@ func TestCheckBootstrapStatus_NotBootstrapped(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -627,7 +627,7 @@ func TestCheckBootstrapStatus_NotBootstrapped(t *testing.T) {
 func TestCheckBootstrapStatus_HTTPError(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -652,7 +652,7 @@ func TestCheckBootstrapStatus_InvalidJSON(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -670,7 +670,7 @@ func TestCheckBootstrapStatus_InvalidJSON(t *testing.T) {
 
 func TestReEnroll_TrustBundleFetchError(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	trustBundlePath := filepath.Join(tmpDir, "trust-bundle.pem")
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
@@ -713,7 +713,7 @@ func TestReEnroll_TrustBundleEmpty(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -743,7 +743,7 @@ func TestReEnroll_TrustBundleBadStatus(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -775,7 +775,7 @@ func TestReEnroll_CLICertLoadError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
@@ -808,7 +808,7 @@ func TestReEnroll_InvalidCAPEM(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,

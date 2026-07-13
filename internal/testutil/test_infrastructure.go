@@ -77,7 +77,7 @@ func NewTestConfig(t *testing.T) *config.Config {
 
 	operatorID := fmt.Sprintf("test-op-%s-%d", safeName, n)
 	operatorSessionID := fmt.Sprintf("test-sess-%s-%d", safeName, n)
-	workDir := t.TempDir()
+	workDir := TempDir(t)
 
 	pkiDir := filepath.Join(workDir, constants.RuntimeDirname, constants.PkiDirname)
 	secretsDir := filepath.Join(workDir, constants.RuntimeDirname, constants.SecretsDirname)
@@ -147,7 +147,7 @@ func GetTestOperatorDirectURL() string {
 }
 
 // TempFile registers a t.Cleanup to remove path when the test ends.
-// Use this whenever a test needs a file outside of t.TempDir() (e.g. /tmp).
+// Use this whenever a test needs a file outside of TempDir(t) (e.g. /tmp).
 // The file is NOT created by this function - only the cleanup is registered.
 func TempFile(t *testing.T, path string) {
 	t.Helper()

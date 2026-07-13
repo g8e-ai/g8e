@@ -30,7 +30,7 @@ import (
 )
 
 func TestSQLAuditStore_FileMutation(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault
@@ -100,7 +100,7 @@ func TestSQLAuditStore_FileMutation(t *testing.T) {
 }
 
 func TestSQLAuditStore_MultipleFileMutationsPerEvent(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault
@@ -168,7 +168,7 @@ func TestSQLAuditStore_MultipleFileMutationsPerEvent(t *testing.T) {
 }
 
 func TestSQLAuditStore_GetFileMutationsNoMutations(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault
@@ -199,7 +199,7 @@ func TestSQLAuditStore_GetFileMutationsNoMutations(t *testing.T) {
 }
 
 func TestSQLAuditStore_FileMutationOperationTypes(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault

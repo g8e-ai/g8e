@@ -21,10 +21,11 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestBuildMTLSClient_MissingCertFile(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{Host: "localhost"},
@@ -40,7 +41,7 @@ func TestBuildMTLSClient_MissingCertFile(t *testing.T) {
 }
 
 func TestBuildMTLSClient_InvalidCertPair(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{Host: "localhost"},
@@ -68,7 +69,7 @@ func TestBuildMTLSClient_InvalidCertPair(t *testing.T) {
 }
 
 func TestBuildMTLSClient_MissingTrustBundle(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -120,7 +121,7 @@ func TestBuildMTLSClient_MissingTrustBundle(t *testing.T) {
 }
 
 func TestBuildMTLSClient_InvalidTrustBundle(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -204,7 +205,7 @@ func TestCheckOperatorRunning_LocalhostReplacement(t *testing.T) {
 }
 
 func TestAutoRenewCertificate_InvalidCertType(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{Host: "localhost"},
@@ -220,7 +221,7 @@ func TestAutoRenewCertificate_InvalidCertType(t *testing.T) {
 }
 
 func TestAutoRenewCertificate_NonExpiringCert(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -259,7 +260,7 @@ func TestAutoRenewCertificate_NonExpiringCert(t *testing.T) {
 }
 
 func TestLoadCredentials_NonExistentFile(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{Host: "localhost"},
@@ -275,7 +276,7 @@ func TestLoadCredentials_NonExistentFile(t *testing.T) {
 }
 
 func TestDeleteCredentials_NonExistent(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{Host: "localhost"},
@@ -288,7 +289,7 @@ func TestDeleteCredentials_NonExistent(t *testing.T) {
 }
 
 func TestCheckBootstrapStatus_InvalidURL(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{Host: "localhost"},
@@ -301,7 +302,7 @@ func TestCheckBootstrapStatus_InvalidURL(t *testing.T) {
 }
 
 func TestCheckBootstrapStatus_NotRunning(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{Host: "localhost"},
@@ -323,7 +324,7 @@ func TestCheckBootstrapStatus_ValidResponse(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{Host: "localhost"},

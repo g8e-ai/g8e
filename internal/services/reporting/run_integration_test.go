@@ -39,7 +39,7 @@ import (
 func setupReportingEnv(t *testing.T, seed bool) (Options, string) {
 	t.Helper()
 
-	root := t.TempDir()
+	root := testutil.TempDir(t)
 	dataDir := filepath.Join(root, "data")
 	runtimeDir := filepath.Join(root, "runtime")
 	vaultDir := filepath.Join(root, "vault")
@@ -353,7 +353,7 @@ func TestRun_LockedVault_NoKeyPath(t *testing.T) {
 
 func TestRun_LockedVault_KeyFileNotFound(t *testing.T) {
 	opts, _ := setupReportingEnv(t, true)
-	opts.VaultKeyPath = filepath.Join(t.TempDir(), "nonexistent.key")
+	opts.VaultKeyPath = filepath.Join(testutil.TempDir(t), "nonexistent.key")
 
 	result, err := Run(context.Background(), opts)
 	require.NoError(t, err)
@@ -363,7 +363,7 @@ func TestRun_LockedVault_KeyFileNotFound(t *testing.T) {
 func TestRun_MissingExecutionVault(t *testing.T) {
 	opts, _ := setupReportingEnv(t, true)
 	// Use a file as parent directory so SQLite can't create the DB (cross-platform).
-	blocker := filepath.Join(t.TempDir(), "blocker")
+	blocker := filepath.Join(testutil.TempDir(t), "blocker")
 	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
 	opts.ExecutionVaultDBPath = filepath.Join(blocker, "test.db")
 
@@ -376,7 +376,7 @@ func TestRun_MissingExecutionVault(t *testing.T) {
 
 func TestRun_MissingReplayStore(t *testing.T) {
 	opts, _ := setupReportingEnv(t, true)
-	blocker := filepath.Join(t.TempDir(), "blocker")
+	blocker := filepath.Join(testutil.TempDir(t), "blocker")
 	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
 	opts.ReplayStoreDBPath = filepath.Join(blocker, "test.db")
 
@@ -388,7 +388,7 @@ func TestRun_MissingReplayStore(t *testing.T) {
 
 func TestRun_MissingSuspendedTxStore(t *testing.T) {
 	opts, _ := setupReportingEnv(t, true)
-	blocker := filepath.Join(t.TempDir(), "blocker")
+	blocker := filepath.Join(testutil.TempDir(t), "blocker")
 	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
 	opts.SuspendedTransactionDBPath = filepath.Join(blocker, "test.db")
 
@@ -414,7 +414,7 @@ func TestRun_CancelledContext(t *testing.T) {
 
 func TestRun_BadOutDir(t *testing.T) {
 	opts, _ := setupReportingEnv(t, false)
-	blocker := filepath.Join(t.TempDir(), "blocker")
+	blocker := filepath.Join(testutil.TempDir(t), "blocker")
 	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
 	opts.OutDir = filepath.Join(blocker, "cannot-create-here")
 

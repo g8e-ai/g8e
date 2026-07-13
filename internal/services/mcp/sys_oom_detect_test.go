@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestSysOOMDetectTool_Metadata(t *testing.T) {
@@ -38,7 +39,7 @@ func TestSysOOMDetectTool_Metadata(t *testing.T) {
 }
 
 func TestSysOOMDetectTool_Execute(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 
 	// Create a mock log file with OOM events that match the improved regexes
 	logContent := `
@@ -154,7 +155,7 @@ func TestSysOOMDetectTool_Execute_DefaultPath(t *testing.T) {
 }
 
 func TestSysOOMDetectTool_Execute_NoEvents(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	logPath := filepath.Join(tempDir, "clean_dmesg")
 	err := os.WriteFile(logPath, []byte("system boot successful\nno errors found"), 0644)
 	require.NoError(t, err)

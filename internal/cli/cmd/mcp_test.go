@@ -40,6 +40,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestAgentCmd(t *testing.T) {
@@ -473,7 +474,7 @@ func TestCreateMCPClient(t *testing.T) {
 	t.Run("createMCPClient requires valid config with certs", func(t *testing.T) {
 		// This test verifies the function signature and basic behavior
 		// Full integration test would require actual certificate files
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		cfg := &config.Config{
 			ProjectRoot: tempDir,
@@ -744,7 +745,7 @@ func TestProxyToGatewayWithRetry(t *testing.T) {
 
 func TestCreateMCPClient_WithValidCerts(t *testing.T) {
 	t.Run("createMCPClient fails when certificates are missing", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		cfg := &config.Config{
 			ProjectRoot: tempDir,
 		}
@@ -784,7 +785,7 @@ func TestCreateMCPClient_WithValidCerts(t *testing.T) {
 
 func generateTestCerts(t *testing.T) (certPath, keyPath, caPath string) {
 	t.Helper()
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
@@ -953,7 +954,7 @@ func TestPrintMCPConfigStdio(t *testing.T) {
 
 func TestPrintMCPConfigLocal(t *testing.T) {
 	t.Run("generates local config with /etc/hosts entry", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		cfgDir := filepath.Join(tempDir, constants.RuntimeDirname, constants.PkiDirname, constants.PkiSubdirClient)
 		require.NoError(t, os.MkdirAll(cfgDir, 0755))
@@ -982,7 +983,7 @@ func TestPrintMCPConfigLocal(t *testing.T) {
 
 func TestPrintMCPConfigIP(t *testing.T) {
 	t.Run("generates IP-based config", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		cfgDir := filepath.Join(tempDir, constants.RuntimeDirname, constants.PkiDirname, constants.PkiSubdirClient)
 		require.NoError(t, os.MkdirAll(cfgDir, 0755))
@@ -1215,7 +1216,7 @@ func TestMcpStdioCmd(t *testing.T) {
 
 func TestWriteAgentConfig(t *testing.T) {
 	t.Run("cursor writes config file", func(t *testing.T) {
-		t.Setenv("HOME", t.TempDir())
+		t.Setenv("HOME", testutil.TempDir(t))
 		binaryPath, err := os.Executable()
 		require.NoError(t, err)
 
@@ -1228,7 +1229,7 @@ func TestWriteAgentConfig(t *testing.T) {
 	})
 
 	t.Run("devin writes config file", func(t *testing.T) {
-		t.Setenv("HOME", t.TempDir())
+		t.Setenv("HOME", testutil.TempDir(t))
 		binaryPath, err := os.Executable()
 		require.NoError(t, err)
 
@@ -1241,7 +1242,7 @@ func TestWriteAgentConfig(t *testing.T) {
 	})
 
 	t.Run("vscode writes config file", func(t *testing.T) {
-		t.Setenv("HOME", t.TempDir())
+		t.Setenv("HOME", testutil.TempDir(t))
 		binaryPath, err := os.Executable()
 		require.NoError(t, err)
 
@@ -1254,7 +1255,7 @@ func TestWriteAgentConfig(t *testing.T) {
 	})
 
 	t.Run("continue writes config file", func(t *testing.T) {
-		t.Setenv("HOME", t.TempDir())
+		t.Setenv("HOME", testutil.TempDir(t))
 		binaryPath, err := os.Executable()
 		require.NoError(t, err)
 
@@ -1267,7 +1268,7 @@ func TestWriteAgentConfig(t *testing.T) {
 	})
 
 	t.Run("goose writes config file", func(t *testing.T) {
-		t.Setenv("HOME", t.TempDir())
+		t.Setenv("HOME", testutil.TempDir(t))
 		binaryPath, err := os.Executable()
 		require.NoError(t, err)
 
@@ -1280,7 +1281,7 @@ func TestWriteAgentConfig(t *testing.T) {
 	})
 
 	t.Run("codeium writes config file", func(t *testing.T) {
-		t.Setenv("HOME", t.TempDir())
+		t.Setenv("HOME", testutil.TempDir(t))
 		binaryPath, err := os.Executable()
 		require.NoError(t, err)
 
@@ -1293,7 +1294,7 @@ func TestWriteAgentConfig(t *testing.T) {
 	})
 
 	t.Run("tabby writes config file", func(t *testing.T) {
-		t.Setenv("HOME", t.TempDir())
+		t.Setenv("HOME", testutil.TempDir(t))
 		binaryPath, err := os.Executable()
 		require.NoError(t, err)
 
@@ -1306,7 +1307,7 @@ func TestWriteAgentConfig(t *testing.T) {
 	})
 
 	t.Run("gemini writes config file with existing settings merge", func(t *testing.T) {
-		tmpHome := t.TempDir()
+		tmpHome := testutil.TempDir(t)
 		t.Setenv("HOME", tmpHome)
 		binaryPath, err := os.Executable()
 		require.NoError(t, err)
@@ -1325,7 +1326,7 @@ func TestWriteAgentConfig(t *testing.T) {
 	})
 
 	t.Run("aider returns error when config already exists", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		t.Chdir(tmpDir)
 
 		existingPath := filepath.Join(tmpDir, ".aider.conf.yml")
@@ -1340,7 +1341,7 @@ func TestWriteAgentConfig(t *testing.T) {
 	})
 
 	t.Run("aider writes config when no existing file", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		t.Chdir(tmpDir)
 
 		binaryPath, err := os.Executable()
@@ -1356,7 +1357,7 @@ func TestWriteAgentConfig(t *testing.T) {
 	})
 
 	t.Run("ollama writes temp file with cleanup", func(t *testing.T) {
-		t.Setenv("HOME", t.TempDir())
+		t.Setenv("HOME", testutil.TempDir(t))
 		binaryPath, err := os.Executable()
 		require.NoError(t, err)
 
@@ -1374,7 +1375,7 @@ func TestWriteAgentConfig(t *testing.T) {
 	})
 
 	t.Run("unknown agent writes temp file with cleanup", func(t *testing.T) {
-		t.Setenv("HOME", t.TempDir())
+		t.Setenv("HOME", testutil.TempDir(t))
 		binaryPath, err := os.Executable()
 		require.NoError(t, err)
 

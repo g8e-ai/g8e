@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func getProjectRoot() string {
@@ -507,7 +508,7 @@ func TestGetProjectRoot(t *testing.T) {
 		defer os.Chdir(originalWd)
 
 		// Change to a temporary directory
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		err = os.Chdir(tmpDir)
 		require.NoError(t, err)
 

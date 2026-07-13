@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // chdirTemp creates a temp dir, chdirs into it, and restores the original
@@ -36,7 +37,7 @@ func chdirTemp(t *testing.T) string {
 	t.Helper()
 	originalWd, err := os.Getwd()
 	require.NoError(t, err)
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	require.NoError(t, os.Chdir(tmpDir))
 	t.Cleanup(func() { os.Chdir(originalWd) })
 	return tmpDir

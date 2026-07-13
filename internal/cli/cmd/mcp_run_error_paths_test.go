@@ -31,13 +31,14 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // ─── buildGatewayConn error paths ────────────────────────────────────────────
 
 func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 	t.Run("fails when cert files do not exist", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		cfg := &config.Config{
 			ProjectRoot:    tempDir,
 			CredentialsDir: tempDir,
@@ -48,7 +49,7 @@ func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("fails when CA bundle does not exist", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		certPath, keyPath, _ := generateTestCerts(t)
 
 		cfg := &config.Config{
@@ -75,7 +76,7 @@ func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 		t.Setenv(envG8EGatewayURL, "https://127.0.0.1:9999/mcp")
 
 		cfg := &config.Config{
-			ProjectRoot:    t.TempDir(),
+			ProjectRoot:    testutil.TempDir(t),
 			CredentialsDir: filepath.Dir(certPath),
 		}
 
@@ -427,7 +428,7 @@ func TestRunAgentHarness_ConfigLoadError(t *testing.T) {
 		chdirTemp(t)
 
 		// Reset harness flags to known state
-		harnessConfigPath = filepath.Join(t.TempDir(), "nonexistent-config.json")
+		harnessConfigPath = filepath.Join(testutil.TempDir(t), "nonexistent-config.json")
 		harnessMTLSURL = ""
 		harnessPublicURL = ""
 		harnessCert = ""
@@ -458,7 +459,7 @@ func TestRunAgentHarness_ConfigLoadError(t *testing.T) {
 
 func TestEnsureDHSPosture_ErrorPath(t *testing.T) {
 	t.Run("returns error when docker compose file does not exist", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		err := ensureDHSPosture(tempDir, "consensus")
 		require.Error(t, err)
 		// Docker will fail because the compose file doesn't exist
@@ -470,7 +471,7 @@ func TestEnsureDHSPosture_ErrorPath(t *testing.T) {
 
 func TestPrintMCPConfigLocal_WithValidCerts(t *testing.T) {
 	t.Run("generates config when certs exist", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		certPath, keyPath, caPath := generateTestCerts(t)
 
@@ -512,7 +513,7 @@ func TestPrintMCPConfigLocal_WithValidCerts(t *testing.T) {
 
 func TestPrintMCPConfigIP_WithValidCerts(t *testing.T) {
 	t.Run("generates IP config when certs exist", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		certPath, keyPath, caPath := generateTestCerts(t)
 

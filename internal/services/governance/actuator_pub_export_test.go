@@ -26,6 +26,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // actuatorPublicKeyExportData represents the typed structure for actuator public key JSON export
@@ -56,7 +57,7 @@ func TestActuatorPublicKeyExport(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			tmpDir := t.TempDir()
+			tmpDir := testutil.TempDir(t)
 			pubKey, _, err := ed25519.GenerateKey(nil)
 			require.NoError(t, err)
 

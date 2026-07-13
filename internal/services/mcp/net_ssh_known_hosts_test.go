@@ -24,6 +24,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestNetSSHKnownHostsTool_Metadata(t *testing.T) {
@@ -67,7 +68,7 @@ func TestNetSSHKnownHostsTool_Execute_Success(t *testing.T) {
 	ctx := context.Background()
 
 	// Create temp files
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	configPath := filepath.Join(tmpDir, "config")
 	knownHostsPath := filepath.Join(tmpDir, "known_hosts")
 
@@ -172,7 +173,7 @@ func TestNetSSHKnownHostsTool_Execute_MissingFiles(t *testing.T) {
 	tool := &NetSSHKnownHostsTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	configPath := filepath.Join(tmpDir, "non_existent_config")
 	knownHostsPath := filepath.Join(tmpDir, "non_existent_known_hosts")
 

@@ -33,6 +33,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // mockSecretManager is a mock implementation of SecretManager for unit testing.
@@ -103,7 +104,7 @@ func TestRandomSerial(t *testing.T) {
 func TestWritePEMFile(t *testing.T) {
 
 	t.Run("Writes DER as PEM with type", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		filePath := filepath.Join(tmpDir, "test.crt")
 
 		testData := []byte("test data")
@@ -131,7 +132,7 @@ func TestWritePEMFile(t *testing.T) {
 	})
 
 	t.Run("Writes raw PEM bytes without type", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		filePath := filepath.Join(tmpDir, "bundle.pem")
 
 		testPEM := `-----BEGIN CERTIFICATE-----
@@ -156,7 +157,7 @@ test data
 	})
 
 	t.Run("Requires parent directories to exist", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		filePath := filepath.Join(tmpDir, "subdir", "nested", "test.crt")
 
 		testData := []byte("test data")
@@ -165,7 +166,7 @@ test data
 	})
 
 	t.Run("Overwrites existing file", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		filePath := filepath.Join(tmpDir, "test.crt")
 
 		// Write initial content
@@ -187,7 +188,7 @@ test data
 
 	t.Run("Returns error on invalid path", func(t *testing.T) {
 		// Use a path that cannot be created (e.g., inside a file)
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		filePath := filepath.Join(tmpDir, "notadir", "test.crt")
 
 		// Create a file instead of directory
@@ -202,7 +203,7 @@ test data
 func TestFileExists(t *testing.T) {
 
 	t.Run("Returns true for existing file", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		filePath := filepath.Join(tmpDir, "exists.txt")
 
 		err := os.WriteFile(filePath, []byte("content"), 0644)
@@ -213,7 +214,7 @@ func TestFileExists(t *testing.T) {
 	})
 
 	t.Run("Returns false for non-existent file", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		filePath := filepath.Join(tmpDir, "doesnotexist.txt")
 
 		exists := fileExists(filePath)
@@ -221,7 +222,7 @@ func TestFileExists(t *testing.T) {
 	})
 
 	t.Run("Returns true for directory", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 
 		exists := fileExists(tmpDir)
 		assert.True(t, exists, "fileExists returns true for directories (os.Stat succeeds)")
@@ -385,7 +386,7 @@ func TestIsCurveP256(t *testing.T) {
 func TestLoadCACertificate(t *testing.T) {
 
 	t.Run("Loads valid PEM certificate", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		certPath := filepath.Join(tmpDir, "ca.crt")
 
 		// Generate a test certificate
@@ -421,7 +422,7 @@ func TestLoadCACertificate(t *testing.T) {
 	})
 
 	t.Run("Returns error for non-existent file", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		certPath := filepath.Join(tmpDir, "doesnotexist.crt")
 
 		var loadedCert *x509.Certificate
@@ -431,7 +432,7 @@ func TestLoadCACertificate(t *testing.T) {
 	})
 
 	t.Run("Returns error for invalid PEM", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		certPath := filepath.Join(tmpDir, "invalid.crt")
 
 		err := os.WriteFile(certPath, []byte("not valid PEM"), 0644)
@@ -444,7 +445,7 @@ func TestLoadCACertificate(t *testing.T) {
 	})
 
 	t.Run("Returns error for malformed certificate", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		certPath := filepath.Join(tmpDir, "malformed.crt")
 
 		// Write PEM with invalid DER data
@@ -510,7 +511,7 @@ func TestNewPKIAuthority(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	t.Run("Uses default PKI dir when pkiDir is empty", func(t *testing.T) {
-		dataDir := t.TempDir()
+		dataDir := testutil.TempDir(t)
 
 		pki := newPKIAuthority(dataDir, "", nil, nil, logger)
 		expectedPKIDir := filepath.Join(dataDir, constants.PkiDirname)
@@ -518,7 +519,7 @@ func TestNewPKIAuthority(t *testing.T) {
 	})
 
 	t.Run("Uses custom PKI dir when provided", func(t *testing.T) {
-		dataDir := t.TempDir()
+		dataDir := testutil.TempDir(t)
 		customPKIDir := filepath.Join(dataDir, "custom-pki")
 
 		pki := newPKIAuthority(dataDir, customPKIDir, nil, nil, logger)
@@ -526,7 +527,7 @@ func TestNewPKIAuthority(t *testing.T) {
 	})
 
 	t.Run("Initializes all fields", func(t *testing.T) {
-		dataDir := t.TempDir()
+		dataDir := testutil.TempDir(t)
 		pkiDir := filepath.Join(dataDir, "pki")
 
 		pki := newPKIAuthority(dataDir, pkiDir, nil, nil, logger)
@@ -541,7 +542,7 @@ func TestNewPKIAuthority(t *testing.T) {
 
 func TestPKIAuthority_PathGetters(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	dataDir := t.TempDir()
+	dataDir := testutil.TempDir(t)
 	pkiDir := filepath.Join(dataDir, "pki")
 
 	pki := newPKIAuthority(dataDir, pkiDir, nil, nil, logger)

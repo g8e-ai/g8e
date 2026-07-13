@@ -30,11 +30,12 @@ import (
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestOutboundL3Notary_VerifyL3Proof_NoApproval(t *testing.T) {
 	logger := slog.Default()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	config := &storage.SuspendedTransactionConfig{
 		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
@@ -73,7 +74,7 @@ func TestOutboundL3Notary_VerifyL3Proof_NoApproval(t *testing.T) {
 
 func TestOutboundL3Notary_VerifyL3Proof_ExpiredApproval(t *testing.T) {
 	logger := slog.Default()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	config := &storage.SuspendedTransactionConfig{
 		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
@@ -116,7 +117,7 @@ func TestOutboundL3Notary_VerifyL3Proof_ExpiredApproval(t *testing.T) {
 
 func TestOutboundL3Notary_VerifyL3Proof_MissingSignature(t *testing.T) {
 	logger := slog.Default()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	config := &storage.SuspendedTransactionConfig{
 		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
@@ -159,7 +160,7 @@ func TestOutboundL3Notary_VerifyL3Proof_MissingSignature(t *testing.T) {
 
 func TestOutboundL3Notary_VerifyL3Proof_InvalidSignatureEncoding(t *testing.T) {
 	logger := slog.Default()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	config := &storage.SuspendedTransactionConfig{
 		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
@@ -202,7 +203,7 @@ func TestOutboundL3Notary_VerifyL3Proof_InvalidSignatureEncoding(t *testing.T) {
 
 func TestOutboundL3Notary_VerifyL3Proof_InvalidSignatureLength(t *testing.T) {
 	logger := slog.Default()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	config := &storage.SuspendedTransactionConfig{
 		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
@@ -246,7 +247,7 @@ func TestOutboundL3Notary_VerifyL3Proof_InvalidSignatureLength(t *testing.T) {
 
 func TestOutboundL3Notary_VerifyL3Proof_SignatureMismatch(t *testing.T) {
 	logger := slog.Default()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	config := &storage.SuspendedTransactionConfig{
 		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
@@ -299,7 +300,7 @@ func TestOutboundL3Notary_VerifyL3Proof_SignatureMismatch(t *testing.T) {
 
 func TestOutboundL3Notary_VerifyL3Proof_FingerprintMismatch(t *testing.T) {
 	logger := slog.Default()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	config := &storage.SuspendedTransactionConfig{
 		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
@@ -350,7 +351,7 @@ func TestOutboundL3Notary_VerifyL3Proof_FingerprintMismatch(t *testing.T) {
 
 func TestOutboundL3Notary_VerifyL3Proof_ValidProof(t *testing.T) {
 	logger := slog.Default()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	config := &storage.SuspendedTransactionConfig{
 		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
@@ -401,7 +402,7 @@ func TestOutboundL3Notary_VerifyL3Proof_ValidProof(t *testing.T) {
 
 func TestOutboundL3Notary_VerifyL3Proof_TransactionNotFound(t *testing.T) {
 	logger := slog.Default()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	config := &storage.SuspendedTransactionConfig{
 		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
@@ -426,7 +427,7 @@ func TestOutboundL3Notary_VerifyL3Proof_TransactionNotFound(t *testing.T) {
 
 func TestOutboundL3Notary_VerifyL3Proof_UserIDMismatch(t *testing.T) {
 	logger := slog.Default()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	config := &storage.SuspendedTransactionConfig{
 		DBPath: filepath.Join(tmpDir, "test.db"),
 	}
@@ -469,7 +470,7 @@ func TestOutboundL3Notary_VerifyL3Proof_UserIDMismatch(t *testing.T) {
 
 func TestOutboundL3Notary_VerifyL3Proof_NoFingerprintCheckWhenNotSet(t *testing.T) {
 	logger := slog.Default()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	config := &storage.SuspendedTransactionConfig{
 		DBPath: filepath.Join(tmpDir, "test.db"),
 	}

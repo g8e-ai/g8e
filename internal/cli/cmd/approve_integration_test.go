@@ -33,6 +33,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestApproveCmd(t *testing.T) {
@@ -43,7 +44,7 @@ func TestApproveCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		defer os.Chdir(originalWd)
 
@@ -56,7 +57,7 @@ func TestApproveCmd(t *testing.T) {
 	})
 
 	t.Run("approve fails when not authenticated", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupApproveTestConfig(t, tmpDir)
 
 		// Use injectable config loader for hermetic test
@@ -98,7 +99,7 @@ func TestApproveCmd(t *testing.T) {
 	})
 
 	t.Run("approve fails with missing CLI key file", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupApproveTestConfig(t, tmpDir)
 
 		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
@@ -127,7 +128,7 @@ func TestApproveCmd(t *testing.T) {
 	})
 
 	t.Run("approve fails with missing CLI cert file", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupApproveTestConfig(t, tmpDir)
 
 		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
@@ -168,7 +169,7 @@ func TestApproveCmd(t *testing.T) {
 	})
 
 	t.Run("approve fails with invalid key/cert pair", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupApproveTestConfig(t, tmpDir)
 
 		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
@@ -210,7 +211,7 @@ func TestApproveCmd(t *testing.T) {
 	})
 
 	t.Run("approve fails with missing trust bundle", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := setupApproveTestConfig(t, tmpDir)
 
 		// Use injectable config loader for hermetic test

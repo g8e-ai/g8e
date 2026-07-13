@@ -39,7 +39,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	svc := NewFileEditService(cfg, logger)
 
 	t.Run("write and track file", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "test-file.txt")
 		content := "This is test content\nLine 2\nLine 3"
 
@@ -66,7 +66,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("read file content", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "read-test.txt")
 		content := "Content to read\nSecond line\nThird line"
 		os.WriteFile(testFile, []byte(content), 0644)
@@ -95,7 +95,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("write with backup", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "backup-test.txt")
 
 		// Create initial file
@@ -131,7 +131,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("replace content", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "replace-test.txt")
 
 		initialContent := "Hello world\nThis is a test\nGoodbye world"
@@ -163,7 +163,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("insert lines", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "insert-test.txt")
 
 		initialContent := "Line 1\nLine 3\nLine 4"
@@ -196,7 +196,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("delete lines", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "delete-test.txt")
 
 		initialContent := "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"
@@ -230,7 +230,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("concurrent file edits", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		var wg sync.WaitGroup
 		numEdits := 5
 
@@ -266,7 +266,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("read specific line range with caching", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "range-test.txt")
 
 		var lines []string
@@ -303,7 +303,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("large file operations", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "large-file.txt")
 
 		// Create large content (1000 lines)
@@ -332,7 +332,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("file edit pipeline", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "pipeline.txt")
 		pipelineID := "pipeline-1"
 
@@ -395,7 +395,7 @@ func TestFileEditService_Integration(t *testing.T) {
 
 	t.Run("error handling", func(t *testing.T) {
 		// Test 1: Non-existent file without create flag
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		nonExistent := filepath.Join(tmpDir, "does-not-exist.txt")
 		content := "test"
 
@@ -418,7 +418,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("file with special characters", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "special-chars.txt")
 
 		content := "Special: ñ, é, ü, 日本語, 🚀, <xml>, {\"json\": true}, 'quotes'"
@@ -451,7 +451,7 @@ func TestFileEditService_AdvancedScenarios(t *testing.T) {
 	svc := NewFileEditService(cfg, logger)
 
 	t.Run("multiple backups", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "multi-backup.txt")
 
 		backupPaths := make([]string, 0)
@@ -489,7 +489,7 @@ func TestFileEditService_AdvancedScenarios(t *testing.T) {
 	})
 
 	t.Run("read with max lines limit", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "maxlines-test.txt")
 
 		// Create file with 100 lines
@@ -521,7 +521,7 @@ func TestFileEditService_AdvancedScenarios(t *testing.T) {
 	})
 
 	t.Run("complex replace with multiple occurrences", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "multi-replace.txt")
 
 		content := "foo bar foo baz foo qux"
@@ -552,7 +552,7 @@ func TestFileEditService_AdvancedScenarios(t *testing.T) {
 	})
 
 	t.Run("file permissions and stats collection", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "perms-test.txt")
 
 		content := "test content"

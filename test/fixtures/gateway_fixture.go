@@ -109,7 +109,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	t.Helper()
 
 	// Create test paths without mutating global constants.Paths. The ephemeral
-	// scaffolding (secrets, runtime dir) lives under t.TempDir(); only the
+	// scaffolding (secrets, runtime dir) lives under testutil.TempDir(t); only the
 	// gateway data/vault is relocated to a persistent results directory below.
 	testPaths := testutil.NewTestPathsFromTemp(t)
 
