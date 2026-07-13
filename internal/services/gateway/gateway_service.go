@@ -56,8 +56,8 @@ import (
 // In this mode, the Operator does NOT execute commands or initiate outbound
 // connections. It strictly serves inbound requests from platform components.
 type GatewayModeService struct {
-	cfg    *config.Config
-	logger *slog.Logger
+	cfg     *config.Config
+	logger  *slog.Logger
 	fileSvc fs.RuntimeFileService
 
 	db                 *CanonicalDBService
@@ -91,8 +91,8 @@ type GatewayModeService struct {
 // gatewayServiceBuilder constructs a GatewayModeService from configuration,
 // with optional pre-built components for test environments.
 type gatewayServiceBuilder struct {
-	cfg    *config.Config
-	logger *slog.Logger
+	cfg     *config.Config
+	logger  *slog.Logger
 	fileSvc fs.RuntimeFileService
 
 	// Pre-built components (test only). When nil, build() constructs them.
@@ -155,7 +155,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	}
 
 	// --- PKI ---
-	pki := newPKIAuthority(cfg.Gateway.DataDir, cfg.Gateway.PKIDir, db, sm, logger)
+	pki := newPKIAuthority(b.fileSvc, db, sm, logger)
 
 	// --- Core services ---
 	userSvc := NewUserService(db, logger)

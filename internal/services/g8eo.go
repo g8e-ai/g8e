@@ -40,8 +40,8 @@ import (
 )
 
 type G8eoService struct {
-	config *config.Config
-	logger *slog.Logger
+	config  *config.Config
+	logger  *slog.Logger
 	fileSvc fs.RuntimeFileService
 
 	bootstrap         *auth.BootstrapService

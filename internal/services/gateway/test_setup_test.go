@@ -111,7 +111,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	sm, err := NewSecretManagerWithKeystore(db.db, fileSvc, logger, ks)
 	require.NoError(t, err)
 
-	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
+	pki := newPKIAuthority(fileSvc, db, sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 

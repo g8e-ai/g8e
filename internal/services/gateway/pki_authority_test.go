@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/g8e-ai/g8e/protocol"
 	"github.com/stretchr/testify/assert"
@@ -72,6 +73,7 @@ type testPKIContext struct {
 	pki     *PKIAuthority
 	pkiDir  string
 	dataDir string
+	fileSvc fs.RuntimeFileService
 	db      *CanonicalDBService
 	sm      *SecretManager
 	logger  *slog.Logger
@@ -84,13 +86,9 @@ func setupTestPKI(t *testing.T) *testPKIContext {
 	t.Helper()
 
 	dataDir := testutil.TempDir(t)
-	pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 	logger := testutil.NewTestLogger()
 	fileSvc := newTestFileSvc(t)
-
-	// Clean pkiDir to avoid stale certificates from previous test runs
-	os.RemoveAll(pkiDir)
-	require.NoError(t, os.MkdirAll(pkiDir, 0755))
+	pkiDir := fileSvc.Resolve(constants.PkiDirname)
 
 	db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
 	require.NoError(t, err, "failed to open test database")
@@ -98,7 +96,7 @@ func setupTestPKI(t *testing.T) *testPKIContext {
 
 	sm := newTestSecretManager(t, db.db, fileSvc)
 
-	pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+	pki := newPKIAuthority(fileSvc, db, sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err, "failed to initialize PKI hierarchy")
 
@@ -106,6 +104,7 @@ func setupTestPKI(t *testing.T) *testPKIContext {
 		pki:     pki,
 		pkiDir:  pkiDir,
 		dataDir: dataDir,
+		fileSvc: fileSvc,
 		db:      db,
 		sm:      sm,
 		logger:  logger,
@@ -482,7 +481,7 @@ func TestPKIAuthority_ReuseExisting(t *testing.T) {
 	cert1 := parsePEMCertificate(t, rootCertPEM1)
 	serial1 := cert1.SerialNumber
 
-	pki2 := newPKIAuthority(ctx.dataDir, ctx.pkiDir, ctx.db, ctx.sm, ctx.logger)
+	pki2 := newPKIAuthority(ctx.fileSvc, ctx.db, ctx.sm, ctx.logger)
 	err := pki2.InitializePKI(nil)
 	require.NoError(t, err)
 
