@@ -245,7 +245,7 @@ The protocol defines canonical event types in `../../protocol/constants/events.j
 
 ### Audit & Governance Events
 - `OperatorAuditCommandRecorded`, `OperatorAuditUserRecorded`, `OperatorAuditAiRecorded`
-- `OperatorAuditDirectCommandRecorded`, `OperatorAuditDirectCommandResultRecorded`
+- `OperatorAuditDirectCommandRecorded`, `OperatorAuditDirectCommandResultRecorded`, `OperatorAuditMcpCallRecorded`
 - `OperatorBootstrapRequested`, `OperatorBootstrapReceived`, `OperatorBootstrapConfigReceived`, `OperatorBootstrapCompleted`, `OperatorBootstrapFailed`
 
 ### MCP/A2A Events
@@ -265,9 +265,8 @@ The protocol defines canonical event types in `../../protocol/constants/events.j
 - `OperatorSlotInitializationFailed`
 - `OperatorContextChanged`
 
-### Intent Events
-- `OperatorIntentRequested`, `OperatorIntentGranted`, `OperatorIntentDenied`, `OperatorIntentRevokeRequested`, `OperatorIntentRevoked`
-- `OperatorIntentApprovalRequested`, `OperatorIntentApprovalGranted`, `OperatorIntentApprovalRejected`
+### Notary Events
+- `OperatorNotaryApprovalRequested`, `OperatorNotaryTransactionExpired`
 
 ### Other Events
 - `OperatorEvalAnswerRequested`

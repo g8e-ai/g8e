@@ -398,7 +398,8 @@ Sender and message type constants:
 
 Shell command execution constants:
 
-- `DefaultShellCommandTimeout` (30 seconds), `MaxShellCommandTimeout` (300 seconds)
+- Terminal control characters: `CtrlC` (3), `Backspace` (8), `Delete` (127), `PrintableASCIIStart` (32), `PrintableASCIIEnd` (126)
+- `DefaultShellCommandTimeout` (30 seconds), `MaxShellCommandTimeout` (300 seconds), `ShutdownTimeout` (15 seconds)
 - `LocalhostHostname` (`localhost`), `LocalhostIP` (`127.0.0.1`)
 - `RemoteEphemeralScriptTemplate`: bash script template for remote Operator deployment with graceful cleanup
 - `RemoteInjectedBinaryMessage`, `RemoteInjectedScriptMinimal`: constants for binary injection without execution

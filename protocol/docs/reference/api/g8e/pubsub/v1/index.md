@@ -4,8 +4,8 @@
 ## Table of Contents
 
 - [g8e/pubsub/v1/pubsub.proto](#g8e_pubsub_v1_pubsub-proto)
-    - [PubSubEvent](#g8e-pubsub-v1-PubSubEvent)
     - [PubSubMessage](#g8e-pubsub-v1-PubSubMessage)
+    - [PubSubEvent](#g8e-pubsub-v1-PubSubEvent)
   
 - [Scalar Value Types](#scalar-value-types)
 
@@ -18,35 +18,40 @@
 
 
 
-<a name="g8e-pubsub-v1-PubSubEvent"></a>
-
-### PubSubEvent
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| type | [string](#string) |  |  |
-| channel | [string](#string) |  |  |
-| pattern | [string](#string) |  |  |
-| data | [bytes](#bytes) |  |  |
-
-
-
-
-
-
 <a name="g8e-pubsub-v1-PubSubMessage"></a>
 
 ### PubSubMessage
-
+PubSubMessage is the client-to-server WebSocket frame for pub/sub operations.
+Clients send this message to subscribe, unsubscribe, or publish on a channel.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| action | [string](#string) |  |  |
-| channel | [string](#string) |  |  |
-| data | [bytes](#bytes) |  |  |
+| action | [string](#string) |  | Operation to perform: &#34;subscribe&#34;, &#34;psubscribe&#34;, &#34;unsubscribe&#34;, or &#34;publish&#34;. |
+| channel | [string](#string) |  | Target channel name. Follows the convention &#34;{prefix}:{operator_id}:{session_id}&#34;. |
+| data | [bytes](#bytes) |  | Payload bytes for publish actions. Empty for subscribe/unsubscribe. |
+
+
+
+
+
+
+
+<a name="g8e-pubsub-v1-PubSubEvent"></a>
+
+### PubSubEvent
+PubSubEvent is the server-to-client WebSocket frame delivered to subscribers.
+The broker emits events for message delivery, subscription acknowledgments, and errors.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| type | [string](#string) |  | Event type: &#34;message&#34;, &#34;pmessage&#34;, &#34;subscribed&#34;, &#34;unsubscribed&#34;, or &#34;error&#34;. |
+| channel | [string](#string) |  | Channel the event pertains to. |
+| pattern | [string](#string) |  | Pattern matched for pmessage events. Empty for direct channel deliveries. |
+| data | [bytes](#bytes) |  | Message payload for message/pmessage events. Empty for acknowledgment events. |
+
+
 
 
 

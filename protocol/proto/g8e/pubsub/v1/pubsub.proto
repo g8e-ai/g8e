@@ -17,15 +17,19 @@ package g8e.pubsub.v1;
 
 option go_package = "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1;pubsubv1";
 
+// PubSubMessage is the client-to-server WebSocket frame for pub/sub operations.
+// Clients send this message to subscribe, unsubscribe, or publish on a channel.
 message PubSubMessage {
-  string action = 1;
-  string channel = 2;
-  bytes data = 3;
+  string action = 1;  // Operation to perform: "subscribe", "psubscribe", "unsubscribe", or "publish".
+  string channel = 2; // Target channel name. Follows the convention "{prefix}:{operator_id}:{session_id}".
+  bytes data = 3;     // Payload bytes for publish actions. Empty for subscribe/unsubscribe.
 }
 
+// PubSubEvent is the server-to-client WebSocket frame delivered to subscribers.
+// The broker emits events for message delivery, subscription acknowledgments, and errors.
 message PubSubEvent {
-  string type = 1;
-  string channel = 2;
-  string pattern = 3;
-  bytes data = 4;
+  string type = 1;    // Event type: "message", "pmessage", "subscribed", "unsubscribed", or "error".
+  string channel = 2; // Channel the event pertains to.
+  string pattern = 3; // Pattern matched for pmessage events. Empty for direct channel deliveries.
+  bytes data = 4;     // Message payload for message/pmessage events. Empty for acknowledgment events.
 }
