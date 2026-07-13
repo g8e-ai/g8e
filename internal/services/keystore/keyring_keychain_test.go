@@ -64,7 +64,7 @@ func TestKeychainKeyring_StoreRetrieveDelete(t *testing.T) {
 
 	_, err = keyring.RetrieveMasterKey()
 	require.Error(t, err)
-	assert.Equal(t, constants.ErrKeyNotFound, err)
+	assert.Equal(t, constants.ErrKeyStoreKeyNotFound, err)
 }
 
 func TestKeychainKeyring_RetrieveNotFound(t *testing.T) {
@@ -80,7 +80,7 @@ func TestKeychainKeyring_RetrieveNotFound(t *testing.T) {
 
 	_, err = keyring.RetrieveMasterKey()
 	require.Error(t, err)
-	assert.Equal(t, constants.ErrKeyNotFound, err)
+	assert.Equal(t, constants.ErrKeyStoreKeyNotFound, err)
 }
 
 func TestKeychainKeyring_DeleteIdempotent(t *testing.T) {

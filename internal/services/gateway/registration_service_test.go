@@ -67,8 +67,7 @@ func TestPKIPhase2_CalculateSerialFromPEM(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	smDir := t.TempDir()
-	sm, err := NewSecretManager(db.db, smDir, logger)
-	require.NoError(t, err)
+	sm := newTestSecretManager(t, db.db, smDir)
 
 	pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 	err = pki.InitializePKI(nil)
@@ -148,8 +147,7 @@ func TestPKIPhase3_CLI_CSR_Optional(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		smDir := t.TempDir()
-		sm, err := NewSecretManager(db.db, smDir, logger)
-		require.NoError(t, err)
+		sm := newTestSecretManager(t, db.db, smDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 		err = pki.InitializePKI(nil)
@@ -697,8 +695,7 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		smDir := t.TempDir()
-		sm, err := NewSecretManager(db.db, smDir, logger)
-		require.NoError(t, err)
+		sm := newTestSecretManager(t, db.db, smDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 		err = pki.InitializePKI(nil)
@@ -732,8 +729,7 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		smDir := t.TempDir()
-		sm, err := NewSecretManager(db.db, smDir, logger)
-		require.NoError(t, err)
+		sm := newTestSecretManager(t, db.db, smDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 		err = pki.InitializePKI(nil)
@@ -767,8 +763,7 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		smDir := t.TempDir()
-		sm, err := NewSecretManager(db.db, smDir, logger)
-		require.NoError(t, err)
+		sm := newTestSecretManager(t, db.db, smDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 		err = pki.InitializePKI(nil)
@@ -801,8 +796,7 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		smDir := t.TempDir()
-		sm, err := NewSecretManager(db.db, smDir, logger)
-		require.NoError(t, err)
+		sm := newTestSecretManager(t, db.db, smDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 		err = pki.InitializePKI(nil)
@@ -839,8 +833,7 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		smDir := t.TempDir()
-		sm, err := NewSecretManager(db.db, smDir, logger)
-		require.NoError(t, err)
+		sm := newTestSecretManager(t, db.db, smDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 		err = pki.InitializePKI(nil)
@@ -876,8 +869,7 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		smDir := t.TempDir()
-		sm, err := NewSecretManager(db.db, smDir, logger)
-		require.NoError(t, err)
+		sm := newTestSecretManager(t, db.db, smDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 		err = pki.InitializePKI(nil)
@@ -918,8 +910,7 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		smDir := t.TempDir()
-		sm, err := NewSecretManager(db.db, smDir, logger)
-		require.NoError(t, err)
+		sm := newTestSecretManager(t, db.db, smDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 		err = pki.InitializePKI(nil)

@@ -96,8 +96,7 @@ func setupTestPKI(t *testing.T) *testPKIContext {
 	require.NoError(t, err, "failed to open test database")
 	t.Cleanup(func() { db.Close() })
 
-	sm, err := NewSecretManager(db.db, secretsDir, logger)
-	require.NoError(t, err, "failed to create secret manager")
+	sm := newTestSecretManager(t, db.db, secretsDir)
 
 	pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 	err = pki.InitializePKI(nil)
@@ -686,8 +685,7 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		db, err := openTestDB(t, dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		sm, err := NewSecretManager(db.db, secretsDir, logger)
-		require.NoError(t, err)
+		sm := newTestSecretManager(t, db.db, secretsDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 		err = pki.InitializePKI(nil)
@@ -717,8 +715,7 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		db, err := openTestDB(t, dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		sm, err := NewSecretManager(db.db, secretsDir, logger)
-		require.NoError(t, err)
+		sm := newTestSecretManager(t, db.db, secretsDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 		err = pki.InitializePKI(nil)
@@ -739,8 +736,7 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		db, err := openTestDB(t, dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		sm, err := NewSecretManager(db.db, secretsDir, logger)
-		require.NoError(t, err)
+		sm := newTestSecretManager(t, db.db, secretsDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 		err = pki.InitializePKI(nil)
@@ -772,8 +768,7 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		db, err := openTestDB(t, dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		sm, err := NewSecretManager(db.db, secretsDir, logger)
-		require.NoError(t, err)
+		sm := newTestSecretManager(t, db.db, secretsDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 		err = pki.InitializePKI(nil)
@@ -808,8 +803,7 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		db, err := openTestDB(t, dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		sm, err := NewSecretManager(db.db, secretsDir, logger)
-		require.NoError(t, err)
+		sm := newTestSecretManager(t, db.db, secretsDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 		err = pki.InitializePKI(nil)
@@ -830,8 +824,7 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		db, err := openTestDB(t, dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		sm, err := NewSecretManager(db.db, secretsDir, logger)
-		require.NoError(t, err)
+		sm := newTestSecretManager(t, db.db, secretsDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 		err = pki.InitializePKI(nil)
@@ -856,8 +849,7 @@ func TestPKIAuthority_Phase5_Permissions(t *testing.T) {
 		db, err := openTestDB(t, dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		sm, err := NewSecretManager(db.db, secretsDir, logger)
-		require.NoError(t, err)
+		sm := newTestSecretManager(t, db.db, secretsDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 		err = pki.InitializePKI(nil)
@@ -892,8 +884,7 @@ func TestPKIAuthority_Phase5_Permissions(t *testing.T) {
 		db, err := openTestDB(t, dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		sm, err := NewSecretManager(db.db, secretsDir, logger)
-		require.NoError(t, err)
+		sm := newTestSecretManager(t, db.db, secretsDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 		err = pki.InitializePKI(nil)
@@ -916,8 +907,7 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 		db, err := openTestDB(t, dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		sm, err := NewSecretManager(db.db, secretsDir, logger)
-		require.NoError(t, err)
+		sm := newTestSecretManager(t, db.db, secretsDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 		err = pki.InitializePKI(nil)
@@ -946,8 +936,7 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 		db, err := openTestDB(t, dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		sm, err := NewSecretManager(db.db, secretsDir, logger)
-		require.NoError(t, err)
+		sm := newTestSecretManager(t, db.db, secretsDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 		err = pki.InitializePKI(nil)
@@ -976,8 +965,7 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 		db, err := openTestDB(t, dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		sm, err := NewSecretManager(db.db, secretsDir, logger)
-		require.NoError(t, err)
+		sm := newTestSecretManager(t, db.db, secretsDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 		err = pki.InitializePKI(nil)
@@ -1006,8 +994,7 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 		db, err := openTestDB(t, dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		sm, err := NewSecretManager(db.db, secretsDir, logger)
-		require.NoError(t, err)
+		sm := newTestSecretManager(t, db.db, secretsDir)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
 		err = pki.InitializePKI(nil)
