@@ -33,6 +33,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/netutil"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/network"
 )
@@ -301,7 +302,11 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 				// Write network identity to file if needed
 				var networkIdentityFile string
 				if len(identityResult.IdentityData) > 0 {
-					pm, err := platform.NewProcessManager(cfg.ProjectRoot)
+					fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+					if err != nil {
+						return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+					}
+					pm, err := platform.NewProcessManager(fileSvc)
 					if err != nil {
 						return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 					}
@@ -425,7 +430,11 @@ Displays the process ID and endpoint URLs when the gateway is running.`,
 			cmd.Println("========================")
 
 			// Try HTTP check first (works for Docker/foreground/background modes)
-			client, err := api.NewClient(cfg)
+			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("gateway: create file service: %w", err)
+			}
+			client, err := api.NewClient(fileSvc, cfg)
 			if err == nil {
 				respBody, err := client.Get("/api/v1/health")
 				if err == nil {
@@ -446,7 +455,7 @@ Displays the process ID and endpoint URLs when the gateway is running.`,
 			}
 
 			// Fallback to ProcessManager check (for background/host mode)
-			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
+			pm, err := platform.NewProcessManager(fileSvc)
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
@@ -587,7 +596,11 @@ Gateway over mTLS.`,
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
-			client, err := clientFactory(cfg)
+			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("gateway: create file service: %w", err)
+			}
+			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}

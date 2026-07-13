@@ -18,6 +18,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 // configLoad is the underlying config loader function. It is a package-level
@@ -37,4 +38,15 @@ func loadConfig(projectRoot string) (*config.Config, error) {
 		return nil, fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 	}
 	return cfg, nil
+}
+
+// relFromAbs converts an absolute path within .g8e/ to a relative path
+// suitable for fileSvc methods. Panics if the path is outside the runtime
+// directory — all config-derived paths are expected to be within .g8e/.
+func relFromAbs(fileSvc fs.RuntimeFileService, absPath string) string {
+	rel, err := fileSvc.Rel(absPath)
+	if err != nil {
+		panic(fmt.Sprintf("relFromAbs: %s is not within .g8e/ runtime dir: %v", absPath, err))
+	}
+	return rel
 }

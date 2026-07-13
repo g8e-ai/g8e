@@ -24,16 +24,17 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 func mockClientFactory(client apiClient) apiClientFactory {
-	return func(cfg *config.Config) (apiClient, error) {
+	return func(_ fs.RuntimeFileService, cfg *config.Config) (apiClient, error) {
 		return client, nil
 	}
 }
 
 func failingClientFactory(err error) apiClientFactory {
-	return func(cfg *config.Config) (apiClient, error) {
+	return func(_ fs.RuntimeFileService, cfg *config.Config) (apiClient, error) {
 		return nil, err
 	}
 }

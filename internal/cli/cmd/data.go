@@ -17,6 +17,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 func dataCmd() *cobra.Command {
@@ -62,7 +64,12 @@ func dataUsersCmdWithConfig(configLoader func(string) (*config.Config, error), c
 				return err
 			}
 
-			client, err := clientFactory(cfg)
+			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("data: create file service: %w", err)
+			}
+
+			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("data: create API client: %w", err)
 			}
@@ -104,7 +111,12 @@ func dataOperatorsCmdWithConfig(configLoader func(string) (*config.Config, error
 				return err
 			}
 
-			client, err := clientFactory(cfg)
+			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("data: create file service: %w", err)
+			}
+
+			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("data: create API client: %w", err)
 			}
@@ -146,7 +158,12 @@ func dataSettingsCmdWithConfig(configLoader func(string) (*config.Config, error)
 				return err
 			}
 
-			client, err := clientFactory(cfg)
+			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("data: create file service: %w", err)
+			}
+
+			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("data: create API client: %w", err)
 			}
@@ -198,7 +215,12 @@ or provide --document-id to fetch a specific document.`,
 				return err
 			}
 
-			client, err := clientFactory(cfg)
+			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("data: create file service: %w", err)
+			}
+
+			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("data: create API client: %w", err)
 			}
@@ -276,7 +298,12 @@ to control the number of results.`,
 				return err
 			}
 
-			client, err := clientFactory(cfg)
+			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("data: create file service: %w", err)
+			}
+
+			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("data: create API client: %w", err)
 			}

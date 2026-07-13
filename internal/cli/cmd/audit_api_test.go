@@ -16,12 +16,14 @@ package cmd
 import (
 	"bytes"
 	"errors"
+	"log/slog"
 	"os"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,7 +42,9 @@ func setupAuditAPITestEnv(t *testing.T) *config.Config {
 		OperatorID:        "op-test",
 		CLISessionID:      "cli-sess-test",
 	}
-	require.NoError(t, auth.SaveCredentials(cfg, creds))
+	fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
+	require.NoError(t, err)
+	require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
 	return cfg
 }
 
@@ -54,7 +58,7 @@ func TestAuditReceiptsCmd_API_MockHappyPath(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditReceiptsCmdWithConfig(loader, factory)
 	cmd.Flags().Set("session", "op-sess-test")
@@ -78,7 +82,7 @@ func TestAuditReceiptsCmd_API_JSONOutput(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditReceiptsCmdWithConfig(loader, factory)
 	cmd.Flags().Set("session", "op-sess-test")
@@ -100,7 +104,7 @@ func TestAuditReceiptsCmd_API_EmptyReceipts(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditReceiptsCmdWithConfig(loader, factory)
 	cmd.Flags().Set("session", "op-sess-test")
@@ -121,7 +125,7 @@ func TestAuditReceiptsCmd_API_GetError(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditReceiptsCmdWithConfig(loader, factory)
 	cmd.Flags().Set("session", "op-sess-test")
@@ -142,7 +146,7 @@ func TestAuditReceiptsCmd_API_InvalidJSON(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditReceiptsCmdWithConfig(loader, factory)
 	cmd.Flags().Set("session", "op-sess-test")
@@ -159,7 +163,7 @@ func TestAuditReceiptsCmd_API_ClientFactoryError(t *testing.T) {
 	cfg := setupAuditAPITestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) {
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) {
 		return nil, constants.ErrNotAuthenticated
 	}
 
@@ -186,7 +190,7 @@ func TestAuditExportCmd_API_MockHappyPath(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditExportCmdWithConfig(loader, factory)
 	cmd.Flags().Set("session", "op-sess-test")
@@ -213,7 +217,7 @@ func TestAuditExportCmd_API_GetError(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditExportCmdWithConfig(loader, factory)
 	cmd.Flags().Set("session", "op-sess-test")
@@ -238,7 +242,7 @@ func TestAuditReportCmd_API_MockHappyPath(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditReportCmdWithConfig(loader, factory)
 	cmd.Flags().Set("session", "op-sess-test")
@@ -263,7 +267,7 @@ func TestAuditReportCmd_API_InvalidJSON(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditReportCmdWithConfig(loader, factory)
 	cmd.Flags().Set("session", "op-sess-test")
@@ -286,7 +290,7 @@ func TestAuditReportCmd_API_GetError(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditReportCmdWithConfig(loader, factory)
 	cmd.Flags().Set("session", "op-sess-test")
@@ -311,7 +315,7 @@ func TestAuditEventsCmd_API_MockHappyPath(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditEventsCmdWithConfig(loader, factory)
 	cmd.Flags().Set("session", "op-sess-test")
@@ -335,7 +339,7 @@ func TestAuditEventsCmd_API_JSONOutput(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditEventsCmdWithConfig(loader, factory)
 	cmd.Flags().Set("session", "op-sess-test")
@@ -357,7 +361,7 @@ func TestAuditEventsCmd_API_EmptyEvents(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditEventsCmdWithConfig(loader, factory)
 	cmd.Flags().Set("session", "op-sess-test")
@@ -378,7 +382,7 @@ func TestAuditEventsCmd_API_GetError(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditEventsCmdWithConfig(loader, factory)
 	cmd.Flags().Set("session", "op-sess-test")
@@ -399,7 +403,7 @@ func TestAuditEventsCmd_API_InvalidJSON(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditEventsCmdWithConfig(loader, factory)
 	cmd.Flags().Set("session", "op-sess-test")
@@ -423,7 +427,7 @@ func TestAuditSummaryCmd_API_MockHappyPath(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditSummaryCmdWithConfig(loader, factory)
 	cmd.Flags().Set("session", "op-sess-test")
@@ -446,7 +450,7 @@ func TestAuditSummaryCmd_API_EmptyRecords(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditSummaryCmdWithConfig(loader, factory)
 	cmd.Flags().Set("session", "op-sess-test")
@@ -467,7 +471,7 @@ func TestAuditSummaryCmd_API_InvalidJSON(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditSummaryCmdWithConfig(loader, factory)
 	cmd.Flags().Set("session", "op-sess-test")
@@ -488,7 +492,7 @@ func TestAuditSummaryCmd_API_GetError(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := auditSummaryCmdWithConfig(loader, factory)
 	cmd.Flags().Set("session", "op-sess-test")

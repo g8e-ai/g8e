@@ -19,7 +19,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
-	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,11 +28,9 @@ import (
 func TestSaveAndLoadCredentials(t *testing.T) {
 	t.Parallel()
 	tmpDir := testutil.TempDir(t)
+	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, ".g8e/run"),
-		PKIDir:         filepath.Join(tmpDir, ".g8e/pki"),
-		SecretsDir:     filepath.Join(tmpDir, ".g8e/secrets"),
 		CredentialsDir: tmpDir,
 	}
 
@@ -43,10 +41,10 @@ func TestSaveAndLoadCredentials(t *testing.T) {
 		CLISessionID:      "cli-sess-abc",
 	}
 
-	err := SaveCredentials(cfg, creds)
+	err := SaveCredentials(fileSvc, cfg, creds)
 	require.NoError(t, err)
 
-	loaded, err := LoadCredentials(cfg)
+	loaded, err := LoadCredentials(fileSvc, cfg)
 	require.NoError(t, err)
 	require.NotNil(t, loaded)
 	assert.Equal(t, creds.OperatorSessionID, loaded.OperatorSessionID)
@@ -58,15 +56,13 @@ func TestSaveAndLoadCredentials(t *testing.T) {
 func TestLoadCredentials_NotFound(t *testing.T) {
 	t.Parallel()
 	tmpDir := testutil.TempDir(t)
+	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 	}
 
-	loaded, err := LoadCredentials(cfg)
+	loaded, err := LoadCredentials(fileSvc, cfg)
 	require.NoError(t, err)
 	assert.Nil(t, loaded)
 }
@@ -74,19 +70,17 @@ func TestLoadCredentials_NotFound(t *testing.T) {
 func TestLoadCredentials_InvalidJSON(t *testing.T) {
 	t.Parallel()
 	tmpDir := testutil.TempDir(t)
+	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 	}
 
 	credsFile := cfg.CredentialsFile()
-	require.NoError(t, os.MkdirAll(cfg.CredentialsDir, 0700))
-	require.NoError(t, os.WriteFile(credsFile, []byte("invalid-json{{{"), 0600))
+	require.NoError(t, os.MkdirAll(cfg.CredentialsDir, constants.PermDirPrivate))
+	require.NoError(t, os.WriteFile(credsFile, []byte("invalid-json{{{"), constants.PermFilePrivate))
 
-	loaded, err := LoadCredentials(cfg)
+	loaded, err := LoadCredentials(fileSvc, cfg)
 	require.Error(t, err)
 	assert.Nil(t, loaded)
 	assert.Error(t, err)
@@ -95,11 +89,9 @@ func TestLoadCredentials_InvalidJSON(t *testing.T) {
 func TestDeleteCredentials_Success(t *testing.T) {
 	t.Parallel()
 	tmpDir := testutil.TempDir(t)
+	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths: &config.PathsConfig{
 			Infra: struct {
@@ -128,19 +120,19 @@ func TestDeleteCredentials_Success(t *testing.T) {
 		CLISessionID:      "cli-sess-abc",
 	}
 
-	require.NoError(t, SaveCredentials(cfg, creds))
+	require.NoError(t, SaveCredentials(fileSvc, cfg, creds))
 
 	certDir := cfg.CredentialsDir
-	require.NoError(t, os.MkdirAll(certDir, 0700))
-	require.NoError(t, os.WriteFile(cfg.CLICertFile(), []byte("cli-cert"), 0600))
-	require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), []byte("cli-key"), 0600))
-	require.NoError(t, os.WriteFile(cfg.OperatorCertFile(), []byte("op-cert"), 0600))
-	require.NoError(t, os.WriteFile(cfg.OperatorKeyFile(), []byte("op-key"), 0600))
+	require.NoError(t, os.MkdirAll(certDir, constants.PermDirPrivate))
+	require.NoError(t, os.WriteFile(cfg.CLICertFile(), []byte("cli-cert"), constants.PermFilePrivate))
+	require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), []byte("cli-key"), constants.PermFilePrivate))
+	require.NoError(t, os.WriteFile(cfg.OperatorCertFile(), []byte("op-cert"), constants.PermFilePrivate))
+	require.NoError(t, os.WriteFile(cfg.OperatorKeyFile(), []byte("op-key"), constants.PermFilePrivate))
 	hubBundle := cfg.TrustBundlePath()
-	require.NoError(t, os.MkdirAll(filepath.Dir(hubBundle), 0700))
-	require.NoError(t, os.WriteFile(hubBundle, []byte("g8e-gw-ca-bundle"), 0600))
+	require.NoError(t, os.MkdirAll(filepath.Dir(hubBundle), constants.PermDirPrivate))
+	require.NoError(t, os.WriteFile(hubBundle, []byte("g8e-gw-ca-bundle"), constants.PermFilePrivate))
 
-	err := DeleteCredentials(cfg)
+	err := DeleteCredentials(fileSvc, cfg)
 	require.NoError(t, err)
 
 	assert.NoFileExists(t, cfg.CredentialsFile())
@@ -152,11 +144,9 @@ func TestDeleteCredentials_Success(t *testing.T) {
 func TestDeleteCredentials_NonExistentFiles(t *testing.T) {
 	t.Parallel()
 	tmpDir := testutil.TempDir(t)
+	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths: &config.PathsConfig{
 			Infra: struct {
@@ -178,7 +168,7 @@ func TestDeleteCredentials_NonExistentFiles(t *testing.T) {
 		},
 	}
 
-	err := DeleteCredentials(cfg)
+	err := DeleteCredentials(fileSvc, cfg)
 	require.NoError(t, err)
 }
 
@@ -186,17 +176,15 @@ func TestSaveCredentials_WriteError(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := testutil.TempDir(t)
+	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
 	// Create the credentials directory
-	require.NoError(t, os.MkdirAll(cfg.CredentialsDir, 0700))
+	require.NoError(t, os.MkdirAll(cfg.CredentialsDir, constants.PermDirPrivate))
 
 	// Create a file at the credentials file path to block writing
 	credsFile := cfg.CredentialsFile()
@@ -209,7 +197,7 @@ func TestSaveCredentials_WriteError(t *testing.T) {
 		CLISessionID:      "cli-sess-abc",
 	}
 
-	err := SaveCredentials(cfg, creds)
+	err := SaveCredentials(fileSvc, cfg, creds)
 	require.Error(t, err)
 	assert.Error(t, err)
 }
@@ -218,23 +206,21 @@ func TestLoadCredentials_ReadError(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := testutil.TempDir(t)
+	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
 	// Create the credentials directory
-	require.NoError(t, os.MkdirAll(cfg.CredentialsDir, 0700))
+	require.NoError(t, os.MkdirAll(cfg.CredentialsDir, constants.PermDirPrivate))
 
 	// Create a file at the credentials file path that's a directory
 	credsFile := cfg.CredentialsFile()
-	require.NoError(t, os.MkdirAll(credsFile, 0700))
+	require.NoError(t, os.MkdirAll(credsFile, constants.PermDirPrivate))
 
-	_, err := LoadCredentials(cfg)
+	_, err := LoadCredentials(fileSvc, cfg)
 	require.Error(t, err)
 	assert.Error(t, err)
 }
@@ -244,14 +230,12 @@ func TestSaveCredentials_MkdirError(t *testing.T) {
 
 	// Create a file where we expect a directory
 	tmpDir := testutil.TempDir(t)
+	fileSvc := newAuthTestFileSvc(t)
 	blockingFile := filepath.Join(tmpDir, "credentials")
-	require.NoError(t, os.WriteFile(blockingFile, []byte("block"), 0600))
+	require.NoError(t, os.WriteFile(blockingFile, []byte("block"), constants.PermFilePrivate))
 
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: blockingFile, // This is a file, not a directory
 		Paths:          &config.PathsConfig{},
 	}
@@ -263,7 +247,7 @@ func TestSaveCredentials_MkdirError(t *testing.T) {
 		CLISessionID:      "cli-sess-abc",
 	}
 
-	err := SaveCredentials(cfg, creds)
+	err := SaveCredentials(fileSvc, cfg, creds)
 	require.Error(t, err)
 	assert.Error(t, err)
 }
@@ -272,11 +256,9 @@ func TestDeleteCredentials_RemoveError(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := testutil.TempDir(t)
+	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths: &config.PathsConfig{
 			Infra: struct {
@@ -300,6 +282,6 @@ func TestDeleteCredentials_RemoveError(t *testing.T) {
 
 	// Create a directory where we expect a file (to cause removal error on some OSes)
 	// This test is platform-dependent
-	err := DeleteCredentials(cfg)
+	err := DeleteCredentials(fileSvc, cfg)
 	require.NoError(t, err) // Non-existent files should not error
 }

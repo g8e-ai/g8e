@@ -15,6 +15,7 @@ package cmd
 
 import (
 	"bytes"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -22,6 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -133,13 +135,16 @@ func TestLogoutCmd(t *testing.T) {
 			},
 		}
 
+		fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
+		require.NoError(t, err)
+
 		// Verify no credentials exist in test config
-		creds, err := auth.LoadCredentials(cfg)
+		creds, err := auth.LoadCredentials(fileSvc, cfg)
 		require.NoError(t, err)
 		require.Nil(t, creds)
 
 		// Delete credentials using the auth function directly
-		err = auth.DeleteCredentials(cfg)
+		err = auth.DeleteCredentials(fileSvc, cfg)
 		require.NoError(t, err)
 
 		// Verify it succeeds even when no credentials exist
@@ -164,19 +169,22 @@ func TestLogoutCmd(t *testing.T) {
 			OperatorID:        "op-789",
 			CLISessionID:      "cli-sess-abc",
 		}
-		require.NoError(t, auth.SaveCredentials(cfg, creds))
+		fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
+		require.NoError(t, err)
+
+		require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
 		require.NoError(t, os.WriteFile(cfg.CLICertFile(), []byte("cli-cert"), 0600))
 		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), []byte("cli-key"), 0600))
 		require.NoError(t, os.WriteFile(cfg.OperatorCertFile(), []byte("op-cert"), 0600))
 		require.NoError(t, os.WriteFile(cfg.OperatorKeyFile(), []byte("op-key"), 0600))
 
 		// Verify credentials were saved
-		loadedCreds, err := auth.LoadCredentials(cfg)
+		loadedCreds, err := auth.LoadCredentials(fileSvc, cfg)
 		require.NoError(t, err)
 		require.NotNil(t, loadedCreds)
 
 		// Delete credentials using the auth function
-		require.NoError(t, auth.DeleteCredentials(cfg))
+		require.NoError(t, auth.DeleteCredentials(fileSvc, cfg))
 
 		// Verify files deleted
 		_, err = os.Stat(cfg.CredentialsFile())

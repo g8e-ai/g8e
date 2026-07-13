@@ -44,6 +44,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/pathutil"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/network"
@@ -358,6 +359,11 @@ func runMCPStdioProxy(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("mcp: load config: %w", err)
 	}
 
+	fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+	if err != nil {
+		return fmt.Errorf("mcp: create file service: %w", err)
+	}
+
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
 	// Build the mTLS gateway connection once. Identity is in the delegated cert's
@@ -375,8 +381,8 @@ func runMCPStdioProxy(cmd *cobra.Command, _ []string) error {
 	// the CLI cert (not the delegated/app cert) because the gateway's SSE auth
 	// middleware validates CLI session ownership. The gateway URL is stripped
 	// of the /mcp suffix to get the base URL for SSE endpoints.
-	if creds, err := auth.LoadCredentials(cfg); err == nil && creds != nil && creds.UserID != "" {
-		if sseClient, err := auth.BuildMTLSClient(cfg, 0); err == nil {
+	if creds, err := auth.LoadCredentials(fileSvc, cfg); err == nil && creds != nil && creds.UserID != "" {
+		if sseClient, err := auth.BuildMTLSClient(fileSvc, cfg, 0); err == nil {
 			conn.sseClient = sseClient
 			conn.userID = creds.UserID
 			// Use OperatorPublicURL (g8e.local) for SSE to ensure TLS ServerName
@@ -1041,7 +1047,12 @@ func startGatewayIfNeeded() error {
 		return fmt.Errorf("mcp: load config: %w", err)
 	}
 
-	pm, err := platform.NewProcessManager(cfg.ProjectRoot)
+	fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
+	}
+
+	pm, err := platform.NewProcessManager(fileSvc)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 	}
@@ -1415,34 +1426,39 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 		return fmt.Errorf("mcp: load config: %w", err)
 	}
 
+	fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+	if err != nil {
+		return fmt.Errorf("mcp: create file service: %w", err)
+	}
+
 	// Ensure CLI credentials exist, auto-enroll if needed
-	creds, err := auth.LoadCredentials(cfg)
+	creds, err := auth.LoadCredentials(fileSvc, cfg)
 	if err != nil || creds == nil {
 		fmt.Fprintf(os.Stderr, "[g8e] No CLI credentials found, enrolling...\n")
-		if err := auth.EnrollCLI(cfg, false); err != nil {
+		if err := auth.EnrollCLI(fileSvc, cfg, false); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 		}
 		fmt.Fprintf(os.Stderr, "[g8e] CLI enrolled successfully\n")
-		creds, err = auth.LoadCredentials(cfg)
+		creds, err = auth.LoadCredentials(fileSvc, cfg)
 		if err != nil || creds == nil {
 			return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 		}
 	}
 
 	// Enroll the agent as an external app for audit trail attribution
-	appID, appCert, appKey, err := auth.EnrollAgentApp(cfg, strings.ToLower(agentID))
+	appID, appCert, appKey, err := auth.EnrollAgentApp(fileSvc, cfg, strings.ToLower(agentID))
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 	}
 
 	// Require an authenticated human with passkey registration; auto-register if missing
-	hasPasskey, err := auth.VerifyPasskeyRegistration(cfg, creds.UserID, creds.CLISessionID)
+	hasPasskey, err := auth.VerifyPasskeyRegistration(fileSvc, cfg, creds.UserID, creds.CLISessionID)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrNoPasskeysRegistered, err)
 	}
 	if !hasPasskey {
 		fmt.Fprintf(os.Stderr, "[g8e] No passkey registered, starting passkey enrollment...\n")
-		if err := auth.RegisterPasskeyViaBrowser(cfg, creds.UserID, creds.CLISessionID); err != nil {
+		if err := auth.RegisterPasskeyViaBrowser(fileSvc, cfg, creds.UserID, creds.CLISessionID); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrPasskeyRegistrationFailed, err)
 		}
 	}

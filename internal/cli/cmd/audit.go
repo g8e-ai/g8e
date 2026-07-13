@@ -16,6 +16,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,6 +26,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/spf13/cobra"
 )
 
@@ -67,14 +69,19 @@ transaction hash, and --json to output raw JSON instead of a table.`,
 				return err
 			}
 
-			client, err := clientFactory(cfg)
+			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("audit: create file service: %w", err)
+			}
+
+			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("audit: create API client: %w", err)
 			}
 
 			// Auto-discover session ID if not provided
 			if operatorSessionID == "" {
-				creds, err := auth.LoadCredentials(cfg)
+				creds, err := auth.LoadCredentials(fileSvc, cfg)
 				if err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 				}
@@ -184,14 +191,19 @@ file path (defaults to stdout).`,
 				return err
 			}
 
-			client, err := clientFactory(cfg)
+			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("audit: create file service: %w", err)
+			}
+
+			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("audit: create API client: %w", err)
 			}
 
 			// Auto-discover session ID if not provided
 			if operatorSessionID == "" {
-				creds, err := auth.LoadCredentials(cfg)
+				creds, err := auth.LoadCredentials(fileSvc, cfg)
 				if err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 				}
@@ -251,14 +263,19 @@ directory for the report file.`,
 				return err
 			}
 
-			client, err := clientFactory(cfg)
+			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("audit: create file service: %w", err)
+			}
+
+			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("audit: create API client: %w", err)
 			}
 
 			// Auto-discover session ID if not provided
 			if operatorSessionID == "" {
-				creds, err := auth.LoadCredentials(cfg)
+				creds, err := auth.LoadCredentials(fileSvc, cfg)
 				if err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 				}
@@ -336,14 +353,19 @@ filter by operator session ID, --limit to control the number of results, and
 				return fmt.Errorf("%w: limit must be between 1 and 10000", constants.ErrValidationFailed)
 			}
 
-			client, err := clientFactory(cfg)
+			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("audit: create file service: %w", err)
+			}
+
+			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("audit: create API client: %w", err)
 			}
 
 			// Auto-discover session ID if not provided
 			if operatorSessionID == "" {
-				creds, err := auth.LoadCredentials(cfg)
+				creds, err := auth.LoadCredentials(fileSvc, cfg)
 				if err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 				}
@@ -442,14 +464,19 @@ Gateway over mTLS. Use --session to filter by operator session ID.`,
 				return err
 			}
 
-			client, err := clientFactory(cfg)
+			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("audit: create file service: %w", err)
+			}
+
+			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("audit: create API client: %w", err)
 			}
 
 			// Auto-discover session ID if not provided
 			if operatorSessionID == "" {
-				creds, err := auth.LoadCredentials(cfg)
+				creds, err := auth.LoadCredentials(fileSvc, cfg)
 				if err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 				}

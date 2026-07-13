@@ -26,12 +26,13 @@ import (
 
 func TestBuildMTLSClient_MissingCertFile(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
+	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{Host: "localhost"},
 	}
 
-	_, err := BuildMTLSClient(cfg, 30*time.Second)
+	_, err := BuildMTLSClient(fileSvc, cfg, 30*time.Second)
 	if err == nil {
 		t.Error("expected error for missing cert file")
 	}
@@ -42,6 +43,7 @@ func TestBuildMTLSClient_MissingCertFile(t *testing.T) {
 
 func TestBuildMTLSClient_InvalidCertPair(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
+	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{Host: "localhost"},
@@ -49,17 +51,17 @@ func TestBuildMTLSClient_InvalidCertPair(t *testing.T) {
 
 	certFile := cfg.CLICertFile()
 	keyFile := cfg.CLIKeyFile()
-	if err := os.MkdirAll(filepath.Dir(certFile), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(certFile), constants.PermDirPrivate); err != nil {
 		t.Fatalf("MkdirAll failed: %v", err)
 	}
-	if err := os.WriteFile(certFile, []byte("not a cert"), 0600); err != nil {
+	if err := os.WriteFile(certFile, []byte("not a cert"), constants.PermFilePrivate); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
-	if err := os.WriteFile(keyFile, []byte("not a key"), 0600); err != nil {
+	if err := os.WriteFile(keyFile, []byte("not a key"), constants.PermFilePrivate); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 
-	_, err := BuildMTLSClient(cfg, 30*time.Second)
+	_, err := BuildMTLSClient(fileSvc, cfg, 30*time.Second)
 	if err == nil {
 		t.Error("expected error for invalid cert pair")
 	}
@@ -70,6 +72,7 @@ func TestBuildMTLSClient_InvalidCertPair(t *testing.T) {
 
 func TestBuildMTLSClient_MissingTrustBundle(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
+	fileSvc := newAuthTestFileSvc(t)
 
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -101,17 +104,17 @@ func TestBuildMTLSClient_MissingTrustBundle(t *testing.T) {
 
 	certFile := cfg.CLICertFile()
 	keyFile := cfg.CLIKeyFile()
-	if err := os.MkdirAll(filepath.Dir(certFile), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(certFile), constants.PermDirPrivate); err != nil {
 		t.Fatalf("MkdirAll failed: %v", err)
 	}
-	if err := os.WriteFile(certFile, certPEM, 0600); err != nil {
+	if err := os.WriteFile(certFile, certPEM, constants.PermFilePrivate); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
-	if err := os.WriteFile(keyFile, keyPEM, 0600); err != nil {
+	if err := os.WriteFile(keyFile, keyPEM, constants.PermFilePrivate); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 
-	_, err = BuildMTLSClient(cfg, 30*time.Second)
+	_, err = BuildMTLSClient(fileSvc, cfg, 30*time.Second)
 	if err == nil {
 		t.Error("expected error for missing trust bundle")
 	}
@@ -122,6 +125,7 @@ func TestBuildMTLSClient_MissingTrustBundle(t *testing.T) {
 
 func TestBuildMTLSClient_InvalidTrustBundle(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
+	fileSvc := newAuthTestFileSvc(t)
 
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -154,20 +158,20 @@ func TestBuildMTLSClient_InvalidTrustBundle(t *testing.T) {
 
 	certFile := cfg.CLICertFile()
 	keyFile := cfg.CLIKeyFile()
-	if err := os.MkdirAll(filepath.Dir(certFile), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(certFile), constants.PermDirPrivate); err != nil {
 		t.Fatalf("MkdirAll failed: %v", err)
 	}
-	if err := os.WriteFile(certFile, certPEM, 0600); err != nil {
+	if err := os.WriteFile(certFile, certPEM, constants.PermFilePrivate); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
-	if err := os.WriteFile(keyFile, keyPEM, 0600); err != nil {
+	if err := os.WriteFile(keyFile, keyPEM, constants.PermFilePrivate); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
-	if err := os.WriteFile(caFile, []byte("not a cert"), 0644); err != nil {
+	if err := os.WriteFile(caFile, []byte("not a cert"), constants.PermFilePublic); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 
-	_, err = BuildMTLSClient(cfg, 30*time.Second)
+	_, err = BuildMTLSClient(fileSvc, cfg, 30*time.Second)
 	if err == nil {
 		t.Error("expected error for invalid trust bundle")
 	}
@@ -206,12 +210,13 @@ func TestCheckOperatorRunning_LocalhostReplacement(t *testing.T) {
 
 func TestAutoRenewCertificate_InvalidCertType(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
+	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{Host: "localhost"},
 	}
 
-	err := AutoRenewCertificate(cfg, "invalid-type", "")
+	err := AutoRenewCertificate(fileSvc, cfg, "invalid-type", "")
 	if err == nil {
 		t.Error("expected error for invalid cert type")
 	}
@@ -222,6 +227,7 @@ func TestAutoRenewCertificate_InvalidCertType(t *testing.T) {
 
 func TestAutoRenewCertificate_NonExpiringCert(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
+	fileSvc := newAuthTestFileSvc(t)
 
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -246,14 +252,14 @@ func TestAutoRenewCertificate_NonExpiringCert(t *testing.T) {
 	}
 
 	certFile := cfg.CLICertFile()
-	if err := os.MkdirAll(filepath.Dir(certFile), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(certFile), constants.PermDirPrivate); err != nil {
 		t.Fatalf("MkdirAll failed: %v", err)
 	}
-	if err := os.WriteFile(certFile, certPEM, 0600); err != nil {
+	if err := os.WriteFile(certFile, certPEM, constants.PermFilePrivate); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 
-	err = AutoRenewCertificate(cfg, "cli", "")
+	err = AutoRenewCertificate(fileSvc, cfg, "cli", "")
 	if err != nil {
 		t.Errorf("expected no error for non-expiring cert, got: %v", err)
 	}
@@ -261,12 +267,13 @@ func TestAutoRenewCertificate_NonExpiringCert(t *testing.T) {
 
 func TestLoadCredentials_NonExistentFile(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
+	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{Host: "localhost"},
 	}
 
-	creds, err := LoadCredentials(cfg)
+	creds, err := LoadCredentials(fileSvc, cfg)
 	if err != nil {
 		t.Errorf("expected no error for non-existent file, got: %v", err)
 	}
@@ -277,12 +284,13 @@ func TestLoadCredentials_NonExistentFile(t *testing.T) {
 
 func TestDeleteCredentials_NonExistent(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
+	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{Host: "localhost"},
 	}
 
-	err := DeleteCredentials(cfg)
+	err := DeleteCredentials(fileSvc, cfg)
 	if err != nil {
 		t.Errorf("expected no error for non-existent file, got: %v", err)
 	}

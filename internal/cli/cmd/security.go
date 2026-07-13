@@ -337,7 +337,7 @@ func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, e
 			keyPath := filepath.Join(pkiDir, constants.PkiFileOperatorKey)
 			chainPath := filepath.Join(pkiDir, constants.PkiFileOperatorChain)
 
-			if err := auth.SaveCertAndKey(regResp.OperatorCert, regResp.OperatorCertChain, opKey, certPath, keyPath); err != nil {
+			if err := auth.SaveCertAndKey(fileSvc, regResp.OperatorCert, regResp.OperatorCertChain, opKey, certPath, keyPath); err != nil {
 				return fmt.Errorf("security: save cert and key: %w", err)
 			}
 

@@ -15,18 +15,19 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 type Client struct {
@@ -36,14 +37,14 @@ type Client struct {
 	baseURL    string // Optional override for testing
 }
 
-func NewClient(cfg *config.Config) (*Client, error) {
-	return NewClientWithURL(cfg, "")
+func NewClient(fileSvc fs.RuntimeFileService, cfg *config.Config) (*Client, error) {
+	return NewClientWithURL(fileSvc, cfg, "")
 }
 
 // NewClientWithURL creates a client with an optional base URL override for testing.
 // If baseURL is empty, it uses cfg.OperatorHTTPURL().
-func NewClientWithURL(cfg *config.Config, baseURL string) (*Client, error) {
-	creds, err := auth.LoadCredentials(cfg)
+func NewClientWithURL(fileSvc fs.RuntimeFileService, cfg *config.Config, baseURL string) (*Client, error) {
+	creds, err := auth.LoadCredentials(fileSvc, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 	}
@@ -57,7 +58,11 @@ func NewClientWithURL(cfg *config.Config, baseURL string) (*Client, error) {
 		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
 	}
 
-	trustBundle, err := os.ReadFile(cfg.TrustBundlePath())
+	trustBundleRel, err := fileSvc.Rel(cfg.TrustBundlePath())
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
+	}
+	trustBundle, err := fileSvc.ReadFile(context.Background(), trustBundleRel)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
 	}

@@ -22,6 +22,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"log/slog"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -31,6 +32,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -120,7 +122,9 @@ func TestApproveCmd(t *testing.T) {
 			OperatorID:        "op-789",
 			CLISessionID:      "cli-sess-abc",
 		}
-		require.NoError(t, auth.SaveCredentials(cfg, creds))
+		fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
+		require.NoError(t, err)
+		require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
 
 		err := cmd.RunE(cmd, []string{"abc123"})
 		require.Error(t, err)
@@ -149,7 +153,9 @@ func TestApproveCmd(t *testing.T) {
 			OperatorID:        "op-789",
 			CLISessionID:      "cli-sess-abc",
 		}
-		require.NoError(t, auth.SaveCredentials(cfg, creds))
+		fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
+		require.NoError(t, err)
+		require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
 
 		_, priv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
@@ -190,7 +196,9 @@ func TestApproveCmd(t *testing.T) {
 			OperatorID:        "op-789",
 			CLISessionID:      "cli-sess-abc",
 		}
-		require.NoError(t, auth.SaveCredentials(cfg, creds))
+		fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
+		require.NoError(t, err)
+		require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
 
 		_, priv1, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
@@ -253,7 +261,9 @@ func TestApproveCmd(t *testing.T) {
 			OperatorID:        "op-789",
 			CLISessionID:      "cli-sess-abc",
 		}
-		require.NoError(t, auth.SaveCredentials(cfg, creds))
+		fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
+		require.NoError(t, err)
+		require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
 
 		err = cmd.RunE(cmd, []string{"abc123"})
 		require.Error(t, err)

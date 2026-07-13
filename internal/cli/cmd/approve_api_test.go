@@ -23,6 +23,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -34,6 +35,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -96,7 +98,9 @@ func setupApproveAPITestEnv(t *testing.T) (*config.Config, ed25519.PrivateKey) {
 		OperatorID:        "op-test",
 		CLISessionID:      "cli-sess-test",
 	}
-	require.NoError(t, auth.SaveCredentials(cfg, creds))
+	fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
+	require.NoError(t, err)
+	require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
 
 	return cfg, priv
 }
@@ -178,7 +182,7 @@ func TestApproveCmd_SSE_HappyPath(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := approveCmdWithConfig(loader, factory)
 	var buf bytes.Buffer
@@ -203,7 +207,7 @@ func TestApproveCmd_SSE_Timeout(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := approveCmdWithConfig(loader, factory)
 	var buf bytes.Buffer
@@ -231,7 +235,7 @@ func TestApproveCmd_SSE_Success_GetError(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := approveCmdWithConfig(loader, factory)
 	var buf bytes.Buffer
@@ -255,7 +259,7 @@ func TestApproveCmd_SSE_Success_InvalidJSONStatus(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := approveCmdWithConfig(loader, factory)
 	var buf bytes.Buffer
@@ -271,7 +275,7 @@ func TestApproveCmd_APIInjection_ClientFactoryError(t *testing.T) {
 	cfg, _ := setupApproveAPITestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) {
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) {
 		return nil, constants.ErrNotAuthenticated
 	}
 
@@ -297,7 +301,7 @@ func TestApproveCmd_SSE_Success_EmptyStatus(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := approveCmdWithConfig(loader, factory)
 	var buf bytes.Buffer
@@ -322,7 +326,7 @@ func TestApproveCmd_SSE_Success_StatusNotApproved(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
 	cmd := approveCmdWithConfig(loader, factory)
 	var buf bytes.Buffer
@@ -339,7 +343,7 @@ func TestApproveCmd_NoCredentials_Error(t *testing.T) {
 	require.NoError(t, os.Remove(cfg.CredentialsFile()))
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return &mockAPIClient{}, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return &mockAPIClient{}, nil }
 
 	cmd := approveCmdWithConfig(loader, factory)
 	var buf bytes.Buffer
