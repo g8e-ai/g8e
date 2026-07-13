@@ -26,9 +26,9 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
-	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // mockNativeTool is a mock implementation of NativeTool for unit testing.

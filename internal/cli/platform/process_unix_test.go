@@ -19,11 +19,11 @@ package platform
 import (
 	"errors"
 	"fmt"
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"os/exec"
 	"syscall"
 	"testing"
 	"time"
-	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // mockProcess is a mock implementation of the process interface

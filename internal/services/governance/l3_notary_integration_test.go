@@ -27,10 +27,10 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestOutboundL3Notary_VerifyL3Proof_NoApproval(t *testing.T) {

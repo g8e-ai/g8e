@@ -21,8 +21,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFileReadTool_Name(t *testing.T) {

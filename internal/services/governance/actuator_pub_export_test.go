@@ -25,8 +25,8 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/stretchr/testify/require"
 	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/stretchr/testify/require"
 )
 
 // actuatorPublicKeyExportData represents the typed structure for actuator public key JSON export

@@ -25,8 +25,8 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/stretchr/testify/require"
 	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/stretchr/testify/require"
 )
 
 func mustMarshalArgs(t *testing.T, dbPath, query string) json.RawMessage {

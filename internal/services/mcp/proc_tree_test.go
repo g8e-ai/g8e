@@ -21,8 +21,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/stretchr/testify/require"
 )
 
 func TestProcTreeTool_Metadata(t *testing.T) {
