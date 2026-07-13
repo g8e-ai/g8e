@@ -31,6 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/system"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 	"github.com/g8e-ai/g8e/internal/uuid"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
@@ -91,7 +92,7 @@ func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.He
 		OperatorSessionID: hs.config.OperatorSessionId,
 		CaseID:            "",
 		InvestigationID:   "",
-		Timestamp:         models.NowTimestamp(),
+		Timestamp:         timesvc.NowTimestamp(),
 		HeartbeatType:     heartbeatType,
 		SystemIdentity: models.HeartbeatSystemIdentity{
 			Hostname:     system.GetHostname(),

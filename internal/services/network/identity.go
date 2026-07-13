@@ -34,26 +34,35 @@ import (
 // This allows dependency injection for testing.
 type netInterfacesFunc func() ([]net.Interface, error)
 
+// interfaceAddrsFunc is a function type for getting addresses of a network interface.
+// This allows dependency injection for testing.
+type interfaceAddrsFunc func(iface net.Interface) ([]net.Addr, error)
+
 // defaultNetInterfaces is the default implementation using net.Interfaces.
 func defaultNetInterfaces() ([]net.Interface, error) {
 	return net.Interfaces()
 }
 
+// defaultInterfaceAddrs is the default implementation using net.Interface.Addrs.
+func defaultInterfaceAddrs(iface net.Interface) ([]net.Addr, error) {
+	return iface.Addrs()
+}
+
 // GetExternalInterfaceIP returns the first non-loopback IPv4 address found on the host.
 // This is used for the Operator Bootstrap endpoint which remote operators rely on.
 func GetExternalInterfaceIP() string {
-	return getExternalInterfaceIPWithFunc(defaultNetInterfaces)
+	return getExternalInterfaceIPWithFunc(defaultNetInterfaces, defaultInterfaceAddrs)
 }
 
-// getExternalInterfaceIPWithFunc is the testable implementation that accepts a netInterfaces function.
-func getExternalInterfaceIPWithFunc(getInterfaces netInterfacesFunc) string {
+// getExternalInterfaceIPWithFunc is the testable implementation that accepts injectable functions.
+func getExternalInterfaceIPWithFunc(getInterfaces netInterfacesFunc, getAddrs interfaceAddrsFunc) string {
 	ifaces, err := getInterfaces()
 	if err != nil {
 		return "localhost"
 	}
 
 	for _, iface := range ifaces {
-		addrs, err := iface.Addrs()
+		addrs, err := getAddrs(iface)
 		if err != nil {
 			continue
 		}
@@ -238,7 +247,7 @@ func (d *Detector) DetectAll(ctx context.Context) (*NetworkIdentity, error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			winID, err := d.detectWindowsIdentity()
+			winID, err := d.detectWindowsIdentity(ctx)
 			if err != nil {
 				mu.Lock()
 				if firstErr == nil {
@@ -595,31 +604,32 @@ func (d *Detector) detectSSHKnownHosts() ([]string, error) {
 
 // commandExecutor is a function type for executing commands.
 // This allows dependency injection for testing.
-type commandExecutor func(name string, args ...string) ([]byte, error)
+type commandExecutor func(ctx context.Context, name string, args ...string) ([]byte, error)
 
-// defaultCommandExecutor is the default implementation using exec.Command.
-func defaultCommandExecutor(name string, args ...string) ([]byte, error) {
-	return exec.Command(name, args...).Output()
+// defaultCommandExecutor is the default implementation using exec.CommandContext.
+// The context allows cancellation of long-running commands (e.g. systeminfo on Windows).
+func defaultCommandExecutor(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return exec.CommandContext(ctx, name, args...).Output()
 }
 
 // detectWindowsIdentity detects Windows-specific network identities.
-func (d *Detector) detectWindowsIdentity() (WindowsIdentity, error) {
-	return d.detectWindowsIdentityWithExecutor(defaultCommandExecutor)
+func (d *Detector) detectWindowsIdentity(ctx context.Context) (WindowsIdentity, error) {
+	return d.detectWindowsIdentityWithExecutor(ctx, defaultCommandExecutor)
 }
 
 // detectWindowsIdentityWithExecutor is the testable implementation that accepts a command executor.
-func (d *Detector) detectWindowsIdentityWithExecutor(executor commandExecutor) (WindowsIdentity, error) {
+func (d *Detector) detectWindowsIdentityWithExecutor(ctx context.Context, executor commandExecutor) (WindowsIdentity, error) {
 	var winID WindowsIdentity
 
 	// Try to get NetBIOS name using hostname command
-	hn, err := executor("hostname")
+	hn, err := executor(ctx, "hostname")
 	if err != nil {
 		return winID, fmt.Errorf("network: get hostname: %w", err)
 	}
 	winID.NetBIOSName = strings.TrimSpace(string(hn))
 
 	// Try to get AD FQDN using systeminfo
-	info, err := executor("systeminfo")
+	info, err := executor(ctx, "systeminfo")
 	if err != nil {
 		return winID, fmt.Errorf("network: get systeminfo: %w", err)
 	}

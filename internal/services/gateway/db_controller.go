@@ -29,7 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
-	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 )
 
 // DBController handles database, KV, blob, and audit endpoints.
@@ -329,7 +329,7 @@ func (c *DBController) handleAuditReceiptsExport(w http.ResponseWriter, r *http.
 	if sinceStr != "" {
 		if t, err := time.Parse(time.RFC3339, sinceStr); err == nil {
 			since = t
-		} else if t, err := sqliteutil.ParseTimestamp(sinceStr); err == nil {
+		} else if t, err := timesvc.ParseTimestamp(sinceStr); err == nil {
 			since = t
 		}
 	}

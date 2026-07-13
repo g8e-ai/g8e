@@ -1,7 +1,7 @@
 # Encryption Architecture
 
-Last Updated: 2026-07-06
-Version: v1.3.7
+Last Updated: 2026-07-13
+Version: v1.5.0
 
 ## Overview
 
@@ -10,9 +10,9 @@ g8e uses mandatory encryption for all sensitive data at rest. The encryption sys
 ## Design Principles
 
 - **Fail-closed**: Encryption is mandatory. Services fail to initialize without a vault.
-- **Zero-knowledge**: Vault keys are never written to disk in plaintext.
+- **Zero-knowledge**: The DEK is never persisted to disk; only its wrapped form is stored.
 - **Key rotation**: Support for re-keying without data loss.
-- **Auditability**: All encryption operations are logged to the audit store.
+- **Auditability**: Encryption state is recorded in audit records, and vault lifecycle operations are logged.
 
 ## Key Hierarchy
 
@@ -30,7 +30,7 @@ All storage services require an unlocked vault at initialization. The following 
 - **Execution vault**: Compressed stdout, compressed stderr, and compressed file diffs from command executions.
 - **Ledger**: File content stored in the git-backed ledger with `.enc` suffix.
 - **KV store adapter**: Sentinel UEI token values in the canonical KV store.
-- **Keystore**: Platform secrets, JWT signing keys, and database credentials, stored via OS keyring with file-based fallback.
+- **Keystore**: Session encryption keys, ED25519 signing keys (actuator, notary, operator, CLI), CA private keys, service certificate private keys, API keys for external services, and auditor HMAC keys, stored via OS keyring with file-based fallback.
 
 ## Vault Lifecycle
 
@@ -136,8 +136,8 @@ The vault directory defaults to `.g8e/vault` and the vault key defaults to `.g8e
 
 - All sensitive data is encrypted with AES-256-GCM.
 - Each record uses a unique nonce to prevent key reuse.
-- Vault keys are never written to disk in plaintext.
-- Vault keys are zeroed from memory when the vault is locked.
+- The DEK is never written to disk in plaintext; only its wrapped form persists.
+- Key material is zeroed from memory when the vault is locked.
 
 ### Key Management
 
@@ -186,8 +186,8 @@ To rotate vault keys:
 ### Data Protection
 
 - Sensitive data encrypted at rest.
-- Vault keys never persisted in plaintext.
-- Audit trail of all encryption operations.
+- The DEK is never persisted in plaintext; only its wrapped form is stored.
+- Encryption state tracked in audit records.
 - Support for key rotation and deletion.
 
 ### Platform Keyring Support

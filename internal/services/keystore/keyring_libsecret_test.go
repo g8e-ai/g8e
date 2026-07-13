@@ -111,7 +111,7 @@ func TestLibsecretKeyring_RetrieveNotFound(t *testing.T) {
 
 	_, err = keyring.RetrieveMasterKey()
 	require.Error(t, err)
-	assert.Equal(t, constants.ErrKeyNotFound, err)
+	assert.Equal(t, constants.ErrKeyStoreKeyNotFound, err)
 }
 
 func TestNewLinux_FallbackToFileKeyring(t *testing.T) {

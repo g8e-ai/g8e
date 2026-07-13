@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## v1.5.x
+
+| Version | Date | Description | Notes |
+|---------|------|-------------|-------|
+| 1.5.0 | 2026-07-13 | Go protocol module merge, CI modernization, and protocol updates. Merges the separate `github.com/g8e-ai/g8e/protocol` Go module into the root module. Renames `OperatorIntent*` events to `OperatorNotary*`, changes timestamp format to fixed microsecond precision, adds new CLI flags (`--tribunal-bootstrap`, `--public-base-url`, `--cors-origin`, `--passkey-rp-*`), changes MCP gateway tool discovery to proxied passthrough, adds cross-OS CI matrix (ubuntu/macOS/Windows) with cross-platform test compatibility fixes, Python pytest suite (94 tests), protocol conformance suite (151 tests), Go performance benchmarks (13 benchmarks), smoke test scripts, gitleaks secret scanning, go-licenses license compliance, cosign/sigstore artifact signing, fresh-install verification jobs, pip-audit dependency scanning, and py.typed PEP 561 marker. | [v1.5.0](docs/release_notes/v1.5.x/v1.5.0.md) |
+
 ## v1.4.x
 
 | Version | Date | Description | Notes |

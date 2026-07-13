@@ -1,0 +1,286 @@
+{
+  "_comment": "Canonical file edit wire shapes. FileEditRequest is the request for file editing operations. FileEditResult is the result. FileReadOptions and FileStats are sub-models. Serialized from FileEditRequest, FileEditResult, FileReadOptions, FileStats (internal/models/file_edit.go).",
+
+  "_authority": "operator (g8eo)",
+  "_consumers": ["client", "agent"],
+
+  "file_read_options": {
+    "_description": "Options for reading files.",
+    "start_line": {
+      "type": "integer",
+      "required": false,
+      "description": "Starting line number (1-indexed). Omitted when zero."
+    },
+    "end_line": {
+      "type": "integer",
+      "required": false,
+      "description": "Ending line number. Omitted when zero."
+    },
+    "max_lines": {
+      "type": "integer",
+      "required": false,
+      "description": "Maximum lines to read. Omitted when zero."
+    },
+    "include_stats": {
+      "type": "boolean",
+      "required": true,
+      "description": "Whether to include file statistics"
+    }
+  },
+
+  "file_stats": {
+    "_description": "File statistics.",
+    "size": {
+      "type": "integer",
+      "required": true,
+      "description": "File size in bytes"
+    },
+    "lines": {
+      "type": "integer",
+      "required": true,
+      "description": "Number of lines"
+    },
+    "mode": {
+      "type": "string",
+      "required": true,
+      "description": "File mode (e.g. 0644)"
+    },
+    "mod_time": {
+      "type": "string",
+      "format": "iso8601",
+      "required": false,
+      "description": "Modification time. Omitted when zero."
+    },
+    "is_symlink": {
+      "type": "boolean",
+      "required": true,
+      "description": "Whether the file is a symlink"
+    },
+    "symlink_target": {
+      "type": "string",
+      "required": false,
+      "description": "Symlink target path. Omitted when not a symlink."
+    },
+    "owner": {
+      "type": "string",
+      "required": false,
+      "description": "File owner. Omitted when empty."
+    },
+    "group": {
+      "type": "string",
+      "required": false,
+      "description": "File group. Omitted when empty."
+    }
+  },
+
+  "file_edit_request": {
+    "_description": "Request to perform file editing operations.",
+
+    "execution_id": {
+      "type": "string",
+      "required": true,
+      "description": "Execution identifier"
+    },
+    "case_id": {
+      "type": "string",
+      "required": true,
+      "description": "Case ID"
+    },
+    "task_id": {
+      "type": "string",
+      "required": false,
+      "description": "Task ID. Omitted when empty."
+    },
+    "investigation_id": {
+      "type": "string",
+      "required": true,
+      "description": "Investigation ID"
+    },
+    "operation": {
+      "type": "string",
+      "required": true,
+      "description": "File operation type. See constants.FileOperation."
+    },
+    "file_path": {
+      "type": "string",
+      "required": true,
+      "description": "Target file path"
+    },
+    "read_options": {
+      "type": "object",
+      "required": false,
+      "description": "Read options. Conforms to file_read_options shape. Omitted when not set.",
+      "_ref": "#file_read_options"
+    },
+    "content": {
+      "type": "string",
+      "required": false,
+      "description": "Full file content for write operations. Omitted when empty."
+    },
+    "old_content": {
+      "type": "string",
+      "required": false,
+      "description": "Old content for replace operations. Omitted when empty."
+    },
+    "new_content": {
+      "type": "string",
+      "required": false,
+      "description": "New content for replace operations. Omitted when empty."
+    },
+    "insert_position": {
+      "type": "integer",
+      "required": false,
+      "description": "Line position for insert operations. Omitted when zero."
+    },
+    "insert_content": {
+      "type": "string",
+      "required": false,
+      "description": "Content to insert. Omitted when empty."
+    },
+    "start_line": {
+      "type": "integer",
+      "required": false,
+      "description": "Start line for line-range operations. Omitted when zero."
+    },
+    "end_line": {
+      "type": "integer",
+      "required": false,
+      "description": "End line for line-range operations. Omitted when zero."
+    },
+    "patch_content": {
+      "type": "string",
+      "required": false,
+      "description": "Patch content for patch operations. Omitted when empty."
+    },
+    "create_backup": {
+      "type": "boolean",
+      "required": true,
+      "description": "Whether to create a backup before editing"
+    },
+    "create_if_missing": {
+      "type": "boolean",
+      "required": true,
+      "description": "Whether to create the file if it does not exist"
+    },
+    "encoding": {
+      "type": "string",
+      "required": false,
+      "description": "File encoding. Omitted when empty."
+    },
+    "requested_by": {
+      "type": "string",
+      "required": true,
+      "description": "Requester identifier"
+    },
+    "justification": {
+      "type": "string",
+      "required": true,
+      "description": "Human-readable justification"
+    }
+  },
+
+  "file_edit_result": {
+    "_description": "Result of a file editing operation.",
+
+    "execution_id": {
+      "type": "string",
+      "required": true,
+      "description": "Execution identifier"
+    },
+    "case_id": {
+      "type": "string",
+      "required": true,
+      "description": "Case ID"
+    },
+    "task_id": {
+      "type": "string",
+      "required": false,
+      "description": "Task ID. Omitted when empty."
+    },
+    "investigation_id": {
+      "type": "string",
+      "required": true,
+      "description": "Investigation ID"
+    },
+    "operation": {
+      "type": "string",
+      "required": true,
+      "description": "File operation type. See constants.FileOperation."
+    },
+    "file_path": {
+      "type": "string",
+      "required": true,
+      "description": "Target file path"
+    },
+    "status": {
+      "type": "string",
+      "required": true,
+      "description": "Execution status. Values: EXECUTION_STATUS_EXECUTING, EXECUTION_STATUS_COMPLETED, EXECUTION_STATUS_FAILED."
+    },
+    "content": {
+      "type": "string",
+      "required": false,
+      "description": "Resulting file content (for read operations). Omitted when empty."
+    },
+    "backup_path": {
+      "type": "string",
+      "required": false,
+      "description": "Backup file path. Omitted when empty."
+    },
+    "file_stats": {
+      "type": "object",
+      "required": false,
+      "description": "File statistics. Conforms to file_stats shape. Omitted when not set.",
+      "_ref": "#file_stats"
+    },
+    "lines_changed": {
+      "type": "integer",
+      "required": false,
+      "description": "Number of lines changed. Omitted when zero."
+    },
+    "bytes_written": {
+      "type": "integer",
+      "required": false,
+      "description": "Bytes written. Omitted when zero."
+    },
+    "start_time": {
+      "type": "string",
+      "format": "iso8601",
+      "required": false,
+      "description": "Operation start time. Omitted when zero."
+    },
+    "end_time": {
+      "type": "string",
+      "format": "iso8601",
+      "required": false,
+      "description": "Operation end time. Omitted when zero."
+    },
+    "duration_seconds": {
+      "type": "number",
+      "required": true,
+      "description": "Operation duration in seconds"
+    },
+    "error_message": {
+      "type": "string",
+      "required": false,
+      "description": "Error message. Omitted when empty."
+    },
+    "error_type": {
+      "type": "string",
+      "required": false,
+      "description": "Error type. Omitted when empty."
+    },
+    "system_info": {
+      "type": "object",
+      "required": false,
+      "description": "Execution system info. Conforms to terminal_output.json#execution_system_info. Omitted when not set.",
+      "_ref": "terminal_output.json#execution_system_info"
+    },
+    "environment_info": {
+      "type": "object",
+      "required": false,
+      "description": "Execution environment info. Conforms to terminal_output.json#execution_environment_info. Omitted when not set.",
+      "_ref": "terminal_output.json#execution_environment_info"
+    }
+  }
+}

@@ -2,7 +2,7 @@
 
 # g8e
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](protocol/docs/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](protocol/docs/spec.md)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Python Tests](https://img.shields.io/badge/Python%20Tests-94%20passed-3776AB.svg)](protocol/python/tests/) [![Conformance](https://img.shields.io/badge/Conformance-151%20tests-3776AB.svg)](protocol/conformance/) [![Secrets](https://img.shields.io/badge/secrets-gitleaks-006600.svg)](https://github.com/gitleaks/gitleaks) [![Licenses](https://img.shields.io/badge/licenses-go--licenses-006600.svg)](https://github.com/google/go-licenses) [![Signed](https://img.shields.io/badge/binaries-cosign%20signed-676BFF.svg)](https://github.com/sigstore/cosign) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](protocol/docs/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](protocol/docs/spec.md)
 
 </div>
 
@@ -238,6 +238,24 @@ The binary is available for linux, darwin, and windows on amd64 and arm64 archit
 
 For complete CLI usage, see the [Getting Started Guide](docs/guides/getting_started.md).
 
+### Use the Protocol Library
+
+If you only need the g8e wire protocol for your own client or service, consume the published packages without building the full platform:
+
+**Go module** (requires Go 1.26+):
+
+```bash
+go get github.com/g8e-ai/g8e@v1.5.0
+```
+
+**Python package** (requires Python 3.10+):
+
+```bash
+pip install g8e
+```
+
+See the [Protocol Library documentation](docs/architecture/protocol.md) for the full API reference.
+
 ### Posture Configurations
 
 The gateway supports three posture configurations:
@@ -256,7 +274,9 @@ The g8e platform is designed for environments requiring zero trust architecture 
 
 ## Status
 
-**v1.4.0**: Current release. Includes core protocol, gateway and operator roles, five-layer pipeline with Tribunal-based L2 consensus, PKI/mTLS identity, WebAuthn notary, MCP/A2A protocol translation, LFAA audit vault, native tools, JIT execution capabilities, bound vs observed state tiering, and multi-platform support. The gateway delegates L2 deliberation to an enrolled Tribunal service under consensus and notary postures. The L4 Warden verifies L2 consensus before L3 notary. The g8e Console SPA provides a browser-based dashboard for passkey management, interactive L3 transaction approval, and real-time SSE audit streaming. Browser-based passkey enrollment via the console SPA is the sole registration path. One-time enrollment tokens secure the passkey enrollment flow. A layered L3 authorization model requires passkey proof for all callers, with mTLS transport authentication as an additional layer for CLI sessions. The CLI approval flow opens a browser for WebAuthn ceremonies and receives transaction status via SSE notifications. CORS support enables cross-origin browser access. Environment variable resolution allows gateway flags to be set without CLI arguments. The gateway supports foreground mode for development and Docker deployments. New `g8e gui` and `g8e tunnel` command suites enable external frontend enrollment and Cloudflare Tunnel management. The L5 Actuator is refactored to use a cleaner `ExecutionHandler` interface. OpenAPI/Swagger annotations are added across gateway endpoints. The `operator run` command is renamed to `operator start`, and running `g8e` with no arguments now launches the TUI by default.
+**v1.5.0**: Current release. Merges the separate `github.com/g8e-ai/g8e/protocol` Go sub-module into the root `github.com/g8e-ai/g8e` module, simplifying dependency management for external consumers — a single `go get github.com/g8e-ai/g8e@vX.Y.Z` now provides both the platform and protocol packages. Import paths remain unchanged (`github.com/g8e-ai/g8e/protocol/...`). Includes core protocol, gateway and operator roles, five-layer pipeline with Tribunal-based L2 consensus, PKI/mTLS identity, WebAuthn notary, MCP/A2A protocol translation, LFAA audit vault, native tools, JIT execution capabilities, bound vs observed state tiering, and multi-platform support. The gateway delegates L2 deliberation to an enrolled Tribunal service under consensus and notary postures. The L4 Warden verifies L2 consensus before L3 notary. The g8e Console SPA provides a browser-based dashboard for passkey management, interactive L3 transaction approval, and real-time SSE audit streaming. Browser-based passkey enrollment via the console SPA is the sole registration path. One-time enrollment tokens secure the passkey enrollment flow. A layered L3 authorization model requires passkey proof for all callers, with mTLS transport authentication as an additional layer for CLI sessions. The CLI approval flow opens a browser for WebAuthn ceremonies and receives transaction status via SSE notifications. CORS support enables cross-origin browser access. Environment variable resolution allows gateway flags to be set without CLI arguments. The gateway supports foreground mode for development and Docker deployments. New `g8e gui` and `g8e tunnel` command suites enable external frontend enrollment and Cloudflare Tunnel management. The L5 Actuator is refactored to use a cleaner `ExecutionHandler` interface. OpenAPI/Swagger annotations are added across gateway endpoints. The `operator run` command is renamed to `operator start`, and running `g8e` with no arguments now launches the TUI by default.
+
+CI modernization adds a cross-OS test matrix (ubuntu/macOS/Windows), 94 Python pytest tests, 151 protocol conformance tests enforcing Go/Python/JSON parity, 13 Go performance benchmarks, smoke test scripts for clean-environment install verification, gitleaks secret scanning, go-licenses license compliance checks, cosign/sigstore keyless binary signing, fresh-install verification jobs for both Go and Python releases, pip-audit dependency vulnerability scanning, and a `py.typed` PEP 561 marker for type checker support.
 
 ## Documentation
 

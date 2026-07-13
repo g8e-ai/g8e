@@ -15,10 +15,9 @@ package storage
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 )
@@ -108,7 +107,7 @@ func (hh *HistoryHandler) HandleFetchHistory(requestJSON []byte) (*operatorv1.Fe
 		result.WebSession = &operatorv1.AuditWebSession{
 			Id:           session.ID,
 			Title:        session.Title,
-			CreatedAt:    session.CreatedAt.UTC().Format(time.RFC3339Nano),
+			CreatedAt:    timesvc.FormatTimestamp(session.CreatedAt),
 			UserIdentity: session.UserIdentity,
 		}
 	}
@@ -117,7 +116,7 @@ func (hh *HistoryHandler) HandleFetchHistory(requestJSON []byte) (*operatorv1.Fe
 		auditEvent := &operatorv1.AuditEvent{
 			Id:                  event.ID,
 			OperatorSessionId:   event.OperatorSessionID,
-			Timestamp:           sqliteutil.FormatTimestamp(event.Timestamp),
+			Timestamp:           timesvc.FormatTimestamp(event.Timestamp),
 			Type:                string(event.Type),
 			ContentText:         event.ContentText,
 			CommandRaw:          event.CommandRaw,
@@ -193,7 +192,7 @@ func (hh *HistoryHandler) HandleFetchFileHistory(requestJSON []byte) (*operatorv
 	for _, entry := range history {
 		result.History = append(result.History, &operatorv1.FileHistoryEntry{
 			CommitHash: entry.CommitHash,
-			Timestamp:  sqliteutil.FormatTimestamp(entry.Timestamp),
+			Timestamp:  timesvc.FormatTimestamp(entry.Timestamp),
 			Message:    entry.Message,
 		})
 	}

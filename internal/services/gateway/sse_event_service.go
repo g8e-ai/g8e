@@ -22,6 +22,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 )
 
 // SSEEventService provides server-sent event storage and retrieval.
@@ -79,7 +80,7 @@ func (s *SSEEventService) SSEEventsAppend(route SSERoute, eventType, payload, pr
 	if err := route.validate(); err != nil {
 		return err
 	}
-	now := sqliteutil.NowTimestamp()
+	now := timesvc.NowTimestamp()
 	_, err := s.db.ExecWithRetry(
 		"INSERT INTO sse_events (web_session_id, cli_session_id, user_id, event_type, payload, producer_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		nullIfEmpty(route.WebSessionID), nullIfEmpty(route.CLISessionID), nullIfEmpty(route.UserID), eventType, payload, nullIfEmpty(producerID), now,
@@ -102,7 +103,7 @@ func nullIfEmpty(s string) sql.NullString {
 // SSEEventsCleanup deletes events older than the given max age. This prevents
 // the ring buffer from growing unboundedly between reconnections.
 func (s *SSEEventService) SSEEventsCleanup(maxAge time.Duration) (int64, error) {
-	cutoff := sqliteutil.FormatTimestamp(time.Now().UTC().Add(-maxAge))
+	cutoff := timesvc.FormatTimestamp(time.Now().UTC().Add(-maxAge))
 	result, err := s.db.ExecWithRetry("DELETE FROM sse_events WHERE created_at < ?", cutoff)
 	if err != nil {
 		return 0, fmt.Errorf("sse_event_service: cleanup: %w", err)

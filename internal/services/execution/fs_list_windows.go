@@ -29,13 +29,6 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
-// getNlink is a stub for Windows compatibility.
-// Windows does not have the same nlink concept as Unix, and the Windows
-// FsListService implementation does not use syscall.Stat_t or call this function.
-func getNlink(interface{}) uint64 {
-	return 0
-}
-
 // FsListService handles file system listing operations on Windows
 type FsListService struct {
 	workDir string
@@ -95,14 +88,6 @@ func (s *FsListService) ExecuteFsList(ctx context.Context, req *models.FsListReq
 	result.Path = absPath
 
 	// Apply limits
-	maxDepth := req.MaxDepth
-	if maxDepth < 0 {
-		maxDepth = constants.FsListDefaultDepth
-	}
-	if maxDepth > constants.FsListMaxDepth {
-		maxDepth = constants.FsListMaxDepth
-	}
-
 	maxEntries := req.MaxEntries
 	if maxEntries <= 0 {
 		maxEntries = constants.FsListDefaultEntries

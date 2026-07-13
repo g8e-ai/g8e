@@ -92,12 +92,6 @@ github.com/erikgeiser/coninput
 # github.com/fxamacker/cbor/v2 v2.9.2
 ## explicit; go 1.20
 github.com/fxamacker/cbor/v2
-# github.com/g8e-ai/g8e/protocol v0.0.0 => ./protocol
-## explicit; go 1.26
-github.com/g8e-ai/g8e/protocol
-github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1
-github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1
-github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1
 # github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376
 ## explicit; go 1.13
 github.com/go-git/gcfg
@@ -483,4 +477,3 @@ modernc.org/memory
 modernc.org/sqlite
 modernc.org/sqlite/lib
 modernc.org/sqlite/vtab
-# github.com/g8e-ai/g8e/protocol => ./protocol

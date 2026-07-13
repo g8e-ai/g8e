@@ -30,7 +30,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/httpclient"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 )
 
 // BootstrapConfig represents the configuration received from Auth Services
@@ -197,7 +197,7 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 			return nil, fmt.Errorf("%w: %w", constants.ErrBootstrapRequestBuild, err)
 		}
 		req.Header.Set(constants.HeaderContentType, "application/json")
-		req.Header.Set(constants.HeaderXRequestTimestamp, sqliteutil.NowTimestamp())
+		req.Header.Set(constants.HeaderXRequestTimestamp, timesvc.NowTimestamp())
 
 		bs.logger.Info("Authentication request transmitted", "attempt", attempt)
 

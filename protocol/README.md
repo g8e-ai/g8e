@@ -6,7 +6,7 @@ Protocol library for the g8e zero-trust execution platform. Provides protobuf sc
 
 ### Go
 
-The Go module requires Go 1.26 and depends on `google.golang.org/grpc` and `google.golang.org/protobuf`. Install with `go get github.com/g8e-ai/g8e/protocol`.
+The Go module is part of the root module `github.com/g8e-ai/g8e` and requires Go 1.26. It depends on `google.golang.org/grpc` and `google.golang.org/protobuf`. Install with `go get github.com/g8e-ai/g8e`.
 
 ### Python
 
@@ -16,13 +16,10 @@ The Python package requires Python 3.10 or later and depends on `pydantic>=2.0.0
 
 ```
 protocol/
-  go.mod                     Go module definition (github.com/g8e-ai/g8e/protocol)
-  go.sum                     Go dependency checksums
   go_package.go              Package doc for the Go protocol package
   workload_identity.go       SPIFFE workload identity generation and validation
   workload_identity_test.go  Unit tests for workload identity helpers
   Makefile                   Test, format, vet, lint, and OpenAPI targets
-  vendor/                    Vendored Go dependencies
   proto/                     Protobuf schema definitions and generated Go code
     buf.yaml                 Buf module config (buf.build/g8e/platform)
     g8e/common/v1/           Common governance types (common.proto, common.pb.go)
@@ -171,7 +168,7 @@ The `Makefile` provides the following targets:
 - `make lint`: Run `golangci-lint`
 - `make openapi`: Generate OpenAPI specification from protobuf (requires buf)
 
-Protobuf code generation uses buf. The generation config is in `buf.gen.yaml` at the repository root. Run `buf generate` from the repository root to regenerate Go structs, gRPC stubs, and Markdown API documentation into `proto/`, `proto/`, and `docs/reference/api/` respectively.
+Protobuf code generation uses buf. The generation config is in `buf.gen.yaml` at the repository root. Run `make proto` from the repository root to regenerate Go structs, gRPC stubs, and Markdown API documentation.
 
 ## Protocol Versioning
 

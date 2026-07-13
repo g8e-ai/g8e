@@ -23,10 +23,10 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -364,14 +364,14 @@ func TestAuditVaultPrune(t *testing.T) {
 
 	// 2. Insert events
 	oldTime := time.Now().AddDate(0, 0, -10)
-	oldTimestamp := sqliteutil.FormatTimestamp(oldTime)
+	oldTimestamp := timesvc.FormatTimestamp(oldTime)
 	_, err = avs.db.Exec("INSERT INTO events (id, timestamp, type, operator_session_id) VALUES (?, ?, ?, ?)",
 		1, oldTimestamp, "test.event", "old-session")
 	require.NoError(t, err)
 
 	// Insert a recent event
 	recentTime := time.Now().AddDate(0, 0, -2)
-	recentTimestamp := sqliteutil.FormatTimestamp(recentTime)
+	recentTimestamp := timesvc.FormatTimestamp(recentTime)
 	_, err = avs.db.Exec("INSERT INTO events (id, timestamp, type, operator_session_id) VALUES (?, ?, ?, ?)",
 		2, recentTimestamp, "test.event", "recent-session")
 	require.NoError(t, err)

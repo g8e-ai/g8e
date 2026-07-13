@@ -17,21 +17,19 @@
 
     "settings": {
       "llm": {
-        "_description": "Maps to LLMSettings model.",
-        "provider":              { "type": "string",  "required": false, "values": ["openai", "ollama", "gemini", "anthropic"] },
-        "llm_model":             { "type": "string",  "required": false, "description": "Primary LLM model name (alias for primary_model)." },
-        "llm_assistant_model":   { "type": "string",  "required": false, "description": "Assistant LLM model name (alias for assistant_model)." },
-        "openai_endpoint":       { "type": "string",  "required": false },
-        "openai_api_key":        { "type": "string",  "required": false },
-        "ollama_endpoint":       { "type": "string",  "required": false },
-        "ollama_api_key":        { "type": "string",  "required": false },
-        "gemini_api_key":        { "type": "string",  "required": false },
-        "anthropic_endpoint":    { "type": "string",  "required": false },
-        "anthropic_api_key":     { "type": "string",  "required": false },
-        "llm_max_tokens":        { "type": "integer", "required": false },
-        "llm_command_gen_enabled":  { "type": "boolean", "required": false },
-        "llm_command_gen_verifier": { "type": "boolean", "required": false },
-        "llm_command_gen_passes":   { "type": "integer", "required": false }
+        "_description": "Maps to LLMSettings model. Uses generic provider fields instead of provider-specific keys. Aliases shown in brackets.",
+        "llm_primary_provider":   { "type": "string",  "required": false, "description": "Primary LLM provider (alias: primary_provider)" },
+        "llm_assistant_provider": { "type": "string",  "required": false, "description": "Assistant LLM provider (alias: assistant_provider)" },
+        "llm_lite_provider":      { "type": "string",  "required": false, "description": "Lite LLM provider (alias: lite_provider)" },
+        "llm_model":              { "type": "string",  "required": false, "description": "Primary LLM model name (alias: primary_model)" },
+        "llm_assistant_model":    { "type": "string",  "required": false, "description": "Assistant LLM model name (alias: assistant_model)" },
+        "llm_lite_model":         { "type": "string",  "required": false, "description": "Lite LLM model name (alias: lite_model)" },
+        "primary_api_key":        { "type": "string",  "required": false, "description": "Primary provider API key" },
+        "primary_endpoint":       { "type": "string",  "required": false, "description": "Primary provider endpoint URL" },
+        "assistant_api_key":      { "type": "string",  "required": false, "description": "Assistant provider API key" },
+        "assistant_endpoint":     { "type": "string",  "required": false, "description": "Assistant provider endpoint URL" },
+        "lite_api_key":           { "type": "string",  "required": false, "description": "Lite provider API key" },
+        "lite_endpoint":          { "type": "string",  "required": false, "description": "Lite provider endpoint URL" }
       },
       "search": {
         "_description": "Maps to SearchSettings model.",
@@ -45,6 +43,17 @@
         "_description": "Maps to EvalJudgeSettings model. Keys use alias names.",
         "eval_judge_model":       { "type": "string",  "required": false },
         "eval_judge_max_tokens":  { "type": "integer", "required": false }
+      },
+      "command_validation": {
+        "_description": "Maps to CommandValidationSettings model. Operator command safety and validation configuration.",
+        "enable_whitelisting":    { "type": "boolean", "required": false, "default": false },
+        "whitelisted_commands":   { "type": "string",  "required": false, "default": "" },
+        "enable_blacklisting":    { "type": "boolean", "required": false, "default": true }
+      },
+      "batch_execution": {
+        "_description": "Maps to BatchExecutionSettings model. Batch execution configuration for Operator tools.",
+        "max_concurrency": { "type": "integer", "required": false, "default": 10, "description": "Maximum concurrent tool executions (1-64)" },
+        "fail_fast":       { "type": "boolean", "required": false, "default": false }
       }
     },
 

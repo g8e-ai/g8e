@@ -1,13 +1,13 @@
 # Storage Architecture
 
-Last Updated: 2026-07-12
-Version: v1.4.0
+Last Updated: 2026-07-13
+Version: v1.5.0
 
 ## Overview
 
-The g8e storage layer is split into discrete services, each responsible for a specific persistence concern. All services use SQLite as their backing store, with mandatory [encryption at rest](./encryption.md) enforced for sensitive data.
+The g8e storage layer is split into discrete services, each responsible for a specific persistence concern. Most services use SQLite as their backing store; the Ledger uses git for file version control, and the History Handler is a stateless coordinator that delegates to the Audit Store and Ledger. Mandatory [encryption at rest](./encryption.md) is enforced for sensitive data.
 
-Services that handle sensitive content require an unlocked vault and operate with fail-closed semantics: they return errors rather than writing plaintext when the vault is locked. Services that store only public or non-sensitive data (nonces, governance envelopes, attestations) do not require encryption.
+Services that handle sensitive content require an unlocked vault and operate with fail-closed semantics: they return errors rather than writing plaintext when the vault is locked. Services that store only public or non-sensitive data (nonces, governance envelopes, attestations) do not require encryption. The Audit Store and Token Store both operate on the shared gateway database (`g8e.db`), managed by the CanonicalDBService, rather than maintaining separate database files.
 
 The storage layer consists of the following services:
 
@@ -26,7 +26,7 @@ The storage layer consists of the following services:
 
 ### Audit Store
 
-The Audit Store is the authoritative append-only record of operator sessions, events, file mutations, and signed action receipts. It tracks all system activity and provides the data backbone for audit queries and compliance reporting.
+The Audit Store is the authoritative append-only record of operator sessions, events, file mutations, and signed action receipts. It tracks all system activity and provides the data backbone for audit queries and compliance reporting. The Audit Store operates on the shared gateway database (`g8e.db`) alongside the KV store, document store, and other gateway services, sharing a single SQLite connection pool managed by the CanonicalDBService.
 
 **Capabilities:**
 
@@ -167,7 +167,9 @@ Behavior when the vault is locked varies by service:
 
 Most services run a background pruner that periodically deletes records older than the configured retention threshold and removes the oldest rows when the database exceeds the configured size limit. Pruning also runs incremental vacuum to reclaim space without a full database lock.
 
-The Replay Store is the exception: it does not start a background pruner. Callers invoke pruning and stale reservation cleanup directly.
+Two services do not start a background pruner:
+- **Replay Store**: Callers invoke pruning and stale reservation cleanup directly.
+- **Commitment Ledger**: Attestations are permanent audit records and are not pruned.
 
 ---
 

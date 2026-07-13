@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-07-12
-Version: v1.4.0
+Last Updated: 2026-07-13
+Version: v1.5.0
 
 ---
 
@@ -222,6 +222,32 @@ The envelope must include `transaction_hash`, `nonce`, `expires_at`, and `state_
 
 ---
 
+## Protocol Library for Client Development
+
+Operators and CLI clients connecting to the g8e Gateway can use the g8e Protocol Library for protobuf schema definitions, SPIFFE workload identity helpers, and JSON protocol constants. The library is published as both a Go module and a Python package, both sharing the same version number as the platform binary.
+
+### Go Module
+
+```bash
+go get github.com/g8e-ai/g8e@v1.5.0
+```
+
+The module provides protobuf types for governance envelopes, operator messages, and common protocol structures. It also includes SPIFFE workload identity helpers for generating operator, CLI, and gateway identities used in mTLS enrollment.
+
+See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
+
+### Python Package
+
+For operator-side tooling or Python-based services:
+
+```bash
+pip install g8e==1.5.0
+```
+
+Provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
+
+---
+
 ## Maintenance
 
 ### Log Management
@@ -410,3 +436,4 @@ Certificate revocation is enforced on every mTLS handshake. The gateway maintain
 ## Next Steps
 
 - **[Build Apps](./build_apps.md)**: Build g8e-compatible applications using a gateway.
+- **[Protocol Library](../architecture/protocol.md)**: Go module and Python package API reference, constants, models, and usage examples.

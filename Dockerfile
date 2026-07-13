@@ -29,7 +29,6 @@ WORKDIR /build
 
 # Copy go mod files and vendored dependencies for air-gapped builds
 COPY go.mod go.sum vendor/ ./
-COPY protocol/go.mod protocol/go.sum protocol/vendor/ ./protocol/
 
 # Use vendored modules — no network access required
 ENV GOFLAGS=-mod=vendor

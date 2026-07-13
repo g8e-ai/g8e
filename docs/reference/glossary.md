@@ -4,8 +4,8 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 2026-07-12
-Version: v1.4.0
+Last Updated: 2026-07-13
+Version: v1.5.0
 
 Core terminology for the g8e protocol, g8e Gateway, g8e Operator, and ecosystem integration (MCP, A2A). Terms are organized alphabetically.
 
@@ -82,7 +82,7 @@ A gateway instance in a federated deployment that can communicate with other gat
 
 ## g8e Gateway
 
-The g8e Node launched with gateway flags, serving as the Policy Decision Point (PDP).
+The g8e binary file launched with gateway flags, serving as the Policy Decision Point (PDP).
 
 ---
 
@@ -98,7 +98,7 @@ The posture is set at startup and affects whether L2 signatures and L3 proofs ar
 
 ## g8e Operator
 
-The g8e Node launched to connect to a g8e Gateway, serving as the Policy Execution Point (PEP) and MCP server.
+The g8e binary file launched to connect to a g8e Gateway, serving as the Policy Execution Point (PEP) and MCP server.
 
 ---
 
@@ -180,13 +180,13 @@ A cryptographic artifact produced during L2 Consensus verification. It is a SHA-
 
 ## Mutual TLS (mTLS)
 
-Two-way TLS authentication where both client and server verify each other's certificates. Used between g8e Operators and the g8e Gateway to ensure g8e Node authenticity and prevent forged connections. The g8e Gateway operates as a Certificate Authority (CA) issuing Operator certificates with SPIFFE URI SAN identity.
+Two-way TLS authentication where both client and server verify each other's certificates. Used between g8e Operators and the g8e Gateway to ensure g8e binary file authenticity and prevent forged connections. The g8e Gateway operates as a Certificate Authority (CA) issuing Operator certificates with SPIFFE URI SAN identity.
 
 ---
 
-## g8e Node
+## g8e binary file
 
-The pre-compiled g8e Node that can be launched as a g8e Gateway or g8e Operator. The same artifact serves both roles, selected by command-line flags.
+The pre-compiled g8e binary file that can be launched as a g8e Gateway or g8e Operator. The same artifact serves both roles, selected by command-line flags.
 
 ---
 

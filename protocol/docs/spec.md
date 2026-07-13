@@ -4,8 +4,8 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-07-10
-Version: v1.3.10
+Last Updated: 2026-07-13
+Version: v1.5.0
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -114,7 +114,7 @@ All envelopes use canonical JSON (protojson) encoding for client-facing surfaces
 - **Signing basis**: deterministic `transaction_hash` computed from normalized envelope fields in proto field order
 - **Internal storage**: protobuf bytes (implementation detail)
 
-The transaction hash is computed from the following fields in order: `action_type`, `target_resource`, `payload` (base64-encoded), `state_merkle_root`, `nonce`, `expires_at` (UTC RFC3339Nano), `intent_data` (canonicalized map with sorted keys), `requestor_user_id`, and `acting_app_id`. The result is hashed with SHA-256 and hex-encoded. The L3 proof is intentionally excluded from the hash so that L2 consensus can sign before the human notary is asked to authorize.
+The transaction hash is computed from the following fields in order: `action_type`, `target_resource`, `payload` (base64-encoded), `state_merkle_root`, `nonce`, `expires_at` (UTC fixed microsecond precision), `intent_data` (canonicalized map with sorted keys), `requestor_user_id`, and `acting_app_id`. The result is hashed with SHA-256 and hex-encoded. The L3 proof is intentionally excluded from the hash so that L2 consensus can sign before the human notary is asked to authorize.
 
 This ensures compatibility with JSON-based ecosystems while maintaining typed schema validation.
 
@@ -205,6 +205,7 @@ The protocol defines canonical event types in `../../protocol/constants/events.j
 - `AiLLMChatIterationTextChunkReceived`, `AiLLMChatIterationTextCompleted`, `AiLLMChatIterationTextReceived`, `AiLLMChatIterationTextTruncated`
 - `AiLLMChatIterationThinkingStarted`, `AiLLMChatIterationThinkingUpdate`, `AiLLMChatIterationThinkingEnd`
 - `AiLLMChatIterationCitationsReceived`
+- `AiLLMChatIterationThinkingStopped`
 - `AiLLMChatFilterEvent`, `AiLLMChatMessageDeadLettered`, `AiLLMChatMessageProcessingFailed`, `AiLLMChatMessageReplayed`, `AiLLMChatMessageSent`
 - `AiLLMChatStopHide`, `AiLLMChatStopShow`, `AiLLMChatSubmitted`
 - `AiLLMConfigFailed`, `AiLLMConfigReceived`, `AiLLMConfigRequested`
@@ -212,13 +213,17 @@ The protocol defines canonical event types in `../../protocol/constants/events.j
 - `AiLLMToolG8eCommandConstraintsCompleted`, `AiLLMToolG8eCommandConstraintsFailed`, `AiLLMToolG8eCommandConstraintsReceived`, `AiLLMToolG8eCommandConstraintsRequested`
 - `AiLLMToolG8eInvestigationQueryCompleted`, `AiLLMToolG8eInvestigationQueryFailed`, `AiLLMToolG8eInvestigationQueryReceived`, `AiLLMToolG8eInvestigationQueryRequested`
 - `AiLLMToolG8eWebSearchCompleted`, `AiLLMToolG8eWebSearchFailed`, `AiLLMToolG8eWebSearchReceived`, `AiLLMToolG8eWebSearchRequested`
+- `AiReputationStateUpdated`
 - `AiTriageClarificationAnswered`, `AiTriageClarificationQuestions`, `AiTriageClarificationSkipped`, `AiTriageClarificationTimeout`
+- `AiTribunalSessionStarted`, `AiTribunalSessionCompleted`, `AiTribunalSessionDisabled`, `AiTribunalSessionGenerationFailed`, `AiTribunalSessionModelNotConfigured`, `AiTribunalSessionProviderUnavailable`, `AiTribunalSessionSystemError`, `AiTribunalSessionAuditorFailed`, `AiTribunalSessionWardenBlocked`
+- `AiTribunalVotingPassCompleted`, `AiTribunalVotingConsensusReached`, `AiTribunalVotingConsensusNotReached`, `AiTribunalVotingConsensusFailed`, `AiTribunalVotingRoundStarted`, `AiTribunalVotingRoundCompleted`, `AiTribunalVotingRound2Started`, `AiTribunalVotingRound2ConsensusReached`, `AiTribunalVotingRound2ConsensusFailed`, `AiTribunalVotingDissentRecorded`, `AiTribunalVotingAuditStarted`, `AiTribunalVotingAuditCompleted`
 
 ### Application Events
-- `AppCaseAssigned`, `AppCaseCleared`, `AppCaseClosed`, `AppCaseCreated`, `AppCaseCreationRequested`, `AppCaseEscalated`, `AppCaseResolved`, `AppCaseSelected`, `AppCaseSwitched`, `AppCaseUpdateRequested`, `AppCaseUpdated`
+- `AppCaseAssigned`, `AppCaseCleared`, `AppCaseClosed`, `AppCaseCreated`, `AppCaseCreationRequested`, `AppCaseDeleted`, `AppCaseEscalated`, `AppCaseResolved`, `AppCaseSelected`, `AppCaseSwitched`, `AppCaseUpdateRequested`, `AppCaseUpdated`
 - `AppInvestigationChatMessageAi`, `AppInvestigationChatMessageSystem`, `AppInvestigationChatMessageUser`
-- `AppInvestigationClosed`, `AppInvestigationCreated`, `AppInvestigationEscalated`, `AppInvestigationListCompleted`, `AppInvestigationListFailed`, `AppInvestigationListReceived`, `AppInvestigationListRequested`, `AppInvestigationLoaded`, `AppInvestigationRequested`, `AppInvestigationStarted`
+- `AppInvestigationClosed`, `AppInvestigationCreated`, `AppInvestigationDeleted`, `AppInvestigationEscalated`, `AppInvestigationListCompleted`, `AppInvestigationListFailed`, `AppInvestigationListReceived`, `AppInvestigationListRequested`, `AppInvestigationLoaded`, `AppInvestigationRequested`, `AppInvestigationStarted`
 - `AppInvestigationStatusUpdatedClosed`, `AppInvestigationStatusUpdatedEscalated`, `AppInvestigationStatusUpdatedOpen`, `AppInvestigationStatusUpdatedResolved`, `AppInvestigationUpdated`
+- `AppMemoryCreated`, `AppMemoryUpdated`
 - `AppTaskAssigned`, `AppTaskCompleted`, `AppTaskCreated`, `AppTaskFailed`, `AppTaskStarted`, `AppTaskUpdated`
 
 ### Command Execution Events
@@ -240,7 +245,7 @@ The protocol defines canonical event types in `../../protocol/constants/events.j
 
 ### Audit & Governance Events
 - `OperatorAuditCommandRecorded`, `OperatorAuditUserRecorded`, `OperatorAuditAiRecorded`
-- `OperatorAuditDirectCommandRecorded`, `OperatorAuditDirectCommandResultRecorded`
+- `OperatorAuditDirectCommandRecorded`, `OperatorAuditDirectCommandResultRecorded`, `OperatorAuditMcpCallRecorded`
 - `OperatorBootstrapRequested`, `OperatorBootstrapReceived`, `OperatorBootstrapConfigReceived`, `OperatorBootstrapCompleted`, `OperatorBootstrapFailed`
 
 ### MCP/A2A Events
@@ -250,6 +255,7 @@ The protocol defines canonical event types in `../../protocol/constants/events.j
 ### Network Events
 - `OperatorNetworkPingRequested`, `OperatorNetworkPingReceived`, `OperatorNetworkPingCompleted`, `OperatorNetworkPingFailed`
 - `OperatorNetworkPortCheckRequested`, `OperatorNetworkPortCheckReceived`, `OperatorNetworkPortCheckStarted`, `OperatorNetworkPortCheckCompleted`, `OperatorNetworkPortCheckFailed`
+- `OperatorPortCheckRequested`
 
 ### Operator Lifecycle Events
 - `OperatorBound`, `OperatorDeviceRegistered`, `OperatorUnbound`
@@ -259,9 +265,8 @@ The protocol defines canonical event types in `../../protocol/constants/events.j
 - `OperatorSlotInitializationFailed`
 - `OperatorContextChanged`
 
-### Intent Events
-- `OperatorIntentRequested`, `OperatorIntentGranted`, `OperatorIntentDenied`, `OperatorIntentRevokeRequested`, `OperatorIntentRevoked`
-- `OperatorIntentApprovalRequested`, `OperatorIntentApprovalGranted`, `OperatorIntentApprovalRejected`
+### Notary Events
+- `OperatorNotaryApprovalRequested`, `OperatorNotaryTransactionExpired`
 
 ### Other Events
 - `OperatorEvalAnswerRequested`
@@ -282,7 +287,7 @@ The protocol defines canonical event types in `../../protocol/constants/events.j
 - `PlatformConsoleLogConnectedConfirmed`, `PlatformConsoleLogEntryReceived`
 - `PlatformExternalServiceConfigured`
 - `PlatformNotification`
-- `PlatformSentinelModeChanged`
+- `PlatformVaultModeChanged`
 - `PlatformSseConnectionClosed`, `PlatformSseConnectionError`, `PlatformSseConnectionEstablished`, `PlatformSseConnectionFailed`, `PlatformSseConnectionOpened`, `PlatformSseKeepaliveSent`
 - `PlatformTelemetryAuditLogged`, `PlatformTelemetryErrorLogged`, `PlatformTelemetryHealthReported`, `PlatformTelemetryPerformanceRecorded`
 - `PlatformTerminalClosed`, `PlatformTerminalMaximized`, `PlatformTerminalMinimized`, `PlatformTerminalOpened`
@@ -360,9 +365,15 @@ The g8e platform uses CLI flags for production configuration. All paths are comp
 
 - `G8E_TRIBUNAL_ID`: ID of the TribunalPolicy for L2 consensus (required for `--consensus` posture)
 - `G8E_TRIBUNAL_URL`: URL of the Tribunal service for L2 deliberation (e.g. `https://localhost:8443/tribunal/v1/deliberate`)
+- `G8E_TRIBUNAL_BOOTSTRAP`: Path to a JSON file that seeds a TribunalPolicy and trusted signers at startup (overrides `--tribunal-bootstrap`)
 - `G8E_VAULT_DIR`: Directory for vault data (overrides `--vault-dir`)
 - `G8E_VAULT_KEY`: Path to vault private key (overrides `--vault-key`)
 - `G8E_VAULT_REQUIRE_UNLOCK`: Set to `true` to require vault unlock at startup (overrides `--vault-require-unlock`)
+- `G8E_PASSKEY_RP_ID`: RP ID for passkey operations (overrides `--passkey-rp-id`)
+- `G8E_PASSKEY_RP_NAME`: RP Name for passkey operations (overrides `--passkey-rp-name`)
+- `G8E_PASSKEY_RP_ORIGINS`: Comma-separated additional RP origins for passkey operations (overrides `--passkey-rp-origin`)
+- `G8E_PUBLIC_BASE_URL`: Public base URL for approval links and host validation (overrides `--public-base-url`)
+- `G8E_ALLOWED_ORIGINS`: Comma-separated allowed CORS origins for cross-origin browser access (overrides `--cors-origin`)
 
 CLI flags:
 
@@ -373,8 +384,8 @@ CLI flags:
 - `--vault-dir <dir>`: Directory for vault data (default: `.g8e/secrets/vault`)
 - `--vault-key <path>`: Path to vault private key (default: auto-generated in vault dir)
 - `--vault-require-unlock`: Require vault to be unlocked at startup (fail if vault cannot be unlocked)
-- `--http-port <port>`: HTTP port for bootstrap and MCP routes (default: 8080)
-- `--https-port <port>`: HTTPS port for mTLS API and public surface (default: 8443)
+- `--http-port <port>`: HTTP port for bootstrap and MCP routes (flag default: 0, auto-resolved from `constants.Ports`; effective default: 8080)
+- `--https-port <port>`: HTTPS port for mTLS API and public surface (flag default: 0, auto-resolved from `constants.Ports`; effective default: 8443)
 - `--passkey-rp-id <id>`: RP ID for passkey operations (default: localhost)
 - `--passkey-rp-name <name>`: RP Name for passkey operations (default: g8e)
 - `--rate-limit-rps <n>`: Gateway requests per second limit (set to 0 to disable)
@@ -383,9 +394,13 @@ CLI flags:
 - `--cert-mode <mode>`: Certificate mode: full (all hostnames/IPs), localhost (only localhost)
 - `--tribunal-id <id>`: ID of the TribunalPolicy for L2 consensus (required for `--consensus` posture, env: `G8E_TRIBUNAL_ID`)
 - `--tribunal-url <url>`: URL of the Tribunal service for L2 deliberation (env: `G8E_TRIBUNAL_URL`)
+- `--tribunal-bootstrap <path>`: Path to a JSON file that seeds a TribunalPolicy and trusted signers at startup (env: `G8E_TRIBUNAL_BOOTSTRAP`)
 - `--mcp-downstream-url <url>`: URL of a downstream MCP server to proxy discovery and execution to (default: none)
 - `--a2a-downstream-url <url>`: URL of a downstream A2A server to proxy execution to (default: none)
-- `--follow`: Follow log output after starting (like tail -f)
+- `--public-base-url <url>`: Public base URL for approval links and host validation (env: `G8E_PUBLIC_BASE_URL`)
+- `--cors-origin <origin>`: Allowed CORS origin for cross-origin browser access (repeatable, env: `G8E_ALLOWED_ORIGINS`)
+- `--passkey-rp-origin <origin>`: Additional RP origin for passkey operations (repeatable, env: `G8E_PASSKEY_RP_ORIGINS`)
+- `--follow`: Run gateway in foreground (Ctrl+C stops gateway)
 
 ---
 

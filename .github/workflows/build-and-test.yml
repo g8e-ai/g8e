@@ -18,7 +18,7 @@ jobs:
   ci:
     name: Build & Test
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -49,7 +49,7 @@ jobs:
 
       - name: Verify Version Sync
         run: |
-          VERSION=$(cat VERSION | tr -d '\n' | sed 's/^v//')
+          VERSION=$(cat VERSION | tr -d '\n\r' | sed 's/^v//')
           PY_VERSION=$(grep -E '^version = ' protocol/python/pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
           PY_INIT_VERSION=$(grep -E '^__version__ = ' protocol/python/g8e/__init__.py | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
           if [ "$PY_VERSION" != "$VERSION" ] || [ "$PY_INIT_VERSION" != "$VERSION" ]; then
@@ -86,3 +86,162 @@ jobs:
 
       - name: Cross-Compile (Windows)
         run: make build-windows
+
+  python-tests:
+    name: Python Package Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install package and test dependencies
+        working-directory: protocol/python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" 2>/dev/null || pip install -e . pytest
+
+      - name: Verify version
+        run: |
+          VERSION=$(cat VERSION | tr -d '\n\r' | sed 's/^v//')
+          python -c "import g8e; assert g8e.__version__ == '$VERSION', f'Version mismatch: {g8e.__version__} != $VERSION'"
+          echo "Python version sync OK: $VERSION"
+
+      - name: Run pytest suite
+        working-directory: protocol/python
+        run: python -m pytest tests/ -v
+
+      - name: Run examples (smoke test)
+        working-directory: protocol/python
+        run: |
+          python examples/constants_example.py
+          python examples/models_example.py
+
+  python-audit:
+    name: Python Dependency Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+
+      - name: Install package
+        working-directory: protocol/python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Run pip-audit
+        run: |
+          pip install pip-audit
+          pip-audit --skip-editable
+
+  smoke-test:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.5'
+          cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Python smoke test
+        run: bash scripts/smoke-test-python.sh
+
+      - name: Go smoke test
+        run: bash scripts/smoke-test-go.sh
+
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: gitleaks
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.27.2/gitleaks_8.27.2_linux_x64.tar.gz | tar xz -C /tmp
+          /tmp/gitleaks detect --source . --config .gitleaks.toml --verbose --no-banner
+
+  license-check:
+    name: License Compliance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.5'
+          cache: true
+
+      - name: Install go-licenses
+        run: go install github.com/google/go-licenses@latest
+
+      - name: Generate license report
+        run: |
+          go-licenses report ./... > licenses.csv 2>/dev/null || true
+          echo "License report generated"
+
+      - name: Check for forbidden licenses
+        run: |
+          if grep -iE 'GPL|AGPL|LGPL|SSPL|BUSL' licenses.csv; then
+            echo "ERROR: Forbidden copyleft license detected"
+            cat licenses.csv
+            exit 1
+          fi
+          echo "License compliance OK"
+
+  conformance:
+    name: Protocol Conformance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+
+      - name: Install package
+        working-directory: protocol/python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run conformance tests
+        run: python -m pytest protocol/conformance/ -v

@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-07-12
-Version: v1.4.0
+Last Updated: 2026-07-13
+Version: v1.5.0
 
 ---
 
@@ -16,7 +16,7 @@ A g8e-compatible application functions strictly as a GovernanceEnvelope producer
 
 Security operations including L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, and L5 Actuator verification gates, replay defense, state binding, cryptographic audit, and human-in-the-loop authorization are fully delegated to the g8e Gateway. The application provides only the components the protocol cannot intrinsically supply: the mutation intent and optionally, consensus evidence.
 
-This guide covers the full spectrum of g8e application development: from minimal envelope-producing clients to maximal agentic ensembles that implement multi-persona reasoning, Byzantine consensus, and signed governance envelope production. The [Building an Agentic System](#building-an-agentic-system) section documents the architecture, persona system, prompt design, memory model, and consensus cascade of a g8e-compliant agentic ensemble --- the canonical pattern for anyone building an AI reasoning layer on top of the g8e protocol surface.
+This guide covers the full spectrum of g8e application development: from minimal envelope-producing clients to maximal agentic ensembles that implement multi-persona reasoning, Byzantine consensus, and signed governance envelope production. The [Building an Agentic System](#building-an-agentic-system) section documents the architecture, persona system, prompt design, memory model, and consensus cascade of a g8e-compliant agentic ensemble, the canonical pattern for anyone building an AI reasoning layer on top of the g8e protocol surface.
 
 ---
 
@@ -79,19 +79,51 @@ A valid GovernanceEnvelope includes the following categories of fields:
 
 ### Typed Payloads
 
-The protocol defines canonical event types for all first-class operations. The following list covers the primary mutation event types used by applications:
+The protocol defines canonical event types for all first-class operations. The primary categories used by applications include:
 
-- **Shell Operations**: `g8e.v1.operator.command.requested`, `g8e.v1.operator.command.cancel.requested`
-- **File Operations**: `g8e.v1.operator.filesystem.read.requested`, `g8e.v1.operator.file.edit.requested`, `g8e.v1.operator.file.history.fetch.requested`, `g8e.v1.operator.file.diff.fetch.requested`, `g8e.v1.operator.file.restore.requested`
-- **Filesystem Operations**: `g8e.v1.operator.filesystem.list.requested`, `g8e.v1.operator.filesystem.grep.requested`
-- **MCP Operations**: `g8e.v1.operator.mcp.call.requested`
-- **A2A Operations**: `g8e.v1.operator.a2a.call.requested`
-- **Network Operations**: `g8e.v1.operator.network.ping.requested`, `g8e.v1.operator.network.port.check.requested`
-- **Heartbeat**: `g8e.v1.operator.heartbeat.requested`
-- **Audit Operations**: `g8e.v1.operator.audit.command.recorded`, `g8e.v1.operator.audit.ai.recorded`
-- **Shutdown**: `g8e.v1.operator.shutdown.requested`
+- **Shell Operations**: Command execution and cancellation
+- **File Operations**: Filesystem reads, file edits, history fetch, diff fetch, and restore
+- **Filesystem Operations**: Directory listing and grep
+- **MCP Operations**: MCP tool calls
+- **A2A Operations**: A2A skill invocations
+- **Network Operations**: Ping and port checks
+- **Heartbeat**: Operator heartbeat
+- **Audit Operations**: Command and AI audit recording
+- **Shutdown**: Operator shutdown
 
-This list is not exhaustive. The complete set of event type constants and payload schema definitions are available in the protocol constants and protobuf schemas.
+This list is not exhaustive. The complete set of event type constants and payload schema definitions are available in the [Protocol Library](../architecture/protocol.md).
+
+### Protocol Library Dependencies
+
+Applications constructing `GovernanceEnvelope` transactions or parsing `ActionReceipt` responses should use the g8e Protocol Library, which is published as both a Go module and a Python package. Both share the same version number as the platform binary.
+
+#### Go Module
+
+The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
+
+```bash
+go get github.com/g8e-ai/g8e@v1.5.0
+```
+
+The Go package provides protobuf message types for governance envelopes, governance metadata (L1, L2, L3), and all typed payload messages for first-class operations. It also provides SPIFFE workload identity helpers for URI SAN generation and validation.
+
+See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference and example programs.
+
+#### Python Package
+
+Install from PyPI:
+
+```bash
+pip install g8e==1.5.0
+```
+
+The package provides:
+
+- **`g8e.constants`**: Runtime loader for JSON protocol constants, including events, status, collections, headers, channels, and API paths
+- **`g8e.enums`**: Dynamic enum generation from protocol constants, including event types and operator tool names
+- **`g8e.models`**: Pydantic v2 models for protocol data structures, including request contexts, platform settings, and SSE event wire models
+
+Requires Python 3.10+. Set `G8E_PROTOCOL_DIR` to override the default protocol constants directory. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference and example scripts.
 
 ---
 
@@ -152,7 +184,7 @@ Compute the deterministic transaction hash from the envelope's critical fields. 
 - requestor_user_id
 - acting_app_id
 
-The `id` field must be set to this computed hash. L3 proof is intentionally excluded from the hash so that L2 consensus can sign before the human notary is asked.
+The `id` field must be set to this computed hash. L3 proof is intentionally excluded from the hash so that L2 consensus can sign before the human notary is asked. The Protocol Library provides a `GenerateMessageID` helper that handles this computation.
 
 ### Step 5: Build Envelope
 
@@ -846,7 +878,7 @@ Memory is one of several storage tiers that feed the agent:
 | Operator scrubbed vault | Sentinel-scrubbed execution records | AI-readable host-history tier |
 | Operator raw vault | Unscrubbed forensic records | **Never** AI-readable |
 
-The invariant: the agent reconstructes its prompt from references and summaries, not by
+The invariant: the agent reconstructs its prompt from references and summaries, not by
 holding a database, filesystem, or host session. It receives the **minimum useful
 projection** for the current turn.
 
@@ -985,34 +1017,15 @@ signed envelopes that g8e's protocol-level Tribunal and Gateway validate.
 When a signed envelope reaches the Gateway, it passes through a five-layer interlock
 sequence before any tool dispatch occurs. Each layer is independent and fail-closed.
 
-- **L1 Doctrine**: Hard gates, code pattern matching, and MITRE-based threat analysis. The
-  L1Doctrine validator checks protobuf field options for forbidden patterns and runs
-  regex-based threat detectors against command strings, MCP arguments, A2A payloads, and
-  file edit content.
-- **L2 Consensus**: Multi-agent consensus signature verification using Ed25519. The L4Warden
-  verifies each L2Vote signature against the transaction hash and decision, and enforces
-  quorum policy from the configured TribunalPolicy.
-- **L3 Notary**: Human-in-the-loop authorization via WebAuthn passkey assertion or signed CLI
-  proof. Mutations require L3 proof; the Gateway suspends execution and returns an approval
-  URL when L3 is missing.
-- **L4 Warden**: Pre-dispatch verification combining stateless validation (hash integrity,
-  payload decoding, L1 doctrine), stateful validation (expiry, nonce replay prevention via
-  SQLite, state root binding), and posture-aware L2/L3 checks. The Warden returns a
-  `VerifiedTransaction` only if all gates pass.
-- **L5 Actuator**: Isolated tool dispatch and signed receipt production. The L5Actuator mints
-  a JIT capability scoped to the transaction, dispatches through the execution handler, signs
-  an ActionReceipt with its Ed25519 key, and records it in the audit store. Receipt signing
-  is fail-closed: if the initial receipt cannot be signed or logged, execution does not
-  proceed.
+- **L1 Doctrine**: Hard gates, code pattern matching, and MITRE-based threat analysis. Checks command strings, MCP arguments, A2A payloads, and file edit content for forbidden patterns.
+- **L2 Consensus**: Multi-agent consensus signature verification using Ed25519. Verifies each vote signature against the transaction hash and decision, and enforces quorum policy from the configured tribunal.
+- **L3 Notary**: Human-in-the-loop authorization via WebAuthn passkey assertion or signed CLI proof. Mutations require L3 proof; the Gateway suspends execution and returns an approval URL when L3 is missing.
+- **L4 Warden**: Pre-dispatch verification combining stateless validation (hash integrity, payload decoding, L1 doctrine), stateful validation (expiry, nonce replay prevention, state root binding), and posture-aware L2/L3 checks. Returns a verified transaction only if all gates pass.
+- **L5 Actuator**: Isolated tool dispatch and signed receipt production. Mints a JIT capability scoped to the transaction, dispatches through the execution handler, signs a receipt with its Ed25519 key, and records it in the audit store. Receipt signing is fail-closed: if the initial receipt cannot be signed or logged, execution does not proceed.
 
 #### Demo Scenarios (Test Tool)
 
-g8e also ships **demo scenarios** (`g8e demos scenarios run`), a Go-based test tool that exercises the protocol
-surface with simple Persona structs.
-It tests MCP, A2A, governance envelopes, tribunal quorum/veto, and notary OOB flows
-against a real Gateway and Operator. The demo scenarios tool is not a reasoning system; it
-validates protocol mechanics. The agentic system documented here is what you build on top
-of the protocol to add intelligence.
+g8e also ships **demo scenarios** (`g8e demos scenarios run`), a test tool that exercises the protocol surface with simple agent personas. It tests MCP, A2A, governance envelopes, tribunal quorum/veto, and notary OOB flows against a real Gateway and Operator. The demo scenarios tool is not a reasoning system; it validates protocol mechanics. The agentic system documented here is what you build on top of the protocol to add intelligence.
 
 #### Building Your Own
 
@@ -1050,3 +1063,4 @@ yours to design.
 
 - **[Connect Apps to Gateway](connect_apps_to_gateway.md)**: Connect to, authenticate, use, maintain, and pull reports from a Gateway.
 - **[Connect Operator to Gateway](connect_operator_to_gateway.md)**: Deploy and use a g8e Operator.
+- **[Protocol Library](../architecture/protocol.md)**: Go module and Python package API reference, constants, models, and usage examples.

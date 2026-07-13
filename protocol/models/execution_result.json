@@ -1,0 +1,238 @@
+{
+  "_comment": "Canonical execution result and request payload shapes. ExecutionRequestPayload is the wire payload for command execution requests. ExecutionResultsPayload is the wire payload for command execution results. Serialized from ExecutionRequestPayload and ExecutionResultsPayload (internal/models/commands.go).",
+
+  "_authority": "operator (g8eo)",
+  "_consumers": ["client", "agent"],
+
+  "execution_request_payload": {
+    "_description": "Wire payload for command execution requests.",
+
+    "execution_id": {
+      "type": "string",
+      "required": true,
+      "description": "Unique execution identifier"
+    },
+    "case_id": {
+      "type": "string",
+      "required": true,
+      "description": "Case ID"
+    },
+    "task_id": {
+      "type": "string",
+      "required": false,
+      "description": "Task ID. Omitted when not set."
+    },
+    "investigation_id": {
+      "type": "string",
+      "required": true,
+      "description": "Investigation ID"
+    },
+    "command": {
+      "type": "string",
+      "required": true,
+      "description": "Command to execute"
+    },
+    "args": {
+      "type": "array",
+      "items": "string",
+      "required": false,
+      "description": "Command arguments. Omitted when empty."
+    },
+    "timeout_seconds": {
+      "type": "integer",
+      "required": true,
+      "description": "Execution timeout in seconds"
+    },
+    "requested_by": {
+      "type": "string",
+      "required": true,
+      "description": "Requester identifier"
+    },
+    "environment": {
+      "type": "object",
+      "required": false,
+      "description": "Environment variable overrides (key-value pairs). Omitted when empty."
+    },
+    "working_directory": {
+      "type": "string",
+      "required": false,
+      "description": "Working directory for execution. Omitted when not set."
+    },
+    "network_topology_id": {
+      "type": "string",
+      "required": false,
+      "description": "Network topology ID. Omitted when not set."
+    },
+    "target_address": {
+      "type": "string",
+      "required": false,
+      "description": "Target address. Omitted when not set."
+    },
+    "priority": {
+      "type": "integer",
+      "required": false,
+      "description": "Execution priority. Omitted when zero."
+    },
+    "tags": {
+      "type": "object",
+      "required": false,
+      "description": "Execution tags (key-value pairs). Omitted when empty."
+    },
+    "justification": {
+      "type": "string",
+      "required": false,
+      "description": "Human-readable justification. Omitted when empty."
+    },
+    "intent": {
+      "type": "string",
+      "required": false,
+      "description": "Declared intent. Omitted when empty."
+    },
+    "vault_mode": {
+      "type": "string",
+      "required": false,
+      "description": "Vault mode. Omitted when empty."
+    }
+  },
+
+  "execution_results_payload": {
+    "_description": "Wire payload for command execution results. Uses pointer types for optional fields.",
+
+    "payload_type": {
+      "type": "string",
+      "required": true,
+      "description": "Payload type discriminator (always 'execution_result')"
+    },
+    "execution_id": {
+      "type": "string",
+      "required": true,
+      "description": "Unique execution identifier"
+    },
+    "case_id": {
+      "type": "string",
+      "required": true,
+      "description": "Case ID"
+    },
+    "task_id": {
+      "type": "string",
+      "required": false,
+      "description": "Task ID. Omitted when not set."
+    },
+    "investigation_id": {
+      "type": "string",
+      "required": true,
+      "description": "Investigation ID"
+    },
+    "command": {
+      "type": "string",
+      "required": true,
+      "description": "Command that was executed"
+    },
+    "args": {
+      "type": "array",
+      "items": "string",
+      "required": false,
+      "description": "Command arguments. Omitted when empty."
+    },
+    "status": {
+      "type": "string",
+      "required": true,
+      "description": "Execution status. Values: EXECUTION_STATUS_EXECUTING, EXECUTION_STATUS_COMPLETED, EXECUTION_STATUS_FAILED."
+    },
+    "duration_seconds": {
+      "type": "number",
+      "required": true,
+      "description": "Execution duration in seconds"
+    },
+    "operator_id": {
+      "type": "string",
+      "required": true,
+      "description": "Operator ID that executed the command"
+    },
+    "operator_session_id": {
+      "type": "string",
+      "required": true,
+      "description": "Operator session ID"
+    },
+    "stdout": {
+      "type": "string",
+      "required": false,
+      "description": "Standard output. Omitted when empty."
+    },
+    "stderr": {
+      "type": "string",
+      "required": false,
+      "description": "Standard error. Omitted when empty."
+    },
+    "stdout_size": {
+      "type": "integer",
+      "required": true,
+      "description": "Size of stdout in bytes"
+    },
+    "stderr_size": {
+      "type": "integer",
+      "required": true,
+      "description": "Size of stderr in bytes"
+    },
+    "stdout_hash": {
+      "type": "string",
+      "required": false,
+      "description": "SHA256 hash of stdout. Omitted when empty."
+    },
+    "stderr_hash": {
+      "type": "string",
+      "required": false,
+      "description": "SHA256 hash of stderr. Omitted when empty."
+    },
+    "stored_locally": {
+      "type": "boolean",
+      "required": true,
+      "description": "Whether output was stored locally on the Operator"
+    },
+    "return_code": {
+      "type": "integer",
+      "required": false,
+      "description": "Process return code. Omitted when zero."
+    },
+    "error_message": {
+      "type": "string",
+      "required": false,
+      "description": "Error message. Omitted when not set."
+    },
+    "error_type": {
+      "type": "string",
+      "required": false,
+      "description": "Error type. Omitted when not set."
+    },
+    "start_time": {
+      "type": "string",
+      "format": "iso8601",
+      "required": false,
+      "description": "Execution start time. Omitted when not set."
+    },
+    "end_time": {
+      "type": "string",
+      "format": "iso8601",
+      "required": false,
+      "description": "Execution end time. Omitted when not set."
+    },
+    "terminal_output": {
+      "type": "object",
+      "required": false,
+      "description": "Terminal output details. Conforms to terminal_output.json#terminal_output. Omitted when not set.",
+      "_ref": "terminal_output.json#terminal_output"
+    },
+    "system_info": {
+      "type": "object",
+      "required": false,
+      "description": "Execution system info. Conforms to terminal_output.json#execution_system_info. Omitted when not set.",
+      "_ref": "terminal_output.json#execution_system_info"
+    },
+    "environment_info": {
+      "type": "object",
+      "required": false,
+      "description": "Execution environment info. Conforms to terminal_output.json#execution_environment_info. Omitted when not set.",
+      "_ref": "terminal_output.json#execution_environment_info"
+    }
+  }
+}

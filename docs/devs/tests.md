@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-07-12
+Last Updated: 2026-07-13
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -171,6 +171,93 @@ From `protocol/constants/ports.json`:
 - `8080` — Gateway HTTP (bootstrap, CA bundle, console, health)
 - `8443` — Gateway HTTPS (mTLS API, MCP, public)
 
+### Python Test Suite
+
+The Python protocol package (`protocol/python/`) includes a pytest suite in `protocol/python/tests/` with 94 tests across 4 files:
+
+- `test_constants.py` — Constant dict loading, value integrity, and namespace conventions
+- `test_enums.py` — Enum generation, name conversion helpers, and dynamic attribute access
+- `test_models.py` — Model instantiation, validation rules, serialization round-trips, and `G8eBaseModel` behavior
+- `test_version.py` — Version string consistency with `pyproject.toml` and semver format
+
+Run locally:
+```bash
+cd protocol/python
+pip install -e ".[dev]"
+python -m pytest tests/ -v
+```
+
+CI runs pytest on a Python 3.10-3.14 matrix (`python-tests` job).
+
+### Protocol Conformance Suite
+
+The conformance suite in `protocol/conformance/` contains 151 tests across 2 files that enforce parity between Go constants, Python runtime values, and canonical JSON in `protocol/constants/`:
+
+- `test_constants.py` — JSON file structure, `_go_const`/`_python_const` presence, value uniqueness, Go naming conventions, Python-JSON parity, event value namespace conventions
+- `test_models.py` — Model schema integrity, field parity between Python Pydantic models and JSON schemas, serialization round-trips, validation rules
+
+Run locally:
+```bash
+pip install -e protocol/python/".[dev]"
+python -m pytest protocol/conformance/ -v
+```
+
+CI runs conformance tests on Python 3.14 (`conformance` job).
+
+### Performance Benchmarks
+
+Go benchmarks cover hot paths in 3 packages (13 benchmarks total):
+
+- `internal/services/sqliteutil/` — gzip compress/decompress at various payload sizes, SHA-256 hashing, compress+decompress round-trip
+- `internal/constants/` — `ActionType.IsMutation` for mutation and non-mutation types
+- `internal/services/mcp/` — JSON-RPC request/response marshal/unmarshal, tool call params parsing, tool result serialization
+
+Run benchmarks:
+```bash
+make benchmark
+```
+
+### Smoke Tests
+
+Two smoke test scripts verify that published packages work in clean environments:
+
+- `scripts/smoke-test-python.sh` — Creates a clean venv, installs the Python package, verifies README imports, and runs example scripts
+- `scripts/smoke-test-go.sh` — Creates a temp Go module, uses `go mod edit -replace` to point at the local repo, imports `protocol.NewWorkloadIdentity()`, and builds
+
+CI runs both scripts on every PR (`smoke-test` job).
+
 ### Continuous Integration
 
-GitHub Actions (`.github/workflows/build-and-test.yml`) enforces: proto verification, doctrine validation, swagger generation/validation, golangci-lint, govulncheck, unit tests, integration tests, and Windows cross-compile. CI does **not** run Tier 3 Docker E2E tests.
+GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
+
+**Core CI** (`ci` job, cross-OS matrix: ubuntu/macos/windows):
+- Proto verification and doctrine validation
+- Swagger generation and validation
+- golangci-lint
+- govulncheck
+- Unit tests and integration tests
+- Windows cross-compile (Linux runner only)
+
+**Additional CI jobs**:
+- `python-tests` — Pytest on Python 3.10-3.14 matrix with version sync verification
+- `python-audit` — pip-audit `--strict` for Python dependency vulnerability scanning
+- `conformance` — Protocol conformance suite (151 tests) on Python 3.14
+- `smoke-test` — Clean-environment install verification for both Python and Go packages
+- `secret-scan` — gitleaks full-history secret scanning
+- `license-check` — go-licenses report with forbidden copyleft license detection (GPL, AGPL, LGPL, SSPL, BUSL)
+
+CI does **not** run Tier 3 Docker E2E tests.
+
+### Release Pipeline Verification
+
+**Binary releases** (`.github/workflows/release-binary.yml`, triggered by `v*` tags):
+- Cross-platform binary builds (linux/darwin/windows, amd64/arm64)
+- SHA-256 checksums
+- cosign/sigstore keyless artifact signing (`.sig` files uploaded with release)
+- Post-publish `verify-install` job: fresh `go install` on ubuntu/macos/windows with `--version` and `--help` verification
+
+**Python releases** (`.github/workflows/release-python-protocol.yml`, triggered by `protocol/v*` tags):
+- Package metadata validation (required fields, name, URLs)
+- `twine check` on built dist
+- `py.typed` PEP 561 marker for type checker support
+- Post-publish `verify-install` job: fresh `pip install g8e==<version>` from PyPI on ubuntu/macos/windows with import verification

@@ -116,6 +116,30 @@ func main() {
 	}
 	fmt.Printf("Operator SPIFFE URL: %s\n", operatorURL.String())
 
+	cliURL, err := wid.CLISPIFFEURL(userID, sessionID)
+	if err != nil {
+		log.Fatalf("Failed to parse CLI SPIFFE URL: %v", err)
+	}
+	fmt.Printf("CLI SPIFFE URL: %s\n", cliURL.String())
+
+	appURL, err := wid.AppSPIFFEURL(operatorID)
+	if err != nil {
+		log.Fatalf("Failed to parse App SPIFFE URL: %v", err)
+	}
+	fmt.Printf("App SPIFFE URL: %s\n", appURL.String())
+
+	userURL, err := wid.UserSPIFFEURL(userID)
+	if err != nil {
+		log.Fatalf("Failed to parse User SPIFFE URL: %v", err)
+	}
+	fmt.Printf("User SPIFFE URL: %s\n", userURL.String())
+
+	hubURL, err := wid.HubSPIFFEURL()
+	if err != nil {
+		log.Fatalf("Failed to parse Hub SPIFFE URL: %v", err)
+	}
+	fmt.Printf("Hub SPIFFE URL: %s\n", hubURL.String())
+
 	gatewayURL, err := wid.GatewayPeerSPIFFEURL(gatewayID)
 	if err != nil {
 		log.Fatalf("Failed to parse Gateway Peer SPIFFE URL: %v", err)

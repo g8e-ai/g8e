@@ -1,0 +1,166 @@
+{
+  "_comment": "Canonical L3 approval wire shapes. ApprovalCompletedEvent is the SSE event payload emitted when a user completes the WebAuthn approval ceremony. SuspendedTransaction represents a transaction awaiting L3 human approval. ApprovalProof holds all fields needed to record an L3 approval. Serialized from ApprovalCompletedEvent (internal/models/approval.go), SuspendedTransaction and ApprovalProof (internal/models/suspended.go).",
+
+  "_authority": "client (gateway)",
+  "_consumers": ["cli", "agent"],
+
+  "approval_completed_event": {
+    "_description": "SSE event payload for L3 transaction approval completion. Emitted by the gateway when a user completes the WebAuthn approval ceremony.",
+    "type": {
+      "type": "string",
+      "required": true,
+      "description": "Event type identifier"
+    },
+    "user_id": {
+      "type": "string",
+      "required": true,
+      "description": "User ID of the approver"
+    },
+    "tx_hash": {
+      "type": "string",
+      "required": true,
+      "description": "Transaction hash of the approved transaction"
+    }
+  },
+
+  "suspended_transaction": {
+    "_description": "A transaction awaiting L3 human approval. Stored in the suspended transactions store.",
+    "transaction_hash": {
+      "type": "string",
+      "required": true,
+      "description": "Hash of the governance transaction"
+    },
+    "envelope": {
+      "type": "object",
+      "required": true,
+      "description": "Original GovernanceEnvelope JSON"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "iso8601",
+      "required": true,
+      "description": "When the transaction was suspended"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "iso8601",
+      "required": true,
+      "description": "When the suspension expires"
+    },
+    "tool_name": {
+      "type": "string",
+      "required": true,
+      "description": "Name of the tool that triggered the suspension"
+    },
+    "tool_arguments": {
+      "type": "object",
+      "required": true,
+      "description": "Tool arguments JSON"
+    },
+    "user_id": {
+      "type": "string",
+      "required": true,
+      "description": "User ID that initiated the transaction"
+    },
+    "operator_id": {
+      "type": "string",
+      "required": true,
+      "description": "Operator ID that submitted the transaction"
+    },
+    "approved": {
+      "type": "boolean",
+      "required": true,
+      "description": "Whether the transaction has been approved"
+    },
+    "approved_at": {
+      "type": "string",
+      "format": "iso8601",
+      "required": false,
+      "description": "When the transaction was approved. Omitted when not approved."
+    },
+    "approved_by": {
+      "type": "string",
+      "required": false,
+      "description": "CLI session ID or user ID of the approver. Omitted when not approved."
+    },
+    "approval_signature": {
+      "type": "string",
+      "required": false,
+      "description": "Signature over transaction_hash by the approver. Omitted when not approved."
+    },
+    "expected_cert_fingerprint": {
+      "type": "string",
+      "required": false,
+      "description": "Expected mTLS cert fingerprint for verification. Omitted when not set."
+    },
+    "approval_public_key": {
+      "type": "string",
+      "required": false,
+      "description": "Hex-encoded Ed25519 public key of the approver. Omitted when not set."
+    },
+    "passkey_credential_id": {
+      "type": "string",
+      "required": false,
+      "description": "WebAuthn credential ID. Omitted when not set."
+    },
+    "passkey_client_data_json": {
+      "type": "string",
+      "required": false,
+      "description": "WebAuthn clientDataJSON. Omitted when not set."
+    },
+    "passkey_authenticator_data": {
+      "type": "string",
+      "required": false,
+      "description": "WebAuthn authenticatorData. Omitted when not set."
+    },
+    "passkey_signature": {
+      "type": "string",
+      "required": false,
+      "description": "WebAuthn signature. Omitted when not set."
+    }
+  },
+
+  "approval_proof": {
+    "_description": "All fields needed to record an L3 approval. CLI Ed25519 fields are present for CLI approvals; passkey WebAuthn fields are present for all approvals going forward.",
+    "approved_by": {
+      "type": "string",
+      "required": true,
+      "description": "CLI session ID or user ID of the approver"
+    },
+    "cli_signature": {
+      "type": "string",
+      "required": false,
+      "description": "CLI Ed25519 signature. Omitted for passkey-only approvals."
+    },
+    "cert_fingerprint": {
+      "type": "string",
+      "required": false,
+      "description": "mTLS certificate fingerprint. Omitted when not set."
+    },
+    "approval_public_key": {
+      "type": "string",
+      "required": false,
+      "description": "Hex-encoded Ed25519 public key of the approver. Omitted when not set."
+    },
+    "credential_id": {
+      "type": "string",
+      "required": false,
+      "description": "WebAuthn credential ID. Omitted when not set."
+    },
+    "client_data_json": {
+      "type": "string",
+      "required": false,
+      "description": "WebAuthn clientDataJSON. Omitted when not set."
+    },
+    "authenticator_data": {
+      "type": "string",
+      "required": false,
+      "description": "WebAuthn authenticatorData. Omitted when not set."
+    },
+    "signature": {
+      "type": "string",
+      "required": false,
+      "description": "WebAuthn signature. Omitted when not set."
+    }
+  }
+}

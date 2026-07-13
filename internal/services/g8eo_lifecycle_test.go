@@ -97,6 +97,9 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	require.NotNil(t, service.bootstrap)
 	service.bootstrap.SetHTTPClient(server.Client())
 
+	// Inject test keystore (bypasses OS keychain for cross-platform CI)
+	service.SetKeystore(ks)
+
 	// Inject Mock PubSub Client
 	mockPubSub := pubsubtest.NewMockOperatorPubSubClient()
 	service.SetPubSubClient(mockPubSub)

@@ -13,18 +13,20 @@
 
 // Package constants provides timestamp-related constants.
 //
-// Single source of truth: protocol/constants/timestamp.json
-// This file is manually maintained to match the JSON SSOT.
+// Single source of truth: internal/timesvc (the Go mirror of protocol/constants/timestamp.json).
+// This file re-exports the canonical format strings so protocol constants remain usable.
 package constants
 
-import "time"
+import "github.com/g8e-ai/g8e/internal/timesvc"
 
 // FormatRFC3339 is the canonical timestamp format string for RFC3339 with timezone offset.
-// Used throughout the platform for consistent timestamp representation.
 //
-// Source: protocol/constants/timestamp.json
-const FormatRFC3339 = "2006-01-02T15:04:05Z07:00"
+// Source: internal/timesvc
+const FormatRFC3339 = timesvc.FormatRFC3339
 
-// TimestampFormat is the canonical timestamp format for RFC3339 with nanosecond precision.
+// TimestampFormat is the canonical timestamp format for RFC3339 with fixed microsecond precision.
 // Used throughout the platform for consistent timestamp representation.
-const TimestampFormat = time.RFC3339Nano
+// The fixed 6-digit fractional seconds guarantee lexicographic ordering for SQLite indices.
+//
+// Source: internal/timesvc
+const TimestampFormat = timesvc.Format

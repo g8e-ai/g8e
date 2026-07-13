@@ -530,7 +530,7 @@ func TestPKIController_HandleTrustScriptWindows(t *testing.T) {
 		script := rr.Body.String()
 		assert.Contains(t, script, "CA bundle downloaded")
 		assert.Contains(t, script, "LocalMachine")
-		assert.NotContains(t, script, "Downloading g8e Node")
+		assert.NotContains(t, script, "Downloading g8e binary file")
 	})
 
 	t.Run("Success - GET with X-Forwarded-Host uses external host", func(t *testing.T) {
@@ -595,7 +595,7 @@ func TestPKIController_HandleTrustScriptLinux(t *testing.T) {
 	assert.Contains(t, script, "CA bundle installed")
 	assert.Contains(t, script, "CA bundle trusted system-wide")
 	assert.Contains(t, script, "update-ca-certificates")
-	assert.NotContains(t, script, "Downloading g8e Node")
+	assert.NotContains(t, script, "Downloading g8e binary file")
 }
 
 func TestPKIController_HandleTrustScriptWindowsAlias(t *testing.T) {
@@ -616,7 +616,7 @@ func TestPKIController_HandleTrustScriptWindowsAlias(t *testing.T) {
 				script := rr.Body.String()
 				assert.Contains(t, script, "CA bundle downloaded")
 				assert.Contains(t, script, "LocalMachine")
-				assert.NotContains(t, script, "Downloading g8e Node")
+				assert.NotContains(t, script, "Downloading g8e binary file")
 			},
 		},
 	}

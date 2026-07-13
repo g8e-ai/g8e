@@ -680,7 +680,7 @@ func (c *PKIController) handleTrustScriptWindowsAlias(w http.ResponseWriter, r *
 }
 
 // @Summary		Download node binary
-// @Description	Downloads the g8e node binary for the current platform (internal endpoint)
+// @Description	Downloads the g8e binary file binary for the current platform (internal endpoint)
 // @Tags			bootstrap
 // @Produce		application/octet-stream
 // @Success		200	{file}	file
