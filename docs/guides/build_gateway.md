@@ -51,7 +51,7 @@ The Makefile provides several build targets:
 - `make build-windows` - Builds g8e binary file for Windows (amd64, arm64).
 - `make build-darwin` - Builds g8e binary file for Darwin (amd64, arm64).
 - `make build-compressed` - Builds g8e binary file then compresses with UPX (requires UPX installed).
-- `make clean` - Removes compiled g8e Nodes and test artifacts.
+- `make clean` - Removes compiled g8e binaries and test artifacts.
 
 ### Build in Docker (no local Go required)
 
