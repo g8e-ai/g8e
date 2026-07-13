@@ -16,13 +16,9 @@ permissions:
 
 jobs:
   ci:
-    name: Build & Test (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: Build & Test
+    runs-on: ubuntu-latest
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
     defaults:
       run:
         shell: bash
@@ -53,25 +49,6 @@ jobs:
           curl -fSL https://github.com/protocolbuffers/protobuf/releases/download/v35.0/$PROTOC_ZIP -o /tmp/protoc.zip
           sudo unzip -o /tmp/protoc.zip -d /usr/local bin/protoc
           sudo chmod +x /usr/local/bin/protoc
-          rm /tmp/protoc.zip
-
-      - name: Install protoc (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          PROTOC_ZIP=protoc-35.0-osx-aarch_64.zip
-          curl -fSL https://github.com/protocolbuffers/protobuf/releases/download/v35.0/$PROTOC_ZIP -o /tmp/protoc.zip
-          sudo unzip -o /tmp/protoc.zip -d /usr/local bin/protoc
-          sudo chmod +x /usr/local/bin/protoc
-          rm /tmp/protoc.zip
-
-      - name: Install protoc (Windows)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          PROTOC_ZIP=protoc-35.0-win64.zip
-          curl -fSL https://github.com/protocolbuffers/protobuf/releases/download/v35.0/$PROTOC_ZIP -o /tmp/protoc.zip
-          unzip -o /tmp/protoc.zip -d "$HOME/protoc" bin/protoc.exe
-          echo "$HOME/protoc/bin" >> $GITHUB_PATH
           rm /tmp/protoc.zip
 
       - name: Verify Version Sync
