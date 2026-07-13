@@ -28,7 +28,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/storage"
@@ -69,7 +68,7 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
 	resp := response.NewWriter(logger)
-	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, paths.Infra.SecretsDir, nil, "", "", "")
+	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, fileSvc.Resolve(constants.SecretsDirname), nil, "", "", "")
 	cliSessionSvc := NewCLISessionService(db, logger)
 	operatorSessionSvc := NewOperatorSessionService(db, logger)
 	webSessionSvc := NewWebSessionService(db, logger)

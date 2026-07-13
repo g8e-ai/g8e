@@ -27,7 +27,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
@@ -194,7 +193,6 @@ func TestStateRootCaching(t *testing.T) {
 func BenchmarkStateRootCalculation(b *testing.B) {
 	dir := b.TempDir()
 	baseDir := b.TempDir()
-	paths.InitWithBase(baseDir)
 	fileSvc, err := fs.NewRuntimeFileService(baseDir, testutil.NewTestLogger())
 	require.NoError(b, err)
 	require.NoError(b, fileSvc.CreateRuntimeTree(context.Background()))
@@ -223,7 +221,6 @@ func BenchmarkStateRootCalculation(b *testing.B) {
 func BenchmarkStateRootLargeDataset(b *testing.B) {
 	dir := b.TempDir()
 	baseDir := b.TempDir()
-	paths.InitWithBase(baseDir)
 	fileSvc, err := fs.NewRuntimeFileService(baseDir, testutil.NewTestLogger())
 	require.NoError(b, err)
 	require.NoError(b, fileSvc.CreateRuntimeTree(context.Background()))

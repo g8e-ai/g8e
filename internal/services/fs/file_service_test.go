@@ -38,17 +38,6 @@ func setupTestFS(t *testing.T) RuntimeFileService {
 	return svc
 }
 
-func TestNewRuntimeFileService_RequiresPathsInit(t *testing.T) {
-	// Save and restore paths.Infra.RuntimeDir
-	saved := paths.Infra.RuntimeDir
-	t.Cleanup(func() { paths.Infra.RuntimeDir = saved })
-
-	paths.Infra.RuntimeDir = ""
-	_, err := NewRuntimeFileService("/tmp", testutil.NewVerboseTestLogger(t))
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "paths.Infra not initialized")
-}
-
 func TestNewRuntimeFileService_EmptyBaseDirUsesCWD(t *testing.T) {
 	baseDir := testutil.TempDir(t)
 	require.NoError(t, paths.InitWithBase(baseDir))

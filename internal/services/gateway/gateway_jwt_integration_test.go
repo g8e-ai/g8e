@@ -33,7 +33,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/storage"
@@ -159,7 +158,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	}
 
 	resp := response.NewWriter(logger)
-	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, paths.Infra.SecretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
+	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, fileSvc.Resolve(constants.SecretsDirname), NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 
 	cliSessionSvc := NewCLISessionService(db, logger)
 	operatorSessionSvc := NewOperatorSessionService(db, logger)
@@ -312,7 +311,7 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 	}
 
 	resp := response.NewWriter(logger)
-	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, paths.Infra.SecretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
+	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, fileSvc.Resolve(constants.SecretsDirname), NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 
 	cliSessionSvc := NewCLISessionService(db, logger)
 	operatorSessionSvc := NewOperatorSessionService(db, logger)
@@ -480,7 +479,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	}
 
 	resp := response.NewWriter(logger)
-	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, paths.Infra.SecretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
+	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, fileSvc.Resolve(constants.SecretsDirname), NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 
 	cliSessionSvc := NewCLISessionService(db, logger)
 	operatorSessionSvc := NewOperatorSessionService(db, logger)
@@ -643,7 +642,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 	}
 
 	resp := response.NewWriter(logger)
-	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, paths.Infra.SecretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, cfg.Gateway.JWTIssuer, cfg.Gateway.JWTAudience)
+	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, fileSvc.Resolve(constants.SecretsDirname), NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, cfg.Gateway.JWTIssuer, cfg.Gateway.JWTAudience)
 
 	t.Run("Token with wrong aud is rejected", func(t *testing.T) {
 		claims := map[string]interface{}{
@@ -710,7 +709,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 	})
 
 	t.Run("Token without iss/aud/nbf is accepted when not configured", func(t *testing.T) {
-		authNoValidation := NewAuthService(db, pki, testutil.NewTestLogger(), userSvc, personaSvc, resp, paths.Infra.SecretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
+		authNoValidation := NewAuthService(db, pki, testutil.NewTestLogger(), userSvc, personaSvc, resp, fileSvc.Resolve(constants.SecretsDirname), NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 
 		claims := map[string]interface{}{
 			"sub": "user-123",

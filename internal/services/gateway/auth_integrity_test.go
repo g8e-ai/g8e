@@ -28,7 +28,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
@@ -145,7 +144,7 @@ func setupAuthService(t *testing.T) (*AuthService, *CanonicalDBService) {
 
 	responderSvc := response.NewWriter(logger)
 	personaSvc := NewPersonaService(db, logger)
-	auth := NewAuthService(db, nil, logger, nil, personaSvc, responderSvc, paths.Infra.SecretsDir, nil, "", "", "")
+	auth := NewAuthService(db, nil, logger, nil, personaSvc, responderSvc, fileSvc.Resolve(constants.SecretsDirname), nil, "", "", "")
 	return auth, db
 }
 

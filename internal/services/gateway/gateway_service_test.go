@@ -29,7 +29,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
@@ -42,7 +41,7 @@ func TestNewGatewayModeService(t *testing.T) {
 	// Ensure directories are set for tests to avoid SQLITE_CANTOPEN
 	cfg.Gateway.DataDir = testutil.TempDir(t)
 	cfg.Gateway.PKIDir = testutil.TempDir(t)
-	cfg.Gateway.SecretsDir = paths.Infra.SecretsDir
+	cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
 
 	t.Run("Default configuration with self-signed certs", func(t *testing.T) {
 		db, err := openTestDB(t, cfg.Gateway.DataDir, filepath.Join(cfg.Gateway.DataDir, "vault"), fileSvc, logger)
@@ -53,7 +52,7 @@ func TestNewGatewayModeService(t *testing.T) {
 		t.Cleanup(func() { pubsub.Close() })
 
 		cfg.Gateway.PKIDir = testutil.TempDir(t)
-		cfg.Gateway.SecretsDir = paths.Infra.SecretsDir
+		cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
 		cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
 		ls, err := newGatewayModeServiceForTest(cfg, fileSvc, logger, db, pubsub)
@@ -72,9 +71,8 @@ func TestGatewayModeService_StateManagement(t *testing.T) {
 
 	cfg.Gateway.DataDir = testutil.TempDir(t)
 	cfg.Gateway.PKIDir = testutil.TempDir(t)
-	cfg.Gateway.SecretsDir = paths.Infra.SecretsDir
-
 	fileSvc := newTestFileSvc(t)
+	cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
 
 	db, err := openTestDB(t, cfg.Gateway.DataDir, filepath.Join(cfg.Gateway.DataDir, "vault"), fileSvc, logger)
 	require.NoError(t, err)
@@ -139,7 +137,7 @@ func TestNewGatewayModeServiceForTest(t *testing.T) {
 	t.Cleanup(func() { pubsub.Close() })
 
 	cfg.Gateway.PKIDir = pkiDir
-	cfg.Gateway.SecretsDir = paths.Infra.SecretsDir
+	cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
 	cfg.Gateway.DataDir = dbDir
 	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
@@ -167,7 +165,7 @@ func TestGatewayModeService_Getters(t *testing.T) {
 	t.Cleanup(func() { pubsub.Close() })
 
 	cfg.Gateway.PKIDir = pkiDir
-	cfg.Gateway.SecretsDir = paths.Infra.SecretsDir
+	cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
 	cfg.Gateway.DataDir = dbDir
 	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
@@ -221,7 +219,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		t.Cleanup(func() { pubsub.Close() })
 
 		cfg.Gateway.PKIDir = pkiDir
-		cfg.Gateway.SecretsDir = paths.Infra.SecretsDir
+		cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
 		cfg.Gateway.DataDir = dbDir
 		cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
@@ -248,7 +246,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		t.Cleanup(func() { pubsub.Close() })
 
 		cfg.Gateway.PKIDir = pkiDir
-		cfg.Gateway.SecretsDir = paths.Infra.SecretsDir
+		cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
 		cfg.Gateway.DataDir = dbDir
 		cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
@@ -275,7 +273,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		t.Cleanup(func() { pubsub.Close() })
 
 		cfg.Gateway.PKIDir = pkiDir
-		cfg.Gateway.SecretsDir = paths.Infra.SecretsDir
+		cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
 		cfg.Gateway.DataDir = dbDir
 		cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
@@ -302,7 +300,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		t.Cleanup(func() { pubsub.Close() })
 
 		cfg.Gateway.PKIDir = pkiDir
-		cfg.Gateway.SecretsDir = paths.Infra.SecretsDir
+		cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
 		cfg.Gateway.DataDir = dbDir
 		cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
@@ -341,7 +339,7 @@ func TestGatewayModeService_GetGovernanceDeps(t *testing.T) {
 	t.Cleanup(func() { pubsub.Close() })
 
 	cfg.Gateway.PKIDir = pkiDir
-	cfg.Gateway.SecretsDir = paths.Infra.SecretsDir
+	cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
 	cfg.Gateway.DataDir = dbDir
 	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
@@ -376,7 +374,7 @@ func TestGatewayModeService_StartStop(t *testing.T) {
 	t.Cleanup(func() { pubsub.Close() })
 
 	cfg.Gateway.PKIDir = pkiDir
-	cfg.Gateway.SecretsDir = paths.Infra.SecretsDir
+	cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
 	cfg.Gateway.DataDir = dbDir
 	// Use port 0 for dynamic port assignment in tests
 	cfg.Gateway.HTTPPort = 0
@@ -442,7 +440,7 @@ func TestGatewayModeService_StopWhenNotRunning(t *testing.T) {
 	t.Cleanup(func() { pubsub.Close() })
 
 	cfg.Gateway.PKIDir = pkiDir
-	cfg.Gateway.SecretsDir = paths.Infra.SecretsDir
+	cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
 	cfg.Gateway.DataDir = dbDir
 	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
@@ -477,7 +475,7 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 	t.Cleanup(func() { pubsub.Close() })
 
 	cfg.Gateway.PKIDir = pkiDir
-	cfg.Gateway.SecretsDir = paths.Infra.SecretsDir
+	cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
 	cfg.Gateway.DataDir = dbDir
 	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
@@ -553,7 +551,7 @@ func TestGatewayModeService_RenewServiceCertWithIdentity(t *testing.T) {
 	t.Cleanup(func() { pubsub.Close() })
 
 	cfg.Gateway.PKIDir = pkiDir
-	cfg.Gateway.SecretsDir = paths.Infra.SecretsDir
+	cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
 	cfg.Gateway.DataDir = dbDir
 	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
@@ -584,7 +582,7 @@ func TestGatewayModeService_RunServiceCertRenewalLoop(t *testing.T) {
 	t.Cleanup(func() { pubsub.Close() })
 
 	cfg.Gateway.PKIDir = pkiDir
-	cfg.Gateway.SecretsDir = paths.Infra.SecretsDir
+	cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
 	cfg.Gateway.DataDir = dbDir
 	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
