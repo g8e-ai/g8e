@@ -27,6 +27,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/pathutil"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/vault"
@@ -79,6 +80,12 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 		return RunResult{}, fmt.Errorf("%w: %s: %w", constants.ErrReportOutputDirFailed, opts.OutDir, err)
 	}
 
+	// Construct fileSvc for .g8e/ file I/O.
+	fileSvc, err := fs.NewRuntimeFileService("", logger)
+	if err != nil {
+		return RunResult{}, fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	}
+
 	// Open vault (locked or unlocked).
 	v, vaultUnlocked := openVault(opts.VaultDir, opts.VaultKeyPath, logger)
 
@@ -86,7 +93,7 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 	auditStoreCfg := storage.DefaultAuditStoreConfig()
 	auditStoreCfg.DataDir = opts.DataDir
 	auditStoreCfg.EncryptionVault = v
-	auditStore, err := storage.NewSQLAuditStore(auditStoreCfg, logger)
+	auditStore, err := storage.NewSQLAuditStore(auditStoreCfg, logger, fileSvc)
 	if err != nil {
 		return RunResult{}, fmt.Errorf("%w: audit store: %w", constants.ErrReportStoreUnavailable, err)
 	}

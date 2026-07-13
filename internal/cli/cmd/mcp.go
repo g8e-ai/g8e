@@ -1145,32 +1145,46 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 	case string(constants.AgentBinaryCursor):
 		// Cursor does not support native tool disabling via config
 		// Governance enforced by making g8e the only MCP server
-		if err := os.MkdirAll(agentPaths.CursorConfigDir, 0755); err != nil {
+		if err := os.MkdirAll(agentPaths.CursorConfigDir, constants.PermDirStandard); err != nil {
 			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
-		if err := BackupConfigFile(agentPaths.CursorConfigPath); err != nil {
-			return "", nil, fmt.Errorf("mcp: backup config: %w", err)
+		if _, err := os.Stat(agentPaths.CursorConfigPath); err == nil {
+			existing, err := os.ReadFile(agentPaths.CursorConfigPath)
+			if err != nil {
+				return "", nil, fmt.Errorf("%w: %w", constants.ErrFileReadFailed, err)
+			}
+			if err := os.WriteFile(agentPaths.CursorConfigPath+".bak", existing, constants.PermFilePublic); err != nil {
+				return "", nil, fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
+			}
+			fmt.Fprintf(os.Stderr, "[g8e] Backing up existing config to %s\n", pathutil.ToSlash(agentPaths.CursorConfigPath+".bak"))
 		}
 		displayPath := pathutil.ToSlash(agentPaths.CursorConfigPath)
 		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", displayPath)
-		if err := os.WriteFile(agentPaths.CursorConfigPath, configJSON, 0644); err != nil {
-			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+		if err := os.WriteFile(agentPaths.CursorConfigPath, configJSON, constants.PermFilePublic); err != nil {
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 		}
 		return agentPaths.CursorConfigPath, nil, nil
 
 	case string(constants.AgentBinaryDevin):
 		// Devin does not support native tool disabling via config
 		// Governance enforced by making g8e the only MCP server
-		if err := os.MkdirAll(agentPaths.DevinConfigDir, 0755); err != nil {
+		if err := os.MkdirAll(agentPaths.DevinConfigDir, constants.PermDirStandard); err != nil {
 			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
-		if err := BackupConfigFile(agentPaths.DevinConfigPath); err != nil {
-			return "", nil, fmt.Errorf("mcp: backup config: %w", err)
+		if _, err := os.Stat(agentPaths.DevinConfigPath); err == nil {
+			existing, err := os.ReadFile(agentPaths.DevinConfigPath)
+			if err != nil {
+				return "", nil, fmt.Errorf("%w: %w", constants.ErrFileReadFailed, err)
+			}
+			if err := os.WriteFile(agentPaths.DevinConfigPath+".bak", existing, constants.PermFilePublic); err != nil {
+				return "", nil, fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
+			}
+			fmt.Fprintf(os.Stderr, "[g8e] Backing up existing config to %s\n", pathutil.ToSlash(agentPaths.DevinConfigPath+".bak"))
 		}
 		displayPath := pathutil.ToSlash(agentPaths.DevinConfigPath)
 		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", displayPath)
-		if err := os.WriteFile(agentPaths.DevinConfigPath, configJSON, 0644); err != nil {
-			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+		if err := os.WriteFile(agentPaths.DevinConfigPath, configJSON, constants.PermFilePublic); err != nil {
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 		}
 		return agentPaths.DevinConfigPath, nil, nil
 
@@ -1185,15 +1199,15 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		displayPath := pathutil.ToSlash(configPath)
 		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", displayPath)
 		configYAML := fmt.Sprintf("mcp-server:\n  - name: g8e\n    command: %s\n    args:\n      - mcp\n      - stdio\n", binaryPath)
-		if err := os.WriteFile(configPath, []byte(configYAML), 0644); err != nil {
-			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+		if err := os.WriteFile(configPath, []byte(configYAML), constants.PermFilePublic); err != nil {
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 		}
 		return configPath, nil, nil
 
 	case string(constants.AgentBinaryGemini):
 		// Gemini uses settings.json for configuration
 		// We need to add g8e MCP server and exclude native tools to force governance
-		if err := os.MkdirAll(agentPaths.GeminiConfigDir, 0755); err != nil {
+		if err := os.MkdirAll(agentPaths.GeminiConfigDir, constants.PermDirStandard); err != nil {
 			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
 
@@ -1225,88 +1239,123 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 
 		displayPath := pathutil.ToSlash(agentPaths.GeminiConfigPath)
 		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s with native tools disabled\n", displayPath)
-		if err := os.WriteFile(agentPaths.GeminiConfigPath, configJSON, 0644); err != nil {
-			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+		if err := os.WriteFile(agentPaths.GeminiConfigPath, configJSON, constants.PermFilePublic); err != nil {
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 		}
 		return agentPaths.GeminiConfigPath, nil, nil
 
 	case string(constants.AgentBinaryGoose):
 		// Goose does not support native tool disabling via config
 		// Governance enforced by making g8e the only MCP server
-		if err := os.MkdirAll(agentPaths.GooseConfigDir, 0755); err != nil {
+		if err := os.MkdirAll(agentPaths.GooseConfigDir, constants.PermDirStandard); err != nil {
 			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
-		if err := BackupConfigFile(agentPaths.GooseConfigPath); err != nil {
-			return "", nil, fmt.Errorf("mcp: backup config: %w", err)
+		if _, err := os.Stat(agentPaths.GooseConfigPath); err == nil {
+			existing, err := os.ReadFile(agentPaths.GooseConfigPath)
+			if err != nil {
+				return "", nil, fmt.Errorf("%w: %w", constants.ErrFileReadFailed, err)
+			}
+			if err := os.WriteFile(agentPaths.GooseConfigPath+".bak", existing, constants.PermFilePublic); err != nil {
+				return "", nil, fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
+			}
+			fmt.Fprintf(os.Stderr, "[g8e] Backing up existing config to %s\n", pathutil.ToSlash(agentPaths.GooseConfigPath+".bak"))
 		}
 		displayPath := pathutil.ToSlash(agentPaths.GooseConfigPath)
 		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", displayPath)
-		if err := os.WriteFile(agentPaths.GooseConfigPath, configJSON, 0644); err != nil {
-			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+		if err := os.WriteFile(agentPaths.GooseConfigPath, configJSON, constants.PermFilePublic); err != nil {
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 		}
 		return agentPaths.GooseConfigPath, nil, nil
 
 	case string(constants.AgentBinaryVSCode):
 		// VS Code does not support native tool disabling via config
 		// Governance enforced by making g8e the only MCP server
-		if err := os.MkdirAll(agentPaths.VSCodeConfigDir, 0755); err != nil {
+		if err := os.MkdirAll(agentPaths.VSCodeConfigDir, constants.PermDirStandard); err != nil {
 			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
-		if err := BackupConfigFile(agentPaths.VSCodeConfigPath); err != nil {
-			return "", nil, fmt.Errorf("mcp: backup config: %w", err)
+		if _, err := os.Stat(agentPaths.VSCodeConfigPath); err == nil {
+			existing, err := os.ReadFile(agentPaths.VSCodeConfigPath)
+			if err != nil {
+				return "", nil, fmt.Errorf("%w: %w", constants.ErrFileReadFailed, err)
+			}
+			if err := os.WriteFile(agentPaths.VSCodeConfigPath+".bak", existing, constants.PermFilePublic); err != nil {
+				return "", nil, fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
+			}
+			fmt.Fprintf(os.Stderr, "[g8e] Backing up existing config to %s\n", pathutil.ToSlash(agentPaths.VSCodeConfigPath+".bak"))
 		}
 		displayPath := pathutil.ToSlash(agentPaths.VSCodeConfigPath)
 		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", displayPath)
-		if err := os.WriteFile(agentPaths.VSCodeConfigPath, configJSON, 0644); err != nil {
-			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+		if err := os.WriteFile(agentPaths.VSCodeConfigPath, configJSON, constants.PermFilePublic); err != nil {
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 		}
 		return agentPaths.VSCodeConfigPath, nil, nil
 
 	case string(constants.AgentBinaryCodeium):
 		// Codeium does not support native tool disabling via config
 		// Governance enforced by making g8e the only MCP server
-		if err := os.MkdirAll(agentPaths.CodeiumConfigDir, 0755); err != nil {
+		if err := os.MkdirAll(agentPaths.CodeiumConfigDir, constants.PermDirStandard); err != nil {
 			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
-		if err := BackupConfigFile(agentPaths.CodeiumConfigPath); err != nil {
-			return "", nil, fmt.Errorf("mcp: backup config: %w", err)
+		if _, err := os.Stat(agentPaths.CodeiumConfigPath); err == nil {
+			existing, err := os.ReadFile(agentPaths.CodeiumConfigPath)
+			if err != nil {
+				return "", nil, fmt.Errorf("%w: %w", constants.ErrFileReadFailed, err)
+			}
+			if err := os.WriteFile(agentPaths.CodeiumConfigPath+".bak", existing, constants.PermFilePublic); err != nil {
+				return "", nil, fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
+			}
+			fmt.Fprintf(os.Stderr, "[g8e] Backing up existing config to %s\n", pathutil.ToSlash(agentPaths.CodeiumConfigPath+".bak"))
 		}
 		displayPath := pathutil.ToSlash(agentPaths.CodeiumConfigPath)
 		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", displayPath)
-		if err := os.WriteFile(agentPaths.CodeiumConfigPath, configJSON, 0644); err != nil {
-			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+		if err := os.WriteFile(agentPaths.CodeiumConfigPath, configJSON, constants.PermFilePublic); err != nil {
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 		}
 		return agentPaths.CodeiumConfigPath, nil, nil
 
 	case string(constants.AgentBinaryTabby):
 		// Tabby does not support native tool disabling via config
 		// Governance enforced by making g8e the only MCP server
-		if err := os.MkdirAll(agentPaths.TabbyConfigDir, 0755); err != nil {
+		if err := os.MkdirAll(agentPaths.TabbyConfigDir, constants.PermDirStandard); err != nil {
 			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
-		if err := BackupConfigFile(agentPaths.TabbyConfigPath); err != nil {
-			return "", nil, fmt.Errorf("mcp: backup config: %w", err)
+		if _, err := os.Stat(agentPaths.TabbyConfigPath); err == nil {
+			existing, err := os.ReadFile(agentPaths.TabbyConfigPath)
+			if err != nil {
+				return "", nil, fmt.Errorf("%w: %w", constants.ErrFileReadFailed, err)
+			}
+			if err := os.WriteFile(agentPaths.TabbyConfigPath+".bak", existing, constants.PermFilePublic); err != nil {
+				return "", nil, fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
+			}
+			fmt.Fprintf(os.Stderr, "[g8e] Backing up existing config to %s\n", pathutil.ToSlash(agentPaths.TabbyConfigPath+".bak"))
 		}
 		displayPath := pathutil.ToSlash(agentPaths.TabbyConfigPath)
 		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", displayPath)
-		if err := os.WriteFile(agentPaths.TabbyConfigPath, configJSON, 0644); err != nil {
-			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+		if err := os.WriteFile(agentPaths.TabbyConfigPath, configJSON, constants.PermFilePublic); err != nil {
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 		}
 		return agentPaths.TabbyConfigPath, nil, nil
 
 	case string(constants.AgentBinaryContinue), string(constants.AgentBinaryContinueAlias):
 		// Continue does not support native tool disabling via config
 		// Governance enforced by making g8e the only MCP server
-		if err := os.MkdirAll(agentPaths.ContinueConfigDir, 0755); err != nil {
+		if err := os.MkdirAll(agentPaths.ContinueConfigDir, constants.PermDirStandard); err != nil {
 			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
-		if err := BackupConfigFile(agentPaths.ContinueConfigPath); err != nil {
-			return "", nil, fmt.Errorf("mcp: backup config: %w", err)
+		if _, err := os.Stat(agentPaths.ContinueConfigPath); err == nil {
+			existing, err := os.ReadFile(agentPaths.ContinueConfigPath)
+			if err != nil {
+				return "", nil, fmt.Errorf("%w: %w", constants.ErrFileReadFailed, err)
+			}
+			if err := os.WriteFile(agentPaths.ContinueConfigPath+".bak", existing, constants.PermFilePublic); err != nil {
+				return "", nil, fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
+			}
+			fmt.Fprintf(os.Stderr, "[g8e] Backing up existing config to %s\n", pathutil.ToSlash(agentPaths.ContinueConfigPath+".bak"))
 		}
 		displayPath := pathutil.ToSlash(agentPaths.ContinueConfigPath)
 		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", displayPath)
-		if err := os.WriteFile(agentPaths.ContinueConfigPath, configJSON, 0644); err != nil {
-			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+		if err := os.WriteFile(agentPaths.ContinueConfigPath, configJSON, constants.PermFilePublic); err != nil {
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 		}
 		return agentPaths.ContinueConfigPath, nil, nil
 
@@ -1320,7 +1369,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		}
 		if _, err := tmpFile.Write(configJSON); err != nil {
 			tmpFile.Close()
-			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 		}
 		tmpFile.Close()
 		tmpPath := tmpFile.Name()
@@ -1340,7 +1389,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		}
 		if _, err := tmpFile.Write(configJSON); err != nil {
 			tmpFile.Close()
-			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 		}
 		tmpFile.Close()
 		tmpPath := tmpFile.Name()

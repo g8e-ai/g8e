@@ -18,7 +18,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/pathutil"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/timesvc"
@@ -110,6 +111,7 @@ type SQLAuditStore struct {
 	db              *sqliteutil.DB
 	config          *AuditStoreConfig
 	logger          *slog.Logger
+	fileSvc         fs.RuntimeFileService
 	encryptionVault *vault.Vault
 	pruner          *sqliteutil.Pruner
 	closeOnce       sync.Once
@@ -118,7 +120,7 @@ type SQLAuditStore struct {
 }
 
 // NewSQLAuditStore creates a new SQL audit store
-func NewSQLAuditStore(config *AuditStoreConfig, logger *slog.Logger) (*SQLAuditStore, error) {
+func NewSQLAuditStore(config *AuditStoreConfig, logger *slog.Logger, fileSvc fs.RuntimeFileService) (*SQLAuditStore, error) {
 	if config == nil {
 		config = DefaultAuditStoreConfig()
 	}
@@ -130,6 +132,7 @@ func NewSQLAuditStore(config *AuditStoreConfig, logger *slog.Logger) (*SQLAuditS
 	ass := &SQLAuditStore{
 		config:          config,
 		logger:          logger,
+		fileSvc:         fileSvc,
 		encryptionVault: config.EncryptionVault,
 	}
 
@@ -172,14 +175,8 @@ func (ass *SQLAuditStore) bootstrap() error {
 
 // createDirectoryStructure creates the audit store directory structure
 func (ass *SQLAuditStore) createDirectoryStructure() error {
-	dirs := []string{
-		ass.config.DataDir,
-	}
-
-	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("%w %s: %w", constants.ErrAuditStoreCreateDirPathFailed, dir, err)
-		}
+	if err := ass.fileSvc.MkdirAll(context.Background(), constants.DataDirname, constants.PermDirStandard); err != nil {
+		return fmt.Errorf("%w %s: %w", constants.ErrAuditStoreCreateDirPathFailed, constants.DataDirname, err)
 	}
 
 	ass.logger.Info("Audit store directory structure ensured",
@@ -190,14 +187,14 @@ func (ass *SQLAuditStore) createDirectoryStructure() error {
 
 // verifyWritePermissions ensures the data directory is writable
 func (ass *SQLAuditStore) verifyWritePermissions() error {
-	testFile := pathutil.SafeJoin(ass.config.DataDir, ".write_test")
+	testRelPath := filepath.Join(constants.DataDirname, ".write_test")
 
-	if err := os.WriteFile(testFile, []byte("write_test"), 0600); err != nil {
+	if err := ass.fileSvc.WriteFile(context.Background(), testRelPath, []byte("write_test"), constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("%w %s: %w", constants.ErrAuditStoreCannotWrite, ass.config.DataDir, err)
 	}
 
-	if err := os.Remove(testFile); err != nil {
-		ass.logger.Warn("Failed to remove write test file", "path", testFile, string(constants.ConnectionStateError), err)
+	if err := ass.fileSvc.Remove(context.Background(), testRelPath); err != nil {
+		ass.logger.Warn("Failed to remove write test file", "path", testRelPath, string(constants.ConnectionStateError), err)
 	}
 
 	ass.logger.Info("Write permissions verified", "path", ass.config.DataDir)

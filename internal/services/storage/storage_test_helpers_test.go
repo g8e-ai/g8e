@@ -14,10 +14,13 @@
 package storage
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	vault "github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/require"
@@ -31,6 +34,18 @@ func testGitPath(t *testing.T) string {
 		t.Skip("git not available - skipping git-dependent test")
 	}
 	return gitPath
+}
+
+// newTestFileSvc creates a RuntimeFileService backed by a temp directory with
+// the full .g8e runtime tree created. Returns the file service and the data
+// directory path (fileSvc.Resolve(constants.DataDirname)).
+func newTestFileSvc(t *testing.T) (fs.RuntimeFileService, string) {
+	t.Helper()
+	baseDir := testutil.TempDir(t)
+	svc, err := fs.NewRuntimeFileService(baseDir, testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, svc.CreateRuntimeTree(context.Background()))
+	return svc, svc.Resolve(constants.DataDirname)
 }
 
 // CreateTestVault creates a new unlocked Vault in the given directory using the provided private key.

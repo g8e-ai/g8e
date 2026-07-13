@@ -16,14 +16,15 @@
 package gateway
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -112,31 +113,31 @@ func setupTestPKI(t *testing.T) *testPKIContext {
 }
 
 // loadCertificate reads and parses a PEM-encoded certificate from the given path.
-func loadCertificate(t *testing.T, path string) *x509.Certificate {
+func loadCertificate(t *testing.T, fileSvc fs.RuntimeFileService, relPath string) *x509.Certificate {
 	t.Helper()
 
-	certPEM, err := os.ReadFile(path)
-	require.NoError(t, err, "failed to read certificate from %s", path)
+	certPEM, err := fileSvc.ReadFile(context.Background(), relPath)
+	require.NoError(t, err, "failed to read certificate from %s", relPath)
 
 	block, _ := pem.Decode(certPEM)
-	require.NotNil(t, block, "failed to decode PEM from %s", path)
+	require.NotNil(t, block, "failed to decode PEM from %s", relPath)
 
 	cert, err := x509.ParseCertificate(block.Bytes)
-	require.NoError(t, err, "failed to parse certificate from %s", path)
+	require.NoError(t, err, "failed to parse certificate from %s", relPath)
 
 	return cert
 }
 
 // loadTrustBundle reads a PEM-encoded trust bundle and returns a cert pool.
-func loadTrustBundle(t *testing.T, path string) *x509.CertPool {
+func loadTrustBundle(t *testing.T, fileSvc fs.RuntimeFileService, relPath string) *x509.CertPool {
 	t.Helper()
 
-	bundlePEM, err := os.ReadFile(path)
-	require.NoError(t, err, "failed to read trust bundle from %s", path)
+	bundlePEM, err := fileSvc.ReadFile(context.Background(), relPath)
+	require.NoError(t, err, "failed to read trust bundle from %s", relPath)
 
 	pool := x509.NewCertPool()
 	ok := pool.AppendCertsFromPEM(bundlePEM)
-	require.True(t, ok, "failed to parse trust bundle from %s", path)
+	require.True(t, ok, "failed to parse trust bundle from %s", relPath)
 
 	return pool
 }
@@ -165,7 +166,7 @@ func TestPKIAuthority_VerifyCertificate(t *testing.T) {
 	t.Run("Valid certificate is accepted", func(t *testing.T) {
 		ctx := setupTestPKI(t)
 
-		cert := loadCertificate(t, filepath.Join(ctx.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
+		cert := loadCertificate(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
 		err := ctx.pki.VerifyCertificate(cert)
 		require.NoError(t, err)
 	})
@@ -173,7 +174,7 @@ func TestPKIAuthority_VerifyCertificate(t *testing.T) {
 	t.Run("Revoked certificate is rejected", func(t *testing.T) {
 		ctx := setupTestPKI(t)
 
-		cert := loadCertificate(t, filepath.Join(ctx.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
+		cert := loadCertificate(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
 		err := ctx.pki.RevokeCertificate(cert.SerialNumber.String(), "test revocation")
 		require.NoError(t, err)
 
@@ -188,14 +189,14 @@ func TestPKIAuthority_InitializePKI(t *testing.T) {
 		ctx := setupTestPKI(t)
 
 		dirs := []string{
-			filepath.Join(ctx.pkiDir, constants.PkiSubdirRoot),
-			filepath.Join(ctx.pkiDir, constants.PkiSubdirAuthorities),
-			filepath.Join(ctx.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub),
-			filepath.Join(ctx.pkiDir, constants.PkiSubdirTrust),
-			filepath.Join(ctx.pkiDir, constants.PkiSubdirRevocation),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirAuthorities),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirRevocation),
 		}
 		for _, dir := range dirs {
-			info, err := os.Stat(dir)
+			info, err := ctx.fileSvc.Stat(context.Background(), dir)
 			require.NoError(t, err, "directory %s should exist", dir)
 			assert.True(t, info.IsDir(), "%s should be a directory", dir)
 		}
@@ -207,19 +208,19 @@ func TestPKIAuthority_InitializePKI(t *testing.T) {
 		certPEM := testutil.ReadRootCA(t, ctx.pkiDir)
 		assert.NotEmpty(t, certPEM)
 
-		rootKeyPath := filepath.Join(ctx.pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCAKey)
-		_, err := os.Stat(rootKeyPath)
-		assert.True(t, os.IsNotExist(err), "root CA private key must not exist as PEM file")
+		rootKeyRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCAKey)
+		_, err := ctx.fileSvc.Stat(context.Background(), rootKeyRelPath)
+		assert.True(t, errors.Is(err, constants.ErrNotFound), "root CA private key must not exist as PEM file")
 
 		keyDER, err := ctx.sm.GetCAPrivateKey("root")
 		require.NoError(t, err)
 		assert.NotEmpty(t, keyDER)
 
-		paths := testutil.GetPKICertPaths(ctx.pkiDir)
-		certInfo, err := os.Stat(paths.RootCA)
+		rootCARelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA)
+		certInfo, err := ctx.fileSvc.Stat(context.Background(), rootCARelPath)
 		require.NoError(t, err)
 		if runtime.GOOS != "windows" {
-			assert.Equal(t, os.FileMode(0644), certInfo.Mode().Perm())
+			assert.Equal(t, constants.PermFilePublic, certInfo.Mode().Perm())
 		}
 	})
 
@@ -228,14 +229,14 @@ func TestPKIAuthority_InitializePKI(t *testing.T) {
 
 		intermediates := []string{"hub_ca", "operator_ca"}
 		for _, name := range intermediates {
-			certPath := filepath.Join(ctx.pkiDir, constants.PkiSubdirAuthorities, name+constants.FileExtCert)
-			keyPath := filepath.Join(ctx.pkiDir, constants.PkiSubdirAuthorities, name+constants.FileExtKey)
+			certRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirAuthorities, name+constants.FileExtCert)
+			keyRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirAuthorities, name+constants.FileExtKey)
 
-			_, err := os.Stat(certPath)
+			_, err := ctx.fileSvc.Stat(context.Background(), certRelPath)
 			require.NoError(t, err, "%s cert should exist", name)
 
-			_, err = os.Stat(keyPath)
-			assert.True(t, os.IsNotExist(err), "%s private key must not exist as PEM file", name)
+			_, err = ctx.fileSvc.Stat(context.Background(), keyRelPath)
+			assert.True(t, errors.Is(err, constants.ErrNotFound), "%s private key must not exist as PEM file", name)
 
 			caType := strings.TrimSuffix(name, "_ca")
 			keyDER, err := ctx.sm.GetCAPrivateKey(caType)
@@ -247,17 +248,17 @@ func TestPKIAuthority_InitializePKI(t *testing.T) {
 	t.Run("Service certificate generation", func(t *testing.T) {
 		ctx := setupTestPKI(t)
 
-		serviceCertPath := filepath.Join(ctx.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert)
-		serviceChainPath := filepath.Join(ctx.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayChain)
+		serviceCertRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert)
+		serviceChainRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayChain)
 
-		_, err := os.Stat(serviceCertPath)
+		_, err := ctx.fileSvc.Stat(context.Background(), serviceCertRelPath)
 		require.NoError(t, err)
 
-		_, err = os.Stat(serviceChainPath)
+		_, err = ctx.fileSvc.Stat(context.Background(), serviceChainRelPath)
 		require.NoError(t, err)
 
-		serviceKeyPath := filepath.Join(ctx.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayKey)
-		_, err = os.Stat(serviceKeyPath)
+		serviceKeyRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayKey)
+		_, err = ctx.fileSvc.Stat(context.Background(), serviceKeyRelPath)
 		require.Error(t, err, "private key should not exist as plaintext file")
 
 		keyDER, err := ctx.sm.GetServicePrivateKey("operator-gateway")
@@ -274,8 +275,8 @@ func TestPKIAuthority_InitializePKI(t *testing.T) {
 			constants.PkiFileOperatorBundle: 2,
 		}
 		for bundleName, expectedCount := range bundles {
-			bundlePath := filepath.Join(ctx.pkiDir, constants.PkiSubdirTrust, bundleName)
-			bundlePEM, err := os.ReadFile(bundlePath)
+			bundleRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, bundleName)
+			bundlePEM, err := ctx.fileSvc.ReadFile(context.Background(), bundleRelPath)
 			require.NoError(t, err, "trust bundle %s should exist", bundleName)
 
 			certPool := x509.NewCertPool()
@@ -286,8 +287,8 @@ func TestPKIAuthority_InitializePKI(t *testing.T) {
 			assert.Equal(t, expectedCount, actualCount, "trust bundle %s should contain %d certificates", bundleName, expectedCount)
 		}
 
-		trustDomainPath := filepath.Join(ctx.pkiDir, constants.PkiSubdirTrust, constants.PkiFileTrustDomainJSON)
-		_, err := os.Stat(trustDomainPath)
+		trustDomainRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileTrustDomainJSON)
+		_, err := ctx.fileSvc.Stat(context.Background(), trustDomainRelPath)
 		require.NoError(t, err, "trust domain metadata should exist")
 	})
 
@@ -295,16 +296,16 @@ func TestPKIAuthority_InitializePKI(t *testing.T) {
 		ctx := setupTestPKI(t)
 
 		const rootCAMirrorFilename = "ca.crt"
-		rootCAPath := filepath.Join(ctx.pkiDir, rootCAMirrorFilename)
-		_, err := os.Stat(rootCAPath)
-		assert.True(t, os.IsNotExist(err), "ca.crt must not exist at PKI root")
+		rootCAMirrorRelPath := filepath.Join(constants.PkiDirname, rootCAMirrorFilename)
+		_, err := ctx.fileSvc.Stat(context.Background(), rootCAMirrorRelPath)
+		assert.True(t, errors.Is(err, constants.ErrNotFound), "ca.crt must not exist at PKI root")
 	})
 
 	t.Run("Serving certificate verifies against trust bundle", func(t *testing.T) {
 		ctx := setupTestPKI(t)
 
-		serviceCert := loadCertificate(t, filepath.Join(ctx.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
-		trustPool := loadTrustBundle(t, filepath.Join(ctx.pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle))
+		serviceCert := loadCertificate(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
+		trustPool := loadTrustBundle(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle))
 
 		opts := x509.VerifyOptions{Roots: trustPool}
 		chains, err := serviceCert.Verify(opts)
@@ -339,7 +340,7 @@ func TestPKIAuthority_ChainValidity(t *testing.T) {
 
 	t.Run("Service certificate chain validity", func(t *testing.T) {
 		hubCertPEM := testutil.ReadHubCA(t, ctx.pkiDir)
-		serviceCert := loadCertificate(t, filepath.Join(ctx.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
+		serviceCert := loadCertificate(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
 
 		hubCert := parsePEMCertificate(t, hubCertPEM)
 
@@ -373,7 +374,7 @@ func TestPKIAuthority_URISAN(t *testing.T) {
 	ctx := setupTestPKI(t)
 
 	t.Run("Service certificate has SPIFFE URI SAN", func(t *testing.T) {
-		serviceCert := loadCertificate(t, filepath.Join(ctx.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
+		serviceCert := loadCertificate(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
 
 		assert.NotEmpty(t, serviceCert.URIs)
 
@@ -414,7 +415,7 @@ func TestPKIAuthority_ValidityPeriods(t *testing.T) {
 	})
 
 	t.Run("Service certificate validity period", func(t *testing.T) {
-		serviceCert := loadCertificate(t, filepath.Join(ctx.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
+		serviceCert := loadCertificate(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
 
 		duration := serviceCert.NotAfter.Sub(serviceCert.NotBefore)
 		expectedDuration := time.Duration(servingCertValidityDays) * 24 * time.Hour
@@ -434,7 +435,7 @@ func TestPKIAuthority_EKU(t *testing.T) {
 	})
 
 	t.Run("Service certificate has correct EKU", func(t *testing.T) {
-		serviceCert := loadCertificate(t, filepath.Join(ctx.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
+		serviceCert := loadCertificate(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
 
 		assert.Contains(t, serviceCert.ExtKeyUsage, x509.ExtKeyUsageServerAuth)
 		assert.Contains(t, serviceCert.ExtKeyUsage, x509.ExtKeyUsageClientAuth)
@@ -465,7 +466,7 @@ func TestPKIAuthority_TrustBundlePath(t *testing.T) {
 	actualPath := ctx.pki.TrustBundlePath()
 	assert.Equal(t, expectedPath, actualPath)
 
-	_, err := os.Stat(actualPath)
+	_, err := ctx.fileSvc.Stat(context.Background(), filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle))
 	require.NoError(t, err)
 }
 
@@ -499,7 +500,7 @@ func TestPKIAuthority_ReuseExisting(t *testing.T) {
 func TestPKIAuthority_Phase0Regression_C1_ServiceCertRenewal(t *testing.T) {
 	ctx := setupTestPKI(t)
 
-	serviceCert := loadCertificate(t, filepath.Join(ctx.pkiDir, "issued", "hub", "operator-gateway.crt"))
+	serviceCert := loadCertificate(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, "issued", "hub", "operator-gateway.crt"))
 
 	duration := serviceCert.NotAfter.Sub(serviceCert.NotBefore)
 	expectedDuration := time.Duration(servingCertValidityDays) * 24 * time.Hour
@@ -678,7 +679,6 @@ func TestPKIAuthority_GenerateCRL(t *testing.T) {
 func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 	t.Run("Phase5: SignCSR rejects P-384 CSR", func(t *testing.T) {
 		dataDir := testutil.TempDir(t)
-		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
 		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
@@ -686,7 +686,7 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, db, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
@@ -708,7 +708,6 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 
 	t.Run("Phase5: SignCSR accepts P-256 CSR", func(t *testing.T) {
 		dataDir := testutil.TempDir(t)
-		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
 		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
@@ -716,7 +715,7 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, db, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
@@ -729,7 +728,6 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 
 	t.Run("Phase5: All CA and service certs use P-256", func(t *testing.T) {
 		dataDir := testutil.TempDir(t)
-		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
 		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
@@ -737,7 +735,7 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, db, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
@@ -761,7 +759,6 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 			t.Skip("Unix file permissions not supported on Windows")
 		}
 		dataDir := testutil.TempDir(t)
-		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
 		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
@@ -769,25 +766,25 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, db, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Check public certificate files have 0644 permissions
 		publicFiles := []string{
-			filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA),
-			filepath.Join(pkiDir, constants.PkiSubdirAuthorities, constants.PkiFileHubCA),
-			filepath.Join(pkiDir, constants.PkiSubdirAuthorities, constants.PkiFileOperatorCA),
-			filepath.Join(pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert),
-			filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileRootBundle),
-			filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle),
-			filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileOperatorBundle),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirAuthorities, constants.PkiFileHubCA),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirAuthorities, constants.PkiFileOperatorCA),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileRootBundle),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileOperatorBundle),
 		}
 
 		for _, file := range publicFiles {
-			info, err := os.Stat(file)
+			info, err := fileSvc.Stat(context.Background(), file)
 			require.NoError(t, err, "file should exist: "+file)
-			assert.Equal(t, os.FileMode(0644), info.Mode().Perm(), "public file should have 0644 permissions: "+file)
+			assert.Equal(t, constants.PermFilePublic, info.Mode().Perm(), "public file should have 0644 permissions: "+file)
 		}
 	})
 
@@ -796,7 +793,6 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 			t.Skip("Unix file permissions not supported on Windows")
 		}
 		dataDir := testutil.TempDir(t)
-		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
 		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
@@ -804,20 +800,19 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, db, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Check sensitive chain file has 0600 permissions
-		chainFile := filepath.Join(pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayChain)
-		info, err := os.Stat(chainFile)
+		chainRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayChain)
+		info, err := fileSvc.Stat(context.Background(), chainRelPath)
 		require.NoError(t, err, "chain file should exist")
-		assert.Equal(t, os.FileMode(0600), info.Mode().Perm(), "chain file should have 0600 permissions")
+		assert.Equal(t, constants.PermFilePrivate, info.Mode().Perm(), "chain file should have 0600 permissions")
 	})
 
 	t.Run("Phase5: issued/apps directory is not created", func(t *testing.T) {
 		dataDir := testutil.TempDir(t)
-		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
 		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
@@ -825,14 +820,14 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, db, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Verify issued/apps directory does not exist
-		appsDir := filepath.Join(pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirApps)
-		_, err = os.Stat(appsDir)
-		assert.True(t, os.IsNotExist(err), "issued/apps directory should not be created")
+		appsRelDir := filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirApps)
+		_, err = fileSvc.Stat(context.Background(), appsRelDir)
+		assert.True(t, errors.Is(err, constants.ErrNotFound), "issued/apps directory should not be created")
 	})
 }
 
@@ -842,7 +837,6 @@ func TestPKIAuthority_Phase5_Permissions(t *testing.T) {
 			t.Skip("Unix file permissions not supported on Windows")
 		}
 		dataDir := testutil.TempDir(t)
-		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
 		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
@@ -850,25 +844,25 @@ func TestPKIAuthority_Phase5_Permissions(t *testing.T) {
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, db, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Check public certificate files have 0644 permissions
 		publicFiles := []string{
-			filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA),
-			filepath.Join(pkiDir, constants.PkiSubdirAuthorities, constants.PkiFileHubCA),
-			filepath.Join(pkiDir, constants.PkiSubdirAuthorities, constants.PkiFileOperatorCA),
-			filepath.Join(pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert),
-			filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileRootBundle),
-			filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle),
-			filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileOperatorBundle),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirAuthorities, constants.PkiFileHubCA),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirAuthorities, constants.PkiFileOperatorCA),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileRootBundle),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileOperatorBundle),
 		}
 
 		for _, file := range publicFiles {
-			info, err := os.Stat(file)
+			info, err := fileSvc.Stat(context.Background(), file)
 			require.NoError(t, err, "file should exist: "+file)
-			assert.Equal(t, os.FileMode(0644), info.Mode().Perm(), "public file should have 0644 permissions: "+file)
+			assert.Equal(t, constants.PermFilePublic, info.Mode().Perm(), "public file should have 0644 permissions: "+file)
 		}
 	})
 
@@ -877,7 +871,6 @@ func TestPKIAuthority_Phase5_Permissions(t *testing.T) {
 			t.Skip("Unix file permissions not supported on Windows")
 		}
 		dataDir := testutil.TempDir(t)
-		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
 		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
@@ -885,22 +878,21 @@ func TestPKIAuthority_Phase5_Permissions(t *testing.T) {
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, db, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Check sensitive chain file has 0600 permissions
-		chainFile := filepath.Join(pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayChain)
-		info, err := os.Stat(chainFile)
+		chainRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayChain)
+		info, err := fileSvc.Stat(context.Background(), chainRelPath)
 		require.NoError(t, err, "chain file should exist")
-		assert.Equal(t, os.FileMode(0600), info.Mode().Perm(), "chain file should have 0600 permissions")
+		assert.Equal(t, constants.PermFilePrivate, info.Mode().Perm(), "chain file should have 0600 permissions")
 	})
 }
 
 func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 	t.Run("Phase8_1: root.pem parses with 1 certificate", func(t *testing.T) {
 		dataDir := testutil.TempDir(t)
-		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
 		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
@@ -908,13 +900,13 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, db, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Load root.pem bundle
-		rootBundlePath := filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileRootBundle)
-		rootPEM, err := os.ReadFile(rootBundlePath)
+		rootBundleRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileRootBundle)
+		rootPEM, err := fileSvc.ReadFile(context.Background(), rootBundleRelPath)
 		require.NoError(t, err)
 
 		// Parse with x509.NewCertPool().AppendCertsFromPEM
@@ -929,7 +921,6 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 
 	t.Run("Phase8_1: operator-bundle.pem parses with 2 certificates", func(t *testing.T) {
 		dataDir := testutil.TempDir(t)
-		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
 		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
@@ -937,13 +928,13 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, db, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Load operator-bundle.pem
-		operatorBundlePath := filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileOperatorBundle)
-		operatorPEM, err := os.ReadFile(operatorBundlePath)
+		operatorBundleRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileOperatorBundle)
+		operatorPEM, err := fileSvc.ReadFile(context.Background(), operatorBundleRelPath)
 		require.NoError(t, err)
 
 		// Parse with x509.NewCertPool().AppendCertsFromPEM
@@ -958,7 +949,6 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 
 	t.Run("Phase8_1: g8eg-ca-bundle.pem parses with 3 certificates", func(t *testing.T) {
 		dataDir := testutil.TempDir(t)
-		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
 		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
@@ -966,13 +956,13 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, db, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Load g8eg-ca-bundle.pem
-		gatewayBundlePath := filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
-		gatewayPEM, err := os.ReadFile(gatewayBundlePath)
+		gatewayBundleRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+		gatewayPEM, err := fileSvc.ReadFile(context.Background(), gatewayBundleRelPath)
 		require.NoError(t, err)
 
 		// Parse with x509.NewCertPool().AppendCertsFromPEM
@@ -987,7 +977,6 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 
 	t.Run("Phase8_1: serving certificate verifies against g8eg-ca-bundle.pem", func(t *testing.T) {
 		dataDir := testutil.TempDir(t)
-		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
 		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
@@ -995,13 +984,13 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, db, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
 		// Load the serving certificate
-		serviceCertPath := filepath.Join(pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert)
-		certPEM, err := os.ReadFile(serviceCertPath)
+		serviceCertRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert)
+		certPEM, err := fileSvc.ReadFile(context.Background(), serviceCertRelPath)
 		require.NoError(t, err)
 
 		block, _ := pem.Decode(certPEM)
@@ -1011,8 +1000,8 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 		require.NoError(t, err, "serving certificate should parse as X.509")
 
 		// Load the gateway trust bundle
-		gatewayBundlePath := filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
-		gatewayPEM, err := os.ReadFile(gatewayBundlePath)
+		gatewayBundleRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+		gatewayPEM, err := fileSvc.ReadFile(context.Background(), gatewayBundleRelPath)
 		require.NoError(t, err)
 
 		// Parse the trust bundle

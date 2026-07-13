@@ -455,7 +455,7 @@ func TestSQLAuditStore_NilEncryptionVault(t *testing.T) {
 	config := DefaultAuditStoreConfig()
 
 	// Test that service fails to initialize with nil EncryptionVault
-	ass, err := NewSQLAuditStore(config, logger)
+	ass, err := NewSQLAuditStore(config, logger, nil)
 	if err == nil {
 		t.Error("NewSQLAuditStore with nil EncryptionVault should return error")
 	}

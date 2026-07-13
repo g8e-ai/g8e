@@ -24,6 +24,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/vault"
@@ -42,20 +43,25 @@ func setupTestAuditStore(t *testing.T) *storage.SQLAuditStore {
 	t.Helper()
 	tempDir := testutil.TempDir(t)
 
+	fileSvc, err := fs.NewRuntimeFileService(tempDir, testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	dataDir := fileSvc.Resolve(constants.DataDirname)
+
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	vaultDir := filepath.Join(tempDir, constants.VaultDirname)
 	testVault := createTestVault(t, vaultDir, privKey)
 
 	cfg := &storage.AuditStoreConfig{
-		DataDir:              tempDir,
+		DataDir:              dataDir,
 		DBPath:               "test_audit.db",
 		MaxDBSizeMB:          100,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 60,
 		EncryptionVault:      testVault,
 	}
-	store, err := storage.NewSQLAuditStore(cfg, testutil.NewTestLogger())
+	store, err := storage.NewSQLAuditStore(cfg, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { store.Close() })
 	return store

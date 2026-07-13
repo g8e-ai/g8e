@@ -34,6 +34,8 @@ func setupTestHistoryHandler(t *testing.T) (*HistoryHandler, *SQLAuditStore, *va
 	gitPath := testGitPath(t)
 	tempDir := testutil.TempDir(t)
 
+	fileSvc, dataDir := newTestFileSvc(t)
+
 	// Create vault for encryption
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -51,14 +53,14 @@ func setupTestHistoryHandler(t *testing.T) (*HistoryHandler, *SQLAuditStore, *va
 	require.NoError(t, err)
 
 	auditStoreConfig := &AuditStoreConfig{
-		DataDir:              tempDir,
+		DataDir:              dataDir,
 		DBPath:               "audit_store.db",
 		MaxDBSizeMB:          100,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 60,
 		EncryptionVault:      testVault,
 	}
-	auditStore, err := NewSQLAuditStore(auditStoreConfig, logger)
+	auditStore, err := NewSQLAuditStore(auditStoreConfig, logger, fileSvc)
 	require.NoError(t, err)
 
 	t.Cleanup(func() {

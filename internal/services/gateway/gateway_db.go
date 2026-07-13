@@ -157,7 +157,7 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	auditStoreConfig := storage.DefaultAuditStoreConfig()
 	auditStoreConfig.DataDir = dataDir
 	auditStoreConfig.EncryptionVault = encryptionVault
-	auditStore, err := storage.NewSQLAuditStore(auditStoreConfig, logger)
+	auditStore, err := storage.NewSQLAuditStore(auditStoreConfig, logger, fileSvc)
 	if err != nil {
 		db.Close()
 		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
