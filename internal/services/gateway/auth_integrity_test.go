@@ -28,6 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
@@ -38,9 +39,9 @@ import (
 func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
+	fileSvc := newTestFileSvc(t)
 	dbDir := testutil.TempDir(t)
-	secretsDir := testutil.TempDir(t)
-	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger)
+	db, err := openTestDB(t, dbDir, filepath.Join(dbDir, constants.VaultDirname), fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -103,9 +104,9 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
+	fileSvc := newTestFileSvc(t)
 	dbDir := testutil.TempDir(t)
-	secretsDir := testutil.TempDir(t)
-	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger)
+	db, err := openTestDB(t, dbDir, filepath.Join(dbDir, constants.VaultDirname), fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -136,15 +137,15 @@ func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
 func setupAuthService(t *testing.T) (*AuthService, *CanonicalDBService) {
 	t.Helper()
 	logger := testutil.NewTestLogger()
+	fileSvc := newTestFileSvc(t)
 	dbDir := testutil.TempDir(t)
-	secretsDir := testutil.TempDir(t)
-	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger)
+	db, err := openTestDB(t, dbDir, filepath.Join(dbDir, constants.VaultDirname), fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
 	responderSvc := response.NewWriter(logger)
 	personaSvc := NewPersonaService(db, logger)
-	auth := NewAuthService(db, nil, logger, nil, personaSvc, responderSvc, secretsDir, nil, "", "", "")
+	auth := NewAuthService(db, nil, logger, nil, personaSvc, responderSvc, paths.Infra.SecretsDir, nil, "", "", "")
 	return auth, db
 }
 

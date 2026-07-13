@@ -378,8 +378,8 @@ func TestAuthIntegrity_AppPolicyDenyByDefault(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	dbDir := testutil.TempDir(t)
-	secretsDir := testutil.TempDir(t)
-	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
+	fileSvc := newTestFileSvc(t)
+	db, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

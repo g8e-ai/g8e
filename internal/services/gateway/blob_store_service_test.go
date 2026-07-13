@@ -29,11 +29,11 @@ import (
 func setupBlobStoreTest(t *testing.T) (*BlobStoreService, *CanonicalDBService) {
 	t.Helper()
 	logger := testutil.NewTestLogger()
+	fileSvc := newTestFileSvc(t)
 	dbDir := testutil.TempDir(t)
-	secretsDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(dbDir, constants.VaultDirname)
 
-	db, err := openTestDB(t, dbDir, secretsDir, vaultDir, logger)
+	db, err := openTestDB(t, dbDir, vaultDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
