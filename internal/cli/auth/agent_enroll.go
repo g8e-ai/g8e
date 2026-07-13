@@ -22,13 +22,13 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"runtime"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/protocol"
 )
 
@@ -38,7 +38,7 @@ import (
 // Store for key generation and imports the signed cert for Windows Hello native
 // API access. It does NOT handle re-enrollment of existing credentials — that
 // is the re-enrollment path's responsibility.
-func EnrollCLI(cfg *config.Config, useTPM bool) error {
+func EnrollCLI(fileSvc fs.RuntimeFileService, cfg *config.Config, useTPM bool) error {
 	bootstrapped, err := CheckBootstrapStatus(cfg, "")
 	if err != nil {
 		return fmt.Errorf("check bootstrap status: %w", err)
@@ -73,7 +73,7 @@ func EnrollCLI(cfg *config.Config, useTPM bool) error {
 		return constants.ErrMissingRequiredField
 	}
 
-	if err := SaveCertAndKey(regResp.CLICert, regResp.CLICertChain, cliKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
+	if err := SaveCertAndKey(fileSvc, regResp.CLICert, regResp.CLICertChain, cliKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 	if runtime.GOOS == "windows" {
@@ -83,14 +83,11 @@ func EnrollCLI(cfg *config.Config, useTPM bool) error {
 	}
 	if regResp.HubTrustBundle != "" {
 		trustPath := cfg.TrustBundlePath()
-		if err := os.MkdirAll(filepath.Dir(trustPath), constants.PermDirStandard); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
-		}
-		if err := os.WriteFile(trustPath, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
+		if err := writeFileWithFS(fileSvc, trustPath, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 		}
 	}
-	return SaveCredentials(cfg, &Credentials{
+	return SaveCredentials(fileSvc, cfg, &Credentials{
 		OperatorSessionID: regResp.OperatorSessionID,
 		UserID:            regResp.UserID,
 		OperatorID:        regResp.OperatorID,
@@ -101,11 +98,11 @@ func EnrollCLI(cfg *config.Config, useTPM bool) error {
 // EnrollAgentApp enrolls an agent as an external app with the gateway using the delegated credential model.
 // It requires an authenticated human CLI session (mTLS) and issues a short-lived cert that carries
 // both the app SPIFFE ID and the requestor's user identity.
-func EnrollAgentApp(cfg *config.Config, agentName string) (appID, certFile, keyFile string, err error) {
+func EnrollAgentApp(fileSvc fs.RuntimeFileService, cfg *config.Config, agentName string) (appID, certFile, keyFile string, err error) {
 	certFile = cfg.AppCertFile(agentName)
 	keyFile = cfg.AppKeyFile(agentName)
 
-	if existingAppID, ok := checkExistingAppCert(certFile, agentName); ok {
+	if existingAppID, ok := checkExistingAppCert(fileSvc, certFile, agentName); ok {
 		return existingAppID, certFile, keyFile, nil
 	}
 
@@ -124,12 +121,12 @@ func EnrollAgentApp(cfg *config.Config, agentName string) (appID, certFile, keyF
 		return "", "", "", fmt.Errorf("%w: %w", constants.ErrRequestMarshalFailed, err)
 	}
 
-	httpClient, err := BuildMTLSClient(cfg, httpTimeout)
+	httpClient, err := BuildMTLSClient(fileSvc, cfg, httpTimeout)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	creds, err := LoadCredentials(cfg)
+	creds, err := LoadCredentials(fileSvc, cfg)
 	if err != nil {
 		return "", "", "", fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 	}
@@ -163,15 +160,15 @@ func EnrollAgentApp(cfg *config.Config, agentName string) (appID, certFile, keyF
 		return "", "", "", fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, enrollResp.Error)
 	}
 
-	if err := SaveCertAndKey(enrollResp.AppCert, enrollResp.CertChain, key, certFile, keyFile); err != nil {
+	if err := SaveCertAndKey(fileSvc, enrollResp.AppCert, enrollResp.CertChain, key, certFile, keyFile); err != nil {
 		return "", "", "", fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 
 	return enrollResp.AppID, certFile, keyFile, nil
 }
 
-func checkExistingAppCert(certFile, agentName string) (string, bool) {
-	certBytes, err := os.ReadFile(certFile)
+func checkExistingAppCert(fileSvc fs.RuntimeFileService, certFile, agentName string) (string, bool) {
+	certBytes, err := readFileWithFS(fileSvc, certFile)
 	if err != nil {
 		return "", false
 	}
