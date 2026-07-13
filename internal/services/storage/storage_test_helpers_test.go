@@ -36,12 +36,11 @@ func testGitPath(t *testing.T) string {
 	return gitPath
 }
 
-// newTestFileSvc creates a RuntimeFileService backed by a temp directory with
-// the full .g8e runtime tree created. Returns the file service and the data
-// directory path (fileSvc.Resolve(constants.DataDirname)).
-func newTestFileSvc(t *testing.T) (fs.RuntimeFileService, string) {
+// newTestFileSvc creates a RuntimeFileService backed by baseDir with the full
+// .g8e runtime tree created. Returns the file service and the data directory
+// path (fileSvc.Resolve(constants.DataDirname)).
+func newTestFileSvc(t *testing.T, baseDir string) (fs.RuntimeFileService, string) {
 	t.Helper()
-	baseDir := testutil.TempDir(t)
 	svc, err := fs.NewRuntimeFileService(baseDir, testutil.NewTestLogger())
 	require.NoError(t, err)
 	require.NoError(t, svc.CreateRuntimeTree(context.Background()))

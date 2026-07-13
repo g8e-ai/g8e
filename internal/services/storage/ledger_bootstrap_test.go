@@ -42,7 +42,7 @@ func setupBootstrapLedger(t *testing.T) (*GitLedgerService, string) {
 	gitPath := testGitPath(t)
 	tempDir := testutil.TempDir(t)
 
-	fileSvc, _ := newTestFileSvc(t)
+	fileSvc, _ := newTestFileSvc(t, tempDir)
 	ledgerDir := fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.LedgerDirname))
 
 	_, privKey, err := ed25519.GenerateKey(nil)
@@ -268,7 +268,7 @@ func TestBootstrap_ReconstructionOverExistingDir(t *testing.T) {
 	gitPath := testGitPath(t)
 	tempDir := testutil.TempDir(t)
 
-	fileSvc, _ := newTestFileSvc(t)
+	fileSvc, _ := newTestFileSvc(t, tempDir)
 	ledgerDir := fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.LedgerDirname))
 
 	_, privKey, err := ed25519.GenerateKey(nil)

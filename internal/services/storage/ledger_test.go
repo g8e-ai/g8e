@@ -35,7 +35,7 @@ func setupTestLedger(t *testing.T) (*GitLedgerService, string) {
 	gitPath := testGitPath(t)
 	tempDir := testutil.TempDir(t)
 
-	fileSvc, _ := newTestFileSvc(t)
+	fileSvc, _ := newTestFileSvc(t, tempDir)
 	ledgerDir := fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.LedgerDirname))
 
 	// Create vault but do NOT unlock it (encryption disabled)
@@ -69,7 +69,7 @@ func setupTestLedgerWithEncryption(t *testing.T) (*GitLedgerService, string) {
 	gitPath := testGitPath(t)
 	tempDir := testutil.TempDir(t)
 
-	fileSvc, _ := newTestFileSvc(t)
+	fileSvc, _ := newTestFileSvc(t, tempDir)
 	ledgerDir := fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.LedgerDirname))
 
 	// Create vault and unlock it (encryption enabled)
@@ -344,8 +344,8 @@ func TestLedgerService_CopyToLedger(t *testing.T) {
 	err := os.WriteFile(srcPath, []byte(srcContent), 0644)
 	require.NoError(t, err)
 
-	// Copy to ledger
-	dstPath := filepath.Join(tempDir, "ledger", "files", "test", "source.txt")
+	// Copy to ledger — destination must be inside .g8e/ runtime dir
+	dstPath := lms.fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.LedgerDirname, "files", "test", "source.txt"))
 	err = lms.copyToLedger(srcPath, dstPath)
 	require.NoError(t, err)
 
@@ -366,12 +366,13 @@ func TestLedgerService_CopyToLedger_NonExistentSource(t *testing.T) {
 
 func TestLedgerService_SnapshotLedger(t *testing.T) {
 	t.Parallel()
-	lms, tempDir := setupTestLedger(t)
+	lms, _ := setupTestLedger(t)
 
-	ledgerDir := filepath.Join(tempDir, "ledger")
+	ledgerRelDir := filepath.Join(constants.DataDirname, constants.LedgerDirname)
+	ledgerDir := lms.fileSvc.Resolve(ledgerRelDir)
 
 	// Initialize git repository first
-	err := lms.initGitRepo(ledgerDir)
+	err := lms.initGitRepo(ledgerRelDir)
 	require.NoError(t, err, "failed to initialize git repo")
 
 	// Take a snapshot
@@ -381,7 +382,7 @@ func TestLedgerService_SnapshotLedger(t *testing.T) {
 	assert.Len(t, hash1, 40) // Git SHA-1 hash length
 
 	// Make a change and take another snapshot
-	testFile := filepath.Join(tempDir, "ledger", "files", "snapshot_test.txt")
+	testFile := filepath.Join(ledgerDir, "files", "snapshot_test.txt")
 	os.MkdirAll(filepath.Dir(testFile), 0755)
 	err = os.WriteFile(testFile, []byte("snapshot test"), 0644)
 	require.NoError(t, err)
@@ -394,12 +395,13 @@ func TestLedgerService_SnapshotLedger(t *testing.T) {
 
 func TestLedgerService_CalculateDiffStat(t *testing.T) {
 	t.Parallel()
-	lms, tempDir := setupTestLedger(t)
+	lms, _ := setupTestLedger(t)
 
-	ledgerDir := filepath.Join(tempDir, "ledger")
+	ledgerRelDir := filepath.Join(constants.DataDirname, constants.LedgerDirname)
+	ledgerDir := lms.fileSvc.Resolve(ledgerRelDir)
 
 	// Initialize git repo first
-	err := lms.initGitRepo(ledgerDir)
+	err := lms.initGitRepo(ledgerRelDir)
 	require.NoError(t, err)
 
 	// Take initial snapshot
@@ -407,7 +409,7 @@ func TestLedgerService_CalculateDiffStat(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a file
-	testFile := filepath.Join(tempDir, "ledger", "files", "diff_test.txt")
+	testFile := filepath.Join(ledgerDir, "files", "diff_test.txt")
 	os.MkdirAll(filepath.Dir(testFile), 0755)
 	err = os.WriteFile(testFile, []byte("line 1\nline 2\nline 3\n"), 0644)
 	require.NoError(t, err)
@@ -423,9 +425,9 @@ func TestLedgerService_CalculateDiffStat(t *testing.T) {
 
 func TestLedgerService_CalculateDiffStat_EmptyHashes(t *testing.T) {
 	t.Parallel()
-	lms, tempDir := setupTestLedger(t)
+	lms, _ := setupTestLedger(t)
 
-	ledgerDir := filepath.Join(tempDir, "ledger")
+	ledgerDir := lms.fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.LedgerDirname))
 
 	diffStat := lms.calculateDiffStat(ledgerDir, "", "")
 	assert.Empty(t, diffStat)
@@ -707,7 +709,7 @@ func TestLedgerService_MultiSessionConcurrency(t *testing.T) {
 			assert.NoError(t, err)
 
 			// Verify session-specific ledger directory exists
-			sessionLedgerDir := filepath.Join(tempDir, "ledger", "sessions", sessionID)
+			sessionLedgerDir := lms.fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.LedgerDirname, constants.SessionsDirname, sessionID))
 			assert.DirExists(t, filepath.Join(sessionLedgerDir, ".git"))
 
 			done <- true

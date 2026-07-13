@@ -33,7 +33,7 @@ func setupTestLedgerForDiffStat(t *testing.T) (*GitLedgerService, string) {
 	gitPath := testGitPath(t)
 	tempDir := testutil.TempDir(t)
 
-	fileSvc, _ := newTestFileSvc(t)
+	fileSvc, _ := newTestFileSvc(t, tempDir)
 	ledgerDir := fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.LedgerDirname))
 
 	// Create vault but do NOT unlock it (encryption disabled)
