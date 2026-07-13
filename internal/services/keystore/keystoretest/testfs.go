@@ -17,7 +17,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/require"
@@ -29,9 +29,8 @@ import (
 func NewTestFileService(t *testing.T) (fs.RuntimeFileService, string) {
 	t.Helper()
 	baseDir := testutil.TempDir(t)
-	require.NoError(t, paths.InitWithBase(baseDir))
 	svc, err := fs.NewRuntimeFileService(baseDir, testutil.NewVerboseTestLogger(t))
 	require.NoError(t, err)
 	require.NoError(t, svc.CreateRuntimeTree(context.Background()))
-	return svc, paths.Infra.SecretsDir
+	return svc, svc.Resolve(constants.SecretsDirname)
 }

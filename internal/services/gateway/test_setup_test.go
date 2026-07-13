@@ -23,7 +23,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
@@ -62,7 +61,6 @@ type TestInfrastructure struct {
 func newTestFileSvc(t *testing.T) fs.RuntimeFileService {
 	t.Helper()
 	baseDir := testutil.TempDir(t)
-	require.NoError(t, paths.InitWithBase(baseDir))
 	svc, err := fs.NewRuntimeFileService(baseDir, testutil.NewTestLogger())
 	require.NoError(t, err)
 	require.NoError(t, svc.CreateRuntimeTree(context.Background()))
@@ -99,7 +97,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	fileSvc := newTestFileSvc(t)
 	dbDir := testutil.TempDir(t)
 	pkiDir := testutil.TempDir(t)
-	secretsDir := paths.Infra.SecretsDir
+	secretsDir := fileSvc.Resolve(constants.SecretsDirname)
 
 	ks := newTestKeystore(t, fileSvc, logger)
 

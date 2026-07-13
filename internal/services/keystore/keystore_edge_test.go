@@ -25,7 +25,6 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -36,11 +35,10 @@ import (
 func setupTestFileService(t *testing.T) (fs.RuntimeFileService, string) {
 	t.Helper()
 	baseDir := testutil.TempDir(t)
-	require.NoError(t, paths.InitWithBase(baseDir))
 	svc, err := fs.NewRuntimeFileService(baseDir, testutil.NewVerboseTestLogger(t))
 	require.NoError(t, err)
 	require.NoError(t, svc.CreateRuntimeTree(context.Background()))
-	return svc, paths.Infra.SecretsDir
+	return svc, svc.Resolve(constants.SecretsDirname)
 }
 
 func TestFileKeyring_StoreMasterKey_InvalidKeyLength(t *testing.T) {

@@ -17,9 +17,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
 )
 
 // CreateRuntimeTree creates the full .g8e/ directory tree with correct
@@ -33,34 +33,34 @@ func (fs *localFS) CreateRuntimeTree(ctx context.Context) error {
 		return err
 	}
 
-	infra := paths.Infra
+	pkiDir := filepath.Join(fs.runtimeDir, constants.PkiDirname)
 
 	dirs := []struct {
 		path string
 		mode os.FileMode
 	}{
 		{fs.runtimeDir, constants.PermDirPrivate},
-		{infra.DataDir, constants.PermDirStandard},
-		{infra.PkiDir, constants.PermDirStandard},
-		{infra.PkiRootDir, constants.PermDirStandard},
-		{infra.PkiAuthoritiesDir, constants.PermDirStandard},
-		{infra.PkiIssuedDir, constants.PermDirStandard},
-		{infra.PkiIssuedHubDir, constants.PermDirStandard},
-		{infra.PkiIssuedGatewayPeerDir, constants.PermDirStandard},
-		{infra.AppCertDir, constants.PermDirStandard},
-		{infra.PkiTrustDir, constants.PermDirStandard},
-		{infra.PkiRevocationDir, constants.PermDirStandard},
-		{infra.PkiBinariesDir, constants.PermDirStandard},
-		{infra.TrustedSignersDir, constants.PermDirStandard},
-		{infra.ClientPkiDir, constants.PermDirStandard},
-		{infra.SecretsDir, constants.PermDirPrivate},
-		{infra.VaultDir, constants.PermDirPrivate},
-		{infra.LedgerDir, constants.PermDirStandard},
-		{infra.LedgerFilesDir, constants.PermDirStandard},
-		{infra.LogDir, constants.PermDirStandard},
-		{infra.PidDir, constants.PermDirStandard},
-		{infra.ProtocolDir, constants.PermDirStandard},
-		{infra.DocsDir, constants.PermDirStandard},
+		{filepath.Join(fs.runtimeDir, constants.DataDirname), constants.PermDirStandard},
+		{pkiDir, constants.PermDirStandard},
+		{filepath.Join(pkiDir, constants.PkiSubdirRoot), constants.PermDirStandard},
+		{filepath.Join(pkiDir, constants.PkiSubdirAuthorities), constants.PermDirStandard},
+		{filepath.Join(pkiDir, constants.PkiSubdirIssued), constants.PermDirStandard},
+		{filepath.Join(pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub), constants.PermDirStandard},
+		{filepath.Join(pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirGatewayPeer), constants.PermDirStandard},
+		{filepath.Join(pkiDir, constants.PkiSubdirApps), constants.PermDirStandard},
+		{filepath.Join(pkiDir, constants.PkiSubdirTrust), constants.PermDirStandard},
+		{filepath.Join(pkiDir, constants.PkiSubdirRevocation), constants.PermDirStandard},
+		{filepath.Join(pkiDir, constants.PkiSubdirBinaries), constants.PermDirStandard},
+		{filepath.Join(pkiDir, constants.PkiSubdirTrustedSigners), constants.PermDirStandard},
+		{filepath.Join(pkiDir, constants.PkiSubdirClient), constants.PermDirStandard},
+		{filepath.Join(fs.runtimeDir, constants.SecretsDirname), constants.PermDirPrivate},
+		{filepath.Join(fs.runtimeDir, constants.VaultDirname), constants.PermDirPrivate},
+		{filepath.Join(fs.runtimeDir, constants.LedgerDirname), constants.PermDirStandard},
+		{filepath.Join(fs.runtimeDir, constants.LedgerDirname, constants.FilesDirname), constants.PermDirStandard},
+		{filepath.Join(fs.runtimeDir, constants.LogDirname), constants.PermDirStandard},
+		{filepath.Join(fs.runtimeDir, constants.PidDirname), constants.PermDirStandard},
+		{filepath.Join(fs.runtimeDir, constants.ProtocolDirname), constants.PermDirStandard},
+		{filepath.Join(fs.runtimeDir, constants.DocsDirname), constants.PermDirStandard},
 	}
 
 	for _, dir := range dirs {

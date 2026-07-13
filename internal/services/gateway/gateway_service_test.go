@@ -74,6 +74,8 @@ func TestGatewayModeService_StateManagement(t *testing.T) {
 	cfg.Gateway.PKIDir = testutil.TempDir(t)
 	cfg.Gateway.SecretsDir = paths.Infra.SecretsDir
 
+	fileSvc := newTestFileSvc(t)
+
 	db, err := openTestDB(t, cfg.Gateway.DataDir, filepath.Join(cfg.Gateway.DataDir, "vault"), fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })

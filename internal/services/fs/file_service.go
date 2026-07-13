@@ -29,7 +29,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/pathutil"
-	"github.com/g8e-ai/g8e/internal/paths"
 )
 
 // RuntimeFileService provides safe file operations within the .g8e runtime directory.
@@ -93,8 +92,7 @@ type localFS struct {
 }
 
 // NewRuntimeFileService creates a RuntimeFileService scoped to the .g8e/
-// directory under baseDir. Callers must call paths.InitWithBase before
-// constructing the service.
+// directory under baseDir.
 func NewRuntimeFileService(baseDir string, logger *slog.Logger) (RuntimeFileService, error) {
 	if baseDir == "" {
 		var err error
@@ -102,10 +100,6 @@ func NewRuntimeFileService(baseDir string, logger *slog.Logger) (RuntimeFileServ
 		if err != nil {
 			return nil, fmt.Errorf("fs: get working directory: %w", err)
 		}
-	}
-
-	if paths.Infra.RuntimeDir == "" {
-		return nil, fmt.Errorf("fs: paths.Infra not initialized — call paths.InitWithBase first")
 	}
 
 	return &localFS{
