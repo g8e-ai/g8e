@@ -16,13 +16,16 @@
 package gateway
 
 import (
+	"context"
 	"log/slog"
 	"path/filepath"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/keystore/keystoretest"
 	"github.com/g8e-ai/g8e/internal/services/storage"
@@ -53,12 +56,25 @@ type TestInfrastructure struct {
 	SecretsDir         string
 }
 
+// newTestFileSvc creates a RuntimeFileService backed by a temp directory
+// with the full .g8e runtime tree created. All gateway integration tests
+// should use this helper to obtain a fileSvc.
+func newTestFileSvc(t *testing.T) fs.RuntimeFileService {
+	t.Helper()
+	baseDir := testutil.TempDir(t)
+	require.NoError(t, paths.InitWithBase(baseDir))
+	svc, err := fs.NewRuntimeFileService(baseDir, testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, svc.CreateRuntimeTree(context.Background()))
+	return svc
+}
+
 // newTestKeystore creates an initialized keystore using an in-memory keyring.
 // Callers must pass this to OpenCanonicalDBService when testMode is true.
-func newTestKeystore(tb testing.TB, secretsDir string, logger *slog.Logger) *keystore.Keystore {
+func newTestKeystore(tb testing.TB, fileSvc fs.RuntimeFileService, logger *slog.Logger) *keystore.Keystore {
 	tb.Helper()
 	keyring := keystoretest.NewMemoryKeyring()
-	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyringAndFS(logger, keyring, fileSvc)
 	require.NoError(tb, err)
 	require.NoError(tb, ks.Initialize())
 	require.NoError(tb, ks.EnforcePermissions())
@@ -67,10 +83,10 @@ func newTestKeystore(tb testing.TB, secretsDir string, logger *slog.Logger) *key
 
 // openTestDB wraps OpenCanonicalDBService for tests, creating a keystore
 // with an in-memory keyring so callers don't need to manage testKeystore.
-func openTestDB(t *testing.T, dataDir, secretsDir, vaultDir string, logger *slog.Logger) (*CanonicalDBService, error) {
+func openTestDB(t *testing.T, dataDir, vaultDir string, fileSvc fs.RuntimeFileService, logger *slog.Logger) (*CanonicalDBService, error) {
 	t.Helper()
-	ks := newTestKeystore(t, secretsDir, logger)
-	return OpenCanonicalDBService(dataDir, secretsDir, vaultDir, logger, true, "", false, ks)
+	ks := newTestKeystore(t, fileSvc, logger)
+	return OpenCanonicalDBService(dataDir, vaultDir, logger, true, "", false, ks, fileSvc)
 }
 
 // setupTestInfrastructure creates common test infrastructure for gateway tests.
@@ -80,25 +96,22 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
+	fileSvc := newTestFileSvc(t)
 	dbDir := testutil.TempDir(t)
 	pkiDir := testutil.TempDir(t)
-	secretsDir := testutil.TempDir(t)
+	secretsDir := paths.Infra.SecretsDir
 
-	ks := newTestKeystore(t, secretsDir, logger)
+	ks := newTestKeystore(t, fileSvc, logger)
 
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks)
+	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
-	sm := &SecretManager{
-		db:         db.db,
-		secretsDir: secretsDir,
-		logger:     logger,
-		keystore:   ks,
-	}
+	sm, err := NewSecretManagerWithKeystore(db.db, fileSvc, logger, ks)
+	require.NoError(t, err)
 
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
 	err = pki.InitializePKI(nil)

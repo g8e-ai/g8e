@@ -31,6 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/exitcode"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/services"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 // ServeOperatorOptions holds the configuration for running the operator in standalone mode.
@@ -271,6 +272,17 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		logger.Error("Failed to create Operator service", string(constants.ConnectionStateError), err)
 		os.Exit(exitcode.FromError(err))
 	}
+
+	fileSvc, err := fs.NewRuntimeFileService("", logger)
+	if err != nil {
+		logger.Error("Failed to create file service", string(constants.ConnectionStateError), err)
+		os.Exit(exitcode.FromError(err))
+	}
+	if err := fileSvc.CreateRuntimeTree(context.Background()); err != nil {
+		logger.Error("Failed to create runtime tree", string(constants.ConnectionStateError), err)
+		os.Exit(exitcode.FromError(err))
+	}
+	g8eoService.SetFileService(fileSvc)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

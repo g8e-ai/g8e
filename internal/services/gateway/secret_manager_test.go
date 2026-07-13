@@ -28,6 +28,8 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/keystore/keystoretest"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
@@ -54,20 +56,16 @@ func newSecretManagerTestDB(t *testing.T) *sqliteutil.DB {
 }
 
 // newTestSecretManager creates a SecretManager with the in-memory keyring.
-func newTestSecretManager(t *testing.T, db *sqliteutil.DB, secretsDir string) *SecretManager {
+func newTestSecretManager(t *testing.T, db *sqliteutil.DB, fileSvc fs.RuntimeFileService) *SecretManager {
 	t.Helper()
 	keyring := keystoretest.NewMemoryKeyring()
-	ks, err := keystore.NewWithKeyring(secretsDir, testutil.NewTestLogger(), keyring)
+	ks, err := keystore.NewWithKeyringAndFS(testutil.NewTestLogger(), keyring, fileSvc)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnforcePermissions())
-	return &SecretManager{
-		db:                  db,
-		secretsDir:          secretsDir,
-		bootstrapDigestPath: filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest),
-		logger:              testutil.NewTestLogger(),
-		keystore:            ks,
-	}
+	sm, err := NewSecretManagerWithKeystore(db, fileSvc, testutil.NewTestLogger(), ks)
+	require.NoError(t, err)
+	return sm
 }
 
 func readSecretFromDB(t *testing.T, db *sqliteutil.DB, name string) string {
@@ -120,8 +118,9 @@ func updatePlatformSetting(t *testing.T, db *sqliteutil.DB, name string, value s
 
 func TestSecretManager_InitAppSettings_CreatesSecretsAndFiles(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 
 	require.NoError(t, sm.InitAppSettings())
 
@@ -137,8 +136,9 @@ func TestSecretManager_InitAppSettings_CreatesSecretsAndFiles(t *testing.T) {
 
 func TestSecretManager_InitAppSettings_CreatesValidActuatorKey(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 
 	require.NoError(t, sm.InitAppSettings())
 
@@ -158,8 +158,9 @@ func TestSecretManager_InitAppSettings_CreatesValidActuatorKey(t *testing.T) {
 
 func TestSecretManager_GetActuatorKey_RejectsMalformedSeedLength(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 	require.NoError(t, sm.InitAppSettings())
 
 	// Store malformed seed directly in keystore
@@ -172,8 +173,9 @@ func TestSecretManager_GetActuatorKey_RejectsMalformedSeedLength(t *testing.T) {
 
 func TestSecretManager_GetActuatorKey_RejectsMismatchedKeyID(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 	require.NoError(t, sm.InitAppSettings())
 
 	updatePlatformSetting(t, db, "actuator_key_id", strings.Repeat("b", ed25519.PublicKeySize*2))
@@ -184,9 +186,10 @@ func TestSecretManager_GetActuatorKey_RejectsMismatchedKeyID(t *testing.T) {
 
 func TestSecretManager_InitAppSettings_FailsWhenFileWriteFails(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
 
-	sm := newTestSecretManager(t, db, secretsDir)
+	sm := newTestSecretManager(t, db, fileSvc)
 
 	// Replace the secrets directory with a file to cause real write failure
 	// This uses actual filesystem operations without mocking
@@ -201,16 +204,17 @@ func TestSecretManager_InitAppSettings_FailsWhenFileWriteFails(t *testing.T) {
 
 func TestSecretManager_InitAppSettings_DetectsDBFileDivergence(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
 
-	sm := newTestSecretManager(t, db, secretsDir)
+	sm := newTestSecretManager(t, db, fileSvc)
 	require.NoError(t, sm.InitAppSettings())
 
 	// Write corrupted encrypted data (simulating manual file tampering)
 	corruptedData := []byte(`{"version":1,"nonce":"AAAA","ciphertext":"corrupted"}`)
 	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, constants.SecretsFileSessionEncryptionKey), corruptedData, 0600))
 
-	sm2 := newTestSecretManager(t, db, secretsDir)
+	sm2 := newTestSecretManager(t, db, fileSvc)
 	err := sm2.InitAppSettings()
 	require.Error(t, err)
 	// With encryption, file corruption causes digest mismatch
@@ -218,8 +222,9 @@ func TestSecretManager_InitAppSettings_DetectsDBFileDivergence(t *testing.T) {
 
 func TestSecretManager_InitAppSettings_WritesDigestManifest(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 	require.NoError(t, sm.InitAppSettings())
 
 	manifestPath := filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest)
@@ -241,8 +246,9 @@ func TestSecretManager_InitAppSettings_WritesDigestManifest(t *testing.T) {
 
 func TestSecretManager_InitAppSettings_ManifestPermissions(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 	require.NoError(t, sm.InitAppSettings())
 
 	info, err := os.Stat(filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest))
@@ -254,16 +260,17 @@ func TestSecretManager_InitAppSettings_ManifestPermissions(t *testing.T) {
 
 func TestSecretManager_InitAppSettings_RejectsUncoordinatedSecretRotation(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
 
-	sm := newTestSecretManager(t, db, secretsDir)
+	sm := newTestSecretManager(t, db, fileSvc)
 	require.NoError(t, sm.InitAppSettings())
 
 	// Write corrupted encrypted data (simulating manual file tampering)
 	corruptedData := []byte(`{"version":1,"nonce":"AAAA","ciphertext":"corrupted"}`)
 	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, constants.SecretsFileSessionEncryptionKey), corruptedData, 0600))
 
-	sm2 := newTestSecretManager(t, db, secretsDir)
+	sm2 := newTestSecretManager(t, db, fileSvc)
 	err := sm2.InitAppSettings()
 	require.Error(t, err)
 	// With encryption, file corruption causes digest mismatch
@@ -271,25 +278,27 @@ func TestSecretManager_InitAppSettings_RejectsUncoordinatedSecretRotation(t *tes
 
 func TestSecretManager_InitAppSettings_RejectsPreexistingSecretWithoutAppSettings(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
 
 	preSeeded := strings.Repeat("c", 64)
 	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, constants.SecretsFileSessionEncryptionKey), []byte(preSeeded), 0600))
 
-	sm := newTestSecretManager(t, db, secretsDir)
+	sm := newTestSecretManager(t, db, fileSvc)
 	err := sm.InitAppSettings()
 	require.Error(t, err)
 }
 
 func TestSecretManager_InitAppSettings_FailsWhenRequiredSecretFileMissing(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
 
-	sm := newTestSecretManager(t, db, secretsDir)
+	sm := newTestSecretManager(t, db, fileSvc)
 	require.NoError(t, sm.InitAppSettings())
 	require.NoError(t, os.Remove(filepath.Join(secretsDir, constants.SecretsFileSessionEncryptionKey)))
 
-	sm2 := newTestSecretManager(t, db, secretsDir)
+	sm2 := newTestSecretManager(t, db, fileSvc)
 	err := sm2.InitAppSettings()
 	require.Error(t, err)
 	// Missing file causes read error during validation
@@ -297,13 +306,14 @@ func TestSecretManager_InitAppSettings_FailsWhenRequiredSecretFileMissing(t *tes
 
 func TestSecretManager_InitAppSettings_RecreatesWhenDigestManifestMissing(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
 
-	sm := newTestSecretManager(t, db, secretsDir)
+	sm := newTestSecretManager(t, db, fileSvc)
 	require.NoError(t, sm.InitAppSettings())
 	require.NoError(t, os.Remove(filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest)))
 
-	sm2 := newTestSecretManager(t, db, secretsDir)
+	sm2 := newTestSecretManager(t, db, fileSvc)
 	// Should recreate secrets instead of failing
 	require.NoError(t, sm2.InitAppSettings())
 	// Verify manifest was recreated
@@ -313,9 +323,10 @@ func TestSecretManager_InitAppSettings_RecreatesWhenDigestManifestMissing(t *tes
 
 func TestSecretManager_InitAppSettings_FailsWhenDigestManifestEntryMissing(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
 
-	sm := newTestSecretManager(t, db, secretsDir)
+	sm := newTestSecretManager(t, db, fileSvc)
 	require.NoError(t, sm.InitAppSettings())
 	manifestPath := filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest)
 	data, err := os.ReadFile(manifestPath)
@@ -327,16 +338,17 @@ func TestSecretManager_InitAppSettings_FailsWhenDigestManifestEntryMissing(t *te
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(manifestPath, mutated, 0600))
 
-	sm2 := newTestSecretManager(t, db, secretsDir)
+	sm2 := newTestSecretManager(t, db, fileSvc)
 	err = sm2.InitAppSettings()
 	require.Error(t, err)
 }
 
 func TestSecretManager_InitAppSettings_ReturnsErrorOnMalformedPlatformSettings(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
 
-	sm := newTestSecretManager(t, db, secretsDir)
+	sm := newTestSecretManager(t, db, fileSvc)
 	require.NoError(t, sm.InitAppSettings())
 
 	_, err := db.Exec(
@@ -345,7 +357,7 @@ func TestSecretManager_InitAppSettings_ReturnsErrorOnMalformedPlatformSettings(t
 	)
 	require.NoError(t, err)
 
-	sm2 := newTestSecretManager(t, db, secretsDir)
+	sm2 := newTestSecretManager(t, db, fileSvc)
 	err = sm2.InitAppSettings()
 	// This test is no longer valid since InitAppSettings doesn't read platform_settings on subsequent boots
 	// It only checks for existence and then validates secrets
@@ -355,8 +367,9 @@ func TestSecretManager_InitAppSettings_ReturnsErrorOnMalformedPlatformSettings(t
 
 func TestSecretManager_APIKeys(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 
 	// Store and retrieve API key
 	err := sm.StoreAPIKey("openai", "sk-test-key-12345")
@@ -373,8 +386,9 @@ func TestSecretManager_APIKeys(t *testing.T) {
 
 func TestSecretManager_OperatorPrivateKey(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 
 	// Generate and store Operator private key
 	seed := make([]byte, ed25519.SeedSize)
@@ -397,8 +411,9 @@ func TestSecretManager_OperatorPrivateKey(t *testing.T) {
 
 func TestSecretManager_OperatorPrivateKey_RejectsInvalidSeed(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 
 	// Store invalid seed length
 	err := sm.keystore.EncryptSecret("operator_private_key", "deadbeef")
@@ -410,8 +425,9 @@ func TestSecretManager_OperatorPrivateKey_RejectsInvalidSeed(t *testing.T) {
 
 func TestSecretManager_CLIPrivateKey(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 
 	// Generate and store CLI private key
 	seed := make([]byte, ed25519.SeedSize)
@@ -434,8 +450,9 @@ func TestSecretManager_CLIPrivateKey(t *testing.T) {
 
 func TestSecretManager_SessionToken(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 
 	// Store session token with 1 hour TTL
 	token := "session-abc-123"
@@ -450,8 +467,9 @@ func TestSecretManager_SessionToken(t *testing.T) {
 
 func TestSecretManager_SessionToken_Expires(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 
 	// Store session token with 1 millisecond TTL
 	token := "session-expired"
@@ -467,8 +485,9 @@ func TestSecretManager_SessionToken_Expires(t *testing.T) {
 
 func TestSecretManager_SessionToken_InvalidFormat(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 
 	// Store malformed token data
 	err := sm.keystore.EncryptSecret("session_token", "invalid-format-no-pipe")
@@ -480,8 +499,9 @@ func TestSecretManager_SessionToken_InvalidFormat(t *testing.T) {
 
 func TestSecretManager_GetKeystore(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 
 	ks := sm.GetKeystore()
 	assert.NotNil(t, ks)
@@ -490,8 +510,9 @@ func TestSecretManager_GetKeystore(t *testing.T) {
 
 func TestSecretManager_GetSessionEncryptionKey(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 
 	// Initialize to create the key
 	require.NoError(t, sm.InitAppSettings())
@@ -505,8 +526,9 @@ func TestSecretManager_GetSessionEncryptionKey(t *testing.T) {
 
 func TestSecretManager_GetSessionEncryptionKey_NotInitialized(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 
 	// Try to retrieve without initialization
 	_, err := sm.GetSessionEncryptionKey()
@@ -515,8 +537,9 @@ func TestSecretManager_GetSessionEncryptionKey_NotInitialized(t *testing.T) {
 
 func TestSecretManager_GetAuditorHMACKey(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 
 	// Initialize to create the key
 	require.NoError(t, sm.InitAppSettings())
@@ -530,8 +553,9 @@ func TestSecretManager_GetAuditorHMACKey(t *testing.T) {
 
 func TestSecretManager_GetAuditorHMACKey_NotInitialized(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 
 	// Try to retrieve without initialization
 	_, err := sm.GetAuditorHMACKey()
@@ -540,8 +564,9 @@ func TestSecretManager_GetAuditorHMACKey_NotInitialized(t *testing.T) {
 
 func TestSecretManager_NotaryKey(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 
 	// Store notary key
 	seedHex := hex.EncodeToString([]byte("notary-seed-32-bytes-long-1234567890"))
@@ -557,8 +582,9 @@ func TestSecretManager_NotaryKey(t *testing.T) {
 
 func TestSecretManager_GetNotaryKey_NotInitialized(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 
 	// Try to retrieve without initialization
 	_, err := sm.GetNotaryKey()
@@ -567,8 +593,9 @@ func TestSecretManager_GetNotaryKey_NotInitialized(t *testing.T) {
 
 func TestSecretManager_CleanupStaleAppSettings(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	secretsDir := testutil.TempDir(t)
-	sm := newTestSecretManager(t, db, secretsDir)
+	fileSvc := newTestFileSvc(t)
+	secretsDir := paths.Infra.SecretsDir
+	sm := newTestSecretManager(t, db, fileSvc)
 
 	// Test with no platform_settings document (query error)
 	err := sm.cleanupStaleAppSettings()

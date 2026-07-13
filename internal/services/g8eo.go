@@ -111,7 +111,7 @@ func (vs *G8eoService) SetKeystore(ks *keystore.Keystore) {
 }
 
 // SetFileService injects a RuntimeFileService for file I/O within the .g8e/ directory.
-// If not set before Start(), the service constructs one from config.WorkDir.
+// Must be called before Start().
 func (vs *G8eoService) SetFileService(fileSvc fs.RuntimeFileService) {
 	vs.mu.Lock()
 	defer vs.mu.Unlock()
@@ -130,15 +130,8 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.logger.Info("g8e Operator initializing (Outbound Mode)",
 		"posture", vs.config.Posture)
 
-	var err error
 	if vs.fileSvc == nil {
-		vs.fileSvc, err = fs.NewRuntimeFileService(vs.config.WorkDir, vs.logger)
-		if err != nil {
-			return fmt.Errorf("%w: init file service: %w", constants.ErrInternal, err)
-		}
-		if err := vs.fileSvc.CreateRuntimeTree(ctx); err != nil {
-			return fmt.Errorf("%w: create runtime tree: %w", constants.ErrInternal, err)
-		}
+		return fmt.Errorf("%w: fileSvc must be set via SetFileService before Start()", constants.ErrInternal)
 	}
 
 	bootstrapConfig, err := vs.bootstrap.RequestBootstrapConfig(ctx)

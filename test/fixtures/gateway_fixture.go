@@ -46,8 +46,10 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/netutil"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/execution"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/gateway"
 	govsvc "github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
@@ -218,11 +220,16 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	}
 	cfg.Gateway.A2ADownstreamURL = a2aURL
 
-	ls, err := gateway.NewGatewayModeService(cfg, testutil.NewTestLogger())
+	require.NoError(t, paths.InitWithBase(testPaths.BaseDir))
+	fileSvc, err := fs.NewRuntimeFileService(testPaths.BaseDir, testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+
+	ls, err := gateway.NewGatewayModeService(cfg, fileSvc, testutil.NewTestLogger())
 	require.NoError(t, err)
 
 	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
-	fileSvc := execution.NewFileEditService(cfg, testutil.NewTestLogger())
+	fileEditSvc := execution.NewFileEditService(cfg, testutil.NewTestLogger())
 	govDeps := ls.GetGovernanceDeps()
 	sm, err := ls.GetSecretManager()
 	require.NoError(t, err)
@@ -247,7 +254,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 			Config:             cfg,
 			Logger:             testutil.NewTestLogger(),
 			Execution:          execSvc,
-			FileEdit:           fileSvc,
+			FileEdit:           fileEditSvc,
 			PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetGatewayWebSocketHandler()),
 			Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil),
 			ActuatorSigningKey: ActuatorPriv,
