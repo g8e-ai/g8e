@@ -557,6 +557,20 @@ func TestEnrollWithGateway_FingerprintVerification(t *testing.T) {
 	assert.True(t, errors.Is(err, constants.ErrValidationFailed))
 }
 
+func TestCheckBootstrapStatus_InvalidURL(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := testutil.TempDir(t)
+	cfg := &config.Config{
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		Paths:       &config.PathsConfig{},
+	}
+
+	_, err := CheckBootstrapStatus(cfg, "://invalid")
+	require.Error(t, err)
+}
+
 func TestCheckBootstrapStatus_Success(t *testing.T) {
 	t.Parallel()
 

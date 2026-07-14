@@ -14,13 +14,11 @@
 package auth
 
 import (
+	"context"
 	"crypto/tls"
 	"net/http"
-	"os"
-	"path/filepath"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -29,26 +27,15 @@ import (
 
 func TestNewSecureHTTPClient_Success(t *testing.T) {
 	t.Parallel()
-	fileSvc := newAuthTestFileSvc(t)
-	runtimeDir := fileSvc.Resolve("")
-	trustBundlePath := filepath.Join(runtimeDir, "trust-bundle.pem")
+	fileSvc, cfg := newAuthTestEnv(t)
 
-	// Generate a test CA certificate
 	caPEM, _ := testutil.GenerateTestCertificate(t, "test-ca")
-	require.NoError(t, os.WriteFile(trustBundlePath, []byte(caPEM), constants.PermFilePrivate))
-
-	cfg := &config.Config{
-		ProjectRoot: runtimeDir,
-		RuntimeDir:  runtimeDir,
-		Paths:       &config.PathsConfig{},
-	}
-	cfg.Paths.Infra.CACertPath = trustBundlePath
+	require.NoError(t, fileSvc.WriteFile(context.Background(), cfg.DefaultTrustBundleRelPath(), []byte(caPEM), constants.PermFilePublic))
 
 	client, err := NewSecureHTTPClient(fileSvc, cfg)
 	require.NoError(t, err)
 	require.NotNil(t, client)
 
-	// Verify TLS config is set correctly
 	transport, ok := client.Transport.(*http.Transport)
 	require.True(t, ok)
 	require.NotNil(t, transport.TLSClientConfig)
@@ -57,13 +44,7 @@ func TestNewSecureHTTPClient_Success(t *testing.T) {
 
 func TestNewSecureHTTPClient_MissingTrustBundlePath(t *testing.T) {
 	t.Parallel()
-	fileSvc := newAuthTestFileSvc(t)
-	runtimeDir := fileSvc.Resolve("")
-	cfg := &config.Config{
-		ProjectRoot: runtimeDir,
-		RuntimeDir:  runtimeDir,
-		Paths:       &config.PathsConfig{},
-	}
+	fileSvc, cfg := newAuthTestEnv(t)
 
 	client, err := NewSecureHTTPClient(fileSvc, cfg)
 	require.Error(t, err)
@@ -73,18 +54,9 @@ func TestNewSecureHTTPClient_MissingTrustBundlePath(t *testing.T) {
 
 func TestNewSecureHTTPClient_InvalidPEM(t *testing.T) {
 	t.Parallel()
-	fileSvc := newAuthTestFileSvc(t)
-	runtimeDir := fileSvc.Resolve("")
-	trustBundlePath := filepath.Join(runtimeDir, "trust-bundle.pem")
+	fileSvc, cfg := newAuthTestEnv(t)
 
-	require.NoError(t, os.WriteFile(trustBundlePath, []byte("invalid-pem-data"), constants.PermFilePrivate))
-
-	cfg := &config.Config{
-		ProjectRoot: runtimeDir,
-		RuntimeDir:  runtimeDir,
-		Paths:       &config.PathsConfig{},
-	}
-	cfg.Paths.Infra.CACertPath = trustBundlePath
+	require.NoError(t, fileSvc.WriteFile(context.Background(), cfg.DefaultTrustBundleRelPath(), []byte("invalid-pem-data"), constants.PermFilePublic))
 
 	client, err := NewSecureHTTPClient(fileSvc, cfg)
 	require.Error(t, err)

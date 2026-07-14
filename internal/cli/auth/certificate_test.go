@@ -260,11 +260,12 @@ func TestAutoRenewCertificate_NotExpiring(t *testing.T) {
 
 	// Create a valid certificate that is not expiring
 	certFile := cfg.CLICertFile()
-	require.NoError(t, os.MkdirAll(filepath.Dir(certFile), constants.PermDirPrivate))
 	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
-	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), constants.PermFilePrivate))
+	certRel, err := fileSvc.RelFromAbs(certFile)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte(certPEM), constants.PermFilePrivate))
 
-	err := AutoRenewCertificate(fileSvc, cfg, "cli", "")
+	err = AutoRenewCertificate(fileSvc, cfg, "cli", "")
 	require.NoError(t, err)
 }
 
@@ -297,13 +298,11 @@ func TestAutoRenewCertificate_ExpiringCert(t *testing.T) {
 	// This test would require generating a short-lived cert and actually calling ReEnroll
 	// Since ReEnroll requires a real server, we test the error path
 	certFile := cfg.CLICertFile()
-	require.NoError(t, os.MkdirAll(filepath.Dir(certFile), constants.PermDirPrivate))
+	certRel, err := fileSvc.RelFromAbs(certFile)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte("not a valid cert"), constants.PermFilePrivate))
 
-	// Write a dummy cert file - this will fail to parse as a real cert
-	// but tests the error path
-	require.NoError(t, os.WriteFile(certFile, []byte("not a valid cert"), constants.PermFilePrivate))
-
-	err := AutoRenewCertificate(fileSvc, cfg, "cli", "")
+	err = AutoRenewCertificate(fileSvc, cfg, "cli", "")
 	require.Error(t, err)
 	assert.Error(t, err)
 }
@@ -321,10 +320,11 @@ func TestAutoRenewCertificate_OperatorType(t *testing.T) {
 
 	// Create a valid certificate that's not expiring
 	certFile := cfg.OperatorCertFile()
-	require.NoError(t, os.MkdirAll(filepath.Dir(certFile), constants.PermDirPrivate))
 	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
-	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), constants.PermFilePrivate))
+	certRel, err := fileSvc.RelFromAbs(certFile)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte(certPEM), constants.PermFilePrivate))
 
-	err := AutoRenewCertificate(fileSvc, cfg, "operator", "")
+	err = AutoRenewCertificate(fileSvc, cfg, "operator", "")
 	require.NoError(t, err)
 }

@@ -16,6 +16,7 @@
 package auth
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -41,16 +42,17 @@ func TestVerifyPasskeyRegistration_NetworkError(t *testing.T) {
 		Paths:       &config.PathsConfig{},
 	}
 
+	fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+
 	// VerifyPasskeyRegistration now uses mTLS: supply CLI cert and a CA bundle
 	// so the test reaches the network dial (and fails there, as expected).
-	writeTestCLICert(t, cfg)
+	writeTestCLICert(t, fileSvc, cfg)
 	dummyCert, _ := generateTestCertificateWithSPIFFE(t, "dummy", time.Now().Add(24*time.Hour))
 	caPath := filepath.Join(tmpDir, "test-ca.pem")
 	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), constants.PermFilePrivate))
 	cfg.Paths.Infra.CACertPath = caPath
-
-	fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
-	require.NoError(t, err)
 
 	hasPasskey, err := VerifyPasskeyRegistration(fileSvc, cfg, "test-user", "test-cli-session")
 

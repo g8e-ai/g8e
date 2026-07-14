@@ -76,6 +76,21 @@ func TestCheckOperatorRunning_URLWithoutProtocol(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrGatewayURLRequired)
 }
 
+func TestCheckOperatorRunning_LocalhostReplacement(t *testing.T) {
+	t.Parallel()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer listener.Close()
+
+	_, port, err := net.SplitHostPort(listener.Addr().String())
+	require.NoError(t, err)
+
+	url := fmt.Sprintf("http://localhost:%s", port)
+	err = CheckOperatorRunningAtURL(url)
+	require.NoError(t, err)
+}
+
 func TestIsCertificateVerificationError_UnknownAuthorityError(t *testing.T) {
 	t.Parallel()
 

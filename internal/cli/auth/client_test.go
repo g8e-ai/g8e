@@ -339,11 +339,15 @@ func TestLoadCredentials(t *testing.T) {
 
 	t.Run("invalid JSON returns error", func(t *testing.T) {
 		credsFile := cfg.CredentialsFile()
-		if err := os.WriteFile(credsFile, []byte("invalid json"), constants.PermFilePrivate); err != nil {
+		credsRel, err := fileSvc.RelFromAbs(credsFile)
+		if err != nil {
+			t.Fatalf("Failed to get relative path: %v", err)
+		}
+		if err := fileSvc.WriteFile(context.Background(), credsRel, []byte("invalid json"), constants.PermFilePrivate); err != nil {
 			t.Fatalf("Failed to write invalid JSON: %v", err)
 		}
 
-		_, err := LoadCredentials(fileSvc, cfg)
+		_, err = LoadCredentials(fileSvc, cfg)
 		if err == nil {
 			t.Error("LoadCredentials() should return error for invalid JSON")
 		}
@@ -366,10 +370,19 @@ func TestDeleteCredentials(t *testing.T) {
 		keyFile := cfg.CLIKeyFile()
 		trustFile := cfg.ResolvedTrustBundlePath()
 
-		for _, f := range []string{credsFile, certFile, keyFile, trustFile} {
-			if err := os.WriteFile(f, []byte("test"), constants.PermFilePrivate); err != nil {
+		// Write runtime files via fileSvc
+		for _, f := range []string{credsFile, certFile, keyFile} {
+			rel, err := fileSvc.RelFromAbs(f)
+			if err != nil {
+				t.Fatalf("Failed to get relative path: %v", err)
+			}
+			if err := fileSvc.WriteFile(context.Background(), rel, []byte("test"), constants.PermFilePrivate); err != nil {
 				t.Fatalf("Failed to create test file: %v", err)
 			}
+		}
+		// Write custom trust bundle via os (custom path code path)
+		if err := os.WriteFile(trustFile, []byte("test"), constants.PermFilePrivate); err != nil {
+			t.Fatalf("Failed to create trust file: %v", err)
 		}
 
 		if err := DeleteCredentials(fileSvc, cfg); err != nil {
@@ -700,4 +713,16 @@ func newAuthTestFileSvc(t *testing.T) fs.RuntimeFileService {
 		t.Fatalf("Failed to create runtime tree: %v", err)
 	}
 	return svc
+}
+
+func newAuthTestEnv(t *testing.T) (fs.RuntimeFileService, *config.Config) {
+	t.Helper()
+	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
+	cfg := &config.Config{
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
+		Paths:       &config.PathsConfig{Host: "localhost"},
+	}
+	return fileSvc, cfg
 }

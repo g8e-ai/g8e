@@ -14,6 +14,7 @@
 package auth
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -76,9 +77,9 @@ func TestLoadCredentials_InvalidJSON(t *testing.T) {
 		RuntimeDir:  runtimeDir,
 	}
 
-	credsFile := cfg.CredentialsFile()
-	require.NoError(t, os.MkdirAll(cfg.RuntimeDir, constants.PermDirPrivate))
-	require.NoError(t, os.WriteFile(credsFile, []byte("invalid-json{{{"), constants.PermFilePrivate))
+	credsRel, err := fileSvc.RelFromAbs(cfg.CredentialsFile())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), credsRel, []byte("invalid-json{{{"), constants.PermFilePrivate))
 
 	loaded, err := LoadCredentials(fileSvc, cfg)
 	require.Error(t, err)
@@ -122,23 +123,21 @@ func TestDeleteCredentials_Success(t *testing.T) {
 
 	require.NoError(t, SaveCredentials(fileSvc, cfg, creds))
 
-	certDir := cfg.RuntimeDir
-	require.NoError(t, os.MkdirAll(certDir, constants.PermDirPrivate))
-	require.NoError(t, os.WriteFile(cfg.CLICertFile(), []byte("cli-cert"), constants.PermFilePrivate))
-	require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), []byte("cli-key"), constants.PermFilePrivate))
-	require.NoError(t, os.WriteFile(cfg.OperatorCertFile(), []byte("op-cert"), constants.PermFilePrivate))
-	require.NoError(t, os.WriteFile(cfg.OperatorKeyFile(), []byte("op-key"), constants.PermFilePrivate))
-	hubBundle := cfg.ResolvedTrustBundlePath()
-	require.NoError(t, os.MkdirAll(filepath.Dir(hubBundle), constants.PermDirPrivate))
-	require.NoError(t, os.WriteFile(hubBundle, []byte("g8e-gw-ca-bundle"), constants.PermFilePrivate))
+	cliCertRel, err := fileSvc.RelFromAbs(cfg.CLICertFile())
+	require.NoError(t, err)
+	cliKeyRel, err := fileSvc.RelFromAbs(cfg.CLIKeyFile())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), cliCertRel, []byte("cli-cert"), constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), cliKeyRel, []byte("cli-key"), constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), cfg.DefaultTrustBundleRelPath(), []byte("g8e-gw-ca-bundle"), constants.PermFilePrivate))
 
-	err := DeleteCredentials(fileSvc, cfg)
+	err = DeleteCredentials(fileSvc, cfg)
 	require.NoError(t, err)
 
 	assert.NoFileExists(t, cfg.CredentialsFile())
 	assert.NoFileExists(t, cfg.CLICertFile())
 	assert.NoFileExists(t, cfg.CLIKeyFile())
-	assert.NoFileExists(t, hubBundle)
+	assert.NoFileExists(t, cfg.ResolvedTrustBundlePath())
 }
 
 func TestDeleteCredentials_NonExistentFiles(t *testing.T) {

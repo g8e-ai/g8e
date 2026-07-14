@@ -140,13 +140,11 @@ func setupTestConfig(t *testing.T) (*config.Config, fs.RuntimeFileService, strin
 	require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), constants.PermFilePublic))
 
 	caCertPEM := generateTestCA(t)
-	trustBundlePath := filepath.Join(projectRoot, paths.Infra.CaCertPath)
-	trustBundleRel, err := fileSvc.Rel(trustBundlePath)
-	require.NoError(t, err)
-	require.NoError(t, fileSvc.WriteFile(context.Background(), trustBundleRel, caCertPEM, constants.PermFilePublic))
 
 	cfg, err := config.LoadWithPaths(projectRoot, []byte(pathsJSON))
 	require.NoError(t, err)
+
+	require.NoError(t, fileSvc.WriteFile(context.Background(), cfg.DefaultTrustBundleRelPath(), caCertPEM, constants.PermFilePublic))
 
 	return cfg, fileSvc, tempDir
 }
@@ -164,8 +162,12 @@ func setupTestCredentials(t *testing.T, fileSvc fs.RuntimeFileService, cfg *conf
 	require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
 
 	certPEM, keyPEM, _ := generateTestCert(t)
-	require.NoError(t, os.WriteFile(cfg.CLICertFile(), certPEM, constants.PermFilePrivate))
-	require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), keyPEM, constants.PermFilePrivate))
+	certRel, err := fileSvc.RelFromAbs(cfg.CLICertFile())
+	require.NoError(t, err)
+	keyRel, err := fileSvc.RelFromAbs(cfg.CLIKeyFile())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, certPEM, constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), keyRel, keyPEM, constants.PermFilePrivate))
 }
 
 func setupTLSClient(t *testing.T, fileSvc fs.RuntimeFileService, cfg *config.Config, server *httptest.Server) *Client {

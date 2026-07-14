@@ -30,6 +30,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -242,23 +243,13 @@ func TestRemoveTrustBundleFS_CustomPathNonExistentIsNoOp(t *testing.T) {
 
 func TestBuildMTLSClient_ReadsTrustBundleFromRuntimeTree(t *testing.T) {
 	t.Parallel()
-	fileSvc := newAuthTestFileSvc(t)
-	runtimeDir := fileSvc.Resolve("")
+	fileSvc, cfg := newAuthTestEnv(t)
 
 	caPEM, _ := testutil.GenerateTestCertificate(t, "test-ca")
 
-	cfg := &config.Config{
-		RuntimeDir: runtimeDir,
-		Paths:      &config.PathsConfig{Host: "localhost"},
-	}
-
 	require.NoError(t, fileSvc.WriteFile(context.Background(), cfg.DefaultTrustBundleRelPath(), []byte(caPEM), constants.PermFilePrivate))
 
-	certFile := cfg.CLICertFile()
-	keyFile := cfg.CLIKeyFile()
-	require.NoError(t, os.MkdirAll(filepath.Dir(certFile), constants.PermDirPrivate))
-
-	writeValidCertPair(t, certFile, keyFile)
+	writeValidCertPair(t, fileSvc, cfg.CLICertFile(), cfg.CLIKeyFile())
 
 	client, err := BuildMTLSClient(fileSvc, cfg, 30*time.Second)
 	require.NoError(t, err)
@@ -267,16 +258,9 @@ func TestBuildMTLSClient_ReadsTrustBundleFromRuntimeTree(t *testing.T) {
 
 func TestNewSecureHTTPClient_ReadsTrustBundleFromRuntimeTree(t *testing.T) {
 	t.Parallel()
-	fileSvc := newAuthTestFileSvc(t)
-	runtimeDir := fileSvc.Resolve("")
+	fileSvc, cfg := newAuthTestEnv(t)
 
 	caPEM, _ := testutil.GenerateTestCertificate(t, "test-ca")
-
-	cfg := &config.Config{
-		ProjectRoot: runtimeDir,
-		RuntimeDir:  runtimeDir,
-		Paths:       &config.PathsConfig{},
-	}
 
 	require.NoError(t, fileSvc.WriteFile(context.Background(), cfg.DefaultTrustBundleRelPath(), []byte(caPEM), constants.PermFilePrivate))
 
@@ -287,14 +271,7 @@ func TestNewSecureHTTPClient_ReadsTrustBundleFromRuntimeTree(t *testing.T) {
 
 func TestNewSecureHTTPClient_MissingDefaultBundleReturnsTypedError(t *testing.T) {
 	t.Parallel()
-	fileSvc := newAuthTestFileSvc(t)
-	runtimeDir := fileSvc.Resolve("")
-
-	cfg := &config.Config{
-		ProjectRoot: runtimeDir,
-		RuntimeDir:  runtimeDir,
-		Paths:       &config.PathsConfig{},
-	}
+	fileSvc, cfg := newAuthTestEnv(t)
 
 	client, err := NewSecureHTTPClient(fileSvc, cfg)
 	require.Error(t, err)
@@ -303,8 +280,8 @@ func TestNewSecureHTTPClient_MissingDefaultBundleReturnsTypedError(t *testing.T)
 }
 
 // writeValidCertPair generates a self-signed certificate and writes the cert
-// and key PEM files to the given paths.
-func writeValidCertPair(t *testing.T, certFile, keyFile string) {
+// and key PEM files to the runtime tree via fileSvc.
+func writeValidCertPair(t *testing.T, fileSvc fs.RuntimeFileService, certFile, keyFile string) {
 	t.Helper()
 
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -324,6 +301,10 @@ func writeValidCertPair(t *testing.T, certFile, keyFile string) {
 	require.NoError(t, err)
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 
-	require.NoError(t, os.WriteFile(certFile, certPEM, constants.PermFilePrivate))
-	require.NoError(t, os.WriteFile(keyFile, keyPEM, constants.PermFilePrivate))
+	certRel, err := fileSvc.RelFromAbs(certFile)
+	require.NoError(t, err)
+	keyRel, err := fileSvc.RelFromAbs(keyFile)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, certPEM, constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), keyRel, keyPEM, constants.PermFilePrivate))
 }
