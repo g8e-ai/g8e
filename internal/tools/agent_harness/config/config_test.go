@@ -5,11 +5,12 @@ package config
 
 import (
 	"encoding/json"
-	"github.com/g8e-ai/g8e/internal/testutil"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestDefault(t *testing.T) {

@@ -1,8 +1,9 @@
 package cmd
 
 import (
-	"github.com/g8e-ai/g8e/internal/services/fs"
 	"log/slog"
+
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 // newFileSvc creates a RuntimeFileService rooted at the current working directory

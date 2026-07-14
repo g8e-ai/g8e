@@ -30,11 +30,21 @@ func (fs *localFS) EnforceDirPermissions(ctx context.Context, relPath string, mo
 	}
 	absPath := fs.Resolve(relPath)
 
+	root, err := os.OpenRoot(absPath)
+	if err != nil {
+		return fmt.Errorf("%w: %s: %w", constants.ErrEnforcePermissions, absPath, err)
+	}
+	defer root.Close()
+
 	return filepath.WalkDir(absPath, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if err := os.Chmod(path, mode); err != nil {
+		rel, err := filepath.Rel(absPath, path)
+		if err != nil {
+			return fmt.Errorf("%w: %s: %w", constants.ErrEnforcePermissions, path, err)
+		}
+		if err := root.Chmod(rel, mode); err != nil {
 			return fmt.Errorf("%w: %s: %w", constants.ErrEnforcePermissions, path, err)
 		}
 		return nil
