@@ -4,8 +4,8 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-07-13
-Version: v1.5.0
+Last Updated: 2026-07-14
+Version: v1.5.1
 
 The **g8e Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
@@ -142,7 +142,7 @@ The host is the authoritative source of truth for all mutations.
 
 ## 5. Current Implementation Status
 
-The reference implementation (`g8eo`) currently supports:
+The reference implementation currently supports:
 
 - **Universal Protocol Translation**: Functional MCP and A2A gateway mapping standard tool calls to signed `GovernanceEnvelope` mutations.
 - **Fail-Closed 5-Layer Verification**: L1 (Doctrine), L2 (Consensus), L3 (Notary), L4 (Warden), and L5 (Actuator) gates are fully enforced on every transaction.
@@ -152,7 +152,7 @@ The reference implementation (`g8eo`) currently supports:
 - **Deterministic Hash Binding**: SHA-256 transaction hash integrity enforced across all wire formats.
 - **Sovereign Execution Boundary**: Automated scrubbing and rehydration of sensitive data during the execution lifecycle.
 - **Host-Unique Signing**: Cryptographic Action Receipts signed by host-specific keys.
-- **Zero-Dependency Node Binary**: Statically compiled Go binary for air-gapped and high-security deployments.
+- **Zero-Dependency Binary**: Statically compiled Go binary for air-gapped and high-security deployments.
 - **Expanded Native Tool Catalog**: 30 native tools compiled into the binary for memory-safe, boundary-enforced execution across database triage, log digestion, process governance, network validation, system introspection, file operations, cloud metadata, and shell execution.
 
 ---
@@ -194,7 +194,7 @@ Configure your AI client to connect to the Gateway's universal HTTP MCP endpoint
 
 **Protocol Integration:**
 - **All Clients**: Use the universal HTTP endpoint with mTLS authentication
-- **IDE Integration (Cursor, Devin, Claude Code, Codex, VS Code, Continue, Aider, Gemini, Goose)**: Configure MCP client with HTTP transport
+- **Supported Agents (Cursor, Devin, Claude Code, Codex, VS Code, Continue, Aider, Codeium, Tabby, Ollama, Gemini, Goose)**: Configure MCP client with HTTP transport
 - **Custom BYO Clients**: Use HTTP MCP or A2A protocol endpoints
 
 ### 4. Test with a Simple Mutation
@@ -249,7 +249,7 @@ The Operator compiles native tool playbooks for common operational tasks:
 - **Log Digestion**: Stream filtering, OOM detection, config diffing
 - **Process Governance**: Resource profiling, safe signal handling, process tree inspection
 - **Network Validation**: Socket auditing, endpoint probing, HTTP health checks, DNS resolution, TLS certificate inspection, SSH known hosts management
-- **System Introspection**: System information, environment variables, time/clock, service status, container status, disk usage
+- **System Introspection**: System information, environment variables, time/clock, service status, container status
 - **File Operations**: File checksumming, disk usage analysis, file reading
 - **Cloud & Orchestration**: Cloud metadata, Kubernetes inspection, Git operations, operator deployment
 - **Shell Execution**: Safe shell command execution

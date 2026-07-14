@@ -1,7 +1,7 @@
 # Network Architecture
 
-Last Updated: 2026-07-13
-Version: v1.5.0
+Last Updated: 2026-07-14
+Version: v1.5.1
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
 
@@ -48,16 +48,16 @@ Certificate revocation is enforced via a database-backed denylist checked per-re
 
 ## 2. Workload Identity (SPIFFE)
 
-Each system component receives a SPIFFE ID, embedded as a Uniform Resource Identifier (URI) in the Subject Alternative Name (SAN) of its mTLS certificate. The generation logic is defined in `protocol/workload_identity.go`.
+Each system component receives a SPIFFE ID, embedded as a Uniform Resource Identifier (URI) in the Subject Alternative Name (SAN) of its mTLS certificate.
 
-| Workload Type | SPIFFE ID Format | Reference |
-| :--- | :--- | :--- |
-| **g8e Operator** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` | `protocol/workload_identity.go` |
-| **CLI / BYO Client** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` | `protocol/workload_identity.go` |
-| **Application / Agent** | `spiffe://g8e.local/app/<operator_id>` | `protocol/workload_identity.go` |
-| **User (Human Delegator)** | `spiffe://g8e.local/user/<user_id>` | `protocol/workload_identity.go` |
-| **g8e Gateway** | `spiffe://g8e.local/hub/operator-listen` | `protocol/workload_identity.go` |
-| **Gateway Peer** | `spiffe://g8e.local/gateway/<gateway_id>` | `protocol/workload_identity.go` |
+| Workload Type | SPIFFE ID Format |
+| :--- | :--- |
+| **g8e Operator** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` |
+| **CLI / BYO Client** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` |
+| **Application / Agent** | `spiffe://g8e.local/app/<operator_id>` |
+| **User (Human Delegator)** | `spiffe://g8e.local/user/<user_id>` |
+| **g8e Gateway** | `spiffe://g8e.local/hub/operator-listen` |
+| **Gateway Peer** | `spiffe://g8e.local/gateway/<gateway_id>` |
 
 ---
 
@@ -68,7 +68,7 @@ The g8e Gateway enforces TLS 1.3 for all L7 communication.
 ### Application-Layer mTLS Enforcement
 
 - The gateway accepts and verifies client certificates using `tls.VerifyClientCertIfGiven` at the TLS layer. This allows browser-based clients (such as the g8e Console) to connect without certificates.
-- For all non-public routes, the `auth.Middleware()` acts as a strict, fail-closed gate at the application layer, requiring a verified client certificate.
+- For all non-public routes, the application-layer middleware acts as a strict, fail-closed gate, requiring a verified client certificate.
 - Revocation is checked against a database-backed revoked certificates store.
 - Middleware verifies that the SPIFFE ID in the client certificate matches the specific session identifier (such as `operator_session_id` or `cli_session_id`) inside the `GovernanceEnvelope`.
 
@@ -104,7 +104,7 @@ Since the g8e Gateway acts as a self-signed CA, clients must explicitly trust th
 
 ### No-DNS / Direct IP Configuration
 
-The platform supports setup without requiring `/etc/hosts` changes or DNS configuration. If `g8e.local` resolution fails, the system automatically falls back to direct IP access using the machine's external interface IP. This is implemented in `internal/cli/cmd/mcp.go`.
+The platform supports setup without requiring `/etc/hosts` changes or DNS configuration. If `g8e.local` resolution fails, the CLI automatically falls back to direct IP access using the machine's external interface IP.
 
 ### Windows Certificate Store Enrollment
 
@@ -123,7 +123,7 @@ On Windows, `g8e auth enroll` auto-detects the platform and uses the Windows Cer
 
 The g8e Gateway utilizes a consolidated 2-port design. Surfaces with different TLS requirements are isolated by port.
 
-Default ports are defined in `protocol/constants/ports.json`:
+Default ports:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
@@ -133,7 +133,7 @@ Default ports are defined in `protocol/constants/ports.json`:
 ### Port Constraints
 
 - **HTTP Surface** (`8080`): Serves plain HTTP for health checks, state endpoint, trust scripts (`/web-cert.sh`, `/web-cert.ps1`), CA bundle and fingerprint discovery, enrollment endpoints, deploy scripts, and node binary distribution. Unregistered paths return 404; there is no redirect to HTTPS.
-- **HTTPS Surface** (`8443`): Uses `tls.VerifyClientCertIfGiven`, overriding the stricter `tls.RequireAndVerifyClientCert` default from `PKIAuthority.TLSConfig()`. Operates with application-layer mTLS validation. All governed execution endpoints and operator routes require a verified SPIFFE identity via client certificate, while public routes (the Console SPA, static assets, CA bundle, CRL, and WebAuthn browser endpoints) are accessible directly. When JWKS is configured, MCP and A2A endpoints accept JWT authentication as an alternative to mTLS for BYO clients.
+- **HTTPS Surface** (`8443`): Uses `tls.VerifyClientCertIfGiven`, overriding the stricter `tls.RequireAndVerifyClientCert` default. Operates with application-layer mTLS validation. All governed execution endpoints and operator routes require a verified SPIFFE identity via client certificate, while public routes (the Console SPA, static assets, CA bundle, CRL, and WebAuthn browser endpoints) are accessible directly. When JWKS is configured, MCP and A2A endpoints accept JWT authentication as an alternative to mTLS for BYO clients.
 - **Collision Prevention**: The gateway fails startup if multiple logical surfaces are assigned to the same port, ensuring no downgrade of the mTLS execution boundary.
 
 ---
@@ -144,19 +144,19 @@ Default ports are defined in `protocol/constants/ports.json`:
 
 ### Trust Domain
 
-The trust domain is defined as the constant `TrustDomain = "g8e.local"` in `protocol/workload_identity.go`. All SPIFFE IDs use this domain: `spiffe://g8e.local/<path>`. The trust domain is static and does not vary per installation.
+The trust domain is `g8e.local`. All SPIFFE IDs use this domain: `spiffe://g8e.local/<path>`. The trust domain is static and does not vary per installation.
 
 ### Default Gateway Hostname
 
-The constant `GatewayInternalHostname` in `internal/constants/network.go` sets `g8e.local` as the default hostname for gateway TLS connections. The gateway serving certificate includes `g8e.local` as a DNS SAN, allowing clients to connect using this name when DNS resolution is configured.
+The platform sets `g8e.local` as the default hostname for gateway TLS connections. The gateway serving certificate includes `g8e.local` as a DNS SAN, allowing clients to connect using this name when DNS resolution is configured.
 
 ### Gateway Peer PKI
 
-The platform defines a dedicated gateway peer PKI tier for federated gateway-to-gateway communication. The `g8e Gateway Peer Intermediate CA` signs peer certificates with the SPIFFE ID format `spiffe://g8e.local/gateway/<gateway_id>`, where `<gateway_id>` is a persistent identifier generated at gateway installation time. The peer intermediate CA and SPIFFE ID format are defined in `internal/services/gateway/gateway_certs.go` and `protocol/workload_identity.go` respectively.
+The platform defines a dedicated gateway peer PKI tier for federated gateway-to-gateway communication. The `g8e Gateway Peer Intermediate CA` signs peer certificates with the SPIFFE ID format `spiffe://g8e.local/gateway/<gateway_id>`, where `<gateway_id>` is a persistent identifier generated at gateway installation time.
 
 ### No-DNS Fallback
 
-When `g8e.local` does not resolve via system DNS, the CLI falls back to the machine's external interface IP. This fallback is implemented in `internal/cli/cmd/mcp.go` using the network identity detection in `internal/services/network/identity.go`.
+When `g8e.local` does not resolve via system DNS, the CLI falls back to the machine's external interface IP. The CLI uses `g8e.local` as the TLS ServerName for verification even when connecting via direct IP, since the gateway certificate includes `g8e.local` in its DNS SAN.
 
 ### Local Operator Delivery
 
@@ -190,8 +190,8 @@ The platform provides zero-config ingress for agentic CLI coding tools through:
 
 ## 8. Network Identity Detection
 
-The gateway detects the machine's network identity (IPs, hostnames, and aliases) using the detector in `internal/services/network/identity.go`. This detection includes:
-- **Network Interface IPs**: Both IPv4 and IPv6.
+The gateway detects the machine's network identity (IPs, hostnames, and aliases) at startup. This detection includes:
+- **Network Interface IPs**: IPv4 addresses from all non-loopback interfaces.
 - **Hostnames**: From `/etc/hostname` and system calls.
 - **Hosts File Aliases**: Local aliases pointing to the machine's IPs.
 - **mDNS names**: *.local names via Avahi or Bonjour.
@@ -200,26 +200,6 @@ The gateway detects the machine's network identity (IPs, hostnames, and aliases)
 - **Windows Identity**: NetBIOS and AD FQDN names.
 
 This information is used for certificate SAN generation and peer discovery.
-
----
-
-## 9. Implementation Reference
-
-| Concern | File |
-|---|---|
-| Workload identity | `protocol/workload_identity.go` |
-| Network identity | `internal/services/network/identity.go` |
-| PKI / CertStore | `internal/services/gateway/gateway_certs.go` |
-| Port constants | `protocol/constants/ports.json` |
-| Gateway hostname constant | `internal/constants/network.go` |
-| HTTP and HTTPS routers | `internal/services/gateway/gateway_http_router.go` |
-| mTLS middleware and public routes | `internal/services/gateway/gateway_auth.go` |
-| Gateway pub/sub | `internal/services/gateway/gateway_pubsub.go` |
-| SSE event bridge | `internal/services/gateway/gateway_http_sse.go` |
-| SSE event storage | `internal/services/gateway/sse_event_service.go` |
-| Gateway service | `internal/services/gateway/gateway_service.go` |
-| Governance envelope verification | `internal/services/gateway/governance_envelope.go` |
-| CLI MCP Stdio | `internal/cli/cmd/mcp.go` |
 
 ---
 

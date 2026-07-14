@@ -1,7 +1,7 @@
 # Storage Architecture
 
-Last Updated: 2026-07-13
-Version: v1.5.0
+Last Updated: 2026-07-14
+Version: v1.5.1
 
 ## Overview
 
@@ -53,7 +53,6 @@ File operations follow a two-phase commit pattern. The ledger snapshots the pre-
 
 - Encrypts file copies at rest using AES-256-GCM when the vault is unlocked
 - Enforces a 100 MB size limit on encrypted copies to prevent memory exhaustion during encryption
-- Streams unencrypted file copies to avoid loading entire files into memory
 - Fails closed for file retrieval and restoration when the vault is locked
 - Normalizes file paths across platforms by stripping Windows drive letters and converting backslashes
 - Exposes the HEAD commit hash of the global files ledger as a BFT-verifiable state snapshot
@@ -71,7 +70,8 @@ The Execution Vault stores command execution results and file diffs. All content
 - Stores content hashes alongside compressed blobs for integrity verification
 - Links execution records to workflow metadata such as case, task, and investigation IDs
 - Prunes records older than the retention threshold and removes the oldest rows when the database exceeds the configured size limit
-- Uses stable string IDs as primary keys for both execution and file diff records
+- Uses upsert semantics on stable string IDs for both execution and file diff records
+- Supports retrieving file diffs scoped to an operator session
 
 ---
 
@@ -112,10 +112,12 @@ The Suspended Transaction Store persists governance transactions that are awaiti
 **Capabilities:**
 
 - Stores the complete governance envelope as text for replay after approval
+- Uses upsert semantics on transaction hash, allowing re-submission with updated approval metadata
 - Tracks approval status, approver identity, cryptographic signature, expected certificate fingerprint, and Ed25519 public key for verification at L3 notary time
 - Supports both Ed25519 CLI-based and passkey WebAuthn-based approval proofs
 - Filters out expired transactions on retrieval
 - Optionally filters pending transactions by user ID
+- Retrieves expired transactions for audit before cleanup
 - Prunes expired records automatically via a background pruner
 - Does not require encryption, as governance envelope data is treated as public audit content
 
@@ -143,9 +145,15 @@ The History Handler is a thin coordinator that combines the Audit Store and Ledg
 
 - Fetches audit events for a session and attaches file mutations for completed file edits
 - Delegates file history queries to the ledger's git log
-- Delegates file restoration to the ledger's point-in-time retrieval
+- Delegates point-in-time file retrieval and file restoration to the ledger
 - Scopes all operations to an operator session ID
 - Uses dependency injection for the audit store and ledger, enabling unit testing with mocks
+
+---
+
+## Runtime File I/O Abstraction
+
+All storage services that interact with the filesystem do so through a shared file I/O abstraction scoped to the `.g8e/` runtime directory. This abstraction provides atomic file writes via a temporary file and rename pattern, path resolution that confines operations within the runtime directory, and recursive permission enforcement for directories and files. The Ledger and Audit Store both rely on this abstraction for all filesystem operations, ensuring consistent path handling and preventing writes outside the runtime directory.
 
 ---
 
@@ -192,8 +200,8 @@ Paths are normalized for platform-appropriate separators on Windows, converting 
 5. **Path traversal protection**: The Ledger strips drive letters and leading separators before constructing ledger-relative paths.
 6. **Cross-platform path safety**: The shared path utility layer prevents double-joining of absolute paths on Windows and normalizes separators across platforms. See [Cross-Platform Path Handling](#cross-platform-path-handling).
 7. **Size limits for encrypted copies**: The Ledger enforces a 100 MB cap on encrypted file copies to prevent OOM during the full-read required by AES-GCM.
-8. **Streaming for unencrypted copies**: The Ledger streams unencrypted file copies to prevent OOM.
-9. **Atomic nonce reservation**: The UNIQUE constraint on the nonce column provides atomicity without application-level locking.
+8. **Atomic nonce reservation**: The UNIQUE constraint on the nonce column provides atomicity without application-level locking.
+9. **Runtime directory confinement**: The shared file I/O abstraction resolves all paths relative to the `.g8e/` runtime directory, preventing writes outside the intended scope.
 
 ---
 

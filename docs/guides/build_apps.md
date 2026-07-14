@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-07-13
-Version: v1.5.0
+Last Updated: 2026-07-14
+Version: v1.5.1
 
 ---
 
@@ -82,11 +82,11 @@ A valid GovernanceEnvelope includes the following categories of fields:
 The protocol defines canonical event types for all first-class operations. The primary categories used by applications include:
 
 - **Shell Operations**: Command execution and cancellation
-- **File Operations**: Filesystem reads, file edits, history fetch, diff fetch, and restore
-- **Filesystem Operations**: Directory listing and grep
+- **File Operations**: File edits, file history fetch, and file restore
+- **Filesystem Operations**: Directory listing, filesystem reads, and grep
 - **MCP Operations**: MCP tool calls
 - **A2A Operations**: A2A skill invocations
-- **Network Operations**: Ping and port checks
+- **Network Operations**: Port checks
 - **Heartbeat**: Operator heartbeat
 - **Audit Operations**: Command and AI audit recording
 - **Shutdown**: Operator shutdown
@@ -102,7 +102,7 @@ Applications constructing `GovernanceEnvelope` transactions or parsing `ActionRe
 The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.5.0
+go get github.com/g8e-ai/g8e@v1.5.1
 ```
 
 The Go package provides protobuf message types for governance envelopes, governance metadata (L1, L2, L3), and all typed payload messages for first-class operations. It also provides SPIFFE workload identity helpers for URI SAN generation and validation.
@@ -114,7 +114,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 Install from PyPI:
 
 ```bash
-pip install g8e==1.5.0
+pip install g8e==1.5.1
 ```
 
 The package provides:
@@ -184,7 +184,7 @@ Compute the deterministic transaction hash from the envelope's critical fields. 
 - requestor_user_id
 - acting_app_id
 
-The `id` field must be set to this computed hash. L3 proof is intentionally excluded from the hash so that L2 consensus can sign before the human notary is asked. The Protocol Library provides a `GenerateMessageID` helper that handles this computation.
+The `id` field must be set to this computed hash. L3 proof is intentionally excluded from the hash so that L2 consensus can sign before the human notary is asked.
 
 ### Step 5: Build Envelope
 
