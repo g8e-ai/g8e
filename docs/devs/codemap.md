@@ -373,6 +373,39 @@ The reporting system operates as a self-contained, offline verification utility 
 - **`internal/cli/stream/`**: SSH and subprocess streaming for remote operator management. `stream.go` provides the streaming CLI command. `stream_ssh.go` provides SSH connection management for remote log streaming and command execution.
 - **`internal/cli/sse/`**: Server-Sent Events client for CLI consumption of gateway SSE streams. `client.go` provides the SSE client implementation used by the TUI for real-time updates.
 
+## Runtime File Service
+
+**`internal/services/fs/`** - File service for the `.g8e/` runtime directory
+
+`RuntimeFileService` interface (`file_service.go`) provides safe file operations within the `.g8e/` runtime directory. All paths are relative to the runtime directory root. The `localFS` implementation wraps `os.*` calls with atomic writes (tmp+rename), permission enforcement, and consistent error wrapping using `constants.Err*` constants.
+
+Interface methods:
+- `Resolve(relPath)` - Converts a relative path to an absolute path within `.g8e/`
+- `Rel(absPath)` - Converts an absolute `.g8e/` path back to a relative path
+- `ReadFile(ctx, relPath)` - Reads a file; returns `constants.ErrNotFound` if missing
+- `WriteFile(ctx, relPath, data, mode)` - Atomically writes a file with tmp+rename
+- `MkdirAll(ctx, relPath, mode)` - Creates a directory tree
+- `Stat(ctx, relPath)` - Returns `os.FileInfo`; returns `constants.ErrNotFound` if missing
+- `FileExists(ctx, relPath)` - Returns `(bool, error)`, false for non-existent
+- `Remove(ctx, relPath)` - Deletes a file; no-op if missing
+- `RemoveAll(ctx, relPath)` - Deletes a directory tree; no-op if missing
+- `ReadDir(ctx, relPath)` - Lists directory entries
+- `Rename(ctx, oldPath, newPath)` - Atomically renames a file or directory
+- `CreateRuntimeTree(ctx)` - Creates the full `.g8e/` directory tree with correct permissions. Called once at startup. Idempotent
+- `EnforceDirPermissions(ctx, relPath, mode)` - Recursively enforces directory permissions
+- `EnforceFilePermissions(ctx, relPath, mode)` - Enforces file permissions on a single file
+
+Construction: `fs.NewRuntimeFileService(baseDir, logger)` creates a service scoped to `.g8e/` under `baseDir`.
+
+Test helpers (per-package, build-tagged `integration` or test-only):
+- `newTestFileSvc(t)` in `internal/services/gateway/test_setup_test.go` - Temp-backed fileSvc with full runtime tree for gateway tests
+- `newTestFileSvc(t, baseDir)` in `internal/services/storage/storage_test_helpers_test.go` - Storage test fileSvc, returns fileSvc and data dir
+- `NewTestFileSvc(t, baseDir)` in `internal/services/storage/storagetest/helpers.go` - Exported test fileSvc for storagetest consumers
+- `newAuthTestFileSvc(t)` in `internal/cli/auth/client_test.go` - Auth client test fileSvc
+- `newPlatformTestFileSvc(t, baseDir)` in `internal/cli/platform/process_test.go` - Platform test fileSvc
+- `newCmdTestFileSvc(t)` in `internal/cli/cmd/vault_test.go` - CLI command test fileSvc (uses CWD as base)
+- `newTestFileSvc(t)` in `internal/cli/serve/test_setup_test.go` - Serve test fileSvc
+
 ## Test Infrastructure (Not Production)
 
 The following packages are test-only and are not part of the production dependency tree:

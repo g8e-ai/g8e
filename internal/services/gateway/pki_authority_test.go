@@ -143,6 +143,17 @@ func loadTrustBundle(t *testing.T, fileSvc fs.RuntimeFileService, relPath string
 	return pool
 }
 
+// readCAFromFS reads a CA certificate from the fileSvc tree using a relative path.
+func readCAFromFS(t *testing.T, fileSvc fs.RuntimeFileService, relPath, caName string) []byte {
+	t.Helper()
+
+	certPEM, err := fileSvc.ReadFile(context.Background(), relPath)
+	require.NoError(t, err, "CA certificate '%s' not found at %s. Ensure PKI is initialized before accessing certificates.", caName, relPath)
+	require.NotEmpty(t, certPEM, "CA certificate '%s' at %s is empty", caName, relPath)
+
+	return certPEM
+}
+
 // parsePEMCertificate parses a PEM-encoded certificate from bytes.
 func parsePEMCertificate(t *testing.T, pemData []byte) *x509.Certificate {
 	t.Helper()
@@ -206,7 +217,7 @@ func TestPKIAuthority_InitializePKI(t *testing.T) {
 	t.Run("Root CA generation", func(t *testing.T) {
 		ctx := setupTestPKI(t)
 
-		certPEM := testutil.ReadRootCA(t, ctx.pkiDir)
+		certPEM := readCAFromFS(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA), "root")
 		assert.NotEmpty(t, certPEM)
 
 		rootKeyRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCAKey)
@@ -319,7 +330,7 @@ func TestPKIAuthority_ChainValidity(t *testing.T) {
 	ctx := setupTestPKI(t)
 
 	t.Run("Root CA is self-signed", func(t *testing.T) {
-		rootCertPEM := testutil.ReadRootCA(t, ctx.pkiDir)
+		rootCertPEM := readCAFromFS(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA), "root")
 		rootCert := parsePEMCertificate(t, rootCertPEM)
 
 		assert.Equal(t, rootCert.Issuer.CommonName, rootCert.Subject.CommonName)
@@ -328,8 +339,8 @@ func TestPKIAuthority_ChainValidity(t *testing.T) {
 	})
 
 	t.Run("Intermediate CA chain validity", func(t *testing.T) {
-		rootCertPEM := testutil.ReadRootCA(t, ctx.pkiDir)
-		hubCertPEM := testutil.ReadHubCA(t, ctx.pkiDir)
+		rootCertPEM := readCAFromFS(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA), "root")
+		hubCertPEM := readCAFromFS(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirAuthorities, constants.PkiFileHubCA), "hub")
 
 		rootCert := parsePEMCertificate(t, rootCertPEM)
 		hubCert := parsePEMCertificate(t, hubCertPEM)
@@ -340,7 +351,7 @@ func TestPKIAuthority_ChainValidity(t *testing.T) {
 	})
 
 	t.Run("Service certificate chain validity", func(t *testing.T) {
-		hubCertPEM := testutil.ReadHubCA(t, ctx.pkiDir)
+		hubCertPEM := readCAFromFS(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirAuthorities, constants.PkiFileHubCA), "hub")
 		serviceCert := loadCertificate(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
 
 		hubCert := parsePEMCertificate(t, hubCertPEM)
@@ -355,15 +366,15 @@ func TestPKIAuthority_IssuerSeparation(t *testing.T) {
 	ctx := setupTestPKI(t)
 
 	t.Run("Distinct intermediate CAs", func(t *testing.T) {
-		hubCertPEM := testutil.ReadHubCA(t, ctx.pkiDir)
-		operatorCertPEM := testutil.ReadOperatorCA(t, ctx.pkiDir)
+		hubCertPEM := readCAFromFS(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirAuthorities, constants.PkiFileHubCA), "hub")
+		operatorCertPEM := readCAFromFS(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirAuthorities, constants.PkiFileOperatorCA), "operator")
 
 		hubCert := parsePEMCertificate(t, hubCertPEM)
 		operatorCert := parsePEMCertificate(t, operatorCertPEM)
 
 		assert.NotEqual(t, hubCert.Subject.CommonName, operatorCert.Subject.CommonName)
 
-		rootCertPEM := testutil.ReadRootCA(t, ctx.pkiDir)
+		rootCertPEM := readCAFromFS(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA), "root")
 		rootCert := parsePEMCertificate(t, rootCertPEM)
 
 		assert.Equal(t, rootCert.Subject.CommonName, hubCert.Issuer.CommonName)
@@ -396,7 +407,7 @@ func TestPKIAuthority_ValidityPeriods(t *testing.T) {
 	ctx := setupTestPKI(t)
 
 	t.Run("Root CA validity period", func(t *testing.T) {
-		rootCertPEM := testutil.ReadRootCA(t, ctx.pkiDir)
+		rootCertPEM := readCAFromFS(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA), "root")
 		rootCert := parsePEMCertificate(t, rootCertPEM)
 
 		duration := rootCert.NotAfter.Sub(rootCert.NotBefore)
@@ -406,7 +417,7 @@ func TestPKIAuthority_ValidityPeriods(t *testing.T) {
 	})
 
 	t.Run("Intermediate CA validity period", func(t *testing.T) {
-		hubCertPEM := testutil.ReadHubCA(t, ctx.pkiDir)
+		hubCertPEM := readCAFromFS(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirAuthorities, constants.PkiFileHubCA), "hub")
 		hubCert := parsePEMCertificate(t, hubCertPEM)
 
 		duration := hubCert.NotAfter.Sub(hubCert.NotBefore)
@@ -429,7 +440,7 @@ func TestPKIAuthority_EKU(t *testing.T) {
 	ctx := setupTestPKI(t)
 
 	t.Run("CA has correct KeyUsage", func(t *testing.T) {
-		rootCertPEM := testutil.ReadRootCA(t, ctx.pkiDir)
+		rootCertPEM := readCAFromFS(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA), "root")
 		rootCert := parsePEMCertificate(t, rootCertPEM)
 
 		assert.Equal(t, x509.KeyUsageCertSign|x509.KeyUsageCRLSign, rootCert.KeyUsage)
@@ -479,7 +490,7 @@ func TestPKIAuthority_PKIDir(t *testing.T) {
 func TestPKIAuthority_ReuseExisting(t *testing.T) {
 	ctx := setupTestPKI(t)
 
-	rootCertPEM1 := testutil.ReadRootCA(t, ctx.pkiDir)
+	rootCertPEM1 := readCAFromFS(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA), "root")
 	cert1 := parsePEMCertificate(t, rootCertPEM1)
 	serial1 := cert1.SerialNumber
 
@@ -487,7 +498,7 @@ func TestPKIAuthority_ReuseExisting(t *testing.T) {
 	err := pki2.InitializePKI(nil)
 	require.NoError(t, err)
 
-	rootCertPEM2 := testutil.ReadRootCA(t, ctx.pkiDir)
+	rootCertPEM2 := readCAFromFS(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA), "root")
 	cert2 := parsePEMCertificate(t, rootCertPEM2)
 	serial2 := cert2.SerialNumber
 
@@ -528,11 +539,11 @@ func TestPKIAuthority_Phase0Regression_C2_OperatorSerialBlank(t *testing.T) {
 func TestPKIAuthority_Phase0Regression_H2_CurveInconsistency(t *testing.T) {
 	ctx := setupTestPKI(t)
 
-	rootCertPEM := testutil.ReadRootCA(t, ctx.pkiDir)
+	rootCertPEM := readCAFromFS(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA), "root")
 	rootCert := parsePEMCertificate(t, rootCertPEM)
 	assert.Equal(t, elliptic.P256(), rootCert.PublicKey.(*ecdsa.PublicKey).Curve, RegressionMarkerAfterFix+": root CA uses P-256")
 
-	hubCertPEM := testutil.ReadHubCA(t, ctx.pkiDir)
+	hubCertPEM := readCAFromFS(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirAuthorities, constants.PkiFileHubCA), "hub")
 	hubCert := parsePEMCertificate(t, hubCertPEM)
 	assert.Equal(t, elliptic.P256(), hubCert.PublicKey.(*ecdsa.PublicKey).Curve, RegressionMarkerAfterFix+": intermediate CA uses P-256")
 
@@ -565,7 +576,18 @@ func TestPKIAuthority_SignCSR(t *testing.T) {
 		ctx := setupTestPKI(t)
 
 		// Verify PKI directory structure exists
-		testutil.RequirePKIInitialized(t, ctx.pkiDir)
+		for _, dir := range []string{
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirAuthorities),
+			filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust),
+		} {
+			info, err := ctx.fileSvc.Stat(context.Background(), dir)
+			require.NoError(t, err, "PKI directory %s does not exist", dir)
+			require.True(t, info.IsDir(), "PKI path %s is not a directory", dir)
+		}
+		rootCARelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA)
+		_, err := ctx.fileSvc.Stat(context.Background(), rootCARelPath)
+		require.NoError(t, err, "Root CA certificate does not exist at %s. PKI may not be initialized.", rootCARelPath)
 
 		// Verify we can sign a CSR using the production flow
 		csr := testutil.GenerateTestCSRP256(t, "test-operator")
@@ -607,11 +629,11 @@ func TestPKIAuthority_SignCSR(t *testing.T) {
 		assert.NotEqual(t, ctx1.dataDir, ctx2.dataDir, "each test should get a distinct data directory")
 
 		// Verify root CA serials are different (distinct test CAs)
-		rootCertPEM1 := testutil.ReadRootCA(t, ctx1.pkiDir)
+		rootCertPEM1 := readCAFromFS(t, ctx1.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA), "root")
 		block1, _ := pem.Decode(rootCertPEM1)
 		cert1, _ := x509.ParseCertificate(block1.Bytes)
 
-		rootCertPEM2 := testutil.ReadRootCA(t, ctx2.pkiDir)
+		rootCertPEM2 := readCAFromFS(t, ctx2.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA), "root")
 		block2, _ := pem.Decode(rootCertPEM2)
 		cert2, _ := x509.ParseCertificate(block2.Bytes)
 

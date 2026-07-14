@@ -198,7 +198,7 @@ The keystore uses the OS-native credential store when available, with a file-bas
 - **macOS**: Keychain.
 - **Windows**: File-based storage.
 
-The file-based fallback stores the master key as a base64-encoded file with restrictive permissions. Atomic writes are performed via temp file rename.
+The file-based fallback stores the master key as a base64-encoded file with restrictive permissions. Atomic writes are performed via temp file rename. All keystore file I/O within `.g8e/` uses `RuntimeFileService` (`internal/services/fs`) with relative paths constructed from `constants.*` constants, replacing direct `os.*` calls. Paths are resolved via `fileSvc.Resolve(constants.*)` instead of `DataDir` or `CredentialsDir` config fields.
 
 ## Troubleshooting
 

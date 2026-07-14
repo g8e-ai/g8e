@@ -76,6 +76,11 @@ Startup sequence: binary check/build â†’ root of trust generation (first boot) â
 - Use canonical JSON (protojson) for all client-facing surfaces
 - Route all mutations through `GovernanceEnvelope` and the 5-layer verification gauntlet
 - Define ALL filepath strings as constants in `internal/constants/paths.go`
+- Use `RuntimeFileService` (`internal/services/fs`) as the canonical abstraction for all `.g8e/` file I/O. Call `CreateRuntimeTree` at startup, then use `fileSvc.ReadFile`/`fileSvc.WriteFile`/`fileSvc.Stat`/`fileSvc.Remove` with relative paths constructed from `constants.*` constants
+- Pass `fileSvc` as an explicit parameter to services and functions that perform `.g8e/` file I/O. Do not use `os.ReadFile`/`os.WriteFile` for `.g8e/` paths
+- Use `fileSvc.Resolve(constants.*)` to obtain absolute paths when needed (e.g., for `filepath.Join` in non-fileSvc APIs). Use `fileSvc.Rel()` to convert absolute `.g8e/` paths back to relative paths for `fileSvc` calls
+- Use `constants.Perm*` constants for file and directory permissions. Use `constants.Err*` constants for error checking (e.g., `errors.Is(err, constants.ErrNotFound)` replaces `os.IsNotExist`)
+- Do not add `DataDir`/`CredentialsDir`/`PKIDir` fields to config structs. Use `fileSvc.Resolve(constants.*)` instead. `paths.Infra` is config-only (path registration), not for file I/O
 - Use `TestPaths` for isolated test environments (base directory from a constant, all sub-paths from constants)
 - Reproduce bugs with failing tests before fixing
 - Tier 1 (Unit) tests: mocks and stubs, no external dependencies (no files, network, or DB)
