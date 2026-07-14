@@ -32,3 +32,11 @@ func newCmdTestEnv(t *testing.T) (fs.RuntimeFileService, *config.Config) {
 func fileSvcFactoryFor(fileSvc fs.RuntimeFileService) func() (fs.RuntimeFileService, error) {
 	return func() (fs.RuntimeFileService, error) { return fileSvc, nil }
 }
+
+// mustRel converts an absolute .g8e/ path to a relative path, failing the test on error.
+func mustRel(t *testing.T, fileSvc fs.RuntimeFileService, absPath string) string {
+	t.Helper()
+	rel, err := fileSvc.RelFromAbs(absPath)
+	require.NoError(t, err)
+	return rel
+}

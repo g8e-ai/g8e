@@ -799,9 +799,9 @@ func TestReEnroll_InvalidCAPEM(t *testing.T) {
 	privKey, err := x509.ParseECPrivateKey(block.Bytes)
 	require.NoError(t, err)
 
-	cliCertRel, err := fileSvc.Rel(cfg.CLICertFile())
+	cliCertRel, err := fileSvc.RelFromAbs(cfg.CLICertFile())
 	require.NoError(t, err)
-	cliKeyRel, err := fileSvc.Rel(cfg.CLIKeyFile())
+	cliKeyRel, err := fileSvc.RelFromAbs(cfg.CLIKeyFile())
 	require.NoError(t, err)
 	err = SaveCertAndKey(fileSvc, certPEM, "", privKey, cliCertRel, cliKeyRel)
 	require.NoError(t, err)

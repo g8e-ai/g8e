@@ -83,11 +83,11 @@ func setupApproveAPITestEnv(t *testing.T) (*config.Config, ed25519.PrivateKey, f
 	keyDER, err := x509.MarshalPKCS8PrivateKey(priv)
 	require.NoError(t, err)
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
-	require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLIKeyFile()), keyPEM, constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLIKeyFile()), keyPEM, constants.PermFilePrivate))
 
 	certDER := generateApproveTestCertDER(t, priv)
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLICertFile()), certPEM, constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()), certPEM, constants.PermFilePrivate))
 
 	creds := &auth.Credentials{
 		OperatorSessionID: "op-sess-test",
@@ -106,7 +106,7 @@ func setupApproveSSETestEnv(t *testing.T) (*config.Config, ed25519.PrivateKey, f
 	t.Helper()
 	cfg, priv, fileSvc := setupApproveAPITestEnv(t)
 
-	certPEM, err := fileSvc.ReadFile(context.Background(), relFromAbs(fileSvc, cfg.CLICertFile()))
+	certPEM, err := fileSvc.ReadFile(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()))
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(cfg.TrustBundlePath(), certPEM, 0o600))
 
@@ -335,7 +335,7 @@ func TestApproveCmd_SSE_Success_StatusNotApproved(t *testing.T) {
 
 func TestApproveCmd_NoCredentials_Error(t *testing.T) {
 	cfg, _, fileSvc := setupApproveAPITestEnv(t)
-	require.NoError(t, fileSvc.Remove(context.Background(), relFromAbs(fileSvc, cfg.CredentialsFile())))
+	require.NoError(t, fileSvc.Remove(context.Background(), mustRel(t, fileSvc, cfg.CredentialsFile())))
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return &mockAPIClient{}, nil }

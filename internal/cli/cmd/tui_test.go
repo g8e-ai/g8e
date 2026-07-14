@@ -309,7 +309,7 @@ func TestTUI_RealCredentialsNotEnrolled(t *testing.T) {
 		fileSvc, cfg := newCmdTestEnv(t)
 
 		// Ensure no credentials file exists
-		exists, err := fileSvc.FileExists(context.Background(), relFromAbs(fileSvc, cfg.CredentialsFile()))
+		exists, err := fileSvc.FileExists(context.Background(), mustRel(t, fileSvc, cfg.CredentialsFile()))
 		require.NoError(t, err)
 		require.False(t, exists)
 
@@ -336,7 +336,7 @@ func TestTUI_RealCredentialsCorruptJSON(t *testing.T) {
 	t.Run("fails with ErrFailedToLoadCredentials when credentials file is corrupt", func(t *testing.T) {
 		fileSvc, cfg := newCmdTestEnv(t)
 
-		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CredentialsFile()), []byte("{invalid json"), constants.PermFilePrivate))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CredentialsFile()), []byte("{invalid json"), constants.PermFilePrivate))
 
 		deps := tuiDeps{
 			configLoader:         func(string) (*config.Config, error) { return cfg, nil },

@@ -81,6 +81,10 @@ type RuntimeFileService interface {
 	// Rel converts an absolute path within .g8e/ to a path relative to the runtime dir.
 	// Returns an error if the path is outside the runtime directory.
 	Rel(absPath string) (string, error)
+
+	// RelFromAbs converts an absolute path within .g8e/ to a relative path.
+	// Returns an error if the path is outside the runtime directory.
+	RelFromAbs(absPath string) (string, error)
 }
 
 // localFS is the default RuntimeFileService implementation, operating
@@ -130,6 +134,12 @@ func (fs *localFS) Rel(absPath string) (string, error) {
 		return "", fmt.Errorf("%w: %s is outside runtime dir %s", constants.ErrPathValidation, absPath, fs.runtimeDir)
 	}
 	return rel, nil
+}
+
+// RelFromAbs converts an absolute path within .g8e/ to a relative path.
+// Returns an error if the path is outside the runtime directory.
+func (fs *localFS) RelFromAbs(absPath string) (string, error) {
+	return fs.Rel(absPath)
 }
 
 // isWithinRuntimeDir verifies that absPath is within the runtime directory.

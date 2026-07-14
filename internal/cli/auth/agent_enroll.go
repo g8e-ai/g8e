@@ -74,11 +74,11 @@ func EnrollCLI(fileSvc fs.RuntimeFileService, cfg *config.Config, useTPM bool) e
 		return constants.ErrMissingRequiredField
 	}
 
-	cliCertRel, err := fileSvc.Rel(cfg.CLICertFile())
+	cliCertRel, err := fileSvc.RelFromAbs(cfg.CLICertFile())
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
-	cliKeyRel, err := fileSvc.Rel(cfg.CLIKeyFile())
+	cliKeyRel, err := fileSvc.RelFromAbs(cfg.CLIKeyFile())
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
@@ -169,11 +169,11 @@ func EnrollAgentApp(fileSvc fs.RuntimeFileService, cfg *config.Config, agentName
 		return "", "", "", fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, enrollResp.Error)
 	}
 
-	certRel, err := fileSvc.Rel(certFile)
+	certRel, err := fileSvc.RelFromAbs(certFile)
 	if err != nil {
 		return "", "", "", fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
-	keyRel, err := fileSvc.Rel(keyFile)
+	keyRel, err := fileSvc.RelFromAbs(keyFile)
 	if err != nil {
 		return "", "", "", fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
@@ -185,7 +185,7 @@ func EnrollAgentApp(fileSvc fs.RuntimeFileService, cfg *config.Config, agentName
 }
 
 func checkExistingAppCert(fileSvc fs.RuntimeFileService, certFile, agentName string) (string, bool) {
-	certRel, err := fileSvc.Rel(certFile)
+	certRel, err := fileSvc.RelFromAbs(certFile)
 	if err != nil {
 		return "", false
 	}

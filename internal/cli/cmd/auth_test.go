@@ -74,7 +74,7 @@ func TestLogoutCmd(t *testing.T) {
 		err = auth.DeleteCredentials(fileSvc, cfg)
 		require.NoError(t, err)
 
-		exists, err := fileSvc.FileExists(context.Background(), relFromAbs(fileSvc, cfg.CredentialsFile()))
+		exists, err := fileSvc.FileExists(context.Background(), mustRel(t, fileSvc, cfg.CredentialsFile()))
 		require.NoError(t, err)
 		assert.False(t, exists)
 	})
@@ -90,10 +90,10 @@ func TestLogoutCmd(t *testing.T) {
 		}
 
 		require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
-		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLICertFile()), []byte("cli-cert"), constants.PermFilePrivate))
-		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLIKeyFile()), []byte("cli-key"), constants.PermFilePrivate))
-		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.OperatorCertFile()), []byte("op-cert"), constants.PermFilePrivate))
-		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.OperatorKeyFile()), []byte("op-key"), constants.PermFilePrivate))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()), []byte("cli-cert"), constants.PermFilePrivate))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLIKeyFile()), []byte("cli-key"), constants.PermFilePrivate))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.OperatorCertFile()), []byte("op-cert"), constants.PermFilePrivate))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.OperatorKeyFile()), []byte("op-key"), constants.PermFilePrivate))
 
 		loadedCreds, err := auth.LoadCredentials(fileSvc, cfg)
 		require.NoError(t, err)
@@ -101,13 +101,13 @@ func TestLogoutCmd(t *testing.T) {
 
 		require.NoError(t, auth.DeleteCredentials(fileSvc, cfg))
 
-		exists, err := fileSvc.FileExists(context.Background(), relFromAbs(fileSvc, cfg.CredentialsFile()))
+		exists, err := fileSvc.FileExists(context.Background(), mustRel(t, fileSvc, cfg.CredentialsFile()))
 		require.NoError(t, err)
 		assert.False(t, exists)
-		exists, err = fileSvc.FileExists(context.Background(), relFromAbs(fileSvc, cfg.CLICertFile()))
+		exists, err = fileSvc.FileExists(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()))
 		require.NoError(t, err)
 		assert.False(t, exists)
-		exists, err = fileSvc.FileExists(context.Background(), relFromAbs(fileSvc, cfg.CLIKeyFile()))
+		exists, err = fileSvc.FileExists(context.Background(), mustRel(t, fileSvc, cfg.CLIKeyFile()))
 		require.NoError(t, err)
 		assert.False(t, exists)
 	})

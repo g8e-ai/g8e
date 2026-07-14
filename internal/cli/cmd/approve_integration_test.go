@@ -69,14 +69,14 @@ func TestApproveCmd(t *testing.T) {
 			Type:  "PRIVATE KEY",
 			Bytes: privBytes,
 		})
-		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLIKeyFile()), privPEM, constants.PermFilePrivate))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLIKeyFile()), privPEM, constants.PermFilePrivate))
 
 		cert := generateTestCertificate(t, priv)
 		certPEM := pem.EncodeToMemory(&pem.Block{
 			Type:  "CERTIFICATE",
 			Bytes: cert,
 		})
-		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLICertFile()), certPEM, constants.PermFilePrivate))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()), certPEM, constants.PermFilePrivate))
 
 		// Don't create credentials - should fail on API client creation
 		err = cmd.RunE(cmd, []string{"abc123"})
@@ -137,7 +137,7 @@ func TestApproveCmd(t *testing.T) {
 			Type:  "PRIVATE KEY",
 			Bytes: privBytes,
 		})
-		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLIKeyFile()), privPEM, constants.PermFilePrivate))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLIKeyFile()), privPEM, constants.PermFilePrivate))
 
 		err = cmd.RunE(cmd, []string{"abc123"})
 		require.Error(t, err)
@@ -168,13 +168,13 @@ func TestApproveCmd(t *testing.T) {
 		privBytes, err := x509.MarshalPKCS8PrivateKey(priv1)
 		require.NoError(t, err)
 		privPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes})
-		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLIKeyFile()), privPEM, constants.PermFilePrivate))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLIKeyFile()), privPEM, constants.PermFilePrivate))
 
 		_, priv2, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 		cert := generateTestCertificate(t, priv2)
 		certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert})
-		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLICertFile()), certPEM, constants.PermFilePrivate))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()), certPEM, constants.PermFilePrivate))
 
 		err = cmd.RunE(cmd, []string{"abc123"})
 		require.Error(t, err)
@@ -185,7 +185,7 @@ func TestApproveCmd(t *testing.T) {
 		fileSvc, cfg := newCmdTestEnv(t)
 
 		// Remove the trust bundle that setupTestConfig creates
-		require.NoError(t, fileSvc.Remove(context.Background(), relFromAbs(fileSvc, cfg.TrustBundlePath())))
+		require.NoError(t, fileSvc.Remove(context.Background(), mustRel(t, fileSvc, cfg.TrustBundlePath())))
 
 		// Use injectable config loader for hermetic test
 		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
@@ -206,14 +206,14 @@ func TestApproveCmd(t *testing.T) {
 			Type:  "PRIVATE KEY",
 			Bytes: privBytes,
 		})
-		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLIKeyFile()), privPEM, constants.PermFilePrivate))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLIKeyFile()), privPEM, constants.PermFilePrivate))
 
 		cert := generateTestCertificate(t, priv)
 		certPEM := pem.EncodeToMemory(&pem.Block{
 			Type:  "CERTIFICATE",
 			Bytes: cert,
 		})
-		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLICertFile()), certPEM, constants.PermFilePrivate))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()), certPEM, constants.PermFilePrivate))
 
 		// Create credentials but don't create trust bundle
 		creds := &auth.Credentials{

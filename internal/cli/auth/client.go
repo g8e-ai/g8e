@@ -551,7 +551,7 @@ func SaveCredentials(fileSvc fs.RuntimeFileService, cfg *config.Config, creds *C
 		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONBody, err)
 	}
 
-	relPath, err := fileSvc.Rel(cfg.CredentialsFile())
+	relPath, err := fileSvc.RelFromAbs(cfg.CredentialsFile())
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 	}
@@ -563,7 +563,7 @@ func SaveCredentials(fileSvc fs.RuntimeFileService, cfg *config.Config, creds *C
 }
 
 func LoadCredentials(fileSvc fs.RuntimeFileService, cfg *config.Config) (*Credentials, error) {
-	relPath, err := fileSvc.Rel(cfg.CredentialsFile())
+	relPath, err := fileSvc.RelFromAbs(cfg.CredentialsFile())
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 	}
@@ -584,7 +584,7 @@ func LoadCredentials(fileSvc fs.RuntimeFileService, cfg *config.Config) (*Creden
 }
 
 func DeleteCredentials(fileSvc fs.RuntimeFileService, cfg *config.Config) error {
-	credsRel, err := fileSvc.Rel(cfg.CredentialsFile())
+	credsRel, err := fileSvc.RelFromAbs(cfg.CredentialsFile())
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
 	}
@@ -592,7 +592,7 @@ func DeleteCredentials(fileSvc fs.RuntimeFileService, cfg *config.Config) error 
 		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
 	}
 
-	cliCertRel, err := fileSvc.Rel(cfg.CLICertFile())
+	cliCertRel, err := fileSvc.RelFromAbs(cfg.CLICertFile())
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
 	}
@@ -600,7 +600,7 @@ func DeleteCredentials(fileSvc fs.RuntimeFileService, cfg *config.Config) error 
 		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
 	}
 
-	cliKeyRel, err := fileSvc.Rel(cfg.CLIKeyFile())
+	cliKeyRel, err := fileSvc.RelFromAbs(cfg.CLIKeyFile())
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
 	}
@@ -745,7 +745,7 @@ func AutoRenewCertificate(fileSvc fs.RuntimeFileService, cfg *config.Config, cer
 		return constants.ErrValidationFailed
 	}
 
-	certRelPath, err := fileSvc.Rel(certAbsPath)
+	certRelPath, err := fileSvc.RelFromAbs(certAbsPath)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertParseFailed, err)
 	}
@@ -778,11 +778,11 @@ func AutoRenewCertificate(fileSvc fs.RuntimeFileService, cfg *config.Config, cer
 		return constants.ErrMissingRequiredField
 	}
 
-	cliCertRel, err := fileSvc.Rel(cfg.CLICertFile())
+	cliCertRel, err := fileSvc.RelFromAbs(cfg.CLICertFile())
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
-	cliKeyRel, err := fileSvc.Rel(cfg.CLIKeyFile())
+	cliKeyRel, err := fileSvc.RelFromAbs(cfg.CLIKeyFile())
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}

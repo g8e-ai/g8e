@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -409,4 +410,20 @@ func TestReadFile_CancelledContextReturnsError(t *testing.T) {
 	_, err := svc.ReadFile(ctx, "anything.txt")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, context.Canceled))
+}
+
+func TestRelFromAbs_Success(t *testing.T) {
+	svc := setupTestFS(t)
+	abs := svc.Resolve("pki/root_ca.crt")
+	rel, err := svc.RelFromAbs(abs)
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join("pki", "root_ca.crt"), rel)
+}
+
+func TestRelFromAbs_OutsidePathReturnsError(t *testing.T) {
+	svc := setupTestFS(t)
+	outside := filepath.Join(os.TempDir(), "outside-g8e", "cert.pem")
+	_, err := svc.RelFromAbs(outside)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrPathValidation))
 }

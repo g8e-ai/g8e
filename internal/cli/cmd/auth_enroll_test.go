@@ -96,8 +96,8 @@ func TestPerformEnroll_WithLocalCredsGatewayDownReturnsError(t *testing.T) {
 
 	fileSvc, cfg := newCmdTestEnv(t)
 
-	require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CredentialsFile()), []byte(`{"user_id":"u1","cli_session_id":"s1"}`), constants.PermFilePrivate))
-	require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLICertFile()), []byte("-----BEGIN CERTIFICATE-----\nMIIBdummy==\n-----END CERTIFICATE-----\n"), constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CredentialsFile()), []byte(`{"user_id":"u1","cli_session_id":"s1"}`), constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()), []byte("-----BEGIN CERTIFICATE-----\nMIIBdummy==\n-----END CERTIFICATE-----\n"), constants.PermFilePrivate))
 
 	cmd := enrollCmdWithConfig(func(string) (*config.Config, error) {
 		return cfg, nil

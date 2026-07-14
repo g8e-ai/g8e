@@ -79,7 +79,7 @@ func TestApproveCmdWithConfig(t *testing.T) {
 	t.Run("approve fails with invalid PEM key", func(t *testing.T) {
 		fileSvc, cfg := newCmdTestEnv(t)
 
-		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLIKeyFile()), []byte("not a pem"), constants.PermFilePrivate))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLIKeyFile()), []byte("not a pem"), constants.PermFilePrivate))
 
 		loader := func(string) (*config.Config, error) {
 			return cfg, nil
@@ -96,7 +96,7 @@ func TestApproveCmdWithConfig(t *testing.T) {
 		fileSvc, cfg := newCmdTestEnv(t)
 
 		keyData := append([]byte("-----BEGIN PRIVATE KEY-----\naGVsbG8=\n-----END PRIVATE KEY-----\n"), []byte("extra data")...)
-		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLIKeyFile()), keyData, constants.PermFilePrivate))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLIKeyFile()), keyData, constants.PermFilePrivate))
 
 		loader := func(string) (*config.Config, error) {
 			return cfg, nil
@@ -119,7 +119,7 @@ func TestApproveCmdWithValidKeyFile(t *testing.T) {
 		keyDER, err := x509.MarshalPKCS8PrivateKey(privKey)
 		require.NoError(t, err)
 		keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
-		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLIKeyFile()), keyPEM, constants.PermFilePrivate))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLIKeyFile()), keyPEM, constants.PermFilePrivate))
 
 		loader := func(string) (*config.Config, error) {
 			return cfg, nil

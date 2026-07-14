@@ -92,11 +92,19 @@ func performEnroll(cmd *cobra.Command, fileSvc fs.RuntimeFileService, cfg *confi
 	ctx := context.Background()
 
 	// Check if local credentials exist
-	credsExist, err := fileSvc.FileExists(ctx, relFromAbs(fileSvc, cfg.CredentialsFile()))
+	credsRel, err := fileSvc.RelFromAbs(cfg.CredentialsFile())
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
-	certExists, err := fileSvc.FileExists(ctx, relFromAbs(fileSvc, cfg.CLICertFile()))
+	credsExist, err := fileSvc.FileExists(ctx, credsRel)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	}
+	certRel, err := fileSvc.RelFromAbs(cfg.CLICertFile())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	}
+	certExists, err := fileSvc.FileExists(ctx, certRel)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
@@ -128,7 +136,11 @@ func performEnroll(cmd *cobra.Command, fileSvc fs.RuntimeFileService, cfg *confi
 	cmd.Println("Gateway already bootstrapped. Attempting re-enrollment via CSR with mTLS...")
 
 	// Check if operator certificate exists (CLI-only bootstrap has no operator)
-	opCertExists, err := fileSvc.FileExists(ctx, relFromAbs(fileSvc, cfg.OperatorCertFile()))
+	opCertRel, err := fileSvc.RelFromAbs(cfg.OperatorCertFile())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	}
+	opCertExists, err := fileSvc.FileExists(ctx, opCertRel)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
@@ -178,7 +190,15 @@ func performEnroll(cmd *cobra.Command, fileSvc fs.RuntimeFileService, cfg *confi
 		return constants.ErrMissingRequiredField
 	}
 
-	if err := auth.SaveCertAndKey(fileSvc, regResp.CLICert, regResp.CLICertChain, cliKey, relFromAbs(fileSvc, cfg.CLICertFile()), relFromAbs(fileSvc, cfg.CLIKeyFile())); err != nil {
+	cliCertRel, err := fileSvc.RelFromAbs(cfg.CLICertFile())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+	}
+	cliKeyRel, err := fileSvc.RelFromAbs(cfg.CLIKeyFile())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+	}
+	if err := auth.SaveCertAndKey(fileSvc, regResp.CLICert, regResp.CLICertChain, cliKey, cliCertRel, cliKeyRel); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 	if runtime.GOOS == "windows" {
