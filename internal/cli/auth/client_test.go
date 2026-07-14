@@ -251,7 +251,7 @@ func TestSaveCredentials(t *testing.T) {
 	fileSvc := newAuthTestFileSvc(t)
 
 	cfg := &config.Config{}
-	cfg.CredentialsDir = tempDir
+	cfg.RuntimeDir = tempDir
 
 	creds := &Credentials{
 		OperatorSessionID: "test-session-id",
@@ -300,7 +300,7 @@ func TestLoadCredentials(t *testing.T) {
 	fileSvc := newAuthTestFileSvc(t)
 
 	cfg := &config.Config{}
-	cfg.CredentialsDir = tempDir
+	cfg.RuntimeDir = tempDir
 
 	t.Run("non-existent file returns nil", func(t *testing.T) {
 		creds, err := LoadCredentials(fileSvc, cfg)
@@ -355,13 +355,9 @@ func TestDeleteCredentials(t *testing.T) {
 	fileSvc := newAuthTestFileSvc(t)
 
 	cfg := &config.Config{}
-	cfg.CredentialsDir = tempDir
+	cfg.RuntimeDir = tempDir
 	cfg.Paths = &config.PathsConfig{}
-	absCAPath, err := filepath.Abs(filepath.Join(tempDir, "trust-bundle.pem"))
-	if err != nil {
-		t.Fatalf("filepath.Abs failed: %v", err)
-	}
-	cfg.Paths.Infra.CACertPath = absCAPath
+	cfg.Paths.Infra.CACertPath = filepath.Join(tempDir, "trust-bundle.pem")
 
 	t.Run("delete existing credentials", func(t *testing.T) {
 		// Create test files using config methods

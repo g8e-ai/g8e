@@ -106,7 +106,6 @@ func TestFetchRootCAFingerprint_Success(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -125,7 +124,6 @@ func TestFetchRootCAFingerprint_HTTPError(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 

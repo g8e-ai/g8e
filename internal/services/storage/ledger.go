@@ -38,7 +38,6 @@ import (
 
 // LedgerConfig holds configuration for the git-backed ledger service.
 type LedgerConfig struct {
-	BaseDir         string       // Base directory for ledgers
 	GitPath         string       // Path to git binary
 	EncryptionVault *vault.Vault // Vault for encryption at rest
 }
@@ -136,7 +135,7 @@ func (s *GitLedgerService) bootstrap() error {
 	}
 
 	s.logger.Info("Ledger bootstrapped",
-		"base_dir", s.config.BaseDir,
+		"base_dir", s.fileSvc.Resolve(s.baseRelPath),
 		"files_dir", s.fileSvc.Resolve(filesRelPath),
 		"sessions_dir", s.fileSvc.Resolve(sessionsRelPath))
 

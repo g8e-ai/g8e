@@ -94,7 +94,12 @@ func TempDir(t *testing.T) string {
 			t.Logf("TempDir cleanup: failed to remove %s: %v", dir, err)
 		}
 	})
-	return dir
+
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		t.Fatalf("failed to resolve absolute path for %s: %v", dir, err)
+	}
+	return absDir
 }
 
 // NewTestPathsFromTemp creates a TestPaths instance using TempDir(t) as the base.

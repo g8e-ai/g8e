@@ -102,7 +102,7 @@ func TestLoad(t *testing.T) {
 		assert.Equal(t, filepath.Join(tempDir, DefaultRuntimeDir), config.RuntimeDir)
 		assert.Equal(t, filepath.Join(tempDir, DefaultPKIDir), config.PKIDir)
 		assert.Equal(t, filepath.Join(tempDir, DefaultSecretsDir), config.SecretsDir)
-		assert.Contains(t, config.CredentialsDir, ".g8e")
+		assert.Contains(t, config.RuntimeDir, ".g8e")
 		assert.NotNil(t, config.Paths)
 	})
 
@@ -241,7 +241,7 @@ func TestConfig_CredentialsFile(t *testing.T) {
 	t.Run("returns credentials file path", func(t *testing.T) {
 		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: credentialsDir,
+			RuntimeDir: credentialsDir,
 		}
 
 		result := config.CredentialsFile()
@@ -253,7 +253,7 @@ func TestConfig_CLICertFile(t *testing.T) {
 	t.Run("returns CLI cert file path", func(t *testing.T) {
 		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: credentialsDir,
+			RuntimeDir: credentialsDir,
 		}
 
 		result := config.CLICertFile()
@@ -265,7 +265,7 @@ func TestConfig_CLIKeyFile(t *testing.T) {
 	t.Run("returns CLI key file path", func(t *testing.T) {
 		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: credentialsDir,
+			RuntimeDir: credentialsDir,
 		}
 
 		result := config.CLIKeyFile()
@@ -277,7 +277,7 @@ func TestConfig_OperatorCertFile(t *testing.T) {
 	t.Run("returns Operator cert file path", func(t *testing.T) {
 		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: credentialsDir,
+			RuntimeDir: credentialsDir,
 		}
 
 		result := config.OperatorCertFile()
@@ -289,7 +289,7 @@ func TestConfig_OperatorKeyFile(t *testing.T) {
 	t.Run("returns Operator key file path", func(t *testing.T) {
 		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: credentialsDir,
+			RuntimeDir: credentialsDir,
 		}
 
 		result := config.OperatorKeyFile()
@@ -355,9 +355,6 @@ func TestDefaultConstants(t *testing.T) {
 		assert.Equal(t, ".g8e/secrets", DefaultSecretsDir)
 	})
 
-	t.Run("default credentials dir constant", func(t *testing.T) {
-		assert.Equal(t, ".g8e", DefaultCredentialsDir)
-	})
 }
 
 func TestLoadWithPaths(t *testing.T) {
@@ -588,7 +585,7 @@ func TestConfig_AppCertFile(t *testing.T) {
 	t.Run("returns app cert file path with name", func(t *testing.T) {
 		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: credentialsDir,
+			RuntimeDir: credentialsDir,
 		}
 
 		result := config.AppCertFile("myapp")
@@ -598,7 +595,7 @@ func TestConfig_AppCertFile(t *testing.T) {
 	t.Run("handles empty app name", func(t *testing.T) {
 		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: credentialsDir,
+			RuntimeDir: credentialsDir,
 		}
 
 		result := config.AppCertFile("")
@@ -610,7 +607,7 @@ func TestConfig_AppKeyFile(t *testing.T) {
 	t.Run("returns app key file path with name", func(t *testing.T) {
 		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: credentialsDir,
+			RuntimeDir: credentialsDir,
 		}
 
 		result := config.AppKeyFile("myapp")
@@ -620,7 +617,7 @@ func TestConfig_AppKeyFile(t *testing.T) {
 	t.Run("handles empty app name", func(t *testing.T) {
 		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: credentialsDir,
+			RuntimeDir: credentialsDir,
 		}
 
 		result := config.AppKeyFile("")
@@ -632,7 +629,7 @@ func TestConfig_TrustBundleFile(t *testing.T) {
 	t.Run("returns trust bundle file path", func(t *testing.T) {
 		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: credentialsDir,
+			RuntimeDir: credentialsDir,
 		}
 
 		result := config.TrustBundleFile()

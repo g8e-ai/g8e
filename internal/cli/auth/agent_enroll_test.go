@@ -182,8 +182,7 @@ func startTLSEnrollServer(t *testing.T, cfg *config.Config, handler http.Handler
 
 	// Write CA cert as trust bundle so EnrollAgentApp can verify the server.
 	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
-	caPath, err := filepath.Abs(filepath.Join(cfg.CredentialsDir, "test-ca.pem"))
-	require.NoError(t, err)
+	caPath := filepath.Join(cfg.RuntimeDir, "test-ca.pem")
 	require.NoError(t, os.WriteFile(caPath, caPEM, constants.PermFilePrivate))
 	cfg.Paths.Infra.CACertPath = caPath // absolute — TrustBundlePath() returns it directly
 	cfg.Paths.Host = server.URL         // full URL — OperatorHTTPURL() returns it directly
@@ -221,7 +220,6 @@ func TestEnrollAgentApp_Idempotency_ValidCert(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -255,7 +253,6 @@ func TestEnrollAgentApp_Idempotency_ExpiringCert(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -309,7 +306,6 @@ func TestEnrollAgentApp_NoCert(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -359,7 +355,6 @@ func TestEnrollAgentApp_NoURISAN(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -426,7 +421,6 @@ func TestEnrollAgentApp_InvalidCert(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -467,7 +461,6 @@ func TestEnrollAgentApp_EnrollmentError(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -497,7 +490,6 @@ func TestEnrollAgentApp_GatewayUnreachable(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -507,12 +499,11 @@ func TestEnrollAgentApp_GatewayUnreachable(t *testing.T) {
 	writeTestCLICert(t, cfg)
 	writeTestCredentials(t, fileSvc, cfg)
 	dummyCert, _ := generateTestCertificateWithSPIFFE(t, "dummy", time.Now().Add(24*time.Hour))
-	caPath, err := filepath.Abs(filepath.Join(tmpDir, "test-ca.pem"))
-	require.NoError(t, err)
+	caPath := filepath.Join(tmpDir, "test-ca.pem")
 	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), constants.PermFilePrivate))
 	cfg.Paths.Infra.CACertPath = caPath
 
-	_, _, _, err = EnrollAgentApp(fileSvc, cfg, agentName)
+	_, _, _, err := EnrollAgentApp(fileSvc, cfg, agentName)
 
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrHTTPRequestExecuteFailed))
@@ -529,7 +520,6 @@ func TestEnrollAgentApp_NoCLICredentials(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -538,12 +528,11 @@ func TestEnrollAgentApp_NoCLICredentials(t *testing.T) {
 	// Write CLI cert and CA bundle but no credentials
 	writeTestCLICert(t, cfg)
 	dummyCert, _ := generateTestCertificateWithSPIFFE(t, "dummy", time.Now().Add(24*time.Hour))
-	caPath, err := filepath.Abs(filepath.Join(tmpDir, "test-ca.pem"))
-	require.NoError(t, err)
+	caPath := filepath.Join(tmpDir, "test-ca.pem")
 	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), constants.PermFilePrivate))
 	cfg.Paths.Infra.CACertPath = caPath
 
-	_, _, _, err = EnrollAgentApp(fileSvc, cfg, agentName)
+	_, _, _, err := EnrollAgentApp(fileSvc, cfg, agentName)
 
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrNotAuthenticated))
@@ -560,7 +549,6 @@ func TestEnrollAgentApp_MissingCLICert(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -569,12 +557,11 @@ func TestEnrollAgentApp_MissingCLICert(t *testing.T) {
 	// Write credentials and CA bundle but no CLI cert
 	writeTestCredentials(t, fileSvc, cfg)
 	dummyCert, _ := generateTestCertificateWithSPIFFE(t, "dummy", time.Now().Add(24*time.Hour))
-	caPath, err := filepath.Abs(filepath.Join(tmpDir, "test-ca.pem"))
-	require.NoError(t, err)
+	caPath := filepath.Join(tmpDir, "test-ca.pem")
 	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), constants.PermFilePrivate))
 	cfg.Paths.Infra.CACertPath = caPath
 
-	_, _, _, err = EnrollAgentApp(fileSvc, cfg, agentName)
+	_, _, _, err := EnrollAgentApp(fileSvc, cfg, agentName)
 
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrFailedToLoadClientCertificate))
@@ -591,7 +578,6 @@ func TestEnrollAgentApp_MissingCABundle(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -618,7 +604,6 @@ func TestEnrollAgentApp_WrongSPIFFEID(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 

@@ -36,7 +36,6 @@ func TestVerifyPasskeyRegistration_NetworkError(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -44,8 +43,7 @@ func TestVerifyPasskeyRegistration_NetworkError(t *testing.T) {
 	// so the test reaches the network dial (and fails there, as expected).
 	writeTestCLICert(t, cfg)
 	dummyCert, _ := generateTestCertificateWithSPIFFE(t, "dummy", time.Now().Add(24*time.Hour))
-	caPath, err := filepath.Abs(filepath.Join(tmpDir, "test-ca.pem"))
-	require.NoError(t, err)
+	caPath := filepath.Join(tmpDir, "test-ca.pem")
 	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), constants.PermFilePrivate))
 	cfg.Paths.Infra.CACertPath = caPath
 

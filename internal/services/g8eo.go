@@ -252,7 +252,6 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	if auditStore != nil && gitPath != "" {
 		ledgerConfig := &storage.LedgerConfig{
-			BaseDir:         paths.Infra.LedgerDir,
 			GitPath:         gitPath,
 			EncryptionVault: encryptionVault,
 		}

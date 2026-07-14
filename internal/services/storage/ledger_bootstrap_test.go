@@ -57,7 +57,6 @@ func setupBootstrapLedger(t *testing.T) (*GitLedgerService, string) {
 	t.Cleanup(func() { testVault.Close() })
 
 	config := &LedgerConfig{
-		BaseDir:         ledgerDir,
 		GitPath:         gitPath,
 		EncryptionVault: testVault,
 	}
@@ -269,7 +268,6 @@ func TestBootstrap_ReconstructionOverExistingDir(t *testing.T) {
 	tempDir := testutil.TempDir(t)
 
 	fileSvc, _ := newTestFileSvc(t, tempDir)
-	ledgerDir := fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.LedgerDirname))
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -283,7 +281,6 @@ func TestBootstrap_ReconstructionOverExistingDir(t *testing.T) {
 	t.Cleanup(func() { testVault.Close() })
 
 	config := &LedgerConfig{
-		BaseDir:         ledgerDir,
 		GitPath:         gitPath,
 		EncryptionVault: testVault,
 	}
@@ -323,7 +320,6 @@ func TestBootstrap_NilConfigReturnsError(t *testing.T) {
 func TestBootstrap_NilVaultReturnsError(t *testing.T) {
 	t.Parallel()
 	config := &LedgerConfig{
-		BaseDir: testutil.TempDir(t),
 		GitPath: "/usr/bin/git",
 	}
 	svc, err := NewGitLedgerService(config, testutil.NewTestLogger(), nil)
@@ -356,7 +352,6 @@ func TestBootstrap_BootstrapFailureOnUnwritableBaseDir(t *testing.T) {
 	t.Cleanup(func() { testVault.Close() })
 
 	config := &LedgerConfig{
-		BaseDir:         filepath.Join(blocker, "subdir", "ledger"),
 		GitPath:         testGitPath(t),
 		EncryptionVault: testVault,
 	}

@@ -75,7 +75,6 @@ func TestBootstrap_Success(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -102,7 +101,6 @@ func TestBootstrap_HTTPError(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -147,7 +145,6 @@ func TestBootstrap_ErrorResponse(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -176,7 +173,6 @@ func TestBootstrap_InvalidJSONResponse(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -218,7 +214,6 @@ func TestBootstrap_FingerprintVerification(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -272,7 +267,6 @@ func TestEnrollWithGateway_Success(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -311,7 +305,6 @@ func TestEnrollWithGateway_NonSuccessResponse(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -359,7 +352,6 @@ func TestCLIEnroll_Success(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -381,7 +373,6 @@ func TestCLIEnroll_HTTPError(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -424,7 +415,6 @@ func TestCLIEnroll_ErrorResponse(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -451,7 +441,6 @@ func TestCLIEnroll_InvalidJSONResponse(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -473,7 +462,6 @@ func TestEnrollWithGateway_HTTPError(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -504,7 +492,6 @@ func TestEnrollWithGateway_BadStatusCode(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -548,7 +535,6 @@ func TestEnrollWithGateway_FingerprintVerification(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -588,7 +574,6 @@ func TestCheckBootstrapStatus_Success(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -614,7 +599,6 @@ func TestCheckBootstrapStatus_NotBootstrapped(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -632,7 +616,6 @@ func TestCheckBootstrapStatus_HTTPError(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -657,7 +640,6 @@ func TestCheckBootstrapStatus_InvalidJSON(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -671,14 +653,12 @@ func TestReEnroll_TrustBundleFetchError(t *testing.T) {
 	t.Parallel()
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
-	trustBundlePath, err := filepath.Abs(filepath.Join(tmpDir, "trust-bundle.pem"))
-	require.NoError(t, err)
+	trustBundlePath := filepath.Join(tmpDir, "trust-bundle.pem")
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 	cfg.Paths.Infra.CACertPath = trustBundlePath
@@ -721,7 +701,6 @@ func TestReEnroll_TrustBundleEmpty(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -752,7 +731,6 @@ func TestReEnroll_TrustBundleBadStatus(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -785,12 +763,9 @@ func TestReEnroll_CLICertLoadError(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
-	absCAPath, err := filepath.Abs(filepath.Join(tmpDir, "trust-bundle.pem"))
-	require.NoError(t, err)
-	cfg.Paths.Infra.CACertPath = absCAPath
+	cfg.Paths.Infra.CACertPath = filepath.Join(tmpDir, "trust-bundle.pem")
 
 	// Don't create CLI cert/key files - they should be missing
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -821,12 +796,9 @@ func TestReEnroll_InvalidCAPEM(t *testing.T) {
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
 		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
 		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
-	absCAPath, err := filepath.Abs(filepath.Join(tmpDir, "trust-bundle.pem"))
-	require.NoError(t, err)
-	cfg.Paths.Infra.CACertPath = absCAPath
+	cfg.Paths.Infra.CACertPath = filepath.Join(tmpDir, "trust-bundle.pem")
 
 	// Create valid matching CLI cert/key files
 	certPEM, keyPEM := testutil.GenerateTestCertificate(t, "test-cli")

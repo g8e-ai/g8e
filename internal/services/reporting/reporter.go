@@ -157,13 +157,8 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 	}
 
 	// Open git ledger.
-	ledgerBaseDir := opts.LedgerDir
-	if ledgerBaseDir == "" {
-		ledgerBaseDir = filepath.Join(opts.RuntimeDir, constants.LedgerDirname)
-	}
 	var ledger *storage.GitLedgerService
 	ledgerCfg := &storage.LedgerConfig{
-		BaseDir:         ledgerBaseDir,
 		GitPath:         "git",
 		EncryptionVault: v,
 	}

@@ -36,7 +36,6 @@ func setupTestLedger(t *testing.T) (*GitLedgerService, string) {
 	tempDir := testutil.TempDir(t)
 
 	fileSvc, _ := newTestFileSvc(t, tempDir)
-	ledgerDir := fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.LedgerDirname))
 
 	// Create vault but do NOT unlock it (encryption disabled)
 	_, privKey, err := ed25519.GenerateKey(nil)
@@ -53,7 +52,6 @@ func setupTestLedger(t *testing.T) (*GitLedgerService, string) {
 	logger := testutil.NewTestLogger()
 
 	ledgerConfig := &LedgerConfig{
-		BaseDir:         ledgerDir,
 		GitPath:         gitPath,
 		EncryptionVault: testVault,
 	}
@@ -70,7 +68,6 @@ func setupTestLedgerWithEncryption(t *testing.T) (*GitLedgerService, string) {
 	tempDir := testutil.TempDir(t)
 
 	fileSvc, _ := newTestFileSvc(t, tempDir)
-	ledgerDir := fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.LedgerDirname))
 
 	// Create vault and unlock it (encryption enabled)
 	_, privKey, err := ed25519.GenerateKey(nil)
@@ -88,7 +85,6 @@ func setupTestLedgerWithEncryption(t *testing.T) (*GitLedgerService, string) {
 	logger := testutil.NewTestLogger()
 
 	ledgerConfig := &LedgerConfig{
-		BaseDir:         ledgerDir,
 		GitPath:         gitPath,
 		EncryptionVault: testVault,
 	}
@@ -616,7 +612,6 @@ func TestLedgerService_RestoreFileFromCommit_DisabledVault(t *testing.T) {
 	t.Parallel()
 	// Test with config that has no vault (encryption disabled)
 	config := &LedgerConfig{
-		BaseDir: testutil.TempDir(t),
 		GitPath: "/usr/bin/git",
 	}
 	_, err := NewGitLedgerService(config, testutil.NewTestLogger(), nil)

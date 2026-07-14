@@ -31,7 +31,6 @@ const (
 	DefaultRuntimeDir     = ".g8e"
 	DefaultPKIDir         = ".g8e/pki"
 	DefaultSecretsDir     = ".g8e/secrets"
-	DefaultCredentialsDir = ".g8e"
 )
 
 // PathsConfig holds path configuration for test support.
@@ -83,12 +82,11 @@ func DefaultInfraPaths() PathsConfig {
 // Config holds CLI configuration resolved from constants.Paths.
 // All paths are sourced from internal/constants/paths.go (SSOT).
 type Config struct {
-	ProjectRoot    string
-	RuntimeDir     string
-	PKIDir         string
-	SecretsDir     string
-	CredentialsDir string
-	Paths          *PathsConfig
+	ProjectRoot string
+	RuntimeDir  string
+	PKIDir      string
+	SecretsDir  string
+	Paths       *PathsConfig
 }
 
 // expandPath expands ~ to the user home directory and environment variables in a path.
@@ -142,12 +140,11 @@ func Load(projectRoot string) (*Config, error) {
 	pathsCfg.Infra.VaultKeyPath = paths.Infra.VaultKeyPath
 
 	return &Config{
-		ProjectRoot:    projectRoot,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
-		CredentialsDir: paths.Infra.RuntimeDir,
-		Paths:          &pathsCfg,
+		ProjectRoot: projectRoot,
+		RuntimeDir:  paths.Infra.RuntimeDir,
+		PKIDir:      paths.Infra.PkiDir,
+		SecretsDir:  paths.Infra.SecretsDir,
+		Paths:       &pathsCfg,
 	}, nil
 }
 
@@ -166,7 +163,6 @@ func LoadWithPaths(projectRoot string, pathsData []byte) (*Config, error) {
 	runtimeDir := pathutil.SafeJoin(projectRoot, constants.RuntimeDirname)
 	pkiDir := pathutil.SafeJoin(projectRoot, constants.DefaultPKIDir)
 	secretsDir := pathutil.SafeJoin(projectRoot, constants.DefaultSecretsDir)
-	credentialsDir := pathutil.SafeJoin(projectRoot, constants.RuntimeDirname)
 
 	var paths PathsConfig
 	if err := json.Unmarshal(pathsData, &paths); err != nil {
@@ -176,12 +172,11 @@ func LoadWithPaths(projectRoot string, pathsData []byte) (*Config, error) {
 	resolveInfraPaths(&paths, projectRoot)
 
 	return &Config{
-		ProjectRoot:    projectRoot,
-		RuntimeDir:     runtimeDir,
-		PKIDir:         pkiDir,
-		SecretsDir:     secretsDir,
-		CredentialsDir: credentialsDir,
-		Paths:          &paths,
+		ProjectRoot: projectRoot,
+		RuntimeDir:  runtimeDir,
+		PKIDir:      pkiDir,
+		SecretsDir:  secretsDir,
+		Paths:       &paths,
 	}, nil
 }
 
@@ -242,35 +237,35 @@ func (c *Config) TrustBundlePath() string {
 }
 
 func (c *Config) CredentialsFile() string {
-	return filepath.Join(c.CredentialsDir, constants.CredentialsFilename)
+	return filepath.Join(c.RuntimeDir, constants.CredentialsFilename)
 }
 
 func (c *Config) CLICertFile() string {
-	return filepath.Join(c.CredentialsDir, constants.CliCertFilename)
+	return filepath.Join(c.RuntimeDir, constants.CliCertFilename)
 }
 
 func (c *Config) CLIKeyFile() string {
-	return filepath.Join(c.CredentialsDir, constants.CliKeyFilename)
+	return filepath.Join(c.RuntimeDir, constants.CliKeyFilename)
 }
 
 func (c *Config) AppCertFile(name string) string {
-	return filepath.Join(c.CredentialsDir, constants.PkiSubdirApps, name+constants.FileExtCert)
+	return filepath.Join(c.RuntimeDir, constants.PkiSubdirApps, name+constants.FileExtCert)
 }
 
 func (c *Config) AppKeyFile(name string) string {
-	return filepath.Join(c.CredentialsDir, constants.PkiSubdirApps, name+constants.FileExtKey)
+	return filepath.Join(c.RuntimeDir, constants.PkiSubdirApps, name+constants.FileExtKey)
 }
 
 func (c *Config) OperatorCertFile() string {
-	return filepath.Join(c.CredentialsDir, constants.PkiFileOperatorCert)
+	return filepath.Join(c.RuntimeDir, constants.PkiFileOperatorCert)
 }
 
 func (c *Config) OperatorKeyFile() string {
-	return filepath.Join(c.CredentialsDir, constants.PkiFileOperatorKey)
+	return filepath.Join(c.RuntimeDir, constants.PkiFileOperatorKey)
 }
 
 func (c *Config) TrustBundleFile() string {
-	return filepath.Join(c.CredentialsDir, constants.PkiFileGatewayBundle)
+	return filepath.Join(c.RuntimeDir, constants.PkiFileGatewayBundle)
 }
 
 func (c *Config) OperatorHTTPSPort() int {

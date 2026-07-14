@@ -19,7 +19,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -34,7 +33,6 @@ func setupTestLedgerForDiffStat(t *testing.T) (*GitLedgerService, string) {
 	tempDir := testutil.TempDir(t)
 
 	fileSvc, _ := newTestFileSvc(t, tempDir)
-	ledgerDir := fileSvc.Resolve(filepath.Join(constants.DataDirname, constants.LedgerDirname))
 
 	// Create vault but do NOT unlock it (encryption disabled)
 	_, privKey, err := ed25519.GenerateKey(nil)
@@ -51,7 +49,6 @@ func setupTestLedgerForDiffStat(t *testing.T) (*GitLedgerService, string) {
 	logger := testutil.NewTestLogger()
 
 	ledgerConfig := &LedgerConfig{
-		BaseDir:         ledgerDir,
 		GitPath:         gitPath,
 		EncryptionVault: testVault,
 	}

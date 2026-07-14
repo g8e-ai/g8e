@@ -263,7 +263,7 @@ func TestAutoRenewCertificate_NotExpiring(t *testing.T) {
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		CredentialsDir: tmpDir,
+		RuntimeDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -283,7 +283,7 @@ func TestAutoRenewCertificate_UnknownCertType(t *testing.T) {
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		CredentialsDir: tmpDir,
+		RuntimeDir: tmpDir,
 	}
 
 	err := AutoRenewCertificate(fileSvc, cfg, "unknown-type", "")
@@ -299,7 +299,7 @@ func TestAutoRenewCertificate_ExpiringCert(t *testing.T) {
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		CredentialsDir: tmpDir,
+		RuntimeDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -324,7 +324,7 @@ func TestAutoRenewCertificate_OperatorType(t *testing.T) {
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		CredentialsDir: tmpDir,
+		RuntimeDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 

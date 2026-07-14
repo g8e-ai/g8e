@@ -152,7 +152,7 @@ func setupTestConfig(t *testing.T) (*config.Config, fs.RuntimeFileService, strin
 	require.NoError(t, err)
 
 	// Override credentials directory to use temp directory for test isolation
-	cfg.CredentialsDir = credentialsDir
+	cfg.RuntimeDir = credentialsDir
 
 	return cfg, fileSvc, tempDir
 }
@@ -252,7 +252,7 @@ func TestNewClient_Success(t *testing.T) {
 func TestNewClient_NoCredentials(t *testing.T) {
 	cfg, fileSvc, _ := setupTestConfig(t)
 
-	credsDir := cfg.CredentialsDir
+	credsDir := cfg.RuntimeDir
 	os.RemoveAll(credsDir)
 
 	client, err := NewClient(fileSvc, cfg)
@@ -264,7 +264,7 @@ func TestNewClient_NoCredentials(t *testing.T) {
 func TestNewClient_LoadCredentialsError(t *testing.T) {
 	cfg, fileSvc, _ := setupTestConfig(t)
 
-	credsDir := cfg.CredentialsDir
+	credsDir := cfg.RuntimeDir
 	require.NoError(t, os.MkdirAll(credsDir, constants.PermDirPrivate))
 
 	credsFile := cfg.CredentialsFile()

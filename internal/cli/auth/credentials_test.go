@@ -30,8 +30,8 @@ func TestSaveAndLoadCredentials(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		CredentialsDir: tmpDir,
+		ProjectRoot: tmpDir,
+		RuntimeDir:  tmpDir,
 	}
 
 	creds := &Credentials{
@@ -58,8 +58,8 @@ func TestLoadCredentials_NotFound(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		CredentialsDir: tmpDir,
+		ProjectRoot: tmpDir,
+		RuntimeDir:  tmpDir,
 	}
 
 	loaded, err := LoadCredentials(fileSvc, cfg)
@@ -72,12 +72,12 @@ func TestLoadCredentials_InvalidJSON(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		CredentialsDir: tmpDir,
+		ProjectRoot: tmpDir,
+		RuntimeDir:  tmpDir,
 	}
 
 	credsFile := cfg.CredentialsFile()
-	require.NoError(t, os.MkdirAll(cfg.CredentialsDir, constants.PermDirPrivate))
+	require.NoError(t, os.MkdirAll(cfg.RuntimeDir, constants.PermDirPrivate))
 	require.NoError(t, os.WriteFile(credsFile, []byte("invalid-json{{{"), constants.PermFilePrivate))
 
 	loaded, err := LoadCredentials(fileSvc, cfg)
@@ -91,8 +91,8 @@ func TestDeleteCredentials_Success(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		CredentialsDir: tmpDir,
+		ProjectRoot: tmpDir,
+		RuntimeDir:  tmpDir,
 		Paths: &config.PathsConfig{
 			Infra: struct {
 				AppCertDir           string `json:"app_cert_dir"`
@@ -122,7 +122,7 @@ func TestDeleteCredentials_Success(t *testing.T) {
 
 	require.NoError(t, SaveCredentials(fileSvc, cfg, creds))
 
-	certDir := cfg.CredentialsDir
+	certDir := cfg.RuntimeDir
 	require.NoError(t, os.MkdirAll(certDir, constants.PermDirPrivate))
 	require.NoError(t, os.WriteFile(cfg.CLICertFile(), []byte("cli-cert"), constants.PermFilePrivate))
 	require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), []byte("cli-key"), constants.PermFilePrivate))
@@ -146,8 +146,8 @@ func TestDeleteCredentials_NonExistentFiles(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		CredentialsDir: tmpDir,
+		ProjectRoot: tmpDir,
+		RuntimeDir:  tmpDir,
 		Paths: &config.PathsConfig{
 			Infra: struct {
 				AppCertDir           string `json:"app_cert_dir"`
@@ -178,13 +178,13 @@ func TestSaveCredentials_WriteError(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		CredentialsDir: tmpDir,
+		ProjectRoot: tmpDir,
+		RuntimeDir:  tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
 	// Create the credentials directory
-	require.NoError(t, os.MkdirAll(cfg.CredentialsDir, constants.PermDirPrivate))
+	require.NoError(t, os.MkdirAll(cfg.RuntimeDir, constants.PermDirPrivate))
 
 	// Create a file at the credentials file path to block writing
 	credsFile := cfg.CredentialsFile()
@@ -235,8 +235,8 @@ func TestSaveCredentials_MkdirError(t *testing.T) {
 	require.NoError(t, os.WriteFile(blockingFile, []byte("block"), constants.PermFilePrivate))
 
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		CredentialsDir: blockingFile, // This is a file, not a directory
+		ProjectRoot: tmpDir,
+		RuntimeDir:  blockingFile, // This is a file, not a directory
 		Paths:          &config.PathsConfig{},
 	}
 
@@ -258,8 +258,8 @@ func TestDeleteCredentials_RemoveError(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		CredentialsDir: tmpDir,
+		ProjectRoot: tmpDir,
+		RuntimeDir:  tmpDir,
 		Paths: &config.PathsConfig{
 			Infra: struct {
 				AppCertDir           string `json:"app_cert_dir"`
