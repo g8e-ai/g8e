@@ -16,11 +16,11 @@ func newFileSvc() (fs.RuntimeFileService, error) {
 }
 
 // newFileSvcOrErr creates a RuntimeFileService and wraps the error with
-// constants.ErrInternal if creation fails.
+// constants.ErrFileServiceInit if creation fails.
 func newFileSvcOrErr() (fs.RuntimeFileService, error) {
 	fileSvc, err := newFileSvc()
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 	}
 	return fileSvc, nil
 }

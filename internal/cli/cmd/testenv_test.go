@@ -34,3 +34,18 @@ func mustRel(t *testing.T, fileSvc fs.RuntimeFileService, absPath string) string
 	require.NoError(t, err)
 	return rel
 }
+
+// failingFileSvcFactory returns a fileSvcFactory that always returns the given error.
+// Used in tests to verify that *WithConfig functions handle fileSvcFactory errors correctly.
+func failingFileSvcFactory(err error) func() (fs.RuntimeFileService, error) {
+	return func() (fs.RuntimeFileService, error) { return nil, err }
+}
+
+// panickingClientFactory returns an apiClientFactory that panics if called.
+// Used in factory-error tests to assert that clientFactory is never reached
+// when fileSvcFactory fails.
+func panickingClientFactory() apiClientFactory {
+	return func(fs.RuntimeFileService, *config.Config) (apiClient, error) {
+		panic("clientFactory should not be called when fileSvcFactory fails")
+	}
+}

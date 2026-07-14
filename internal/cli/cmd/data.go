@@ -65,7 +65,7 @@ func dataUsersCmdWithConfig(configLoader func(string) (*config.Config, error), c
 
 			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("data: create file service: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			client, err := clientFactory(fileSvc, cfg)
@@ -112,7 +112,7 @@ func dataOperatorsCmdWithConfig(configLoader func(string) (*config.Config, error
 
 			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("data: create file service: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			client, err := clientFactory(fileSvc, cfg)
@@ -159,7 +159,7 @@ func dataSettingsCmdWithConfig(configLoader func(string) (*config.Config, error)
 
 			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("data: create file service: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			client, err := clientFactory(fileSvc, cfg)
@@ -216,7 +216,7 @@ or provide --document-id to fetch a specific document.`,
 
 			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("data: create file service: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			client, err := clientFactory(fileSvc, cfg)
@@ -299,7 +299,7 @@ to control the number of results.`,
 
 			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("data: create file service: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			client, err := clientFactory(fileSvc, cfg)

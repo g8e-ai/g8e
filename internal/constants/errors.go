@@ -42,6 +42,7 @@ var (
 	ErrEndpointRequired     = errors.New("endpoint required")
 	ErrGatewayURLRequired   = errors.New("gateway URL is required")
 	ErrConfigLoadFailed     = errors.New("config load failed")
+	ErrFileServiceInit      = errors.New("file service initialization failed")
 	ErrCSRGenerationFailed  = errors.New("CSR generation failed")
 	ErrEnrollmentFailed     = errors.New("enrollment failed")
 	ErrMissingCertificate   = errors.New("missing certificate")

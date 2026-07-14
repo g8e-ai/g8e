@@ -92,7 +92,7 @@ func runTUI(cmd *cobra.Command, args []string, deps tuiDeps) error {
 
 	fileSvc, err := deps.fileSvcFactory()
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+		return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 	}
 
 	// Load CLI credentials (must be enrolled).

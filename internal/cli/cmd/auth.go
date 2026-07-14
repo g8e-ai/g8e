@@ -255,7 +255,7 @@ func logoutCmdWithConfig(
 
 			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			creds, err := auth.LoadCredentials(fileSvc, cfg)

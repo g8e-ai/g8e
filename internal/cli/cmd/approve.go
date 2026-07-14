@@ -69,7 +69,7 @@ gateway's SSE stream and waits for the approval.completed event. CLI credentials
 
 			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			client, err := clientFactory(fileSvc, cfg)
