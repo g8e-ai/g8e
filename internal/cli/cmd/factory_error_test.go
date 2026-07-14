@@ -16,6 +16,8 @@ package cmd
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -147,4 +149,358 @@ func TestDataAuditListCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
 	assert.ErrorIs(t, err, factoryErr)
+}
+
+// --- Audit commands (session 17) ---
+
+func TestAuditReceiptsCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := auditReceiptsCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+func TestAuditExportCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := auditExportCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+func TestAuditReportCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := auditReportCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+func TestAuditEventsCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := auditEventsCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+func TestAuditSummaryCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := auditSummaryCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+// --- Gateway commands (session 17) ---
+
+func TestGatewayStartCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := gatewayStartCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+func TestGatewayStopCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := gatewayStopCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+func TestGatewayStatusCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := gatewayStatusCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+func TestGatewayRestartCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := gatewayRestartCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+func TestGatewayLogsCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := gatewayLogsCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+func TestGatewaySettingsCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := gatewaySettingsCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+func TestGatewayCleanCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := gatewayCleanCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(factoryErr))
+	cmd.Flags().Set("force", "true")
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+// --- Vault commands (session 17) ---
+
+func TestVaultInitCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	cmd := vaultInitCmdWithConfig(failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+func TestVaultUnlockCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	cmd := vaultUnlockCmdWithConfig(failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+func TestVaultRekeyCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	cmd := vaultRekeyCmdWithConfig(failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+func TestVaultStatusCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	cmd := vaultStatusCmdWithConfig(failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+func TestVaultResetCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	cmd := vaultResetCmdWithConfig(failingFileSvcFactory(factoryErr))
+	cmd.Flags().Set("confirm", "true")
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+func TestVaultExportCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	cmd := vaultExportCmdWithConfig(failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+func TestVaultImportCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	cmd := vaultImportCmdWithConfig(failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+// --- Auth/enroll command (session 17) ---
+
+func TestEnrollCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	// Start a dummy TCP listener so CheckOperatorRunning does not fail before fileSvcFactory is called
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", constants.Ports.OperatorHttp))
+	require.NoError(t, err)
+	defer ln.Close()
+	go func() {
+		conn, _ := ln.Accept()
+		if conn != nil {
+			conn.Close()
+		}
+	}()
+	config.SetEndpointOverride(fmt.Sprintf("127.0.0.1:%d", constants.Ports.OperatorHttp))
+	defer config.SetEndpointOverride("")
+	cmd := enrollCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err = cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+// --- Operator commands (session 18) ---
+
+func TestOperatorListCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := operatorListCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+func TestOperatorDeployCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := operatorDeployCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+// --- Security commands (session 18) ---
+
+func TestSecurityValidateCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	cmd := securityValidateCmdWithConfig(failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+func TestSecurityPKIEnrollCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := securityPKIEnrollCmdWithConfig(configLoaderFor(cfg), panickingEnrollFunc(), failingFileSvcFactory(factoryErr))
+	cmd.Flags().StringP("endpoint", "e", "localhost:8080", "Gateway endpoint")
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+// --- Test command (session 18) ---
+
+func TestTestE2ECmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	cmd := testE2ECmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(factoryErr))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+// --- MCP commands (session 18) ---
+
+func TestMcpStdioCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	origConfigLoad := configLoad
+	configLoad = func(string) (*config.Config, error) { return cfg, nil }
+	t.Cleanup(func() { configLoad = origConfigLoad })
+	cmd := mcpStdioCmdWithConfig(failingFileSvcFactory(factoryErr))
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+func TestAgentRunCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	origConfigLoad := configLoad
+	configLoad = func(string) (*config.Config, error) { return cfg, nil }
+	t.Cleanup(func() { configLoad = origConfigLoad })
+	cmd := agentRunCmdWithConfig(failingFileSvcFactory(factoryErr))
+	err := cmd.RunE(cmd, []string{"claude"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, factoryErr)
+}
+
+// panickingEnrollFunc returns an enrollFunc that panics if called.
+func panickingEnrollFunc() enrollFunc {
+	return func(*config.Config, string, string, string, string) (*auth.RegistrationResponse, error) {
+		panic("enroll should not be called when fileSvcFactory fails")
+	}
 }

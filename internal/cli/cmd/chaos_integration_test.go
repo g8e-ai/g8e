@@ -13,6 +13,12 @@
 
 //go:build integration
 
+// os.Chdir is used because runChaos calls configLoad which reads config from
+// the current working directory. This is a legitimate cwd usage — the config
+// layer translates cwd into fileSvc baseDir. Injecting fileSvcFactory into
+// runChaos would require config-layer injection, which is out of scope for the
+// current refactor.
+
 package cmd
 
 import (

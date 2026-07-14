@@ -11,6 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// os.Chdir is used for source-tree demo discovery (finding ./demos/ directories,
+// compose.yml, doctrine/, target-data/), not .g8e/ runtime state. This is a
+// legitimate cwd usage — demo commands resolve paths relative to the working
+// directory, not through RuntimeFileService.
+
 package cmd
 
 import (

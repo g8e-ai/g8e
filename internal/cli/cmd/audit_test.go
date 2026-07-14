@@ -15,17 +15,15 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -373,31 +371,11 @@ func TestAuditReceiptsCmd_ConfigLoadFailure(t *testing.T) {
 
 func TestAuditReceiptsCmd_APIClientFailure(t *testing.T) {
 	t.Run("receipts fails when API client creation fails", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		// Create invalid config that will cause API client creation to fail
-		// by not having the required gateway URL
-		runtimeDir := filepath.Join(tmpDir, ".g8e")
-		pkiDir := filepath.Join(runtimeDir, "pki")
-		secretsDir := filepath.Join(runtimeDir, "secrets")
-
-		require.NoError(t, os.MkdirAll(pkiDir, 0755))
-		require.NoError(t, os.MkdirAll(secretsDir, 0700))
-
-		trustBundlePath := filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem")
-		require.NoError(t, os.MkdirAll(filepath.Dir(trustBundlePath), 0755))
-		require.NoError(t, os.WriteFile(trustBundlePath, []byte("dummy-trust-bundle"), 0644))
-
-		pathsJSON := minimalPathsJSON(t)
-		cfg, err := config.LoadWithPaths(tmpDir, []byte(pathsJSON))
-		require.NoError(t, err)
+		fileSvc, cfg := newCmdTestEnv(t)
 
 		cmd := auditReceiptsCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory, newFileSvc)
+		}, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
@@ -405,7 +383,7 @@ func TestAuditReceiptsCmd_APIClientFailure(t *testing.T) {
 
 		cmd.Flags().Set("session", "sess-123")
 
-		err = cmd.RunE(cmd, []string{})
+		err := cmd.RunE(cmd, []string{})
 		require.Error(t, err)
 		// API client creation will fail due to missing/invalid gateway URL
 	})
@@ -413,18 +391,13 @@ func TestAuditReceiptsCmd_APIClientFailure(t *testing.T) {
 
 func TestAuditReceiptsCmd_CredentialsLoadFailure(t *testing.T) {
 	t.Run("receipts fails when credentials file is corrupted", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		cfg := setupAuditTestConfig(t, tmpDir)
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
+		fileSvc, cfg := newCmdTestEnv(t)
 
-		// Write corrupted credentials file
-		require.NoError(t, os.WriteFile(cfg.CredentialsFile(), []byte("invalid json {{{"), 0600))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CredentialsFile()), []byte("invalid json {{{"), constants.PermFilePrivate))
 
 		cmd := auditReceiptsCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory, newFileSvc)
+		}, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
@@ -438,18 +411,11 @@ func TestAuditReceiptsCmd_CredentialsLoadFailure(t *testing.T) {
 
 func TestAuditReceiptsCmd_NoCredentials(t *testing.T) {
 	t.Run("receipts fails when no credentials exist", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		cfg := setupAuditTestConfig(t, tmpDir)
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		// Ensure credentials file does not exist
-		os.Remove(cfg.CredentialsFile())
+		fileSvc, cfg := newCmdTestEnv(t)
 
 		cmd := auditReceiptsCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory, newFileSvc)
+		}, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
@@ -528,15 +494,11 @@ func TestAuditReceiptsCmd_TableDriven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpDir := testutil.TempDir(t)
-			cfg := setupAuditTestConfig(t, tmpDir)
-			originalWd, _ := os.Getwd()
-			os.Chdir(tmpDir)
-			defer os.Chdir(originalWd)
+			fileSvc, cfg := newCmdTestEnv(t)
 
 			cmd := auditReceiptsCmdWithConfig(func(_ string) (*config.Config, error) {
 				return cfg, nil
-			}, defaultAPIClientFactory, newFileSvc)
+			}, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 
 			var buf bytes.Buffer
 			cmd.SetOut(&buf)
@@ -647,17 +609,11 @@ func TestAuditExportCmd_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("export fails when not authenticated", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		cfg := setupAuditTestConfig(t, tmpDir)
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		os.Remove(cfg.CredentialsFile())
+		fileSvc, cfg := newCmdTestEnv(t)
 
 		cmd := auditExportCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory, newFileSvc)
+		}, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -668,17 +624,13 @@ func TestAuditExportCmd_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("export fails with corrupted credentials", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		cfg := setupAuditTestConfig(t, tmpDir)
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
+		fileSvc, cfg := newCmdTestEnv(t)
 
-		require.NoError(t, os.WriteFile(cfg.CredentialsFile(), []byte("invalid json {{{"), 0600))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CredentialsFile()), []byte("invalid json {{{"), constants.PermFilePrivate))
 
 		cmd := auditExportCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory, newFileSvc)
+		}, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -708,17 +660,11 @@ func TestAuditReportCmd_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("report fails when not authenticated", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		cfg := setupAuditTestConfig(t, tmpDir)
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		os.Remove(cfg.CredentialsFile())
+		fileSvc, cfg := newCmdTestEnv(t)
 
 		cmd := auditReportCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory, newFileSvc)
+		}, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -748,17 +694,11 @@ func TestAuditEventsCmd_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("events fails when not authenticated", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		cfg := setupAuditTestConfig(t, tmpDir)
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		os.Remove(cfg.CredentialsFile())
+		fileSvc, cfg := newCmdTestEnv(t)
 
 		cmd := auditEventsCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory, newFileSvc)
+		}, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -769,15 +709,11 @@ func TestAuditEventsCmd_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("events fails with invalid limit (zero)", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		cfg := setupAuditTestConfig(t, tmpDir)
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
+		fileSvc, cfg := newCmdTestEnv(t)
 
 		cmd := auditEventsCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory, newFileSvc)
+		}, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		cmd.Flags().Set("session", "sess-123")
 		cmd.Flags().Set("limit", "0")
 
@@ -791,15 +727,11 @@ func TestAuditEventsCmd_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("events fails with invalid limit (too high)", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		cfg := setupAuditTestConfig(t, tmpDir)
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
+		fileSvc, cfg := newCmdTestEnv(t)
 
 		cmd := auditEventsCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory, newFileSvc)
+		}, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		cmd.Flags().Set("session", "sess-123")
 		cmd.Flags().Set("limit", "10001")
 
@@ -832,17 +764,11 @@ func TestAuditSummaryCmd_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("summary fails when not authenticated", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		cfg := setupAuditTestConfig(t, tmpDir)
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		os.Remove(cfg.CredentialsFile())
+		fileSvc, cfg := newCmdTestEnv(t)
 
 		cmd := auditSummaryCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory, newFileSvc)
+		}, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -851,25 +777,4 @@ func TestAuditSummaryCmd_ErrorPaths(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
 	})
-}
-
-func setupAuditTestConfig(t *testing.T, tmpDir string) *config.Config {
-	runtimeDir := filepath.Join(tmpDir, ".g8e")
-	pkiDir := filepath.Join(runtimeDir, "pki")
-	secretsDir := filepath.Join(runtimeDir, "secrets")
-
-	require.NoError(t, os.MkdirAll(pkiDir, 0755))
-	require.NoError(t, os.MkdirAll(secretsDir, 0700))
-
-	// Create trust bundle
-	trustBundlePath := filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem")
-	require.NoError(t, os.MkdirAll(filepath.Dir(trustBundlePath), 0755))
-	require.NoError(t, os.WriteFile(trustBundlePath, []byte("dummy-trust-bundle"), 0644))
-
-	// Use LoadWithPaths for hermetic test execution
-	pathsJSON := minimalPathsJSON(t)
-
-	cfg, err := config.LoadWithPaths(tmpDir, []byte(pathsJSON))
-	require.NoError(t, err)
-	return cfg
 }

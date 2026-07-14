@@ -15,11 +15,8 @@ package cmd
 
 import (
 	"bytes"
-	"os"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -85,16 +82,9 @@ func TestGatewayStartCmdFlags(t *testing.T) {
 
 func TestGatewayLogsCmdNoLogFile(t *testing.T) {
 	t.Run("logs command reports no log file when none exists", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
+		fileSvc, cfg := newCmdTestEnv(t)
 
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		runtimeDir := tmpDir + "/.g8e"
-		require.NoError(t, os.MkdirAll(runtimeDir, constants.PermDirPrivate))
-
-		cmd := gatewayLogsCmd()
+		cmd := gatewayLogsCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)

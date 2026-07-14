@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-07-13
+Last Updated: 2026-07-14
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -45,6 +45,59 @@ g8e tests run directly on the host using real infrastructure. If it does not wor
 - **Never use hand-trolled error strings** — Use typed constants instead of hardcoded strings for error reason strings, status codes, and rejection reasons.
 - **Never use generic test names** — No `TestCoverage`, `TestEdgeCases`, `TestGap`, `TestMisc`, or any name that does not describe the specific behavior under test. The name must tell the reader what is being verified.
 - **Never use generic test filenames** — No `edge_test.go`, `misc_test.go`, `coverage_test.go`, or any filename that does not describe its scope. Do not use "coverage", "gap", or "edge" in test filenames.
+
+---
+
+## cwd-Based `os.Chdir` Classification
+
+Tests must not use `os.Chdir` to align `.g8e/` runtime state. Instead, inject `fileSvcFactoryFor(fileSvc)` into `*WithConfig` functions using a temp-rooted `fileSvc` from `newCmdTestEnv(t)`.
+
+### Legitimate `os.Chdir` (Retain with Justification)
+
+- **Source-tree discovery** — Demo commands resolve `./demos/`, `compose.yml`, `doctrine/`, `target-data/` relative to cwd. These are not `.g8e/` runtime paths. Files: `demos_*test.go`.
+- **Config-layer tests** — `config.Load("")` reads from cwd by design. The config package is the layer that translates cwd into `fileSvc` baseDir. Files: `config/config_test.go`.
+- **Chaos tests** — `runChaos` calls `configLoad` which reads from cwd. Injecting `fileSvcFactory` would require config-layer injection. Files: `chaos_integration_test.go`.
+
+Each retained `os.Chdir` file must have a file-level comment explaining why cwd usage is legitimate.
+
+### Illegitimate `os.Chdir` (Eliminate)
+
+Any test that aligns `.g8e/` runtime state for command tests must use `newCmdTestEnv(t)` + `fileSvcFactoryFor(fileSvc)` injection. This pattern returns a pre-aligned `(fileSvc, cfg)` pair where `cfg.RuntimeDir == fileSvc.Resolve("")`.
+
+---
+
+## Factory-Error Test Requirement
+
+Every `fileSvcFactory` injection point in `internal/cli/cmd/` must have a corresponding `TestXxxCmdWithConfig_FileSvcFactoryError` test in `factory_error_test.go`. The test asserts that:
+
+1. The error is wrapped with `constants.ErrFileServiceInit`
+2. The underlying factory error is preserved via `errors.Is`
+3. Downstream dependencies are not called
+
+Pattern:
+
+```go
+func TestXxxCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+    _, cfg := newCmdTestEnv(t)
+    cmd := xxxCmdWithConfig(configLoaderFor(cfg), /* other deps */, failingFileSvcFactory(factoryErr))
+    err := cmd.RunE(cmd, []string{})
+    require.Error(t, err)
+    assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+    assert.ErrorIs(t, err, factoryErr)
+}
+```
+
+Helpers: `failingFileSvcFactory(err)` returns a factory that always errors. `panickingClientFactory()` returns a client factory that panics if called (proves downstream is not reached).
+
+---
+
+## CLI Command Test Helpers
+
+- **`newCmdTestEnv(t)`** — Returns `(fs.RuntimeFileService, *config.Config)` with a temp-rooted `fileSvc` and aligned `cfg`. Uses `setupTestConfig` internally, which calls `fileSvc.CreateRuntimeTree`, `config.LoadWithPaths`, and writes a dummy trust bundle via `fileSvc.WriteFile`.
+- **`fileSvcFactoryFor(fileSvc)`** — Returns a `fileSvcFactory` closure that always returns the given `fileSvc`. Used to inject a hermetic `fileSvc` into `*WithConfig` functions.
+- **`configLoaderFor(cfg)`** — Returns a config loader closure that always returns the given `cfg`.
+- **`mustRel(t, fileSvc, absPath)`** — Converts an absolute `.g8e/` path to a relative path, failing the test on error.
+- **`newAuthTestEnv(t)`** — Returns `(fileSvc, cfg)` with auth-specific fixture setup (cert/key files written via `fileSvc.WriteFile`).
 
 ---
 

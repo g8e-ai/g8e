@@ -13,6 +13,11 @@
 
 package config
 
+// os.Chdir is used because these tests verify config.Load("") which reads
+// from the current working directory by design. The config package is the
+// layer that translates cwd into fileSvc baseDir. This is a legitimate cwd
+// usage — not .g8e/ runtime state alignment.
+
 import (
 	"encoding/json"
 	"os"

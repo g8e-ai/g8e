@@ -13,6 +13,11 @@
 
 //go:build e2e
 
+// os.Chdir is used for source-tree demo discovery (finding ./demos/ directories,
+// compose.yml, doctrine/, target-data/), not .g8e/ runtime state. This is a
+// legitimate cwd usage — demo commands resolve paths relative to the working
+// directory, not through RuntimeFileService.
+
 package cmd
 
 import (
