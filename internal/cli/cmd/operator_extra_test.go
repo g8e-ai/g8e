@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -102,14 +103,9 @@ func TestOperatorStartCmdFlags(t *testing.T) {
 
 func TestOperatorDeployCmdErrorPaths(t *testing.T) {
 	t.Run("deploy fails when no credentials", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		_, _ = setupTestConfig(t, tmpDir)
+		fileSvc, cfg := newCmdTestEnv(t)
 
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		cmd := operatorDeployCmd()
+		cmd := operatorDeployCmdWithConfig(func(_ string) (*config.Config, error) { return cfg, nil }, fileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)

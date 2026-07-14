@@ -1490,13 +1490,13 @@ func TestAgentLaunchArgs(t *testing.T) {
 
 func TestRunMCPAgentRun_NoArgs(t *testing.T) {
 	t.Run("returns error when no args and no url", func(t *testing.T) {
-		err := runMCPAgentRun(nil, "")
+		err := runMCPAgentRun(nil, "", newFileSvc)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "specify an agent name")
 	})
 
 	t.Run("returns error for unknown agent", func(t *testing.T) {
-		err := runMCPAgentRun([]string{"unknown-agent-xyz"}, "")
+		err := runMCPAgentRun([]string{"unknown-agent-xyz"}, "", newFileSvc)
 		require.Error(t, err)
 	})
 }

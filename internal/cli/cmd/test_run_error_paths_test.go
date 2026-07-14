@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -44,17 +45,9 @@ func TestTestCoverageCmd_VerboseFlagAddsVFlag(t *testing.T) {
 }
 
 func TestTestE2ECmd_NoGatewayReturnsGatewayNotRunning(t *testing.T) {
-	tmpDir := chdirTemp(t)
+	fileSvc, cfg := newCmdTestEnv(t)
 
-	runtimeDir := filepath.Join(tmpDir, ".g8e")
-	require.NoError(t, os.MkdirAll(filepath.Join(runtimeDir, "pki"), 0o755))
-	require.NoError(t, os.MkdirAll(filepath.Join(runtimeDir, "secrets"), 0o700))
-
-	protocolDir := filepath.Join(tmpDir, "protocol", "constants")
-	require.NoError(t, os.MkdirAll(protocolDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(protocolDir, "paths.json"), []byte(minimalPathsJSON(t)), 0o644))
-
-	cmd := testE2ECmd()
+	cmd := testE2ECmdWithConfig(func(_ string) (*config.Config, error) { return cfg, nil }, fileSvcFactoryFor(fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

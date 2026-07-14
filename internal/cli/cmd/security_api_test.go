@@ -283,7 +283,7 @@ func TestSecurityValidateCmd_API_ValidPEMSuccess(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "session_encryption_key"), []byte("dummy key"), 0600))
 	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "bootstrap_digest.json"), []byte("{}"), 0644))
 
-	cmd := securityValidateCmd()
+	cmd := securityValidateCmdWithConfig(newFileSvc)
 	cmd.Flags().Set("pki-dir", pkiDir)
 	cmd.Flags().Set("secrets-dir", secretsDir)
 	var buf bytes.Buffer
@@ -313,7 +313,7 @@ func TestSecurityValidateCmd_API_InvalidPEM(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "session_encryption_key"), []byte("dummy key"), 0600))
 	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "bootstrap_digest.json"), []byte("{}"), 0644))
 
-	cmd := securityValidateCmd()
+	cmd := securityValidateCmdWithConfig(newFileSvc)
 	cmd.Flags().Set("pki-dir", pkiDir)
 	cmd.Flags().Set("secrets-dir", secretsDir)
 	var buf bytes.Buffer
@@ -345,7 +345,7 @@ func TestSecurityValidateCmd_API_PortCheckOutput(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "session_encryption_key"), []byte("dummy key"), 0600))
 	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "bootstrap_digest.json"), []byte("{}"), 0644))
 
-	cmd := securityValidateCmd()
+	cmd := securityValidateCmdWithConfig(newFileSvc)
 	cmd.Flags().Set("pki-dir", pkiDir)
 	cmd.Flags().Set("secrets-dir", secretsDir)
 	var buf bytes.Buffer

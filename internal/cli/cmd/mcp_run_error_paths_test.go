@@ -128,7 +128,7 @@ func TestStartGatewayIfNeeded_ConfigLoadError(t *testing.T) {
 		}
 		t.Cleanup(func() { configLoad = originalLoad })
 
-		err := startGatewayIfNeeded()
+		err := startGatewayIfNeeded(newFileSvc)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "mcp: load config")
 	})
@@ -146,7 +146,7 @@ func TestLaunchAgentWithGovernance_ConfigLoadError(t *testing.T) {
 		}
 		t.Cleanup(func() { configLoad = originalLoad })
 
-		err := launchAgentWithGovernance("claude", nil)
+		err := launchAgentWithGovernance("claude", nil, newFileSvc)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrGatewayNotReady)
 	})
@@ -211,7 +211,7 @@ func TestProxySessionToGateway_ConnectionRefused(t *testing.T) {
 
 func TestRunMCPAgentRun_SubprocessStartFailure(t *testing.T) {
 	t.Run("returns ErrProcessStartFailed for non-existent command", func(t *testing.T) {
-		err := runMCPAgentRun([]string{"nonexistent-command-xyz-12345"}, "")
+		err := runMCPAgentRun([]string{"nonexistent-command-xyz-12345"}, "", newFileSvc)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrProcessStartFailed)
 	})
@@ -243,7 +243,7 @@ func TestRunMCPAgentRun_HTTPProxyEmptyStdin(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL)
+		err = runMCPAgentRun(nil, server.URL, newFileSvc)
 		require.NoError(t, err)
 	})
 }
@@ -279,7 +279,7 @@ func TestRunMCPAgentRun_HTTPProxyL1Blocked(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL)
+		err = runMCPAgentRun(nil, server.URL, newFileSvc)
 		require.NoError(t, err)
 	})
 }
@@ -309,7 +309,7 @@ func TestRunMCPAgentRun_HTTPProxyNotificationDropped(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL)
+		err = runMCPAgentRun(nil, server.URL, newFileSvc)
 		require.NoError(t, err)
 	})
 }
@@ -338,7 +338,7 @@ func TestRunMCPAgentRun_HTTPProxyParseError(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL)
+		err = runMCPAgentRun(nil, server.URL, newFileSvc)
 		require.NoError(t, err)
 	})
 }
@@ -367,7 +367,7 @@ func TestRunMCPAgentRun_HTTPProxyEmptyLines(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL)
+		err = runMCPAgentRun(nil, server.URL, newFileSvc)
 		require.NoError(t, err)
 	})
 }
@@ -396,7 +396,7 @@ func TestRunMCPAgentRun_HTTPProxyInitializeFallback(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL)
+		err = runMCPAgentRun(nil, server.URL, newFileSvc)
 		require.NoError(t, err)
 	})
 }
@@ -425,7 +425,7 @@ func TestRunMCPAgentRun_HTTPProxyDownstreamError(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL)
+		err = runMCPAgentRun(nil, server.URL, newFileSvc)
 		require.NoError(t, err)
 	})
 }
