@@ -18,23 +18,19 @@ import (
 	"os"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/cli/config"
 )
 
 func TestCommandErrorHandling(t *testing.T) {
 	t.Run("data store requires collection flag", func(t *testing.T) {
-		cmd := dataStoreCmd()
+		fileSvc, cfg := newCmdTestEnv(t)
+		loader := func(_ string) (*config.Config, error) { return cfg, nil }
+		cmd := dataStoreCmdWithConfig(loader, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		setupDataTestConfig(t, tmpDir)
 
 		err := cmd.RunE(cmd, []string{})
 		require.Error(t, err)
@@ -43,17 +39,12 @@ func TestCommandErrorHandling(t *testing.T) {
 	})
 
 	t.Run("data audit list requires Operator session id", func(t *testing.T) {
-		cmd := dataAuditListCmd()
+		fileSvc, cfg := newCmdTestEnv(t)
+		loader := func(_ string) (*config.Config, error) { return cfg, nil }
+		cmd := dataAuditListCmdWithConfig(loader, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		setupDataTestConfig(t, tmpDir)
 
 		// Unset the environment variable
 		originalEnv := os.Getenv("G8E_OPERATOR_SESSION_ID")

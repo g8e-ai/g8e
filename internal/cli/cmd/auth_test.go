@@ -15,16 +15,14 @@ package cmd
 
 import (
 	"bytes"
-	"log/slog"
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
-	"github.com/g8e-ai/g8e/internal/paths"
-	"github.com/g8e-ai/g8e/internal/services/fs"
-	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -55,35 +53,11 @@ func TestLogoutCmd(t *testing.T) {
 	})
 
 	t.Run("logout succeeds with no active session", func(t *testing.T) {
-		cmd := logoutCmd()
+		fileSvc, cfg := newCmdTestEnv(t)
+		cmd := logoutCmdWithConfig(func(_ string) (*config.Config, error) { return cfg, nil }, fileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		tmpDir := testutil.TempDir(t)
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
-
-		// Set up minimal config structure so config loads, then auth fails
-		runtimeDir := filepath.Join(tmpDir, ".g8e")
-		credentialsParentDir := runtimeDir
-		require.NoError(t, os.MkdirAll(credentialsParentDir, 0700))
-		require.NoError(t, os.MkdirAll(filepath.Join(runtimeDir, "pki"), 0755))
-
-		// Create minimal paths.json structure
-		protocolDir := filepath.Join(tmpDir, "protocol")
-		constantsDir := filepath.Join(protocolDir, "constants")
-		require.NoError(t, os.MkdirAll(constantsDir, 0755))
-
-		pathsJSON := minimalPathsJSON(t)
-		pathsPath := filepath.Join(constantsDir, "paths.json")
-		require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
-
-		// Set environment variable to override credentials directory
-		originalHome := os.Getenv("HOME")
-		os.Setenv("HOME", tmpDir)
-		defer os.Setenv("HOME", originalHome)
 
 		err := cmd.RunE(cmd, []string{})
 		require.NoError(t, err)
@@ -91,107 +65,51 @@ func TestLogoutCmd(t *testing.T) {
 	})
 
 	t.Run("logout succeeds when no session exists", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
+		fileSvc, cfg := newCmdTestEnv(t)
 
-		// Set HOME to tmpDir to ensure credentials are read from temp directory
-		originalHome := os.Getenv("HOME")
-		os.Setenv("HOME", tmpDir)
-		defer os.Setenv("HOME", originalHome)
-
-		// Create a simple config that points to tmpDir for credentials
-		// Avoid using setupTestConfig which creates a conflicting .g8e directory
-		cfg := &config.Config{
-			ProjectRoot: tmpDir,
-			RuntimeDir:  filepath.Join(tmpDir, paths.Infra.RuntimeDir),
-			PKIDir:      filepath.Join(tmpDir, paths.Infra.PkiDir),
-			SecretsDir:  filepath.Join(tmpDir, paths.Infra.SecretsDir),
-			Paths: &config.PathsConfig{
-				Infra: struct {
-					AppCertDir           string `json:"app_cert_dir"`
-					CACertPath           string `json:"ca_cert_path"`
-					DBPath               string `json:"db_path"`
-					DocsDir              string `json:"docs_dir"`
-					PKIDir               string `json:"pki_dir"`
-					ProtocolConstantsDir string `json:"protocol_constants_dir"`
-					ProtocolDir          string `json:"protocol_dir"`
-					ProtocolModelsDir    string `json:"protocol_models_dir"`
-					SecretsDir           string `json:"secrets_dir"`
-					SSHConfigPath        string `json:"ssh_config_path"`
-					VaultDir             string `json:"vault_dir"`
-					VaultKeyPath         string `json:"vault_key_path"`
-				}{
-					CACertPath:           paths.Infra.CaCertPath,
-					PKIDir:               paths.Infra.PkiDir,
-					SecretsDir:           paths.Infra.SecretsDir,
-					AppCertDir:           paths.Infra.AppCertDir,
-					ProtocolDir:          paths.Infra.ProtocolDir,
-					ProtocolConstantsDir: paths.Infra.ProtocolConstantsDir,
-					ProtocolModelsDir:    paths.Infra.ProtocolModelsDir,
-					DocsDir:              paths.Infra.DocsDir,
-					SSHConfigPath:        paths.Infra.SshConfigPath,
-					DBPath:               paths.Infra.DbPath,
-				},
-			},
-		}
-
-		fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
-		require.NoError(t, err)
-
-		// Verify no credentials exist in test config
 		creds, err := auth.LoadCredentials(fileSvc, cfg)
 		require.NoError(t, err)
 		require.Nil(t, creds)
 
-		// Delete credentials using the auth function directly
 		err = auth.DeleteCredentials(fileSvc, cfg)
 		require.NoError(t, err)
 
-		// Verify it succeeds even when no credentials exist
-		_, err = os.Stat(cfg.CredentialsFile())
-		assert.True(t, os.IsNotExist(err))
+		exists, err := fileSvc.FileExists(context.Background(), relFromAbs(fileSvc, cfg.CredentialsFile()))
+		require.NoError(t, err)
+		assert.False(t, exists)
 	})
 
 	t.Run("logout deletes credentials when session exists", func(t *testing.T) {
-		// Test the underlying auth.DeleteCredentials function directly
-		// since config.Load always uses the real home directory
-		tmpDir := testutil.TempDir(t)
-		cfg := setupTestConfig(t, tmpDir)
+		fileSvc, cfg := newCmdTestEnv(t)
 
-		// Create credentials directory (but not the credentials file itself)
-		certDir := cfg.RuntimeDir
-		require.NoError(t, os.MkdirAll(certDir, 0700))
-
-		// Create credentials
 		creds := &auth.Credentials{
 			OperatorSessionID: "op-sess-123",
 			UserID:            "user-456",
 			OperatorID:        "op-789",
 			CLISessionID:      "cli-sess-abc",
 		}
-		fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
-		require.NoError(t, err)
 
 		require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
-		require.NoError(t, os.WriteFile(cfg.CLICertFile(), []byte("cli-cert"), 0600))
-		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), []byte("cli-key"), 0600))
-		require.NoError(t, os.WriteFile(cfg.OperatorCertFile(), []byte("op-cert"), 0600))
-		require.NoError(t, os.WriteFile(cfg.OperatorKeyFile(), []byte("op-key"), 0600))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLICertFile()), []byte("cli-cert"), constants.PermFilePrivate))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLIKeyFile()), []byte("cli-key"), constants.PermFilePrivate))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.OperatorCertFile()), []byte("op-cert"), constants.PermFilePrivate))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.OperatorKeyFile()), []byte("op-key"), constants.PermFilePrivate))
 
-		// Verify credentials were saved
 		loadedCreds, err := auth.LoadCredentials(fileSvc, cfg)
 		require.NoError(t, err)
 		require.NotNil(t, loadedCreds)
 
-		// Delete credentials using the auth function
 		require.NoError(t, auth.DeleteCredentials(fileSvc, cfg))
 
-		// Verify files deleted
-		_, err = os.Stat(cfg.CredentialsFile())
-		assert.True(t, os.IsNotExist(err))
-		_, err = os.Stat(cfg.CLICertFile())
-		assert.True(t, os.IsNotExist(err))
-		_, err = os.Stat(cfg.CLIKeyFile())
-		assert.True(t, os.IsNotExist(err))
+		exists, err := fileSvc.FileExists(context.Background(), relFromAbs(fileSvc, cfg.CredentialsFile()))
+		require.NoError(t, err)
+		assert.False(t, exists)
+		exists, err = fileSvc.FileExists(context.Background(), relFromAbs(fileSvc, cfg.CLICertFile()))
+		require.NoError(t, err)
+		assert.False(t, exists)
+		exists, err = fileSvc.FileExists(context.Background(), relFromAbs(fileSvc, cfg.CLIKeyFile()))
+		require.NoError(t, err)
+		assert.False(t, exists)
 	})
 }
 

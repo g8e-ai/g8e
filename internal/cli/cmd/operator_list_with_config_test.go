@@ -43,8 +43,7 @@ func TestOperatorListCmdWithConfig_ConfigLoadError(t *testing.T) {
 }
 
 func TestOperatorListCmdWithConfig_ClientCreationError(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	_, cfg := newCmdTestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	cmd := operatorListCmdWithConfig(loader, failingClientFactory(errors.New("client creation error")))
@@ -58,8 +57,7 @@ func TestOperatorListCmdWithConfig_ClientCreationError(t *testing.T) {
 }
 
 func TestOperatorListCmdWithConfig_GetRequestError(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	_, cfg := newCmdTestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	client := &mockAPIClient{getErr: errors.New("network error")}
@@ -74,8 +72,7 @@ func TestOperatorListCmdWithConfig_GetRequestError(t *testing.T) {
 }
 
 func TestOperatorListCmdWithConfig_InvalidJSONResponse(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	_, cfg := newCmdTestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	client := &mockAPIClient{getResp: []byte("not json")}
@@ -90,8 +87,7 @@ func TestOperatorListCmdWithConfig_InvalidJSONResponse(t *testing.T) {
 }
 
 func TestOperatorListCmdWithConfig_EmptyOperatorsListPrintsNoOperators(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	_, cfg := newCmdTestEnv(t)
 
 	operators := []models.OperatorDocumentGo{}
 	operatorsJSON, _ := json.Marshal(operators)
@@ -110,8 +106,7 @@ func TestOperatorListCmdWithConfig_EmptyOperatorsListPrintsNoOperators(t *testin
 }
 
 func TestOperatorListCmdWithConfig_ValidResponsePrintsOperatorTable(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	_, cfg := newCmdTestEnv(t)
 
 	operators := []models.OperatorDocumentGo{
 		{ID: "op-001", CloudSubtype: "aws", Status: "active"},

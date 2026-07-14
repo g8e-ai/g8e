@@ -15,15 +15,16 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
-	"os"
 	"runtime"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -53,7 +54,7 @@ func TestApproveCmdWithConfig(t *testing.T) {
 		failLoader := func(string) (*config.Config, error) {
 			return nil, errors.New("config load error")
 		}
-		cmd := approveCmdWithConfig(failLoader, defaultAPIClientFactory)
+		cmd := approveCmdWithConfig(failLoader, defaultAPIClientFactory, newFileSvc)
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -62,13 +63,12 @@ func TestApproveCmdWithConfig(t *testing.T) {
 	})
 
 	t.Run("approve fails when CLI key file does not exist", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		cfg := setupTestConfig(t, tmpDir)
+		fileSvc, cfg := newCmdTestEnv(t)
 
 		loader := func(string) (*config.Config, error) {
 			return cfg, nil
 		}
-		cmd := approveCmdWithConfig(loader, defaultAPIClientFactory)
+		cmd := approveCmdWithConfig(loader, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -77,15 +77,14 @@ func TestApproveCmdWithConfig(t *testing.T) {
 	})
 
 	t.Run("approve fails with invalid PEM key", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		cfg := setupTestConfig(t, tmpDir)
+		fileSvc, cfg := newCmdTestEnv(t)
 
-		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), []byte("not a pem"), 0o600))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLIKeyFile()), []byte("not a pem"), constants.PermFilePrivate))
 
 		loader := func(string) (*config.Config, error) {
 			return cfg, nil
 		}
-		cmd := approveCmdWithConfig(loader, defaultAPIClientFactory)
+		cmd := approveCmdWithConfig(loader, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -94,16 +93,15 @@ func TestApproveCmdWithConfig(t *testing.T) {
 	})
 
 	t.Run("approve fails with extra data after PEM", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		cfg := setupTestConfig(t, tmpDir)
+		fileSvc, cfg := newCmdTestEnv(t)
 
 		keyData := append([]byte("-----BEGIN PRIVATE KEY-----\naGVsbG8=\n-----END PRIVATE KEY-----\n"), []byte("extra data")...)
-		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), keyData, 0o600))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLIKeyFile()), keyData, constants.PermFilePrivate))
 
 		loader := func(string) (*config.Config, error) {
 			return cfg, nil
 		}
-		cmd := approveCmdWithConfig(loader, defaultAPIClientFactory)
+		cmd := approveCmdWithConfig(loader, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -114,20 +112,19 @@ func TestApproveCmdWithConfig(t *testing.T) {
 
 func TestApproveCmdWithValidKeyFile(t *testing.T) {
 	t.Run("approve fails when cert file does not exist after key is read", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		cfg := setupTestConfig(t, tmpDir)
+		fileSvc, cfg := newCmdTestEnv(t)
 
 		_, privKey, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 		keyDER, err := x509.MarshalPKCS8PrivateKey(privKey)
 		require.NoError(t, err)
 		keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
-		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), keyPEM, 0o600))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLIKeyFile()), keyPEM, constants.PermFilePrivate))
 
 		loader := func(string) (*config.Config, error) {
 			return cfg, nil
 		}
-		cmd := approveCmdWithConfig(loader, defaultAPIClientFactory)
+		cmd := approveCmdWithConfig(loader, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)

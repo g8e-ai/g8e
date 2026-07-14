@@ -15,8 +15,8 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"errors"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -45,8 +45,7 @@ func TestEnrollCmdWithConfig_OperatorNotRunningReturnsError(t *testing.T) {
 	config.SetEndpointOverride("127.0.0.1:1")
 	defer config.SetEndpointOverride("")
 
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	_, cfg := newCmdTestEnv(t)
 
 	loader := func(string) (*config.Config, error) {
 		return cfg, nil
@@ -78,8 +77,7 @@ func TestPerformEnroll_NoLocalCredsGatewayDownReturnsError(t *testing.T) {
 	config.SetEndpointOverride("127.0.0.1:1")
 	defer config.SetEndpointOverride("")
 
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	fileSvc, cfg := newCmdTestEnv(t)
 
 	cmd := enrollCmdWithConfig(func(string) (*config.Config, error) {
 		return cfg, nil
@@ -88,7 +86,6 @@ func TestPerformEnroll_NoLocalCredsGatewayDownReturnsError(t *testing.T) {
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
-	fileSvc := newCmdTestFileSvc(t)
 	err := performEnroll(cmd, fileSvc, cfg, false)
 	require.Error(t, err)
 }
@@ -97,11 +94,10 @@ func TestPerformEnroll_WithLocalCredsGatewayDownReturnsError(t *testing.T) {
 	config.SetEndpointOverride("127.0.0.1:1")
 	defer config.SetEndpointOverride("")
 
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	fileSvc, cfg := newCmdTestEnv(t)
 
-	require.NoError(t, os.WriteFile(cfg.CredentialsFile(), []byte(`{"user_id":"u1","cli_session_id":"s1"}`), 0o600))
-	require.NoError(t, os.WriteFile(cfg.CLICertFile(), []byte("-----BEGIN CERTIFICATE-----\nMIIBdummy==\n-----END CERTIFICATE-----\n"), 0o600))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CredentialsFile()), []byte(`{"user_id":"u1","cli_session_id":"s1"}`), constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CLICertFile()), []byte("-----BEGIN CERTIFICATE-----\nMIIBdummy==\n-----END CERTIFICATE-----\n"), constants.PermFilePrivate))
 
 	cmd := enrollCmdWithConfig(func(string) (*config.Config, error) {
 		return cfg, nil
@@ -110,7 +106,6 @@ func TestPerformEnroll_WithLocalCredsGatewayDownReturnsError(t *testing.T) {
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
-	fileSvc := newCmdTestFileSvc(t)
 	err := performEnroll(cmd, fileSvc, cfg, false)
 	require.Error(t, err)
 }

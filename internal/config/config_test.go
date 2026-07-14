@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -58,7 +57,7 @@ func TestLoad_Defaults(t *testing.T) {
 }
 
 func TestLoad_WorkDir_Flag(t *testing.T) {
-	tmpDir := testutil.TempDir(t)
+	tmpDir := t.TempDir()
 
 	cfg, err := Load(LoadOptions{
 		OperatorEndpoint: constants.DefaultEndpoint,

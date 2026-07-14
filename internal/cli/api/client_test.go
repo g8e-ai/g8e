@@ -114,9 +114,6 @@ func setupTestConfig(t *testing.T) (*config.Config, fs.RuntimeFileService, strin
 	require.NoError(t, err)
 	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 
-	credentialsDir := filepath.Join(tempDir, "credentials")
-	require.NoError(t, os.MkdirAll(credentialsDir, constants.PermDirPrivate))
-
 	protocolDir := filepath.Join(projectRoot, "protocol")
 	constantsDir := filepath.Join(protocolDir, "constants")
 	require.NoError(t, os.MkdirAll(constantsDir, constants.PermDirStandard))
@@ -150,9 +147,6 @@ func setupTestConfig(t *testing.T) (*config.Config, fs.RuntimeFileService, strin
 
 	cfg, err := config.LoadWithPaths(projectRoot, []byte(pathsJSON))
 	require.NoError(t, err)
-
-	// Override credentials directory to use temp directory for test isolation
-	cfg.RuntimeDir = credentialsDir
 
 	return cfg, fileSvc, tempDir
 }

@@ -27,6 +27,18 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
+// dataTestEnv holds the pre-aligned (fileSvc, cfg) pair for data tests.
+type dataTestEnv struct {
+	fileSvc fs.RuntimeFileService
+	cfg     *config.Config
+}
+
+func newDataTestEnv(t *testing.T) dataTestEnv {
+	t.Helper()
+	fileSvc, cfg := newCmdTestEnv(t)
+	return dataTestEnv{fileSvc: fileSvc, cfg: cfg}
+}
+
 func mockClientFactory(client apiClient) apiClientFactory {
 	return func(_ fs.RuntimeFileService, cfg *config.Config) (apiClient, error) {
 		return client, nil
@@ -44,7 +56,7 @@ func TestDataUsersCmdWithConfig_ConfigLoadError(t *testing.T) {
 		return nil, errors.New("config load error")
 	}
 
-	cmd := dataUsersCmdWithConfig(failLoader, defaultAPIClientFactory)
+	cmd := dataUsersCmdWithConfig(failLoader, defaultAPIClientFactory, newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -54,11 +66,10 @@ func TestDataUsersCmdWithConfig_ConfigLoadError(t *testing.T) {
 }
 
 func TestDataUsersCmdWithConfig_ClientCreationError(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	env := newDataTestEnv(t)
 
-	loader := func(string) (*config.Config, error) { return cfg, nil }
-	cmd := dataUsersCmdWithConfig(loader, failingClientFactory(errors.New("client creation error")))
+	loader := func(string) (*config.Config, error) { return env.cfg, nil }
+	cmd := dataUsersCmdWithConfig(loader, failingClientFactory(errors.New("client creation error")), fileSvcFactoryFor(env.fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -69,12 +80,11 @@ func TestDataUsersCmdWithConfig_ClientCreationError(t *testing.T) {
 }
 
 func TestDataUsersCmdWithConfig_GetRequestError(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	env := newDataTestEnv(t)
 
-	loader := func(string) (*config.Config, error) { return cfg, nil }
+	loader := func(string) (*config.Config, error) { return env.cfg, nil }
 	client := &mockAPIClient{getErr: errors.New("network error")}
-	cmd := dataUsersCmdWithConfig(loader, mockClientFactory(client))
+	cmd := dataUsersCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -85,12 +95,11 @@ func TestDataUsersCmdWithConfig_GetRequestError(t *testing.T) {
 }
 
 func TestDataUsersCmdWithConfig_InvalidJSONResponse(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	env := newDataTestEnv(t)
 
-	loader := func(string) (*config.Config, error) { return cfg, nil }
+	loader := func(string) (*config.Config, error) { return env.cfg, nil }
 	client := &mockAPIClient{getResp: []byte("invalid json")}
-	cmd := dataUsersCmdWithConfig(loader, mockClientFactory(client))
+	cmd := dataUsersCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -101,15 +110,14 @@ func TestDataUsersCmdWithConfig_InvalidJSONResponse(t *testing.T) {
 }
 
 func TestDataUsersCmdWithConfig_ValidResponse(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	env := newDataTestEnv(t)
 
 	users := []map[string]interface{}{{"id": "user1"}, {"id": "user2"}}
 	usersJSON, _ := json.Marshal(users)
 
-	loader := func(string) (*config.Config, error) { return cfg, nil }
+	loader := func(string) (*config.Config, error) { return env.cfg, nil }
 	client := &mockAPIClient{getResp: usersJSON}
-	cmd := dataUsersCmdWithConfig(loader, mockClientFactory(client))
+	cmd := dataUsersCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -123,17 +131,16 @@ func TestDataUsersCmdWithConfig_ValidResponse(t *testing.T) {
 }
 
 func TestDataOperatorsCmdWithConfig_ValidResponse(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	env := newDataTestEnv(t)
 
 	operators := []map[string]interface{}{
 		{"id": "op1", "cloud_subtype": "aws", "status": "active"},
 	}
 	opsJSON, _ := json.Marshal(operators)
 
-	loader := func(string) (*config.Config, error) { return cfg, nil }
+	loader := func(string) (*config.Config, error) { return env.cfg, nil }
 	client := &mockAPIClient{getResp: opsJSON}
-	cmd := dataOperatorsCmdWithConfig(loader, mockClientFactory(client))
+	cmd := dataOperatorsCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -146,12 +153,11 @@ func TestDataOperatorsCmdWithConfig_ValidResponse(t *testing.T) {
 }
 
 func TestDataOperatorsCmdWithConfig_InvalidJSONResponse(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	env := newDataTestEnv(t)
 
-	loader := func(string) (*config.Config, error) { return cfg, nil }
+	loader := func(string) (*config.Config, error) { return env.cfg, nil }
 	client := &mockAPIClient{getResp: []byte("not json")}
-	cmd := dataOperatorsCmdWithConfig(loader, mockClientFactory(client))
+	cmd := dataOperatorsCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -162,8 +168,7 @@ func TestDataOperatorsCmdWithConfig_InvalidJSONResponse(t *testing.T) {
 }
 
 func TestDataSettingsCmdWithConfig_ValidResponse(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	env := newDataTestEnv(t)
 
 	settings := map[string]interface{}{
 		"settings":   map[string]interface{}{"key": "value"},
@@ -172,9 +177,9 @@ func TestDataSettingsCmdWithConfig_ValidResponse(t *testing.T) {
 	}
 	settingsJSON, _ := json.Marshal(settings)
 
-	loader := func(string) (*config.Config, error) { return cfg, nil }
+	loader := func(string) (*config.Config, error) { return env.cfg, nil }
 	client := &mockAPIClient{getResp: settingsJSON}
-	cmd := dataSettingsCmdWithConfig(loader, mockClientFactory(client))
+	cmd := dataSettingsCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -186,12 +191,11 @@ func TestDataSettingsCmdWithConfig_ValidResponse(t *testing.T) {
 }
 
 func TestDataSettingsCmdWithConfig_InvalidJSONResponse(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	env := newDataTestEnv(t)
 
-	loader := func(string) (*config.Config, error) { return cfg, nil }
+	loader := func(string) (*config.Config, error) { return env.cfg, nil }
 	client := &mockAPIClient{getResp: []byte("invalid")}
-	cmd := dataSettingsCmdWithConfig(loader, mockClientFactory(client))
+	cmd := dataSettingsCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -202,12 +206,11 @@ func TestDataSettingsCmdWithConfig_InvalidJSONResponse(t *testing.T) {
 }
 
 func TestDataStoreCmdWithConfig_NoCollectionReturnsError(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	env := newDataTestEnv(t)
 
-	loader := func(string) (*config.Config, error) { return cfg, nil }
+	loader := func(string) (*config.Config, error) { return env.cfg, nil }
 	client := &mockAPIClient{}
-	cmd := dataStoreCmdWithConfig(loader, mockClientFactory(client))
+	cmd := dataStoreCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -218,12 +221,11 @@ func TestDataStoreCmdWithConfig_NoCollectionReturnsError(t *testing.T) {
 }
 
 func TestDataStoreCmdWithConfig_ListModeCallsQuery(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	env := newDataTestEnv(t)
 
-	loader := func(string) (*config.Config, error) { return cfg, nil }
+	loader := func(string) (*config.Config, error) { return env.cfg, nil }
 	client := &mockAPIClient{postResp: []byte(`[{"id":"doc1"}]`)}
-	cmd := dataStoreCmdWithConfig(loader, mockClientFactory(client))
+	cmd := dataStoreCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	cmd.Flags().Set("collection", "test_collection")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -237,12 +239,11 @@ func TestDataStoreCmdWithConfig_ListModeCallsQuery(t *testing.T) {
 }
 
 func TestDataStoreCmdWithConfig_DocumentModeCallsGet(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	env := newDataTestEnv(t)
 
-	loader := func(string) (*config.Config, error) { return cfg, nil }
+	loader := func(string) (*config.Config, error) { return env.cfg, nil }
 	client := &mockAPIClient{getResp: []byte(`{"id":"doc1","data":"hello"}`)}
-	cmd := dataStoreCmdWithConfig(loader, mockClientFactory(client))
+	cmd := dataStoreCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	cmd.Flags().Set("collection", "test_collection")
 	cmd.Flags().Set("document-id", "doc1")
 	var buf bytes.Buffer
@@ -256,12 +257,11 @@ func TestDataStoreCmdWithConfig_DocumentModeCallsGet(t *testing.T) {
 }
 
 func TestDataStoreCmdWithConfig_PostError(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	env := newDataTestEnv(t)
 
-	loader := func(string) (*config.Config, error) { return cfg, nil }
+	loader := func(string) (*config.Config, error) { return env.cfg, nil }
 	client := &mockAPIClient{postErr: errors.New("query failed")}
-	cmd := dataStoreCmdWithConfig(loader, mockClientFactory(client))
+	cmd := dataStoreCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	cmd.Flags().Set("collection", "test_collection")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -273,12 +273,11 @@ func TestDataStoreCmdWithConfig_PostError(t *testing.T) {
 }
 
 func TestDataStoreCmdWithConfig_GetError(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	env := newDataTestEnv(t)
 
-	loader := func(string) (*config.Config, error) { return cfg, nil }
+	loader := func(string) (*config.Config, error) { return env.cfg, nil }
 	client := &mockAPIClient{getErr: errors.New("fetch failed")}
-	cmd := dataStoreCmdWithConfig(loader, mockClientFactory(client))
+	cmd := dataStoreCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	cmd.Flags().Set("collection", "test_collection")
 	cmd.Flags().Set("document-id", "doc1")
 	var buf bytes.Buffer
@@ -291,12 +290,11 @@ func TestDataStoreCmdWithConfig_GetError(t *testing.T) {
 }
 
 func TestDataAuditListCmdWithConfig_NoSessionIDReturnsError(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	env := newDataTestEnv(t)
 
-	loader := func(string) (*config.Config, error) { return cfg, nil }
+	loader := func(string) (*config.Config, error) { return env.cfg, nil }
 	client := &mockAPIClient{}
-	cmd := dataAuditListCmdWithConfig(loader, mockClientFactory(client))
+	cmd := dataAuditListCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -307,12 +305,11 @@ func TestDataAuditListCmdWithConfig_NoSessionIDReturnsError(t *testing.T) {
 }
 
 func TestDataAuditListCmdWithConfig_ValidQuery(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	env := newDataTestEnv(t)
 
-	loader := func(string) (*config.Config, error) { return cfg, nil }
+	loader := func(string) (*config.Config, error) { return env.cfg, nil }
 	client := &mockAPIClient{postResp: []byte(`[{"type":"login"}]`)}
-	cmd := dataAuditListCmdWithConfig(loader, mockClientFactory(client))
+	cmd := dataAuditListCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	cmd.Flags().Set("operator-session-id", "sess-123")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -326,12 +323,11 @@ func TestDataAuditListCmdWithConfig_ValidQuery(t *testing.T) {
 }
 
 func TestDataAuditListCmdWithConfig_PostError(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	env := newDataTestEnv(t)
 
-	loader := func(string) (*config.Config, error) { return cfg, nil }
+	loader := func(string) (*config.Config, error) { return env.cfg, nil }
 	client := &mockAPIClient{postErr: errors.New("query failed")}
-	cmd := dataAuditListCmdWithConfig(loader, mockClientFactory(client))
+	cmd := dataAuditListCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	cmd.Flags().Set("operator-session-id", "sess-123")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)

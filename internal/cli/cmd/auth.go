@@ -216,17 +216,24 @@ func performEnroll(cmd *cobra.Command, fileSvc fs.RuntimeFileService, cfg *confi
 }
 
 func logoutCmd() *cobra.Command {
+	return logoutCmdWithConfig(loadConfig, newFileSvc)
+}
+
+func logoutCmdWithConfig(
+	configLoader func(string) (*config.Config, error),
+	fileSvcFactory func() (fs.RuntimeFileService, error),
+) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "logout",
 		Short: "Clear local Operator session and credentials",
 		Long:  `Clear the local Operator session by deleting stored credentials from disk. This does not revoke the session on the gateway side — it only removes the local credential files so the CLI can no longer authenticate.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig("")
+			cfg, err := configLoader("")
 			if err != nil {
 				return err
 			}
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}

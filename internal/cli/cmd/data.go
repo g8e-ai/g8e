@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 func dataCmd() *cobra.Command {
@@ -48,10 +49,10 @@ func dataCmd() *cobra.Command {
 }
 
 func dataUsersCmd() *cobra.Command {
-	return dataUsersCmdWithConfig(loadConfig, defaultAPIClientFactory)
+	return dataUsersCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func dataUsersCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
+func dataUsersCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "users",
 		Short: "Manage user accounts",
@@ -62,7 +63,7 @@ func dataUsersCmdWithConfig(configLoader func(string) (*config.Config, error), c
 				return err
 			}
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
 				return fmt.Errorf("data: create file service: %w", err)
 			}
@@ -95,10 +96,10 @@ func dataUsersCmdWithConfig(configLoader func(string) (*config.Config, error), c
 }
 
 func dataOperatorsCmd() *cobra.Command {
-	return dataOperatorsCmdWithConfig(loadConfig, defaultAPIClientFactory)
+	return dataOperatorsCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func dataOperatorsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
+func dataOperatorsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "operators",
 		Short: "Manage Operator instances",
@@ -109,7 +110,7 @@ func dataOperatorsCmdWithConfig(configLoader func(string) (*config.Config, error
 				return err
 			}
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
 				return fmt.Errorf("data: create file service: %w", err)
 			}
@@ -142,10 +143,10 @@ func dataOperatorsCmdWithConfig(configLoader func(string) (*config.Config, error
 }
 
 func dataSettingsCmd() *cobra.Command {
-	return dataSettingsCmdWithConfig(loadConfig, defaultAPIClientFactory)
+	return dataSettingsCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func dataSettingsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
+func dataSettingsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "settings",
 		Short: "Manage Gateway settings",
@@ -156,7 +157,7 @@ func dataSettingsCmdWithConfig(configLoader func(string) (*config.Config, error)
 				return err
 			}
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
 				return fmt.Errorf("data: create file service: %w", err)
 			}
@@ -194,10 +195,10 @@ func dataSettingsCmdWithConfig(configLoader func(string) (*config.Config, error)
 }
 
 func dataStoreCmd() *cobra.Command {
-	return dataStoreCmdWithConfig(loadConfig, defaultAPIClientFactory)
+	return dataStoreCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func dataStoreCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
+func dataStoreCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var collection string
 	var documentID string
 
@@ -213,7 +214,7 @@ or provide --document-id to fetch a specific document.`,
 				return err
 			}
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
 				return fmt.Errorf("data: create file service: %w", err)
 			}
@@ -277,10 +278,10 @@ listing and aggregation of audit events by operator session.`,
 }
 
 func dataAuditListCmd() *cobra.Command {
-	return dataAuditListCmdWithConfig(loadConfig, defaultAPIClientFactory)
+	return dataAuditListCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func dataAuditListCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
+func dataAuditListCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
 	var limit int
 
@@ -296,7 +297,7 @@ to control the number of results.`,
 				return err
 			}
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
 				return fmt.Errorf("data: create file service: %w", err)
 			}

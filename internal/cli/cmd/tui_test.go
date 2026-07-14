@@ -18,8 +18,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -32,7 +30,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/fs"
-	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // --- helpers ---
@@ -45,6 +42,7 @@ func stubTUIDeps(t *testing.T, cfg *config.Config) tuiDeps {
 		configLoader: func(string) (*config.Config, error) {
 			return cfg, nil
 		},
+		fileSvcFactory: newFileSvc,
 		checkOperatorRunning: func(*config.Config) error {
 			return nil
 		},
@@ -68,8 +66,8 @@ func stubTUIDeps(t *testing.T, cfg *config.Config) tuiDeps {
 // setupTUITestConfig creates a minimal config in a temp directory for hermetic tests.
 func setupTUITestConfig(t *testing.T) *config.Config {
 	t.Helper()
-	tmpDir := testutil.TempDir(t)
-	return setupTestConfig(t, tmpDir)
+	_, cfg := newCmdTestEnv(t)
+	return cfg
 }
 
 // newRootCmdWithVersion creates a root cobra command with the given version,
@@ -285,11 +283,11 @@ func TestTUI_SSEURLConstruction(t *testing.T) {
 
 func TestTUI_RealConfigNoGateway(t *testing.T) {
 	t.Run("fails with gateway not reachable when using real config and no gateway", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		cfg := setupTestConfig(t, tmpDir)
+		fileSvc, cfg := newCmdTestEnv(t)
 
 		deps := tuiDeps{
 			configLoader:         func(string) (*config.Config, error) { return cfg, nil },
+			fileSvcFactory:       fileSvcFactoryFor(fileSvc),
 			checkOperatorRunning: func(*config.Config) error { return constants.ErrGatewayNotReachable },
 			loadCredentials:      auth.LoadCredentials,
 			buildMTLSClient:      auth.BuildMTLSClient,
@@ -308,15 +306,16 @@ func TestTUI_RealConfigNoGateway(t *testing.T) {
 
 func TestTUI_RealCredentialsNotEnrolled(t *testing.T) {
 	t.Run("fails with not enrolled when credentials file does not exist", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		cfg := setupTestConfig(t, tmpDir)
+		fileSvc, cfg := newCmdTestEnv(t)
 
 		// Ensure no credentials file exists
-		_, err := os.Stat(cfg.CredentialsFile())
-		require.True(t, os.IsNotExist(err))
+		exists, err := fileSvc.FileExists(context.Background(), relFromAbs(fileSvc, cfg.CredentialsFile()))
+		require.NoError(t, err)
+		require.False(t, exists)
 
 		deps := tuiDeps{
 			configLoader:         func(string) (*config.Config, error) { return cfg, nil },
+			fileSvcFactory:       fileSvcFactoryFor(fileSvc),
 			checkOperatorRunning: func(*config.Config) error { return nil },
 			loadCredentials:      auth.LoadCredentials,
 			buildMTLSClient:      auth.BuildMTLSClient,
@@ -335,15 +334,13 @@ func TestTUI_RealCredentialsNotEnrolled(t *testing.T) {
 
 func TestTUI_RealCredentialsCorruptJSON(t *testing.T) {
 	t.Run("fails with ErrFailedToLoadCredentials when credentials file is corrupt", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		cfg := setupTestConfig(t, tmpDir)
+		fileSvc, cfg := newCmdTestEnv(t)
 
-		credsDir := filepath.Dir(cfg.CredentialsFile())
-		require.NoError(t, os.MkdirAll(credsDir, 0700))
-		require.NoError(t, os.WriteFile(cfg.CredentialsFile(), []byte("{invalid json"), 0600))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), relFromAbs(fileSvc, cfg.CredentialsFile()), []byte("{invalid json"), constants.PermFilePrivate))
 
 		deps := tuiDeps{
 			configLoader:         func(string) (*config.Config, error) { return cfg, nil },
+			fileSvcFactory:       fileSvcFactoryFor(fileSvc),
 			checkOperatorRunning: func(*config.Config) error { return nil },
 			loadCredentials:      auth.LoadCredentials,
 			buildMTLSClient:      auth.BuildMTLSClient,

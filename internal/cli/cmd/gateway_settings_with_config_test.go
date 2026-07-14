@@ -41,8 +41,7 @@ func TestGatewaySettingsCmdWithConfig_ConfigLoadError(t *testing.T) {
 }
 
 func TestGatewaySettingsCmdWithConfig_ClientCreationError(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	_, cfg := newCmdTestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	cmd := gatewaySettingsCmdWithConfig(loader, failingClientFactory(errors.New("client creation error")))
@@ -56,8 +55,7 @@ func TestGatewaySettingsCmdWithConfig_ClientCreationError(t *testing.T) {
 }
 
 func TestGatewaySettingsCmdWithConfig_GetRequestError(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	_, cfg := newCmdTestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	client := &mockAPIClient{getErr: errors.New("network error")}
@@ -72,8 +70,7 @@ func TestGatewaySettingsCmdWithConfig_GetRequestError(t *testing.T) {
 }
 
 func TestGatewaySettingsCmdWithConfig_ValidResponsePrintsSettings(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	_, cfg := newCmdTestEnv(t)
 
 	settingsJSON := []byte(`{"posture":"consensus","port":8443,"log_level":"info"}`)
 

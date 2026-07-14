@@ -16,7 +16,6 @@ package cmd
 import (
 	"bytes"
 	"errors"
-	"log/slog"
 	"os"
 	"testing"
 
@@ -33,8 +32,7 @@ var errMockNetwork = errors.New("network failure")
 
 func setupAuditAPITestEnv(t *testing.T) *config.Config {
 	t.Helper()
-	tmpDir := testutil.TempDir(t)
-	cfg := setupTestConfig(t, tmpDir)
+	fileSvc, cfg := newCmdTestEnv(t)
 
 	creds := &auth.Credentials{
 		OperatorSessionID: "op-sess-test",
@@ -42,8 +40,6 @@ func setupAuditAPITestEnv(t *testing.T) *config.Config {
 		OperatorID:        "op-test",
 		CLISessionID:      "cli-sess-test",
 	}
-	fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
-	require.NoError(t, err)
 	require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
 	return cfg
 }

@@ -17,7 +17,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -45,10 +44,14 @@ func defaultAPIClientFactory(fileSvc fs.RuntimeFileService, cfg *config.Config) 
 }
 
 func approveCmd() *cobra.Command {
-	return approveCmdWithConfig(loadConfig, defaultAPIClientFactory)
+	return approveCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func approveCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
+func approveCmdWithConfig(
+	configLoader func(string) (*config.Config, error),
+	clientFactory apiClientFactory,
+	fileSvcFactory func() (fs.RuntimeFileService, error),
+) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "approve <transaction_hash>",
 		Short: "Approve a suspended L3 transaction via browser WebAuthn",
@@ -64,7 +67,7 @@ gateway's SSE stream and waits for the approval.completed event. CLI credentials
 				return err
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
