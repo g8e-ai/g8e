@@ -97,10 +97,10 @@ func TestBuildMTLSClient_MissingTrustBundle(t *testing.T) {
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 
 	cfg := &config.Config{
-		RuntimeDir: tmpDir,
+		RuntimeDir: runtimeDir,
 		Paths:      &config.PathsConfig{Host: "localhost"},
 	}
-	cfg.Paths.Infra.CACertPath = filepath.Join(tmpDir, "ca-bundle.pem")
+	cfg.Paths.Infra.CACertPath = filepath.Join(runtimeDir, "ca-bundle.pem")
 
 	certFile := cfg.CLICertFile()
 	keyFile := cfg.CLIKeyFile()

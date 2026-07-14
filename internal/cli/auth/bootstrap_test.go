@@ -651,14 +651,12 @@ func TestCheckBootstrapStatus_InvalidJSON(t *testing.T) {
 
 func TestReEnroll_TrustBundleFetchError(t *testing.T) {
 	t.Parallel()
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
-	trustBundlePath := filepath.Join(tmpDir, "trust-bundle.pem")
+	runtimeDir := fileSvc.Resolve("")
+	trustBundlePath := filepath.Join(runtimeDir, "trust-bundle.pem")
 	cfg := &config.Config{
-		ProjectRoot: tmpDir,
-		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
 		Paths:       &config.PathsConfig{},
 	}
 	cfg.Paths.Infra.CACertPath = trustBundlePath
@@ -694,13 +692,11 @@ func TestReEnroll_TrustBundleEmpty(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		ProjectRoot: tmpDir,
-		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
 		Paths:       &config.PathsConfig{},
 	}
 
@@ -724,13 +720,11 @@ func TestReEnroll_TrustBundleBadStatus(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		ProjectRoot: tmpDir,
-		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
 		Paths:       &config.PathsConfig{},
 	}
 
@@ -756,16 +750,14 @@ func TestReEnroll_CLICertLoadError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		ProjectRoot: tmpDir,
-		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
 		Paths:       &config.PathsConfig{},
 	}
-	cfg.Paths.Infra.CACertPath = filepath.Join(tmpDir, "trust-bundle.pem")
+	cfg.Paths.Infra.CACertPath = filepath.Join(runtimeDir, "trust-bundle.pem")
 
 	// Don't create CLI cert/key files - they should be missing
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -789,16 +781,14 @@ func TestReEnroll_InvalidCAPEM(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		ProjectRoot: tmpDir,
-		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
 		Paths:       &config.PathsConfig{},
 	}
-	cfg.Paths.Infra.CACertPath = filepath.Join(tmpDir, "trust-bundle.pem")
+	cfg.Paths.Infra.CACertPath = filepath.Join(runtimeDir, "trust-bundle.pem")
 
 	// Create valid matching CLI cert/key files
 	certPEM, keyPEM := testutil.GenerateTestCertificate(t, "test-cli")
@@ -809,7 +799,11 @@ func TestReEnroll_InvalidCAPEM(t *testing.T) {
 	privKey, err := x509.ParseECPrivateKey(block.Bytes)
 	require.NoError(t, err)
 
-	err = SaveCertAndKey(fileSvc, certPEM, "", privKey, cfg.CLICertFile(), cfg.CLIKeyFile())
+	cliCertRel, err := fileSvc.Rel(cfg.CLICertFile())
+	require.NoError(t, err)
+	cliKeyRel, err := fileSvc.Rel(cfg.CLIKeyFile())
+	require.NoError(t, err)
+	err = SaveCertAndKey(fileSvc, certPEM, "", privKey, cliCertRel, cliKeyRel)
 	require.NoError(t, err)
 
 	operatorCSR, _, err := GenerateCSR("test-operator")

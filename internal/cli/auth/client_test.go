@@ -247,11 +247,11 @@ func TestIsCertificateVerificationError(t *testing.T) {
 }
 
 func TestSaveCredentials(t *testing.T) {
-	tempDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 
 	cfg := &config.Config{}
-	cfg.RuntimeDir = tempDir
+	cfg.RuntimeDir = runtimeDir
 
 	creds := &Credentials{
 		OperatorSessionID: "test-session-id",
@@ -296,11 +296,11 @@ func TestSaveCredentials(t *testing.T) {
 }
 
 func TestLoadCredentials(t *testing.T) {
-	tempDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 
 	cfg := &config.Config{}
-	cfg.RuntimeDir = tempDir
+	cfg.RuntimeDir = runtimeDir
 
 	t.Run("non-existent file returns nil", func(t *testing.T) {
 		creds, err := LoadCredentials(fileSvc, cfg)
@@ -351,13 +351,13 @@ func TestLoadCredentials(t *testing.T) {
 }
 
 func TestDeleteCredentials(t *testing.T) {
-	tempDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 
 	cfg := &config.Config{}
-	cfg.RuntimeDir = tempDir
+	cfg.RuntimeDir = runtimeDir
 	cfg.Paths = &config.PathsConfig{}
-	cfg.Paths.Infra.CACertPath = filepath.Join(tempDir, "trust-bundle.pem")
+	cfg.Paths.Infra.CACertPath = filepath.Join(runtimeDir, "trust-bundle.pem")
 
 	t.Run("delete existing credentials", func(t *testing.T) {
 		// Create test files using config methods
@@ -394,11 +394,10 @@ func TestDeleteCredentials(t *testing.T) {
 }
 
 func TestSaveCertAndKey(t *testing.T) {
-	tempDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 
-	certFile := filepath.Join(tempDir, "cert.pem")
-	keyFile := filepath.Join(tempDir, "key.pem")
+	certRel := "cert.pem"
+	keyRel := "key.pem"
 
 	// Generate test key
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -410,13 +409,13 @@ func TestSaveCertAndKey(t *testing.T) {
 	chainPEM := "-----BEGIN CERTIFICATE-----\ntest chain data\n-----END CERTIFICATE-----"
 
 	t.Run("save cert and key without chain", func(t *testing.T) {
-		err := SaveCertAndKey(fileSvc, certPEM, "", privKey, certFile, keyFile)
+		err := SaveCertAndKey(fileSvc, certPEM, "", privKey, certRel, keyRel)
 		if err != nil {
 			t.Fatalf("SaveCertAndKey() failed: %v", err)
 		}
 
 		// Verify cert file
-		certData, err := os.ReadFile(certFile)
+		certData, err := fileSvc.ReadFile(context.Background(), certRel)
 		if err != nil {
 			t.Fatalf("Failed to read cert file: %v", err)
 		}
@@ -425,7 +424,7 @@ func TestSaveCertAndKey(t *testing.T) {
 		}
 
 		// Verify key file
-		keyData, err := os.ReadFile(keyFile)
+		keyData, err := fileSvc.ReadFile(context.Background(), keyRel)
 		if err != nil {
 			t.Fatalf("Failed to read key file: %v", err)
 		}
@@ -439,7 +438,7 @@ func TestSaveCertAndKey(t *testing.T) {
 		}
 
 		// Verify file permissions
-		info, err := os.Stat(keyFile)
+		info, err := os.Stat(fileSvc.Resolve(keyRel))
 		if err != nil {
 			t.Fatalf("Failed to stat key file: %v", err)
 		}
@@ -449,12 +448,12 @@ func TestSaveCertAndKey(t *testing.T) {
 	})
 
 	t.Run("save cert and key with chain", func(t *testing.T) {
-		err := SaveCertAndKey(fileSvc, certPEM, chainPEM, privKey, certFile, keyFile)
+		err := SaveCertAndKey(fileSvc, certPEM, chainPEM, privKey, certRel, keyRel)
 		if err != nil {
 			t.Fatalf("SaveCertAndKey() failed: %v", err)
 		}
 
-		certData, err := os.ReadFile(certFile)
+		certData, err := fileSvc.ReadFile(context.Background(), certRel)
 		if err != nil {
 			t.Fatalf("Failed to read cert file: %v", err)
 		}
@@ -532,15 +531,14 @@ func TestParseCertPEM(t *testing.T) {
 		Bytes: certDER,
 	})
 
-	tempDir := testutil.TempDir(t)
-	certFile := filepath.Join(tempDir, "cert.pem")
+	certRel := "cert.pem"
 
 	t.Run("valid certificate", func(t *testing.T) {
-		if err := os.WriteFile(certFile, certPEM, constants.PermFilePrivate); err != nil {
+		if err := fileSvc.WriteFile(context.Background(), certRel, certPEM, constants.PermFilePrivate); err != nil {
 			t.Fatalf("Failed to write cert file: %v", err)
 		}
 
-		cert, err := parseCertPEM(fileSvc, certFile)
+		cert, err := parseCertPEM(fileSvc, certRel)
 		if err != nil {
 			t.Fatalf("parseCertPEM() failed: %v", err)
 		}
@@ -551,18 +549,18 @@ func TestParseCertPEM(t *testing.T) {
 	})
 
 	t.Run("file not found", func(t *testing.T) {
-		_, err := parseCertPEM(fileSvc, filepath.Join(tempDir, "nonexistent.pem"))
+		_, err := parseCertPEM(fileSvc, "nonexistent.pem")
 		if err == nil {
 			t.Error("parseCertPEM() should return error for non-existent file")
 		}
 	})
 
 	t.Run("invalid PEM", func(t *testing.T) {
-		if err := os.WriteFile(certFile, []byte("invalid pem"), constants.PermFilePrivate); err != nil {
+		if err := fileSvc.WriteFile(context.Background(), certRel, []byte("invalid pem"), constants.PermFilePrivate); err != nil {
 			t.Fatalf("Failed to write invalid PEM: %v", err)
 		}
 
-		_, err := parseCertPEM(fileSvc, certFile)
+		_, err := parseCertPEM(fileSvc, certRel)
 		if err == nil {
 			t.Error("parseCertPEM() should return error for invalid PEM")
 		}
@@ -573,11 +571,11 @@ func TestParseCertPEM(t *testing.T) {
 			Type:  "PRIVATE KEY",
 			Bytes: certDER,
 		})
-		if err := os.WriteFile(certFile, keyPEM, constants.PermFilePrivate); err != nil {
+		if err := fileSvc.WriteFile(context.Background(), certRel, keyPEM, constants.PermFilePrivate); err != nil {
 			t.Fatalf("Failed to write key PEM: %v", err)
 		}
 
-		_, err := parseCertPEM(fileSvc, certFile)
+		_, err := parseCertPEM(fileSvc, certRel)
 		if err == nil {
 			t.Error("parseCertPEM() should return error for wrong PEM type")
 		}
@@ -656,15 +654,14 @@ func TestCheckCertExpiry(t *testing.T) {
 		Bytes: certDER,
 	})
 
-	tempDir := testutil.TempDir(t)
-	certFile := filepath.Join(tempDir, "cert.pem")
+	certRel := "cert.pem"
 
 	t.Run("expiring certificate", func(t *testing.T) {
-		if err := os.WriteFile(certFile, certPEM, constants.PermFilePrivate); err != nil {
+		if err := fileSvc.WriteFile(context.Background(), certRel, certPEM, constants.PermFilePrivate); err != nil {
 			t.Fatalf("Failed to write cert file: %v", err)
 		}
 
-		expiring, err := CheckCertExpiry(fileSvc, certFile)
+		expiring, err := CheckCertExpiry(fileSvc, certRel)
 		if err != nil {
 			t.Fatalf("CheckCertExpiry() failed: %v", err)
 		}
@@ -674,7 +671,7 @@ func TestCheckCertExpiry(t *testing.T) {
 	})
 
 	t.Run("non-existent file", func(t *testing.T) {
-		_, err := CheckCertExpiry(fileSvc, filepath.Join(tempDir, "nonexistent.pem"))
+		_, err := CheckCertExpiry(fileSvc, "nonexistent.pem")
 		if err == nil {
 			t.Error("CheckCertExpiry() should return error for non-existent file")
 		}

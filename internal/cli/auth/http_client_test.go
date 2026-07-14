@@ -29,17 +29,17 @@ import (
 
 func TestNewSecureHTTPClient_Success(t *testing.T) {
 	t.Parallel()
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
-	trustBundlePath := filepath.Join(tmpDir, "trust-bundle.pem")
+	runtimeDir := fileSvc.Resolve("")
+	trustBundlePath := filepath.Join(runtimeDir, "trust-bundle.pem")
 
 	// Generate a test CA certificate
 	caPEM, _ := testutil.GenerateTestCertificate(t, "test-ca")
 	require.NoError(t, os.WriteFile(trustBundlePath, []byte(caPEM), constants.PermFilePrivate))
 
 	cfg := &config.Config{
-		ProjectRoot: tmpDir,
-		RuntimeDir:  tmpDir,
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
 		Paths:       &config.PathsConfig{},
 	}
 	cfg.Paths.Infra.CACertPath = trustBundlePath
@@ -57,11 +57,11 @@ func TestNewSecureHTTPClient_Success(t *testing.T) {
 
 func TestNewSecureHTTPClient_MissingTrustBundlePath(t *testing.T) {
 	t.Parallel()
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		ProjectRoot: tmpDir,
-		RuntimeDir:  tmpDir,
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
 		Paths:       &config.PathsConfig{},
 	}
 
@@ -73,15 +73,15 @@ func TestNewSecureHTTPClient_MissingTrustBundlePath(t *testing.T) {
 
 func TestNewSecureHTTPClient_InvalidPEM(t *testing.T) {
 	t.Parallel()
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
-	trustBundlePath := filepath.Join(tmpDir, "trust-bundle.pem")
+	runtimeDir := fileSvc.Resolve("")
+	trustBundlePath := filepath.Join(runtimeDir, "trust-bundle.pem")
 
 	require.NoError(t, os.WriteFile(trustBundlePath, []byte("invalid-pem-data"), constants.PermFilePrivate))
 
 	cfg := &config.Config{
-		ProjectRoot: tmpDir,
-		RuntimeDir:  tmpDir,
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
 		Paths:       &config.PathsConfig{},
 	}
 	cfg.Paths.Infra.CACertPath = trustBundlePath
