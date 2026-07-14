@@ -103,7 +103,7 @@ func TestOperatorStartCmdFlags(t *testing.T) {
 func TestOperatorDeployCmdErrorPaths(t *testing.T) {
 	t.Run("deploy fails when no credentials", func(t *testing.T) {
 		tmpDir := testutil.TempDir(t)
-		setupTestConfig(t, tmpDir)
+		_, _ = setupTestConfig(t, tmpDir)
 
 		originalWd, _ := os.Getwd()
 		os.Chdir(tmpDir)

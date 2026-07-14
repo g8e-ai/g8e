@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"context"
-	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -20,11 +18,7 @@ import (
 func newCmdTestEnv(t *testing.T) (fs.RuntimeFileService, *config.Config) {
 	t.Helper()
 	tmpDir := testutil.TempDir(t)
-	fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
-	require.NoError(t, err)
-	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
-	cfg := setupTestConfig(t, tmpDir)
-	return fileSvc, cfg
+	return setupTestConfig(t, tmpDir)
 }
 
 // fileSvcFactoryFor returns a fileSvcFactory that always returns the given fileSvc.

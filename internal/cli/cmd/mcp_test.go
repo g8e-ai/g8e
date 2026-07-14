@@ -39,6 +39,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
@@ -475,13 +476,15 @@ func TestCreateMCPClient(t *testing.T) {
 		// This test verifies the function signature and basic behavior
 		// Full integration test would require actual certificate files
 		tempDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+		require.NoError(t, err)
 
 		cfg := &config.Config{
 			ProjectRoot: tempDir,
 		}
 
 		// Should fail without certificates
-		_, err := createMCPClient(cfg)
+		_, err = createMCPClient(fileSvc, cfg)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to load client certificate")
 	})
@@ -746,10 +749,12 @@ func TestProxyToGatewayWithRetry(t *testing.T) {
 func TestCreateMCPClient_WithValidCerts(t *testing.T) {
 	t.Run("createMCPClient fails when certificates are missing", func(t *testing.T) {
 		tempDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+		require.NoError(t, err)
 		cfg := &config.Config{
 			ProjectRoot: tempDir,
 		}
-		_, err := createMCPClient(cfg)
+		_, err = createMCPClient(fileSvc, cfg)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrFailedToLoadClientCertificate)
 	})

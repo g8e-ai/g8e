@@ -99,7 +99,7 @@ func generateTestPEMCert(t *testing.T) []byte {
 // --- PKI Enroll ---
 
 func TestSecurityPKIEnrollCmd_API_MockHappyPath(t *testing.T) {
-	cfg := setupTestConfig(t, testutil.TempDir(t))
+	_, cfg := setupTestConfig(t, testutil.TempDir(t))
 	tmpDir := testutil.TempDir(t)
 
 	mockEnroll := func(_ *config.Config, _, _, _, _ string) (*auth.RegistrationResponse, error) {
@@ -129,7 +129,7 @@ func TestSecurityPKIEnrollCmd_API_MockHappyPath(t *testing.T) {
 }
 
 func TestSecurityPKIEnrollCmd_API_MockHappyPathWithTrustBundle(t *testing.T) {
-	cfg := setupTestConfig(t, testutil.TempDir(t))
+	_, cfg := setupTestConfig(t, testutil.TempDir(t))
 	tmpDir := testutil.TempDir(t)
 
 	mockEnroll := func(_ *config.Config, _, _, _, _ string) (*auth.RegistrationResponse, error) {
@@ -158,7 +158,7 @@ func TestSecurityPKIEnrollCmd_API_MockHappyPathWithTrustBundle(t *testing.T) {
 }
 
 func TestSecurityPKIEnrollCmd_API_MissingEndpoint(t *testing.T) {
-	cfg := setupTestConfig(t, testutil.TempDir(t))
+	_, cfg := setupTestConfig(t, testutil.TempDir(t))
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	mockEnroll := func(_ *config.Config, _, _, _, _ string) (*auth.RegistrationResponse, error) {
@@ -197,7 +197,7 @@ func TestSecurityPKIEnrollCmd_API_ConfigLoadError(t *testing.T) {
 }
 
 func TestSecurityPKIEnrollCmd_API_EnrollError(t *testing.T) {
-	cfg := setupTestConfig(t, testutil.TempDir(t))
+	_, cfg := setupTestConfig(t, testutil.TempDir(t))
 
 	mockEnroll := func(_ *config.Config, _, _, _, _ string) (*auth.RegistrationResponse, error) {
 		return nil, errMockEnroll
@@ -217,7 +217,7 @@ func TestSecurityPKIEnrollCmd_API_EnrollError(t *testing.T) {
 }
 
 func TestSecurityPKIEnrollCmd_API_MissingCertInResponse(t *testing.T) {
-	cfg := setupTestConfig(t, testutil.TempDir(t))
+	_, cfg := setupTestConfig(t, testutil.TempDir(t))
 
 	mockEnroll := func(_ *config.Config, _, _, _, _ string) (*auth.RegistrationResponse, error) {
 		return &auth.RegistrationResponse{

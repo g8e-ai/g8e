@@ -16,13 +16,13 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"os"
-	"path/filepath"
+	"log/slog"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -127,26 +127,20 @@ func TestAuthCommandFlags(t *testing.T) {
 	})
 }
 
-func setupTestConfig(t *testing.T, tmpDir string) *config.Config {
-	runtimeDir := filepath.Join(tmpDir, ".g8e")
-	pkiDir := filepath.Join(runtimeDir, "pki")
-	secretsDir := filepath.Join(runtimeDir, "secrets")
+func setupTestConfig(t *testing.T, tmpDir string) (fs.RuntimeFileService, *config.Config) {
+	t.Helper()
 
-	require.NoError(t, os.MkdirAll(pkiDir, 0755))
-	require.NoError(t, os.MkdirAll(secretsDir, 0700))
-	// Note: credentialsDir is .g8e by default, do NOT create a "credentials" subdirectory
-	// The credentials file is written to .g8e/credentials, not .g8e/credentials/credentials
+	fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 
-	// Create trust bundle
-	trustBundlePath := filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem")
-	require.NoError(t, os.MkdirAll(filepath.Dir(trustBundlePath), 0755))
-	require.NoError(t, os.WriteFile(trustBundlePath, []byte("dummy-trust-bundle"), 0644))
-
-	// Use LoadWithPaths for hermetic test execution
-	// This ensures the test does not depend on any running operator
 	pathsJSON := minimalPathsJSON(t)
-
 	cfg, err := config.LoadWithPaths(tmpDir, []byte(pathsJSON))
 	require.NoError(t, err)
-	return cfg
+
+	require.Equal(t, cfg.RuntimeDir, fileSvc.Resolve(""))
+
+	require.NoError(t, fileSvc.WriteFile(context.Background(), cfg.DefaultTrustBundleRelPath(), []byte("dummy-trust-bundle"), constants.PermFilePublic))
+
+	return fileSvc, cfg
 }

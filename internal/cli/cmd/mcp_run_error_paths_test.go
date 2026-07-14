@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -30,6 +31,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
@@ -37,20 +39,24 @@ import (
 // ─── buildGatewayConn error paths ────────────────────────────────────────────
 
 func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
-	t.Run("fails when cert files do not exist", func(t *testing.T) {
+	t.Run("fails when trust bundle and cert files do not exist", func(t *testing.T) {
 		tempDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+		require.NoError(t, err)
 		cfg := &config.Config{
 			ProjectRoot: tempDir,
 			RuntimeDir:  tempDir,
 		}
-		_, err := buildGatewayConn(cfg)
+		_, err = buildGatewayConn(fileSvc, cfg)
 		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrFailedToLoadClientCertificate)
+		assert.ErrorIs(t, err, constants.ErrFailedToReadTrustBundle)
 	})
 
 	t.Run("fails when CA bundle does not exist", func(t *testing.T) {
 		tempDir := testutil.TempDir(t)
 		certPath, keyPath, _ := generateTestCerts(t)
+		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+		require.NoError(t, err)
 
 		cfg := &config.Config{
 			ProjectRoot: tempDir,
@@ -62,13 +68,16 @@ func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 		t.Setenv(envG8EClientCert, certPath)
 		t.Setenv(envG8EClientKey, keyPath)
 
-		_, err := buildGatewayConn(cfg)
+		_, err = buildGatewayConn(fileSvc, cfg)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrFailedToReadTrustBundle)
 	})
 
 	t.Run("succeeds with valid certs and custom gateway URL", func(t *testing.T) {
 		certPath, keyPath, caPath := generateTestCerts(t)
+		tempDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+		require.NoError(t, err)
 
 		t.Setenv(envG8EClientCert, certPath)
 		t.Setenv(envG8EClientKey, keyPath)
@@ -76,11 +85,11 @@ func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 		t.Setenv(envG8EGatewayURL, "https://127.0.0.1:9999/mcp")
 
 		cfg := &config.Config{
-			ProjectRoot: testutil.TempDir(t),
+			ProjectRoot: tempDir,
 			RuntimeDir:  filepath.Dir(certPath),
 		}
 
-		conn, err := buildGatewayConn(cfg)
+		conn, err := buildGatewayConn(fileSvc, cfg)
 		require.NoError(t, err)
 		assert.NotNil(t, conn)
 		assert.Equal(t, "https://127.0.0.1:9999/mcp", conn.gatewayURL)

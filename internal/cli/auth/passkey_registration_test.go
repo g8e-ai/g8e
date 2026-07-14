@@ -16,6 +16,7 @@
 package auth
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -47,7 +49,10 @@ func TestVerifyPasskeyRegistration_NetworkError(t *testing.T) {
 	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), constants.PermFilePrivate))
 	cfg.Paths.Infra.CACertPath = caPath
 
-	hasPasskey, err := VerifyPasskeyRegistration(cfg, "test-user", "test-cli-session")
+	fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
+	require.NoError(t, err)
+
+	hasPasskey, err := VerifyPasskeyRegistration(fileSvc, cfg, "test-user", "test-cli-session")
 
 	require.Error(t, err)
 	assert.False(t, hasPasskey)

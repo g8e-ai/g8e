@@ -147,8 +147,7 @@ func TestEnrollCmdWithConfigErrorPaths(t *testing.T) {
 	})
 
 	t.Run("enroll fails when operator not running", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		cfg := setupTestConfig(t, tmpDir)
+		_, cfg := setupTestConfig(t, testutil.TempDir(t))
 
 		config.SetEndpointOverride("127.0.0.1:65535")
 		t.Cleanup(func() { config.SetEndpointOverride("") })
