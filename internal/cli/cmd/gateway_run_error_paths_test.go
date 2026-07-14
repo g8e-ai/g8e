@@ -35,13 +35,13 @@ func setupGatewayTestEnv(t *testing.T) string {
 	tmpDir := chdirTemp(t)
 
 	runtimeDir := filepath.Join(tmpDir, ".g8e")
-	require.NoError(t, os.MkdirAll(filepath.Join(runtimeDir, "pki"), 0o755))
-	require.NoError(t, os.MkdirAll(filepath.Join(runtimeDir, "secrets"), 0o700))
-	require.NoError(t, os.MkdirAll(filepath.Join(runtimeDir, "pki", "trust"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(runtimeDir, "pki"), constants.PermDirStandard))
+	require.NoError(t, os.MkdirAll(filepath.Join(runtimeDir, "secrets"), constants.PermDirPrivate))
+	require.NoError(t, os.MkdirAll(filepath.Join(runtimeDir, "pki", "trust"), constants.PermDirStandard))
 
 	protocolDir := filepath.Join(tmpDir, "protocol", "constants")
-	require.NoError(t, os.MkdirAll(protocolDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(protocolDir, "paths.json"), []byte(minimalPathsJSON(t)), 0o644))
+	require.NoError(t, os.MkdirAll(protocolDir, constants.PermDirStandard))
+	require.NoError(t, os.WriteFile(filepath.Join(protocolDir, "paths.json"), []byte(minimalPathsJSON(t)), constants.PermFilePublic))
 
 	return tmpDir
 }

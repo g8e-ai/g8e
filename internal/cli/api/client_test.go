@@ -14,6 +14,7 @@
 package api
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -22,6 +23,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"log/slog"
 	"math/big"
 	"net"
 	"net/http"
@@ -38,6 +40,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
@@ -96,29 +99,27 @@ func generateTestCA(t *testing.T) (caCertPEM []byte) {
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 }
 
-func setupTestConfig(t *testing.T) (*config.Config, string) {
+func setupTestConfig(t *testing.T) (*config.Config, fs.RuntimeFileService, string) {
 	t.Helper()
 
 	tempDir := testutil.TempDir(t)
 
-	projectRoot := filepath.Join(tempDir, "project")
-	require.NoError(t, os.MkdirAll(projectRoot, 0755))
+	absTempDir, err := filepath.Abs(tempDir)
+	require.NoError(t, err)
 
-	runtimeDir := filepath.Join(projectRoot, paths.Infra.RuntimeDir)
-	require.NoError(t, os.MkdirAll(runtimeDir, 0755))
+	projectRoot := filepath.Join(absTempDir, "project")
+	require.NoError(t, os.MkdirAll(projectRoot, constants.PermDirStandard))
 
-	pkiDir := filepath.Join(projectRoot, paths.Infra.PkiDir)
-	require.NoError(t, os.MkdirAll(pkiDir, 0755))
-
-	secretsDir := filepath.Join(projectRoot, paths.Infra.SecretsDir)
-	require.NoError(t, os.MkdirAll(secretsDir, 0755))
+	fileSvc, err := fs.NewRuntimeFileService(projectRoot, slog.Default())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 
 	credentialsDir := filepath.Join(tempDir, "credentials")
-	require.NoError(t, os.MkdirAll(credentialsDir, 0700))
+	require.NoError(t, os.MkdirAll(credentialsDir, constants.PermDirPrivate))
 
 	protocolDir := filepath.Join(projectRoot, "protocol")
 	constantsDir := filepath.Join(protocolDir, "constants")
-	require.NoError(t, os.MkdirAll(constantsDir, 0755))
+	require.NoError(t, os.MkdirAll(constantsDir, constants.PermDirStandard))
 
 	pathsData := map[string]any{
 		"host": "localhost",
@@ -139,12 +140,13 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 	require.NoError(t, err)
 	pathsJSON := string(pathsBytes)
 	pathsPath := filepath.Join(constantsDir, "paths.json")
-	require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
+	require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), constants.PermFilePublic))
 
 	caCertPEM := generateTestCA(t)
 	trustBundlePath := filepath.Join(projectRoot, paths.Infra.CaCertPath)
-	require.NoError(t, os.MkdirAll(filepath.Dir(trustBundlePath), 0755))
-	require.NoError(t, os.WriteFile(trustBundlePath, caCertPEM, 0644))
+	trustBundleRel, err := fileSvc.Rel(trustBundlePath)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), trustBundleRel, caCertPEM, constants.PermFilePublic))
 
 	cfg, err := config.LoadWithPaths(projectRoot, []byte(pathsJSON))
 	require.NoError(t, err)
@@ -152,10 +154,10 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 	// Override credentials directory to use temp directory for test isolation
 	cfg.CredentialsDir = credentialsDir
 
-	return cfg, tempDir
+	return cfg, fileSvc, tempDir
 }
 
-func setupTestCredentials(t *testing.T, cfg *config.Config) {
+func setupTestCredentials(t *testing.T, fileSvc fs.RuntimeFileService, cfg *config.Config) {
 	t.Helper()
 
 	creds := &auth.Credentials{
@@ -165,17 +167,17 @@ func setupTestCredentials(t *testing.T, cfg *config.Config) {
 		CLISessionID:      "test-cli-session-id",
 	}
 
-	require.NoError(t, auth.SaveCredentials(cfg, creds))
+	require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
 
 	certPEM, keyPEM, _ := generateTestCert(t)
-	require.NoError(t, os.WriteFile(cfg.CLICertFile(), certPEM, 0600))
-	require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), keyPEM, 0600))
+	require.NoError(t, os.WriteFile(cfg.CLICertFile(), certPEM, constants.PermFilePrivate))
+	require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), keyPEM, constants.PermFilePrivate))
 }
 
-func setupTLSClient(t *testing.T, cfg *config.Config, server *httptest.Server) *Client {
+func setupTLSClient(t *testing.T, fileSvc fs.RuntimeFileService, cfg *config.Config, server *httptest.Server) *Client {
 	t.Helper()
 
-	client, err := NewClientWithURL(cfg, server.URL)
+	client, err := NewClientWithURL(fileSvc, cfg, server.URL)
 	require.NoError(t, err)
 
 	caCertPool := x509.NewCertPool()
@@ -227,10 +229,10 @@ func newLocalhostTLSServer(t *testing.T, handler http.HandlerFunc) *httptest.Ser
 }
 
 func TestNewClient_Success(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
-	setupTestCredentials(t, cfg)
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
 
-	client, err := NewClient(cfg)
+	client, err := NewClient(fileSvc, cfg)
 	require.NoError(t, err)
 	require.NotNil(t, client)
 
@@ -248,85 +250,89 @@ func TestNewClient_Success(t *testing.T) {
 }
 
 func TestNewClient_NoCredentials(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
+	cfg, fileSvc, _ := setupTestConfig(t)
 
 	credsDir := cfg.CredentialsDir
 	os.RemoveAll(credsDir)
 
-	client, err := NewClient(cfg)
+	client, err := NewClient(fileSvc, cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
 	require.ErrorIs(t, err, constants.ErrNotAuthenticated)
 }
 
 func TestNewClient_LoadCredentialsError(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
+	cfg, fileSvc, _ := setupTestConfig(t)
 
 	credsDir := cfg.CredentialsDir
-	require.NoError(t, os.MkdirAll(credsDir, 0700))
+	require.NoError(t, os.MkdirAll(credsDir, constants.PermDirPrivate))
 
 	credsFile := cfg.CredentialsFile()
-	require.NoError(t, os.WriteFile(credsFile, []byte("invalid json"), 0600))
+	require.NoError(t, os.WriteFile(credsFile, []byte("invalid json"), constants.PermFilePrivate))
 
-	client, err := NewClient(cfg)
+	client, err := NewClient(fileSvc, cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
 	require.ErrorIs(t, err, constants.ErrFailedToLoadCredentials)
 }
 
 func TestNewClient_MissingCertFile(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
-	setupTestCredentials(t, cfg)
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
 
 	require.NoError(t, os.Remove(cfg.CLICertFile()))
 
-	client, err := NewClient(cfg)
+	client, err := NewClient(fileSvc, cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
 	require.ErrorIs(t, err, constants.ErrFailedToLoadClientCertificate)
 }
 
 func TestNewClient_MissingKeyFile(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
-	setupTestCredentials(t, cfg)
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
 
 	require.NoError(t, os.Remove(cfg.CLIKeyFile()))
 
-	client, err := NewClient(cfg)
+	client, err := NewClient(fileSvc, cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
 	require.ErrorIs(t, err, constants.ErrFailedToLoadClientCertificate)
 }
 
 func TestNewClient_MissingTrustBundle(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
-	setupTestCredentials(t, cfg)
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
 
 	caCertPath := cfg.TrustBundlePath()
-	require.NoError(t, os.Remove(caCertPath))
+	caRel, err := fileSvc.Rel(caCertPath)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.Remove(context.Background(), caRel))
 
-	client, err := NewClient(cfg)
+	client, err := NewClient(fileSvc, cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
 	require.ErrorIs(t, err, constants.ErrFailedToReadTrustBundle)
 }
 
 func TestNewClient_InvalidTrustBundle(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
-	setupTestCredentials(t, cfg)
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
 
 	caCertPath := cfg.TrustBundlePath()
-	require.NoError(t, os.WriteFile(caCertPath, []byte("not a valid PEM"), 0644))
+	caRel, err := fileSvc.Rel(caCertPath)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), caRel, []byte("not a valid PEM"), constants.PermFilePublic))
 
-	client, err := NewClient(cfg)
+	client, err := NewClient(fileSvc, cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
 	require.ErrorIs(t, err, constants.ErrFailedToParseTrustBundle)
 }
 
 func TestDoRequest_Success(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
-	setupTestCredentials(t, cfg)
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
 
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
@@ -343,7 +349,7 @@ func TestDoRequest_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := setupTLSClient(t, cfg, server)
+	client := setupTLSClient(t, fileSvc, cfg, server)
 
 	body := map[string]string{"key": "value"}
 	resp, err := client.DoRequest("POST", "/api/test", body)
@@ -352,8 +358,8 @@ func TestDoRequest_Success(t *testing.T) {
 }
 
 func TestDoRequest_GetWithoutBody(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
-	setupTestCredentials(t, cfg)
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
 
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "GET", r.Method)
@@ -365,7 +371,7 @@ func TestDoRequest_GetWithoutBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := setupTLSClient(t, cfg, server)
+	client := setupTLSClient(t, fileSvc, cfg, server)
 
 	resp, err := client.DoRequest("GET", "/api/test", nil)
 	require.NoError(t, err)
@@ -373,10 +379,10 @@ func TestDoRequest_GetWithoutBody(t *testing.T) {
 }
 
 func TestDoRequest_MarshalError(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
-	setupTestCredentials(t, cfg)
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
 
-	client, err := NewClient(cfg)
+	client, err := NewClient(fileSvc, cfg)
 	require.NoError(t, err)
 
 	body := make(chan int)
@@ -386,10 +392,10 @@ func TestDoRequest_MarshalError(t *testing.T) {
 }
 
 func TestDoRequest_HTTPError(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
-	setupTestCredentials(t, cfg)
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
 
-	client, err := NewClient(cfg)
+	client, err := NewClient(fileSvc, cfg)
 	require.NoError(t, err)
 
 	_, err = client.DoRequest("GET", "/invalid-endpoint", nil)
@@ -398,8 +404,8 @@ func TestDoRequest_HTTPError(t *testing.T) {
 }
 
 func TestDoRequest_APIError(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
-	setupTestCredentials(t, cfg)
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
 
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -407,7 +413,7 @@ func TestDoRequest_APIError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := setupTLSClient(t, cfg, server)
+	client := setupTLSClient(t, fileSvc, cfg, server)
 
 	_, err := client.DoRequest("GET", "/api/test", nil)
 	require.Error(t, err)
@@ -416,8 +422,8 @@ func TestDoRequest_APIError(t *testing.T) {
 }
 
 func TestDoRequest_InvalidJSONResponse(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
-	setupTestCredentials(t, cfg)
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
 
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -426,7 +432,7 @@ func TestDoRequest_InvalidJSONResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := setupTLSClient(t, cfg, server)
+	client := setupTLSClient(t, fileSvc, cfg, server)
 
 	_, err := client.DoRequest("GET", "/api/test", nil)
 	require.Error(t, err)
@@ -434,8 +440,8 @@ func TestDoRequest_InvalidJSONResponse(t *testing.T) {
 }
 
 func TestDoRequest_ReadResponseError(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
-	setupTestCredentials(t, cfg)
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
 
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -448,7 +454,7 @@ func TestDoRequest_ReadResponseError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := setupTLSClient(t, cfg, server)
+	client := setupTLSClient(t, fileSvc, cfg, server)
 
 	_, err := client.DoRequest("GET", "/api/test", nil)
 	require.Error(t, err)
@@ -456,8 +462,8 @@ func TestDoRequest_ReadResponseError(t *testing.T) {
 }
 
 func TestGet_Success(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
-	setupTestCredentials(t, cfg)
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
 
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "GET", r.Method)
@@ -467,7 +473,7 @@ func TestGet_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := setupTLSClient(t, cfg, server)
+	client := setupTLSClient(t, fileSvc, cfg, server)
 
 	resp, err := client.Get("/api/test")
 	require.NoError(t, err)
@@ -475,8 +481,8 @@ func TestGet_Success(t *testing.T) {
 }
 
 func TestPost_Success(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
-	setupTestCredentials(t, cfg)
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
 
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
@@ -487,7 +493,7 @@ func TestPost_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := setupTLSClient(t, cfg, server)
+	client := setupTLSClient(t, fileSvc, cfg, server)
 
 	body := map[string]string{"data": "test"}
 	resp, err := client.Post("/api/test", body)
@@ -496,8 +502,8 @@ func TestPost_Success(t *testing.T) {
 }
 
 func TestPut_Success(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
-	setupTestCredentials(t, cfg)
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
 
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "PUT", r.Method)
@@ -508,7 +514,7 @@ func TestPut_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := setupTLSClient(t, cfg, server)
+	client := setupTLSClient(t, fileSvc, cfg, server)
 
 	body := map[string]string{"data": "updated"}
 	resp, err := client.Put("/api/test", body)
@@ -517,8 +523,8 @@ func TestPut_Success(t *testing.T) {
 }
 
 func TestDelete_Success(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
-	setupTestCredentials(t, cfg)
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
 
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "DELETE", r.Method)
@@ -528,7 +534,7 @@ func TestDelete_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := setupTLSClient(t, cfg, server)
+	client := setupTLSClient(t, fileSvc, cfg, server)
 
 	resp, err := client.Delete("/api/test")
 	require.NoError(t, err)
@@ -536,8 +542,8 @@ func TestDelete_Success(t *testing.T) {
 }
 
 func TestDoRequest_HeadersSetCorrectly(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
-	setupTestCredentials(t, cfg)
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
 
 	var receivedHeaders http.Header
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -548,7 +554,7 @@ func TestDoRequest_HeadersSetCorrectly(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := setupTLSClient(t, cfg, server)
+	client := setupTLSClient(t, fileSvc, cfg, server)
 
 	_, err := client.DoRequest("POST", "/api/test", map[string]string{"test": "data"})
 	require.NoError(t, err)
@@ -561,8 +567,8 @@ func TestDoRequest_HeadersSetCorrectly(t *testing.T) {
 }
 
 func TestDoRequest_URLConstruction(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
-	setupTestCredentials(t, cfg)
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
 
 	var receivedURL string
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -573,7 +579,7 @@ func TestDoRequest_URLConstruction(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := setupTLSClient(t, cfg, server)
+	client := setupTLSClient(t, fileSvc, cfg, server)
 
 	_, err := client.DoRequest("GET", "/api/v1/resource", nil)
 	require.NoError(t, err)
@@ -582,10 +588,10 @@ func TestDoRequest_URLConstruction(t *testing.T) {
 }
 
 func TestNewClient_TLSConfig(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
-	setupTestCredentials(t, cfg)
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
 
-	client, err := NewClient(cfg)
+	client, err := NewClient(fileSvc, cfg)
 	require.NoError(t, err)
 
 	transport, ok := client.httpClient.Transport.(*http.Transport)
@@ -601,8 +607,8 @@ func TestNewClient_TLSConfig(t *testing.T) {
 }
 
 func TestDoRequest_ResponseBodyValidation(t *testing.T) {
-	cfg, _ := setupTestConfig(t)
-	setupTestCredentials(t, cfg)
+	cfg, fileSvc, _ := setupTestConfig(t)
+	setupTestCredentials(t, fileSvc, cfg)
 
 	testCases := []struct {
 		name       string
@@ -661,7 +667,7 @@ func TestDoRequest_ResponseBodyValidation(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := setupTLSClient(t, cfg, server)
+			client := setupTLSClient(t, fileSvc, cfg, server)
 
 			resp, err := client.DoRequest("GET", "/api/test", nil)
 			if tc.expectErr {

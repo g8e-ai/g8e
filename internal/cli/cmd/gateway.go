@@ -329,7 +329,11 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 			}
 
 			// Background mode: start gateway as a background process
-			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
+			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+			}
+			pm, err := platform.NewProcessManager(fileSvc)
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
@@ -382,12 +386,16 @@ func gatewayStopCmd() *cobra.Command {
 		Long: `Stop the running g8e Gateway process by sending a termination signal to the
 managed process. If the gateway is not running, this command is a no-op.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig("")
+			_, err := loadConfig("")
 			if err != nil {
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
-			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
+			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+			}
+			pm, err := platform.NewProcessManager(fileSvc)
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
@@ -492,12 +500,16 @@ one. The current posture is read from the persisted posture file
 (.g8e/pids/operator.posture) and preserved across the restart. If the file is
 missing, the gateway defaults to 'doctrine' posture.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig("")
+			_, err := loadConfig("")
 			if err != nil {
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
-			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
+			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+			}
+			pm, err := platform.NewProcessManager(fileSvc)
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
@@ -555,12 +567,16 @@ func gatewayLogsCmd() *cobra.Command {
 		Long: `View the g8e Gateway log file. Use --follow to continuously tail the log
 output (like tail -f).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig("")
+			_, err := loadConfig("")
 			if err != nil {
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
-			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
+			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+			}
+			pm, err := platform.NewProcessManager(fileSvc)
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
@@ -693,7 +709,7 @@ secrets, logs, and TLS/PKI certificates/keys. All trust routes and credentials
 are permanently destroyed. CLI credentials become invalid after this operation.
 Use --force to skip the confirmation prompt.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig("")
+			_, err := loadConfig("")
 			if err != nil {
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
@@ -717,7 +733,11 @@ Use --force to skip the confirmation prompt.`,
 				}
 			}
 
-			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
+			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+			}
+			pm, err := platform.NewProcessManager(fileSvc)
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}

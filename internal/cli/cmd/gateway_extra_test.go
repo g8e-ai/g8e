@@ -18,6 +18,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -91,7 +92,7 @@ func TestGatewayLogsCmdNoLogFile(t *testing.T) {
 		defer os.Chdir(originalWd)
 
 		runtimeDir := tmpDir + "/.g8e"
-		require.NoError(t, os.MkdirAll(runtimeDir, 0o700))
+		require.NoError(t, os.MkdirAll(runtimeDir, constants.PermDirPrivate))
 
 		cmd := gatewayLogsCmd()
 		var buf bytes.Buffer

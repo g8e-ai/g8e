@@ -31,7 +31,8 @@ func TestNewSecureHTTPClient_Success(t *testing.T) {
 	t.Parallel()
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
-	trustBundlePath := filepath.Join(tmpDir, "trust-bundle.pem")
+	trustBundlePath, err := filepath.Abs(filepath.Join(tmpDir, "trust-bundle.pem"))
+	require.NoError(t, err)
 
 	// Generate a test CA certificate
 	caPEM, _ := testutil.GenerateTestCertificate(t, "test-ca")
@@ -75,7 +76,8 @@ func TestNewSecureHTTPClient_InvalidPEM(t *testing.T) {
 	t.Parallel()
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
-	trustBundlePath := filepath.Join(tmpDir, "trust-bundle.pem")
+	trustBundlePath, err := filepath.Abs(filepath.Join(tmpDir, "trust-bundle.pem"))
+	require.NoError(t, err)
 
 	require.NoError(t, os.WriteFile(trustBundlePath, []byte("invalid-pem-data"), constants.PermFilePrivate))
 

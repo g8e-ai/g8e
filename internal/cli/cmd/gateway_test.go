@@ -14,8 +14,9 @@
 package cmd
 
 import (
+	"context"
+	"log/slog"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -24,6 +25,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/serve"
 	g8econfig "github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
@@ -281,11 +283,12 @@ func TestDetectIdentity(t *testing.T) {
 
 func TestReExecArgsMatchStartCmdFlags(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
-	pm, err := platform.NewProcessManager(tmpDir)
+	fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
 	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 
-	// Ensure runtime dir exists so BuildReExecArgs can write the identity file
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".g8e"), 0o700))
+	pm, err := platform.NewProcessManager(fileSvc)
+	require.NoError(t, err)
 
 	opts := platform.OperatorStartOptions{
 		GatewayConfig: serve.GatewayConfig{
