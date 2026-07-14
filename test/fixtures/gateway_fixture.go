@@ -131,7 +131,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	t.Logf("Test vault created at: %s", dataDir)
 
 	secretsDir := testPaths.SecretsDir
-	pkiDir := filepath.Join(dataDir, constants.PkiDirname)
+	pkiDir := testPaths.PKIDir
 
 	var downstreamServer *httptest.Server
 	var downstreamURL string
