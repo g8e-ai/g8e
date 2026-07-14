@@ -16,6 +16,7 @@ package cmd
 import (
 	"context"
 	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
@@ -335,8 +336,29 @@ func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, e
 			keyPath := filepath.Join(pkiDir, constants.PkiFileOperatorKey)
 			chainPath := filepath.Join(pkiDir, constants.PkiFileOperatorChain)
 
-			if err := auth.SaveCertAndKey(fileSvc, regResp.OperatorCert, regResp.OperatorCertChain, opKey, certPath, keyPath); err != nil {
-				return fmt.Errorf("security: save cert and key: %w", err)
+			if outputDir == "" {
+				if err := auth.SaveCertAndKey(fileSvc, regResp.OperatorCert, regResp.OperatorCertChain, opKey, relFromAbs(fileSvc, certPath), relFromAbs(fileSvc, keyPath)); err != nil {
+					return fmt.Errorf("security: save cert and key: %w", err)
+				}
+			} else {
+				keyBytes, err := x509.MarshalECPrivateKey(opKey)
+				if err != nil {
+					return fmt.Errorf("security: marshal key: %w: %w", constants.ErrKeyParseFailed, err)
+				}
+				keyPEM := pem.EncodeToMemory(&pem.Block{
+					Type:  "EC PRIVATE KEY",
+					Bytes: keyBytes,
+				})
+				if err := os.WriteFile(keyPath, keyPEM, constants.PermFilePrivate); err != nil {
+					return fmt.Errorf("security: save key: %w: %w", constants.ErrCertSaveFailed, err)
+				}
+				certContent := regResp.OperatorCert
+				if regResp.OperatorCertChain != "" {
+					certContent += "\n" + regResp.OperatorCertChain
+				}
+				if err := os.WriteFile(certPath, []byte(certContent), constants.PermFilePrivate); err != nil {
+					return fmt.Errorf("security: save cert: %w: %w", constants.ErrCertSaveFailed, err)
+				}
 			}
 
 			if outputDir == "" {

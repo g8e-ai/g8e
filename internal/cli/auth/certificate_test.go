@@ -14,6 +14,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/pem"
 	"os"
@@ -30,10 +31,9 @@ import (
 
 func TestSaveCertAndKey_Success(t *testing.T) {
 	t.Parallel()
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
-	certFile := filepath.Join(tmpDir, "cert.pem")
-	keyFile := filepath.Join(tmpDir, "key.pem")
+	certRel := "cert.pem"
+	keyRel := "key.pem"
 
 	_, privKey, err := GenerateCSR("test")
 	require.NoError(t, err)
@@ -41,56 +41,53 @@ func TestSaveCertAndKey_Success(t *testing.T) {
 	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
 	chainPEM, _ := testutil.GenerateTestCertificate(t, "test-chain")
 
-	err = SaveCertAndKey(fileSvc, certPEM, chainPEM, privKey, certFile, keyFile)
+	err = SaveCertAndKey(fileSvc, certPEM, chainPEM, privKey, certRel, keyRel)
 	require.NoError(t, err)
 
-	certData, err := os.ReadFile(certFile)
+	certData, err := fileSvc.ReadFile(context.Background(), certRel)
 	require.NoError(t, err)
 	assert.Contains(t, string(certData), "BEGIN CERTIFICATE")
 
-	keyData, err := os.ReadFile(keyFile)
+	keyData, err := fileSvc.ReadFile(context.Background(), keyRel)
 	require.NoError(t, err)
 	assert.Contains(t, string(keyData), "EC PRIVATE KEY")
 }
 
 func TestSaveCertAndKey_NoChain(t *testing.T) {
 	t.Parallel()
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
-	certFile := filepath.Join(tmpDir, "cert.pem")
-	keyFile := filepath.Join(tmpDir, "key.pem")
+	certRel := "cert.pem"
+	keyRel := "key.pem"
 
 	_, privKey, err := GenerateCSR("test")
 	require.NoError(t, err)
 
 	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
 
-	err = SaveCertAndKey(fileSvc, certPEM, "", privKey, certFile, keyFile)
+	err = SaveCertAndKey(fileSvc, certPEM, "", privKey, certRel, keyRel)
 	require.NoError(t, err)
 
-	certData, err := os.ReadFile(certFile)
+	certData, err := fileSvc.ReadFile(context.Background(), certRel)
 	require.NoError(t, err)
 	assert.Contains(t, string(certData), "BEGIN CERTIFICATE")
 }
 
 func TestSaveCertAndKey_CreatesDirectory(t *testing.T) {
 	t.Parallel()
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
-	subDir := filepath.Join(tmpDir, "subdir", "nested")
-	certFile := filepath.Join(subDir, "cert.pem")
-	keyFile := filepath.Join(subDir, "key.pem")
+	certRel := filepath.Join("subdir", "nested", "cert.pem")
+	keyRel := filepath.Join("subdir", "nested", "key.pem")
 
 	_, privKey, err := GenerateCSR("test")
 	require.NoError(t, err)
 
 	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
 
-	err = SaveCertAndKey(fileSvc, certPEM, "", privKey, certFile, keyFile)
+	err = SaveCertAndKey(fileSvc, certPEM, "", privKey, certRel, keyRel)
 	require.NoError(t, err)
 
-	assert.FileExists(t, certFile)
-	assert.FileExists(t, keyFile)
+	assert.FileExists(t, fileSvc.Resolve(certRel))
+	assert.FileExists(t, fileSvc.Resolve(keyRel))
 }
 
 func TestSaveCertAndKey_MkdirError(t *testing.T) {
@@ -98,19 +95,19 @@ func TestSaveCertAndKey_MkdirError(t *testing.T) {
 	fileSvc := newAuthTestFileSvc(t)
 
 	// Create a file where we expect a directory
-	tmpDir := testutil.TempDir(t)
-	blockingFile := filepath.Join(tmpDir, "subdir")
+	runtimeDir := fileSvc.Resolve("")
+	blockingFile := filepath.Join(runtimeDir, "subdir")
 	require.NoError(t, os.WriteFile(blockingFile, []byte("block"), constants.PermFilePrivate))
 
-	certFile := filepath.Join(blockingFile, "nested", "cert.pem")
-	keyFile := filepath.Join(blockingFile, "nested", "key.pem")
+	certRel := filepath.Join("subdir", "nested", "cert.pem")
+	keyRel := filepath.Join("subdir", "nested", "key.pem")
 
 	_, privKey, err := GenerateCSR("test")
 	require.NoError(t, err)
 
 	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
 
-	err = SaveCertAndKey(fileSvc, certPEM, "", privKey, certFile, keyFile)
+	err = SaveCertAndKey(fileSvc, certPEM, "", privKey, certRel, keyRel)
 	require.Error(t, err)
 	assert.Error(t, err)
 }
@@ -118,13 +115,12 @@ func TestSaveCertAndKey_MkdirError(t *testing.T) {
 func TestParseCertPEM_Success(t *testing.T) {
 	t.Parallel()
 	fileSvc := newAuthTestFileSvc(t)
-	tmpDir := testutil.TempDir(t)
-	certFile := filepath.Join(tmpDir, "cert.pem")
+	certRel := "cert.pem"
 
 	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
-	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte(certPEM), constants.PermFilePrivate))
 
-	cert, err := parseCertPEM(fileSvc, certFile)
+	cert, err := parseCertPEM(fileSvc, certRel)
 	require.NoError(t, err)
 	require.NotNil(t, cert)
 	assert.Equal(t, "test-cert", cert.Subject.CommonName)
@@ -133,12 +129,11 @@ func TestParseCertPEM_Success(t *testing.T) {
 func TestParseCertPEM_InvalidPEM(t *testing.T) {
 	t.Parallel()
 	fileSvc := newAuthTestFileSvc(t)
-	tmpDir := testutil.TempDir(t)
-	certFile := filepath.Join(tmpDir, "cert.pem")
+	certRel := "cert.pem"
 
-	require.NoError(t, os.WriteFile(certFile, []byte("invalid-pem-data"), constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte("invalid-pem-data"), constants.PermFilePrivate))
 
-	cert, err := parseCertPEM(fileSvc, certFile)
+	cert, err := parseCertPEM(fileSvc, certRel)
 	require.Error(t, err)
 	assert.Nil(t, cert)
 	assert.Contains(t, err.Error(), "failed to decode PEM block")
@@ -147,17 +142,16 @@ func TestParseCertPEM_InvalidPEM(t *testing.T) {
 func TestParseCertPEM_NonCertificatePEM(t *testing.T) {
 	t.Parallel()
 	fileSvc := newAuthTestFileSvc(t)
-	tmpDir := testutil.TempDir(t)
-	certFile := filepath.Join(tmpDir, "cert.pem")
+	certRel := "cert.pem"
 
 	// Write a private key PEM instead of a certificate
 	privKeyPEM := pem.EncodeToMemory(&pem.Block{
 		Type:  "EC PRIVATE KEY",
 		Bytes: []byte("dummy-key-data"),
 	})
-	require.NoError(t, os.WriteFile(certFile, privKeyPEM, constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, privKeyPEM, constants.PermFilePrivate))
 
-	cert, err := parseCertPEM(fileSvc, certFile)
+	cert, err := parseCertPEM(fileSvc, certRel)
 	require.Error(t, err)
 	assert.Nil(t, cert)
 	assert.Error(t, err)
@@ -214,17 +208,16 @@ func TestIsCertExpiringSoon_ExactlyAtThreshold(t *testing.T) {
 func TestCheckCertExpiry_Expiring(t *testing.T) {
 	t.Parallel()
 	fileSvc := newAuthTestFileSvc(t)
-	tmpDir := testutil.TempDir(t)
-	certFile := filepath.Join(tmpDir, "cert.pem")
+	certRel := "cert.pem"
 
 	// Note: The isCertExpiringSoon function is tested separately with modified certificates.
 	// This test verifies that CheckCertExpiry correctly parses a valid certificate.
 	// Since we cannot easily create a certificate with a custom expiry in the test harness,
 	// we test the happy path here and rely on isCertExpiringSoon tests for expiry logic.
 	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
-	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte(certPEM), constants.PermFilePrivate))
 
-	expiring, err := CheckCertExpiry(fileSvc, certFile)
+	expiring, err := CheckCertExpiry(fileSvc, certRel)
 	require.NoError(t, err)
 	// Default test certificates have long validity, so this should be false
 	assert.False(t, expiring)
@@ -233,13 +226,12 @@ func TestCheckCertExpiry_Expiring(t *testing.T) {
 func TestCheckCertExpiry_NotExpiring(t *testing.T) {
 	t.Parallel()
 	fileSvc := newAuthTestFileSvc(t)
-	tmpDir := testutil.TempDir(t)
-	certFile := filepath.Join(tmpDir, "cert.pem")
+	certRel := "cert.pem"
 
 	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
-	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte(certPEM), constants.PermFilePrivate))
 
-	expiring, err := CheckCertExpiry(fileSvc, certFile)
+	expiring, err := CheckCertExpiry(fileSvc, certRel)
 	require.NoError(t, err)
 	assert.False(t, expiring)
 }
@@ -247,23 +239,22 @@ func TestCheckCertExpiry_NotExpiring(t *testing.T) {
 func TestCheckCertExpiry_InvalidFile(t *testing.T) {
 	t.Parallel()
 	fileSvc := newAuthTestFileSvc(t)
-	tmpDir := testutil.TempDir(t)
-	certFile := filepath.Join(tmpDir, "cert.pem")
+	certRel := "cert.pem"
 
-	require.NoError(t, os.WriteFile(certFile, []byte("invalid-pem"), constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte("invalid-pem"), constants.PermFilePrivate))
 
-	expiring, err := CheckCertExpiry(fileSvc, certFile)
+	expiring, err := CheckCertExpiry(fileSvc, certRel)
 	require.Error(t, err)
 	assert.False(t, expiring)
 }
 
 func TestAutoRenewCertificate_NotExpiring(t *testing.T) {
 	t.Parallel()
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		ProjectRoot: tmpDir,
-		RuntimeDir:  tmpDir,
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
 		Paths:       &config.PathsConfig{},
 	}
 
@@ -279,11 +270,11 @@ func TestAutoRenewCertificate_NotExpiring(t *testing.T) {
 
 func TestAutoRenewCertificate_UnknownCertType(t *testing.T) {
 	t.Parallel()
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		ProjectRoot: tmpDir,
-		RuntimeDir:  tmpDir,
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
 	}
 
 	err := AutoRenewCertificate(fileSvc, cfg, "unknown-type", "")
@@ -295,11 +286,11 @@ func TestAutoRenewCertificate_ExpiringCert(t *testing.T) {
 	t.Parallel()
 
 	// Create a certificate that expires in 12 hours (within renewal threshold)
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		ProjectRoot: tmpDir,
-		RuntimeDir:  tmpDir,
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
 		Paths:       &config.PathsConfig{},
 	}
 
@@ -320,11 +311,11 @@ func TestAutoRenewCertificate_ExpiringCert(t *testing.T) {
 func TestAutoRenewCertificate_OperatorType(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		ProjectRoot: tmpDir,
-		RuntimeDir:  tmpDir,
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
 		Paths:       &config.PathsConfig{},
 	}
 

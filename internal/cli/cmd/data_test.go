@@ -175,10 +175,10 @@ func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
 	require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
 
 	return &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     runtimeDir,
-		PKIDir:         pkiDir,
-		SecretsDir:     secretsDir,
+		ProjectRoot: tmpDir,
+		RuntimeDir:  runtimeDir,
+		PKIDir:      pkiDir,
+		SecretsDir:  secretsDir,
 		Paths: &config.PathsConfig{
 			Host: "localhost",
 			Infra: struct {

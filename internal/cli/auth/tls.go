@@ -18,6 +18,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -34,7 +35,7 @@ func BuildMTLSClient(fileSvc fs.RuntimeFileService, cfg *config.Config, timeout 
 		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
 	}
 
-	caBundleBytes, err := readFileWithFS(fileSvc, cfg.TrustBundlePath())
+	caBundleBytes, err := os.ReadFile(cfg.TrustBundlePath())
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
 	}

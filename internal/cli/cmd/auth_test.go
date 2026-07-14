@@ -101,10 +101,10 @@ func TestLogoutCmd(t *testing.T) {
 		// Create a simple config that points to tmpDir for credentials
 		// Avoid using setupTestConfig which creates a conflicting .g8e directory
 		cfg := &config.Config{
-			ProjectRoot:    tmpDir,
-			RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
-			PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
-			SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
+			ProjectRoot: tmpDir,
+			RuntimeDir:  filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+			PKIDir:      filepath.Join(tmpDir, paths.Infra.PkiDir),
+			SecretsDir:  filepath.Join(tmpDir, paths.Infra.SecretsDir),
 			Paths: &config.PathsConfig{
 				Infra: struct {
 					AppCertDir           string `json:"app_cert_dir"`

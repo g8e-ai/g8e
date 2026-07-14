@@ -178,7 +178,7 @@ func performEnroll(cmd *cobra.Command, fileSvc fs.RuntimeFileService, cfg *confi
 		return constants.ErrMissingRequiredField
 	}
 
-	if err := auth.SaveCertAndKey(fileSvc, regResp.CLICert, regResp.CLICertChain, cliKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
+	if err := auth.SaveCertAndKey(fileSvc, regResp.CLICert, regResp.CLICertChain, cliKey, relFromAbs(fileSvc, cfg.CLICertFile()), relFromAbs(fileSvc, cfg.CLIKeyFile())); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 	if runtime.GOOS == "windows" {
@@ -188,8 +188,7 @@ func performEnroll(cmd *cobra.Command, fileSvc fs.RuntimeFileService, cfg *confi
 	}
 
 	if regResp.HubTrustBundle != "" {
-		trustRel := relFromAbs(fileSvc, cfg.TrustBundlePath())
-		if err := fileSvc.WriteFile(ctx, trustRel, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
+		if err := auth.WriteTrustBundle(cfg.TrustBundlePath(), []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 		}
 	}

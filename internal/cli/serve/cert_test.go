@@ -43,6 +43,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/fs"
+	govsvc "github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -472,7 +473,7 @@ func TestExportActuatorPublicKey(t *testing.T) {
 		require.NoError(t, err)
 		logger := testLogger()
 
-		err = ExportActuatorPublicKey(fileSvc, pubKey, "test-key-id", logger)
+		err = govsvc.ExportActuatorPublicKey(fileSvc, pubKey, "test-key-id", logger)
 		require.NoError(t, err)
 
 		pemRel := filepath.Join(constants.PkiDirname, constants.ActuatorPubPEMFilename)
@@ -500,7 +501,7 @@ func TestExportActuatorPublicKey(t *testing.T) {
 		pubKey, _, err := ed25519.GenerateKey(rand.Reader)
 		require.NoError(t, err)
 
-		err = ExportActuatorPublicKey(fileSvc, pubKey, "key-id", nil)
+		err = govsvc.ExportActuatorPublicKey(fileSvc, pubKey, "key-id", nil)
 		require.NoError(t, err)
 
 		pemRel := filepath.Join(constants.PkiDirname, constants.ActuatorPubPEMFilename)
@@ -518,8 +519,8 @@ func TestExportActuatorPublicKey(t *testing.T) {
 
 		logger := testLogger()
 
-		require.NoError(t, ExportActuatorPublicKey(fileSvc, pubKey1, "key-1", logger))
-		require.NoError(t, ExportActuatorPublicKey(fileSvc, pubKey2, "key-2", logger))
+		require.NoError(t, govsvc.ExportActuatorPublicKey(fileSvc, pubKey1, "key-1", logger))
+		require.NoError(t, govsvc.ExportActuatorPublicKey(fileSvc, pubKey2, "key-2", logger))
 
 		jsonRel := filepath.Join(constants.PkiDirname, constants.ActuatorPubJSONFilename)
 		jsonData, err := fileSvc.ReadFile(context.Background(), jsonRel)
@@ -538,7 +539,7 @@ func TestExportActuatorPublicKey(t *testing.T) {
 
 		logger := testLogger()
 
-		err = ExportActuatorPublicKey(fileSvc, pubKey, "key-id", logger)
+		err = govsvc.ExportActuatorPublicKey(fileSvc, pubKey, "key-id", logger)
 		require.NoError(t, err)
 
 		pemRel := filepath.Join(constants.PkiDirname, constants.ActuatorPubPEMFilename)

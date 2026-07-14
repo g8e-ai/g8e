@@ -189,7 +189,7 @@ func TestSQLAuditStore_GetEncryptionVault(t *testing.T) {
 
 	// 1. Constructor should return error when vault is nil
 	config1 := &TestSQLAuditStoreConfig{
-		DBPath:  "test1.db",
+		DBPath: "test1.db",
 	}
 	avs1, err := NewTestSQLAuditStore(config1, logger, nil)
 	require.Error(t, err)

@@ -302,7 +302,7 @@ func TestGetDataDir(t *testing.T) {
 			ass:  nil,
 			want: "",
 		},
-			{
+		{
 			name: "store with nil fileSvc",
 			ass: &SQLAuditStore{
 				config: &AuditStoreConfig{},

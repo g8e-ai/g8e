@@ -15,6 +15,7 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/json"
@@ -73,7 +74,15 @@ func EnrollCLI(fileSvc fs.RuntimeFileService, cfg *config.Config, useTPM bool) e
 		return constants.ErrMissingRequiredField
 	}
 
-	if err := SaveCertAndKey(fileSvc, regResp.CLICert, regResp.CLICertChain, cliKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
+	cliCertRel, err := fileSvc.Rel(cfg.CLICertFile())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+	}
+	cliKeyRel, err := fileSvc.Rel(cfg.CLIKeyFile())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+	}
+	if err := SaveCertAndKey(fileSvc, regResp.CLICert, regResp.CLICertChain, cliKey, cliCertRel, cliKeyRel); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 	if runtime.GOOS == "windows" {
@@ -83,7 +92,7 @@ func EnrollCLI(fileSvc fs.RuntimeFileService, cfg *config.Config, useTPM bool) e
 	}
 	if regResp.HubTrustBundle != "" {
 		trustPath := cfg.TrustBundlePath()
-		if err := writeFileWithFS(fileSvc, trustPath, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
+		if err := WriteTrustBundle(trustPath, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 		}
 	}
@@ -160,7 +169,15 @@ func EnrollAgentApp(fileSvc fs.RuntimeFileService, cfg *config.Config, agentName
 		return "", "", "", fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, enrollResp.Error)
 	}
 
-	if err := SaveCertAndKey(fileSvc, enrollResp.AppCert, enrollResp.CertChain, key, certFile, keyFile); err != nil {
+	certRel, err := fileSvc.Rel(certFile)
+	if err != nil {
+		return "", "", "", fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+	}
+	keyRel, err := fileSvc.Rel(keyFile)
+	if err != nil {
+		return "", "", "", fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+	}
+	if err := SaveCertAndKey(fileSvc, enrollResp.AppCert, enrollResp.CertChain, key, certRel, keyRel); err != nil {
 		return "", "", "", fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 
@@ -168,7 +185,11 @@ func EnrollAgentApp(fileSvc fs.RuntimeFileService, cfg *config.Config, agentName
 }
 
 func checkExistingAppCert(fileSvc fs.RuntimeFileService, certFile, agentName string) (string, bool) {
-	certBytes, err := readFileWithFS(fileSvc, certFile)
+	certRel, err := fileSvc.Rel(certFile)
+	if err != nil {
+		return "", false
+	}
+	certBytes, err := fileSvc.ReadFile(context.Background(), certRel)
 	if err != nil {
 		return "", false
 	}

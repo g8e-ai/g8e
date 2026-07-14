@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
-	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
@@ -39,6 +38,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/pkg/certutil"
 	"github.com/g8e-ai/g8e/internal/services/auth"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 )
@@ -50,21 +50,7 @@ func ParseCertPEM(certFile string) (*x509.Certificate, error) {
 		return nil, fmt.Errorf("%w: %w", constants.ErrCertReadFailed, err)
 	}
 
-	block, _ := pem.Decode(certPEM)
-	if block == nil {
-		return nil, fmt.Errorf("%w: %s", constants.ErrPEMDecodeFailed, "certificate file")
-	}
-
-	if block.Type != "CERTIFICATE" {
-		return nil, fmt.Errorf("%w: type=%s", constants.ErrInvalidPEMType, block.Type)
-	}
-
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrCertParseFailed, err)
-	}
-
-	return cert, nil
+	return certutil.ParseCertFromPEM(certPEM)
 }
 
 // IsCertExpiringSoon checks if a certificate is expiring within the renewal threshold.
@@ -590,45 +576,4 @@ func LogCertBundle(logger *slog.Logger, label string, pemData []byte) {
 		idx++
 	}
 	logger.Info("[TLS-DEBUG] bundle parsed", "label", label, "cert_count", idx)
-}
-
-// ExportActuatorPublicKey writes the Actuator's public key to both PEM and JSON formats
-// in the PKI directory for receipt verification by the evals harness.
-func ExportActuatorPublicKey(fileSvc fs.RuntimeFileService, pubKey ed25519.PublicKey, keyID string, logger *slog.Logger) error {
-	if err := fileSvc.MkdirAll(context.Background(), constants.PkiDirname, constants.PermDirPrivate); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
-	}
-
-	// Write PEM format
-	pemRelPath := filepath.Join(constants.PkiDirname, constants.ActuatorPubPEMFilename)
-	pemData := pem.EncodeToMemory(&pem.Block{
-		Type:  "PUBLIC KEY",
-		Bytes: pubKey,
-	})
-	if err := fileSvc.WriteFile(context.Background(), pemRelPath, pemData, constants.PermFilePrivate); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
-	}
-	if logger != nil {
-		logger.Info("Actuator public key exported", "path", fileSvc.Resolve(pemRelPath), "format", "PEM")
-	}
-
-	// Write JSON format
-	jsonRelPath := filepath.Join(constants.PkiDirname, constants.ActuatorPubJSONFilename)
-	jsonData := models.ActuatorPublicKeyExport{
-		KeyID:     keyID,
-		PublicKey: hex.EncodeToString(pubKey),
-		Algorithm: "ed25519",
-	}
-	jsonBytes, err := json.MarshalIndent(jsonData, "", "  ")
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrJSONMarshalFailed, err)
-	}
-	if err := fileSvc.WriteFile(context.Background(), jsonRelPath, jsonBytes, constants.PermFilePrivate); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
-	}
-	if logger != nil {
-		logger.Info("Actuator public key exported", "path", fileSvc.Resolve(jsonRelPath), "format", "JSON")
-	}
-
-	return nil
 }

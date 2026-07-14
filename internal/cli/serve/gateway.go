@@ -225,7 +225,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	// Export Actuator public key for receipt verification by evals harness
 	actuatorPub := actuatorPriv.Public().(ed25519.PublicKey)
 	logger.Info("Exporting Actuator public key", "pki_dir", cfg.PKIDir, "key_id", actuatorKeyID)
-	if err := ExportActuatorPublicKey(fileSvc, actuatorPub, actuatorKeyID, logger); err != nil {
+	if err := govsvc.ExportActuatorPublicKey(fileSvc, actuatorPub, actuatorKeyID, logger); err != nil {
 		logger.Warn("Failed to export Actuator public key for evals harness receipt verification", "error", err)
 	}
 

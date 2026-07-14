@@ -25,10 +25,10 @@ import (
 )
 
 func TestBuildMTLSClient_MissingCertFile(t *testing.T) {
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		RuntimeDir: tmpDir,
+		RuntimeDir: runtimeDir,
 		Paths:      &config.PathsConfig{Host: "localhost"},
 	}
 
@@ -42,10 +42,10 @@ func TestBuildMTLSClient_MissingCertFile(t *testing.T) {
 }
 
 func TestBuildMTLSClient_InvalidCertPair(t *testing.T) {
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		RuntimeDir: tmpDir,
+		RuntimeDir: runtimeDir,
 		Paths:      &config.PathsConfig{Host: "localhost"},
 	}
 
@@ -71,8 +71,8 @@ func TestBuildMTLSClient_InvalidCertPair(t *testing.T) {
 }
 
 func TestBuildMTLSClient_MissingTrustBundle(t *testing.T) {
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -124,8 +124,8 @@ func TestBuildMTLSClient_MissingTrustBundle(t *testing.T) {
 }
 
 func TestBuildMTLSClient_InvalidTrustBundle(t *testing.T) {
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -150,10 +150,10 @@ func TestBuildMTLSClient_InvalidTrustBundle(t *testing.T) {
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 
 	cfg := &config.Config{
-		RuntimeDir: tmpDir,
+		RuntimeDir: runtimeDir,
 		Paths:      &config.PathsConfig{Host: "localhost"},
 	}
-	cfg.Paths.Infra.CACertPath = filepath.Join(tmpDir, "ca-bundle.pem")
+	cfg.Paths.Infra.CACertPath = filepath.Join(runtimeDir, "ca-bundle.pem")
 
 	certFile := cfg.CLICertFile()
 	keyFile := cfg.CLIKeyFile()
@@ -166,7 +166,7 @@ func TestBuildMTLSClient_InvalidTrustBundle(t *testing.T) {
 	if err := os.WriteFile(keyFile, keyPEM, constants.PermFilePrivate); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(tmpDir, "ca-bundle.pem"), []byte("not a cert"), constants.PermFilePublic); err != nil {
+	if err := os.WriteFile(filepath.Join(runtimeDir, "ca-bundle.pem"), []byte("not a cert"), constants.PermFilePublic); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 
@@ -208,10 +208,10 @@ func TestCheckOperatorRunning_LocalhostReplacement(t *testing.T) {
 }
 
 func TestAutoRenewCertificate_InvalidCertType(t *testing.T) {
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		RuntimeDir: tmpDir,
+		RuntimeDir: runtimeDir,
 		Paths:      &config.PathsConfig{Host: "localhost"},
 	}
 
@@ -225,8 +225,8 @@ func TestAutoRenewCertificate_InvalidCertType(t *testing.T) {
 }
 
 func TestAutoRenewCertificate_NonExpiringCert(t *testing.T) {
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -246,7 +246,7 @@ func TestAutoRenewCertificate_NonExpiringCert(t *testing.T) {
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
 
 	cfg := &config.Config{
-		RuntimeDir: tmpDir,
+		RuntimeDir: runtimeDir,
 		Paths:      &config.PathsConfig{Host: "localhost"},
 	}
 
@@ -265,10 +265,10 @@ func TestAutoRenewCertificate_NonExpiringCert(t *testing.T) {
 }
 
 func TestLoadCredentials_NonExistentFile(t *testing.T) {
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		RuntimeDir: tmpDir,
+		RuntimeDir: runtimeDir,
 		Paths:      &config.PathsConfig{Host: "localhost"},
 	}
 
@@ -282,10 +282,10 @@ func TestLoadCredentials_NonExistentFile(t *testing.T) {
 }
 
 func TestDeleteCredentials_NonExistent(t *testing.T) {
-	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		RuntimeDir: tmpDir,
+		RuntimeDir: runtimeDir,
 		Paths:      &config.PathsConfig{Host: "localhost"},
 	}
 
