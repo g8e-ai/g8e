@@ -55,7 +55,6 @@ type ChaosEvent struct {
 
 // TestSQLAuditStoreConfig holds configuration for the test-only Local-First Audit Architecture
 type TestSQLAuditStoreConfig struct {
-	DataDir                   string
 	DBPath                    string
 	LedgerDir                 string
 	MaxDBSizeMB               int64
@@ -71,10 +70,8 @@ type TestSQLAuditStoreConfig struct {
 }
 
 // DefaultTestSQLAuditStoreConfig returns the default configuration for the test audit store.
-// Note: DataDir should be set by the caller based on the actual work directory.
 func DefaultTestSQLAuditStoreConfig() *TestSQLAuditStoreConfig {
 	return &TestSQLAuditStoreConfig{
-		DataDir:                   ".g8e/data",
 		DBPath:                    "g8e.db",
 		LedgerDir:                 constants.LedgerDirname,
 		MaxDBSizeMB:               2048,
@@ -145,8 +142,8 @@ func NewTestSQLAuditStore(config *TestSQLAuditStoreConfig, logger *slog.Logger, 
 
 	encryptionEnabled := avs.encryptionVault.IsUnlocked()
 	avs.logger.Info("Audit vault initialized",
-		"data_dir", config.DataDir,
-		"db_path", pathutil.ResolveDBPath(config.DataDir, config.DBPath),
+		"data_dir", avs.fileSvc.Resolve(constants.DataDirname),
+		"db_path", pathutil.ResolveDBPath(avs.fileSvc.Resolve(constants.DataDirname), config.DBPath),
 		"ledger_path", avs.ledgerPath,
 		"encryption_enabled", encryptionEnabled)
 
@@ -155,7 +152,7 @@ func NewTestSQLAuditStore(config *TestSQLAuditStoreConfig, logger *slog.Logger, 
 
 // bootstrap initializes the audit vault (directory structure, database, git repo)
 func (avs *TestSQLAuditStore) bootstrap() error {
-	avs.logger.Info("Bootstrapping audit vault", "data_dir", avs.config.DataDir)
+	avs.logger.Info("Bootstrapping audit vault", "data_dir", avs.fileSvc.Resolve(constants.DataDirname))
 
 	if err := avs.createDirectoryStructure(); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreCreateDirFailed, err)
@@ -197,7 +194,7 @@ func (avs *TestSQLAuditStore) createDirectoryStructure() error {
 	}
 
 	avs.logger.Info("Audit vault directory structure ensured",
-		"data_dir", avs.config.DataDir,
+		"data_dir", avs.fileSvc.Resolve(constants.DataDirname),
 		"ledger_dir", avs.ledgerPath,
 		"sessions_dir", avs.sessionsRoot)
 
@@ -209,14 +206,14 @@ func (avs *TestSQLAuditStore) verifyWritePermissions() error {
 	testRelPath := filepath.Join(constants.DataDirname, ".write_test")
 
 	if err := avs.fileSvc.WriteFile(context.Background(), testRelPath, []byte("write_test"), constants.PermFilePrivate); err != nil {
-		return fmt.Errorf("%w %s: %w", constants.ErrAuditStoreCannotWrite, avs.config.DataDir, err)
+		return fmt.Errorf("%w %s: %w", constants.ErrAuditStoreCannotWrite, avs.fileSvc.Resolve(constants.DataDirname), err)
 	}
 
 	if err := avs.fileSvc.Remove(context.Background(), testRelPath); err != nil {
 		avs.logger.Warn("Failed to remove write test file", "path", testRelPath, string(constants.ConnectionStateError), err)
 	}
 
-	avs.logger.Info("Write permissions verified", "path", avs.config.DataDir)
+	avs.logger.Info("Write permissions verified", "path", avs.fileSvc.Resolve(constants.DataDirname))
 	return nil
 }
 
@@ -311,7 +308,7 @@ func (avs *TestSQLAuditStore) initGitRepo(relPath string) error {
 
 // initDatabase creates the database and schema
 func (avs *TestSQLAuditStore) initDatabase() error {
-	dbPath := pathutil.ResolveDBPath(avs.config.DataDir, avs.config.DBPath)
+	dbPath := pathutil.ResolveDBPath(avs.fileSvc.Resolve(constants.DataDirname), avs.config.DBPath)
 
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 	db, err := sqliteutil.OpenDB(cfg, avs.logger)
@@ -1273,7 +1270,7 @@ func (avs *TestSQLAuditStore) GetDataDir() string {
 	if avs == nil {
 		return ""
 	}
-	return avs.config.DataDir
+	return avs.fileSvc.Resolve(constants.DataDirname)
 }
 
 // GetLedgerPath returns the ledger directory path

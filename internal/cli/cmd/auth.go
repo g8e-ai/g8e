@@ -18,7 +18,6 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"runtime"
 
@@ -70,7 +69,7 @@ The Gateway must already be running (use './g8e gw start' first).`,
 				return err
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
@@ -228,7 +227,7 @@ func logoutCmd() *cobra.Command {
 				return err
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}

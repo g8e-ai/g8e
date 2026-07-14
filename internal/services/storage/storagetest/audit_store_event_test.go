@@ -39,7 +39,6 @@ func TestSQLAuditStore_Event(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -99,7 +98,6 @@ func TestSQLAuditStore_RecordEvent_RejectsUnknownSession(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -147,7 +145,6 @@ func TestSQLAuditStore_RecordEvent_RejectsMissingSession(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -182,7 +179,6 @@ func TestSQLAuditStore_RecordEvents_RollsBackUnknownSession(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -234,7 +230,6 @@ func TestSQLAuditStore_RecordEvents_SucceedsWithExistingSessions(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -284,7 +279,6 @@ func TestSQLAuditStore_OutputTruncation(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -347,7 +341,6 @@ func TestSQLAuditStore_StderrTruncation(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -405,7 +398,6 @@ func TestSQLAuditStore_EventPagination(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -477,7 +469,6 @@ func TestSQLAuditStore_EventOrdering(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -531,7 +522,6 @@ func TestSQLAuditStore_NullExitCode(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -579,7 +569,6 @@ func TestSQLAuditStore_DifferentEventTypes(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -640,7 +629,6 @@ func TestSQLAuditStore_GetEventsEmptySession(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -674,7 +662,6 @@ func TestSQLAuditStore_LongContentFields(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,

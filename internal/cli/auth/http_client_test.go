@@ -38,9 +38,9 @@ func TestNewSecureHTTPClient_Success(t *testing.T) {
 	require.NoError(t, os.WriteFile(trustBundlePath, []byte(caPEM), constants.PermFilePrivate))
 
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  tmpDir,
+		Paths:       &config.PathsConfig{},
 	}
 	cfg.Paths.Infra.CACertPath = trustBundlePath
 
@@ -60,9 +60,9 @@ func TestNewSecureHTTPClient_MissingTrustBundlePath(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  tmpDir,
+		Paths:       &config.PathsConfig{},
 	}
 
 	client, err := NewSecureHTTPClient(fileSvc, cfg)
@@ -80,9 +80,9 @@ func TestNewSecureHTTPClient_InvalidPEM(t *testing.T) {
 	require.NoError(t, os.WriteFile(trustBundlePath, []byte("invalid-pem-data"), constants.PermFilePrivate))
 
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  tmpDir,
+		Paths:       &config.PathsConfig{},
 	}
 	cfg.Paths.Infra.CACertPath = trustBundlePath
 

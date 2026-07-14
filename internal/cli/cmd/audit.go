@@ -16,7 +16,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,7 +25,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/spf13/cobra"
 )
 
@@ -69,7 +67,7 @@ transaction hash, and --json to output raw JSON instead of a table.`,
 				return err
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("audit: create file service: %w", err)
 			}
@@ -191,7 +189,7 @@ file path (defaults to stdout).`,
 				return err
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("audit: create file service: %w", err)
 			}
@@ -263,7 +261,7 @@ directory for the report file.`,
 				return err
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("audit: create file service: %w", err)
 			}
@@ -353,7 +351,7 @@ filter by operator session ID, --limit to control the number of results, and
 				return fmt.Errorf("%w: limit must be between 1 and 10000", constants.ErrValidationFailed)
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("audit: create file service: %w", err)
 			}
@@ -464,7 +462,7 @@ Gateway over mTLS. Use --session to filter by operator session ID.`,
 				return err
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("audit: create file service: %w", err)
 			}

@@ -72,7 +72,6 @@ func setupReportingEnv(t *testing.T, seed bool) (Options, string) {
 
 	// Audit store.
 	auditCfg := &storage.AuditStoreConfig{
-		DataDir:              dataDir,
 		DBPath:               constants.DbFilename,
 		MaxDBSizeMB:          100,
 		RetentionDays:        7,

@@ -179,7 +179,6 @@ func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
 		RuntimeDir:     runtimeDir,
 		PKIDir:         pkiDir,
 		SecretsDir:     secretsDir,
-		CredentialsDir: credentialsDir,
 		Paths: &config.PathsConfig{
 			Host: "localhost",
 			Infra: struct {

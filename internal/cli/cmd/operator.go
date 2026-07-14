@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,7 +30,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/stream"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/spf13/cobra"
 )
 
@@ -69,7 +67,7 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 				return err
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("operator: create file service: %w", err)
 			}
@@ -390,7 +388,7 @@ func operatorDeployCmd() *cobra.Command {
 				return err
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("operator: create file service: %w", err)
 			}

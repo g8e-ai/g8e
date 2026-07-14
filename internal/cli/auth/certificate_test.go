@@ -262,9 +262,9 @@ func TestAutoRenewCertificate_NotExpiring(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  tmpDir,
+		Paths:       &config.PathsConfig{},
 	}
 
 	// Create a valid certificate that is not expiring
@@ -282,8 +282,8 @@ func TestAutoRenewCertificate_UnknownCertType(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir: tmpDir,
+		ProjectRoot: tmpDir,
+		RuntimeDir:  tmpDir,
 	}
 
 	err := AutoRenewCertificate(fileSvc, cfg, "unknown-type", "")
@@ -298,9 +298,9 @@ func TestAutoRenewCertificate_ExpiringCert(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  tmpDir,
+		Paths:       &config.PathsConfig{},
 	}
 
 	// This test would require generating a short-lived cert and actually calling ReEnroll
@@ -323,9 +323,9 @@ func TestAutoRenewCertificate_OperatorType(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  tmpDir,
+		Paths:       &config.PathsConfig{},
 	}
 
 	// Create a valid certificate that's not expiring

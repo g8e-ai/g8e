@@ -28,9 +28,9 @@ import (
 )
 
 const (
-	DefaultRuntimeDir     = ".g8e"
-	DefaultPKIDir         = ".g8e/pki"
-	DefaultSecretsDir     = ".g8e/secrets"
+	DefaultRuntimeDir = ".g8e"
+	DefaultPKIDir     = ".g8e/pki"
+	DefaultSecretsDir = ".g8e/secrets"
 )
 
 // PathsConfig holds path configuration for test support.

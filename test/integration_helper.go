@@ -26,6 +26,8 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/services/fs"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // NewLiveOperatorHTTPClient creates an API client configured for mTLS
@@ -46,8 +48,12 @@ func NewLiveOperatorHTTPClient(t require.TestingT, repoRoot string) (*api.Client
 	cliCfg, err := config.Load(repoRoot)
 	require.NoError(t, err, "failed to load CLI config")
 
+	// Construct fileSvc for credential loading
+	fileSvc, err := fs.NewRuntimeFileService(repoRoot, testutil.NewTestLogger())
+	require.NoError(t, err, "failed to create file service")
+
 	// Use platform's api.NewClient with 5-second timeout
-	client, err := api.NewClient(cliCfg)
+	client, err := api.NewClient(fileSvc, cliCfg)
 	require.NoError(t, err, "failed to create API client - run './g8e auth login' first")
 
 	return client, cliCfg

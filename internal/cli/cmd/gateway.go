@@ -33,7 +33,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/netutil"
-	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/network"
 )
@@ -302,7 +301,7 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 				// Write network identity to file if needed
 				var networkIdentityFile string
 				if len(identityResult.IdentityData) > 0 {
-					fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+					fileSvc, err := newFileSvc()
 					if err != nil {
 						return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 					}
@@ -329,7 +328,7 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 			}
 
 			// Background mode: start gateway as a background process
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
@@ -391,7 +390,7 @@ managed process. If the gateway is not running, this command is a no-op.`,
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
@@ -438,7 +437,7 @@ Displays the process ID and endpoint URLs when the gateway is running.`,
 			cmd.Println("========================")
 
 			// Try HTTP check first (works for Docker/foreground/background modes)
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("gateway: create file service: %w", err)
 			}
@@ -505,7 +504,7 @@ missing, the gateway defaults to 'doctrine' posture.`,
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
@@ -572,7 +571,7 @@ output (like tail -f).`,
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
@@ -612,7 +611,7 @@ Gateway over mTLS.`,
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("gateway: create file service: %w", err)
 			}
@@ -733,7 +732,7 @@ Use --force to skip the confirmation prompt.`,
 				}
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}

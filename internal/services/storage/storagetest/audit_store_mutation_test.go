@@ -39,7 +39,6 @@ func TestSQLAuditStore_FileMutation(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -109,7 +108,6 @@ func TestSQLAuditStore_MultipleFileMutationsPerEvent(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -177,7 +175,6 @@ func TestSQLAuditStore_GetFileMutationsNoMutations(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -208,7 +205,6 @@ func TestSQLAuditStore_FileMutationOperationTypes(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,

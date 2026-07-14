@@ -314,7 +314,6 @@ func TestGatewayService_RunMaintenance_AuditsExpiredTransactions(t *testing.T) {
 
 	// Create audit store
 	auditConfig := &storage.AuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "audit.db",
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
@@ -1051,7 +1050,6 @@ func TestGatewayService_StoreSuspendedTransaction(t *testing.T) {
 
 		// Create audit store
 		auditConfig := &storage.AuditStoreConfig{
-			DataDir:                   fileSvc.Resolve(constants.DataDirname),
 			DBPath:                    "audit.db",
 			MaxDBSizeMB:               100,
 			RetentionDays:             7,

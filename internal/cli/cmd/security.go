@@ -18,7 +18,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -28,7 +27,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 func securityCmd() *cobra.Command {
@@ -60,7 +58,7 @@ and confirms that the CA bundle is properly configured for mTLS.`,
 			cmd.Println("Running platform security validation...")
 			failed := false
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
 			}
@@ -288,7 +286,7 @@ func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, e
 				return fmt.Errorf("security: load config: %w", err)
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
 			}

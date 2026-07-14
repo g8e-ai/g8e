@@ -458,7 +458,6 @@ func Run(cfg Config) error {
 	// ── audit vault ───────────────────────────────────────────────────────────
 	gitPath, _ := findGit()
 	avCfg := &storagetest.TestSQLAuditStoreConfig{
-		DataDir:                   dataDir,
 		DBPath:                    "g8e.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               2048,

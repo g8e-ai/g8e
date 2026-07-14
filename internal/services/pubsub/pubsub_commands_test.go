@@ -822,7 +822,6 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 			fileSvc := storagetest.NewTestFileSvc(t, tmpDir)
 			gitPath, _ := exec.LookPath("git")
 			avCfg := &storagetest.TestSQLAuditStoreConfig{
-				DataDir:                   fileSvc.Resolve(constants.DataDirname),
 				DBPath:                    "g8e.db",
 				LedgerDir:                 "ledger",
 				MaxDBSizeMB:               2048,
@@ -893,7 +892,6 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 			fileSvc := storagetest.NewTestFileSvc(t, tmpDir)
 			gitPath, _ := exec.LookPath("git")
 			avCfg := &storagetest.TestSQLAuditStoreConfig{
-				DataDir:                   fileSvc.Resolve(constants.DataDirname),
 				DBPath:                    "g8e.db",
 				LedgerDir:                 "ledger",
 				MaxDBSizeMB:               2048,
@@ -963,7 +961,6 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 			fileSvc := storagetest.NewTestFileSvc(t, tmpDir)
 			gitPath, _ := exec.LookPath("git")
 			avCfg := &storagetest.TestSQLAuditStoreConfig{
-				DataDir:                   fileSvc.Resolve(constants.DataDirname),
 				DBPath:                    "g8e.db",
 				LedgerDir:                 "ledger",
 				MaxDBSizeMB:               2048,
@@ -1056,7 +1053,6 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 		fileSvc := storagetest.NewTestFileSvc(t, tmpDir)
 		gitPath, _ := exec.LookPath("git")
 		avCfg := &storagetest.TestSQLAuditStoreConfig{
-			DataDir:                   fileSvc.Resolve(constants.DataDirname),
 			DBPath:                    "g8e.db",
 			LedgerDir:                 "ledger",
 			MaxDBSizeMB:               2048,

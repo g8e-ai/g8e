@@ -16,7 +16,6 @@ package cmd
 import (
 	"database/sql"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -28,7 +27,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
-	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
 )
@@ -144,7 +142,7 @@ func testE2ECmd() *cobra.Command {
 
 			// Fallback to ProcessManager check (for background/host mode)
 			if !isRunning {
-				fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+				fileSvc, err := newFileSvc()
 				if err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 				}

@@ -17,7 +17,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
 	"strings"
 
@@ -28,7 +27,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/paths"
-	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 func dataCmd() *cobra.Command {
@@ -64,7 +62,7 @@ func dataUsersCmdWithConfig(configLoader func(string) (*config.Config, error), c
 				return err
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("data: create file service: %w", err)
 			}
@@ -111,7 +109,7 @@ func dataOperatorsCmdWithConfig(configLoader func(string) (*config.Config, error
 				return err
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("data: create file service: %w", err)
 			}
@@ -158,7 +156,7 @@ func dataSettingsCmdWithConfig(configLoader func(string) (*config.Config, error)
 				return err
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("data: create file service: %w", err)
 			}
@@ -215,7 +213,7 @@ or provide --document-id to fetch a specific document.`,
 				return err
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("data: create file service: %w", err)
 			}
@@ -298,7 +296,7 @@ to control the number of results.`,
 				return err
 			}
 
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("data: create file service: %w", err)
 			}

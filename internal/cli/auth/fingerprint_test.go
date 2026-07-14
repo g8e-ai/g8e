@@ -102,11 +102,11 @@ func TestFetchRootCAFingerprint_Success(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	// Test the success case - the function should successfully fetch the fingerprint
@@ -120,11 +120,11 @@ func TestFetchRootCAFingerprint_HTTPError(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	// Use httptest.Server to simulate connection error by closing immediately

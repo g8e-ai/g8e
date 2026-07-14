@@ -48,7 +48,6 @@ func TestSQLAuditStore_WithEncryption(t *testing.T) {
 
 	// Create audit vault with encryption enabled
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -108,7 +107,6 @@ func TestSQLAuditStore_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 
 	// Create audit vault with encryption
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -144,7 +142,6 @@ func TestSQLAuditStore_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 	// Attempt to reopen database WITHOUT encryption vault should fail
 	// This is the new fail-closed behavior: service cannot be opened without vault
 	config2 := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -171,7 +168,6 @@ func TestSQLAuditStore_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 	defer vault3.Close()
 
 	config3 := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -207,7 +203,6 @@ func TestSQLAuditStore_EncryptionWithRekey(t *testing.T) {
 	fileSvc := NewTestFileSvc(t, tempDir)
 
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -253,7 +248,6 @@ func TestSQLAuditStore_EncryptionWithRekey(t *testing.T) {
 
 	// Reopen audit vault with rekeyed vault
 	config2 := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -287,7 +281,6 @@ func TestSQLAuditStore_MixedEncryptedUnencrypted(t *testing.T) {
 	fileSvc := NewTestFileSvc(t, tempDir)
 
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -352,7 +345,6 @@ func TestAuditVaultPrune(t *testing.T) {
 	fileSvc := NewTestFileSvc(t, tempDir)
 
 	config := &TestSQLAuditStoreConfig{
-		DataDir:         fileSvc.Resolve(constants.DataDirname),
 		DBPath:          "prune_test.db",
 		RetentionDays:   7,
 		EncryptionVault: testVault,

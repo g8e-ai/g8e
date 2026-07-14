@@ -126,7 +126,7 @@ func TestApproveCmd(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
 
-		err := cmd.RunE(cmd, []string{"abc123"})
+		err = cmd.RunE(cmd, []string{"abc123"})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrFailedToLoadClientCertificate)
 	})
@@ -295,10 +295,9 @@ func setupApproveTestConfig(t *testing.T, tmpDir string) *config.Config {
 	require.NoError(t, err)
 
 	// Override with our test directories
-	cfg.RuntimeDir = runtimeDir
 	cfg.PKIDir = pkiDir
 	cfg.SecretsDir = secretsDir
-	cfg.CredentialsDir = credentialsDir
+	cfg.RuntimeDir = credentialsDir
 
 	return cfg
 }

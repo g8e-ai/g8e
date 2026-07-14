@@ -155,7 +155,6 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 
 	// Initialize SQLAuditStore for transaction-native audit recording
 	auditStoreConfig := storage.DefaultAuditStoreConfig()
-	auditStoreConfig.DataDir = dataDir
 	auditStoreConfig.EncryptionVault = encryptionVault
 	auditStore, err := storage.NewSQLAuditStore(auditStoreConfig, logger, fileSvc)
 	if err != nil {

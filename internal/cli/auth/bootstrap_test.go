@@ -71,11 +71,11 @@ func TestBootstrap_Success(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -97,11 +97,11 @@ func TestBootstrap_HTTPError(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -141,11 +141,11 @@ func TestBootstrap_ErrorResponse(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -169,11 +169,11 @@ func TestBootstrap_InvalidJSONResponse(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -210,11 +210,11 @@ func TestBootstrap_FingerprintVerification(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -263,11 +263,11 @@ func TestEnrollWithGateway_Success(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -301,11 +301,11 @@ func TestEnrollWithGateway_NonSuccessResponse(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -348,11 +348,11 @@ func TestCLIEnroll_Success(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	cliCSR, _, err := GenerateCSR("test-cli")
@@ -369,11 +369,11 @@ func TestCLIEnroll_HTTPError(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	cliCSR, _, err := GenerateCSR("test-cli")
@@ -411,11 +411,11 @@ func TestCLIEnroll_ErrorResponse(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	cliCSR, _, err := GenerateCSR("test-cli")
@@ -437,11 +437,11 @@ func TestCLIEnroll_InvalidJSONResponse(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	cliCSR, _, err := GenerateCSR("test-cli")
@@ -458,11 +458,11 @@ func TestEnrollWithGateway_HTTPError(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -488,11 +488,11 @@ func TestEnrollWithGateway_BadStatusCode(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -531,11 +531,11 @@ func TestEnrollWithGateway_FingerprintVerification(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -570,11 +570,11 @@ func TestCheckBootstrapStatus_Success(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	bootstrapped, err := CheckBootstrapStatus(cfg, server.URL)
@@ -595,11 +595,11 @@ func TestCheckBootstrapStatus_NotBootstrapped(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	bootstrapped, err := CheckBootstrapStatus(cfg, server.URL)
@@ -612,11 +612,11 @@ func TestCheckBootstrapStatus_HTTPError(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	// When gateway is not reachable, CheckBootstrapStatus returns the connection error
@@ -636,11 +636,11 @@ func TestCheckBootstrapStatus_InvalidJSON(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	bootstrapped, err := CheckBootstrapStatus(cfg, server.URL)
@@ -655,11 +655,11 @@ func TestReEnroll_TrustBundleFetchError(t *testing.T) {
 	fileSvc := newAuthTestFileSvc(t)
 	trustBundlePath := filepath.Join(tmpDir, "trust-bundle.pem")
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 	cfg.Paths.Infra.CACertPath = trustBundlePath
 
@@ -697,11 +697,11 @@ func TestReEnroll_TrustBundleEmpty(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -727,11 +727,11 @@ func TestReEnroll_TrustBundleBadStatus(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -759,11 +759,11 @@ func TestReEnroll_CLICertLoadError(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 	cfg.Paths.Infra.CACertPath = filepath.Join(tmpDir, "trust-bundle.pem")
 
@@ -792,11 +792,11 @@ func TestReEnroll_InvalidCAPEM(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 	cfg.Paths.Infra.CACertPath = filepath.Join(tmpDir, "trust-bundle.pem")
 

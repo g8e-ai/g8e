@@ -19,7 +19,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"log/slog"
 	"path/filepath"
 	"strings"
 
@@ -89,7 +88,7 @@ func vaultInitCmd() *cobra.Command {
 		Short: "Initialize a new encryption vault",
 		Long:  `Generate a new encryption vault with a random key. The key is saved to the specified key path.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
 			}
@@ -160,7 +159,7 @@ func vaultUnlockCmd() *cobra.Command {
 		Short: "Unlock the encryption vault",
 		Long:  `Unlock an existing vault using the private key.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
 			}
@@ -218,7 +217,7 @@ func vaultRekeyCmd() *cobra.Command {
 		Short: "Re-key the vault with a new private key",
 		Long:  `Re-encrypt the vault's DEK with a new private key. Both old and new keys are required.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
 			}
@@ -295,7 +294,7 @@ func vaultStatusCmd() *cobra.Command {
 		Short: "Show vault status",
 		Long:  `Display whether the vault is initialized and unlocked.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
 			}
@@ -347,7 +346,7 @@ func vaultResetCmd() *cobra.Command {
 		Short: "Destroy the vault and all encrypted data",
 		Long:  `Reset the vault completely. This is a destructive operation that makes all encrypted data unrecoverable.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
 			}
@@ -407,7 +406,7 @@ func vaultExportCmd() *cobra.Command {
 		Short: "Export the vault key",
 		Long:  `Export the vault private key in hex format. Use with extreme caution.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
 			}
@@ -443,7 +442,7 @@ func vaultImportCmd() *cobra.Command {
 		Short: "Import a vault key",
 		Long:  `Import a vault private key from hex string or stdin.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+			fileSvc, err := newFileSvc()
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
 			}

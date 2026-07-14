@@ -105,7 +105,6 @@ func TestLogoutCmd(t *testing.T) {
 			RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
 			PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
 			SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
-			CredentialsDir: tmpDir,
 			Paths: &config.PathsConfig{
 				Infra: struct {
 					AppCertDir           string `json:"app_cert_dir"`
@@ -159,7 +158,7 @@ func TestLogoutCmd(t *testing.T) {
 		cfg := setupTestConfig(t, tmpDir)
 
 		// Create credentials directory (but not the credentials file itself)
-		certDir := cfg.CredentialsDir
+		certDir := cfg.RuntimeDir
 		require.NoError(t, os.MkdirAll(certDir, 0700))
 
 		// Create credentials

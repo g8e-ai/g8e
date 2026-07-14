@@ -46,7 +46,6 @@ func setupTestAuditStore(t *testing.T) *storage.SQLAuditStore {
 	fileSvc, err := fs.NewRuntimeFileService(tempDir, testutil.NewTestLogger())
 	require.NoError(t, err)
 	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
-	dataDir := fileSvc.Resolve(constants.DataDirname)
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -54,7 +53,6 @@ func setupTestAuditStore(t *testing.T) *storage.SQLAuditStore {
 	testVault := createTestVault(t, vaultDir, privKey)
 
 	cfg := &storage.AuditStoreConfig{
-		DataDir:              dataDir,
 		DBPath:               "test_audit.db",
 		MaxDBSizeMB:          100,
 		RetentionDays:        7,

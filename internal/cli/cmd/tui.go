@@ -16,7 +16,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"time"
 
@@ -89,7 +88,7 @@ func runTUI(cmd *cobra.Command, args []string, deps tuiDeps) error {
 		return fmt.Errorf("%w — start it with 'g8e gw start': %w", constants.ErrGatewayNotReachable, err)
 	}
 
-	fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+	fileSvc, err := newFileSvc()
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}

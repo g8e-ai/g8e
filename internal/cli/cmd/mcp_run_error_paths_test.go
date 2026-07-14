@@ -41,7 +41,7 @@ func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 		tempDir := testutil.TempDir(t)
 		cfg := &config.Config{
 			ProjectRoot:    tempDir,
-			CredentialsDir: tempDir,
+			RuntimeDir:     tempDir,
 		}
 		_, err := buildGatewayConn(cfg)
 		require.Error(t, err)
@@ -54,7 +54,7 @@ func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 
 		cfg := &config.Config{
 			ProjectRoot:    tempDir,
-			CredentialsDir: filepath.Dir(certPath),
+			RuntimeDir:     filepath.Dir(certPath),
 		}
 		// Set env to point to non-existent CA bundle
 		t.Setenv(envG8ECABundle, filepath.Join(tempDir, "nonexistent-ca.pem"))
@@ -77,7 +77,7 @@ func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 
 		cfg := &config.Config{
 			ProjectRoot:    testutil.TempDir(t),
-			CredentialsDir: filepath.Dir(certPath),
+			RuntimeDir:     filepath.Dir(certPath),
 		}
 
 		conn, err := buildGatewayConn(cfg)

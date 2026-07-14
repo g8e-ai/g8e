@@ -20,7 +20,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,7 +36,6 @@ func TestSQLAuditStore_Session(t *testing.T) {
 	fileSvc := NewTestFileSvc(t, tempDir)
 
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -78,7 +76,6 @@ func TestSQLAuditStore_MultipleSessions(t *testing.T) {
 	fileSvc := NewTestFileSvc(t, tempDir)
 
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -131,7 +128,6 @@ func TestSQLAuditStore_GetSessionNotFound(t *testing.T) {
 	fileSvc := NewTestFileSvc(t, tempDir)
 
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -162,7 +158,6 @@ func TestSQLAuditStore_SessionWithNullFields(t *testing.T) {
 	fileSvc := NewTestFileSvc(t, tempDir)
 
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,

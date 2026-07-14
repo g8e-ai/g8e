@@ -44,7 +44,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/pathutil"
-	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/network"
@@ -359,7 +358,7 @@ func runMCPStdioProxy(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("mcp: load config: %w", err)
 	}
 
-	fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+	fileSvc, err := newFileSvc()
 	if err != nil {
 		return fmt.Errorf("mcp: create file service: %w", err)
 	}
@@ -1047,7 +1046,7 @@ func startGatewayIfNeeded() error {
 		return fmt.Errorf("mcp: load config: %w", err)
 	}
 
-	fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+	fileSvc, err := newFileSvc()
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 	}
@@ -1426,7 +1425,7 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 		return fmt.Errorf("mcp: load config: %w", err)
 	}
 
-	fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
+	fileSvc, err := newFileSvc()
 	if err != nil {
 		return fmt.Errorf("mcp: create file service: %w", err)
 	}

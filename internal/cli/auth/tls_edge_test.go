@@ -29,7 +29,7 @@ func TestBuildMTLSClient_MissingCertFile(t *testing.T) {
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		RuntimeDir: tmpDir,
-		Paths:          &config.PathsConfig{Host: "localhost"},
+		Paths:      &config.PathsConfig{Host: "localhost"},
 	}
 
 	_, err := BuildMTLSClient(fileSvc, cfg, 30*time.Second)
@@ -46,7 +46,7 @@ func TestBuildMTLSClient_InvalidCertPair(t *testing.T) {
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		RuntimeDir: tmpDir,
-		Paths:          &config.PathsConfig{Host: "localhost"},
+		Paths:      &config.PathsConfig{Host: "localhost"},
 	}
 
 	certFile := cfg.CLICertFile()
@@ -98,7 +98,7 @@ func TestBuildMTLSClient_MissingTrustBundle(t *testing.T) {
 
 	cfg := &config.Config{
 		RuntimeDir: tmpDir,
-		Paths:          &config.PathsConfig{Host: "localhost"},
+		Paths:      &config.PathsConfig{Host: "localhost"},
 	}
 	cfg.Paths.Infra.CACertPath = filepath.Join(tmpDir, "ca-bundle.pem")
 
@@ -151,7 +151,7 @@ func TestBuildMTLSClient_InvalidTrustBundle(t *testing.T) {
 
 	cfg := &config.Config{
 		RuntimeDir: tmpDir,
-		Paths:          &config.PathsConfig{Host: "localhost"},
+		Paths:      &config.PathsConfig{Host: "localhost"},
 	}
 	cfg.Paths.Infra.CACertPath = filepath.Join(tmpDir, "ca-bundle.pem")
 
@@ -212,7 +212,7 @@ func TestAutoRenewCertificate_InvalidCertType(t *testing.T) {
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		RuntimeDir: tmpDir,
-		Paths:          &config.PathsConfig{Host: "localhost"},
+		Paths:      &config.PathsConfig{Host: "localhost"},
 	}
 
 	err := AutoRenewCertificate(fileSvc, cfg, "invalid-type", "")
@@ -247,7 +247,7 @@ func TestAutoRenewCertificate_NonExpiringCert(t *testing.T) {
 
 	cfg := &config.Config{
 		RuntimeDir: tmpDir,
-		Paths:          &config.PathsConfig{Host: "localhost"},
+		Paths:      &config.PathsConfig{Host: "localhost"},
 	}
 
 	certFile := cfg.CLICertFile()
@@ -269,7 +269,7 @@ func TestLoadCredentials_NonExistentFile(t *testing.T) {
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		RuntimeDir: tmpDir,
-		Paths:          &config.PathsConfig{Host: "localhost"},
+		Paths:      &config.PathsConfig{Host: "localhost"},
 	}
 
 	creds, err := LoadCredentials(fileSvc, cfg)
@@ -286,7 +286,7 @@ func TestDeleteCredentials_NonExistent(t *testing.T) {
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		RuntimeDir: tmpDir,
-		Paths:          &config.PathsConfig{Host: "localhost"},
+		Paths:      &config.PathsConfig{Host: "localhost"},
 	}
 
 	err := DeleteCredentials(fileSvc, cfg)
@@ -299,7 +299,7 @@ func TestCheckBootstrapStatus_InvalidURL(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		RuntimeDir: tmpDir,
-		Paths:          &config.PathsConfig{Host: "localhost"},
+		Paths:      &config.PathsConfig{Host: "localhost"},
 	}
 
 	_, err := CheckBootstrapStatus(cfg, "://invalid")
@@ -312,7 +312,7 @@ func TestCheckBootstrapStatus_NotRunning(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		RuntimeDir: tmpDir,
-		Paths:          &config.PathsConfig{Host: "localhost"},
+		Paths:      &config.PathsConfig{Host: "localhost"},
 	}
 
 	_, err := CheckBootstrapStatus(cfg, "http://127.0.0.1:1")
@@ -334,7 +334,7 @@ func TestCheckBootstrapStatus_ValidResponse(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		RuntimeDir: tmpDir,
-		Paths:          &config.PathsConfig{Host: "localhost"},
+		Paths:      &config.PathsConfig{Host: "localhost"},
 	}
 
 	bootstrapped, err := CheckBootstrapStatus(cfg, srv.URL)

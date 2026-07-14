@@ -44,7 +44,6 @@ func TestSQLAuditStore_RecordActionReceipt(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -109,7 +108,6 @@ func TestSQLAuditStore_RecordActionReceipt_Upsert(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -188,7 +186,6 @@ func TestSQLAuditStore_GetActionReceipt_NotFound(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -219,7 +216,6 @@ func TestSQLAuditStore_ListActionReceipts(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -313,7 +309,6 @@ func TestSQLAuditStore_ListActionReceipts_AllSessions(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -366,7 +361,6 @@ func TestSQLAuditStore_ListActionReceiptsSince(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -426,7 +420,6 @@ func TestSQLAuditStore_ListActionReceiptsSince_Empty(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -457,7 +450,6 @@ func TestSQLAuditStore_ActionReceipts_AutoSessionCreation(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -517,7 +509,6 @@ func TestSQLAuditStore_ActionReceipts_MultipleStatuses(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,

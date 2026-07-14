@@ -180,7 +180,7 @@ func TestSaveCredentials_WriteError(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot: tmpDir,
 		RuntimeDir:  tmpDir,
-		Paths:          &config.PathsConfig{},
+		Paths:       &config.PathsConfig{},
 	}
 
 	// Create the credentials directory
@@ -209,12 +209,12 @@ func TestLoadCredentials_ReadError(t *testing.T) {
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		CredentialsDir: tmpDir,
+		RuntimeDir:     tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
 
 	// Create the credentials directory
-	require.NoError(t, os.MkdirAll(cfg.CredentialsDir, constants.PermDirPrivate))
+	require.NoError(t, os.MkdirAll(cfg.RuntimeDir, constants.PermDirPrivate))
 
 	// Create a file at the credentials file path that's a directory
 	credsFile := cfg.CredentialsFile()
@@ -237,7 +237,7 @@ func TestSaveCredentials_MkdirError(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot: tmpDir,
 		RuntimeDir:  blockingFile, // This is a file, not a directory
-		Paths:          &config.PathsConfig{},
+		Paths:       &config.PathsConfig{},
 	}
 
 	creds := &Credentials{

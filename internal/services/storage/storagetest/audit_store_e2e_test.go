@@ -45,7 +45,6 @@ func TestSQLAuditStore_EndToEnd_AuditTrail(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -179,7 +178,6 @@ func TestSQLAuditStore_EndToEnd_MultipleTransactions(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -291,7 +289,6 @@ func TestSQLAuditStore_Consistency_EventReceiptLinkage(t *testing.T) {
 	testVault := CreateTestVault(t, vaultDir, privKey)
 	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,

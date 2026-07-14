@@ -127,6 +127,7 @@ func writeTestCLICert(t *testing.T, cfg *config.Config) {
 	require.NoError(t, err)
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 
+	require.NoError(t, os.MkdirAll(filepath.Dir(cfg.CLICertFile()), constants.PermDirPrivate))
 	require.NoError(t, os.WriteFile(cfg.CLICertFile(), certPEM, constants.PermFilePrivate))
 	require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), keyPEM, constants.PermFilePrivate))
 }
@@ -183,6 +184,7 @@ func startTLSEnrollServer(t *testing.T, cfg *config.Config, handler http.Handler
 	// Write CA cert as trust bundle so EnrollAgentApp can verify the server.
 	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
 	caPath := filepath.Join(cfg.RuntimeDir, "test-ca.pem")
+	require.NoError(t, os.MkdirAll(cfg.RuntimeDir, constants.PermDirPrivate))
 	require.NoError(t, os.WriteFile(caPath, caPEM, constants.PermFilePrivate))
 	cfg.Paths.Infra.CACertPath = caPath // absolute — TrustBundlePath() returns it directly
 	cfg.Paths.Host = server.URL         // full URL — OperatorHTTPURL() returns it directly
@@ -216,11 +218,11 @@ func TestEnrollAgentApp_Idempotency_ValidCert(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
@@ -249,11 +251,11 @@ func TestEnrollAgentApp_Idempotency_ExpiringCert(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
@@ -302,11 +304,11 @@ func TestEnrollAgentApp_NoCert(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "new-agent"
@@ -351,11 +353,11 @@ func TestEnrollAgentApp_NoURISAN(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
@@ -417,11 +419,11 @@ func TestEnrollAgentApp_InvalidCert(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
@@ -457,11 +459,11 @@ func TestEnrollAgentApp_EnrollmentError(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
@@ -486,11 +488,11 @@ func TestEnrollAgentApp_GatewayUnreachable(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
@@ -516,11 +518,11 @@ func TestEnrollAgentApp_NoCLICredentials(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
@@ -545,11 +547,11 @@ func TestEnrollAgentApp_MissingCLICert(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
@@ -574,11 +576,11 @@ func TestEnrollAgentApp_MissingCABundle(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
@@ -600,11 +602,11 @@ func TestEnrollAgentApp_WrongSPIFFEID(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"

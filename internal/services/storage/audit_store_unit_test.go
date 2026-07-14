@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
@@ -36,7 +35,6 @@ func TestDefaultAuditStoreConfig(t *testing.T) {
 		got      interface{}
 		expected interface{}
 	}{
-		{"DataDir", config.DataDir, paths.Infra.DataDir},
 		{"DBPath", config.DBPath, constants.DbFilename},
 		{"MaxDBSizeMB", config.MaxDBSizeMB, int64(2048)},
 		{"RetentionDays", config.RetentionDays, 90},
@@ -304,14 +302,12 @@ func TestGetDataDir(t *testing.T) {
 			ass:  nil,
 			want: "",
 		},
-		{
-			name: "store with config",
+			{
+			name: "store with nil fileSvc",
 			ass: &SQLAuditStore{
-				config: &AuditStoreConfig{
-					DataDir: "/test/data",
-				},
+				config: &AuditStoreConfig{},
 			},
-			want: "/test/data",
+			want: "",
 		},
 	}
 

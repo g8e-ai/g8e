@@ -25,7 +25,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/pathutil"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
@@ -35,7 +34,6 @@ import (
 
 // AuditStoreConfig holds configuration for the SQL audit store
 type AuditStoreConfig struct {
-	DataDir                   string
 	DBPath                    string
 	MaxDBSizeMB               int64
 	RetentionDays             int
@@ -48,10 +46,8 @@ type AuditStoreConfig struct {
 }
 
 // DefaultAuditStoreConfig returns the default configuration for the audit store.
-// Note: DataDir should be set by the caller based on the actual work directory.
 func DefaultAuditStoreConfig() *AuditStoreConfig {
 	return &AuditStoreConfig{
-		DataDir:                   paths.Infra.DataDir,
 		DBPath:                    constants.DbFilename,
 		MaxDBSizeMB:               2048,
 		RetentionDays:             90,
@@ -145,9 +141,10 @@ func NewSQLAuditStore(config *AuditStoreConfig, logger *slog.Logger, fileSvc fs.
 	ass.pruner.Start()
 
 	encryptionEnabled := ass.encryptionVault != nil && ass.encryptionVault.IsUnlocked()
+	dataDir := ass.fileSvc.Resolve(constants.DataDirname)
 	ass.logger.Info("Audit store initialized",
-		"data_dir", config.DataDir,
-		"db_path", pathutil.ResolveDBPath(config.DataDir, config.DBPath),
+		"data_dir", dataDir,
+		"db_path", pathutil.ResolveDBPath(dataDir, config.DBPath),
 		"encryption_enabled", encryptionEnabled)
 
 	return ass, nil
@@ -155,7 +152,7 @@ func NewSQLAuditStore(config *AuditStoreConfig, logger *slog.Logger, fileSvc fs.
 
 // bootstrap initializes the audit store (directory structure, database)
 func (ass *SQLAuditStore) bootstrap() error {
-	ass.logger.Info("Bootstrapping audit store", "data_dir", ass.config.DataDir)
+	ass.logger.Info("Bootstrapping audit store", "data_dir", ass.fileSvc.Resolve(constants.DataDirname))
 
 	if err := ass.createDirectoryStructure(); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreCreateDirFailed, err)
@@ -180,7 +177,7 @@ func (ass *SQLAuditStore) createDirectoryStructure() error {
 	}
 
 	ass.logger.Info("Audit store directory structure ensured",
-		"data_dir", ass.config.DataDir)
+		"data_dir", ass.fileSvc.Resolve(constants.DataDirname))
 
 	return nil
 }
@@ -190,20 +187,20 @@ func (ass *SQLAuditStore) verifyWritePermissions() error {
 	testRelPath := filepath.Join(constants.DataDirname, ".write_test")
 
 	if err := ass.fileSvc.WriteFile(context.Background(), testRelPath, []byte("write_test"), constants.PermFilePrivate); err != nil {
-		return fmt.Errorf("%w %s: %w", constants.ErrAuditStoreCannotWrite, ass.config.DataDir, err)
+		return fmt.Errorf("%w %s: %w", constants.ErrAuditStoreCannotWrite, ass.fileSvc.Resolve(constants.DataDirname), err)
 	}
 
 	if err := ass.fileSvc.Remove(context.Background(), testRelPath); err != nil {
 		ass.logger.Warn("Failed to remove write test file", "path", testRelPath, string(constants.ConnectionStateError), err)
 	}
 
-	ass.logger.Info("Write permissions verified", "path", ass.config.DataDir)
+	ass.logger.Info("Write permissions verified", "path", ass.fileSvc.Resolve(constants.DataDirname))
 	return nil
 }
 
 // initDatabase creates the database and schema
 func (ass *SQLAuditStore) initDatabase() error {
-	dbPath := pathutil.ResolveDBPath(ass.config.DataDir, ass.config.DBPath)
+	dbPath := pathutil.ResolveDBPath(ass.fileSvc.Resolve(constants.DataDirname), ass.config.DBPath)
 
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 	db, err := sqliteutil.OpenDB(cfg, ass.logger)
@@ -1276,10 +1273,10 @@ func (ass *SQLAuditStore) Close() error {
 
 // GetDataDir returns the audit store data directory
 func (ass *SQLAuditStore) GetDataDir() string {
-	if ass == nil {
+	if ass == nil || ass.fileSvc == nil {
 		return ""
 	}
-	return ass.config.DataDir
+	return ass.fileSvc.Resolve(constants.DataDirname)
 }
 
 // encryptContent encrypts content using the encryption vault.

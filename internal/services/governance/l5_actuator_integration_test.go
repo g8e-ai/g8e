@@ -45,7 +45,6 @@ func TestL5ActuatorRecordActionReceiptCalled(t *testing.T) {
 	fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
 	require.NoError(t, err)
 	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
-	dataDir := fileSvc.Resolve(constants.DataDirname)
 
 	// Create vault for encryption
 	_, privKey, err := ed25519.GenerateKey(nil)
@@ -61,7 +60,6 @@ func TestL5ActuatorRecordActionReceiptCalled(t *testing.T) {
 	defer testVault.Close()
 
 	auditConfig := &storage.AuditStoreConfig{
-		DataDir:         dataDir,
 		DBPath:          "test.db",
 		MaxDBSizeMB:     100,
 		RetentionDays:   1,

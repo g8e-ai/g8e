@@ -80,8 +80,14 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 		return RunResult{}, fmt.Errorf("%w: %s: %w", constants.ErrReportOutputDirFailed, opts.OutDir, err)
 	}
 
-	// Construct fileSvc for .g8e/ file I/O.
-	fileSvc, err := fs.NewRuntimeFileService("", logger)
+	// Construct fileSvc for .g8e/ file I/O. Derive base dir from opts.DataDir
+	// (which is <base>/.g8e/data) so the audit store opens the same DB that
+	// the commitment ledger accesses via opts.DataDir directly.
+	baseDir := ""
+	if opts.DataDir != "" {
+		baseDir = filepath.Dir(filepath.Dir(opts.DataDir))
+	}
+	fileSvc, err := fs.NewRuntimeFileService(baseDir, logger)
 	if err != nil {
 		return RunResult{}, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
@@ -91,7 +97,6 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 
 	// Open audit store (sessions, events, file_mutations, receipts, commitment_ledger).
 	auditStoreCfg := storage.DefaultAuditStoreConfig()
-	auditStoreCfg.DataDir = opts.DataDir
 	auditStoreCfg.EncryptionVault = v
 	auditStore, err := storage.NewSQLAuditStore(auditStoreCfg, logger, fileSvc)
 	if err != nil {

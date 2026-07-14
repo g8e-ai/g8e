@@ -35,8 +35,6 @@ func TestAuditVaultConfig_Default(t *testing.T) {
 
 	config := DefaultTestSQLAuditStoreConfig()
 
-	// Default DataDir is now a relative path - caller must resolve based on workDir
-	assert.Equal(t, ".g8e/data", config.DataDir)
 	assert.Equal(t, "g8e.db", config.DBPath)
 	assert.Equal(t, constants.LedgerDirname, config.LedgerDir)
 	assert.Equal(t, int64(2048), config.MaxDBSizeMB)
@@ -60,7 +58,6 @@ func TestSQLAuditStore_BootstrapWithURL(t *testing.T) {
 	fileSvc := NewTestFileSvc(t, tempDir)
 
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 constants.LedgerDirname,
 		MaxDBSizeMB:               100,
@@ -102,7 +99,6 @@ func TestSQLAuditStore_GetDataDir(t *testing.T) {
 	fileSvc := NewTestFileSvc(t, tempDir)
 
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 constants.LedgerDirname,
 		MaxDBSizeMB:               100,
@@ -136,7 +132,6 @@ func TestSQLAuditStore_GetLedgerPath(t *testing.T) {
 	fileSvc := NewTestFileSvc(t, tempDir)
 
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 constants.LedgerDirname,
 		MaxDBSizeMB:               100,
@@ -182,7 +177,6 @@ func TestSQLAuditStore_DefaultConfig(t *testing.T) {
 	// Verify default config uses relative paths (caller resolves them)
 	// g8eo uses CLI flags only, not environment variables for configuration
 	config := DefaultTestSQLAuditStoreConfig()
-	assert.Equal(t, ".g8e/data", config.DataDir)
 	assert.Equal(t, "g8e.db", config.DBPath)
 	assert.Equal(t, constants.LedgerDirname, config.LedgerDir)
 	assert.Equal(t, int64(2048), config.MaxDBSizeMB)
@@ -195,7 +189,6 @@ func TestSQLAuditStore_GetEncryptionVault(t *testing.T) {
 
 	// 1. Constructor should return error when vault is nil
 	config1 := &TestSQLAuditStoreConfig{
-		DataDir: tempDir,
 		DBPath:  "test1.db",
 	}
 	avs1, err := NewTestSQLAuditStore(config1, logger, nil)
@@ -214,7 +207,6 @@ func TestSQLAuditStore_GetEncryptionVault(t *testing.T) {
 	fileSvc := NewTestFileSvc(t, tempDir)
 
 	config2 := &TestSQLAuditStoreConfig{
-		DataDir:         fileSvc.Resolve(constants.DataDirname),
 		DBPath:          "test2.db",
 		EncryptionVault: v,
 	}
@@ -240,7 +232,6 @@ func TestSQLAuditStore_CloseIdempotent(t *testing.T) {
 	fileSvc := NewTestFileSvc(t, tempDir)
 
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 constants.LedgerDirname,
 		MaxDBSizeMB:               100,
@@ -274,7 +265,6 @@ func TestSQLAuditStore_WALMode(t *testing.T) {
 	fileSvc := NewTestFileSvc(t, tempDir)
 
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   fileSvc.Resolve(constants.DataDirname),
 		DBPath:                    "test.db",
 		LedgerDir:                 constants.LedgerDirname,
 		MaxDBSizeMB:               100,
