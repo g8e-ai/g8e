@@ -1042,7 +1042,7 @@ func (d *subprocessMCPProxy) forward(req JSONRPCRequest) (JSONRPCResponse, error
 // HTTP is only used here to poll the bootstrap health endpoint before mTLS
 // certs have been issued — all subsequent traffic uses mTLS.
 func startGatewayIfNeeded() error {
-	cfg, err := loadConfig("")
+	_, err := loadConfig("")
 	if err != nil {
 		return fmt.Errorf("mcp: load config: %w", err)
 	}

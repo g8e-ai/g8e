@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
-	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,9 +33,9 @@ func TestVerifyPasskeyRegistration_NetworkError(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -44,8 +44,9 @@ func TestVerifyPasskeyRegistration_NetworkError(t *testing.T) {
 	// so the test reaches the network dial (and fails there, as expected).
 	writeTestCLICert(t, cfg)
 	dummyCert, _ := generateTestCertificateWithSPIFFE(t, "dummy", time.Now().Add(24*time.Hour))
-	caPath := filepath.Join(tmpDir, "test-ca.pem")
-	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), 0600))
+	caPath, err := filepath.Abs(filepath.Join(tmpDir, "test-ca.pem"))
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), constants.PermFilePrivate))
 	cfg.Paths.Infra.CACertPath = caPath
 
 	hasPasskey, err := VerifyPasskeyRegistration(cfg, "test-user", "test-cli-session")

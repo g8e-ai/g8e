@@ -19,11 +19,13 @@ package platform
 import (
 	"errors"
 	"fmt"
-	"github.com/g8e-ai/g8e/internal/testutil"
 	"os/exec"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // mockProcess is a mock implementation of the process interface
@@ -120,7 +122,8 @@ func (m *mockTickerFactory) NewTicker(d time.Duration) ticker {
 
 func TestIsProcessRunningWithFinder(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
-	pm, err := NewProcessManager(tmpDir)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -199,7 +202,8 @@ func TestIsProcessRunningWithFinder(t *testing.T) {
 
 func TestFindProcessOnPortWithFactory(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
-	pm, err := NewProcessManager(tmpDir)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -288,7 +292,8 @@ func TestFindProcessOnPortWithFactory(t *testing.T) {
 
 func TestFindOperatorProcessWithExecutor(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
-	pm, err := NewProcessManager(tmpDir)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -331,7 +336,7 @@ func TestFindOperatorProcessWithExecutor(t *testing.T) {
 	})
 
 	t.Run("passes correct arguments to command", func(t *testing.T) {
-		expectedPattern := fmt.Sprintf("g8e gw start.*--data-dir %s", pm.dataDir)
+		expectedPattern := fmt.Sprintf("g8e gw start.*--data-dir %s", fileSvc.Resolve(constants.DataDirname))
 		executor := &mockCommandExecutor{
 			commandFunc: func(name string, args ...string) *exec.Cmd {
 				if name != "pgrep" {
@@ -352,7 +357,8 @@ func TestFindOperatorProcessWithExecutor(t *testing.T) {
 
 func TestStopProcessWithDeps(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
-	pm, err := NewProcessManager(tmpDir)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}

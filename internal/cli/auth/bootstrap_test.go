@@ -671,7 +671,8 @@ func TestReEnroll_TrustBundleFetchError(t *testing.T) {
 	t.Parallel()
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newAuthTestFileSvc(t)
-	trustBundlePath := filepath.Join(tmpDir, "trust-bundle.pem")
+	trustBundlePath, err := filepath.Abs(filepath.Join(tmpDir, "trust-bundle.pem"))
+	require.NoError(t, err)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
@@ -787,7 +788,9 @@ func TestReEnroll_CLICertLoadError(t *testing.T) {
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
-	cfg.Paths.Infra.CACertPath = filepath.Join(tmpDir, "trust-bundle.pem")
+	absCAPath, err := filepath.Abs(filepath.Join(tmpDir, "trust-bundle.pem"))
+	require.NoError(t, err)
+	cfg.Paths.Infra.CACertPath = absCAPath
 
 	// Don't create CLI cert/key files - they should be missing
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -821,7 +824,9 @@ func TestReEnroll_InvalidCAPEM(t *testing.T) {
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
-	cfg.Paths.Infra.CACertPath = filepath.Join(tmpDir, "trust-bundle.pem")
+	absCAPath, err := filepath.Abs(filepath.Join(tmpDir, "trust-bundle.pem"))
+	require.NoError(t, err)
+	cfg.Paths.Infra.CACertPath = absCAPath
 
 	// Create valid matching CLI cert/key files
 	certPEM, keyPEM := testutil.GenerateTestCertificate(t, "test-cli")

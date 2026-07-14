@@ -357,7 +357,11 @@ func TestDeleteCredentials(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.CredentialsDir = tempDir
 	cfg.Paths = &config.PathsConfig{}
-	cfg.Paths.Infra.CACertPath = filepath.Join(tempDir, "trust-bundle.pem")
+	absCAPath, err := filepath.Abs(filepath.Join(tempDir, "trust-bundle.pem"))
+	if err != nil {
+		t.Fatalf("filepath.Abs failed: %v", err)
+	}
+	cfg.Paths.Infra.CACertPath = absCAPath
 
 	t.Run("delete existing credentials", func(t *testing.T) {
 		// Create test files using config methods

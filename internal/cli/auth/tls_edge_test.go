@@ -100,7 +100,11 @@ func TestBuildMTLSClient_MissingTrustBundle(t *testing.T) {
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{Host: "localhost"},
 	}
-	cfg.Paths.Infra.CACertPath = filepath.Join(tmpDir, "ca-bundle.pem")
+	absCAPath, err := filepath.Abs(filepath.Join(tmpDir, "ca-bundle.pem"))
+	if err != nil {
+		t.Fatalf("filepath.Abs failed: %v", err)
+	}
+	cfg.Paths.Infra.CACertPath = absCAPath
 
 	certFile := cfg.CLICertFile()
 	keyFile := cfg.CLIKeyFile()
@@ -153,7 +157,10 @@ func TestBuildMTLSClient_InvalidTrustBundle(t *testing.T) {
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{Host: "localhost"},
 	}
-	caFile := filepath.Join(tmpDir, "ca-bundle.pem")
+	caFile, err := filepath.Abs(filepath.Join(tmpDir, "ca-bundle.pem"))
+	if err != nil {
+		t.Fatalf("filepath.Abs failed: %v", err)
+	}
 	cfg.Paths.Infra.CACertPath = caFile
 
 	certFile := cfg.CLICertFile()

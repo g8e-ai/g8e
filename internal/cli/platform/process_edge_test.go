@@ -14,7 +14,8 @@ import (
 func TestBuildReExecArgs(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 
-	pm, err := NewProcessManager(tmpDir)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	require.NoError(t, err)
 
 	tests := []struct {

@@ -24,6 +24,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 func TestEnrollCmdWithConfig_ConfigLoaderError(t *testing.T) {
@@ -88,7 +89,8 @@ func TestPerformEnroll_NoLocalCredsGatewayDownReturnsError(t *testing.T) {
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
-	err := performEnroll(cmd, cfg, false)
+	fileSvc := newCmdTestFileSvc(t)
+	err := performEnroll(cmd, fileSvc, cfg, false)
 	require.Error(t, err)
 }
 
@@ -109,7 +111,8 @@ func TestPerformEnroll_WithLocalCredsGatewayDownReturnsError(t *testing.T) {
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
-	err := performEnroll(cmd, cfg, false)
+	fileSvc := newCmdTestFileSvc(t)
+	err := performEnroll(cmd, fileSvc, cfg, false)
 	require.Error(t, err)
 }
 

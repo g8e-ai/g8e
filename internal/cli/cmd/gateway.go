@@ -268,7 +268,7 @@ current posture is read from this file and preserved. If the file is missing or
 corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 'doctrine', 'consensus', and 'notary'.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig("")
+			_, err := loadConfig("")
 			if err != nil {
 				return fmt.Errorf("gateway: load config: %w", err)
 			}

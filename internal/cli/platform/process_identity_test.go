@@ -28,10 +28,16 @@ func TestWriteNetworkIdentityFile_ErrorOnInvalidRuntimeDir(t *testing.T) {
 	t.Parallel()
 
 	dir := testutil.TempDir(t)
-	runtimeFile := filepath.Join(dir, constants.NetworkIdentityFilename)
-	require.NoError(t, os.WriteFile(runtimeFile, []byte("file"), constants.PermFilePrivate))
 
-	pm := &ProcessManager{runtimeDir: runtimeFile}
-	_, err := pm.WriteNetworkIdentityFile([]byte(`{"IPs":[]}`))
+	// Create a file where the .g8e/ runtime directory would be expected,
+	// causing WriteFile to fail because the path is not a directory.
+	runtimeBlockingFile := filepath.Join(dir, constants.RuntimeDirname)
+	require.NoError(t, os.WriteFile(runtimeBlockingFile, []byte("blocking"), constants.PermFilePrivate))
+
+	fileSvc := newPlatformTestFileSvc(t, dir)
+	pm, err := NewProcessManager(fileSvc)
+	require.NoError(t, err)
+
+	_, err = pm.WriteNetworkIdentityFile([]byte(`{"IPs":[]}`))
 	require.Error(t, err)
 }

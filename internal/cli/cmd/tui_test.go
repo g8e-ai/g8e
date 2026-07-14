@@ -31,6 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
@@ -47,7 +48,7 @@ func stubTUIDeps(t *testing.T, cfg *config.Config) tuiDeps {
 		checkOperatorRunning: func(*config.Config) error {
 			return nil
 		},
-		loadCredentials: func(*config.Config) (*auth.Credentials, error) {
+		loadCredentials: func(fs.RuntimeFileService, *config.Config) (*auth.Credentials, error) {
 			return &auth.Credentials{
 				OperatorSessionID: "op-sess-test",
 				UserID:            "user-test",
@@ -55,7 +56,7 @@ func stubTUIDeps(t *testing.T, cfg *config.Config) tuiDeps {
 				CLISessionID:      "cli-sess-test",
 			}, nil
 		},
-		buildMTLSClient: func(*config.Config, time.Duration) (*http.Client, error) {
+		buildMTLSClient: func(fs.RuntimeFileService, *config.Config, time.Duration) (*http.Client, error) {
 			return &http.Client{}, nil
 		},
 		tuiRun: func(ctx context.Context, opts tui.Options) error {
@@ -146,7 +147,7 @@ func TestTUI_CredentialLoadFailure(t *testing.T) {
 		cfg := setupTUITestConfig(t)
 		deps := stubTUIDeps(t, cfg)
 		credErr := errors.New("corrupt credentials file")
-		deps.loadCredentials = func(*config.Config) (*auth.Credentials, error) {
+		deps.loadCredentials = func(fs.RuntimeFileService, *config.Config) (*auth.Credentials, error) {
 			return nil, credErr
 		}
 		cmd := tuiCmdWithDeps(deps)
@@ -162,7 +163,7 @@ func TestTUI_NotEnrolled(t *testing.T) {
 	t.Run("returns enrollment error when credentials are nil", func(t *testing.T) {
 		cfg := setupTUITestConfig(t)
 		deps := stubTUIDeps(t, cfg)
-		deps.loadCredentials = func(*config.Config) (*auth.Credentials, error) {
+		deps.loadCredentials = func(fs.RuntimeFileService, *config.Config) (*auth.Credentials, error) {
 			return nil, nil
 		}
 		cmd := tuiCmdWithDeps(deps)
@@ -181,7 +182,7 @@ func TestTUI_BuildMTLSClientFailure(t *testing.T) {
 		cfg := setupTUITestConfig(t)
 		deps := stubTUIDeps(t, cfg)
 		tlsErr := errors.New("cert file missing")
-		deps.buildMTLSClient = func(*config.Config, time.Duration) (*http.Client, error) {
+		deps.buildMTLSClient = func(fs.RuntimeFileService, *config.Config, time.Duration) (*http.Client, error) {
 			return nil, tlsErr
 		}
 		cmd := tuiCmdWithDeps(deps)

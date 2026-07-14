@@ -21,10 +21,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
-	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -102,13 +103,12 @@ func TestFetchRootCAFingerprint_Success(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
-	cfg.Paths.Infra.CACertPath = certPEM
 
 	// Test the success case - the function should successfully fetch the fingerprint
 	fp, err := FetchRootCAFingerprint(cfg, server.URL)
@@ -122,9 +122,9 @@ func TestFetchRootCAFingerprint_HTTPError(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:         filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:     filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}

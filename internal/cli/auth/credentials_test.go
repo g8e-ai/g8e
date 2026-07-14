@@ -188,7 +188,7 @@ func TestSaveCredentials_WriteError(t *testing.T) {
 
 	// Create a file at the credentials file path to block writing
 	credsFile := cfg.CredentialsFile()
-	require.NoError(t, os.WriteFile(credsFile, []byte("block"), 0400))
+	require.NoError(t, os.WriteFile(credsFile, []byte("block"), constants.PermFileReadOnly))
 
 	creds := &Credentials{
 		OperatorSessionID: "op-sess-123",

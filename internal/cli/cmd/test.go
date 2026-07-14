@@ -126,7 +126,7 @@ func testE2ECmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 3 (Live Platform E2E) tests...")
 
-			cfg, err := loadConfig("")
+			_, err := loadConfig("")
 			if err != nil {
 				return err
 			}
