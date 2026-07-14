@@ -31,7 +31,7 @@ func TestEnrollCmdWithConfig_ConfigLoaderError(t *testing.T) {
 		return nil, errors.New("config load error")
 	}
 
-	cmd := enrollCmdWithConfig(failLoader)
+	cmd := enrollCmdWithConfig(failLoader, newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -51,7 +51,7 @@ func TestEnrollCmdWithConfig_OperatorNotRunningReturnsError(t *testing.T) {
 		return cfg, nil
 	}
 
-	cmd := enrollCmdWithConfig(loader)
+	cmd := enrollCmdWithConfig(loader, newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -61,7 +61,7 @@ func TestEnrollCmdWithConfig_OperatorNotRunningReturnsError(t *testing.T) {
 }
 
 func TestEnrollCmdWithConfig_NoTPMFlagOnNonWindows(t *testing.T) {
-	cmd := enrollCmdWithConfig(loadConfig)
+	cmd := enrollCmdWithConfig(loadConfig, newFileSvc)
 	tpmFlag := cmd.Flags().Lookup("tpm")
 	if tpmFlag != nil {
 		assert.Equal(t, "false", tpmFlag.DefValue)
@@ -69,7 +69,7 @@ func TestEnrollCmdWithConfig_NoTPMFlagOnNonWindows(t *testing.T) {
 }
 
 func TestEnrollCmdWithConfig_HasRunE(t *testing.T) {
-	cmd := enrollCmdWithConfig(loadConfig)
+	cmd := enrollCmdWithConfig(loadConfig, newFileSvc)
 	require.NotNil(t, cmd.RunE)
 }
 
@@ -81,7 +81,7 @@ func TestPerformEnroll_NoLocalCredsGatewayDownReturnsError(t *testing.T) {
 
 	cmd := enrollCmdWithConfig(func(string) (*config.Config, error) {
 		return cfg, nil
-	})
+	}, newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -101,7 +101,7 @@ func TestPerformEnroll_WithLocalCredsGatewayDownReturnsError(t *testing.T) {
 
 	cmd := enrollCmdWithConfig(func(string) (*config.Config, error) {
 		return cfg, nil
-	})
+	}, newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -117,7 +117,7 @@ func TestEnrollCmdWithConfig_UsesInjectedConfigLoader(t *testing.T) {
 		return nil, errors.New("injected error")
 	}
 
-	cmd := enrollCmdWithConfig(loader)
+	cmd := enrollCmdWithConfig(loader, newFileSvc)
 	_ = cmd.RunE(cmd, nil)
 
 	assert.True(t, called, "config loader should have been called")
@@ -129,7 +129,7 @@ func TestEnrollCmdWithConfig_PropagatesConfigError(t *testing.T) {
 		return nil, expectedErr
 	}
 
-	cmd := enrollCmdWithConfig(loader)
+	cmd := enrollCmdWithConfig(loader, newFileSvc)
 	err := cmd.RunE(cmd, nil)
 	require.Error(t, err)
 }

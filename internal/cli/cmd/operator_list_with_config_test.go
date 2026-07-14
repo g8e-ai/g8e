@@ -32,7 +32,7 @@ func TestOperatorListCmdWithConfig_ConfigLoadError(t *testing.T) {
 		return nil, errors.New("config load error")
 	}
 
-	cmd := operatorListCmdWithConfig(failLoader, defaultAPIClientFactory)
+	cmd := operatorListCmdWithConfig(failLoader, defaultAPIClientFactory, newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -46,7 +46,7 @@ func TestOperatorListCmdWithConfig_ClientCreationError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	cmd := operatorListCmdWithConfig(loader, failingClientFactory(errors.New("client creation error")))
+	cmd := operatorListCmdWithConfig(loader, failingClientFactory(errors.New("client creation error")), newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -61,7 +61,7 @@ func TestOperatorListCmdWithConfig_GetRequestError(t *testing.T) {
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	client := &mockAPIClient{getErr: errors.New("network error")}
-	cmd := operatorListCmdWithConfig(loader, mockClientFactory(client))
+	cmd := operatorListCmdWithConfig(loader, mockClientFactory(client), newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -76,7 +76,7 @@ func TestOperatorListCmdWithConfig_InvalidJSONResponse(t *testing.T) {
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	client := &mockAPIClient{getResp: []byte("not json")}
-	cmd := operatorListCmdWithConfig(loader, mockClientFactory(client))
+	cmd := operatorListCmdWithConfig(loader, mockClientFactory(client), newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -94,7 +94,7 @@ func TestOperatorListCmdWithConfig_EmptyOperatorsListPrintsNoOperators(t *testin
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	client := &mockAPIClient{getResp: operatorsJSON}
-	cmd := operatorListCmdWithConfig(loader, mockClientFactory(client))
+	cmd := operatorListCmdWithConfig(loader, mockClientFactory(client), newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -116,7 +116,7 @@ func TestOperatorListCmdWithConfig_ValidResponsePrintsOperatorTable(t *testing.T
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	client := &mockAPIClient{getResp: operatorsJSON}
-	cmd := operatorListCmdWithConfig(loader, mockClientFactory(client))
+	cmd := operatorListCmdWithConfig(loader, mockClientFactory(client), newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

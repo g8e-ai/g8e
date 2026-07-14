@@ -138,7 +138,7 @@ func TestEnrollCmdWithConfigErrorPaths(t *testing.T) {
 		failLoader := func(string) (*config.Config, error) {
 			return nil, errors.New("config load error")
 		}
-		cmd := enrollCmdWithConfig(failLoader)
+		cmd := enrollCmdWithConfig(failLoader, newFileSvc)
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -155,7 +155,7 @@ func TestEnrollCmdWithConfigErrorPaths(t *testing.T) {
 		loader := func(string) (*config.Config, error) {
 			return cfg, nil
 		}
-		cmd := enrollCmdWithConfig(loader)
+		cmd := enrollCmdWithConfig(loader, newFileSvc)
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -166,14 +166,14 @@ func TestEnrollCmdWithConfigErrorPaths(t *testing.T) {
 
 func TestEnrollCmdStructure(t *testing.T) {
 	t.Run("enroll command has correct use and description", func(t *testing.T) {
-		cmd := enrollCmdWithConfig(func(string) (*config.Config, error) { return nil, nil })
+		cmd := enrollCmdWithConfig(func(string) (*config.Config, error) { return nil, nil }, newFileSvc)
 		assert.Equal(t, "enroll", cmd.Use)
 		assert.Contains(t, cmd.Short, "Enroll")
 		assert.NotNil(t, cmd.RunE)
 	})
 
 	t.Run("enroll has tpm flag on Windows only", func(t *testing.T) {
-		cmd := enrollCmdWithConfig(func(string) (*config.Config, error) { return nil, nil })
+		cmd := enrollCmdWithConfig(func(string) (*config.Config, error) { return nil, nil }, newFileSvc)
 		flag := cmd.Flags().Lookup("tpm")
 		if runtime.GOOS == "windows" {
 			assert.NotNil(t, flag)

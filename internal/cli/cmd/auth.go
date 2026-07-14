@@ -45,10 +45,13 @@ func authCmd() *cobra.Command {
 }
 
 func enrollCmd() *cobra.Command {
-	return enrollCmdWithConfig(loadConfig)
+	return enrollCmdWithConfig(loadConfig, newFileSvc)
 }
 
-func enrollCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobra.Command {
+func enrollCmdWithConfig(
+	configLoader func(string) (*config.Config, error),
+	fileSvcFactory func() (fs.RuntimeFileService, error),
+) *cobra.Command {
 	var useTPM bool
 
 	cmd := &cobra.Command{
@@ -69,9 +72,9 @@ The Gateway must already be running (use './g8e gw start' first).`,
 				return err
 			}
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			return performEnroll(cmd, fileSvc, cfg, useTPM)

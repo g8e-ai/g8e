@@ -25,6 +25,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/spf13/cobra"
 )
 
@@ -47,10 +48,10 @@ func auditCmd() *cobra.Command {
 }
 
 func auditReceiptsCmd() *cobra.Command {
-	return auditReceiptsCmdWithConfig(loadConfig, defaultAPIClientFactory)
+	return auditReceiptsCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func auditReceiptsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
+func auditReceiptsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
 	var txID string
 	var jsonOutput bool
@@ -67,9 +68,9 @@ transaction hash, and --json to output raw JSON instead of a table.`,
 				return err
 			}
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("audit: create file service: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			client, err := clientFactory(fileSvc, cfg)
@@ -170,10 +171,10 @@ transaction hash, and --json to output raw JSON instead of a table.`,
 }
 
 func auditExportCmd() *cobra.Command {
-	return auditExportCmdWithConfig(loadConfig, defaultAPIClientFactory)
+	return auditExportCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func auditExportCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
+func auditExportCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
 	var outPath string
 
@@ -189,9 +190,9 @@ file path (defaults to stdout).`,
 				return err
 			}
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("audit: create file service: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			client, err := clientFactory(fileSvc, cfg)
@@ -242,10 +243,10 @@ file path (defaults to stdout).`,
 }
 
 func auditReportCmd() *cobra.Command {
-	return auditReportCmdWithConfig(loadConfig, defaultAPIClientFactory)
+	return auditReportCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func auditReportCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
+func auditReportCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
 	var outDir string
 
@@ -261,9 +262,9 @@ directory for the report file.`,
 				return err
 			}
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("audit: create file service: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			client, err := clientFactory(fileSvc, cfg)
@@ -326,10 +327,10 @@ directory for the report file.`,
 }
 
 func auditEventsCmd() *cobra.Command {
-	return auditEventsCmdWithConfig(loadConfig, defaultAPIClientFactory)
+	return auditEventsCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func auditEventsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
+func auditEventsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
 	var limit int
 	var jsonOutput bool
@@ -351,9 +352,9 @@ filter by operator session ID, --limit to control the number of results, and
 				return fmt.Errorf("%w: limit must be between 1 and 10000", constants.ErrValidationFailed)
 			}
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("audit: create file service: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			client, err := clientFactory(fileSvc, cfg)
@@ -445,10 +446,10 @@ filter by operator session ID, --limit to control the number of results, and
 }
 
 func auditSummaryCmd() *cobra.Command {
-	return auditSummaryCmdWithConfig(loadConfig, defaultAPIClientFactory)
+	return auditSummaryCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func auditSummaryCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
+func auditSummaryCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
 
 	cmd := &cobra.Command{
@@ -462,9 +463,9 @@ Gateway over mTLS. Use --session to filter by operator session ID.`,
 				return err
 			}
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("audit: create file service: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			client, err := clientFactory(fileSvc, cfg)

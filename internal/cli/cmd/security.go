@@ -28,6 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/pkg/certutil"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 func securityCmd() *cobra.Command {
@@ -46,6 +47,10 @@ func securityCmd() *cobra.Command {
 }
 
 func securityValidateCmd() *cobra.Command {
+	return securityValidateCmdWithConfig(newFileSvc)
+}
+
+func securityValidateCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var pkiDir string
 	var secretsDir string
 
@@ -59,9 +64,9 @@ and confirms that the CA bundle is properly configured for mTLS.`,
 			cmd.Println("Running platform security validation...")
 			failed := false
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 			ctx := context.Background()
 
@@ -266,10 +271,10 @@ func defaultEnrollFunc(cfg *config.Config, gatewayEndpoint, operatorCSR, cliCSR,
 }
 
 func securityPKIEnrollCmd() *cobra.Command {
-	return securityPKIEnrollCmdWithConfig(loadConfig, defaultEnrollFunc)
+	return securityPKIEnrollCmdWithConfig(loadConfig, defaultEnrollFunc, newFileSvc)
 }
 
-func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, error), enroll enrollFunc) *cobra.Command {
+func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, error), enroll enrollFunc, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var outputDir string
 
 	cmd := &cobra.Command{
@@ -287,9 +292,9 @@ func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, e
 				return fmt.Errorf("security: load config: %w", err)
 			}
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 			ctx := context.Background()
 

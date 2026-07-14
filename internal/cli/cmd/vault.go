@@ -80,6 +80,10 @@ func readKeyFile(fileSvc fs.RuntimeFileService, relKeyPath string) ([]byte, erro
 }
 
 func vaultInitCmd() *cobra.Command {
+	return vaultInitCmdWithConfig(newFileSvc)
+}
+
+func vaultInitCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var vaultDir string
 	var keyPath string
 
@@ -88,9 +92,9 @@ func vaultInitCmd() *cobra.Command {
 		Short: "Initialize a new encryption vault",
 		Long:  `Generate a new encryption vault with a random key. The key is saved to the specified key path.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			vaultDir, err = resolveRuntimePath(fileSvc, vaultDir, constants.VaultDirname)
@@ -151,6 +155,10 @@ func vaultInitCmd() *cobra.Command {
 }
 
 func vaultUnlockCmd() *cobra.Command {
+	return vaultUnlockCmdWithConfig(newFileSvc)
+}
+
+func vaultUnlockCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var vaultDir string
 	var keyPath string
 
@@ -159,9 +167,9 @@ func vaultUnlockCmd() *cobra.Command {
 		Short: "Unlock the encryption vault",
 		Long:  `Unlock an existing vault using the private key.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			vaultDir, err = resolveRuntimePath(fileSvc, vaultDir, constants.VaultDirname)
@@ -208,6 +216,10 @@ func vaultUnlockCmd() *cobra.Command {
 }
 
 func vaultRekeyCmd() *cobra.Command {
+	return vaultRekeyCmdWithConfig(newFileSvc)
+}
+
+func vaultRekeyCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var vaultDir string
 	var keyPath string
 	var newKeyPath string
@@ -217,9 +229,9 @@ func vaultRekeyCmd() *cobra.Command {
 		Short: "Re-key the vault with a new private key",
 		Long:  `Re-encrypt the vault's DEK with a new private key. Both old and new keys are required.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			vaultDir, err = resolveRuntimePath(fileSvc, vaultDir, constants.VaultDirname)
@@ -287,6 +299,10 @@ func vaultRekeyCmd() *cobra.Command {
 }
 
 func vaultStatusCmd() *cobra.Command {
+	return vaultStatusCmdWithConfig(newFileSvc)
+}
+
+func vaultStatusCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var vaultDir string
 
 	cmd := &cobra.Command{
@@ -294,9 +310,9 @@ func vaultStatusCmd() *cobra.Command {
 		Short: "Show vault status",
 		Long:  `Display whether the vault is initialized and unlocked.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			vaultDir, err = resolveRuntimePath(fileSvc, vaultDir, constants.VaultDirname)
@@ -338,6 +354,10 @@ func vaultStatusCmd() *cobra.Command {
 }
 
 func vaultResetCmd() *cobra.Command {
+	return vaultResetCmdWithConfig(newFileSvc)
+}
+
+func vaultResetCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var vaultDir string
 	var confirm bool
 
@@ -346,9 +366,9 @@ func vaultResetCmd() *cobra.Command {
 		Short: "Destroy the vault and all encrypted data",
 		Long:  `Reset the vault completely. This is a destructive operation that makes all encrypted data unrecoverable.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			vaultDir, err = resolveRuntimePath(fileSvc, vaultDir, constants.VaultDirname)
@@ -399,6 +419,10 @@ func vaultResetCmd() *cobra.Command {
 }
 
 func vaultExportCmd() *cobra.Command {
+	return vaultExportCmdWithConfig(newFileSvc)
+}
+
+func vaultExportCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var keyPath string
 
 	cmd := &cobra.Command{
@@ -406,9 +430,9 @@ func vaultExportCmd() *cobra.Command {
 		Short: "Export the vault key",
 		Long:  `Export the vault private key in hex format. Use with extreme caution.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			vaultDir := constants.VaultDirname
@@ -434,6 +458,10 @@ func vaultExportCmd() *cobra.Command {
 }
 
 func vaultImportCmd() *cobra.Command {
+	return vaultImportCmdWithConfig(newFileSvc)
+}
+
+func vaultImportCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var keyPath string
 	var keyHex string
 
@@ -442,9 +470,9 @@ func vaultImportCmd() *cobra.Command {
 		Short: "Import a vault key",
 		Long:  `Import a vault private key from hex string or stdin.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			vaultDir := constants.VaultDirname

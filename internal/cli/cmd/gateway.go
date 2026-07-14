@@ -33,6 +33,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/netutil"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/network"
 )
@@ -244,6 +245,13 @@ func gatewayCmd() *cobra.Command {
 }
 
 func gatewayStartCmd() *cobra.Command {
+	return gatewayStartCmdWithConfig(loadConfig, newFileSvc)
+}
+
+func gatewayStartCmdWithConfig(
+	configLoader func(string) (*config.Config, error),
+	fileSvcFactory func() (fs.RuntimeFileService, error),
+) *cobra.Command {
 	var flags GatewayFlags
 	var follow bool
 
@@ -267,7 +275,7 @@ current posture is read from this file and preserved. If the file is missing or
 corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 'doctrine', 'consensus', and 'notary'.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := loadConfig("")
+			_, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
@@ -301,9 +309,9 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 				// Write network identity to file if needed
 				var networkIdentityFile string
 				if len(identityResult.IdentityData) > 0 {
-					fileSvc, err := newFileSvc()
+					fileSvc, err := fileSvcFactory()
 					if err != nil {
-						return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+						return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 					}
 					pm, err := platform.NewProcessManager(fileSvc)
 					if err != nil {
@@ -328,9 +336,9 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 			}
 
 			// Background mode: start gateway as a background process
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 			pm, err := platform.NewProcessManager(fileSvc)
 			if err != nil {
@@ -379,20 +387,27 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 }
 
 func gatewayStopCmd() *cobra.Command {
+	return gatewayStopCmdWithConfig(loadConfig, newFileSvc)
+}
+
+func gatewayStopCmdWithConfig(
+	configLoader func(string) (*config.Config, error),
+	fileSvcFactory func() (fs.RuntimeFileService, error),
+) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stop",
 		Short: "Stop the g8e Gateway",
 		Long: `Stop the running g8e Gateway process by sending a termination signal to the
 managed process. If the gateway is not running, this command is a no-op.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := loadConfig("")
+			_, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 			pm, err := platform.NewProcessManager(fileSvc)
 			if err != nil {
@@ -421,6 +436,13 @@ managed process. If the gateway is not running, this command is a no-op.`,
 }
 
 func gatewayStatusCmd() *cobra.Command {
+	return gatewayStatusCmdWithConfig(loadConfig, newFileSvc)
+}
+
+func gatewayStatusCmdWithConfig(
+	configLoader func(string) (*config.Config, error),
+	fileSvcFactory func() (fs.RuntimeFileService, error),
+) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Check Gateway health and status",
@@ -428,7 +450,7 @@ func gatewayStatusCmd() *cobra.Command {
 check against the gateway API, then falling back to a process-manager check.
 Displays the process ID and endpoint URLs when the gateway is running.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig("")
+			cfg, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
@@ -437,9 +459,9 @@ Displays the process ID and endpoint URLs when the gateway is running.`,
 			cmd.Println("========================")
 
 			// Try HTTP check first (works for Docker/foreground/background modes)
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("gateway: create file service: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 			client, err := api.NewClient(fileSvc, cfg)
 			if err == nil {
@@ -491,6 +513,13 @@ Displays the process ID and endpoint URLs when the gateway is running.`,
 }
 
 func gatewayRestartCmd() *cobra.Command {
+	return gatewayRestartCmdWithConfig(loadConfig, newFileSvc)
+}
+
+func gatewayRestartCmdWithConfig(
+	configLoader func(string) (*config.Config, error),
+	fileSvcFactory func() (fs.RuntimeFileService, error),
+) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "restart",
 		Short: "Restart the g8e Gateway",
@@ -499,14 +528,14 @@ one. The current posture is read from the persisted posture file
 (.g8e/pids/operator.posture) and preserved across the restart. If the file is
 missing, the gateway defaults to 'doctrine' posture.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := loadConfig("")
+			_, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 			pm, err := platform.NewProcessManager(fileSvc)
 			if err != nil {
@@ -558,6 +587,13 @@ missing, the gateway defaults to 'doctrine' posture.`,
 }
 
 func gatewayLogsCmd() *cobra.Command {
+	return gatewayLogsCmdWithConfig(loadConfig, newFileSvc)
+}
+
+func gatewayLogsCmdWithConfig(
+	configLoader func(string) (*config.Config, error),
+	fileSvcFactory func() (fs.RuntimeFileService, error),
+) *cobra.Command {
 	var follow bool
 
 	cmd := &cobra.Command{
@@ -566,14 +602,14 @@ func gatewayLogsCmd() *cobra.Command {
 		Long: `View the g8e Gateway log file. Use --follow to continuously tail the log
 output (like tail -f).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := loadConfig("")
+			_, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 			pm, err := platform.NewProcessManager(fileSvc)
 			if err != nil {
@@ -596,10 +632,10 @@ output (like tail -f).`,
 }
 
 func gatewaySettingsCmd() *cobra.Command {
-	return gatewaySettingsCmdWithConfig(loadConfig, defaultAPIClientFactory)
+	return gatewaySettingsCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func gatewaySettingsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
+func gatewaySettingsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "settings",
 		Short: "Manage Gateway settings",
@@ -611,9 +647,9 @@ Gateway over mTLS.`,
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("gateway: create file service: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
@@ -697,6 +733,13 @@ certificates and keys are preserved. Use --force to skip the confirmation prompt
 }
 
 func gatewayCleanCmd() *cobra.Command {
+	return gatewayCleanCmdWithConfig(loadConfig, newFileSvc)
+}
+
+func gatewayCleanCmdWithConfig(
+	configLoader func(string) (*config.Config, error),
+	fileSvcFactory func() (fs.RuntimeFileService, error),
+) *cobra.Command {
 	var force bool
 
 	cmd := &cobra.Command{
@@ -708,7 +751,7 @@ secrets, logs, and TLS/PKI certificates/keys. All trust routes and credentials
 are permanently destroyed. CLI credentials become invalid after this operation.
 Use --force to skip the confirmation prompt.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := loadConfig("")
+			_, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
@@ -732,9 +775,9 @@ Use --force to skip the confirmation prompt.`,
 				}
 			}
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 			pm, err := platform.NewProcessManager(fileSvc)
 			if err != nil {

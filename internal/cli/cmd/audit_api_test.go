@@ -56,7 +56,7 @@ func TestAuditReceiptsCmd_API_MockHappyPath(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := auditReceiptsCmdWithConfig(loader, factory)
+	cmd := auditReceiptsCmdWithConfig(loader, factory, newFileSvc)
 	cmd.Flags().Set("session", "op-sess-test")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -80,7 +80,7 @@ func TestAuditReceiptsCmd_API_JSONOutput(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := auditReceiptsCmdWithConfig(loader, factory)
+	cmd := auditReceiptsCmdWithConfig(loader, factory, newFileSvc)
 	cmd.Flags().Set("session", "op-sess-test")
 	cmd.Flags().Set("json", "true")
 	var buf bytes.Buffer
@@ -102,7 +102,7 @@ func TestAuditReceiptsCmd_API_EmptyReceipts(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := auditReceiptsCmdWithConfig(loader, factory)
+	cmd := auditReceiptsCmdWithConfig(loader, factory, newFileSvc)
 	cmd.Flags().Set("session", "op-sess-test")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -123,7 +123,7 @@ func TestAuditReceiptsCmd_API_GetError(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := auditReceiptsCmdWithConfig(loader, factory)
+	cmd := auditReceiptsCmdWithConfig(loader, factory, newFileSvc)
 	cmd.Flags().Set("session", "op-sess-test")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -144,7 +144,7 @@ func TestAuditReceiptsCmd_API_InvalidJSON(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := auditReceiptsCmdWithConfig(loader, factory)
+	cmd := auditReceiptsCmdWithConfig(loader, factory, newFileSvc)
 	cmd.Flags().Set("session", "op-sess-test")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -163,7 +163,7 @@ func TestAuditReceiptsCmd_API_ClientFactoryError(t *testing.T) {
 		return nil, constants.ErrNotAuthenticated
 	}
 
-	cmd := auditReceiptsCmdWithConfig(loader, factory)
+	cmd := auditReceiptsCmdWithConfig(loader, factory, newFileSvc)
 	cmd.Flags().Set("session", "op-sess-test")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -188,7 +188,7 @@ func TestAuditExportCmd_API_MockHappyPath(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := auditExportCmdWithConfig(loader, factory)
+	cmd := auditExportCmdWithConfig(loader, factory, newFileSvc)
 	cmd.Flags().Set("session", "op-sess-test")
 	outFile := tmpDir + "/export.json"
 	cmd.Flags().Set("out", outFile)
@@ -215,7 +215,7 @@ func TestAuditExportCmd_API_GetError(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := auditExportCmdWithConfig(loader, factory)
+	cmd := auditExportCmdWithConfig(loader, factory, newFileSvc)
 	cmd.Flags().Set("session", "op-sess-test")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -240,7 +240,7 @@ func TestAuditReportCmd_API_MockHappyPath(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := auditReportCmdWithConfig(loader, factory)
+	cmd := auditReportCmdWithConfig(loader, factory, newFileSvc)
 	cmd.Flags().Set("session", "op-sess-test")
 	cmd.Flags().Set("out", tmpDir)
 	var buf bytes.Buffer
@@ -265,7 +265,7 @@ func TestAuditReportCmd_API_InvalidJSON(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := auditReportCmdWithConfig(loader, factory)
+	cmd := auditReportCmdWithConfig(loader, factory, newFileSvc)
 	cmd.Flags().Set("session", "op-sess-test")
 	cmd.Flags().Set("out", tmpDir)
 	var buf bytes.Buffer
@@ -288,7 +288,7 @@ func TestAuditReportCmd_API_GetError(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := auditReportCmdWithConfig(loader, factory)
+	cmd := auditReportCmdWithConfig(loader, factory, newFileSvc)
 	cmd.Flags().Set("session", "op-sess-test")
 	cmd.Flags().Set("out", tmpDir)
 	var buf bytes.Buffer
@@ -313,7 +313,7 @@ func TestAuditEventsCmd_API_MockHappyPath(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := auditEventsCmdWithConfig(loader, factory)
+	cmd := auditEventsCmdWithConfig(loader, factory, newFileSvc)
 	cmd.Flags().Set("session", "op-sess-test")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -337,7 +337,7 @@ func TestAuditEventsCmd_API_JSONOutput(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := auditEventsCmdWithConfig(loader, factory)
+	cmd := auditEventsCmdWithConfig(loader, factory, newFileSvc)
 	cmd.Flags().Set("session", "op-sess-test")
 	cmd.Flags().Set("json", "true")
 	var buf bytes.Buffer
@@ -359,7 +359,7 @@ func TestAuditEventsCmd_API_EmptyEvents(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := auditEventsCmdWithConfig(loader, factory)
+	cmd := auditEventsCmdWithConfig(loader, factory, newFileSvc)
 	cmd.Flags().Set("session", "op-sess-test")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -380,7 +380,7 @@ func TestAuditEventsCmd_API_GetError(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := auditEventsCmdWithConfig(loader, factory)
+	cmd := auditEventsCmdWithConfig(loader, factory, newFileSvc)
 	cmd.Flags().Set("session", "op-sess-test")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -401,7 +401,7 @@ func TestAuditEventsCmd_API_InvalidJSON(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := auditEventsCmdWithConfig(loader, factory)
+	cmd := auditEventsCmdWithConfig(loader, factory, newFileSvc)
 	cmd.Flags().Set("session", "op-sess-test")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -425,7 +425,7 @@ func TestAuditSummaryCmd_API_MockHappyPath(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := auditSummaryCmdWithConfig(loader, factory)
+	cmd := auditSummaryCmdWithConfig(loader, factory, newFileSvc)
 	cmd.Flags().Set("session", "op-sess-test")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -448,7 +448,7 @@ func TestAuditSummaryCmd_API_EmptyRecords(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := auditSummaryCmdWithConfig(loader, factory)
+	cmd := auditSummaryCmdWithConfig(loader, factory, newFileSvc)
 	cmd.Flags().Set("session", "op-sess-test")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -469,7 +469,7 @@ func TestAuditSummaryCmd_API_InvalidJSON(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := auditSummaryCmdWithConfig(loader, factory)
+	cmd := auditSummaryCmdWithConfig(loader, factory, newFileSvc)
 	cmd.Flags().Set("session", "op-sess-test")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -490,7 +490,7 @@ func TestAuditSummaryCmd_API_GetError(t *testing.T) {
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := auditSummaryCmdWithConfig(loader, factory)
+	cmd := auditSummaryCmdWithConfig(loader, factory, newFileSvc)
 	cmd.Flags().Set("session", "op-sess-test")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)

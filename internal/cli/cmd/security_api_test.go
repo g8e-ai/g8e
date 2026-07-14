@@ -47,7 +47,7 @@ var errMockEnroll = errors.New("enrollment server error")
 func enrollCmdWithRoot(configLoader func(string) (*config.Config, error), enroll enrollFunc) *cobra.Command {
 	root := &cobra.Command{Use: "g8e"}
 	root.PersistentFlags().StringP("endpoint", "e", "", "Gateway endpoint (host or host:port)")
-	enrollCmd := securityPKIEnrollCmdWithConfig(configLoader, enroll)
+	enrollCmd := securityPKIEnrollCmdWithConfig(configLoader, enroll, newFileSvc)
 	root.AddCommand(enrollCmd)
 	// Trigger cobra's persistent flag merging so cmd.Flags() can see the inherited --endpoint flag
 	_ = enrollCmd.ParseFlags([]string{})

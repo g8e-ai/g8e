@@ -30,6 +30,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/stream"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/spf13/cobra"
 )
 
@@ -53,10 +54,10 @@ func operatorCmd() *cobra.Command {
 }
 
 func operatorListCmd() *cobra.Command {
-	return operatorListCmdWithConfig(loadConfig, defaultAPIClientFactory)
+	return operatorListCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
+func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all Operator instances",
@@ -67,9 +68,9 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 				return err
 			}
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("operator: create file service: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			client, err := clientFactory(fileSvc, cfg)
@@ -373,6 +374,10 @@ func copyFile(src, dst string) error {
 }
 
 func operatorDeployCmd() *cobra.Command {
+	return operatorDeployCmdWithConfig(loadConfig, newFileSvc)
+}
+
+func operatorDeployCmdWithConfig(configLoader func(string) (*config.Config, error), fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var hosts string
 	var port int
 	var identityFile string
@@ -383,14 +388,14 @@ func operatorDeployCmd() *cobra.Command {
 		Short: "Deploy the operator binary to remote hosts and start it",
 		Long:  `Deploy the g8e operator binary to remote hosts via SSH and start it in the background. Uses your existing SSH config for authentication. Requires './g8e auth enroll' first.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig("")
+			cfg, err := configLoader("")
 			if err != nil {
 				return err
 			}
 
-			fileSvc, err := newFileSvc()
+			fileSvc, err := fileSvcFactory()
 			if err != nil {
-				return fmt.Errorf("operator: create file service: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
 			creds, err := auth.LoadCredentials(fileSvc, cfg)

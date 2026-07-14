@@ -162,6 +162,10 @@ type Content struct {
 // ─── stdio: governed proxy (the only supported mode) ────────────────────────
 
 func mcpStdioCmd() *cobra.Command {
+	return mcpStdioCmdWithConfig(newFileSvc)
+}
+
+func mcpStdioCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	return &cobra.Command{
 		Use:   "stdio",
 		Short: "Run MCP stdio server with full L1-L5 governance (proxies to gateway)",
@@ -173,7 +177,7 @@ discovery and health checks only.
 This command is launched automatically by 'g8e mcp agent run'. When invoked
 directly the CLI session is loaded from disk (bootstrapping enrollment if needed).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runMCPStdioProxy(cmd, args)
+			return runMCPStdioProxy(cmd, args, fileSvcFactory)
 		},
 	}
 }
@@ -359,15 +363,15 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-func runMCPStdioProxy(cmd *cobra.Command, _ []string) error {
+func runMCPStdioProxy(cmd *cobra.Command, _ []string, fileSvcFactory func() (fs.RuntimeFileService, error)) error {
 	cfg, err := loadConfig("")
 	if err != nil {
 		return fmt.Errorf("mcp: load config: %w", err)
 	}
 
-	fileSvc, err := newFileSvc()
+	fileSvc, err := fileSvcFactory()
 	if err != nil {
-		return fmt.Errorf("mcp: create file service: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
@@ -874,6 +878,10 @@ func getSupportedAgents() []agentInfo {
 // ─── agent run ──────────────────────────────────────────────────────────────
 
 func agentRunCmd() *cobra.Command {
+	return agentRunCmdWithConfig(newFileSvc)
+}
+
+func agentRunCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var downstreamURL string
 
 	cmd := &cobra.Command{
@@ -945,7 +953,7 @@ the gateway and use 'g8e mcp stdio'.`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runMCPAgentRun(args, downstreamURL)
+			return runMCPAgentRun(args, downstreamURL, fileSvcFactory)
 		},
 	}
 
@@ -1047,15 +1055,15 @@ func (d *subprocessMCPProxy) forward(req JSONRPCRequest) (JSONRPCResponse, error
 // waits until it is healthy, then ensures CLI mTLS credentials exist.
 // HTTP is only used here to poll the bootstrap health endpoint before mTLS
 // certs have been issued — all subsequent traffic uses mTLS.
-func startGatewayIfNeeded() error {
+func startGatewayIfNeeded(fileSvcFactory func() (fs.RuntimeFileService, error)) error {
 	_, err := loadConfig("")
 	if err != nil {
 		return fmt.Errorf("mcp: load config: %w", err)
 	}
 
-	fileSvc, err := newFileSvc()
+	fileSvc, err := fileSvcFactory()
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
+		return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 	}
 
 	pm, err := platform.NewProcessManager(fileSvc)
@@ -1422,8 +1430,8 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 // then launches the requested agent with 'g8e mcp stdio' as its sole MCP server.
 // The authenticated CLI session is propagated to the stdio subprocess via G8E_*
 // environment variables so it never needs to re-read credentials from disk.
-func launchAgentWithGovernance(agentID string, extraArgs []string) error {
-	if err := startGatewayIfNeeded(); err != nil {
+func launchAgentWithGovernance(agentID string, extraArgs []string, fileSvcFactory func() (fs.RuntimeFileService, error)) error {
+	if err := startGatewayIfNeeded(fileSvcFactory); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrGatewayNotReady, err)
 	}
 
@@ -1432,9 +1440,9 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 		return fmt.Errorf("mcp: load config: %w", err)
 	}
 
-	fileSvc, err := newFileSvc()
+	fileSvc, err := fileSvcFactory()
 	if err != nil {
-		return fmt.Errorf("mcp: create file service: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 	}
 
 	// Ensure CLI credentials exist, auto-enroll if needed
@@ -1585,7 +1593,7 @@ func agentLaunchArgs(agentID, mcpConfigPath string) ([]string, error) {
 	}
 }
 
-func runMCPAgentRun(args []string, downstreamURL string) error {
+func runMCPAgentRun(args []string, downstreamURL string, fileSvcFactory func() (fs.RuntimeFileService, error)) error {
 	if downstreamURL == "" && len(args) == 0 {
 		return fmt.Errorf("specify an agent name or MCP server\n\nLaunch an agent with governance:\n  g8e mcp agent run claude\n\nWrap an MCP server subprocess:\n  g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /\n\nWrap an HTTP MCP server:\n  g8e mcp agent run --url http://localhost:3000")
 	}
@@ -1595,7 +1603,7 @@ func runMCPAgentRun(args []string, downstreamURL string) error {
 		firstArg := strings.ToLower(args[0])
 		for _, a := range getSupportedAgents() {
 			if strings.ToLower(a.ID) == firstArg {
-				return launchAgentWithGovernance(a.ID, args[1:])
+				return launchAgentWithGovernance(a.ID, args[1:], fileSvcFactory)
 			}
 		}
 	}

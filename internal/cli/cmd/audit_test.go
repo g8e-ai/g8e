@@ -359,7 +359,7 @@ func TestAuditReceiptsCmd_ConfigLoadFailure(t *testing.T) {
 		}
 		defer func() { configLoad = originalLoad }()
 
-		cmd := auditReceiptsCmdWithConfig(loadConfig, defaultAPIClientFactory)
+		cmd := auditReceiptsCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
@@ -397,7 +397,7 @@ func TestAuditReceiptsCmd_APIClientFailure(t *testing.T) {
 
 		cmd := auditReceiptsCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory)
+		}, defaultAPIClientFactory, newFileSvc)
 
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
@@ -424,7 +424,7 @@ func TestAuditReceiptsCmd_CredentialsLoadFailure(t *testing.T) {
 
 		cmd := auditReceiptsCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory)
+		}, defaultAPIClientFactory, newFileSvc)
 
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
@@ -449,7 +449,7 @@ func TestAuditReceiptsCmd_NoCredentials(t *testing.T) {
 
 		cmd := auditReceiptsCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory)
+		}, defaultAPIClientFactory, newFileSvc)
 
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
@@ -536,7 +536,7 @@ func TestAuditReceiptsCmd_TableDriven(t *testing.T) {
 
 			cmd := auditReceiptsCmdWithConfig(func(_ string) (*config.Config, error) {
 				return cfg, nil
-			}, defaultAPIClientFactory)
+			}, defaultAPIClientFactory, newFileSvc)
 
 			var buf bytes.Buffer
 			cmd.SetOut(&buf)
@@ -636,7 +636,7 @@ func TestAuditExportCmd_ErrorPaths(t *testing.T) {
 		}
 		defer func() { configLoad = originalLoad }()
 
-		cmd := auditExportCmdWithConfig(loadConfig, defaultAPIClientFactory)
+		cmd := auditExportCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -657,7 +657,7 @@ func TestAuditExportCmd_ErrorPaths(t *testing.T) {
 
 		cmd := auditExportCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory)
+		}, defaultAPIClientFactory, newFileSvc)
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -678,7 +678,7 @@ func TestAuditExportCmd_ErrorPaths(t *testing.T) {
 
 		cmd := auditExportCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory)
+		}, defaultAPIClientFactory, newFileSvc)
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -697,7 +697,7 @@ func TestAuditReportCmd_ErrorPaths(t *testing.T) {
 		}
 		defer func() { configLoad = originalLoad }()
 
-		cmd := auditReportCmdWithConfig(loadConfig, defaultAPIClientFactory)
+		cmd := auditReportCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -718,7 +718,7 @@ func TestAuditReportCmd_ErrorPaths(t *testing.T) {
 
 		cmd := auditReportCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory)
+		}, defaultAPIClientFactory, newFileSvc)
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -737,7 +737,7 @@ func TestAuditEventsCmd_ErrorPaths(t *testing.T) {
 		}
 		defer func() { configLoad = originalLoad }()
 
-		cmd := auditEventsCmdWithConfig(loadConfig, defaultAPIClientFactory)
+		cmd := auditEventsCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -758,7 +758,7 @@ func TestAuditEventsCmd_ErrorPaths(t *testing.T) {
 
 		cmd := auditEventsCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory)
+		}, defaultAPIClientFactory, newFileSvc)
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -777,7 +777,7 @@ func TestAuditEventsCmd_ErrorPaths(t *testing.T) {
 
 		cmd := auditEventsCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory)
+		}, defaultAPIClientFactory, newFileSvc)
 		cmd.Flags().Set("session", "sess-123")
 		cmd.Flags().Set("limit", "0")
 
@@ -799,7 +799,7 @@ func TestAuditEventsCmd_ErrorPaths(t *testing.T) {
 
 		cmd := auditEventsCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory)
+		}, defaultAPIClientFactory, newFileSvc)
 		cmd.Flags().Set("session", "sess-123")
 		cmd.Flags().Set("limit", "10001")
 
@@ -821,7 +821,7 @@ func TestAuditSummaryCmd_ErrorPaths(t *testing.T) {
 		}
 		defer func() { configLoad = originalLoad }()
 
-		cmd := auditSummaryCmdWithConfig(loadConfig, defaultAPIClientFactory)
+		cmd := auditSummaryCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -842,7 +842,7 @@ func TestAuditSummaryCmd_ErrorPaths(t *testing.T) {
 
 		cmd := auditSummaryCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory)
+		}, defaultAPIClientFactory, newFileSvc)
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
