@@ -618,26 +618,16 @@ func DeleteCredentials(fileSvc fs.RuntimeFileService, cfg *config.Config) error 
 // SaveCertAndKey writes a certificate and its private key to the runtime directory via fileSvc.
 // certRelPath and keyRelPath must be relative to the .g8e/ runtime directory root.
 func SaveCertAndKey(fileSvc fs.RuntimeFileService, certPEM, chainPEM string, key *ecdsa.PrivateKey, certRelPath, keyRelPath string) error {
-	keyBytes, err := x509.MarshalECPrivateKey(key)
+	certBytes, keyBytes, err := certutil.EncodeCertAndKey(certPEM, chainPEM, key)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrKeyParseFailed, err)
-	}
-
-	keyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "EC PRIVATE KEY",
-		Bytes: keyBytes,
-	})
-
-	if err := fileSvc.WriteFile(context.Background(), keyRelPath, keyPEM, constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 
-	certContent := certPEM
-	if chainPEM != "" {
-		certContent += "\n" + chainPEM
+	if err := fileSvc.WriteFile(context.Background(), keyRelPath, keyBytes, constants.PermFilePrivate); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 
-	if err := fileSvc.WriteFile(context.Background(), certRelPath, []byte(certContent), constants.PermFilePrivate); err != nil {
+	if err := fileSvc.WriteFile(context.Background(), certRelPath, certBytes, constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 

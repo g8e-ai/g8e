@@ -16,7 +16,6 @@ package cmd
 import (
 	"context"
 	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
@@ -28,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/pkg/certutil"
 )
 
 func securityCmd() *cobra.Command {
@@ -349,22 +349,14 @@ func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, e
 					return fmt.Errorf("security: save cert and key: %w", err)
 				}
 			} else {
-				keyBytes, err := x509.MarshalECPrivateKey(opKey)
+				certBytes, keyBytes, err := certutil.EncodeCertAndKey(regResp.OperatorCert, regResp.OperatorCertChain, opKey)
 				if err != nil {
-					return fmt.Errorf("security: marshal key: %w: %w", constants.ErrKeyParseFailed, err)
+					return fmt.Errorf("security: save cert and key: %w: %w", constants.ErrCertSaveFailed, err)
 				}
-				keyPEM := pem.EncodeToMemory(&pem.Block{
-					Type:  "EC PRIVATE KEY",
-					Bytes: keyBytes,
-				})
-				if err := os.WriteFile(keyPath, keyPEM, constants.PermFilePrivate); err != nil {
+				if err := os.WriteFile(keyPath, keyBytes, constants.PermFilePrivate); err != nil {
 					return fmt.Errorf("security: save key: %w: %w", constants.ErrCertSaveFailed, err)
 				}
-				certContent := regResp.OperatorCert
-				if regResp.OperatorCertChain != "" {
-					certContent += "\n" + regResp.OperatorCertChain
-				}
-				if err := os.WriteFile(certPath, []byte(certContent), constants.PermFilePrivate); err != nil {
+				if err := os.WriteFile(certPath, certBytes, constants.PermFilePrivate); err != nil {
 					return fmt.Errorf("security: save cert: %w: %w", constants.ErrCertSaveFailed, err)
 				}
 			}

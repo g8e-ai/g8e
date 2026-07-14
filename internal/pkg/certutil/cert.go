@@ -1,6 +1,7 @@
 package certutil
 
 import (
+	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -26,4 +27,30 @@ func ParseCertFromPEM(data []byte) (*x509.Certificate, error) {
 	}
 
 	return cert, nil
+}
+
+// EncodeCertAndKey marshals an EC private key to PEM and combines a leaf
+// certificate with an optional chain using the canonical "\n" separator.
+// Returns the certificate bytes and key bytes. Storage is left to the caller.
+func EncodeCertAndKey(certPEM, chainPEM string, key *ecdsa.PrivateKey) ([]byte, []byte, error) {
+	if key == nil {
+		return nil, nil, constants.ErrKeyParseFailed
+	}
+
+	keyBytes, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: %w", constants.ErrKeyParseFailed, err)
+	}
+
+	keyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "EC PRIVATE KEY",
+		Bytes: keyBytes,
+	})
+
+	certContent := certPEM
+	if chainPEM != "" {
+		certContent += "\n" + chainPEM
+	}
+
+	return []byte(certContent), keyPEM, nil
 }
