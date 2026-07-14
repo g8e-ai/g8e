@@ -235,7 +235,10 @@ func (f *DockerE2EFixture) GetCABundle(t *testing.T) string {
 	return string(bundle)
 }
 
-// CheckOperatorContainer checks if the operator container is running and has connection success in logs.
+// CheckOperatorContainer checks if the operator container is running and has
+// authentication success in logs. It waits for the operator to complete bootstrap
+// authentication before asserting, since the operator may still be enrolling
+// when the gateway first becomes healthy.
 func (f *DockerE2EFixture) CheckOperatorContainer(t *testing.T) {
 	t.Helper()
 
@@ -248,9 +251,15 @@ func (f *DockerE2EFixture) CheckOperatorContainer(t *testing.T) {
 	status := strings.TrimSpace(string(output))
 	require.Equal(t, "running", status, "Operator container is not running")
 
-	// Check logs for connection success marker
-	logs := f.OperatorLogs(t)
-	require.Contains(t, logs, "Authentication successful", "Operator logs do not contain authentication success marker")
+	// Wait for operator to complete bootstrap authentication
+	require.Eventually(t, func() bool {
+		logsCmd := exec.Command("docker", "logs", opContainerName)
+		logsOutput, err := logsCmd.CombinedOutput()
+		if err != nil {
+			return false
+		}
+		return strings.Contains(string(logsOutput), "Authentication successful")
+	}, 120*time.Second, 2*time.Second, "Operator logs do not contain authentication success marker")
 }
 
 // OperatorLogs returns the combined stdout/stderr logs of the operator container.

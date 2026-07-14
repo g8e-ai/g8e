@@ -16,8 +16,10 @@
 package e2e
 
 import (
+	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -46,9 +48,18 @@ func TestDockerGateway_Auth(t *testing.T) {
 		require.NotEmpty(t, bundle, "CA bundle is empty")
 		require.Contains(t, bundle, "BEGIN CERTIFICATE", "CA bundle does not contain PEM certificate")
 
-		// Verify operator logs show successful authentication using the same CA chain
-		logs := f.OperatorLogs(t)
-		require.Contains(t, logs, "Authentication successful",
+		// Verify operator logs show successful authentication using the same CA chain.
+		// Wait for the operator to complete bootstrap authentication, since it may
+		// still be enrolling when the gateway first becomes healthy.
+		opContainerName := f.ContainerPrefix + "-operator"
+		require.Eventually(t, func() bool {
+			logsCmd := exec.Command("docker", "logs", opContainerName)
+			logsOutput, err := logsCmd.CombinedOutput()
+			if err != nil {
+				return false
+			}
+			return strings.Contains(string(logsOutput), "Authentication successful")
+		}, 120*time.Second, 2*time.Second,
 			"Operator logs do not contain authentication success marker — CA bundle may be inconsistent")
 	})
 
