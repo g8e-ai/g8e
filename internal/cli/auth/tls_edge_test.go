@@ -32,7 +32,7 @@ func TestBuildMTLSClient_MissingCertFile(t *testing.T) {
 		Paths:      &config.PathsConfig{Host: "localhost"},
 	}
 
-	_, err := BuildMTLSClient(cfg, 30*time.Second)
+	_, err := BuildMTLSClient(fileSvc, cfg, 30*time.Second)
 	if err == nil {
 		t.Error("expected error for missing cert file")
 	}
@@ -61,7 +61,7 @@ func TestBuildMTLSClient_InvalidCertPair(t *testing.T) {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 
-	_, err := BuildMTLSClient(cfg, 30*time.Second)
+	_, err := BuildMTLSClient(fileSvc, cfg, 30*time.Second)
 	if err == nil {
 		t.Error("expected error for invalid cert pair")
 	}
@@ -114,7 +114,7 @@ func TestBuildMTLSClient_MissingTrustBundle(t *testing.T) {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 
-	_, err = BuildMTLSClient(cfg, 30*time.Second)
+	_, err = BuildMTLSClient(fileSvc, cfg, 30*time.Second)
 	if err == nil {
 		t.Error("expected error for missing trust bundle")
 	}
@@ -170,7 +170,7 @@ func TestBuildMTLSClient_InvalidTrustBundle(t *testing.T) {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 
-	_, err = BuildMTLSClient(cfg, 30*time.Second)
+	_, err = BuildMTLSClient(fileSvc, cfg, 30*time.Second)
 	if err == nil {
 		t.Error("expected error for invalid trust bundle")
 	}

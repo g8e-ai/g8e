@@ -35,7 +35,7 @@ type tuiDeps struct {
 	fileSvcFactory       func() (fs.RuntimeFileService, error)
 	checkOperatorRunning func(*config.Config) error
 	loadCredentials      func(fs.RuntimeFileService, *config.Config) (*auth.Credentials, error)
-	buildMTLSClient      func(*config.Config, time.Duration) (*http.Client, error)
+	buildMTLSClient      func(fs.RuntimeFileService, *config.Config, time.Duration) (*http.Client, error)
 	tuiRun               func(context.Context, tui.Options) error
 }
 
@@ -105,7 +105,7 @@ func runTUI(cmd *cobra.Command, args []string, deps tuiDeps) error {
 	}
 
 	// Build mTLS HTTP client for SSE streaming (no timeout — context-controlled).
-	httpClient, err := deps.buildMTLSClient(cfg, 0)
+	httpClient, err := deps.buildMTLSClient(fileSvc, cfg, 0)
 	if err != nil {
 		return fmt.Errorf("tui: build mTLS client: %w", err)
 	}

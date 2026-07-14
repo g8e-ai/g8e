@@ -51,24 +51,41 @@ import (
 // httpTimeout is the default timeout for all HTTP clients in the auth package.
 const httpTimeout = 30 * time.Second
 
-// WriteTrustBundle writes the trust bundle to the given path using os.* operations,
-// since TrustBundlePath() may point outside the .g8e/ runtime directory.
-func WriteTrustBundle(trustBundlePath string, data []byte, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(trustBundlePath), constants.PermDirPrivate); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
+// ReadTrustBundle reads the trust bundle using fileSvc for the default runtime
+// path, or os.ReadFile for a custom external path.
+func ReadTrustBundle(fileSvc fs.RuntimeFileService, cfg *config.Config) ([]byte, error) {
+	if custom := cfg.CustomTrustBundlePath(); custom != "" {
+		return os.ReadFile(custom)
 	}
-	if err := os.WriteFile(trustBundlePath, data, mode); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
-	}
-	return nil
+	return fileSvc.ReadFile(context.Background(), cfg.DefaultTrustBundleRelPath())
 }
 
-// removeTrustBundle removes the trust bundle file. No-op if the file does not exist.
-func removeTrustBundle(trustBundlePath string) error {
-	if err := os.Remove(trustBundlePath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
+// WriteTrustBundleFS writes the trust bundle using fileSvc for the default runtime
+// path, or os.* for a custom external path.
+func WriteTrustBundleFS(fileSvc fs.RuntimeFileService, cfg *config.Config, data []byte, mode os.FileMode) error {
+	if custom := cfg.CustomTrustBundlePath(); custom != "" {
+		if err := os.MkdirAll(filepath.Dir(custom), constants.PermDirPrivate); err != nil {
+			return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
+		}
+		if err := os.WriteFile(custom, data, mode); err != nil {
+			return fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
+		}
+		return nil
 	}
-	return nil
+	return fileSvc.WriteFile(context.Background(), cfg.DefaultTrustBundleRelPath(), data, mode)
+}
+
+// RemoveTrustBundleFS removes the trust bundle using fileSvc for the default
+// runtime path, or os.Remove for a custom external path. No-op if the file
+// does not exist.
+func RemoveTrustBundleFS(fileSvc fs.RuntimeFileService, cfg *config.Config) error {
+	if custom := cfg.CustomTrustBundlePath(); custom != "" {
+		if err := os.Remove(custom); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
+		}
+		return nil
+	}
+	return fileSvc.Remove(context.Background(), cfg.DefaultTrustBundleRelPath())
 }
 
 // isNotFound checks if an error indicates the file does not exist.
@@ -156,15 +173,13 @@ func GenerateCSR(commonName string) (csrPEM string, privKey *ecdsa.PrivateKey, e
 
 // NewSecureHTTPClient creates an HTTP client bound to the Operator's CA trust bundle.
 // This ensures the CLI can validate the Operator's TLS certificate during CSR-based enrollment.
-func NewSecureHTTPClient(cfg *config.Config) (*http.Client, error) {
-	trustBundlePath := cfg.TrustBundlePath()
-	if trustBundlePath == "" {
-		return nil, constants.ErrGatewayURLRequired
-	}
-
-	caPEM, err := os.ReadFile(trustBundlePath)
+func NewSecureHTTPClient(fileSvc fs.RuntimeFileService, cfg *config.Config) (*http.Client, error) {
+	caPEM, err := ReadTrustBundle(fileSvc, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
+	}
+	if len(caPEM) == 0 {
+		return nil, constants.ErrGatewayURLRequired
 	}
 
 	caPool := x509.NewCertPool()
@@ -507,8 +522,7 @@ func ReEnroll(fileSvc fs.RuntimeFileService, cfg *config.Config, operatorCSR, cl
 	}
 
 	// Write updated trust bundle only after successful mTLS enrollment
-	trustBundlePath := cfg.TrustBundlePath()
-	if err := WriteTrustBundle(trustBundlePath, currentTrustBundle, constants.PermFilePublic); err != nil {
+	if err := WriteTrustBundleFS(fileSvc, cfg, currentTrustBundle, constants.PermFilePublic); err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 	}
 
@@ -608,7 +622,7 @@ func DeleteCredentials(fileSvc fs.RuntimeFileService, cfg *config.Config) error 
 		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
 	}
 
-	if err := removeTrustBundle(cfg.TrustBundlePath()); err != nil {
+	if err := RemoveTrustBundleFS(fileSvc, cfg); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
 	}
 
@@ -781,8 +795,7 @@ func AutoRenewCertificate(fileSvc fs.RuntimeFileService, cfg *config.Config, cer
 	}
 
 	if regResp.HubTrustBundle != "" {
-		trustPath := cfg.TrustBundlePath()
-		if err := WriteTrustBundle(trustPath, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
+		if err := WriteTrustBundleFS(fileSvc, cfg, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 		}
 	}

@@ -126,7 +126,7 @@ func performEnroll(cmd *cobra.Command, fileSvc fs.RuntimeFileService, cfg *confi
 
 		// Register passkey for the newly enrolled user via browser (web session)
 		cmd.Println("\nRegistering passkey via browser...")
-		if err := auth.RegisterPasskeyViaBrowser(cfg, creds.UserID, creds.CLISessionID); err != nil {
+		if err := auth.RegisterPasskeyViaBrowser(fileSvc, cfg, creds.UserID, creds.CLISessionID); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrPasskeyRegistrationFailed, err)
 		}
 		return nil
@@ -208,7 +208,7 @@ func performEnroll(cmd *cobra.Command, fileSvc fs.RuntimeFileService, cfg *confi
 	}
 
 	if regResp.HubTrustBundle != "" {
-		if err := auth.WriteTrustBundle(cfg.TrustBundlePath(), []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
+		if err := auth.WriteTrustBundleFS(fileSvc, cfg, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 		}
 	}
@@ -229,7 +229,7 @@ func performEnroll(cmd *cobra.Command, fileSvc fs.RuntimeFileService, cfg *confi
 	cmd.Printf("CLI Session ID: %s\n", regResp.CLISessionID)
 
 	cmd.Println("\nRegistering passkey via browser...")
-	if err := auth.RegisterPasskeyViaBrowser(cfg, creds.UserID, creds.CLISessionID); err != nil {
+	if err := auth.RegisterPasskeyViaBrowser(fileSvc, cfg, creds.UserID, creds.CLISessionID); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrPasskeyRegistrationFailed, err)
 	}
 	return nil

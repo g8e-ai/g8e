@@ -21,7 +21,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/netutil"
-	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -152,8 +151,16 @@ func TestLoad(t *testing.T) {
 	})
 }
 
-func TestConfig_TrustBundlePath(t *testing.T) {
-	t.Run("returns absolute path as-is", func(t *testing.T) {
+func TestConfig_DefaultTrustBundleRelPath(t *testing.T) {
+	t.Run("returns canonical runtime-relative path", func(t *testing.T) {
+		config := &Config{}
+		result := config.DefaultTrustBundleRelPath()
+		assert.Equal(t, constants.PkiDirname+"/"+constants.PkiSubdirTrust+"/"+constants.PkiFileGatewayBundle, result)
+	})
+}
+
+func TestConfig_CustomTrustBundlePath(t *testing.T) {
+	t.Run("returns absolute custom path when set", func(t *testing.T) {
 		caPath := filepath.Join(testutil.TempDir(t), "absolute", "path", "to", "ca.pem")
 		config := &Config{
 			ProjectRoot: "/project/root",
@@ -177,11 +184,11 @@ func TestConfig_TrustBundlePath(t *testing.T) {
 			},
 		}
 
-		result := config.TrustBundlePath()
+		result := config.CustomTrustBundlePath()
 		assert.Equal(t, caPath, result)
 	})
 
-	t.Run("joins relative path with project root", func(t *testing.T) {
+	t.Run("joins relative custom path with project root", func(t *testing.T) {
 		projectRoot := filepath.Join(string(filepath.Separator), "project", "root")
 		config := &Config{
 			ProjectRoot: projectRoot,
@@ -205,11 +212,11 @@ func TestConfig_TrustBundlePath(t *testing.T) {
 			},
 		}
 
-		result := config.TrustBundlePath()
+		result := config.CustomTrustBundlePath()
 		assert.Equal(t, filepath.Join(projectRoot, "relative", "path", "to", "ca.pem"), result)
 	})
 
-	t.Run("returns empty string when CACertPath is empty", func(t *testing.T) {
+	t.Run("returns empty when CACertPath is empty", func(t *testing.T) {
 		config := &Config{
 			ProjectRoot: "/project/root",
 			Paths: &PathsConfig{
@@ -232,8 +239,80 @@ func TestConfig_TrustBundlePath(t *testing.T) {
 			},
 		}
 
-		result := config.TrustBundlePath()
+		result := config.CustomTrustBundlePath()
 		assert.Empty(t, result)
+	})
+
+	t.Run("returns empty when CACertPath matches default runtime location", func(t *testing.T) {
+		runtimeDir := filepath.Join(string(filepath.Separator), "project", "root", ".g8e")
+		defaultPath := filepath.Join(runtimeDir, constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+		config := &Config{
+			ProjectRoot: "/project/root",
+			RuntimeDir:  runtimeDir,
+			Paths: &PathsConfig{
+				Infra: struct {
+					AppCertDir           string `json:"app_cert_dir"`
+					CACertPath           string `json:"ca_cert_path"`
+					DBPath               string `json:"db_path"`
+					DocsDir              string `json:"docs_dir"`
+					PKIDir               string `json:"pki_dir"`
+					ProtocolConstantsDir string `json:"protocol_constants_dir"`
+					ProtocolDir          string `json:"protocol_dir"`
+					ProtocolModelsDir    string `json:"protocol_models_dir"`
+					SecretsDir           string `json:"secrets_dir"`
+					SSHConfigPath        string `json:"ssh_config_path"`
+					VaultDir             string `json:"vault_dir"`
+					VaultKeyPath         string `json:"vault_key_path"`
+				}{
+					CACertPath: defaultPath,
+				},
+			},
+		}
+
+		result := config.CustomTrustBundlePath()
+		assert.Empty(t, result)
+	})
+}
+
+func TestConfig_ResolvedTrustBundlePath(t *testing.T) {
+	t.Run("returns custom path when set", func(t *testing.T) {
+		caPath := filepath.Join(testutil.TempDir(t), "custom", "ca.pem")
+		config := &Config{
+			ProjectRoot: "/project/root",
+			Paths: &PathsConfig{
+				Infra: struct {
+					AppCertDir           string `json:"app_cert_dir"`
+					CACertPath           string `json:"ca_cert_path"`
+					DBPath               string `json:"db_path"`
+					DocsDir              string `json:"docs_dir"`
+					PKIDir               string `json:"pki_dir"`
+					ProtocolConstantsDir string `json:"protocol_constants_dir"`
+					ProtocolDir          string `json:"protocol_dir"`
+					ProtocolModelsDir    string `json:"protocol_models_dir"`
+					SecretsDir           string `json:"secrets_dir"`
+					SSHConfigPath        string `json:"ssh_config_path"`
+					VaultDir             string `json:"vault_dir"`
+					VaultKeyPath         string `json:"vault_key_path"`
+				}{
+					CACertPath: caPath,
+				},
+			},
+		}
+
+		result := config.ResolvedTrustBundlePath()
+		assert.Equal(t, caPath, result)
+	})
+
+	t.Run("returns default runtime path when no custom path", func(t *testing.T) {
+		runtimeDir := filepath.Join(string(filepath.Separator), "project", "root", ".g8e")
+		config := &Config{
+			ProjectRoot: "/project/root",
+			RuntimeDir:  runtimeDir,
+			Paths:       &PathsConfig{},
+		}
+
+		result := config.ResolvedTrustBundlePath()
+		assert.Equal(t, filepath.Join(runtimeDir, constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle), result)
 	})
 }
 
@@ -694,15 +773,29 @@ func TestConfig_OperatorHTTPURL_Override(t *testing.T) {
 	})
 }
 
-func TestConfig_TrustBundlePath_NilPaths(t *testing.T) {
-	t.Run("returns constants path when Paths is nil", func(t *testing.T) {
+func TestConfig_CustomTrustBundlePath_NilPaths(t *testing.T) {
+	t.Run("returns empty when Paths is nil", func(t *testing.T) {
 		config := &Config{
 			ProjectRoot: "/project/root",
 			Paths:       nil,
 		}
 
-		result := config.TrustBundlePath()
-		assert.Equal(t, paths.Infra.CaCertPath, result)
+		result := config.CustomTrustBundlePath()
+		assert.Empty(t, result)
+	})
+}
+
+func TestConfig_ResolvedTrustBundlePath_NilPaths(t *testing.T) {
+	t.Run("returns default runtime path when Paths is nil", func(t *testing.T) {
+		runtimeDir := filepath.Join(string(filepath.Separator), "project", "root", ".g8e")
+		config := &Config{
+			ProjectRoot: "/project/root",
+			RuntimeDir:  runtimeDir,
+			Paths:       nil,
+		}
+
+		result := config.ResolvedTrustBundlePath()
+		assert.Equal(t, filepath.Join(runtimeDir, constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle), result)
 	})
 }
 

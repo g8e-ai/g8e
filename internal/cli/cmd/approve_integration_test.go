@@ -185,7 +185,7 @@ func TestApproveCmd(t *testing.T) {
 		fileSvc, cfg := newCmdTestEnv(t)
 
 		// Remove the trust bundle that setupTestConfig creates
-		require.NoError(t, fileSvc.Remove(context.Background(), mustRel(t, fileSvc, cfg.TrustBundlePath())))
+		require.NoError(t, fileSvc.Remove(context.Background(), cfg.DefaultTrustBundleRelPath()))
 
 		// Use injectable config loader for hermetic test
 		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {

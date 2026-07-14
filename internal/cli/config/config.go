@@ -222,18 +222,41 @@ func resolveInfraPaths(paths *PathsConfig, projectRoot string) {
 	}
 }
 
-func (c *Config) TrustBundlePath() string {
-	if c.Paths == nil {
-		return paths.Infra.CaCertPath
+// DefaultTrustBundleRelPath returns the trust bundle path relative to the
+// .g8e/ runtime directory root. This is the canonical location for the
+// gateway CA bundle and should be used with RuntimeFileService.
+func (c *Config) DefaultTrustBundleRelPath() string {
+	return constants.PkiDirname + "/" + constants.PkiSubdirTrust + "/" + constants.PkiFileGatewayBundle
+}
+
+// ResolvedTrustBundlePath returns the absolute trust bundle path for display,
+// env-var propagation, or subprocess config. It returns the custom external
+// path when configured, or the default runtime path joined with RuntimeDir.
+// Callers that perform file I/O should use ReadTrustBundle/WriteTrustBundleFS/
+// RemoveTrustBundleFS with fileSvc instead.
+func (c *Config) ResolvedTrustBundlePath() string {
+	if custom := c.CustomTrustBundlePath(); custom != "" {
+		return custom
 	}
-	if c.Paths.Infra.CACertPath == "" {
+	return filepath.Join(c.RuntimeDir, c.DefaultTrustBundleRelPath())
+}
+
+// CustomTrustBundlePath returns a user-specified external trust bundle path
+// if one has been configured that differs from the default runtime location.
+// Returns an empty string when the default runtime path should be used.
+func (c *Config) CustomTrustBundlePath() string {
+	if c.Paths == nil || c.Paths.Infra.CACertPath == "" {
 		return ""
 	}
-	if filepath.IsAbs(c.Paths.Infra.CACertPath) {
-		return c.Paths.Infra.CACertPath
+	configured := c.Paths.Infra.CACertPath
+	if !filepath.IsAbs(configured) {
+		configured = pathutil.SafeJoin(c.ProjectRoot, configured)
 	}
-	// Use pathutil.SafeJoin for cross-platform safety when joining relative paths
-	return pathutil.SafeJoin(c.ProjectRoot, c.Paths.Infra.CACertPath)
+	defaultAbs := filepath.Join(c.RuntimeDir, constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+	if configured == defaultAbs {
+		return ""
+	}
+	return configured
 }
 
 func (c *Config) CredentialsFile() string {

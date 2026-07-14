@@ -101,7 +101,7 @@ func Default() Config {
 		if cliCfg != nil {
 			cfg.Auth.ClientCert = cliCfg.CLICertFile()
 			cfg.Auth.ClientKey = cliCfg.CLIKeyFile()
-			cfg.Auth.CABundle = cliCfg.TrustBundlePath()
+			cfg.Auth.CABundle = cliCfg.ResolvedTrustBundlePath()
 		}
 	}
 

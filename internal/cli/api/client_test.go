@@ -298,9 +298,7 @@ func TestNewClient_MissingTrustBundle(t *testing.T) {
 	cfg, fileSvc, _ := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
-	caCertPath := cfg.TrustBundlePath()
-	caRel, err := fileSvc.Rel(caCertPath)
-	require.NoError(t, err)
+	caRel := cfg.DefaultTrustBundleRelPath()
 	require.NoError(t, fileSvc.Remove(context.Background(), caRel))
 
 	client, err := NewClient(fileSvc, cfg)
@@ -313,9 +311,7 @@ func TestNewClient_InvalidTrustBundle(t *testing.T) {
 	cfg, fileSvc, _ := setupTestConfig(t)
 	setupTestCredentials(t, fileSvc, cfg)
 
-	caCertPath := cfg.TrustBundlePath()
-	caRel, err := fileSvc.Rel(caCertPath)
-	require.NoError(t, err)
+	caRel := cfg.DefaultTrustBundleRelPath()
 	require.NoError(t, fileSvc.WriteFile(context.Background(), caRel, []byte("not a valid PEM"), constants.PermFilePublic))
 
 	client, err := NewClient(fileSvc, cfg)

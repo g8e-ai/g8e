@@ -15,7 +15,6 @@ package api
 
 import (
 	"bytes"
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -58,11 +57,7 @@ func NewClientWithURL(fileSvc fs.RuntimeFileService, cfg *config.Config, baseURL
 		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
 	}
 
-	trustBundleRel, err := fileSvc.Rel(cfg.TrustBundlePath())
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
-	}
-	trustBundle, err := fileSvc.ReadFile(context.Background(), trustBundleRel)
+	trustBundle, err := auth.ReadTrustBundle(fileSvc, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
 	}

@@ -108,7 +108,7 @@ func setupApproveSSETestEnv(t *testing.T) (*config.Config, ed25519.PrivateKey, f
 
 	certPEM, err := fileSvc.ReadFile(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()))
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(cfg.TrustBundlePath(), certPEM, 0o600))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), cfg.DefaultTrustBundleRelPath(), certPEM, constants.PermFilePrivate))
 
 	return cfg, priv, fileSvc
 }

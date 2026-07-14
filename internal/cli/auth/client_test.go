@@ -364,7 +364,7 @@ func TestDeleteCredentials(t *testing.T) {
 		credsFile := cfg.CredentialsFile()
 		certFile := cfg.CLICertFile()
 		keyFile := cfg.CLIKeyFile()
-		trustFile := cfg.TrustBundlePath()
+		trustFile := cfg.ResolvedTrustBundlePath()
 
 		for _, f := range []string{credsFile, certFile, keyFile, trustFile} {
 			if err := os.WriteFile(f, []byte("test"), constants.PermFilePrivate); err != nil {

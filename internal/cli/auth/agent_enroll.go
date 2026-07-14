@@ -91,8 +91,7 @@ func EnrollCLI(fileSvc fs.RuntimeFileService, cfg *config.Config, useTPM bool) e
 		}
 	}
 	if regResp.HubTrustBundle != "" {
-		trustPath := cfg.TrustBundlePath()
-		if err := WriteTrustBundle(trustPath, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
+		if err := WriteTrustBundleFS(fileSvc, cfg, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 		}
 	}
@@ -130,7 +129,7 @@ func EnrollAgentApp(fileSvc fs.RuntimeFileService, cfg *config.Config, agentName
 		return "", "", "", fmt.Errorf("%w: %w", constants.ErrRequestMarshalFailed, err)
 	}
 
-	httpClient, err := BuildMTLSClient(cfg, httpTimeout)
+	httpClient, err := BuildMTLSClient(fileSvc, cfg, httpTimeout)
 	if err != nil {
 		return "", "", "", err
 	}

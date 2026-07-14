@@ -44,6 +44,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/pathutil"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/network"
@@ -284,11 +285,21 @@ type gatewayConn struct {
 // buildGatewayConn constructs a gatewayConn. It reads the delegated credential
 // from G8E_* environment variables injected by 'mcp agent run'. The delegated cert
 // carries both the app SPIFFE ID and the requestor's user identity in its URI SANs.
-func buildGatewayConn(cfg *config.Config) (*gatewayConn, error) {
+func buildGatewayConn(fileSvc fs.RuntimeFileService, cfg *config.Config) (*gatewayConn, error) {
 	// Use the delegated credential (app cert) for agent runs, or CLI cert for direct CLI usage
 	certFile := envOr(envG8EAppCert, envOr(envG8EClientCert, cfg.CLICertFile()))
 	keyFile := envOr(envG8EAppKey, envOr(envG8EClientKey, cfg.CLIKeyFile()))
-	caFile := envOr(envG8ECABundle, cfg.TrustBundlePath())
+
+	var caBundleBytes []byte
+	var err error
+	if envCA := os.Getenv(envG8ECABundle); envCA != "" {
+		caBundleBytes, err = os.ReadFile(envCA)
+	} else {
+		caBundleBytes, err = auth.ReadTrustBundle(fileSvc, cfg)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
+	}
 
 	// Try g8e.local first, fall back to IP if not set in env
 	gatewayURL := os.Getenv(envG8EGatewayURL)
@@ -299,10 +310,6 @@ func buildGatewayConn(cfg *config.Config) (*gatewayConn, error) {
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
-	}
-	caBundleBytes, err := os.ReadFile(caFile)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
 	}
 	caPool := x509.NewCertPool()
 	caPool.AppendCertsFromPEM(caBundleBytes)
@@ -367,7 +374,7 @@ func runMCPStdioProxy(cmd *cobra.Command, _ []string) error {
 
 	// Build the mTLS gateway connection once. Identity is in the delegated cert's
 	// URI SANs — no session object or headers. All proxy calls reuse this connection.
-	conn, err := buildGatewayConn(cfg)
+	conn, err := buildGatewayConn(fileSvc, cfg)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrGatewayNotReady, err)
 	}
@@ -381,7 +388,7 @@ func runMCPStdioProxy(cmd *cobra.Command, _ []string) error {
 	// middleware validates CLI session ownership. The gateway URL is stripped
 	// of the /mcp suffix to get the base URL for SSE endpoints.
 	if creds, err := auth.LoadCredentials(fileSvc, cfg); err == nil && creds != nil && creds.UserID != "" {
-		if sseClient, err := auth.BuildMTLSClient(cfg, 0); err == nil {
+		if sseClient, err := auth.BuildMTLSClient(fileSvc, cfg, 0); err == nil {
 			conn.sseClient = sseClient
 			conn.userID = creds.UserID
 			// Use OperatorPublicURL (g8e.local) for SSE to ensure TLS ServerName
@@ -550,13 +557,13 @@ func extractTxHashFromApprovalURL(approvalURL string) string {
 // createMCPClient builds a plain mTLS HTTP client from config paths.
 // Most callers should use buildGatewayConn instead, which also loads the
 // delegated credential required for mTLS gateway authentication.
-func createMCPClient(cfg *config.Config) (*http.Client, error) {
+func createMCPClient(fileSvc fs.RuntimeFileService, cfg *config.Config) (*http.Client, error) {
 	cert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
 	}
 
-	caCert, err := os.ReadFile(cfg.TrustBundlePath())
+	caCert, err := auth.ReadTrustBundle(fileSvc, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
 	}
@@ -665,7 +672,7 @@ func printMCPConfigLocal(cmd *cobra.Command) error {
 
 	actualCertPath := filepath.ToSlash(cfg.CLICertFile())
 	actualKeyPath := filepath.ToSlash(cfg.CLIKeyFile())
-	actualCAPath := filepath.ToSlash(cfg.TrustBundlePath())
+	actualCAPath := filepath.ToSlash(cfg.ResolvedTrustBundlePath())
 
 	mcpConfig, err := mcp.NewGatewayConfig(gatewayURL, actualCertPath, actualKeyPath, actualCAPath)
 	if err != nil {
@@ -692,7 +699,7 @@ func printMCPConfigIP(cmd *cobra.Command) error {
 
 	actualCertPath := filepath.ToSlash(cfg.CLICertFile())
 	actualKeyPath := filepath.ToSlash(cfg.CLIKeyFile())
-	actualCAPath := filepath.ToSlash(cfg.TrustBundlePath())
+	actualCAPath := filepath.ToSlash(cfg.ResolvedTrustBundlePath())
 
 	// Use constants.GatewayInternalHostname for hostname verification even when connecting via IP
 	// The certificate has constants.GatewayInternalHostname in its SAN, so verification will succeed
@@ -1451,13 +1458,13 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 	}
 
 	// Require an authenticated human with passkey registration; auto-register if missing
-	hasPasskey, err := auth.VerifyPasskeyRegistration(cfg, creds.UserID, creds.CLISessionID)
+	hasPasskey, err := auth.VerifyPasskeyRegistration(fileSvc, cfg, creds.UserID, creds.CLISessionID)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrNoPasskeysRegistered, err)
 	}
 	if !hasPasskey {
 		fmt.Fprintf(os.Stderr, "[g8e] No passkey registered, starting passkey enrollment...\n")
-		if err := auth.RegisterPasskeyViaBrowser(cfg, creds.UserID, creds.CLISessionID); err != nil {
+		if err := auth.RegisterPasskeyViaBrowser(fileSvc, cfg, creds.UserID, creds.CLISessionID); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrPasskeyRegistrationFailed, err)
 		}
 	}
@@ -1502,7 +1509,7 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 	agentCmd.Env = append(os.Environ(),
 		envG8EClientCert+"="+cfg.CLICertFile(),
 		envG8EClientKey+"="+cfg.CLIKeyFile(),
-		envG8ECABundle+"="+cfg.TrustBundlePath(),
+		envG8ECABundle+"="+cfg.ResolvedTrustBundlePath(),
 		envG8EGatewayURL+"="+gatewayURL,
 		envG8EAppID+"="+appID,
 		envG8EAppCert+"="+appCert,

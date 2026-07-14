@@ -128,7 +128,7 @@ func TestDeleteCredentials_Success(t *testing.T) {
 	require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), []byte("cli-key"), constants.PermFilePrivate))
 	require.NoError(t, os.WriteFile(cfg.OperatorCertFile(), []byte("op-cert"), constants.PermFilePrivate))
 	require.NoError(t, os.WriteFile(cfg.OperatorKeyFile(), []byte("op-key"), constants.PermFilePrivate))
-	hubBundle := cfg.TrustBundlePath()
+	hubBundle := cfg.ResolvedTrustBundlePath()
 	require.NoError(t, os.MkdirAll(filepath.Dir(hubBundle), constants.PermDirPrivate))
 	require.NoError(t, os.WriteFile(hubBundle, []byte("g8e-gw-ca-bundle"), constants.PermFilePrivate))
 
