@@ -23,13 +23,12 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 // BuildMTLSClient creates an *http.Client configured with CLI mTLS certificates
 // and the gateway CA bundle. The timeout parameter controls the client-level
 // timeout; pass 0 for context-controlled cancellation (e.g., SSE streaming).
-func BuildMTLSClient(fileSvc fs.RuntimeFileService, cfg *config.Config, timeout time.Duration) (*http.Client, error) {
+func BuildMTLSClient(cfg *config.Config, timeout time.Duration) (*http.Client, error) {
 	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)

@@ -381,7 +381,7 @@ func runMCPStdioProxy(cmd *cobra.Command, _ []string) error {
 	// middleware validates CLI session ownership. The gateway URL is stripped
 	// of the /mcp suffix to get the base URL for SSE endpoints.
 	if creds, err := auth.LoadCredentials(fileSvc, cfg); err == nil && creds != nil && creds.UserID != "" {
-		if sseClient, err := auth.BuildMTLSClient(fileSvc, cfg, 0); err == nil {
+		if sseClient, err := auth.BuildMTLSClient(cfg, 0); err == nil {
 			conn.sseClient = sseClient
 			conn.userID = creds.UserID
 			// Use OperatorPublicURL (g8e.local) for SSE to ensure TLS ServerName
@@ -1451,13 +1451,13 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 	}
 
 	// Require an authenticated human with passkey registration; auto-register if missing
-	hasPasskey, err := auth.VerifyPasskeyRegistration(fileSvc, cfg, creds.UserID, creds.CLISessionID)
+	hasPasskey, err := auth.VerifyPasskeyRegistration(cfg, creds.UserID, creds.CLISessionID)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrNoPasskeysRegistered, err)
 	}
 	if !hasPasskey {
 		fmt.Fprintf(os.Stderr, "[g8e] No passkey registered, starting passkey enrollment...\n")
-		if err := auth.RegisterPasskeyViaBrowser(fileSvc, cfg, creds.UserID, creds.CLISessionID); err != nil {
+		if err := auth.RegisterPasskeyViaBrowser(cfg, creds.UserID, creds.CLISessionID); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrPasskeyRegistrationFailed, err)
 		}
 	}

@@ -44,7 +44,7 @@ func TestNewSecureHTTPClient_Success(t *testing.T) {
 	}
 	cfg.Paths.Infra.CACertPath = trustBundlePath
 
-	client, err := NewSecureHTTPClient(fileSvc, cfg)
+	client, err := NewSecureHTTPClient(cfg)
 	require.NoError(t, err)
 	require.NotNil(t, client)
 
@@ -65,7 +65,7 @@ func TestNewSecureHTTPClient_MissingTrustBundlePath(t *testing.T) {
 		Paths:       &config.PathsConfig{},
 	}
 
-	client, err := NewSecureHTTPClient(fileSvc, cfg)
+	client, err := NewSecureHTTPClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
 	assert.Error(t, err)
@@ -86,7 +86,7 @@ func TestNewSecureHTTPClient_InvalidPEM(t *testing.T) {
 	}
 	cfg.Paths.Infra.CACertPath = trustBundlePath
 
-	client, err := NewSecureHTTPClient(fileSvc, cfg)
+	client, err := NewSecureHTTPClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
 	assert.Contains(t, err.Error(), "failed to parse CA certificates")

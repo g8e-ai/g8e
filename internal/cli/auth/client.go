@@ -156,7 +156,7 @@ func GenerateCSR(commonName string) (csrPEM string, privKey *ecdsa.PrivateKey, e
 
 // NewSecureHTTPClient creates an HTTP client bound to the Operator's CA trust bundle.
 // This ensures the CLI can validate the Operator's TLS certificate during CSR-based enrollment.
-func NewSecureHTTPClient(fileSvc fs.RuntimeFileService, cfg *config.Config) (*http.Client, error) {
+func NewSecureHTTPClient(cfg *config.Config) (*http.Client, error) {
 	trustBundlePath := cfg.TrustBundlePath()
 	if trustBundlePath == "" {
 		return nil, constants.ErrGatewayURLRequired

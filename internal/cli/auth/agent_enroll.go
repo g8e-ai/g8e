@@ -130,7 +130,7 @@ func EnrollAgentApp(fileSvc fs.RuntimeFileService, cfg *config.Config, agentName
 		return "", "", "", fmt.Errorf("%w: %w", constants.ErrRequestMarshalFailed, err)
 	}
 
-	httpClient, err := BuildMTLSClient(fileSvc, cfg, httpTimeout)
+	httpClient, err := BuildMTLSClient(cfg, httpTimeout)
 	if err != nil {
 		return "", "", "", err
 	}

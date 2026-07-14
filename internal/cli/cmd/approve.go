@@ -111,7 +111,7 @@ func waitForApprovalAndVerify(ctx context.Context, cmd *cobra.Command, fileSvc f
 		return fmt.Errorf("approve: %w", constants.ErrNotAuthenticated)
 	}
 
-	sseClient, err := auth.BuildMTLSClient(fileSvc, cfg, 0)
+	sseClient, err := auth.BuildMTLSClient(cfg, 0)
 	if err != nil {
 		return fmt.Errorf("approve: build mTLS client: %w", err)
 	}

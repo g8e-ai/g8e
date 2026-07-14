@@ -56,7 +56,7 @@ func stubTUIDeps(t *testing.T, cfg *config.Config) tuiDeps {
 				CLISessionID:      "cli-sess-test",
 			}, nil
 		},
-		buildMTLSClient: func(fs.RuntimeFileService, *config.Config, time.Duration) (*http.Client, error) {
+		buildMTLSClient: func(*config.Config, time.Duration) (*http.Client, error) {
 			return &http.Client{}, nil
 		},
 		tuiRun: func(ctx context.Context, opts tui.Options) error {
@@ -182,7 +182,7 @@ func TestTUI_BuildMTLSClientFailure(t *testing.T) {
 		cfg := setupTUITestConfig(t)
 		deps := stubTUIDeps(t, cfg)
 		tlsErr := errors.New("cert file missing")
-		deps.buildMTLSClient = func(fs.RuntimeFileService, *config.Config, time.Duration) (*http.Client, error) {
+		deps.buildMTLSClient = func(*config.Config, time.Duration) (*http.Client, error) {
 			return nil, tlsErr
 		}
 		cmd := tuiCmdWithDeps(deps)
