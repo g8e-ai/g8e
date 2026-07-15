@@ -103,6 +103,82 @@ This relationship is what makes the platform deployable in environments where in
 
 The gateway and the operator share no filesystem, no database, no memory. They communicate exclusively through the mTLS channel and the governance envelope. The gateway sees envelopes and commitments. The operator sees envelopes, state, and raw data. The gateway's compromise does not expose data. The operator's compromise does not expose the gateway's PKI. Each component's failure domain is isolated.
 
+## The Economics of Governance
+
+The standard objection to multi-agent consensus before execution is cost: if every mutation requires a quorum of models to deliberate, the inference bill multiplies with the layer count. The objection is empirically grounded — for homogeneous frontier ensembles. Published measurements of multi-agent debate architectures show a 2.1×–3.4× token cost multiplier over single-agent self-correction, frequently for accuracy that is statistically comparable to or worse than the non-communicative baseline, with sycophantic convergence intensifying as model scale increases ([arXiv:2605.00914](https://arxiv.org/pdf/2605.00914)). Running consensus on N copies of the same frontier model buys correlated failure at N times the price.
+
+g8e's admission pipeline inverts the cost structure the same way it inverts custody. The pipeline is heterogeneous by construction: small language models (2–4B effective parameters, self-hosted, g8e-conformant) handle the narrow, structured decisions — triage classification, intent interrogation, and the L2 consensus votes — while frontier models are reserved for the two roles where generalist reasoning is load-bearing: planning and risk audit. This is the architecture NVIDIA's research arm now argues is the correct default for agentic systems generally — SLM-first, LLM-on-demand — on the observation that serving a ~7B model is 10–30× cheaper in latency, energy, and FLOPs than a 70–175B model on narrow, repetitive tasks ([Belcak et al., arXiv:2506.02153](https://arxiv.org/pdf/2506.02153)). A structured admission vote over a scrubbed, tokenized envelope is precisely such a task.
+
+### Where the Tokens Go
+
+The modeled token budget below reflects a moderate-complexity mutation clearing the full pipeline. These are planning estimates, not gateway telemetry; envelope sizes vary by domain and doctrine configuration, and the model should be re-run against measured means for any specific deployment.
+
+| Pipeline stage | Inference calls | Input tokens | Output tokens | Model class |
+| --- | --- | --- | --- | --- |
+| Triage classification | 1 | 1,500 | 50 | SLM (~2B) |
+| Intent interrogation | 1 | 1,000 | 200 | SLM (~2B) |
+| Planning (Sage) | 1 | 8,000 | 1,500 | Frontier LLM |
+| L2 consensus (5 agents × 2 rounds) | 10 | 30,000 | 3,000 | SLM (~4B) |
+| Risk audit (Auditor) | 1 | 5,000 | 800 | Frontier LLM |
+| L3 Notary / L4 Warden / L5 Actuator | 0 | 0 | 0 | Human / deterministic |
+| **Total** | **14** | **45,500** | **5,550** | |
+
+The distribution is the point. The consensus layer — the part of the pipeline that looks expensive on an architecture diagram — accounts for roughly 70% of input tokens and 10 of the 14 inference calls, and it runs entirely on the cheapest compute in the system. The frontier spend is confined to two calls totaling ~13K input / ~2.3K output tokens. Governance is verification-heavy and reasoning-light, and the topology prices it accordingly.
+
+### Cost per Governed Action
+
+Reference API rates, July 2026 (published list prices, per million input/output tokens): Claude Opus 4.8 $5/$25, Claude Sonnet 5 $3/$15, Gemini 3.1 Pro $2/$12, Gemini 3.5 Flash $1.50/$9. Self-hosted SLM cost on a single 24 GB consumer GPU is dominated by hardware amortization, not energy — marginal electricity for a 2–4B-class model runs on the order of $0.001 per million tokens, with fully amortized cost near $0.10 per million tokens at moderate utilization, and lower with batching.
+
+| Configuration | Frontier tokens (in/out) | Cost / action | Cost / 10K actions·mo |
+| --- | --- | --- | --- |
+| A. All-frontier pipeline (Opus 4.8 everywhere) | 45.5K / 5.55K | $0.366 | $3,660 |
+| B. g8e topology — Sage + Auditor on Opus 4.8 | 13K / 2.3K | $0.126 | $1,260 |
+| B′. g8e topology — Sage + Auditor on Gemini 3.1 Pro | 13K / 2.3K | $0.054 | $540 |
+| C. Roadmap — Auditor on SLM + vector retrieval; Sage only frontier | 8K / 1.5K | $0.035 | $350 |
+| D. Fully local (4B-class planner, degraded reasoning) | 0 / 0 | ~$0.005 | ~$50 |
+
+```mermaid
+xychart-beta
+    title "Cost per governed action (USD, modeled)"
+    x-axis ["A: All-frontier", "B: g8e (Opus)", "B': g8e (Gemini Pro)", "C: Roadmap", "D: Fully local"]
+    y-axis "USD per action" 0 --> 0.40
+    bar [0.366, 0.126, 0.054, 0.035, 0.005]
+```
+
+Three observations fall out of the table.
+
+First, the local ensemble's share of the bill in configurations B and C is approximately $0.004 per action — about 3% of the total. The entire five-agent, two-round consensus mechanism, plus triage and interrogation, costs less per action than a single frontier API call's tool-use overhead. The multi-agent cost multiplier that the debate literature measures at 2.1×–3.4× collapses to noise when the quorum runs on hardware whose marginal cost rounds to zero.
+
+Second, the frontier line item is further compressible through prompt caching. The planner's system prompt, doctrine context, and tool schemas are static across transactions; cached input bills at roughly 10% of the list rate across providers. Realistic cached operation lands configuration B near $0.08 per action and B′ near $0.04.
+
+Third, the delta between configuration C and an ungoverned single-model agent is the honest headline number. A bare frontier agent making one planning call per action costs ~$0.030 at Gemini 3.1 Pro rates. The fully governed pipeline in configuration C costs ~$0.035. Full five-layer admission — deterministic doctrine, heterogeneous consensus, human notarization, fail-closed re-verification, and tamper-evident receipts — adds roughly $0.005 and 15% to the cost of the reasoning it governs.
+
+### Comparables
+
+| System / study | Architecture | Reported economics |
+| --- | --- | --- |
+| Homogeneous multi-agent debate ([arXiv:2605.00914](https://arxiv.org/pdf/2605.00914)) | N frontier-class agents, iterative debate | 2.1×–3.4× token cost vs. single-agent self-correction; accuracy comparable or worse; sycophancy up to 95.4% at 32B scale |
+| Multi-Agent Judge ([arXiv:2511.06396](https://arxiv.org/pdf/2511.06396)) | Debate-based safety judging on 14B open-weight backbones | κ = 0.7331, within 0.026 of GPT-4o agreement, at 46% of GPT-4o's per-query cost |
+| SLM-first agentic systems ([arXiv:2506.02153](https://arxiv.org/pdf/2506.02153)) | Heterogeneous SLM/LLM routing | 10–30× cost reduction on narrow subtasks; recommended default architecture |
+| g8e admission pipeline (modeled, this paper) | 5-agent heterogeneous SLM quorum + 2 frontier roles | Consensus ≈ 3% of per-action cost; full governance overhead ≈ $0.005/action |
+
+The Multi-Agent Judge result is the closest published analogue to the L2 layer — heterogeneous small-model consensus rendering a verdict before a decision is committed — and it demonstrates that small-backbone quorums can match frontier single-judge agreement at half the cost even at 14B scale, on an open-ended judging task. The g8e vote is narrower still: a signed, single-round verdict over a canonical SHA-256 transaction hash and a scrubbed payload, not an iterative debate over free text. Narrower task, smaller viable model, lower cost. The heterogeneity of the quorum is also the documented mitigation for the conformity collapse that degrades homogeneous ensembles: agents with different weights do not share failure modes, which is the property that makes k-of-n voting meaningful in the first place.
+
+### Latency
+
+| Stage | Modeled latency | Notes |
+| --- | --- | --- |
+| Triage + interrogation | < 1 s | 2B-class, ~200 output tokens combined |
+| L2 consensus | 3–6 s | 5 agents concurrent, 2 sequential rounds, 100–200 tok/s per agent |
+| Planning (frontier) | 5–15 s | ~1.5K output tokens |
+| Risk audit | 3–8 s frontier; sub-second on roadmap SLM + retrieval | Retrieval replaces reasoning over the risk corpus |
+| Machine-layer total (pre-L3) | ~10–25 s | |
+| L3 human notarization | Unbounded | Dominates wall-clock for high-risk mutations by design |
+
+The latency budget clarifies why the consensus layer is effectively free in time as well as money. For any mutation that reaches the L3 Notary, wall-clock time is bounded by a human touching a hardware key — an interval measured in minutes or hours, not seconds. Spending 3–6 seconds of that interval on ten additional verification calls costs nothing the transaction would otherwise recover. The pipeline's expensive resource is human attention, and the machine layers exist to spend it as rarely as possible; the protocol ordering (L1 → L2 → L3) guarantees the human is never asked until every machine-checkable layer has passed.
+
+The economics and the sovereignty argument are the same argument. The consensus quorum runs on the operator's hardware because that is where trust is cheapest to establish and where inference is cheapest to run. The frontier model runs in the cloud because that is where generalist reasoning is cheapest to rent — and because the scrubbing and commitment architecture makes it safe to rent. Verification is local, abundant, and nearly free. Reasoning is remote, metered, and minimized. The pipeline routes each to where its economics are best, and the result is that governing an action costs a rounding error more than performing it.
+
 ## Domain Applications
 
 The gateway-operator architecture is domain-agnostic. The same binary, the same protocol, and the same five-layer verification pipeline governs actions across industries. What changes between domains is the doctrine configuration, the target data, and the governance posture. The data owner configures these to match their regulatory and operational requirements.
