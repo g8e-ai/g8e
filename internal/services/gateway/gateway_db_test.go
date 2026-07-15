@@ -286,14 +286,14 @@ func TestSchemaIdempotent(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 	ks1 := newTestKeystore(t, fileSvc, logger)
-	db1, err := OpenCanonicalDBService(dir, filepath.Join(dir, "vault"), logger, true, "", false, ks1, fileSvc)
+	db1, err := OpenCanonicalDBService(dir, filepath.Join(dir, "vault"), logger, true, "", ks1, fileSvc)
 	require.NoError(t, err)
 	require.NoError(t, db1.DocStore.DocSet("test", "1", mustDocJSON(t, map[string]string{"val": "first"})))
 	db1.Close()
 
 	// Re-open same database - schema init should not fail or lose data
 	ks2 := newTestKeystore(t, fileSvc, logger)
-	db2, err := OpenCanonicalDBService(dir, filepath.Join(dir, "vault"), logger, true, "", false, ks2, fileSvc)
+	db2, err := OpenCanonicalDBService(dir, filepath.Join(dir, "vault"), logger, true, "", ks2, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db2.Close() })
 
