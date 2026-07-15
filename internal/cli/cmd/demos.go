@@ -643,10 +643,12 @@ func printDemoEndpoints(cmd *cobra.Command, org string) {
 		cmd.Printf("  No endpoint information available for '%s'\n", org)
 	}
 
-	if port := demoHTTPPort(org); port != "" {
+	httpPort := demoHTTPPort(org)
+	httpsPort := demoHTTPSPort(org)
+	if httpPort != "" && httpsPort != "" {
 		cmd.Println()
 		cmd.Println("  Enroll a passkey for human approval:")
-		cmd.Printf("    g8e auth enroll -e localhost:%s\n", port)
+		cmd.Printf("    g8e auth enroll -e localhost:%s --port %s\n", httpPort, httpsPort)
 		cmd.Println()
 		cmd.Println("  This enrolls your CLI session and registers a WebAuthn passkey")
 		cmd.Println("  in your browser. The passkey is required for all governed operations.")
@@ -673,6 +675,32 @@ func demoHTTPPort(org string) string {
 		return "8085"
 	case constants.DemosOrgFrontend:
 		return "8083"
+	default:
+		return ""
+	}
+}
+
+// demoHTTPSPort returns the Docker-published HTTPS port for the given demo org.
+// This is the port used for mTLS API calls including `g8e auth enroll`.
+// Returns empty string for unknown orgs.
+func demoHTTPSPort(org string) string {
+	switch org {
+	case constants.DemosOrgHealthcare:
+		return "8444"
+	case constants.DemosOrgGov:
+		return "8443"
+	case constants.DemosOrgFinance:
+		return "8445"
+	case constants.DemosOrgSecureData:
+		return "8446"
+	case constants.DemosOrgDoW:
+		return "8449"
+	case constants.DemosOrgDHS:
+		return "8450"
+	case constants.DemosOrgSwarm:
+		return "8448"
+	case constants.DemosOrgFrontend:
+		return "8446"
 	default:
 		return ""
 	}

@@ -98,7 +98,8 @@ func TestNewRootCmd_PersistentPreRunE_SetsEndpointOverride(t *testing.T) {
 
 		cfg, err := config.Load("")
 		require.NoError(t, err)
-		assert.Contains(t, cfg.OperatorHTTPURL(), "remote.example.com")
+		assert.Contains(t, cfg.OperatorDiscoveryURL(), "remote.example.com")
+		assert.Contains(t, cfg.OperatorPublicURL(), "remote.example.com")
 	})
 
 	t.Run("endpoint and port flags set override with port", func(t *testing.T) {
@@ -116,8 +117,31 @@ func TestNewRootCmd_PersistentPreRunE_SetsEndpointOverride(t *testing.T) {
 
 		cfg, err := config.Load("")
 		require.NoError(t, err)
-		assert.Contains(t, cfg.OperatorHTTPURL(), "remote.example.com")
-		assert.Contains(t, cfg.OperatorHTTPURL(), "9999")
+		assert.Contains(t, cfg.OperatorDiscoveryURL(), "remote.example.com")
+		assert.NotContains(t, cfg.OperatorDiscoveryURL(), "9999")
+		assert.Contains(t, cfg.OperatorPublicURL(), "remote.example.com")
+		assert.Contains(t, cfg.OperatorPublicURL(), "9999")
+	})
+
+	t.Run("endpoint with port and --port sets split overrides", func(t *testing.T) {
+		config.SetEndpointOverride("")
+		t.Cleanup(func() { config.SetEndpointOverride("") })
+
+		rootCmd := NewRootCmd("dev", serve.VersionInfo{})
+		rootCmd.SetArgs([]string{"--endpoint", "remote.example.com:8085", "--port", "9999", "gw", "status"})
+
+		var buf bytes.Buffer
+		rootCmd.SetOut(&buf)
+		rootCmd.SetErr(&buf)
+
+		_ = rootCmd.Execute()
+
+		cfg, err := config.Load("")
+		require.NoError(t, err)
+		assert.Contains(t, cfg.OperatorDiscoveryURL(), "remote.example.com:8085")
+		assert.NotContains(t, cfg.OperatorDiscoveryURL(), "9999")
+		assert.Contains(t, cfg.OperatorPublicURL(), "remote.example.com:9999")
+		assert.NotContains(t, cfg.OperatorPublicURL(), "8085")
 	})
 
 	t.Run("port-only flag defaults to localhost", func(t *testing.T) {
@@ -135,7 +159,9 @@ func TestNewRootCmd_PersistentPreRunE_SetsEndpointOverride(t *testing.T) {
 
 		cfg, err := config.Load("")
 		require.NoError(t, err)
-		assert.Contains(t, cfg.OperatorHTTPURL(), "localhost")
-		assert.Contains(t, cfg.OperatorHTTPURL(), "9090")
+		assert.Contains(t, cfg.OperatorDiscoveryURL(), "localhost")
+		assert.NotContains(t, cfg.OperatorDiscoveryURL(), "9090")
+		assert.Contains(t, cfg.OperatorPublicURL(), "localhost")
+		assert.Contains(t, cfg.OperatorPublicURL(), "9090")
 	})
 }
