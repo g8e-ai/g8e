@@ -16,7 +16,9 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -54,12 +56,22 @@ Running './g8e' with no arguments launches the Tactical Governance Console (TUI)
 			}
 			if endpoint != "" {
 				if port > 0 {
-					config.SetEndpointOverrideWithPort(endpoint, port)
+					if strings.Contains(endpoint, "://") {
+						config.SetEndpointOverride(endpoint)
+					} else {
+						host := endpoint
+						if h, _, err := net.SplitHostPort(host); err == nil {
+							host = h
+						}
+						config.SetHTTPEndpointOverride(endpoint)
+						config.SetHTTPSEndpointOverride(fmt.Sprintf("%s:%d", host, port))
+					}
 				} else {
 					config.SetEndpointOverride(endpoint)
 				}
 			} else if port > 0 {
-				config.SetEndpointOverrideWithPort("localhost", port)
+				config.SetHTTPEndpointOverride("localhost")
+				config.SetHTTPSEndpointOverride(fmt.Sprintf("localhost:%d", port))
 			}
 			return nil
 		},
@@ -71,8 +83,8 @@ Running './g8e' with no arguments launches the Tactical Governance Console (TUI)
 	}
 	rootCmd.SetContext(context.WithValue(ctx, versionInfoKey{}, vi))
 
-	rootCmd.PersistentFlags().StringP("endpoint", "e", "", "Gateway endpoint (host or host:port) for remote enrollment")
-	rootCmd.PersistentFlags().IntP("port", "p", 0, "Gateway HTTPS port (overrides default 8443; use with --endpoint)")
+	rootCmd.PersistentFlags().StringP("endpoint", "e", "", "Gateway HTTP discovery endpoint (host or host:port) for remote enrollment")
+	rootCmd.PersistentFlags().IntP("port", "p", 0, "Gateway HTTPS/mTLS port (overrides default 8443; use with --endpoint)")
 
 	rootCmd.AddCommand(
 		gatewayCmd(),
