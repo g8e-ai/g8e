@@ -24,9 +24,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
 )
@@ -117,6 +119,10 @@ func testIntegrationCmd() *cobra.Command {
 }
 
 func testE2ECmd() *cobra.Command {
+	return testE2ECmdWithConfig(loadConfig, newFileSvc)
+}
+
+func testE2ECmdWithConfig(configLoader func(string) (*config.Config, error), fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "e2e",
 		Short: "Run Tier 3 (Live Platform E2E) tests",
@@ -124,7 +130,7 @@ func testE2ECmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 3 (Live Platform E2E) tests...")
 
-			cfg, err := loadConfig("")
+			_, err := configLoader("")
 			if err != nil {
 				return err
 			}
@@ -142,7 +148,11 @@ func testE2ECmd() *cobra.Command {
 
 			// Fallback to ProcessManager check (for background/host mode)
 			if !isRunning {
-				pm, err := platform.NewProcessManager(cfg.ProjectRoot)
+				fileSvc, err := fileSvcFactory()
+				if err != nil {
+					return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+				}
+				pm, err := platform.NewProcessManager(fileSvc)
 				if err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 				}

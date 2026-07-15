@@ -15,6 +15,7 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -42,11 +43,55 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/pkg/certutil"
 	"github.com/g8e-ai/g8e/internal/services/auth"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 // httpTimeout is the default timeout for all HTTP clients in the auth package.
 const httpTimeout = 30 * time.Second
+
+// ReadTrustBundle reads the trust bundle using fileSvc for the default runtime
+// path, or os.ReadFile for a custom external path.
+func ReadTrustBundle(fileSvc fs.RuntimeFileService, cfg *config.Config) ([]byte, error) {
+	if custom := cfg.CustomTrustBundlePath(); custom != "" {
+		return os.ReadFile(custom)
+	}
+	return fileSvc.ReadFile(context.Background(), cfg.DefaultTrustBundleRelPath())
+}
+
+// WriteTrustBundleFS writes the trust bundle using fileSvc for the default runtime
+// path, or os.* for a custom external path.
+func WriteTrustBundleFS(fileSvc fs.RuntimeFileService, cfg *config.Config, data []byte, mode os.FileMode) error {
+	if custom := cfg.CustomTrustBundlePath(); custom != "" {
+		if err := os.MkdirAll(filepath.Dir(custom), constants.PermDirPrivate); err != nil {
+			return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
+		}
+		if err := os.WriteFile(custom, data, mode); err != nil {
+			return fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
+		}
+		return nil
+	}
+	return fileSvc.WriteFile(context.Background(), cfg.DefaultTrustBundleRelPath(), data, mode)
+}
+
+// RemoveTrustBundleFS removes the trust bundle using fileSvc for the default
+// runtime path, or os.Remove for a custom external path. No-op if the file
+// does not exist.
+func RemoveTrustBundleFS(fileSvc fs.RuntimeFileService, cfg *config.Config) error {
+	if custom := cfg.CustomTrustBundlePath(); custom != "" {
+		if err := os.Remove(custom); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
+		}
+		return nil
+	}
+	return fileSvc.Remove(context.Background(), cfg.DefaultTrustBundleRelPath())
+}
+
+// isNotFound checks if an error indicates the file does not exist.
+func isNotFound(err error) bool {
+	return errors.Is(err, constants.ErrNotFound) || errors.Is(err, os.ErrNotExist)
+}
 
 type RegistrationResponse struct {
 	Success           bool   `json:"success"`
@@ -128,15 +173,13 @@ func GenerateCSR(commonName string) (csrPEM string, privKey *ecdsa.PrivateKey, e
 
 // NewSecureHTTPClient creates an HTTP client bound to the Operator's CA trust bundle.
 // This ensures the CLI can validate the Operator's TLS certificate during CSR-based enrollment.
-func NewSecureHTTPClient(cfg *config.Config) (*http.Client, error) {
-	trustBundlePath := cfg.TrustBundlePath()
-	if trustBundlePath == "" {
-		return nil, constants.ErrGatewayURLRequired
-	}
-
-	caPEM, err := os.ReadFile(trustBundlePath)
+func NewSecureHTTPClient(fileSvc fs.RuntimeFileService, cfg *config.Config) (*http.Client, error) {
+	caPEM, err := ReadTrustBundle(fileSvc, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
+	}
+	if len(caPEM) == 0 {
+		return nil, constants.ErrGatewayURLRequired
 	}
 
 	caPool := x509.NewCertPool()
@@ -358,7 +401,7 @@ func CLIEnroll(cfg *config.Config, cliCSR string, baseURL string) (*Registration
 // ReEnroll performs CSR-based re-enrollment using existing mTLS credentials.
 // This is used when the platform is already bootstrapped and the CLI has valid certificates.
 // If baseURL is empty, it uses cfg.OperatorDiscoveryURL() and cfg.OperatorPublicURL().
-func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint string, baseURL string) (*RegistrationResponse, error) {
+func ReEnroll(fileSvc fs.RuntimeFileService, cfg *config.Config, operatorCSR, cliCSR string, caFingerprint string, baseURL string) (*RegistrationResponse, error) {
 	// Generate proper system fingerprint
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	systemFp, err := auth.GenerateSystemFingerprint(logger)
@@ -479,11 +522,7 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 	}
 
 	// Write updated trust bundle only after successful mTLS enrollment
-	trustBundlePath := cfg.TrustBundlePath()
-	if err := os.MkdirAll(filepath.Dir(trustBundlePath), constants.PermDirStandard); err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
-	}
-	if err := os.WriteFile(trustBundlePath, currentTrustBundle, constants.PermFilePublic); err != nil {
+	if err := WriteTrustBundleFS(fileSvc, cfg, currentTrustBundle, constants.PermFilePublic); err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 	}
 
@@ -520,29 +559,31 @@ func isCertificateVerificationError(err error) bool {
 	return false
 }
 
-func SaveCredentials(cfg *config.Config, creds *Credentials) error {
-	if err := os.MkdirAll(cfg.CredentialsDir, constants.PermDirPrivate); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
-	}
-
-	credsFile := cfg.CredentialsFile()
+func SaveCredentials(fileSvc fs.RuntimeFileService, cfg *config.Config, creds *Credentials) error {
 	credsData, err := json.Marshal(creds)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONBody, err)
 	}
 
-	if err := os.WriteFile(credsFile, credsData, constants.PermFilePrivate); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
+	relPath, err := fileSvc.RelFromAbs(cfg.CredentialsFile())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
+	}
+	if err := fileSvc.WriteFile(context.Background(), relPath, credsData, constants.PermFilePrivate); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 	}
 
 	return nil
 }
 
-func LoadCredentials(cfg *config.Config) (*Credentials, error) {
-	credsFile := cfg.CredentialsFile()
-	credsData, err := os.ReadFile(credsFile)
+func LoadCredentials(fileSvc fs.RuntimeFileService, cfg *config.Config) (*Credentials, error) {
+	relPath, err := fileSvc.RelFromAbs(cfg.CredentialsFile())
 	if err != nil {
-		if os.IsNotExist(err) {
+		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
+	}
+	credsData, err := fileSvc.ReadFile(context.Background(), relPath)
+	if err != nil {
+		if isNotFound(err) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
@@ -556,52 +597,51 @@ func LoadCredentials(cfg *config.Config) (*Credentials, error) {
 	return &creds, nil
 }
 
-func DeleteCredentials(cfg *config.Config) error {
-	credsFile := cfg.CredentialsFile()
-	if err := os.Remove(credsFile); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
+func DeleteCredentials(fileSvc fs.RuntimeFileService, cfg *config.Config) error {
+	credsRel, err := fileSvc.RelFromAbs(cfg.CredentialsFile())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
+	}
+	if err := fileSvc.Remove(context.Background(), credsRel); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
 	}
 
-	certFiles := []string{
-		cfg.CLICertFile(),
-		cfg.CLIKeyFile(),
-		cfg.TrustBundlePath(),
+	cliCertRel, err := fileSvc.RelFromAbs(cfg.CLICertFile())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
+	}
+	if err := fileSvc.Remove(context.Background(), cliCertRel); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
 	}
 
-	for _, file := range certFiles {
-		if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
-		}
+	cliKeyRel, err := fileSvc.RelFromAbs(cfg.CLIKeyFile())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
+	}
+	if err := fileSvc.Remove(context.Background(), cliKeyRel); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
+	}
+
+	if err := RemoveTrustBundleFS(fileSvc, cfg); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
 	}
 
 	return nil
 }
 
-func SaveCertAndKey(certPEM, chainPEM string, key *ecdsa.PrivateKey, certFile, keyFile string) error {
-	if err := os.MkdirAll(filepath.Dir(certFile), constants.PermDirPrivate); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
-	}
-
-	keyBytes, err := x509.MarshalECPrivateKey(key)
+// SaveCertAndKey writes a certificate and its private key to the runtime directory via fileSvc.
+// certRelPath and keyRelPath must be relative to the .g8e/ runtime directory root.
+func SaveCertAndKey(fileSvc fs.RuntimeFileService, certPEM, chainPEM string, key *ecdsa.PrivateKey, certRelPath, keyRelPath string) error {
+	certBytes, keyBytes, err := certutil.EncodeCertAndKey(certPEM, chainPEM, key)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrKeyParseFailed, err)
-	}
-
-	keyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "EC PRIVATE KEY",
-		Bytes: keyBytes,
-	})
-
-	if err := os.WriteFile(keyFile, keyPEM, constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 
-	certContent := certPEM
-	if chainPEM != "" {
-		certContent += "\n" + chainPEM
+	if err := fileSvc.WriteFile(context.Background(), keyRelPath, keyBytes, constants.PermFilePrivate); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 
-	if err := os.WriteFile(certFile, []byte(certContent), constants.PermFilePrivate); err != nil {
+	if err := fileSvc.WriteFile(context.Background(), certRelPath, certBytes, constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 
@@ -666,28 +706,14 @@ func CheckBootstrapStatus(cfg *config.Config, baseURL string) (bool, error) {
 	return statusResp.Bootstrapped, nil
 }
 
-// parseCertPEM parses a PEM-encoded certificate file and returns the x509 certificate.
-func parseCertPEM(certFile string) (*x509.Certificate, error) {
-	certPEM, err := os.ReadFile(certFile)
+// parseCertPEM parses a PEM-encoded certificate file from the runtime directory and returns the x509 certificate.
+func parseCertPEM(fileSvc fs.RuntimeFileService, certRelPath string) (*x509.Certificate, error) {
+	certPEM, err := fileSvc.ReadFile(context.Background(), certRelPath)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrCertReadFailed, err)
 	}
 
-	block, _ := pem.Decode(certPEM)
-	if block == nil {
-		return nil, constants.ErrPEMDecodeFailed
-	}
-
-	if block.Type != "CERTIFICATE" {
-		return nil, constants.ErrInvalidPEMType
-	}
-
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrCertParseFailed, err)
-	}
-
-	return cert, nil
+	return certutil.ParseCertFromPEM(certPEM)
 }
 
 // isCertExpiringSoon checks if a certificate is expiring within the renewal threshold.
@@ -700,8 +726,9 @@ func isCertExpiringSoon(cert *x509.Certificate) bool {
 
 // CheckCertExpiry checks if the local CLI or Operator certificate is expiring soon.
 // Returns true if the certificate is expiring within the renewal threshold.
-func CheckCertExpiry(certFile string) (bool, error) {
-	cert, err := parseCertPEM(certFile)
+// certRelPath must be relative to the .g8e/ runtime directory root.
+func CheckCertExpiry(fileSvc fs.RuntimeFileService, certRelPath string) (bool, error) {
+	cert, err := parseCertPEM(fileSvc, certRelPath)
 	if err != nil {
 		return false, err
 	}
@@ -711,18 +738,23 @@ func CheckCertExpiry(certFile string) (bool, error) {
 
 // AutoRenewCertificate performs automatic re-enrollment if the certificate is expiring soon.
 // This is a fail-closed operation: if renewal fails, it returns an error rather than falling back.
-func AutoRenewCertificate(cfg *config.Config, certType string, caFingerprint string) error {
-	var certFile string
+func AutoRenewCertificate(fileSvc fs.RuntimeFileService, cfg *config.Config, certType string, caFingerprint string) error {
+	var certAbsPath string
 	switch certType {
 	case "cli":
-		certFile = cfg.CLICertFile()
+		certAbsPath = cfg.CLICertFile()
 	case "operator":
-		certFile = cfg.OperatorCertFile()
+		certAbsPath = cfg.OperatorCertFile()
 	default:
 		return constants.ErrValidationFailed
 	}
 
-	expiringSoon, err := CheckCertExpiry(certFile)
+	certRelPath, err := fileSvc.RelFromAbs(certAbsPath)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrCertParseFailed, err)
+	}
+
+	expiringSoon, err := CheckCertExpiry(fileSvc, certRelPath)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertParseFailed, err)
 	}
@@ -741,7 +773,7 @@ func AutoRenewCertificate(cfg *config.Config, certType string, caFingerprint str
 		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
-	regResp, err := ReEnroll(cfg, "", cliCSR, caFingerprint, "")
+	regResp, err := ReEnroll(fileSvc, cfg, "", cliCSR, caFingerprint, "")
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 	}
@@ -750,16 +782,20 @@ func AutoRenewCertificate(cfg *config.Config, certType string, caFingerprint str
 		return constants.ErrMissingRequiredField
 	}
 
-	if err := SaveCertAndKey(regResp.CLICert, regResp.CLICertChain, cliKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
+	cliCertRel, err := fileSvc.RelFromAbs(cfg.CLICertFile())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+	}
+	cliKeyRel, err := fileSvc.RelFromAbs(cfg.CLIKeyFile())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+	}
+	if err := SaveCertAndKey(fileSvc, regResp.CLICert, regResp.CLICertChain, cliKey, cliCertRel, cliKeyRel); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 
 	if regResp.HubTrustBundle != "" {
-		trustPath := cfg.TrustBundlePath()
-		if err := os.MkdirAll(filepath.Dir(trustPath), constants.PermDirStandard); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
-		}
-		if err := os.WriteFile(trustPath, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
+		if err := WriteTrustBundleFS(fileSvc, cfg, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 		}
 	}
@@ -771,8 +807,8 @@ func AutoRenewCertificate(cfg *config.Config, certType string, caFingerprint str
 		CLISessionID:      regResp.CLISessionID,
 	}
 
-	if err := SaveCredentials(cfg, creds); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
+	if err := SaveCredentials(fileSvc, cfg, creds); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 	}
 
 	return nil

@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestAgentLaunchArgs_ClaudeIncludesMcpConfigAndDisallowedTools(t *testing.T) {
@@ -120,13 +121,13 @@ func TestAgentLaunchArgs_IsCaseInsensitive(t *testing.T) {
 }
 
 func TestRunMCPAgentRun_NoArgsReturnsError(t *testing.T) {
-	err := runMCPAgentRun(nil, "")
+	err := runMCPAgentRun(nil, "", newFileSvc)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "specify an agent name")
 }
 
 func TestRunMCPAgentRun_UnknownAgentReturnsError(t *testing.T) {
-	err := runMCPAgentRun([]string{"unknown-agent"}, "")
+	err := runMCPAgentRun([]string{"unknown-agent"}, "", newFileSvc)
 	require.Error(t, err)
 }
 
@@ -145,7 +146,7 @@ func TestGetSupportedAgents_ReturnsAllExpectedAgents(t *testing.T) {
 }
 
 func TestWriteAgentConfig_CursorWritesConfigFile(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", testutil.TempDir(t))
 
 	configPath, cleanup, err := WriteAgentConfig("cursor", "/fake/g8e")
 	require.NoError(t, err)
@@ -162,7 +163,7 @@ func TestWriteAgentConfig_CursorWritesConfigFile(t *testing.T) {
 }
 
 func TestWriteAgentConfig_DevinWritesConfigFile(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", testutil.TempDir(t))
 
 	configPath, cleanup, err := WriteAgentConfig("devin", "/fake/g8e")
 	require.NoError(t, err)
@@ -173,7 +174,7 @@ func TestWriteAgentConfig_DevinWritesConfigFile(t *testing.T) {
 }
 
 func TestWriteAgentConfig_GooseWritesConfigFile(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", testutil.TempDir(t))
 
 	configPath, cleanup, err := WriteAgentConfig("goose", "/fake/g8e")
 	require.NoError(t, err)
@@ -184,7 +185,7 @@ func TestWriteAgentConfig_GooseWritesConfigFile(t *testing.T) {
 }
 
 func TestWriteAgentConfig_VSCodeWritesConfigFile(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", testutil.TempDir(t))
 
 	configPath, cleanup, err := WriteAgentConfig("vscode", "/fake/g8e")
 	require.NoError(t, err)
@@ -195,7 +196,7 @@ func TestWriteAgentConfig_VSCodeWritesConfigFile(t *testing.T) {
 }
 
 func TestWriteAgentConfig_ContinueWritesConfigFile(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", testutil.TempDir(t))
 
 	configPath, cleanup, err := WriteAgentConfig("continue", "/fake/g8e")
 	require.NoError(t, err)
@@ -243,7 +244,7 @@ func TestWriteAgentConfig_GenericWritesTempFile(t *testing.T) {
 }
 
 func TestWriteAgentConfig_GeminiWritesSettingsFile(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", testutil.TempDir(t))
 
 	configPath, cleanup, err := WriteAgentConfig("gemini", "/fake/g8e")
 	require.NoError(t, err)
@@ -259,7 +260,7 @@ func TestWriteAgentConfig_GeminiWritesSettingsFile(t *testing.T) {
 }
 
 func TestWriteAgentConfig_GeminiMergesExistingSettings(t *testing.T) {
-	tmpHome := t.TempDir()
+	tmpHome := testutil.TempDir(t)
 	t.Setenv("HOME", tmpHome)
 	t.Setenv("USERPROFILE", tmpHome)
 

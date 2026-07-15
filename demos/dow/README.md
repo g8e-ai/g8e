@@ -10,7 +10,7 @@ The DoW demo directly addresses **DoW Challenge Areas 5** (Multi-Modal WAPS Payl
 
 - **Autonomous SIGINT-to-EO/IR cross-cueing** with cryptographic proof of consensus (Challenge 5)
 - **BFT spoofing defense** against near-peer EW/GNSS attacks (Challenge 8)
-- **Disconnected operations** with local ledger and audit vault — no cloud, no OEM keys (Challenge 6)
+- **Disconnected operations** with local ledger and audit vault; no cloud, no OEM keys (Challenge 6)
 - **Low-SWaP governance**: g8e runs in <128MB RAM and <0.5 CPU per container
 
 ## Container Architecture
@@ -25,10 +25,9 @@ The DoW demo directly addresses **DoW Challenge Areas 5** (Multi-Modal WAPS Payl
                               │
 ┌──────────────────────────────────────────────────────────────────┐
 │                    net_perimeter (10.41.0.0/24)                   │
-│  ┌──────────┐  ┌──────────────────┐                              │
-│  │ Gateway  │  │  Ground Station  │  Simulated C2 datalink       │
-│  │ (consens)│  │  (toggleable)    │                              │
-│  └──────────┘  └──────────────────┘                              │
+│  ┌──────────────────┐  ┌──────────────────┐                     │
+│  │ Gateway (consens)│  │  Ground Station  │  Simulated C2 link  │
+│  └──────────────────┘  └──────────────────┘                     │
 └──────────────────────────────────────────────────────────────────┘
                               │
 ┌──────────────────────────────────────────────────────────────────┐
@@ -44,10 +43,10 @@ The DoW demo directly addresses **DoW Challenge Areas 5** (Multi-Modal WAPS Payl
                               │
 ┌──────────────────────────────────────────────────────────────────┐
 │                     net_secure (10.43.0.0/24)                     │
-│  ┌──────────────────────────────────────┐                       │
-│  │ Operator (actuator boundary)         │                       │
-│  │ Gimbal controller + flight ctrl      │                       │
-│  └──────────────────────────────────────┘                       │
+│  ┌──────────────────┐  ┌──────────────────┐                     │
+│  │ Operator (L5     │  │ Gimbal (mock     │                     │
+│  │  actuator)       │  │  HTTP server)    │                     │
+│  └──────────────────┘  └──────────────────┘                     │
 └──────────────────────────────────────────────────────────────────┘
                               │
 ┌──────────────────────────────────────────────────────────────────┐
@@ -58,12 +57,14 @@ The DoW demo directly addresses **DoW Challenge Areas 5** (Multi-Modal WAPS Payl
 └──────────────────────────────────────────────────────────────────┘
 ```
 
+The Gateway and Operator each span multiple networks: Gateway bridges net_perimeter, net_internal, and net_secure; Operator bridges net_internal and net_secure.
+
 ## Network Topology
 
 - **net_untrusted (10.40.0.0/24)**: EW adversary simulation (spoofed GNSS, datalink jam)
 - **net_perimeter (10.41.0.0/24)**: Gateway public surface + simulated ground station
 - **net_internal (10.42.0.0/24)**: Sensor agents (SIGINT, EO/IR, PNT Fusion) + Operator outbound mTLS
-- **net_secure (10.43.0.0/24)**: Operator actuator boundary (gimbal, flight controller)
+- **net_secure (10.43.0.0/24)**: Operator actuator boundary and gimbal controller
 - **net_mgmt (10.44.0.0/24)**: Observability and audit trail
 
 ## SWaP Constraints
@@ -77,6 +78,7 @@ Docker resource limits prove g8e's governance layer fits within tactical payload
 | agent-sigint | 0.25 | 64M | SIGINT sensor agent |
 | agent-eoir | 0.25 | 64M | EO/IR camera agent |
 | agent-pnt-fusion | 0.25 | 64M | PNT fusion agent |
+| gimbal | 0.25 | 32M | Mock gimbal controller |
 
 **Governance overhead**: ~20MB binary, ~2W power equivalent. Prove it with `docker stats`.
 
@@ -111,11 +113,18 @@ The demo includes 15 doctrine rules covering:
 ### Build the g8e binary
 
 ```bash
-cd /home/bob/g8e
 make build
 ```
 
+This builds the g8e binary and copies it to `demos/bin/g8e`.
+
 ### Start the DoW demo
+
+```bash
+g8e demos start dow
+```
+
+Alternatively, start manually:
 
 ```bash
 cd demos/dow
@@ -146,13 +155,13 @@ docker compose logs -f agent-pnt-fusion
 ### Verify SWaP constraints
 
 ```bash
-docker stats dow-gateway dow-operator dow-agent-sigint dow-agent-eoir dow-agent-pnt-fusion
+docker stats dow-gateway dow-operator dow-agent-sigint dow-agent-eoir dow-agent-pnt-fusion dow-gimbal
 ```
 
 ### Run sensor agents manually
 
 ```bash
-# agent-sigint is a real g8e binary — run the cross-cue scenario
+# agent-sigint is a real g8e binary; run the cross-cue scenario
 docker compose run --rm agent-sigint demos scenarios run \
   --mtls-url https://g8e.local:8443 \
   --public-url http://g8e.local:8080 \
@@ -161,9 +170,16 @@ docker compose run --rm agent-sigint demos scenarios run \
   --ca /root/.g8e/pki/trust/g8eg-ca-bundle.pem \
   --ensemble 3 --l3-mode mock dow-cross-cue
 
-# agent-eoir and agent-pnt-fusion still use dow_simulator.py for display
+# agent-eoir and agent-pnt-fusion use dow_simulator.py for display
 docker compose exec agent-eoir python /app/dow_simulator.py EOIR-01 eoir
 docker compose exec agent-pnt-fusion python /app/dow_simulator.py PNT-FUSION-01 pnt_fusion
+
+# Inspect tactical environment data
+docker compose exec agent-eoir python /app/inspect_rf.py
+docker compose exec agent-pnt-fusion python /app/inspect_pnt.py
+
+# Verify gimbal slew recordings
+docker compose exec gimbal python /app/verify_slews.py
 ```
 
 ## Demo Scenarios
@@ -174,7 +190,7 @@ docker compose exec agent-pnt-fusion python /app/dow_simulator.py PNT-FUSION-01 
 g8e demos run dow 1
 ```
 
-**Proves**: The `agent-sigint` container (a real g8e binary) shares the operator's enrolled mTLS credentials via a read-only volume mount, constructs a `GovernanceEnvelope` wrapping a `run_shell_command` tool call to `slew` the camera, and submits it to the `g8e-gateway`. The Gateway enforces L1 doctrine and L2 BFT consensus (quorum 2/3). The `g8e-operator` verifies the proofs and executes the `slew` script via the L5 Actuator, which sends an HTTP POST to the mock gimbal controller on `net_secure`. The gimbal records the slew — **zero** ground station intervention.
+**Proves**: The `agent-sigint` container (a real g8e binary) shares the operator's enrolled mTLS credentials via a read-only volume mount, constructs a `GovernanceEnvelope` wrapping a `run_shell_command` tool call to `slew` the camera, and submits it to the `g8e-gateway`. The Gateway enforces L1 doctrine and L2 BFT consensus (quorum 2/3). The `g8e-operator` verifies the proofs and executes the `slew` script via the L5 Actuator, which sends an HTTP POST to the mock gimbal controller on `net_secure`. The gimbal records the slew. **Zero** ground station intervention.
 
 **Key components**:
 - **`agent-sigint`**: Real g8e binary running `demos scenarios run dow-cross-cue` with the operator's mTLS credentials (shared via `operator_state` volume mount at `/root/.g8e:ro`).
@@ -187,7 +203,7 @@ g8e demos run dow 1
 g8e demos run dow 2
 ```
 
-**Proves**: A spoofed GNSS coordinate is injected into the PNT fusion engine. The BFT consensus engine detects divergence between the spoofed GNSS source and Visual Odometry/MAGNAV sources. The poisoned model is outvoted. The `GovernanceEnvelope` fails L2 verification, and the `g8e-operator` fails closed — the drone is not hijacked.
+**Proves**: A spoofed GNSS coordinate is injected into the PNT fusion engine. The BFT consensus engine detects divergence between the spoofed GNSS source and Visual Odometry/MAGNAV sources. The poisoned model is outvoted. The `GovernanceEnvelope` fails L2 verification, and the `g8e-operator` fails closed; the drone is not hijacked.
 
 ### Scenario 3: Disconnected Operations (Challenge 6)
 
@@ -195,7 +211,7 @@ g8e demos run dow 2
 g8e demos run dow 3
 ```
 
-**Proves**: The tactical datalink is severed (`docker network disconnect`), simulating a comms-denied environment. The `g8e-gateway` and `g8e-operator` continue processing cross-cueing events locally. Raw data and execution histories are committed to g8e's Git-backed ledger and SQLite local audit vault on the operator container — with no cloud connectivity and no OEM permission keys.
+**Proves**: The tactical datalink is severed (`docker network disconnect`), simulating a comms-denied environment. The `g8e-gateway` and `g8e-operator` continue processing cross-cueing events locally. Raw data and execution histories are committed to g8e's Git-backed ledger and SQLite local audit vault on the operator container, with no cloud connectivity and no OEM permission keys.
 
 ### Run all scenarios
 
@@ -221,7 +237,7 @@ This matches the tactical edge use case: machine-to-machine autonomy with BFT co
 
 ### Operator: Outbound-Only mTLS
 
-The operator connects to the gateway via outbound-only mTLS tunnel over `net_internal`. It accepts no inbound connections from `net_internal`. The actuator boundary (gimbal controller, flight controller) lives on `net_secure`.
+The operator connects to the gateway via outbound-only mTLS tunnel over `net_internal`. It accepts no inbound connections from `net_internal`. The actuator boundary (gimbal controller) lives on `net_secure`.
 
 ### Data Sovereignty
 
@@ -233,6 +249,11 @@ All audit data is committed locally:
 ## Stop and Clean Up
 
 ```bash
+# Via g8e CLI
+g8e demos stop dow
+g8e demos clean dow    # also removes volumes
+
+# Or manually
 docker compose down
 docker compose down -v  # also removes volumes
 ```

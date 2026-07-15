@@ -575,6 +575,7 @@ update-doctrines:
 clean:
 	@echo "Cleaning up build artifacts and runtime state..."
 	@rm -rf .g8e/
+	@rm -rf .g8e-test-tmp/
 	@rm -rf bin/
 	@rm -f *.sha256 *.test coverage.out coverage_filtered.out buf
 	@rm -rf .g8e-harness-*/

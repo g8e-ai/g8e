@@ -14,115 +14,116 @@
 package governance
 
 import (
+	"context"
 	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
-	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/fs"
+	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// actuatorPublicKeyExportData represents the typed structure for actuator public key JSON export
-type actuatorPublicKeyExportData struct {
-	KeyID     string `json:"key_id"`
-	PublicKey string `json:"public_key"`
-	Algorithm string `json:"algorithm"`
-}
-
 func TestActuatorPublicKeyExport(t *testing.T) {
-	t.Parallel()
+	t.Run("Success", func(t *testing.T) {
+		tmpDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
+		require.NoError(t, err)
+		pubKey, _, err := ed25519.GenerateKey(rand.Reader)
+		require.NoError(t, err)
+		logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	tests := []struct {
-		name  string
-		keyID string
-	}{
-		{
-			name:  "standard export",
-			keyID: "test-Actuator-key",
-		},
-		{
-			name:  "export with different key ID",
-			keyID: "alternate-key-id",
-		},
-	}
+		err = ExportActuatorPublicKey(fileSvc, pubKey, "test-Actuator-key", logger)
+		require.NoError(t, err)
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			tmpDir := t.TempDir()
-			pubKey, _, err := ed25519.GenerateKey(nil)
-			require.NoError(t, err)
+		pemRel := filepath.Join(constants.PkiDirname, constants.ActuatorPubPEMFilename)
+		pemData, err := fileSvc.ReadFile(context.Background(), pemRel)
+		require.NoError(t, err)
 
-			logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+		block, rest := pem.Decode(pemData)
+		require.NotNil(t, block, "failed to decode PEM block")
+		require.Empty(t, rest, "unexpected trailing data after PEM block")
+		require.Equal(t, "PUBLIC KEY", block.Type)
+		require.Equal(t, []byte(pubKey), block.Bytes)
 
-			// Write public key using the same logic as main.go's exportActuatorPublicKey
-			err = exportActuatorPublicKey(tmpDir, pubKey, tt.keyID, logger)
-			require.NoError(t, err)
+		jsonRel := filepath.Join(constants.PkiDirname, constants.ActuatorPubJSONFilename)
+		jsonData, err := fileSvc.ReadFile(context.Background(), jsonRel)
+		require.NoError(t, err)
 
-			// 1. Verify PEM file
-			pemPath := filepath.Join(tmpDir, constants.ActuatorPubPEMFilename)
-			pemData, err := os.ReadFile(pemPath)
-			require.NoError(t, err)
-
-			block, rest := pem.Decode(pemData)
-			require.NotNil(t, block, "failed to decode PEM block")
-			require.Empty(t, rest, "unexpected trailing data after PEM block")
-			require.Equal(t, "PUBLIC KEY", block.Type)
-			require.Equal(t, []byte(pubKey), block.Bytes)
-
-			// 2. Verify JSON file
-			jsonPath := filepath.Join(tmpDir, constants.ActuatorPubJSONFilename)
-			jsonData, err := os.ReadFile(jsonPath)
-			require.NoError(t, err)
-
-			var parsed actuatorPublicKeyExportData
-			err = json.Unmarshal(jsonData, &parsed)
-			require.NoError(t, err)
-
-			require.Equal(t, tt.keyID, parsed.KeyID)
-			require.Equal(t, hex.EncodeToString(pubKey), parsed.PublicKey)
-			require.Equal(t, "ed25519", parsed.Algorithm)
-		})
-	}
-}
-
-// exportActuatorPublicKey is a copy of the function in main.go to allow testing.
-// In a real refactor, this should move to internal/services/governance/Actuator.go.
-func exportActuatorPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID string, logger *slog.Logger) error {
-	if err := os.MkdirAll(pkiDir, 0700); err != nil {
-		return fmt.Errorf("exportActuatorPublicKey: failed to create PKI directory: %w", err)
-	}
-
-	// Write PEM format
-	pemPath := filepath.Join(pkiDir, constants.ActuatorPubPEMFilename)
-	pemData := pem.EncodeToMemory(&pem.Block{
-		Type:  "PUBLIC KEY",
-		Bytes: pubKey,
+		var parsed models.ActuatorPublicKeyExport
+		require.NoError(t, json.Unmarshal(jsonData, &parsed))
+		assert.Equal(t, "test-Actuator-key", parsed.KeyID)
+		assert.Equal(t, hex.EncodeToString(pubKey), parsed.PublicKey)
+		assert.Equal(t, "ed25519", parsed.Algorithm)
 	})
-	if err := os.WriteFile(pemPath, pemData, 0644); err != nil {
-		return fmt.Errorf("exportActuatorPublicKey: failed to write PEM file: %w", err)
-	}
 
-	// Write JSON format
-	jsonPath := filepath.Join(pkiDir, constants.ActuatorPubJSONFilename)
-	jsonData := actuatorPublicKeyExportData{
-		KeyID:     keyID,
-		PublicKey: hex.EncodeToString(pubKey),
-		Algorithm: "ed25519",
-	}
-	jsonBytes, err := json.MarshalIndent(jsonData, "", "  ")
-	if err != nil {
-		return fmt.Errorf("exportActuatorPublicKey: failed to marshal JSON: %w", err)
-	}
-	if err := os.WriteFile(jsonPath, jsonBytes, 0644); err != nil {
-		return fmt.Errorf("exportActuatorPublicKey: failed to write JSON file: %w", err)
-	}
-	return nil
+	t.Run("NilLogger", func(t *testing.T) {
+		tmpDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
+		require.NoError(t, err)
+		pubKey, _, err := ed25519.GenerateKey(rand.Reader)
+		require.NoError(t, err)
+
+		err = ExportActuatorPublicKey(fileSvc, pubKey, "key-id", nil)
+		require.NoError(t, err)
+
+		pemRel := filepath.Join(constants.PkiDirname, constants.ActuatorPubPEMFilename)
+		_, err = fileSvc.ReadFile(context.Background(), pemRel)
+		require.NoError(t, err, "PEM file should be created even with nil logger")
+	})
+
+	t.Run("OverwriteExisting", func(t *testing.T) {
+		tmpDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
+		require.NoError(t, err)
+		pubKey1, _, err := ed25519.GenerateKey(rand.Reader)
+		require.NoError(t, err)
+
+		pubKey2, _, err := ed25519.GenerateKey(rand.Reader)
+		require.NoError(t, err)
+
+		logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+		require.NoError(t, ExportActuatorPublicKey(fileSvc, pubKey1, "key-1", logger))
+		require.NoError(t, ExportActuatorPublicKey(fileSvc, pubKey2, "key-2", logger))
+
+		jsonRel := filepath.Join(constants.PkiDirname, constants.ActuatorPubJSONFilename)
+		jsonData, err := fileSvc.ReadFile(context.Background(), jsonRel)
+		require.NoError(t, err)
+
+		var parsed models.ActuatorPublicKeyExport
+		require.NoError(t, json.Unmarshal(jsonData, &parsed))
+		assert.Equal(t, "key-2", parsed.KeyID)
+		assert.Equal(t, hex.EncodeToString(pubKey2), parsed.PublicKey)
+	})
+
+	t.Run("FilePermissions", func(t *testing.T) {
+		tmpDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
+		require.NoError(t, err)
+		pubKey, _, err := ed25519.GenerateKey(rand.Reader)
+		require.NoError(t, err)
+
+		logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+		err = ExportActuatorPublicKey(fileSvc, pubKey, "key-id", logger)
+		require.NoError(t, err)
+
+		pemRel := filepath.Join(constants.PkiDirname, constants.ActuatorPubPEMFilename)
+		info, err := fileSvc.Stat(context.Background(), pemRel)
+		require.NoError(t, err)
+		if runtime.GOOS != "windows" {
+			assert.True(t, info.Mode().Perm() == constants.PermFilePrivate)
+		}
+	})
 }

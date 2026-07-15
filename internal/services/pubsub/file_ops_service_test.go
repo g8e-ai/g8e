@@ -42,7 +42,7 @@ func (m *mockAuditEventRecorder) RecordEvent(event *storage.Event) (int64, error
 func TestPayloadToFileEditRequest(t *testing.T) {
 	t.Run("converts valid payload", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		req := &operatorv1.FileEditRequested{
 			FilePath:        filepath.Join(tmpDir, "test.txt"),
 			Operation:       "write",
@@ -120,7 +120,7 @@ func TestPayloadToFileEditRequest(t *testing.T) {
 
 	t.Run("rejects missing operation", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		req := &operatorv1.FileEditRequested{FilePath: filepath.Join(tmpDir, "test.txt")}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
@@ -136,7 +136,7 @@ func TestPayloadToFileEditRequest(t *testing.T) {
 
 	t.Run("uses message ID when payload has no execution_id", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		req := &operatorv1.FileEditRequested{FilePath: filepath.Join(tmpDir, "test.txt"), Operation: "write"}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
@@ -152,7 +152,7 @@ func TestPayloadToFileEditRequest(t *testing.T) {
 
 	t.Run("uses default justification when not specified", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		req := &operatorv1.FileEditRequested{FilePath: filepath.Join(tmpDir, "test.txt"), Operation: "write"}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
@@ -170,7 +170,7 @@ func TestPayloadToFileEditRequest(t *testing.T) {
 func TestPayloadToFsListRequest(t *testing.T) {
 	t.Run("converts valid payload", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		req := &operatorv1.FsListRequested{
 			Path:        tmpDir,
 			ExecutionId: "exec-1",
@@ -228,7 +228,7 @@ func TestPayloadToFsListRequest(t *testing.T) {
 
 	t.Run("uses message ID when payload has no execution_id", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		req := &operatorv1.FsListRequested{Path: tmpDir}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
@@ -244,7 +244,7 @@ func TestPayloadToFsListRequest(t *testing.T) {
 
 	t.Run("uses default max_entries when not specified", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		req := &operatorv1.FsListRequested{Path: tmpDir}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
@@ -262,7 +262,7 @@ func TestPayloadToFsListRequest(t *testing.T) {
 func TestPayloadToFsGrepRequest(t *testing.T) {
 	t.Run("converts valid payload", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		req := &operatorv1.FsGrepRequested{
 			Path:        tmpDir,
 			Pattern:     "test",
@@ -322,7 +322,7 @@ func TestPayloadToFsGrepRequest(t *testing.T) {
 
 	t.Run("uses message ID when payload has no execution_id", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		req := &operatorv1.FsGrepRequested{Path: tmpDir, Pattern: "test"}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
@@ -338,7 +338,7 @@ func TestPayloadToFsGrepRequest(t *testing.T) {
 
 	t.Run("uses default max_matches when not specified", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		req := &operatorv1.FsGrepRequested{Path: tmpDir, Pattern: "test"}
 		payload, _ := proto.Marshal(req)
 		msg := &PubSubCommandMessage{
@@ -394,7 +394,7 @@ func TestFileOpsService_HandleFileEditRequest(t *testing.T) {
 
 	t.Run("rejects missing operation", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		client := pubsubtest.NewMockOperatorPubSubClient()

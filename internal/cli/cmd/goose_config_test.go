@@ -19,12 +19,13 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGooseGovernanceConfig(t *testing.T) {
-	tempHome := t.TempDir()
+	tempHome := testutil.TempDir(t)
 	t.Setenv("HOME", tempHome)
 
 	homeDir, err := os.UserHomeDir()

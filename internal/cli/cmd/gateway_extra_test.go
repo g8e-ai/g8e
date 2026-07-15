@@ -15,7 +15,6 @@ package cmd
 
 import (
 	"bytes"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -83,16 +82,9 @@ func TestGatewayStartCmdFlags(t *testing.T) {
 
 func TestGatewayLogsCmdNoLogFile(t *testing.T) {
 	t.Run("logs command reports no log file when none exists", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		fileSvc, cfg := newCmdTestEnv(t)
 
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		runtimeDir := tmpDir + "/.g8e"
-		require.NoError(t, os.MkdirAll(runtimeDir, 0o700))
-
-		cmd := gatewayLogsCmd()
+		cmd := gatewayLogsCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)

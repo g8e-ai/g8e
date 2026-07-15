@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -182,7 +183,7 @@ func TestL1Doctrine_AnalyzeCommand_PrivilegeEscalation(t *testing.T) {
 func TestL1Doctrine_AnalyzeMCPArguments(t *testing.T) {
 	t.Parallel()
 	doctrine := NewL1Doctrine()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	tests := []struct {
 		name        string
@@ -917,7 +918,7 @@ func TestL1Doctrine_isCriticalSystemFile(t *testing.T) {
 		})
 	}
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	nonCriticalPaths := []string{
 		"/home/user/file.txt",
 		filepath.Join(tmpDir, "test"),
@@ -961,7 +962,7 @@ func TestL1Doctrine_CriticalSystemDirs_ExactMatch(t *testing.T) {
 
 	t.Run("similar but non-critical paths", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		assert.False(t, doctrine.isCriticalSystemFile("/home/bin"))
 		assert.False(t, doctrine.isCriticalSystemFile("/opt/bin/myapp"))
 		assert.False(t, doctrine.isCriticalSystemFile(filepath.Join(tmpDir, "sbin")))
@@ -1266,7 +1267,7 @@ func TestL1Doctrine_AnalyzeCommand_AllNetworkManipulation(t *testing.T) {
 func TestL1Doctrine_AnalyzeMCPArguments_RecursiveAnalysis(t *testing.T) {
 	t.Parallel()
 	doctrine := NewL1Doctrine()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	tests := []struct {
 		name        string

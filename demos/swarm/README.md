@@ -25,7 +25,7 @@ The swarm demo demonstrates:
 
 - **net_untrusted (10.30.0.0/24)**: Adversary simulation
 - **net_perimeter (10.31.0.0/24)**: Gateway public surface
-- **net_internal (10.32.0.0/24)**: Drone operators and command interface
+- **net_internal (10.32.0.0/24)**: Drone operators, agent runtime, and command interface
 - **net_secure (10.33.0.0/24)**: Privileged operator operations
 - **net_mgmt (10.34.0.0/24)**: Observability and monitoring
 
@@ -42,25 +42,30 @@ The swarm demo demonstrates:
 
 The demo includes 15 doctrine rules covering:
 - **Weapons Control**: Unauthorized weapon release prevention
-- **Safety**: Friendly fire and civilian casualty risk detection
+- **Safety**: Friendly fire, civilian casualty, and battery critical override detection
 - **Navigation**: Restricted airspace, GPS spoofing, altitude/speed violations
-- **Command Control**: Authorization override, autonomous mode restrictions
-- **Data Security**: Exfiltration prevention, sensor data tampering
-- **Mission Control**: Breach detection, swarm coordination protection
+- **Electronic Warfare**: Communication jamming detection
+- **Command Control**: Authorization override, autonomous mode, swarm coordination protection
+- **Data Exfiltration**: Sensor data exfiltration prevention
+- **Data Integrity**: Sensor data tampering detection
+- **Mission Control**: Mission parameter breach detection
 
 ## Quick Start
 
 ### Prerequisites
 
 - Docker and Docker Compose installed
-- g8e binary built at repository root
+- g8e binary built and copied to `demos/bin/g8e` (run `make build` from the repository root)
 
 ### Build the g8e binary
 
+From the repository root:
+
 ```bash
-cd /home/bob/g8e
 make build
 ```
+
+`make build` copies the binary to `demos/bin/g8e`, which the Docker build uses for the container image.
 
 ### Start the swarm
 
@@ -108,10 +113,11 @@ docker compose down -v
 
 ## Running the Drone Simulator
 
-Each operator container has the drone simulator mounted. To run it manually on a specific operator:
+Each operator container has the drone simulator mounted at `/app/drone_simulator.py`. The operator container image does not include Python3; install it first to run the simulator manually:
 
 ```bash
-docker compose exec operator-1 python /app/drone_simulator.py DRONE-001 recon
+docker compose exec operator-1 apt-get update && docker compose exec operator-1 apt-get install -y python3
+docker compose exec operator-1 python3 /app/drone_simulator.py DRONE-001 recon
 ```
 
 ## Battlefield Data
@@ -129,19 +135,19 @@ The swarm demo includes 3 real scenarios integrated into the `g8e demos run` CLI
 ```bash
 g8e demos run swarm 1
 ```
-Submits a `GovernanceEnvelope` for a drone recon mission through the gateway via `harnessRun("swarm-recon-mission")`. Verifies gateway health, operator enrollment, doctrine loaded, L2 consensus admission, and ledger receipt.
+Submits a `GovernanceEnvelope` for a drone recon mission through the gateway via mTLS. Verifies gateway health, operator enrollment, doctrine loaded, L2 consensus admission (quorum 2/3), and ledger receipt.
 
 ### Scenario 2: Weapons Safety Doctrine Block
 ```bash
 g8e demos run swarm 2
 ```
-Runs `harnessRun("swarm-weapon-release-block")` which attempts an unauthorized weapon release via MCP tool call. Verifies L1 Doctrine blocks it before any operator execution.
+Attempts an unauthorized weapon release via MCP tool call. Verifies L1 Doctrine blocks it before any operator execution, with no L2 consensus reached and no L5 actuation.
 
 ### Scenario 3: Navigation Boundary Violation Block
 ```bash
 g8e demos run swarm 3
 ```
-Runs `harnessRun("swarm-restricted-airspace-block")` which attempts to navigate a drone into restricted airspace via MCP tool call. Verifies L1 Doctrine blocks the navigation command.
+Attempts to navigate a drone into restricted airspace via MCP tool call. Verifies L1 Doctrine blocks the navigation command before the drone enters the prohibited zone.
 
 Use `-v` for verbose step-by-step output:
 ```bash
@@ -164,7 +170,7 @@ docker compose logs operator-1
 
 ### Drone simulator not running
 
-The drone simulator is mounted but not executed by default. To run it on specific operators, use the exec command shown above.
+The drone simulator is mounted but not executed by default. The operator container image does not include Python3; install it first, then run the simulator using the exec command shown above.
 
 ### High memory usage
 
@@ -173,42 +179,41 @@ With 20 operators, this demo requires significant resources. If you experience i
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     net_untrusted                            │
+┌──────────────────────────────────────────────────────────────┐
+│                    net_untrusted (10.30.0.0/24)               │
 │  ┌──────────────┐                                            │
 │  │   Adversary  │  Attempts to intercept communications     │
 │  └──────────────┘                                            │
-└─────────────────────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────────────────────────────────────┐
-│                    net_perimeter                             │
+└──────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────┐
+│                   net_perimeter (10.31.0.0/24)                │
 │  ┌──────────────┐                                            │
 │  │   Gateway    │  HTTP:8085, HTTPS:8448                    │
 │  └──────────────┘                                            │
-└─────────────────────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────────────────────────────────────┐
-│                    net_internal                              │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │ Operator │  │ Operator │  │ Operator │  │ Command  │   │
-│  │   1-20   │  │  Relay   │  │ Support  │  │ Interface│   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────────────────────────────────────┐
-│                     net_secure                               │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐                   │
-│  │ Operator │  │ Operator │  │ Operator │  Privileged ops  │
-│  │  1-20    │  │  Attack  │  │  Recon   │                   │
-│  └──────────┘  └──────────┘  └──────────┘                   │
-└─────────────────────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────────────────────────────────────┐
-│                      net_mgmt                                 │
-│  ┌──────────────┐                                           │
-│  │Observability │  Log aggregation and audit trail          │
-│  └──────────────┘                                           │
-└─────────────────────────────────────────────────────────────┘
+└──────────────────────────────────────────────────────────────┘
+          │
+┌─────────┴────────────────────────────────────────────────────┐
+│                   net_internal (10.32.0.0/24)                 │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐     │
+│  │ Gateway  │  │Operators │  │  Agent   │  │ Command  │     │
+│  │ (bridge) │  │  1-20    │  │ Runtime  │  │ Interface│     │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘     │
+└──────────────────────────────────────────────────────────────┘
+          │
+┌─────────┴────────────────────────────────────────────────────┐
+│                    net_secure (10.33.0.0/24)                  │
+│  ┌────────────────────────────────────────────────────┐      │
+│  │  Operators 1-20 (recon, attack, support, relay)    │      │
+│  └────────────────────────────────────────────────────┘      │
+└──────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────┐
+│                     net_mgmt (10.34.0.0/24)                   │
+│  ┌──────────────┐                                            │
+│  │Observability │  Log aggregation and audit trail           │
+│  └──────────────┘                                            │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ## License

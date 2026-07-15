@@ -24,6 +24,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/vault"
@@ -40,7 +41,11 @@ import (
 // unlocked vault for encryption. Cleanup is registered via t.Cleanup.
 func setupTestAuditStore(t *testing.T) *storage.SQLAuditStore {
 	t.Helper()
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
+
+	fileSvc, err := fs.NewRuntimeFileService(tempDir, testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -48,14 +53,13 @@ func setupTestAuditStore(t *testing.T) *storage.SQLAuditStore {
 	testVault := createTestVault(t, vaultDir, privKey)
 
 	cfg := &storage.AuditStoreConfig{
-		DataDir:              tempDir,
 		DBPath:               "test_audit.db",
 		MaxDBSizeMB:          100,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 60,
 		EncryptionVault:      testVault,
 	}
-	store, err := storage.NewSQLAuditStore(cfg, testutil.NewTestLogger())
+	store, err := storage.NewSQLAuditStore(cfg, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { store.Close() })
 	return store
@@ -176,7 +180,7 @@ func findRow(vr VerificationResult, check string) *VerificationRow {
 // ---------------------------------------------------------------------------
 
 func TestReportVerification_EmptyLedger_AllPass(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	cl, _ := setupTestCommitmentLedger(t)
 
 	fileRes, vr, err := reportVerification(context.Background(), outDir, nil, cl, nil)
@@ -191,7 +195,7 @@ func TestReportVerification_EmptyLedger_AllPass(t *testing.T) {
 }
 
 func TestReportVerification_ValidCommitmentChain_AllPass(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	cl, _ := setupTestCommitmentLedger(t)
 
 	insertCommitment(t, cl, "tx-1", "hash-1", "", "commit-hash-1", "FS_WRITE", "/file1")
@@ -208,7 +212,7 @@ func TestReportVerification_ValidCommitmentChain_AllPass(t *testing.T) {
 }
 
 func TestReportVerification_FirstCommitmentHasNonEmptyPriorHash_Fails(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	cl, _ := setupTestCommitmentLedger(t)
 
 	insertCommitment(t, cl, "tx-1", "hash-1", "should-be-empty", "commit-hash-1", "FS_WRITE", "/file1")
@@ -224,7 +228,7 @@ func TestReportVerification_FirstCommitmentHasNonEmptyPriorHash_Fails(t *testing
 }
 
 func TestReportVerification_BrokenChainSecondCommit_Fails(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	cl, db := setupTestCommitmentLedger(t)
 
 	insertCommitment(t, cl, "tx-1", "hash-1", "", "commit-hash-1", "FS_WRITE", "/file1")
@@ -246,7 +250,7 @@ func TestReportVerification_BrokenChainSecondCommit_Fails(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestReportVerification_NilLedger_MerkleRootSkipped(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	cl, _ := setupTestCommitmentLedger(t)
 
 	_, vr, err := reportVerification(context.Background(), outDir, nil, cl, nil)
@@ -263,7 +267,7 @@ func TestReportVerification_NilLedger_MerkleRootSkipped(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestReportVerification_NilAuditStore_MutationLinkageSkipped(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	cl, _ := setupTestCommitmentLedger(t)
 
 	_, vr, err := reportVerification(context.Background(), outDir, nil, cl, nil)
@@ -276,7 +280,7 @@ func TestReportVerification_NilAuditStore_MutationLinkageSkipped(t *testing.T) {
 }
 
 func TestReportVerification_MutationsAllHaveHashes_Pass(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	cl, _ := setupTestCommitmentLedger(t)
 	auditStore := setupTestAuditStore(t)
 	eventID := createSessionAndEvent(t, auditStore)
@@ -309,7 +313,7 @@ func TestReportVerification_MutationsAllHaveHashes_Pass(t *testing.T) {
 }
 
 func TestReportVerification_MutationMissingLedgerHashAfter_Fails(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	cl, _ := setupTestCommitmentLedger(t)
 	auditStore := setupTestAuditStore(t)
 	eventID := createSessionAndEvent(t, auditStore)
@@ -334,7 +338,7 @@ func TestReportVerification_MutationMissingLedgerHashAfter_Fails(t *testing.T) {
 }
 
 func TestReportVerification_ReadOperationDoesNotRequireHash(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	cl, _ := setupTestCommitmentLedger(t)
 	auditStore := setupTestAuditStore(t)
 	eventID := createSessionAndEvent(t, auditStore)
@@ -361,7 +365,7 @@ func TestReportVerification_ReadOperationDoesNotRequireHash(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestReportVerification_AllReceiptsPresent_Pass(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	cl, _ := setupTestCommitmentLedger(t)
 	auditStore := setupTestAuditStore(t)
 	sessionID := "test-session-receipts"
@@ -394,7 +398,7 @@ func TestReportVerification_AllReceiptsPresent_Pass(t *testing.T) {
 }
 
 func TestReportVerification_MissingReceipt_Fails(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	cl, _ := setupTestCommitmentLedger(t)
 	auditStore := setupTestAuditStore(t)
 	sessionID := "test-session-missing-receipt"
@@ -428,7 +432,7 @@ func TestReportVerification_MissingReceipt_Fails(t *testing.T) {
 }
 
 func TestReportVerification_EmptyCommitments_NoCrossLinkNeeded(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	cl, _ := setupTestCommitmentLedger(t)
 	auditStore := setupTestAuditStore(t)
 
@@ -447,7 +451,7 @@ func TestReportVerification_EmptyCommitments_NoCrossLinkNeeded(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestReportVerification_ContextCancelled_ReturnsErr(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	cl, _ := setupTestCommitmentLedger(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -462,7 +466,7 @@ func TestReportVerification_ContextCancelled_ReturnsErr(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestReportVerification_CSVFileWritten(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	cl, _ := setupTestCommitmentLedger(t)
 
 	fileRes, vr, err := reportVerification(context.Background(), outDir, nil, cl, nil)
@@ -482,7 +486,7 @@ func TestReportVerification_CSVFileWritten(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestReportVerification_CommitmentLedgerReadError_Skipped(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	// Create a commitment ledger with a nil db to trigger read error
 	cl := storage.NewCommitmentLedger(nil, testutil.NewTestLogger())

@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -91,7 +92,7 @@ func TestRunShellCommandTool_Execute_SimpleCommand(t *testing.T) {
 func TestRunShellCommandTool_Execute_WithWorkingDir(t *testing.T) {
 	tool := &RunShellCommandTool{}
 	ctx := context.Background()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	pwdCmd := "pwd"
 	if runtime.GOOS == "windows" {
@@ -475,7 +476,7 @@ func TestValidateForSSHExecution_StillBlocksDenylist(t *testing.T) {
 }
 
 func TestValidateForSSHExecution_AllowsSafeCommands(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	safeCommands := []struct {
 		command    string
 		args       []string
@@ -508,7 +509,7 @@ func TestValidateForSSHExecution_AllowsSafeCommands(t *testing.T) {
 }
 
 func TestValidateCommandSafety_WorkingDirValidation(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	workingDirTests := []struct {
 		name        string
 		command     string

@@ -30,8 +30,9 @@ import (
 func setupTestLedgerForDiffStat(t *testing.T) (*GitLedgerService, string) {
 	t.Helper()
 	gitPath := testGitPath(t)
-	tempDir := t.TempDir()
-	ledgerDir := filepath.Join(tempDir, "ledger")
+	tempDir := testutil.TempDir(t)
+
+	fileSvc, _ := newTestFileSvc(t, tempDir)
 
 	// Create vault but do NOT unlock it (encryption disabled)
 	_, privKey, err := ed25519.GenerateKey(nil)
@@ -48,11 +49,10 @@ func setupTestLedgerForDiffStat(t *testing.T) (*GitLedgerService, string) {
 	logger := testutil.NewTestLogger()
 
 	ledgerConfig := &LedgerConfig{
-		BaseDir:         ledgerDir,
 		GitPath:         gitPath,
 		EncryptionVault: testVault,
 	}
-	lms, err := NewGitLedgerService(ledgerConfig, logger)
+	lms, err := NewGitLedgerService(ledgerConfig, logger, fileSvc)
 	require.NoError(t, err)
 	require.NotNil(t, lms)
 
@@ -140,7 +140,7 @@ func TestLedgerService_GetDiffStat_InvalidHashesReturnsEmpty(t *testing.T) {
 // demonstrating fail-closed behavior for disabled infrastructure.
 func TestLedgerService_GetDiffStat_GitDisabledReturnsEmpty(t *testing.T) {
 	t.Parallel()
-	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
+	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger(), nil)
 
 	stat := lms.GetDiffStat("abc123", "def456", "operator-session")
 	assert.Empty(t, stat)

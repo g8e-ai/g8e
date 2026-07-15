@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -104,7 +105,7 @@ func TestFSDiskProfileTool_Execute_SingleFile(t *testing.T) {
 	tool := &FSDiskProfileTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "test.txt")
 	err := os.WriteFile(testFile, []byte("hello world"), 0644)
 	require.NoError(t, err)
@@ -139,7 +140,7 @@ func TestFSDiskProfileTool_Execute_DirectoryStructure(t *testing.T) {
 	tool := &FSDiskProfileTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	// Create directory structure
 	subDir1 := filepath.Join(tmpDir, "subdir1")
@@ -192,7 +193,7 @@ func TestFSDiskProfileTool_Execute_MaxDepth(t *testing.T) {
 	tool := &FSDiskProfileTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	// Create nested structure: tmpDir/subdir1/subdir2/subdir3/file.txt
 	subDir1 := filepath.Join(tmpDir, "subdir1")
@@ -241,7 +242,7 @@ func TestFSDiskProfileTool_Execute_DefaultMaxDepth(t *testing.T) {
 	tool := &FSDiskProfileTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	// Create nested structure
 	subDir1 := filepath.Join(tmpDir, "subdir1")
@@ -280,7 +281,7 @@ func TestFSDiskProfileTool_Execute_ZeroMaxDepth(t *testing.T) {
 	tool := &FSDiskProfileTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	// Create simple structure
 	subDir := filepath.Join(tmpDir, "subdir")
@@ -311,7 +312,7 @@ func TestFSDiskProfileTool_Execute_NegativeMaxDepth(t *testing.T) {
 	tool := &FSDiskProfileTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	file := filepath.Join(tmpDir, "file.txt")
 	err := os.WriteFile(file, []byte("content"), 0644)
@@ -339,7 +340,7 @@ func TestFSDiskProfileTool_Execute_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	// Create some structure
 	subDir := filepath.Join(tmpDir, "subdir")
@@ -359,7 +360,7 @@ func TestFSDiskProfileTool_Execute_SizeCalculation(t *testing.T) {
 	tool := &FSDiskProfileTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	// Create files with known sizes
 	file1 := filepath.Join(tmpDir, "file1.txt")
@@ -391,7 +392,7 @@ func TestFSDiskProfileTool_Execute_ModificationTime(t *testing.T) {
 	tool := &FSDiskProfileTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	file := filepath.Join(tmpDir, "file.txt")
 	err := os.WriteFile(file, []byte("content"), 0644)
@@ -431,7 +432,7 @@ func TestFSDiskProfileTool_Execute_EmptyDirectory(t *testing.T) {
 	tool := &FSDiskProfileTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	// Empty directory
 
 	req := FSDiskProfileRequest{Path: tmpDir}
@@ -456,7 +457,7 @@ func TestFSDiskProfileTool_Execute_SymlinkSkip(t *testing.T) {
 	tool := &FSDiskProfileTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	// Create a file and a symlink to it
 	file := filepath.Join(tmpDir, "file.txt")
@@ -489,7 +490,7 @@ func TestFSDiskProfileTool_Execute_LargeMaxDepth(t *testing.T) {
 	tool := &FSDiskProfileTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	// Create a moderately deep structure
 	current := tmpDir

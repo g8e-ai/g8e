@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -121,7 +122,7 @@ func TestFileReadTool_Execute_SensitiveSSHKey(t *testing.T) {
 	tool := &FileReadTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	sensitiveKeys := []string{
 		"id_rsa",
 		"id_ed25519",
@@ -157,7 +158,7 @@ func TestFileReadTool_Execute_SafeSSHKeyWithExtension(t *testing.T) {
 	tool := &FileReadTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	safeKeyPath := filepath.Join(tmpDir, "id_rsa.pub")
 	err := os.WriteFile(safeKeyPath, []byte("public key content"), 0644)
 	require.NoError(t, err)
@@ -202,7 +203,7 @@ func TestFileReadTool_Execute_Success(t *testing.T) {
 	tool := &FileReadTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "test.txt")
 	testContent := "hello world\nline 2\nline 3"
 	err := os.WriteFile(testFile, []byte(testContent), 0644)
@@ -229,7 +230,7 @@ func TestFileReadTool_Execute_EmptyFile(t *testing.T) {
 	tool := &FileReadTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "empty.txt")
 	err := os.WriteFile(testFile, []byte{}, 0644)
 	require.NoError(t, err)
@@ -253,7 +254,7 @@ func TestFileReadTool_Execute_WithOffset(t *testing.T) {
 	tool := &FileReadTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "test.txt")
 	testContent := "line 1\nline 2\nline 3\nline 4\nline 5"
 	err := os.WriteFile(testFile, []byte(testContent), 0644)
@@ -279,7 +280,7 @@ func TestFileReadTool_Execute_WithLimit(t *testing.T) {
 	tool := &FileReadTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "test.txt")
 	testContent := "line 1\nline 2\nline 3\nline 4\nline 5"
 	err := os.WriteFile(testFile, []byte(testContent), 0644)
@@ -305,7 +306,7 @@ func TestFileReadTool_Execute_WithOffsetAndLimit(t *testing.T) {
 	tool := &FileReadTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "test.txt")
 	testContent := "line 1\nline 2\nline 3\nline 4\nline 5"
 	err := os.WriteFile(testFile, []byte(testContent), 0644)
@@ -332,7 +333,7 @@ func TestFileReadTool_Execute_OffsetBeyondFile(t *testing.T) {
 	tool := &FileReadTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "test.txt")
 	testContent := "line 1\nline 2\nline 3"
 	err := os.WriteFile(testFile, []byte(testContent), 0644)
@@ -356,7 +357,7 @@ func TestFileReadTool_Execute_OffsetZero(t *testing.T) {
 	tool := &FileReadTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "test.txt")
 	testContent := "line 1\nline 2\nline 3"
 	err := os.WriteFile(testFile, []byte(testContent), 0644)
@@ -380,7 +381,7 @@ func TestFileReadTool_Execute_LimitZero(t *testing.T) {
 	tool := &FileReadTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "test.txt")
 	testContent := "line 1\nline 2\nline 3"
 	err := os.WriteFile(testFile, []byte(testContent), 0644)
@@ -404,7 +405,7 @@ func TestFileReadTool_Execute_StartAfterEnd(t *testing.T) {
 	tool := &FileReadTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "test.txt")
 	testContent := "line 1\nline 2\nline 3"
 	err := os.WriteFile(testFile, []byte(testContent), 0644)
@@ -428,7 +429,7 @@ func TestFileReadTool_Execute_SingleLine(t *testing.T) {
 	tool := &FileReadTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "single.txt")
 	testContent := "single line"
 	err := os.WriteFile(testFile, []byte(testContent), 0644)
@@ -452,7 +453,7 @@ func TestFileReadTool_Execute_BinaryFile(t *testing.T) {
 	tool := &FileReadTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "binary.bin")
 	// Use valid UTF-8 bytes that are still "binary-like" (null bytes, control chars)
 	binaryContent := []byte{0x00, 0x01, 0x02, 0x03, 0x1F}
@@ -478,7 +479,7 @@ func TestFileReadTool_Execute_UnicodeContent(t *testing.T) {
 	tool := &FileReadTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "unicode.txt")
 	unicodeContent := "Hello 世界 🌍 Ñoño café"
 	err := os.WriteFile(testFile, []byte(unicodeContent), 0644)
@@ -502,7 +503,7 @@ func TestFileReadTool_Execute_LargeFile(t *testing.T) {
 	tool := &FileReadTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "large.txt")
 
 	// Create a file with many lines
@@ -534,7 +535,7 @@ func TestFileReadTool_Execute_AbsolutePath(t *testing.T) {
 	tool := &FileReadTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "absolute.txt")
 	testContent := "test content"
 	err := os.WriteFile(testFile, []byte(testContent), 0644)
@@ -562,7 +563,7 @@ func TestFileReadTool_Execute_RelativePath(t *testing.T) {
 	tool := &FileReadTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	originalDir, err := os.Getwd()
 	require.NoError(t, err)
 	defer os.Chdir(originalDir)
@@ -593,7 +594,7 @@ func TestFileReadTool_Execute_DirectoryInsteadOfFile(t *testing.T) {
 	tool := &FileReadTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	req := FileReadRequest{Path: tmpDir}
 	args, err := json.Marshal(req)
@@ -615,7 +616,7 @@ func TestFileReadTool_Execute_TrailingNewline(t *testing.T) {
 	tool := &FileReadTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "trailing.txt")
 	testContent := "line 1\nline 2\n"
 	err := os.WriteFile(testFile, []byte(testContent), 0644)
@@ -639,7 +640,7 @@ func TestFileReadTool_Execute_OnlyNewlines(t *testing.T) {
 	tool := &FileReadTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "newlines.txt")
 	testContent := "\n\n\n"
 	err := os.WriteFile(testFile, []byte(testContent), 0644)

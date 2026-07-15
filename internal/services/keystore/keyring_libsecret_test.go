@@ -117,7 +117,7 @@ func TestLibsecretKeyring_RetrieveNotFound(t *testing.T) {
 func TestNewLinux_FallbackToFileKeyring(t *testing.T) {
 	t.Parallel()
 
-	secretsDir := t.TempDir()
+	fileSvc, _ := setupTestFileService(t)
 	logger := testutil.NewTestLogger()
 
 	backupPath := os.Getenv("PATH")
@@ -125,7 +125,7 @@ func TestNewLinux_FallbackToFileKeyring(t *testing.T) {
 
 	os.Setenv("PATH", "")
 
-	ks, err := New(secretsDir, logger)
+	ks, err := NewWithFS(fileSvc, logger)
 	require.NoError(t, err)
 	assert.Equal(t, "file", ks.KeyringName())
 }
@@ -137,10 +137,10 @@ func TestNewLinux_WithLibsecret(t *testing.T) {
 		t.Skip("secret-tool not available, skipping libsecret keyring test")
 	}
 
-	secretsDir := t.TempDir()
+	fileSvc, _ := setupTestFileService(t)
 	logger := testutil.NewTestLogger()
 
-	ks, err := New(secretsDir, logger)
+	ks, err := NewWithFS(fileSvc, logger)
 	require.NoError(t, err)
 	assert.Equal(t, "libsecret", ks.KeyringName())
 }

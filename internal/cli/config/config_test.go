@@ -13,6 +13,11 @@
 
 package config
 
+// os.Chdir is used because these tests verify config.Load("") which reads
+// from the current working directory by design. The config package is the
+// layer that translates cwd into fileSvc baseDir. This is a legitimate cwd
+// usage — not .g8e/ runtime state alignment.
+
 import (
 	"encoding/json"
 	"os"
@@ -21,7 +26,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/netutil"
-	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -92,7 +97,7 @@ func TestExpandPath(t *testing.T) {
 
 func TestLoad(t *testing.T) {
 	t.Run("loads config from any directory using embedded defaults", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		config, err := Load(tempDir)
 		require.NoError(t, err)
@@ -101,12 +106,12 @@ func TestLoad(t *testing.T) {
 		assert.Equal(t, filepath.Join(tempDir, DefaultRuntimeDir), config.RuntimeDir)
 		assert.Equal(t, filepath.Join(tempDir, DefaultPKIDir), config.PKIDir)
 		assert.Equal(t, filepath.Join(tempDir, DefaultSecretsDir), config.SecretsDir)
-		assert.Contains(t, config.CredentialsDir, ".g8e")
+		assert.Contains(t, config.RuntimeDir, ".g8e")
 		assert.NotNil(t, config.Paths)
 	})
 
 	t.Run("uses current directory when project root is empty", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		// Change to temp directory and load with empty project root
 		originalWd, err := os.Getwd()
@@ -125,7 +130,7 @@ func TestLoad(t *testing.T) {
 	})
 
 	t.Run("always uses embedded defaults regardless of file presence", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		// Create protocol/constants directory with a paths.json file
 		// This should be ignored since we always use embedded defaults
@@ -151,9 +156,17 @@ func TestLoad(t *testing.T) {
 	})
 }
 
-func TestConfig_TrustBundlePath(t *testing.T) {
-	t.Run("returns absolute path as-is", func(t *testing.T) {
-		caPath := filepath.Join(t.TempDir(), "absolute", "path", "to", "ca.pem")
+func TestConfig_DefaultTrustBundleRelPath(t *testing.T) {
+	t.Run("returns canonical runtime-relative path", func(t *testing.T) {
+		config := &Config{}
+		result := config.DefaultTrustBundleRelPath()
+		assert.Equal(t, constants.PkiDirname+"/"+constants.PkiSubdirTrust+"/"+constants.PkiFileGatewayBundle, result)
+	})
+}
+
+func TestConfig_CustomTrustBundlePath(t *testing.T) {
+	t.Run("returns absolute custom path when set", func(t *testing.T) {
+		caPath := filepath.Join(testutil.TempDir(t), "absolute", "path", "to", "ca.pem")
 		config := &Config{
 			ProjectRoot: "/project/root",
 			Paths: &PathsConfig{
@@ -176,11 +189,11 @@ func TestConfig_TrustBundlePath(t *testing.T) {
 			},
 		}
 
-		result := config.TrustBundlePath()
+		result := config.CustomTrustBundlePath()
 		assert.Equal(t, caPath, result)
 	})
 
-	t.Run("joins relative path with project root", func(t *testing.T) {
+	t.Run("joins relative custom path with project root", func(t *testing.T) {
 		projectRoot := filepath.Join(string(filepath.Separator), "project", "root")
 		config := &Config{
 			ProjectRoot: projectRoot,
@@ -204,11 +217,11 @@ func TestConfig_TrustBundlePath(t *testing.T) {
 			},
 		}
 
-		result := config.TrustBundlePath()
+		result := config.CustomTrustBundlePath()
 		assert.Equal(t, filepath.Join(projectRoot, "relative", "path", "to", "ca.pem"), result)
 	})
 
-	t.Run("returns empty string when CACertPath is empty", func(t *testing.T) {
+	t.Run("returns empty when CACertPath is empty", func(t *testing.T) {
 		config := &Config{
 			ProjectRoot: "/project/root",
 			Paths: &PathsConfig{
@@ -231,8 +244,80 @@ func TestConfig_TrustBundlePath(t *testing.T) {
 			},
 		}
 
-		result := config.TrustBundlePath()
+		result := config.CustomTrustBundlePath()
 		assert.Empty(t, result)
+	})
+
+	t.Run("returns empty when CACertPath matches default runtime location", func(t *testing.T) {
+		runtimeDir := filepath.Join(string(filepath.Separator), "project", "root", ".g8e")
+		defaultPath := filepath.Join(runtimeDir, constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+		config := &Config{
+			ProjectRoot: "/project/root",
+			RuntimeDir:  runtimeDir,
+			Paths: &PathsConfig{
+				Infra: struct {
+					AppCertDir           string `json:"app_cert_dir"`
+					CACertPath           string `json:"ca_cert_path"`
+					DBPath               string `json:"db_path"`
+					DocsDir              string `json:"docs_dir"`
+					PKIDir               string `json:"pki_dir"`
+					ProtocolConstantsDir string `json:"protocol_constants_dir"`
+					ProtocolDir          string `json:"protocol_dir"`
+					ProtocolModelsDir    string `json:"protocol_models_dir"`
+					SecretsDir           string `json:"secrets_dir"`
+					SSHConfigPath        string `json:"ssh_config_path"`
+					VaultDir             string `json:"vault_dir"`
+					VaultKeyPath         string `json:"vault_key_path"`
+				}{
+					CACertPath: defaultPath,
+				},
+			},
+		}
+
+		result := config.CustomTrustBundlePath()
+		assert.Empty(t, result)
+	})
+}
+
+func TestConfig_ResolvedTrustBundlePath(t *testing.T) {
+	t.Run("returns custom path when set", func(t *testing.T) {
+		caPath := filepath.Join(testutil.TempDir(t), "custom", "ca.pem")
+		config := &Config{
+			ProjectRoot: "/project/root",
+			Paths: &PathsConfig{
+				Infra: struct {
+					AppCertDir           string `json:"app_cert_dir"`
+					CACertPath           string `json:"ca_cert_path"`
+					DBPath               string `json:"db_path"`
+					DocsDir              string `json:"docs_dir"`
+					PKIDir               string `json:"pki_dir"`
+					ProtocolConstantsDir string `json:"protocol_constants_dir"`
+					ProtocolDir          string `json:"protocol_dir"`
+					ProtocolModelsDir    string `json:"protocol_models_dir"`
+					SecretsDir           string `json:"secrets_dir"`
+					SSHConfigPath        string `json:"ssh_config_path"`
+					VaultDir             string `json:"vault_dir"`
+					VaultKeyPath         string `json:"vault_key_path"`
+				}{
+					CACertPath: caPath,
+				},
+			},
+		}
+
+		result := config.ResolvedTrustBundlePath()
+		assert.Equal(t, caPath, result)
+	})
+
+	t.Run("returns default runtime path when no custom path", func(t *testing.T) {
+		runtimeDir := filepath.Join(string(filepath.Separator), "project", "root", ".g8e")
+		config := &Config{
+			ProjectRoot: "/project/root",
+			RuntimeDir:  runtimeDir,
+			Paths:       &PathsConfig{},
+		}
+
+		result := config.ResolvedTrustBundlePath()
+		assert.Equal(t, filepath.Join(runtimeDir, constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle), result)
 	})
 }
 
@@ -240,7 +325,7 @@ func TestConfig_CredentialsFile(t *testing.T) {
 	t.Run("returns credentials file path", func(t *testing.T) {
 		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: credentialsDir,
+			RuntimeDir: credentialsDir,
 		}
 
 		result := config.CredentialsFile()
@@ -252,7 +337,7 @@ func TestConfig_CLICertFile(t *testing.T) {
 	t.Run("returns CLI cert file path", func(t *testing.T) {
 		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: credentialsDir,
+			RuntimeDir: credentialsDir,
 		}
 
 		result := config.CLICertFile()
@@ -264,7 +349,7 @@ func TestConfig_CLIKeyFile(t *testing.T) {
 	t.Run("returns CLI key file path", func(t *testing.T) {
 		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: credentialsDir,
+			RuntimeDir: credentialsDir,
 		}
 
 		result := config.CLIKeyFile()
@@ -276,7 +361,7 @@ func TestConfig_OperatorCertFile(t *testing.T) {
 	t.Run("returns Operator cert file path", func(t *testing.T) {
 		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: credentialsDir,
+			RuntimeDir: credentialsDir,
 		}
 
 		result := config.OperatorCertFile()
@@ -288,7 +373,7 @@ func TestConfig_OperatorKeyFile(t *testing.T) {
 	t.Run("returns Operator key file path", func(t *testing.T) {
 		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: credentialsDir,
+			RuntimeDir: credentialsDir,
 		}
 
 		result := config.OperatorKeyFile()
@@ -354,14 +439,11 @@ func TestDefaultConstants(t *testing.T) {
 		assert.Equal(t, ".g8e/secrets", DefaultSecretsDir)
 	})
 
-	t.Run("default credentials dir constant", func(t *testing.T) {
-		assert.Equal(t, ".g8e", DefaultCredentialsDir)
-	})
 }
 
 func TestLoadWithPaths(t *testing.T) {
 	t.Run("loads config with custom paths from struct", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		customPaths := DefaultInfraPaths()
 		customPaths.Host = "test-host"
@@ -393,7 +475,7 @@ func TestLoadWithPaths(t *testing.T) {
 	})
 
 	t.Run("uses current directory when project root is empty", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		originalWd, err := os.Getwd()
 		require.NoError(t, err)
@@ -415,7 +497,7 @@ func TestLoadWithPaths(t *testing.T) {
 	})
 
 	t.Run("returns error for invalid JSON", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		invalidJSON := `{"host": invalid}`
 
@@ -426,8 +508,8 @@ func TestLoadWithPaths(t *testing.T) {
 	})
 
 	t.Run("resolves absolute paths as-is", func(t *testing.T) {
-		tempDir := t.TempDir()
-		absPath := filepath.Join(t.TempDir(), "absolute", "path", "to", "cert.pem")
+		tempDir := testutil.TempDir(t)
+		absPath := filepath.Join(testutil.TempDir(t), "absolute", "path", "to", "cert.pem")
 
 		customPaths := DefaultInfraPaths()
 		customPaths.Infra.CACertPath = absPath
@@ -440,7 +522,7 @@ func TestLoadWithPaths(t *testing.T) {
 	})
 
 	t.Run("resolves relative paths relative to project root", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		customPaths := DefaultInfraPaths()
 		customPaths.Infra.CACertPath = "relative/ca.pem"
@@ -453,7 +535,7 @@ func TestLoadWithPaths(t *testing.T) {
 	})
 
 	t.Run("handles empty infra fields gracefully", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		customPaths := DefaultInfraPaths()
 		customPaths.Infra.AppCertDir = ""
@@ -522,7 +604,8 @@ func TestResolveInfraPaths(t *testing.T) {
 
 	t.Run("preserves absolute paths unchanged", func(t *testing.T) {
 		projectRoot := "/project/root"
-		absPath := filepath.Join(os.TempDir(), "absolute")
+		cwd, _ := os.Getwd()
+		absPath := filepath.Join(cwd, constants.TestTempDirname, "absolute")
 		paths := &PathsConfig{
 			Infra: struct {
 				AppCertDir           string `json:"app_cert_dir"`
@@ -586,7 +669,7 @@ func TestConfig_AppCertFile(t *testing.T) {
 	t.Run("returns app cert file path with name", func(t *testing.T) {
 		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: credentialsDir,
+			RuntimeDir: credentialsDir,
 		}
 
 		result := config.AppCertFile("myapp")
@@ -596,7 +679,7 @@ func TestConfig_AppCertFile(t *testing.T) {
 	t.Run("handles empty app name", func(t *testing.T) {
 		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: credentialsDir,
+			RuntimeDir: credentialsDir,
 		}
 
 		result := config.AppCertFile("")
@@ -608,7 +691,7 @@ func TestConfig_AppKeyFile(t *testing.T) {
 	t.Run("returns app key file path with name", func(t *testing.T) {
 		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: credentialsDir,
+			RuntimeDir: credentialsDir,
 		}
 
 		result := config.AppKeyFile("myapp")
@@ -618,7 +701,7 @@ func TestConfig_AppKeyFile(t *testing.T) {
 	t.Run("handles empty app name", func(t *testing.T) {
 		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: credentialsDir,
+			RuntimeDir: credentialsDir,
 		}
 
 		result := config.AppKeyFile("")
@@ -630,7 +713,7 @@ func TestConfig_TrustBundleFile(t *testing.T) {
 	t.Run("returns trust bundle file path", func(t *testing.T) {
 		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
 		config := &Config{
-			CredentialsDir: credentialsDir,
+			RuntimeDir: credentialsDir,
 		}
 
 		result := config.TrustBundleFile()
@@ -695,15 +778,29 @@ func TestConfig_OperatorHTTPURL_Override(t *testing.T) {
 	})
 }
 
-func TestConfig_TrustBundlePath_NilPaths(t *testing.T) {
-	t.Run("returns constants path when Paths is nil", func(t *testing.T) {
+func TestConfig_CustomTrustBundlePath_NilPaths(t *testing.T) {
+	t.Run("returns empty when Paths is nil", func(t *testing.T) {
 		config := &Config{
 			ProjectRoot: "/project/root",
 			Paths:       nil,
 		}
 
-		result := config.TrustBundlePath()
-		assert.Equal(t, paths.Infra.CaCertPath, result)
+		result := config.CustomTrustBundlePath()
+		assert.Empty(t, result)
+	})
+}
+
+func TestConfig_ResolvedTrustBundlePath_NilPaths(t *testing.T) {
+	t.Run("returns default runtime path when Paths is nil", func(t *testing.T) {
+		runtimeDir := filepath.Join(string(filepath.Separator), "project", "root", ".g8e")
+		config := &Config{
+			ProjectRoot: "/project/root",
+			RuntimeDir:  runtimeDir,
+			Paths:       nil,
+		}
+
+		result := config.ResolvedTrustBundlePath()
+		assert.Equal(t, filepath.Join(runtimeDir, constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle), result)
 	})
 }
 
@@ -714,7 +811,7 @@ func TestLoadIntegration(t *testing.T) {
 		// This test verifies the self-sovereign binary behavior:
 		// The binary always uses embedded default paths regardless of directory structure.
 
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		// Change to temp directory (simulating running binary from empty directory)
 		originalWd, err := os.Getwd()

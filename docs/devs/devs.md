@@ -11,7 +11,7 @@ g8e is a zero-trust execution platform for agentic infrastructure. Mutations are
 - **Data sovereignty**: Raw data stays on the Operator host; platform state is host-native under `.g8e/`
 - **BYO clients**: The CLI (`./g8e`) is the default interface; MCP stdio for AI IDE integration; Console SPA and TUI for governance management
 
-See [g8e Protocol](../../protocol/docs/spec.md), [Gateway](../architecture/gateway.md), [Operator](../architecture/operator.md).
+See [g8e Protocol](../../protocol/docs/spec.md), [Gateway](../architecture/gateway.md), [Operator](../architecture/operator.md), [Codemap](codemap.md).
 
 ## Getting Started
 
@@ -38,7 +38,7 @@ Startup sequence: binary check/build â†’ root of trust generation (first boot) â
 ## Paths & State
 
 **Source paths** (git root):
-- `protocol/` - Protobuf schemas and JSON protocol constants
+- `protocol/` - Protobuf schemas, JSON protocol constants, model definitions, Python SDK, and conformance tests
 - `cmd/g8e/` - Binary entrypoint
 - `internal/cli/cmd/` - Cobra command tree
 - `internal/cli/serve/` - Gateway and operator boot sequences
@@ -49,6 +49,7 @@ Startup sequence: binary check/build â†’ root of trust generation (first boot) â
 **Runtime paths** (`.g8e/`):
 - `.g8e/pki/` - CA hierarchy and trust bundles
 - `.g8e/secrets/` - Bootstrap secrets
+- `.g8e/vault/` - Encryption vault (private)
 - `.g8e/data/` - SQLite databases and blobs
 - `.g8e/logs/` - Component logs
 - `.g8e/pids/` - Process IDs
@@ -76,6 +77,13 @@ Startup sequence: binary check/build â†’ root of trust generation (first boot) â
 - Use canonical JSON (protojson) for all client-facing surfaces
 - Route all mutations through `GovernanceEnvelope` and the 5-layer verification gauntlet
 - Define ALL filepath strings as constants in `internal/constants/paths.go`
+- Use `RuntimeFileService` (`internal/services/fs`) as the canonical abstraction for all `.g8e/` file I/O. Call `CreateRuntimeTree` at startup, then use `fileSvc.ReadFile`/`fileSvc.WriteFile`/`fileSvc.Stat`/`fileSvc.Remove` with relative paths constructed from `constants.*` constants
+- Pass `fileSvc` as an explicit parameter to services and functions that perform `.g8e/` file I/O. Do not use `os.ReadFile`/`os.WriteFile` for `.g8e/` paths
+- Use `fileSvc.Resolve(constants.*)` to obtain absolute paths when needed (e.g., for `filepath.Join` in non-fileSvc APIs). Use `fileSvc.Rel()` to convert absolute `.g8e/` paths back to relative paths for `fileSvc` calls
+- Use `constants.Perm*` constants for file and directory permissions. Use `constants.Err*` constants for error checking (e.g., `errors.Is(err, constants.ErrNotFound)` replaces `os.IsNotExist`)
+- Wrap `fileSvcFactory()` errors with `constants.ErrFileServiceInit` in all `*WithConfig` command functions. Do not use `constants.ErrInternal`, `constants.ErrPathValidation`, or ad-hoc string wrapping for file service initialization errors
+- Inject `fileSvcFactory func() (fs.RuntimeFileService, error)` as a parameter in `*WithConfig` command functions. Production constructors pass `newFileSvc`; tests pass `fileSvcFactoryFor(fileSvc)` with a temp-rooted `fileSvc`. Every injection point must have a factory-error test asserting `ErrFileServiceInit` wrapping
+- Do not add `DataDir`/`CredentialsDir`/`PKIDir` fields to config structs. Use `fileSvc.Resolve(constants.*)` instead. `paths.Infra` is config-only (path registration), not for file I/O
 - Use `TestPaths` for isolated test environments (base directory from a constant, all sub-paths from constants)
 - Reproduce bugs with failing tests before fixing
 - Tier 1 (Unit) tests: mocks and stubs, no external dependencies (no files, network, or DB)
@@ -125,6 +133,7 @@ Return centralized error constants from `internal/constants/errors.go` for known
 - mTLS by default; test runner handles certificate injection
 - Contract tests enforce alignment between components and `protocol/`
 - Coverage threshold: 75%
+- See [Testing Guide](tests.md) for detailed test patterns and infrastructure
 
 **Test infrastructure separation:**
 - `internal/services/storage/storagetest/` - Test-only audit storage (`TestSQLAuditStore` with Git ledger, no-op `DocSet`)
@@ -183,6 +192,7 @@ MCP tools compiled into the g8e binary that execute within the Operator's execut
 |---|---|
 | Protobuf schemas | `protocol/proto/` |
 | Constants (JSON reference) | `protocol/constants/` |
+| JSON model definitions | `protocol/models/` |
 | Go registry files | `internal/constants/` |
 | Governance layers | `internal/services/governance/` |
 | CLI entry points | `cmd/g8e/` â†’ `internal/cli/cmd/` |

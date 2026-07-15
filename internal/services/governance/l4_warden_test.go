@@ -63,7 +63,7 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 
 func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 	t.Helper()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	var msg proto.Message
 	switch actionType {
 	case constants.ActionTypeExecuteBash:

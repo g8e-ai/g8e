@@ -13,6 +13,12 @@
 
 //go:build integration
 
+// os.Chdir is used because runChaos calls configLoad which reads config from
+// the current working directory. This is a legitimate cwd usage — the config
+// layer translates cwd into fileSvc baseDir. Injecting fileSvcFactory into
+// runChaos would require config-layer injection, which is out of scope for the
+// current refactor.
+
 package cmd
 
 import (
@@ -20,6 +26,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -42,7 +49,7 @@ func TestRunChaosErrorHandling(t *testing.T) {
 
 		// Change to a temp directory to avoid affecting real filesystem
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		defer os.Chdir(originalWd)
 
@@ -56,7 +63,7 @@ func TestRunChaosErrorHandling(t *testing.T) {
 		require.NotNil(t, cmd)
 
 		// Use a valid temporary directory
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		chaosCount = 1
 		chaosDataDir = tmpDir
 		chaosPKIDir = ""

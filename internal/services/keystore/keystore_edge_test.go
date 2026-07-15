@@ -16,6 +16,7 @@
 package keystore
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -24,15 +25,25 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+func setupTestFileService(t *testing.T) (fs.RuntimeFileService, string) {
+	t.Helper()
+	baseDir := testutil.TempDir(t)
+	svc, err := fs.NewRuntimeFileService(baseDir, testutil.NewVerboseTestLogger(t))
+	require.NoError(t, err)
+	require.NoError(t, svc.CreateRuntimeTree(context.Background()))
+	return svc, svc.Resolve(constants.SecretsDirname)
+}
+
 func TestFileKeyring_StoreMasterKey_InvalidKeyLength(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	keyring, err := newFileKeyring(secretsDir)
 	require.NoError(t, err)
 
@@ -43,7 +54,7 @@ func TestFileKeyring_StoreMasterKey_InvalidKeyLength(t *testing.T) {
 
 func TestFileKeyring_RetrieveMasterKey_InvalidBase64(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	keyring, err := newFileKeyring(secretsDir)
 	require.NoError(t, err)
 
@@ -57,7 +68,7 @@ func TestFileKeyring_RetrieveMasterKey_InvalidBase64(t *testing.T) {
 
 func TestFileKeyring_RetrieveMasterKey_EmptyFile(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	keyring, err := newFileKeyring(secretsDir)
 	require.NoError(t, err)
 
@@ -77,7 +88,7 @@ func TestFileKeyring_RetrieveMasterKey_PermissionDenied(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root can read any file")
 	}
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	keyring, err := newFileKeyring(secretsDir)
 	require.NoError(t, err)
 
@@ -91,7 +102,7 @@ func TestFileKeyring_RetrieveMasterKey_PermissionDenied(t *testing.T) {
 
 func TestFileKeyring_StoreAndRetrieve_RoundTrip(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	keyring, err := newFileKeyring(secretsDir)
 	require.NoError(t, err)
 
@@ -107,26 +118,14 @@ func TestFileKeyring_StoreAndRetrieve_RoundTrip(t *testing.T) {
 	assert.Equal(t, testKey, retrieved)
 }
 
-func TestKeystore_NewWithKeyring_MkdirFail(t *testing.T) {
-	logger := testutil.NewTestLogger()
-	keyring := newMemoryKeyring()
-
-	filePath := filepath.Join(t.TempDir(), "notadir")
-	require.NoError(t, os.WriteFile(filePath, []byte("x"), 0644))
-
-	_, err := NewWithKeyring(filePath, logger, keyring)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrDirCreateFailed)
-}
-
 func TestKeystore_Initialize_RetrieveError(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	fileSvc, _ := setupTestFileService(t)
 	logger := testutil.NewTestLogger()
 	retrieveErr := errors.New("retrieve failed")
 	keyring := &errorKeyring{retrieveErr: retrieveErr}
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := NewWithKeyringAndFS(logger, keyring, fileSvc)
 	require.NoError(t, err)
 
 	err = ks.Initialize()
@@ -136,12 +135,12 @@ func TestKeystore_Initialize_RetrieveError(t *testing.T) {
 
 func TestKeystore_Encrypt_RetrieveError(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	fileSvc, _ := setupTestFileService(t)
 	logger := testutil.NewTestLogger()
 	retrieveErr := errors.New("retrieve failed")
 	keyring := &errorKeyring{retrieveErr: retrieveErr}
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := NewWithKeyringAndFS(logger, keyring, fileSvc)
 	require.NoError(t, err)
 
 	_, err = ks.Encrypt("plaintext")
@@ -151,12 +150,12 @@ func TestKeystore_Encrypt_RetrieveError(t *testing.T) {
 
 func TestKeystore_EncryptSecret_RetrieveError(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	fileSvc, _ := setupTestFileService(t)
 	logger := testutil.NewTestLogger()
 	retrieveErr := errors.New("retrieve failed")
 	keyring := &errorKeyring{retrieveErr: retrieveErr}
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := NewWithKeyringAndFS(logger, keyring, fileSvc)
 	require.NoError(t, err)
 
 	err = ks.EncryptSecret("test", "value")
@@ -166,12 +165,12 @@ func TestKeystore_EncryptSecret_RetrieveError(t *testing.T) {
 
 func TestKeystore_Decrypt_RetrieveError(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	fileSvc, _ := setupTestFileService(t)
 	logger := testutil.NewTestLogger()
 	retrieveErr := errors.New("retrieve failed")
 	keyring := &errorKeyring{retrieveErr: retrieveErr}
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := NewWithKeyringAndFS(logger, keyring, fileSvc)
 	require.NoError(t, err)
 
 	_, err = ks.Decrypt("dGVzdA==")
@@ -180,11 +179,11 @@ func TestKeystore_Decrypt_RetrieveError(t *testing.T) {
 
 func TestKeystore_Purge_DeleteMasterKeyError(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	fileSvc, _ := setupTestFileService(t)
 	logger := testutil.NewTestLogger()
 	keyring := &errorKeyring{deleteErr: errors.New("delete failed")}
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := NewWithKeyringAndFS(logger, keyring, fileSvc)
 	require.NoError(t, err)
 
 	err = ks.Purge()
@@ -194,11 +193,11 @@ func TestKeystore_Purge_DeleteMasterKeyError(t *testing.T) {
 
 func TestKeystore_EnforcePermissions_DeletedDir(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	fileSvc, secretsDir := setupTestFileService(t)
 	logger := testutil.NewTestLogger()
 	keyring := newMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := NewWithKeyringAndFS(logger, keyring, fileSvc)
 	require.NoError(t, err)
 
 	require.NoError(t, os.RemoveAll(secretsDir))
@@ -210,11 +209,11 @@ func TestKeystore_EnforcePermissions_DeletedDir(t *testing.T) {
 
 func TestKeystore_Purge_WithSecrets(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	fileSvc, secretsDir := setupTestFileService(t)
 	logger := testutil.NewTestLogger()
 	keyring := newMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := NewWithKeyringAndFS(logger, keyring, fileSvc)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
@@ -289,11 +288,11 @@ func (m *simpleMemoryKeyring) DeleteMasterKey() error {
 
 func TestKeystore_Initialize_StoreError(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	fileSvc, _ := setupTestFileService(t)
 	logger := testutil.NewTestLogger()
 	keyring := &errorKeyring{storeErr: errors.New("store failed")}
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := NewWithKeyringAndFS(logger, keyring, fileSvc)
 	require.NoError(t, err)
 
 	err = ks.Initialize()
@@ -303,11 +302,11 @@ func TestKeystore_Initialize_StoreError(t *testing.T) {
 
 func TestKeystore_EnforcePermissions_ReadDirError(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	fileSvc, secretsDir := setupTestFileService(t)
 	logger := testutil.NewTestLogger()
 	keyring := newMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := NewWithKeyringAndFS(logger, keyring, fileSvc)
 	require.NoError(t, err)
 
 	require.NoError(t, os.RemoveAll(secretsDir))
@@ -319,11 +318,11 @@ func TestKeystore_EnforcePermissions_ReadDirError(t *testing.T) {
 
 func TestKeystore_Purge_ReadDirError(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	fileSvc, secretsDir := setupTestFileService(t)
 	logger := testutil.NewTestLogger()
 	keyring := newMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := NewWithKeyringAndFS(logger, keyring, fileSvc)
 	require.NoError(t, err)
 
 	require.NoError(t, os.RemoveAll(secretsDir))
@@ -335,11 +334,11 @@ func TestKeystore_Purge_ReadDirError(t *testing.T) {
 
 func TestKeystore_DecryptSecret_CorruptCiphertext(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	fileSvc, secretsDir := setupTestFileService(t)
 	logger := testutil.NewTestLogger()
 	keyring := newMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := NewWithKeyringAndFS(logger, keyring, fileSvc)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
@@ -361,11 +360,11 @@ func TestKeystore_DecryptSecret_CorruptCiphertext(t *testing.T) {
 
 func TestKeystore_EncryptSecret_MarshalError(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	fileSvc, _ := setupTestFileService(t)
 	logger := testutil.NewTestLogger()
 	keyring := &errorKeyring{storeErr: errors.New("store failed")}
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := NewWithKeyringAndFS(logger, keyring, fileSvc)
 	require.NoError(t, err)
 
 	err = ks.EncryptSecret("test", "value")
@@ -374,11 +373,11 @@ func TestKeystore_EncryptSecret_MarshalError(t *testing.T) {
 
 func TestKeystore_DeleteSecret_Error(t *testing.T) {
 	t.Parallel()
-	secretsDir := t.TempDir()
+	fileSvc, secretsDir := setupTestFileService(t)
 	logger := testutil.NewTestLogger()
 	keyring := newMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := NewWithKeyringAndFS(logger, keyring, fileSvc)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 

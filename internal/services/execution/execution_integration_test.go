@@ -97,7 +97,7 @@ func TestExecutionService_Integration(t *testing.T) {
 	})
 
 	t.Run("complex command with file I/O", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.ToSlash(filepath.Join(tmpDir, "test-output.txt"))
 
 		req := &models.ExecutionRequestPayload{
@@ -121,7 +121,7 @@ func TestExecutionService_Integration(t *testing.T) {
 	})
 
 	t.Run("command with working directory and environment", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:      "env-exec-1",
@@ -148,7 +148,7 @@ func TestExecutionService_Integration(t *testing.T) {
 	})
 
 	t.Run("pipeline commands with multiple steps", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 
 		// Step 1: Create a file
 		step1Req := &models.ExecutionRequestPayload{
@@ -366,7 +366,7 @@ func TestExecutionService_AdvancedScenarios(t *testing.T) {
 	svc := NewExecutionService(cfg, logger)
 
 	t.Run("script execution with multiple commands", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		scriptPath := filepath.Join(tmpDir, "test-script.sh")
 
 		scriptContent := `#!/bin/bash
@@ -433,7 +433,7 @@ exit 0
 	})
 
 	t.Run("resource-intensive command tracking", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 
 		// Create a command that does some work
 		req := &models.ExecutionRequestPayload{

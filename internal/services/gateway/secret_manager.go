@@ -14,6 +14,7 @@
 package gateway
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
@@ -22,13 +23,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/timesvc"
@@ -43,15 +44,14 @@ var requiredBootstrapSecrets = []string{
 
 // SecretManager handles generation and validation of platform security secrets.
 type SecretManager struct {
-	db                  *sqliteutil.DB
-	logger              *slog.Logger
-	secretsDir          string
-	bootstrapDigestPath string
-	keystore            *keystore.Keystore
+	db       *sqliteutil.DB
+	logger   *slog.Logger
+	fileSvc  fs.RuntimeFileService
+	keystore *keystore.Keystore
 }
 
-func NewSecretManager(db *sqliteutil.DB, secretsDir string, logger *slog.Logger) (*SecretManager, error) {
-	ks, err := keystore.New(secretsDir, logger)
+func NewSecretManager(db *sqliteutil.DB, fileSvc fs.RuntimeFileService, logger *slog.Logger) (*SecretManager, error) {
+	ks, err := keystore.NewWithFS(fileSvc, logger)
 	if err != nil {
 		return nil, fmt.Errorf("secret_manager: init: keystore: %w", err)
 	}
@@ -62,23 +62,21 @@ func NewSecretManager(db *sqliteutil.DB, secretsDir string, logger *slog.Logger)
 		return nil, fmt.Errorf("secret_manager: init: permissions: %w", err)
 	}
 	return &SecretManager{
-		db:                  db,
-		secretsDir:          secretsDir,
-		bootstrapDigestPath: filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest),
-		logger:              logger,
-		keystore:            ks,
+		db:       db,
+		logger:   logger,
+		fileSvc:  fileSvc,
+		keystore: ks,
 	}, nil
 }
 
 // NewSecretManagerWithKeystore creates a SecretManager using a pre-initialized keystore.
 // This is used for testing to bypass OS keychain dependencies.
-func NewSecretManagerWithKeystore(db *sqliteutil.DB, secretsDir string, logger *slog.Logger, ks *keystore.Keystore) (*SecretManager, error) {
+func NewSecretManagerWithKeystore(db *sqliteutil.DB, fileSvc fs.RuntimeFileService, logger *slog.Logger, ks *keystore.Keystore) (*SecretManager, error) {
 	return &SecretManager{
-		db:                  db,
-		secretsDir:          secretsDir,
-		bootstrapDigestPath: filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest),
-		logger:              logger,
-		keystore:            ks,
+		db:       db,
+		logger:   logger,
+		fileSvc:  fileSvc,
+		keystore: ks,
 	}, nil
 }
 
@@ -172,18 +170,18 @@ func (m *SecretManager) recreateAppSettings() error {
 
 	// Delete existing secret files
 	for _, name := range requiredBootstrapSecrets {
-		filePath := filepath.Join(m.secretsDir, name)
-		if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+		relPath := filepath.Join(constants.SecretsDirname, name)
+		if err := m.fileSvc.Remove(context.Background(), relPath); err != nil {
 			m.logger.Warn("[SecretManager] Failed to delete secret file during recreation",
-				"path", filePath, "error", err)
+				"name", name, "error", err)
 		}
 	}
 
 	// Delete bootstrap digest manifest if it exists
-	manifestPath := m.bootstrapDigestPath
-	if err := os.Remove(manifestPath); err != nil && !os.IsNotExist(err) {
+	manifestRelPath := filepath.Join(constants.SecretsDirname, constants.SecretsFileBootstrapDigest)
+	if err := m.fileSvc.Remove(context.Background(), manifestRelPath); err != nil {
 		m.logger.Warn("[SecretManager] Failed to delete digest manifest during recreation",
-			"path", manifestPath, "error", err)
+			"error", err)
 	}
 
 	// Recreate from scratch
@@ -194,10 +192,6 @@ func (m *SecretManager) createAppSettings(now time.Time) error {
 	if err := m.rejectPreexistingBootstrapState(); err != nil {
 		return fmt.Errorf("secret_manager: create app settings: %w", err)
 	}
-	if err := os.MkdirAll(m.secretsDir, 0700); err != nil {
-		return fmt.Errorf("secret_manager: create app settings: %s: %w", m.secretsDir, constants.ErrDirCreateFailed)
-	}
-
 	// Generate Actuator signing key and compute its KeyID once
 	ActuatorSeedBytes, err := m.generateSecureTokenBytes(ed25519.SeedSize)
 	if err != nil {
@@ -264,9 +258,11 @@ func (m *SecretManager) createAppSettings(now time.Time) error {
 }
 
 func (m *SecretManager) validateAppSettings() error {
-	if info, err := os.Stat(m.secretsDir); err != nil {
+	info, err := m.fileSvc.Stat(context.Background(), constants.SecretsDirname)
+	if err != nil {
 		return fmt.Errorf("secret_manager: validate app settings: %w", err)
-	} else if !info.IsDir() {
+	}
+	if !info.IsDir() {
 		return fmt.Errorf("secret_manager: validate app settings: %w", constants.ErrNotADirectory)
 	}
 
@@ -275,8 +271,7 @@ func (m *SecretManager) validateAppSettings() error {
 		// If bootstrap digest manifest is missing, treat this as corrupted state
 		// and recreate secrets (e.g., when .g8e directory was wiped but DB persists)
 		if errors.Is(err, constants.ErrNotFound) {
-			m.logger.Warn("[SecretManager] Bootstrap digest manifest missing, recreating secrets",
-				"path", m.bootstrapDigestPath)
+			m.logger.Warn("[SecretManager] Bootstrap digest manifest missing, recreating secrets")
 			return m.recreateAppSettings()
 		}
 		return fmt.Errorf("secret_manager: validate app settings: %w", err)
@@ -288,10 +283,10 @@ func (m *SecretManager) validateAppSettings() error {
 		if !ok || entry.SHA256 == "" {
 			return fmt.Errorf("secret_manager: validate app settings: %s: %w", name, constants.ErrNotFound)
 		}
-		filePath := filepath.Join(m.secretsDir, name)
-		encryptedData, err := os.ReadFile(filePath)
+		relPath := filepath.Join(constants.SecretsDirname, name)
+		encryptedData, err := m.fileSvc.ReadFile(context.Background(), relPath)
 		if err != nil {
-			return fmt.Errorf("secret_manager: validate app settings: read secret %s: %w", filePath, err)
+			return fmt.Errorf("secret_manager: validate app settings: read secret %s: %w", name, err)
 		}
 		encryptedDigest := sha256.Sum256(encryptedData)
 		if actual := hex.EncodeToString(encryptedDigest[:]); actual != entry.SHA256 {
@@ -331,10 +326,10 @@ func (m *SecretManager) writeDigestManifestFromEncryptedFiles(now time.Time) err
 	}
 
 	for _, name := range requiredBootstrapSecrets {
-		filePath := filepath.Join(m.secretsDir, name)
-		data, err := os.ReadFile(filePath)
+		relPath := filepath.Join(constants.SecretsDirname, name)
+		data, err := m.fileSvc.ReadFile(context.Background(), relPath)
 		if err != nil {
-			return fmt.Errorf("secret_manager: write digest manifest: read %s: %w", filePath, err)
+			return fmt.Errorf("secret_manager: write digest manifest: read %s: %w", name, err)
 		}
 		sum := sha256.Sum256(data)
 		manifest.Secrets[name] = bootstrapDigestRef{SHA256: hex.EncodeToString(sum[:])}
@@ -345,37 +340,30 @@ func (m *SecretManager) writeDigestManifestFromEncryptedFiles(now time.Time) err
 		return fmt.Errorf("secret_manager: write digest manifest: marshal: %w", err)
 	}
 
-	finalPath := m.bootstrapDigestPath
-	tmpPath := finalPath + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+	manifestRelPath := filepath.Join(constants.SecretsDirname, constants.SecretsFileBootstrapDigest)
+	if err := m.fileSvc.WriteFile(context.Background(), manifestRelPath, data, constants.PermFilePrivate); err != nil {
 		m.logger.Error("[SecretManager] Failed to write bootstrap digest manifest",
-			"path", tmpPath, "error", err)
-		return fmt.Errorf("secret_manager: write digest manifest: write %s: %w", tmpPath, err)
-	}
-	if err := os.Rename(tmpPath, finalPath); err != nil {
-		_ = os.Remove(tmpPath)
-		m.logger.Error("[SecretManager] Failed to rename bootstrap digest manifest",
-			"from", tmpPath, "to", finalPath, "error", err)
-		return fmt.Errorf("secret_manager: write digest manifest: rename to %s: %w", finalPath, err)
+			"error", err)
+		return fmt.Errorf("secret_manager: write digest manifest: write: %w", err)
 	}
 	m.logger.Info("[SecretManager] Bootstrap digest manifest written from encrypted files",
-		"path", finalPath, "secrets", len(manifest.Secrets))
+		"secrets", len(manifest.Secrets))
 	return nil
 }
 
 func (m *SecretManager) readDigestManifest() (*bootstrapDigestManifest, error) {
-	manifestPath := m.bootstrapDigestPath
-	data, err := os.ReadFile(manifestPath)
+	manifestRelPath := filepath.Join(constants.SecretsDirname, constants.SecretsFileBootstrapDigest)
+	data, err := m.fileSvc.ReadFile(context.Background(), manifestRelPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("secret_manager: read digest manifest: %s: %w", manifestPath, constants.ErrNotFound)
+		if errors.Is(err, constants.ErrNotFound) {
+			return nil, fmt.Errorf("secret_manager: read digest manifest: %w", constants.ErrNotFound)
 		}
 		return nil, fmt.Errorf("secret_manager: read digest manifest: %w", err)
 	}
 
 	var manifest bootstrapDigestManifest
 	if err := json.Unmarshal(data, &manifest); err != nil {
-		return nil, fmt.Errorf("secret_manager: read digest manifest: unmarshal %s: %w", manifestPath, err)
+		return nil, fmt.Errorf("secret_manager: read digest manifest: unmarshal: %w", err)
 	}
 	if manifest.Version != 1 {
 		return nil, fmt.Errorf("secret_manager: read digest manifest: version %d: %w", manifest.Version, constants.ErrValidationFailed)
@@ -388,16 +376,22 @@ func (m *SecretManager) readDigestManifest() (*bootstrapDigestManifest, error) {
 
 func (m *SecretManager) rejectPreexistingBootstrapState() error {
 	for _, name := range requiredBootstrapSecrets {
-		if _, err := os.Stat(filepath.Join(m.secretsDir, name)); err == nil {
-			return fmt.Errorf("secret_manager: reject preexisting bootstrap state: %s: %w", name, constants.ErrAlreadyExists)
-		} else if !os.IsNotExist(err) {
+		relPath := filepath.Join(constants.SecretsDirname, name)
+		exists, err := m.fileSvc.FileExists(context.Background(), relPath)
+		if err != nil {
 			return fmt.Errorf("secret_manager: reject preexisting bootstrap state: %s: %w", name, err)
 		}
+		if exists {
+			return fmt.Errorf("secret_manager: reject preexisting bootstrap state: %s: %w", name, constants.ErrAlreadyExists)
+		}
 	}
-	if _, err := os.Stat(m.bootstrapDigestPath); err == nil {
-		return fmt.Errorf("secret_manager: reject preexisting bootstrap state: digest manifest: %w", constants.ErrAlreadyExists)
-	} else if !os.IsNotExist(err) {
+	manifestRelPath := filepath.Join(constants.SecretsDirname, constants.SecretsFileBootstrapDigest)
+	exists, err := m.fileSvc.FileExists(context.Background(), manifestRelPath)
+	if err != nil {
 		return fmt.Errorf("secret_manager: reject preexisting bootstrap state: digest manifest: %w", err)
+	}
+	if exists {
+		return fmt.Errorf("secret_manager: reject preexisting bootstrap state: digest manifest: %w", constants.ErrAlreadyExists)
 	}
 	return nil
 }

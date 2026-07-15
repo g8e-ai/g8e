@@ -224,7 +224,7 @@ func TestGetLinuxMachineIDFromCustomPath(t *testing.T) {
 
 	t.Run("empty machine ID file is handled", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		emptyFile := filepath.Join(tmpDir, constants.TestEmptyMachineIDFilename)
 		err := os.WriteFile(emptyFile, []byte(""), 0644)
 		require.NoError(t, err)

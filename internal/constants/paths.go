@@ -384,10 +384,11 @@ const (
 
 // File permission modes (octal).
 const (
-	PermDirPrivate  = 0700 // rwx------
-	PermDirStandard = 0755 // rwxr-xr-x
-	PermFilePrivate = 0600 // rw-------
-	PermFilePublic  = 0644 // rw-r--r--
+	PermDirPrivate   = 0700 // rwx------
+	PermDirStandard  = 0755 // rwxr-xr-x
+	PermFilePrivate  = 0600 // rw-------
+	PermFilePublic   = 0644 // rw-r--r--
+	PermFileReadOnly = 0400 // r--------
 )
 
 // Test-specific constants for isolated test environments.
@@ -418,6 +419,10 @@ const (
 	TestPkiDirname              = "pki"
 	TestNestedDirname           = "nested"
 	TestDeepDirname             = "deep"
+
+	// TestTempDirname is the CWD-relative base directory for test temp dirs,
+	// replacing system TEMP to keep all test artifacts under the project root.
+	TestTempDirname = ".g8e-test-tmp"
 
 	// Test path constants for gateway config and tribunal bootstrap tests
 	TestPathVarLibDataDir       = "/var/lib/g8e/data"

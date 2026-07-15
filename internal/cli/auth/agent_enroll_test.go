@@ -14,6 +14,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -35,7 +36,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -90,17 +91,17 @@ func generateTestCertificateWithSPIFFE(t *testing.T, agentName string, notAfter 
 
 // writeTestCredentials writes a credentials file with a synthetic CLISessionID so
 // EnrollAgentApp can pass the LoadCredentials check without a real gateway session.
-func writeTestCredentials(t *testing.T, cfg *config.Config) {
+func writeTestCredentials(t *testing.T, fileSvc fs.RuntimeFileService, cfg *config.Config) {
 	t.Helper()
 	creds := &Credentials{
 		UserID:       "test-user",
 		CLISessionID: "test-session-id",
 	}
-	require.NoError(t, SaveCredentials(cfg, creds))
+	require.NoError(t, SaveCredentials(fileSvc, cfg, creds))
 }
 
 // writeTestCLICert generates a self-signed CLI cert and writes it to cfg.CLICertFile()/CLIKeyFile().
-func writeTestCLICert(t *testing.T, cfg *config.Config) {
+func writeTestCLICert(t *testing.T, fileSvc fs.RuntimeFileService, cfg *config.Config) {
 	t.Helper()
 
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -126,8 +127,12 @@ func writeTestCLICert(t *testing.T, cfg *config.Config) {
 	require.NoError(t, err)
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 
-	require.NoError(t, os.WriteFile(cfg.CLICertFile(), certPEM, 0600))
-	require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), keyPEM, 0600))
+	certRel, err := fileSvc.RelFromAbs(cfg.CLICertFile())
+	require.NoError(t, err)
+	keyRel, err := fileSvc.RelFromAbs(cfg.CLIKeyFile())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, certPEM, constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), keyRel, keyPEM, constants.PermFilePrivate))
 }
 
 // startTLSEnrollServer starts a TLS test server with a localhost-valid cert and configures
@@ -181,9 +186,9 @@ func startTLSEnrollServer(t *testing.T, cfg *config.Config, handler http.Handler
 
 	// Write CA cert as trust bundle so EnrollAgentApp can verify the server.
 	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
-	caPath := filepath.Join(cfg.CredentialsDir, "test-ca.pem")
-	require.NoError(t, os.WriteFile(caPath, caPEM, 0600))
-	cfg.Paths.Infra.CACertPath = caPath // absolute — TrustBundlePath() returns it directly
+	caPath := filepath.Join(cfg.RuntimeDir, "test-ca.pem")
+	require.NoError(t, os.WriteFile(caPath, caPEM, constants.PermFilePrivate))
+	cfg.Paths.Infra.CACertPath = caPath // absolute — CustomTrustBundlePath() returns it directly
 	cfg.Paths.Host = server.URL         // full URL — OperatorHTTPURL() returns it directly
 
 	return server
@@ -212,14 +217,12 @@ func enrollResponse(t *testing.T, agentName string) []byte {
 func TestEnrollAgentApp_Idempotency_ValidCert(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
@@ -228,12 +231,15 @@ func TestEnrollAgentApp_Idempotency_ValidCert(t *testing.T) {
 
 	// Create a valid cert with >7 days remaining
 	certPEM, keyPEM := generateTestCertificateWithSPIFFE(t, agentName, time.Now().Add(30*24*time.Hour))
-	require.NoError(t, os.MkdirAll(filepath.Dir(certFile), 0700))
-	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
-	require.NoError(t, os.WriteFile(keyFile, []byte(keyPEM), 0600))
+	certRel, err := fileSvc.RelFromAbs(certFile)
+	require.NoError(t, err)
+	keyRel, err := fileSvc.RelFromAbs(keyFile)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte(certPEM), constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), keyRel, []byte(keyPEM), constants.PermFilePrivate))
 
 	// No CLI cert, no CA bundle, no gateway — idempotency must short-circuit before any of that.
-	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(cfg, agentName)
+	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(fileSvc, cfg, agentName)
 
 	require.NoError(t, err)
 	assert.Equal(t, "spiffe://g8e.local/app/"+agentName, appID)
@@ -245,14 +251,12 @@ func TestEnrollAgentApp_Idempotency_ValidCert(t *testing.T) {
 func TestEnrollAgentApp_Idempotency_ExpiringCert(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
@@ -261,9 +265,12 @@ func TestEnrollAgentApp_Idempotency_ExpiringCert(t *testing.T) {
 
 	// Create an expiring cert (<7 days remaining)
 	certPEM, keyPEM := generateTestCertificateWithSPIFFE(t, agentName, time.Now().Add(3*24*time.Hour))
-	require.NoError(t, os.MkdirAll(filepath.Dir(certFile), 0700))
-	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
-	require.NoError(t, os.WriteFile(keyFile, []byte(keyPEM), 0600))
+	certRel, err := fileSvc.RelFromAbs(certFile)
+	require.NoError(t, err)
+	keyRel, err := fileSvc.RelFromAbs(keyFile)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte(certPEM), constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), keyRel, []byte(keyPEM), constants.PermFilePrivate))
 
 	// Expiring cert → must re-enroll → needs TLS server + CLI cert + credentials
 	startTLSEnrollServer(t, cfg, func(w http.ResponseWriter, r *http.Request) {
@@ -283,10 +290,10 @@ func TestEnrollAgentApp_Idempotency_ExpiringCert(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 		w.Write(enrollResponse(t, agentName))
 	})
-	writeTestCLICert(t, cfg)
-	writeTestCredentials(t, cfg)
+	writeTestCLICert(t, fileSvc, cfg)
+	writeTestCredentials(t, fileSvc, cfg)
 
-	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(cfg, agentName)
+	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(fileSvc, cfg, agentName)
 
 	require.NoError(t, err)
 	assert.Equal(t, "spiffe://g8e.local/app/"+agentName, appID)
@@ -298,14 +305,12 @@ func TestEnrollAgentApp_Idempotency_ExpiringCert(t *testing.T) {
 func TestEnrollAgentApp_NoCert(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "new-agent"
@@ -329,11 +334,10 @@ func TestEnrollAgentApp_NoCert(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 		w.Write(enrollResponse(t, agentName))
 	})
-	require.NoError(t, os.MkdirAll(filepath.Dir(certFile), 0700))
-	writeTestCLICert(t, cfg)
-	writeTestCredentials(t, cfg)
+	writeTestCLICert(t, fileSvc, cfg)
+	writeTestCredentials(t, fileSvc, cfg)
 
-	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(cfg, agentName)
+	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(fileSvc, cfg, agentName)
 
 	require.NoError(t, err)
 	assert.Equal(t, "spiffe://g8e.local/app/"+agentName, appID)
@@ -347,14 +351,12 @@ func TestEnrollAgentApp_NoCert(t *testing.T) {
 func TestEnrollAgentApp_NoURISAN(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
@@ -388,9 +390,12 @@ func TestEnrollAgentApp_NoURISAN(t *testing.T) {
 	require.NoError(t, err)
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 
-	require.NoError(t, os.MkdirAll(filepath.Dir(certFile), 0700))
-	require.NoError(t, os.WriteFile(certFile, certPEM, 0600))
-	require.NoError(t, os.WriteFile(keyFile, keyPEM, 0600))
+	certRel, err := fileSvc.RelFromAbs(certFile)
+	require.NoError(t, err)
+	keyRel, err := fileSvc.RelFromAbs(keyFile)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, certPEM, constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), keyRel, keyPEM, constants.PermFilePrivate))
 
 	startTLSEnrollServer(t, cfg, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, constants.APIPaths.PKIAppsDelegated, r.URL.Path)
@@ -398,10 +403,10 @@ func TestEnrollAgentApp_NoURISAN(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 		w.Write(enrollResponse(t, agentName))
 	})
-	writeTestCLICert(t, cfg)
-	writeTestCredentials(t, cfg)
+	writeTestCLICert(t, fileSvc, cfg)
+	writeTestCredentials(t, fileSvc, cfg)
 
-	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(cfg, agentName)
+	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(fileSvc, cfg, agentName)
 
 	require.NoError(t, err)
 	assert.Equal(t, "spiffe://g8e.local/app/"+agentName, appID)
@@ -413,14 +418,12 @@ func TestEnrollAgentApp_NoURISAN(t *testing.T) {
 func TestEnrollAgentApp_InvalidCert(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
@@ -428,9 +431,12 @@ func TestEnrollAgentApp_InvalidCert(t *testing.T) {
 	keyFile := cfg.AppKeyFile(agentName)
 
 	// Write invalid cert data
-	require.NoError(t, os.MkdirAll(filepath.Dir(certFile), 0700))
-	require.NoError(t, os.WriteFile(certFile, []byte("invalid-cert-data"), 0600))
-	require.NoError(t, os.WriteFile(keyFile, []byte("invalid-key-data"), 0600))
+	certRel, err := fileSvc.RelFromAbs(certFile)
+	require.NoError(t, err)
+	keyRel, err := fileSvc.RelFromAbs(keyFile)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte("invalid-cert-data"), constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), keyRel, []byte("invalid-key-data"), constants.PermFilePrivate))
 
 	startTLSEnrollServer(t, cfg, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, constants.APIPaths.PKIAppsDelegated, r.URL.Path)
@@ -438,10 +444,10 @@ func TestEnrollAgentApp_InvalidCert(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 		w.Write(enrollResponse(t, agentName))
 	})
-	writeTestCLICert(t, cfg)
-	writeTestCredentials(t, cfg)
+	writeTestCLICert(t, fileSvc, cfg)
+	writeTestCredentials(t, fileSvc, cfg)
 
-	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(cfg, agentName)
+	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(fileSvc, cfg, agentName)
 
 	require.NoError(t, err)
 	assert.Equal(t, "spiffe://g8e.local/app/"+agentName, appID)
@@ -453,14 +459,12 @@ func TestEnrollAgentApp_InvalidCert(t *testing.T) {
 func TestEnrollAgentApp_EnrollmentError(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
@@ -469,10 +473,10 @@ func TestEnrollAgentApp_EnrollmentError(t *testing.T) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": "internal server error"})
 	})
-	writeTestCLICert(t, cfg)
-	writeTestCredentials(t, cfg)
+	writeTestCLICert(t, fileSvc, cfg)
+	writeTestCredentials(t, fileSvc, cfg)
 
-	_, _, _, err := EnrollAgentApp(cfg, agentName)
+	_, _, _, err := EnrollAgentApp(fileSvc, cfg, agentName)
 
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrHTTPStatusError))
@@ -482,27 +486,25 @@ func TestEnrollAgentApp_EnrollmentError(t *testing.T) {
 func TestEnrollAgentApp_GatewayUnreachable(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
 
 	// CLI cert, CA bundle, and credentials must exist so we reach the POST before failing.
-	writeTestCLICert(t, cfg)
-	writeTestCredentials(t, cfg)
+	writeTestCLICert(t, fileSvc, cfg)
+	writeTestCredentials(t, fileSvc, cfg)
 	dummyCert, _ := generateTestCertificateWithSPIFFE(t, "dummy", time.Now().Add(24*time.Hour))
-	caPath := filepath.Join(tmpDir, "test-ca.pem")
-	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), 0600))
+	caPath := filepath.Join(runtimeDir, "test-ca.pem")
+	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), constants.PermFilePrivate))
 	cfg.Paths.Infra.CACertPath = caPath
 
-	_, _, _, err := EnrollAgentApp(cfg, agentName)
+	_, _, _, err := EnrollAgentApp(fileSvc, cfg, agentName)
 
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrHTTPRequestExecuteFailed))
@@ -512,26 +514,24 @@ func TestEnrollAgentApp_GatewayUnreachable(t *testing.T) {
 func TestEnrollAgentApp_NoCLICredentials(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
 
 	// Write CLI cert and CA bundle but no credentials
-	writeTestCLICert(t, cfg)
+	writeTestCLICert(t, fileSvc, cfg)
 	dummyCert, _ := generateTestCertificateWithSPIFFE(t, "dummy", time.Now().Add(24*time.Hour))
-	caPath := filepath.Join(tmpDir, "test-ca.pem")
-	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), 0600))
+	caPath := filepath.Join(runtimeDir, "test-ca.pem")
+	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), constants.PermFilePrivate))
 	cfg.Paths.Infra.CACertPath = caPath
 
-	_, _, _, err := EnrollAgentApp(cfg, agentName)
+	_, _, _, err := EnrollAgentApp(fileSvc, cfg, agentName)
 
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrNotAuthenticated))
@@ -541,26 +541,24 @@ func TestEnrollAgentApp_NoCLICredentials(t *testing.T) {
 func TestEnrollAgentApp_MissingCLICert(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
 
 	// Write credentials and CA bundle but no CLI cert
-	writeTestCredentials(t, cfg)
+	writeTestCredentials(t, fileSvc, cfg)
 	dummyCert, _ := generateTestCertificateWithSPIFFE(t, "dummy", time.Now().Add(24*time.Hour))
-	caPath := filepath.Join(tmpDir, "test-ca.pem")
-	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), 0600))
+	caPath := filepath.Join(runtimeDir, "test-ca.pem")
+	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), constants.PermFilePrivate))
 	cfg.Paths.Infra.CACertPath = caPath
 
-	_, _, _, err := EnrollAgentApp(cfg, agentName)
+	_, _, _, err := EnrollAgentApp(fileSvc, cfg, agentName)
 
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrFailedToLoadClientCertificate))
@@ -570,23 +568,21 @@ func TestEnrollAgentApp_MissingCLICert(t *testing.T) {
 func TestEnrollAgentApp_MissingCABundle(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
 
 	// Write CLI cert and credentials but no CA bundle
-	writeTestCLICert(t, cfg)
-	writeTestCredentials(t, cfg)
+	writeTestCLICert(t, fileSvc, cfg)
+	writeTestCredentials(t, fileSvc, cfg)
 
-	_, _, _, err := EnrollAgentApp(cfg, agentName)
+	_, _, _, err := EnrollAgentApp(fileSvc, cfg, agentName)
 
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrFailedToReadTrustBundle))
@@ -596,14 +592,12 @@ func TestEnrollAgentApp_MissingCABundle(t *testing.T) {
 func TestEnrollAgentApp_WrongSPIFFEID(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
+	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
+		Paths:       &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
@@ -612,9 +606,12 @@ func TestEnrollAgentApp_WrongSPIFFEID(t *testing.T) {
 
 	// Create a cert with a different SPIFFE ID
 	certPEM, keyPEM := generateTestCertificateWithSPIFFE(t, "different-agent", time.Now().Add(30*24*time.Hour))
-	require.NoError(t, os.MkdirAll(filepath.Dir(certFile), 0700))
-	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
-	require.NoError(t, os.WriteFile(keyFile, []byte(keyPEM), 0600))
+	certRel, err := fileSvc.RelFromAbs(certFile)
+	require.NoError(t, err)
+	keyRel, err := fileSvc.RelFromAbs(keyFile)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte(certPEM), constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), keyRel, []byte(keyPEM), constants.PermFilePrivate))
 
 	startTLSEnrollServer(t, cfg, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, constants.APIPaths.PKIAppsDelegated, r.URL.Path)
@@ -622,10 +619,10 @@ func TestEnrollAgentApp_WrongSPIFFEID(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 		w.Write(enrollResponse(t, agentName))
 	})
-	writeTestCLICert(t, cfg)
-	writeTestCredentials(t, cfg)
+	writeTestCLICert(t, fileSvc, cfg)
+	writeTestCredentials(t, fileSvc, cfg)
 
-	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(cfg, agentName)
+	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(fileSvc, cfg, agentName)
 
 	require.NoError(t, err)
 	assert.Equal(t, "spiffe://g8e.local/app/"+agentName, appID)
@@ -637,10 +634,10 @@ func TestEnrollAgentApp_WrongSPIFFEID(t *testing.T) {
 func TestCheckExistingAppCert_NoFile(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
-	certFile := filepath.Join(tmpDir, "nonexistent-cert.pem")
+	fileSvc := newAuthTestFileSvc(t)
+	certFile := fileSvc.Resolve("nonexistent-cert.pem")
 
-	appID, ok := checkExistingAppCert(certFile, "test-agent")
+	appID, ok := checkExistingAppCert(fileSvc, certFile, "test-agent")
 
 	assert.Empty(t, appID)
 	assert.False(t, ok)
@@ -650,11 +647,13 @@ func TestCheckExistingAppCert_NoFile(t *testing.T) {
 func TestCheckExistingAppCert_InvalidPEM(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
-	certFile := filepath.Join(tmpDir, "invalid-cert.pem")
-	require.NoError(t, os.WriteFile(certFile, []byte("not-valid-pem"), 0600))
+	fileSvc := newAuthTestFileSvc(t)
+	certFile := fileSvc.Resolve("invalid-cert.pem")
+	certRel, err := fileSvc.RelFromAbs(certFile)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte("not-valid-pem"), constants.PermFilePrivate))
 
-	appID, ok := checkExistingAppCert(certFile, "test-agent")
+	appID, ok := checkExistingAppCert(fileSvc, certFile, "test-agent")
 
 	assert.Empty(t, appID)
 	assert.False(t, ok)
@@ -664,16 +663,18 @@ func TestCheckExistingAppCert_InvalidPEM(t *testing.T) {
 func TestCheckExistingAppCert_InvalidCertificate(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
-	certFile := filepath.Join(tmpDir, "invalid-cert.pem")
+	fileSvc := newAuthTestFileSvc(t)
+	certFile := fileSvc.Resolve("invalid-cert.pem")
 	// Write a PEM block that's not a valid certificate
 	invalidPEM := pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: []byte("not-a-valid-certificate"),
 	})
-	require.NoError(t, os.WriteFile(certFile, invalidPEM, 0600))
+	certRel, err := fileSvc.RelFromAbs(certFile)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, invalidPEM, constants.PermFilePrivate))
 
-	appID, ok := checkExistingAppCert(certFile, "test-agent")
+	appID, ok := checkExistingAppCert(fileSvc, certFile, "test-agent")
 
 	assert.Empty(t, appID)
 	assert.False(t, ok)
@@ -683,15 +684,17 @@ func TestCheckExistingAppCert_InvalidCertificate(t *testing.T) {
 func TestCheckExistingAppCert_ExpiringSoon(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
-	certFile := filepath.Join(tmpDir, "expiring-cert.pem")
+	fileSvc := newAuthTestFileSvc(t)
+	certFile := fileSvc.Resolve("expiring-cert.pem")
 	agentName := "test-agent"
 
 	// Create cert expiring in 3 days (< 7 day threshold)
 	certPEM, _ := generateTestCertificateWithSPIFFE(t, agentName, time.Now().Add(3*24*time.Hour))
-	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
+	certRel, err := fileSvc.RelFromAbs(certFile)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte(certPEM), constants.PermFilePrivate))
 
-	appID, ok := checkExistingAppCert(certFile, agentName)
+	appID, ok := checkExistingAppCert(fileSvc, certFile, agentName)
 
 	assert.Empty(t, appID)
 	assert.False(t, ok)
@@ -701,15 +704,17 @@ func TestCheckExistingAppCert_ExpiringSoon(t *testing.T) {
 func TestCheckExistingAppCert_ValidWithCorrectSPIFFE(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
-	certFile := filepath.Join(tmpDir, "valid-cert.pem")
+	fileSvc := newAuthTestFileSvc(t)
+	certFile := fileSvc.Resolve("valid-cert.pem")
 	agentName := "test-agent"
 
 	// Create valid cert with >7 days remaining and correct SPIFFE ID
 	certPEM, _ := generateTestCertificateWithSPIFFE(t, agentName, time.Now().Add(30*24*time.Hour))
-	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
+	certRel, err := fileSvc.RelFromAbs(certFile)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte(certPEM), constants.PermFilePrivate))
 
-	appID, ok := checkExistingAppCert(certFile, agentName)
+	appID, ok := checkExistingAppCert(fileSvc, certFile, agentName)
 
 	expectedID := "spiffe://g8e.local/app/" + agentName
 	assert.Equal(t, expectedID, appID)
@@ -720,15 +725,17 @@ func TestCheckExistingAppCert_ValidWithCorrectSPIFFE(t *testing.T) {
 func TestCheckExistingAppCert_ValidWithWrongSPIFFE(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
-	certFile := filepath.Join(tmpDir, "valid-cert.pem")
+	fileSvc := newAuthTestFileSvc(t)
+	certFile := fileSvc.Resolve("valid-cert.pem")
 	agentName := "test-agent"
 
 	// Create valid cert with >7 days remaining but different SPIFFE ID
 	certPEM, _ := generateTestCertificateWithSPIFFE(t, "different-agent", time.Now().Add(30*24*time.Hour))
-	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
+	certRel, err := fileSvc.RelFromAbs(certFile)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte(certPEM), constants.PermFilePrivate))
 
-	appID, ok := checkExistingAppCert(certFile, agentName)
+	appID, ok := checkExistingAppCert(fileSvc, certFile, agentName)
 
 	assert.Empty(t, appID)
 	assert.False(t, ok)
@@ -738,15 +745,17 @@ func TestCheckExistingAppCert_ValidWithWrongSPIFFE(t *testing.T) {
 func TestCheckExistingAppCert_ExactlyAtThreshold(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
-	certFile := filepath.Join(tmpDir, "threshold-cert.pem")
+	fileSvc := newAuthTestFileSvc(t)
+	certFile := fileSvc.Resolve("threshold-cert.pem")
 	agentName := "test-agent"
 
 	// Create cert expiring exactly at 7 days (should be rejected)
 	certPEM, _ := generateTestCertificateWithSPIFFE(t, agentName, time.Now().Add(7*24*time.Hour))
-	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
+	certRel, err := fileSvc.RelFromAbs(certFile)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte(certPEM), constants.PermFilePrivate))
 
-	appID, ok := checkExistingAppCert(certFile, agentName)
+	appID, ok := checkExistingAppCert(fileSvc, certFile, agentName)
 
 	assert.Empty(t, appID)
 	assert.False(t, ok)
@@ -756,15 +765,17 @@ func TestCheckExistingAppCert_ExactlyAtThreshold(t *testing.T) {
 func TestCheckExistingAppCert_JustAboveThreshold(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
-	certFile := filepath.Join(tmpDir, "valid-cert.pem")
+	fileSvc := newAuthTestFileSvc(t)
+	certFile := fileSvc.Resolve("valid-cert.pem")
 	agentName := "test-agent"
 
 	// Create cert expiring in 7 days + 1 second (should be accepted)
 	certPEM, _ := generateTestCertificateWithSPIFFE(t, agentName, time.Now().Add(7*24*time.Hour+time.Second))
-	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
+	certRel, err := fileSvc.RelFromAbs(certFile)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte(certPEM), constants.PermFilePrivate))
 
-	appID, ok := checkExistingAppCert(certFile, agentName)
+	appID, ok := checkExistingAppCert(fileSvc, certFile, agentName)
 
 	expectedID := "spiffe://g8e.local/app/" + agentName
 	assert.Equal(t, expectedID, appID)

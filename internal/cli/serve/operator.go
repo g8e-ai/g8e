@@ -20,6 +20,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -29,8 +30,8 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/exitcode"
-	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/services"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 // ServeOperatorOptions holds the configuration for running the operator in standalone mode.
@@ -67,34 +68,42 @@ func resolveWorkingDir(workingDir, launchDir string) string {
 
 // resolveKeyPath returns the explicit key path if set, otherwise checks the default
 // operator and client key paths on disk. Returns empty string if none are found.
-func resolveKeyPath(privateKey string, logger *slog.Logger) string {
+func resolveKeyPath(privateKey string, fileSvc fs.RuntimeFileService, logger *slog.Logger) string {
 	if privateKey != "" {
 		return privateKey
 	}
-	if _, err := os.Stat(paths.Infra.OperatorKeyPath); err == nil {
-		logger.Info("Using default Operator key from project directory", "path", paths.Infra.OperatorKeyPath)
-		return paths.Infra.OperatorKeyPath
+	opKeyRel := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorKey)
+	if exists, err := fileSvc.FileExists(context.Background(), opKeyRel); err == nil && exists {
+		opKeyPath := fileSvc.Resolve(opKeyRel)
+		logger.Info("Using default Operator key from project directory", "path", opKeyPath)
+		return opKeyPath
 	}
-	if _, err := os.Stat(paths.Infra.ClientOperatorKeyPath); err == nil {
-		logger.Info("Using default client key from project directory", "path", paths.Infra.ClientOperatorKeyPath)
-		return paths.Infra.ClientOperatorKeyPath
+	cliKeyRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirClient, constants.PkiFileOperatorKey)
+	if exists, err := fileSvc.FileExists(context.Background(), cliKeyRel); err == nil && exists {
+		cliKeyPath := fileSvc.Resolve(cliKeyRel)
+		logger.Info("Using default client key from project directory", "path", cliKeyPath)
+		return cliKeyPath
 	}
 	return ""
 }
 
 // resolveCertPath returns the explicit cert path if set, otherwise checks the default
 // operator and client cert paths on disk. Returns empty string if none are found.
-func resolveCertPath(clientCert string, logger *slog.Logger) string {
+func resolveCertPath(clientCert string, fileSvc fs.RuntimeFileService, logger *slog.Logger) string {
 	if clientCert != "" {
 		return clientCert
 	}
-	if _, err := os.Stat(paths.Infra.OperatorCertPath); err == nil {
-		logger.Info("Using default Operator certificate from project directory", "path", paths.Infra.OperatorCertPath)
-		return paths.Infra.OperatorCertPath
+	opCertRel := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert)
+	if exists, err := fileSvc.FileExists(context.Background(), opCertRel); err == nil && exists {
+		opCertPath := fileSvc.Resolve(opCertRel)
+		logger.Info("Using default Operator certificate from project directory", "path", opCertPath)
+		return opCertPath
 	}
-	if _, err := os.Stat(paths.Infra.ClientOperatorCertPath); err == nil {
-		logger.Info("Using default client certificate from project directory", "path", paths.Infra.ClientOperatorCertPath)
-		return paths.Infra.ClientOperatorCertPath
+	cliCertRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirClient, constants.PkiFileOperatorCert)
+	if exists, err := fileSvc.FileExists(context.Background(), cliCertRel); err == nil && exists {
+		cliCertPath := fileSvc.Resolve(cliCertRel)
+		logger.Info("Using default client certificate from project directory", "path", cliCertPath)
+		return cliCertPath
 	}
 	return ""
 }
@@ -154,10 +163,21 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	logger.Info("g8e", "version", vi.Version, "build", vi.BuildID)
 	logger.Info("Using Operator endpoint", "endpoint", operatorEndpoint)
 
+	// Construct RuntimeFileService early so all .g8e/ I/O goes through it
+	fileSvc, err := fs.NewRuntimeFileService("", logger)
+	if err != nil {
+		logger.Error("Failed to create file service", string(constants.ConnectionStateError), err)
+		os.Exit(exitcode.FromError(err))
+	}
+	if err := fileSvc.CreateRuntimeTree(context.Background()); err != nil {
+		logger.Error("Failed to create runtime tree", string(constants.ConnectionStateError), err)
+		os.Exit(exitcode.FromError(err))
+	}
+
 	trustStore := certs.NewTrustStore(nil)
 	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
 
-	trustLoaded := LoadTrustBundle(logger, opts.TrustBundlePath, trustStore)
+	trustLoaded := LoadTrustBundle(context.Background(), logger, opts.TrustBundlePath, fileSvc, trustStore)
 	if !trustLoaded {
 		if opts.Endpoint != "" {
 			trustURL := fmt.Sprintf("http://%s:%d%s", opts.Endpoint, constants.Ports.OperatorHttp, constants.WellKnownPKICABundle)
@@ -179,19 +199,12 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	}
 	logger.Info("Trust bundle loaded")
 
-	privateKey := resolveKeyPath(opts.PrivateKey, logger)
-	clientCert := resolveCertPath(opts.ClientCert, logger)
+	privateKey := resolveKeyPath(opts.PrivateKey, fileSvc, logger)
+	clientCert := resolveCertPath(opts.ClientCert, fileSvc, logger)
 
 	if opts.Endpoint != "" {
 		logger.Info("Performing automatic enrollment with Gateway", "endpoint", opts.Endpoint)
-		certPaths := CertPaths{
-			PkiTrustDir:       paths.Infra.PkiTrustDir,
-			OperatorKeyPath:   paths.Infra.OperatorKeyPath,
-			OperatorCertPath:  paths.Infra.OperatorCertPath,
-			CaCertPath:        paths.Infra.CaCertPath,
-			TrustedSignersDir: paths.Infra.TrustedSignersDir,
-		}
-		sessionID, err := PerformAutomaticEnrollment(context.Background(), opts.Endpoint, certPaths, logger)
+		sessionID, err := PerformAutomaticEnrollment(context.Background(), opts.Endpoint, fileSvc, logger)
 		if err != nil {
 			logger.Error("Automatic enrollment failed", string(constants.ConnectionStateError), err)
 			fmt.Fprintf(os.Stderr, "Automatic enrollment failed: %v\n", err)
@@ -200,17 +213,18 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		}
 		os.Setenv(string(constants.EnvVar.OperatorSessionID), sessionID)
 
-		privateKey = paths.Infra.OperatorKeyPath
-		clientCert = paths.Infra.OperatorCertPath
+		privateKey = fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiFileOperatorKey))
+		clientCert = fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert))
 
-		pemData, err := os.ReadFile(paths.Infra.CaCertPath)
+		caBundleRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+		pemData, err := fileSvc.ReadFile(context.Background(), caBundleRel)
 		if err != nil {
-			logger.Error("Failed to reload trust bundle after enrollment", "path", paths.Infra.CaCertPath, string(constants.ConnectionStateError), err)
+			logger.Error("Failed to reload trust bundle after enrollment", "path", fileSvc.Resolve(caBundleRel), string(constants.ConnectionStateError), err)
 			fmt.Fprintf(os.Stderr, "%s: %v\n", constants.ErrFailedToReadTrustBundle, err)
 			os.Exit(constants.ExitConfigError)
 		}
 		trustStore.SetCA(pemData)
-		logger.Info("Trust bundle reloaded after enrollment", "path", paths.Infra.CaCertPath)
+		logger.Info("Trust bundle reloaded after enrollment", "path", fileSvc.Resolve(caBundleRel))
 
 		logger.Info("Automatic enrollment completed, using enrolled certificates")
 	}
@@ -272,6 +286,8 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		os.Exit(exitcode.FromError(err))
 	}
 
+	g8eoService.SetFileService(fileSvc)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -293,7 +309,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		RunClientCertRenewalLoop(ctx, cfg, clientCert, privateKey, logger, clientIdentity)
+		RunClientCertRenewalLoop(ctx, cfg, fileSvc, clientCert, privateKey, logger, clientIdentity)
 	}()
 
 	select {

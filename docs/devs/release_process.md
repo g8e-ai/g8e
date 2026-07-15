@@ -8,7 +8,7 @@ This document is the definitive checklist for updating all version-bearing files
 
 1. Determine the new version number (see [Versioning Rules](#versioning-rules))
 2. Set `VERSION` to the new version (the single source of truth)
-3. Run `make release` — this auto-syncs `pyproject.toml` and `__init__.py`, runs protocol tests, and builds binaries
+3. Run `make release` — this auto-syncs `pyproject.toml` and `__init__.py`, runs the full test suite, and builds binaries
 4. Update `CHANGELOG.md` and create release notes (see [Manual Updates](#manual-updates))
 5. Review release content for [documentation accuracy](#content-accuracy-review) — protocol specs, architecture docs, and guides must reflect any code refactors or behavioral changes shipped in this release
 6. Run the [Verification](#verification) section to catch any missed files
@@ -47,51 +47,27 @@ The following files contain version strings. `VERSION` is the single source of t
 | # | File | How It's Updated | Format |
 |---|------|-----------------|--------|
 | 1 | `VERSION` | **Manual** — set to new version | `vX.Y.Z\n` (with trailing newline, no trailing spaces) |
-| 2 | `CHANGELOG.md` | **Manual** — add new section below `## [Unreleased]` | `## [X.Y.Z] - YYYY-MM-DD` (no `v` prefix) |
+| 2 | `CHANGELOG.md` | **Manual** — add a table row to the major-version section | `\| X.Y.Z \| YYYY-MM-DD \| ... \|` (no `v` prefix) |
 | 3 | `protocol/python/pyproject.toml` | **Auto** — `make release` syncs from `VERSION` | `version = "X.Y.Z"` (no `v` prefix) |
 | 4 | `protocol/python/g8e/__init__.py` | **Auto** — `make release` syncs from `VERSION` | `__version__ = "X.Y.Z"` (no `v` prefix) |
 
 > ⚠️ Items 3 and 4 are auto-synced by `make release` and verified by `make release-tag` and CI. A mismatch will fail the release.
 
-#### CHANGELOG.md Template
+#### CHANGELOG.md Format
 
-Use the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) sections. Only include the subsections that apply to the release — `Removed` and `Deprecated` are part of the standard and should be used when relevant (e.g., v1.3.1 was a `Removed`-only cleanup release).
+The CHANGELOG is a table-based index. Each major version has a section (`## vX.Y.x`) containing a table of releases. Detailed content lives in the per-release notes files (see [Release Notes File](#b-release-notes-file)), not in the CHANGELOG itself.
+
+If a major-version section already exists, add a new row at the top of the table. If this is a new major version, add a new section after the `---` separator.
 
 ```markdown
-## [X.Y.Z] - YYYY-MM-DD
+## vX.Y.x
 
-### Overview
-
-[Brief summary of the release — 2-3 sentences highlighting major changes]
-
-### Breaking Changes
-
-* **Change title** - Description of breaking change and migration path
-
-### Added
-
-* **Feature title** - Description of new feature
-
-### Changed
-
-* **Change title** - Description of modification
-
-### Deprecated
-
-* **Item title** - What is deprecated and the recommended replacement
-
-### Removed
-
-* **Item title** - What was removed and why
-
-### Fixed
-
-* **Bug title** - Description of fix
-
-### Security
-
-* **Security title** - Description of security improvement
+| Version | Date | Description | Notes |
+|---------|------|-------------|-------|
+| X.Y.Z | YYYY-MM-DD | Brief summary of the release (1-3 sentences). | [vX.Y.Z](docs/release_notes/vX.Y.x/vX.Y.Z.md) |
 ```
+
+The Description column should concisely summarize the release. The Notes column links to the full release notes file. Use the `v` prefix in the link text but not in the Version column.
 
 ### B. Release Notes File
 
@@ -155,7 +131,7 @@ Use the same `## [X.Y.Z] - YYYY-MM-DD` header as the CHANGELOG (no `v` prefix in
 
 - **Bullet format**: `* **Item title** — Description` using an em-dash (`—`) separator between the bold title and description. Sub-bullets use `- ` for nested detail.
 - **Section selection**: Only include sections that have content. Common combinations: small fix releases use just `Overview` + `Fixed`; feature releases use `Added` + `Changed` + `Fixed`; cleanup releases use `Removed` + `Changed` + `Fixed`.
-- **Optional sections**: `Deferred`, `Tests`, and `Documentation` are not part of the Keep-a-Changelog standard but have been used in past release notes when those categories carry significant content. Use them when appropriate.
+- **Optional sections**: `Deferred`, `Tests`, `Documentation`, `Dependencies`, and `Migration Notes for External Consumers` are not part of the Keep-a-Changelog standard but have been used in past release notes when those categories carry significant content. Use them when appropriate.
 - **Detail level**: Release notes can be more verbose than the CHANGELOG entry — include file paths, function names, and links to relevant docs where helpful.
 - **Trailing separator**: Some release notes end with a `---` horizontal rule. This is optional.
 
@@ -178,9 +154,8 @@ Any file in the output that carries a version/date header should have that heade
 > | Plain | `Version: vX.Y.Z` / `Last Updated: YYYY-MM-DD` | most architecture, guide, reference, and protocol docs |
 > | Bold | `**Version:** vX.Y.Z` / `**Last Updated:** YYYY-MM-DD` | (none currently) |
 > | Document Version (no `v`) | `**Document Version:** X.Y.Z` | `docs/reference/compliance-alignment.md` |
-> | Date only (no version line) | `Last Updated: YYYY-MM-DD` | `protocol/docs/a2a.md`, `protocol/docs/mcp.md` |
 
-#### Architecture Docs (`docs/architecture/`) — 8 files
+#### Architecture Docs (`docs/architecture/`) — 10 files
 
 | # | File |
 |---|------|
@@ -190,37 +165,41 @@ Any file in the output that carries a version/date header should have that heade
 | 9 | `docs/architecture/governance.md` |
 | 10 | `docs/architecture/network.md` |
 | 11 | `docs/architecture/operator.md` |
-| 12 | `docs/architecture/sse.md` |
-| 13 | `docs/architecture/storage.md` |
+| 12 | `docs/architecture/protocol.md` |
+| 13 | `docs/architecture/scripts.md` |
+| 14 | `docs/architecture/sse.md` |
+| 15 | `docs/architecture/storage.md` |
 
-#### Guide Docs (`docs/guides/`) — 9 files
+#### Guide Docs (`docs/guides/`) — 10 files
 
 | # | File | Note |
 |---|------|------|
-| 14 | `docs/guides/air_gap.md` | |
-| 15 | `docs/guides/build_apps.md` | |
-| 16 | `docs/guides/build_gateway.md` | |
-| 17 | `docs/guides/build_operator.md` | |
-| 18 | `docs/guides/cli.md` | |
-| 19 | `docs/guides/connect_apps_to_gateway.md` | |
-| 20 | `docs/guides/connect_operator_to_gateway.md` | |
-| 21 | `docs/guides/docker_gateway.md` | |
-| 22 | `docs/guides/getting_started.md` | |
+| 16 | `docs/guides/air_gap.md` | |
+| 17 | `docs/guides/build_apps.md` | |
+| 18 | `docs/guides/build_gateway.md` | |
+| 19 | `docs/guides/build_operator.md` | |
+| 20 | `docs/guides/cloudflare_tunnel.md` | |
+| 21 | `docs/guides/connect_apps_to_gateway.md` | |
+| 22 | `docs/guides/connect_operator_to_gateway.md` | |
+| 23 | `docs/guides/docker_gateway.md` | |
+| 24 | `docs/guides/getting_started.md` | |
+| 25 | `docs/guides/lovable.md` | |
+
 
 #### Reference Docs (`docs/reference/`) — 2 files
 
 | # | File | Note |
 |---|------|------|
-| 23 | `docs/reference/glossary.md` | plain `Version:` header |
-| 24 | `docs/reference/compliance-alignment.md` | `**Document Version:**` (no `v` prefix) |
+| 26 | `docs/reference/glossary.md` | plain `Version:` header |
+| 27 | `docs/reference/compliance-alignment.md` | `**Document Version:**` (no `v` prefix) |
 
 #### Protocol Docs (`protocol/docs/`) — 3 files
 
 | # | File | Note |
 |---|------|------|
-| 25 | `protocol/docs/spec.md` | has both `Version:` and `Last Updated:` |
-| 26 | `protocol/docs/a2a.md` | `Last Updated:` only — update the date |
-| 27 | `protocol/docs/mcp.md` | `Last Updated:` only — update the date |
+| 28 | `protocol/docs/spec.md` | has both `Version:` and `Last Updated:` |
+| 29 | `protocol/docs/a2a.md` | has both `Version:` and `Last Updated:` |
+| 30 | `protocol/docs/mcp.md` | has both `Version:` and `Last Updated:` |
 
 #### Update Pattern for Each Modified Doc
 
@@ -233,7 +212,7 @@ For plain-format files, update the two header lines:
 +Version: vX.Y.Z
 ```
 
-For bold-format and date-only files, update whichever of `Version`, `Document Version`, and `Last Updated` lines are present, preserving the existing markdown styling.
+For bold-format and document-version files, update whichever of `Version`, `Document Version`, and `Last Updated` lines are present, preserving the existing markdown styling.
 
 > **Only update docs you actually reviewed.** If a doc's content didn't change in this release, leave its headers at the previous version. This keeps version stamps meaningful — they reflect the last time a human reviewed and updated the doc, not the last release tag.
 
@@ -242,7 +221,7 @@ For bold-format and date-only files, update whichever of `Version`, `Document Ve
 The following doc directories intentionally do **not** carry release `Version:` headers and do **not** need version bumps on release. They may still need *content* updates if the release changes their subject matter (see [Content Accuracy Review](#content-accuracy-review)):
 
 - `docs/core/` — Position papers, about page
-- `docs/devs/` — Developer documentation (including this file). Note: some devs docs (e.g., `docs/devs/tests.md`) carry a `Last Updated:` date that tracks the doc's own content changes, **not** the release — only bump it if you changed the doc.
+- `docs/devs/` — Developer documentation (including this file). Note: some devs docs (e.g., `docs/devs/tests.md`, `docs/devs/troubleshooting.md`) carry `Last Updated:` dates and/or `Version:` headers that track the doc's own content changes, **not** the release — only bump them if you changed the doc.
 - `docs/diagrams/` — Mermaid diagrams and flowcharts
 - `docs/release_notes/` — Historical release notes (past entries are immutable)
 - `demos/` — Demo configurations and doctrine files
@@ -257,7 +236,7 @@ The Go protocol code is part of the root module `github.com/g8e-ai/g8e`. There i
 The following files read the version dynamically from `VERSION` at build time and do **not** require manual updates:
 
 - `Makefile` — Reads `VERSION` via `$(shell cat VERSION)`; `make release` syncs Python files; `make release-tag` tags and pushes
-- `Dockerfile` / `Dockerfile.operator` — Receive version as build arg
+- `Dockerfile` — Receives version as build arg
 - `docker-compose.yml` — References build context, not version
 - `.github/workflows/*.yml` — Triggered by git tags, no hardcoded version. CI includes a version sync check that fails if Python files don't match `VERSION`.
 
@@ -312,8 +291,8 @@ grep -rnE 'oldCommandName|OldEndpointPath|OLD_CONSTANT' docs/ protocol/docs/ --i
 `make release` handles version syncing, tests, and builds automatically. The following must still be done manually:
 
 - [ ] **1. `VERSION`** — Set to `vX.Y.Z`
-- [ ] **2. `make release`** — Auto-syncs `pyproject.toml` + `__init__.py`, runs protocol tests, builds binaries
-- [ ] **3. `CHANGELOG.md`** — Add `## [X.Y.Z] - YYYY-MM-DD` section (no `v` prefix)
+- [ ] **2. `make release`** — Auto-syncs `pyproject.toml` + `__init__.py`, runs the full test suite, builds binaries
+- [ ] **3. `CHANGELOG.md`** — Add a table row to the major-version section (no `v` prefix in version column)
 - [ ] **4. `docs/release_notes/vX.Y.x/vX.Y.Z.md`** — Create new release notes file
 - [ ] **5. Documentation headers** — Update version/date headers **only** in docs that were actually reviewed or modified in this release (use `git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/` to identify them). Do not blanket-bump all headers. See [Section C](#c-documentation-with-version--date-headers) for the full list of files that carry headers.
 - [ ] **6. Content review** — Complete the [Content Accuracy Review](#content-accuracy-review). Only update docs to fix inaccuracies or document missing features — do not rewrite accurate docs.

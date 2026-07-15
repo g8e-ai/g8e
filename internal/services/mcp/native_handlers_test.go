@@ -26,6 +26,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
 )
@@ -247,7 +248,7 @@ func TestHandleDBDiscoverTopology(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("valid database", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		dbPath := filepath.Join(tmpDir, "test.db")
 
 		db, err := sql.Open("sqlite", dbPath)
@@ -309,7 +310,7 @@ func TestHandleDBQueryValidate(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("indexed SELECT query accepted", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		dbPath := filepath.Join(tmpDir, "test.db")
 
 		db, err := sql.Open("sqlite", dbPath)
@@ -345,7 +346,7 @@ func TestHandleDBQueryValidate(t *testing.T) {
 	})
 
 	t.Run("full table scan rejected", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		dbPath := filepath.Join(tmpDir, "test.db")
 
 		db, err := sql.Open("sqlite", dbPath)
@@ -381,7 +382,7 @@ func TestHandleDBQueryValidate(t *testing.T) {
 	})
 
 	t.Run("non-SELECT query rejected", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		dbPath := filepath.Join(tmpDir, "test.db")
 
 		db, err := sql.Open("sqlite", dbPath)
@@ -417,7 +418,7 @@ func TestHandleDBIsolatedRead(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("valid SELECT query", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		dbPath := filepath.Join(tmpDir, "test.db")
 
 		db, err := sql.Open("sqlite", dbPath)
@@ -458,7 +459,7 @@ func TestHandleDBIsolatedRead(t *testing.T) {
 	})
 
 	t.Run("non-SELECT query rejected", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		dbPath := filepath.Join(tmpDir, "test.db")
 
 		req := DBIsolatedReadRequest{
@@ -488,7 +489,7 @@ func TestHandleDBIndexTriage(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("valid database", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		dbPath := filepath.Join(tmpDir, "test.db")
 
 		db, err := sql.Open("sqlite", dbPath)
@@ -526,7 +527,7 @@ func TestHandleLogStreamFilter(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("valid log file", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		logPath := filepath.Join(tmpDir, "test.log")
 
 		logContent := "INFO: test message\nERROR: error message\nDEBUG: debug message"
@@ -600,7 +601,7 @@ func TestHandleConfigDiffMask(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("valid config diff", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		configPath := filepath.Join(tmpDir, "config.yaml")
 
 		configContent := "key1: value1\nkey2: secret_value"
@@ -632,7 +633,7 @@ func TestHandleConfigDiffMask(t *testing.T) {
 	})
 
 	t.Run("secret masking", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		configPath := filepath.Join(tmpDir, "config.yaml")
 
 		configContent := "password: mypassword"
@@ -702,7 +703,7 @@ func TestHandleFSDiskProfile(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("valid path", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 
 		req := FSDiskProfileRequest{
 			Path:     tmpDir,
@@ -1451,7 +1452,7 @@ func TestHandleGitOps(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("git status on test repo", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 
 		cmd := exec.Command("git", "init")
 		cmd.Dir = tmpDir
@@ -1514,7 +1515,7 @@ func TestHandleGitOps(t *testing.T) {
 	})
 
 	t.Run("git log with limit", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 
 		cmd := exec.Command("git", "init")
 		cmd.Dir = tmpDir
@@ -1574,7 +1575,7 @@ func TestHandleGitOps(t *testing.T) {
 	})
 
 	t.Run("non-git repository", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		req := map[string]interface{}{
 			"operation": "status",
 			"repo_path": tmpDir,
@@ -1751,7 +1752,7 @@ func TestHandleFSFileChecksum(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("valid file", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "test.txt")
 		if err := os.WriteFile(testFile, []byte("test content"), 0644); err != nil {
 			t.Fatalf("failed to create test file: %v", err)
@@ -1824,7 +1825,7 @@ func TestHandleFSDiskUsage(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("valid path", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 
 		req := map[string]interface{}{
 			"path": tmpDir,

@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -36,16 +37,19 @@ func setupTestGitLedger(t *testing.T) *storage.GitLedgerService {
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 
-	vaultDir := filepath.Join(t.TempDir(), "vault")
+	vaultDir := filepath.Join(testutil.TempDir(t), "vault")
 	require.NoError(t, os.MkdirAll(vaultDir, 0o700))
 	v := createTestVault(t, vaultDir, privKey)
 
-	ledgerDir := filepath.Join(t.TempDir(), "ledger")
+	baseDir := testutil.TempDir(t)
+	fileSvc, err := fs.NewRuntimeFileService(baseDir, testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+
 	ledger, err := storage.NewGitLedgerService(&storage.LedgerConfig{
-		BaseDir:         ledgerDir,
 		GitPath:         "git",
 		EncryptionVault: v,
-	}, testutil.NewTestLogger())
+	}, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 
 	return ledger
@@ -71,7 +75,7 @@ func seedLedgerCommit(t *testing.T, ledger *storage.GitLedgerService, sessionID,
 
 func TestReportLedgerMerkleRoot_BootstrapOnly(t *testing.T) {
 	ledger := setupTestGitLedger(t)
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	res, err := reportLedgerMerkleRoot(context.Background(), outDir, ledger)
 	require.NoError(t, err)
@@ -94,10 +98,10 @@ func TestReportLedgerMerkleRoot_WithCommits(t *testing.T) {
 	ledger := setupTestGitLedger(t)
 
 	// Seed a commit.
-	srcFile := filepath.Join(t.TempDir(), "test-file.txt")
+	srcFile := filepath.Join(testutil.TempDir(t), "test-file.txt")
 	seedLedgerCommit(t, ledger, "", srcFile, "hello world")
 
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	res, err := reportLedgerMerkleRoot(context.Background(), outDir, ledger)
 	require.NoError(t, err)
 	assert.Equal(t, constants.ReportLedgerMerkleRootFilename, res.Filename)
@@ -116,7 +120,7 @@ func TestReportLedgerMerkleRoot_WithCommits(t *testing.T) {
 
 func TestReportLedgerCommits_BootstrapOnly(t *testing.T) {
 	ledger := setupTestGitLedger(t)
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	res, err := reportLedgerCommits(context.Background(), outDir, ledger)
 	require.NoError(t, err)
@@ -139,13 +143,13 @@ func TestReportLedgerCommits_WithCommits(t *testing.T) {
 	ledger := setupTestGitLedger(t)
 
 	// Seed two commits with different files.
-	srcFile1 := filepath.Join(t.TempDir(), "file1.txt")
+	srcFile1 := filepath.Join(testutil.TempDir(t), "file1.txt")
 	seedLedgerCommit(t, ledger, "", srcFile1, "content 1")
 
-	srcFile2 := filepath.Join(t.TempDir(), "file2.txt")
+	srcFile2 := filepath.Join(testutil.TempDir(t), "file2.txt")
 	seedLedgerCommit(t, ledger, "", srcFile2, "content 2")
 
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	res, err := reportLedgerCommits(context.Background(), outDir, ledger)
 	require.NoError(t, err)
 	assert.Equal(t, constants.ReportLedgerCommitsFilename, res.Filename)
@@ -168,7 +172,7 @@ func TestReportLedgerCommits_WithCommits(t *testing.T) {
 
 func TestReportLedgerMerkleRoot_CancelledContext(t *testing.T) {
 	ledger := setupTestGitLedger(t)
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -180,7 +184,7 @@ func TestReportLedgerMerkleRoot_CancelledContext(t *testing.T) {
 
 func TestReportLedgerCommits_CancelledContext(t *testing.T) {
 	ledger := setupTestGitLedger(t)
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

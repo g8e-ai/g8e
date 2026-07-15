@@ -25,12 +25,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestFileKeyProvider_GetMemberKey_Success(t *testing.T) {
 	t.Parallel()
 
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	tribunalID := "test-tribunal"
 	memberAppID := "member-1"
 
@@ -51,7 +52,7 @@ func TestFileKeyProvider_GetMemberKey_Success(t *testing.T) {
 func TestFileKeyProvider_GetMemberKey_NotFound(t *testing.T) {
 	t.Parallel()
 
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	tribunalID := "test-tribunal"
 
 	provider := NewFileKeyProvider(secretsDir, tribunalID)
@@ -63,7 +64,7 @@ func TestFileKeyProvider_GetMemberKey_NotFound(t *testing.T) {
 func TestFileKeyProvider_GetMemberKey_InvalidSeedLength(t *testing.T) {
 	t.Parallel()
 
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	tribunalID := "test-tribunal"
 	memberAppID := "member-bad"
 
@@ -81,7 +82,7 @@ func TestFileKeyProvider_GetMemberKey_InvalidSeedLength(t *testing.T) {
 func TestFileKeyProvider_GetMemberKey_InvalidHex(t *testing.T) {
 	t.Parallel()
 
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	tribunalID := "test-tribunal"
 	memberAppID := "member-bad-hex"
 
@@ -99,7 +100,7 @@ func TestFileKeyProvider_GetMemberKey_InvalidHex(t *testing.T) {
 func TestSaveMemberKey_CreatesDirectoryAndFile(t *testing.T) {
 	t.Parallel()
 
-	secretsDir := filepath.Join(t.TempDir(), "nested", "secrets")
+	secretsDir := filepath.Join(testutil.TempDir(t), "nested", "secrets")
 	tribunalID := "test-tribunal"
 	memberAppID := "member-1"
 
@@ -132,7 +133,7 @@ func TestSaveMemberKey_CreatesDirectoryAndFile(t *testing.T) {
 func TestFileKeyProvider_MultipleMembers(t *testing.T) {
 	t.Parallel()
 
-	secretsDir := t.TempDir()
+	secretsDir := testutil.TempDir(t)
 	tribunalID := "multi-tribunal"
 
 	members := []string{"member-0", "member-1", "member-2"}

@@ -16,26 +16,21 @@ package keystore
 import (
 	"fmt"
 	"log/slog"
-	"os"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
-// New creates a new Keystore instance with the keychain keyring.
-// Production callers should pass paths.Infra.SecretsDir for secretsDir.
-func New(secretsDir string, logger *slog.Logger) (*Keystore, error) {
-	if err := os.MkdirAll(secretsDir, constants.PermDirPrivate); err != nil {
-		return nil, fmt.Errorf("keystore: create secrets directory: %w", err)
-	}
-
+// NewWithFS creates a new Keystore instance with the keychain keyring
+// and the provided RuntimeFileService for file I/O.
+func NewWithFS(fileSvc fs.RuntimeFileService, logger *slog.Logger) (*Keystore, error) {
 	keyring, err := newKeychainKeyring()
 	if err != nil {
 		return nil, fmt.Errorf("keystore: initialize keychain keyring: %w", err)
 	}
 
 	return &Keystore{
-		logger:     logger,
-		secretsDir: secretsDir,
-		keyring:    keyring,
+		logger:  logger,
+		keyring: keyring,
+		fileSvc: fileSvc,
 	}, nil
 }

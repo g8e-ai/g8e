@@ -35,7 +35,7 @@ func TestUserService_CreateUser_Integration(t *testing.T) {
 	t.Run("Success - creates regular user with OS user info", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.VaultDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -60,7 +60,7 @@ func TestUserService_Disable_Integration(t *testing.T) {
 	t.Run("Success - disables user with audit entry", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.VaultDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -100,7 +100,7 @@ func TestUserService_Disable_Integration(t *testing.T) {
 	t.Run("Success - idempotent when already disabled", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.VaultDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -128,7 +128,7 @@ func TestUserService_Disable_Integration(t *testing.T) {
 	t.Run("Success - with auth cache invalidation", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.VaultDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -155,7 +155,7 @@ func TestUserService_Disable_Integration(t *testing.T) {
 	t.Run("Error - GetByID failure when DB closed", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.VaultDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -177,7 +177,7 @@ func TestUserService_DeleteUser_Integration(t *testing.T) {
 	t.Run("Success - with auth cache invalidation", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.VaultDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -204,7 +204,7 @@ func TestUserService_UpdatePasskeyCredentials_Integration(t *testing.T) {
 	t.Run("Error - DocUpdate failure", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.VaultDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -236,7 +236,7 @@ func TestUserService_HasAnyUsers_Integration(t *testing.T) {
 	t.Run("Error - DocQuery failure", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.VaultDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -255,7 +255,7 @@ func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 	t.Run("Success - maps role to matching persona", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.VaultDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -279,7 +279,7 @@ func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 	t.Run("Success - returns default when no roles", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.VaultDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -293,7 +293,7 @@ func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 	t.Run("Success - returns default when no match", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.VaultDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -307,7 +307,7 @@ func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 	t.Run("Success - returns default when persona load fails", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.VaultDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -326,7 +326,7 @@ func TestUserService_docToUser_Integration(t *testing.T) {
 	t.Run("Success - converts valid doc to user", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.VaultDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -348,7 +348,7 @@ func TestUserService_docToUser_Integration(t *testing.T) {
 	t.Run("Error - handles malformed doc", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.VaultDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 

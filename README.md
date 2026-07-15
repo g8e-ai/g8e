@@ -143,45 +143,9 @@ sequenceDiagram
 
 The admission pipeline consists of five layers with independent failure domains:
 
-```mermaid
-graph TD
-    Start["Signed GovernanceEnvelope<br/>(Incoming Transaction)"]
-
-    subgraph Verification ["Operator Verification - protocol-mandated"]
-        direction TB
-        L1{"L1: Doctrine<br/>Forbidden Patterns?"}
-        L2{"L2: Consensus<br/>Quorum Signature?"}
-        L3{"L3: Authorization<br/>Human Presence?"}
-        State{"State Check<br/>Merkle Root Fresh?"}
-        L4{"L4: Warden<br/>Pre-dispatch Gate"}
-        
-        FailClosed["Fail Closed<br/>Typed Rejection + Audit Entry"]
-        Actuator["L5: Actuator<br/>Execute + Signed Receipt"]
-        LocalVault([Local Audit Vault])
-
-        L1 -- "Passed" --> L2
-        L1 -- "Violated" ----> FailClosed
-        
-        L2 -- "Passed" --> L3
-        L2 -- "Invalid/Missing" ---> FailClosed
-        
-        L3 -- "Authorized" --> State
-        L3 -- "Denied" --> FailClosed
-        
-        State -- "Fresh" --> L4
-        State -- "Stale" --> FailClosed
-
-        L4 -- "Verified" --> Actuator
-        L4 -- "Failed" --> FailClosed
-
-        Actuator --> LocalVault
-        FailClosed --> LocalVault
-    end
-
-    LocalVault --> Done["Recorded · Signed · Audited"]
-
-    Start --> L1
-```
+<p align="center">
+  <img src="docs/diagrams/g8e-diagram.png" alt="g8e Admission Pipeline with agentic ensemble" width="720" />
+</p>
 
 1. **L1 Doctrine**: Deterministic static analysis. Enforces rules against forbidden patterns and MITRE ATT&CK indicators. Active for every action. See [Gateway Postures](docs/guides/build_gateway.md#gateway-mode-flags).
 2. **L2 Consensus**: Multi-agent deliberation. An enrolled Tribunal service evaluates the envelope and produces signed votes over the canonical SHA-256 transaction hash. The gateway delegates L2 deliberation to the Tribunal and never self-signs. See [Consensus Layer](protocol/docs/spec.md#l2-consensus).
@@ -293,7 +257,7 @@ CI modernization adds a cross-OS test matrix (ubuntu/macOS/Windows), 94 Python p
 - [Docker Gateway](docs/guides/docker_gateway.md)
 - [Cloudflare Tunnel Integration](docs/guides/cloudflare_tunnel.md)
 - [Lovable Frontend Integration](docs/guides/lovable.md)
-- [Live Swarm Demo](docs/guides/live-swarm-demo.md)
+- [Live Swarm Demo](demos/live-swarm/README.md)
 
 #### Architecture
 - [Gateway Architecture](docs/architecture/gateway.md)

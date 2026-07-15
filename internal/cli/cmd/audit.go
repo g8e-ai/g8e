@@ -25,6 +25,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/spf13/cobra"
 )
 
@@ -47,10 +48,10 @@ func auditCmd() *cobra.Command {
 }
 
 func auditReceiptsCmd() *cobra.Command {
-	return auditReceiptsCmdWithConfig(loadConfig, defaultAPIClientFactory)
+	return auditReceiptsCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func auditReceiptsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
+func auditReceiptsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
 	var txID string
 	var jsonOutput bool
@@ -67,14 +68,19 @@ transaction hash, and --json to output raw JSON instead of a table.`,
 				return err
 			}
 
-			client, err := clientFactory(cfg)
+			fileSvc, err := fileSvcFactory()
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+
+			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("audit: create API client: %w", err)
 			}
 
 			// Auto-discover session ID if not provided
 			if operatorSessionID == "" {
-				creds, err := auth.LoadCredentials(cfg)
+				creds, err := auth.LoadCredentials(fileSvc, cfg)
 				if err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 				}
@@ -165,10 +171,10 @@ transaction hash, and --json to output raw JSON instead of a table.`,
 }
 
 func auditExportCmd() *cobra.Command {
-	return auditExportCmdWithConfig(loadConfig, defaultAPIClientFactory)
+	return auditExportCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func auditExportCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
+func auditExportCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
 	var outPath string
 
@@ -184,14 +190,19 @@ file path (defaults to stdout).`,
 				return err
 			}
 
-			client, err := clientFactory(cfg)
+			fileSvc, err := fileSvcFactory()
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+
+			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("audit: create API client: %w", err)
 			}
 
 			// Auto-discover session ID if not provided
 			if operatorSessionID == "" {
-				creds, err := auth.LoadCredentials(cfg)
+				creds, err := auth.LoadCredentials(fileSvc, cfg)
 				if err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 				}
@@ -213,11 +224,11 @@ file path (defaults to stdout).`,
 			}
 
 			// Write to file
-			if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(outPath), constants.PermDirStandard); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 			}
-			if err := os.WriteFile(outPath, resp, 0644); err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrFileEditWriteFileFailed, err)
+			if err := os.WriteFile(outPath, resp, constants.PermFilePublic); err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 			}
 
 			cmd.Printf("Receipts export written to: %s (%d bytes)\n", outPath, len(resp))
@@ -232,10 +243,10 @@ file path (defaults to stdout).`,
 }
 
 func auditReportCmd() *cobra.Command {
-	return auditReportCmdWithConfig(loadConfig, defaultAPIClientFactory)
+	return auditReportCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func auditReportCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
+func auditReportCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
 	var outDir string
 
@@ -251,14 +262,19 @@ directory for the report file.`,
 				return err
 			}
 
-			client, err := clientFactory(cfg)
+			fileSvc, err := fileSvcFactory()
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+
+			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("audit: create API client: %w", err)
 			}
 
 			// Auto-discover session ID if not provided
 			if operatorSessionID == "" {
-				creds, err := auth.LoadCredentials(cfg)
+				creds, err := auth.LoadCredentials(fileSvc, cfg)
 				if err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 				}
@@ -285,13 +301,13 @@ directory for the report file.`,
 			}
 
 			// Write report to file
-			if err := os.MkdirAll(outDir, 0755); err != nil {
+			if err := os.MkdirAll(outDir, constants.PermDirStandard); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 			}
 
 			jsonPath := filepath.Join(outDir, constants.ComplianceReportFilename)
-			if err := os.WriteFile(jsonPath, resp, 0644); err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrFileEditWriteFileFailed, err)
+			if err := os.WriteFile(jsonPath, resp, constants.PermFilePublic); err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 			}
 
 			cmd.Println("Compliance report written:")
@@ -311,10 +327,10 @@ directory for the report file.`,
 }
 
 func auditEventsCmd() *cobra.Command {
-	return auditEventsCmdWithConfig(loadConfig, defaultAPIClientFactory)
+	return auditEventsCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func auditEventsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
+func auditEventsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
 	var limit int
 	var jsonOutput bool
@@ -336,14 +352,19 @@ filter by operator session ID, --limit to control the number of results, and
 				return fmt.Errorf("%w: limit must be between 1 and 10000", constants.ErrValidationFailed)
 			}
 
-			client, err := clientFactory(cfg)
+			fileSvc, err := fileSvcFactory()
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+
+			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("audit: create API client: %w", err)
 			}
 
 			// Auto-discover session ID if not provided
 			if operatorSessionID == "" {
-				creds, err := auth.LoadCredentials(cfg)
+				creds, err := auth.LoadCredentials(fileSvc, cfg)
 				if err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 				}
@@ -425,10 +446,10 @@ filter by operator session ID, --limit to control the number of results, and
 }
 
 func auditSummaryCmd() *cobra.Command {
-	return auditSummaryCmdWithConfig(loadConfig, defaultAPIClientFactory)
+	return auditSummaryCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func auditSummaryCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
+func auditSummaryCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
 
 	cmd := &cobra.Command{
@@ -442,14 +463,19 @@ Gateway over mTLS. Use --session to filter by operator session ID.`,
 				return err
 			}
 
-			client, err := clientFactory(cfg)
+			fileSvc, err := fileSvcFactory()
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+
+			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("audit: create API client: %w", err)
 			}
 
 			// Auto-discover session ID if not provided
 			if operatorSessionID == "" {
-				creds, err := auth.LoadCredentials(cfg)
+				creds, err := auth.LoadCredentials(fileSvc, cfg)
 				if err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 				}

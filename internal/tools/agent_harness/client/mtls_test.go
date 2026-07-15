@@ -37,6 +37,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/internal/governance"
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
@@ -471,7 +472,7 @@ func TestGetReceipt_Success(t *testing.T) {
 	server.StartTLS()
 	defer server.Close()
 
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	clientCertPath := filepath.Join(tempDir, "client.crt")
 	clientKeyPath := filepath.Join(tempDir, "client.key")
 	caBundlePath := filepath.Join(tempDir, "ca.pem")
@@ -576,7 +577,7 @@ func TestGetReceipt_NotFound(t *testing.T) {
 	server.StartTLS()
 	defer server.Close()
 
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	clientCertPath := filepath.Join(tempDir, "client.crt")
 	clientKeyPath := filepath.Join(tempDir, "client.key")
 	caBundlePath := filepath.Join(tempDir, "ca.pem")
@@ -658,7 +659,7 @@ func TestGetReceipt_ServerError(t *testing.T) {
 	server.StartTLS()
 	defer server.Close()
 
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	clientCertPath := filepath.Join(tempDir, "client.crt")
 	clientKeyPath := filepath.Join(tempDir, "client.key")
 	caBundlePath := filepath.Join(tempDir, "ca.pem")
@@ -744,7 +745,7 @@ func TestGetReceipt_InvalidJSON(t *testing.T) {
 	server.StartTLS()
 	defer server.Close()
 
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	clientCertPath := filepath.Join(tempDir, "client.crt")
 	clientKeyPath := filepath.Join(tempDir, "client.key")
 	caBundlePath := filepath.Join(tempDir, "ca.pem")

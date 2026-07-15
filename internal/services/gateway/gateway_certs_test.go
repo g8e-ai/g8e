@@ -11,9 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build integration
+
 package gateway
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -26,7 +29,6 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
@@ -97,139 +99,6 @@ func TestRandomSerial(t *testing.T) {
 		limit := new(big.Int).Lsh(big.NewInt(1), 128)
 		assert.Less(t, serial.Cmp(limit), 0, "serial should be less than 2^128")
 		assert.GreaterOrEqual(t, serial.Cmp(big.NewInt(0)), 0, "serial should be non-negative")
-	})
-}
-
-func TestWritePEMFile(t *testing.T) {
-
-	t.Run("Writes DER as PEM with type", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		filePath := filepath.Join(tmpDir, "test.crt")
-
-		testData := []byte("test data")
-		err := writePEMFile(filePath, "CERTIFICATE", testData, 0644)
-		require.NoError(t, err)
-
-		// Verify file exists
-		info, err := os.Stat(filePath)
-		require.NoError(t, err)
-		assert.False(t, info.IsDir())
-
-		// Verify content is PEM-encoded
-		content, err := os.ReadFile(filePath)
-		require.NoError(t, err)
-
-		block, _ := pem.Decode(content)
-		require.NotNil(t, block)
-		assert.Equal(t, "CERTIFICATE", block.Type)
-		assert.Equal(t, testData, block.Bytes)
-
-		// Verify permissions on Unix
-		if runtime.GOOS != "windows" {
-			assert.Equal(t, os.FileMode(0644), info.Mode().Perm())
-		}
-	})
-
-	t.Run("Writes raw PEM bytes without type", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		filePath := filepath.Join(tmpDir, "bundle.pem")
-
-		testPEM := `-----BEGIN CERTIFICATE-----
-test data
------END CERTIFICATE-----`
-		err := writePEMFile(filePath, "", []byte(testPEM), 0600)
-		require.NoError(t, err)
-
-		// Verify file exists
-		info, err := os.Stat(filePath)
-		require.NoError(t, err)
-
-		// Verify content is written as-is
-		content, err := os.ReadFile(filePath)
-		require.NoError(t, err)
-		assert.Equal(t, testPEM, string(content))
-
-		// Verify permissions on Unix
-		if runtime.GOOS != "windows" {
-			assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
-		}
-	})
-
-	t.Run("Requires parent directories to exist", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		filePath := filepath.Join(tmpDir, "subdir", "nested", "test.crt")
-
-		testData := []byte("test data")
-		err := writePEMFile(filePath, "CERTIFICATE", testData, 0644)
-		assert.Error(t, err, "writePEMFile should fail when parent directories don't exist")
-	})
-
-	t.Run("Overwrites existing file", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		filePath := filepath.Join(tmpDir, "test.crt")
-
-		// Write initial content
-		err := writePEMFile(filePath, "CERTIFICATE", []byte("initial"), 0644)
-		require.NoError(t, err)
-
-		// Overwrite with new content
-		err = writePEMFile(filePath, "CERTIFICATE", []byte("updated"), 0644)
-		require.NoError(t, err)
-
-		// Verify content was overwritten
-		content, err := os.ReadFile(filePath)
-		require.NoError(t, err)
-
-		block, _ := pem.Decode(content)
-		require.NotNil(t, block)
-		assert.Equal(t, []byte("updated"), block.Bytes)
-	})
-
-	t.Run("Returns error on invalid path", func(t *testing.T) {
-		// Use a path that cannot be created (e.g., inside a file)
-		tmpDir := t.TempDir()
-		filePath := filepath.Join(tmpDir, "notadir", "test.crt")
-
-		// Create a file instead of directory
-		err := os.WriteFile(filepath.Join(tmpDir, "notadir"), []byte("file"), 0644)
-		require.NoError(t, err)
-
-		err = writePEMFile(filePath, "CERTIFICATE", []byte("test"), 0644)
-		assert.Error(t, err)
-	})
-}
-
-func TestFileExists(t *testing.T) {
-
-	t.Run("Returns true for existing file", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		filePath := filepath.Join(tmpDir, "exists.txt")
-
-		err := os.WriteFile(filePath, []byte("content"), 0644)
-		require.NoError(t, err)
-
-		exists := fileExists(filePath)
-		assert.True(t, exists)
-	})
-
-	t.Run("Returns false for non-existent file", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		filePath := filepath.Join(tmpDir, "doesnotexist.txt")
-
-		exists := fileExists(filePath)
-		assert.False(t, exists)
-	})
-
-	t.Run("Returns true for directory", func(t *testing.T) {
-		tmpDir := t.TempDir()
-
-		exists := fileExists(tmpDir)
-		assert.True(t, exists, "fileExists returns true for directories (os.Stat succeeds)")
-	})
-
-	t.Run("Returns false for empty path", func(t *testing.T) {
-		exists := fileExists("")
-		assert.False(t, exists)
 	})
 }
 
@@ -385,8 +254,7 @@ func TestIsCurveP256(t *testing.T) {
 func TestLoadCACertificate(t *testing.T) {
 
 	t.Run("Loads valid PEM certificate", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		certPath := filepath.Join(tmpDir, "ca.crt")
+		fileSvc := newTestFileSvc(t)
 
 		// Generate a test certificate
 		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -406,13 +274,14 @@ func TestLoadCACertificate(t *testing.T) {
 		require.NoError(t, err)
 
 		certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-		err = os.WriteFile(certPath, certPEM, 0644)
+		relPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, "test-ca.crt")
+		err = fileSvc.WriteFile(context.Background(), relPath, certPEM, constants.PermFilePublic)
 		require.NoError(t, err)
 
 		// Load the certificate using the method
 		var loadedCert *x509.Certificate
-		pki := &PKIAuthority{}
-		err = pki.loadCACertificate(certPath, &loadedCert)
+		pki := &PKIAuthority{fileSvc: fileSvc}
+		err = pki.loadCACertificate(relPath, &loadedCert)
 		require.NoError(t, err)
 
 		assert.NotNil(t, loadedCert, "loaded certificate should not be nil")
@@ -421,40 +290,38 @@ func TestLoadCACertificate(t *testing.T) {
 	})
 
 	t.Run("Returns error for non-existent file", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		certPath := filepath.Join(tmpDir, "doesnotexist.crt")
+		fileSvc := newTestFileSvc(t)
 
 		var loadedCert *x509.Certificate
-		pki := &PKIAuthority{}
-		err := pki.loadCACertificate(certPath, &loadedCert)
+		pki := &PKIAuthority{fileSvc: fileSvc}
+		err := pki.loadCACertificate(filepath.Join(constants.PkiDirname, "doesnotexist.crt"), &loadedCert)
 		assert.Error(t, err)
 	})
 
 	t.Run("Returns error for invalid PEM", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		certPath := filepath.Join(tmpDir, "invalid.crt")
+		fileSvc := newTestFileSvc(t)
 
-		err := os.WriteFile(certPath, []byte("not valid PEM"), 0644)
+		relPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, "invalid.crt")
+		err := fileSvc.WriteFile(context.Background(), relPath, []byte("not valid PEM"), constants.PermFilePublic)
 		require.NoError(t, err)
 
 		var loadedCert *x509.Certificate
-		pki := &PKIAuthority{}
-		err = pki.loadCACertificate(certPath, &loadedCert)
+		pki := &PKIAuthority{fileSvc: fileSvc}
+		err = pki.loadCACertificate(relPath, &loadedCert)
 		assert.Error(t, err)
 	})
 
 	t.Run("Returns error for malformed certificate", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		certPath := filepath.Join(tmpDir, "malformed.crt")
+		fileSvc := newTestFileSvc(t)
 
-		// Write PEM with invalid DER data
 		invalidPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte("invalid DER")})
-		err := os.WriteFile(certPath, invalidPEM, 0644)
+		relPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, "malformed.crt")
+		err := fileSvc.WriteFile(context.Background(), relPath, invalidPEM, constants.PermFilePublic)
 		require.NoError(t, err)
 
 		var loadedCert *x509.Certificate
-		pki := &PKIAuthority{}
-		err = pki.loadCACertificate(certPath, &loadedCert)
+		pki := &PKIAuthority{fileSvc: fileSvc}
+		err = pki.loadCACertificate(relPath, &loadedCert)
 		assert.Error(t, err)
 	})
 }
@@ -509,28 +376,10 @@ func TestLoadCAPrivateKey(t *testing.T) {
 func TestNewPKIAuthority(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	t.Run("Uses default PKI dir when pkiDir is empty", func(t *testing.T) {
-		dataDir := t.TempDir()
-
-		pki := newPKIAuthority(dataDir, "", nil, nil, logger)
-		expectedPKIDir := filepath.Join(dataDir, constants.PkiDirname)
-		assert.Equal(t, expectedPKIDir, pki.pkiDir)
-	})
-
-	t.Run("Uses custom PKI dir when provided", func(t *testing.T) {
-		dataDir := t.TempDir()
-		customPKIDir := filepath.Join(dataDir, "custom-pki")
-
-		pki := newPKIAuthority(dataDir, customPKIDir, nil, nil, logger)
-		assert.Equal(t, customPKIDir, pki.pkiDir)
-	})
-
 	t.Run("Initializes all fields", func(t *testing.T) {
-		dataDir := t.TempDir()
-		pkiDir := filepath.Join(dataDir, "pki")
+		fileSvc := newTestFileSvc(t)
 
-		pki := newPKIAuthority(dataDir, pkiDir, nil, nil, logger)
-		assert.Equal(t, pkiDir, pki.pkiDir)
+		pki := newPKIAuthority(fileSvc, nil, nil, logger)
 		assert.Nil(t, pki.db)
 		assert.Nil(t, pki.secretManager)
 		assert.Equal(t, logger, pki.logger)
@@ -541,28 +390,27 @@ func TestNewPKIAuthority(t *testing.T) {
 
 func TestPKIAuthority_PathGetters(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	dataDir := t.TempDir()
-	pkiDir := filepath.Join(dataDir, "pki")
+	fileSvc := newTestFileSvc(t)
 
-	pki := newPKIAuthority(dataDir, pkiDir, nil, nil, logger)
+	pki := newPKIAuthority(fileSvc, nil, nil, logger)
 
 	t.Run("TrustBundlePath returns correct path", func(t *testing.T) {
-		expected := filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+		expected := fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle))
 		assert.Equal(t, expected, pki.TrustBundlePath())
 	})
 
 	t.Run("RootCAPath returns correct path", func(t *testing.T) {
-		expected := filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA)
+		expected := fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA))
 		assert.Equal(t, expected, pki.RootCAPath())
 	})
 
 	t.Run("BinariesDir returns correct path", func(t *testing.T) {
-		expected := filepath.Join(pkiDir, constants.PkiSubdirBinaries)
+		expected := fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiSubdirBinaries))
 		assert.Equal(t, expected, pki.BinariesDir())
 	})
 
 	t.Run("PKIDir returns correct path", func(t *testing.T) {
-		assert.Equal(t, pkiDir, pki.PKIDir())
+		assert.Equal(t, fileSvc.Resolve(constants.PkiDirname), pki.PKIDir())
 	})
 }
 

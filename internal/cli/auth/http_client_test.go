@@ -14,14 +14,12 @@
 package auth
 
 import (
+	"context"
 	"crypto/tls"
 	"net/http"
-	"os"
-	"path/filepath"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/cli/config"
-	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,28 +27,15 @@ import (
 
 func TestNewSecureHTTPClient_Success(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
-	trustBundlePath := filepath.Join(tmpDir, "trust-bundle.pem")
+	fileSvc, cfg := newAuthTestEnv(t)
 
-	// Generate a test CA certificate
 	caPEM, _ := testutil.GenerateTestCertificate(t, "test-ca")
-	require.NoError(t, os.WriteFile(trustBundlePath, []byte(caPEM), 0600))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), cfg.DefaultTrustBundleRelPath(), []byte(caPEM), constants.PermFilePublic))
 
-	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
-	}
-	cfg.Paths.Infra.CACertPath = trustBundlePath
-
-	client, err := NewSecureHTTPClient(cfg)
+	client, err := NewSecureHTTPClient(fileSvc, cfg)
 	require.NoError(t, err)
 	require.NotNil(t, client)
 
-	// Verify TLS config is set correctly
 	transport, ok := client.Transport.(*http.Transport)
 	require.True(t, ok)
 	require.NotNil(t, transport.TLSClientConfig)
@@ -59,17 +44,9 @@ func TestNewSecureHTTPClient_Success(t *testing.T) {
 
 func TestNewSecureHTTPClient_MissingTrustBundlePath(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
-	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
-	}
+	fileSvc, cfg := newAuthTestEnv(t)
 
-	client, err := NewSecureHTTPClient(cfg)
+	client, err := NewSecureHTTPClient(fileSvc, cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
 	assert.Error(t, err)
@@ -77,22 +54,11 @@ func TestNewSecureHTTPClient_MissingTrustBundlePath(t *testing.T) {
 
 func TestNewSecureHTTPClient_InvalidPEM(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
-	trustBundlePath := filepath.Join(tmpDir, "trust-bundle.pem")
+	fileSvc, cfg := newAuthTestEnv(t)
 
-	require.NoError(t, os.WriteFile(trustBundlePath, []byte("invalid-pem-data"), 0600))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), cfg.DefaultTrustBundleRelPath(), []byte("invalid-pem-data"), constants.PermFilePublic))
 
-	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
-	}
-	cfg.Paths.Infra.CACertPath = trustBundlePath
-
-	client, err := NewSecureHTTPClient(cfg)
+	client, err := NewSecureHTTPClient(fileSvc, cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
 	assert.Contains(t, err.Error(), "failed to parse CA certificates")

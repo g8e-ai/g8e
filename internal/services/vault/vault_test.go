@@ -421,7 +421,7 @@ func TestVaultHeaderRekey(t *testing.T) {
 
 func TestVaultHeaderSaveLoad(t *testing.T) {
 	t.Parallel()
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 
 	t.Run("save and load", func(t *testing.T) {
 		t.Parallel()
@@ -452,13 +452,13 @@ func TestVaultHeaderExists(t *testing.T) {
 
 	t.Run("returns false when not exists", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		assert.False(t, VaultHeaderExists(tempDir))
 	})
 
 	t.Run("returns true when exists", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		header, dek, _ := NewVaultHeader(testPrivateKey1)
 		defer SecureZero(dek)
 		header.Save(tempDir)
@@ -500,7 +500,7 @@ func TestVaultUnlock(t *testing.T) {
 	t.Parallel()
 	t.Run("unlock existing vault", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		dataDir := filepath.Join(tempDir, "data")
 
 		vault1 := newTestVault(t, dataDir, testPrivateKey1)
@@ -516,7 +516,7 @@ func TestVaultUnlock(t *testing.T) {
 
 	t.Run("unlock with wrong key fails", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		dataDir := filepath.Join(tempDir, "data")
 
 		vault1 := newTestVault(t, dataDir, testPrivateKey1)
@@ -531,7 +531,7 @@ func TestVaultUnlock(t *testing.T) {
 
 	t.Run("unlock non-existent vault fails", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		dataDir := filepath.Join(tempDir, "nonexistent")
 
 		vault, _ := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
@@ -546,7 +546,7 @@ func TestVaultRekey(t *testing.T) {
 	t.Parallel()
 	t.Run("rekey vault", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		dataDir := filepath.Join(tempDir, "data")
 
 		vault := newTestVault(t, dataDir, testPrivateKey1)
@@ -584,7 +584,7 @@ func TestVaultLock(t *testing.T) {
 	t.Parallel()
 	t.Run("lock clears DEK", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		dataDir := filepath.Join(tempDir, "data")
 
 		vault := newTestVault(t, dataDir, testPrivateKey1)
@@ -604,7 +604,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 	t.Parallel()
 	t.Run("encrypt and decrypt", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		v := newTestVault(t, filepath.Join(tempDir, "data"), testPrivateKey1)
 		defer v.Close()
 
@@ -622,7 +622,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 
 	t.Run("encrypt empty data", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		v := newTestVault(t, filepath.Join(tempDir, "data"), testPrivateKey1)
 		defer v.Close()
 
@@ -638,7 +638,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 
 	t.Run("large data", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		v := newTestVault(t, filepath.Join(tempDir, "data"), testPrivateKey1)
 		defer v.Close()
 
@@ -654,7 +654,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 
 	t.Run("decrypt ciphertext too short", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		v := newTestVault(t, filepath.Join(tempDir, "data"), testPrivateKey1)
 		defer v.Close()
 
@@ -664,7 +664,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 
 	t.Run("encrypt fails when locked", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		v := newTestVault(t, filepath.Join(tempDir, "data"), testPrivateKey1)
 		defer v.Close()
 
@@ -675,7 +675,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 
 	t.Run("decrypt fails when locked", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		v := newTestVault(t, filepath.Join(tempDir, "data"), testPrivateKey1)
 		defer v.Close()
 
@@ -687,7 +687,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 
 func TestVaultVerifyIntegrity(t *testing.T) {
 	t.Parallel()
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	dataDir := filepath.Join(tempDir, "data")
 
 	vault := newTestVault(t, dataDir, testPrivateKey1)
@@ -716,7 +716,7 @@ func TestVaultReset(t *testing.T) {
 	t.Parallel()
 	t.Run("reset requires confirmation", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		dataDir := filepath.Join(tempDir, "data")
 
 		vault := newTestVault(t, dataDir, testPrivateKey1)
@@ -728,7 +728,7 @@ func TestVaultReset(t *testing.T) {
 
 	t.Run("reset destroys vault", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		dataDir := filepath.Join(tempDir, "data")
 
 		vault := newTestVault(t, dataDir, testPrivateKey1)
@@ -743,7 +743,7 @@ func TestVaultReset(t *testing.T) {
 
 func TestVaultFullLifecycle(t *testing.T) {
 	t.Parallel()
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	dataDir := filepath.Join(tempDir, "data")
 
 	vault1 := newTestVault(t, dataDir, testPrivateKey1)
@@ -801,7 +801,7 @@ func TestNewVault(t *testing.T) {
 
 	t.Run("nil logger uses default", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		v, err := NewVault(&VaultConfig{DataDir: tempDir})
 		require.NoError(t, err)
 		defer v.Close()
@@ -813,7 +813,7 @@ func TestVaultUnlockAlreadyOpen(t *testing.T) {
 	t.Parallel()
 	t.Run("unlock already unlocked vault fails", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		dataDir := filepath.Join(tempDir, "data")
 
 		v := newTestVault(t, dataDir, testPrivateKey1)
@@ -828,7 +828,7 @@ func TestVaultGetDataDir(t *testing.T) {
 	t.Parallel()
 	t.Run("returns configured data dir", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		dataDir := filepath.Join(tempDir, "data")
 
 		v := newTestVault(t, dataDir, testPrivateKey1)
@@ -854,7 +854,7 @@ func TestDeleteVaultHeader(t *testing.T) {
 	t.Parallel()
 	t.Run("deletes existing header", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		header, dek, err := NewVaultHeader(testPrivateKey1)
 		require.NoError(t, err)
@@ -869,7 +869,7 @@ func TestDeleteVaultHeader(t *testing.T) {
 
 	t.Run("delete non-existent is no-op", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		err := DeleteVaultHeader(filepath.Join(tempDir, "nonexistent"))
 		require.NoError(t, err)
 	})
@@ -879,7 +879,7 @@ func TestLoadVaultHeaderCorrupted(t *testing.T) {
 	t.Parallel()
 	t.Run("corrupted JSON returns error", func(t *testing.T) {
 		t.Parallel()
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		headerPath := filepath.Join(tempDir, constants.VaultHeaderFilename)
 
 		require.NoError(t, os.WriteFile(headerPath, []byte("not valid json {{{"), 0600))
@@ -891,7 +891,7 @@ func TestLoadVaultHeaderCorrupted(t *testing.T) {
 
 func TestVaultConcurrentAccess(t *testing.T) {
 	t.Parallel()
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	dataDir := filepath.Join(tempDir, "data")
 
 	v := newTestVault(t, dataDir, testPrivateKey1)

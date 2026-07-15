@@ -4,8 +4,8 @@ title: g8e Protocol Library
 
 # g8e Protocol Library
 
-Last Updated: 2026-07-13
-Version: v1.5.0
+Last Updated: 2026-07-14
+Version: v1.5.1
 
 The g8e Protocol Library is the canonical wire contract for all mutations in the g8e zero-trust execution platform. It provides protobuf schema definitions, JSON constant registries, JSON model schemas, Pydantic models, dynamic enum generation, SPIFFE workload identity helpers, and example programs for building g8e-compatible clients and services.
 
@@ -105,7 +105,7 @@ The `workload_identity.go` file provides SPIFFE workload identity generation and
 - **Hub**: `spiffe://g8e.local/hub/operator-listen`
 - **GatewayPeer**: `spiffe://g8e.local/gateway/<gateway_id>`
 
-Each identity type provides `SPIFFEID` and `SPIFFEURL` generation methods and `Matches*` validation methods. The `MatchesCLISessionOnly` method validates a CLI identity by session ID only, prior to loading user context. Extraction methods include `ExtractCLISessionID`, `ExtractUserID`, `ExtractUserIDFromUserSAN`, `ExtractOperatorSessionID`, and `ExtractGatewayID`.
+Each identity type provides `SPIFFEID` and `SPIFFEURL` generation methods. Validation methods include `MatchesOperator`, `MatchesCLI`, `MatchesCLISessionOnly`, `MatchesApp`, `MatchesHub`, and `MatchesGatewayPeer`. The `MatchesCLISessionOnly` method validates a CLI identity by session ID only, prior to loading user context. Extraction methods include `ExtractCLISessionID`, `ExtractUserID`, `ExtractUserIDFromUserSAN`, `ExtractOperatorSessionID`, and `ExtractGatewayID`.
 
 ### Go Usage Examples
 
@@ -298,7 +298,8 @@ Example MCP server configurations are in `protocol/examples/mcp_server/`:
 
 - **`g8e_gateway_mcp_config.json`**: HTTP + mTLS MCP server configuration with literal cert paths for production deployments. Uses the unified `/mcp` endpoint on port 8443.
 - **`g8e_gateway_mcp_config_env.json`**: HTTP + mTLS MCP server configuration with env-var cert paths for containerized deployments.
-- **`g8e_stdio_mcp_config.json`**: Stdio MCP server configuration for local development with native tools and no gateway required. Compatible with Cursor, Devin, VS Code, and Claude Code MCP clients.
+- **`g8e_stdio_mcp_config.json`**: Stdio MCP server configuration for local development with native tools. Requires a running gateway; the g8e binary proxies all requests to the gateway over mTLS. Compatible with Claude Code, Codex, Cursor, Devin, VS Code, Continue, Aider, Goose, Gemini, and other MCP-compatible clients.
+- **`g8e_agent_mcp_config.json`**: Agent MCP config example demonstrating the format written by `g8e mcp agent run` to agent-specific config files. Uses the `excludeTools` schema to disable native agent tools, forcing all I/O through g8e's governed MCP tools so every action is audited at L1-L5.
 
 ---
 
@@ -396,8 +397,7 @@ The Python protocol workflow (`.github/workflows/release-python-protocol.yml`):
 4. Builds the package: `python -m build` (produces sdist + wheel in `protocol/python/dist/`)
 5. Validates with `twine check dist/*`
 6. Publishes to PyPI using trusted publishing (OIDC `id-token: write`)
-7. Creates a GitHub release with auto-generated release notes
-8. Verifies fresh PyPI install and imports on Ubuntu, macOS, and Windows
+7. Verifies fresh PyPI install and imports on Ubuntu, macOS, and Windows
 
 ### Version Sync Enforcement
 

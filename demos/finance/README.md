@@ -50,9 +50,10 @@ The demo includes 8 trading control doctrine rules covering:
 ### Build the g8e binary
 
 ```bash
-cd /home/bob/g8e
 make build
 ```
+
+This builds the g8e binary and copies it to `demos/bin/g8e`.
 
 ### Start the finance demo
 
@@ -92,11 +93,11 @@ g8e demos run finance 1
 
 The scenario runs a 5-step flow:
 
-1. **Gateway health check** — confirms the g8e gateway is live
-2. **Operator enrollment verification** — confirms mTLS certs exist
-3. **Demo scenario mTLS transaction** — submits a `finance-unauthorized-trade` scenario via the real gateway; L1 doctrine blocks the unauthorized trade execution payload at confidence >= 0.90
-4. **Audit log tail** — verifies doctrine rejection in gateway logs
-5. **Network isolation proof** — bad-actor on net_untrusted has no route to net_secure (supplementary proof)
+1. **Gateway health check**: confirms the g8e gateway is live
+2. **Operator enrollment verification**: confirms mTLS certs exist
+3. **Demo scenario mTLS transaction**: submits a `finance-unauthorized-trade` scenario via the real gateway; L1 doctrine blocks the unauthorized trade execution payload at confidence >= 0.90
+4. **Audit log tail**: verifies doctrine rejection in gateway logs
+5. **Network isolation proof**: bad-actor on net_untrusted has no route to net_secure (supplementary proof)
 
 ### Run all scenarios
 
@@ -106,11 +107,11 @@ g8e demos run finance
 
 ## Architecture Notes
 
-### Gateway Posture: Consensus
+### Gateway Posture: Doctrine
 
-The gateway runs in `--posture consensus` mode, meaning:
+The gateway runs in doctrine mode (the default), meaning:
 - L1 Doctrine validation is **enforced** (fail-closed)
-- L2 Consensus signatures are **enforced** (fail-closed, quorum ≥ 2)
+- L2 Consensus signatures are audited but not required
 - L3 Notary proofs are audited but not required
 
 ### Data Sovereignty

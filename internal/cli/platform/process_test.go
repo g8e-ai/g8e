@@ -14,7 +14,9 @@
 package platform
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -23,37 +25,57 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/services/fs"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
-func TestNewProcessManager(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	pm, err := NewProcessManager(tmpDir)
+func newPlatformTestFileSvc(t *testing.T, baseDir string) fs.RuntimeFileService {
+	t.Helper()
+	fileSvc, err := fs.NewRuntimeFileService(baseDir, slog.Default())
 	if err != nil {
-		t.Fatalf("NewProcessManager failed: %v", err)
+		t.Fatalf("failed to create fileSvc: %v", err)
 	}
+	return fileSvc
+}
 
-	if pm.projectRoot != tmpDir {
-		t.Errorf("expected projectRoot %s, got %s", tmpDir, pm.projectRoot)
-	}
+func TestNewProcessManager(t *testing.T) {
+	t.Run("returns error for nil fileSvc", func(t *testing.T) {
+		_, err := NewProcessManager(nil)
+		if err == nil {
+			t.Error("expected error for nil fileSvc")
+		}
+	})
 
-	// ProcessManager should use paths relative to projectRoot
-	expectedRuntimeDir := filepath.Join(tmpDir, constants.RuntimeDirname)
-	if pm.runtimeDir != expectedRuntimeDir {
-		t.Errorf("expected runtimeDir %s, got %s", expectedRuntimeDir, pm.runtimeDir)
-	}
+	t.Run("accepts valid fileSvc", func(t *testing.T) {
+		tmpDir := testutil.TempDir(t)
+		fileSvc := newPlatformTestFileSvc(t, tmpDir)
 
-	expectedPKIDir := filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname)
-	if pm.pkiDir != expectedPKIDir {
-		t.Errorf("expected pkiDir %s, got %s", expectedPKIDir, pm.pkiDir)
-	}
+		pm, err := NewProcessManager(fileSvc)
+		if err != nil {
+			t.Fatalf("NewProcessManager failed: %v", err)
+		}
 
+		if pm.fileSvc == nil {
+			t.Error("expected fileSvc to be set")
+		}
+
+		// Verify path resolution works
+		expectedRuntimeDir := filepath.Join(tmpDir, constants.RuntimeDirname)
+		if pm.fileSvc.Resolve("") != expectedRuntimeDir {
+			t.Errorf("expected runtime dir %s, got %s", expectedRuntimeDir, pm.fileSvc.Resolve(""))
+		}
+
+		expectedPKIDir := filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname)
+		if pm.fileSvc.Resolve(constants.PkiDirname) != expectedPKIDir {
+			t.Errorf("expected pkiDir %s, got %s", expectedPKIDir, pm.fileSvc.Resolve(constants.PkiDirname))
+		}
+	})
 }
 
 func TestEnsureDirectories(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -62,28 +84,37 @@ func TestEnsureDirectories(t *testing.T) {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
-	dirs := []string{pm.runtimeDir, pm.pkiDir, pm.secretsDir, pm.dataDir, pm.logDir, pm.pidDir}
-	for _, dir := range dirs {
-		info, err := os.Stat(dir)
+	dirs := []struct {
+		path string
+		mode os.FileMode
+	}{
+		{fileSvc.Resolve(""), constants.PermDirPrivate},
+		{fileSvc.Resolve(constants.PkiDirname), constants.PermDirStandard},
+		{fileSvc.Resolve(constants.SecretsDirname), constants.PermDirPrivate},
+		{fileSvc.Resolve(constants.DataDirname), constants.PermDirStandard},
+		{fileSvc.Resolve(constants.LogDirname), constants.PermDirStandard},
+		{fileSvc.Resolve(constants.PidDirname), constants.PermDirStandard},
+	}
+	for _, d := range dirs {
+		info, err := os.Stat(d.path)
 		if err != nil {
-			t.Errorf("directory %s does not exist: %v", dir, err)
+			t.Errorf("directory %s does not exist: %v", d.path, err)
 		}
 		if !info.IsDir() {
-			t.Errorf("%s is not a directory", dir)
+			t.Errorf("%s is not a directory", d.path)
 		}
-		// Verify permissions are 0700 on Unix systems
-		// Windows uses ACLs and doesn't support Unix-style permissions
 		if runtime.GOOS != "windows" {
-			if info.Mode().Perm() != 0700 {
-				t.Errorf("directory %s has incorrect permissions %o, expected 0700", dir, info.Mode().Perm())
+			if info.Mode().Perm() != d.mode {
+				t.Errorf("directory %s has incorrect permissions %o, expected %o", d.path, info.Mode().Perm(), d.mode)
 			}
 		}
 	}
 }
 
 func TestFindAvailablePort(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -123,8 +154,9 @@ func TestFindAvailablePort(t *testing.T) {
 }
 
 func TestReadPID(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -157,8 +189,7 @@ func TestReadPID(t *testing.T) {
 	}
 
 	// Test malformed PID file
-	malformedFile := filepath.Join(pm.pidDir, "malformed.pid")
-	if err := os.WriteFile(malformedFile, []byte("not-a-number"), 0600); err != nil {
+	if err := fileSvc.WriteFile(context.Background(), filepath.Join(constants.PidDirname, "malformed.pid"), []byte("not-a-number"), constants.PermFilePrivate); err != nil {
 		t.Fatalf("failed to write malformed PID file: %v", err)
 	}
 
@@ -169,8 +200,9 @@ func TestReadPID(t *testing.T) {
 }
 
 func TestWritePID(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -184,7 +216,7 @@ func TestWritePID(t *testing.T) {
 		t.Fatalf("writePID failed: %v", err)
 	}
 
-	pidFile := filepath.Join(pm.pidDir, "test.pid")
+	pidFile := fileSvc.Resolve(filepath.Join(constants.PidDirname, "test.pid"))
 	data, err := os.ReadFile(pidFile)
 	if err != nil {
 		t.Fatalf("failed to read PID file: %v", err)
@@ -199,22 +231,21 @@ func TestWritePID(t *testing.T) {
 		t.Errorf("expected PID %d, got %d", testPID, pid)
 	}
 
-	// Verify file permissions on Unix systems
-	// Windows uses ACLs and doesn't support Unix-style permissions
 	if runtime.GOOS != "windows" {
 		info, err := os.Stat(pidFile)
 		if err != nil {
 			t.Fatalf("failed to stat PID file: %v", err)
 		}
-		if info.Mode().Perm() != 0600 {
-			t.Errorf("PID file has incorrect permissions %o, expected 0600", info.Mode().Perm())
+		if info.Mode().Perm() != constants.PermFilePrivate {
+			t.Errorf("PID file has incorrect permissions %o, expected %o", info.Mode().Perm(), constants.PermFilePrivate)
 		}
 	}
 }
 
 func TestDeletePID(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -232,9 +263,13 @@ func TestDeletePID(t *testing.T) {
 		t.Errorf("deletePID failed: %v", err)
 	}
 
-	pidFile := filepath.Join(pm.pidDir, "test.pid")
-	if _, err := os.Stat(pidFile); !os.IsNotExist(err) {
-		t.Error("PID file should not exist after deletion")
+	pidFile := fileSvc.Resolve(filepath.Join(constants.PidDirname, "test.pid"))
+	exists, err := fileSvc.FileExists(context.Background(), filepath.Join(constants.PidDirname, "test.pid"))
+	if err != nil {
+		t.Fatalf("FileExists failed: %v", err)
+	}
+	if exists {
+		t.Errorf("PID file should not exist after deletion: %s", pidFile)
 	}
 
 	// Test deleting non-existent PID file (should not error)
@@ -244,8 +279,9 @@ func TestDeletePID(t *testing.T) {
 }
 
 func TestIsProcessRunning(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -270,8 +306,9 @@ func TestIsProcessRunning(t *testing.T) {
 }
 
 func TestOperatorStatus(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -332,8 +369,9 @@ func TestOperatorStatus(t *testing.T) {
 }
 
 func TestStopOperator(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -367,20 +405,25 @@ func TestStopOperator(t *testing.T) {
 	}
 
 	// Verify PID file was deleted
-	pidFile := filepath.Join(pm.pidDir, constants.OperatorPIDFilename)
-	if _, err := os.Stat(pidFile); !os.IsNotExist(err) {
+	pidRelPath := filepath.Join(constants.PidDirname, constants.OperatorPIDFilename)
+	exists, err := fileSvc.FileExists(context.Background(), pidRelPath)
+	if err != nil {
+		t.Fatalf("FileExists failed: %v", err)
+	}
+	if exists {
 		t.Error("PID file should be deleted after stop")
 	}
 }
 
 func TestGetLogPath(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	expectedPath := filepath.Join(pm.logDir, paths.OperatorLogPath)
+	expectedPath := filepath.Join(fileSvc.Resolve(constants.LogDirname), constants.OperatorLogFilename)
 	actualPath := pm.GetLogPath()
 
 	if actualPath != expectedPath {
@@ -389,8 +432,9 @@ func TestGetLogPath(t *testing.T) {
 }
 
 func TestGetOperatorNodeBinary(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -411,8 +455,9 @@ func TestGetOperatorNodeBinary(t *testing.T) {
 }
 
 func TestReset(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -422,14 +467,14 @@ func TestReset(t *testing.T) {
 	}
 
 	// Create some test data in dataDir
-	testFile := filepath.Join(pm.dataDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("test"), 0600); err != nil {
+	testFile := fileSvc.Resolve(filepath.Join(constants.DataDirname, "test.txt"))
+	if err := os.WriteFile(testFile, []byte("test"), constants.PermFilePrivate); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
 	// Create some test data in secretsDir
-	secretFile := filepath.Join(pm.secretsDir, "secret.txt")
-	if err := os.WriteFile(secretFile, []byte("secret"), 0600); err != nil {
+	secretFile := fileSvc.Resolve(filepath.Join(constants.SecretsDirname, "secret.txt"))
+	if err := os.WriteFile(secretFile, []byte("secret"), constants.PermFilePrivate); err != nil {
 		t.Fatalf("failed to create secret file: %v", err)
 	}
 
@@ -439,17 +484,25 @@ func TestReset(t *testing.T) {
 	}
 
 	// Verify dataDir was wiped
-	if _, err := os.Stat(testFile); !os.IsNotExist(err) {
+	dataExists, err := fileSvc.FileExists(context.Background(), filepath.Join(constants.DataDirname, "test.txt"))
+	if err != nil {
+		t.Fatalf("FileExists failed: %v", err)
+	}
+	if dataExists {
 		t.Error("dataDir should be wiped")
 	}
 
 	// Verify secretsDir was wiped
-	if _, err := os.Stat(secretFile); !os.IsNotExist(err) {
+	secretsExist, err := fileSvc.FileExists(context.Background(), filepath.Join(constants.SecretsDirname, "secret.txt"))
+	if err != nil {
+		t.Fatalf("FileExists failed: %v", err)
+	}
+	if secretsExist {
 		t.Error("secretsDir should be wiped")
 	}
 
 	// Verify directories were recreated
-	dirs := []string{pm.dataDir, pm.secretsDir}
+	dirs := []string{fileSvc.Resolve(constants.DataDirname), fileSvc.Resolve(constants.SecretsDirname)}
 	for _, dir := range dirs {
 		if _, err := os.Stat(dir); err != nil {
 			t.Errorf("directory %s should be recreated: %v", dir, err)
@@ -458,8 +511,9 @@ func TestReset(t *testing.T) {
 }
 
 func TestClean(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -469,8 +523,8 @@ func TestClean(t *testing.T) {
 	}
 
 	// Create some test data
-	testFile := filepath.Join(pm.runtimeDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("test"), 0600); err != nil {
+	testFile := fileSvc.Resolve("test.txt")
+	if err := os.WriteFile(testFile, []byte("test"), constants.PermFilePrivate); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -480,14 +534,19 @@ func TestClean(t *testing.T) {
 	}
 
 	// Verify runtimeDir was removed
-	if _, err := os.Stat(pm.runtimeDir); !os.IsNotExist(err) {
+	runtimeExists, err := fileSvc.FileExists(context.Background(), "test.txt")
+	if err != nil {
+		t.Fatalf("FileExists failed: %v", err)
+	}
+	if runtimeExists {
 		t.Error("runtimeDir should be removed")
 	}
 }
 
 func TestStopProcess(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -504,12 +563,12 @@ func TestStopProcess(t *testing.T) {
 }
 
 func TestTailLog(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	logFile := filepath.Join(tmpDir, "test.log")
 
 	// Create a log file with some content
 	content := "line1\nline2\nline3\n"
-	if err := os.WriteFile(logFile, []byte(content), 0600); err != nil {
+	if err := os.WriteFile(logFile, []byte(content), constants.PermFilePrivate); err != nil {
 		t.Fatalf("failed to create log file: %v", err)
 	}
 
@@ -529,8 +588,8 @@ func TestConstants(t *testing.T) {
 	if constants.OperatorPIDFilename == "" {
 		t.Error("constants.OperatorPIDFilename should not be empty")
 	}
-	if paths.OperatorLogPath == "" {
-		t.Error("paths.OperatorLogPath should not be empty")
+	if constants.OperatorLogFilename == "" {
+		t.Error("constants.OperatorLogFilename should not be empty")
 	}
 	if ShutdownTimeout == 0 {
 		t.Error("ShutdownTimeout should not be zero")
@@ -544,8 +603,9 @@ func TestConstants(t *testing.T) {
 }
 
 func TestProcessManagerConcurrency(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -576,8 +636,9 @@ func TestProcessManagerConcurrency(t *testing.T) {
 }
 
 func TestProcessManagerDirectoryPermissions(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -587,25 +648,36 @@ func TestProcessManagerDirectoryPermissions(t *testing.T) {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
-	// Check each directory has 0700 permissions on Unix systems
+	// Check each directory has correct permissions on Unix systems
 	// Windows uses ACLs and doesn't support Unix-style permissions
 	if runtime.GOOS != "windows" {
-		dirs := []string{pm.runtimeDir, pm.pkiDir, pm.secretsDir, pm.dataDir, pm.logDir, pm.pidDir}
-		for _, dir := range dirs {
-			info, err := os.Stat(dir)
+		dirs := []struct {
+			path string
+			mode os.FileMode
+		}{
+			{fileSvc.Resolve(""), constants.PermDirPrivate},
+			{fileSvc.Resolve(constants.PkiDirname), constants.PermDirStandard},
+			{fileSvc.Resolve(constants.SecretsDirname), constants.PermDirPrivate},
+			{fileSvc.Resolve(constants.DataDirname), constants.PermDirStandard},
+			{fileSvc.Resolve(constants.LogDirname), constants.PermDirStandard},
+			{fileSvc.Resolve(constants.PidDirname), constants.PermDirStandard},
+		}
+		for _, d := range dirs {
+			info, err := os.Stat(d.path)
 			if err != nil {
-				t.Fatalf("failed to stat directory %s: %v", dir, err)
+				t.Fatalf("failed to stat directory %s: %v", d.path, err)
 			}
-			if info.Mode().Perm() != 0700 {
-				t.Errorf("directory %s has incorrect permissions %o, expected 0700", dir, info.Mode().Perm())
+			if info.Mode().Perm() != d.mode {
+				t.Errorf("directory %s has incorrect permissions %o, expected %o", d.path, info.Mode().Perm(), d.mode)
 			}
 		}
 	}
 }
 
 func TestProcessManagerErrorHandling(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -615,8 +687,8 @@ func TestProcessManagerErrorHandling(t *testing.T) {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
-	dirAsFile := filepath.Join(pm.pidDir, "dir_as_pid")
-	if err := os.Mkdir(dirAsFile, 0700); err != nil {
+	dirAsFile := fileSvc.Resolve(filepath.Join(constants.PidDirname, "dir_as_pid"))
+	if err := os.Mkdir(dirAsFile, constants.PermDirPrivate); err != nil {
 		t.Fatalf("failed to create directory: %v", err)
 	}
 
@@ -627,8 +699,9 @@ func TestProcessManagerErrorHandling(t *testing.T) {
 }
 
 func TestWritePIDPermissions(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -637,7 +710,7 @@ func TestWritePIDPermissions(t *testing.T) {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
-	// Test that PID files are written with 0600 permissions on Unix systems
+	// Test that PID files are written with correct permissions on Unix systems
 	// Windows uses ACLs and doesn't support Unix-style permissions
 	if runtime.GOOS != "windows" {
 		testPID := 99999
@@ -645,21 +718,22 @@ func TestWritePIDPermissions(t *testing.T) {
 			t.Fatalf("writePID failed: %v", err)
 		}
 
-		pidFile := filepath.Join(pm.pidDir, "perms.pid")
+		pidFile := fileSvc.Resolve(filepath.Join(constants.PidDirname, "perms.pid"))
 		info, err := os.Stat(pidFile)
 		if err != nil {
 			t.Fatalf("failed to stat PID file: %v", err)
 		}
 
-		if info.Mode().Perm() != 0600 {
-			t.Errorf("PID file has incorrect permissions %o, expected 0600", info.Mode().Perm())
+		if info.Mode().Perm() != constants.PermFilePrivate {
+			t.Errorf("PID file has incorrect permissions %o, expected %o", info.Mode().Perm(), constants.PermFilePrivate)
 		}
 	}
 }
 
 func TestReadPIDEmptyFile(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -669,8 +743,8 @@ func TestReadPIDEmptyFile(t *testing.T) {
 	}
 
 	// Test reading an empty PID file
-	emptyFile := filepath.Join(pm.pidDir, "empty.pid")
-	if err := os.WriteFile(emptyFile, []byte(""), 0600); err != nil {
+	emptyFile := fileSvc.Resolve(filepath.Join(constants.PidDirname, "empty.pid"))
+	if err := os.WriteFile(emptyFile, []byte(""), constants.PermFilePrivate); err != nil {
 		t.Fatalf("failed to write empty PID file: %v", err)
 	}
 
@@ -681,8 +755,9 @@ func TestReadPIDEmptyFile(t *testing.T) {
 }
 
 func TestReadPIDWhitespace(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -692,8 +767,8 @@ func TestReadPIDWhitespace(t *testing.T) {
 	}
 
 	// Test reading PID file with whitespace
-	whitespaceFile := filepath.Join(pm.pidDir, "whitespace.pid")
-	if err := os.WriteFile(whitespaceFile, []byte("  12345  "), 0600); err != nil {
+	whitespaceFile := fileSvc.Resolve(filepath.Join(constants.PidDirname, "whitespace.pid"))
+	if err := os.WriteFile(whitespaceFile, []byte("  12345  "), constants.PermFilePrivate); err != nil {
 		t.Fatalf("failed to write whitespace PID file: %v", err)
 	}
 
@@ -707,8 +782,9 @@ func TestReadPIDWhitespace(t *testing.T) {
 }
 
 func TestFindAvailablePortInvalidPort(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -722,8 +798,9 @@ func TestFindAvailablePortInvalidPort(t *testing.T) {
 }
 
 func TestDeletePIDNonExistent(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -739,8 +816,9 @@ func TestDeletePIDNonExistent(t *testing.T) {
 }
 
 func TestIsProcessRunningNegativePID(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -752,8 +830,9 @@ func TestIsProcessRunningNegativePID(t *testing.T) {
 }
 
 func TestGetOperatorNodeBinaryPath(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -774,8 +853,9 @@ func TestGetOperatorNodeBinaryPath(t *testing.T) {
 }
 
 func TestCleanWithNonExistentRuntime(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -787,8 +867,9 @@ func TestCleanWithNonExistentRuntime(t *testing.T) {
 }
 
 func TestCheckPortAvailable(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -821,8 +902,9 @@ func TestCheckPortAvailable(t *testing.T) {
 }
 
 func TestWritePosture(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -836,7 +918,7 @@ func TestWritePosture(t *testing.T) {
 		t.Fatalf("writePosture failed: %v", err)
 	}
 
-	postureFile := filepath.Join(pm.pidDir, constants.OperatorPostureFilename)
+	postureFile := fileSvc.Resolve(filepath.Join(constants.PidDirname, constants.OperatorPostureFilename))
 	data, err := os.ReadFile(postureFile)
 	if err != nil {
 		t.Fatalf("failed to read posture file: %v", err)
@@ -852,15 +934,16 @@ func TestWritePosture(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to stat posture file: %v", err)
 		}
-		if info.Mode().Perm() != 0600 {
-			t.Errorf("posture file has incorrect permissions %o, expected 0600", info.Mode().Perm())
+		if info.Mode().Perm() != constants.PermFilePrivate {
+			t.Errorf("posture file has incorrect permissions %o, expected %o", info.Mode().Perm(), constants.PermFilePrivate)
 		}
 	}
 }
 
 func TestReadPosture(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -906,8 +989,9 @@ func TestReadPosture(t *testing.T) {
 }
 
 func TestDeletePosture(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
@@ -925,8 +1009,12 @@ func TestDeletePosture(t *testing.T) {
 		t.Errorf("deletePosture failed: %v", err)
 	}
 
-	postureFile := filepath.Join(pm.pidDir, constants.OperatorPostureFilename)
-	if _, err := os.Stat(postureFile); !os.IsNotExist(err) {
+	postureRelPath := filepath.Join(constants.PidDirname, constants.OperatorPostureFilename)
+	exists, err := fileSvc.FileExists(context.Background(), postureRelPath)
+	if err != nil {
+		t.Fatalf("FileExists failed: %v", err)
+	}
+	if exists {
 		t.Error("posture file should not exist after deletion")
 	}
 
@@ -937,8 +1025,9 @@ func TestDeletePosture(t *testing.T) {
 }
 
 func TestReadPosturePublic(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
+	tmpDir := testutil.TempDir(t)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	if err != nil {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}

@@ -25,6 +25,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/vault"
@@ -39,14 +40,17 @@ import (
 func setupReportingEnv(t *testing.T, seed bool) (Options, string) {
 	t.Helper()
 
-	root := t.TempDir()
-	dataDir := filepath.Join(root, "data")
+	root := testutil.TempDir(t)
 	runtimeDir := filepath.Join(root, "runtime")
 	vaultDir := filepath.Join(root, "vault")
 	ledgerDir := filepath.Join(root, "runtime", "ledger")
 	outDir := filepath.Join(root, "reports")
 
-	require.NoError(t, os.MkdirAll(dataDir, 0o755))
+	fileSvc, err := fs.NewRuntimeFileService(root, testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+	dataDir := fileSvc.Resolve(constants.DataDirname)
+
 	require.NoError(t, os.MkdirAll(runtimeDir, 0o755))
 	require.NoError(t, os.MkdirAll(vaultDir, 0o700))
 
@@ -68,14 +72,13 @@ func setupReportingEnv(t *testing.T, seed bool) (Options, string) {
 
 	// Audit store.
 	auditCfg := &storage.AuditStoreConfig{
-		DataDir:              dataDir,
 		DBPath:               constants.DbFilename,
 		MaxDBSizeMB:          100,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 60,
 		EncryptionVault:      v,
 	}
-	store, err := storage.NewSQLAuditStore(auditCfg, testutil.NewTestLogger())
+	store, err := storage.NewSQLAuditStore(auditCfg, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { store.Close() })
 
@@ -353,7 +356,7 @@ func TestRun_LockedVault_NoKeyPath(t *testing.T) {
 
 func TestRun_LockedVault_KeyFileNotFound(t *testing.T) {
 	opts, _ := setupReportingEnv(t, true)
-	opts.VaultKeyPath = filepath.Join(t.TempDir(), "nonexistent.key")
+	opts.VaultKeyPath = filepath.Join(testutil.TempDir(t), "nonexistent.key")
 
 	result, err := Run(context.Background(), opts)
 	require.NoError(t, err)
@@ -363,7 +366,7 @@ func TestRun_LockedVault_KeyFileNotFound(t *testing.T) {
 func TestRun_MissingExecutionVault(t *testing.T) {
 	opts, _ := setupReportingEnv(t, true)
 	// Use a file as parent directory so SQLite can't create the DB (cross-platform).
-	blocker := filepath.Join(t.TempDir(), "blocker")
+	blocker := filepath.Join(testutil.TempDir(t), "blocker")
 	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
 	opts.ExecutionVaultDBPath = filepath.Join(blocker, "test.db")
 
@@ -376,7 +379,7 @@ func TestRun_MissingExecutionVault(t *testing.T) {
 
 func TestRun_MissingReplayStore(t *testing.T) {
 	opts, _ := setupReportingEnv(t, true)
-	blocker := filepath.Join(t.TempDir(), "blocker")
+	blocker := filepath.Join(testutil.TempDir(t), "blocker")
 	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
 	opts.ReplayStoreDBPath = filepath.Join(blocker, "test.db")
 
@@ -388,7 +391,7 @@ func TestRun_MissingReplayStore(t *testing.T) {
 
 func TestRun_MissingSuspendedTxStore(t *testing.T) {
 	opts, _ := setupReportingEnv(t, true)
-	blocker := filepath.Join(t.TempDir(), "blocker")
+	blocker := filepath.Join(testutil.TempDir(t), "blocker")
 	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
 	opts.SuspendedTransactionDBPath = filepath.Join(blocker, "test.db")
 
@@ -414,7 +417,7 @@ func TestRun_CancelledContext(t *testing.T) {
 
 func TestRun_BadOutDir(t *testing.T) {
 	opts, _ := setupReportingEnv(t, false)
-	blocker := filepath.Join(t.TempDir(), "blocker")
+	blocker := filepath.Join(testutil.TempDir(t), "blocker")
 	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
 	opts.OutDir = filepath.Join(blocker, "cannot-create-here")
 

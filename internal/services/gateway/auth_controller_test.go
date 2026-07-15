@@ -50,29 +50,24 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
-	ks := newTestKeystore(t, secretsDir, logger)
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks)
+	dbDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
+	ks := newTestKeystore(t, fileSvc, logger)
+	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	sm := &SecretManager{
-		db:         db.db,
-		secretsDir: secretsDir,
-		logger:     logger,
-		keystore:   ks,
-	}
+	sm, err := NewSecretManagerWithKeystore(db.db, fileSvc, logger, ks)
+	require.NoError(t, err)
 
-	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
+	pki := newPKIAuthority(fileSvc, db, sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
 	resp := response.NewWriter(logger)
-	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "", "", "")
+	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, fileSvc.Resolve(constants.SecretsDirname), nil, "", "", "")
 	cliSessionSvc := NewCLISessionService(db, logger)
 	operatorSessionSvc := NewOperatorSessionService(db, logger)
 	webSessionSvc := NewWebSessionService(db, logger)
@@ -140,8 +135,9 @@ func setupTestPasskeyService(t *testing.T) (*PasskeyHandler, *UserService, stora
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	db, err := openTestDB(t, dbDir, t.TempDir(), filepath.Join(dbDir, constants.VaultDirname), logger)
+	dbDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
+	db, err := openTestDB(t, dbDir, filepath.Join(dbDir, constants.VaultDirname), fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -248,7 +244,7 @@ func TestAuthControllerReadBody(t *testing.T) {
 func TestFileActuatorKeyReader(t *testing.T) {
 	t.Run("Success - reads valid actuator key file", func(t *testing.T) {
 		// Create a temporary file with valid actuator key data
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		keyFile := filepath.Join(tmpDir, constants.ActuatorPubJSONFilename)
 		keyData := `{"key_id":"test-key-id","public_key":"test-public-key"}`
 		require.NoError(t, os.WriteFile(keyFile, []byte(keyData), 0644))
@@ -270,7 +266,7 @@ func TestFileActuatorKeyReader(t *testing.T) {
 	})
 
 	t.Run("Failure - invalid JSON in file", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		keyFile := filepath.Join(tmpDir, constants.ActuatorPubJSONFilename)
 		require.NoError(t, os.WriteFile(keyFile, []byte("{invalid json"), 0644))
 
@@ -281,7 +277,7 @@ func TestFileActuatorKeyReader(t *testing.T) {
 	})
 
 	t.Run("Success - missing required fields returns empty values", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		keyFile := filepath.Join(tmpDir, constants.ActuatorPubJSONFilename)
 		require.NoError(t, os.WriteFile(keyFile, []byte(`{"key_id":"test-id"}`), 0644))
 

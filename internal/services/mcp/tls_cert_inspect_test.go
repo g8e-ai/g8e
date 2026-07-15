@@ -137,7 +137,8 @@ func TestTLSCertInspectTool_Execute_Validation(t *testing.T) {
 }
 
 func TestTLSCertInspectTool_Execute_File(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "tls-test-*")
+	require.NoError(t, os.MkdirAll(constants.TestTempDirname, constants.PermDirStandard))
+	tmpDir, err := os.MkdirTemp(constants.TestTempDirname, "tls-test-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 

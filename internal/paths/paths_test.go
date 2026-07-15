@@ -635,6 +635,7 @@ func TestInfraDefaults_BeforeInit(t *testing.T) {
 		ServiceCertPath                  string
 		PkiRootDir                       string
 		PkiAuthoritiesDir                string
+		PkiIssuedDir                     string
 		PkiIssuedHubDir                  string
 		PkiIssuedGatewayPeerDir          string
 		PkiTrustDir                      string
@@ -661,6 +662,7 @@ func TestInfraDefaults_BeforeInit(t *testing.T) {
 		ExecutionVaultDBPath             string
 		ReplayStoreDBPath                string
 		LedgerDir                        string
+		LedgerFilesDir                   string
 		DemosDir                         string
 		DemosHealthcareDir               string
 		DemosFinanceDir                  string

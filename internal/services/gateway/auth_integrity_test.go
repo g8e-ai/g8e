@@ -38,9 +38,9 @@ import (
 func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger)
+	fileSvc := newTestFileSvc(t)
+	dbDir := testutil.TempDir(t)
+	db, err := openTestDB(t, dbDir, filepath.Join(dbDir, constants.VaultDirname), fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -103,9 +103,9 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger)
+	fileSvc := newTestFileSvc(t)
+	dbDir := testutil.TempDir(t)
+	db, err := openTestDB(t, dbDir, filepath.Join(dbDir, constants.VaultDirname), fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -136,15 +136,15 @@ func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
 func setupAuthService(t *testing.T) (*AuthService, *CanonicalDBService) {
 	t.Helper()
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger)
+	fileSvc := newTestFileSvc(t)
+	dbDir := testutil.TempDir(t)
+	db, err := openTestDB(t, dbDir, filepath.Join(dbDir, constants.VaultDirname), fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
 	responderSvc := response.NewWriter(logger)
 	personaSvc := NewPersonaService(db, logger)
-	auth := NewAuthService(db, nil, logger, nil, personaSvc, responderSvc, secretsDir, nil, "", "", "")
+	auth := NewAuthService(db, nil, logger, nil, personaSvc, responderSvc, fileSvc.Resolve(constants.SecretsDirname), nil, "", "", "")
 	return auth, db
 }
 

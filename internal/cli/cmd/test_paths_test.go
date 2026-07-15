@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,16 +26,16 @@ func minimalPathsJSON(t *testing.T) string {
 	t.Helper()
 
 	paths := config.DefaultInfraPaths()
-	paths.Infra.AppCertDir = ".g8e/app/certs"
-	paths.Infra.CACertPath = ".g8e/pki/trust/g8eg-ca-bundle.pem"
-	paths.Infra.DBPath = ".g8e/g8e.db"
-	paths.Infra.DocsDir = "docs"
-	paths.Infra.PKIDir = ".g8e/pki"
-	paths.Infra.ProtocolConstantsDir = "protocol/constants"
-	paths.Infra.ProtocolDir = "protocol"
-	paths.Infra.ProtocolModelsDir = "protocol/models"
-	paths.Infra.SecretsDir = ".g8e/secrets"
-	paths.Infra.SSHConfigPath = ".g8e/ssh/config"
+	paths.Infra.AppCertDir = constants.DefaultPKIDir + "/" + constants.PkiSubdirIssued + "/" + constants.PkiSubdirApps
+	paths.Infra.CACertPath = constants.DefaultPKIDir + "/" + constants.PkiSubdirTrust + "/" + constants.PkiFileGatewayBundle
+	paths.Infra.DBPath = constants.DefaultDataDir + "/g8e.db"
+	paths.Infra.DocsDir = constants.DocsDirname
+	paths.Infra.PKIDir = constants.DefaultPKIDir
+	paths.Infra.ProtocolConstantsDir = constants.ProtocolDirname + "/" + constants.ProtocolConstantsDirname
+	paths.Infra.ProtocolDir = constants.ProtocolDirname
+	paths.Infra.ProtocolModelsDir = constants.ProtocolDirname + "/" + constants.ProtocolModelsDirname
+	paths.Infra.SecretsDir = constants.DefaultSecretsDir
+	paths.Infra.SSHConfigPath = constants.RuntimeDirname + "/" + constants.SshConfigFilename
 
 	b, err := json.Marshal(paths)
 	require.NoError(t, err)

@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
 )
 
@@ -76,7 +77,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestNew_WithValidCerts(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	caPath := filepath.Join(tempDir, "ca.pem")
 	certPath := filepath.Join(tempDir, "client.crt")
 	keyPath := filepath.Join(tempDir, "client.key")
@@ -109,7 +110,7 @@ BnRlc3RjYTCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEAwT8kQCE6x5V8U2v7
 }
 
 func TestNew_InvalidKeyPair(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	certPath := filepath.Join(tempDir, "client.crt")
 	keyPath := filepath.Join(tempDir, "client.key")
 

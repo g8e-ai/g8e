@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -140,7 +141,7 @@ func TestFSFileChecksumTool_Execute_Success(t *testing.T) {
 	tool := &FSFileChecksumTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "test.txt")
 	testContent := []byte("hello world")
 	err := os.WriteFile(testFile, testContent, 0644)
@@ -172,7 +173,7 @@ func TestFSFileChecksumTool_Execute_EmptyFile(t *testing.T) {
 	tool := &FSFileChecksumTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "empty.txt")
 	err := os.WriteFile(testFile, []byte{}, 0644)
 	require.NoError(t, err)
@@ -197,7 +198,7 @@ func TestFSFileChecksumTool_Execute_LargeFile(t *testing.T) {
 	tool := &FSFileChecksumTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "large.bin")
 
 	// Create a 1MB file
@@ -231,7 +232,7 @@ func TestFSFileChecksumTool_Execute_BinaryFile(t *testing.T) {
 	tool := &FSFileChecksumTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "binary.bin")
 
 	// Create binary content with null bytes and other special characters
@@ -262,7 +263,7 @@ func TestFSFileChecksumTool_Execute_UnicodeContent(t *testing.T) {
 	tool := &FSFileChecksumTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "unicode.txt")
 
 	// Create content with various Unicode characters
@@ -291,7 +292,7 @@ func TestFSFileChecksumTool_Execute_DirectoryInsteadOfFile(t *testing.T) {
 	tool := &FSFileChecksumTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	req := FSFileChecksumRequest{FilePath: tmpDir}
 	args, err := json.Marshal(req)
@@ -306,7 +307,7 @@ func TestFSFileChecksumTool_Execute_AbsolutePath(t *testing.T) {
 	tool := &FSFileChecksumTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	testFile := filepath.Join(tmpDir, "absolute.txt")
 	err := os.WriteFile(testFile, []byte("test"), 0644)
 	require.NoError(t, err)
@@ -334,7 +335,7 @@ func TestFSFileChecksumTool_Execute_RelativePath(t *testing.T) {
 	ctx := context.Background()
 
 	// Change to temp directory to test relative paths
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	originalDir, err := os.Getwd()
 	require.NoError(t, err)
 	defer os.Chdir(originalDir)
@@ -364,7 +365,7 @@ func TestFSFileChecksumTool_Execute_MultipleFiles(t *testing.T) {
 	tool := &FSFileChecksumTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	files := map[string]string{
 		"file1.txt": "content1",

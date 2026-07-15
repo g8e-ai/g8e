@@ -52,6 +52,7 @@ Documentation must be useful for humans to understand how to authenticate, autho
   - **L5 Actuator**: Isolated tool dispatch (MCP/A2A) and signed receipt production.
 - Remove deprecated, obsolete, or legacy references during updates.
 - Reflect only the live repository state.
+- Document `RuntimeFileService` (`internal/services/fs`) as the canonical `.g8e/` file I/O abstraction in developer-facing docs. Reference `fileSvc.ReadFile`/`fileSvc.Stat` for test verification patterns. Document `errors.Is(err, constants.ErrNotFound)` as the replacement for `os.IsNotExist` in test assertions.
 
 ## Never
 

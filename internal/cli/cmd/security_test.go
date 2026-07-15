@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -54,7 +55,7 @@ func TestSecurityValidateCmd(t *testing.T) {
 
 func TestSecurityValidateWithTestEnvironment(t *testing.T) {
 	t.Run("validate checks PKI directory structure", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		pkiDir := filepath.Join(tmpDir, "pki")
 		secretsDir := filepath.Join(tmpDir, "secrets")
 
@@ -73,7 +74,7 @@ func TestSecurityValidateWithTestEnvironment(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "session_encryption_key"), []byte("dummy key"), 0600))
 		require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "bootstrap_digest.json"), []byte("{}"), 0644))
 
-		cmd := securityValidateCmd()
+		cmd := securityValidateCmdWithConfig(newFileSvc)
 		cmd.Flags().Set("pki-dir", pkiDir)
 		cmd.Flags().Set("secrets-dir", secretsDir)
 
@@ -87,14 +88,14 @@ func TestSecurityValidateWithTestEnvironment(t *testing.T) {
 	})
 
 	t.Run("validate fails with missing PKI directory", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		pkiDir := filepath.Join(tmpDir, "pki")
 		secretsDir := filepath.Join(tmpDir, "secrets")
 
 		// Don't create PKI directory
 		require.NoError(t, os.MkdirAll(secretsDir, 0700))
 
-		cmd := securityValidateCmd()
+		cmd := securityValidateCmdWithConfig(newFileSvc)
 		cmd.Flags().Set("pki-dir", pkiDir)
 		cmd.Flags().Set("secrets-dir", secretsDir)
 
@@ -108,14 +109,14 @@ func TestSecurityValidateWithTestEnvironment(t *testing.T) {
 	})
 
 	t.Run("validate fails with missing secrets directory", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		pkiDir := filepath.Join(tmpDir, "pki")
 		secretsDir := filepath.Join(tmpDir, "secrets")
 
 		// Create PKI but not secrets
 		require.NoError(t, os.MkdirAll(filepath.Join(pkiDir, "root"), 0755))
 
-		cmd := securityValidateCmd()
+		cmd := securityValidateCmdWithConfig(newFileSvc)
 		cmd.Flags().Set("pki-dir", pkiDir)
 		cmd.Flags().Set("secrets-dir", secretsDir)
 

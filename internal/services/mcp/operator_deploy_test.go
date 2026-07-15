@@ -21,6 +21,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -132,7 +133,7 @@ func TestOperatorDeployTool_Execute_Localhost_Success(t *testing.T) {
 	tool := &OperatorDeployTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dummyBinary := successScript(t, tmpDir, "dummy-operator")
 
 	req := OperatorDeployRequest{
@@ -162,7 +163,7 @@ func TestOperatorDeployTool_Execute_Localhost_Failure(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a dummy "operator" binary that fails
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dummyBinary := filepath.Join(tmpDir, "dummy-operator-fail")
 	content := "#!/bin/sh\necho 'failed' >&2\nexit 1"
 	err := os.WriteFile(dummyBinary, []byte(content), 0755)
@@ -241,7 +242,7 @@ func TestOperatorDeployTool_Execute_MultiHost(t *testing.T) {
 	tool := &OperatorDeployTool{}
 	ctx := context.Background()
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dummyBinary := successScript(t, tmpDir, "dummy-multi-operator")
 
 	req := OperatorDeployRequest{

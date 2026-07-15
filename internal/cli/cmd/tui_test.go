@@ -18,8 +18,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -31,6 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 // --- helpers ---
@@ -43,10 +42,11 @@ func stubTUIDeps(t *testing.T, cfg *config.Config) tuiDeps {
 		configLoader: func(string) (*config.Config, error) {
 			return cfg, nil
 		},
+		fileSvcFactory: newFileSvc,
 		checkOperatorRunning: func(*config.Config) error {
 			return nil
 		},
-		loadCredentials: func(*config.Config) (*auth.Credentials, error) {
+		loadCredentials: func(fs.RuntimeFileService, *config.Config) (*auth.Credentials, error) {
 			return &auth.Credentials{
 				OperatorSessionID: "op-sess-test",
 				UserID:            "user-test",
@@ -54,7 +54,7 @@ func stubTUIDeps(t *testing.T, cfg *config.Config) tuiDeps {
 				CLISessionID:      "cli-sess-test",
 			}, nil
 		},
-		buildMTLSClient: func(*config.Config, time.Duration) (*http.Client, error) {
+		buildMTLSClient: func(fs.RuntimeFileService, *config.Config, time.Duration) (*http.Client, error) {
 			return &http.Client{}, nil
 		},
 		tuiRun: func(ctx context.Context, opts tui.Options) error {
@@ -66,8 +66,8 @@ func stubTUIDeps(t *testing.T, cfg *config.Config) tuiDeps {
 // setupTUITestConfig creates a minimal config in a temp directory for hermetic tests.
 func setupTUITestConfig(t *testing.T) *config.Config {
 	t.Helper()
-	tmpDir := t.TempDir()
-	return setupTestConfig(t, tmpDir)
+	_, cfg := newCmdTestEnv(t)
+	return cfg
 }
 
 // newRootCmdWithVersion creates a root cobra command with the given version,
@@ -145,7 +145,7 @@ func TestTUI_CredentialLoadFailure(t *testing.T) {
 		cfg := setupTUITestConfig(t)
 		deps := stubTUIDeps(t, cfg)
 		credErr := errors.New("corrupt credentials file")
-		deps.loadCredentials = func(*config.Config) (*auth.Credentials, error) {
+		deps.loadCredentials = func(fs.RuntimeFileService, *config.Config) (*auth.Credentials, error) {
 			return nil, credErr
 		}
 		cmd := tuiCmdWithDeps(deps)
@@ -161,7 +161,7 @@ func TestTUI_NotEnrolled(t *testing.T) {
 	t.Run("returns enrollment error when credentials are nil", func(t *testing.T) {
 		cfg := setupTUITestConfig(t)
 		deps := stubTUIDeps(t, cfg)
-		deps.loadCredentials = func(*config.Config) (*auth.Credentials, error) {
+		deps.loadCredentials = func(fs.RuntimeFileService, *config.Config) (*auth.Credentials, error) {
 			return nil, nil
 		}
 		cmd := tuiCmdWithDeps(deps)
@@ -180,7 +180,7 @@ func TestTUI_BuildMTLSClientFailure(t *testing.T) {
 		cfg := setupTUITestConfig(t)
 		deps := stubTUIDeps(t, cfg)
 		tlsErr := errors.New("cert file missing")
-		deps.buildMTLSClient = func(*config.Config, time.Duration) (*http.Client, error) {
+		deps.buildMTLSClient = func(fs.RuntimeFileService, *config.Config, time.Duration) (*http.Client, error) {
 			return nil, tlsErr
 		}
 		cmd := tuiCmdWithDeps(deps)
@@ -283,11 +283,11 @@ func TestTUI_SSEURLConstruction(t *testing.T) {
 
 func TestTUI_RealConfigNoGateway(t *testing.T) {
 	t.Run("fails with gateway not reachable when using real config and no gateway", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		cfg := setupTestConfig(t, tmpDir)
+		fileSvc, cfg := newCmdTestEnv(t)
 
 		deps := tuiDeps{
 			configLoader:         func(string) (*config.Config, error) { return cfg, nil },
+			fileSvcFactory:       fileSvcFactoryFor(fileSvc),
 			checkOperatorRunning: func(*config.Config) error { return constants.ErrGatewayNotReachable },
 			loadCredentials:      auth.LoadCredentials,
 			buildMTLSClient:      auth.BuildMTLSClient,
@@ -306,15 +306,16 @@ func TestTUI_RealConfigNoGateway(t *testing.T) {
 
 func TestTUI_RealCredentialsNotEnrolled(t *testing.T) {
 	t.Run("fails with not enrolled when credentials file does not exist", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		cfg := setupTestConfig(t, tmpDir)
+		fileSvc, cfg := newCmdTestEnv(t)
 
 		// Ensure no credentials file exists
-		_, err := os.Stat(cfg.CredentialsFile())
-		require.True(t, os.IsNotExist(err))
+		exists, err := fileSvc.FileExists(context.Background(), mustRel(t, fileSvc, cfg.CredentialsFile()))
+		require.NoError(t, err)
+		require.False(t, exists)
 
 		deps := tuiDeps{
 			configLoader:         func(string) (*config.Config, error) { return cfg, nil },
+			fileSvcFactory:       fileSvcFactoryFor(fileSvc),
 			checkOperatorRunning: func(*config.Config) error { return nil },
 			loadCredentials:      auth.LoadCredentials,
 			buildMTLSClient:      auth.BuildMTLSClient,
@@ -333,15 +334,13 @@ func TestTUI_RealCredentialsNotEnrolled(t *testing.T) {
 
 func TestTUI_RealCredentialsCorruptJSON(t *testing.T) {
 	t.Run("fails with ErrFailedToLoadCredentials when credentials file is corrupt", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		cfg := setupTestConfig(t, tmpDir)
+		fileSvc, cfg := newCmdTestEnv(t)
 
-		credsDir := filepath.Dir(cfg.CredentialsFile())
-		require.NoError(t, os.MkdirAll(credsDir, 0700))
-		require.NoError(t, os.WriteFile(cfg.CredentialsFile(), []byte("{invalid json"), 0600))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CredentialsFile()), []byte("{invalid json"), constants.PermFilePrivate))
 
 		deps := tuiDeps{
 			configLoader:         func(string) (*config.Config, error) { return cfg, nil },
+			fileSvcFactory:       fileSvcFactoryFor(fileSvc),
 			checkOperatorRunning: func(*config.Config) error { return nil },
 			loadCredentials:      auth.LoadCredentials,
 			buildMTLSClient:      auth.BuildMTLSClient,

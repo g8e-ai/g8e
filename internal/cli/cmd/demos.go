@@ -392,7 +392,7 @@ func runDemosExport(cmd *cobra.Command, args []string) error {
 	if len(args) == 1 {
 		outDir = args[0]
 	}
-	if err := os.MkdirAll(outDir, 0o755); err != nil {
+	if err := os.MkdirAll(outDir, constants.PermDirStandard); err != nil {
 		return fmt.Errorf("creating output directory %s: %w", outDir, err)
 	}
 

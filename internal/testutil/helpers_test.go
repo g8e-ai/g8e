@@ -53,7 +53,7 @@ func TestNewTestConfig(t *testing.T) {
 			name: "WorkDirExists",
 			test: func(t *testing.T, cfg *config.Config) {
 				_, err := os.Stat(cfg.WorkDir)
-				require.NoError(t, err, "WorkDir from t.TempDir() must exist")
+				require.NoError(t, err, "WorkDir from TempDir(t) must exist")
 			},
 		},
 		{
@@ -205,7 +205,7 @@ func TestGetTestOperatorDirectURL(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestTempFile_RegistersCleanup(t *testing.T) {
-	dir := t.TempDir()
+	dir := TempDir(t)
 	path := dir + "/tempfile_test_artifact"
 
 	// Create the file so the cleanup has something to remove.

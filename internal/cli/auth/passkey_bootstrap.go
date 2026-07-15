@@ -28,6 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/cli/sse"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 // passkeyEnrollTimeout is the maximum time to wait for passkey registration
@@ -39,9 +40,9 @@ const passkeyEnrollTimeout = 5 * time.Minute
 // session. When the browser completes WebAuthn registration, the gateway emits
 // a passkey.registered event that the CLI receives in real-time, replacing the
 // legacy polling approach.
-func RegisterPasskeyViaBrowser(cfg *config.Config, userID, cliSessionID string) error {
+func RegisterPasskeyViaBrowser(fileSvc fs.RuntimeFileService, cfg *config.Config, userID, cliSessionID string) error {
 	// Generate a one-time enrollment token from the gateway
-	token, err := generateEnrollmentToken(cfg, userID, cliSessionID)
+	token, err := generateEnrollmentToken(fileSvc, cfg, userID, cliSessionID)
 	if err != nil {
 		return fmt.Errorf("failed to generate enrollment token: %w", err)
 	}
@@ -52,7 +53,7 @@ func RegisterPasskeyViaBrowser(cfg *config.Config, userID, cliSessionID string) 
 
 	_ = platform.OpenBrowser(consoleURL)
 
-	mtlsClient, err := BuildMTLSClient(cfg, 0)
+	mtlsClient, err := BuildMTLSClient(fileSvc, cfg, 0)
 	if err != nil {
 		return err
 	}
@@ -96,8 +97,8 @@ func RegisterPasskeyViaBrowser(cfg *config.Config, userID, cliSessionID string) 
 
 // generateEnrollmentToken calls the gateway's enrollment token generation endpoint
 // to create a one-time token for secure passkey registration.
-func generateEnrollmentToken(cfg *config.Config, userID, cliSessionID string) (string, error) {
-	mtlsClient, err := BuildMTLSClient(cfg, httpTimeout)
+func generateEnrollmentToken(fileSvc fs.RuntimeFileService, cfg *config.Config, userID, cliSessionID string) (string, error) {
+	mtlsClient, err := BuildMTLSClient(fileSvc, cfg, httpTimeout)
 	if err != nil {
 		return "", err
 	}
@@ -138,10 +139,10 @@ func generateEnrollmentToken(cfg *config.Config, userID, cliSessionID string) (s
 // querying the gateway's mTLS passkey status endpoint. The cliSessionID
 // parameter is sent as the X-G8E-CLI-Session-ID header so the gateway's
 // mTLS auth middleware can route the request to handleCLIAuth.
-func VerifyPasskeyRegistration(cfg *config.Config, userID, cliSessionID string) (bool, error) {
+func VerifyPasskeyRegistration(fileSvc fs.RuntimeFileService, cfg *config.Config, userID, cliSessionID string) (bool, error) {
 	statusURL := fmt.Sprintf("%s%s", cfg.OperatorPublicURL(), constants.APIPaths.AuthPasskeysCLIStatus)
 
-	httpClient, err := BuildMTLSClient(cfg, httpTimeout)
+	httpClient, err := BuildMTLSClient(fileSvc, cfg, httpTimeout)
 	if err != nil {
 		return false, err
 	}

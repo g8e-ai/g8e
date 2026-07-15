@@ -51,7 +51,7 @@ func TestNewPruner_RespectsPositiveInterval(t *testing.T) {
 
 func TestPruner_InvokesFnOnTick(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "pruner.db"))
 
@@ -94,7 +94,7 @@ func TestPruner_Stop_BeforeStart_DoesNotPanic(t *testing.T) {
 
 func TestPruner_Stop_HaltsInvocations(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "halt.db"))
 
@@ -125,7 +125,7 @@ func TestPruner_Stop_HaltsInvocations(t *testing.T) {
 
 func TestPruner_FnReceivesCorrectLogger(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "logarg.db"))
 
@@ -160,7 +160,7 @@ func TestPruner_FnReceivesCorrectLogger(t *testing.T) {
 
 func TestPruner_StartAfterStop_DoesNotInvokeFn(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "postStop.db"))
 
@@ -194,7 +194,7 @@ func TestPruner_StartAfterStop_DoesNotInvokeFn(t *testing.T) {
 
 func TestPruner_FnReceivesCorrectDB(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "dbarg.db"))
 

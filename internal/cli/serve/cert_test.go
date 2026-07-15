@@ -42,7 +42,9 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/services/fs"
+	govsvc "github.com/g8e-ai/g8e/internal/services/governance"
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -77,8 +79,8 @@ func generateTestCert(t *testing.T, notBefore, notAfter time.Time) string {
 		Bytes: derBytes,
 	})
 
-	path := filepath.Join(t.TempDir(), constants.TestCertCrtFilename)
-	require.NoError(t, os.WriteFile(path, certPEM, 0600))
+	path := filepath.Join(testutil.TempDir(t), constants.TestCertCrtFilename)
+	require.NoError(t, os.WriteFile(path, certPEM, constants.PermFilePrivate))
 	return path
 }
 
@@ -136,17 +138,17 @@ func TestParseCertPEM(t *testing.T) {
 	keyDER, err := x509.MarshalECPrivateKey(privKey)
 	require.NoError(t, err)
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
-	keyPath := filepath.Join(t.TempDir(), constants.TestECPrivateKeyFilename)
-	require.NoError(t, os.WriteFile(keyPath, keyPEM, 0600))
+	keyPath := filepath.Join(testutil.TempDir(t), constants.TestECPrivateKeyFilename)
+	require.NoError(t, os.WriteFile(keyPath, keyPEM, constants.PermFilePrivate))
 
 	corruptPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte("corrupted cert data")})
-	corruptPath := filepath.Join(t.TempDir(), constants.TestCorruptCrtFilename)
-	require.NoError(t, os.WriteFile(corruptPath, corruptPEM, 0600))
+	corruptPath := filepath.Join(testutil.TempDir(t), constants.TestCorruptCrtFilename)
+	require.NoError(t, os.WriteFile(corruptPath, corruptPEM, constants.PermFilePrivate))
 
-	invalidPath := filepath.Join(t.TempDir(), constants.TestInvalidPEMFilename)
-	require.NoError(t, os.WriteFile(invalidPath, []byte("not a PEM file"), 0600))
+	invalidPath := filepath.Join(testutil.TempDir(t), constants.TestInvalidPEMFilename)
+	require.NoError(t, os.WriteFile(invalidPath, []byte("not a PEM file"), constants.PermFilePrivate))
 
-	nonExistentPath := filepath.Join(t.TempDir(), constants.TestNonExistentCrtFilename)
+	nonExistentPath := filepath.Join(testutil.TempDir(t), constants.TestNonExistentCrtFilename)
 
 	tests := []struct {
 		name     string
@@ -310,79 +312,76 @@ func TestGenerateCSR(t *testing.T) {
 
 func TestLoadTrustBundle(t *testing.T) {
 	caPEM := generateTestCertPEM(t, time.Now(), time.Now().Add(365*24*time.Hour))
+	caBundleRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
 
 	tests := []struct {
 		name         string
-		setup        func(t *testing.T) (explicitPath string, initPaths bool)
+		setup        func(t *testing.T) (explicitPath string, fileSvc fs.RuntimeFileService)
 		wantLoaded   bool
 		wantRawCA    []byte
 		wantRawCANil bool
 	}{
 		{
 			name: "ExplicitPath",
-			setup: func(t *testing.T) (string, bool) {
-				require.NoError(t, paths.InitWithBase(t.TempDir()))
-				explicitPath := filepath.Join(t.TempDir(), constants.TestCABundleFilename)
-				require.NoError(t, os.WriteFile(explicitPath, caPEM, 0644))
-				return explicitPath, true
+			setup: func(t *testing.T) (string, fs.RuntimeFileService) {
+				fileSvc := newTestFileSvc(t)
+				explicitPath := filepath.Join(testutil.TempDir(t), constants.TestCABundleFilename)
+				require.NoError(t, os.WriteFile(explicitPath, caPEM, constants.PermFilePublic))
+				return explicitPath, fileSvc
 			},
 			wantLoaded: true,
 			wantRawCA:  caPEM,
 		},
 		{
 			name: "DefaultPath",
-			setup: func(t *testing.T) (string, bool) {
-				require.NoError(t, paths.InitWithBase(t.TempDir()))
-				require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.CaCertPath), 0700))
-				require.NoError(t, os.WriteFile(paths.Infra.CaCertPath, caPEM, 0644))
-				return "", true
+			setup: func(t *testing.T) (string, fs.RuntimeFileService) {
+				fileSvc := newTestFileSvc(t)
+				require.NoError(t, fileSvc.WriteFile(context.Background(), caBundleRel, caPEM, constants.PermFilePublic))
+				return "", fileSvc
 			},
 			wantLoaded: true,
 			wantRawCA:  caPEM,
 		},
 		{
 			name: "NoFilesFound",
-			setup: func(t *testing.T) (string, bool) {
-				require.NoError(t, paths.InitWithBase(t.TempDir()))
-				return "", true
+			setup: func(t *testing.T) (string, fs.RuntimeFileService) {
+				fileSvc := newTestFileSvc(t)
+				return "", fileSvc
 			},
 			wantLoaded:   false,
 			wantRawCANil: true,
 		},
 		{
 			name: "ExplicitPathInvalidPEM",
-			setup: func(t *testing.T) (string, bool) {
-				require.NoError(t, paths.InitWithBase(t.TempDir()))
-				invalidPath := filepath.Join(t.TempDir(), constants.TestInvalidPEMFilename)
-				require.NoError(t, os.WriteFile(invalidPath, []byte("not a PEM"), 0644))
-				return invalidPath, true
+			setup: func(t *testing.T) (string, fs.RuntimeFileService) {
+				fileSvc := newTestFileSvc(t)
+				invalidPath := filepath.Join(testutil.TempDir(t), constants.TestInvalidPEMFilename)
+				require.NoError(t, os.WriteFile(invalidPath, []byte("not a PEM"), constants.PermFilePublic))
+				return invalidPath, fileSvc
 			},
 			wantLoaded:   false,
 			wantRawCANil: true,
 		},
 		{
 			name: "ExplicitPathFallsBackToDefault",
-			setup: func(t *testing.T) (string, bool) {
-				require.NoError(t, paths.InitWithBase(t.TempDir()))
-				require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.CaCertPath), 0700))
-				require.NoError(t, os.WriteFile(paths.Infra.CaCertPath, caPEM, 0644))
-				return filepath.Join(t.TempDir(), constants.TestDoesNotExistPEMFilename), true
+			setup: func(t *testing.T) (string, fs.RuntimeFileService) {
+				fileSvc := newTestFileSvc(t)
+				require.NoError(t, fileSvc.WriteFile(context.Background(), caBundleRel, caPEM, constants.PermFilePublic))
+				return filepath.Join(testutil.TempDir(t), constants.TestDoesNotExistPEMFilename), fileSvc
 			},
 			wantLoaded: true,
 			wantRawCA:  caPEM,
 		},
 		{
 			name: "ExplicitPathPriority",
-			setup: func(t *testing.T) (string, bool) {
-				tmpDir := t.TempDir()
-				require.NoError(t, paths.InitWithBase(tmpDir))
+			setup: func(t *testing.T) (string, fs.RuntimeFileService) {
+				fileSvc := newTestFileSvc(t)
 				explicitPEM := generateTestCertPEM(t, time.Now(), time.Now().Add(365*24*time.Hour))
-				explicitPath := filepath.Join(tmpDir, constants.TestExplicitPEMFilename)
-				require.NoError(t, os.WriteFile(explicitPath, explicitPEM, 0644))
+				explicitPath := filepath.Join(testutil.TempDir(t), constants.TestExplicitPEMFilename)
+				require.NoError(t, os.WriteFile(explicitPath, explicitPEM, constants.PermFilePublic))
 				defaultPEM := generateTestCertPEM(t, time.Now(), time.Now().Add(365*24*time.Hour))
-				require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.CaCertPath), 0700))
-				require.NoError(t, os.WriteFile(paths.Infra.CaCertPath, defaultPEM, 0644))
-				return explicitPath, true
+				require.NoError(t, fileSvc.WriteFile(context.Background(), caBundleRel, defaultPEM, constants.PermFilePublic))
+				return explicitPath, fileSvc
 			},
 			wantLoaded: true,
 		},
@@ -390,12 +389,12 @@ func TestLoadTrustBundle(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			explicitPath, _ := tt.setup(t)
+			explicitPath, fileSvc := tt.setup(t)
 
 			ts := certs.NewTrustStore(nil)
 			logger := testLogger()
 
-			loaded := LoadTrustBundle(logger, explicitPath, ts)
+			loaded := LoadTrustBundle(context.Background(), logger, explicitPath, fileSvc, ts)
 			assert.Equal(t, tt.wantLoaded, loaded)
 
 			if tt.wantRawCANil {
@@ -469,17 +468,16 @@ func TestLogCertBundle(t *testing.T) {
 
 func TestExportActuatorPublicKey(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
+		fileSvc := newTestFileSvc(t)
 		pubKey, _, err := ed25519.GenerateKey(rand.Reader)
 		require.NoError(t, err)
-
-		pkiDir := filepath.Join(t.TempDir(), constants.TestPkiDirname)
 		logger := testLogger()
 
-		err = ExportActuatorPublicKey(pkiDir, pubKey, "test-key-id", logger)
+		err = govsvc.ExportActuatorPublicKey(fileSvc, pubKey, "test-key-id", logger)
 		require.NoError(t, err)
 
-		pemPath := filepath.Join(pkiDir, constants.ActuatorPubPEMFilename)
-		pemData, err := os.ReadFile(pemPath)
+		pemRel := filepath.Join(constants.PkiDirname, constants.ActuatorPubPEMFilename)
+		pemData, err := fileSvc.ReadFile(context.Background(), pemRel)
 		require.NoError(t, err)
 
 		block, _ := pem.Decode(pemData)
@@ -487,8 +485,8 @@ func TestExportActuatorPublicKey(t *testing.T) {
 		assert.Equal(t, "PUBLIC KEY", block.Type)
 		assert.Equal(t, []byte(pubKey), block.Bytes)
 
-		jsonPath := filepath.Join(pkiDir, constants.ActuatorPubJSONFilename)
-		jsonData, err := os.ReadFile(jsonPath)
+		jsonRel := filepath.Join(constants.PkiDirname, constants.ActuatorPubJSONFilename)
+		jsonData, err := fileSvc.ReadFile(context.Background(), jsonRel)
 		require.NoError(t, err)
 
 		var parsed models.ActuatorPublicKeyExport
@@ -498,44 +496,34 @@ func TestExportActuatorPublicKey(t *testing.T) {
 		assert.Equal(t, "ed25519", parsed.Algorithm)
 	})
 
-	t.Run("EmptyPKIDir", func(t *testing.T) {
-		pubKey, _, err := ed25519.GenerateKey(rand.Reader)
-		require.NoError(t, err)
-
-		err = ExportActuatorPublicKey("", pubKey, "key-id", testLogger())
-		require.Error(t, err)
-		assert.True(t, errors.Is(err, constants.ErrPKIDirRequired))
-	})
-
 	t.Run("NilLogger", func(t *testing.T) {
+		fileSvc := newTestFileSvc(t)
 		pubKey, _, err := ed25519.GenerateKey(rand.Reader)
 		require.NoError(t, err)
 
-		pkiDir := filepath.Join(t.TempDir(), constants.TestPkiDirname)
-
-		err = ExportActuatorPublicKey(pkiDir, pubKey, "key-id", nil)
+		err = govsvc.ExportActuatorPublicKey(fileSvc, pubKey, "key-id", nil)
 		require.NoError(t, err)
 
-		pemPath := filepath.Join(pkiDir, constants.ActuatorPubPEMFilename)
-		_, err = os.ReadFile(pemPath)
+		pemRel := filepath.Join(constants.PkiDirname, constants.ActuatorPubPEMFilename)
+		_, err = fileSvc.ReadFile(context.Background(), pemRel)
 		require.NoError(t, err, "PEM file should be created even with nil logger")
 	})
 
 	t.Run("OverwriteExisting", func(t *testing.T) {
+		fileSvc := newTestFileSvc(t)
 		pubKey1, _, err := ed25519.GenerateKey(rand.Reader)
 		require.NoError(t, err)
 
 		pubKey2, _, err := ed25519.GenerateKey(rand.Reader)
 		require.NoError(t, err)
 
-		pkiDir := filepath.Join(t.TempDir(), constants.TestPkiDirname)
 		logger := testLogger()
 
-		require.NoError(t, ExportActuatorPublicKey(pkiDir, pubKey1, "key-1", logger))
-		require.NoError(t, ExportActuatorPublicKey(pkiDir, pubKey2, "key-2", logger))
+		require.NoError(t, govsvc.ExportActuatorPublicKey(fileSvc, pubKey1, "key-1", logger))
+		require.NoError(t, govsvc.ExportActuatorPublicKey(fileSvc, pubKey2, "key-2", logger))
 
-		jsonPath := filepath.Join(pkiDir, constants.ActuatorPubJSONFilename)
-		jsonData, err := os.ReadFile(jsonPath)
+		jsonRel := filepath.Join(constants.PkiDirname, constants.ActuatorPubJSONFilename)
+		jsonData, err := fileSvc.ReadFile(context.Background(), jsonRel)
 		require.NoError(t, err)
 
 		var parsed models.ActuatorPublicKeyExport
@@ -544,20 +532,21 @@ func TestExportActuatorPublicKey(t *testing.T) {
 		assert.Equal(t, hex.EncodeToString(pubKey2), parsed.PublicKey)
 	})
 
-	t.Run("CreatesNestedDir", func(t *testing.T) {
+	t.Run("FilePermissions", func(t *testing.T) {
+		fileSvc := newTestFileSvc(t)
 		pubKey, _, err := ed25519.GenerateKey(rand.Reader)
 		require.NoError(t, err)
 
-		pkiDir := filepath.Join(t.TempDir(), constants.TestNestedDirname, constants.TestDeepDirname, constants.TestPkiDirname)
 		logger := testLogger()
 
-		err = ExportActuatorPublicKey(pkiDir, pubKey, "key-id", logger)
+		err = govsvc.ExportActuatorPublicKey(fileSvc, pubKey, "key-id", logger)
 		require.NoError(t, err)
 
-		info, err := os.Stat(filepath.Join(pkiDir, constants.ActuatorPubPEMFilename))
+		pemRel := filepath.Join(constants.PkiDirname, constants.ActuatorPubPEMFilename)
+		info, err := fileSvc.Stat(context.Background(), pemRel)
 		require.NoError(t, err)
 		if runtime.GOOS != "windows" {
-			assert.True(t, info.Mode().Perm() == 0600)
+			assert.True(t, info.Mode().Perm() == constants.PermFilePrivate)
 		}
 	})
 }
@@ -582,7 +571,7 @@ func TestCheckCertExpiry(t *testing.T) {
 	})
 
 	t.Run("NonExistentFile_ReturnsError", func(t *testing.T) {
-		expiring, err := checkCertExpiry(filepath.Join(t.TempDir(), constants.TestNonExistentCrtFilename))
+		expiring, err := checkCertExpiry(filepath.Join(testutil.TempDir(t), constants.TestNonExistentCrtFilename))
 		require.Error(t, err)
 		assert.False(t, expiring)
 		assert.True(t, errors.Is(err, constants.ErrCertReadFailed))
@@ -652,66 +641,74 @@ func TestBuildMTLSClient(t *testing.T) {
 
 func TestSaveRenewedCerts(t *testing.T) {
 	t.Run("Success_WritesKeyAndCertFiles", func(t *testing.T) {
-		dir := t.TempDir()
-		certFile := filepath.Join(dir, constants.TestClientCrtFilename)
-		keyFile := filepath.Join(dir, constants.TestClientKeyFilename)
+		fileSvc := newTestFileSvc(t)
+		certFile := fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.TestClientCrtFilename))
+		keyFile := fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.TestClientKeyFilename))
 
 		privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		require.NoError(t, err)
 
 		certContent := "fake-cert-pem-content"
-		keyPEM, err := saveRenewedCerts(certFile, keyFile, certContent, privKey)
+		keyPEM, err := saveRenewedCerts(context.Background(), fileSvc, certFile, keyFile, certContent, privKey)
 		require.NoError(t, err)
 		assert.NotEmpty(t, keyPEM)
 		assert.Contains(t, string(keyPEM), "EC PRIVATE KEY")
 
-		savedCert, err := os.ReadFile(certFile)
+		certRel, err := fileSvc.Rel(certFile)
+		require.NoError(t, err)
+		savedCert, err := fileSvc.ReadFile(context.Background(), certRel)
 		require.NoError(t, err)
 		assert.Equal(t, certContent, string(savedCert))
 
-		savedKey, err := os.ReadFile(keyFile)
+		keyRel, err := fileSvc.Rel(keyFile)
+		require.NoError(t, err)
+		savedKey, err := fileSvc.ReadFile(context.Background(), keyRel)
 		require.NoError(t, err)
 		assert.Contains(t, string(savedKey), "EC PRIVATE KEY")
 	})
 
 	t.Run("CertChainAppendedToCertContent", func(t *testing.T) {
-		dir := t.TempDir()
-		certFile := filepath.Join(dir, constants.TestClientCrtFilename)
-		keyFile := filepath.Join(dir, constants.TestClientKeyFilename)
+		fileSvc := newTestFileSvc(t)
+		certFile := fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.TestClientCrtFilename))
+		keyFile := fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.TestClientKeyFilename))
 
 		privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		require.NoError(t, err)
 
 		certContent := "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\nintermediate\n-----END CERTIFICATE-----"
-		_, err = saveRenewedCerts(certFile, keyFile, certContent, privKey)
+		_, err = saveRenewedCerts(context.Background(), fileSvc, certFile, keyFile, certContent, privKey)
 		require.NoError(t, err)
 
-		savedCert, err := os.ReadFile(certFile)
+		certRel, err := fileSvc.Rel(certFile)
+		require.NoError(t, err)
+		savedCert, err := fileSvc.ReadFile(context.Background(), certRel)
 		require.NoError(t, err)
 		assert.Contains(t, string(savedCert), "leaf")
 		assert.Contains(t, string(savedCert), "intermediate")
 	})
 
-	t.Run("NonExistentKeyDir_ReturnsKeyWriteFailed", func(t *testing.T) {
-		certFile := filepath.Join(t.TempDir(), constants.TestClientCrtFilename)
-		keyFile := filepath.Join(t.TempDir(), constants.TestNestedDirname, constants.TestClientKeyFilename)
+	t.Run("KeyPathOutsideRuntime_ReturnsKeyWriteFailed", func(t *testing.T) {
+		fileSvc := newTestFileSvc(t)
+		certFile := fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.TestClientCrtFilename))
+		keyFile := filepath.Join(testutil.TempDir(t), constants.TestClientKeyFilename)
 
 		privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		require.NoError(t, err)
 
-		_, err = saveRenewedCerts(certFile, keyFile, "cert-content", privKey)
+		_, err = saveRenewedCerts(context.Background(), fileSvc, certFile, keyFile, "cert-content", privKey)
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, constants.ErrKeyWriteFailed))
 	})
 
-	t.Run("NonExistentCertDir_ReturnsCertSaveFailed", func(t *testing.T) {
-		keyFile := filepath.Join(t.TempDir(), constants.TestClientKeyFilename)
-		certFile := filepath.Join(t.TempDir(), constants.TestNestedDirname, constants.TestClientCrtFilename)
+	t.Run("CertPathOutsideRuntime_ReturnsCertSaveFailed", func(t *testing.T) {
+		fileSvc := newTestFileSvc(t)
+		keyFile := fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.TestClientKeyFilename))
+		certFile := filepath.Join(testutil.TempDir(t), constants.TestClientCrtFilename)
 
 		privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		require.NoError(t, err)
 
-		_, err = saveRenewedCerts(certFile, keyFile, "cert-content", privKey)
+		_, err = saveRenewedCerts(context.Background(), fileSvc, certFile, keyFile, "cert-content", privKey)
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, constants.ErrCertSaveFailed))
 	})
@@ -722,18 +719,18 @@ func TestSaveRenewedCerts(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRenewOperatorCertificate_NonExistentCertFile(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	fileSvc := newTestFileSvc(t)
 
 	cfg := &config.Config{Endpoint: "https://fake:8443"}
 	ci := certs.NewClientIdentity(tls.Certificate{})
 
-	err := RenewOperatorCertificate(context.Background(), cfg, filepath.Join(t.TempDir(), constants.TestNonExistentCrtFilename), constants.TestNonExistentCrtFilename, ci)
+	err := RenewOperatorCertificate(context.Background(), cfg, fileSvc, filepath.Join(testutil.TempDir(t), constants.TestNonExistentCrtFilename), constants.TestNonExistentCrtFilename, ci)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrCertParseFailed))
 }
 
 func TestRenewOperatorCertificate_CertNotExpiring(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	fileSvc := newTestFileSvc(t)
 
 	certPath := generateTestCert(t, time.Now(), time.Now().Add(365*24*time.Hour))
 	keyPath := filepath.Join(filepath.Dir(certPath), constants.TestECPrivateKeyFilename)
@@ -743,12 +740,12 @@ func TestRenewOperatorCertificate_CertNotExpiring(t *testing.T) {
 	keyDER, err := x509.MarshalECPrivateKey(privKey)
 	require.NoError(t, err)
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
-	require.NoError(t, os.WriteFile(keyPath, keyPEM, 0600))
+	require.NoError(t, os.WriteFile(keyPath, keyPEM, constants.PermFilePrivate))
 
 	cfg := &config.Config{Endpoint: "https://fake:8443"}
 	ci := certs.NewClientIdentity(tls.Certificate{})
 
-	err = RenewOperatorCertificate(context.Background(), cfg, certPath, keyPath, ci)
+	err = RenewOperatorCertificate(context.Background(), cfg, fileSvc, certPath, keyPath, ci)
 	require.NoError(t, err, "cert not expiring soon should return nil without making network calls")
 }
 
@@ -757,7 +754,7 @@ func TestRenewOperatorCertificate_CertNotExpiring(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRunClientCertRenewalLoop_ContextCancellation(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	fileSvc := newTestFileSvc(t)
 
 	cfg := &config.Config{Endpoint: "https://fake:8443"}
 	ci := certs.NewClientIdentity(tls.Certificate{})
@@ -768,7 +765,7 @@ func TestRunClientCertRenewalLoop_ContextCancellation(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		RunClientCertRenewalLoop(ctx, cfg, constants.TestNonExistentCrtFilename, constants.TestNonExistentCrtFilename, logger, ci)
+		RunClientCertRenewalLoop(ctx, cfg, fileSvc, constants.TestNonExistentCrtFilename, constants.TestNonExistentCrtFilename, logger, ci)
 		close(done)
 	}()
 

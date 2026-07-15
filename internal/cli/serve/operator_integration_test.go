@@ -16,6 +16,7 @@
 package serve
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -33,7 +34,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -41,51 +42,48 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestResolveKeyPath_DefaultOperatorKey(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.OperatorKeyPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.OperatorKeyPath, []byte("fake key"), 0600))
+	fileSvc := newTestFileSvc(t)
+	opKeyRel := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorKey)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), opKeyRel, []byte("fake key"), constants.PermFilePrivate))
 
-	result := resolveKeyPath("", testLogger())
-	assert.Equal(t, paths.Infra.OperatorKeyPath, result)
+	result := resolveKeyPath("", fileSvc, testLogger())
+	assert.Equal(t, fileSvc.Resolve(opKeyRel), result)
 }
 
 func TestResolveKeyPath_FallsBackToClientKey(t *testing.T) {
-	tmpDir := t.TempDir()
-	require.NoError(t, paths.InitWithBase(tmpDir))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.ClientOperatorKeyPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.ClientOperatorKeyPath, []byte("fake key"), 0600))
+	fileSvc := newTestFileSvc(t)
+	cliKeyRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirClient, constants.PkiFileOperatorKey)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), cliKeyRel, []byte("fake key"), constants.PermFilePrivate))
 
-	result := resolveKeyPath("", testLogger())
-	assert.Equal(t, paths.Infra.ClientOperatorKeyPath, result)
+	result := resolveKeyPath("", fileSvc, testLogger())
+	assert.Equal(t, fileSvc.Resolve(cliKeyRel), result)
 }
 
 func TestResolveKeyPath_NoFilesFound(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	fileSvc := newTestFileSvc(t)
 
-	result := resolveKeyPath("", testLogger())
+	result := resolveKeyPath("", fileSvc, testLogger())
 	assert.Equal(t, "", result)
 }
 
 func TestResolveKeyPath_OperatorKeyTakesPrecedenceOverClientKey(t *testing.T) {
-	tmpDir := t.TempDir()
-	require.NoError(t, paths.InitWithBase(tmpDir))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.OperatorKeyPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.OperatorKeyPath, []byte("op key"), 0600))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.ClientOperatorKeyPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.ClientOperatorKeyPath, []byte("client key"), 0600))
+	fileSvc := newTestFileSvc(t)
+	opKeyRel := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorKey)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), opKeyRel, []byte("op key"), constants.PermFilePrivate))
+	cliKeyRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirClient, constants.PkiFileOperatorKey)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), cliKeyRel, []byte("client key"), constants.PermFilePrivate))
 
-	result := resolveKeyPath("", testLogger())
-	assert.Equal(t, paths.Infra.OperatorKeyPath, result,
+	result := resolveKeyPath("", fileSvc, testLogger())
+	assert.Equal(t, fileSvc.Resolve(opKeyRel), result,
 		"operator key should take precedence over client key when both exist")
 }
 
 func TestResolveKeyPath_ExplicitOverridesDefaults(t *testing.T) {
-	tmpDir := t.TempDir()
-	require.NoError(t, paths.InitWithBase(tmpDir))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.OperatorKeyPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.OperatorKeyPath, []byte("op key"), 0600))
+	fileSvc := newTestFileSvc(t)
+	opKeyRel := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorKey)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), opKeyRel, []byte("op key"), constants.PermFilePrivate))
 
-	result := resolveKeyPath("/explicit/key.pem", testLogger())
+	result := resolveKeyPath("/explicit/key.pem", fileSvc, testLogger())
 	assert.Equal(t, "/explicit/key.pem", result,
 		"explicit path should override default file lookup")
 }
@@ -95,51 +93,48 @@ func TestResolveKeyPath_ExplicitOverridesDefaults(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestResolveCertPath_DefaultOperatorCert(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.OperatorCertPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.OperatorCertPath, []byte("fake cert"), 0600))
+	fileSvc := newTestFileSvc(t)
+	opCertRel := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), opCertRel, []byte("fake cert"), constants.PermFilePrivate))
 
-	result := resolveCertPath("", testLogger())
-	assert.Equal(t, paths.Infra.OperatorCertPath, result)
+	result := resolveCertPath("", fileSvc, testLogger())
+	assert.Equal(t, fileSvc.Resolve(opCertRel), result)
 }
 
 func TestResolveCertPath_FallsBackToClientCert(t *testing.T) {
-	tmpDir := t.TempDir()
-	require.NoError(t, paths.InitWithBase(tmpDir))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.ClientOperatorCertPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.ClientOperatorCertPath, []byte("fake cert"), 0600))
+	fileSvc := newTestFileSvc(t)
+	cliCertRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirClient, constants.PkiFileOperatorCert)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), cliCertRel, []byte("fake cert"), constants.PermFilePrivate))
 
-	result := resolveCertPath("", testLogger())
-	assert.Equal(t, paths.Infra.ClientOperatorCertPath, result)
+	result := resolveCertPath("", fileSvc, testLogger())
+	assert.Equal(t, fileSvc.Resolve(cliCertRel), result)
 }
 
 func TestResolveCertPath_NoFilesFound(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	fileSvc := newTestFileSvc(t)
 
-	result := resolveCertPath("", testLogger())
+	result := resolveCertPath("", fileSvc, testLogger())
 	assert.Equal(t, "", result)
 }
 
 func TestResolveCertPath_OperatorCertTakesPrecedenceOverClientCert(t *testing.T) {
-	tmpDir := t.TempDir()
-	require.NoError(t, paths.InitWithBase(tmpDir))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.OperatorCertPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.OperatorCertPath, []byte("op cert"), 0600))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.ClientOperatorCertPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.ClientOperatorCertPath, []byte("client cert"), 0600))
+	fileSvc := newTestFileSvc(t)
+	opCertRel := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), opCertRel, []byte("op cert"), constants.PermFilePrivate))
+	cliCertRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirClient, constants.PkiFileOperatorCert)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), cliCertRel, []byte("client cert"), constants.PermFilePrivate))
 
-	result := resolveCertPath("", testLogger())
-	assert.Equal(t, paths.Infra.OperatorCertPath, result,
+	result := resolveCertPath("", fileSvc, testLogger())
+	assert.Equal(t, fileSvc.Resolve(opCertRel), result,
 		"operator cert should take precedence over client cert when both exist")
 }
 
 func TestResolveCertPath_ExplicitOverridesDefaults(t *testing.T) {
-	tmpDir := t.TempDir()
-	require.NoError(t, paths.InitWithBase(tmpDir))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.OperatorCertPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.OperatorCertPath, []byte("op cert"), 0600))
+	fileSvc := newTestFileSvc(t)
+	opCertRel := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), opCertRel, []byte("op cert"), constants.PermFilePrivate))
 
-	result := resolveCertPath("/explicit/cert.pem", testLogger())
+	result := resolveCertPath("/explicit/cert.pem", fileSvc, testLogger())
 	assert.Equal(t, "/explicit/cert.pem", result,
 		"explicit path should override default file lookup")
 }
@@ -172,11 +167,11 @@ func generateTestKeyCertPair(t *testing.T) (string, string) {
 	require.NoError(t, err)
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	certPath := filepath.Join(dir, constants.TestClientCrtFilename)
 	keyPath := filepath.Join(dir, constants.TestClientKeyFilename)
-	require.NoError(t, os.WriteFile(certPath, certPEM, 0600))
-	require.NoError(t, os.WriteFile(keyPath, keyPEM, 0600))
+	require.NoError(t, os.WriteFile(certPath, certPEM, constants.PermFilePrivate))
+	require.NoError(t, os.WriteFile(keyPath, keyPEM, constants.PermFilePrivate))
 	return certPath, keyPath
 }
 
@@ -193,7 +188,7 @@ func TestLoadClientCertPair_Success(t *testing.T) {
 func TestLoadClientCertPair_NonExistentCertFile(t *testing.T) {
 	_, keyPath := generateTestKeyCertPair(t)
 
-	_, _, err := loadClientCertPair(filepath.Join(t.TempDir(), constants.TestNonExistentCrtFilename), keyPath)
+	_, _, err := loadClientCertPair(filepath.Join(testutil.TempDir(t), constants.TestNonExistentCrtFilename), keyPath)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrReadClientCert))
 }
@@ -201,15 +196,15 @@ func TestLoadClientCertPair_NonExistentCertFile(t *testing.T) {
 func TestLoadClientCertPair_NonExistentKeyFile(t *testing.T) {
 	certPath, _ := generateTestKeyCertPair(t)
 
-	_, _, err := loadClientCertPair(certPath, filepath.Join(t.TempDir(), constants.TestNonExistentKeyFilename))
+	_, _, err := loadClientCertPair(certPath, filepath.Join(testutil.TempDir(t), constants.TestNonExistentKeyFilename))
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrReadPrivateKey))
 }
 
 func TestLoadClientCertPair_InvalidCertPEM(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	invalidCert := filepath.Join(dir, constants.TestInvalidCrtFilename)
-	require.NoError(t, os.WriteFile(invalidCert, []byte("not a PEM file"), 0600))
+	require.NoError(t, os.WriteFile(invalidCert, []byte("not a PEM file"), constants.PermFilePrivate))
 
 	_, keyPath := generateTestKeyCertPair(t)
 
@@ -221,9 +216,9 @@ func TestLoadClientCertPair_InvalidCertPEM(t *testing.T) {
 func TestLoadClientCertPair_InvalidKeyPEM(t *testing.T) {
 	certPath, _ := generateTestKeyCertPair(t)
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	invalidKey := filepath.Join(dir, constants.TestInvalidKeyFilename)
-	require.NoError(t, os.WriteFile(invalidKey, []byte("not a PEM file"), 0600))
+	require.NoError(t, os.WriteFile(invalidKey, []byte("not a PEM file"), constants.PermFilePrivate))
 
 	_, _, err := loadClientCertPair(certPath, invalidKey)
 	require.Error(t, err)
@@ -240,9 +235,9 @@ func TestLoadClientCertPair_MismatchedKeyCertPair(t *testing.T) {
 }
 
 func TestLoadClientCertPair_EmptyCertFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	emptyCert := filepath.Join(dir, constants.TestClientCrtFilename)
-	require.NoError(t, os.WriteFile(emptyCert, []byte{}, 0600))
+	require.NoError(t, os.WriteFile(emptyCert, []byte{}, constants.PermFilePrivate))
 
 	_, keyPath := generateTestKeyCertPair(t)
 
@@ -255,9 +250,9 @@ func TestLoadClientCertPair_EmptyCertFile(t *testing.T) {
 func TestLoadClientCertPair_EmptyKeyFile(t *testing.T) {
 	certPath, _ := generateTestKeyCertPair(t)
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	emptyKey := filepath.Join(dir, constants.TestClientKeyFilename)
-	require.NoError(t, os.WriteFile(emptyKey, []byte{}, 0600))
+	require.NoError(t, os.WriteFile(emptyKey, []byte{}, constants.PermFilePrivate))
 
 	_, _, err := loadClientCertPair(certPath, emptyKey)
 	require.Error(t, err)
@@ -266,7 +261,7 @@ func TestLoadClientCertPair_EmptyKeyFile(t *testing.T) {
 }
 
 func TestLoadClientCertPair_CertPathIsDirectory(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	_, keyPath := generateTestKeyCertPair(t)
 
 	_, _, err := loadClientCertPair(dir, keyPath)
@@ -277,7 +272,7 @@ func TestLoadClientCertPair_CertPathIsDirectory(t *testing.T) {
 
 func TestLoadClientCertPair_KeyPathIsDirectory(t *testing.T) {
 	certPath, _ := generateTestKeyCertPair(t)
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 
 	_, _, err := loadClientCertPair(certPath, dir)
 	require.Error(t, err)
@@ -286,7 +281,7 @@ func TestLoadClientCertPair_KeyPathIsDirectory(t *testing.T) {
 }
 
 func TestLoadClientCertPair_BothPathsNonExistent(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	nonExistentCert := filepath.Join(dir, constants.TestNonExistentCrtFilename)
 	nonExistentKey := filepath.Join(dir, constants.TestNonExistentKeyFilename)
 
@@ -313,35 +308,35 @@ func TestLoadClientCertPair_CertPEMMatchesFileContent(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestResolveKeyPath_WhitespaceExplicitPathReturnedAsIs(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	fileSvc := newTestFileSvc(t)
 
-	result := resolveKeyPath("   ", testLogger())
+	result := resolveKeyPath("   ", fileSvc, testLogger())
 	assert.Equal(t, "   ", result,
 		"whitespace-only explicit path is non-empty so it should be returned as-is")
 }
 
 func TestResolveCertPath_WhitespaceExplicitPathReturnedAsIs(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	fileSvc := newTestFileSvc(t)
 
-	result := resolveCertPath("   ", testLogger())
+	result := resolveCertPath("   ", fileSvc, testLogger())
 	assert.Equal(t, "   ", result,
 		"whitespace-only explicit path is non-empty so it should be returned as-is")
 }
 
 func TestResolveKeyPath_OnlyClientKeyExists(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.ClientOperatorKeyPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.ClientOperatorKeyPath, []byte("client key"), 0600))
+	fileSvc := newTestFileSvc(t)
+	cliKeyRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirClient, constants.PkiFileOperatorKey)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), cliKeyRel, []byte("client key"), constants.PermFilePrivate))
 
-	result := resolveKeyPath("", testLogger())
-	assert.Equal(t, paths.Infra.ClientOperatorKeyPath, result)
+	result := resolveKeyPath("", fileSvc, testLogger())
+	assert.Equal(t, fileSvc.Resolve(cliKeyRel), result)
 }
 
 func TestResolveCertPath_OnlyClientCertExists(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.ClientOperatorCertPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.ClientOperatorCertPath, []byte("client cert"), 0600))
+	fileSvc := newTestFileSvc(t)
+	cliCertRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirClient, constants.PkiFileOperatorCert)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), cliCertRel, []byte("client cert"), constants.PermFilePrivate))
 
-	result := resolveCertPath("", testLogger())
-	assert.Equal(t, paths.Infra.ClientOperatorCertPath, result)
+	result := resolveCertPath("", fileSvc, testLogger())
+	assert.Equal(t, fileSvc.Resolve(cliCertRel), result)
 }

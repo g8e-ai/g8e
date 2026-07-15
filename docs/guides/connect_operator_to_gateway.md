@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-07-13
-Version: v1.5.0
+Last Updated: 2026-07-14
+Version: v1.5.1
 
 ---
 
@@ -63,7 +63,7 @@ The gateway provides CLI commands to deploy and manage operators on remote hosts
 ./g8e operator deploy --hosts <host1,host2> --background
 ```
 
-This command copies the operator binary to remote hosts via SCP, makes it executable via SSH, and optionally starts it in the background. Requires `./g8e auth enroll` first. Additional flags include `-P` for SSH port and `-i` for SSH identity file.
+This command copies the operator binary to remote hosts via SCP, makes it executable via SSH, and optionally starts the gateway in the background. Requires `./g8e auth enroll` first. Additional flags include `-P` for SSH port and `-i` for SSH identity file.
 
 **Stream operator binary to remote hosts:**
 
@@ -107,8 +107,8 @@ On the remote host, start the operator with the enrolled certificates:
 ./g8e operator start -e <gateway-ip>
 ```
 
-The operator will:
-- Load the mTLS certificates from the PKI directory
+When `--endpoint` is provided, the operator automatically performs CSR enrollment with the gateway if no local certificates are found, making step 3 optional. The operator will:
+- Load the mTLS certificates from the PKI directory (or auto-enroll via `--endpoint`)
 - Connect to the gateway control plane on port 8443 (HTTPS) and bootstrap on port 8080 (HTTP)
 - Start the local audit vault and execution services
 - Execute mutations through the L1-L5 verification pipeline
@@ -166,8 +166,8 @@ AI clients can connect to the gateway's MCP endpoint:
 
 ```bash
 curl -X POST https://localhost:8443/mcp \
-  --cert .g8e/credentials/cli.crt \
-  --key .g8e/credentials/cli.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"shell.execute","arguments":{"command":"ls -la"}}}'
 ```
@@ -212,8 +212,8 @@ For direct envelope submission to the gateway:
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/governance/envelopes \
-  --cert .g8e/credentials/cli.crt \
-  --key .g8e/credentials/cli.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d @envelope.json
 ```
@@ -229,7 +229,7 @@ Operators and CLI clients connecting to the g8e Gateway can use the g8e Protocol
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.5.0
+go get github.com/g8e-ai/g8e@v1.5.1
 ```
 
 The module provides protobuf types for governance envelopes, operator messages, and common protocol structures. It also includes SPIFFE workload identity helpers for generating operator, CLI, and gateway identities used in mTLS enrollment.
@@ -241,7 +241,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For operator-side tooling or Python-based services:
 
 ```bash
-pip install g8e==1.5.0
+pip install g8e==1.5.1
 ```
 
 Provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
@@ -352,10 +352,10 @@ Verify PKI directory exists and contains valid certificates:
 ls -la .g8e/pki/
 ```
 
-Verify credentials directory exists and contains client certificates:
+Verify runtime directory exists and contains client certificates:
 
 ```bash
-ls -la .g8e/credentials/
+ls -la .g8e/cli.crt .g8e/cli.key
 ```
 
 Re-enroll if certificates are missing or expired:
@@ -402,7 +402,7 @@ Verify the gateway is running:
 Verify you have valid client credentials:
 
 ```bash
-ls -la .g8e/credentials/
+ls -la .g8e/cli.crt .g8e/cli.key
 ```
 
 Re-authenticate if credentials are missing or invalid:

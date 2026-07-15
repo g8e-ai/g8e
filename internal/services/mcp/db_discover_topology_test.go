@@ -25,6 +25,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -68,7 +69,7 @@ func TestDBDiscoverTopologyTool_Execute_EmptyDatabase(t *testing.T) {
 	tool := &DBDiscoverTopologyTool{}
 
 	// Create an empty SQLite database
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "empty.db")
 	db, err := sql.Open("sqlite", dbPath)
 	require.NoError(t, err)
@@ -96,7 +97,7 @@ func TestDBDiscoverTopologyTool_Execute_SingleTable(t *testing.T) {
 	tool := &DBDiscoverTopologyTool{}
 
 	// Create a database with a single table
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "single.db")
 	db, err := sql.Open("sqlite", dbPath)
 	require.NoError(t, err)
@@ -137,7 +138,7 @@ func TestDBDiscoverTopologyTool_Execute_MultipleTables(t *testing.T) {
 	tool := &DBDiscoverTopologyTool{}
 
 	// Create a database with multiple tables
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "multi.db")
 	db, err := sql.Open("sqlite", dbPath)
 	require.NoError(t, err)
@@ -201,7 +202,7 @@ func TestDBDiscoverTopologyTool_Execute_VariousDataTypes(t *testing.T) {
 	tool := &DBDiscoverTopologyTool{}
 
 	// Create a database with various data types
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "types.db")
 	db, err := sql.Open("sqlite", dbPath)
 	require.NoError(t, err)
@@ -240,7 +241,7 @@ func TestDBDiscoverTopologyTool_Execute_SqliteInternalTablesFiltered(t *testing.
 	tool := &DBDiscoverTopologyTool{}
 
 	// Create a database - SQLite will create internal tables like sqlite_sequence
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "internal.db")
 	db, err := sql.Open("sqlite", dbPath)
 	require.NoError(t, err)
@@ -274,7 +275,7 @@ func TestDBDiscoverTopologyTool_Execute_InvalidTableNamesSkipped(t *testing.T) {
 	tool := &DBDiscoverTopologyTool{}
 
 	// Create a database with valid and invalid table names
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "invalid.db")
 	db, err := sql.Open("sqlite", dbPath)
 	require.NoError(t, err)
@@ -315,7 +316,7 @@ func TestDBDiscoverTopologyTool_Execute_TableWithNoColumns(t *testing.T) {
 	tool := &DBDiscoverTopologyTool{}
 
 	// Create a database with a table that has no columns (edge case)
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "no_cols.db")
 	db, err := sql.Open("sqlite", dbPath)
 	require.NoError(t, err)
@@ -344,7 +345,7 @@ func TestDBDiscoverTopologyTool_Execute_ContextCancellation(t *testing.T) {
 	tool := &DBDiscoverTopologyTool{}
 
 	// Create a database
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "cancel.db")
 	db, err := sql.Open("sqlite", dbPath)
 	require.NoError(t, err)
@@ -373,7 +374,7 @@ func TestDBDiscoverTopologyTool_Execute_InvalidDatabaseFile(t *testing.T) {
 	tool := &DBDiscoverTopologyTool{}
 
 	// Create a file that's not a valid SQLite database
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	invalidPath := filepath.Join(tmpDir, "invalid.db")
 	err := os.WriteFile(invalidPath, []byte("not a sqlite database"), 0644)
 	require.NoError(t, err)
@@ -391,7 +392,7 @@ func TestDBDiscoverTopologyTool_Execute_DatabaseIsDirectory(t *testing.T) {
 	tool := &DBDiscoverTopologyTool{}
 
 	// Use a directory path instead of a file
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	req := DBDiscoverTopologyRequest{DatabasePath: tmpDir}
 	args, err := json.Marshal(req)
@@ -406,7 +407,7 @@ func TestDBDiscoverTopologyTool_Execute_ReadOnlyMode(t *testing.T) {
 	tool := &DBDiscoverTopologyTool{}
 
 	// Create a database
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "readonly.db")
 	db, err := sql.Open("sqlite", dbPath)
 	require.NoError(t, err)
@@ -438,7 +439,7 @@ func TestDBDiscoverTopologyTool_Execute_TableWithUnderscorePrefix(t *testing.T) 
 	tool := &DBDiscoverTopologyTool{}
 
 	// Create a database with tables starting with underscore (valid identifiers)
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "underscore.db")
 	db, err := sql.Open("sqlite", dbPath)
 	require.NoError(t, err)
@@ -470,7 +471,7 @@ func TestDBDiscoverTopologyTool_Execute_TableWithMixedCase(t *testing.T) {
 	tool := &DBDiscoverTopologyTool{}
 
 	// Create a database with mixed-case table names
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tmpDir, "mixedcase.db")
 	db, err := sql.Open("sqlite", dbPath)
 	require.NoError(t, err)

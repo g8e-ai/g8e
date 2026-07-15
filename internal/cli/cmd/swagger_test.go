@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -89,7 +90,7 @@ func TestSwaggerInitCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -109,7 +110,7 @@ func TestSwaggerInitCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -127,7 +128,7 @@ func TestSwaggerInitCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -166,7 +167,7 @@ func TestSwaggerServeCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -189,7 +190,7 @@ func TestSwaggerServeCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -212,7 +213,7 @@ func TestSwaggerServeCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -237,7 +238,7 @@ func TestSwaggerServeCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -262,7 +263,7 @@ func TestSwaggerServeCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -283,7 +284,7 @@ func TestSwaggerServeCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -327,7 +328,7 @@ func TestSwaggerValidateCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -345,7 +346,7 @@ func TestSwaggerValidateCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -364,7 +365,7 @@ func TestSwaggerValidateCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -387,7 +388,7 @@ func TestSwaggerValidateCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -478,7 +479,7 @@ func TestSwaggerCommandPathResolution(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -501,7 +502,7 @@ func TestSwaggerCommandPathResolution(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -524,7 +525,7 @@ func TestSwaggerCommandPathResolution(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -555,7 +556,7 @@ func TestSwaggerCommandOutputFormatting(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -582,7 +583,7 @@ func TestSwaggerCommandOutputFormatting(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -624,7 +625,7 @@ func TestSwaggerCommandErrorMessages(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -709,7 +710,7 @@ func TestSwaggerCommandEdgeCases(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -730,7 +731,7 @@ func TestSwaggerCommandEdgeCases(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
@@ -751,7 +752,7 @@ func TestSwaggerCommandEdgeCases(t *testing.T) {
 		cmd.SetErr(&buf)
 
 		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		os.Chdir(tmpDir)
 		t.Cleanup(func() { os.Chdir(originalWd) })
 

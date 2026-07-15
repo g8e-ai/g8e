@@ -28,7 +28,7 @@ import (
 func setupTestReplayStore(t *testing.T) *SQLReplayStore {
 	t.Helper()
 
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "test_replay_store.db")
 
 	config := &ReplayStoreConfig{

@@ -26,6 +26,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestMain(m *testing.M) {
+	os.MkdirAll(constants.TestTempDirname, constants.PermDirStandard)
+	os.Exit(m.Run())
+}
+
 // mockFileOpener is a mock implementation of fileOpener for testing.
 type mockFileOpener struct {
 	openFunc func(name string) (*os.File, error)
@@ -150,7 +155,7 @@ func TestNetSocketAuditTool_Execute_ContextCancellation(t *testing.T) {
 	t.Parallel()
 
 	// Create a temporary file with valid content
-	tmpFile, err := os.CreateTemp("", "proc-net-tcp")
+	tmpFile, err := os.CreateTemp(constants.TestTempDirname, "proc-net-tcp")
 	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 
@@ -184,7 +189,7 @@ func TestNetSocketAuditTool_Execute_ValidTCPData(t *testing.T) {
 	t.Parallel()
 
 	// Create a temporary file with valid TCP data
-	tmpFile, err := os.CreateTemp("", "proc-net-tcp")
+	tmpFile, err := os.CreateTemp(constants.TestTempDirname, "proc-net-tcp")
 	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 
@@ -238,7 +243,7 @@ func TestNetSocketAuditTool_Execute_ValidUDPData(t *testing.T) {
 	t.Parallel()
 
 	// Create a temporary file with valid UDP data
-	tmpFile, err := os.CreateTemp("", "proc-net-udp")
+	tmpFile, err := os.CreateTemp(constants.TestTempDirname, "proc-net-udp")
 	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 
@@ -282,11 +287,11 @@ func TestNetSocketAuditTool_Execute_EmptyProtocol(t *testing.T) {
 	t.Parallel()
 
 	// Create temporary files for both TCP and UDP
-	tcpFile, err := os.CreateTemp("", "proc-net-tcp")
+	tcpFile, err := os.CreateTemp(constants.TestTempDirname, "proc-net-tcp")
 	require.NoError(t, err)
 	defer os.Remove(tcpFile.Name())
 
-	udpFile, err := os.CreateTemp("", "proc-net-udp")
+	udpFile, err := os.CreateTemp(constants.TestTempDirname, "proc-net-udp")
 	require.NoError(t, err)
 	defer os.Remove(udpFile.Name())
 
@@ -342,7 +347,7 @@ func TestNetSocketAuditTool_Execute_MalformedFile(t *testing.T) {
 	t.Parallel()
 
 	// Create a temporary file with malformed data
-	tmpFile, err := os.CreateTemp("", "proc-net-tcp")
+	tmpFile, err := os.CreateTemp(constants.TestTempDirname, "proc-net-tcp")
 	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 
@@ -380,7 +385,7 @@ func TestNetSocketAuditTool_Execute_EmptyFile(t *testing.T) {
 	t.Parallel()
 
 	// Create a temporary empty file
-	tmpFile, err := os.CreateTemp("", "proc-net-tcp")
+	tmpFile, err := os.CreateTemp(constants.TestTempDirname, "proc-net-tcp")
 	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 	tmpFile.Close()
@@ -412,7 +417,7 @@ func TestNetSocketAuditTool_Execute_OnlyHeader(t *testing.T) {
 	t.Parallel()
 
 	// Create a temporary file with only header
-	tmpFile, err := os.CreateTemp("", "proc-net-tcp")
+	tmpFile, err := os.CreateTemp(constants.TestTempDirname, "proc-net-tcp")
 	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 
@@ -448,7 +453,7 @@ func TestNetSocketAuditTool_Execute_InvalidAddress(t *testing.T) {
 	t.Parallel()
 
 	// Create a temporary file with invalid address format
-	tmpFile, err := os.CreateTemp("", "proc-net-tcp")
+	tmpFile, err := os.CreateTemp(constants.TestTempDirname, "proc-net-tcp")
 	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 
@@ -537,7 +542,7 @@ func TestParseProcNetFile_ContextCancellation(t *testing.T) {
 	t.Parallel()
 
 	// Create a temporary file
-	tmpFile, err := os.CreateTemp("", "proc-net-tcp")
+	tmpFile, err := os.CreateTemp(constants.TestTempDirname, "proc-net-tcp")
 	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 
@@ -565,7 +570,7 @@ func TestParseProcNetFile_ValidData(t *testing.T) {
 	t.Parallel()
 
 	// Create a temporary file with valid data
-	tmpFile, err := os.CreateTemp("", "proc-net-tcp")
+	tmpFile, err := os.CreateTemp(constants.TestTempDirname, "proc-net-tcp")
 	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 
@@ -599,7 +604,7 @@ func TestParseProcNetFile_MultipleEntries(t *testing.T) {
 	t.Parallel()
 
 	// Create a temporary file with multiple entries
-	tmpFile, err := os.CreateTemp("", "proc-net-tcp")
+	tmpFile, err := os.CreateTemp(constants.TestTempDirname, "proc-net-tcp")
 	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 
@@ -625,7 +630,7 @@ func TestParseProcNetFile_SkipInvalidLines(t *testing.T) {
 	t.Parallel()
 
 	// Create a temporary file with mixed valid and invalid data
-	tmpFile, err := os.CreateTemp("", "proc-net-tcp")
+	tmpFile, err := os.CreateTemp(constants.TestTempDirname, "proc-net-tcp")
 	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 
@@ -651,7 +656,7 @@ func TestParseProcNetFile_InsufficientFields(t *testing.T) {
 	t.Parallel()
 
 	// Create a temporary file with insufficient fields
-	tmpFile, err := os.CreateTemp("", "proc-net-tcp")
+	tmpFile, err := os.CreateTemp(constants.TestTempDirname, "proc-net-tcp")
 	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 
@@ -675,7 +680,7 @@ func TestParseProcNetFile_EmptyFile(t *testing.T) {
 	t.Parallel()
 
 	// Create a temporary empty file
-	tmpFile, err := os.CreateTemp("", "proc-net-tcp")
+	tmpFile, err := os.CreateTemp(constants.TestTempDirname, "proc-net-tcp")
 	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 	tmpFile.Close()
