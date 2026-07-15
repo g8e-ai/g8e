@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-07-14
-Version: v1.5.1
+Last Updated: 2026-07-15
+Version: v1.5.2
 
 This document explains how to authenticate and authorize actions in the g8e platform. The platform is built as a zero-trust execution environment where every action is verified before execution.
 
@@ -37,6 +37,25 @@ There are three enrollment scenarios:
 | **First-time setup** | Gateway never bootstrapped | CLI connects over plain HTTP to the gateway HTTP port, Gateway bootstraps itself |
 | **New CLI on existing gateway** | Gateway exists, no local credentials | CLI connects over plain HTTP, Gateway enrolls CLI |
 | **Re-enrollment** | Credentials exist, need rotation | CLI uses existing mTLS cert to request new cert |
+
+**Two-Phase Enrollment & Split Endpoint Flags:**
+
+Enrollment involves two phases that use different ports and protocols:
+
+1. **Discovery/bootstrap phase** (plain HTTP) — CA bundle fetch, bootstrap status check, CSR trust bundle retrieval
+2. **mTLS API phase** (HTTPS) — Enrollment token generation, CSR submission, SSE stream, API client operations
+
+By default, the CLI connects to `g8e.local` (or the machine IP fallback) on the default ports (HTTP 8080, HTTPS 8443). When the gateway's HTTP and HTTPS ports are mapped to different host ports — as in Docker demos — use the split endpoint flags:
+
+| Flags | HTTP override | HTTPS override | Use case |
+|---|---|---|---|
+| `-e localhost` | `localhost` (default HTTP port) | `localhost` (default HTTPS port) | Same-host, default ports |
+| `-e localhost:8085` | `localhost:8085` | `localhost` (default HTTPS port) | HTTP port override only |
+| `-e localhost --port 8448` | `localhost` (default HTTP port) | `localhost:8448` | HTTPS port override only |
+| `-e localhost:8085 --port 8448` | `localhost:8085` | `localhost:8448` | Docker demo (split ports) |
+| `--port 8448` | `localhost` (default HTTP port) | `localhost:8448` | HTTPS port override, localhost HTTP |
+
+The `--endpoint` flag (`-e`) sets the HTTP discovery endpoint (host or host:port). The `--port` flag sets the HTTPS/mTLS port (overrides default 8443). When only `--endpoint` is provided, both HTTP and HTTPS use the same host. When both are provided, the CLI splits them into independent overrides for each phase.
 
 **Enrollment Token Flow:**
 
@@ -283,6 +302,8 @@ When `--vault-require-unlock` is set, the gateway fails to start if the vault ca
 
 1. Start the Gateway
 2. Run `g8e auth enroll` to enroll your CLI
+   - For default ports: `g8e auth enroll`
+   - For Docker demos with split ports: `g8e auth enroll -e localhost:<httpPort> --port <httpsPort>`
 3. Trust the Gateway CA (run the appropriate script for your OS)
 4. Restart your browser
 5. Navigate to the Console and register a passkey

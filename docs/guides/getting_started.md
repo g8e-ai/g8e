@@ -273,6 +273,14 @@ After the gateway is running (locally or in Docker), authenticate the CLI to boo
 ./g8e auth enroll
 ```
 
+For Docker demos where HTTP and HTTPS are mapped to different host ports, use the split endpoint flags:
+
+```bash
+./g8e auth enroll -e localhost:<httpPort> --port <httpsPort>
+```
+
+See [Demo port mappings](#demo-port-mappings) below for each demo's ports.
+
 ### Enroll a remote operator
 
 To connect an operator on a remote host to the gateway:
@@ -442,6 +450,14 @@ Each demo uses distinct host ports to allow simultaneous deployment. The fronten
 | dow | 8086 | 8449 | - |
 | dhs | 8087 | 8450 | - |
 | frontend | 8083 | 8446 | 3003 |
+
+When enrolling the CLI against a demo gateway, use the HTTP and HTTPS ports from the table above:
+
+```bash
+./g8e auth enroll -e localhost:<httpPort> --port <httpsPort>
+```
+
+For example, to enroll against the healthcare demo: `./g8e auth enroll -e localhost:8081 --port 8444`.
 
 ---
 

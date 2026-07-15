@@ -1,7 +1,7 @@
 # Network Architecture
 
-Last Updated: 2026-07-14
-Version: v1.5.1
+Last Updated: 2026-07-15
+Version: v1.5.2
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
 
@@ -102,6 +102,23 @@ Since the g8e Gateway acts as a self-signed CA, clients must explicitly trust th
 
 **Browser Restart**: After running any trust script, users **must restart all open browsers**. Browsers often cache certificate trust state, and WebAuthn registration will fail if the browser does not yet recognize the new platform CA.
 
+### CLI Endpoint Override Flags
+
+When the gateway's HTTP and HTTPS ports are mapped to different host ports — as in Docker demos where the container's internal ports (8080/8443) are exposed on different host ports (e.g., 8085/8448) — the CLI provides two flags to independently override each phase's endpoint:
+
+| Flag | Purpose | Default |
+|---|---|---|
+| `--endpoint` (`-e`) | HTTP discovery endpoint (host or host:port) | `g8e.local` (or IP fallback) |
+| `--port` | HTTPS/mTLS port (overrides default 8443) | `8443` |
+
+When both flags are used together, the CLI maintains independent overrides for each phase: `--endpoint` controls the HTTP discovery/bootstrap URL, and `--port` controls the HTTPS/mTLS URL. This is essential for Docker demo environments where HTTP and HTTPS are mapped to different host ports.
+
+**Example (Docker demo with split ports):**
+```
+g8e auth enroll -e localhost:8085 --port 8448
+```
+This sets the HTTP discovery endpoint to `localhost:8085` and the HTTPS/mTLS endpoint to `localhost:8448`.
+
 ### No-DNS / Direct IP Configuration
 
 The platform supports setup without requiring `/etc/hosts` changes or DNS configuration. If `g8e.local` resolution fails, the CLI automatically falls back to direct IP access using the machine's external interface IP.
@@ -135,6 +152,12 @@ Default ports:
 - **HTTP Surface** (`8080`): Serves plain HTTP for health checks, state endpoint, trust scripts (`/web-cert.sh`, `/web-cert.ps1`), CA bundle and fingerprint discovery, enrollment endpoints, deploy scripts, and node binary distribution. Unregistered paths return 404; there is no redirect to HTTPS.
 - **HTTPS Surface** (`8443`): Uses `tls.VerifyClientCertIfGiven`, overriding the stricter `tls.RequireAndVerifyClientCert` default. Operates with application-layer mTLS validation. All governed execution endpoints and operator routes require a verified SPIFFE identity via client certificate, while public routes (the Console SPA, static assets, CA bundle, CRL, and WebAuthn browser endpoints) are accessible directly. When JWKS is configured, MCP and A2A endpoints accept JWT authentication as an alternative to mTLS for BYO clients.
 - **Collision Prevention**: The gateway fails startup if multiple logical surfaces are assigned to the same port, ensuring no downgrade of the mTLS execution boundary.
+
+### Docker Port Mapping & CLI Split Endpoints
+
+In Docker demo environments, the gateway's internal HTTP (8080) and HTTPS (8443) ports are typically mapped to different host ports (e.g., 8085→8080, 8448→8443). Since enrollment uses both ports — HTTP for discovery/bootstrap and HTTPS for mTLS API operations — a single endpoint override cannot address both correctly.
+
+The CLI solves this with split endpoint overrides (see [CLI Endpoint Override Flags](#cli-endpoint-override-flags) above). The `--endpoint` flag targets the HTTP discovery port and the `--port` flag targets the HTTPS/mTLS port, allowing the CLI to reach both surfaces through their mapped host ports independently.
 
 ---
 
