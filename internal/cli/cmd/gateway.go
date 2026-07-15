@@ -51,28 +51,28 @@ func getBinaryName() string {
 // It is populated by addGatewayFlags and converted to serve.GatewayConfig
 // via gatewayFlagsToServeConfig.
 type GatewayFlags struct {
-	Posture            string
-	HTTPPort           int
-	HTTPSPort          int
-	DataDir            string
-	PKIDir             string
-	SecretsDir         string
-	VaultDir           string
-	VaultKeyPath       string
-	PasskeyRpID        string
-	PasskeyRpName      string
-	PasskeyRpOrigins   []string
-	RateLimitRPS       float64
-	RateLimitBurst     int
-	LogLevel           string
-	CertIdentityMode   string
-	TribunalID         string
-	TribunalURL        string
-	TribunalBootstrap  string
-	MCPDownstreamURL   string
-	A2ADownstreamURL   string
-	PublicBaseURL      string
-	AllowedOrigins     []string
+	Posture           string
+	HTTPPort          int
+	HTTPSPort         int
+	DataDir           string
+	PKIDir            string
+	SecretsDir        string
+	VaultDir          string
+	VaultKeyPath      string
+	PasskeyRpID       string
+	PasskeyRpName     string
+	PasskeyRpOrigins  []string
+	RateLimitRPS      float64
+	RateLimitBurst    int
+	LogLevel          string
+	CertIdentityMode  string
+	TribunalID        string
+	TribunalURL       string
+	TribunalBootstrap string
+	MCPDownstreamURL  string
+	A2ADownstreamURL  string
+	PublicBaseURL     string
+	AllowedOrigins    []string
 }
 
 // addGatewayFlags registers all shared gateway flags on the given cobra command,
@@ -147,28 +147,28 @@ func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
 // gateway config struct.
 func gatewayFlagsToServeConfig(f GatewayFlags) serve.GatewayConfig {
 	return serve.GatewayConfig{
-		Posture:            g8econfig.GatewayPosture(f.Posture),
-		HTTPPort:           f.HTTPPort,
-		HTTPSPort:          f.HTTPSPort,
-		DataDir:            f.DataDir,
-		PKIDir:             f.PKIDir,
-		SecretsDir:         f.SecretsDir,
-		VaultDir:           f.VaultDir,
-		VaultKeyPath:       f.VaultKeyPath,
-		PasskeyRpID:        f.PasskeyRpID,
-		PasskeyRpName:      f.PasskeyRpName,
-		PasskeyRpOrigins:   f.PasskeyRpOrigins,
-		RateLimitRPS:       f.RateLimitRPS,
-		RateLimitBurst:     f.RateLimitBurst,
-		LogLevel:           f.LogLevel,
-		CertIdentityMode:   f.CertIdentityMode,
-		TribunalID:         f.TribunalID,
-		TribunalURL:        f.TribunalURL,
-		TribunalBootstrap:  f.TribunalBootstrap,
-		MCPDownstreamURL:   f.MCPDownstreamURL,
-		A2ADownstreamURL:   f.A2ADownstreamURL,
-		PublicBaseURL:      f.PublicBaseURL,
-		AllowedOrigins:     f.AllowedOrigins,
+		Posture:           g8econfig.GatewayPosture(f.Posture),
+		HTTPPort:          f.HTTPPort,
+		HTTPSPort:         f.HTTPSPort,
+		DataDir:           f.DataDir,
+		PKIDir:            f.PKIDir,
+		SecretsDir:        f.SecretsDir,
+		VaultDir:          f.VaultDir,
+		VaultKeyPath:      f.VaultKeyPath,
+		PasskeyRpID:       f.PasskeyRpID,
+		PasskeyRpName:     f.PasskeyRpName,
+		PasskeyRpOrigins:  f.PasskeyRpOrigins,
+		RateLimitRPS:      f.RateLimitRPS,
+		RateLimitBurst:    f.RateLimitBurst,
+		LogLevel:          f.LogLevel,
+		CertIdentityMode:  f.CertIdentityMode,
+		TribunalID:        f.TribunalID,
+		TribunalURL:       f.TribunalURL,
+		TribunalBootstrap: f.TribunalBootstrap,
+		MCPDownstreamURL:  f.MCPDownstreamURL,
+		A2ADownstreamURL:  f.A2ADownstreamURL,
+		PublicBaseURL:     f.PublicBaseURL,
+		AllowedOrigins:    f.AllowedOrigins,
 	}
 }
 
@@ -185,18 +185,18 @@ func defaultWizardRunner(opts wizard.Options) (wizard.Result, error) {
 // Only wizard-owned fields are included — the wizard never sees flags it cannot edit.
 func wizardConfigFromFlags(f GatewayFlags) wizard.Config {
 	return wizard.Config{
-		PublicBaseURL:      f.PublicBaseURL,
-		CertIdentityMode:   f.CertIdentityMode,
-		AllowedOrigins:     f.AllowedOrigins,
-		Posture:            f.Posture,
-		TribunalID:         f.TribunalID,
-		TribunalURL:        f.TribunalURL,
-		TribunalBootstrap:  f.TribunalBootstrap,
-		PasskeyRpID:        f.PasskeyRpID,
-		PasskeyRpName:      f.PasskeyRpName,
-		PasskeyRpOrigins:   f.PasskeyRpOrigins,
-		MCPDownstreamURL:   f.MCPDownstreamURL,
-		A2ADownstreamURL:   f.A2ADownstreamURL,
+		PublicBaseURL:     f.PublicBaseURL,
+		CertIdentityMode:  f.CertIdentityMode,
+		AllowedOrigins:    f.AllowedOrigins,
+		Posture:           f.Posture,
+		TribunalID:        f.TribunalID,
+		TribunalURL:       f.TribunalURL,
+		TribunalBootstrap: f.TribunalBootstrap,
+		PasskeyRpID:       f.PasskeyRpID,
+		PasskeyRpName:     f.PasskeyRpName,
+		PasskeyRpOrigins:  f.PasskeyRpOrigins,
+		MCPDownstreamURL:  f.MCPDownstreamURL,
+		A2ADownstreamURL:  f.A2ADownstreamURL,
 	}
 }
 

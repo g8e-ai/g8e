@@ -216,18 +216,18 @@ func TestInit_ReturnsBlink(t *testing.T) {
 func TestResult_AllFieldsPopulated(t *testing.T) {
 	m := NewModel(Options{
 		InitialConfig: Config{
-			PublicBaseURL:      "https://demo.g8e.ai",
-			CertIdentityMode:   "full",
-			AllowedOrigins:     []string{"https://console.g8e.ai"},
-			Posture:            "consensus",
-			TribunalID:         "trib-prod-01",
-			TribunalURL:        "https://tribunal.g8e.ai",
-			TribunalBootstrap:  "/etc/g8e/bootstrap.json",
-			PasskeyRpID:        "demo.g8e.ai",
-			PasskeyRpName:      "g8e",
-			PasskeyRpOrigins:   []string{"https://demo.g8e.ai"},
-			MCPDownstreamURL:   "http://mcp:3000",
-			A2ADownstreamURL:   "http://a2a:3001",
+			PublicBaseURL:     "https://demo.g8e.ai",
+			CertIdentityMode:  "full",
+			AllowedOrigins:    []string{"https://console.g8e.ai"},
+			Posture:           "consensus",
+			TribunalID:        "trib-prod-01",
+			TribunalURL:       "https://tribunal.g8e.ai",
+			TribunalBootstrap: "/etc/g8e/bootstrap.json",
+			PasskeyRpID:       "demo.g8e.ai",
+			PasskeyRpName:     "g8e",
+			PasskeyRpOrigins:  []string{"https://demo.g8e.ai"},
+			MCPDownstreamURL:  "http://mcp:3000",
+			A2ADownstreamURL:  "http://a2a:3001",
 		},
 	})
 

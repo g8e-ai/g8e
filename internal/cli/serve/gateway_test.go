@@ -386,8 +386,8 @@ func TestGatewayConfigToOptions_DownstreamURLs(t *testing.T) {
 
 func TestGatewayConfigToOptions_VaultFieldsNotMapped(t *testing.T) {
 	cfg := GatewayConfig{
-		VaultDir:           constants.TestPathShortVault,
-		VaultKeyPath:       constants.TestPathShortVaultKey,
+		VaultDir:     constants.TestPathShortVault,
+		VaultKeyPath: constants.TestPathShortVaultKey,
 	}
 
 	opts := gatewayConfigToOptions(cfg)
@@ -666,9 +666,9 @@ func TestGatewayConfig_VaultConfiguration(t *testing.T) {
 
 func TestGatewayConfigToOptions_VaultFieldsPreservedInConfigOnly(t *testing.T) {
 	cfg := GatewayConfig{
-		VaultDir:      constants.TestPathShortVault,
-		VaultKeyPath:  constants.TestPathShortVaultKey,
-		DataDir:       constants.TestPathShortData,
+		VaultDir:     constants.TestPathShortVault,
+		VaultKeyPath: constants.TestPathShortVaultKey,
+		DataDir:      constants.TestPathShortData,
 		PKIDir:       constants.TestPathShortPKI,
 		SecretsDir:   constants.TestPathShortSecrets,
 	}
