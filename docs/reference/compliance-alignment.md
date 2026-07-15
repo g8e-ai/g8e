@@ -1,8 +1,8 @@
 # Compliance Alignment Report
 
-**Document Version:** 1.4.0  
-**Last Updated:** 2026-07-12  
-**Platform:** g8e v1.4.0  
+**Document Version:** 1.5.1  
+**Last Updated:** 2026-07-14  
+**Platform:** g8e v1.5.1  
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -16,8 +16,9 @@ This document provides a comprehensive alignment of the g8e platform's security 
 - **ISO 27001:2022:** Comprehensive coverage of Annex A controls
 - **GDPR:** Data sovereignty by design with PII scrubbing and local processing
 - **HIPAA:** Security Rule alignment with audit trails and access controls
-- **NIST 800-53 Rev 5:** Moderate-to-High baseline coverage
-- **PCI DSS 4.0:** Relevant controls for cardholder data environments
+- **NIST SP 800-53 Rev 5.2.0:** Moderate-to-High baseline coverage
+- **NIST SP 800-63B-4:** AAL2/AAL3 alignment with phishing-resistant authenticators
+- **PCI DSS v4.0.1:** Relevant controls for cardholder data environments
 - **NSA Zero Trust Implementation Guidelines (ZIG):** Strong alignment with Discovery, Phase One, and Phase Two activities
 
 ---
@@ -63,6 +64,8 @@ This document provides a comprehensive alignment of the g8e platform's security 
 ---
 
 ## 2. ISO 27001:2022 Alignment
+
+ISO/IEC 27001:2022 (with Amendment 1:2024) is the current version of the standard. Amendment 1:2024, published February 2024, adds climate change considerations to Clauses 4.1 and 4.2. The transition deadline for organizations certified to ISO 27001:2013 was October 31, 2025; all 2013 certifications are now expired.
 
 ### Annex A Control Mapping
 
@@ -222,7 +225,9 @@ This document provides a comprehensive alignment of the g8e platform's security 
 
 ---
 
-## 5. NIST 800-53 Rev 5 Alignment
+## 5. NIST SP 800-53 Rev 5.2.0 Alignment
+
+NIST SP 800-53 Release 5.2.0 (August 27, 2025) adds three new controls: SA-15(13) (Logging Syntax), SA-24 (Design for Cyber Resiliency), and SI-02(07) (Root Cause Analysis). These controls address software update security and cyber resiliency by design, responding to Executive Order 14306.
 
 ### Moderate-to-High Baseline Controls
 
@@ -299,10 +304,15 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | **SI-14** | Non-persistence | JIT credentials, self-dissolving capabilities, no standing privileges | `internal/services/governance/capability.go` |
 | **SI-16** | Memory protection | Go memory safety |
 | **SI-17** | Fail-safe procedures | Fail-closed verification pipeline |
+| **SA-15(13)** | Logging syntax | Structured audit event format in audit store with typed event fields | `internal/services/storage/audit_store.go` |
+| **SA-24** | Design for cyber resiliency | Fail-closed verification pipeline with state recovery via git-backed ledger | `internal/services/storage/ledger.go` |
+| **SI-02(07)** | Root cause analysis | Coordinated disclosure policy with vulnerability tracking | `.github/SECURITY.md` |
 
 ---
 
-## 6. PCI DSS 4.0 Alignment
+## 6. PCI DSS v4.0.1 Alignment
+
+PCI DSS v4.0.1 (published June 11, 2024) is the current active version. PCI DSS v4.0 was retired December 31, 2024. The 51 future-dated requirements introduced in v4.0 became effective March 31, 2025, including universal MFA, expanded encryption requirements, and continuous monitoring.
 
 ### Relevant Controls for Cardholder Data Environments
 
@@ -362,7 +372,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 
 ### Overview
 
-The NSA Zero Trust Implementation Guidelines (ZIG) provide a five-phase approach to achieving Target-level Zero Trust maturity, aligned with the Department of Defense (DoD) Zero Trust Reference Architecture and NIST guidance. g8e demonstrates strong alignment with the Discovery, Phase One, and Phase Two guidelines.
+The NSA Zero Trust Implementation Guidelines (ZIG) provide a five-phase approach to achieving Target-level Zero Trust maturity, aligned with the Department of War (DoW) Zero Trust Reference Architecture (v2.0, July 2022) and NIST guidance. The NSA released the Primer and Discovery Phase in January 2026, followed by Phase One and Phase Two in January 2026. An interactive ZIG webpage was launched in May 2026. g8e demonstrates strong alignment with the Discovery, Phase One, and Phase Two guidelines.
 
 **ZIG Phases:**
 - **Discovery Phase:** Identify critical data, applications, assets, and services (DAAS)
@@ -419,27 +429,56 @@ The NSA Zero Trust Implementation Guidelines (ZIG) provide a five-phase approach
 
 ### ZIG Pillars Alignment
 
-The NSA ZIG framework aligns with the DoD Zero Trust pillars. g8e implements these pillars as follows:
+The ZIG framework organizes 152 activities from the DoW Zero Trust Strategy across seven pillars. g8e implements these pillars as follows:
 
 | Pillar | ZIG Focus | g8e Implementation |
 |--------|-----------|-------------------|
-| **Identity** | Strong authentication, identity management | WebAuthn/FIDO2, SPIFFE workload identity, mTLS |
-| **Devices** | Device trust and posture | Certificate-based device identity, mTLS verification |
-| **Network** | Network segmentation, encryption | mTLS everywhere, micro-segmentation |
-| **Applications** | Application security, data protection | GovernanceEnvelope, Sovereign Execution Boundary |
+| **User** | Strong authentication, identity management | WebAuthn/FIDO2, SPIFFE workload identity, mTLS |
+| **Device** | Device trust and posture | Certificate-based device identity, mTLS verification |
+| **Application & Workload** | Application security, data protection | GovernanceEnvelope, Sovereign Execution Boundary |
 | **Data** | Data classification, loss prevention | PII/secret scrubbing, encryption at rest |
-| **Infrastructure** | Secure infrastructure deployment | Local-first, air-gap capable, git-backed state |
+| **Network & Environment** | Network segmentation, encryption | mTLS everywhere, micro-segmentation |
+| **Automation & Orchestration** | Automated response, policy enforcement | Fail-closed verification pipeline, JIT capability minting |
+| **Visibility & Analytics** | Continuous monitoring, audit logging | Audit store with signed receipts, git-backed ledger |
+
+### NIST SP 800-207A Alignment
+
+NIST SP 800-207A (September 2023) extends SP 800-207 with a zero trust architecture model for cloud-native applications in multi-cloud environments. It explicitly references SPIFFE as a platform for enforcing application-level policies based on service identities. g8e's SPIFFE workload identity system and mTLS enforcement align with this model.
 
 ### Gap Analysis: ZIG Phases Three and Four
 
 | Phase | Status | Notes |
 |-------|--------|-------|
 | **Phase Three** | Partial alignment | Advanced threat hunting and automated response in development |
-| **Phase Four** | Planned | Continuous optimization and maturity assessment planned for 2027 |
+| **Phase Four** | Planned | Continuous optimization and maturity assessment planned for FY 2027 |
 
 ---
 
-## 8. Security Control Summary
+## 8. NIST SP 800-63B-4 Alignment
+
+NIST SP 800-63B-4 (July 2025) supersedes SP 800-63B (2020) and defines technical requirements for three Authentication Assurance Levels (AALs). This revision introduces phishing-resistant authenticator requirements at AAL2, non-exportable key requirements at AAL3, normative guidance for syncable authenticators, and session monitoring (continuous authentication) guidelines.
+
+### Authentication Assurance Level Mapping
+
+| AAL | SP 800-63B-4 Requirement | g8e Implementation | Evidence |
+|-----|---------------------------|-------------------|----------|
+| **AAL2** | Two distinct authentication factors; phishing-resistant option required | WebAuthn/FIDO2 passkey (possession factor) plus mTLS client certificate (transport factor); WebAuthn is phishing-resistant by design | `internal/services/governance/l3_notary.go`, `docs/architecture/auth.md` |
+| **AAL3** | Phishing-resistant authenticator with non-exportable key; two factors | Hardware-bound WebAuthn authenticator with non-exportable private key (platform authenticator or security key); mTLS certificate as second factor | `internal/services/governance/l3_notary.go`, `internal/services/gateway/pki_controller.go` |
+
+### Key Requirement Alignment
+
+| Requirement | g8e Implementation | Evidence |
+|-------------|-------------------|----------|
+| **Phishing-resistant authentication** | WebAuthn/FIDO2 uses public-key cryptography with origin binding, preventing credential phishing | `internal/services/governance/l3_notary.go` |
+| **Non-exportable authenticator keys** | Platform authenticators (Windows Hello, Touch ID) and FIDO2 security keys store private keys in hardware-protected storage | `docs/architecture/auth.md` |
+| **Multi-factor authentication** | Passkey authorization (L3 Notary) plus mTLS transport authentication provides two distinct factors | `internal/services/governance/l3_notary.go` |
+| **Session monitoring** | Audit store tracks all session activity with signed receipts; session-based isolation with operator, CLI, and web session IDs | `internal/services/storage/audit_store.go` |
+| **Reauthentication** | Per-transaction authorization via L3 Notary; no persistent sessions for mutations | `internal/services/governance/l3_notary.go` |
+| **Authenticator lifecycle** | Passkey registration and revocation via g8e Console; certificate enrollment and revocation via PKI controller | `internal/services/gateway/pki_controller.go` |
+
+---
+
+## 9. Security Control Summary
 
 ### Cryptographic Controls
 
@@ -476,7 +515,7 @@ The NSA ZIG framework aligns with the DoD Zero Trust pillars. g8e implements the
 
 ---
 
-## 9. Gap Analysis and Roadmap
+## 10. Gap Analysis and Roadmap
 
 ### Current Strengths
 
@@ -497,6 +536,13 @@ The NSA ZIG framework aligns with the DoD Zero Trust pillars. g8e implements the
 - **Thread-safe dependency wiring** via atomic pointers for late-bound gateway dependencies, eliminating data races in concurrent request handling
 - **Configurable CORS middleware** validating request origins against an allowlist for cross-origin browser access
 - **75% test coverage threshold** enforced in CI/CD across gateway, governance, storage, and CLI subsystems
+- **RuntimeFileService abstraction** (`internal/services/fs`) as canonical `.g8e/` file I/O layer, replacing direct `os.*` calls across gateway, keystore, PKI, and CLI subsystems
+- **Unified Go module** merging the separate protocol module into the root module, eliminating version skew between protocol and platform
+- **Cosign/sigstore artifact signing** providing cryptographic signatures for release binaries
+- **Gitleaks secret scanning** in CI/CD preventing credential leakage in source code
+- **Go-licenses license compliance** auditing transitive dependencies for license compatibility
+- **Cross-OS CI matrix** (Ubuntu, macOS, Windows) ensuring platform parity
+- **Python protocol conformance suite** (151 tests) validating protocol implementation against the specification
 
 ### Planned Enhancements
 
@@ -517,7 +563,7 @@ The NSA ZIG framework aligns with the DoD Zero Trust pillars. g8e implements the
 
 ---
 
-## 10. Evidence Repository
+## 11. Evidence Repository
 
 ### Documentation
 
@@ -561,7 +607,7 @@ The NSA ZIG framework aligns with the DoD Zero Trust pillars. g8e implements the
 
 ---
 
-## 11. Contact and Support
+## 12. Contact and Support
 
 ### Security Contact
 
@@ -582,7 +628,7 @@ For specific compliance questions or audit support, contact:
 
 ---
 
-## 12. Document Control
+## 13. Document Control
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
@@ -594,6 +640,8 @@ For specific compliance questions or audit support, contact:
 | 1.3.6 | 2026-07-03 | Lateralus Labs | Updated platform version to v1.3.6; added missing v1.3.5 document control entry |
 | 1.3.11 | 2026-07-12 | Lateralus Labs | Updated platform version to v1.3.11; added one-time enrollment tokens, SSE-based L3 approval notifications, thread-safe dependency wiring, configurable CORS middleware, and 75% test coverage threshold to current strengths; verified all evidence paths against live codebase |
 | 1.4.0 | 2026-07-12 | Lateralus Labs | Updated platform version to v1.4.0; added frontend enrollment (`g8e gui`), Cloudflare Tunnel management (`g8e tunnel`), L5 Actuator `ExecutionHandler` interface refactor, OpenAPI/Swagger annotations across gateway endpoints, consolidated web-cert trust scripts, `operator start` rename, and default TUI launch to current strengths |
+| 1.5.0 | 2026-07-13 | Lateralus Labs | Updated platform version to v1.5.0; added unified Go module, Cosign/sigstore artifact signing, Gitleaks secret scanning, Go-licenses compliance, cross-OS CI matrix, Python protocol conformance suite (151 tests), Go performance benchmarks, and smoke test scripts to current strengths |
+| 1.5.1 | 2026-07-14 | Lateralus Labs | Updated platform version to v1.5.1; added NIST SP 800-63B-4 alignment section; updated NIST SP 800-53 to Rev 5.2.0 with new controls SA-15(13), SA-24, SI-02(07); updated PCI DSS to v4.0.1; added ISO 27001 Amendment 1:2024 reference; corrected ZIG pillars to match DoW seven-pillar framework; added NIST SP 800-207A reference; updated DoD to DoW naming; added RuntimeFileService to current strengths; verified all evidence paths against live codebase |
 
 ---
 
@@ -619,7 +667,9 @@ For specific compliance questions or audit support, contact:
 - **PCI DSS:** Payment Card Industry Data Security Standard
 - **ISO:** International Organization for Standardization
 - **DoD:** Department of Defense
+- **DoW:** Department of War (formerly Department of Defense)
 - **ZIG:** Zero Trust Implementation Guidelines
+- **AAL:** Authentication Assurance Level
 
 ---
 

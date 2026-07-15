@@ -257,7 +257,7 @@ CI modernization adds a cross-OS test matrix (ubuntu/macOS/Windows), 94 Python p
 - [Docker Gateway](docs/guides/docker_gateway.md)
 - [Cloudflare Tunnel Integration](docs/guides/cloudflare_tunnel.md)
 - [Lovable Frontend Integration](docs/guides/lovable.md)
-- [Live Swarm Demo](docs/guides/live-swarm-demo.md)
+- [Live Swarm Demo](demos/live-swarm/README.md)
 
 #### Architecture
 - [Gateway Architecture](docs/architecture/gateway.md)

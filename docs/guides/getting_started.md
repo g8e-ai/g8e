@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-07-13
-Version: v1.5.0
+Last Updated: 2026-07-14
+Version: v1.5.1
 
 ---
 
@@ -70,7 +70,7 @@ If you only need the g8e wire protocol — constants, models, enums, or protobuf
 As of v1.5.0, the protocol is part of the root Go module. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.5.0
+go get github.com/g8e-ai/g8e@v1.5.1
 ```
 
 Import the protocol packages in your Go code:
@@ -95,7 +95,7 @@ pip install g8e
 Pinned to a specific version:
 
 ```bash
-pip install g8e==1.5.0
+pip install g8e==1.5.1
 ```
 
 The package provides:
@@ -345,17 +345,18 @@ Each demo spins up a full isolated stack via Docker Compose:
 - **Target system**, mock EHR/trading/classified-doc API on `net_secure`
 - **Observability**, log aggregator and audit viewer on `net_mgmt`
 
-All g8e services (gateway, operator, agent runtime) use the root `Dockerfile` with `build: context: ..`, which performs a multi-stage Go build inside Docker. No pre-built binary is required. Auxiliary services (target systems, sensors, bad actors, observability) use Alpine, Python, Nginx, or other base images. The secure-data demo deploys two gateway-operator pairs (source and destination domains) on separate subnets. The DoW demo deploys three sensor agent containers (SIGINT, EO/IR, PNT fusion) with SWaP resource limits on all g8e containers. The swarm demo deploys a single gateway with 20 operator containers. The DHS demo deploys a real `agent-coalition` container running `demos scenarios run`, a real `datasvc` Python HTTP actuator on `net_secure`, and display-only source connectors modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries.
+All g8e services (gateway, operator, agent runtime) use `demos/Dockerfile` with `build: context: ..`, which copies a pre-built binary from `demos/bin/g8e` into the image. Run `make build` first to compile the binary and copy it to `demos/bin/g8e`. Auxiliary services (target systems, sensors, bad actors, observability) use Alpine, Python, Nginx, or other base images. The secure-data demo deploys two gateway-operator pairs (source and destination domains) on separate subnets. The DoW demo deploys three sensor agent containers (SIGINT, EO/IR, PNT fusion) with SWaP resource limits on all g8e containers. The swarm demo deploys a single gateway with 20 operator containers. The DHS demo deploys a real `agent-coalition` container running `demos scenarios run`, a real `datasvc` Python HTTP actuator on `net_secure`, and display-only source connectors modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries.
 
 All demos use the `/api/v1/health` endpoint for gateway health checks.
 
-The `g8e` demos CLI checks for a local binary at `demos/bin/g8e` and prints a warning if it is not found. This binary is not required for Docker Compose builds, which compile from source using the root `Dockerfile`.
+The `g8e` demos CLI checks for a local binary at `demos/bin/g8e` and prints a warning if it is not found. This binary is required for Docker Compose builds, which copy it into the image via `demos/Dockerfile`.
 
 ### Prerequisites for demos
 
 - Docker 24.0+ with Docker Compose v2
+- Go 1.26+ (or a pre-built `g8e` binary) to produce `demos/bin/g8e`
 
-No pre-build step is required. Docker Compose builds the g8e binary from source inside each container using the root `Dockerfile` multi-stage build.
+Run `make build` first to compile the binary and copy it to `demos/bin/g8e`. Docker Compose copies this binary into each g8e service container via `demos/Dockerfile`.
 
 ### Run a demo
 

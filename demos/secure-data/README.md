@@ -7,7 +7,7 @@ This demo simulates a **governed SharePoint-to-SharePoint migration** with a two
 The secure-data demo demonstrates:
 
 - **Two-Operator topology**: source domain and destination domain each have their own Gateway (PDPoint) and Operator (L5 Actuator)
-- **Chain of custody**: both operators sign receipts — neither implicitly trusts the other
+- **Chain of custody**: both operators sign receipts; neither implicitly trusts the other
 - **8 secure data transfer doctrine rules** enforced on every migration operation
 - **Connector bypass prevention**: direct rclone/scp/rsync invocation blocked without a GovernanceEnvelope
 - **Cross-tenant leak detection**: envelopes targeting destinations not in the signed manifest are rejected
@@ -15,9 +15,9 @@ The secure-data demo demonstrates:
 
 ## Network Topology
 
-- **net_src_internal (10.20.0.0/24)**: Source domain — source gateway, source operator, connectors (rclone, SharePoint), source storage
-- **net_dst_internal (10.21.0.0/24)**: Destination domain — destination gateway, destination operator, destination storage
-- **net_migration (10.22.0.0/24)**: Migration corridor — source operator writes via rclone, destination operator verifies arrival
+- **net_src_internal (10.20.0.0/24)**: Source domain: source gateway, source operator, connectors (rclone, SharePoint), source storage
+- **net_dst_internal (10.21.0.0/24)**: Destination domain: destination gateway, destination operator, destination storage
+- **net_migration (10.22.0.0/24)**: Migration corridor: source operator writes via rclone, destination operator verifies arrival
 - **net_untrusted (10.23.0.0/24)**: Bad actor (isolated, no path to source or destination storage)
 - **net_mgmt (10.24.0.0/24)**: Observability (reads audit logs from both gateways)
 
@@ -47,12 +47,13 @@ The demo includes 8 secure data transfer doctrine rules covering:
 ### Prerequisites
 
 - Docker and Docker Compose installed
-- g8e binary built at repository root
+- g8e binary built via `make build` (see below)
 
 ### Build the g8e binary
 
+From the repository root:
+
 ```bash
-cd /home/bob/g8e
 make build
 ```
 
@@ -128,7 +129,7 @@ This is the only demo with two separate gateway/operator pairs:
 - **Source domain** (`src-gateway` + `src-operator`): initiates the migration, reads from source storage
 - **Destination domain** (`dst-gateway` + `dst-operator`): verifies arrival, writes to destination storage
 
-Both gateways run in `--posture consensus` mode. The migration corridor (`net_migration`) is the only network shared between domains — source operator writes, destination operator verifies.
+Both gateways run in default `doctrine` posture (L1 enforcement). The migration corridor (`net_migration`) is the only network shared between domains; source operator writes, destination operator verifies.
 
 ### Connectors
 

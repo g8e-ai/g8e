@@ -185,7 +185,6 @@ Any file in the output that carries a version/date header should have that heade
 | 24 | `docs/guides/getting_started.md` | |
 | 25 | `docs/guides/lovable.md` | |
 
-> `docs/guides/live-swarm-demo.md` exists but does not carry a version header.
 
 #### Reference Docs (`docs/reference/`) — 2 files
 

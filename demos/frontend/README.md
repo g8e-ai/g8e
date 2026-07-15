@@ -6,11 +6,11 @@ This demo demonstrates **third-party frontend application enrollment** with the 
 
 The frontend demo demonstrates:
 
-- **CORS enrollment** — gateway accepts requests from `http://localhost:3003`
-- **WebAuthn passkey registration** — browser creates a credential via `navigator.credentials.create`
-- **WebAuthn passkey authentication** — browser authenticates via `navigator.credentials.get`
-- **SSE live event streaming** — authenticated session receives real-time gateway events
-- **Session cookie handling** — `credentials: 'include'` on all fetch calls
+- **CORS enrollment**: gateway accepts requests from `http://localhost:3003`
+- **WebAuthn passkey registration**: browser creates a credential via `navigator.credentials.create`
+- **WebAuthn passkey authentication**: browser authenticates via `navigator.credentials.get`
+- **SSE live event streaming**: authenticated session receives real-time gateway events
+- **Session cookie handling**: `credentials: 'include'` on all authenticated API calls
 
 ## Network Topology
 
@@ -33,30 +33,43 @@ The frontend demo demonstrates:
 
 The demo includes 3 frontend security doctrine rules:
 
-- **Unauthorized API Access** — blocks unauthenticated API access attempts
-- **CORS Origin Spoofing** — detects forged Origin/Referer headers
-- **Session Hijacking** — detects session token replay/theft attempts
+- **Unauthorized API Access**: blocks unauthenticated API access attempts
+- **CORS Origin Spoofing**: detects forged Origin/Referer headers
+- **Session Hijacking**: detects session token replay/theft attempts
 
 ## Quick Start
 
 ### Prerequisites
 
 - Docker and Docker Compose installed
-- g8e binary built at repository root
+- g8e binary built and copied to `demos/bin/g8e`
 
 ### Build the g8e binary
 
+From the repository root:
+
 ```bash
-cd /home/bob/g8e
 make build
 ```
 
+This builds the g8e binary and copies it to `demos/bin/g8e`.
+
 ### Start the frontend demo
+
+Using the g8e CLI (recommended):
+
+```bash
+g8e demos start frontend
+```
+
+Or using Docker Compose directly:
 
 ```bash
 cd demos/frontend
 docker compose up -d
 ```
+
+> **Note**: The frontend demo uses ports 8083 and 8446, which overlap with the `secure-data` (source) demo. Do not run both simultaneously.
 
 ### Check service status
 
@@ -68,10 +81,10 @@ docker compose ps
 
 Open `http://localhost:3003` in your browser to interact with the demo:
 
-1. **Health check** — the app verifies gateway connectivity on load
-2. **Register Passkey** — creates a WebAuthn credential in the browser
-3. **Authenticate** — logs in with the registered passkey
-4. **Connect SSE** — receives live gateway events via Server-Sent Events
+1. **Health check**: the app verifies gateway connectivity on load
+2. **Register Passkey**: creates a WebAuthn credential in the browser
+3. **Authenticate**: logs in with the registered passkey
+4. **Connect SSE**: receives live gateway events via Server-Sent Events
 
 ## Demo Scenarios
 
@@ -85,11 +98,11 @@ g8e demos run frontend 1
 
 The scenario runs a 5-step verification:
 
-1. **Gateway health check** — confirms the g8e gateway is live on port 8083
-2. **CORS preflight** — verifies the gateway accepts `OPTIONS` requests from `http://localhost:3003`
-3. **Passkey endpoint accessible** — confirms the WebAuthn challenge endpoint responds
-4. **SSE endpoint protected** — confirms the SSE stream returns 401 without a valid session (proves it is protected)
-5. **Frontend app served** — confirms nginx is serving the frontend HTML on port 3003
+1. **Gateway health check**: confirms the g8e gateway is live on port 8083
+2. **CORS preflight**: verifies the gateway accepts `OPTIONS` requests from `http://localhost:3003`
+3. **Passkey endpoint accessible**: confirms the WebAuthn challenge endpoint responds
+4. **SSE endpoint protected**: confirms the SSE stream returns 401 without a valid session (proves it is protected)
+5. **Frontend app served**: confirms nginx is serving the frontend HTML on port 3003
 
 After the automated checks pass, open `http://localhost:3003` in your browser to complete the interactive passkey registration and SSE streaming flow.
 
@@ -103,20 +116,18 @@ g8e demos run frontend
 
 ### Gateway Configuration
 
-The gateway starts with CORS and passkey RP origins pre-configured for the frontend:
+The gateway starts with CORS and passkey RP origins pre-configured for the frontend via CLI flags:
 
-```
---passkey-rp-origin http://localhost:8083
---passkey-rp-origin https://localhost:8446
---passkey-rp-origin http://localhost:3003
---cors-origin http://localhost:3003
-```
+- `--passkey-rp-origin http://localhost:8083`
+- `--passkey-rp-origin https://localhost:8446`
+- `--passkey-rp-origin http://localhost:3003`
+- `--cors-origin http://localhost:3003`
 
 ### Frontend App
 
 The frontend is a single-file HTML application served by nginx on port 3003. No build step is required. The app uses:
 
-- `credentials: 'include'` on all fetch calls
+- `credentials: 'include'` on all authenticated API calls
 - `EventSource` with `withCredentials: true` for SSE
 - Base64url helpers for WebAuthn credential encoding/decoding
 

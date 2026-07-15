@@ -21,7 +21,7 @@ demos/
 │   ├── config/
 │   ├── doctrine/               # PHI/HIPAA scrub patterns
 │   ├── target-data/            # Simulated EHR/PA records
-│   ├── healthcare.md           # Demo narrative and scenario walkthrough
+│   ├── README.md               # Healthcare-specific documentation
 │   ├── init.sql                # PostgreSQL schema for reporting-db
 │   ├── pa_api_server.py        # FHIR R4 PA submission API server
 │   └── setup_metabase.py       # Metabase compliance dashboard setup script

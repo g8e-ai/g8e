@@ -11,7 +11,7 @@ g8e is a zero-trust execution platform for agentic infrastructure. Mutations are
 - **Data sovereignty**: Raw data stays on the Operator host; platform state is host-native under `.g8e/`
 - **BYO clients**: The CLI (`./g8e`) is the default interface; MCP stdio for AI IDE integration; Console SPA and TUI for governance management
 
-See [g8e Protocol](../../protocol/docs/spec.md), [Gateway](../architecture/gateway.md), [Operator](../architecture/operator.md).
+See [g8e Protocol](../../protocol/docs/spec.md), [Gateway](../architecture/gateway.md), [Operator](../architecture/operator.md), [Codemap](codemap.md).
 
 ## Getting Started
 
@@ -38,7 +38,7 @@ Startup sequence: binary check/build â†’ root of trust generation (first boot) â
 ## Paths & State
 
 **Source paths** (git root):
-- `protocol/` - Protobuf schemas and JSON protocol constants
+- `protocol/` - Protobuf schemas, JSON protocol constants, model definitions, Python SDK, and conformance tests
 - `cmd/g8e/` - Binary entrypoint
 - `internal/cli/cmd/` - Cobra command tree
 - `internal/cli/serve/` - Gateway and operator boot sequences
@@ -49,6 +49,7 @@ Startup sequence: binary check/build â†’ root of trust generation (first boot) â
 **Runtime paths** (`.g8e/`):
 - `.g8e/pki/` - CA hierarchy and trust bundles
 - `.g8e/secrets/` - Bootstrap secrets
+- `.g8e/vault/` - Encryption vault (private)
 - `.g8e/data/` - SQLite databases and blobs
 - `.g8e/logs/` - Component logs
 - `.g8e/pids/` - Process IDs
@@ -132,6 +133,7 @@ Return centralized error constants from `internal/constants/errors.go` for known
 - mTLS by default; test runner handles certificate injection
 - Contract tests enforce alignment between components and `protocol/`
 - Coverage threshold: 75%
+- See [Testing Guide](tests.md) for detailed test patterns and infrastructure
 
 **Test infrastructure separation:**
 - `internal/services/storage/storagetest/` - Test-only audit storage (`TestSQLAuditStore` with Git ledger, no-op `DocSet`)
@@ -190,6 +192,7 @@ MCP tools compiled into the g8e binary that execute within the Operator's execut
 |---|---|
 | Protobuf schemas | `protocol/proto/` |
 | Constants (JSON reference) | `protocol/constants/` |
+| JSON model definitions | `protocol/models/` |
 | Go registry files | `internal/constants/` |
 | Governance layers | `internal/services/governance/` |
 | CLI entry points | `cmd/g8e/` â†’ `internal/cli/cmd/` |

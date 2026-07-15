@@ -16,7 +16,7 @@ title: Live Swarm Demo
 - **Authenticator:** Platform security key (Touch ID, Windows Hello), YubiKey, or similar
 - **Claude Code:** Installed and on PATH (`claude --version` works)
 - **g8e:** Cloned to `~/g8e`
-- **g8e Python Package:** Install the protocol library for Python-based tooling (`pip install g8e==1.5.0`). See the [Protocol Library documentation](../architecture/protocol.md) for API reference.
+- **g8e Python Package:** Install the protocol library for Python-based tooling (`pip install g8e==1.5.1`). See the [Protocol Library documentation](../../docs/architecture/protocol.md) for API reference.
 
 ---
 
