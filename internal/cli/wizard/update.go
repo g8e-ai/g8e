@@ -72,14 +72,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		return m, nil
-
-	case validationMsg:
-		if msg.err != "" {
-			m.validationError = msg.err
-			return m, nil
-		}
-		m.validationError = ""
-		return m, nil
 	}
 
 	return m, nil
@@ -128,7 +120,7 @@ func (m Model) handleUp() (tea.Model, tea.Cmd) {
 	switch m.step {
 	case StepNetwork:
 		switch m.focusIndex {
-		case 0:
+		case 1:
 			if m.certModeChoice > 0 {
 				m.certModeChoice--
 			}
@@ -159,7 +151,7 @@ func (m Model) handleDown() (tea.Model, tea.Cmd) {
 	switch m.step {
 	case StepNetwork:
 		switch m.focusIndex {
-		case 0:
+		case 1:
 			if m.certModeChoice < 1 {
 				m.certModeChoice++
 			}
@@ -188,7 +180,8 @@ func (m Model) handleDown() (tea.Model, tea.Cmd) {
 // handleTab cycles focus to the next input field within a step.
 func (m Model) handleTab() (tea.Model, tea.Cmd) {
 	blurAllInputs(&m)
-	m.focusIndex++
+	max := m.stepFocusMax()
+	m.focusIndex = (m.focusIndex + 1) % (max + 1)
 	focusFirstInput(&m)
 	return m, nil
 }
@@ -196,11 +189,32 @@ func (m Model) handleTab() (tea.Model, tea.Cmd) {
 // handleShiftTab cycles focus to the previous input field within a step.
 func (m Model) handleShiftTab() (tea.Model, tea.Cmd) {
 	blurAllInputs(&m)
-	if m.focusIndex > 0 {
-		m.focusIndex--
-	}
+	max := m.stepFocusMax()
+	m.focusIndex = (m.focusIndex - 1 + max + 1) % (max + 1)
 	focusFirstInput(&m)
 	return m, nil
+}
+
+// stepFocusMax returns the maximum focusIndex for the current step,
+// accounting for conditional fields that are only visible when their
+// toggle is enabled.
+func (m Model) stepFocusMax() int {
+	switch m.step {
+	case StepNetwork:
+		if m.needsWebFrontend {
+			return 3
+		}
+		return 2
+	case StepPosture:
+		return 6
+	case StepRouting:
+		if m.routeToA2A {
+			return 3
+		}
+		return 2
+	default:
+		return 0
+	}
 }
 
 // handleTextInput forwards key events to the currently focused textinput.
@@ -348,7 +362,6 @@ func (m Model) validateNetwork() string {
 }
 
 func (m Model) validatePosture() string {
-	postureName := postureNameFromChoice(m.postureChoice)
 	if m.postureChoice == 1 || m.postureChoice == 2 {
 		tribunalID := m.tribunalIDInput.Value()
 		if err := validateTribunalID(tribunalID); err != nil {
@@ -376,7 +389,6 @@ func (m Model) validatePosture() string {
 			return err.Error()
 		}
 	}
-	_ = postureName
 	return ""
 }
 

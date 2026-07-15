@@ -74,6 +74,9 @@ func NewModel(opts Options) Model {
 	m.publicBaseURLInput.SetValue(opts.InitialConfig.PublicBaseURL)
 
 	m.corsOriginInput = newTextInput("https://console.g8e.ai", "Allowed CORS origin", 40)
+	if len(opts.InitialConfig.AllowedOrigins) > 0 {
+		m.corsOriginInput.SetValue(opts.InitialConfig.AllowedOrigins[0])
+	}
 
 	m.tribunalIDInput = newTextInput("trib-prod-01", "Tribunal Policy ID", 30)
 	m.tribunalIDInput.SetValue(opts.InitialConfig.TribunalID)
@@ -99,6 +102,9 @@ func NewModel(opts Options) Model {
 	m.passkeyRpNameInput.SetValue(rpName)
 
 	m.passkeyRpOriginInput = newTextInput("https://localhost:8443", "Passkey RP Origin", 40)
+	if len(opts.InitialConfig.PasskeyRpOrigins) > 0 {
+		m.passkeyRpOriginInput.SetValue(opts.InitialConfig.PasskeyRpOrigins[0])
+	}
 
 	m.mcpDownstreamInput = newTextInput("http://mcp:3000", "MCP Server URL", 40)
 	m.mcpDownstreamInput.SetValue(opts.InitialConfig.MCPDownstreamURL)
@@ -122,6 +128,11 @@ func NewModel(opts Options) Model {
 	}
 
 	m.vaultRequireUnlock = opts.InitialConfig.VaultRequireUnlock
+
+	// Initialize toggles from initial config so pre-filled inputs are visible
+	m.routeToMCP = opts.InitialConfig.MCPDownstreamURL != ""
+	m.routeToA2A = opts.InitialConfig.A2ADownstreamURL != ""
+	m.needsWebFrontend = len(opts.InitialConfig.AllowedOrigins) > 0
 
 	// Focus the first input
 	m.publicBaseURLInput.Focus()
@@ -150,8 +161,10 @@ func (m Model) result() Result {
 	} else {
 		cfg.CertIdentityMode = "localhost"
 	}
-	if m.needsWebFrontend && m.corsOriginInput.Value() != "" {
+	if m.needsWebFrontend {
 		cfg.AllowedOrigins = []string{m.corsOriginInput.Value()}
+	} else {
+		cfg.AllowedOrigins = nil
 	}
 
 	// Step 2: Posture
@@ -175,9 +188,13 @@ func (m Model) result() Result {
 	// Step 3: Routing
 	if m.routeToMCP {
 		cfg.MCPDownstreamURL = m.mcpDownstreamInput.Value()
+	} else {
+		cfg.MCPDownstreamURL = ""
 	}
 	if m.routeToA2A {
 		cfg.A2ADownstreamURL = m.a2aDownstreamInput.Value()
+	} else {
+		cfg.A2ADownstreamURL = ""
 	}
 
 	// Step 4: Vault

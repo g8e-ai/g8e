@@ -17,9 +17,3 @@ package wizard
 type stepTransitionMsg struct {
 	to Step
 }
-
-// validationMsg carries a validation error or success.
-type validationMsg struct {
-	err string // empty = valid
-}
-

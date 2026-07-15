@@ -111,7 +111,7 @@ func (m Model) viewNetwork() string {
 
 	b.WriteString(mutedStyle.Render("How will this gateway be exposed to the network?"))
 	b.WriteString("\n")
-	b.WriteString(renderChoice([]string{"Local Development Only", "Full Network"}, m.certModeChoice, m.focusIndex == 0))
+	b.WriteString(renderChoice([]string{"Local Development Only", "Full Network"}, m.certModeChoice, m.focusIndex == 1))
 	b.WriteString("\n\n")
 
 	b.WriteString(renderToggle("Do you need a web frontend to connect from a browser?", m.needsWebFrontend, m.focusIndex == 2))

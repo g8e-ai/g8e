@@ -30,7 +30,7 @@ func validatePublicBaseURL(s string) error {
 	}
 	u, err := url.Parse(s)
 	if err != nil {
-		return fmt.Errorf("invalid URL: %w", err)
+		return fmt.Errorf("wizard: validate public base URL: %w", err)
 	}
 	if u.Scheme != "https" && u.Scheme != "http" {
 		return fmt.Errorf("URL must use http or https scheme, got %q", u.Scheme)
@@ -61,7 +61,7 @@ func validateTribunalURL(s string) error {
 	}
 	u, err := url.Parse(s)
 	if err != nil {
-		return fmt.Errorf("invalid tribunal URL: %w", err)
+		return fmt.Errorf("wizard: validate tribunal URL: %w", err)
 	}
 	if u.Scheme != "https" {
 		return fmt.Errorf("tribunal URL must use https scheme, got %q", u.Scheme)
@@ -95,29 +95,33 @@ func validateTribunalID(s string) error {
 
 // validateTribunalBootstrap validates a tribunal bootstrap JSON file.
 // Must be a readable regular JSON file with a tribunal_id field matching the given ID.
+//
+// This function uses os.Stat/os.ReadFile directly because the bootstrap path is
+// user-supplied and may live outside the .g8e/ runtime tree. RuntimeFileService is
+// scoped to .g8e/ paths and is not appropriate for arbitrary filesystem paths.
 func validateTribunalBootstrap(path, tribunalID string) error {
 	info, err := os.Stat(path)
 	if err != nil {
-		return fmt.Errorf("cannot read bootstrap file: %w", err)
+		return fmt.Errorf("wizard: validate bootstrap: %w", err)
 	}
 	if info.IsDir() {
-		return fmt.Errorf("bootstrap path must be a file, not a directory")
+		return fmt.Errorf("wizard: validate bootstrap: path must be a file, not a directory")
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("cannot read bootstrap file: %w", err)
+		return fmt.Errorf("wizard: validate bootstrap: %w", err)
 	}
 	var doc struct {
 		TribunalID string `json:"tribunal_id"`
 	}
 	if err := json.Unmarshal(data, &doc); err != nil {
-		return fmt.Errorf("bootstrap file is not valid JSON: %w", err)
+		return fmt.Errorf("wizard: validate bootstrap: not valid JSON: %w", err)
 	}
 	if doc.TribunalID == "" {
-		return fmt.Errorf("bootstrap file must contain a tribunal_id field")
+		return fmt.Errorf("wizard: validate bootstrap: file must contain a tribunal_id field")
 	}
 	if doc.TribunalID != tribunalID {
-		return fmt.Errorf("bootstrap file tribunal_id %q does not match configured tribunal ID %q", doc.TribunalID, tribunalID)
+		return fmt.Errorf("wizard: validate bootstrap: tribunal_id %q does not match configured tribunal ID %q", doc.TribunalID, tribunalID)
 	}
 	return nil
 }
@@ -130,7 +134,7 @@ func validatePasskeyRP(rpID, origin string) error {
 	}
 	u, err := url.Parse(origin)
 	if err != nil {
-		return fmt.Errorf("invalid passkey origin: %w", err)
+		return fmt.Errorf("wizard: validate passkey RP: %w", err)
 	}
 	if u.Scheme != "https" && u.Scheme != "http" {
 		return fmt.Errorf("passkey origin must use http or https scheme")
@@ -157,7 +161,7 @@ func validateDownstreamURL(s string) error {
 	}
 	u, err := url.Parse(s)
 	if err != nil {
-		return fmt.Errorf("invalid downstream URL: %w", err)
+		return fmt.Errorf("wizard: validate downstream URL: %w", err)
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return fmt.Errorf("downstream URL must use http or https scheme, got %q", u.Scheme)
@@ -182,7 +186,7 @@ func validateCORSOrigin(s string) error {
 	}
 	u, err := url.Parse(s)
 	if err != nil {
-		return fmt.Errorf("invalid CORS origin: %w", err)
+		return fmt.Errorf("wizard: validate CORS origin: %w", err)
 	}
 	if u.Scheme != "https" && u.Scheme != "http" {
 		return fmt.Errorf("CORS origin must use http or https scheme, got %q", u.Scheme)
