@@ -37,7 +37,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/fs"
@@ -243,7 +242,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 
 	publicBaseURL := cfg.Gateway.PublicBaseURL
 	if publicBaseURL == "" {
-		publicBaseURL = netutil.LocalhostHTTPSURL(cfg.Gateway.HTTPSPort)
+		publicBaseURL = network.LocalhostHTTPSURL(cfg.Gateway.HTTPSPort)
 	}
 
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{

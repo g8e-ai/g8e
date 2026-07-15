@@ -28,7 +28,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/netutil"
+	"github.com/g8e-ai/g8e/internal/services/network"
 )
 
 // GUIEnrollmentFile is the name of the file storing enrolled GUI origins.
@@ -332,8 +332,8 @@ CORS preflight.`,
 				cmd.Println("Run 'g8e gui enroll --origin <origin>' first.")
 			}
 
-			httpsURL := netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
-			httpURL := netutil.LocalhostHTTPURL(constants.Ports.OperatorHttp)
+			httpsURL := network.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+			httpURL := network.LocalhostHTTPURL(constants.Ports.OperatorHttp)
 
 			cmd.Println("Verification Results")
 			cmd.Println(strings.Repeat("=", 50))
@@ -395,7 +395,7 @@ func printEnrollConfig(cmd *cobra.Command, origin, rpID, rpName, publicBaseURL s
 		rpName = "g8e"
 	}
 	if publicBaseURL == "" {
-		publicBaseURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+		publicBaseURL = network.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	cmd.Println("Frontend Configuration Snippet")
@@ -506,7 +506,7 @@ func saveGUIEnrollment(path string, enrollment *GUIEnrollment) error {
 // returns a helpful error telling the user to restart the gateway with the
 // correct flags.
 func checkGatewayCORS(cfg *config.Config, origin string) error {
-	httpURL := netutil.LocalhostHTTPURL(constants.Ports.OperatorHttp)
+	httpURL := network.LocalhostHTTPURL(constants.Ports.OperatorHttp)
 
 	client := &http.Client{Timeout: 5 * time.Second}
 

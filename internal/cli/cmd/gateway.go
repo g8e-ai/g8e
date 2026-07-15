@@ -32,7 +32,6 @@ import (
 	g8econfig "github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/network"
@@ -371,10 +370,11 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 			}
 
 			externalIP := network.GetExternalInterfaceIP()
+			hostname := pickHostname(identityResult.Identity)
 
 			cmd.Printf("[g8e] Gateway started (PID: %d)\n", pid)
 			cmd.Println()
-			printNextSteps(cmd, postureObj, externalIP)
+			printNextSteps(cmd, postureObj, externalIP, hostname)
 
 			return nil
 		},
@@ -476,9 +476,9 @@ Displays the process ID and endpoint URLs when the gateway is running.`,
 					}
 					cmd.Printf("\nEndpoints:\n")
 					cmd.Printf("  Operator Bootstrap: https://%s:%d\n", network.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
-					cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
-					cmd.Printf("  Console UI:         %s/console/ (WebAuthn/passkey dashboard)\n", netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
-					cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", netutil.LocalhostHTTPURL(constants.Ports.OperatorHttp))
+					cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
+					cmd.Printf("  Console UI:         %s/console/ (WebAuthn/passkey dashboard)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
+					cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", network.LocalhostHTTPURL(constants.Ports.OperatorHttp))
 					return nil
 				}
 			}
@@ -498,9 +498,9 @@ Displays the process ID and endpoint URLs when the gateway is running.`,
 				cmd.Printf("State: RUNNING (PID: %d)\n", pid)
 				cmd.Printf("\nEndpoints:\n")
 				cmd.Printf("  Operator Bootstrap: https://%s:%d\n", network.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
-				cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
-				cmd.Printf("  Console UI:         %s/console/ (WebAuthn/passkey dashboard)\n", netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
-				cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", netutil.LocalhostHTTPURL(constants.Ports.OperatorHttp))
+				cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
+				cmd.Printf("  Console UI:         %s/console/ (WebAuthn/passkey dashboard)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
+				cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", network.LocalhostHTTPURL(constants.Ports.OperatorHttp))
 			} else {
 				cmd.Println("State: STOPPED")
 			}
@@ -577,7 +577,7 @@ missing, the gateway defaults to 'doctrine' posture.`,
 			cmd.Println("g8e Gateway restarted successfully")
 			postureObj, _ := governance.ParseGovernancePosture(currentPosture)
 			cmd.Printf("Governance mode: %s\n", postureObj.Description())
-			cmd.Printf("\nConsole UI: %s/console/ (WebAuthn/passkey dashboard)\n", netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
+			cmd.Printf("\nConsole UI: %s/console/ (WebAuthn/passkey dashboard)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
 			cmd.Printf("\nNext step: Run '%s auth enroll' to authenticate\n", getBinaryName())
 			return nil
 		},
