@@ -26,7 +26,6 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -34,6 +33,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -72,10 +72,9 @@ func (m *mockAPIClient) Delete(path string) ([]byte, error) {
 }
 
 // setupApproveAPITestEnv creates a full test environment with valid key, cert, and credentials.
-func setupApproveAPITestEnv(t *testing.T) (*config.Config, ed25519.PrivateKey) {
+func setupApproveAPITestEnv(t *testing.T) (*config.Config, ed25519.PrivateKey, fs.RuntimeFileService) {
 	t.Helper()
-	tmpDir := t.TempDir()
-	cfg := setupTestConfig(t, tmpDir)
+	fileSvc, cfg := newCmdTestEnv(t)
 
 	_, priv, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -83,11 +82,11 @@ func setupApproveAPITestEnv(t *testing.T) (*config.Config, ed25519.PrivateKey) {
 	keyDER, err := x509.MarshalPKCS8PrivateKey(priv)
 	require.NoError(t, err)
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
-	require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), keyPEM, 0o600))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLIKeyFile()), keyPEM, constants.PermFilePrivate))
 
 	certDER := generateApproveTestCertDER(t, priv)
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	require.NoError(t, os.WriteFile(cfg.CLICertFile(), certPEM, 0o600))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()), certPEM, constants.PermFilePrivate))
 
 	creds := &auth.Credentials{
 		OperatorSessionID: "op-sess-test",
@@ -95,22 +94,22 @@ func setupApproveAPITestEnv(t *testing.T) (*config.Config, ed25519.PrivateKey) {
 		OperatorID:        "op-test",
 		CLISessionID:      "cli-sess-test",
 	}
-	require.NoError(t, auth.SaveCredentials(cfg, creds))
+	require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
 
-	return cfg, priv
+	return cfg, priv, fileSvc
 }
 
 // setupApproveSSETestEnv extends setupApproveAPITestEnv by writing a valid CA
 // cert to the trust bundle path so auth.BuildMTLSClient can succeed.
-func setupApproveSSETestEnv(t *testing.T) (*config.Config, ed25519.PrivateKey) {
+func setupApproveSSETestEnv(t *testing.T) (*config.Config, ed25519.PrivateKey, fs.RuntimeFileService) {
 	t.Helper()
-	cfg, priv := setupApproveAPITestEnv(t)
+	cfg, priv, fileSvc := setupApproveAPITestEnv(t)
 
-	certPEM, err := os.ReadFile(cfg.CLICertFile())
+	certPEM, err := fileSvc.ReadFile(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()))
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(cfg.TrustBundlePath(), certPEM, 0o600))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), cfg.DefaultTrustBundleRelPath(), certPEM, constants.PermFilePrivate))
 
-	return cfg, priv
+	return cfg, priv, fileSvc
 }
 
 // sseApproveServer returns an httptest.Server that serves a single
@@ -166,7 +165,7 @@ func withEndpointOverride(t *testing.T, url string) {
 }
 
 func TestApproveCmd_SSE_HappyPath(t *testing.T) {
-	cfg, _ := setupApproveSSETestEnv(t)
+	cfg, _, fileSvc := setupApproveSSETestEnv(t)
 
 	srv := sseApproveServer(t, "user-test", "txhash123")
 	t.Cleanup(srv.Close)
@@ -177,9 +176,9 @@ func TestApproveCmd_SSE_HappyPath(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := approveCmdWithConfig(loader, factory)
+	cmd := approveCmdWithConfig(loader, factory, fileSvcFactoryFor(fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -192,7 +191,7 @@ func TestApproveCmd_SSE_HappyPath(t *testing.T) {
 }
 
 func TestApproveCmd_SSE_Timeout(t *testing.T) {
-	cfg, _ := setupApproveSSETestEnv(t)
+	cfg, _, fileSvc := setupApproveSSETestEnv(t)
 
 	srv := sseNoEventServer(t)
 	withEndpointOverride(t, srv.URL)
@@ -202,9 +201,9 @@ func TestApproveCmd_SSE_Timeout(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := approveCmdWithConfig(loader, factory)
+	cmd := approveCmdWithConfig(loader, factory, fileSvcFactoryFor(fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -219,7 +218,7 @@ func TestApproveCmd_SSE_Timeout(t *testing.T) {
 }
 
 func TestApproveCmd_SSE_Success_GetError(t *testing.T) {
-	cfg, _ := setupApproveSSETestEnv(t)
+	cfg, _, fileSvc := setupApproveSSETestEnv(t)
 
 	srv := sseApproveServer(t, "user-test", "txhash123")
 	t.Cleanup(srv.Close)
@@ -230,9 +229,9 @@ func TestApproveCmd_SSE_Success_GetError(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := approveCmdWithConfig(loader, factory)
+	cmd := approveCmdWithConfig(loader, factory, fileSvcFactoryFor(fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -243,7 +242,7 @@ func TestApproveCmd_SSE_Success_GetError(t *testing.T) {
 }
 
 func TestApproveCmd_SSE_Success_InvalidJSONStatus(t *testing.T) {
-	cfg, _ := setupApproveSSETestEnv(t)
+	cfg, _, fileSvc := setupApproveSSETestEnv(t)
 
 	srv := sseApproveServer(t, "user-test", "txhash123")
 	t.Cleanup(srv.Close)
@@ -254,9 +253,9 @@ func TestApproveCmd_SSE_Success_InvalidJSONStatus(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := approveCmdWithConfig(loader, factory)
+	cmd := approveCmdWithConfig(loader, factory, fileSvcFactoryFor(fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -267,14 +266,14 @@ func TestApproveCmd_SSE_Success_InvalidJSONStatus(t *testing.T) {
 }
 
 func TestApproveCmd_APIInjection_ClientFactoryError(t *testing.T) {
-	cfg, _ := setupApproveAPITestEnv(t)
+	cfg, _, fileSvc := setupApproveAPITestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) {
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) {
 		return nil, constants.ErrNotAuthenticated
 	}
 
-	cmd := approveCmdWithConfig(loader, factory)
+	cmd := approveCmdWithConfig(loader, factory, fileSvcFactoryFor(fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -285,7 +284,7 @@ func TestApproveCmd_APIInjection_ClientFactoryError(t *testing.T) {
 }
 
 func TestApproveCmd_SSE_Success_EmptyStatus(t *testing.T) {
-	cfg, _ := setupApproveSSETestEnv(t)
+	cfg, _, fileSvc := setupApproveSSETestEnv(t)
 
 	srv := sseApproveServer(t, "user-test", "txhash456")
 	t.Cleanup(srv.Close)
@@ -296,9 +295,9 @@ func TestApproveCmd_SSE_Success_EmptyStatus(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := approveCmdWithConfig(loader, factory)
+	cmd := approveCmdWithConfig(loader, factory, fileSvcFactoryFor(fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -310,7 +309,7 @@ func TestApproveCmd_SSE_Success_EmptyStatus(t *testing.T) {
 }
 
 func TestApproveCmd_SSE_Success_StatusNotApproved(t *testing.T) {
-	cfg, _ := setupApproveSSETestEnv(t)
+	cfg, _, fileSvc := setupApproveSSETestEnv(t)
 
 	srv := sseApproveServer(t, "user-test", "txhash789")
 	t.Cleanup(srv.Close)
@@ -321,9 +320,9 @@ func TestApproveCmd_SSE_Success_StatusNotApproved(t *testing.T) {
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return mockClient, nil }
 
-	cmd := approveCmdWithConfig(loader, factory)
+	cmd := approveCmdWithConfig(loader, factory, fileSvcFactoryFor(fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -334,13 +333,13 @@ func TestApproveCmd_SSE_Success_StatusNotApproved(t *testing.T) {
 }
 
 func TestApproveCmd_NoCredentials_Error(t *testing.T) {
-	cfg, _ := setupApproveAPITestEnv(t)
-	require.NoError(t, os.Remove(cfg.CredentialsFile()))
+	cfg, _, fileSvc := setupApproveAPITestEnv(t)
+	require.NoError(t, fileSvc.Remove(context.Background(), mustRel(t, fileSvc, cfg.CredentialsFile())))
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	factory := func(*config.Config) (apiClient, error) { return &mockAPIClient{}, nil }
+	factory := func(fs.RuntimeFileService, *config.Config) (apiClient, error) { return &mockAPIClient{}, nil }
 
-	cmd := approveCmdWithConfig(loader, factory)
+	cmd := approveCmdWithConfig(loader, factory, fileSvcFactoryFor(fileSvc))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

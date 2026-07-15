@@ -14,16 +14,17 @@
 package cmd
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/spf13/cobra"
 )
 
@@ -44,10 +45,13 @@ func authCmd() *cobra.Command {
 }
 
 func enrollCmd() *cobra.Command {
-	return enrollCmdWithConfig(loadConfig)
+	return enrollCmdWithConfig(loadConfig, newFileSvc)
 }
 
-func enrollCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobra.Command {
+func enrollCmdWithConfig(
+	configLoader func(string) (*config.Config, error),
+	fileSvcFactory func() (fs.RuntimeFileService, error),
+) *cobra.Command {
 	var useTPM bool
 
 	cmd := &cobra.Command{
@@ -68,7 +72,12 @@ The Gateway must already be running (use './g8e gw start' first).`,
 				return err
 			}
 
-			return performEnroll(cmd, cfg, useTPM)
+			fileSvc, err := fileSvcFactory()
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+
+			return performEnroll(cmd, fileSvc, cfg, useTPM)
 		},
 	}
 
@@ -82,23 +91,35 @@ The Gateway must already be running (use './g8e gw start' first).`,
 // performEnroll handles CLI session enrollment and browser-based passkey registration.
 // On Windows, it uses the Windows Certificate Store for key generation and imports
 // the signed cert for Windows Hello native API access.
-func performEnroll(cmd *cobra.Command, cfg *config.Config, useTPM bool) error {
+func performEnroll(cmd *cobra.Command, fileSvc fs.RuntimeFileService, cfg *config.Config, useTPM bool) error {
+	ctx := context.Background()
+
 	// Check if local credentials exist
-	hasLocalCreds := true
-	if _, err := os.Stat(cfg.CredentialsFile()); os.IsNotExist(err) {
-		hasLocalCreds = false
+	credsRel, err := fileSvc.RelFromAbs(cfg.CredentialsFile())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
-	if _, err := os.Stat(cfg.CLICertFile()); os.IsNotExist(err) {
-		hasLocalCreds = false
+	credsExist, err := fileSvc.FileExists(ctx, credsRel)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
+	certRel, err := fileSvc.RelFromAbs(cfg.CLICertFile())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	}
+	certExists, err := fileSvc.FileExists(ctx, certRel)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	}
+	hasLocalCreds := credsExist && certExists
 
 	// No local credentials: first-time bootstrap or new CLI on an existing gateway.
 	if !hasLocalCreds {
 		cmd.Println("Performing CLI session enrollment...")
-		if err := auth.EnrollCLI(cfg, useTPM); err != nil {
+		if err := auth.EnrollCLI(fileSvc, cfg, useTPM); err != nil {
 			return err
 		}
-		creds, err := auth.LoadCredentials(cfg)
+		creds, err := auth.LoadCredentials(fileSvc, cfg)
 		if err != nil || creds == nil {
 			return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 		}
@@ -108,7 +129,7 @@ func performEnroll(cmd *cobra.Command, cfg *config.Config, useTPM bool) error {
 
 		// Register passkey for the newly enrolled user via browser (web session)
 		cmd.Println("\nRegistering passkey via browser...")
-		if err := auth.RegisterPasskeyViaBrowser(cfg, creds.UserID, creds.CLISessionID); err != nil {
+		if err := auth.RegisterPasskeyViaBrowser(fileSvc, cfg, creds.UserID, creds.CLISessionID); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrPasskeyRegistrationFailed, err)
 		}
 		return nil
@@ -118,14 +139,19 @@ func performEnroll(cmd *cobra.Command, cfg *config.Config, useTPM bool) error {
 	cmd.Println("Gateway already bootstrapped. Attempting re-enrollment via CSR with mTLS...")
 
 	// Check if operator certificate exists (CLI-only bootstrap has no operator)
-	hasOperatorCert := true
-	if _, err := os.Stat(cfg.OperatorCertFile()); os.IsNotExist(err) {
-		hasOperatorCert = false
+	opCertRel, err := fileSvc.RelFromAbs(cfg.OperatorCertFile())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
+	opCertExists, err := fileSvc.FileExists(ctx, opCertRel)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	}
+	hasOperatorCert := opCertExists
 
 	// Check if certificates are expiring soon and auto-renew if needed
 	cmd.Println("Checking certificate expiry...")
-	if err := auth.AutoRenewCertificate(cfg, "cli", ""); err != nil {
+	if err := auth.AutoRenewCertificate(fileSvc, cfg, "cli", ""); err != nil {
 		return err
 	}
 
@@ -133,7 +159,6 @@ func performEnroll(cmd *cobra.Command, cfg *config.Config, useTPM bool) error {
 	hostname, _ := os.Hostname()
 	var cliCSR string
 	var cliKey *ecdsa.PrivateKey
-	var err error
 	if runtime.GOOS == "windows" {
 		cliCSR, cliKey, err = auth.GenerateWindowsCSR(fmt.Sprintf("g8e-cli-%s", hostname), useTPM)
 	} else {
@@ -147,7 +172,7 @@ func performEnroll(cmd *cobra.Command, cfg *config.Config, useTPM bool) error {
 	if hasOperatorCert {
 		// Full re-enrollment with operator CSR
 		cmd.Println("Re-enrolling with operator...")
-		regResp, err = auth.ReEnroll(cfg, "", cliCSR, "", "")
+		regResp, err = auth.ReEnroll(fileSvc, cfg, "", cliCSR, "", "")
 		if err != nil {
 			// Check if this is a TLS verification error (stale trust bundle after gateway PKI regeneration)
 			if errors.Is(err, constants.ErrTrustBundleStale) {
@@ -168,7 +193,15 @@ func performEnroll(cmd *cobra.Command, cfg *config.Config, useTPM bool) error {
 		return constants.ErrMissingRequiredField
 	}
 
-	if err := auth.SaveCertAndKey(regResp.CLICert, regResp.CLICertChain, cliKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
+	cliCertRel, err := fileSvc.RelFromAbs(cfg.CLICertFile())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+	}
+	cliKeyRel, err := fileSvc.RelFromAbs(cfg.CLIKeyFile())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+	}
+	if err := auth.SaveCertAndKey(fileSvc, regResp.CLICert, regResp.CLICertChain, cliKey, cliCertRel, cliKeyRel); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 	if runtime.GOOS == "windows" {
@@ -178,11 +211,7 @@ func performEnroll(cmd *cobra.Command, cfg *config.Config, useTPM bool) error {
 	}
 
 	if regResp.HubTrustBundle != "" {
-		trustPath := cfg.TrustBundlePath()
-		if err := os.MkdirAll(filepath.Dir(trustPath), 0755); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
-		}
-		if err := os.WriteFile(trustPath, []byte(regResp.HubTrustBundle), 0644); err != nil {
+		if err := auth.WriteTrustBundleFS(fileSvc, cfg, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 		}
 	}
@@ -194,7 +223,7 @@ func performEnroll(cmd *cobra.Command, cfg *config.Config, useTPM bool) error {
 		CLISessionID:      regResp.CLISessionID,
 	}
 
-	if err := auth.SaveCredentials(cfg, creds); err != nil {
+	if err := auth.SaveCredentials(fileSvc, cfg, creds); err != nil {
 		return err
 	}
 
@@ -203,24 +232,36 @@ func performEnroll(cmd *cobra.Command, cfg *config.Config, useTPM bool) error {
 	cmd.Printf("CLI Session ID: %s\n", regResp.CLISessionID)
 
 	cmd.Println("\nRegistering passkey via browser...")
-	if err := auth.RegisterPasskeyViaBrowser(cfg, creds.UserID, creds.CLISessionID); err != nil {
+	if err := auth.RegisterPasskeyViaBrowser(fileSvc, cfg, creds.UserID, creds.CLISessionID); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrPasskeyRegistrationFailed, err)
 	}
 	return nil
 }
 
 func logoutCmd() *cobra.Command {
+	return logoutCmdWithConfig(loadConfig, newFileSvc)
+}
+
+func logoutCmdWithConfig(
+	configLoader func(string) (*config.Config, error),
+	fileSvcFactory func() (fs.RuntimeFileService, error),
+) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "logout",
 		Short: "Clear local Operator session and credentials",
 		Long:  `Clear the local Operator session by deleting stored credentials from disk. This does not revoke the session on the gateway side — it only removes the local credential files so the CLI can no longer authenticate.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig("")
+			cfg, err := configLoader("")
 			if err != nil {
 				return err
 			}
 
-			creds, err := auth.LoadCredentials(cfg)
+			fileSvc, err := fileSvcFactory()
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+
+			creds, err := auth.LoadCredentials(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 			}
@@ -230,7 +271,7 @@ func logoutCmd() *cobra.Command {
 				return nil
 			}
 
-			if err := auth.DeleteCredentials(cfg); err != nil {
+			if err := auth.DeleteCredentials(fileSvc, cfg); err != nil {
 				return err
 			}
 

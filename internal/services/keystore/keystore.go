@@ -14,16 +14,17 @@
 package keystore
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 )
 
@@ -42,21 +43,18 @@ type EncryptedSecret struct {
 
 // Keystore provides OS-native key storage and encryption for platform secrets.
 type Keystore struct {
-	logger     *slog.Logger
-	secretsDir string
-	keyring    Keyring
+	logger  *slog.Logger
+	keyring Keyring
+	fileSvc fs.RuntimeFileService
 }
 
-// NewWithKeyring creates a new Keystore instance with a custom keyring.
-// This is primarily used for testing with the in-memory memory keyring.
-func NewWithKeyring(secretsDir string, logger *slog.Logger, keyring Keyring) (*Keystore, error) {
-	if err := os.MkdirAll(secretsDir, 0700); err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
-	}
+// NewWithKeyringAndFS creates a new Keystore instance with a custom keyring and
+// a RuntimeFileService for atomic file operations.
+func NewWithKeyringAndFS(logger *slog.Logger, keyring Keyring, fileSvc fs.RuntimeFileService) (*Keystore, error) {
 	return &Keystore{
-		logger:     logger,
-		secretsDir: secretsDir,
-		keyring:    keyring,
+		logger:  logger,
+		keyring: keyring,
+		fileSvc: fileSvc,
 	}, nil
 }
 
@@ -153,14 +151,9 @@ func (k *Keystore) EncryptSecret(name, plaintext string) error {
 		return fmt.Errorf("%w: %w", constants.ErrKeyStoreMarshalFailed, err)
 	}
 
-	path := filepath.Join(k.secretsDir, name)
-	tmpPath := path + constants.TmpFileSuffix
-	if err := os.WriteFile(tmpPath, data, constants.PermFilePrivate); err != nil {
+	relPath := filepath.Join(constants.SecretsDirname, name)
+	if err := k.fileSvc.WriteFile(context.Background(), relPath, data, constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrKeyStoreWriteFailed, err)
-	}
-
-	if err := os.Rename(tmpPath, path); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrKeyStoreRenameFailed, err)
 	}
 
 	k.logger.Debug("[Keystore] Secret encrypted and written", "name", name)
@@ -169,8 +162,8 @@ func (k *Keystore) EncryptSecret(name, plaintext string) error {
 
 // DecryptSecret reads and decrypts a secret value from disk.
 func (k *Keystore) DecryptSecret(name string) (string, error) {
-	path := filepath.Join(k.secretsDir, name)
-	data, err := os.ReadFile(path)
+	relPath := filepath.Join(constants.SecretsDirname, name)
+	data, err := k.fileSvc.ReadFile(context.Background(), relPath)
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", constants.ErrKeyStoreReadFailed, err)
 	}
@@ -223,8 +216,8 @@ func (k *Keystore) Decrypt(encodedCiphertext string) (string, error) {
 
 // DeleteSecret removes a secret file from disk.
 func (k *Keystore) DeleteSecret(name string) error {
-	path := filepath.Join(k.secretsDir, name)
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+	relPath := filepath.Join(constants.SecretsDirname, name)
+	if err := k.fileSvc.Remove(context.Background(), relPath); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrKeyStoreDeleteSecret, err)
 	}
 	k.logger.Debug("[Keystore] Secret deleted", "name", name)
@@ -237,7 +230,7 @@ func (k *Keystore) Purge() error {
 		return fmt.Errorf("%w: %w", constants.ErrKeyStoreDeleteFailed, err)
 	}
 
-	entries, err := os.ReadDir(k.secretsDir)
+	entries, err := k.fileSvc.ReadDir(context.Background(), constants.SecretsDirname)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrKeyStoreReadDir, err)
 	}
@@ -247,9 +240,9 @@ func (k *Keystore) Purge() error {
 		if entry.IsDir() {
 			continue
 		}
-		path := filepath.Join(k.secretsDir, entry.Name())
-		if err := os.Remove(path); err != nil {
-			purgeErrors = append(purgeErrors, fmt.Errorf("%w: %s: %w", constants.ErrKeyStoreDeleteFile, path, err))
+		relPath := filepath.Join(constants.SecretsDirname, entry.Name())
+		if err := k.fileSvc.Remove(context.Background(), relPath); err != nil {
+			purgeErrors = append(purgeErrors, fmt.Errorf("%w: %s: %w", constants.ErrKeyStoreDeleteFile, entry.Name(), err))
 		}
 	}
 
@@ -263,26 +256,24 @@ func (k *Keystore) Purge() error {
 
 // EnforcePermissions enforces strict filesystem permissions on the secrets directory.
 func (k *Keystore) EnforcePermissions() error {
-	if err := os.Chmod(k.secretsDir, constants.PermDirPrivate); err != nil {
+	if err := k.fileSvc.EnforceDirPermissions(context.Background(), constants.SecretsDirname, constants.PermDirPrivate); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrKeyStoreChmodDir, err)
 	}
-
-	entries, err := os.ReadDir(k.secretsDir)
+	entries, err := k.fileSvc.ReadDir(context.Background(), constants.SecretsDirname)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrKeyStoreReadDir, err)
 	}
-
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
-		path := filepath.Join(k.secretsDir, entry.Name())
-		if err := os.Chmod(path, constants.PermFilePrivate); err != nil {
+		relPath := filepath.Join(constants.SecretsDirname, entry.Name())
+		if err := k.fileSvc.EnforceFilePermissions(context.Background(), relPath, constants.PermFilePrivate); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrKeyStoreChmodFile, err)
 		}
 	}
 
-	k.logger.Debug("[Keystore] Permissions enforced", "dir", k.secretsDir)
+	k.logger.Debug("[Keystore] Permissions enforced", "dir", constants.SecretsDirname)
 	return nil
 }
 

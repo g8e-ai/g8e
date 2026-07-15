@@ -6,7 +6,7 @@ This demo simulates a **governed defense contractor environment** where g8e enfo
 
 The gov demo demonstrates:
 
-- **CUI exfiltration detection** via classification marking patterns and CMMC access control rules
+- **8 CUI/CMMC doctrine rules** evaluated on every transaction
 - **Two-layer defense**: network isolation (Layer 1) + doctrine enforcement (Layer 2)
 - **Demo scenario mTLS transactions** submitting real GovernanceEnvelopes through the gateway
 - **Network isolation** preventing unauthorized access from net_untrusted to net_secure
@@ -31,27 +31,39 @@ The gov demo demonstrates:
 
 ## Doctrine Rules
 
-The demo includes CUI/CMMC doctrine rules covering:
+The demo includes 8 CUI/CMMC doctrine rules covering:
 
-- **Classification Detection**: CUI marking detection, classification level enforcement
+- **Classification Detection**: CUI marking detection, unauthorized classified document access
 - **Access Control**: CMMC Level 2 access control requirements
-- **Exfiltration Prevention**: CUI exfiltration attempt detection at confidence >= 0.95
+- **Exfiltration Prevention**: CUI exfiltration attempt detection at confidence >= 0.95, unauthorized cross-domain CUI transfer
+- **Encryption**: CMMC encryption requirement violation detection
+- **Data Storage**: CUI storage location violation detection
+- **Audit**: CMMC audit logging bypass detection
 
 ## Quick Start
 
 ### Prerequisites
 
 - Docker and Docker Compose installed
-- g8e binary built at repository root
+- g8e binary built and copied to `demos/bin/`
 
 ### Build the g8e binary
 
 ```bash
-cd /home/bob/g8e
 make build
 ```
 
+This builds the g8e binary and copies it to `demos/bin/g8e`.
+
 ### Start the gov demo
+
+Using the g8e CLI (recommended):
+
+```bash
+g8e demos start gov
+```
+
+Or using Docker Compose directly:
 
 ```bash
 cd demos/gov
@@ -89,11 +101,11 @@ g8e demos run gov 1
 
 The scenario runs a 5-step flow:
 
-1. **Gateway health check** — confirms the g8e gateway is live
-2. **Operator enrollment verification** — confirms mTLS certs exist
-3. **Demo scenario mTLS transaction** — submits a `gov-cui-exfil-block` scenario via the real gateway; L1 doctrine blocks the CUI exfiltration payload at confidence >= 0.95
-4. **Audit log tail** — verifies doctrine rejection in gateway logs
-5. **Network isolation proof** — bad-actor on net_untrusted has no route to net_secure (supplementary proof)
+1. **Gateway health check**: confirms the g8e gateway is live
+2. **Operator enrollment verification**: confirms mTLS certs exist
+3. **Demo scenario mTLS transaction**: submits a `gov-cui-exfil-block` scenario via the real gateway; L1 doctrine blocks the CUI exfiltration payload at confidence >= 0.95
+4. **Audit log tail**: verifies doctrine rejection in gateway logs
+5. **Network isolation proof**: bad-actor on net_untrusted has no route to net_secure (supplementary proof)
 
 ### Run all scenarios
 
@@ -105,7 +117,7 @@ g8e demos run gov
 
 ### Gateway Posture: Doctrine
 
-The gateway runs in `--posture doctrine` mode, meaning:
+The gateway runs in doctrine mode (the default), meaning:
 - L1 Doctrine validation is **enforced** (fail-closed)
 - L2 Consensus signatures are audited but not required
 - L3 Notary proofs are audited but not required

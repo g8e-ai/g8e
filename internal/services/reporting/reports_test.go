@@ -38,7 +38,7 @@ import (
 
 func TestReportReceipts_EmptyStore(t *testing.T) {
 	store := setupTestAuditStore(t)
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	res, err := reportReceipts(context.Background(), outDir, store)
 	require.NoError(t, err)
@@ -89,7 +89,7 @@ func TestReportReceipts_WithRecords(t *testing.T) {
 		Signature:         "sig-2",
 	}))
 
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	res, err := reportReceipts(context.Background(), outDir, store)
 	require.NoError(t, err)
 	assert.Equal(t, 2, res.RowCount)
@@ -108,7 +108,7 @@ func TestReportReceipts_WithRecords(t *testing.T) {
 
 func TestReportReceipts_CancelledContext(t *testing.T) {
 	store := setupTestAuditStore(t)
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -124,7 +124,7 @@ func TestReportReceipts_CancelledContext(t *testing.T) {
 
 func TestReportSessions_EmptyStore(t *testing.T) {
 	store := setupTestAuditStore(t)
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	res, err := reportSessions(context.Background(), outDir, store)
 	require.NoError(t, err)
@@ -137,7 +137,7 @@ func TestReportSessions_WithRecords(t *testing.T) {
 	require.NoError(t, store.CreateSession("sess-1", "operator", "Session 1", "user1@test.com"))
 	require.NoError(t, store.CreateSession("sess-2", "operator", "Session 2", "user2@test.com"))
 
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	res, err := reportSessions(context.Background(), outDir, store)
 	require.NoError(t, err)
 	assert.Equal(t, 2, res.RowCount)
@@ -156,7 +156,7 @@ func TestReportSessions_WithRecords(t *testing.T) {
 
 func TestReportSessions_CancelledContext(t *testing.T) {
 	store := setupTestAuditStore(t)
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -172,7 +172,7 @@ func TestReportSessions_CancelledContext(t *testing.T) {
 
 func TestReportEvents_EmptyStore(t *testing.T) {
 	store := setupTestAuditStore(t)
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	res, err := reportEvents(context.Background(), outDir, store)
 	require.NoError(t, err)
@@ -203,7 +203,7 @@ func TestReportEvents_WithRecords(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	res, err := reportEvents(context.Background(), outDir, store)
 	require.NoError(t, err)
 	assert.Equal(t, 2, res.RowCount)
@@ -220,7 +220,7 @@ func TestReportEvents_WithRecords(t *testing.T) {
 
 func TestReportEvents_CancelledContext(t *testing.T) {
 	store := setupTestAuditStore(t)
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -236,7 +236,7 @@ func TestReportEvents_CancelledContext(t *testing.T) {
 
 func TestReportFileMutations_EmptyStore(t *testing.T) {
 	store := setupTestAuditStore(t)
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	res, err := reportFileMutations(context.Background(), outDir, store)
 	require.NoError(t, err)
@@ -263,7 +263,7 @@ func TestReportFileMutations_WithRecords(t *testing.T) {
 		LedgerHashAfter:  "hash-after-2",
 	}))
 
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	res, err := reportFileMutations(context.Background(), outDir, store)
 	require.NoError(t, err)
 	assert.Equal(t, 2, res.RowCount)
@@ -282,7 +282,7 @@ func TestReportFileMutations_WithRecords(t *testing.T) {
 
 func TestReportFileMutations_CancelledContext(t *testing.T) {
 	store := setupTestAuditStore(t)
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -298,7 +298,7 @@ func TestReportFileMutations_CancelledContext(t *testing.T) {
 
 func TestReportCommitments_EmptyLedger(t *testing.T) {
 	cl, _ := setupTestCommitmentLedger(t)
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	res, err := reportCommitments(context.Background(), outDir, cl)
 	require.NoError(t, err)
@@ -311,7 +311,7 @@ func TestReportCommitments_WithRecords(t *testing.T) {
 	insertCommitment(t, cl, "tx-1", "hash-1", "", "commit-hash-1", "FS_WRITE", "/file1")
 	insertCommitment(t, cl, "tx-2", "hash-2", "commit-hash-1", "commit-hash-2", "FS_WRITE", "/file2")
 
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	res, err := reportCommitments(context.Background(), outDir, cl)
 	require.NoError(t, err)
 	assert.Equal(t, 2, res.RowCount)
@@ -330,7 +330,7 @@ func TestReportCommitments_WithRecords(t *testing.T) {
 
 func TestReportCommitments_CancelledContext(t *testing.T) {
 	cl, _ := setupTestCommitmentLedger(t)
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -345,13 +345,13 @@ func TestReportCommitments_CancelledContext(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestReportReplayNonces_EmptyStore(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "test_replay.db")
 	rs, err := storage.NewSQLReplayStore(&storage.ReplayStoreConfig{DBPath: dbPath}, testutil.NewTestLogger())
 	require.NoError(t, err)
 	t.Cleanup(func() { rs.Close() })
 
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	res, err := reportReplayNonces(context.Background(), outDir, rs)
 	require.NoError(t, err)
 	assert.Equal(t, constants.ReportReplayNoncesFilename, res.Filename)
@@ -359,7 +359,7 @@ func TestReportReplayNonces_EmptyStore(t *testing.T) {
 }
 
 func TestReportReplayNonces_WithRecords(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "test_replay.db")
 	rs, err := storage.NewSQLReplayStore(&storage.ReplayStoreConfig{DBPath: dbPath}, testutil.NewTestLogger())
 	require.NoError(t, err)
@@ -371,7 +371,7 @@ func TestReportReplayNonces_WithRecords(t *testing.T) {
 	_, err = rs.ReserveNonce("nonce-2", expiresAt)
 	require.NoError(t, err)
 
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	res, err := reportReplayNonces(context.Background(), outDir, rs)
 	require.NoError(t, err)
 	assert.Equal(t, 2, res.RowCount)
@@ -387,13 +387,13 @@ func TestReportReplayNonces_WithRecords(t *testing.T) {
 }
 
 func TestReportReplayNonces_CancelledContext(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "test_replay.db")
 	rs, err := storage.NewSQLReplayStore(&storage.ReplayStoreConfig{DBPath: dbPath}, testutil.NewTestLogger())
 	require.NoError(t, err)
 	t.Cleanup(func() { rs.Close() })
 
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -407,7 +407,7 @@ func TestReportReplayNonces_CancelledContext(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestReportSuspendedTransactions_EmptyStore(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "test_suspended.db")
 	sts, err := storage.NewSuspendedTransactionService(&storage.SuspendedTransactionConfig{
 		DBPath:               dbPath,
@@ -418,7 +418,7 @@ func TestReportSuspendedTransactions_EmptyStore(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { sts.Close() })
 
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	res, err := reportSuspendedTransactions(context.Background(), outDir, sts)
 	require.NoError(t, err)
 	assert.Equal(t, constants.ReportSuspendedTxFilename, res.Filename)
@@ -426,7 +426,7 @@ func TestReportSuspendedTransactions_EmptyStore(t *testing.T) {
 }
 
 func TestReportSuspendedTransactions_WithRecords(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "test_suspended.db")
 	sts, err := storage.NewSuspendedTransactionService(&storage.SuspendedTransactionConfig{
 		DBPath:               dbPath,
@@ -463,7 +463,7 @@ func TestReportSuspendedTransactions_WithRecords(t *testing.T) {
 		ApprovalSignature: "sig-1",
 	}))
 
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	res, err := reportSuspendedTransactions(ctx, outDir, sts)
 	require.NoError(t, err)
 	assert.Equal(t, 2, res.RowCount)
@@ -483,7 +483,7 @@ func TestReportSuspendedTransactions_WithRecords(t *testing.T) {
 }
 
 func TestReportSuspendedTransactions_CancelledContext(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "test_suspended.db")
 	sts, err := storage.NewSuspendedTransactionService(&storage.SuspendedTransactionConfig{
 		DBPath:               dbPath,
@@ -494,7 +494,7 @@ func TestReportSuspendedTransactions_CancelledContext(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { sts.Close() })
 
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -508,7 +508,7 @@ func TestReportSuspendedTransactions_CancelledContext(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestReportLedgerMerkleRoot_NilLedger(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -519,7 +519,7 @@ func TestReportLedgerMerkleRoot_NilLedger(t *testing.T) {
 }
 
 func TestReportLedgerCommits_NilLedger(t *testing.T) {
-	outDir := t.TempDir()
+	outDir := testutil.TempDir(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -534,7 +534,7 @@ func TestReportLedgerCommits_NilLedger(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestOpenVault_NoKeyPath_ReturnsLockedVault(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 
@@ -551,7 +551,7 @@ func TestOpenVault_NoKeyPath_ReturnsLockedVault(t *testing.T) {
 }
 
 func TestOpenVault_KeyFileNotFound(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 
@@ -568,7 +568,7 @@ func TestOpenVault_KeyFileNotFound(t *testing.T) {
 }
 
 func TestOpenVault_InvalidKeyEncoding(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 
@@ -588,7 +588,7 @@ func TestOpenVault_InvalidKeyEncoding(t *testing.T) {
 }
 
 func TestOpenVault_ValidKey(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 

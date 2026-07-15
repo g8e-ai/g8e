@@ -27,13 +27,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 func TestFsGrepService_ExecuteFsGrep(t *testing.T) {
 	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	workDir := t.TempDir()
+	workDir := testutil.TempDir(t)
 
 	// Setup test files
 	require.NoError(t, os.WriteFile(filepath.Join(workDir, "file1.txt"), []byte("hello world\nthis is a test\ng8e is cool"), 0644))

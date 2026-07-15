@@ -38,7 +38,7 @@ func TestFileEditService_ReadOperations(t *testing.T) {
 
 	t.Run("read with end line only", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "endonly.txt")
 
 		content := "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"
@@ -67,7 +67,7 @@ func TestFileEditService_ReadOperations(t *testing.T) {
 
 	t.Run("read with max lines from middle", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "maxlines.txt")
 
 		var lines []string
@@ -102,7 +102,7 @@ func TestFileEditService_ReadOperations(t *testing.T) {
 
 	t.Run("read with complete file stats", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "stats.txt")
 
 		content := "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"
@@ -133,7 +133,7 @@ func TestFileEditService_ReadOperations(t *testing.T) {
 	t.Run("read symlink with stats", func(t *testing.T) {
 		t.Parallel()
 
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		targetFile := filepath.Join(tmpDir, "target.txt")
 		symlinkFile := filepath.Join(tmpDir, "link.txt")
 
@@ -176,7 +176,7 @@ func TestFileEditService_WriteOperations(t *testing.T) {
 
 	t.Run("write to existing file without create flag", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "exists.txt")
 
 		os.WriteFile(testFile, []byte("original"), 0644)
@@ -203,7 +203,7 @@ func TestFileEditService_WriteOperations(t *testing.T) {
 
 	t.Run("write new file without backup", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "new.txt")
 
 		content := "new content"
@@ -227,7 +227,7 @@ func TestFileEditService_WriteOperations(t *testing.T) {
 
 	t.Run("write with nested directory creation", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		nestedPath := filepath.Join(tmpDir, "a", "b", "c", "test.txt")
 		content := "nested"
 
@@ -257,7 +257,7 @@ func TestFileEditService_ReplaceOperations(t *testing.T) {
 
 	t.Run("replace with backup", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "replace.txt")
 
 		original := "original text"
@@ -288,7 +288,7 @@ func TestFileEditService_ReplaceOperations(t *testing.T) {
 
 	t.Run("replace with empty new content", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "replace-empty.txt")
 
 		initialContent := "keep this remove_this keep that"
@@ -324,7 +324,7 @@ func TestFileEditService_InsertOperations(t *testing.T) {
 
 	t.Run("insert with backup", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "insert.txt")
 
 		original := "Line 1\nLine 3"
@@ -352,7 +352,7 @@ func TestFileEditService_InsertOperations(t *testing.T) {
 
 	t.Run("insert multiline content", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "insert-multi.txt")
 
 		initialContent := "Line 1\nLine 4"
@@ -389,7 +389,7 @@ func TestFileEditService_DeleteOperations(t *testing.T) {
 
 	t.Run("delete with backup", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "delete.txt")
 
 		original := "Line 1\nLine 2\nLine 3\nLine 4"
@@ -417,7 +417,7 @@ func TestFileEditService_DeleteOperations(t *testing.T) {
 
 	t.Run("delete first line", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "delete-first.txt")
 
 		initialContent := "Line 1\nLine 2\nLine 3"
@@ -450,7 +450,7 @@ func TestFileEditService_ErrorHandling(t *testing.T) {
 
 	t.Run("patch operation not implemented", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "patch.txt")
 
 		os.WriteFile(testFile, []byte("content"), 0644)
@@ -474,7 +474,7 @@ func TestFileEditService_ErrorHandling(t *testing.T) {
 
 	t.Run("unsupported operation", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.Join(tmpDir, "unsupported.txt")
 
 		os.WriteFile(testFile, []byte("content"), 0644)

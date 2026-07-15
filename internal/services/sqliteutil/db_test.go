@@ -41,7 +41,7 @@ func TestDefaultDBConfig(t *testing.T) {
 
 func TestOpenDB_CreatesFile(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "test.db"))
 
@@ -56,7 +56,7 @@ func TestOpenDB_CreatesFile(t *testing.T) {
 
 func TestOpenDB_CreatesParentDirectories(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "nested", "deep", "test.db"))
 
@@ -71,7 +71,7 @@ func TestOpenDB_CreatesParentDirectories(t *testing.T) {
 
 func TestOpenDB_WALModeEnabled(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "wal.db"))
 
@@ -86,7 +86,7 @@ func TestOpenDB_WALModeEnabled(t *testing.T) {
 
 func TestOpenDB_ForeignKeysEnabled(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "fk.db"))
 
@@ -101,7 +101,7 @@ func TestOpenDB_ForeignKeysEnabled(t *testing.T) {
 
 func TestOpenDB_SingleConnectionPool(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "pool.db"))
 
@@ -115,7 +115,7 @@ func TestOpenDB_SingleConnectionPool(t *testing.T) {
 
 func TestOpenDB_SetFilePermissions_False(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "noperm.db"))
 	cfg.SetFilePermissions = false
@@ -131,7 +131,7 @@ func TestOpenDB_SetFilePermissions_False(t *testing.T) {
 
 func TestRunIncrementalVacuum(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "vacuum.db"))
 
@@ -145,7 +145,7 @@ func TestRunIncrementalVacuum(t *testing.T) {
 
 func TestRunIncrementalVacuum_ZeroPages(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "vacuum0.db"))
 
@@ -159,7 +159,7 @@ func TestRunIncrementalVacuum_ZeroPages(t *testing.T) {
 
 func TestRunIncrementalVacuum_WrapsError(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "wraperrdb.db"))
 
@@ -174,7 +174,7 @@ func TestRunIncrementalVacuum_WrapsError(t *testing.T) {
 
 func TestGetPath(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	path := filepath.Join(dir, "getpath.db")
 	cfg := DefaultDBConfig(path)
@@ -188,7 +188,7 @@ func TestGetPath(t *testing.T) {
 
 func TestGetDBSizeBytes(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "size.db"))
 
@@ -203,7 +203,7 @@ func TestGetDBSizeBytes(t *testing.T) {
 
 func TestGetDBSizeBytes_GrowsWithData(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "grow.db"))
 
@@ -229,7 +229,7 @@ func TestGetDBSizeBytes_GrowsWithData(t *testing.T) {
 
 func TestGetDBSizeBytes_ReturnsErrorOnClosedDB(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "closederr.db"))
 
@@ -243,7 +243,7 @@ func TestGetDBSizeBytes_ReturnsErrorOnClosedDB(t *testing.T) {
 
 func TestHealthCheck_Success(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "health.db"))
 
@@ -258,7 +258,7 @@ func TestHealthCheck_Success(t *testing.T) {
 
 func TestHealthCheck_ClosedDB(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "healthclosed.db"))
 
@@ -274,7 +274,7 @@ func TestHealthCheck_ClosedDB(t *testing.T) {
 
 func TestHealthCheck_CancelledContext(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "healthcancel.db"))
 
@@ -291,7 +291,7 @@ func TestHealthCheck_CancelledContext(t *testing.T) {
 
 func TestExecWithRetry_Success(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "exec.db"))
 
@@ -306,7 +306,7 @@ func TestExecWithRetry_Success(t *testing.T) {
 
 func TestExecWithRetry_InvalidSQL(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "execinvalid.db"))
 
@@ -321,7 +321,7 @@ func TestExecWithRetry_InvalidSQL(t *testing.T) {
 
 func TestExecWithRetry_WithParameters(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "execparams.db"))
 
@@ -342,7 +342,7 @@ func TestExecWithRetry_WithParameters(t *testing.T) {
 
 func TestQueryWithRetry_Success(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "query.db"))
 
@@ -373,7 +373,7 @@ func TestQueryWithRetry_Success(t *testing.T) {
 
 func TestQueryWithRetry_InvalidSQL(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "queryinvalid.db"))
 
@@ -388,7 +388,7 @@ func TestQueryWithRetry_InvalidSQL(t *testing.T) {
 
 func TestQueryRowWithRetry_Success(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "queryrow.db"))
 
@@ -411,7 +411,7 @@ func TestQueryRowWithRetry_Success(t *testing.T) {
 
 func TestQueryRowWithRetry_NoRows(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "queryrowempty.db"))
 
@@ -431,7 +431,7 @@ func TestQueryRowWithRetry_NoRows(t *testing.T) {
 
 func TestQueryRowWithRetry_InvalidSQL(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "queryrowinvalid.db"))
 
@@ -446,7 +446,7 @@ func TestQueryRowWithRetry_InvalidSQL(t *testing.T) {
 
 func TestExecInTxWithRetry_Commit(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "txcommit.db"))
 
@@ -471,7 +471,7 @@ func TestExecInTxWithRetry_Commit(t *testing.T) {
 
 func TestExecInTxWithRetry_RollbackOnError(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "txrollback.db"))
 
@@ -499,7 +499,7 @@ func TestExecInTxWithRetry_RollbackOnError(t *testing.T) {
 
 func TestExecInTxWithRetry_MultipleStatements(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "txmulti.db"))
 
@@ -529,7 +529,7 @@ func TestExecInTxWithRetry_MultipleStatements(t *testing.T) {
 
 func TestExecInTxWithRetry_InvalidSQL(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "txinvalid.db"))
 
@@ -546,7 +546,7 @@ func TestExecInTxWithRetry_InvalidSQL(t *testing.T) {
 
 func TestMaterializeRows_Success(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "materialize.db"))
 
@@ -571,7 +571,7 @@ func TestMaterializeRows_Success(t *testing.T) {
 
 func TestMaterializeRows_EmptyResult(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "materializeempty.db"))
 
@@ -593,7 +593,7 @@ func TestMaterializeRows_EmptyResult(t *testing.T) {
 
 func TestMaterializeRows_WithParameters(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "materializeparams.db"))
 
@@ -618,7 +618,7 @@ func TestMaterializeRows_WithParameters(t *testing.T) {
 
 func TestMaterializeRows_ScanError(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "materializescan.db"))
 
@@ -645,7 +645,7 @@ func TestMaterializeRows_ScanError(t *testing.T) {
 
 func TestMaterializeRows_QueryError(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "materializequery.db"))
 

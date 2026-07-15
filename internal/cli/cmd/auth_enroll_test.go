@@ -15,8 +15,8 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"errors"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -31,7 +31,7 @@ func TestEnrollCmdWithConfig_ConfigLoaderError(t *testing.T) {
 		return nil, errors.New("config load error")
 	}
 
-	cmd := enrollCmdWithConfig(failLoader)
+	cmd := enrollCmdWithConfig(failLoader, newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -45,14 +45,13 @@ func TestEnrollCmdWithConfig_OperatorNotRunningReturnsError(t *testing.T) {
 	config.SetEndpointOverride("127.0.0.1:1")
 	defer config.SetEndpointOverride("")
 
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	_, cfg := newCmdTestEnv(t)
 
 	loader := func(string) (*config.Config, error) {
 		return cfg, nil
 	}
 
-	cmd := enrollCmdWithConfig(loader)
+	cmd := enrollCmdWithConfig(loader, newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -62,7 +61,7 @@ func TestEnrollCmdWithConfig_OperatorNotRunningReturnsError(t *testing.T) {
 }
 
 func TestEnrollCmdWithConfig_NoTPMFlagOnNonWindows(t *testing.T) {
-	cmd := enrollCmdWithConfig(loadConfig)
+	cmd := enrollCmdWithConfig(loadConfig, newFileSvc)
 	tpmFlag := cmd.Flags().Lookup("tpm")
 	if tpmFlag != nil {
 		assert.Equal(t, "false", tpmFlag.DefValue)
@@ -70,7 +69,7 @@ func TestEnrollCmdWithConfig_NoTPMFlagOnNonWindows(t *testing.T) {
 }
 
 func TestEnrollCmdWithConfig_HasRunE(t *testing.T) {
-	cmd := enrollCmdWithConfig(loadConfig)
+	cmd := enrollCmdWithConfig(loadConfig, newFileSvc)
 	require.NotNil(t, cmd.RunE)
 }
 
@@ -78,17 +77,16 @@ func TestPerformEnroll_NoLocalCredsGatewayDownReturnsError(t *testing.T) {
 	config.SetEndpointOverride("127.0.0.1:1")
 	defer config.SetEndpointOverride("")
 
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	fileSvc, cfg := newCmdTestEnv(t)
 
 	cmd := enrollCmdWithConfig(func(string) (*config.Config, error) {
 		return cfg, nil
-	})
+	}, newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
-	err := performEnroll(cmd, cfg, false)
+	err := performEnroll(cmd, fileSvc, cfg, false)
 	require.Error(t, err)
 }
 
@@ -96,20 +94,19 @@ func TestPerformEnroll_WithLocalCredsGatewayDownReturnsError(t *testing.T) {
 	config.SetEndpointOverride("127.0.0.1:1")
 	defer config.SetEndpointOverride("")
 
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	fileSvc, cfg := newCmdTestEnv(t)
 
-	require.NoError(t, os.WriteFile(cfg.CredentialsFile(), []byte(`{"user_id":"u1","cli_session_id":"s1"}`), 0o600))
-	require.NoError(t, os.WriteFile(cfg.CLICertFile(), []byte("-----BEGIN CERTIFICATE-----\nMIIBdummy==\n-----END CERTIFICATE-----\n"), 0o600))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CredentialsFile()), []byte(`{"user_id":"u1","cli_session_id":"s1"}`), constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()), []byte("-----BEGIN CERTIFICATE-----\nMIIBdummy==\n-----END CERTIFICATE-----\n"), constants.PermFilePrivate))
 
 	cmd := enrollCmdWithConfig(func(string) (*config.Config, error) {
 		return cfg, nil
-	})
+	}, newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
-	err := performEnroll(cmd, cfg, false)
+	err := performEnroll(cmd, fileSvc, cfg, false)
 	require.Error(t, err)
 }
 
@@ -120,7 +117,7 @@ func TestEnrollCmdWithConfig_UsesInjectedConfigLoader(t *testing.T) {
 		return nil, errors.New("injected error")
 	}
 
-	cmd := enrollCmdWithConfig(loader)
+	cmd := enrollCmdWithConfig(loader, newFileSvc)
 	_ = cmd.RunE(cmd, nil)
 
 	assert.True(t, called, "config loader should have been called")
@@ -132,7 +129,7 @@ func TestEnrollCmdWithConfig_PropagatesConfigError(t *testing.T) {
 		return nil, expectedErr
 	}
 
-	cmd := enrollCmdWithConfig(loader)
+	cmd := enrollCmdWithConfig(loader, newFileSvc)
 	err := cmd.RunE(cmd, nil)
 	require.Error(t, err)
 }

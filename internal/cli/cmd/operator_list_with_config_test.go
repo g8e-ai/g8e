@@ -32,7 +32,7 @@ func TestOperatorListCmdWithConfig_ConfigLoadError(t *testing.T) {
 		return nil, errors.New("config load error")
 	}
 
-	cmd := operatorListCmdWithConfig(failLoader, defaultAPIClientFactory)
+	cmd := operatorListCmdWithConfig(failLoader, defaultAPIClientFactory, newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -43,11 +43,10 @@ func TestOperatorListCmdWithConfig_ConfigLoadError(t *testing.T) {
 }
 
 func TestOperatorListCmdWithConfig_ClientCreationError(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	_, cfg := newCmdTestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	cmd := operatorListCmdWithConfig(loader, failingClientFactory(errors.New("client creation error")))
+	cmd := operatorListCmdWithConfig(loader, failingClientFactory(errors.New("client creation error")), newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -58,12 +57,11 @@ func TestOperatorListCmdWithConfig_ClientCreationError(t *testing.T) {
 }
 
 func TestOperatorListCmdWithConfig_GetRequestError(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	_, cfg := newCmdTestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	client := &mockAPIClient{getErr: errors.New("network error")}
-	cmd := operatorListCmdWithConfig(loader, mockClientFactory(client))
+	cmd := operatorListCmdWithConfig(loader, mockClientFactory(client), newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -74,12 +72,11 @@ func TestOperatorListCmdWithConfig_GetRequestError(t *testing.T) {
 }
 
 func TestOperatorListCmdWithConfig_InvalidJSONResponse(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	_, cfg := newCmdTestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	client := &mockAPIClient{getResp: []byte("not json")}
-	cmd := operatorListCmdWithConfig(loader, mockClientFactory(client))
+	cmd := operatorListCmdWithConfig(loader, mockClientFactory(client), newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -90,15 +87,14 @@ func TestOperatorListCmdWithConfig_InvalidJSONResponse(t *testing.T) {
 }
 
 func TestOperatorListCmdWithConfig_EmptyOperatorsListPrintsNoOperators(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	_, cfg := newCmdTestEnv(t)
 
 	operators := []models.OperatorDocumentGo{}
 	operatorsJSON, _ := json.Marshal(operators)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	client := &mockAPIClient{getResp: operatorsJSON}
-	cmd := operatorListCmdWithConfig(loader, mockClientFactory(client))
+	cmd := operatorListCmdWithConfig(loader, mockClientFactory(client), newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -110,8 +106,7 @@ func TestOperatorListCmdWithConfig_EmptyOperatorsListPrintsNoOperators(t *testin
 }
 
 func TestOperatorListCmdWithConfig_ValidResponsePrintsOperatorTable(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	_, cfg := newCmdTestEnv(t)
 
 	operators := []models.OperatorDocumentGo{
 		{ID: "op-001", CloudSubtype: "aws", Status: "active"},
@@ -121,7 +116,7 @@ func TestOperatorListCmdWithConfig_ValidResponsePrintsOperatorTable(t *testing.T
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	client := &mockAPIClient{getResp: operatorsJSON}
-	cmd := operatorListCmdWithConfig(loader, mockClientFactory(client))
+	cmd := operatorListCmdWithConfig(loader, mockClientFactory(client), newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

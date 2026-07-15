@@ -23,6 +23,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/certs"
 	"github.com/g8e-ai/g8e/internal/services/execution"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	pubsubtest "github.com/g8e-ai/g8e/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -41,6 +42,10 @@ func TestG8eoService_Start_BootstrapFailure(t *testing.T) {
 
 	service, err := NewG8eoService(cfg, logger, tlsCfg)
 	require.NoError(t, err)
+
+	fileSvc, err := fs.NewRuntimeFileService(testutil.TempDir(t), logger)
+	require.NoError(t, err)
+	service.SetFileService(fileSvc)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()

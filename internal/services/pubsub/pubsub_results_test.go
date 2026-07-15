@@ -180,7 +180,7 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 func TestPubSubResultsService_PublishFsGrepResult(t *testing.T) {
 	t.Run("successful fs grep publish", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -347,7 +347,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 	t.Run("successful publish", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -378,7 +378,7 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 
 	t.Run("publishes failed status on error", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()

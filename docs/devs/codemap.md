@@ -307,7 +307,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 
 The `g8e` binary (`internal/cli/cmd/main.go`) registers the following subcommands on the root Cobra command:
 
-- **`gw`** (alias `gateway`): Gateway lifecycle management. Subcommands: `start` (background process), `serve` (foreground worker, hidden, re-exec target for `start`), `stop`, `status`, `restart`, `logs`, `settings`, `reset`, `clean`. Also includes `data`, `security`, and `tunnel` subcommand groups.
+- **`gw`** (alias `gateway`): Gateway lifecycle management. Subcommands: `start` (background process; `--follow` flag runs in foreground as the re-exec target), `stop`, `status`, `restart`, `logs`, `settings`, `reset`, `clean`. Also includes `data`, `security`, and `tunnel` subcommand groups.
   - **`data`**: Administer the local platform over mTLS. Subcommands: `users`, `operators`, `settings`, `store`, `audit`.
   - **`security`**: Security validation checks. Subcommands: `validate`, `pki`.
   - **`tunnel`**: Manage Cloudflare Tunnel for public gateway access. Subcommands: `create`, `run`, `status`.
@@ -361,9 +361,9 @@ The reporting system operates as a self-contained, offline verification utility 
 - **`internal/cli/serve/gateway.go`**: Gateway boot sequence: `RunGateway` orchestrates config loading, `GatewayModeService` construction, in-process execution service initialization, tribunal bootstrap (policy seeding via `bootstrapTribunalPolicy`, key loading via `BootstrapTribunal` with `FileKeyProvider`), in-process `OperatorPubSubService` construction via `NewGatewayOperatorPubSubService` with `GatewayCommandServiceConfig` (embedding base `CommandServiceConfig` plus `MCPGateway` and `GovDeps *GovernanceDeps`), `SetEnvelopeProcessor` wiring, `SetTribunal` and `SetTribunalDeliberator` wiring under consensus posture, and graceful shutdown with 30-second timeout. `ExportActuatorPublicKey` writes the actuator public key to the PKI directory for receipt verification by external harnesses.
 - **`internal/cli/serve/logger.go`**: Logger configuration: `ConfigureLogger` and `ConfigureLoggerWithOutput` produce `slog.Logger` instances with operator-friendly formatting and configurable log levels.
 - **`internal/cli/serve/version.go`**: `VersionInfo` struct holds build-time metadata (version, build ID, build time, platform) set via ldflags.
-- **`internal/cli/cmd/gateway.go`**: Gateway CLI command tree. `gatewayStartCmd` launches the gateway as a background process via `platform.StartProcess`, resolving configuration from CLI flags and environment variables. `gatewayServeCmd` (hidden) is the foreground re-exec target that calls `serve.RunGateway`. `gatewaySettingsCmd`, `gatewayResetCmd`, and `gatewayCleanCmd` manage gateway state over mTLS.
+- **`internal/cli/cmd/gateway.go`**: Gateway CLI command tree. `gatewayStartCmd` launches the gateway as a background process via `pm.StartOperator` (`ProcessManager.StartOperator`), resolving configuration from CLI flags and environment variables. With `--follow` flag, runs in foreground by calling `serve.RunGateway` directly. `gatewaySettingsCmd`, `gatewayResetCmd`, and `gatewayCleanCmd` manage gateway state over mTLS.
 - **`internal/cli/cmd/tui.go`**: `tuiCmd` launches the Tactical Governance Console (TUI). Loads config, checks operator status, loads credentials, builds an mTLS client, and constructs an SSE stream URL using the CLI session ID for real-time updates.
-- **`internal/cli/cmd/gwstdout.go`**: `printNextSteps` outputs posture-aware guidance after the gateway starts, including CA trust instructions, CLI enrollment, governance posture configuration, operator and agent connection steps, and Console UI access.
+- **`internal/cli/cmd/gwstdout.go`**: `printNextSteps` outputs guidance after the gateway starts, including CA trust instructions, CLI enrollment, operator deployment, and Console UI access.
 - **`internal/services/gateway/cli_cert.go`**: `VerifyCLICertificate` validates that a CLI mTLS certificate is valid for a given CLI session by checking expiry and matching SPIFFE URI SANs against the expected workload identity.
 - **Test Coverage**: `cert_test.go` covers `PerformAutomaticEnrollment` (6 tests), `RenewOperatorCertificate` (9 tests), `RunClientCertRenewalLoop` (1 test) with hermetic `httptest.Server` and real certificate generation. `operator_test.go` covers extracted helpers at 100%. `gateway_test.go` covers gateway boot sequence. `internal/cli/serve` overall at 49.6% coverage.
 
@@ -372,6 +372,39 @@ The reporting system operates as a self-contained, offline verification utility 
 - **`internal/cli/platform/`**: Cross-platform process management for operator subprocesses. `process.go` provides core process lifecycle. `process_unix.go` and `process_windows.go` provide platform-specific process discovery and signal handling. `browser.go` provides cross-platform browser opening for console URLs.
 - **`internal/cli/stream/`**: SSH and subprocess streaming for remote operator management. `stream.go` provides the streaming CLI command. `stream_ssh.go` provides SSH connection management for remote log streaming and command execution.
 - **`internal/cli/sse/`**: Server-Sent Events client for CLI consumption of gateway SSE streams. `client.go` provides the SSE client implementation used by the TUI for real-time updates.
+
+## Runtime File Service
+
+**`internal/services/fs/`** - File service for the `.g8e/` runtime directory
+
+`RuntimeFileService` interface (`file_service.go`) provides safe file operations within the `.g8e/` runtime directory. All paths are relative to the runtime directory root. The `localFS` implementation wraps `os.*` calls with atomic writes (tmp+rename), permission enforcement, and consistent error wrapping using `constants.Err*` constants.
+
+Interface methods:
+- `Resolve(relPath)` - Converts a relative path to an absolute path within `.g8e/`
+- `Rel(absPath)` - Converts an absolute `.g8e/` path back to a relative path
+- `ReadFile(ctx, relPath)` - Reads a file; returns `constants.ErrNotFound` if missing
+- `WriteFile(ctx, relPath, data, mode)` - Atomically writes a file with tmp+rename
+- `MkdirAll(ctx, relPath, mode)` - Creates a directory tree
+- `Stat(ctx, relPath)` - Returns `os.FileInfo`; returns `constants.ErrNotFound` if missing
+- `FileExists(ctx, relPath)` - Returns `(bool, error)`, false for non-existent
+- `Remove(ctx, relPath)` - Deletes a file; no-op if missing
+- `RemoveAll(ctx, relPath)` - Deletes a directory tree; no-op if missing
+- `ReadDir(ctx, relPath)` - Lists directory entries
+- `Rename(ctx, oldPath, newPath)` - Atomically renames a file or directory
+- `CreateRuntimeTree(ctx)` - Creates the full `.g8e/` directory tree with correct permissions. Called once at startup. Idempotent
+- `EnforceDirPermissions(ctx, relPath, mode)` - Recursively enforces directory permissions
+- `EnforceFilePermissions(ctx, relPath, mode)` - Enforces file permissions on a single file
+
+Construction: `fs.NewRuntimeFileService(baseDir, logger)` creates a service scoped to `.g8e/` under `baseDir`.
+
+Test helpers (per-package, build-tagged `integration` or test-only):
+- `newTestFileSvc(t)` in `internal/services/gateway/test_setup_test.go` - Temp-backed fileSvc with full runtime tree for gateway tests
+- `newTestFileSvc(t, baseDir)` in `internal/services/storage/storage_test_helpers_test.go` - Storage test fileSvc, returns fileSvc and data dir
+- `NewTestFileSvc(t, baseDir)` in `internal/services/storage/storagetest/helpers.go` - Exported test fileSvc for storagetest consumers
+- `newAuthTestFileSvc(t)` in `internal/cli/auth/client_test.go` - Auth client test fileSvc
+- `newPlatformTestFileSvc(t, baseDir)` in `internal/cli/platform/process_test.go` - Platform test fileSvc
+- `newCmdTestFileSvc(t)` in `internal/cli/cmd/vault_test.go` - CLI command test fileSvc (uses CWD as base)
+- `newTestFileSvc(t)` in `internal/cli/serve/test_setup_test.go` - Serve test fileSvc
 
 ## Test Infrastructure (Not Production)
 

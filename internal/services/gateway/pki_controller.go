@@ -116,17 +116,16 @@ func (c *PKIController) handlePKIFingerprint(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	rootCAPath := c.pki.RootCAPath()
-	pemData, err := os.ReadFile(rootCAPath)
+	pemData, err := c.pki.RootCAPEM()
 	if err != nil {
-		c.logger.Error("Failed to read root CA", "error", err, "path", rootCAPath)
+		c.logger.Error("Failed to read root CA", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("%w: %v", constants.ErrPKILoadRootCA, err).Error())
 		return
 	}
 
 	block, rest := pem.Decode(pemData)
 	if block == nil {
-		c.logger.Error("Invalid root CA PEM", "path", rootCAPath)
+		c.logger.Error("Invalid root CA PEM")
 		c.responder.Error(w, http.StatusInternalServerError, constants.ErrPEMDecodeFailed.Error())
 		return
 	}

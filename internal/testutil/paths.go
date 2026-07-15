@@ -14,7 +14,9 @@
 package testutil
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -73,9 +75,36 @@ func NewTestPaths(baseDir string) *TestPaths {
 	}
 }
 
-// NewTestPathsFromTemp creates a TestPaths instance using t.TempDir() as the base.
+// TempDir creates a unique temp directory under CWD (./.g8e-test-tmp/) and
+// registers a t.Cleanup to remove it. This replaces t.TempDir() to keep all
+// test artifacts relative to the project root instead of the system TEMP dir.
+func TempDir(t *testing.T) string {
+	t.Helper()
+	base := filepath.Join(constants.PathCurrentDir, constants.TestTempDirname)
+	if err := os.MkdirAll(base, constants.PermDirStandard); err != nil {
+		t.Fatalf("failed to create test temp base dir %s: %v", base, err)
+	}
+	safeName := strings.NewReplacer("/", "_", "\\", "_").Replace(t.Name())
+	dir, err := os.MkdirTemp(base, safeName+"-*")
+	if err != nil {
+		t.Fatalf("failed to create test temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(dir); err != nil {
+			t.Logf("TempDir cleanup: failed to remove %s: %v", dir, err)
+		}
+	})
+
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		t.Fatalf("failed to resolve absolute path for %s: %v", dir, err)
+	}
+	return absDir
+}
+
+// NewTestPathsFromTemp creates a TestPaths instance using TempDir(t) as the base.
 // This is the recommended way to get isolated test paths.
 func NewTestPathsFromTemp(t *testing.T) *TestPaths {
 	t.Helper()
-	return NewTestPaths(t.TempDir())
+	return NewTestPaths(TempDir(t))
 }

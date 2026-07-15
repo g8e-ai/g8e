@@ -94,7 +94,7 @@ func TestLedgerService_GetDiffContent_InvalidHashesReturnsEmpty(t *testing.T) {
 
 func TestLedgerService_GetDiffContent_GitDisabledReturnsEmpty(t *testing.T) {
 	t.Parallel()
-	lms, _ := NewGitLedgerService(nil, nil)
+	lms, _ := NewGitLedgerService(nil, nil, nil)
 
 	diff := lms.GetDiffContent("abc123", "def456", "operator-session")
 	assert.Empty(t, diff)

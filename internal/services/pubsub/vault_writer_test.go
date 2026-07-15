@@ -165,7 +165,7 @@ func TestVaultWriter_WriteExecution(t *testing.T) {
 func TestVaultWriter_WriteFileDiff(t *testing.T) {
 	t.Run("handles nil vault gracefully", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc := NewVaultWriter(cfg, logger, nil)
@@ -186,7 +186,7 @@ func TestVaultWriter_WriteFileDiff(t *testing.T) {
 
 	t.Run("writes file diff with vault", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		mockVault := &mockExecutionVault{}
@@ -232,7 +232,7 @@ func TestVaultWriter_WriteExecution_VaultError(t *testing.T) {
 
 func TestVaultWriter_WriteFileDiff_VaultError(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	failingVault := &configurableExecutionVault{
@@ -253,7 +253,7 @@ func TestVaultWriter_WriteFileDiff_VaultError(t *testing.T) {
 func TestVaultWriter_StoreFileDiffFromLedger(t *testing.T) {
 	t.Run("skips when ledger is nil", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc := NewVaultWriter(cfg, logger, nil)
@@ -264,7 +264,7 @@ func TestVaultWriter_StoreFileDiffFromLedger(t *testing.T) {
 
 	t.Run("handles insufficient history", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		ledger := &storage.GitLedgerService{}

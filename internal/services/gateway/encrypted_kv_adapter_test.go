@@ -32,7 +32,7 @@ import (
 // unlocked vault for testing EncryptedKVAdapter.
 func setupEncryptedKVTest(t *testing.T) (*KVStoreService, *vault.Vault) {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 
 	db, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(filepath.Join(dir, "test.db")), logger)
@@ -88,7 +88,7 @@ func TestEncryptedKVAdapter_SetLockedVault(t *testing.T) {
 	kv, _ := setupEncryptedKVTest(t)
 
 	// Create a locked vault (no unlock)
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	vaultDir := filepath.Join(dir, "vault")
 	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 	_, privKey, err := ed25519.GenerateKey(nil)
@@ -114,7 +114,7 @@ func TestEncryptedKVAdapter_GetLockedVault(t *testing.T) {
 	require.NoError(t, adapter.KVSet(ctx, "key", "value", 0))
 
 	// Create a locked vault and swap it in
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	vaultDir := filepath.Join(dir, "vault")
 	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 	_, privKey, err := ed25519.GenerateKey(nil)
@@ -165,7 +165,7 @@ func TestEncryptedKVAdapter_ScanPrefixLockedVault(t *testing.T) {
 	require.NoError(t, adapter.KVSet(ctx, "prefix:key1", "val1", 0))
 
 	// Create a locked vault
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	vaultDir := filepath.Join(dir, "vault")
 	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 	_, privKey, err := ed25519.GenerateKey(nil)

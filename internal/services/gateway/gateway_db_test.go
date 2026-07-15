@@ -57,12 +57,12 @@ func TestGatewaySchema(t *testing.T) {
 }
 
 func TestCanonicalDBService_GetDB(t *testing.T) {
-	dataDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dataDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
 	logger := testutil.NewTestLogger()
 
-	ks := newTestKeystore(t, secretsDir, logger)
-	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, ks)
+	ks := newTestKeystore(t, fileSvc, logger)
+	db, err := OpenCanonicalDBService(dataDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -70,12 +70,12 @@ func TestCanonicalDBService_GetDB(t *testing.T) {
 }
 
 func TestCanonicalDBService_Wait(t *testing.T) {
-	dataDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dataDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
 	logger := testutil.NewTestLogger()
 
-	ks := newTestKeystore(t, secretsDir, logger)
-	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, ks)
+	ks := newTestKeystore(t, fileSvc, logger)
+	db, err := OpenCanonicalDBService(dataDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
 	require.NoError(t, err)
 
 	// Close the database to stop background workers
@@ -86,12 +86,12 @@ func TestCanonicalDBService_Wait(t *testing.T) {
 }
 
 func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
-	dataDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dataDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
 	logger := testutil.NewTestLogger()
 
-	ks := newTestKeystore(t, secretsDir, logger)
-	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, ks)
+	ks := newTestKeystore(t, fileSvc, logger)
+	db, err := OpenCanonicalDBService(dataDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -115,11 +115,11 @@ func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
 
 func newTestDB(t *testing.T) *CanonicalDBService {
 	t.Helper()
-	dir := t.TempDir()
-	secretsDir := t.TempDir()
+	dir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
 	logger := testutil.NewTestLogger()
-	ks := newTestKeystore(t, secretsDir, logger)
-	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), logger, true, "", false, ks)
+	ks := newTestKeystore(t, fileSvc, logger)
+	db, err := OpenCanonicalDBService(dir, filepath.Join(dir, "vault"), logger, true, "", false, ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	return db
@@ -281,19 +281,19 @@ func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSchemaIdempotent(t *testing.T) {
-	dir := t.TempDir()
-	secretsDir := t.TempDir()
+	dir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
 
 	logger := testutil.NewTestLogger()
-	ks1 := newTestKeystore(t, secretsDir, logger)
-	db1, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), logger, true, "", false, ks1)
+	ks1 := newTestKeystore(t, fileSvc, logger)
+	db1, err := OpenCanonicalDBService(dir, filepath.Join(dir, "vault"), logger, true, "", false, ks1, fileSvc)
 	require.NoError(t, err)
 	require.NoError(t, db1.DocStore.DocSet("test", "1", mustDocJSON(t, map[string]string{"val": "first"})))
 	db1.Close()
 
 	// Re-open same database - schema init should not fail or lose data
-	ks2 := newTestKeystore(t, secretsDir, logger)
-	db2, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), logger, true, "", false, ks2)
+	ks2 := newTestKeystore(t, fileSvc, logger)
+	db2, err := OpenCanonicalDBService(dir, filepath.Join(dir, "vault"), logger, true, "", false, ks2, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db2.Close() })
 
@@ -308,13 +308,13 @@ func TestSchemaIdempotent(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCreateDataDir(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	dir := filepath.Join(tmpDir, "nested", "deep", "data")
-	secretsDir := t.TempDir()
+	fileSvc := newTestFileSvc(t)
 
 	logger := testutil.NewTestLogger()
-	ks := newTestKeystore(t, secretsDir, logger)
-	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), logger, true, "", false, ks)
+	ks := newTestKeystore(t, fileSvc, logger)
+	db, err := OpenCanonicalDBService(dir, filepath.Join(dir, "vault"), logger, true, "", false, ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

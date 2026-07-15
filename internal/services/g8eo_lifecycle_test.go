@@ -82,10 +82,10 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	require.NoError(t, header.Save(vaultDir))
 
 	// Initialize keystore with in-memory keyring for the master key (required for gateway database)
-	secretsDir := paths.Infra.SecretsDir
-	require.NoError(t, os.MkdirAll(secretsDir, 0700))
+	fileSvc, secretsDir := keystoretest.NewTestFileService(t)
+	_ = secretsDir
 	testBackend := keystoretest.NewMemoryKeyring()
-	ks, err := keystore.NewWithKeyring(secretsDir, testutil.NewVerboseTestLogger(t), testBackend)
+	ks, err := keystore.NewWithKeyringAndFS(testutil.NewVerboseTestLogger(t), testBackend, fileSvc)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnforcePermissions())
@@ -99,6 +99,9 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 
 	// Inject test keystore (bypasses OS keychain for cross-platform CI)
 	service.SetKeystore(ks)
+
+	// Inject file service (required before Start)
+	service.SetFileService(fileSvc)
 
 	// Inject Mock PubSub Client
 	mockPubSub := pubsubtest.NewMockOperatorPubSubClient()

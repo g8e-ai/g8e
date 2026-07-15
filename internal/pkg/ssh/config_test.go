@@ -18,13 +18,14 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestParseConfig(t *testing.T) {
 	t.Run("single host block", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		cfg := filepath.Join(dir, "config")
 		content := `
 Host myserver
@@ -46,7 +47,7 @@ Host myserver
 	})
 
 	t.Run("multiple blocks", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		cfg := filepath.Join(dir, "config")
 		content := `
 Host prod-*
@@ -68,7 +69,7 @@ Host staging
 	})
 
 	t.Run("equals delimiter", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		cfg := filepath.Join(dir, "config")
 		content := `
 Host equalhost
@@ -93,7 +94,7 @@ Host equalhost
 	})
 
 	t.Run("comments", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		cfg := filepath.Join(dir, "config")
 		content := `
 # Global comment
@@ -111,7 +112,7 @@ Host commented
 	})
 
 	t.Run("multiple identity files", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		cfg := filepath.Join(dir, "config")
 		content := `
 Host multi
@@ -253,7 +254,7 @@ func TestResolveHost(t *testing.T) {
 	})
 
 	t.Run("with SSH config file", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		cfg := filepath.Join(dir, "config")
 		content := `
 Host testhost
@@ -274,7 +275,7 @@ Host testhost
 	})
 
 	t.Run("SSH config with wildcard match", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		cfg := filepath.Join(dir, "config")
 		content := `
 Host prod-*
@@ -292,7 +293,7 @@ Host prod-*
 	})
 
 	t.Run("SSH user flag overrides config", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		cfg := filepath.Join(dir, "config")
 		content := `
 Host testhost
@@ -306,7 +307,7 @@ Host testhost
 	})
 
 	t.Run("SSH identity file flag overrides config", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		cfg := filepath.Join(dir, "config")
 		content := `
 Host testhost
@@ -322,7 +323,7 @@ Host testhost
 
 	t.Run("default username when none provided", func(t *testing.T) {
 		// Mock home directory to avoid trying to read ~/.ssh/config in environments where it doesn't exist (e.g. CI)
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		t.Setenv("HOME", dir)
 		t.Setenv("USERPROFILE", dir) // For Windows compatibility
 
@@ -337,7 +338,7 @@ Host testhost
 
 	t.Run("default port when none provided", func(t *testing.T) {
 		// Mock home directory to avoid trying to read ~/.ssh/config in environments where it doesn't exist (e.g. CI)
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		t.Setenv("HOME", dir)
 		t.Setenv("USERPROFILE", dir) // For Windows compatibility
 
@@ -351,7 +352,7 @@ Host testhost
 	})
 
 	t.Run("proxy command from config", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		cfg := filepath.Join(dir, "config")
 		content := `
 Host jump
@@ -370,7 +371,7 @@ Host jump
 	})
 
 	t.Run("port 22 from config is ignored", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		cfg := filepath.Join(dir, "config")
 		content := `
 Host testhost
@@ -384,7 +385,7 @@ Host testhost
 	})
 
 	t.Run("config hostname overrides parsed hostname", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		cfg := filepath.Join(dir, "config")
 		content := `
 Host alias
@@ -398,7 +399,7 @@ Host alias
 	})
 
 	t.Run("user@host with config hostname override", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		cfg := filepath.Join(dir, "config")
 		content := `
 Host alias
@@ -428,7 +429,7 @@ func TestBuildAuthMethods(t *testing.T) {
 	})
 
 	t.Run("invalid key file content", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		keyPath := filepath.Join(dir, "invalid_key")
 		require.NoError(t, os.WriteFile(keyPath, []byte("not a valid key"), 0600))
 
@@ -444,7 +445,7 @@ func TestBuildAuthMethods(t *testing.T) {
 	})
 
 	t.Run("empty key file", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		keyPath := filepath.Join(dir, "empty_key")
 		require.NoError(t, os.WriteFile(keyPath, []byte(""), 0600))
 
@@ -456,7 +457,7 @@ func TestBuildAuthMethods(t *testing.T) {
 
 func TestBuildHostKeyCallback(t *testing.T) {
 	t.Run("known_hosts file does not exist", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		khPath := filepath.Join(dir, "known_hosts")
 
 		cb, err := BuildHostKeyCallback(khPath)
@@ -466,7 +467,7 @@ func TestBuildHostKeyCallback(t *testing.T) {
 	})
 
 	t.Run("malformed known_hosts file", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := testutil.TempDir(t)
 		khPath := filepath.Join(dir, "known_hosts")
 		require.NoError(t, os.WriteFile(khPath, []byte("invalid known_hosts content"), 0600))
 

@@ -11,6 +11,11 @@
 // See the License for the specific language and governing permissions and
 // limitations under the License.
 
+// os.Chdir is used for source-tree demo discovery (finding ./demos/ directories,
+// compose.yml, doctrine/, target-data/), not .g8e/ runtime state. This is a
+// legitimate cwd usage — demo commands resolve paths relative to the working
+// directory, not through RuntimeFileService.
+
 package cmd
 
 import (
@@ -23,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // chdirTemp creates a temp dir, chdirs into it, and restores the original
@@ -36,7 +42,7 @@ func chdirTemp(t *testing.T) string {
 	t.Helper()
 	originalWd, err := os.Getwd()
 	require.NoError(t, err)
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	require.NoError(t, os.Chdir(tmpDir))
 	t.Cleanup(func() { os.Chdir(originalWd) })
 	return tmpDir

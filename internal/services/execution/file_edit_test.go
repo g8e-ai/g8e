@@ -35,7 +35,7 @@ func TestFileEditService_ExecuteFileEdit_Write(t *testing.T) {
 
 	t.Run("write to new file", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		tmpFile := filepath.Join(tmpDir, constants.TestFileTxtFilename)
 		content := "test content"
 
@@ -64,7 +64,7 @@ func TestFileEditService_ExecuteFileEdit_Write(t *testing.T) {
 
 	t.Run("write with backup", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		tmpFile := filepath.Join(tmpDir, constants.TestFileTxtFilename)
 
 		// Create initial file
@@ -100,7 +100,7 @@ func TestFileEditService_ExecuteFileEdit_Write(t *testing.T) {
 
 	t.Run("write without create_if_missing fails", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		tmpFile := filepath.Join(tmpDir, constants.TestNonexistentTxtFilename)
 		content := "test"
 
@@ -130,7 +130,7 @@ func TestFileEditService_ExecuteFileEdit_Read(t *testing.T) {
 
 	t.Run("read entire file", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		tmpFile := filepath.Join(tmpDir, constants.TestFileTxtFilename)
 		content := "line1\nline2\nline3"
 		os.WriteFile(tmpFile, []byte(content), constants.PermFilePublic)
@@ -153,7 +153,7 @@ func TestFileEditService_ExecuteFileEdit_Read(t *testing.T) {
 
 	t.Run("read specific lines", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		tmpFile := filepath.Join(tmpDir, constants.TestFileTxtFilename)
 		os.WriteFile(tmpFile, []byte("line1\nline2\nline3\nline4\nline5"), constants.PermFilePublic)
 
@@ -199,7 +199,7 @@ func TestFileEditService_ExecuteFileEdit_Read(t *testing.T) {
 
 	t.Run("read with file stats", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		tmpFile := filepath.Join(tmpDir, constants.TestFileTxtFilename)
 		os.WriteFile(tmpFile, []byte("test content"), constants.PermFilePublic)
 
@@ -231,7 +231,7 @@ func TestFileEditService_ExecuteFileEdit_Replace(t *testing.T) {
 
 	t.Run("replace content", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		tmpFile := filepath.Join(tmpDir, constants.TestFileTxtFilename)
 		os.WriteFile(tmpFile, []byte("hello world"), constants.PermFilePublic)
 
@@ -260,7 +260,7 @@ func TestFileEditService_ExecuteFileEdit_Replace(t *testing.T) {
 
 	t.Run("replace missing content fails", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		tmpFile := filepath.Join(tmpDir, constants.TestFileTxtFilename)
 		os.WriteFile(tmpFile, []byte("hello world"), constants.PermFilePublic)
 
@@ -292,7 +292,7 @@ func TestFileEditService_ExecuteFileEdit_Insert(t *testing.T) {
 
 	t.Run("insert at position", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		tmpFile := filepath.Join(tmpDir, constants.TestFileTxtFilename)
 		os.WriteFile(tmpFile, []byte("line1\nline3"), constants.PermFilePublic)
 
@@ -321,7 +321,7 @@ func TestFileEditService_ExecuteFileEdit_Insert(t *testing.T) {
 
 	t.Run("insert at invalid position fails", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		tmpFile := filepath.Join(tmpDir, constants.TestFileTxtFilename)
 		os.WriteFile(tmpFile, []byte("line1"), constants.PermFilePublic)
 
@@ -352,7 +352,7 @@ func TestFileEditService_ExecuteFileEdit_Delete(t *testing.T) {
 
 	t.Run("delete lines", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		tmpFile := filepath.Join(tmpDir, constants.TestFileTxtFilename)
 		os.WriteFile(tmpFile, []byte("line1\nline2\nline3\nline4"), constants.PermFilePublic)
 
@@ -384,7 +384,7 @@ func TestFileEditService_ExecuteFileEdit_Delete(t *testing.T) {
 
 	t.Run("delete invalid range fails", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		tmpFile := filepath.Join(tmpDir, constants.TestFileTxtFilename)
 		os.WriteFile(tmpFile, []byte("line1"), constants.PermFilePublic)
 
@@ -415,7 +415,7 @@ func TestFileEditService_ExecuteFileEdit_Patch(t *testing.T) {
 
 	t.Run("patch not implemented", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		tmpFile := filepath.Join(tmpDir, constants.TestFileTxtFilename)
 		os.WriteFile(tmpFile, []byte("test"), constants.PermFilePublic)
 
@@ -438,7 +438,7 @@ func TestFileEditService_ExecuteFileEdit_Patch(t *testing.T) {
 
 	t.Run("missing patch content returns error", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		tmpFile := filepath.Join(tmpDir, constants.TestFileTxtFilename)
 		os.WriteFile(tmpFile, []byte("test"), constants.PermFilePublic)
 
@@ -460,7 +460,7 @@ func TestFileEditService_ExecuteFileEdit_Patch(t *testing.T) {
 
 	t.Run("backup creation attempted before patch", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		tmpFile := filepath.Join(tmpDir, constants.TestFileTxtFilename)
 		os.WriteFile(tmpFile, []byte("original content"), constants.PermFilePublic)
 
@@ -492,7 +492,7 @@ func TestFileEditService_ExecuteFileEdit_Patch(t *testing.T) {
 
 	t.Run("backup creation fails with non-existent file", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		nonExistentFile := filepath.Join(tmpDir, constants.TestNonexistentTxtFilename)
 
 		patchContent := "diff patch"
@@ -522,7 +522,7 @@ func TestFileEditService_ValidateFilePath(t *testing.T) {
 
 	t.Run("valid path", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		err := svc.validateFilePath(filepath.Join(tmpDir, constants.TestFileTxtFilename))
 		require.NoError(t, err)
 	})
@@ -541,7 +541,7 @@ func TestFileEditService_CreateBackup(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	svc := NewFileEditService(cfg, logger)
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	tmpFile := filepath.Join(tmpDir, constants.TestFileTxtFilename)
 	content := "original content"
 	os.WriteFile(tmpFile, []byte(content), constants.PermFilePublic)

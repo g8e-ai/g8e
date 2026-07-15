@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-07-13
-Version: v1.5.0
+Last Updated: 2026-07-14
+Version: v1.5.1
 
 The g8e Protocol platform is composed of two logically distinct roles, both implemented by the reference g8e binary file:
 
@@ -27,7 +27,7 @@ The g8e Protocol platform is composed of two logically distinct roles, both impl
 - **Canonical JSON (GovernanceEnvelope)**: Every mutation action is governed by a canonical JSON `GovernanceEnvelope` (protojson). This is the single canonical container for all g8e mutations, binding identity, intent, state, and governance proofs into one transaction.
 - **Transaction Invariants**: Every transaction is identified by a deterministic `transaction_hash` computed from its content. The envelope `id` must match this hash for the transaction to be valid.
 - **Protocol vs Implementation**: The protocol is the Gateway. Conforming implementations of the g8e Gateway and g8e Operator enforce these invariants.
-- **Sovereign Authority (PKI)**: The g8e Gateway owns the platform's PKI and is the only entity permitted to sign certificates. See [Network Architecture](./network.md) for the complete PKI hierarchy and certificate management.
+- **Sovereign Authority (PKI)**: The g8e Gateway owns the platform's PKI and is the only entity permitted to sign certificates. PKI file operations use `RuntimeFileService` (`internal/services/fs`) with relative paths under `constants.PkiDirname`. See [Network Architecture](./network.md) for the complete PKI hierarchy and certificate management.
 - **CSR-Based Enrollment**: Participants enroll by submitting a Certificate Signing Request (CSR) to the g8e Gateway. Identities are encoded as SPIFFE URI SANs. See [Network Architecture](./network.md) for detailed enrollment procedures.
 
 ---
@@ -119,7 +119,7 @@ Served on the HTTPS port (8443), this router handles all API, MCP, passkey, cons
 
 The public HTTPS router registers the following route categories:
 
-**Public Routes (no authentication)**: Health, state, Swagger UI (`/swagger/`, `/swagger/index.html`, `/swagger/doc.json`), CA bundle and fingerprint discovery, CRL, console SPA (`/console/`), landing page, login/logout, bootstrap enrollment, CLI and device enrollment, PKI apps and devices enrollment, enrollment token validation, and the OOB approval page redirect.
+**Public Routes (no authentication)**: Health, state, Swagger UI (`/swagger/`, `/swagger/index.html`, `/swagger/doc.json`), CA bundle and fingerprint discovery, CRL, console SPA (`/console/`), landing page, logout, bootstrap enrollment, CLI and device enrollment, PKI devices enrollment, CSR signing, enrollment token validation, and the OOB approval page redirect.
 
 **MCP/A2A Routes**: Registered on the public mux. When JWKS is configured, MCP routes are wrapped with JWT auth middleware; otherwise they rely on mTLS via the outer auth middleware. Registered paths include `/mcp` (unified MCP JSON-RPC endpoint) and `/api/v1/a2a/call` (A2A endpoint).
 
@@ -127,7 +127,7 @@ The public HTTPS router registers the following route categories:
 
 **JIT Passkey Routes (JWT-authenticated)**: When JWKS is configured, `/api/v1/auth/passkeys/jit-register/challenge` and `/api/v1/auth/passkeys/jit-register/verify` allow OIDC/JIT users with zero credentials to register their first passkey. These routes are wrapped with JWT auth middleware.
 
-**mTLS-Only Routes**: Data settings, blob store, operator management (list, terminate, bind, unbind, target, reauth), governance signers, app policies, app revocation, tribunal management (list, delete), tribunal deliberate, governance envelopes (rate-limited), audit receipts, events, export, summary, and report, SSE push, database, KV store, pub/sub publish and stream, PKI management (CSR sign, apps delegated, certificates revoke, revocation bundle), user management, passkey CLI status, and enrollment token generation.
+**mTLS-Only Routes**: Data settings, blob store, operator management (list, terminate, bind, unbind, target, reauth), governance signers, app policies, app revocation, tribunal management (list, delete), tribunal deliberate, governance envelopes (rate-limited), audit receipts, events, export, summary, and report, SSE push, database, KV store, pub/sub publish and stream, PKI management (apps enrollment, apps delegated, certificates revoke, revocation bundle), user management, passkey CLI status, and enrollment token generation.
 
 **WebSession-Protected Routes**: Browser-facing routes under `/api/v1/users/`, `/api/v1/auth/sessions/`, `/api/v1/approvals`, `/api/v1/auth/passkeys` are classified as `RouteAuthWebSession` in the RouteAuthRegistry, requiring a valid web session cookie. These include user profile (`/api/v1/users/me`), web session info (`/api/v1/auth/sessions/me`), OOB approval actions and listing, and passkey credential listing and revocation.
 
@@ -183,7 +183,7 @@ The endpoint also supports SSE (Server-Sent Events) via GET requests for streami
 
 ### Native Tool Registry
 
-The gateway maintains a centralized tool registry. The ToolRegistry provides thread-safe tool registration and lookup, enforcing tool name validation and input schema compliance. All native tools implement the `NativeTool` interface with `Name()`, `Description()`, `InputSchema()`, and `Execute()` methods.
+The gateway maintains a centralized tool registry. The ToolRegistry provides thread-safe tool registration and lookup, enforcing tool name validation and input schema compliance. All native tools implement a common interface providing name, description, input schema, and execution capabilities.
 
 ### Input Validation Framework
 
@@ -269,6 +269,15 @@ A monotonically increasing counter (`state_version`) tracks changes across all d
 
 Triggers on the `documents`, `kv_store`, and `blobs` tables increment the state version on insert, update, and delete operations. The gateway queries the current version before performing expensive state root calculations, skipping computation when the version has not changed.
 
+### Bound vs Observed State Tiering
+
+The gateway distinguishes between two state tiers for Merkle root computation:
+
+- **Bound State**: Authoritative state (documents, bound KV entries, bound blobs, token keymap) that gates transaction admission. The bound state root is the freshness root that in-flight envelopes depend on.
+- **Observed State**: Telemetry and environmental readings stored as observed KV entries and blobs. These are hashed into a separate observed state root that is chained into the audit ledger but does not gate transaction admission.
+
+This tiering prevents observed-state churn (continuous telemetry updates) from invalidating in-flight envelopes, which would degrade fail-closed into fail-always.
+
 ---
 
 ## Health Endpoint Consolidation
@@ -298,7 +307,7 @@ Every transaction submitted to `POST /api/v1/governance/envelopes` must pass thr
 Enforces forbidden patterns (such as `sudo` or `rm -rf /`), blacklists, and whitelists. It also performs MITRE threat detection on incoming payloads.
 
 ### L2 Consensus (Tribunal Deliberation)
-The gateway delegates L2 deliberation to an enrolled Tribunal service rather than self-signing votes. The Tribunal evaluates the transaction and produces `L2Vote` entries (Ed25519 signatures over the transaction hash) from its member agents. Under `consensus` and `notary` postures, the gateway calls the Tribunal's `Deliberate` endpoint (via in-process deliberation) and attaches the returned L2 votes to the envelope. The L4 Warden then verifies the quorum of valid signatures against the `TribunalPolicy` stored in the TribunalStoreService.
+The gateway delegates L2 deliberation to an enrolled Tribunal service rather than self-signing votes. The Tribunal evaluates the transaction and produces `L2Vote` entries (Ed25519 signatures over the transaction hash) from its member agents. Under `consensus` and `notary` postures, the gateway calls the Tribunal's `Deliberate` endpoint (via in-process deliberation) and attaches the returned L2 votes to the envelope. The L4 Warden then verifies the quorum of valid signatures against the `TribunalPolicy` stored in the tribunal store.
 
 ### L3 Notary (Human Authorization)
 The gateway notary enforces human-in-the-loop authorization using a layered model: passkey authorization is required for all proofs, and CLI mTLS session verification is applied as an additional transport-auth layer when `mtls_cert_fingerprint` is present.
@@ -311,9 +320,9 @@ The gateway notary enforces human-in-the-loop authorization using a layered mode
 Enforces final pre-execution verification gates:
 - **Transaction Hash**: The `envelope.id` must match the deterministic transaction hash computed from its content.
 - **Expiry**: The `expires_at` timestamp must be in the future.
-- **Nonce/Replay**: The `nonce` must not have been used previously (sliding-window protection) via the ReplayStore.
+- **Nonce/Replay**: The `nonce` must not have been used previously (sliding-window protection) via the replay store.
 - **State Root**: The `state_merkle_root` (if provided) must match the current state root of the gateway.
-- **Signer Trust**: Verifies L2 Consensus / L3 Notary signatures against trusted keys in the SignerStore.
+- **Signer Trust**: Verifies L2 Consensus / L3 Notary signatures against trusted keys in the signer store.
 
 ### L5 Actuator (Execution and Receipt)
 Performs isolated boundary tool dispatch (via MCP/A2A) and signed receipt production:
@@ -339,7 +348,7 @@ When a standard AI client (such as Claude, Codex, or Cursor) requests a mutation
 The g8e Gateway (g8eg) provides JWT authentication and Just-In-Time (JIT) user provisioning flows that fully isolate the downstream g8e Operator (g8eo) from Identity Providers (IdP). The g8e Gateway (g8eg) acts as the authentication brain, while the g8e Operator (g8eo) receives a pre-validated, enriched payload via the pub/sub pipe.
 
 ### 4-Step JWT Flow
-The JWT authentication logic is implemented in the gateway auth middleware via the `JWTAuthMiddleware` function.
+The JWT authentication logic is implemented in the gateway auth middleware.
 
 **Step 1: Inbound HTTP Handshake and JWT Verification**
 The g8e Gateway (g8eg) intercepts inbound `Authorization: Bearer <JWT>` tokens on public MCP endpoints before routing to downstream execution logic. The middleware cryptographically verifies the JWT signature using JWKS, validates `exp`, `nbf`, `iss`, and `aud` claims, and extracts identity claims (`sub`, `tenant_id`, `roles`).

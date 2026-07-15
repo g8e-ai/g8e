@@ -29,6 +29,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -327,7 +328,7 @@ func TestDeriveSeedPublicKey_PublicKeyIs64HexChars(t *testing.T) {
 func TestBootstrapTribunalPolicy_PathIsDirectory(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	// Pass the directory itself as the config path — os.ReadFile should fail
 	err := bootstrapTribunalPolicy(nil, tmpDir, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
@@ -338,7 +339,7 @@ func TestBootstrapTribunalPolicy_PathIsDirectory(t *testing.T) {
 func TestBootstrapTribunalPolicy_EmptyFile(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	configPath := filepath.Join(tmpDir, constants.TribunalBootstrapConfigFilename)
 	require.NoError(t, os.WriteFile(configPath, []byte{}, 0600))
 
@@ -351,7 +352,7 @@ func TestBootstrapTribunalPolicy_EmptyFile(t *testing.T) {
 func TestBootstrapTribunalPolicy_ValidConfigNilServiceOnlyChecksServiceAfterParse(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	configPath := filepath.Join(tmpDir, constants.TribunalBootstrapConfigFilename)
 	err := os.WriteFile(configPath, []byte(`{
 		"tribunal_id": "test-tribunal",
@@ -371,7 +372,7 @@ func TestBootstrapTribunalPolicy_ValidConfigNilServiceOnlyChecksServiceAfterPars
 func TestBootstrapTribunalPolicy_NilServiceWithInvalidSeedHex(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	configPath := filepath.Join(tmpDir, constants.TribunalBootstrapConfigFilename)
 	err := os.WriteFile(configPath, []byte(`{
 		"tribunal_id": "test-tribunal",

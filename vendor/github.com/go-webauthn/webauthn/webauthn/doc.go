@@ -54,11 +54,8 @@
 // handling the JSON responses from this library and translating them for the WebAUthn API appropriately. There are two
 // primary ways to handle this other than doing so manually:
 //
-//   1. Using a client side library like [@simplewebauthn/browser].
-//   2. Some browsers support the [parseCreationOptionsFromJSON] static method on the WebAuthn object.
-//
-// [parseCreationOptionsFromJSON]: https://developer.mozilla.org/en-US/docs/Web/API/PublicKeyCredential/parseCreationOptionsFromJSON_static
-// [@simplewebauthn/browser]: https://simplewebauthn.dev/docs/packages/browser
+//  1. Using a client side library like [@simplewebauthn/browser].
+//  2. Some browsers support the [parseCreationOptionsFromJSON] static method on the WebAuthn object.
 //
 // # Storage
 //
@@ -182,4 +179,7 @@
 // rule applies to [Credential] storage, not to [SessionData]. Additionally index the challenge (unique) and
 // the expiry timestamp so sessions can be looked up by challenge at Finish time and expired rows reaped
 // cheaply. Stored sessions must only be consumed by a Finish call operating under the same RP ID.
+//
+// [parseCreationOptionsFromJSON]: https://developer.mozilla.org/en-US/docs/Web/API/PublicKeyCredential/parseCreationOptionsFromJSON_static
+// [@simplewebauthn/browser]: https://simplewebauthn.dev/docs/packages/browser
 package webauthn

@@ -30,7 +30,7 @@ import (
 
 func setupKVStore(t *testing.T) *KVStoreService {
 	t.Helper()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := sqliteutil.DefaultDBConfig(filepath.Join(dir, "test.db"))
 	db, err := sqliteutil.OpenDB(cfg, logger)

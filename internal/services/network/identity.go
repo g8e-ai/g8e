@@ -300,17 +300,16 @@ func (d *Detector) detectIPs() ([]string, error) {
 			}
 
 			if ip != nil {
-				// Include both IPv4 and IPv6, but exclude loopback for now
-				// (localhost is added separately)
-				if !ip.IsLoopback() {
+				// IPv4 only — IPv6 is not supported
+				if ip.To4() != nil && !ip.IsLoopback() {
 					ips = append(ips, ip.String())
 				}
 			}
 		}
 	}
 
-	// Always add localhost
-	ips = append(ips, "127.0.0.1", "::1")
+	// Always add localhost (IPv4 only)
+	ips = append(ips, "127.0.0.1")
 
 	return ips, nil
 }
@@ -701,7 +700,7 @@ func (ni *NetworkIdentity) GetAllIPs() []net.IP {
 
 	for _, ipStr := range ni.IPs {
 		ip := net.ParseIP(ipStr)
-		if ip != nil {
+		if ip != nil && ip.To4() != nil {
 			ips = append(ips, ip)
 		}
 	}
@@ -774,7 +773,7 @@ func (ni *NetworkIdentity) FormatForDisplay() string {
 // getExternalIP returns the first non-loopback, non-link-local IPv4 from the list.
 func getExternalIP(ips []string) string {
 	for _, ip := range ips {
-		if ip == "127.0.0.1" || ip == "::1" || strings.HasPrefix(ip, "169.254.") {
+		if ip == "127.0.0.1" || strings.HasPrefix(ip, "169.254.") {
 			continue
 		}
 		parsed := net.ParseIP(ip)

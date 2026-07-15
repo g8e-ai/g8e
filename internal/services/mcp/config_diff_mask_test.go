@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -60,7 +61,7 @@ func TestConfigDiffMaskExecute_MissingBaselineReturnsError(t *testing.T) {
 func TestConfigDiffMaskExecute_NonExistentFileReturnsError(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	tool := &ConfigDiffMaskTool{}
 	args, _ := json.Marshal(ConfigDiffMaskRequest{
 		ConfigPath: filepath.Join(dir, "nonexistent.yaml"),
@@ -74,7 +75,7 @@ func TestConfigDiffMaskExecute_NonExistentFileReturnsError(t *testing.T) {
 func TestConfigDiffMaskExecute_IdenticalContentReturnsNoDifferences(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	configPath := filepath.Join(dir, "config.yaml")
 	content := "server:\n  port: 8080\n  host: localhost\n"
 	require.NoError(t, os.WriteFile(configPath, []byte(content), 0644))
@@ -97,7 +98,7 @@ func TestConfigDiffMaskExecute_IdenticalContentReturnsNoDifferences(t *testing.T
 func TestConfigDiffMaskExecute_AddedLinesClassifiedAsAdded(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	configPath := filepath.Join(dir, "config.yaml")
 	require.NoError(t, os.WriteFile(configPath, []byte("line1\nline2\nline3\n"), 0644))
 
@@ -126,7 +127,7 @@ func TestConfigDiffMaskExecute_AddedLinesClassifiedAsAdded(t *testing.T) {
 func TestConfigDiffMaskExecute_RemovedLinesClassifiedAsRemoved(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	configPath := filepath.Join(dir, "config.yaml")
 	require.NoError(t, os.WriteFile(configPath, []byte("line1\n"), 0644))
 
@@ -154,7 +155,7 @@ func TestConfigDiffMaskExecute_RemovedLinesClassifiedAsRemoved(t *testing.T) {
 func TestConfigDiffMaskExecute_ChangedLinesClassifiedAsChanged(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	configPath := filepath.Join(dir, "config.yaml")
 	require.NoError(t, os.WriteFile(configPath, []byte("server:\n  port: 9090\n"), 0644))
 
@@ -178,7 +179,7 @@ func TestConfigDiffMaskExecute_ChangedLinesClassifiedAsChanged(t *testing.T) {
 func TestConfigDiffMaskExecute_MasksPasswordSecrets(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	configPath := filepath.Join(dir, "config.yaml")
 	require.NoError(t, os.WriteFile(configPath, []byte("password: supersecret123\n"), 0644))
 
@@ -202,7 +203,7 @@ func TestConfigDiffMaskExecute_MasksPasswordSecrets(t *testing.T) {
 func TestConfigDiffMaskExecute_MasksTokenSecrets(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	configPath := filepath.Join(dir, "config.yaml")
 	require.NoError(t, os.WriteFile(configPath, []byte("api_token: abc123\n"), 0644))
 
@@ -226,7 +227,7 @@ func TestConfigDiffMaskExecute_MasksTokenSecrets(t *testing.T) {
 func TestConfigDiffMaskExecute_MasksKeySecrets(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	configPath := filepath.Join(dir, "config.yaml")
 	require.NoError(t, os.WriteFile(configPath, []byte("private_key: abc123\n"), 0644))
 
@@ -250,7 +251,7 @@ func TestConfigDiffMaskExecute_MasksKeySecrets(t *testing.T) {
 func TestConfigDiffMaskExecute_DoesNotMaskNonSensitiveValues(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	configPath := filepath.Join(dir, "config.yaml")
 	require.NoError(t, os.WriteFile(configPath, []byte("server:\n  port: 9090\n"), 0644))
 
@@ -274,7 +275,7 @@ func TestConfigDiffMaskExecute_DoesNotMaskNonSensitiveValues(t *testing.T) {
 func TestConfigDiffMaskExecute_PathTraversalRejected(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	configPath := filepath.Join(dir, "config.yaml")
 	require.NoError(t, os.WriteFile(configPath, []byte("safe\n"), 0644))
 
@@ -292,7 +293,7 @@ func TestConfigDiffMaskExecute_PathTraversalRejected(t *testing.T) {
 func TestConfigDiffMaskExecute_DiffKeyUsesLineIndex(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	configPath := filepath.Join(dir, "config.yaml")
 	require.NoError(t, os.WriteFile(configPath, []byte("a\nb\nc\nd\n"), 0644))
 

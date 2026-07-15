@@ -121,7 +121,7 @@ func TestFilesystemSignerStore_NonexistentDir(t *testing.T) {
 func TestFilesystemSignerStore_EmptyDir(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	store, err := NewFilesystemSignerStore(dir, logger)
 	require.NoError(t, err)
 	assert.NotNil(t, store)
@@ -134,7 +134,7 @@ func TestFilesystemSignerStore_EmptyDir(t *testing.T) {
 func TestFilesystemSignerStore_WithValidKey(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 
 	pub, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -154,7 +154,7 @@ func TestFilesystemSignerStore_WithValidKey(t *testing.T) {
 func TestFilesystemSignerStore_WithInvalidHex(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "bad.pub"), []byte("not-hex!"), 0644))
 
@@ -169,7 +169,7 @@ func TestFilesystemSignerStore_WithInvalidHex(t *testing.T) {
 func TestFilesystemSignerStore_WithWrongKeySize(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 
 	shortKey := hex.EncodeToString([]byte("short"))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "short.pub"), []byte(shortKey), 0644))
@@ -185,7 +185,7 @@ func TestFilesystemSignerStore_WithWrongKeySize(t *testing.T) {
 func TestFilesystemSignerStore_SkipsNonPubFiles(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "readme.txt"), []byte("ignore me"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "subdir"), []byte("dir"), 0644))

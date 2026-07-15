@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -30,30 +31,36 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // ─── buildGatewayConn error paths ────────────────────────────────────────────
 
 func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
-	t.Run("fails when cert files do not exist", func(t *testing.T) {
-		tempDir := t.TempDir()
+	t.Run("fails when trust bundle and cert files do not exist", func(t *testing.T) {
+		tempDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+		require.NoError(t, err)
 		cfg := &config.Config{
-			ProjectRoot:    tempDir,
-			CredentialsDir: tempDir,
+			ProjectRoot: tempDir,
+			RuntimeDir:  tempDir,
 		}
-		_, err := buildGatewayConn(cfg)
+		_, err = buildGatewayConn(fileSvc, cfg)
 		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrFailedToLoadClientCertificate)
+		assert.ErrorIs(t, err, constants.ErrFailedToReadTrustBundle)
 	})
 
 	t.Run("fails when CA bundle does not exist", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		certPath, keyPath, _ := generateTestCerts(t)
+		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+		require.NoError(t, err)
 
 		cfg := &config.Config{
-			ProjectRoot:    tempDir,
-			CredentialsDir: filepath.Dir(certPath),
+			ProjectRoot: tempDir,
+			RuntimeDir:  filepath.Dir(certPath),
 		}
 		// Set env to point to non-existent CA bundle
 		t.Setenv(envG8ECABundle, filepath.Join(tempDir, "nonexistent-ca.pem"))
@@ -61,13 +68,16 @@ func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 		t.Setenv(envG8EClientCert, certPath)
 		t.Setenv(envG8EClientKey, keyPath)
 
-		_, err := buildGatewayConn(cfg)
+		_, err = buildGatewayConn(fileSvc, cfg)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrFailedToReadTrustBundle)
 	})
 
 	t.Run("succeeds with valid certs and custom gateway URL", func(t *testing.T) {
 		certPath, keyPath, caPath := generateTestCerts(t)
+		tempDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+		require.NoError(t, err)
 
 		t.Setenv(envG8EClientCert, certPath)
 		t.Setenv(envG8EClientKey, keyPath)
@@ -75,11 +85,11 @@ func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 		t.Setenv(envG8EGatewayURL, "https://127.0.0.1:9999/mcp")
 
 		cfg := &config.Config{
-			ProjectRoot:    t.TempDir(),
-			CredentialsDir: filepath.Dir(certPath),
+			ProjectRoot: tempDir,
+			RuntimeDir:  filepath.Dir(certPath),
 		}
 
-		conn, err := buildGatewayConn(cfg)
+		conn, err := buildGatewayConn(fileSvc, cfg)
 		require.NoError(t, err)
 		assert.NotNil(t, conn)
 		assert.Equal(t, "https://127.0.0.1:9999/mcp", conn.gatewayURL)
@@ -118,7 +128,7 @@ func TestStartGatewayIfNeeded_ConfigLoadError(t *testing.T) {
 		}
 		t.Cleanup(func() { configLoad = originalLoad })
 
-		err := startGatewayIfNeeded()
+		err := startGatewayIfNeeded(newFileSvc)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "mcp: load config")
 	})
@@ -136,7 +146,7 @@ func TestLaunchAgentWithGovernance_ConfigLoadError(t *testing.T) {
 		}
 		t.Cleanup(func() { configLoad = originalLoad })
 
-		err := launchAgentWithGovernance("claude", nil)
+		err := launchAgentWithGovernance("claude", nil, newFileSvc)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrGatewayNotReady)
 	})
@@ -201,7 +211,7 @@ func TestProxySessionToGateway_ConnectionRefused(t *testing.T) {
 
 func TestRunMCPAgentRun_SubprocessStartFailure(t *testing.T) {
 	t.Run("returns ErrProcessStartFailed for non-existent command", func(t *testing.T) {
-		err := runMCPAgentRun([]string{"nonexistent-command-xyz-12345"}, "")
+		err := runMCPAgentRun([]string{"nonexistent-command-xyz-12345"}, "", newFileSvc)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrProcessStartFailed)
 	})
@@ -233,7 +243,7 @@ func TestRunMCPAgentRun_HTTPProxyEmptyStdin(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL)
+		err = runMCPAgentRun(nil, server.URL, newFileSvc)
 		require.NoError(t, err)
 	})
 }
@@ -269,7 +279,7 @@ func TestRunMCPAgentRun_HTTPProxyL1Blocked(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL)
+		err = runMCPAgentRun(nil, server.URL, newFileSvc)
 		require.NoError(t, err)
 	})
 }
@@ -299,7 +309,7 @@ func TestRunMCPAgentRun_HTTPProxyNotificationDropped(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL)
+		err = runMCPAgentRun(nil, server.URL, newFileSvc)
 		require.NoError(t, err)
 	})
 }
@@ -328,7 +338,7 @@ func TestRunMCPAgentRun_HTTPProxyParseError(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL)
+		err = runMCPAgentRun(nil, server.URL, newFileSvc)
 		require.NoError(t, err)
 	})
 }
@@ -357,7 +367,7 @@ func TestRunMCPAgentRun_HTTPProxyEmptyLines(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL)
+		err = runMCPAgentRun(nil, server.URL, newFileSvc)
 		require.NoError(t, err)
 	})
 }
@@ -386,7 +396,7 @@ func TestRunMCPAgentRun_HTTPProxyInitializeFallback(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL)
+		err = runMCPAgentRun(nil, server.URL, newFileSvc)
 		require.NoError(t, err)
 	})
 }
@@ -415,7 +425,7 @@ func TestRunMCPAgentRun_HTTPProxyDownstreamError(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL)
+		err = runMCPAgentRun(nil, server.URL, newFileSvc)
 		require.NoError(t, err)
 	})
 }
@@ -427,7 +437,7 @@ func TestRunAgentHarness_ConfigLoadError(t *testing.T) {
 		chdirTemp(t)
 
 		// Reset harness flags to known state
-		harnessConfigPath = filepath.Join(t.TempDir(), "nonexistent-config.json")
+		harnessConfigPath = filepath.Join(testutil.TempDir(t), "nonexistent-config.json")
 		harnessMTLSURL = ""
 		harnessPublicURL = ""
 		harnessCert = ""
@@ -458,7 +468,7 @@ func TestRunAgentHarness_ConfigLoadError(t *testing.T) {
 
 func TestEnsureDHSPosture_ErrorPath(t *testing.T) {
 	t.Run("returns error when docker compose file does not exist", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		err := ensureDHSPosture(tempDir, "consensus")
 		require.Error(t, err)
 		// Docker will fail because the compose file doesn't exist
@@ -470,7 +480,7 @@ func TestEnsureDHSPosture_ErrorPath(t *testing.T) {
 
 func TestPrintMCPConfigLocal_WithValidCerts(t *testing.T) {
 	t.Run("generates config when certs exist", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		certPath, keyPath, caPath := generateTestCerts(t)
 
@@ -512,7 +522,7 @@ func TestPrintMCPConfigLocal_WithValidCerts(t *testing.T) {
 
 func TestPrintMCPConfigIP_WithValidCerts(t *testing.T) {
 	t.Run("generates IP config when certs exist", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 
 		certPath, keyPath, caPath := generateTestCerts(t)
 

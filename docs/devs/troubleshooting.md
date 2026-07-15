@@ -1,7 +1,7 @@
 # Developer Troubleshooting
 
-Last Updated: 2026-07-12
-Version: v1.4.0
+Last Updated: 2026-07-22
+Version: v1.5.1
 
 This page covers common setup failures, runtime friction, and operational
 caveats for contributors working on g8e from a fresh checkout. The platform
@@ -116,10 +116,12 @@ Use `./g8e gw reset` or `./g8e gw clean` only for disposable local
 state. They intentionally remove runtime data under `.g8e/`.
 
 If the gateway started but the HTTPS health endpoint reports
-`governance_ready: false`, the governance pipeline has not finished
-initializing. This typically resolves within seconds of startup. If it
-persists, check the gateway logs for tribunal bootstrap errors or vault
-initialization failures.
+`governance_ready: false`, the gateway is running in `consensus` or
+`notary` posture and no trusted L2 signers are registered. In `doctrine`
+posture, `governance_ready` is always `true`. To resolve, register
+trusted signers or switch to `doctrine` posture. See
+[Governance](../architecture/governance.md) for signer registration
+details.
 
 ## Tests fail because the gateway is not running
 
@@ -139,20 +141,6 @@ If a test failure mentions missing trust bundles or client certificates,
 confirm that the test fixture has not been modified to skip enrollment. The
 `EnrollClientIdentity` helper in `test/fixtures/gateway_fixture.go` generates
 test PKI material at runtime.
-
-### Test environment variables
-
-The test harness supports several environment variables for controlling
-test execution:
-
-- `G8E_TEST_ENV`: Controls the test environment. Set to `docker` to use
-  the root `docker-compose.yml`. Set to `demos/<name>` to use a specific
-  demo compose file.
-- `G8E_SKIP_PASSKEY`: Set to `1` to skip interactive passkey prompts
-  during CLI login in tests. This enables non-interactive test execution.
-
-These variables are consumed in `test/integration_helper.go` and
-`internal/cli/cmd/auth.go`.
 
 ## Vault and encryption failures
 
@@ -259,10 +247,10 @@ changes or DNS configuration are required for basic operation.
 
 ### Session TTL
 
-Sessions have a 1-hour TTL by default. Long-lived access requires
-programmatic renewal or re-authentication. If CLI commands fail with
-session-related errors after extended idle periods, re-enroll or restart
-the gateway to refresh the session.
+Operator sessions have a 24-hour TTL by default. CLI sessions have a
+1-hour TTL. If CLI commands fail with session-related errors after
+extended idle periods, re-enroll to obtain a fresh session. Operator
+sessions require a gateway restart to refresh.
 
 ## L3 approval timeouts and transaction rejection
 
@@ -462,7 +450,7 @@ load and buffer pressure.
 The `sse_events` table is pruned automatically by the gateway maintenance
 loop every 30 seconds with a 1-hour retention window. Events older than
 1 hour are deleted. If historical events are needed beyond 1 hour, query
-them before they expire or adjust the retention configuration.
+them before they expire.
 
 ### State root impact
 

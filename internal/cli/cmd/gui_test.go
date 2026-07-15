@@ -26,6 +26,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestGuiCmdRegistration(t *testing.T) {
@@ -73,7 +74,7 @@ func TestLoadGUIEnrollment_FileNotFound(t *testing.T) {
 }
 
 func TestLoadGUIEnrollment_ValidFile(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	path := filepath.Join(tmpDir, GUIEnrollmentFile)
 	require.NoError(t, os.WriteFile(path, []byte(`{"origins":["https://app1.example.com","http://localhost:3003"]}`), 0600))
 
@@ -85,7 +86,7 @@ func TestLoadGUIEnrollment_ValidFile(t *testing.T) {
 }
 
 func TestLoadGUIEnrollment_InvalidJSON(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	path := filepath.Join(tmpDir, GUIEnrollmentFile)
 	require.NoError(t, os.WriteFile(path, []byte(`{invalid json`), 0600))
 
@@ -95,7 +96,7 @@ func TestLoadGUIEnrollment_InvalidJSON(t *testing.T) {
 }
 
 func TestSaveGUIEnrollment_RoundTrip(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	path := filepath.Join(tmpDir, "subdir", GUIEnrollmentFile)
 
 	enrollment := &GUIEnrollment{
@@ -109,7 +110,7 @@ func TestSaveGUIEnrollment_RoundTrip(t *testing.T) {
 }
 
 func TestSaveGUIEnrollment_CreatesParentDir(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	path := filepath.Join(tmpDir, "nested", "deep", GUIEnrollmentFile)
 
 	require.NoError(t, saveGUIEnrollment(path, &GUIEnrollment{Origins: []string{}}))
@@ -118,7 +119,7 @@ func TestSaveGUIEnrollment_CreatesParentDir(t *testing.T) {
 }
 
 func TestGuiEnrollCmdWithDeps_CreatesEnrollment(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	runtimeDir := filepath.Join(tmpDir, ".g8e")
 	require.NoError(t, os.MkdirAll(runtimeDir, 0700))
 
@@ -144,7 +145,7 @@ func TestGuiEnrollCmdWithDeps_CreatesEnrollment(t *testing.T) {
 }
 
 func TestGuiEnrollCmdWithDeps_DuplicateOriginIsIdempotent(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	runtimeDir := filepath.Join(tmpDir, ".g8e")
 	require.NoError(t, os.MkdirAll(runtimeDir, 0700))
 
@@ -174,7 +175,7 @@ func TestGuiEnrollCmdWithDeps_DuplicateOriginIsIdempotent(t *testing.T) {
 }
 
 func TestGuiEnrollCmdWithDeps_MissingOriginReturnsError(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: filepath.Join(tmpDir, ".g8e")}
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	corsChecker := func(*config.Config, string) error { return nil }
@@ -191,7 +192,7 @@ func TestGuiEnrollCmdWithDeps_MissingOriginReturnsError(t *testing.T) {
 }
 
 func TestGuiEnrollCmdWithDeps_InvalidOriginReturnsError(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: filepath.Join(tmpDir, ".g8e")}
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	corsChecker := func(*config.Config, string) error { return nil }
@@ -225,7 +226,7 @@ func TestGuiEnrollCmdWithDeps_ConfigLoadError(t *testing.T) {
 }
 
 func TestGuiShowCmdWithDeps_NoEnrollments(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: filepath.Join(tmpDir, ".g8e")}
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 
@@ -240,7 +241,7 @@ func TestGuiShowCmdWithDeps_NoEnrollments(t *testing.T) {
 }
 
 func TestGuiShowCmdWithDeps_ListsEnrolledOrigins(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	runtimeDir := filepath.Join(tmpDir, ".g8e")
 	require.NoError(t, os.MkdirAll(runtimeDir, 0700))
 
@@ -265,7 +266,7 @@ func TestGuiShowCmdWithDeps_ListsEnrolledOrigins(t *testing.T) {
 }
 
 func TestGuiVerifyCmdWithDeps_PrintsVerificationChecklist(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	runtimeDir := filepath.Join(tmpDir, ".g8e")
 	require.NoError(t, os.MkdirAll(runtimeDir, 0700))
 
@@ -293,7 +294,7 @@ func TestGuiVerifyCmdWithDeps_PrintsVerificationChecklist(t *testing.T) {
 }
 
 func TestGuiVerifyCmdWithDeps_UnenrolledOriginWarns(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: filepath.Join(tmpDir, ".g8e")}
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 
@@ -309,7 +310,7 @@ func TestGuiVerifyCmdWithDeps_UnenrolledOriginWarns(t *testing.T) {
 }
 
 func TestGuiVerifyCmdWithDeps_MissingOriginReturnsError(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: filepath.Join(tmpDir, ".g8e")}
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 
@@ -325,7 +326,7 @@ func TestGuiVerifyCmdWithDeps_MissingOriginReturnsError(t *testing.T) {
 }
 
 func TestGuiRemoveCmdWithDeps_RemovesEnrolledOrigin(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	runtimeDir := filepath.Join(tmpDir, ".g8e")
 	require.NoError(t, os.MkdirAll(runtimeDir, 0700))
 
@@ -352,7 +353,7 @@ func TestGuiRemoveCmdWithDeps_RemovesEnrolledOrigin(t *testing.T) {
 }
 
 func TestGuiRemoveCmdWithDeps_RemovesLastOrigin(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	runtimeDir := filepath.Join(tmpDir, ".g8e")
 	require.NoError(t, os.MkdirAll(runtimeDir, 0700))
 
@@ -378,7 +379,7 @@ func TestGuiRemoveCmdWithDeps_RemovesLastOrigin(t *testing.T) {
 }
 
 func TestGuiRemoveCmdWithDeps_NotEnrolledReturnsNotFound(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	runtimeDir := filepath.Join(tmpDir, ".g8e")
 	require.NoError(t, os.MkdirAll(runtimeDir, 0700))
 
@@ -402,7 +403,7 @@ func TestGuiRemoveCmdWithDeps_NotEnrolledReturnsNotFound(t *testing.T) {
 }
 
 func TestGuiRemoveCmdWithDeps_MissingOriginReturnsError(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: filepath.Join(tmpDir, ".g8e")}
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 
@@ -418,7 +419,7 @@ func TestGuiRemoveCmdWithDeps_MissingOriginReturnsError(t *testing.T) {
 }
 
 func TestGuiRemoveCmdWithDeps_InvalidOriginReturnsError(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: filepath.Join(tmpDir, ".g8e")}
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 
@@ -450,7 +451,7 @@ func TestGuiRemoveCmdWithDeps_ConfigLoadError(t *testing.T) {
 }
 
 func TestGuiShowCmdWithDeps_JSONOutput(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	runtimeDir := filepath.Join(tmpDir, ".g8e")
 	require.NoError(t, os.MkdirAll(runtimeDir, 0700))
 
@@ -477,7 +478,7 @@ func TestGuiShowCmdWithDeps_JSONOutput(t *testing.T) {
 }
 
 func TestGuiShowCmdWithDeps_JSONOutputEmpty(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: filepath.Join(tmpDir, ".g8e")}
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 
@@ -494,7 +495,7 @@ func TestGuiShowCmdWithDeps_JSONOutputEmpty(t *testing.T) {
 }
 
 func TestGuiEnrollCmdWithDeps_CORSCheckFailsHard(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	runtimeDir := filepath.Join(tmpDir, ".g8e")
 	require.NoError(t, os.MkdirAll(runtimeDir, 0700))
 

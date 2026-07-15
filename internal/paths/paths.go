@@ -59,6 +59,7 @@ var Infra struct {
 	ServiceCertPath             string
 	PkiRootDir                  string
 	PkiAuthoritiesDir           string
+	PkiIssuedDir                string
 	PkiIssuedHubDir             string
 	PkiIssuedGatewayPeerDir     string
 	PkiTrustDir                 string
@@ -95,6 +96,7 @@ var Infra struct {
 	ExecutionVaultDBPath string
 	ReplayStoreDBPath    string
 	LedgerDir            string
+	LedgerFilesDir       string
 
 	// Demo paths
 	DemosDir                         string
@@ -137,6 +139,7 @@ var Infra struct {
 	ServiceCertPath             string
 	PkiRootDir                  string
 	PkiAuthoritiesDir           string
+	PkiIssuedDir                string
 	PkiIssuedHubDir             string
 	PkiIssuedGatewayPeerDir     string
 	PkiTrustDir                 string
@@ -168,6 +171,7 @@ var Infra struct {
 	ExecutionVaultDBPath string
 	ReplayStoreDBPath    string
 	LedgerDir            string
+	LedgerFilesDir       string
 
 	DemosDir                         string
 	DemosHealthcareDir               string
@@ -310,10 +314,12 @@ func InitWithBase(baseDir string) error {
 	Infra.ServiceCertPath = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert)
 	Infra.PkiRootDir = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirRoot)
 	Infra.PkiAuthoritiesDir = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirAuthorities)
-	Infra.PkiIssuedHubDir = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub)
+	Infra.PkiIssuedDir = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirIssued)
+	Infra.PkiIssuedHubDir = pathutil.SafeJoin(Infra.PkiIssuedDir, constants.PkiSubdirHub)
 	Infra.PkiIssuedGatewayPeerDir = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirIssued, constants.PkiSubdirGatewayPeer)
 	Infra.PkiTrustDir = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirTrust)
 	Infra.PkiRevocationDir = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirRevocation)
+	Infra.PkiBinariesDir = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirBinaries)
 	Infra.ActuatorPubJSONPath = pathutil.SafeJoin(Infra.PkiDir, constants.ActuatorPubJSONFilename)
 	Infra.ActuatorPubPEMPath = pathutil.SafeJoin(Infra.PkiDir, constants.ActuatorPubPEMFilename)
 
@@ -339,6 +345,7 @@ func InitWithBase(baseDir string) error {
 	Infra.ExecutionVaultDBPath = pathutil.SafeJoin(Infra.DataDir, constants.ExecutionVaultDBFilename)
 	Infra.ReplayStoreDBPath = pathutil.SafeJoin(Infra.DataDir, constants.ReplayStoreDBFilename)
 	Infra.LedgerDir = pathutil.SafeJoin(Infra.DataDir, constants.LedgerDirname)
+	Infra.LedgerFilesDir = pathutil.SafeJoin(Infra.LedgerDir, constants.FilesDirname)
 
 	Infra.DemosDir = pathutil.SafeJoin(baseDir, constants.DemosDirname)
 	Infra.DemosHealthcareDir = pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgHealthcare)

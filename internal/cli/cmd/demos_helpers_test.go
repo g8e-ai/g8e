@@ -29,6 +29,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestToDockerPath_NonWindowsReturnsPathUnchanged(t *testing.T) {
@@ -46,7 +47,7 @@ func TestToDockerPath_WindowsConvertsBackslashes(t *testing.T) {
 }
 
 func TestReadDoctrineRule_ValidFileReturnsRule(t *testing.T) {
-	tmp := t.TempDir()
+	tmp := testutil.TempDir(t)
 	doctrineDir := filepath.Join(tmp, constants.DemosDoctrineDir)
 	require.NoError(t, os.MkdirAll(doctrineDir, 0o755))
 
@@ -81,14 +82,14 @@ func TestReadDoctrineRule_ValidFileReturnsRule(t *testing.T) {
 }
 
 func TestReadDoctrineRule_MissingFileReturnsPathNotFound(t *testing.T) {
-	tmp := t.TempDir()
+	tmp := testutil.TempDir(t)
 	_, err := readDoctrineRule(tmp, "nonexistent.json", "rule-1")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrPathNotFound))
 }
 
 func TestReadDoctrineRule_InvalidJSONReturnsInvalidJSONBody(t *testing.T) {
-	tmp := t.TempDir()
+	tmp := testutil.TempDir(t)
 	doctrineDir := filepath.Join(tmp, constants.DemosDoctrineDir)
 	require.NoError(t, os.MkdirAll(doctrineDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(doctrineDir, "bad.json"), []byte("{invalid json"), 0o644))
@@ -99,7 +100,7 @@ func TestReadDoctrineRule_InvalidJSONReturnsInvalidJSONBody(t *testing.T) {
 }
 
 func TestReadDoctrineRule_RuleIDNotFoundReturnsNotFound(t *testing.T) {
-	tmp := t.TempDir()
+	tmp := testutil.TempDir(t)
 	doctrineDir := filepath.Join(tmp, constants.DemosDoctrineDir)
 	require.NoError(t, os.MkdirAll(doctrineDir, 0o755))
 
@@ -193,8 +194,8 @@ func TestBuildScpArgs_PartialFlags(t *testing.T) {
 }
 
 func TestCopyFile_SmallFile(t *testing.T) {
-	src := filepath.Join(t.TempDir(), "src.txt")
-	dst := filepath.Join(t.TempDir(), "dst.txt")
+	src := filepath.Join(testutil.TempDir(t), "src.txt")
+	dst := filepath.Join(testutil.TempDir(t), "dst.txt")
 	require.NoError(t, os.WriteFile(src, []byte("hello world"), 0o644))
 
 	require.NoError(t, copyFile(src, dst))
@@ -205,15 +206,15 @@ func TestCopyFile_SmallFile(t *testing.T) {
 }
 
 func TestCopyFile_NonExistentSource(t *testing.T) {
-	dst := filepath.Join(t.TempDir(), "dst.txt")
+	dst := filepath.Join(testutil.TempDir(t), "dst.txt")
 	err := copyFile("/nonexistent/source/file.txt", dst)
 	assert.Error(t, err)
 }
 
 func TestCopyFile_DestinationInNonExistentDir(t *testing.T) {
-	src := filepath.Join(t.TempDir(), "src.txt")
+	src := filepath.Join(testutil.TempDir(t), "src.txt")
 	require.NoError(t, os.WriteFile(src, []byte("data"), 0o644))
-	dst := filepath.Join(t.TempDir(), "nonexistent", "dst.txt")
+	dst := filepath.Join(testutil.TempDir(t), "nonexistent", "dst.txt")
 	err := copyFile(src, dst)
 	assert.Error(t, err)
 }
@@ -222,8 +223,8 @@ func TestCopyFile_PreservesFileMode(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping on Windows - Unix file modes not supported")
 	}
-	src := filepath.Join(t.TempDir(), "src.sh")
-	dst := filepath.Join(t.TempDir(), "dst.sh")
+	src := filepath.Join(testutil.TempDir(t), "src.sh")
+	dst := filepath.Join(testutil.TempDir(t), "dst.sh")
 	require.NoError(t, os.WriteFile(src, []byte("#!/bin/sh\n"), 0o755))
 
 	require.NoError(t, copyFile(src, dst))
@@ -234,8 +235,8 @@ func TestCopyFile_PreservesFileMode(t *testing.T) {
 }
 
 func TestCopyFile_EmptyFile(t *testing.T) {
-	src := filepath.Join(t.TempDir(), "empty.txt")
-	dst := filepath.Join(t.TempDir(), "copy.txt")
+	src := filepath.Join(testutil.TempDir(t), "empty.txt")
+	dst := filepath.Join(testutil.TempDir(t), "copy.txt")
 	require.NoError(t, os.WriteFile(src, []byte{}, 0o644))
 
 	require.NoError(t, copyFile(src, dst))
@@ -336,12 +337,12 @@ func TestDefaultHarnessConfig_ReturnsExpectedDefaults(t *testing.T) {
 }
 
 func TestCheckDemoDirExists_ExistingDirReturnsNil(t *testing.T) {
-	tmp := t.TempDir()
+	tmp := testutil.TempDir(t)
 	assert.NoError(t, checkDemoDirExists(tmp, "test-org"))
 }
 
 func TestCheckDemoDirExists_NonExistentReturnsNotFound(t *testing.T) {
-	tmp := t.TempDir()
+	tmp := testutil.TempDir(t)
 	nonExistent := filepath.Join(tmp, "no-such-dir")
 	err := checkDemoDirExists(nonExistent, "no-such-org")
 	require.Error(t, err)
@@ -349,7 +350,7 @@ func TestCheckDemoDirExists_NonExistentReturnsNotFound(t *testing.T) {
 }
 
 func TestCheckComposeFileExists_ExistingFileReturnsNil(t *testing.T) {
-	tmp := t.TempDir()
+	tmp := testutil.TempDir(t)
 	composePath := filepath.Join(tmp, constants.DemosComposeFile)
 	require.NoError(t, os.WriteFile(composePath, []byte("version: '3'"), 0o644))
 	assert.NoError(t, checkComposeFileExists(composePath, "test-org"))
@@ -458,7 +459,7 @@ func TestDemoStep_CommandSucceeds(t *testing.T) {
 	demoVerbose = false
 	t.Cleanup(func() { demoVerbose = original })
 
-	tmp := t.TempDir()
+	tmp := testutil.TempDir(t)
 	err := demoStep(tmp, "true command", false, "true")
 	assert.NoError(t, err)
 }
@@ -468,7 +469,7 @@ func TestDemoStep_CommandFails(t *testing.T) {
 	demoVerbose = false
 	t.Cleanup(func() { demoVerbose = original })
 
-	tmp := t.TempDir()
+	tmp := testutil.TempDir(t)
 	err := demoStep(tmp, "false command", false, "false")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "false command")
@@ -479,7 +480,7 @@ func TestDemoStep_FatalError(t *testing.T) {
 	demoVerbose = false
 	t.Cleanup(func() { demoVerbose = original })
 
-	tmp := t.TempDir()
+	tmp := testutil.TempDir(t)
 	err := demoStep(tmp, "critical step", true, "false")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "critical step")
@@ -491,7 +492,7 @@ func TestDemoScenarioStep_Success(t *testing.T) {
 	demoVerbose = false
 	t.Cleanup(func() { demoVerbose = original })
 
-	tmp := t.TempDir()
+	tmp := testutil.TempDir(t)
 	assert.True(t, demoScenarioStep(tmp, "step that succeeds", []string{"true"}))
 }
 
@@ -500,7 +501,7 @@ func TestDemoScenarioStep_Failure(t *testing.T) {
 	demoVerbose = false
 	t.Cleanup(func() { demoVerbose = original })
 
-	tmp := t.TempDir()
+	tmp := testutil.TempDir(t)
 	assert.False(t, demoScenarioStep(tmp, "step that fails", []string{"false"}))
 }
 
@@ -509,7 +510,7 @@ func TestDemoStepWarn_FailurePrintsWarning(t *testing.T) {
 	demoVerbose = false
 	t.Cleanup(func() { demoVerbose = original })
 
-	tmp := t.TempDir()
+	tmp := testutil.TempDir(t)
 	var buf bytes.Buffer
 	oldStdout := os.Stdout
 	r, w, _ := os.Pipe()

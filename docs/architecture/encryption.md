@@ -1,7 +1,7 @@
 # Encryption Architecture
 
-Last Updated: 2026-07-13
-Version: v1.5.0
+Last Updated: 2026-07-15
+Version: v1.5.1
 
 ## Overview
 
@@ -65,6 +65,9 @@ All storage services require an unlocked vault at initialization. The following 
 # Unlock with environment variable (used by gateway/operator)
 export G8E_VAULT_KEY=/path/to/vault/key
 ./g8e gw start
+
+# Or pass the key path directly to the gateway
+./g8e gw start --vault-key /path/to/vault/key
 ```
 
 ### Re-keying
@@ -112,13 +115,19 @@ export G8E_VAULT_KEY=/path/to/vault/key
 
 ## Configuration
 
-### CLI Flags
+### Vault Command Flags
 
 - `--vault-dir`: Directory for vault data (default: `.g8e/vault`).
 - `--key-path`: Path to vault key (used in vault commands).
 - `--new-key-path`: Path to save new vault key during rekey (default: `<vault-dir>/key.new`).
 - `--confirm`: Skip interactive confirmation for vault reset.
 - `--key-hex`: Vault key as hex string for import command.
+
+### Gateway Flags
+
+- `--vault-dir`: Directory for vault data (default: `.g8e/vault`).
+- `--vault-key`: Path to vault private key (default: `.g8e/vault/key`).
+- `--vault-require-unlock`: Require the vault to be unlocked at gateway startup. The gateway fails to start if the vault cannot be unlocked.
 
 ### Environment Variables
 
@@ -142,7 +151,7 @@ The vault directory defaults to `.g8e/vault` and the vault key defaults to `.g8e
 ### Key Management
 
 - Private keys are 32-byte hex-encoded values.
-- Key fingerprints are computed using SHA-256 with a domain-separation pepper. The key material (256-bit) provides sufficient entropy; a fast hash is appropriate for identification purposes.
+- Key fingerprints are computed using SHA-256 with a domain-separation pepper for identification purposes.
 - Keys can be imported or exported for backup via `g8e vault export` and `g8e vault import`.
 - Re-keying rotates the DEK wrapper without data loss (only the DEK wrapper changes).
 - Vault reset destroys all data irrecoverably.
@@ -198,7 +207,7 @@ The keystore uses the OS-native credential store when available, with a file-bas
 - **macOS**: Keychain.
 - **Windows**: File-based storage.
 
-The file-based fallback stores the master key as a base64-encoded file with restrictive permissions. Atomic writes are performed via temp file rename.
+The file-based fallback stores the master key as a base64-encoded file with restrictive permissions. Atomic writes are performed via temp file rename. All keystore file I/O within `.g8e/` uses the platform's file service abstraction with restrictive permissions.
 
 ## Troubleshooting
 

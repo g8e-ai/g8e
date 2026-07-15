@@ -36,7 +36,7 @@ import (
 // ============================================================================
 
 func TestSQLAuditStore_WithEncryption(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 
 	// Create and initialize vault for encryption
 	vaultDataDir := filepath.Join(tempDir, "vault")
@@ -44,9 +44,10 @@ func TestSQLAuditStore_WithEncryption(t *testing.T) {
 	defer encVault.Close()
 	require.True(t, encVault.IsUnlocked())
 
+	fileSvc := NewTestFileSvc(t, tempDir)
+
 	// Create audit vault with encryption enabled
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -57,7 +58,7 @@ func TestSQLAuditStore_WithEncryption(t *testing.T) {
 		EncryptionVault:           encVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -95,17 +96,17 @@ func TestSQLAuditStore_WithEncryption(t *testing.T) {
 }
 
 func TestSQLAuditStore_EncryptedDataUnreadableWithoutKey(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 
 	apiKey := []byte("test-api-key-for-locking-test")
 
 	// Create and initialize vault
 	vaultDataDir := filepath.Join(tempDir, "vault")
 	vault1 := CreateTestVault(t, vaultDataDir, apiKey)
+	fileSvc := NewTestFileSvc(t, tempDir)
 
 	// Create audit vault with encryption
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -116,7 +117,7 @@ func TestSQLAuditStore_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 		EncryptionVault:           vault1,
 	}
 
-	avs1, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs1, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 
 	// Write encrypted data
@@ -141,7 +142,6 @@ func TestSQLAuditStore_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 	// Attempt to reopen database WITHOUT encryption vault should fail
 	// This is the new fail-closed behavior: service cannot be opened without vault
 	config2 := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -152,7 +152,7 @@ func TestSQLAuditStore_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 		EncryptionVault:           nil, // No vault = service fails to initialize
 	}
 
-	avs2, err := NewTestSQLAuditStore(config2, testutil.NewTestLogger())
+	avs2, err := NewTestSQLAuditStore(config2, testutil.NewTestLogger(), fileSvc)
 	require.Error(t, err)
 	require.Nil(t, avs2)
 	assert.Contains(t, err.Error(), "EncryptionVault is required")
@@ -168,7 +168,6 @@ func TestSQLAuditStore_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 	defer vault3.Close()
 
 	config3 := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -179,7 +178,7 @@ func TestSQLAuditStore_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 		EncryptionVault:           vault3,
 	}
 
-	avs3, err := NewTestSQLAuditStore(config3, testutil.NewTestLogger())
+	avs3, err := NewTestSQLAuditStore(config3, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	defer avs3.Close()
 
@@ -193,7 +192,7 @@ func TestSQLAuditStore_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 }
 
 func TestSQLAuditStore_EncryptionWithRekey(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 
 	oldAPIKey := []byte("old-api-key-before-refresh")
 	newAPIKey := []byte("new-api-key-after-refresh")
@@ -201,9 +200,9 @@ func TestSQLAuditStore_EncryptionWithRekey(t *testing.T) {
 	// Initialize with old key
 	vaultDataDir := filepath.Join(tempDir, "vault")
 	vaultSvc := CreateTestVault(t, vaultDataDir, oldAPIKey)
+	fileSvc := NewTestFileSvc(t, tempDir)
 
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -214,7 +213,7 @@ func TestSQLAuditStore_EncryptionWithRekey(t *testing.T) {
 		EncryptionVault:           vaultSvc,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 
 	// Write data with old key
@@ -249,7 +248,6 @@ func TestSQLAuditStore_EncryptionWithRekey(t *testing.T) {
 
 	// Reopen audit vault with rekeyed vault
 	config2 := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -260,7 +258,7 @@ func TestSQLAuditStore_EncryptionWithRekey(t *testing.T) {
 		EncryptionVault:           vault2,
 	}
 
-	avs2, err := NewTestSQLAuditStore(config2, testutil.NewTestLogger())
+	avs2, err := NewTestSQLAuditStore(config2, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	defer avs2.Close()
 	defer vault2.Close()
@@ -273,16 +271,16 @@ func TestSQLAuditStore_EncryptionWithRekey(t *testing.T) {
 }
 
 func TestSQLAuditStore_MixedEncryptedUnencrypted(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 
 	// With the new fail-closed behavior, vault is mandatory
 	// This test verifies that encryption is consistently applied
 	vaultDataDir := filepath.Join(tempDir, "vault")
 	encVault := CreateTestVault(t, vaultDataDir, []byte("mixed-test-api-key"))
 	defer encVault.Close()
+	fileSvc := NewTestFileSvc(t, tempDir)
 
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -293,7 +291,7 @@ func TestSQLAuditStore_MixedEncryptedUnencrypted(t *testing.T) {
 		EncryptionVault:           encVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -336,7 +334,7 @@ func TestSQLAuditStore_MixedEncryptedUnencrypted(t *testing.T) {
 }
 
 func TestAuditVaultPrune(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 	logger := testutil.NewTestLogger()
 
@@ -344,15 +342,15 @@ func TestAuditVaultPrune(t *testing.T) {
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, vaultDir, privKey)
+	fileSvc := NewTestFileSvc(t, tempDir)
 
 	config := &TestSQLAuditStoreConfig{
-		DataDir:         tempDir,
 		DBPath:          "prune_test.db",
 		RetentionDays:   7,
 		EncryptionVault: testVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, logger)
+	avs, err := NewTestSQLAuditStore(config, logger, fileSvc)
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -377,7 +375,7 @@ func TestAuditVaultPrune(t *testing.T) {
 	require.NoError(t, err)
 
 	// 3. Insert file mutations
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	_, err = avs.db.Exec("INSERT INTO file_mutation_log (event_id, filepath, operation) VALUES (?, ?, ?)",
 		1, filepath.Join(tmpDir, "old"), "create")
 	require.NoError(t, err)

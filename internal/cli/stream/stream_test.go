@@ -35,6 +35,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/pkg/ssh"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -149,7 +150,7 @@ func TestCollectHosts_Deduplication(t *testing.T) {
 }
 
 func TestCollectHosts_FromFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	f := filepath.Join(dir, "hosts.txt")
 	require.NoError(t, os.WriteFile(f, []byte("host-a\nhost-b\n# comment\n\nhost-c\n"), 0600))
 
@@ -159,7 +160,7 @@ func TestCollectHosts_FromFile(t *testing.T) {
 }
 
 func TestCollectHosts_FileAndPositional_Merged(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	f := filepath.Join(dir, "hosts.txt")
 	require.NoError(t, os.WriteFile(f, []byte("host-b\nhost-c\n"), 0600))
 
@@ -179,7 +180,7 @@ func TestCollectHosts_FileNotFound(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestParseSSHConfig_BasicBlock(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	cfg := filepath.Join(dir, "config")
 	content := `
 Host myserver
@@ -201,7 +202,7 @@ Host myserver
 }
 
 func TestParseSSHConfig_MultipleBlocks(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	cfg := filepath.Join(dir, "config")
 	content := `
 Host prod-*
@@ -223,7 +224,7 @@ Host staging
 }
 
 func TestParseSSHConfig_EqualsDelimiter(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	cfg := filepath.Join(dir, "config")
 	content := `
 Host equalhost
@@ -248,7 +249,7 @@ func TestParseSSHConfig_MissingFile(t *testing.T) {
 }
 
 func TestParseSSHConfig_Comments(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	cfg := filepath.Join(dir, "config")
 	content := `
 # Global comment
@@ -266,7 +267,7 @@ Host commented
 }
 
 func TestParseSSHConfig_MultipleIdentityFiles(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	cfg := filepath.Join(dir, "config")
 	content := `
 Host multi
@@ -364,7 +365,7 @@ func TestResolveHost_UserAtHostPort(t *testing.T) {
 }
 
 func TestResolveHost_AliasFromSSHConfig(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	cfg := filepath.Join(dir, "config")
 	content := `
 Host myalias
@@ -382,7 +383,7 @@ Host myalias
 }
 
 func TestResolveHost_UserOverridesConfig(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	cfg := filepath.Join(dir, "config")
 	content := `
 Host myhost
@@ -397,7 +398,7 @@ Host myhost
 }
 
 func TestResolveHost_DefaultPort(t *testing.T) {
-	r, err := ssh.ResolveHost("somehost", filepath.Join(t.TempDir(), "nonexistent"), "", "", "")
+	r, err := ssh.ResolveHost("somehost", filepath.Join(testutil.TempDir(t), "nonexistent"), "", "", "")
 	require.NoError(t, err)
 	assert.Equal(t, "22", r.Port)
 }
@@ -464,7 +465,7 @@ func TestCollectHosts_Stdin(t *testing.T) {
 }
 
 func TestCollectHosts_WhitespaceOnlyLines(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	f := filepath.Join(dir, "hosts.txt")
 	require.NoError(t, os.WriteFile(f, []byte("  \n\t\nhost-a\n   host-b   \n"), 0600))
 
@@ -478,7 +479,7 @@ func TestCollectHosts_WhitespaceOnlyLines(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestResolveHost_WildcardSSHConfigMatch(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	cfg := filepath.Join(dir, "config")
 	content := `
 Host prod-*
@@ -495,7 +496,7 @@ Host prod-*
 }
 
 func TestResolveHost_SSHConfigPort22NotOverridden(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	cfg := filepath.Join(dir, "config")
 	content := `
 Host myhost
@@ -518,7 +519,7 @@ func TestResolveHost_NoSSHConfig_DefaultsApplied(t *testing.T) {
 }
 
 func TestResolveHost_HostnameOverriddenFromConfig(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	cfg := filepath.Join(dir, "config")
 	content := `
 Host alias
@@ -854,7 +855,7 @@ func TestRunStream_NodeBinaryNotFound_ResultsInFailure(t *testing.T) {
 	// Exercise the binary-load step in isolation: build a minimal binaryDir
 	// that does NOT contain the expected arch sub-path and verify the error
 	// message that RunStream would emit to stderr.
-	binaryDir := t.TempDir()
+	binaryDir := testutil.TempDir(t)
 	arch := "amd64"
 	binPath := filepath.Join(binaryDir, "linux-"+arch, "g8e.operator")
 
@@ -864,7 +865,7 @@ func TestRunStream_NodeBinaryNotFound_ResultsInFailure(t *testing.T) {
 
 func TestRunStream_ValidNodeBinaryWithCancelledContext(t *testing.T) {
 	// Write a minimal fake binary so the binary-load step succeeds.
-	binaryDir := t.TempDir()
+	binaryDir := testutil.TempDir(t)
 	arch := "amd64"
 	binDir := filepath.Join(binaryDir, "linux-"+arch)
 	require.NoError(t, os.MkdirAll(binDir, 0755))
@@ -887,7 +888,7 @@ func TestRunStream_ValidNodeBinaryWithCancelledContext(t *testing.T) {
 func TestRunStream_ArchValidation(t *testing.T) {
 	validArchs := []string{"amd64", "arm64", "386"}
 	for _, arch := range validArchs {
-		binaryDir := t.TempDir()
+		binaryDir := testutil.TempDir(t)
 		binDir := filepath.Join(binaryDir, "linux-"+arch)
 		require.NoError(t, os.MkdirAll(binDir, 0755))
 		fakeBin := filepath.Join(binDir, "g8e.operator")
@@ -924,7 +925,7 @@ func TestBuildAuthMethods_NonExistentKeyFile_Skipped(t *testing.T) {
 }
 
 func TestBuildAuthMethods_InvalidKeyFile_Skipped(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	badKey := filepath.Join(dir, "bad_key")
 	require.NoError(t, os.WriteFile(badKey, []byte("not a valid private key\n"), 0600))
 
@@ -936,7 +937,7 @@ func TestBuildAuthMethods_InvalidKeyFile_Skipped(t *testing.T) {
 }
 
 func TestBuildAuthMethods_ValidED25519Key_ReturnsMethod(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 
 	// Generate an ed25519 private key in PEM format using ssh-keygen equivalent
 	// via crypto/ed25519 + golang.org/x/crypto/ssh
@@ -952,7 +953,7 @@ func TestBuildAuthMethods_ValidED25519Key_ReturnsMethod(t *testing.T) {
 }
 
 func TestBuildAuthMethods_MultipleValidKeys_AllLoaded(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	key1 := filepath.Join(dir, "key1")
 	key2 := filepath.Join(dir, "key2")
 	generateTestSSHKey(t, key1)
@@ -967,7 +968,7 @@ func TestBuildAuthMethods_MultipleValidKeys_AllLoaded(t *testing.T) {
 }
 
 func TestBuildAuthMethods_MixedValidAndInvalid(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	validKey := filepath.Join(dir, "valid")
 	generateTestSSHKey(t, validKey)
 
@@ -982,7 +983,7 @@ func TestBuildAuthMethods_MixedValidAndInvalid(t *testing.T) {
 }
 
 func TestBuildAuthMethods_InvalidAgentSocket_StillLoadsKeys(t *testing.T) {
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	keyPath := filepath.Join(dir, "id_ed25519")
 	generateTestSSHKey(t, keyPath)
 

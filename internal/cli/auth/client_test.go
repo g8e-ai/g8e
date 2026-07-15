@@ -14,6 +14,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -23,7 +24,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"net"
 	"os"
@@ -34,6 +37,9 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestGenerateCSR(t *testing.T) {
@@ -241,10 +247,11 @@ func TestIsCertificateVerificationError(t *testing.T) {
 }
 
 func TestSaveCredentials(t *testing.T) {
-	tempDir := t.TempDir()
+	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 
 	cfg := &config.Config{}
-	cfg.CredentialsDir = tempDir
+	cfg.RuntimeDir = runtimeDir
 
 	creds := &Credentials{
 		OperatorSessionID: "test-session-id",
@@ -253,7 +260,7 @@ func TestSaveCredentials(t *testing.T) {
 		CLISessionID:      "test-cli-session-id",
 	}
 
-	err := SaveCredentials(cfg, creds)
+	err := SaveCredentials(fileSvc, cfg, creds)
 	if err != nil {
 		t.Fatalf("SaveCredentials() failed: %v", err)
 	}
@@ -265,13 +272,13 @@ func TestSaveCredentials(t *testing.T) {
 		t.Fatalf("Failed to read credentials file: %v", err)
 	}
 
-	// Verify file permissions (should be 0600)
+	// Verify file permissions (should be PermFilePrivate)
 	info, err := os.Stat(credsFile)
 	if err != nil {
 		t.Fatalf("Failed to stat credentials file: %v", err)
 	}
-	if runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
-		t.Errorf("Credentials file permissions = %v, want 0600", info.Mode().Perm())
+	if runtime.GOOS != "windows" && info.Mode().Perm() != constants.PermFilePrivate {
+		t.Errorf("Credentials file permissions = %v, want %v", info.Mode().Perm(), constants.PermFilePrivate)
 	}
 
 	// Verify content
@@ -289,13 +296,14 @@ func TestSaveCredentials(t *testing.T) {
 }
 
 func TestLoadCredentials(t *testing.T) {
-	tempDir := t.TempDir()
+	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 
 	cfg := &config.Config{}
-	cfg.CredentialsDir = tempDir
+	cfg.RuntimeDir = runtimeDir
 
 	t.Run("non-existent file returns nil", func(t *testing.T) {
-		creds, err := LoadCredentials(cfg)
+		creds, err := LoadCredentials(fileSvc, cfg)
 		if err != nil {
 			t.Errorf("LoadCredentials() error = %v, want nil", err)
 		}
@@ -312,11 +320,11 @@ func TestLoadCredentials(t *testing.T) {
 			CLISessionID:      "test-cli-session-id",
 		}
 
-		if err := SaveCredentials(cfg, creds); err != nil {
+		if err := SaveCredentials(fileSvc, cfg, creds); err != nil {
 			t.Fatalf("Failed to save credentials: %v", err)
 		}
 
-		loaded, err := LoadCredentials(cfg)
+		loaded, err := LoadCredentials(fileSvc, cfg)
 		if err != nil {
 			t.Fatalf("LoadCredentials() failed: %v", err)
 		}
@@ -331,11 +339,15 @@ func TestLoadCredentials(t *testing.T) {
 
 	t.Run("invalid JSON returns error", func(t *testing.T) {
 		credsFile := cfg.CredentialsFile()
-		if err := os.WriteFile(credsFile, []byte("invalid json"), 0600); err != nil {
+		credsRel, err := fileSvc.RelFromAbs(credsFile)
+		if err != nil {
+			t.Fatalf("Failed to get relative path: %v", err)
+		}
+		if err := fileSvc.WriteFile(context.Background(), credsRel, []byte("invalid json"), constants.PermFilePrivate); err != nil {
 			t.Fatalf("Failed to write invalid JSON: %v", err)
 		}
 
-		_, err := LoadCredentials(cfg)
+		_, err = LoadCredentials(fileSvc, cfg)
 		if err == nil {
 			t.Error("LoadCredentials() should return error for invalid JSON")
 		}
@@ -343,33 +355,44 @@ func TestLoadCredentials(t *testing.T) {
 }
 
 func TestDeleteCredentials(t *testing.T) {
-	tempDir := t.TempDir()
+	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
 
 	cfg := &config.Config{}
-	cfg.CredentialsDir = tempDir
+	cfg.RuntimeDir = runtimeDir
 	cfg.Paths = &config.PathsConfig{}
-	cfg.Paths.Infra.CACertPath = filepath.Join(tempDir, "trust-bundle.pem")
+	cfg.Paths.Infra.CACertPath = filepath.Join(runtimeDir, "trust-bundle.pem")
 
 	t.Run("delete existing credentials", func(t *testing.T) {
 		// Create test files using config methods
 		credsFile := cfg.CredentialsFile()
 		certFile := cfg.CLICertFile()
 		keyFile := cfg.CLIKeyFile()
-		trustFile := cfg.TrustBundlePath()
+		trustFile := cfg.ResolvedTrustBundlePath()
 
-		for _, f := range []string{credsFile, certFile, keyFile, trustFile} {
-			if err := os.WriteFile(f, []byte("test"), 0600); err != nil {
+		// Write runtime files via fileSvc
+		for _, f := range []string{credsFile, certFile, keyFile} {
+			rel, err := fileSvc.RelFromAbs(f)
+			if err != nil {
+				t.Fatalf("Failed to get relative path: %v", err)
+			}
+			if err := fileSvc.WriteFile(context.Background(), rel, []byte("test"), constants.PermFilePrivate); err != nil {
 				t.Fatalf("Failed to create test file: %v", err)
 			}
 		}
+		// Write custom trust bundle via os (custom path code path)
+		if err := os.WriteFile(trustFile, []byte("test"), constants.PermFilePrivate); err != nil {
+			t.Fatalf("Failed to create trust file: %v", err)
+		}
 
-		if err := DeleteCredentials(cfg); err != nil {
+		if err := DeleteCredentials(fileSvc, cfg); err != nil {
 			t.Fatalf("DeleteCredentials() failed: %v", err)
 		}
 
 		// Verify files are deleted
 		for _, f := range []string{credsFile, certFile, keyFile, trustFile} {
-			if _, err := os.Stat(f); !os.IsNotExist(err) {
+			_, err := os.Stat(f)
+			if !errors.Is(err, os.ErrNotExist) {
 				t.Errorf("File %s still exists after deletion", f)
 			}
 		}
@@ -377,17 +400,17 @@ func TestDeleteCredentials(t *testing.T) {
 
 	t.Run("delete non-existent files succeeds", func(t *testing.T) {
 		// Don't create any files
-		if err := DeleteCredentials(cfg); err != nil {
+		if err := DeleteCredentials(fileSvc, cfg); err != nil {
 			t.Errorf("DeleteCredentials() with non-existent files should succeed, got error: %v", err)
 		}
 	})
 }
 
 func TestSaveCertAndKey(t *testing.T) {
-	tempDir := t.TempDir()
+	fileSvc := newAuthTestFileSvc(t)
 
-	certFile := filepath.Join(tempDir, "cert.pem")
-	keyFile := filepath.Join(tempDir, "key.pem")
+	certRel := "cert.pem"
+	keyRel := "key.pem"
 
 	// Generate test key
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -399,13 +422,13 @@ func TestSaveCertAndKey(t *testing.T) {
 	chainPEM := "-----BEGIN CERTIFICATE-----\ntest chain data\n-----END CERTIFICATE-----"
 
 	t.Run("save cert and key without chain", func(t *testing.T) {
-		err := SaveCertAndKey(certPEM, "", privKey, certFile, keyFile)
+		err := SaveCertAndKey(fileSvc, certPEM, "", privKey, certRel, keyRel)
 		if err != nil {
 			t.Fatalf("SaveCertAndKey() failed: %v", err)
 		}
 
 		// Verify cert file
-		certData, err := os.ReadFile(certFile)
+		certData, err := fileSvc.ReadFile(context.Background(), certRel)
 		if err != nil {
 			t.Fatalf("Failed to read cert file: %v", err)
 		}
@@ -414,7 +437,7 @@ func TestSaveCertAndKey(t *testing.T) {
 		}
 
 		// Verify key file
-		keyData, err := os.ReadFile(keyFile)
+		keyData, err := fileSvc.ReadFile(context.Background(), keyRel)
 		if err != nil {
 			t.Fatalf("Failed to read key file: %v", err)
 		}
@@ -428,22 +451,22 @@ func TestSaveCertAndKey(t *testing.T) {
 		}
 
 		// Verify file permissions
-		info, err := os.Stat(keyFile)
+		info, err := os.Stat(fileSvc.Resolve(keyRel))
 		if err != nil {
 			t.Fatalf("Failed to stat key file: %v", err)
 		}
-		if runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
-			t.Errorf("Key file permissions = %v, want 0600", info.Mode().Perm())
+		if runtime.GOOS != "windows" && info.Mode().Perm() != constants.PermFilePrivate {
+			t.Errorf("Key file permissions = %v, want %v", info.Mode().Perm(), constants.PermFilePrivate)
 		}
 	})
 
 	t.Run("save cert and key with chain", func(t *testing.T) {
-		err := SaveCertAndKey(certPEM, chainPEM, privKey, certFile, keyFile)
+		err := SaveCertAndKey(fileSvc, certPEM, chainPEM, privKey, certRel, keyRel)
 		if err != nil {
 			t.Fatalf("SaveCertAndKey() failed: %v", err)
 		}
 
-		certData, err := os.ReadFile(certFile)
+		certData, err := fileSvc.ReadFile(context.Background(), certRel)
 		if err != nil {
 			t.Fatalf("Failed to read cert file: %v", err)
 		}
@@ -496,6 +519,8 @@ func TestCheckOperatorRunningAtURL(t *testing.T) {
 }
 
 func TestParseCertPEM(t *testing.T) {
+	fileSvc := newAuthTestFileSvc(t)
+
 	// Generate a test certificate
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -519,15 +544,14 @@ func TestParseCertPEM(t *testing.T) {
 		Bytes: certDER,
 	})
 
-	tempDir := t.TempDir()
-	certFile := filepath.Join(tempDir, "cert.pem")
+	certRel := "cert.pem"
 
 	t.Run("valid certificate", func(t *testing.T) {
-		if err := os.WriteFile(certFile, certPEM, 0600); err != nil {
+		if err := fileSvc.WriteFile(context.Background(), certRel, certPEM, constants.PermFilePrivate); err != nil {
 			t.Fatalf("Failed to write cert file: %v", err)
 		}
 
-		cert, err := parseCertPEM(certFile)
+		cert, err := parseCertPEM(fileSvc, certRel)
 		if err != nil {
 			t.Fatalf("parseCertPEM() failed: %v", err)
 		}
@@ -538,18 +562,18 @@ func TestParseCertPEM(t *testing.T) {
 	})
 
 	t.Run("file not found", func(t *testing.T) {
-		_, err := parseCertPEM(filepath.Join(tempDir, "nonexistent.pem"))
+		_, err := parseCertPEM(fileSvc, "nonexistent.pem")
 		if err == nil {
 			t.Error("parseCertPEM() should return error for non-existent file")
 		}
 	})
 
 	t.Run("invalid PEM", func(t *testing.T) {
-		if err := os.WriteFile(certFile, []byte("invalid pem"), 0600); err != nil {
+		if err := fileSvc.WriteFile(context.Background(), certRel, []byte("invalid pem"), constants.PermFilePrivate); err != nil {
 			t.Fatalf("Failed to write invalid PEM: %v", err)
 		}
 
-		_, err := parseCertPEM(certFile)
+		_, err := parseCertPEM(fileSvc, certRel)
 		if err == nil {
 			t.Error("parseCertPEM() should return error for invalid PEM")
 		}
@@ -560,11 +584,11 @@ func TestParseCertPEM(t *testing.T) {
 			Type:  "PRIVATE KEY",
 			Bytes: certDER,
 		})
-		if err := os.WriteFile(certFile, keyPEM, 0600); err != nil {
+		if err := fileSvc.WriteFile(context.Background(), certRel, keyPEM, constants.PermFilePrivate); err != nil {
 			t.Fatalf("Failed to write key PEM: %v", err)
 		}
 
-		_, err := parseCertPEM(certFile)
+		_, err := parseCertPEM(fileSvc, certRel)
 		if err == nil {
 			t.Error("parseCertPEM() should return error for wrong PEM type")
 		}
@@ -618,6 +642,8 @@ func TestIsCertExpiringSoon(t *testing.T) {
 }
 
 func TestCheckCertExpiry(t *testing.T) {
+	fileSvc := newAuthTestFileSvc(t)
+
 	// Generate a test certificate
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -641,15 +667,14 @@ func TestCheckCertExpiry(t *testing.T) {
 		Bytes: certDER,
 	})
 
-	tempDir := t.TempDir()
-	certFile := filepath.Join(tempDir, "cert.pem")
+	certRel := "cert.pem"
 
 	t.Run("expiring certificate", func(t *testing.T) {
-		if err := os.WriteFile(certFile, certPEM, 0600); err != nil {
+		if err := fileSvc.WriteFile(context.Background(), certRel, certPEM, constants.PermFilePrivate); err != nil {
 			t.Fatalf("Failed to write cert file: %v", err)
 		}
 
-		expiring, err := CheckCertExpiry(certFile)
+		expiring, err := CheckCertExpiry(fileSvc, certRel)
 		if err != nil {
 			t.Fatalf("CheckCertExpiry() failed: %v", err)
 		}
@@ -659,7 +684,7 @@ func TestCheckCertExpiry(t *testing.T) {
 	})
 
 	t.Run("non-existent file", func(t *testing.T) {
-		_, err := CheckCertExpiry(filepath.Join(tempDir, "nonexistent.pem"))
+		_, err := CheckCertExpiry(fileSvc, "nonexistent.pem")
 		if err == nil {
 			t.Error("CheckCertExpiry() should return error for non-existent file")
 		}
@@ -675,4 +700,29 @@ func bigIntFromInt(n int64) *big.Int {
 func computeSHA256Fingerprint(data []byte) string {
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
+}
+
+func newAuthTestFileSvc(t *testing.T) fs.RuntimeFileService {
+	t.Helper()
+	baseDir := testutil.TempDir(t)
+	svc, err := fs.NewRuntimeFileService(baseDir, slog.Default())
+	if err != nil {
+		t.Fatalf("Failed to create file service: %v", err)
+	}
+	if err := svc.CreateRuntimeTree(context.Background()); err != nil {
+		t.Fatalf("Failed to create runtime tree: %v", err)
+	}
+	return svc
+}
+
+func newAuthTestEnv(t *testing.T) (fs.RuntimeFileService, *config.Config) {
+	t.Helper()
+	fileSvc := newAuthTestFileSvc(t)
+	runtimeDir := fileSvc.Resolve("")
+	cfg := &config.Config{
+		ProjectRoot: runtimeDir,
+		RuntimeDir:  runtimeDir,
+		Paths:       &config.PathsConfig{Host: "localhost"},
+	}
+	return fileSvc, cfg
 }

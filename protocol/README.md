@@ -6,7 +6,7 @@ Protocol library for the g8e zero-trust execution platform. Provides protobuf sc
 
 ### Go
 
-The Go module is part of the root module `github.com/g8e-ai/g8e` and requires Go 1.26. It depends on `google.golang.org/grpc` and `google.golang.org/protobuf`. Install with `go get github.com/g8e-ai/g8e`.
+The Go module is part of the root module `github.com/g8e-ai/g8e` and requires Go 1.26.5. It depends on `google.golang.org/grpc` and `google.golang.org/protobuf`. Install with `go get github.com/g8e-ai/g8e`.
 
 ### Python
 
@@ -30,18 +30,22 @@ protocol/
   models/                    JSON model schemas and Python error enums
     agents/                  Per-agent-role model schemas
     errors.py                Python error code and category enums
-  python/                    Python package (g8e-protocol)
+  python/                    Python package (g8e)
     g8e/                     Import namespace (g8e)
+      __init__.py            Package version
       constants.py           Runtime loader for JSON protocol constants
       enums.py               Dynamic StrEnum/IntEnum generation from STATUS and EVENTS
       models/                Pydantic v2 models for protocol data structures
+      py.typed               PEP 561 type marker
     examples/                Python example scripts
+    tests/                   Python package tests (constants, enums, models, version)
     pyproject.toml           Package metadata and dependencies
     README.md                Python package README
-  examples/                  Go example programs
+  examples/                  Go example programs and MCP config templates
+    README.md                Examples overview and run instructions
     governance_envelope/     GovernanceEnvelope construction demo
     workload_identity/       SPIFFE workload identity demo
-    mcp_server/              Example MCP server configuration
+    mcp_server/              MCP server configuration templates
   docs/                      Protocol reference documentation
     spec.md                  Protocol specification (GovernanceEnvelope, 5-layer interlock)
     constants.md             Constants system reference
@@ -53,6 +57,7 @@ protocol/
     mcp_jsonrpc_schema.json  MCP JSON-RPC 2.0 message schema
     mcp_tool_template.go     Native tool implementation template
     reference/api/           Generated Markdown API documentation from protobuf
+  conformance/               Cross-language conformance tests (Python/Go parity)
 ```
 
 The buf generation config resides at `buf.gen.yaml` in the repository root. It produces Go structs and gRPC service stubs into `protocol/proto`, and Markdown API documentation into `protocol/docs/reference/api`.
@@ -114,16 +119,17 @@ The `constants/` directory contains JSON files that serve as the authoritative s
 
 The `models/` directory contains JSON Schema files that define the structure for protocol data structures:
 
-- `account_lock.json`, `app_policy.json`, `auth_admin_audit.json`, `bound_session.json`
-- `case.json`, `cli_session.json`, `console_audit.json`, `conversation.json`, `conversation_message.json`
+- `account_lock.json`, `agent_activity_metadata.json`, `app_policy.json`, `approval.json`, `auth_admin_audit.json`, `bound_session.json`
+- `case.json`, `chat_message.json`, `cli_session.json`, `console_audit.json`, `conversation.json`, `conversation_message.json`
+- `enrollment_token.json`, `execution_result.json`, `file_edit.json`, `fs_grep.json`, `fs_list.json`
 - `errors.py`: Python enums for error categories (`ErrorCategory`), severities (`ErrorSeverity`), command categories (`CommandCategory`), and error codes (`ErrorCode`)
-- `investigation.json`, `login_audit.json`, `memory.json`
+- `heartbeat.json`, `investigation.json`, `local_os_user.json`, `login_audit.json`, `memory.json`
 - `operator_document.json`, `operator_session.json`, `operator_usage.json`, `organization.json`
-- `passkey_challenge.json`, `persona.json`, `platform_settings.json`
-- `reputation_commitment.json`, `reputation_state.json`, `revoked_certificate.json`, `stake_resolution.json`
-- `security_constraints.json`, `task.json`, `tool_results.json`, `tribunal.json`, `trusted_signer.json`
-- `user.json`, `user_settings.json`, `web_session.json`
-- `agent_activity_metadata.json`
+- `passkey_challenge.json`, `passkey_credential.json`, `persona.json`, `platform_settings.json`
+- `reputation_commitment.json`, `reputation_state.json`, `request_context.json`, `revoked_certificate.json`, `runtime_config.json`
+- `security_constraints.json`, `sse_event_payloads.json`, `sse_event_wire.json`, `sse_push_payload.json`, `stake_resolution.json`
+- `task.json`, `terminal_output.json`, `tool_results.json`, `tribunal.json`, `trusted_signer.json`
+- `user.json`, `user_settings.json`, `webauthn_response.json`, `web_session.json`
 - `agents/`: Per-agent-role model schemas (`primary.json`, `assistant.json`, `lite.json`, `triage.json`, `title_generator.json`, `agent_harness.json`)
 
 ### Python Package
@@ -148,11 +154,21 @@ The `examples/` directory contains Go example programs:
 - `mcp_server/g8e_gateway_mcp_config.json`: HTTP + mTLS MCP server configuration with literal cert paths for production deployments
 - `mcp_server/g8e_gateway_mcp_config_env.json`: HTTP + mTLS MCP server configuration with env-var cert paths for containerized deployments
 - `mcp_server/g8e_stdio_mcp_config.json`: Stdio MCP server configuration for local development with native tools and no gateway required
+- `mcp_server/g8e_agent_mcp_config.json`: Agent-specific MCP configuration written by `g8e mcp agent run` with native tool exclusion for governance
 
 The `python/examples/` directory contains Python example scripts:
 
 - `constants_example.py`: Demonstrates accessing event, status, and collection constants, component enums, and HTTP header construction
 - `models_example.py`: Demonstrates `RequestContext` creation with bound operators, `PlatformSettings` configuration, and model validation
+
+## Conformance Tests
+
+The `conformance/` directory contains cross-language tests that validate protocol constants and models are identical across the Python package and Go implementation. The JSON files in `constants/` and `models/` are the single source of truth; both Go code and the Python package load from these files.
+
+- `test_constants.py`: Validates JSON structural integrity, `_go_const` and `_python_const` field presence, value uniqueness, event namespace conventions, and Python-JSON parity
+- `test_models.py`: Validates model schema integrity, `PlatformSettings` field parity, `RequestContext` validation, serialization round-trip, and canonical serialization
+
+Run with `python -m pytest protocol/conformance/ -v` from the repository root. See [Conformance Tests](conformance/README.md) for details.
 
 ## Usage
 

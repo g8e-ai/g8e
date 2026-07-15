@@ -35,7 +35,7 @@ import (
 func setupTestExecutionVault(t *testing.T) (*ExecutionVaultService, string) {
 	t.Helper()
 
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -91,7 +91,7 @@ func TestExecutionVault_DefaultExecutionVaultConfig(t *testing.T) {
 func TestExecutionVault_NewExecutionVaultService_WithNilConfig(t *testing.T) {
 	t.Parallel()
 
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	_, privKey, err := ed25519.GenerateKey(nil)
@@ -876,7 +876,7 @@ func TestExecutionVault_FileDiffWithAllFields(t *testing.T) {
 
 func TestExecutionVault_StoreExecution_LockedVault(t *testing.T) {
 	t.Parallel()
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -932,7 +932,7 @@ func TestExecutionVault_StoreExecution_LockedVault(t *testing.T) {
 
 func TestExecutionVault_StoreFileDiff_LockedVault(t *testing.T) {
 	t.Parallel()
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -987,7 +987,7 @@ func TestExecutionVault_StoreFileDiff_LockedVault(t *testing.T) {
 
 func TestExecutionVault_PruneRetention(t *testing.T) {
 	t.Parallel()
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -1069,7 +1069,7 @@ func TestExecutionVault_PruneRetention(t *testing.T) {
 
 func TestExecutionVault_PruneSizeLimit(t *testing.T) {
 	t.Parallel()
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -1274,12 +1274,13 @@ func TestExecutionVault_DatabaseInitFailure(t *testing.T) {
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	vaultDir := t.TempDir()
+	vaultDir := testutil.TempDir(t)
 	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	// Create a file (not a directory) and try to use a path inside it
 	// This will fail because you can't create directories inside a file
-	tempFile, err := os.CreateTemp("", "test-file-*")
+	require.NoError(t, os.MkdirAll(constants.TestTempDirname, constants.PermDirStandard))
+	tempFile, err := os.CreateTemp(constants.TestTempDirname, "test-file-*")
 	require.NoError(t, err)
 	tempFile.Close()
 	defer os.Remove(tempFile.Name())
@@ -1296,7 +1297,7 @@ func TestExecutionVault_DatabaseInitFailure(t *testing.T) {
 
 func TestExecutionVault_SchemaInitFailure(t *testing.T) {
 	t.Parallel()
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -1341,7 +1342,7 @@ func TestExecutionVault_SchemaInitFailure(t *testing.T) {
 
 func TestExecutionVault_GetExecution_DecryptFailure(t *testing.T) {
 	t.Parallel()
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -1405,7 +1406,7 @@ func TestExecutionVault_GetExecution_DecryptFailure(t *testing.T) {
 
 func TestExecutionVault_GetFileDiff_DecryptFailure(t *testing.T) {
 	t.Parallel()
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "execution_vault.db")
 	vaultDir := filepath.Join(tempDir, "vault")
 

@@ -27,6 +27,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/pathutil"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/vault"
@@ -79,14 +80,25 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 		return RunResult{}, fmt.Errorf("%w: %s: %w", constants.ErrReportOutputDirFailed, opts.OutDir, err)
 	}
 
+	// Construct fileSvc for .g8e/ file I/O. Derive base dir from opts.DataDir
+	// (which is <base>/.g8e/data) so the audit store opens the same DB that
+	// the commitment ledger accesses via opts.DataDir directly.
+	baseDir := ""
+	if opts.DataDir != "" {
+		baseDir = filepath.Dir(filepath.Dir(opts.DataDir))
+	}
+	fileSvc, err := fs.NewRuntimeFileService(baseDir, logger)
+	if err != nil {
+		return RunResult{}, fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	}
+
 	// Open vault (locked or unlocked).
 	v, vaultUnlocked := openVault(opts.VaultDir, opts.VaultKeyPath, logger)
 
 	// Open audit store (sessions, events, file_mutations, receipts, commitment_ledger).
 	auditStoreCfg := storage.DefaultAuditStoreConfig()
-	auditStoreCfg.DataDir = opts.DataDir
 	auditStoreCfg.EncryptionVault = v
-	auditStore, err := storage.NewSQLAuditStore(auditStoreCfg, logger)
+	auditStore, err := storage.NewSQLAuditStore(auditStoreCfg, logger, fileSvc)
 	if err != nil {
 		return RunResult{}, fmt.Errorf("%w: audit store: %w", constants.ErrReportStoreUnavailable, err)
 	}
@@ -150,17 +162,12 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 	}
 
 	// Open git ledger.
-	ledgerBaseDir := opts.LedgerDir
-	if ledgerBaseDir == "" {
-		ledgerBaseDir = filepath.Join(opts.RuntimeDir, constants.LedgerDirname)
-	}
 	var ledger *storage.GitLedgerService
 	ledgerCfg := &storage.LedgerConfig{
-		BaseDir:         ledgerBaseDir,
 		GitPath:         "git",
 		EncryptionVault: v,
 	}
-	ledger, ledgerErr := storage.NewGitLedgerService(ledgerCfg, logger)
+	ledger, ledgerErr := storage.NewGitLedgerService(ledgerCfg, logger, fileSvc)
 	if ledgerErr != nil {
 		logger.Warn("Git ledger unavailable; ledger reports will be skipped", "error", ledgerErr)
 		ledger = nil

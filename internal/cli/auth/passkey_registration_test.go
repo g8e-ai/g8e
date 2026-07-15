@@ -16,38 +16,45 @@
 package auth
 
 import (
+	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
-	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestVerifyPasskeyRegistration_NetworkError(t *testing.T) {
 
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	cfg := &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
-		CredentialsDir: tmpDir,
-		Paths:          &config.PathsConfig{},
+		ProjectRoot: tmpDir,
+		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
+		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
+		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
+		Paths:       &config.PathsConfig{},
 	}
+
+	fileSvc, err := fs.NewRuntimeFileService(tmpDir, slog.Default())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 
 	// VerifyPasskeyRegistration now uses mTLS: supply CLI cert and a CA bundle
 	// so the test reaches the network dial (and fails there, as expected).
-	writeTestCLICert(t, cfg)
+	writeTestCLICert(t, fileSvc, cfg)
 	dummyCert, _ := generateTestCertificateWithSPIFFE(t, "dummy", time.Now().Add(24*time.Hour))
 	caPath := filepath.Join(tmpDir, "test-ca.pem")
-	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), 0600))
+	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), constants.PermFilePrivate))
 	cfg.Paths.Infra.CACertPath = caPath
 
-	hasPasskey, err := VerifyPasskeyRegistration(cfg, "test-user", "test-cli-session")
+	hasPasskey, err := VerifyPasskeyRegistration(fileSvc, cfg, "test-user", "test-cli-session")
 
 	require.Error(t, err)
 	assert.False(t, hasPasskey)

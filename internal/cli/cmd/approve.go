@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 type apiClient interface {
@@ -36,17 +37,21 @@ type apiClient interface {
 	Delete(path string) ([]byte, error)
 }
 
-type apiClientFactory func(*config.Config) (apiClient, error)
+type apiClientFactory func(fs.RuntimeFileService, *config.Config) (apiClient, error)
 
-func defaultAPIClientFactory(cfg *config.Config) (apiClient, error) {
-	return api.NewClient(cfg)
+func defaultAPIClientFactory(fileSvc fs.RuntimeFileService, cfg *config.Config) (apiClient, error) {
+	return api.NewClient(fileSvc, cfg)
 }
 
 func approveCmd() *cobra.Command {
-	return approveCmdWithConfig(loadConfig, defaultAPIClientFactory)
+	return approveCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func approveCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
+func approveCmdWithConfig(
+	configLoader func(string) (*config.Config, error),
+	clientFactory apiClientFactory,
+	fileSvcFactory func() (fs.RuntimeFileService, error),
+) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "approve <transaction_hash>",
 		Short: "Approve a suspended L3 transaction via browser WebAuthn",
@@ -62,7 +67,12 @@ gateway's SSE stream and waits for the approval.completed event. CLI credentials
 				return err
 			}
 
-			client, err := clientFactory(cfg)
+			fileSvc, err := fileSvcFactory()
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+
+			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("approve: create API client: %w", err)
 			}
@@ -84,7 +94,7 @@ gateway's SSE stream and waits for the approval.completed event. CLI credentials
 				ctx = context.Background()
 			}
 
-			return waitForApprovalAndVerify(ctx, cmd, cfg, client, txHash)
+			return waitForApprovalAndVerify(ctx, cmd, fileSvc, cfg, client, txHash)
 		},
 	}
 
@@ -95,8 +105,8 @@ gateway's SSE stream and waits for the approval.completed event. CLI credentials
 // waits for the approval.completed SSE event, then verifies the approval
 // status via the mTLS status endpoint. CLI credentials are required — there
 // is no polling fallback.
-func waitForApprovalAndVerify(ctx context.Context, cmd *cobra.Command, cfg *config.Config, client apiClient, txHash string) error {
-	creds, err := auth.LoadCredentials(cfg)
+func waitForApprovalAndVerify(ctx context.Context, cmd *cobra.Command, fileSvc fs.RuntimeFileService, cfg *config.Config, client apiClient, txHash string) error {
+	creds, err := auth.LoadCredentials(fileSvc, cfg)
 	if err != nil {
 		return fmt.Errorf("approve: load credentials: %w", err)
 	}
@@ -104,7 +114,7 @@ func waitForApprovalAndVerify(ctx context.Context, cmd *cobra.Command, cfg *conf
 		return fmt.Errorf("approve: %w", constants.ErrNotAuthenticated)
 	}
 
-	sseClient, err := auth.BuildMTLSClient(cfg, 0)
+	sseClient, err := auth.BuildMTLSClient(fileSvc, cfg, 0)
 	if err != nil {
 		return fmt.Errorf("approve: build mTLS client: %w", err)
 	}

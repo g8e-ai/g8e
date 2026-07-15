@@ -30,7 +30,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -73,23 +72,18 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := t.TempDir()
-	pkiDir := t.TempDir()
-	secretsDir := t.TempDir()
+	dbDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
 
-	ks := newTestKeystore(t, secretsDir, logger)
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks)
+	ks := newTestKeystore(t, fileSvc, logger)
+	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
 	require.NoError(t, err, "failed to open gateway DB service")
 	t.Cleanup(func() { db.Close() })
 
-	sm := &SecretManager{
-		db:         db.db,
-		secretsDir: secretsDir,
-		logger:     logger,
-		keystore:   ks,
-	}
+	sm, err := NewSecretManagerWithKeystore(db.db, fileSvc, logger, ks)
+	require.NoError(t, err)
 
-	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
+	pki := newPKIAuthority(fileSvc, db, sm, logger)
 	require.NoError(t, pki.InitializePKI(nil), "failed to ensure PKI")
 
 	appEnrollment := NewAppEnrollmentService(db, pki, logger)
@@ -184,7 +178,7 @@ func TestPKIController_HandlePKIHubBundle(t *testing.T) {
 			name:   "Failure - PKI error returns 500",
 			method: http.MethodGet,
 			setup: func(t *testing.T, c *PKIController, _ *CanonicalDBService) {
-				c.pki = &PKIAuthority{}
+				c.pki = &PKIAuthority{fileSvc: newTestFileSvc(t)}
 			},
 			expectedStatus: http.StatusInternalServerError,
 			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
@@ -233,7 +227,7 @@ func TestPKIController_HandlePKIFingerprint(t *testing.T) {
 			name:   "Failure - Root CA file not found",
 			method: http.MethodGet,
 			setup: func(t *testing.T, c *PKIController, _ *CanonicalDBService) {
-				c.pki = &PKIAuthority{}
+				c.pki = &PKIAuthority{fileSvc: newTestFileSvc(t)}
 			},
 			expectedStatus: http.StatusInternalServerError,
 			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
@@ -246,9 +240,8 @@ func TestPKIController_HandlePKIFingerprint(t *testing.T) {
 			name:   "Failure - Invalid PEM format",
 			method: http.MethodGet,
 			setup: func(t *testing.T, c *PKIController, _ *CanonicalDBService) {
-				pkiDir := c.pki.PKIDir()
-				rootPath := filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA)
-				err := os.WriteFile(rootPath, []byte("invalid pem data"), 0644)
+				relPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA)
+				err := c.pki.fileSvc.WriteFile(context.Background(), relPath, []byte("invalid pem data"), constants.PermFilePublic)
 				require.NoError(t, err, "failed to write invalid PEM data")
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -639,11 +632,9 @@ func TestPKIController_HandleNodeBinaryDownload(t *testing.T) {
 	c, _, _ := setupTestPKIController(t)
 
 	// Create binaries directory and a test binary
-	binaryDir := filepath.Join(c.pki.PKIDir(), constants.PkiSubdirBinaries)
-	require.NoError(t, os.MkdirAll(binaryDir, 0755))
-	testNodeBinaryPath := filepath.Join(binaryDir, "g8e-windows-amd64.exe") // Test-specific binary name, acceptable as test data
+	binaryRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirBinaries, "g8e-windows-amd64.exe")
 	testNodeBinaryContent := []byte("test binary content")
-	require.NoError(t, os.WriteFile(testNodeBinaryPath, testNodeBinaryContent, 0644))
+	require.NoError(t, c.pki.fileSvc.WriteFile(context.Background(), binaryRelPath, testNodeBinaryContent, constants.PermFilePublic))
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/bin/g8e-windows-amd64.exe", nil)
 	rr := httptest.NewRecorder()

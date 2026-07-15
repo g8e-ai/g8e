@@ -15,7 +15,7 @@ import (
 
 func TestDB_Backoff_DoesNotPanic(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "test.db"))
 	cfg.RetryBaseDelayMs = 1
@@ -32,7 +32,7 @@ func TestDB_Backoff_DoesNotPanic(t *testing.T) {
 
 func TestDB_Backoff_HighAttempt(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "test.db"))
 	cfg.RetryBaseDelayMs = 1
@@ -49,7 +49,7 @@ func TestDB_Backoff_HighAttempt(t *testing.T) {
 
 func TestExecInTxWithRetry_Success(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "test.db"))
 
@@ -74,7 +74,7 @@ func TestExecInTxWithRetry_Success(t *testing.T) {
 
 func TestExecInTxWithRetry_FnErrorRollsBack(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "test.db"))
 
@@ -100,7 +100,7 @@ func TestExecInTxWithRetry_FnErrorRollsBack(t *testing.T) {
 
 func TestExecInTxWithRetry_ClosedDB(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "test.db"))
 

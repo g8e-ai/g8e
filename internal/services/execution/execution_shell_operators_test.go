@@ -61,7 +61,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("file redirection to absolute Windows paths not reliable in POSIX shell")
 		}
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		outputFile := filepath.ToSlash(filepath.Join(tmpDir, "output.txt"))
 
 		req := &models.ExecutionRequestPayload{
@@ -85,7 +85,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("file redirection to absolute Windows paths not reliable in POSIX shell")
 		}
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		inputFile := filepath.ToSlash(filepath.Join(tmpDir, "input.txt"))
 		os.WriteFile(inputFile, []byte("input content"), 0644)
 
@@ -110,7 +110,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("file redirection to absolute Windows paths not reliable in POSIX shell")
 		}
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		outputFile := filepath.ToSlash(filepath.Join(tmpDir, "append.txt"))
 
 		req := &models.ExecutionRequestPayload{
@@ -189,7 +189,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 
 	t.Run("background operator", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		testFile := filepath.ToSlash(filepath.Join(tmpDir, "bg.txt"))
 
 		req := &models.ExecutionRequestPayload{
@@ -503,7 +503,7 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 
 	t.Run("permission denied exit code 126", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		scriptPath := filepath.Join(tmpDir, "no-exec.sh")
 
 		err := os.WriteFile(scriptPath, []byte("#!/bin/bash\necho test"), 0644)
@@ -681,7 +681,7 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("file redirection to absolute Windows paths not reliable in POSIX shell")
 		}
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		errFile := filepath.ToSlash(filepath.Join(tmpDir, "error.log"))
 
 		req := &models.ExecutionRequestPayload{
@@ -705,7 +705,7 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("file redirection to absolute Windows paths not reliable in POSIX shell")
 		}
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		outFile := filepath.ToSlash(filepath.Join(tmpDir, "output.log"))
 		errFile := filepath.ToSlash(filepath.Join(tmpDir, "error.log"))
 
@@ -753,7 +753,7 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("shell script execution via absolute Windows paths not reliable in POSIX shell")
 		}
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		scriptPath := filepath.Join(tmpDir, "test-script.sh")
 
 		scriptContent := `#!/bin/bash

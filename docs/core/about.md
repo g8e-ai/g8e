@@ -22,7 +22,7 @@ g8e functions as a secure perimeter for tool-calling standards. It treats MCP an
 *   **Proof of Human Presence:** High-risk mutations require a WebAuthn/FIDO2 passkey assertion computed over the transaction hash. The approval is bound to one action, one moment, and one host: it cannot be transplanted, replayed, or harvested. See [Authentication](../architecture/auth.md).
 *   **5-Layer Verification Sequence:** Mutations must sequentially pass Doctrine (L1), Consensus (L2), Notary (L3), and Warden (L4) at the Operator boundary before hitting the Actuator (L5) execution boundary. The gateway delegates L2 deliberation to an enrolled Tribunal service that produces signed Ed25519 votes over the transaction hash. Every layer fails closed. See [Governance](../architecture/governance.md).
 *   **Zero Standing Dependencies:** The reference g8e Operator is a single, statically compiled binary, making the platform air-gap capable for deployment in isolated infrastructure perimeters.
-*   **Console SPA:** The g8e Console provides a browser-based dashboard for passkey management, interactive L3 transaction approval, and real-time SSE audit streaming. Browser-based passkey enrollment via the console is the sole registration path. See [Authentication](../architecture/auth.md).
+*   **Console SPA:** The g8e Console provides a browser-based dashboard for passkey enrollment, interactive L3 transaction approval, and real-time SSE audit streaming. See [Authentication](../architecture/auth.md).
 
 ## Core Architecture
 
@@ -42,7 +42,7 @@ The gateway supports three posture configurations that control which verificatio
 | `consensus` | enforced | enforced | audited |
 | `notary` | enforced | enforced | enforced |
 
-L4 Warden and L5 Actuator are always active in all configurations. See [Posture Configuration](../guides/cli.md#posture-configuration) for setup details.
+L4 Warden and L5 Actuator are always active in all configurations. See [Governance](../architecture/governance.md) for posture configuration.
 
 ## Operational Philosophy
 

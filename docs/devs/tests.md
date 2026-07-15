@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-07-13
+Last Updated: 2026-07-15
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -17,7 +17,10 @@ g8e tests run directly on the host using real infrastructure. If it does not wor
 - **Use contract tests** — Enforce alignment between the Operator and `protocol/` constants/models with typed protobuf assertions.
 - **Let `NewGatewayFixture` handle cleanup** — `NewGatewayFixture` registers teardown internally via `t.Cleanup`. Callers do not need to defer or register any cleanup.
 - **Hold temp credential files for the whole test** — Register their removal with `t.Cleanup`, not `defer`, in any setup helper.
-- **Use path constants** — ALL filepath strings in test code must be defined as constants in `internal/constants/paths.go`. Use `constants.Paths.Infra.*` for runtime state paths. The only exception is `TestPaths` for isolated test environments, where the base directory must still come from a constant.
+- **Use path constants** — ALL filepath strings in test code must be defined as constants in `internal/constants/paths.go`. Use `constants.Paths.Infra.*` for runtime state paths. The only exception is `TestPaths` for isolated test environments, where the base directory must still come from a constant. Use `constants.PermFileReadOnly` and other `constants.Perm*` constants for file permission assertions in tests.
+- **Use `fileSvc.FileExists` instead of `os.IsNotExist`** — Check file existence via `fileSvc.FileExists(ctx, relPath)` or `errors.Is(err, constants.ErrNotFound)` instead of `os.IsNotExist`. The `RuntimeFileService` wraps `os.*` calls and returns typed `constants.Err*` errors.
+- **`testutil.TempDir` returns absolute paths** — `testutil.TempDir(t)` returns an absolute path to a temporary directory. Use it as the `baseDir` for `fs.NewRuntimeFileService` and `paths.InitWithBase`. Do not join it with `constants.RuntimeDirname` manually; the file service handles that.
+- **Do not set `DataDir`/`CredentialsDir` in test configs** — Test configs must use `RuntimeDir` and `fileSvc.Resolve(constants.*)` instead of `DataDir`/`CredentialsDir` fields. These fields have been removed from config structs. Pass `fileSvc` to services that need file I/O.
 - **Use typed error constants** — Check for typed constants from `internal/constants/` instead of hardcoded strings in assertions and error message checks.
 - **Use regression test markers** — Use standardized marker constants (`RegressionMarkerAfterFix`, `RegressionMarkerBeforeFix`, `RegressionMarkerIssue`) instead of hardcoded strings. See `internal/services/gateway/pki_authority_test.go` for examples.
 - **Enable race detection** — `-race` on all non-Windows platforms across all test targets.
@@ -42,6 +45,59 @@ g8e tests run directly on the host using real infrastructure. If it does not wor
 - **Never use hand-trolled error strings** — Use typed constants instead of hardcoded strings for error reason strings, status codes, and rejection reasons.
 - **Never use generic test names** — No `TestCoverage`, `TestEdgeCases`, `TestGap`, `TestMisc`, or any name that does not describe the specific behavior under test. The name must tell the reader what is being verified.
 - **Never use generic test filenames** — No `edge_test.go`, `misc_test.go`, `coverage_test.go`, or any filename that does not describe its scope. Do not use "coverage", "gap", or "edge" in test filenames.
+
+---
+
+## cwd-Based `os.Chdir` Classification
+
+Tests must not use `os.Chdir` to align `.g8e/` runtime state. Instead, inject `fileSvcFactoryFor(fileSvc)` into `*WithConfig` functions using a temp-rooted `fileSvc` from `newCmdTestEnv(t)`.
+
+### Legitimate `os.Chdir` (Retain with Justification)
+
+- **Source-tree discovery** — Demo commands resolve `./demos/`, `compose.yml`, `doctrine/`, `target-data/` relative to cwd. These are not `.g8e/` runtime paths. Files: `demos_*test.go`.
+- **Config-layer tests** — `config.Load("")` reads from cwd by design. The config package is the layer that translates cwd into `fileSvc` baseDir. Files: `config/config_test.go`.
+- **Chaos tests** — `runChaos` calls `configLoad` which reads from cwd. Injecting `fileSvcFactory` would require config-layer injection. Files: `chaos_integration_test.go`.
+
+Each retained `os.Chdir` file must have a file-level comment explaining why cwd usage is legitimate.
+
+### Illegitimate `os.Chdir` (Eliminate)
+
+Any test that aligns `.g8e/` runtime state for command tests must use `newCmdTestEnv(t)` + `fileSvcFactoryFor(fileSvc)` injection. This pattern returns a pre-aligned `(fileSvc, cfg)` pair where `cfg.RuntimeDir == fileSvc.Resolve("")`.
+
+---
+
+## Factory-Error Test Requirement
+
+Every `fileSvcFactory` injection point in `internal/cli/cmd/` must have a corresponding `TestXxxCmdWithConfig_FileSvcFactoryError` test in `factory_error_test.go`. The test asserts that:
+
+1. The error is wrapped with `constants.ErrFileServiceInit`
+2. The underlying factory error is preserved via `errors.Is`
+3. Downstream dependencies are not called
+
+Pattern:
+
+```go
+func TestXxxCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+    _, cfg := newCmdTestEnv(t)
+    cmd := xxxCmdWithConfig(configLoaderFor(cfg), /* other deps */, failingFileSvcFactory(factoryErr))
+    err := cmd.RunE(cmd, []string{})
+    require.Error(t, err)
+    assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+    assert.ErrorIs(t, err, factoryErr)
+}
+```
+
+Helpers: `failingFileSvcFactory(err)` returns a factory that always errors. `panickingClientFactory()` returns a client factory that panics if called (proves downstream is not reached).
+
+---
+
+## CLI Command Test Helpers
+
+- **`newCmdTestEnv(t)`** — Returns `(fs.RuntimeFileService, *config.Config)` with a temp-rooted `fileSvc` and aligned `cfg`. Uses `setupTestConfig` internally, which calls `fileSvc.CreateRuntimeTree`, `config.LoadWithPaths`, and writes a dummy trust bundle via `fileSvc.WriteFile`.
+- **`fileSvcFactoryFor(fileSvc)`** — Returns a `fileSvcFactory` closure that always returns the given `fileSvc`. Used to inject a hermetic `fileSvc` into `*WithConfig` functions.
+- **`configLoaderFor(cfg)`** — Returns a config loader closure that always returns the given `cfg`.
+- **`mustRel(t, fileSvc, absPath)`** — Converts an absolute `.g8e/` path to a relative path, failing the test on error.
+- **`newAuthTestEnv(t)`** — Returns `(fileSvc, cfg)` with auth-specific fixture setup (temp-rooted `fileSvc` with runtime tree created, minimal config with `ProjectRoot`/`RuntimeDir`/`Paths.Host` set).
 
 ---
 
@@ -191,7 +247,7 @@ CI runs pytest on a Python 3.10-3.14 matrix (`python-tests` job).
 
 ### Protocol Conformance Suite
 
-The conformance suite in `protocol/conformance/` contains 151 tests across 2 files that enforce parity between Go constants, Python runtime values, and canonical JSON in `protocol/constants/`:
+The conformance suite in `protocol/conformance/` contains 303 tests across 2 files that enforce parity between Go constants, Python runtime values, and canonical JSON in `protocol/constants/`:
 
 - `test_constants.py` — JSON file structure, `_go_const`/`_python_const` presence, value uniqueness, Go naming conventions, Python-JSON parity, event value namespace conventions
 - `test_models.py` — Model schema integrity, field parity between Python Pydantic models and JSON schemas, serialization round-trips, validation rules
@@ -206,15 +262,16 @@ CI runs conformance tests on Python 3.14 (`conformance` job).
 
 ### Performance Benchmarks
 
-Go benchmarks cover hot paths in 3 packages (13 benchmarks total):
+Go benchmarks cover hot paths in 4 packages (19 benchmarks total):
 
-- `internal/services/sqliteutil/` — gzip compress/decompress at various payload sizes, SHA-256 hashing, compress+decompress round-trip
-- `internal/constants/` — `ActionType.IsMutation` for mutation and non-mutation types
-- `internal/services/mcp/` — JSON-RPC request/response marshal/unmarshal, tool call params parsing, tool result serialization
+- `internal/services/sqliteutil/` — gzip compress/decompress at various payload sizes, SHA-256 hashing, compress+decompress round-trip (7 benchmarks)
+- `internal/constants/` — `ActionType.IsMutation` for mutation and non-mutation types (2 benchmarks)
+- `internal/services/mcp/` — JSON-RPC request/response marshal/unmarshal, tool call params parsing, tool result serialization (4 benchmarks)
+- `internal/services/gateway/` — auth cache get/set/invalidate/expiry, state root calculation with small and large datasets (6 benchmarks)
 
 Run benchmarks:
 ```bash
-make benchmark
+go test -bench=. -benchmem ./internal/services/sqliteutil/ ./internal/constants/ ./internal/services/mcp/ ./internal/services/gateway/
 ```
 
 ### Smoke Tests
@@ -230,7 +287,7 @@ CI runs both scripts on every PR (`smoke-test` job).
 
 GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 
-**Core CI** (`ci` job, cross-OS matrix: ubuntu/macos/windows):
+**Core CI** (`ci` job, runs on `ubuntu-latest`):
 - Proto verification and doctrine validation
 - Swagger generation and validation
 - golangci-lint
@@ -240,8 +297,8 @@ GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 
 **Additional CI jobs**:
 - `python-tests` — Pytest on Python 3.10-3.14 matrix with version sync verification
-- `python-audit` — pip-audit `--strict` for Python dependency vulnerability scanning
-- `conformance` — Protocol conformance suite (151 tests) on Python 3.14
+- `python-audit` — pip-audit `--skip-editable` for Python dependency vulnerability scanning
+- `conformance` — Protocol conformance suite (303 tests) on Python 3.14
 - `smoke-test` — Clean-environment install verification for both Python and Go packages
 - `secret-scan` — gitleaks full-history secret scanning
 - `license-check` — go-licenses report with forbidden copyleft license detection (GPL, AGPL, LGPL, SSPL, BUSL)
@@ -251,7 +308,7 @@ CI does **not** run Tier 3 Docker E2E tests.
 ### Release Pipeline Verification
 
 **Binary releases** (`.github/workflows/release-binary.yml`, triggered by `v*` tags):
-- Cross-platform binary builds (linux/darwin/windows, amd64/arm64)
+- Cross-platform binary builds (linux/amd64/arm64/386, darwin/amd64/arm64, windows/amd64/arm64)
 - SHA-256 checksums
 - cosign/sigstore keyless artifact signing (`.sig` files uploaded with release)
 - Post-publish `verify-install` job: fresh `go install` on ubuntu/macos/windows with `--version` and `--help` verification

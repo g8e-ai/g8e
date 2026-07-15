@@ -32,7 +32,7 @@ import (
 func setupTestSuspendedTransactionStore(t *testing.T) *SuspendedTransactionService {
 	t.Helper()
 
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	dbPath := filepath.Join(tempDir, "test_suspended_transactions.db")
 
 	config := &SuspendedTransactionConfig{
@@ -82,7 +82,7 @@ func TestNewSuspendedTransactionService_InvalidDBPath(t *testing.T) {
 
 	// Create a file to use as parent directory — os.MkdirAll will fail because
 	// the path component is a file, not a directory. This is cross-platform.
-	blocker := filepath.Join(t.TempDir(), "blocker")
+	blocker := filepath.Join(testutil.TempDir(t), "blocker")
 	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
 
 	config := &SuspendedTransactionConfig{

@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -159,7 +160,7 @@ func TestParseTunnelID(t *testing.T) {
 
 func TestCloudflaredAuthenticated(t *testing.T) {
 	t.Run("returns true when cert.pem exists", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		certPath := filepath.Join(tmpDir, "cert.pem")
 		require.NoError(t, os.WriteFile(certPath, []byte("fake cert"), 0o600))
 
@@ -167,7 +168,7 @@ func TestCloudflaredAuthenticated(t *testing.T) {
 	})
 
 	t.Run("returns false when cert.pem does not exist", func(t *testing.T) {
-		tmpDir := t.TempDir()
+		tmpDir := testutil.TempDir(t)
 		assert.False(t, cloudflaredAuthenticated(tmpDir))
 	})
 }

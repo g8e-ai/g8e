@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-07-13
-Version: v1.5.0
+Last Updated: 2026-07-14
+Version: v1.5.1
 
 ---
 
@@ -343,7 +343,7 @@ Applications connecting to the g8e Gateway can use the g8e Protocol Library to c
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.5.0
+go get github.com/g8e-ai/g8e@v1.5.1
 ```
 
 The Go module provides protobuf types for envelope construction and receipt parsing, SPIFFE workload identity helpers, and JSON constant registries.
@@ -351,7 +351,7 @@ The Go module provides protobuf types for envelope construction and receipt pars
 ### Python Package
 
 ```bash
-pip install g8e==1.5.0
+pip install g8e==1.5.1
 ```
 
 The Python package provides event type constants, request context models, and HTTP header constants for gateway communication. Requires Python 3.10+.
@@ -459,10 +459,10 @@ g8e gui enroll --origin <url> [flags]
 ```
 
 Flags:
-- `--origin` (required) — Frontend application origin URL (e.g., `https://my-app.lovable.app`)
-- `--passkey-rp-id` — Passkey RP ID (defaults to the origin's hostname)
-- `--passkey-rp-name` — Passkey RP display name (default: `g8e`)
-- `--public-base-url` — Public base URL for the gateway (e.g., `https://console.g8e.ai`)
+- `--origin` (required): Frontend application origin URL (e.g., `https://my-app.lovable.app`)
+- `--passkey-rp-id`: Passkey RP ID (defaults to the origin's hostname)
+- `--passkey-rp-name`: Passkey RP display name (default: `g8e`)
+- `--public-base-url`: Public base URL for the gateway (e.g., `https://console.g8e.ai`)
 
 The command:
 1. Validates the origin URL
@@ -492,7 +492,7 @@ g8e gui remove --origin <url>
 ```
 
 Flags:
-- `--origin` (required) — Frontend application origin URL to remove
+- `--origin` (required): Frontend application origin URL to remove
 
 The command:
 1. Validates the origin URL

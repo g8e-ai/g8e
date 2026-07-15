@@ -35,16 +35,15 @@ import (
 // ============================================================================
 
 func TestSQLAuditStore_RecordActionReceipt(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, vaultDir, privKey)
-
+	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -55,7 +54,7 @@ func TestSQLAuditStore_RecordActionReceipt(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -100,16 +99,15 @@ func TestSQLAuditStore_RecordActionReceipt(t *testing.T) {
 }
 
 func TestSQLAuditStore_RecordActionReceipt_Upsert(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, vaultDir, privKey)
-
+	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -120,7 +118,7 @@ func TestSQLAuditStore_RecordActionReceipt_Upsert(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -179,16 +177,15 @@ func TestSQLAuditStore_RecordActionReceipt_Upsert(t *testing.T) {
 }
 
 func TestSQLAuditStore_GetActionReceipt_NotFound(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, vaultDir, privKey)
-
+	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -199,7 +196,7 @@ func TestSQLAuditStore_GetActionReceipt_NotFound(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -210,16 +207,15 @@ func TestSQLAuditStore_GetActionReceipt_NotFound(t *testing.T) {
 }
 
 func TestSQLAuditStore_ListActionReceipts(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, vaultDir, privKey)
-
+	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -230,7 +226,7 @@ func TestSQLAuditStore_ListActionReceipts(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -304,16 +300,15 @@ func TestSQLAuditStore_ListActionReceipts(t *testing.T) {
 }
 
 func TestSQLAuditStore_ListActionReceipts_AllSessions(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, vaultDir, privKey)
-
+	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -324,7 +319,7 @@ func TestSQLAuditStore_ListActionReceipts_AllSessions(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -357,16 +352,15 @@ func TestSQLAuditStore_ListActionReceipts_AllSessions(t *testing.T) {
 }
 
 func TestSQLAuditStore_ListActionReceiptsSince(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, vaultDir, privKey)
-
+	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -377,7 +371,7 @@ func TestSQLAuditStore_ListActionReceiptsSince(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -417,16 +411,15 @@ func TestSQLAuditStore_ListActionReceiptsSince(t *testing.T) {
 }
 
 func TestSQLAuditStore_ListActionReceiptsSince_Empty(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, vaultDir, privKey)
-
+	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -437,7 +430,7 @@ func TestSQLAuditStore_ListActionReceiptsSince_Empty(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -448,16 +441,15 @@ func TestSQLAuditStore_ListActionReceiptsSince_Empty(t *testing.T) {
 }
 
 func TestSQLAuditStore_ActionReceipts_AutoSessionCreation(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, vaultDir, privKey)
-
+	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -468,7 +460,7 @@ func TestSQLAuditStore_ActionReceipts_AutoSessionCreation(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	defer avs.Close()
 
@@ -508,16 +500,15 @@ func TestSQLAuditStore_ActionReceipts_AutoSessionCreation(t *testing.T) {
 }
 
 func TestSQLAuditStore_ActionReceipts_MultipleStatuses(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
 
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	testVault := CreateTestVault(t, vaultDir, privKey)
-
+	fileSvc := NewTestFileSvc(t, tempDir)
 	config := &TestSQLAuditStoreConfig{
-		DataDir:                   tempDir,
 		DBPath:                    "test.db",
 		LedgerDir:                 "ledger",
 		MaxDBSizeMB:               100,
@@ -528,7 +519,7 @@ func TestSQLAuditStore_ActionReceipts_MultipleStatuses(t *testing.T) {
 		EncryptionVault:           testVault,
 	}
 
-	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger())
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
 	require.NoError(t, err)
 	defer avs.Close()
 

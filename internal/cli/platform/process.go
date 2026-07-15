@@ -15,6 +15,8 @@ package platform
 
 import (
 	"bufio"
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -29,7 +31,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/serve"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 const (
@@ -64,15 +66,7 @@ type OperatorStartOptions struct {
 }
 
 type ProcessManager struct {
-	projectRoot string
-	runtimeDir  string
-	pkiDir      string
-	secretsDir  string
-	dataDir     string
-	logDir      string
-	pidDir      string
-	logFile     string
-	postureFile string
+	fileSvc fs.RuntimeFileService
 	// findOperatorProcessFn allows mocking for tests
 	findOperatorProcessFn func() int
 	// Windows-specific dependencies for testing (used in process_windows.go)
@@ -85,50 +79,26 @@ type ProcessManager struct {
 	isProcessRunningFn func(pid int) bool
 }
 
-func NewProcessManager(projectRoot string) (*ProcessManager, error) {
-	// Initialize paths relative to projectRoot
-	if err := paths.InitWithBase(projectRoot); err != nil {
-		return nil, fmt.Errorf("%w: %v", constants.ErrDirCreateFailed, err)
+func NewProcessManager(fileSvc fs.RuntimeFileService) (*ProcessManager, error) {
+	if fileSvc == nil {
+		return nil, fmt.Errorf("%w: fileSvc is required", constants.ErrPathValidation)
 	}
 
-	runtimeDir := paths.Infra.RuntimeDir
-	pkiDir := paths.Infra.PkiDir
-	secretsDir := paths.Infra.SecretsDir
-	dataDir := paths.Infra.DataDir
-	logDir := paths.Infra.LogDir
-	pidDir := paths.Infra.PidDir
-	logFile := paths.Infra.OperatorLogFile
-	postureFile := paths.Infra.OperatorPostureFile
-
 	return &ProcessManager{
-		projectRoot: projectRoot,
-		runtimeDir:  runtimeDir,
-		pkiDir:      pkiDir,
-		secretsDir:  secretsDir,
-		dataDir:     dataDir,
-		logDir:      logDir,
-		pidDir:      pidDir,
-		logFile:     logFile,
-		postureFile: postureFile,
+		fileSvc: fileSvc,
 	}, nil
 }
 
 func (pm *ProcessManager) CreateDirectories() error {
-	dirs := []string{pm.runtimeDir, pm.pkiDir, pm.secretsDir, pm.dataDir, pm.logDir, pm.pidDir}
-	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, constants.PermDirPrivate); err != nil {
-			return fmt.Errorf("%w: %s: %v", constants.ErrDirCreateFailed, dir, err)
-		}
-	}
-	return nil
+	return pm.fileSvc.CreateRuntimeTree(context.Background())
 }
 
 func (pm *ProcessManager) WriteNetworkIdentityFile(identityData []byte) (string, error) {
-	identityFile := filepath.Join(pm.runtimeDir, constants.NetworkIdentityFilename)
-	if err := os.WriteFile(identityFile, identityData, constants.PermFilePrivate); err != nil {
-		return "", fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
+	relPath := constants.NetworkIdentityFilename
+	if err := pm.fileSvc.WriteFile(context.Background(), relPath, identityData, constants.PermFilePrivate); err != nil {
+		return "", fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
 	}
-	return identityFile, nil
+	return pm.fileSvc.Resolve(relPath), nil
 }
 
 func (pm *ProcessManager) checkPortAvailable(port int, name string) error {
@@ -172,47 +142,46 @@ func (pm *ProcessManager) findAvailablePort(startPort int, name string) (int, er
 }
 
 func (pm *ProcessManager) readPID(filename string) (int, error) {
-	pidFile := filepath.Join(pm.pidDir, filename)
-	pidData, err := os.ReadFile(pidFile)
+	relPath := filepath.Join(constants.PidDirname, filename)
+	pidData, err := pm.fileSvc.ReadFile(context.Background(), relPath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, constants.ErrNotFound) {
 			return 0, nil
 		}
-		return 0, fmt.Errorf("%w: %v", constants.ErrPIDReadFailed, err)
+		return 0, fmt.Errorf("%w: %w", constants.ErrPIDReadFailed, err)
 	}
 
 	var pid int
 	if _, err := fmt.Sscanf(string(pidData), "%d", &pid); err != nil {
-		return 0, fmt.Errorf("%w: %v", constants.ErrPIDReadFailed, err)
+		return 0, fmt.Errorf("%w: %w", constants.ErrPIDReadFailed, err)
 	}
 
 	return pid, nil
 }
 
 func (pm *ProcessManager) writePID(filename string, pid int) error {
-	pidFile := filepath.Join(pm.pidDir, filename)
-	return os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), constants.PermFilePrivate)
+	relPath := filepath.Join(constants.PidDirname, filename)
+	return pm.fileSvc.WriteFile(context.Background(), relPath, []byte(strconv.Itoa(pid)), constants.PermFilePrivate)
 }
 
 func (pm *ProcessManager) deletePID(filename string) error {
-	pidFile := filepath.Join(pm.pidDir, filename)
-	if err := os.Remove(pidFile); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
-	}
-	return nil
+	relPath := filepath.Join(constants.PidDirname, filename)
+	return pm.fileSvc.Remove(context.Background(), relPath)
 }
 
 func (pm *ProcessManager) writePosture(posture string) error {
-	return os.WriteFile(pm.postureFile, []byte(posture), constants.PermFilePrivate)
+	relPath := filepath.Join(constants.PidDirname, constants.OperatorPostureFilename)
+	return pm.fileSvc.WriteFile(context.Background(), relPath, []byte(posture), constants.PermFilePrivate)
 }
 
 func (pm *ProcessManager) readPosture() (string, error) {
-	postureData, err := os.ReadFile(pm.postureFile)
+	relPath := filepath.Join(constants.PidDirname, constants.OperatorPostureFilename)
+	postureData, err := pm.fileSvc.ReadFile(context.Background(), relPath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, constants.ErrNotFound) {
 			return "", nil
 		}
-		return "", fmt.Errorf("%w: %v", constants.ErrPostureReadFailed, err)
+		return "", fmt.Errorf("%w: %w", constants.ErrPostureReadFailed, err)
 	}
 	posture := string(postureData)
 	// Validate posture is one of the allowed values
@@ -223,10 +192,8 @@ func (pm *ProcessManager) readPosture() (string, error) {
 }
 
 func (pm *ProcessManager) deletePosture() error {
-	if err := os.Remove(pm.postureFile); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
-	}
-	return nil
+	relPath := filepath.Join(constants.PidDirname, constants.OperatorPostureFilename)
+	return pm.fileSvc.Remove(context.Background(), relPath)
 }
 
 func (pm *ProcessManager) ReadPosture() (string, error) {
@@ -340,13 +307,13 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 		effectiveHTTPSPort = constants.Ports.OperatorHttps
 	}
 	if effectiveDataDir == "" {
-		effectiveDataDir = pm.dataDir
+		effectiveDataDir = pm.fileSvc.Resolve(constants.DataDirname)
 	}
 	if effectivePKIDir == "" {
-		effectivePKIDir = pm.pkiDir
+		effectivePKIDir = pm.fileSvc.Resolve(constants.PkiDirname)
 	}
 	if effectiveSecretsDir == "" {
-		effectiveSecretsDir = pm.secretsDir
+		effectiveSecretsDir = pm.fileSvc.Resolve(constants.SecretsDirname)
 	}
 	if effectiveLogLevel == "" {
 		effectiveLogLevel = constants.LogLevelDefault
@@ -372,7 +339,8 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 		return err
 	}
 
-	logHandle, err := os.OpenFile(pm.logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, constants.PermFilePrivate)
+	logPath := pm.fileSvc.Resolve(filepath.Join(constants.LogDirname, constants.OperatorLogFilename))
+	logHandle, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, constants.PermFilePrivate)
 	if err != nil {
 		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 	}
@@ -436,7 +404,7 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 	for i := 0; i < MaxHealthChecks; i++ {
 		if !pm.isProcessRunning(cmd.Process.Pid) {
 			_ = pm.deletePID(constants.OperatorPIDFilename)
-			return fmt.Errorf("%w: check %s", constants.ErrProcessStartFailed, pm.logFile)
+			return fmt.Errorf("%w: check %s", constants.ErrProcessStartFailed, logPath)
 		}
 		resp, err := client.Get(healthURL)
 		if err == nil {
@@ -449,7 +417,7 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 	}
 
 	_ = pm.deletePID(constants.OperatorPIDFilename)
-	return fmt.Errorf("%w: gateway did not become healthy, check %s", constants.ErrProcessStartFailed, pm.logFile)
+	return fmt.Errorf("%w: gateway did not become healthy, check %s", constants.ErrProcessStartFailed, logPath)
 }
 
 func (pm *ProcessManager) StopOperator() error {
@@ -516,7 +484,7 @@ func (pm *ProcessManager) OperatorStatus() (bool, int, error) {
 }
 
 func (pm *ProcessManager) GetLogPath() string {
-	return pm.logFile
+	return pm.fileSvc.Resolve(filepath.Join(constants.LogDirname, constants.OperatorLogFilename))
 }
 
 func (pm *ProcessManager) Reset() error {
@@ -524,12 +492,12 @@ func (pm *ProcessManager) Reset() error {
 		return fmt.Errorf("%w: %v", constants.ErrProcessStopFailed, err)
 	}
 
-	if err := os.RemoveAll(pm.dataDir); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("%w: data directory: %v", constants.ErrPathValidation, err)
+	if err := pm.fileSvc.RemoveAll(context.Background(), constants.DataDirname); err != nil {
+		return fmt.Errorf("%w: data directory: %w", constants.ErrPathValidation, err)
 	}
 
-	if err := os.RemoveAll(pm.secretsDir); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("%w: secrets directory: %v", constants.ErrPathValidation, err)
+	if err := pm.fileSvc.RemoveAll(context.Background(), constants.SecretsDirname); err != nil {
+		return fmt.Errorf("%w: secrets directory: %w", constants.ErrPathValidation, err)
 	}
 
 	if err := pm.CreateDirectories(); err != nil {
@@ -544,8 +512,8 @@ func (pm *ProcessManager) Clean() error {
 		return fmt.Errorf("%w: %v", constants.ErrProcessStopFailed, err)
 	}
 
-	if err := os.RemoveAll(pm.runtimeDir); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("%w: runtime directory: %v", constants.ErrPathValidation, err)
+	if err := pm.fileSvc.RemoveAll(context.Background(), ""); err != nil {
+		return fmt.Errorf("%w: runtime directory: %w", constants.ErrPathValidation, err)
 	}
 
 	return nil

@@ -6,14 +6,16 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/serve"
 	g8econfig "github.com/g8e-ai/g8e/internal/config"
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestBuildReExecArgs(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
-	pm, err := NewProcessManager(tmpDir)
+	fileSvc := newPlatformTestFileSvc(t, tmpDir)
+	pm, err := NewProcessManager(fileSvc)
 	require.NoError(t, err)
 
 	tests := []struct {

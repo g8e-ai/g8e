@@ -4,8 +4,8 @@ title: SSE Streaming
 
 # SSE Streaming
 
-Last Updated: 2026-07-13
-Version: v1.5.0
+Last Updated: 2026-07-14
+Version: v1.5.1
 
 The g8e Gateway provides a Server-Sent Events (SSE) streaming infrastructure that enables real-time event delivery from app workloads to browser and CLI clients. g8e-compatible agentic ensembles publish typed events, including audit events, for downstream consumption. The gateway also produces SSE events internally for platform workflows such as passkey registration and L3 transaction approval.
 
@@ -86,7 +86,7 @@ The gateway produces SSE events directly, bypassing the push endpoint. These eve
 
 ### GET /api/v1/sse/events
 
-**Authentication**: Dual auth. If a client certificate is present, mTLS auth is used. Otherwise, the `web_session` cookie is validated.
+**Authentication**: Dual auth. If a client certificate is present, mTLS auth is used. Otherwise, the `g8e_web_session_cookie` cookie is validated.
 
 **Query Parameters**:
 - `web_session_id`, `cli_session_id`, or `user_id`: Filter by routing target (exactly one required)
@@ -119,24 +119,9 @@ The gateway produces SSE events directly, bypassing the push endpoint. These eve
 
 ## Event Types
 
-The SSE system is generic and supports any event type. Protocol-defined audit event types include:
+The SSE system is generic and supports any event type. The protocol catalog defines audit event types (AI actions, command execution, MCP calls, user actions) and platform SSE lifecycle event types (connection established, opened, closed, failed, error, keepalive sent).
 
-- `g8e.v1.operator.audit.ai.recorded`: AI action audit log
-- `g8e.v1.operator.audit.command.recorded`: Command execution audit log
-- `g8e.v1.operator.audit.direct.command.recorded`: Direct command audit log
-- `g8e.v1.operator.audit.direct.command.result.recorded`: Direct command result audit log
-- `g8e.v1.operator.audit.user.recorded`: User action audit log
-
-Platform SSE lifecycle event types:
-
-- `g8e.v1.platform.sse.connection.established`
-- `g8e.v1.platform.sse.connection.opened`
-- `g8e.v1.platform.sse.connection.closed`
-- `g8e.v1.platform.sse.connection.failed`
-- `g8e.v1.platform.sse.connection.error`
-- `g8e.v1.platform.sse.keepalive.sent`
-
-Gateway-produced event types (not in the protocol catalog):
+Two gateway-produced event types are not in the protocol catalog:
 
 - `approval.completed`: L3 transaction approval completed, scoped to `user_id`
 - `passkey.registered`: Passkey enrollment completed, scoped to `cli_session_id`

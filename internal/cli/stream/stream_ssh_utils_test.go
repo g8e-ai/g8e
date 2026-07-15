@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/pkg/ssh"
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	sshlib "golang.org/x/crypto/ssh"
@@ -31,7 +32,7 @@ import (
 
 func TestBuildHostKeyCallback(t *testing.T) {
 	t.Run("known_hosts exists and is valid", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		khPath := filepath.Join(tempDir, "known_hosts")
 
 		// Empty known_hosts is valid - knownhosts.New handles it. Any host attempt
@@ -45,7 +46,7 @@ func TestBuildHostKeyCallback(t *testing.T) {
 	})
 
 	t.Run("known_hosts missing, strict mode returns an error (no insecure fallback)", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		khPath := filepath.Join(tempDir, "known_hosts")
 
 		cb, err := ssh.BuildHostKeyCallback(khPath)
@@ -62,7 +63,7 @@ func TestBuildHostKeyCallback(t *testing.T) {
 	})
 
 	t.Run("strict callback rejects unknown host", func(t *testing.T) {
-		tempDir := t.TempDir()
+		tempDir := testutil.TempDir(t)
 		khPath := filepath.Join(tempDir, "known_hosts")
 		require.NoError(t, os.WriteFile(khPath, []byte(""), 0600))
 

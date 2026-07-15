@@ -57,7 +57,7 @@ func TestResolveGatewayCertificateIdentity(t *testing.T) {
 			},
 			wantErr: false,
 			checkResult: func(t *testing.T, extraIPs []net.IP, extraDNSNames []string) {
-				assert.Equal(t, []net.IP{net.ParseIP("192.0.2.10"), net.ParseIP("2001:db8::10")}, extraIPs)
+				assert.Equal(t, []net.IP{net.ParseIP("192.0.2.10")}, extraIPs)
 				assert.Contains(t, extraDNSNames, "gateway.test.internal")
 				assert.Contains(t, extraDNSNames, "localhost")
 			},
@@ -102,7 +102,7 @@ func TestResolveGatewayCertificateIdentity(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			logger := testutil.NewTestLogger()
-			dir := t.TempDir()
+			dir := testutil.TempDir(t)
 			identityFile := tt.identityFile
 
 			if tt.setupFile != nil {

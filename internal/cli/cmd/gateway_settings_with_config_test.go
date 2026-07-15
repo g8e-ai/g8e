@@ -30,7 +30,7 @@ func TestGatewaySettingsCmdWithConfig_ConfigLoadError(t *testing.T) {
 		return nil, errors.New("config load error")
 	}
 
-	cmd := gatewaySettingsCmdWithConfig(failLoader, defaultAPIClientFactory)
+	cmd := gatewaySettingsCmdWithConfig(failLoader, defaultAPIClientFactory, newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -41,11 +41,10 @@ func TestGatewaySettingsCmdWithConfig_ConfigLoadError(t *testing.T) {
 }
 
 func TestGatewaySettingsCmdWithConfig_ClientCreationError(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	_, cfg := newCmdTestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	cmd := gatewaySettingsCmdWithConfig(loader, failingClientFactory(errors.New("client creation error")))
+	cmd := gatewaySettingsCmdWithConfig(loader, failingClientFactory(errors.New("client creation error")), newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -56,12 +55,11 @@ func TestGatewaySettingsCmdWithConfig_ClientCreationError(t *testing.T) {
 }
 
 func TestGatewaySettingsCmdWithConfig_GetRequestError(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	_, cfg := newCmdTestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	client := &mockAPIClient{getErr: errors.New("network error")}
-	cmd := gatewaySettingsCmdWithConfig(loader, mockClientFactory(client))
+	cmd := gatewaySettingsCmdWithConfig(loader, mockClientFactory(client), newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -72,14 +70,13 @@ func TestGatewaySettingsCmdWithConfig_GetRequestError(t *testing.T) {
 }
 
 func TestGatewaySettingsCmdWithConfig_ValidResponsePrintsSettings(t *testing.T) {
-	tmpDir := chdirTemp(t)
-	cfg := setupDataTestConfig(t, tmpDir)
+	_, cfg := newCmdTestEnv(t)
 
 	settingsJSON := []byte(`{"posture":"consensus","port":8443,"log_level":"info"}`)
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	client := &mockAPIClient{getResp: settingsJSON}
-	cmd := gatewaySettingsCmdWithConfig(loader, mockClientFactory(client))
+	cmd := gatewaySettingsCmdWithConfig(loader, mockClientFactory(client), newFileSvc)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

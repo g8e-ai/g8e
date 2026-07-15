@@ -25,21 +25,24 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 // tuiDeps holds the injectable dependencies for the TUI command,
 // enabling Tier 1 unit tests to stub external calls.
 type tuiDeps struct {
 	configLoader         func(string) (*config.Config, error)
+	fileSvcFactory       func() (fs.RuntimeFileService, error)
 	checkOperatorRunning func(*config.Config) error
-	loadCredentials      func(*config.Config) (*auth.Credentials, error)
-	buildMTLSClient      func(*config.Config, time.Duration) (*http.Client, error)
+	loadCredentials      func(fs.RuntimeFileService, *config.Config) (*auth.Credentials, error)
+	buildMTLSClient      func(fs.RuntimeFileService, *config.Config, time.Duration) (*http.Client, error)
 	tuiRun               func(context.Context, tui.Options) error
 }
 
 func defaultTUIDeps() tuiDeps {
 	return tuiDeps{
 		configLoader:         loadConfig,
+		fileSvcFactory:       newFileSvc,
 		checkOperatorRunning: auth.CheckOperatorRunning,
 		loadCredentials:      auth.LoadCredentials,
 		buildMTLSClient:      auth.BuildMTLSClient,
@@ -87,8 +90,13 @@ func runTUI(cmd *cobra.Command, args []string, deps tuiDeps) error {
 		return fmt.Errorf("%w — start it with 'g8e gw start': %w", constants.ErrGatewayNotReachable, err)
 	}
 
+	fileSvc, err := deps.fileSvcFactory()
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+	}
+
 	// Load CLI credentials (must be enrolled).
-	creds, err := deps.loadCredentials(cfg)
+	creds, err := deps.loadCredentials(fileSvc, cfg)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 	}
@@ -97,7 +105,7 @@ func runTUI(cmd *cobra.Command, args []string, deps tuiDeps) error {
 	}
 
 	// Build mTLS HTTP client for SSE streaming (no timeout — context-controlled).
-	httpClient, err := deps.buildMTLSClient(cfg, 0)
+	httpClient, err := deps.buildMTLSClient(fileSvc, cfg, 0)
 	if err != nil {
 		return fmt.Errorf("tui: build mTLS client: %w", err)
 	}

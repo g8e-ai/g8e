@@ -22,6 +22,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -33,6 +34,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/execution"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	gateway "github.com/g8e-ai/g8e/internal/services/gateway"
 	govsvc "github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
@@ -79,12 +81,23 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		return fmt.Errorf("gateway: initialize paths: %w", err)
 	}
 
+	// Construct RuntimeFileService early so all .g8e/ I/O goes through it
+	initLogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	fileSvc, err := fs.NewRuntimeFileService("", initLogger)
+	if err != nil {
+		return fmt.Errorf("gateway: create file service: %w", err)
+	}
+	if err := fileSvc.CreateRuntimeTree(context.Background()); err != nil {
+		return fmt.Errorf("gateway: create runtime tree: %w", err)
+	}
+
 	// Create log directory and file
-	if err := os.MkdirAll(paths.Infra.LogDir, 0700); err != nil {
+	if err := fileSvc.MkdirAll(context.Background(), constants.LogDirname, constants.PermDirPrivate); err != nil {
 		return fmt.Errorf("gateway: create log directory: %w", err)
 	}
 
-	logHandle, err := os.OpenFile(paths.Infra.OperatorLogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	logFilePath := fileSvc.Resolve(filepath.Join(constants.LogDirname, constants.OperatorLogFilename))
+	logHandle, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, constants.PermFilePrivate)
 	if err != nil {
 		return fmt.Errorf("gateway: open log file: %w", err)
 	}
@@ -95,15 +108,15 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		return fmt.Errorf("gateway: configure logger: %w", err)
 	}
 
-	// Apply defaults for empty directory flags (constants are now absolute)
+	// Apply defaults for empty directory flags
 	if cfg.DataDir == "" {
-		cfg.DataDir = paths.Infra.DataDir
+		cfg.DataDir = fileSvc.Resolve(constants.DataDirname)
 	}
 	if cfg.PKIDir == "" {
-		cfg.PKIDir = paths.Infra.PkiDir
+		cfg.PKIDir = fileSvc.Resolve(constants.PkiDirname)
 	}
 	if cfg.SecretsDir == "" {
-		cfg.SecretsDir = paths.Infra.SecretsDir
+		cfg.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
 	}
 
 	logger.Info("Gateway paths configured", "data_dir", cfg.DataDir, "pki_dir", cfg.PKIDir, "secrets_dir", cfg.SecretsDir)
@@ -140,7 +153,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	}
 	gatewayCfg.Version = vi.Version
 
-	svc, err := gateway.NewGatewayModeService(gatewayCfg, logger)
+	svc, err := gateway.NewGatewayModeService(gatewayCfg, fileSvc, logger)
 	if err != nil {
 		return fmt.Errorf("gateway: create service: %w", err)
 	}
@@ -191,7 +204,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	// Initialize In-Process Execution Gateway
 	logger.Info("Initializing in-process execution Gateway...")
 	execSvc := execution.NewExecutionService(gatewayCfg, logger)
-	fileSvc := execution.NewFileEditService(gatewayCfg, logger)
+	fileEditSvc := execution.NewFileEditService(gatewayCfg, logger)
 
 	// Git for ledger (embedded go-git)
 	gatewayCfg.GitPath = system.GitEmbedded
@@ -212,7 +225,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	// Export Actuator public key for receipt verification by evals harness
 	actuatorPub := actuatorPriv.Public().(ed25519.PublicKey)
 	logger.Info("Exporting Actuator public key", "pki_dir", cfg.PKIDir, "key_id", actuatorKeyID)
-	if err := ExportActuatorPublicKey(cfg.PKIDir, actuatorPub, actuatorKeyID, logger); err != nil {
+	if err := govsvc.ExportActuatorPublicKey(fileSvc, actuatorPub, actuatorKeyID, logger); err != nil {
 		logger.Warn("Failed to export Actuator public key for evals harness receipt verification", "error", err)
 	}
 
@@ -238,7 +251,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 			Config:             gatewayCfg,
 			Logger:             logger,
 			Execution:          execSvc,
-			FileEdit:           fileSvc,
+			FileEdit:           fileEditSvc,
 			PubSubClient:       loopbackClient,
 			ResultsService:     nil, // Results handled via direct loopback publish if needed
 			ExecutionVault:     nil, // Not used in gateway mode

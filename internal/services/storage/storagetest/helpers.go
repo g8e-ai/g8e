@@ -14,10 +14,13 @@
 package storagetest
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	vault "github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/require"
@@ -28,7 +31,7 @@ import (
 func CreateTestVault(t testing.TB, dataDir string, privateKey []byte) *vault.Vault {
 	t.Helper()
 
-	require.NoError(t, os.MkdirAll(dataDir, 0700))
+	require.NoError(t, os.MkdirAll(dataDir, constants.PermDirPrivate))
 
 	logger := testutil.NewTestLogger()
 
@@ -45,6 +48,16 @@ func CreateTestVault(t testing.TB, dataDir string, privateKey []byte) *vault.Vau
 
 	t.Cleanup(func() { v.Close() })
 	return v
+}
+
+// NewTestFileSvc creates a RuntimeFileService backed by baseDir with the full
+// .g8e runtime tree created. Returns the file service.
+func NewTestFileSvc(t testing.TB, baseDir string) fs.RuntimeFileService {
+	t.Helper()
+	svc, err := fs.NewRuntimeFileService(baseDir, testutil.NewTestLogger())
+	require.NoError(t, err)
+	require.NoError(t, svc.CreateRuntimeTree(context.Background()))
+	return svc
 }
 
 // testGitPath returns the system git binary path, skipping the test if git is unavailable.

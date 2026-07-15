@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-07-13
-Version: v1.5.0
+Last Updated: 2026-07-14
+Version: v1.5.1
 
 This document explains how to authenticate and authorize actions in the g8e platform. The platform is built as a zero-trust execution environment where every action is verified before execution.
 
@@ -132,7 +132,7 @@ Every action must pass through these layers before execution:
 |-------|---------|----------------|
 | **L1: Doctrine** | Technical safety | Forbidden patterns, MITRE threats, critical system file protection |
 | **L2: Consensus** | Multi-agent approval | Cryptographic attestation from tribunal members |
-| **L3: Notary** | Human authorization | Passkey or CLI session verification |
+| **L3: Notary** | Human authorization | Passkey or signed CLI proofs |
 | **L4: Warden** | Final verification | Replay protection, state validation, posture enforcement |
 | **L5: Actuator** | Execution | Dispatches action with audit commitment |
 
@@ -271,7 +271,7 @@ Vault operations are managed via CLI commands:
 Vault paths can be configured via:
 - CLI flags: `--vault-dir`, `--vault-key`, `--vault-require-unlock`
 - Environment variables: `G8E_VAULT_DIR`, `G8E_VAULT_KEY`, `G8E_VAULT_REQUIRE_UNLOCK`
-- Default paths: `.g8e/vault/` for vault data, `.g8e/vault/key` for the vault key
+- Default paths: `.g8e/vault/` for vault data, `.g8e/secrets/key` for the vault key
 
 When `--vault-require-unlock` is set, the gateway fails to start if the vault cannot be unlocked with the provided key. This enforces mandatory encryption at rest for production deployments.
 

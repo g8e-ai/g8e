@@ -16,6 +16,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -26,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
@@ -190,9 +192,12 @@ func TestStateRootCaching(t *testing.T) {
 
 func BenchmarkStateRootCalculation(b *testing.B) {
 	dir := b.TempDir()
-	secretsDir := b.TempDir()
-	ks := newTestKeystore(b, secretsDir, testutil.NewTestLogger())
-	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false, ks)
+	baseDir := b.TempDir()
+	fileSvc, err := fs.NewRuntimeFileService(baseDir, testutil.NewTestLogger())
+	require.NoError(b, err)
+	require.NoError(b, fileSvc.CreateRuntimeTree(context.Background()))
+	ks := newTestKeystore(b, fileSvc, testutil.NewTestLogger())
+	db, err := OpenCanonicalDBService(dir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false, ks, fileSvc)
 	require.NoError(b, err)
 	defer db.Close()
 
@@ -215,9 +220,12 @@ func BenchmarkStateRootCalculation(b *testing.B) {
 
 func BenchmarkStateRootLargeDataset(b *testing.B) {
 	dir := b.TempDir()
-	secretsDir := b.TempDir()
-	ks := newTestKeystore(b, secretsDir, testutil.NewTestLogger())
-	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false, ks)
+	baseDir := b.TempDir()
+	fileSvc, err := fs.NewRuntimeFileService(baseDir, testutil.NewTestLogger())
+	require.NoError(b, err)
+	require.NoError(b, fileSvc.CreateRuntimeTree(context.Background()))
+	ks := newTestKeystore(b, fileSvc, testutil.NewTestLogger())
+	db, err := OpenCanonicalDBService(dir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false, ks, fileSvc)
 	require.NoError(b, err)
 	defer db.Close()
 

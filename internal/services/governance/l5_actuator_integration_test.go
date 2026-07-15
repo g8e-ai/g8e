@@ -25,11 +25,13 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	govtypes "github.com/g8e-ai/g8e/internal/governance"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
@@ -37,7 +39,12 @@ func TestL5ActuatorRecordActionReceiptCalled(t *testing.T) {
 	actuator, _ := newTestActuator(t)
 
 	// Create a real AuditVault with test database
-	tempDir := t.TempDir()
+	tempDir := testutil.TempDir(t)
+
+	// Construct fileSvc for .g8e/ file I/O
+	fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 
 	// Create vault for encryption
 	_, privKey, err := ed25519.GenerateKey(nil)
@@ -53,14 +60,13 @@ func TestL5ActuatorRecordActionReceiptCalled(t *testing.T) {
 	defer testVault.Close()
 
 	auditConfig := &storage.AuditStoreConfig{
-		DataDir:         tempDir,
 		DBPath:          "test.db",
 		MaxDBSizeMB:     100,
 		RetentionDays:   1,
 		EncryptionVault: testVault,
 	}
 
-	auditStore, err := storage.NewSQLAuditStore(auditConfig, slog.Default())
+	auditStore, err := storage.NewSQLAuditStore(auditConfig, slog.Default(), fileSvc)
 	require.NoError(t, err)
 	defer auditStore.Close()
 

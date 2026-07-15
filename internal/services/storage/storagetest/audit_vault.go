@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -33,6 +32,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/vault"
@@ -55,7 +55,6 @@ type ChaosEvent struct {
 
 // TestSQLAuditStoreConfig holds configuration for the test-only Local-First Audit Architecture
 type TestSQLAuditStoreConfig struct {
-	DataDir                   string
 	DBPath                    string
 	LedgerDir                 string
 	MaxDBSizeMB               int64
@@ -71,10 +70,8 @@ type TestSQLAuditStoreConfig struct {
 }
 
 // DefaultTestSQLAuditStoreConfig returns the default configuration for the test audit store.
-// Note: DataDir should be set by the caller based on the actual work directory.
 func DefaultTestSQLAuditStoreConfig() *TestSQLAuditStoreConfig {
 	return &TestSQLAuditStoreConfig{
-		DataDir:                   ".g8e/data",
 		DBPath:                    "g8e.db",
 		LedgerDir:                 constants.LedgerDirname,
 		MaxDBSizeMB:               2048,
@@ -90,9 +87,13 @@ type TestSQLAuditStore struct {
 	db              *sqliteutil.DB
 	config          *TestSQLAuditStoreConfig
 	logger          *slog.Logger
+	fileSvc         fs.RuntimeFileService
 	ledgerPath      string
+	ledgerRelPath   string
 	filesPath       string
+	filesRelPath    string
 	sessionsRoot    string // Root for session-specific ledgers
+	sessionsRelPath string
 	gitPath         string
 	encryptionVault *vault.Vault
 	pruner          *sqliteutil.Pruner
@@ -104,7 +105,7 @@ type TestSQLAuditStore struct {
 
 // NewTestSQLAuditStore creates a new test-only audit store service
 // EncryptionVault in config is required for encryption at rest.
-func NewTestSQLAuditStore(config *TestSQLAuditStoreConfig, logger *slog.Logger) (*TestSQLAuditStore, error) {
+func NewTestSQLAuditStore(config *TestSQLAuditStoreConfig, logger *slog.Logger, fileSvc fs.RuntimeFileService) (*TestSQLAuditStore, error) {
 	if config == nil {
 		config = DefaultTestSQLAuditStoreConfig()
 	}
@@ -113,12 +114,20 @@ func NewTestSQLAuditStore(config *TestSQLAuditStoreConfig, logger *slog.Logger) 
 		return nil, constants.ErrAuditStoreEncryptionVaultRequired
 	}
 
+	ledgerRelPath := filepath.Join(constants.DataDirname, config.LedgerDir)
+	filesRelPath := filepath.Join(constants.DataDirname, config.LedgerDir, constants.FilesDirname)
+	sessionsRelPath := filepath.Join(constants.DataDirname, config.LedgerDir, constants.SessionsDirname)
+
 	avs := &TestSQLAuditStore{
 		config:          config,
 		logger:          logger,
-		ledgerPath:      pathutil.SafeJoin(config.DataDir, config.LedgerDir),
-		filesPath:       pathutil.SafeJoin(config.DataDir, config.LedgerDir, "files"),
-		sessionsRoot:    pathutil.SafeJoin(config.DataDir, config.LedgerDir, "sessions"),
+		fileSvc:         fileSvc,
+		ledgerRelPath:   ledgerRelPath,
+		filesRelPath:    filesRelPath,
+		sessionsRelPath: sessionsRelPath,
+		ledgerPath:      fileSvc.Resolve(ledgerRelPath),
+		filesPath:       fileSvc.Resolve(filesRelPath),
+		sessionsRoot:    fileSvc.Resolve(sessionsRelPath),
 		encryptionVault: config.EncryptionVault,
 		gitPath:         config.GitPath,
 	}
@@ -133,8 +142,8 @@ func NewTestSQLAuditStore(config *TestSQLAuditStoreConfig, logger *slog.Logger) 
 
 	encryptionEnabled := avs.encryptionVault.IsUnlocked()
 	avs.logger.Info("Audit vault initialized",
-		"data_dir", config.DataDir,
-		"db_path", pathutil.ResolveDBPath(config.DataDir, config.DBPath),
+		"data_dir", avs.fileSvc.Resolve(constants.DataDirname),
+		"db_path", pathutil.ResolveDBPath(avs.fileSvc.Resolve(constants.DataDirname), config.DBPath),
 		"ledger_path", avs.ledgerPath,
 		"encryption_enabled", encryptionEnabled)
 
@@ -143,7 +152,7 @@ func NewTestSQLAuditStore(config *TestSQLAuditStoreConfig, logger *slog.Logger) 
 
 // bootstrap initializes the audit vault (directory structure, database, git repo)
 func (avs *TestSQLAuditStore) bootstrap() error {
-	avs.logger.Info("Bootstrapping audit vault", "data_dir", avs.config.DataDir)
+	avs.logger.Info("Bootstrapping audit vault", "data_dir", avs.fileSvc.Resolve(constants.DataDirname))
 
 	if err := avs.createDirectoryStructure(); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreCreateDirFailed, err)
@@ -172,20 +181,20 @@ func (avs *TestSQLAuditStore) bootstrap() error {
 // createDirectoryStructure creates the audit vault directory structure
 func (avs *TestSQLAuditStore) createDirectoryStructure() error {
 	dirs := []string{
-		avs.config.DataDir,
-		avs.ledgerPath,
-		avs.filesPath,
-		avs.sessionsRoot,
+		constants.DataDirname,
+		avs.ledgerRelPath,
+		avs.filesRelPath,
+		avs.sessionsRelPath,
 	}
 
 	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := avs.fileSvc.MkdirAll(context.Background(), dir, constants.PermDirStandard); err != nil {
 			return fmt.Errorf("%w %s: %w", constants.ErrAuditStoreCreateDirPathFailed, dir, err)
 		}
 	}
 
 	avs.logger.Info("Audit vault directory structure ensured",
-		"data_dir", avs.config.DataDir,
+		"data_dir", avs.fileSvc.Resolve(constants.DataDirname),
 		"ledger_dir", avs.ledgerPath,
 		"sessions_dir", avs.sessionsRoot)
 
@@ -194,17 +203,17 @@ func (avs *TestSQLAuditStore) createDirectoryStructure() error {
 
 // verifyWritePermissions ensures the data directory is writable
 func (avs *TestSQLAuditStore) verifyWritePermissions() error {
-	testFile := pathutil.SafeJoin(avs.config.DataDir, ".write_test")
+	testRelPath := filepath.Join(constants.DataDirname, ".write_test")
 
-	if err := os.WriteFile(testFile, []byte("write_test"), 0600); err != nil {
-		return fmt.Errorf("%w %s: %w", constants.ErrAuditStoreCannotWrite, avs.config.DataDir, err)
+	if err := avs.fileSvc.WriteFile(context.Background(), testRelPath, []byte("write_test"), constants.PermFilePrivate); err != nil {
+		return fmt.Errorf("%w %s: %w", constants.ErrAuditStoreCannotWrite, avs.fileSvc.Resolve(constants.DataDirname), err)
 	}
 
-	if err := os.Remove(testFile); err != nil {
-		avs.logger.Warn("Failed to remove write test file", "path", testFile, string(constants.ConnectionStateError), err)
+	if err := avs.fileSvc.Remove(context.Background(), testRelPath); err != nil {
+		avs.logger.Warn("Failed to remove write test file", "path", testRelPath, string(constants.ConnectionStateError), err)
 	}
 
-	avs.logger.Info("Write permissions verified", "path", avs.config.DataDir)
+	avs.logger.Info("Write permissions verified", "path", avs.fileSvc.Resolve(constants.DataDirname))
 	return nil
 }
 
@@ -214,14 +223,15 @@ func (avs *TestSQLAuditStore) GetSessionLedgerPath(operatorSessionID string) (st
 		return avs.ledgerPath, nil
 	}
 
-	sessionPath := filepath.Join(avs.sessionsRoot, operatorSessionID)
+	sessionRelPath := filepath.Join(avs.sessionsRelPath, operatorSessionID)
+	gitRelPath := filepath.Join(sessionRelPath, constants.GitDirname)
 
 	avs.mu.RLock()
-	_, err := os.Stat(pathutil.SafeJoin(sessionPath, ".git"))
+	exists, _ := avs.fileSvc.FileExists(context.Background(), gitRelPath)
 	avs.mu.RUnlock()
 
-	if err == nil {
-		return sessionPath, nil
+	if exists {
+		return avs.fileSvc.Resolve(sessionRelPath), nil
 	}
 
 	// Initialize new session ledger
@@ -229,42 +239,47 @@ func (avs *TestSQLAuditStore) GetSessionLedgerPath(operatorSessionID string) (st
 	defer avs.mu.Unlock()
 
 	// Double check
-	if _, err := os.Stat(pathutil.SafeJoin(sessionPath, ".git")); err == nil {
-		return sessionPath, nil
+	exists, _ = avs.fileSvc.FileExists(context.Background(), gitRelPath)
+	if exists {
+		return avs.fileSvc.Resolve(sessionRelPath), nil
 	}
 
-	if err := os.MkdirAll(sessionPath, 0755); err != nil {
+	if err := avs.fileSvc.MkdirAll(context.Background(), sessionRelPath, constants.PermDirStandard); err != nil {
 		return "", fmt.Errorf("failed to create Operator session ledger directory: %w", err)
 	}
 
-	if err := avs.initGitRepo(sessionPath); err != nil {
+	if err := avs.initGitRepo(sessionRelPath); err != nil {
 		return "", fmt.Errorf("failed to initialize Operator session git repo: %w", err)
 	}
 
+	sessionPath := avs.fileSvc.Resolve(sessionRelPath)
 	avs.logger.Info("Initialized new session ledger", "operator_session_id", operatorSessionID, "path", sessionPath)
 	return sessionPath, nil
 }
 
 // initLedgerGit initializes git repository in the global ledger directory
 func (avs *TestSQLAuditStore) initLedgerGit() error {
-	return avs.initGitRepo(avs.ledgerPath)
+	return avs.initGitRepo(avs.ledgerRelPath)
 }
 
-// initGitRepo initializes a git repository in the specified directory using native go-git
-func (avs *TestSQLAuditStore) initGitRepo(path string) error {
-	gitDir := pathutil.SafeJoin(path, ".git")
+// initGitRepo initializes a git repository in the specified directory using native go-git.
+// relPath is a relative path within the .g8e/ runtime directory.
+func (avs *TestSQLAuditStore) initGitRepo(relPath string) error {
+	gitRelPath := filepath.Join(relPath, constants.GitDirname)
 
-	if _, err := os.Stat(gitDir); err == nil {
+	exists, _ := avs.fileSvc.FileExists(context.Background(), gitRelPath)
+	if exists {
 		return nil
 	}
 
-	repo, err := git.PlainInit(path, false)
+	absPath := avs.fileSvc.Resolve(relPath)
+	repo, err := git.PlainInit(absPath, false)
 	if err != nil {
 		return fmt.Errorf("git init failed: %w", err)
 	}
 
-	gitignore := pathutil.SafeJoin(path, ".gitignore")
-	if err := os.WriteFile(gitignore, []byte("# g8e Ledger\n"), 0600); err != nil {
+	gitignoreRelPath := filepath.Join(relPath, constants.GitignoreFilename)
+	if err := avs.fileSvc.WriteFile(context.Background(), gitignoreRelPath, []byte("# g8e Ledger\n"), constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("failed to create .gitignore: %w", err)
 	}
 
@@ -293,7 +308,7 @@ func (avs *TestSQLAuditStore) initGitRepo(path string) error {
 
 // initDatabase creates the database and schema
 func (avs *TestSQLAuditStore) initDatabase() error {
-	dbPath := pathutil.ResolveDBPath(avs.config.DataDir, avs.config.DBPath)
+	dbPath := pathutil.ResolveDBPath(avs.fileSvc.Resolve(constants.DataDirname), avs.config.DBPath)
 
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 	db, err := sqliteutil.OpenDB(cfg, avs.logger)
@@ -1255,7 +1270,7 @@ func (avs *TestSQLAuditStore) GetDataDir() string {
 	if avs == nil {
 		return ""
 	}
-	return avs.config.DataDir
+	return avs.fileSvc.Resolve(constants.DataDirname)
 }
 
 // GetLedgerPath returns the ledger directory path

@@ -17,8 +17,6 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -31,6 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 func TestDataCmd(t *testing.T) {
@@ -111,29 +110,23 @@ func TestDataAuditCmd(t *testing.T) {
 func TestDataCommandsRequireAuthentication(t *testing.T) {
 	testCases := []struct {
 		name string
-		cmd  func() *cobra.Command
+		cmd  func(func(string) (*config.Config, error), apiClientFactory, func() (fs.RuntimeFileService, error)) *cobra.Command
 	}{
-		{"users", dataUsersCmd},
-		{"operators", dataOperatorsCmd},
-		{"settings", dataSettingsCmd},
-		{"store", dataStoreCmd},
-		{"audit list", dataAuditListCmd},
+		{"users", dataUsersCmdWithConfig},
+		{"operators", dataOperatorsCmdWithConfig},
+		{"settings", dataSettingsCmdWithConfig},
+		{"store", dataStoreCmdWithConfig},
+		{"audit list", dataAuditListCmdWithConfig},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd := tc.cmd()
+			fileSvc, cfg := newCmdTestEnv(t)
+			loader := func(_ string) (*config.Config, error) { return cfg, nil }
+			cmd := tc.cmd(loader, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 			var buf bytes.Buffer
 			cmd.SetOut(&buf)
 			cmd.SetErr(&buf)
-
-			originalWd, _ := os.Getwd()
-			tmpDir := t.TempDir()
-			os.Chdir(tmpDir)
-			defer os.Chdir(originalWd)
-
-			// Set up minimal config structure so config loads, then auth fails
-			setupDataTestConfig(t, tmpDir)
 
 			err := cmd.RunE(cmd, []string{})
 			require.Error(t, err)
@@ -151,65 +144,6 @@ func TestDataCommandFlags(t *testing.T) {
 	})
 }
 
-func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
-	runtimeDir := filepath.Join(tmpDir, ".g8e")
-	pkiDir := filepath.Join(runtimeDir, "pki")
-	secretsDir := filepath.Join(runtimeDir, "secrets")
-	credentialsDir := runtimeDir
-
-	require.NoError(t, os.MkdirAll(pkiDir, 0755))
-	require.NoError(t, os.MkdirAll(secretsDir, 0700))
-	// Create credentials directory but NOT the credentials file itself
-	// This ensures auth.LoadCredentials returns (nil, nil) which triggers ErrNotAuthenticated
-	require.NoError(t, os.MkdirAll(credentialsDir, 0700))
-	require.NoError(t, os.MkdirAll(filepath.Join(pkiDir, "root"), 0755))
-
-	// Create minimal paths.json structure
-	protocolDir := filepath.Join(tmpDir, "protocol")
-	constantsDir := filepath.Join(protocolDir, "constants")
-	require.NoError(t, os.MkdirAll(constantsDir, 0755))
-
-	pathsJSON := minimalPathsJSON(t)
-	pathsPath := filepath.Join(constantsDir, "paths.json")
-	require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
-
-	return &config.Config{
-		ProjectRoot:    tmpDir,
-		RuntimeDir:     runtimeDir,
-		PKIDir:         pkiDir,
-		SecretsDir:     secretsDir,
-		CredentialsDir: credentialsDir,
-		Paths: &config.PathsConfig{
-			Host: "localhost",
-			Infra: struct {
-				AppCertDir           string `json:"app_cert_dir"`
-				CACertPath           string `json:"ca_cert_path"`
-				DBPath               string `json:"db_path"`
-				DocsDir              string `json:"docs_dir"`
-				PKIDir               string `json:"pki_dir"`
-				ProtocolConstantsDir string `json:"protocol_constants_dir"`
-				ProtocolDir          string `json:"protocol_dir"`
-				ProtocolModelsDir    string `json:"protocol_models_dir"`
-				SecretsDir           string `json:"secrets_dir"`
-				SSHConfigPath        string `json:"ssh_config_path"`
-				VaultDir             string `json:"vault_dir"`
-				VaultKeyPath         string `json:"vault_key_path"`
-			}{
-				AppCertDir:           filepath.Join(tmpDir, paths.Infra.AppCertDir),
-				CACertPath:           filepath.Join(tmpDir, paths.Infra.CaCertPath),
-				DBPath:               filepath.Join(tmpDir, paths.Infra.DbPath),
-				DocsDir:              filepath.Join(tmpDir, paths.Infra.DocsDir),
-				PKIDir:               filepath.Join(tmpDir, paths.Infra.PkiDir),
-				ProtocolConstantsDir: filepath.Join(tmpDir, paths.Infra.ProtocolConstantsDir),
-				ProtocolDir:          filepath.Join(tmpDir, paths.Infra.ProtocolDir),
-				ProtocolModelsDir:    filepath.Join(tmpDir, paths.Infra.ProtocolModelsDir),
-				SecretsDir:           filepath.Join(tmpDir, paths.Infra.SecretsDir),
-				SSHConfigPath:        filepath.Join(tmpDir, paths.Infra.SshConfigPath),
-			},
-		},
-	}
-}
-
 func TestDataAuditSummaryCmd(t *testing.T) {
 	t.Run("summary command has correct use", func(t *testing.T) {
 		cmd := dataAuditSummaryCmd()
@@ -224,17 +158,13 @@ func TestDataAuditSummaryCmd(t *testing.T) {
 	})
 
 	t.Run("summary fails when database does not exist", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		setupDataTestConfig(t, tmpDir)
+		_, cfg := newCmdTestEnv(t)
+		require.NoError(t, paths.InitWithBase(cfg.ProjectRoot))
 
 		cmd := dataAuditSummaryCmd()
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
 
 		err := cmd.RunE(cmd, []string{})
 		require.Error(t, err)
@@ -242,18 +172,14 @@ func TestDataAuditSummaryCmd(t *testing.T) {
 	})
 
 	t.Run("summary succeeds with empty database", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		setupDataTestConfig(t, tmpDir)
+		_, cfg := newCmdTestEnv(t)
 
-		// Initialize global paths to use tmpDir
-		require.NoError(t, paths.InitWithBase(tmpDir))
+		// Initialize global paths to use test tmpDir
+		require.NoError(t, paths.InitWithBase(cfg.ProjectRoot))
 
-		// Create data directory and empty database using global paths
-		dataDir := paths.Infra.DataDir
-		require.NoError(t, os.MkdirAll(dataDir, 0755))
+		// Create empty database using global paths
 		dbPath := paths.Infra.DbPath
 
-		// Create database with events table but no data
 		db, err := sql.Open("sqlite", dbPath)
 		require.NoError(t, err)
 		defer db.Close()
@@ -265,10 +191,6 @@ func TestDataAuditSummaryCmd(t *testing.T) {
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
 
 		err = cmd.RunE(cmd, []string{})
 		require.NoError(t, err)
@@ -291,20 +213,15 @@ func TestDataStoreCmdFlagValidation(t *testing.T) {
 	})
 
 	t.Run("store list mode with collection flag", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		setupDataTestConfig(t, tmpDir)
-
-		cmd := dataStoreCmd()
+		fileSvc, cfg := newCmdTestEnv(t)
+		loader := func(_ string) (*config.Config, error) { return cfg, nil }
+		cmd := dataStoreCmdWithConfig(loader, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		cmd.Flags().Set("collection", "test_collection")
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		// Will fail on API call, but should pass flag validation
+		// Will fail on API client creation (no credentials), but should pass flag validation
 		err := cmd.RunE(cmd, []string{})
 		require.Error(t, err)
 		// Error should not be about missing collection flag
@@ -325,20 +242,15 @@ func TestDataAuditListCmdFlagValidation(t *testing.T) {
 	})
 
 	t.Run("audit list with operator-session-id flag", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		setupDataTestConfig(t, tmpDir)
-
-		cmd := dataAuditListCmd()
+		fileSvc, cfg := newCmdTestEnv(t)
+		loader := func(_ string) (*config.Config, error) { return cfg, nil }
+		cmd := dataAuditListCmdWithConfig(loader, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		cmd.Flags().Set("operator-session-id", "test-session-123")
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		// Will fail on API call, but should pass flag validation
+		// Will fail on API client creation (no credentials), but should pass flag validation
 		err := cmd.RunE(cmd, []string{})
 		require.Error(t, err)
 		// Error should not be about missing operator-session-id flag
@@ -523,15 +435,11 @@ func TestDataDocFilterTypes(t *testing.T) {
 
 func TestDataAuditSummaryWithSessionFilter(t *testing.T) {
 	t.Run("summary with session filter constructs correct query", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		setupDataTestConfig(t, tmpDir)
+		_, cfg := newCmdTestEnv(t)
 
-		// Initialize global paths to use tmpDir
-		require.NoError(t, paths.InitWithBase(tmpDir))
+		// Initialize global paths to use test tmpDir
+		require.NoError(t, paths.InitWithBase(cfg.ProjectRoot))
 
-		// Create data directory and database with test data
-		dataDir := paths.Infra.DataDir
-		require.NoError(t, os.MkdirAll(dataDir, 0755))
 		dbPath := paths.Infra.DbPath
 
 		db, err := sql.Open("sqlite", dbPath)
@@ -555,10 +463,6 @@ func TestDataAuditSummaryWithSessionFilter(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
 		err = cmd.RunE(cmd, []string{})
 		require.NoError(t, err)
 
@@ -572,15 +476,11 @@ func TestDataAuditSummaryWithSessionFilter(t *testing.T) {
 	})
 
 	t.Run("summary without session filter includes all events", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		setupDataTestConfig(t, tmpDir)
+		_, cfg := newCmdTestEnv(t)
 
-		// Initialize global paths to use tmpDir
-		require.NoError(t, paths.InitWithBase(tmpDir))
+		// Initialize global paths to use test tmpDir
+		require.NoError(t, paths.InitWithBase(cfg.ProjectRoot))
 
-		// Create data directory and database with test data
-		dataDir := paths.Infra.DataDir
-		require.NoError(t, os.MkdirAll(dataDir, 0755))
 		dbPath := paths.Infra.DbPath
 
 		db, err := sql.Open("sqlite", dbPath)
@@ -603,10 +503,6 @@ func TestDataAuditSummaryWithSessionFilter(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
 		err = cmd.RunE(cmd, []string{})
 		require.NoError(t, err)
 
@@ -620,15 +516,11 @@ func TestDataAuditSummaryWithSessionFilter(t *testing.T) {
 
 func TestDataAuditSummaryOutputFormatting(t *testing.T) {
 	t.Run("summary formats output correctly with multiple event types", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		setupDataTestConfig(t, tmpDir)
+		_, cfg := newCmdTestEnv(t)
 
-		// Initialize global paths to use tmpDir
-		require.NoError(t, paths.InitWithBase(tmpDir))
+		// Initialize global paths to use test tmpDir
+		require.NoError(t, paths.InitWithBase(cfg.ProjectRoot))
 
-		// Create data directory and database with test data
-		dataDir := paths.Infra.DataDir
-		require.NoError(t, os.MkdirAll(dataDir, 0755))
 		dbPath := paths.Infra.DbPath
 
 		db, err := sql.Open("sqlite", dbPath)
@@ -652,10 +544,6 @@ func TestDataAuditSummaryOutputFormatting(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
 		err = cmd.RunE(cmd, []string{})
 		require.NoError(t, err)
 
@@ -673,20 +561,15 @@ func TestDataAuditSummaryOutputFormatting(t *testing.T) {
 
 func TestDataStoreCommandModes(t *testing.T) {
 	t.Run("store command defaults to list mode when document-id not provided", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		setupDataTestConfig(t, tmpDir)
-
-		cmd := dataStoreCmd()
+		fileSvc, cfg := newCmdTestEnv(t)
+		loader := func(_ string) (*config.Config, error) { return cfg, nil }
+		cmd := dataStoreCmdWithConfig(loader, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		cmd.Flags().Set("collection", "test_collection")
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		// Will fail on API call, but we can verify the flag state
+		// Will fail on API client creation (no credentials), but we can verify the flag state
 		err := cmd.RunE(cmd, []string{})
 		require.Error(t, err)
 		// Error should not be about missing collection flag
@@ -694,21 +577,16 @@ func TestDataStoreCommandModes(t *testing.T) {
 	})
 
 	t.Run("store command uses document mode when document-id provided", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		setupDataTestConfig(t, tmpDir)
-
-		cmd := dataStoreCmd()
+		fileSvc, cfg := newCmdTestEnv(t)
+		loader := func(_ string) (*config.Config, error) { return cfg, nil }
+		cmd := dataStoreCmdWithConfig(loader, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		cmd.Flags().Set("collection", "test_collection")
 		cmd.Flags().Set("document-id", "doc-123")
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		// Will fail on API call, but we can verify both flags are set
+		// Will fail on API client creation (no credentials), but we can verify both flags are set
 		err := cmd.RunE(cmd, []string{})
 		require.Error(t, err)
 		// Error should not be about missing flags

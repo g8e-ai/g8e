@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -52,7 +53,7 @@ func TestProcTreeTool_Execute_Errors(t *testing.T) {
 }
 
 func TestBuildProcessTree(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 
 	// Setup mock /proc
 	// PID 1: init
@@ -154,7 +155,7 @@ func TestBuildProcessTree(t *testing.T) {
 }
 
 func TestBuildProcessTree_EdgeCases(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := testutil.TempDir(t)
 	oldProcDir := procDirectory
 	procDirectory = tmpDir
 	defer func() { procDirectory = oldProcDir }()

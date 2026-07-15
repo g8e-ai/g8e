@@ -39,7 +39,7 @@ import (
 
 func newTestSuspendedStore(t *testing.T) storage.SuspendedTransactionStore {
 	t.Helper()
-	dbPath := filepath.Join(t.TempDir(), "test_suspended.db")
+	dbPath := filepath.Join(testutil.TempDir(t), "test_suspended.db")
 	sts, err := storage.NewSuspendedTransactionService(&storage.SuspendedTransactionConfig{
 		DBPath:               dbPath,
 		MaxDBSizeMB:          256,
@@ -53,9 +53,9 @@ func newTestSuspendedStore(t *testing.T) storage.SuspendedTransactionStore {
 
 func TestCLIL3Notary_VerifyL3Proof_RejectsMissingInputs(t *testing.T) {
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
+	dbDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
+	db, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	userSvc := NewUserService(db, logger)
@@ -125,9 +125,9 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsMissingInputs(t *testing.T) {
 
 func TestCLIL3Notary_VerifyL3Proof_RejectsInactiveUser(t *testing.T) {
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
+	dbDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
+	db, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	userSvc := NewUserService(db, logger)
@@ -153,15 +153,15 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsInactiveUser(t *testing.T) {
 
 func TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser(t *testing.T) {
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
+	dbDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
+	db, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
 	// Create PKI (required for fail-closed revocation check)
-	sm := newTestSecretManager(t, db.db, secretsDir)
-	pki := newPKIAuthority(dbDir, filepath.Join(dbDir, "pki"), db, sm, logger)
+	sm := newTestSecretManager(t, db.db, fileSvc)
+	pki := newPKIAuthority(fileSvc, db, sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
@@ -232,14 +232,14 @@ func TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser(t *testing.T) {
 
 func TestCLIL3Notary_VerifyL3Proof_RejectsInvalidSignature(t *testing.T) {
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
+	dbDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
+	db, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	sm := newTestSecretManager(t, db.db, secretsDir)
-	pki := newPKIAuthority(dbDir, filepath.Join(dbDir, "pki"), db, sm, logger)
+	sm := newTestSecretManager(t, db.db, fileSvc)
+	pki := newPKIAuthority(fileSvc, db, sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
@@ -311,9 +311,9 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsInvalidSignature(t *testing.T) {
 
 func TestCLIL3Notary_VerifyL3Proof_RejectsUnknownFingerprint(t *testing.T) {
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
+	dbDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
+	db, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	userSvc := NewUserService(db, logger)
@@ -340,14 +340,14 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsUnknownFingerprint(t *testing.T) {
 
 func TestCLIL3Notary_VerifyL3Proof_RejectsRevokedCertificate(t *testing.T) {
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
+	dbDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
+	db, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	sm := newTestSecretManager(t, db.db, secretsDir)
-	pki := newPKIAuthority(dbDir, filepath.Join(dbDir, "pki"), db, sm, logger)
+	sm := newTestSecretManager(t, db.db, fileSvc)
+	pki := newPKIAuthority(fileSvc, db, sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
@@ -396,9 +396,9 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsRevokedCertificate(t *testing.T) {
 
 func TestGatewayL3Notary_DelegatesToCLI(t *testing.T) {
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
+	dbDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
+	db, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	userSvc := NewUserService(db, logger)

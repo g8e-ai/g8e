@@ -17,14 +17,13 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -42,13 +41,6 @@ func TestApproveCmd(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		originalWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		setupApproveTestConfig(t, tmpDir)
-
 		// The cobra framework will validate args before RunE is called
 		// So we test the validation directly
 		err := cmd.Args(cmd, []string{})
@@ -56,20 +48,15 @@ func TestApproveCmd(t *testing.T) {
 	})
 
 	t.Run("approve fails when not authenticated", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		cfg := setupApproveTestConfig(t, tmpDir)
+		fileSvc, cfg := newCmdTestEnv(t)
 
 		// Use injectable config loader for hermetic test
 		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory)
+		}, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
 
 		// Create valid Ed25519 key and certificate
 		_, priv, err := ed25519.GenerateKey(nil)
@@ -82,14 +69,14 @@ func TestApproveCmd(t *testing.T) {
 			Type:  "PRIVATE KEY",
 			Bytes: privBytes,
 		})
-		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), privPEM, 0600))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLIKeyFile()), privPEM, constants.PermFilePrivate))
 
 		cert := generateTestCertificate(t, priv)
 		certPEM := pem.EncodeToMemory(&pem.Block{
 			Type:  "CERTIFICATE",
 			Bytes: cert,
 		})
-		require.NoError(t, os.WriteFile(cfg.CLICertFile(), certPEM, 0600))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()), certPEM, constants.PermFilePrivate))
 
 		// Don't create credentials - should fail on API client creation
 		err = cmd.RunE(cmd, []string{"abc123"})
@@ -98,19 +85,14 @@ func TestApproveCmd(t *testing.T) {
 	})
 
 	t.Run("approve fails with missing CLI key file", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		cfg := setupApproveTestConfig(t, tmpDir)
+		fileSvc, cfg := newCmdTestEnv(t)
 
 		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory)
+		}, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
 
 		// Save credentials so LoadCredentials passes, but don't create key/cert files
 		creds := &auth.Credentials{
@@ -119,7 +101,7 @@ func TestApproveCmd(t *testing.T) {
 			OperatorID:        "op-789",
 			CLISessionID:      "cli-sess-abc",
 		}
-		require.NoError(t, auth.SaveCredentials(cfg, creds))
+		require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
 
 		err := cmd.RunE(cmd, []string{"abc123"})
 		require.Error(t, err)
@@ -127,19 +109,14 @@ func TestApproveCmd(t *testing.T) {
 	})
 
 	t.Run("approve fails with missing CLI cert file", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		cfg := setupApproveTestConfig(t, tmpDir)
+		fileSvc, cfg := newCmdTestEnv(t)
 
 		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory)
+		}, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
 
 		// Save credentials and write valid key, but no cert
 		creds := &auth.Credentials{
@@ -148,7 +125,7 @@ func TestApproveCmd(t *testing.T) {
 			OperatorID:        "op-789",
 			CLISessionID:      "cli-sess-abc",
 		}
-		require.NoError(t, auth.SaveCredentials(cfg, creds))
+		require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
 
 		_, priv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
@@ -160,7 +137,7 @@ func TestApproveCmd(t *testing.T) {
 			Type:  "PRIVATE KEY",
 			Bytes: privBytes,
 		})
-		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), privPEM, 0600))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLIKeyFile()), privPEM, constants.PermFilePrivate))
 
 		err = cmd.RunE(cmd, []string{"abc123"})
 		require.Error(t, err)
@@ -168,19 +145,14 @@ func TestApproveCmd(t *testing.T) {
 	})
 
 	t.Run("approve fails with invalid key/cert pair", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		cfg := setupApproveTestConfig(t, tmpDir)
+		fileSvc, cfg := newCmdTestEnv(t)
 
 		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory)
+		}, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
 
 		// Save credentials and write key/cert that don't match
 		creds := &auth.Credentials{
@@ -189,20 +161,20 @@ func TestApproveCmd(t *testing.T) {
 			OperatorID:        "op-789",
 			CLISessionID:      "cli-sess-abc",
 		}
-		require.NoError(t, auth.SaveCredentials(cfg, creds))
+		require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
 
 		_, priv1, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 		privBytes, err := x509.MarshalPKCS8PrivateKey(priv1)
 		require.NoError(t, err)
 		privPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes})
-		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), privPEM, 0600))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLIKeyFile()), privPEM, constants.PermFilePrivate))
 
 		_, priv2, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 		cert := generateTestCertificate(t, priv2)
 		certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert})
-		require.NoError(t, os.WriteFile(cfg.CLICertFile(), certPEM, 0600))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()), certPEM, constants.PermFilePrivate))
 
 		err = cmd.RunE(cmd, []string{"abc123"})
 		require.Error(t, err)
@@ -210,20 +182,18 @@ func TestApproveCmd(t *testing.T) {
 	})
 
 	t.Run("approve fails with missing trust bundle", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		cfg := setupApproveTestConfig(t, tmpDir)
+		fileSvc, cfg := newCmdTestEnv(t)
+
+		// Remove the trust bundle that setupTestConfig creates
+		require.NoError(t, fileSvc.Remove(context.Background(), cfg.DefaultTrustBundleRelPath()))
 
 		// Use injectable config loader for hermetic test
 		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
-		}, defaultAPIClientFactory)
+		}, defaultAPIClientFactory, fileSvcFactoryFor(fileSvc))
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
 
 		// Create valid Ed25519 key and certificate
 		_, priv, err := ed25519.GenerateKey(nil)
@@ -236,14 +206,14 @@ func TestApproveCmd(t *testing.T) {
 			Type:  "PRIVATE KEY",
 			Bytes: privBytes,
 		})
-		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), privPEM, 0600))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLIKeyFile()), privPEM, constants.PermFilePrivate))
 
 		cert := generateTestCertificate(t, priv)
 		certPEM := pem.EncodeToMemory(&pem.Block{
 			Type:  "CERTIFICATE",
 			Bytes: cert,
 		})
-		require.NoError(t, os.WriteFile(cfg.CLICertFile(), certPEM, 0600))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()), certPEM, constants.PermFilePrivate))
 
 		// Create credentials but don't create trust bundle
 		creds := &auth.Credentials{
@@ -252,44 +222,12 @@ func TestApproveCmd(t *testing.T) {
 			OperatorID:        "op-789",
 			CLISessionID:      "cli-sess-abc",
 		}
-		require.NoError(t, auth.SaveCredentials(cfg, creds))
+		require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
 
 		err = cmd.RunE(cmd, []string{"abc123"})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrFailedToReadTrustBundle)
 	})
-}
-
-func setupApproveTestConfig(t *testing.T, tmpDir string) *config.Config {
-	runtimeDir := filepath.Join(tmpDir, ".g8e")
-	pkiDir := filepath.Join(runtimeDir, "pki")
-	secretsDir := filepath.Join(runtimeDir, "secrets")
-	credentialsDir := filepath.Join(runtimeDir, "credentials")
-
-	require.NoError(t, os.MkdirAll(pkiDir, 0755))
-	require.NoError(t, os.MkdirAll(secretsDir, 0700))
-	require.NoError(t, os.MkdirAll(credentialsDir, 0700))
-
-	// Create minimal paths.json structure
-	protocolDir := filepath.Join(tmpDir, "protocol")
-	constantsDir := filepath.Join(protocolDir, "constants")
-	require.NoError(t, os.MkdirAll(constantsDir, 0755))
-
-	pathsJSON := minimalPathsJSON(t)
-	pathsPath := filepath.Join(constantsDir, "paths.json")
-	require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
-
-	// Load the paths config to properly initialize the Paths field
-	cfg, err := config.LoadWithPaths(tmpDir, []byte(pathsJSON))
-	require.NoError(t, err)
-
-	// Override with our test directories
-	cfg.RuntimeDir = runtimeDir
-	cfg.PKIDir = pkiDir
-	cfg.SecretsDir = secretsDir
-	cfg.CredentialsDir = credentialsDir
-
-	return cfg
 }
 
 // generateTestCertificate creates a test X.509 certificate for testing purposes
