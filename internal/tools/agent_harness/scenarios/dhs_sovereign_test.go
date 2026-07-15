@@ -105,6 +105,7 @@ func TestDHSScenarioPersonas(t *testing.T) {
 	}
 	if releaseScenario == nil {
 		t.Fatal("dhs-release scenario not found")
+		return
 	}
 	if releaseScenario.Persona.ID != "dhs-release-authority" {
 		t.Errorf("dhs-release should use persona 'dhs-release-authority', got %q", releaseScenario.Persona.ID)

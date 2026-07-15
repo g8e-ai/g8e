@@ -142,7 +142,7 @@ help:
 	@echo "  ci-platform   Run platform-only CI (operator, protocol, proto, docs)"
 	@echo ""
 	@echo "Release:"
-	@echo "  release          Sync version, run tests, build binaries (no git ops)"
+	@echo "  release          Sync version, run lint, run tests, build binaries (no git ops)"
 	@echo "  release-tag      Tag & push v<VERSION> + protocol/v<VERSION> (Python release trigger)"
 	@echo ""
 	@echo "Protocol Generation:"
@@ -691,6 +691,9 @@ release:
 	else \
 		echo "  __init__.py already in sync."; \
 	fi; \
+	echo "Running lint..."; \
+	$(MAKE) lint; \
+	echo "  lint passed."; \
 	echo "Running full test suite..."; \
 	$(MAKE) test; \
 	echo "  full test suite passed."; \
