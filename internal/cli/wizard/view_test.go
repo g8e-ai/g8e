@@ -42,13 +42,6 @@ func TestView_RoutingStep_Renders(t *testing.T) {
 	assert.Contains(t, s, "Agent Tooling & Routing")
 }
 
-func TestView_VaultStep_Renders(t *testing.T) {
-	m := NewModel(Options{})
-	m.step = StepVault
-	s := m.View()
-	assert.Contains(t, s, "Vault Strictness")
-}
-
 func TestView_ReviewStep_Renders(t *testing.T) {
 	m := NewModel(Options{
 		InitialConfig: Config{

@@ -181,20 +181,6 @@ func TestNewModel_PostureChoiceNotaryFromConfig(t *testing.T) {
 	assert.Equal(t, 2, m.postureChoice)
 }
 
-// --- NewModel: vault from config ---
-
-func TestNewModel_VaultRequireUnlockFromConfig(t *testing.T) {
-	m := NewModel(Options{
-		InitialConfig: Config{VaultRequireUnlock: true},
-	})
-	assert.True(t, m.vaultRequireUnlock)
-}
-
-func TestNewModel_VaultRequireUnlockDefaultFalse(t *testing.T) {
-	m := NewModel(Options{})
-	assert.False(t, m.vaultRequireUnlock)
-}
-
 // --- NewModel: toggle initialization from config (Bug #5) ---
 
 func TestNewModel_TogglesInitializedFromConfig(t *testing.T) {
@@ -269,7 +255,6 @@ func TestResult_DefaultValues(t *testing.T) {
 	cfg := result.Config
 	assert.Equal(t, "doctrine", cfg.Posture)
 	assert.Equal(t, "localhost", cfg.CertIdentityMode)
-	assert.False(t, cfg.VaultRequireUnlock)
 }
 
 func TestResult_PasskeyOriginStoresExactValue(t *testing.T) {

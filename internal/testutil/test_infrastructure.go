@@ -111,7 +111,6 @@ func NewTestConfig(t *testing.T) *config.Config {
 		SecretsDir:                  secretsDir,
 		VaultDir:                    filepath.Join(workDir, constants.RuntimeDirname, constants.VaultDirname),
 		VaultKeyPath:                filepath.Join(workDir, constants.RuntimeDirname, constants.VaultDirname, constants.VaultKeyFilename),
-		VaultRequireUnlock:          false,
 		ExecutionVaultEnabled:       true,
 		ExecutionVaultMaxSizeMB:     1024,
 		ExecutionVaultRetentionDays: 30,

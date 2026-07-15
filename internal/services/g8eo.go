@@ -162,7 +162,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		testMode = true
 		testKs = vs.testKeystore
 	}
-	gatewayDB, err := gateway.OpenCanonicalDBService(dataDir, vs.config.VaultDir, vs.logger, testMode, vaultKeyPath, vs.config.VaultRequireUnlock, testKs, vs.fileSvc)
+	gatewayDB, err := gateway.OpenCanonicalDBService(dataDir, vs.config.VaultDir, vs.logger, testMode, vaultKeyPath, testKs, vs.fileSvc)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrGatewayDatabaseServiceNotConfigured, err)
 	}

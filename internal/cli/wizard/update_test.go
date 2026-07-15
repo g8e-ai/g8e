@@ -98,20 +98,9 @@ func TestUpdate_EnterFromPosture_AdvancesToRouting(t *testing.T) {
 	assert.Equal(t, StepRouting, m2.(Model).step)
 }
 
-func TestUpdate_EnterFromRouting_AdvancesToVault(t *testing.T) {
+func TestUpdate_EnterFromRouting_AdvancesToReview(t *testing.T) {
 	m := NewModel(Options{})
 	m.step = StepRouting
-	m2, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if cmd != nil {
-		msg := cmd()
-		m2, _ = m2.Update(msg)
-	}
-	assert.Equal(t, StepVault, m2.(Model).step)
-}
-
-func TestUpdate_EnterFromVault_AdvancesToReview(t *testing.T) {
-	m := NewModel(Options{})
-	m.step = StepVault
 	m2, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd != nil {
 		msg := cmd()
@@ -352,24 +341,6 @@ func TestHandleDown_RouteToA2A_TogglesOff(t *testing.T) {
 	assert.False(t, m2.(Model).routeToA2A)
 }
 
-// --- handleUp/handleDown: vault toggle ---
-
-func TestHandleUp_VaultToggle_TogglesOn(t *testing.T) {
-	m := NewModel(Options{})
-	m.step = StepVault
-	assert.False(t, m.vaultRequireUnlock)
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
-	assert.True(t, m2.(Model).vaultRequireUnlock)
-}
-
-func TestHandleDown_VaultToggle_TogglesOff(t *testing.T) {
-	m := NewModel(Options{})
-	m.step = StepVault
-	m.vaultRequireUnlock = true
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
-	assert.False(t, m2.(Model).vaultRequireUnlock)
-}
-
 // --- handleTab: focus wrapping (Bug #6) ---
 
 func TestHandleTab_NetworkStep_WrapsAtMaxWithoutWebFrontend(t *testing.T) {
@@ -492,12 +463,6 @@ func TestStepFocusMax_RoutingWithA2A(t *testing.T) {
 	m.step = StepRouting
 	m.routeToA2A = true
 	assert.Equal(t, 3, m.stepFocusMax())
-}
-
-func TestStepFocusMax_Vault(t *testing.T) {
-	m := NewModel(Options{})
-	m.step = StepVault
-	assert.Equal(t, 0, m.stepFocusMax())
 }
 
 func TestStepFocusMax_Review(t *testing.T) {

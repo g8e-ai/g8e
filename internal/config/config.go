@@ -92,7 +92,6 @@ type GatewayConfig struct {
 	SecretsDir         string         // Directory for platform secrets (default: .g8e/secrets)
 	VaultDir           string         // Directory for encryption vault (default: .g8e/vault)
 	VaultKeyPath       string         // Path to vault key file (default: .g8e/vault/key)
-	VaultRequireUnlock bool           // Require vault to be unlocked before starting (default: true)
 	PasskeyRpID        string         // RP ID for passkey operations (default: localhost)
 	PasskeyRpName      string         // RP Name for passkey operations (default: g8e)
 	PasskeyRpOrigins   []string       // Additional RP origins for passkey operations (e.g. demo remapped ports)
@@ -182,7 +181,6 @@ type Config struct {
 	// Vault configuration for encryption at rest
 	VaultDir           string // Directory for encryption vault (default: .g8e/vault)
 	VaultKeyPath       string // Path to vault key file (default: .g8e/vault/key)
-	VaultRequireUnlock bool   // Require vault to be unlocked before starting (default: true)
 
 	// Execution vault configuration. All paths are relative to WorkDir - the directory the Operator was launched from.
 	ExecutionVaultEnabled       bool
@@ -227,7 +225,6 @@ type GatewayOptions struct {
 	SecretsDir         string
 	VaultDir           string
 	VaultKeyPath       string
-	VaultRequireUnlock bool
 	PasskeyRpID        string
 	PasskeyRpName      string
 	PasskeyRpOrigins   []string
@@ -440,7 +437,6 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			SecretsDir:         secretsDir,
 			VaultDir:           vaultDir,
 			VaultKeyPath:       vaultKeyPath,
-			VaultRequireUnlock: opts.VaultRequireUnlock,
 			PasskeyRpID:        passkeyRpID,
 			PasskeyRpName:      passkeyRpName,
 			PasskeyRpOrigins:   opts.PasskeyRpOrigins,
@@ -573,10 +569,6 @@ func Load(opts LoadOptions) (*Config, error) {
 	if cfg.VaultKeyPath == "" {
 		cfg.VaultKeyPath = paths.Infra.VaultKeyPath
 	}
-
-	// Default VaultRequireUnlock to false (matches CLI flag default)
-	// Gateway can start with vault locked; vault key is optional
-	cfg.VaultRequireUnlock = false
 
 	// Read operator session ID from environment variable (in-memory only, never persisted)
 	// This is set by the deploy script after enrollment to track the operator's session

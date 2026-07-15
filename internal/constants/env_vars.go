@@ -23,7 +23,6 @@ var EnvVar = struct {
 	TribunalBootstrap  EnvVarKey
 	VaultDir           EnvVarKey
 	VaultKey           EnvVarKey
-	VaultRequireUnlock EnvVarKey
 	OperatorSessionID  EnvVarKey
 	PasskeyRpID        EnvVarKey
 	PasskeyRpName      EnvVarKey
@@ -40,7 +39,6 @@ var EnvVar = struct {
 	TribunalBootstrap:  EnvVarKey("G8E_TRIBUNAL_BOOTSTRAP"),
 	VaultDir:           EnvVarKey("G8E_VAULT_DIR"),
 	VaultKey:           EnvVarKey("G8E_VAULT_KEY"),
-	VaultRequireUnlock: EnvVarKey("G8E_VAULT_REQUIRE_UNLOCK"),
 	OperatorSessionID:  EnvVarKey("G8E_OPERATOR_SESSION_ID"),
 	PasskeyRpID:        EnvVarKey("G8E_PASSKEY_RP_ID"),
 	PasskeyRpName:      EnvVarKey("G8E_PASSKEY_RP_NAME"),

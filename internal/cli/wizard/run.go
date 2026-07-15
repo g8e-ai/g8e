@@ -35,7 +35,6 @@ type Config struct {
 	PasskeyRpOrigins   []string
 	MCPDownstreamURL   string
 	A2ADownstreamURL   string
-	VaultRequireUnlock bool
 }
 
 // Options configures the wizard at launch.

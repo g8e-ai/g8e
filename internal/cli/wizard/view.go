@@ -31,8 +31,6 @@ func (m Model) View() string {
 		return m.viewPosture()
 	case StepRouting:
 		return m.viewRouting()
-	case StepVault:
-		return m.viewVault()
 	case StepReview:
 		return m.viewReview()
 	default:
@@ -193,27 +191,6 @@ func (m Model) viewRouting() string {
 	return borderStyle.Render(b.String())
 }
 
-func (m Model) viewVault() string {
-	var b strings.Builder
-	b.WriteString(m.renderHeader())
-	b.WriteString("\n")
-
-	b.WriteString("Should the gateway refuse to start if the secure vault cannot be unlocked?\n\n")
-	b.WriteString(renderToggle("Vault Strict Mode", m.vaultRequireUnlock, true))
-	b.WriteString("\n\n")
-	b.WriteString(mutedStyle.Render("Fail startup if the configured vault key cannot be read or used."))
-	b.WriteString("\n")
-	b.WriteString(mutedStyle.Render("This does not initialize a vault or create a key."))
-	b.WriteString("\n")
-	b.WriteString(mutedStyle.Render("Configure or initialize the vault before enabling this option."))
-
-	b.WriteString(m.renderValidationError())
-	b.WriteString("\n")
-	b.WriteString(m.renderFooter())
-
-	return borderStyle.Render(b.String())
-}
-
 func (m Model) viewReview() string {
 	var b strings.Builder
 	b.WriteString(m.renderHeader())
@@ -236,7 +213,6 @@ func (m Model) viewReview() string {
 		{"Passkey RP Origins", joinOrNone(cfg.PasskeyRpOrigins)},
 		{"MCP Downstream", orNone(cfg.MCPDownstreamURL)},
 		{"A2A Downstream", orNone(cfg.A2ADownstreamURL)},
-		{"Vault Strict", yesNo(cfg.VaultRequireUnlock)},
 	}
 
 	for _, row := range rows {

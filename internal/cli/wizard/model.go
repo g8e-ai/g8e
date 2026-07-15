@@ -49,10 +49,7 @@ type Model struct {
 	routeToA2A         bool
 	a2aDownstreamInput textinput.Model
 
-	// Step 4: Vault
-	vaultRequireUnlock bool
-
-	// Step 5: Review
+	// Step 4: Review
 	reviewConfirmed bool
 
 	// Validation
@@ -127,8 +124,6 @@ func NewModel(opts Options) Model {
 		m.postureChoice = 0
 	}
 
-	m.vaultRequireUnlock = opts.InitialConfig.VaultRequireUnlock
-
 	// Initialize toggles from initial config so pre-filled inputs are visible
 	m.routeToMCP = opts.InitialConfig.MCPDownstreamURL != ""
 	m.routeToA2A = opts.InitialConfig.A2ADownstreamURL != ""
@@ -196,9 +191,6 @@ func (m Model) result() Result {
 	} else {
 		cfg.A2ADownstreamURL = ""
 	}
-
-	// Step 4: Vault
-	cfg.VaultRequireUnlock = m.vaultRequireUnlock
 
 	return Result{Config: cfg}
 }

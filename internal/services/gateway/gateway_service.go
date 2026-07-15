@@ -136,7 +136,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	db := b.preBuiltDB
 	if db == nil {
 		var err error
-		db, err = OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.VaultDir, logger, false, cfg.Gateway.VaultKeyPath, cfg.Gateway.VaultRequireUnlock, nil, b.fileSvc)
+		db, err = OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.VaultDir, logger, false, cfg.Gateway.VaultKeyPath, nil, b.fileSvc)
 		if err != nil {
 			return nil, fmt.Errorf("gateway: failed to initialize database: %w", err)
 		}

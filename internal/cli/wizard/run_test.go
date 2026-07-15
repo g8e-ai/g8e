@@ -80,7 +80,6 @@ func TestConfig_ZeroValue(t *testing.T) {
 	assert.Empty(t, c.CertIdentityMode)
 	assert.Nil(t, c.AllowedOrigins)
 	assert.Empty(t, c.Posture)
-	assert.False(t, c.VaultRequireUnlock)
 }
 
 // --- Options type ---
@@ -122,26 +121,19 @@ func TestRun_FullStepThrough(t *testing.T) {
 	m3, _ = m3.Update(msg2)
 	assert.Equal(t, StepRouting, m3.(Model).step)
 
-	// Step 3: Routing -> Vault
+	// Step 3: Routing -> Review
 	m4, cmd3 := m3.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	require.NotNil(t, cmd3)
 	msg3 := cmd3()
 	m4, _ = m4.Update(msg3)
-	assert.Equal(t, StepVault, m4.(Model).step)
+	assert.Equal(t, StepReview, m4.(Model).step)
 
-	// Step 4: Vault -> Review
+	// Step 4: Review -> Done (quit)
 	m5, cmd4 := m4.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	require.NotNil(t, cmd4)
-	msg4 := cmd4()
-	m5, _ = m5.Update(msg4)
-	assert.Equal(t, StepReview, m5.(Model).step)
+	assert.True(t, m5.(Model).reviewConfirmed)
+	assert.NotNil(t, cmd4)
 
-	// Step 5: Review -> Done (quit)
-	m6, cmd5 := m5.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	assert.True(t, m6.(Model).reviewConfirmed)
-	assert.NotNil(t, cmd5)
-
-	result := m6.(Model).result()
+	result := m5.(Model).result()
 	assert.False(t, result.Cancel)
 	assert.Equal(t, "https://demo.g8e.ai", result.Config.PublicBaseURL)
 }

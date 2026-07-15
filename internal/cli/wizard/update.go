@@ -101,9 +101,6 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 		}
 		return m, func() tea.Msg { return stepTransitionMsg{to: nextStep(StepRouting)} }
 
-	case StepVault:
-		return m, func() tea.Msg { return stepTransitionMsg{to: nextStep(StepVault)} }
-
 	case StepReview:
 		m.reviewConfirmed = true
 		return m, tea.Quit
@@ -140,8 +137,6 @@ func (m Model) handleUp() (tea.Model, tea.Cmd) {
 		case 2:
 			m.routeToA2A = !m.routeToA2A
 		}
-	case StepVault:
-		m.vaultRequireUnlock = !m.vaultRequireUnlock
 	}
 	return m, nil
 }
@@ -171,8 +166,6 @@ func (m Model) handleDown() (tea.Model, tea.Cmd) {
 		case 2:
 			m.routeToA2A = !m.routeToA2A
 		}
-	case StepVault:
-		m.vaultRequireUnlock = !m.vaultRequireUnlock
 	}
 	return m, nil
 }

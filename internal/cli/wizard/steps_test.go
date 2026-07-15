@@ -29,12 +29,8 @@ func TestNextStep_PostureToRouting(t *testing.T) {
 	assert.Equal(t, StepRouting, nextStep(StepPosture))
 }
 
-func TestNextStep_RoutingToVault(t *testing.T) {
-	assert.Equal(t, StepVault, nextStep(StepRouting))
-}
-
-func TestNextStep_VaultToReview(t *testing.T) {
-	assert.Equal(t, StepReview, nextStep(StepVault))
+func TestNextStep_RoutingToReview(t *testing.T) {
+	assert.Equal(t, StepReview, nextStep(StepRouting))
 }
 
 func TestNextStep_ReviewToDone(t *testing.T) {
@@ -59,12 +55,8 @@ func TestPrevStep_RoutingToPosture(t *testing.T) {
 	assert.Equal(t, StepPosture, prevStep(StepRouting))
 }
 
-func TestPrevStep_VaultToRouting(t *testing.T) {
-	assert.Equal(t, StepRouting, prevStep(StepVault))
-}
-
-func TestPrevStep_ReviewToVault(t *testing.T) {
-	assert.Equal(t, StepVault, prevStep(StepReview))
+func TestPrevStep_ReviewToRouting(t *testing.T) {
+	assert.Equal(t, StepRouting, prevStep(StepReview))
 }
 
 // --- stepNumber ---
@@ -81,12 +73,8 @@ func TestStepNumber_RoutingIsThree(t *testing.T) {
 	assert.Equal(t, 3, stepNumber(StepRouting))
 }
 
-func TestStepNumber_VaultIsFour(t *testing.T) {
-	assert.Equal(t, 4, stepNumber(StepVault))
-}
-
-func TestStepNumber_ReviewIsFive(t *testing.T) {
-	assert.Equal(t, 5, stepNumber(StepReview))
+func TestStepNumber_ReviewIsFour(t *testing.T) {
+	assert.Equal(t, 4, stepNumber(StepReview))
 }
 
 func TestStepNumber_DoneIsZero(t *testing.T) {
@@ -119,11 +107,6 @@ func TestStepDefs_RoutingTitle(t *testing.T) {
 	assert.Equal(t, "Agent Tooling & Routing", def.title)
 }
 
-func TestStepDefs_VaultTitle(t *testing.T) {
-	def := stepDefs[StepVault]
-	assert.Equal(t, "Vault Strictness", def.title)
-}
-
 func TestStepDefs_ReviewTitle(t *testing.T) {
 	def := stepDefs[StepReview]
 	assert.Equal(t, "Review & Confirm", def.title)
@@ -132,12 +115,11 @@ func TestStepDefs_ReviewTitle(t *testing.T) {
 // --- stepOrder ---
 
 func TestStepOrder_Sequence(t *testing.T) {
-	assert.Equal(t, 5, len(stepOrder))
+	assert.Equal(t, 4, len(stepOrder))
 	assert.Equal(t, StepNetwork, stepOrder[0])
 	assert.Equal(t, StepPosture, stepOrder[1])
 	assert.Equal(t, StepRouting, stepOrder[2])
-	assert.Equal(t, StepVault, stepOrder[3])
-	assert.Equal(t, StepReview, stepOrder[4])
+	assert.Equal(t, StepReview, stepOrder[3])
 }
 
 func TestStepOrder_ExcludesDone(t *testing.T) {

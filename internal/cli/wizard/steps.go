@@ -20,8 +20,7 @@ const (
 	StepNetwork Step = iota // Step 1: Network & Identity
 	StepPosture             // Step 2: Security & Governance Posture
 	StepRouting             // Step 3: Agent Tooling & Routing
-	StepVault               // Step 4: Vault Strictness
-	StepReview              // Step 5: Review & Confirm
+	StepReview              // Step 4: Review & Confirm
 	StepDone                // Wizard complete
 )
 
@@ -35,7 +34,6 @@ var stepOrder = []Step{
 	StepNetwork,
 	StepPosture,
 	StepRouting,
-	StepVault,
 	StepReview,
 }
 
@@ -43,7 +41,6 @@ var stepDefs = map[Step]stepDef{
 	StepNetwork: {StepNetwork, "Network & Identity", "Configure how operators and clients reach this gateway."},
 	StepPosture: {StepPosture, "Security & Governance Posture", "Select the enforcement level for governance signatures."},
 	StepRouting: {StepRouting, "Agent Tooling & Routing", "Route gateway traffic to downstream MCP or A2A servers."},
-	StepVault:   {StepVault, "Vault Strictness", "Control whether the gateway fails closed without a vault key."},
 	StepReview:  {StepReview, "Review & Confirm", "Verify all settings before starting the gateway."},
 }
 

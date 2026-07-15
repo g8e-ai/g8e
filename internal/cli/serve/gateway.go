@@ -54,7 +54,6 @@ type GatewayConfig struct {
 	SecretsDir          string
 	VaultDir            string
 	VaultKeyPath        string
-	VaultRequireUnlock  bool
 	PasskeyRpID         string
 	PasskeyRpName       string
 	PasskeyRpOrigins    []string
@@ -135,7 +134,6 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		SecretsDir:          cfg.SecretsDir,
 		VaultDir:            cfg.VaultDir,
 		VaultKeyPath:        cfg.VaultKeyPath,
-		VaultRequireUnlock:  cfg.VaultRequireUnlock,
 		PasskeyRpID:         cfg.PasskeyRpID,
 		PasskeyRpName:       cfg.PasskeyRpName,
 		PasskeyRpOrigins:    cfg.PasskeyRpOrigins,

@@ -91,9 +91,8 @@ type CanonicalDBService struct {
 // OpenCanonicalDBService opens (or creates) the unified SQLite database.
 // testMode enables the in-memory keystore keyring for unit tests.
 // vaultKeyPath is the path to the vault private key file (hex-encoded).
-// vaultRequireUnlock requires the vault to be unlocked before starting.
 // testKeystore is an optional keystore instance for test mode (prevents race conditions in parallel tests).
-func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger, testMode bool, vaultKeyPath string, vaultRequireUnlock bool, testKeystore *keystore.Keystore, fileSvc fs.RuntimeFileService) (*CanonicalDBService, error) {
+func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger, testMode bool, vaultKeyPath string, testKeystore *keystore.Keystore, fileSvc fs.RuntimeFileService) (*CanonicalDBService, error) {
 	dbPath := filepath.Join(dataDir, constants.DbFilename)
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 
@@ -113,45 +112,35 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	}
 
 	// Unlock vault before initializing storage services
-	// Encryption is required for secure data storage at rest
-	if vaultKeyPath == "" && vaultRequireUnlock {
+	// Encryption is required for secure data storage at rest — the vault must
+	// always be unlocked at startup. If the key cannot be read or the vault
+	// cannot be unlocked, the gateway fails to start.
+	if vaultKeyPath == "" {
 		vaultKeyPath = filepath.Join(vaultDir, constants.VaultKeyFilename)
 	}
 
-	if vaultKeyPath != "" {
-		if !filepath.IsAbs(vaultKeyPath) {
-			vaultKeyPath = filepath.Join(dataDir, vaultKeyPath)
-		}
-
-		privateKey, err := vault.ReadVaultKey(vaultKeyPath)
-		if err != nil {
-			if vaultRequireUnlock {
-				db.Close()
-				return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyReadFailed, err)
-			}
-			logger.Info("Vault key not found, vault will remain locked", "path", vaultKeyPath, "error", err)
-		} else {
-			defer vault.SecureZero(privateKey)
-
-			if err := encryptionVault.Unlock(privateKey); err != nil {
-				if vaultRequireUnlock {
-					db.Close()
-					if errors.Is(err, constants.ErrVaultNotInitialized) {
-						return nil, fmt.Errorf("%w: %s", constants.ErrVaultNotInitialized, vaultDir)
-					}
-					if errors.Is(err, constants.ErrVaultInvalidPrivateKey) {
-						return nil, fmt.Errorf("%w: %s", constants.ErrVaultKeyDecodeFailed, vaultKeyPath)
-					}
-					return nil, fmt.Errorf("%w: %w", constants.ErrVaultUnlockFailed, err)
-				}
-				logger.Info("Failed to unlock vault, vault will remain locked", "error", err)
-			} else {
-				logger.Info("Vault unlocked successfully", "vault_dir", vaultDir)
-			}
-		}
-	} else {
-		logger.Info("No vault key provided, vault will remain locked")
+	if !filepath.IsAbs(vaultKeyPath) {
+		vaultKeyPath = filepath.Join(dataDir, vaultKeyPath)
 	}
+
+	privateKey, err := vault.ReadVaultKey(vaultKeyPath)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyReadFailed, err)
+	}
+	defer vault.SecureZero(privateKey)
+
+	if err := encryptionVault.Unlock(privateKey); err != nil {
+		db.Close()
+		if errors.Is(err, constants.ErrVaultNotInitialized) {
+			return nil, fmt.Errorf("%w: %s", constants.ErrVaultNotInitialized, vaultDir)
+		}
+		if errors.Is(err, constants.ErrVaultInvalidPrivateKey) {
+			return nil, fmt.Errorf("%w: %s", constants.ErrVaultKeyDecodeFailed, vaultKeyPath)
+		}
+		return nil, fmt.Errorf("%w: %w", constants.ErrVaultUnlockFailed, err)
+	}
+	logger.Info("Vault unlocked successfully", "vault_dir", vaultDir)
 
 	// Initialize SQLAuditStore for transaction-native audit recording
 	auditStoreConfig := storage.DefaultAuditStoreConfig()
