@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Gateway
 
-Last Updated: 2026-07-14
-Version: v1.5.1
+Last Updated: 2026-07-15
+Version: v1.5.2
 
 ---
 
@@ -126,7 +126,6 @@ To start the gateway, use the CLI gateway command:
 - `--secrets-dir <dir>` - Directory for platform secrets (default: .g8e/secrets)
 - `--vault-dir <dir>` - Directory for vault data (default: .g8e/vault)
 - `--vault-key <path>` - Path to vault private key (default: .g8e/secrets/key)
-- `--vault-require-unlock` - Require vault to be unlocked at startup (fail if vault cannot be unlocked)
 - `--passkey-rp-id <id>` - RP ID for passkey operations (default: localhost)
 - `--passkey-rp-name <name>` - RP Name for passkey operations (default: g8e)
 - `--passkey-rp-origin <origin>` - Additional RP origin for passkey operations (repeatable, e.g. http://localhost:8087)

@@ -12,12 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Description | Notes |
 |---------|------|-------------|-------|
-| — | — | Gateway onboarding wizard and vault/rate-limit propagation fix. Adds `--interactive`/`-i` flag to `g8e gw start` launching a Bubble Tea TUI wizard (`internal/cli/wizard/`) with 5-step configuration flow (Network, Posture, Routing, Vault, Review). Adds `charmbracelet/bubbles v0.20.0` dependency. Fixes vault and rate-limit settings propagation through `serve.RunGateway()` → `config.GatewayOptions` → `config.LoadGateway()` (previously hard-coded). | — |
+| — | — | — | — |
 
 ## v1.5.x
 
 | Version | Date | Description | Notes |
 |---------|------|-------------|-------|
+| 1.5.2 | 2026-07-15 | Onboarding wizard, HTTPS port split fix, and test mode cleanup. Adds `--interactive`/`-i` flag to `g8e gw start` launching a Bubble Tea TUI wizard with 4-step configuration flow. Splits `--endpoint`/`--port` into independent HTTP discovery and HTTPS/mTLS overrides to fix auth re-enroll in Docker demos. Removes `VaultRequireUnlock` config and `testMode` from gateway service builder. Moves `internal/netutil` to `internal/services/network`. Fixes vault and rate-limit settings propagation through `GatewayOptions`. Adds `gui_enrollment.md` guide. Fixes cosign binary signing CI permissions. | [v1.5.2](docs/release_notes/v1.5.x/v1.5.2.md) |
 | 1.5.1 | 2026-07-14 | File service abstraction and internal refactoring. Introduces `RuntimeFileService` (`internal/services/fs`) to replace direct `os.*` calls across gateway, keystore, PKI, secret manager, and CLI. Refactors `SecretManager` and `Keystore` constructors to accept `RuntimeFileService`. Removes duplicate GitHub Release step from Python protocol workflow. Bumps `golang.org/x/crypto`, `golang.org/x/sys`, and `pkg/sftp` dependencies. | [v1.5.1](docs/release_notes/v1.5.x/v1.5.1.md) |
 | 1.5.0 | 2026-07-13 | Go protocol module merge, CI modernization, and protocol updates. Merges the separate `github.com/g8e-ai/g8e/protocol` Go module into the root module. Renames `OperatorIntent*` events to `OperatorNotary*`, changes timestamp format to fixed microsecond precision, adds new CLI flags (`--tribunal-bootstrap`, `--public-base-url`, `--cors-origin`, `--passkey-rp-*`), changes MCP gateway tool discovery to proxied passthrough, adds cross-OS CI matrix (ubuntu/macOS/Windows) with cross-platform test compatibility fixes, Python pytest suite (94 tests), protocol conformance suite (151 tests), Go performance benchmarks (13 benchmarks), smoke test scripts, gitleaks secret scanning, go-licenses license compliance, cosign/sigstore artifact signing, fresh-install verification jobs, pip-audit dependency scanning, and py.typed PEP 561 marker. | [v1.5.0](docs/release_notes/v1.5.x/v1.5.0.md) |
 

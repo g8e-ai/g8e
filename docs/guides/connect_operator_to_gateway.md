@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-07-14
-Version: v1.5.1
+Last Updated: 2026-07-15
+Version: v1.5.2
 
 ---
 
@@ -310,7 +310,7 @@ For custom g8e-compatible implementations, the gateway follows the same operatio
 Custom operators should support configuration via:
 - CLI flags for runtime parameters (gateway URL, paths)
 - Configuration files for complex deployments
-- Environment variables for vault settings (G8E_VAULT_DIR, G8E_VAULT_KEY, G8E_VAULT_REQUIRE_UNLOCK)
+- Environment variables for vault settings (G8E_VAULT_DIR, G8E_VAULT_KEY)
 
 ### High Availability
 

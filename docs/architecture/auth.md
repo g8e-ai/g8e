@@ -288,11 +288,11 @@ Vault operations are managed via CLI commands:
 **Configuration:**
 
 Vault paths can be configured via:
-- CLI flags: `--vault-dir`, `--vault-key`, `--vault-require-unlock`
-- Environment variables: `G8E_VAULT_DIR`, `G8E_VAULT_KEY`, `G8E_VAULT_REQUIRE_UNLOCK`
+- CLI flags: `--vault-dir`, `--vault-key`
+- Environment variables: `G8E_VAULT_DIR`, `G8E_VAULT_KEY`
 - Default paths: `.g8e/vault/` for vault data, `.g8e/secrets/key` for the vault key
 
-When `--vault-require-unlock` is set, the gateway fails to start if the vault cannot be unlocked with the provided key. This enforces mandatory encryption at rest for production deployments.
+The vault key is optional. If provided, the gateway uses it to decrypt the vault at startup. If the key is missing or invalid, the gateway starts but storage services fail closed on first use.
 
 ---
 

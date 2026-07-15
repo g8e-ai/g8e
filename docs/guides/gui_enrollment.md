@@ -6,7 +6,7 @@ parent: Guides
 # GUI Frontend Enrollment
 
 Last Updated: 2026-07-15
-Version: v1.5.1
+Version: v1.5.2
 
 ---
 
