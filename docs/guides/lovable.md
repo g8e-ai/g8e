@@ -5,8 +5,8 @@ parent: Guides
 
 # Lovable Frontend Integration
 
-Last Updated: 2026-07-13
-Version: v1.5.0
+Last Updated: 2026-07-14
+Version: v1.5.1
 
 ---
 
@@ -102,7 +102,7 @@ This command:
 2. Sends a CORS preflight to the running gateway to verify the origin is allowed
 3. Verifies the gateway is reachable at the `--public-base-url` (if provided)
 4. Persists the origin to the local enrollment file (`.g8e/gui_enrollments.json`)
-5. Outputs a TypeScript configuration snippet with `API_BASE_URL`, `PASSKEY_RP_ID`, `apiFetch()` helper, `connectSSE()` helper, and key endpoint paths
+5. Outputs a TypeScript configuration snippet with `API_BASE_URL`, `PASSKEY_RP_ID`, `PASSKEY_RP_NAME`, `apiFetch()` helper, `connectSSE()` helper, and key endpoint paths
 
 Copy the outputted snippet into the Lovable project as the starting point for API integration.
 

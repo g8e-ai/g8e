@@ -5,7 +5,7 @@ parent: Guides
 
 # Build a g8e Gateway
 
-Last Updated: 2026-07-13
+Last Updated: 2026-07-14
 Version: v1.5.1
 
 ---
@@ -119,7 +119,7 @@ To start the gateway, use the CLI gateway command:
 ### Gateway Mode Flags
 
 - `--posture <mode>` - g8e Gateway posture: doctrine (L1 enforced, L2/L3 audited, default), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)
-- `--http-port <port>` - Plain HTTP port for bootstrap and MCP routes (default: 8080)
+- `--http-port <port>` - Plain HTTP port for bootstrap, health checks, and PKI discovery (default: 8080)
 - `--https-port <port>` - HTTPS port for mTLS API and public surface (default: 8443)
 - `--data-dir <dir>` - Data directory for SQLite database (default: .g8e/data in working directory)
 - `--pki-dir <dir>` - Directory for TLS certificates (default: .g8e/pki)
