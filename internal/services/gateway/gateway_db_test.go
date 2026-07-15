@@ -62,7 +62,7 @@ func TestCanonicalDBService_GetDB(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(dataDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
+	db, err := OpenCanonicalDBService(dataDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -75,7 +75,7 @@ func TestCanonicalDBService_Wait(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(dataDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
+	db, err := OpenCanonicalDBService(dataDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", ks, fileSvc)
 	require.NoError(t, err)
 
 	// Close the database to stop background workers
@@ -91,7 +91,7 @@ func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(dataDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
+	db, err := OpenCanonicalDBService(dataDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -119,7 +119,7 @@ func newTestDB(t *testing.T) *CanonicalDBService {
 	fileSvc := newTestFileSvc(t)
 	logger := testutil.NewTestLogger()
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(dir, filepath.Join(dir, "vault"), logger, true, "", false, ks, fileSvc)
+	db, err := OpenCanonicalDBService(dir, filepath.Join(dir, "vault"), logger, true, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	return db
@@ -314,7 +314,7 @@ func TestCreateDataDir(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(dir, filepath.Join(dir, "vault"), logger, true, "", false, ks, fileSvc)
+	db, err := OpenCanonicalDBService(dir, filepath.Join(dir, "vault"), logger, true, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

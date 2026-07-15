@@ -669,8 +669,8 @@ func TestGatewayConfigToOptions_VaultFieldsPreservedInConfigOnly(t *testing.T) {
 		VaultDir:      constants.TestPathShortVault,
 		VaultKeyPath:  constants.TestPathShortVaultKey,
 		DataDir:       constants.TestPathShortData,
-		PKIDir:             constants.TestPathShortPKI,
-		SecretsDir:         constants.TestPathShortSecrets,
+		PKIDir:       constants.TestPathShortPKI,
+		SecretsDir:   constants.TestPathShortSecrets,
 	}
 
 	opts := gatewayConfigToOptions(cfg)

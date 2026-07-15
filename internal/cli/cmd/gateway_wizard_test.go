@@ -92,9 +92,8 @@ func TestGatewayStartCmd_InteractivePreservesExplicitFlags(t *testing.T) {
 		capturedOpts = opts
 		return wizard.Result{
 			Config: wizard.Config{
-				Posture:            "consensus",
-				PublicBaseURL:      "https://demo.g8e.ai",
-				VaultRequireUnlock: true,
+				Posture:       "consensus",
+				PublicBaseURL: "https://demo.g8e.ai",
 			},
 		}, nil
 	}

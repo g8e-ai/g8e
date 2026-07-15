@@ -228,7 +228,6 @@ func TestResult_AllFieldsPopulated(t *testing.T) {
 			PasskeyRpOrigins:   []string{"https://demo.g8e.ai"},
 			MCPDownstreamURL:   "http://mcp:3000",
 			A2ADownstreamURL:   "http://a2a:3001",
-			VaultRequireUnlock: true,
 		},
 	})
 
@@ -246,7 +245,6 @@ func TestResult_AllFieldsPopulated(t *testing.T) {
 	assert.Equal(t, "g8e", cfg.PasskeyRpName)
 	assert.Equal(t, "http://mcp:3000", cfg.MCPDownstreamURL)
 	assert.Equal(t, "http://a2a:3001", cfg.A2ADownstreamURL)
-	assert.True(t, cfg.VaultRequireUnlock)
 }
 
 func TestResult_DefaultValues(t *testing.T) {

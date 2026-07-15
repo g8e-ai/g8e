@@ -59,7 +59,6 @@ func TestBuildReExecArgs(t *testing.T) {
 					SecretsDir:         "/secrets",
 					VaultDir:           "/vault",
 					VaultKeyPath:       "/vault/key",
-					VaultRequireUnlock: true,
 					CertIdentityMode:   "spiffe",
 					TribunalID:         "trib-1",
 					TribunalURL:        "https://trib:8443",
@@ -78,8 +77,6 @@ func TestBuildReExecArgs(t *testing.T) {
 			wantSubstrs: []string{
 				"--vault-dir /vault",
 				"--vault-key /vault/key",
-				"--vault-require-unlock",
-				"--cert-mode spiffe",
 				"--tribunal-id trib-1",
 				"--tribunal-url https://trib:8443",
 				"--tribunal-bootstrap bootstrap-data",

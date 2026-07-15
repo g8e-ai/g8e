@@ -103,11 +103,6 @@ func TestGatewayStartCmd(t *testing.T) {
 		assert.NotNil(t, vaultKeyFlag, "vault-key flag should exist")
 		assert.Equal(t, "", vaultKeyFlag.DefValue)
 
-		// Verify vault unlock flag
-		vaultRequireUnlockFlag := flags.Lookup("vault-require-unlock")
-		assert.NotNil(t, vaultRequireUnlockFlag, "vault-require-unlock flag should exist")
-		assert.Equal(t, "false", vaultRequireUnlockFlag.DefValue)
-
 		// Verify passkey flags
 		passkeyRpIDFlag := flags.Lookup("passkey-rp-id")
 		assert.NotNil(t, passkeyRpIDFlag, "passkey-rp-id flag should exist")

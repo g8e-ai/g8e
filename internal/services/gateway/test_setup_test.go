@@ -84,7 +84,7 @@ func newTestKeystore(tb testing.TB, fileSvc fs.RuntimeFileService, logger *slog.
 func openTestDB(t *testing.T, dataDir, vaultDir string, fileSvc fs.RuntimeFileService, logger *slog.Logger) (*CanonicalDBService, error) {
 	t.Helper()
 	ks := newTestKeystore(t, fileSvc, logger)
-	return OpenCanonicalDBService(dataDir, vaultDir, logger, true, "", false, ks, fileSvc)
+	return OpenCanonicalDBService(dataDir, vaultDir, logger, true, "", ks, fileSvc)
 }
 
 // setupTestInfrastructure creates common test infrastructure for gateway tests.
@@ -101,7 +101,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 
 	ks := newTestKeystore(t, fileSvc, logger)
 
-	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
+	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
