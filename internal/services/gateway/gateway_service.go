@@ -37,7 +37,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/fs"
@@ -64,7 +63,6 @@ type GatewayModeService struct {
 	pubsub             *GatewayWebSocketHandler
 	auth               *AuthService
 	pki                *PKIAuthority
-	sm                 *SecretManager
 	reg                *RegistrationService
 	passkey            *PasskeyHandler
 	userSvc            *UserService
@@ -98,11 +96,6 @@ type gatewayServiceBuilder struct {
 	// Pre-built components (test only). When nil, build() constructs them.
 	preBuiltDB     *CanonicalDBService
 	preBuiltPubsub *GatewayWebSocketHandler
-
-	// testMode skips production-only initialization (persona seeding,
-	// certificate identity resolution, JWKS, strict error checking on
-	// SecretManager and passkey service).
-	testMode bool
 }
 
 // newGatewayServiceBuilder creates a builder for production use.
@@ -122,12 +115,6 @@ func (b *gatewayServiceBuilder) withPreBuiltPubsub(pubsub *GatewayWebSocketHandl
 	return b
 }
 
-// withTestMode enables test mode, which skips production-only initialization.
-func (b *gatewayServiceBuilder) withTestMode() *gatewayServiceBuilder {
-	b.testMode = true
-	return b
-}
-
 // build assembles the GatewayModeService from the builder's configuration.
 func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	cfg := b.cfg
@@ -137,7 +124,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	db := b.preBuiltDB
 	if db == nil {
 		var err error
-		db, err = OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.VaultDir, logger, false, cfg.Gateway.VaultKeyPath, cfg.Gateway.VaultRequireUnlock, nil, b.fileSvc)
+		db, err = OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.VaultDir, logger, cfg.Gateway.VaultKeyPath, nil, b.fileSvc)
 		if err != nil {
 			return nil, fmt.Errorf("gateway: failed to initialize database: %w", err)
 		}
@@ -149,10 +136,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	}
 
 	// --- Secret manager ---
-	sm, err := NewSecretManager(db.db, b.fileSvc, logger)
-	if err != nil && !b.testMode {
-		return nil, fmt.Errorf("gateway: initialize secret manager: %w", err)
-	}
+	sm := db.GetSecretManager()
 
 	// --- PKI ---
 	pki := newPKIAuthority(b.fileSvc, db, sm, logger)
@@ -162,21 +146,19 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	res := response.NewWriter(logger)
 
 	var jwksProvider *JWKSProvider
-	if !b.testMode && cfg.Gateway.JWKSURL != "" {
+	if cfg.Gateway.JWKSURL != "" {
 		jwksProvider = NewJWKSProvider(cfg.Gateway.JWKSURL)
 	}
 
 	personaSvc := NewPersonaService(db, logger)
-	if !b.testMode {
-		for _, persona := range DefaultPersonaDefinitions() {
-			existing, err := personaSvc.GetByID(persona.ID)
-			if err != nil {
-				return nil, fmt.Errorf("gateway: failed to check existing persona %s: %w", persona.ID, err)
-			}
-			if existing == nil {
-				if err := personaSvc.CreatePersona(&persona); err != nil {
-					return nil, fmt.Errorf("gateway: failed to create persona %s: %w", persona.ID, err)
-				}
+	for _, persona := range DefaultPersonaDefinitions() {
+		existing, err := personaSvc.GetByID(persona.ID)
+		if err != nil {
+			return nil, fmt.Errorf("gateway: failed to check existing persona %s: %w", persona.ID, err)
+		}
+		if existing == nil {
+			if err := personaSvc.CreatePersona(&persona); err != nil {
+				return nil, fmt.Errorf("gateway: failed to create persona %s: %w", persona.ID, err)
 			}
 		}
 	}
@@ -192,21 +174,17 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	webSessionSvc := NewWebSessionService(db, logger)
 
 	// --- Certificate identity and PKI initialization ---
-	var extraIPs []net.IP
-	if !b.testMode {
-		var extraDNSNames []string
-		extraIPs, extraDNSNames, err = resolveGatewayCertificateIdentity(cfg.Gateway.CertMode, cfg.Gateway.NetworkIdentityFile, network.NewDetector(logger), logger)
-		if err != nil {
-			return nil, err
+	extraIPs, extraDNSNames, err := resolveGatewayCertificateIdentity(cfg.Gateway.CertMode, cfg.Gateway.NetworkIdentityFile, network.NewDetector(logger), logger)
+	if err != nil {
+		return nil, err
+	}
+	if len(extraDNSNames) > 0 {
+		if err := pki.InitializePKIWithNames(extraIPs, extraDNSNames); err != nil {
+			return nil, fmt.Errorf("gateway: failed to initialize PKI hierarchy: %w", err)
 		}
-		if len(extraDNSNames) > 0 {
-			if err := pki.InitializePKIWithNames(extraIPs, extraDNSNames); err != nil {
-				return nil, fmt.Errorf("gateway: failed to initialize PKI hierarchy: %w", err)
-			}
-		} else {
-			if err := pki.InitializePKI(extraIPs); err != nil {
-				return nil, fmt.Errorf("gateway: failed to initialize PKI hierarchy: %w", err)
-			}
+	} else {
+		if err := pki.InitializePKI(extraIPs); err != nil {
+			return nil, fmt.Errorf("gateway: failed to initialize PKI hierarchy: %w", err)
 		}
 	}
 
@@ -221,7 +199,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		HTTPSPort: cfg.Gateway.HTTPSPort,
 	}
 	passkey, err := NewPasskeyService(db, logger, passkeyCfg)
-	if err != nil && !b.testMode {
+	if err != nil {
 		return nil, fmt.Errorf("gateway: failed to initialize passkey service: %w", err)
 	}
 
@@ -243,7 +221,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 
 	publicBaseURL := cfg.Gateway.PublicBaseURL
 	if publicBaseURL == "" {
-		publicBaseURL = netutil.LocalhostHTTPSURL(cfg.Gateway.HTTPSPort)
+		publicBaseURL = network.LocalhostHTTPSURL(cfg.Gateway.HTTPSPort)
 	}
 
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
@@ -281,7 +259,6 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		auth:               auth,
 		pki:                pki,
 		reg:                reg,
-		sm:                 sm,
 		passkey:            passkeyHandler,
 		userSvc:            userSvc,
 		cliSessionSvc:      cliSessionSvc,
@@ -400,7 +377,6 @@ func newGatewayModeServiceForTest(cfg *config.Config, fileSvc fs.RuntimeFileServ
 	return newGatewayServiceBuilder(cfg, fileSvc, logger).
 		withPreBuiltDB(db).
 		withPreBuiltPubsub(pubsub).
-		withTestMode().
 		build()
 }
 
@@ -506,14 +482,9 @@ func (ls *GatewayModeService) GetDB() *CanonicalDBService {
 	return ls.db
 }
 
-// GetSecretManager returns the cached secret manager. If the manager was not
-// initialized during build() (e.g., test mode where keychain init is skipped),
-// it falls back to creating a new instance.
+// GetSecretManager returns the secret manager initialized during database open.
 func (ls *GatewayModeService) GetSecretManager() (*SecretManager, error) {
-	if ls.sm != nil {
-		return ls.sm, nil
-	}
-	return NewSecretManager(ls.db.db, ls.fileSvc, ls.logger)
+	return ls.db.GetSecretManager(), nil
 }
 
 // GetPKIAuthority returns the underlying PKI authority.

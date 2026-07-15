@@ -1,10 +1,10 @@
 # Frontend Enrollment Demo
 
-This demo demonstrates **third-party frontend application enrollment** with the g8e Gateway, showing how an external web app (hosted on a separate origin) can securely authenticate via WebAuthn passkeys and receive live SSE events.
+This demo demonstrates **third-party frontend application enrollment** with the g8e Gateway — an external web app (hosted on a separate origin) can securely authenticate via WebAuthn passkeys and receive live SSE events.
 
 ## Overview
 
-The frontend demo demonstrates:
+The demo covers:
 
 - **CORS enrollment**: gateway accepts requests from `http://localhost:3003`
 - **WebAuthn passkey registration**: browser creates a credential via `navigator.credentials.create`

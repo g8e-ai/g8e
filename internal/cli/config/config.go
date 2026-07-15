@@ -22,9 +22,9 @@ import (
 	"strings"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/pathutil"
+	"github.com/g8e-ai/g8e/internal/services/network"
 )
 
 const (
@@ -311,7 +311,7 @@ func (c *Config) OperatorHTTPURL() string {
 	if c.Paths != nil && strings.Contains(c.Paths.Host, "://") {
 		return c.Paths.Host
 	}
-	return netutil.LocalhostHTTPSURL(c.OperatorHTTPSPort())
+	return network.LocalhostHTTPSURL(c.OperatorHTTPSPort())
 }
 
 // httpEndpointOverride is set by the -e/--endpoint flag to allow
@@ -374,7 +374,7 @@ func (c *Config) OperatorPublicURL() string {
 	if c.Paths != nil && strings.Contains(c.Paths.Host, "://") {
 		return c.Paths.Host
 	}
-	return netutil.LocalhostHTTPSURL(c.OperatorHTTPSPort())
+	return network.LocalhostHTTPSURL(c.OperatorHTTPSPort())
 }
 
 // OperatorDiscoveryURL returns the HTTP URL for CA download and bootstrap routes.
@@ -393,5 +393,5 @@ func (c *Config) OperatorDiscoveryURL() string {
 	if c.Paths != nil && strings.Contains(c.Paths.Host, "://") {
 		return c.Paths.Host
 	}
-	return netutil.LocalhostHTTPURL(constants.Ports.OperatorHttp)
+	return network.LocalhostHTTPURL(constants.Ports.OperatorHttp)
 }

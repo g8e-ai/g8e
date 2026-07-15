@@ -505,6 +505,21 @@ func TestPKIAuthority_ReuseExisting(t *testing.T) {
 	assert.Equal(t, serial1, serial2, "should reuse existing root CA")
 }
 
+func TestPKIAuthority_InitializePKI_Idempotent(t *testing.T) {
+	ctx := setupTestPKI(t)
+
+	rootCertPEM1 := readCAFromFS(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA), "root")
+	serial1 := parsePEMCertificate(t, rootCertPEM1).SerialNumber
+
+	err := ctx.pki.InitializePKI(nil)
+	require.NoError(t, err, "second InitializePKI on same instance should succeed")
+
+	rootCertPEM2 := readCAFromFS(t, ctx.fileSvc, filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA), "root")
+	serial2 := parsePEMCertificate(t, rootCertPEM2).SerialNumber
+
+	assert.Equal(t, serial1, serial2, "root CA should be unchanged after second InitializePKI")
+}
+
 // Phase 0 regression tests for current buggy behavior
 // These tests lock down the current (broken) behavior so regressions are visible
 // when we fix the issues in later phases.

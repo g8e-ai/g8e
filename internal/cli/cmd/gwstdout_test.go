@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/services/governance"
+	"github.com/g8e-ai/g8e/internal/services/network"
 )
 
 // newOutputCmd creates a cobra.Command whose output is captured in the returned buffer.
@@ -27,37 +27,48 @@ func TestPrintNextSteps_DoctrinePosture(t *testing.T) {
 	cmd, buf := newOutputCmd()
 	posture := &governance.DoctrinePosture{}
 	externalIP := "192.168.1.100"
+	hostname := "dev.g8e.local"
 
-	printNextSteps(cmd, posture, externalIP)
+	printNextSteps(cmd, posture, externalIP, hostname)
 
 	out := buf.String()
 	bin := getBinaryName()
 
-	// Step 1: User Workstation (1a scripts, 1b close browsers)
+	// Endpoints section
+	assert.Contains(t, out, "Endpoints:")
+	assert.Contains(t, out, "Operator Bootstrap: https://192.168.1.100:8443")
+	assert.Contains(t, out, "Public API:         https://dev.g8e.local:8443")
+	assert.Contains(t, out, "Console UI:         https://dev.g8e.local:8443/console/")
+	assert.Contains(t, out, "MCP HTTP:           http://127.0.0.1:8080")
+
+	// Status section
+	assert.Contains(t, out, "Gateway Status: Online")
+	assert.Contains(t, out, "The g8e Gateway is online as a stateless relay.")
+	assert.Contains(t, out, "Passkey Enrollment: Pending")
+	assert.Contains(t, out, "Proof of human presence required.")
+
+	// Next Steps with GUI section
 	assert.Contains(t, out, "Next Steps:")
-	assert.Contains(t, out, "1. User Workstation")
-	assert.Contains(t, out, "a. Trust the gateway CA for HTTPS")
+	assert.Contains(t, out, "GUI")
+	assert.Contains(t, out, "1. Trust the gateway CA for HTTPS")
 	assert.Contains(t, out, "Linux/macOS")
 	assert.Contains(t, out, "curl -fsSL http://192.168.1.100:8080/web-cert.sh | sh")
 	assert.Contains(t, out, "Windows")
 	assert.Contains(t, out, "irm http://192.168.1.100:8080/web-cert.ps1 | iex")
-	assert.Contains(t, out, "b. Close all web browser windows on the remote workstation")
+	assert.Contains(t, out, "2. Close all web browser windows on the remote workstation")
 
-	// Step 2: This Terminal (enroll)
-	assert.Contains(t, out, "2. This Terminal")
+	// CLI section
+	assert.Contains(t, out, "CLI")
+	assert.Contains(t, out, "3. Enroll your passkey")
 	assert.Contains(t, out, bin+" auth enroll")
 
-	// Step 3: Operators with Local/Remote Host labels
-	assert.Contains(t, out, "3. Operators")
+	// Operators (step 4)
+	assert.Contains(t, out, "4. Operators:")
 	assert.Contains(t, out, "Local Host:")
 	assert.Contains(t, out, bin+" operator deploy --hosts <host1,host2>")
 	assert.Contains(t, out, bin+" operator stream --hosts <host1,host2>")
 	assert.Contains(t, out, "Remote Host:")
 	assert.Contains(t, out, bin+" operator start -e 192.168.1.100")
-
-	// Console UI
-	assert.Contains(t, out, "Console UI:")
-	assert.Contains(t, out, netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)+"/console/")
 
 	// Removed sections
 	assert.NotContains(t, out, "Connect AI agents")
@@ -72,14 +83,14 @@ func TestPrintNextSteps_ConsensusPosture(t *testing.T) {
 	posture := &governance.ConsensusPosture{}
 	externalIP := "10.0.0.50"
 
-	printNextSteps(cmd, posture, externalIP)
+	printNextSteps(cmd, posture, externalIP, "")
 
 	out := buf.String()
 
 	// All postures now produce the same output (no posture-specific steps)
-	assert.Contains(t, out, "1. User Workstation")
-	assert.Contains(t, out, "2. This Terminal")
-	assert.Contains(t, out, "3. Operators")
+	assert.Contains(t, out, "1. Trust the gateway CA")
+	assert.Contains(t, out, "3. Enroll your passkey")
+	assert.Contains(t, out, "4. Operators:")
 
 	// External IP interpolated correctly
 	assert.Contains(t, out, "http://10.0.0.50:8080/web-cert.sh")
@@ -95,14 +106,14 @@ func TestPrintNextSteps_NotaryPosture(t *testing.T) {
 	posture := &governance.NotaryPosture{}
 	externalIP := "172.16.0.1"
 
-	printNextSteps(cmd, posture, externalIP)
+	printNextSteps(cmd, posture, externalIP, "")
 
 	out := buf.String()
 
 	// All postures now produce the same output (no posture-specific steps)
-	assert.Contains(t, out, "1. User Workstation")
-	assert.Contains(t, out, "2. This Terminal")
-	assert.Contains(t, out, "3. Operators")
+	assert.Contains(t, out, "1. Trust the gateway CA")
+	assert.Contains(t, out, "3. Enroll your passkey")
+	assert.Contains(t, out, "4. Operators:")
 
 	// External IP interpolated correctly
 	assert.Contains(t, out, "http://172.16.0.1:8080/web-cert.sh")
@@ -129,13 +140,14 @@ func TestPrintNextSteps_StepNumberingPerPosture(t *testing.T) {
 	for _, p := range postures {
 		t.Run(p.name, func(t *testing.T) {
 			cmd, buf := newOutputCmd()
-			printNextSteps(cmd, p.posture, "127.0.0.1")
+			printNextSteps(cmd, p.posture, "127.0.0.1", "")
 			out := buf.String()
 
-			// Verify step numbering is sequential: 1, 2, 3
-			assert.Contains(t, out, "  1. User Workstation")
-			assert.Contains(t, out, "  2. This Terminal")
-			assert.Contains(t, out, "  3. Operators")
+			// Verify step numbering is sequential: 1, 2, 3, 4
+			assert.Contains(t, out, "  1. Trust the gateway CA")
+			assert.Contains(t, out, "  2. Close all web browser")
+			assert.Contains(t, out, "  3. Enroll your passkey")
+			assert.Contains(t, out, "  4. Operators:")
 		})
 	}
 }
@@ -151,7 +163,7 @@ func TestPrintNextSteps_ExternalIPInterpolation(t *testing.T) {
 	for _, ip := range testIPs {
 		t.Run(ip, func(t *testing.T) {
 			cmd, buf := newOutputCmd()
-			printNextSteps(cmd, &governance.DoctrinePosture{}, ip)
+			printNextSteps(cmd, &governance.DoctrinePosture{}, ip, "")
 			out := buf.String()
 
 			// The IP should appear in web-cert URL and operator start -e
@@ -164,7 +176,7 @@ func TestPrintNextSteps_ExternalIPInterpolation(t *testing.T) {
 
 func TestPrintNextSteps_PortInterpolation(t *testing.T) {
 	cmd, buf := newOutputCmd()
-	printNextSteps(cmd, &governance.DoctrinePosture{}, "localhost")
+	printNextSteps(cmd, &governance.DoctrinePosture{}, "localhost", "")
 	out := buf.String()
 
 	httpPort := constants.Ports.OperatorHttp
@@ -174,13 +186,14 @@ func TestPrintNextSteps_PortInterpolation(t *testing.T) {
 	assert.Contains(t, out, "localhost:"+itoa(httpPort)+"/web-cert.sh")
 	assert.Contains(t, out, "localhost:"+itoa(httpPort)+"/web-cert.ps1")
 
-	// HTTPS port should appear in the console URL
-	assert.Contains(t, out, netutil.LocalhostHTTPSURL(httpsPort)+"/console/")
+	// HTTPS port should appear in the endpoints section
+	assert.Contains(t, out, "localhost:"+itoa(httpsPort))
+	assert.Contains(t, out, "/console/")
 }
 
 func TestPrintNextSteps_BinaryNameInterpolation(t *testing.T) {
 	cmd, buf := newOutputCmd()
-	printNextSteps(cmd, &governance.DoctrinePosture{}, "localhost")
+	printNextSteps(cmd, &governance.DoctrinePosture{}, "localhost", "")
 	out := buf.String()
 	bin := getBinaryName()
 
@@ -203,19 +216,19 @@ func TestPrintNextSteps_AllPosturesContainCommonSections(t *testing.T) {
 
 	commonSubstrings := []string{
 		"Next Steps:",
-		"User Workstation",
+		"Endpoints:",
 		"Trust the gateway CA",
 		"Close all web browser windows",
-		"This Terminal",
+		"Enroll your passkey",
 		"auth enroll",
 		"Operators",
-		"Console UI:",
+		"Gateway Status: Online",
 	}
 
 	for _, p := range postures {
 		t.Run(p.name, func(t *testing.T) {
 			cmd, buf := newOutputCmd()
-			printNextSteps(cmd, p.posture, "192.168.1.1")
+			printNextSteps(cmd, p.posture, "192.168.1.1", "")
 			out := buf.String()
 
 			for _, sub := range commonSubstrings {
@@ -228,7 +241,7 @@ func TestPrintNextSteps_AllPosturesContainCommonSections(t *testing.T) {
 func TestPrintNextSteps_PostureSpecificContentNotLeaked(t *testing.T) {
 	t.Run("doctrine does not contain consensus or notary specific text", func(t *testing.T) {
 		cmd, buf := newOutputCmd()
-		printNextSteps(cmd, &governance.DoctrinePosture{}, "localhost")
+		printNextSteps(cmd, &governance.DoctrinePosture{}, "localhost", "")
 		out := buf.String()
 
 		assert.NotContains(t, out, "Configure L2 Tribunal")
@@ -239,7 +252,7 @@ func TestPrintNextSteps_PostureSpecificContentNotLeaked(t *testing.T) {
 
 	t.Run("consensus does not contain doctrine or notary specific text", func(t *testing.T) {
 		cmd, buf := newOutputCmd()
-		printNextSteps(cmd, &governance.ConsensusPosture{}, "localhost")
+		printNextSteps(cmd, &governance.ConsensusPosture{}, "localhost", "")
 		out := buf.String()
 
 		assert.NotContains(t, out, "No additional setup required.")
@@ -249,7 +262,7 @@ func TestPrintNextSteps_PostureSpecificContentNotLeaked(t *testing.T) {
 
 	t.Run("notary does not contain doctrine or consensus specific text", func(t *testing.T) {
 		cmd, buf := newOutputCmd()
-		printNextSteps(cmd, &governance.NotaryPosture{}, "localhost")
+		printNextSteps(cmd, &governance.NotaryPosture{}, "localhost", "")
 		out := buf.String()
 
 		assert.NotContains(t, out, "No additional setup required.")
@@ -267,20 +280,20 @@ func TestPrintNextSteps_OutputNotEmpty(t *testing.T) {
 
 	for i, p := range postures {
 		cmd, buf := newOutputCmd()
-		printNextSteps(cmd, p, "localhost")
+		printNextSteps(cmd, p, "localhost", "")
 		require.NotEmpty(t, buf.String(), "posture index %d produced empty output", i)
 	}
 }
 
 func TestPrintNextSteps_LineCountReasonable(t *testing.T) {
 	cmd, buf := newOutputCmd()
-	printNextSteps(cmd, &governance.ConsensusPosture{}, "localhost")
+	printNextSteps(cmd, &governance.ConsensusPosture{}, "localhost", "")
 	out := buf.String()
 
 	lineCount := strings.Count(out, "\n")
-	// The function prints 3 steps plus console UI.
+	// The function prints endpoints, status, passkey enrollment, and 4 steps.
 	// A reasonable lower bound ensures no section was silently skipped.
-	assert.Greater(t, lineCount, 10, "expected substantial output, got %d lines", lineCount)
+	assert.Greater(t, lineCount, 15, "expected substantial output, got %d lines", lineCount)
 }
 
 // itoa is a helper to avoid importing strconv just for int-to-string.
@@ -304,4 +317,30 @@ func itoa(n int) string {
 		buf[i] = '-'
 	}
 	return string(buf[i:])
+}
+
+func TestPickHostname(t *testing.T) {
+	t.Run("nil identity returns empty", func(t *testing.T) {
+		assert.Equal(t, "", pickHostname(nil))
+	})
+
+	t.Run("empty hostnames returns empty", func(t *testing.T) {
+		id := &network.NetworkIdentity{Hostnames: []string{}}
+		assert.Equal(t, "", pickHostname(id))
+	})
+
+	t.Run("prefers FQDN over short hostname", func(t *testing.T) {
+		id := &network.NetworkIdentity{Hostnames: []string{"dev", "dev.g8e.local"}}
+		assert.Equal(t, "dev.g8e.local", pickHostname(id))
+	})
+
+	t.Run("falls back to first hostname if no FQDN", func(t *testing.T) {
+		id := &network.NetworkIdentity{Hostnames: []string{"dev", "workstation"}}
+		assert.Equal(t, "dev", pickHostname(id))
+	})
+
+	t.Run("returns first FQDN when multiple FQDNs exist", func(t *testing.T) {
+		id := &network.NetworkIdentity{Hostnames: []string{"dev.g8e.local", "dev.example.com"}}
+		assert.Equal(t, "dev.g8e.local", pickHostname(id))
+	})
 }

@@ -47,7 +47,6 @@ func TestGatewayConfig_ZeroValue(t *testing.T) {
 	assert.Equal(t, "", cfg.SecretsDir)
 	assert.Equal(t, "", cfg.VaultDir)
 	assert.Equal(t, "", cfg.VaultKeyPath)
-	assert.False(t, cfg.VaultRequireUnlock)
 	assert.Equal(t, "", cfg.PasskeyRpID)
 	assert.Equal(t, "", cfg.PasskeyRpName)
 	assert.Equal(t, float64(0), cfg.RateLimitRPS)
@@ -71,7 +70,6 @@ func TestGatewayConfig_FullAssignment(t *testing.T) {
 		SecretsDir:          constants.TestPathVarLibSecretsDir,
 		VaultDir:            constants.TestPathVarLibVaultDir,
 		VaultKeyPath:        constants.TestPathVarLibVaultKey,
-		VaultRequireUnlock:  true,
 		PasskeyRpID:         "localhost",
 		PasskeyRpName:       "g8e",
 		RateLimitRPS:        5.0,
@@ -93,7 +91,6 @@ func TestGatewayConfig_FullAssignment(t *testing.T) {
 	assert.Equal(t, constants.TestPathVarLibSecretsDir, cfg.SecretsDir)
 	assert.Equal(t, constants.TestPathVarLibVaultDir, cfg.VaultDir)
 	assert.Equal(t, constants.TestPathVarLibVaultKey, cfg.VaultKeyPath)
-	assert.True(t, cfg.VaultRequireUnlock)
 	assert.Equal(t, "localhost", cfg.PasskeyRpID)
 	assert.Equal(t, "g8e", cfg.PasskeyRpName)
 	assert.Equal(t, 5.0, cfg.RateLimitRPS)
@@ -142,7 +139,6 @@ func TestGatewayConfig_PartialAssignment(t *testing.T) {
 	assert.Equal(t, "", cfg.DataDir, "unassigned DataDir should be zero value")
 	assert.Equal(t, "", cfg.PKIDir, "unassigned PKIDir should be zero value")
 	assert.Equal(t, "", cfg.SecretsDir, "unassigned SecretsDir should be zero value")
-	assert.False(t, cfg.VaultRequireUnlock, "unassigned VaultRequireUnlock should be false")
 	assert.Equal(t, float64(0), cfg.RateLimitRPS, "unassigned RateLimitRPS should be zero")
 	assert.Equal(t, 0, cfg.RateLimitBurst, "unassigned RateLimitBurst should be zero")
 	assert.Equal(t, "", cfg.TribunalID, "unassigned TribunalID should be zero value")
@@ -159,7 +155,6 @@ func TestGatewayConfig_AllFieldsExported(t *testing.T) {
 	cfg.SecretsDir = constants.TestPathShortSecrets
 	cfg.VaultDir = constants.TestPathShortVault
 	cfg.VaultKeyPath = constants.TestPathShortVaultKey
-	cfg.VaultRequireUnlock = true
 	cfg.PasskeyRpID = "example.com"
 	cfg.PasskeyRpName = "Example"
 	cfg.RateLimitRPS = 10.0
@@ -180,7 +175,6 @@ func TestGatewayConfig_AllFieldsExported(t *testing.T) {
 	assert.Equal(t, constants.TestPathShortSecrets, cfg.SecretsDir)
 	assert.Equal(t, constants.TestPathShortVault, cfg.VaultDir)
 	assert.Equal(t, constants.TestPathShortVaultKey, cfg.VaultKeyPath)
-	assert.True(t, cfg.VaultRequireUnlock)
 	assert.Equal(t, "example.com", cfg.PasskeyRpID)
 	assert.Equal(t, "Example", cfg.PasskeyRpName)
 	assert.Equal(t, 10.0, cfg.RateLimitRPS)
@@ -261,6 +255,8 @@ func gatewayConfigToOptions(cfg GatewayConfig) config.GatewayOptions {
 		DataDir:             cfg.DataDir,
 		PKIDir:              cfg.PKIDir,
 		SecretsDir:          cfg.SecretsDir,
+		VaultDir:            cfg.VaultDir,
+		VaultKeyPath:        cfg.VaultKeyPath,
 		PasskeyRpID:         cfg.PasskeyRpID,
 		PasskeyRpName:       cfg.PasskeyRpName,
 		PasskeyRpOrigins:    cfg.PasskeyRpOrigins,
@@ -284,6 +280,8 @@ func TestGatewayConfigToOptions_FullMapping(t *testing.T) {
 		DataDir:             constants.TestPathShortData,
 		PKIDir:              constants.TestPathShortPKI,
 		SecretsDir:          constants.TestPathShortSecrets,
+		VaultDir:            "/test/vault",
+		VaultKeyPath:        "/test/vault/key",
 		PasskeyRpID:         "localhost",
 		PasskeyRpName:       "g8e",
 		RateLimitRPS:        5.0,
@@ -304,6 +302,8 @@ func TestGatewayConfigToOptions_FullMapping(t *testing.T) {
 	assert.Equal(t, cfg.DataDir, opts.DataDir)
 	assert.Equal(t, cfg.PKIDir, opts.PKIDir)
 	assert.Equal(t, cfg.SecretsDir, opts.SecretsDir)
+	assert.Equal(t, cfg.VaultDir, opts.VaultDir)
+	assert.Equal(t, cfg.VaultKeyPath, opts.VaultKeyPath)
 	assert.Equal(t, cfg.PasskeyRpID, opts.PasskeyRpID)
 	assert.Equal(t, cfg.PasskeyRpName, opts.PasskeyRpName)
 	assert.Equal(t, cfg.RateLimitRPS, opts.RateLimitRPS)
@@ -386,9 +386,8 @@ func TestGatewayConfigToOptions_DownstreamURLs(t *testing.T) {
 
 func TestGatewayConfigToOptions_VaultFieldsNotMapped(t *testing.T) {
 	cfg := GatewayConfig{
-		VaultDir:           constants.TestPathShortVault,
-		VaultKeyPath:       constants.TestPathShortVaultKey,
-		VaultRequireUnlock: true,
+		VaultDir:     constants.TestPathShortVault,
+		VaultKeyPath: constants.TestPathShortVaultKey,
 	}
 
 	opts := gatewayConfigToOptions(cfg)
@@ -411,7 +410,6 @@ func TestGatewayConfig_FieldCount(t *testing.T) {
 		SecretsDir:          constants.TestPathShortSecrets,
 		VaultDir:            constants.TestPathShortVault,
 		VaultKeyPath:        constants.TestPathShortVaultKey,
-		VaultRequireUnlock:  true,
 		PasskeyRpID:         "localhost",
 		PasskeyRpName:       "g8e",
 		RateLimitRPS:        5.0,
@@ -450,9 +448,6 @@ func TestGatewayConfig_FieldCount(t *testing.T) {
 	if cfg.VaultKeyPath != "" {
 		nonZero++
 	}
-	if cfg.VaultRequireUnlock {
-		nonZero++
-	}
 	if cfg.PasskeyRpID != "" {
 		nonZero++
 	}
@@ -487,7 +482,7 @@ func TestGatewayConfig_FieldCount(t *testing.T) {
 		nonZero++
 	}
 
-	assert.Equal(t, 20, nonZero, "all 20 fields should be set and non-zero")
+	assert.Equal(t, 19, nonZero, "all 19 fields should be set and non-zero")
 }
 
 // ---------------------------------------------------------------------------
@@ -661,29 +656,21 @@ func TestGatewayConfig_NegativeRateLimit(t *testing.T) {
 
 func TestGatewayConfig_VaultConfiguration(t *testing.T) {
 	cfg := GatewayConfig{
-		VaultDir:           constants.TestPathVarLibVaultDir,
-		VaultKeyPath:       constants.TestPathVarLibVaultKey,
-		VaultRequireUnlock: true,
+		VaultDir:     constants.TestPathVarLibVaultDir,
+		VaultKeyPath: constants.TestPathVarLibVaultKey,
 	}
 
 	assert.Equal(t, constants.TestPathVarLibVaultDir, cfg.VaultDir)
 	assert.Equal(t, constants.TestPathVarLibVaultKey, cfg.VaultKeyPath)
-	assert.True(t, cfg.VaultRequireUnlock)
-}
-
-func TestGatewayConfig_VaultRequireUnlockDefault(t *testing.T) {
-	var cfg GatewayConfig
-	assert.False(t, cfg.VaultRequireUnlock, "VaultRequireUnlock should default to false")
 }
 
 func TestGatewayConfigToOptions_VaultFieldsPreservedInConfigOnly(t *testing.T) {
 	cfg := GatewayConfig{
-		VaultDir:           constants.TestPathShortVault,
-		VaultKeyPath:       constants.TestPathShortVaultKey,
-		VaultRequireUnlock: true,
-		DataDir:            constants.TestPathShortData,
-		PKIDir:             constants.TestPathShortPKI,
-		SecretsDir:         constants.TestPathShortSecrets,
+		VaultDir:     constants.TestPathShortVault,
+		VaultKeyPath: constants.TestPathShortVaultKey,
+		DataDir:      constants.TestPathShortData,
+		PKIDir:       constants.TestPathShortPKI,
+		SecretsDir:   constants.TestPathShortSecrets,
 	}
 
 	opts := gatewayConfigToOptions(cfg)

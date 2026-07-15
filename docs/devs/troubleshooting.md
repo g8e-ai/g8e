@@ -170,9 +170,8 @@ If services fail with "vault is locked":
 ./g8e gw restart
 ```
 
-The gateway can be configured to require the vault to be unlocked at startup
-by setting `G8E_VAULT_REQUIRE_UNLOCK=true`. Without this, the gateway starts
-but storage services fail closed on first use.
+Without a vault key, the gateway starts but storage services fail closed on first use.
+Provide the vault key via `G8E_VAULT_KEY` or `--vault-key` to enable decryption.
 
 ### Invalid or lost vault key
 

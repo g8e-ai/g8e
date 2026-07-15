@@ -25,14 +25,16 @@ import (
 
 	"github.com/spf13/cobra"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/cli/serve"
+	"github.com/g8e-ai/g8e/internal/cli/wizard"
 	g8econfig "github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/network"
@@ -49,29 +51,28 @@ func getBinaryName() string {
 // It is populated by addGatewayFlags and converted to serve.GatewayConfig
 // via gatewayFlagsToServeConfig.
 type GatewayFlags struct {
-	Posture            string
-	HTTPPort           int
-	HTTPSPort          int
-	DataDir            string
-	PKIDir             string
-	SecretsDir         string
-	VaultDir           string
-	VaultKeyPath       string
-	VaultRequireUnlock bool
-	PasskeyRpID        string
-	PasskeyRpName      string
-	PasskeyRpOrigins   []string
-	RateLimitRPS       float64
-	RateLimitBurst     int
-	LogLevel           string
-	CertIdentityMode   string
-	TribunalID         string
-	TribunalURL        string
-	TribunalBootstrap  string
-	MCPDownstreamURL   string
-	A2ADownstreamURL   string
-	PublicBaseURL      string
-	AllowedOrigins     []string
+	Posture           string
+	HTTPPort          int
+	HTTPSPort         int
+	DataDir           string
+	PKIDir            string
+	SecretsDir        string
+	VaultDir          string
+	VaultKeyPath      string
+	PasskeyRpID       string
+	PasskeyRpName     string
+	PasskeyRpOrigins  []string
+	RateLimitRPS      float64
+	RateLimitBurst    int
+	LogLevel          string
+	CertIdentityMode  string
+	TribunalID        string
+	TribunalURL       string
+	TribunalBootstrap string
+	MCPDownstreamURL  string
+	A2ADownstreamURL  string
+	PublicBaseURL     string
+	AllowedOrigins    []string
 }
 
 // addGatewayFlags registers all shared gateway flags on the given cobra command,
@@ -85,7 +86,6 @@ func addGatewayFlags(cmd *cobra.Command, f *GatewayFlags) {
 	cmd.Flags().StringVar(&f.SecretsDir, "secrets-dir", "", fmt.Sprintf("Directory for platform secrets (default: %s)", constants.DefaultSecretsDir))
 	cmd.Flags().StringVar(&f.VaultDir, "vault-dir", "", fmt.Sprintf("Directory for vault data (default: %s)", constants.DefaultVaultDirDesc))
 	cmd.Flags().StringVar(&f.VaultKeyPath, "vault-key", "", fmt.Sprintf("Path to vault private key (default: %s)", constants.DefaultVaultKeyDesc))
-	cmd.Flags().BoolVar(&f.VaultRequireUnlock, "vault-require-unlock", false, "Require vault to be unlocked at startup (fail if vault cannot be unlocked)")
 	cmd.Flags().StringVar(&f.PasskeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
 	cmd.Flags().StringVar(&f.PasskeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
 	cmd.Flags().StringArrayVar(&f.PasskeyRpOrigins, "passkey-rp-origin", nil, "Additional RP origin for passkey operations (repeatable, e.g. http://localhost:8087)")
@@ -110,9 +110,6 @@ func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
 	}
 	if f.VaultKeyPath == "" {
 		f.VaultKeyPath = os.Getenv(string(constants.EnvVar.VaultKey))
-	}
-	if !f.VaultRequireUnlock {
-		f.VaultRequireUnlock = os.Getenv(string(constants.EnvVar.VaultRequireUnlock)) == "true"
 	}
 	if f.TribunalID == "" {
 		f.TribunalID = os.Getenv(string(constants.EnvVar.TribunalID))
@@ -150,30 +147,76 @@ func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
 // gateway config struct.
 func gatewayFlagsToServeConfig(f GatewayFlags) serve.GatewayConfig {
 	return serve.GatewayConfig{
-		Posture:            g8econfig.GatewayPosture(f.Posture),
-		HTTPPort:           f.HTTPPort,
-		HTTPSPort:          f.HTTPSPort,
-		DataDir:            f.DataDir,
-		PKIDir:             f.PKIDir,
-		SecretsDir:         f.SecretsDir,
-		VaultDir:           f.VaultDir,
-		VaultKeyPath:       f.VaultKeyPath,
-		VaultRequireUnlock: f.VaultRequireUnlock,
-		PasskeyRpID:        f.PasskeyRpID,
-		PasskeyRpName:      f.PasskeyRpName,
-		PasskeyRpOrigins:   f.PasskeyRpOrigins,
-		RateLimitRPS:       f.RateLimitRPS,
-		RateLimitBurst:     f.RateLimitBurst,
-		LogLevel:           f.LogLevel,
-		CertIdentityMode:   f.CertIdentityMode,
-		TribunalID:         f.TribunalID,
-		TribunalURL:        f.TribunalURL,
-		TribunalBootstrap:  f.TribunalBootstrap,
-		MCPDownstreamURL:   f.MCPDownstreamURL,
-		A2ADownstreamURL:   f.A2ADownstreamURL,
-		PublicBaseURL:      f.PublicBaseURL,
-		AllowedOrigins:     f.AllowedOrigins,
+		Posture:           g8econfig.GatewayPosture(f.Posture),
+		HTTPPort:          f.HTTPPort,
+		HTTPSPort:         f.HTTPSPort,
+		DataDir:           f.DataDir,
+		PKIDir:            f.PKIDir,
+		SecretsDir:        f.SecretsDir,
+		VaultDir:          f.VaultDir,
+		VaultKeyPath:      f.VaultKeyPath,
+		PasskeyRpID:       f.PasskeyRpID,
+		PasskeyRpName:     f.PasskeyRpName,
+		PasskeyRpOrigins:  f.PasskeyRpOrigins,
+		RateLimitRPS:      f.RateLimitRPS,
+		RateLimitBurst:    f.RateLimitBurst,
+		LogLevel:          f.LogLevel,
+		CertIdentityMode:  f.CertIdentityMode,
+		TribunalID:        f.TribunalID,
+		TribunalURL:       f.TribunalURL,
+		TribunalBootstrap: f.TribunalBootstrap,
+		MCPDownstreamURL:  f.MCPDownstreamURL,
+		A2ADownstreamURL:  f.A2ADownstreamURL,
+		PublicBaseURL:     f.PublicBaseURL,
+		AllowedOrigins:    f.AllowedOrigins,
 	}
+}
+
+// wizardRunner is the function signature for launching the interactive wizard.
+// Tests inject a fake runner to avoid starting a real Bubble Tea program.
+type wizardRunner func(wizard.Options) (wizard.Result, error)
+
+// defaultWizardRunner calls wizard.Run with the given options.
+func defaultWizardRunner(opts wizard.Options) (wizard.Result, error) {
+	return wizard.Run(opts)
+}
+
+// wizardConfigFromFlags maps resolved GatewayFlags into the focused wizard.Config.
+// Only wizard-owned fields are included — the wizard never sees flags it cannot edit.
+func wizardConfigFromFlags(f GatewayFlags) wizard.Config {
+	return wizard.Config{
+		PublicBaseURL:     f.PublicBaseURL,
+		CertIdentityMode:  f.CertIdentityMode,
+		AllowedOrigins:    f.AllowedOrigins,
+		Posture:           f.Posture,
+		TribunalID:        f.TribunalID,
+		TribunalURL:       f.TribunalURL,
+		TribunalBootstrap: f.TribunalBootstrap,
+		PasskeyRpID:       f.PasskeyRpID,
+		PasskeyRpName:     f.PasskeyRpName,
+		PasskeyRpOrigins:  f.PasskeyRpOrigins,
+		MCPDownstreamURL:  f.MCPDownstreamURL,
+		A2ADownstreamURL:  f.A2ADownstreamURL,
+	}
+}
+
+// applyWizardConfig merges wizard-owned fields from the wizard result back into
+// resolved GatewayFlags. Only fields the wizard edits are overwritten; all other
+// flags (ports, directories, log level, rate limits, etc.) are preserved.
+func applyWizardConfig(f GatewayFlags, wc wizard.Config) GatewayFlags {
+	f.PublicBaseURL = wc.PublicBaseURL
+	f.CertIdentityMode = wc.CertIdentityMode
+	f.AllowedOrigins = wc.AllowedOrigins
+	f.Posture = wc.Posture
+	f.TribunalID = wc.TribunalID
+	f.TribunalURL = wc.TribunalURL
+	f.TribunalBootstrap = wc.TribunalBootstrap
+	f.PasskeyRpID = wc.PasskeyRpID
+	f.PasskeyRpName = wc.PasskeyRpName
+	f.PasskeyRpOrigins = wc.PasskeyRpOrigins
+	f.MCPDownstreamURL = wc.MCPDownstreamURL
+	f.A2ADownstreamURL = wc.A2ADownstreamURL
+	return f
 }
 
 // detectIdentityResult holds the result of network identity detection.
@@ -236,6 +279,7 @@ func gatewayCmd() *cobra.Command {
 		gatewaySettingsCmd(),
 		gatewayResetCmd(),
 		gatewayCleanCmd(),
+		gatewaySetupCmd(),
 		dataCmd(),
 		securityCmd(),
 		tunnelCmd(),
@@ -244,16 +288,81 @@ func gatewayCmd() *cobra.Command {
 	return cmd
 }
 
+func gatewaySetupCmd() *cobra.Command {
+	return gatewaySetupCmdWithConfig(defaultWizardRunner)
+}
+
+func gatewaySetupCmdWithConfig(runWizard wizardRunner) *cobra.Command {
+	var flags GatewayFlags
+
+	cmd := &cobra.Command{
+		Use:   "setup",
+		Short: "Run the interactive setup wizard",
+		Long: `Launch the interactive onboarding wizard to configure gateway settings
+such as posture, tribunal, passkey, CORS, and certificate options.
+The wizard guides you through each setting and produces a resolved configuration.
+
+Any flags provided on the command line are used as initial values in the wizard.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resolved := resolveGatewayFlags(flags)
+
+			result, err := runWizard(wizard.Options{
+				InitialConfig: wizardConfigFromFlags(resolved),
+				ProgramOptions: []tea.ProgramOption{
+					tea.WithInput(cmd.InOrStdin()),
+					tea.WithOutput(cmd.OutOrStdout()),
+				},
+			})
+			if err != nil {
+				return fmt.Errorf("gateway: wizard: %w", err)
+			}
+			if result.Cancel {
+				cmd.Println("Setup cancelled.")
+				return nil
+			}
+
+			resolved = applyWizardConfig(resolved, result.Config)
+
+			cmd.Println("Setup complete. Configuration:")
+			cmd.Printf("  Posture:            %s\n", resolved.Posture)
+			cmd.Printf("  Public Base URL:    %s\n", resolved.PublicBaseURL)
+			cmd.Printf("  Cert Identity Mode: %s\n", resolved.CertIdentityMode)
+			cmd.Printf("  Tribunal ID:        %s\n", resolved.TribunalID)
+			cmd.Printf("  Tribunal URL:       %s\n", resolved.TribunalURL)
+			cmd.Printf("  MCP Downstream URL: %s\n", resolved.MCPDownstreamURL)
+			cmd.Printf("  A2A Downstream URL: %s\n", resolved.A2ADownstreamURL)
+			cmd.Printf("  Passkey RP ID:      %s\n", resolved.PasskeyRpID)
+			cmd.Printf("  Passkey RP Name:    %s\n", resolved.PasskeyRpName)
+			if len(resolved.AllowedOrigins) > 0 {
+				cmd.Printf("  Allowed Origins:    %s\n", strings.Join(resolved.AllowedOrigins, ", "))
+			}
+			if len(resolved.PasskeyRpOrigins) > 0 {
+				cmd.Printf("  Passkey RP Origins: %s\n", strings.Join(resolved.PasskeyRpOrigins, ", "))
+			}
+			cmd.Println()
+			cmd.Println("Run 'g8e gw start' to launch the gateway with these settings.")
+
+			return nil
+		},
+	}
+
+	addGatewayFlags(cmd, &flags)
+
+	return cmd
+}
+
 func gatewayStartCmd() *cobra.Command {
-	return gatewayStartCmdWithConfig(loadConfig, newFileSvc)
+	return gatewayStartCmdWithConfig(loadConfig, newFileSvc, defaultWizardRunner)
 }
 
 func gatewayStartCmdWithConfig(
 	configLoader func(string) (*config.Config, error),
 	fileSvcFactory func() (fs.RuntimeFileService, error),
+	runWizard wizardRunner,
 ) *cobra.Command {
 	var flags GatewayFlags
 	var follow bool
+	var interactive bool
 
 	cmd := &cobra.Command{
 		Use:   string(constants.ThinkingActionTypeStart),
@@ -281,6 +390,24 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 			}
 
 			resolved := resolveGatewayFlags(flags)
+
+			if interactive {
+				result, err := runWizard(wizard.Options{
+					InitialConfig: wizardConfigFromFlags(resolved),
+					ProgramOptions: []tea.ProgramOption{
+						tea.WithInput(cmd.InOrStdin()),
+						tea.WithOutput(cmd.OutOrStdout()),
+					},
+				})
+				if err != nil {
+					return fmt.Errorf("gateway: wizard: %w", err)
+				}
+				if result.Cancel {
+					cmd.Println("Onboarding cancelled.")
+					return nil
+				}
+				resolved = applyWizardConfig(resolved, result.Config)
+			}
 
 			// Validate posture at CLI edge for clean error messages (before
 			// network detection to fail fast on invalid input)
@@ -371,10 +498,11 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 			}
 
 			externalIP := network.GetExternalInterfaceIP()
+			hostname := pickHostname(identityResult.Identity)
 
 			cmd.Printf("[g8e] Gateway started (PID: %d)\n", pid)
 			cmd.Println()
-			printNextSteps(cmd, postureObj, externalIP)
+			printNextSteps(cmd, postureObj, externalIP, hostname)
 
 			return nil
 		},
@@ -382,6 +510,7 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 
 	addGatewayFlags(cmd, &flags)
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Run gateway in foreground (Ctrl+C stops gateway)")
+	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Launch interactive onboarding wizard")
 
 	return cmd
 }
@@ -476,9 +605,9 @@ Displays the process ID and endpoint URLs when the gateway is running.`,
 					}
 					cmd.Printf("\nEndpoints:\n")
 					cmd.Printf("  Operator Bootstrap: https://%s:%d\n", network.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
-					cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
-					cmd.Printf("  Console UI:         %s/console/ (WebAuthn/passkey dashboard)\n", netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
-					cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", netutil.LocalhostHTTPURL(constants.Ports.OperatorHttp))
+					cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
+					cmd.Printf("  Console UI:         %s/console/ (WebAuthn/passkey dashboard)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
+					cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", network.LocalhostHTTPURL(constants.Ports.OperatorHttp))
 					return nil
 				}
 			}
@@ -498,9 +627,9 @@ Displays the process ID and endpoint URLs when the gateway is running.`,
 				cmd.Printf("State: RUNNING (PID: %d)\n", pid)
 				cmd.Printf("\nEndpoints:\n")
 				cmd.Printf("  Operator Bootstrap: https://%s:%d\n", network.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
-				cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
-				cmd.Printf("  Console UI:         %s/console/ (WebAuthn/passkey dashboard)\n", netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
-				cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", netutil.LocalhostHTTPURL(constants.Ports.OperatorHttp))
+				cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
+				cmd.Printf("  Console UI:         %s/console/ (WebAuthn/passkey dashboard)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
+				cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", network.LocalhostHTTPURL(constants.Ports.OperatorHttp))
 			} else {
 				cmd.Println("State: STOPPED")
 			}
@@ -577,7 +706,7 @@ missing, the gateway defaults to 'doctrine' posture.`,
 			cmd.Println("g8e Gateway restarted successfully")
 			postureObj, _ := governance.ParseGovernancePosture(currentPosture)
 			cmd.Printf("Governance mode: %s\n", postureObj.Description())
-			cmd.Printf("\nConsole UI: %s/console/ (WebAuthn/passkey dashboard)\n", netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
+			cmd.Printf("\nConsole UI: %s/console/ (WebAuthn/passkey dashboard)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
 			cmd.Printf("\nNext step: Run '%s auth enroll' to authenticate\n", getBinaryName())
 			return nil
 		},

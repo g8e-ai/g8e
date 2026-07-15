@@ -26,29 +26,28 @@ import (
 
 func TestGatewayFlagsToServeConfig_AllFieldsTransferred(t *testing.T) {
 	flags := GatewayFlags{
-		Posture:            "consensus",
-		HTTPPort:           8080,
-		HTTPSPort:          8443,
-		DataDir:            "/data",
-		PKIDir:             "/pki",
-		SecretsDir:         "/secrets",
-		VaultDir:           "/vault",
-		VaultKeyPath:       "/vault/key",
-		VaultRequireUnlock: true,
-		PasskeyRpID:        "example.com",
-		PasskeyRpName:      "Example",
-		PasskeyRpOrigins:   []string{"https://example.com"},
-		RateLimitRPS:       100.0,
-		RateLimitBurst:     50,
-		LogLevel:           "debug",
-		CertIdentityMode:   "full",
-		TribunalID:         "trib-1",
-		TribunalURL:        "https://localhost:8443/tribunal/v1/deliberate",
-		TribunalBootstrap:  "/etc/g8e/tribunal.json",
-		MCPDownstreamURL:   "https://downstream/mcp",
-		A2ADownstreamURL:   "https://downstream/a2a",
-		PublicBaseURL:      "https://demo.example.com",
-		AllowedOrigins:     []string{"https://lovable.dev"},
+		Posture:           "consensus",
+		HTTPPort:          8080,
+		HTTPSPort:         8443,
+		DataDir:           "/data",
+		PKIDir:            "/pki",
+		SecretsDir:        "/secrets",
+		VaultDir:          "/vault",
+		VaultKeyPath:      "/vault/key",
+		PasskeyRpID:       "example.com",
+		PasskeyRpName:     "Example",
+		PasskeyRpOrigins:  []string{"https://example.com"},
+		RateLimitRPS:      100.0,
+		RateLimitBurst:    50,
+		LogLevel:          "debug",
+		CertIdentityMode:  "full",
+		TribunalID:        "trib-1",
+		TribunalURL:       "https://localhost:8443/tribunal/v1/deliberate",
+		TribunalBootstrap: "/etc/g8e/tribunal.json",
+		MCPDownstreamURL:  "https://downstream/mcp",
+		A2ADownstreamURL:  "https://downstream/a2a",
+		PublicBaseURL:     "https://demo.example.com",
+		AllowedOrigins:    []string{"https://lovable.dev"},
 	}
 
 	cfg := gatewayFlagsToServeConfig(flags)
@@ -61,7 +60,6 @@ func TestGatewayFlagsToServeConfig_AllFieldsTransferred(t *testing.T) {
 	assert.Equal(t, "/secrets", cfg.SecretsDir)
 	assert.Equal(t, "/vault", cfg.VaultDir)
 	assert.Equal(t, "/vault/key", cfg.VaultKeyPath)
-	assert.True(t, cfg.VaultRequireUnlock)
 	assert.Equal(t, "example.com", cfg.PasskeyRpID)
 	assert.Equal(t, "Example", cfg.PasskeyRpName)
 	assert.Equal(t, []string{"https://example.com"}, cfg.PasskeyRpOrigins)
@@ -91,7 +89,6 @@ func TestGatewayFlagsToServeConfig_EmptyFlags(t *testing.T) {
 	assert.Empty(t, cfg.SecretsDir)
 	assert.Empty(t, cfg.VaultDir)
 	assert.Empty(t, cfg.VaultKeyPath)
-	assert.False(t, cfg.VaultRequireUnlock)
 	assert.Empty(t, cfg.PasskeyRpID)
 	assert.Empty(t, cfg.PasskeyRpName)
 	assert.Nil(t, cfg.PasskeyRpOrigins)
@@ -125,7 +122,6 @@ func TestAddGatewayFlags_RegistersAllFlags(t *testing.T) {
 		{"secrets-dir", ""},
 		{"vault-dir", ""},
 		{"vault-key", ""},
-		{"vault-require-unlock", "false"},
 		{"passkey-rp-id", ""},
 		{"passkey-rp-name", ""},
 		{"rate-limit-rps", "0"},
@@ -217,7 +213,7 @@ func TestResolveGatewayFlags_TribunalCLITakesPrecedence(t *testing.T) {
 
 func TestResolveGatewayFlags_NoOverridesWhenEnvUnset(t *testing.T) {
 	envKeys := []string{
-		"G8E_VAULT_DIR", "G8E_VAULT_KEY", "G8E_VAULT_REQUIRE_UNLOCK",
+		"G8E_VAULT_DIR", "G8E_VAULT_KEY",
 		"G8E_TRIBUNAL_ID", "G8E_TRIBUNAL_URL", "G8E_TRIBUNAL_BOOTSTRAP",
 	}
 	originalValues := make(map[string]string)
@@ -234,17 +230,15 @@ func TestResolveGatewayFlags_NoOverridesWhenEnvUnset(t *testing.T) {
 	})
 
 	result := resolveGatewayFlags(GatewayFlags{
-		VaultDir:           "/cli/vault",
-		VaultKeyPath:       "/cli/key",
-		VaultRequireUnlock: true,
-		TribunalID:         "cli-id",
-		TribunalURL:        "https://cli/tribunal",
-		TribunalBootstrap:  "/cli/bootstrap.json",
+		VaultDir:          "/cli/vault",
+		VaultKeyPath:      "/cli/key",
+		TribunalID:        "cli-id",
+		TribunalURL:       "https://cli/tribunal",
+		TribunalBootstrap: "/cli/bootstrap.json",
 	})
 
 	assert.Equal(t, "/cli/vault", result.VaultDir)
 	assert.Equal(t, "/cli/key", result.VaultKeyPath)
-	assert.True(t, result.VaultRequireUnlock)
 	assert.Equal(t, "cli-id", result.TribunalID)
 	assert.Equal(t, "https://cli/tribunal", result.TribunalURL)
 	assert.Equal(t, "/cli/bootstrap.json", result.TribunalBootstrap)
