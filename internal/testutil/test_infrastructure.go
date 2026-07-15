@@ -105,6 +105,9 @@ func NewTestConfig(t *testing.T) *config.Config {
 		HeartbeatInterval:  30 * time.Second,
 		Gateway: config.GatewayConfig{
 			MaxPayloadBytes: 10 * 1024 * 1024,
+			CertMode:        "localhost",
+			PasskeyRpID:     "localhost",
+			PasskeyRpName:   "g8e",
 		},
 		WorkDir:                     workDir,
 		PKIDir:                      pkiDir,

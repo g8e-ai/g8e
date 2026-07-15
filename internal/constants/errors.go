@@ -998,7 +998,4 @@ var (
 
 	// Browser errors
 	ErrBrowserURLEmpty = errors.New("browser URL cannot be empty")
-
-	// CanonicalDB service errors
-	ErrTestKeystoreNil = errors.New("testKeystore must not be nil in test mode")
 )

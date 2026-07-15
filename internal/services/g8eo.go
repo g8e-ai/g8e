@@ -58,7 +58,7 @@ type G8eoService struct {
 
 	pubSubClient pubsub.PubSubClient
 	tlsConfig    *certs.TLSConfig
-	testKeystore *keystore.Keystore
+	keystore     *keystore.Keystore
 
 	ledger         *storage.GitLedgerService
 	historyHandler *storage.HistoryHandler
@@ -102,20 +102,21 @@ func (vs *G8eoService) SetPubSubClient(client pubsub.PubSubClient) {
 	vs.pubSubClient = client
 }
 
-// SetKeystore injects a pre-initialized keystore for testing, allowing
-// cross-platform tests to bypass OS keychain dependencies.
-func (vs *G8eoService) SetKeystore(ks *keystore.Keystore) {
-	vs.mu.Lock()
-	defer vs.mu.Unlock()
-	vs.testKeystore = ks
-}
-
 // SetFileService injects a RuntimeFileService for file I/O within the .g8e/ directory.
 // Must be called before Start().
 func (vs *G8eoService) SetFileService(fileSvc fs.RuntimeFileService) {
 	vs.mu.Lock()
 	defer vs.mu.Unlock()
 	vs.fileSvc = fileSvc
+}
+
+// SetKeystore injects a pre-initialized keystore for dependency injection.
+// When set, the gateway DB uses this keystore instead of the OS keychain.
+// Must be called before Start().
+func (vs *G8eoService) SetKeystore(ks *keystore.Keystore) {
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
+	vs.keystore = ks
 }
 
 func (vs *G8eoService) Start(ctx context.Context) error {
@@ -156,30 +157,14 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	if vaultKeyPath == "" {
 		vaultKeyPath = paths.Infra.VaultKeyPath
 	}
-	testMode := false
-	var testKs *keystore.Keystore
-	if vs.testKeystore != nil {
-		testMode = true
-		testKs = vs.testKeystore
-	}
-	gatewayDB, err := gateway.OpenCanonicalDBService(dataDir, vs.config.VaultDir, vs.logger, testMode, vaultKeyPath, testKs, vs.fileSvc)
+	gatewayDB, err := gateway.OpenCanonicalDBService(dataDir, vs.config.VaultDir, vs.logger, vaultKeyPath, vs.keystore, vs.fileSvc)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrGatewayDatabaseServiceNotConfigured, err)
 	}
 	vs.gatewayDB = gatewayDB
 	vs.logger.Info("Gateway database initialized (canonical state root)")
 
-	if vs.testKeystore != nil {
-		vs.secretManager, err = gateway.NewSecretManagerWithKeystore(vs.gatewayDB.GetDB(), vs.fileSvc, vs.logger, vs.testKeystore)
-	} else {
-		vs.secretManager, err = gateway.NewSecretManager(vs.gatewayDB.GetDB(), vs.fileSvc, vs.logger)
-	}
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrKeyNotFound, err)
-	}
-	if err := vs.secretManager.InitAppSettings(); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
-	}
+	vs.secretManager = gatewayDB.GetSecretManager()
 	vs.logger.Info("Secret manager initialized")
 
 	// Initialize Data Services - mandatory for replay protection

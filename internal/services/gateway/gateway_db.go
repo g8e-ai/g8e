@@ -79,6 +79,7 @@ type CanonicalDBService struct {
 	KVStore        *KVStoreService
 	SSEStore       *SSEEventService
 	BlobStore      *BlobStoreService
+	sm             *SecretManager
 
 	// Shutdown tracking
 	mu      sync.Mutex
@@ -89,10 +90,10 @@ type CanonicalDBService struct {
 }
 
 // OpenCanonicalDBService opens (or creates) the unified SQLite database.
-// testMode enables the in-memory keystore keyring for unit tests.
 // vaultKeyPath is the path to the vault private key file (hex-encoded).
-// testKeystore is an optional keystore instance for test mode (prevents race conditions in parallel tests).
-func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger, testMode bool, vaultKeyPath string, testKeystore *keystore.Keystore, fileSvc fs.RuntimeFileService) (*CanonicalDBService, error) {
+// ks is an optional pre-initialized keystore (non-nil for tests to bypass OS keychain,
+// nil for production which creates via OS keychain).
+func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger, vaultKeyPath string, ks *keystore.Keystore, fileSvc fs.RuntimeFileService) (*CanonicalDBService, error) {
 	dbPath := filepath.Join(dataDir, constants.DbFilename)
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 
@@ -173,16 +174,9 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	svc.SSEStore = NewSSEEventService(db, logger)
 	svc.BlobStore = NewBlobStoreService(db, logger)
 
-	if testMode {
-		if err := svc.initTestSchema(testKeystore, fileSvc); err != nil {
-			db.Close()
-			return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
-		}
-	} else {
-		if err := svc.initSchema(fileSvc); err != nil {
-			db.Close()
-			return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
-		}
+	if err := svc.initSchema(fileSvc, ks); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	// Initialize state root if missing
@@ -197,27 +191,6 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 
 	logger.Info("Gateway database initialized", "path", dbPath)
 	return svc, nil
-}
-
-func (s *CanonicalDBService) initTestSchema(testKeystore *keystore.Keystore, fileSvc fs.RuntimeFileService) error {
-	_, err := s.db.ExecWithRetry(gatewaySchema)
-	if err != nil {
-		return fmt.Errorf("canonicalDB: init test schema: %w", err)
-	}
-	if testKeystore == nil {
-		return constants.ErrTestKeystoreNil
-	}
-	sm := &SecretManager{
-		db:       s.db,
-		logger:   s.logger,
-		fileSvc:  fileSvc,
-		keystore: testKeystore,
-	}
-	if err := sm.InitAppSettings(); err != nil {
-		return fmt.Errorf("canonicalDB: init test schema: app settings: %w", err)
-	}
-
-	return nil
 }
 
 func (s *CanonicalDBService) initStateRoot() error {
@@ -270,16 +243,27 @@ func (s *CanonicalDBService) RunMaintenance(ctx context.Context) {
 	}
 }
 
-func (s *CanonicalDBService) initSchema(fileSvc fs.RuntimeFileService) error {
+func (s *CanonicalDBService) initSchema(fileSvc fs.RuntimeFileService, ks *keystore.Keystore) error {
 	_, err := s.db.ExecWithRetry(gatewaySchema)
 	if err != nil {
 		return fmt.Errorf("canonicalDB: init schema: %w", err)
 	}
 
-	sm, err := NewSecretManager(s.db, fileSvc, s.logger)
-	if err != nil {
-		return fmt.Errorf("canonicalDB: init schema: secret manager: %w", err)
+	var sm *SecretManager
+	if ks != nil {
+		sm = &SecretManager{
+			db:       s.db,
+			logger:   s.logger,
+			fileSvc:  fileSvc,
+			keystore: ks,
+		}
+	} else {
+		sm, err = NewSecretManager(s.db, fileSvc, s.logger)
+		if err != nil {
+			return fmt.Errorf("canonicalDB: init schema: secret manager: %w", err)
+		}
 	}
+	s.sm = sm
 	if err := sm.InitAppSettings(); err != nil {
 		return fmt.Errorf("canonicalDB: init schema: app settings: %w", err)
 	}
@@ -290,6 +274,11 @@ func (s *CanonicalDBService) initSchema(fileSvc fs.RuntimeFileService) error {
 // GetDB returns the underlying SQLite database connection.
 func (s *CanonicalDBService) GetDB() *sqliteutil.DB {
 	return s.db
+}
+
+// GetSecretManager returns the SecretManager initialized during schema init.
+func (s *CanonicalDBService) GetSecretManager() *SecretManager {
+	return s.sm
 }
 
 func (s *CanonicalDBService) GetVault() *vault.Vault {
