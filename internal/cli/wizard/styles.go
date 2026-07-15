@@ -48,9 +48,6 @@ var (
 			Foreground(colorSelected).
 			Bold(true)
 
-	normalStyle = lipgloss.NewStyle().
-			Foreground(colorNormal)
-
 	passedStyle = lipgloss.NewStyle().
 			Foreground(colorPassed)
 

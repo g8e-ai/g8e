@@ -85,8 +85,8 @@ func validateTribunalID(s string) error {
 		return fmt.Errorf("tribunal ID is required for consensus and notary postures")
 	}
 	for _, r := range s {
-		if !(r >= 'a' && r <= 'z') && !(r >= 'A' && r <= 'Z') &&
-			!(r >= '0' && r <= '9') && r != '-' && r != '_' {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') &&
+			(r < '0' || r > '9') && r != '-' && r != '_' {
 			return fmt.Errorf("tribunal ID must contain only letters, digits, hyphens, and underscores")
 		}
 	}

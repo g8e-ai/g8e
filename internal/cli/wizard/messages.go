@@ -23,7 +23,3 @@ type validationMsg struct {
 	err string // empty = valid
 }
 
-// wizardDoneMsg signals the wizard is complete and produces a Result.
-type wizardDoneMsg struct {
-	result Result
-}

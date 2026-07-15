@@ -58,9 +58,6 @@ type Model struct {
 	// Validation
 	validationError string
 
-	// Navigation
-	showAdvanced bool
-
 	// Track which input field is focused within a step (for Tab cycling)
 	focusIndex int
 }
