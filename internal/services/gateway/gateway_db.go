@@ -22,10 +22,13 @@ package gateway
 
 import (
 	"context"
+	"crypto/rand"
 	_ "embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -79,6 +82,7 @@ type CanonicalDBService struct {
 	KVStore        *KVStoreService
 	SSEStore       *SSEEventService
 	BlobStore      *BlobStoreService
+	sm             *SecretManager
 
 	// Shutdown tracking
 	mu      sync.Mutex
@@ -89,11 +93,10 @@ type CanonicalDBService struct {
 }
 
 // OpenCanonicalDBService opens (or creates) the unified SQLite database.
-// testMode enables the in-memory keystore keyring for unit tests.
 // vaultKeyPath is the path to the vault private key file (hex-encoded).
-// vaultRequireUnlock requires the vault to be unlocked before starting.
-// testKeystore is an optional keystore instance for test mode (prevents race conditions in parallel tests).
-func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger, testMode bool, vaultKeyPath string, vaultRequireUnlock bool, testKeystore *keystore.Keystore, fileSvc fs.RuntimeFileService) (*CanonicalDBService, error) {
+// ks is an optional pre-initialized keystore (non-nil for tests to bypass OS keychain,
+// nil for production which creates via OS keychain).
+func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger, vaultKeyPath string, ks *keystore.Keystore, fileSvc fs.RuntimeFileService) (*CanonicalDBService, error) {
 	dbPath := filepath.Join(dataDir, constants.DbFilename)
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 
@@ -112,46 +115,76 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 		return nil, fmt.Errorf("%w: %w", constants.ErrVaultCreateFailed, err)
 	}
 
-	// Unlock vault before initializing storage services
-	// Encryption is required for secure data storage at rest
-	if vaultKeyPath == "" && vaultRequireUnlock {
+	// Resolve vault key path.
+	if vaultKeyPath == "" {
 		vaultKeyPath = filepath.Join(vaultDir, constants.VaultKeyFilename)
 	}
-
-	if vaultKeyPath != "" {
-		if !filepath.IsAbs(vaultKeyPath) {
-			vaultKeyPath = filepath.Join(dataDir, vaultKeyPath)
-		}
-
-		privateKey, err := vault.ReadVaultKey(vaultKeyPath)
-		if err != nil {
-			if vaultRequireUnlock {
-				db.Close()
-				return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyReadFailed, err)
-			}
-			logger.Info("Vault key not found, vault will remain locked", "path", vaultKeyPath, "error", err)
-		} else {
-			defer vault.SecureZero(privateKey)
-
-			if err := encryptionVault.Unlock(privateKey); err != nil {
-				if vaultRequireUnlock {
-					db.Close()
-					if errors.Is(err, constants.ErrVaultNotInitialized) {
-						return nil, fmt.Errorf("%w: %s", constants.ErrVaultNotInitialized, vaultDir)
-					}
-					if errors.Is(err, constants.ErrVaultInvalidPrivateKey) {
-						return nil, fmt.Errorf("%w: %s", constants.ErrVaultKeyDecodeFailed, vaultKeyPath)
-					}
-					return nil, fmt.Errorf("%w: %w", constants.ErrVaultUnlockFailed, err)
-				}
-				logger.Info("Failed to unlock vault, vault will remain locked", "error", err)
-			} else {
-				logger.Info("Vault unlocked successfully", "vault_dir", vaultDir)
-			}
-		}
-	} else {
-		logger.Info("No vault key provided, vault will remain locked")
+	if !filepath.IsAbs(vaultKeyPath) {
+		vaultKeyPath = filepath.Join(dataDir, vaultKeyPath)
 	}
+
+	// Auto-initialize vault on first run. If no vault header exists, generate
+	// a random key, create the vault header, and write the key file. This
+	// mirrors the `g8e vault init` CLI command and ensures the vault is always
+	// ready without requiring a separate initialization step — same pattern as
+	// SQLite creating the database file on first open.
+	if !vault.VaultHeaderExists(vaultDir) {
+		if err := os.MkdirAll(vaultDir, constants.PermDirPrivate); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("gateway: create vault dir: %w", err)
+		}
+
+		initKey := make([]byte, vault.KeySize)
+		if _, err := rand.Read(initKey); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyGenerateFailed, err)
+		}
+
+		header, _, err := vault.NewVaultHeader(initKey)
+		if err != nil {
+			db.Close()
+			vault.SecureZero(initKey)
+			return nil, fmt.Errorf("%w: %w", constants.ErrVaultHeaderCreateFailed, err)
+		}
+
+		if err := header.Save(vaultDir); err != nil {
+			db.Close()
+			vault.SecureZero(initKey)
+			return nil, fmt.Errorf("%w: %w", constants.ErrVaultHeaderSaveFailed, err)
+		}
+
+		keyData := []byte(hex.EncodeToString(initKey) + "\n")
+		if err := os.WriteFile(vaultKeyPath, keyData, constants.PermFilePrivate); err != nil {
+			db.Close()
+			vault.SecureZero(initKey)
+			return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyWriteFailed, err)
+		}
+
+		vault.SecureZero(initKey)
+		logger.Info("Vault auto-initialized on first run", "vault_dir", vaultDir, "key_path", vaultKeyPath)
+	}
+
+	// Unlock vault. Encryption is required for secure data storage at rest —
+	// the vault must always be unlocked at startup. If the key cannot be read
+	// or the vault cannot be unlocked, the gateway fails to start.
+	privateKey, err := vault.ReadVaultKey(vaultKeyPath)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyReadFailed, err)
+	}
+	defer vault.SecureZero(privateKey)
+
+	if err := encryptionVault.Unlock(privateKey); err != nil {
+		db.Close()
+		if errors.Is(err, constants.ErrVaultNotInitialized) {
+			return nil, fmt.Errorf("%w: %s", constants.ErrVaultNotInitialized, vaultDir)
+		}
+		if errors.Is(err, constants.ErrVaultInvalidPrivateKey) {
+			return nil, fmt.Errorf("%w: %s", constants.ErrVaultKeyDecodeFailed, vaultKeyPath)
+		}
+		return nil, fmt.Errorf("%w: %w", constants.ErrVaultUnlockFailed, err)
+	}
+	logger.Info("Vault unlocked successfully", "vault_dir", vaultDir)
 
 	// Initialize SQLAuditStore for transaction-native audit recording
 	auditStoreConfig := storage.DefaultAuditStoreConfig()
@@ -184,16 +217,9 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	svc.SSEStore = NewSSEEventService(db, logger)
 	svc.BlobStore = NewBlobStoreService(db, logger)
 
-	if testMode {
-		if err := svc.initTestSchema(testKeystore, fileSvc); err != nil {
-			db.Close()
-			return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
-		}
-	} else {
-		if err := svc.initSchema(fileSvc); err != nil {
-			db.Close()
-			return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
-		}
+	if err := svc.initSchema(fileSvc, ks); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	// Initialize state root if missing
@@ -208,27 +234,6 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 
 	logger.Info("Gateway database initialized", "path", dbPath)
 	return svc, nil
-}
-
-func (s *CanonicalDBService) initTestSchema(testKeystore *keystore.Keystore, fileSvc fs.RuntimeFileService) error {
-	_, err := s.db.ExecWithRetry(gatewaySchema)
-	if err != nil {
-		return fmt.Errorf("canonicalDB: init test schema: %w", err)
-	}
-	if testKeystore == nil {
-		return constants.ErrTestKeystoreNil
-	}
-	sm := &SecretManager{
-		db:       s.db,
-		logger:   s.logger,
-		fileSvc:  fileSvc,
-		keystore: testKeystore,
-	}
-	if err := sm.InitAppSettings(); err != nil {
-		return fmt.Errorf("canonicalDB: init test schema: app settings: %w", err)
-	}
-
-	return nil
 }
 
 func (s *CanonicalDBService) initStateRoot() error {
@@ -281,16 +286,27 @@ func (s *CanonicalDBService) RunMaintenance(ctx context.Context) {
 	}
 }
 
-func (s *CanonicalDBService) initSchema(fileSvc fs.RuntimeFileService) error {
+func (s *CanonicalDBService) initSchema(fileSvc fs.RuntimeFileService, ks *keystore.Keystore) error {
 	_, err := s.db.ExecWithRetry(gatewaySchema)
 	if err != nil {
 		return fmt.Errorf("canonicalDB: init schema: %w", err)
 	}
 
-	sm, err := NewSecretManager(s.db, fileSvc, s.logger)
-	if err != nil {
-		return fmt.Errorf("canonicalDB: init schema: secret manager: %w", err)
+	var sm *SecretManager
+	if ks != nil {
+		sm = &SecretManager{
+			db:       s.db,
+			logger:   s.logger,
+			fileSvc:  fileSvc,
+			keystore: ks,
+		}
+	} else {
+		sm, err = NewSecretManager(s.db, fileSvc, s.logger)
+		if err != nil {
+			return fmt.Errorf("canonicalDB: init schema: secret manager: %w", err)
+		}
 	}
+	s.sm = sm
 	if err := sm.InitAppSettings(); err != nil {
 		return fmt.Errorf("canonicalDB: init schema: app settings: %w", err)
 	}
@@ -301,6 +317,11 @@ func (s *CanonicalDBService) initSchema(fileSvc fs.RuntimeFileService) error {
 // GetDB returns the underlying SQLite database connection.
 func (s *CanonicalDBService) GetDB() *sqliteutil.DB {
 	return s.db
+}
+
+// GetSecretManager returns the SecretManager initialized during schema init.
+func (s *CanonicalDBService) GetSecretManager() *SecretManager {
+	return s.sm
 }
 
 func (s *CanonicalDBService) GetVault() *vault.Vault {

@@ -42,8 +42,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/services/network"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/g8e-ai/g8e/internal/uuid"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
@@ -60,7 +60,7 @@ func TestNativeToolsIntegration_DatabaseTools(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+		operatorURL = network.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	// Check if Operator is reachable
@@ -197,7 +197,7 @@ func TestNativeToolsIntegration_LogTools(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+		operatorURL = network.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	checkOperatorReachable(t, operatorURL)
@@ -251,7 +251,7 @@ func TestNativeToolsIntegration_ProcessTools(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+		operatorURL = network.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	checkOperatorReachable(t, operatorURL)
@@ -325,7 +325,7 @@ func TestNativeToolsIntegration_ProcTree(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+		operatorURL = network.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	checkOperatorReachable(t, operatorURL)
@@ -361,7 +361,7 @@ func TestNativeToolsIntegration_NetworkTools(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+		operatorURL = network.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	checkOperatorReachable(t, operatorURL)
@@ -449,7 +449,7 @@ func TestNativeToolsIntegration_Concurrency(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+		operatorURL = network.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	checkOperatorReachable(t, operatorURL)
@@ -523,7 +523,7 @@ func TestNativeToolsIntegration_PropertyBasedTests(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+		operatorURL = network.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	checkOperatorReachable(t, operatorURL)
@@ -649,7 +649,7 @@ func TestNativeToolsIntegration_NegativeControls(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+		operatorURL = network.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	checkOperatorReachable(t, operatorURL)

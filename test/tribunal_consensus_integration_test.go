@@ -47,7 +47,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/netutil"
+	"github.com/g8e-ai/g8e/internal/services/network"
 	"github.com/g8e-ai/g8e/test/fixtures"
 )
 
@@ -70,7 +70,7 @@ func makeToolsCallRequest(toolName string, args map[string]string) []byte {
 // returns the raw HTTP response. The caller is responsible for closing the body.
 func doToolsCall(t *testing.T, client *http.Client, httpsPort int, sessionID string, toolName string, args map[string]string) *http.Response {
 	t.Helper()
-	mtlsURL := netutil.LocalhostHTTPSURL(httpsPort)
+	mtlsURL := network.LocalhostHTTPSURL(httpsPort)
 	reqBody := makeToolsCallRequest(toolName, args)
 	req, err := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 	require.NoError(t, err)
@@ -134,7 +134,7 @@ func TestTribunalConsensus_MalformedCSR(t *testing.T) {
 	identity := fixtures.EnrollClientIdentity(t, f, "csr-test-user", "test-org", "fp-csr-test", "test-host")
 	enrollClient := fixtures.CreateMTLSClient(t, f, identity)
 
-	mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+	mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 
 	// Submit a malformed CSR (not a real PEM)
 	regReq := map[string]string{
@@ -173,7 +173,7 @@ func TestTribunalConsensus_DelegatedAppEnrollment(t *testing.T) {
 	// Generate a CSR for the delegated app
 	appCSRPEM, _ := generateTestCSR(t, "delegated-app")
 
-	mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+	mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 
 	// Request a delegated credential
 	delegatedReq := map[string]string{
@@ -351,7 +351,7 @@ func TestTribunalConsensus_L1ToL5Walkthrough(t *testing.T) {
 
 	// Verify the audit store recorded the transaction.
 	// Query the audit receipts endpoint.
-	mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+	mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 	auditReq, _ := http.NewRequest(http.MethodGet, mtlsURL+constants.APIPaths.AuditReceipts, nil)
 	auditReq.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
 	auditResp, err := apiClient.Do(auditReq)

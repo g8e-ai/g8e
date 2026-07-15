@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Operator
 
-Last Updated: 2026-07-13
-Version: v1.5.0
+Last Updated: 2026-07-15
+Version: v1.5.2
 
 ---
 
@@ -323,12 +323,10 @@ When starting the Gateway with `gw start` or `gw start --follow`, the vault can 
 
 - `--vault-dir <dir>`: Directory for vault data (default: `.g8e/vault`)
 - `--vault-key <path>`: Path to vault private key (default: `.g8e/secrets/key`)
-- `--vault-require-unlock`: Require vault to be unlocked at startup (fail if vault cannot be unlocked)
 
 Environment variables:
 - `G8E_VAULT_DIR`: Override vault directory
 - `G8E_VAULT_KEY`: Override vault key path
-- `G8E_VAULT_REQUIRE_UNLOCK`: Set to `true` to require vault unlock at startup
 
 ### Vault Management
 

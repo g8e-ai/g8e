@@ -18,37 +18,35 @@ type EnvVarKey string
 
 // EnvVar groups all environment variable name constants consumed by g8eo.
 var EnvVar = struct {
-	TribunalID         EnvVarKey
-	TribunalURL        EnvVarKey
-	TribunalBootstrap  EnvVarKey
-	VaultDir           EnvVarKey
-	VaultKey           EnvVarKey
-	VaultRequireUnlock EnvVarKey
-	OperatorSessionID  EnvVarKey
-	PasskeyRpID        EnvVarKey
-	PasskeyRpName      EnvVarKey
-	PasskeyRpOrigins   EnvVarKey
-	PublicBaseURL      EnvVarKey
-	AllowedOrigins     EnvVarKey
-	Shell              EnvVarKey
-	Lang               EnvVarKey
-	Term               EnvVarKey
-	TZ                 EnvVarKey
+	TribunalID        EnvVarKey
+	TribunalURL       EnvVarKey
+	TribunalBootstrap EnvVarKey
+	VaultDir          EnvVarKey
+	VaultKey          EnvVarKey
+	OperatorSessionID EnvVarKey
+	PasskeyRpID       EnvVarKey
+	PasskeyRpName     EnvVarKey
+	PasskeyRpOrigins  EnvVarKey
+	PublicBaseURL     EnvVarKey
+	AllowedOrigins    EnvVarKey
+	Shell             EnvVarKey
+	Lang              EnvVarKey
+	Term              EnvVarKey
+	TZ                EnvVarKey
 }{
-	TribunalID:         EnvVarKey("G8E_TRIBUNAL_ID"),
-	TribunalURL:        EnvVarKey("G8E_TRIBUNAL_URL"),
-	TribunalBootstrap:  EnvVarKey("G8E_TRIBUNAL_BOOTSTRAP"),
-	VaultDir:           EnvVarKey("G8E_VAULT_DIR"),
-	VaultKey:           EnvVarKey("G8E_VAULT_KEY"),
-	VaultRequireUnlock: EnvVarKey("G8E_VAULT_REQUIRE_UNLOCK"),
-	OperatorSessionID:  EnvVarKey("G8E_OPERATOR_SESSION_ID"),
-	PasskeyRpID:        EnvVarKey("G8E_PASSKEY_RP_ID"),
-	PasskeyRpName:      EnvVarKey("G8E_PASSKEY_RP_NAME"),
-	PasskeyRpOrigins:   EnvVarKey("G8E_PASSKEY_RP_ORIGINS"),
-	PublicBaseURL:      EnvVarKey("G8E_PUBLIC_BASE_URL"),
-	AllowedOrigins:     EnvVarKey("G8E_ALLOWED_ORIGINS"),
-	Shell:              EnvVarKey("SHELL"),
-	Lang:               EnvVarKey("LANG"),
-	Term:               EnvVarKey("TERM"),
-	TZ:                 EnvVarKey("TZ"),
+	TribunalID:        EnvVarKey("G8E_TRIBUNAL_ID"),
+	TribunalURL:       EnvVarKey("G8E_TRIBUNAL_URL"),
+	TribunalBootstrap: EnvVarKey("G8E_TRIBUNAL_BOOTSTRAP"),
+	VaultDir:          EnvVarKey("G8E_VAULT_DIR"),
+	VaultKey:          EnvVarKey("G8E_VAULT_KEY"),
+	OperatorSessionID: EnvVarKey("G8E_OPERATOR_SESSION_ID"),
+	PasskeyRpID:       EnvVarKey("G8E_PASSKEY_RP_ID"),
+	PasskeyRpName:     EnvVarKey("G8E_PASSKEY_RP_NAME"),
+	PasskeyRpOrigins:  EnvVarKey("G8E_PASSKEY_RP_ORIGINS"),
+	PublicBaseURL:     EnvVarKey("G8E_PUBLIC_BASE_URL"),
+	AllowedOrigins:    EnvVarKey("G8E_ALLOWED_ORIGINS"),
+	Shell:             EnvVarKey("SHELL"),
+	Lang:              EnvVarKey("LANG"),
+	Term:              EnvVarKey("TERM"),
+	TZ:                EnvVarKey("TZ"),
 }

@@ -51,7 +51,7 @@ func TestGetBinaryName(t *testing.T) {
 func TestResolveStartConfig(t *testing.T) {
 	t.Run("uses CLI flag values when no environment variables set", func(t *testing.T) {
 		// Clear environment variables
-		unsetEnvVars := []string{"G8E_VAULT_DIR", "G8E_VAULT_KEY", "G8E_VAULT_REQUIRE_UNLOCK"}
+		unsetEnvVars := []string{"G8E_VAULT_DIR", "G8E_VAULT_KEY"}
 		for _, env := range unsetEnvVars {
 			original := os.Getenv(env)
 			os.Unsetenv(env)
@@ -63,23 +63,22 @@ func TestResolveStartConfig(t *testing.T) {
 		}
 
 		cfg := resolveGatewayFlags(GatewayFlags{
-			Posture:            "doctrine",
-			HTTPPort:           8080,
-			HTTPSPort:          8443,
-			DataDir:            "/data",
-			PKIDir:             "/pki",
-			SecretsDir:         "/secrets",
-			VaultDir:           "/vault",
-			VaultKeyPath:       "/vault/key",
-			VaultRequireUnlock: false,
-			PasskeyRpID:        "rp-id",
-			PasskeyRpName:      "rp-name",
-			RateLimitRPS:       100.0,
-			RateLimitBurst:     50,
-			LogLevel:           "info",
-			CertIdentityMode:   "full",
-			TribunalID:         "",
-			TribunalURL:        "",
+			Posture:          "doctrine",
+			HTTPPort:         8080,
+			HTTPSPort:        8443,
+			DataDir:          "/data",
+			PKIDir:           "/pki",
+			SecretsDir:       "/secrets",
+			VaultDir:         "/vault",
+			VaultKeyPath:     "/vault/key",
+			PasskeyRpID:      "rp-id",
+			PasskeyRpName:    "rp-name",
+			RateLimitRPS:     100.0,
+			RateLimitBurst:   50,
+			LogLevel:         "info",
+			CertIdentityMode: "full",
+			TribunalID:       "",
+			TribunalURL:      "",
 		})
 
 		assert.Equal(t, "doctrine", cfg.Posture)
@@ -90,7 +89,6 @@ func TestResolveStartConfig(t *testing.T) {
 		assert.Equal(t, "/secrets", cfg.SecretsDir)
 		assert.Equal(t, "/vault", cfg.VaultDir)
 		assert.Equal(t, "/vault/key", cfg.VaultKeyPath)
-		assert.False(t, cfg.VaultRequireUnlock)
 		assert.Equal(t, "rp-id", cfg.PasskeyRpID)
 		assert.Equal(t, "rp-name", cfg.PasskeyRpName)
 		assert.InEpsilon(t, 100.0, cfg.RateLimitRPS, 0.01)
@@ -111,23 +109,22 @@ func TestResolveStartConfig(t *testing.T) {
 		})
 
 		cfg := resolveGatewayFlags(GatewayFlags{
-			Posture:            "doctrine",
-			HTTPPort:           8080,
-			HTTPSPort:          8443,
-			DataDir:            "/data",
-			PKIDir:             "/pki",
-			SecretsDir:         "/secrets",
-			VaultDir:           "", // empty vault dir
-			VaultKeyPath:       "/vault/key",
-			VaultRequireUnlock: false,
-			PasskeyRpID:        "rp-id",
-			PasskeyRpName:      "rp-name",
-			RateLimitRPS:       100.0,
-			RateLimitBurst:     50,
-			LogLevel:           "info",
-			CertIdentityMode:   "full",
-			TribunalID:         "",
-			TribunalURL:        "",
+			Posture:          "doctrine",
+			HTTPPort:         8080,
+			HTTPSPort:        8443,
+			DataDir:          "/data",
+			PKIDir:           "/pki",
+			SecretsDir:       "/secrets",
+			VaultDir:         "", // empty vault dir
+			VaultKeyPath:     "/vault/key",
+			PasskeyRpID:      "rp-id",
+			PasskeyRpName:    "rp-name",
+			RateLimitRPS:     100.0,
+			RateLimitBurst:   50,
+			LogLevel:         "info",
+			CertIdentityMode: "full",
+			TribunalID:       "",
+			TribunalURL:      "",
 		})
 
 		assert.Equal(t, "/env/vault", cfg.VaultDir)
@@ -145,94 +142,25 @@ func TestResolveStartConfig(t *testing.T) {
 		})
 
 		cfg := resolveGatewayFlags(GatewayFlags{
-			Posture:            "doctrine",
-			HTTPPort:           8080,
-			HTTPSPort:          8443,
-			DataDir:            "/data",
-			PKIDir:             "/pki",
-			SecretsDir:         "/secrets",
-			VaultDir:           "/vault",
-			VaultKeyPath:       "", // empty vault key
-			VaultRequireUnlock: false,
-			PasskeyRpID:        "rp-id",
-			PasskeyRpName:      "rp-name",
-			RateLimitRPS:       100.0,
-			RateLimitBurst:     50,
-			LogLevel:           "info",
-			CertIdentityMode:   "full",
-			TribunalID:         "",
-			TribunalURL:        "",
+			Posture:          "doctrine",
+			HTTPPort:         8080,
+			HTTPSPort:        8443,
+			DataDir:          "/data",
+			PKIDir:           "/pki",
+			SecretsDir:       "/secrets",
+			VaultDir:         "/vault",
+			VaultKeyPath:     "", // empty vault key
+			PasskeyRpID:      "rp-id",
+			PasskeyRpName:    "rp-name",
+			RateLimitRPS:     100.0,
+			RateLimitBurst:   50,
+			LogLevel:         "info",
+			CertIdentityMode: "full",
+			TribunalID:       "",
+			TribunalURL:      "",
 		})
 
 		assert.Equal(t, "/env/vault/key", cfg.VaultKeyPath)
-	})
-
-	t.Run("environment variable G8E_VAULT_REQUIRE_UNLOCK=true overrides false CLI flag", func(t *testing.T) {
-		original := os.Getenv("G8E_VAULT_REQUIRE_UNLOCK")
-		os.Setenv("G8E_VAULT_REQUIRE_UNLOCK", "true")
-		t.Cleanup(func() {
-			if original != "" {
-				os.Setenv("G8E_VAULT_REQUIRE_UNLOCK", original)
-			} else {
-				os.Unsetenv("G8E_VAULT_REQUIRE_UNLOCK")
-			}
-		})
-
-		cfg := resolveGatewayFlags(GatewayFlags{
-			Posture:            "doctrine",
-			HTTPPort:           8080,
-			HTTPSPort:          8443,
-			DataDir:            "/data",
-			PKIDir:             "/pki",
-			SecretsDir:         "/secrets",
-			VaultDir:           "/vault",
-			VaultKeyPath:       "/vault/key",
-			VaultRequireUnlock: false, // CLI flag false
-			PasskeyRpID:        "rp-id",
-			PasskeyRpName:      "rp-name",
-			RateLimitRPS:       100.0,
-			RateLimitBurst:     50,
-			LogLevel:           "info",
-			CertIdentityMode:   "full",
-			TribunalID:         "",
-			TribunalURL:        "",
-		})
-
-		assert.True(t, cfg.VaultRequireUnlock)
-	})
-
-	t.Run("environment variable G8E_VAULT_REQUIRE_UNLOCK with non-true value does not override", func(t *testing.T) {
-		original := os.Getenv("G8E_VAULT_REQUIRE_UNLOCK")
-		os.Setenv("G8E_VAULT_REQUIRE_UNLOCK", "false")
-		t.Cleanup(func() {
-			if original != "" {
-				os.Setenv("G8E_VAULT_REQUIRE_UNLOCK", original)
-			} else {
-				os.Unsetenv("G8E_VAULT_REQUIRE_UNLOCK")
-			}
-		})
-
-		cfg := resolveGatewayFlags(GatewayFlags{
-			Posture:            "doctrine",
-			HTTPPort:           8080,
-			HTTPSPort:          8443,
-			DataDir:            "/data",
-			PKIDir:             "/pki",
-			SecretsDir:         "/secrets",
-			VaultDir:           "/vault",
-			VaultKeyPath:       "/vault/key",
-			VaultRequireUnlock: false,
-			PasskeyRpID:        "rp-id",
-			PasskeyRpName:      "rp-name",
-			RateLimitRPS:       100.0,
-			RateLimitBurst:     50,
-			LogLevel:           "info",
-			CertIdentityMode:   "full",
-			TribunalID:         "",
-			TribunalURL:        "",
-		})
-
-		assert.False(t, cfg.VaultRequireUnlock)
 	})
 
 	t.Run("CLI flag value takes precedence over environment variable when set", func(t *testing.T) {
@@ -247,23 +175,22 @@ func TestResolveStartConfig(t *testing.T) {
 		})
 
 		cfg := resolveGatewayFlags(GatewayFlags{
-			Posture:            "doctrine",
-			HTTPPort:           8080,
-			HTTPSPort:          8443,
-			DataDir:            "/data",
-			PKIDir:             "/pki",
-			SecretsDir:         "/secrets",
-			VaultDir:           "/cli/vault", // CLI flag set
-			VaultKeyPath:       "/vault/key",
-			VaultRequireUnlock: false,
-			PasskeyRpID:        "rp-id",
-			PasskeyRpName:      "rp-name",
-			RateLimitRPS:       100.0,
-			RateLimitBurst:     50,
-			LogLevel:           "info",
-			CertIdentityMode:   "full",
-			TribunalID:         "",
-			TribunalURL:        "",
+			Posture:          "doctrine",
+			HTTPPort:         8080,
+			HTTPSPort:        8443,
+			DataDir:          "/data",
+			PKIDir:           "/pki",
+			SecretsDir:       "/secrets",
+			VaultDir:         "/cli/vault", // CLI flag set
+			VaultKeyPath:     "/vault/key",
+			PasskeyRpID:      "rp-id",
+			PasskeyRpName:    "rp-name",
+			RateLimitRPS:     100.0,
+			RateLimitBurst:   50,
+			LogLevel:         "info",
+			CertIdentityMode: "full",
+			TribunalID:       "",
+			TribunalURL:      "",
 		})
 
 		assert.Equal(t, "/cli/vault", cfg.VaultDir)
@@ -292,29 +219,28 @@ func TestReExecArgsMatchStartCmdFlags(t *testing.T) {
 
 	opts := platform.OperatorStartOptions{
 		GatewayConfig: serve.GatewayConfig{
-			Posture:            g8econfig.GatewayPosture("doctrine"),
-			HTTPPort:           8080,
-			HTTPSPort:          8443,
-			DataDir:            "/data",
-			PKIDir:             "/pki",
-			SecretsDir:         "/secrets",
-			VaultDir:           "/vault",
-			VaultKeyPath:       "/vault/key",
-			VaultRequireUnlock: true,
-			PasskeyRpID:        "localhost",
-			PasskeyRpName:      "g8e",
-			PasskeyRpOrigins:   []string{"http://localhost:8087", "https://localhost:8450"},
-			RateLimitRPS:       100.0,
-			RateLimitBurst:     50,
-			LogLevel:           "info",
-			CertIdentityMode:   "full",
-			TribunalID:         "trib-1",
-			TribunalURL:        "https://localhost:8443/tribunal/v1/deliberate",
-			TribunalBootstrap:  "/etc/g8e/tribunal-bootstrap.json",
-			MCPDownstreamURL:   "https://downstream.example.com/mcp",
-			A2ADownstreamURL:   "https://downstream.example.com/a2a",
-			PublicBaseURL:      "https://demo.g8e.ai",
-			AllowedOrigins:     []string{"https://lovable.dev"},
+			Posture:           g8econfig.GatewayPosture("doctrine"),
+			HTTPPort:          8080,
+			HTTPSPort:         8443,
+			DataDir:           "/data",
+			PKIDir:            "/pki",
+			SecretsDir:        "/secrets",
+			VaultDir:          "/vault",
+			VaultKeyPath:      "/vault/key",
+			PasskeyRpID:       "localhost",
+			PasskeyRpName:     "g8e",
+			PasskeyRpOrigins:  []string{"http://localhost:8087", "https://localhost:8450"},
+			RateLimitRPS:      100.0,
+			RateLimitBurst:    50,
+			LogLevel:          "info",
+			CertIdentityMode:  "full",
+			TribunalID:        "trib-1",
+			TribunalURL:       "https://localhost:8443/tribunal/v1/deliberate",
+			TribunalBootstrap: "/etc/g8e/tribunal-bootstrap.json",
+			MCPDownstreamURL:  "https://downstream.example.com/mcp",
+			A2ADownstreamURL:  "https://downstream.example.com/a2a",
+			PublicBaseURL:     "https://demo.g8e.ai",
+			AllowedOrigins:    []string{"https://lovable.dev"},
 		},
 	}
 
@@ -346,8 +272,15 @@ func TestReExecArgsMatchStartCmdFlags(t *testing.T) {
 		}
 	}
 
-	// Assert every cobra flag is emitted when all options are populated
+	// Assert every cobra flag is emitted when all options are populated,
+	// except for UI-only flags that are not re-executed.
+	skipReExec := map[string]bool{
+		"interactive": true, // --interactive is a one-time UI flow, not re-executed
+	}
 	cobraFlags.VisitAll(func(f *pflag.Flag) {
+		if skipReExec[f.Name] {
+			return
+		}
 		if !emittedFlags[f.Name] {
 			t.Errorf("gatewayStartCmd() defines --%s but BuildReExecArgs does not emit it", f.Name)
 		}

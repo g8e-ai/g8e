@@ -53,12 +53,11 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
+	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	sm, err := NewSecretManagerWithKeystore(db.db, fileSvc, logger, ks)
-	require.NoError(t, err)
+	sm := db.GetSecretManager()
 
 	pki := newPKIAuthority(fileSvc, db, sm, logger)
 	err = pki.InitializePKI(nil)

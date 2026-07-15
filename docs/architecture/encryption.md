@@ -1,7 +1,7 @@
 # Encryption Architecture
 
 Last Updated: 2026-07-15
-Version: v1.5.1
+Version: v1.5.2
 
 ## Overview
 
@@ -127,13 +127,11 @@ export G8E_VAULT_KEY=/path/to/vault/key
 
 - `--vault-dir`: Directory for vault data (default: `.g8e/vault`).
 - `--vault-key`: Path to vault private key (default: `.g8e/vault/key`).
-- `--vault-require-unlock`: Require the vault to be unlocked at gateway startup. The gateway fails to start if the vault cannot be unlocked.
 
 ### Environment Variables
 
 - `G8E_VAULT_DIR`: Override vault directory.
 - `G8E_VAULT_KEY`: Override vault key path.
-- `G8E_VAULT_REQUIRE_UNLOCK`: Set to `true` to require the vault to be unlocked at gateway startup (fail if vault cannot be unlocked).
 
 ### Default Paths
 

@@ -83,26 +83,25 @@ type LoadOptions struct {
 // backbone for the entire g8e platform, replacing external databases.
 // No outbound authentication is required - the Operator simply starts and listens.
 type GatewayConfig struct {
-	Enabled            bool
-	Posture            GatewayPosture // Governance enforcement posture (doctrine, consensus, notary)
-	HTTPPort           int            // Plain HTTP port for bootstrap and MCP (default: constants.Ports.OperatorHttp)
-	HTTPSPort          int            // HTTPS port for mTLS API (default: constants.Ports.OperatorHttps)
-	DataDir            string         // Root directory for SQLite database (default: .g8e/data in working directory)
-	PKIDir             string         // Directory for TLS certificates (default: .g8e/pki)
-	SecretsDir         string         // Directory for platform secrets (default: .g8e/secrets)
-	VaultDir           string         // Directory for encryption vault (default: .g8e/vault)
-	VaultKeyPath       string         // Path to vault key file (default: .g8e/vault/key)
-	VaultRequireUnlock bool           // Require vault to be unlocked before starting (default: true)
-	PasskeyRpID        string         // RP ID for passkey operations (default: localhost)
-	PasskeyRpName      string         // RP Name for passkey operations (default: g8e)
-	PasskeyRpOrigins   []string       // Additional RP origins for passkey operations (e.g. demo remapped ports)
-	MCPDownstreamURL   string         // URL of the downstream MCP server to proxy discovery and execution to
-	A2ADownstreamURL   string         // URL of the downstream A2A server to proxy execution to
-	PublicBaseURL      string         // Public base URL for L3 approval links (e.g., https://localhost:8443)
-	JWKSURL            string         // URL to fetch JWKS for JWT validation
-	JWTRoleClaim       string         // The claim in JWT that contains roles (default: "roles")
-	JWTIssuer          string         // Expected issuer claim in JWT (optional, for multi-audience IdP deployments)
-	JWTAudience        string         // Expected audience claim in JWT (optional, for multi-audience IdP deployments)
+	Enabled          bool
+	Posture          GatewayPosture // Governance enforcement posture (doctrine, consensus, notary)
+	HTTPPort         int            // Plain HTTP port for bootstrap and MCP (default: constants.Ports.OperatorHttp)
+	HTTPSPort        int            // HTTPS port for mTLS API (default: constants.Ports.OperatorHttps)
+	DataDir          string         // Root directory for SQLite database (default: .g8e/data in working directory)
+	PKIDir           string         // Directory for TLS certificates (default: .g8e/pki)
+	SecretsDir       string         // Directory for platform secrets (default: .g8e/secrets)
+	VaultDir         string         // Directory for encryption vault (default: .g8e/vault)
+	VaultKeyPath     string         // Path to vault key file (default: .g8e/vault/key)
+	PasskeyRpID      string         // RP ID for passkey operations (default: localhost)
+	PasskeyRpName    string         // RP Name for passkey operations (default: g8e)
+	PasskeyRpOrigins []string       // Additional RP origins for passkey operations (e.g. demo remapped ports)
+	MCPDownstreamURL string         // URL of the downstream MCP server to proxy discovery and execution to
+	A2ADownstreamURL string         // URL of the downstream A2A server to proxy execution to
+	PublicBaseURL    string         // Public base URL for L3 approval links (e.g., https://localhost:8443)
+	JWKSURL          string         // URL to fetch JWKS for JWT validation
+	JWTRoleClaim     string         // The claim in JWT that contains roles (default: "roles")
+	JWTIssuer        string         // Expected issuer claim in JWT (optional, for multi-audience IdP deployments)
+	JWTAudience      string         // Expected audience claim in JWT (optional, for multi-audience IdP deployments)
 
 	// HTTP server limits
 	MaxPayloadBytes   int64         // Maximum request payload size in bytes (default: 10MB)
@@ -180,9 +179,8 @@ type Config struct {
 	SecretsDir string
 
 	// Vault configuration for encryption at rest
-	VaultDir           string // Directory for encryption vault (default: .g8e/vault)
-	VaultKeyPath       string // Path to vault key file (default: .g8e/vault/key)
-	VaultRequireUnlock bool   // Require vault to be unlocked before starting (default: true)
+	VaultDir     string // Directory for encryption vault (default: .g8e/vault)
+	VaultKeyPath string // Path to vault key file (default: .g8e/vault/key)
 
 	// Execution vault configuration. All paths are relative to WorkDir - the directory the Operator was launched from.
 	ExecutionVaultEnabled       bool
@@ -225,6 +223,8 @@ type GatewayOptions struct {
 	DataDir          string
 	PKIDir           string
 	SecretsDir       string
+	VaultDir         string
+	VaultKeyPath     string
 	PasskeyRpID      string
 	PasskeyRpName    string
 	PasskeyRpOrigins []string
@@ -374,8 +374,14 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 		secretsDir = paths.Infra.SecretsDir
 	}
 
-	vaultDir := paths.Infra.VaultDir
-	vaultKeyPath := paths.Infra.VaultKeyPath
+	vaultDir := opts.VaultDir
+	if vaultDir == "" {
+		vaultDir = paths.Infra.VaultDir
+	}
+	vaultKeyPath := opts.VaultKeyPath
+	if vaultKeyPath == "" {
+		vaultKeyPath = paths.Infra.VaultKeyPath
+	}
 
 	// Validate and resolve gateway ports
 	httpPort, httpsPort, err := validateAndResolveGatewayPorts(
@@ -424,24 +430,23 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			Enabled: true,
 			Posture: posture,
 
-			HTTPPort:           httpPort,
-			HTTPSPort:          httpsPort,
-			DataDir:            dataDir,
-			PKIDir:             pkiDir,
-			SecretsDir:         secretsDir,
-			VaultDir:           vaultDir,
-			VaultKeyPath:       vaultKeyPath,
-			VaultRequireUnlock: false,
-			PasskeyRpID:        passkeyRpID,
-			PasskeyRpName:      passkeyRpName,
-			PasskeyRpOrigins:   opts.PasskeyRpOrigins,
-			MCPDownstreamURL:   mcpDownstreamURL,
-			A2ADownstreamURL:   a2aDownstreamURL,
-			PublicBaseURL:      opts.PublicBaseURL,
-			JWKSURL:            jwksURL,
-			JWTRoleClaim:       jwtRoleClaim,
-			JWTIssuer:          jwtIssuer,
-			JWTAudience:        jwtAudience,
+			HTTPPort:         httpPort,
+			HTTPSPort:        httpsPort,
+			DataDir:          dataDir,
+			PKIDir:           pkiDir,
+			SecretsDir:       secretsDir,
+			VaultDir:         vaultDir,
+			VaultKeyPath:     vaultKeyPath,
+			PasskeyRpID:      passkeyRpID,
+			PasskeyRpName:    passkeyRpName,
+			PasskeyRpOrigins: opts.PasskeyRpOrigins,
+			MCPDownstreamURL: mcpDownstreamURL,
+			A2ADownstreamURL: a2aDownstreamURL,
+			PublicBaseURL:    opts.PublicBaseURL,
+			JWKSURL:          jwksURL,
+			JWTRoleClaim:     jwtRoleClaim,
+			JWTIssuer:        jwtIssuer,
+			JWTAudience:      jwtAudience,
 
 			// HTTP server limits with fail-closed defaults
 			MaxPayloadBytes:   512 * 1024, // 512KB
@@ -451,9 +456,8 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			IdleTimeout:       120 * time.Second,
 			MaxHeaderBytes:    1 << 20, // 1MB
 
-			// Rate limiting disabled for gateway mode (local-only, no external clients)
-			RateLimitRPS:   0,
-			RateLimitBurst: 0,
+			RateLimitRPS:   opts.RateLimitRPS,
+			RateLimitBurst: opts.RateLimitBurst,
 
 			// Certificate mode
 			CertMode:            opts.CertMode,
@@ -565,10 +569,6 @@ func Load(opts LoadOptions) (*Config, error) {
 	if cfg.VaultKeyPath == "" {
 		cfg.VaultKeyPath = paths.Infra.VaultKeyPath
 	}
-
-	// Default VaultRequireUnlock to false (matches CLI flag default)
-	// Gateway can start with vault locked; vault key is optional
-	cfg.VaultRequireUnlock = false
 
 	// Read operator session ID from environment variable (in-memory only, never persisted)
 	// This is set by the deploy script after enrollment to track the operator's session

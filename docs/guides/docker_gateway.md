@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
-Last Updated: 2026-07-14
-Version: v1.5.1
+Last Updated: 2026-07-15
+Version: v1.5.2
 
 This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
 
@@ -198,6 +198,6 @@ docker exec g8e-gateway /g8e gw status
 
 - **Base Image**: The image uses Debian Bookworm. Maintain regular updates to the base image for security patches.
 - **Resource Constraints**: The root `docker-compose.yml` defines CPU and memory limits (2 CPUs / 1G per service with 0.5 CPU / 256M reservations). Adjust these for production workloads.
-- **Vault Management**: The vault must be initialized for production operations. Use `G8E_VAULT_REQUIRE_UNLOCK=true` to ensure the gateway only starts when the vault is available.
+- **Vault Management**: The vault must be initialized for production operations. Use `G8E_VAULT_KEY` to provide the vault key path so the gateway can decrypt the vault at startup.
 - **Certificates**: By default, the gateway generates self-signed certificates. For production, provide valid certificates via the `--pki-dir` volume or use `--cert-mode full` with appropriate hostnames.
 - **Operator Connectivity**: The operator connects to the gateway via `g8e.local`, resolved through the Docker network alias on the shared bridge network. Ensure this hostname matches the gateway certificate SANs in production deployments.

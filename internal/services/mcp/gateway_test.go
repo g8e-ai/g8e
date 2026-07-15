@@ -31,10 +31,10 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/governance"
+	"github.com/g8e-ai/g8e/internal/services/network"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/storage/storagetest"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -1759,7 +1759,7 @@ func newTestGatewayService(t *testing.T, opts ...testGatewayOption) *GatewayServ
 		logger:           slog.Default(),
 		responder:        response.NewWriter(slog.Default()),
 		suspendedStore:   &fakeSuspendedStore{},
-		publicBaseURL:    netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
+		publicBaseURL:    network.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
 		maxFailures:      5,
 		cooldownDuration: 1 * time.Minute,
 		maxPayloadBytes:  10 * 1024 * 1024,

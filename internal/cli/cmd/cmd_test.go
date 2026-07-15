@@ -71,6 +71,7 @@ func TestGatewayCommandSubcommands(t *testing.T) {
 			"settings",
 			"reset",
 			"clean",
+			"setup",
 		}
 
 		for _, subcmd := range expectedSubcommands {

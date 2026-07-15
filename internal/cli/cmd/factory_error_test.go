@@ -217,7 +217,7 @@ func TestAuditSummaryCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 
 func TestGatewayStartCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
-	cmd := gatewayStartCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+	cmd := gatewayStartCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory), nil)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

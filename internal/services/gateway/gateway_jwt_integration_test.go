@@ -131,15 +131,14 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
+	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
-	sm, err := NewSecretManagerWithKeystore(db.db, fileSvc, logger, ks)
-	require.NoError(t, err)
+	sm := db.GetSecretManager()
 
 	pki := newPKIAuthority(fileSvc, db, sm, logger)
 	err = pki.InitializePKI(nil)
@@ -283,15 +282,14 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
+	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
-	sm, err := NewSecretManagerWithKeystore(db.db, fileSvc, logger, ks)
-	require.NoError(t, err)
+	sm := db.GetSecretManager()
 
 	pki := newPKIAuthority(fileSvc, db, sm, logger)
 	err = pki.InitializePKI(nil)
@@ -450,15 +448,14 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
+	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
-	sm, err := NewSecretManagerWithKeystore(db.db, fileSvc, logger, ks)
-	require.NoError(t, err)
+	sm := db.GetSecretManager()
 
 	pki := newPKIAuthority(fileSvc, db, sm, logger)
 	err = pki.InitializePKI(nil)
@@ -615,12 +612,11 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks, fileSvc)
+	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	sm, err := NewSecretManagerWithKeystore(db.db, fileSvc, logger, ks)
-	require.NoError(t, err)
+	sm := db.GetSecretManager()
 
 	pki := newPKIAuthority(fileSvc, db, sm, logger)
 	err = pki.InitializePKI(nil)

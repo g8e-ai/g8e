@@ -226,9 +226,6 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 	if opts.VaultKeyPath != "" {
 		args = append(args, "--vault-key", opts.VaultKeyPath)
 	}
-	if opts.VaultRequireUnlock {
-		args = append(args, "--vault-require-unlock")
-	}
 
 	if opts.CertIdentityMode != "" {
 		args = append(args, "--cert-mode", opts.CertIdentityMode)

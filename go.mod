@@ -18,6 +18,11 @@ require (
 )
 
 require (
+	github.com/atotto/clipboard v0.1.4 // indirect
+	github.com/charmbracelet/bubbles v0.20.0 // indirect
+)
+
+require (
 	dario.cat/mergo v1.0.2 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.4.1 // indirect
