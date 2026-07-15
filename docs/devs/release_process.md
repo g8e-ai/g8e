@@ -2,13 +2,13 @@
 
 This document is the definitive checklist for updating all version-bearing files and documentation when bumping a g8e release. The protocol (Go + Python) and the platform binary share the same version number — there are no separate protocol releases.
 
-> **`make release` handles version syncing, tests, and builds.** It does NOT touch git. The release prep changes are committed and opened as a PR. After the PR is merged, run `make release-tag` on the merged main branch to tag and push. See [Release Workflow](#release-workflow).
+> **`make release` handles version syncing, lint, tests, and builds.** It does NOT touch git. The release prep changes are committed and opened as a PR. After the PR is merged, run `make release-tag` on the merged main branch to tag and push. See [Release Workflow](#release-workflow).
 
 ## How to Use This Document
 
 1. Determine the new version number (see [Versioning Rules](#versioning-rules))
 2. Set `VERSION` to the new version (the single source of truth)
-3. Run `make release` — this auto-syncs `pyproject.toml` and `__init__.py`, runs the full test suite, and builds binaries
+3. Run `make release` — this auto-syncs `pyproject.toml` and `__init__.py`, runs lint, runs the full test suite, and builds binaries
 4. Update `CHANGELOG.md` and create release notes (see [Manual Updates](#manual-updates))
 5. Review release content for [documentation accuracy](#content-accuracy-review) — protocol specs, architecture docs, and guides must reflect any code refactors or behavioral changes shipped in this release
 6. Run the [Verification](#verification) section to catch any missed files
@@ -288,10 +288,10 @@ grep -rnE 'oldCommandName|OldEndpointPath|OLD_CONSTANT' docs/ protocol/docs/ --i
 
 ## Manual Updates
 
-`make release` handles version syncing, tests, and builds automatically. The following must still be done manually:
+`make release` handles version syncing, lint, tests, and builds automatically. The following must still be done manually:
 
 - [ ] **1. `VERSION`** — Set to `vX.Y.Z`
-- [ ] **2. `make release`** — Auto-syncs `pyproject.toml` + `__init__.py`, runs the full test suite, builds binaries
+- [ ] **2. `make release`** — Auto-syncs `pyproject.toml` + `__init__.py`, runs lint, runs the full test suite, builds binaries
 - [ ] **3. `CHANGELOG.md`** — Add a table row to the major-version section (no `v` prefix in version column)
 - [ ] **4. `docs/release_notes/vX.Y.x/vX.Y.Z.md`** — Create new release notes file
 - [ ] **5. Documentation headers** — Update version/date headers **only** in docs that were actually reviewed or modified in this release (use `git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/` to identify them). Do not blanket-bump all headers. See [Section C](#c-documentation-with-version--date-headers) for the full list of files that carry headers.
@@ -355,9 +355,10 @@ The protocol (Go + Python) and platform binary share a single version number. Th
 ### `make release` — Prep (no git operations)
 
 1. Syncs `protocol/python/pyproject.toml` and `protocol/python/g8e/__init__.py` from `VERSION`
-2. Runs the full test suite (`make test`)
-3. Builds binaries
-4. Prints next-step instructions
+2. Runs lint (`make lint` — golangci-lint, vulncheck, doctrine validation, swagger)
+3. Runs the full test suite (`make test`)
+4. Builds binaries
+5. Prints next-step instructions
 
 ### `make release-tag` — Tag & Push (run after PR merge)
 
