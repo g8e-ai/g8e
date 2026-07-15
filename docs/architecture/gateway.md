@@ -103,6 +103,14 @@ The g8e Gateway exposes two logical protocol surfaces. To maintain the mTLS exec
 
 **HTTPS Port (8443)**: mTLS for all routes including API, public, enrollment, and MCP endpoints. MCP endpoints require mTLS authentication (or JWT when JWKS is configured). The public HTTPS router also serves Swagger UI at `/swagger/*` and the OpenAPI specification at `/swagger/doc.json`, providing interactive API documentation.
 
+### Configuration Propagation
+
+Vault and rate-limit settings flow from CLI flags through `serve.RunGateway()` → `config.GatewayOptions` → `config.LoadGateway()`. The `GatewayOptions` struct carries `VaultDir`, `VaultKeyPath`, `VaultRequireUnlock`, `RateLimitRPS`, and `RateLimitBurst` from the resolved CLI flags. `LoadGateway` uses these values with fallback to `paths.Infra.*` defaults for vault paths, and applies rate limits as configured (zero disables limiting).
+
+### Onboarding Wizard
+
+`g8e gw start --interactive` (or `-i`) launches a Bubble Tea TUI wizard (`internal/cli/wizard/`) before gateway startup. The wizard guides users through five steps: Network & Identity, Security & Governance Posture, Agent Tooling & Routing, Vault Strictness, and Review & Confirm. The wizard produces a focused `Config` containing only wizard-owned fields; the `cmd` package merges the result into resolved `GatewayFlags` via `applyWizardConfig`, preserving non-wizard flags (ports, directories, log level, rate limits). Cancellation returns without starting the gateway. The wizard is explicit opt-in only; existing flags and automation continue to work unchanged.
+
 ---
 
 ## HTTP Router Architecture

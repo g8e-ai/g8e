@@ -261,6 +261,9 @@ func gatewayConfigToOptions(cfg GatewayConfig) config.GatewayOptions {
 		DataDir:             cfg.DataDir,
 		PKIDir:              cfg.PKIDir,
 		SecretsDir:          cfg.SecretsDir,
+		VaultDir:            cfg.VaultDir,
+		VaultKeyPath:        cfg.VaultKeyPath,
+		VaultRequireUnlock:  cfg.VaultRequireUnlock,
 		PasskeyRpID:         cfg.PasskeyRpID,
 		PasskeyRpName:       cfg.PasskeyRpName,
 		PasskeyRpOrigins:    cfg.PasskeyRpOrigins,
@@ -284,6 +287,9 @@ func TestGatewayConfigToOptions_FullMapping(t *testing.T) {
 		DataDir:             constants.TestPathShortData,
 		PKIDir:              constants.TestPathShortPKI,
 		SecretsDir:          constants.TestPathShortSecrets,
+		VaultDir:            "/test/vault",
+		VaultKeyPath:        "/test/vault/key",
+		VaultRequireUnlock:  true,
 		PasskeyRpID:         "localhost",
 		PasskeyRpName:       "g8e",
 		RateLimitRPS:        5.0,
@@ -304,6 +310,9 @@ func TestGatewayConfigToOptions_FullMapping(t *testing.T) {
 	assert.Equal(t, cfg.DataDir, opts.DataDir)
 	assert.Equal(t, cfg.PKIDir, opts.PKIDir)
 	assert.Equal(t, cfg.SecretsDir, opts.SecretsDir)
+	assert.Equal(t, cfg.VaultDir, opts.VaultDir)
+	assert.Equal(t, cfg.VaultKeyPath, opts.VaultKeyPath)
+	assert.Equal(t, cfg.VaultRequireUnlock, opts.VaultRequireUnlock)
 	assert.Equal(t, cfg.PasskeyRpID, opts.PasskeyRpID)
 	assert.Equal(t, cfg.PasskeyRpName, opts.PasskeyRpName)
 	assert.Equal(t, cfg.RateLimitRPS, opts.RateLimitRPS)

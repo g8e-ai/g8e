@@ -219,22 +219,25 @@ func FindProjectRoot() string {
 
 // GatewayOptions contains configuration values for LoadGateway.
 type GatewayOptions struct {
-	Posture          GatewayPosture
-	HTTPPort         int
-	HTTPSPort        int
-	DataDir          string
-	PKIDir           string
-	SecretsDir       string
-	PasskeyRpID      string
-	PasskeyRpName    string
-	PasskeyRpOrigins []string
-	MCPDownstreamURL string
-	A2ADownstreamURL string
-	PublicBaseURL    string
-	JWKSURL          string
-	JWTRoleClaim     string
-	JWTIssuer        string
-	JWTAudience      string
+	Posture            GatewayPosture
+	HTTPPort           int
+	HTTPSPort          int
+	DataDir            string
+	PKIDir             string
+	SecretsDir         string
+	VaultDir           string
+	VaultKeyPath       string
+	VaultRequireUnlock bool
+	PasskeyRpID        string
+	PasskeyRpName      string
+	PasskeyRpOrigins   []string
+	MCPDownstreamURL   string
+	A2ADownstreamURL   string
+	PublicBaseURL      string
+	JWKSURL            string
+	JWTRoleClaim       string
+	JWTIssuer          string
+	JWTAudience        string
 
 	RateLimitRPS   float64
 	RateLimitBurst int
@@ -374,8 +377,14 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 		secretsDir = paths.Infra.SecretsDir
 	}
 
-	vaultDir := paths.Infra.VaultDir
-	vaultKeyPath := paths.Infra.VaultKeyPath
+	vaultDir := opts.VaultDir
+	if vaultDir == "" {
+		vaultDir = paths.Infra.VaultDir
+	}
+	vaultKeyPath := opts.VaultKeyPath
+	if vaultKeyPath == "" {
+		vaultKeyPath = paths.Infra.VaultKeyPath
+	}
 
 	// Validate and resolve gateway ports
 	httpPort, httpsPort, err := validateAndResolveGatewayPorts(
@@ -431,7 +440,7 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			SecretsDir:         secretsDir,
 			VaultDir:           vaultDir,
 			VaultKeyPath:       vaultKeyPath,
-			VaultRequireUnlock: false,
+			VaultRequireUnlock: opts.VaultRequireUnlock,
 			PasskeyRpID:        passkeyRpID,
 			PasskeyRpName:      passkeyRpName,
 			PasskeyRpOrigins:   opts.PasskeyRpOrigins,
@@ -451,9 +460,8 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			IdleTimeout:       120 * time.Second,
 			MaxHeaderBytes:    1 << 20, // 1MB
 
-			// Rate limiting disabled for gateway mode (local-only, no external clients)
-			RateLimitRPS:   0,
-			RateLimitBurst: 0,
+			RateLimitRPS:   opts.RateLimitRPS,
+			RateLimitBurst: opts.RateLimitBurst,
 
 			// Certificate mode
 			CertMode:            opts.CertMode,

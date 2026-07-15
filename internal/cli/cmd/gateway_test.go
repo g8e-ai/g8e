@@ -346,8 +346,15 @@ func TestReExecArgsMatchStartCmdFlags(t *testing.T) {
 		}
 	}
 
-	// Assert every cobra flag is emitted when all options are populated
+	// Assert every cobra flag is emitted when all options are populated,
+	// except for UI-only flags that are not re-executed.
+	skipReExec := map[string]bool{
+		"interactive": true, // --interactive is a one-time UI flow, not re-executed
+	}
 	cobraFlags.VisitAll(func(f *pflag.Flag) {
+		if skipReExec[f.Name] {
+			return
+		}
 		if !emittedFlags[f.Name] {
 			t.Errorf("gatewayStartCmd() defines --%s but BuildReExecArgs does not emit it", f.Name)
 		}

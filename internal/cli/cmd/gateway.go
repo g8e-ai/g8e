@@ -25,10 +25,13 @@ import (
 
 	"github.com/spf13/cobra"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/cli/serve"
+	"github.com/g8e-ai/g8e/internal/cli/wizard"
 	g8econfig "github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
@@ -175,6 +178,55 @@ func gatewayFlagsToServeConfig(f GatewayFlags) serve.GatewayConfig {
 	}
 }
 
+// wizardRunner is the function signature for launching the interactive wizard.
+// Tests inject a fake runner to avoid starting a real Bubble Tea program.
+type wizardRunner func(wizard.Options) (wizard.Result, error)
+
+// defaultWizardRunner calls wizard.Run with the given options.
+func defaultWizardRunner(opts wizard.Options) (wizard.Result, error) {
+	return wizard.Run(opts)
+}
+
+// wizardConfigFromFlags maps resolved GatewayFlags into the focused wizard.Config.
+// Only wizard-owned fields are included — the wizard never sees flags it cannot edit.
+func wizardConfigFromFlags(f GatewayFlags) wizard.Config {
+	return wizard.Config{
+		PublicBaseURL:      f.PublicBaseURL,
+		CertIdentityMode:   f.CertIdentityMode,
+		AllowedOrigins:     f.AllowedOrigins,
+		Posture:            f.Posture,
+		TribunalID:         f.TribunalID,
+		TribunalURL:        f.TribunalURL,
+		TribunalBootstrap:  f.TribunalBootstrap,
+		PasskeyRpID:        f.PasskeyRpID,
+		PasskeyRpName:      f.PasskeyRpName,
+		PasskeyRpOrigins:   f.PasskeyRpOrigins,
+		MCPDownstreamURL:   f.MCPDownstreamURL,
+		A2ADownstreamURL:   f.A2ADownstreamURL,
+		VaultRequireUnlock: f.VaultRequireUnlock,
+	}
+}
+
+// applyWizardConfig merges wizard-owned fields from the wizard result back into
+// resolved GatewayFlags. Only fields the wizard edits are overwritten; all other
+// flags (ports, directories, log level, rate limits, etc.) are preserved.
+func applyWizardConfig(f GatewayFlags, wc wizard.Config) GatewayFlags {
+	f.PublicBaseURL = wc.PublicBaseURL
+	f.CertIdentityMode = wc.CertIdentityMode
+	f.AllowedOrigins = wc.AllowedOrigins
+	f.Posture = wc.Posture
+	f.TribunalID = wc.TribunalID
+	f.TribunalURL = wc.TribunalURL
+	f.TribunalBootstrap = wc.TribunalBootstrap
+	f.PasskeyRpID = wc.PasskeyRpID
+	f.PasskeyRpName = wc.PasskeyRpName
+	f.PasskeyRpOrigins = wc.PasskeyRpOrigins
+	f.MCPDownstreamURL = wc.MCPDownstreamURL
+	f.A2ADownstreamURL = wc.A2ADownstreamURL
+	f.VaultRequireUnlock = wc.VaultRequireUnlock
+	return f
+}
+
 // detectIdentityResult holds the result of network identity detection.
 type detectIdentityResult struct {
 	Identity       *network.NetworkIdentity
@@ -244,15 +296,17 @@ func gatewayCmd() *cobra.Command {
 }
 
 func gatewayStartCmd() *cobra.Command {
-	return gatewayStartCmdWithConfig(loadConfig, newFileSvc)
+	return gatewayStartCmdWithConfig(loadConfig, newFileSvc, defaultWizardRunner)
 }
 
 func gatewayStartCmdWithConfig(
 	configLoader func(string) (*config.Config, error),
 	fileSvcFactory func() (fs.RuntimeFileService, error),
+	runWizard wizardRunner,
 ) *cobra.Command {
 	var flags GatewayFlags
 	var follow bool
+	var interactive bool
 
 	cmd := &cobra.Command{
 		Use:   string(constants.ThinkingActionTypeStart),
@@ -280,6 +334,24 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 			}
 
 			resolved := resolveGatewayFlags(flags)
+
+			if interactive {
+				result, err := runWizard(wizard.Options{
+					InitialConfig: wizardConfigFromFlags(resolved),
+					ProgramOptions: []tea.ProgramOption{
+						tea.WithInput(cmd.InOrStdin()),
+						tea.WithOutput(cmd.OutOrStdout()),
+					},
+				})
+				if err != nil {
+					return fmt.Errorf("gateway: wizard: %w", err)
+				}
+				if result.Cancel {
+					cmd.Println("Onboarding cancelled.")
+					return nil
+				}
+				resolved = applyWizardConfig(resolved, result.Config)
+			}
 
 			// Validate posture at CLI edge for clean error messages (before
 			// network detection to fail fast on invalid input)
@@ -382,6 +454,7 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 
 	addGatewayFlags(cmd, &flags)
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Run gateway in foreground (Ctrl+C stops gateway)")
+	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Launch interactive onboarding wizard")
 
 	return cmd
 }

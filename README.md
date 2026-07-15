@@ -187,6 +187,9 @@ The binary is available for linux, darwin, and windows on amd64 and arm64 archit
 # Start the Gateway
 ./g8e gw start
 
+# Start with the interactive onboarding wizard
+./g8e gw start --interactive
+
 # Authenticate the CLI
 ./g8e auth enroll
 

@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## Unreleased
+
+| Version | Date | Description | Notes |
+|---------|------|-------------|-------|
+| — | — | Gateway onboarding wizard and vault/rate-limit propagation fix. Adds `--interactive`/`-i` flag to `g8e gw start` launching a Bubble Tea TUI wizard (`internal/cli/wizard/`) with 5-step configuration flow (Network, Posture, Routing, Vault, Review). Adds `charmbracelet/bubbles v0.20.0` dependency. Fixes vault and rate-limit settings propagation through `serve.RunGateway()` → `config.GatewayOptions` → `config.LoadGateway()` (previously hard-coded). | — |
+
 ## v1.5.x
 
 | Version | Date | Description | Notes |
