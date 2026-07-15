@@ -846,3 +846,137 @@ func TestLoadIntegration(t *testing.T) {
 		assert.Equal(t, constants.Ports.OperatorHttps, config.OperatorHTTPSPort())
 	})
 }
+
+func TestSetHTTPEndpointOverride_OnlyAffectsDiscoveryURL(t *testing.T) {
+	SetEndpointOverride("")
+	t.Cleanup(func() { SetEndpointOverride("") })
+
+	SetHTTPEndpointOverride("remote.example.com")
+
+	cfg := &Config{Paths: &PathsConfig{}}
+	assert.Contains(t, cfg.OperatorDiscoveryURL(), "remote.example.com")
+	assert.Contains(t, cfg.OperatorDiscoveryURL(), "http://")
+	assert.NotContains(t, cfg.OperatorPublicURL(), "remote.example.com")
+	assert.NotContains(t, cfg.OperatorHTTPURL(), "remote.example.com")
+}
+
+func TestSetHTTPSEndpointOverride_OnlyAffectsPublicAndHTTPURL(t *testing.T) {
+	SetEndpointOverride("")
+	t.Cleanup(func() { SetEndpointOverride("") })
+
+	SetHTTPSEndpointOverride("remote.example.com")
+
+	cfg := &Config{Paths: &PathsConfig{}}
+	assert.Contains(t, cfg.OperatorPublicURL(), "remote.example.com")
+	assert.Contains(t, cfg.OperatorPublicURL(), "https://")
+	assert.Contains(t, cfg.OperatorHTTPURL(), "remote.example.com")
+	assert.Contains(t, cfg.OperatorHTTPURL(), "https://")
+	assert.NotContains(t, cfg.OperatorDiscoveryURL(), "remote.example.com")
+}
+
+func TestSetEndpointOverride_AffectsBoth(t *testing.T) {
+	SetEndpointOverride("")
+	t.Cleanup(func() { SetEndpointOverride("") })
+
+	SetEndpointOverride("remote.example.com")
+
+	cfg := &Config{Paths: &PathsConfig{}}
+	assert.Contains(t, cfg.OperatorDiscoveryURL(), "remote.example.com")
+	assert.Contains(t, cfg.OperatorPublicURL(), "remote.example.com")
+	assert.Contains(t, cfg.OperatorHTTPURL(), "remote.example.com")
+}
+
+func TestSetEndpointOverride_FullURLReturnedAsIs(t *testing.T) {
+	SetEndpointOverride("")
+	t.Cleanup(func() { SetEndpointOverride("") })
+
+	fullURL := "http://test-server:9090"
+	SetEndpointOverride(fullURL)
+
+	cfg := &Config{Paths: &PathsConfig{}}
+	assert.Equal(t, fullURL, cfg.OperatorDiscoveryURL())
+	assert.Equal(t, fullURL, cfg.OperatorPublicURL())
+	assert.Equal(t, fullURL, cfg.OperatorHTTPURL())
+}
+
+func TestSetEndpointOverrideWithPort_SplitsHTTPOffsetAndHTTPSPort(t *testing.T) {
+	SetEndpointOverride("")
+	t.Cleanup(func() { SetEndpointOverride("") })
+
+	SetEndpointOverrideWithPort("remote.example.com", 9999)
+
+	cfg := &Config{Paths: &PathsConfig{}}
+
+	discoveryURL := cfg.OperatorDiscoveryURL()
+	assert.Contains(t, discoveryURL, "remote.example.com")
+	assert.NotContains(t, discoveryURL, "9999")
+	assert.Contains(t, discoveryURL, "http://")
+
+	publicURL := cfg.OperatorPublicURL()
+	assert.Contains(t, publicURL, "remote.example.com:9999")
+	assert.Contains(t, publicURL, "https://")
+}
+
+func TestSetEndpointOverrideWithPort_StripsExistingPortFromHost(t *testing.T) {
+	SetEndpointOverride("")
+	t.Cleanup(func() { SetEndpointOverride("") })
+
+	SetEndpointOverrideWithPort("remote.example.com:8085", 9999)
+
+	cfg := &Config{Paths: &PathsConfig{}}
+
+	discoveryURL := cfg.OperatorDiscoveryURL()
+	assert.Contains(t, discoveryURL, "remote.example.com")
+	assert.NotContains(t, discoveryURL, "8085")
+	assert.NotContains(t, discoveryURL, "9999")
+
+	publicURL := cfg.OperatorPublicURL()
+	assert.Contains(t, publicURL, "remote.example.com:9999")
+	assert.NotContains(t, publicURL, "8085")
+}
+
+func TestSetEndpointOverrideWithPort_FullURLSetsBoth(t *testing.T) {
+	SetEndpointOverride("")
+	t.Cleanup(func() { SetEndpointOverride("") })
+
+	fullURL := "http://test-server:9090"
+	SetEndpointOverrideWithPort(fullURL, 9999)
+
+	cfg := &Config{Paths: &PathsConfig{}}
+	assert.Equal(t, fullURL, cfg.OperatorDiscoveryURL())
+	assert.Equal(t, fullURL, cfg.OperatorPublicURL())
+}
+
+func TestOperatorPublicURL_HostFullURL(t *testing.T) {
+	t.Run("returns custom URL when Host contains protocol", func(t *testing.T) {
+		customURL := "https://custom-test-server:8443"
+		cfg := &Config{
+			Paths: &PathsConfig{
+				Host: customURL,
+			},
+		}
+
+		result := cfg.OperatorPublicURL()
+		assert.Equal(t, customURL, result)
+	})
+
+	t.Run("returns default localhost URL when Host is simple hostname", func(t *testing.T) {
+		cfg := &Config{
+			Paths: &PathsConfig{
+				Host: "localhost",
+			},
+		}
+
+		result := cfg.OperatorPublicURL()
+		assert.Equal(t, netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
+	})
+
+	t.Run("returns default localhost URL when Paths is nil", func(t *testing.T) {
+		cfg := &Config{
+			Paths: nil,
+		}
+
+		result := cfg.OperatorPublicURL()
+		assert.Equal(t, netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
+	})
+}

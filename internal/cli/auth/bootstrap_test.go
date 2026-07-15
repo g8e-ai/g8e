@@ -691,7 +691,8 @@ func TestReEnroll_TrustBundleFetchError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	_, err = ReEnroll(fileSvc, cfg, operatorCSR, cliCSR, "", server.URL)
+	cfg.Paths.Host = server.URL
+	_, err = ReEnroll(fileSvc, cfg, operatorCSR, cliCSR, "")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrHTTPRequestExecuteFailed))
 }
@@ -719,7 +720,8 @@ func TestReEnroll_TrustBundleEmpty(t *testing.T) {
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	_, err = ReEnroll(fileSvc, cfg, operatorCSR, cliCSR, "", server.URL)
+	cfg.Paths.Host = server.URL
+	_, err = ReEnroll(fileSvc, cfg, operatorCSR, cliCSR, "")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrEmptyTrustBundle))
 }
@@ -747,7 +749,8 @@ func TestReEnroll_TrustBundleBadStatus(t *testing.T) {
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	_, err = ReEnroll(fileSvc, cfg, operatorCSR, cliCSR, "", server.URL)
+	cfg.Paths.Host = server.URL
+	_, err = ReEnroll(fileSvc, cfg, operatorCSR, cliCSR, "")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrHTTPStatusError))
 }
@@ -779,7 +782,8 @@ func TestReEnroll_CLICertLoadError(t *testing.T) {
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	_, err = ReEnroll(fileSvc, cfg, operatorCSR, cliCSR, "", server.URL)
+	cfg.Paths.Host = server.URL
+	_, err = ReEnroll(fileSvc, cfg, operatorCSR, cliCSR, "")
 	require.Error(t, err)
 	// The error should be related to missing CLI certificate
 	assert.True(t, errors.Is(err, constants.ErrFailedToLoadClientCertificate))
@@ -825,7 +829,8 @@ func TestReEnroll_InvalidCAPEM(t *testing.T) {
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	_, err = ReEnroll(fileSvc, cfg, operatorCSR, cliCSR, "", server.URL)
+	cfg.Paths.Host = server.URL
+	_, err = ReEnroll(fileSvc, cfg, operatorCSR, cliCSR, "")
 	require.Error(t, err)
 	// The error should be related to the invalid CA bundle
 	assert.True(t, errors.Is(err, constants.ErrCAParseFailed))

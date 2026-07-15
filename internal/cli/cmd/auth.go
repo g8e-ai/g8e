@@ -172,7 +172,7 @@ func performEnroll(cmd *cobra.Command, fileSvc fs.RuntimeFileService, cfg *confi
 	if hasOperatorCert {
 		// Full re-enrollment with operator CSR
 		cmd.Println("Re-enrolling with operator...")
-		regResp, err = auth.ReEnroll(fileSvc, cfg, "", cliCSR, "", "")
+		regResp, err = auth.ReEnroll(fileSvc, cfg, "", cliCSR, "")
 		if err != nil {
 			// Check if this is a TLS verification error (stale trust bundle after gateway PKI regeneration)
 			if errors.Is(err, constants.ErrTrustBundleStale) {

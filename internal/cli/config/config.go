@@ -299,14 +299,14 @@ func (c *Config) OperatorHTTPSPort() int {
 // When cfg.Paths.Host is a full URL (contains "://"), it is returned directly.
 // This allows tests to override the URL by setting cfg.Paths.Host to the test server URL.
 func (c *Config) OperatorHTTPURL() string {
-	if endpointOverride != "" {
-		if strings.Contains(endpointOverride, "://") {
-			return endpointOverride
+	if httpsEndpointOverride != "" {
+		if strings.Contains(httpsEndpointOverride, "://") {
+			return httpsEndpointOverride
 		}
-		if _, _, err := net.SplitHostPort(endpointOverride); err != nil {
-			return fmt.Sprintf("https://%s:%d", endpointOverride, constants.Ports.OperatorHttps)
+		if _, _, err := net.SplitHostPort(httpsEndpointOverride); err != nil {
+			return fmt.Sprintf("https://%s:%d", httpsEndpointOverride, constants.Ports.OperatorHttps)
 		}
-		return fmt.Sprintf("https://%s", endpointOverride)
+		return fmt.Sprintf("https://%s", httpsEndpointOverride)
 	}
 	if c.Paths != nil && strings.Contains(c.Paths.Host, "://") {
 		return c.Paths.Host
@@ -314,55 +314,84 @@ func (c *Config) OperatorHTTPURL() string {
 	return netutil.LocalhostHTTPSURL(c.OperatorHTTPSPort())
 }
 
-// endpointOverride is set by the -e/--endpoint persistent flag to allow
-// connecting to a remote gateway instead of localhost.
-var endpointOverride string
+// httpEndpointOverride is set by the -e/--endpoint flag to allow
+// connecting to a remote gateway HTTP discovery endpoint instead of localhost.
+var httpEndpointOverride string
 
-// SetEndpointOverride sets the gateway endpoint override (host or host:port).
+// httpsEndpointOverride is set by the --port flag (combined with --endpoint host)
+// to allow connecting to a remote gateway HTTPS/mTLS endpoint on a different port.
+var httpsEndpointOverride string
+
+// SetEndpointOverride sets both HTTP and HTTPS endpoint overrides to the same value.
+// Backward-compatible — used by tests that pass full URLs.
 func SetEndpointOverride(endpoint string) {
-	endpointOverride = endpoint
+	httpEndpointOverride = endpoint
+	httpsEndpointOverride = endpoint
 }
 
-// SetEndpointOverrideWithPort combines a host and port into a host:port endpoint override.
-// If the host already contains a port, it is replaced with the specified port.
+// SetHTTPEndpointOverride sets only the HTTP discovery override.
+func SetHTTPEndpointOverride(endpoint string) {
+	httpEndpointOverride = endpoint
+}
+
+// SetHTTPSEndpointOverride sets only the HTTPS/mTLS override.
+func SetHTTPSEndpointOverride(endpoint string) {
+	httpsEndpointOverride = endpoint
+}
+
+// SetEndpointOverrideWithPort sets HTTPS override to host:port and HTTP
+// override to host (without port, so HTTP uses default port).
+// If the host already contains a port, it is stripped before applying.
 func SetEndpointOverrideWithPort(host string, port int) {
 	if strings.Contains(host, "://") {
-		// Full URL provided — use as-is
-		endpointOverride = host
+		// Full URL provided — use as-is for both
+		httpEndpointOverride = host
+		httpsEndpointOverride = host
 		return
 	}
 	if _, _, err := net.SplitHostPort(host); err == nil {
-		// Host already has a port — replace it
+		// Host already has a port — strip it
 		h, _, _ := net.SplitHostPort(host)
 		host = h
 	}
-	endpointOverride = fmt.Sprintf("%s:%d", host, port)
+	httpEndpointOverride = host
+	httpsEndpointOverride = fmt.Sprintf("%s:%d", host, port)
 }
 
-// OperatorPublicURL returns the HTTPS port for mTLS API and public surface
+// OperatorPublicURL returns the HTTPS URL for mTLS API and public surface.
+// When cfg.Paths.Host is a full URL (contains "://"), it is returned directly,
+// matching OperatorHTTPURL behavior for test overrides.
 func (c *Config) OperatorPublicURL() string {
-	if endpointOverride != "" {
-		if strings.Contains(endpointOverride, "://") {
-			return endpointOverride
+	if httpsEndpointOverride != "" {
+		if strings.Contains(httpsEndpointOverride, "://") {
+			return httpsEndpointOverride
 		}
-		if _, _, err := net.SplitHostPort(endpointOverride); err != nil {
-			return fmt.Sprintf("https://%s:%d", endpointOverride, constants.Ports.OperatorHttps)
+		if _, _, err := net.SplitHostPort(httpsEndpointOverride); err != nil {
+			return fmt.Sprintf("https://%s:%d", httpsEndpointOverride, constants.Ports.OperatorHttps)
 		}
-		return fmt.Sprintf("https://%s", endpointOverride)
+		return fmt.Sprintf("https://%s", httpsEndpointOverride)
+	}
+	if c.Paths != nil && strings.Contains(c.Paths.Host, "://") {
+		return c.Paths.Host
 	}
 	return netutil.LocalhostHTTPSURL(c.OperatorHTTPSPort())
 }
 
-// OperatorDiscoveryURL returns the HTTP port for CA download and bootstrap routes
+// OperatorDiscoveryURL returns the HTTP URL for CA download and bootstrap routes.
+// When cfg.Paths.Host is a full URL (contains "://"), it is returned directly,
+// allowing tests to override the discovery URL via cfg.Paths.Host.
 func (c *Config) OperatorDiscoveryURL() string {
-	if endpointOverride != "" {
-		if strings.Contains(endpointOverride, "://") {
-			return endpointOverride
+	if httpEndpointOverride != "" {
+		if strings.Contains(httpEndpointOverride, "://") {
+			return httpEndpointOverride
 		}
-		if _, _, err := net.SplitHostPort(endpointOverride); err != nil {
-			return fmt.Sprintf("http://%s:%d", endpointOverride, constants.Ports.OperatorHttp)
+		if _, _, err := net.SplitHostPort(httpEndpointOverride); err != nil {
+			return fmt.Sprintf("http://%s:%d", httpEndpointOverride, constants.Ports.OperatorHttp)
 		}
-		return fmt.Sprintf("http://%s", endpointOverride)
+		return fmt.Sprintf("http://%s", httpEndpointOverride)
+	}
+	if c.Paths != nil && strings.Contains(c.Paths.Host, "://") {
+		return c.Paths.Host
 	}
 	return netutil.LocalhostHTTPURL(constants.Ports.OperatorHttp)
 }

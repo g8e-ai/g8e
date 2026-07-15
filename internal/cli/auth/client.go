@@ -400,8 +400,7 @@ func CLIEnroll(cfg *config.Config, cliCSR string, baseURL string) (*Registration
 
 // ReEnroll performs CSR-based re-enrollment using existing mTLS credentials.
 // This is used when the platform is already bootstrapped and the CLI has valid certificates.
-// If baseURL is empty, it uses cfg.OperatorDiscoveryURL() and cfg.OperatorPublicURL().
-func ReEnroll(fileSvc fs.RuntimeFileService, cfg *config.Config, operatorCSR, cliCSR string, caFingerprint string, baseURL string) (*RegistrationResponse, error) {
+func ReEnroll(fileSvc fs.RuntimeFileService, cfg *config.Config, operatorCSR, cliCSR string, caFingerprint string) (*RegistrationResponse, error) {
 	// Generate proper system fingerprint
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	systemFp, err := auth.GenerateSystemFingerprint(logger)
@@ -411,9 +410,6 @@ func ReEnroll(fileSvc fs.RuntimeFileService, cfg *config.Config, operatorCSR, cl
 
 	// Fetch current trust bundle from Operator bootstrap endpoint to handle CA rotation
 	discoveryURL := cfg.OperatorDiscoveryURL()
-	if baseURL != "" {
-		discoveryURL = baseURL
-	}
 	trustBundleURL := fmt.Sprintf("%s%s", discoveryURL, constants.APIPaths.WellKnownPKICABundle)
 	client := &http.Client{Timeout: httpTimeout}
 	trustBundleResp, err := client.Get(trustBundleURL)
@@ -481,9 +477,6 @@ func ReEnroll(fileSvc fs.RuntimeFileService, cfg *config.Config, operatorCSR, cl
 	}
 
 	publicURL := cfg.OperatorPublicURL()
-	if baseURL != "" {
-		publicURL = baseURL
-	}
 	url := fmt.Sprintf("%s%s", publicURL, constants.APIPaths.PKIDevicesEnroll)
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
@@ -773,7 +766,7 @@ func AutoRenewCertificate(fileSvc fs.RuntimeFileService, cfg *config.Config, cer
 		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
-	regResp, err := ReEnroll(fileSvc, cfg, "", cliCSR, caFingerprint, "")
+	regResp, err := ReEnroll(fileSvc, cfg, "", cliCSR, caFingerprint)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 	}
