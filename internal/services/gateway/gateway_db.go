@@ -22,10 +22,13 @@ package gateway
 
 import (
 	"context"
+	"crypto/rand"
 	_ "embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -112,18 +115,58 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 		return nil, fmt.Errorf("%w: %w", constants.ErrVaultCreateFailed, err)
 	}
 
-	// Unlock vault before initializing storage services
-	// Encryption is required for secure data storage at rest — the vault must
-	// always be unlocked at startup. If the key cannot be read or the vault
-	// cannot be unlocked, the gateway fails to start.
+	// Resolve vault key path.
 	if vaultKeyPath == "" {
 		vaultKeyPath = filepath.Join(vaultDir, constants.VaultKeyFilename)
 	}
-
 	if !filepath.IsAbs(vaultKeyPath) {
 		vaultKeyPath = filepath.Join(dataDir, vaultKeyPath)
 	}
 
+	// Auto-initialize vault on first run. If no vault header exists, generate
+	// a random key, create the vault header, and write the key file. This
+	// mirrors the `g8e vault init` CLI command and ensures the vault is always
+	// ready without requiring a separate initialization step — same pattern as
+	// SQLite creating the database file on first open.
+	if !vault.VaultHeaderExists(vaultDir) {
+		if err := os.MkdirAll(vaultDir, constants.PermDirPrivate); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("gateway: create vault dir: %w", err)
+		}
+
+		initKey := make([]byte, vault.KeySize)
+		if _, err := rand.Read(initKey); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyGenerateFailed, err)
+		}
+
+		header, _, err := vault.NewVaultHeader(initKey)
+		if err != nil {
+			db.Close()
+			vault.SecureZero(initKey)
+			return nil, fmt.Errorf("%w: %w", constants.ErrVaultHeaderCreateFailed, err)
+		}
+
+		if err := header.Save(vaultDir); err != nil {
+			db.Close()
+			vault.SecureZero(initKey)
+			return nil, fmt.Errorf("%w: %w", constants.ErrVaultHeaderSaveFailed, err)
+		}
+
+		keyData := []byte(hex.EncodeToString(initKey) + "\n")
+		if err := os.WriteFile(vaultKeyPath, keyData, constants.PermFilePrivate); err != nil {
+			db.Close()
+			vault.SecureZero(initKey)
+			return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyWriteFailed, err)
+		}
+
+		vault.SecureZero(initKey)
+		logger.Info("Vault auto-initialized on first run", "vault_dir", vaultDir, "key_path", vaultKeyPath)
+	}
+
+	// Unlock vault. Encryption is required for secure data storage at rest —
+	// the vault must always be unlocked at startup. If the key cannot be read
+	// or the vault cannot be unlocked, the gateway fails to start.
 	privateKey, err := vault.ReadVaultKey(vaultKeyPath)
 	if err != nil {
 		db.Close()
