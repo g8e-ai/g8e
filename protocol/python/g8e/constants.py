@@ -27,18 +27,22 @@ def _get_protocol_dir() -> Path:
     # 1. Check environment variable
     if "G8E_PROTOCOL_DIR" in os.environ:
         return Path(os.environ["G8E_PROTOCOL_DIR"]) / "constants"
-    
-    # 2. Check relative to this file
-    # protocol/python/g8e/constants.py -> protocol/constants
+
+    # 2. Check within the package (PyPI install — JSON files bundled in g8e/_data/)
+    pkg_path = Path(__file__).parent / "_data"
+    if pkg_path.exists():
+        return pkg_path
+
+    # 3. Check relative to this file (dev mode — protocol/python/g8e/constants.py -> protocol/constants)
     rel_path = Path(__file__).parent.parent.parent / "constants"
     if rel_path.exists():
         return rel_path
-    
-    # 3. Fallback for containerized environments
+
+    # 4. Fallback for containerized environments
     container_path = Path("/app/protocol/constants")
     if container_path.exists():
         return container_path
-    
+
     return Path("./protocol/constants")
 
 _PROTOCOL_CONSTANTS_DIR = _get_protocol_dir()
