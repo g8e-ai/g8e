@@ -106,7 +106,19 @@ jobs:
             source testenv/bin/activate
           fi
           pip install --upgrade pip
-          pip install g8e==${{ needs.release.outputs.version }}
+          # Retry pip install to handle PyPI CDN propagation delay
+          MAX_RETRIES=6
+          for i in $(seq 1 $MAX_RETRIES); do
+            if pip install g8e==${{ needs.release.outputs.version }}; then
+              break
+            fi
+            if [ $i -eq $MAX_RETRIES ]; then
+              echo "Failed to install g8e==${{ needs.release.outputs.version }} after $MAX_RETRIES attempts"
+              exit 1
+            fi
+            echo "PyPI not yet propagated (attempt $i/$MAX_RETRIES), retrying in 15s..."
+            sleep 15
+          done
           python -c "import g8e; print(f'g8e version: {g8e.__version__}'); assert g8e.__version__ == '${{ needs.release.outputs.version }}'"
           echo "Fresh PyPI install verified successfully"
 
