@@ -56,6 +56,12 @@ jobs:
           print('Package metadata OK')
           "
 
+      - name: Copy protocol constants into package
+        run: |
+          mkdir -p protocol/python/g8e/_data
+          cp protocol/constants/*.json protocol/python/g8e/_data/
+          cp -r protocol/constants/doctrine protocol/python/g8e/_data/
+
       - name: Build package
         working-directory: ./protocol/python
         run: |
