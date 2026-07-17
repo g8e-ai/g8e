@@ -170,8 +170,27 @@ class TestGoConstPresence:
 # ---------------------------------------------------------------------------
 
 
+# Files with _python_const fields and their wrapper keys
+FILES_WITH_PYTHON_CONST = {
+    "channels.json": ["channels"],
+    "intents.json": ["intents"],
+    "prompts.json": ["prompts"],
+    "collections.json": ["collections"],
+    "kv_keys.json": ["kv_keys", "session_types"],
+    "agents.json": [
+        "agents",
+        "agent_binaries",
+        "triage_complexity",
+        "triage_confidence",
+        "triage_intent",
+        "triage_posture",
+    ],
+    "field_paths.json": ["field_paths"],
+}
+
+
 class TestPythonConstPresence:
-    """Status.json entries must have _python_const for enum generation."""
+    """Entries in constant files must have _python_const for Python enum generation."""
 
     def test_status_entries_have_python_const(self):
         data = _load_json(STATUS_FILE)
@@ -187,6 +206,80 @@ class TestPythonConstPresence:
                         missing.append(f"{cat_name}/{key}")
         assert not missing, (
             f"status.json: entries missing _python_const: {missing}"
+        )
+
+    @pytest.mark.parametrize(
+        "filename,wrapper_key",
+        [
+            (fn, wk)
+            for fn, wks in FILES_WITH_PYTHON_CONST.items()
+            for wk in wks
+        ],
+    )
+    def test_entries_have_python_const(self, filename: str, wrapper_key: str):
+        data = _load_json(filename)
+        assert wrapper_key in data, (
+            f"{filename}: missing top-level key '{wrapper_key}'"
+        )
+        entries = data[wrapper_key]
+        assert isinstance(entries, dict), (
+            f"{filename}/{wrapper_key}: must be a dict"
+        )
+
+        missing = []
+        for key, meta in entries.items():
+            if isinstance(meta, dict):
+                if "_python_const" not in meta or not meta["_python_const"]:
+                    missing.append(key)
+        assert not missing, (
+            f"{filename}/{wrapper_key}: entries missing _python_const: {missing}"
+        )
+
+
+class TestPythonConstNamingConventions:
+    """_python_const values must be valid SCREAMING_SNAKE_CASE identifiers."""
+
+    SCREAMING_SNAKE_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
+
+    def test_status_python_consts_are_screaming_snake_case(self):
+        data = _load_json(STATUS_FILE)
+        status = _iter_entries(data, "status")
+
+        violations = []
+        for cat_name, cat_vals in status.items():
+            if not isinstance(cat_vals, dict):
+                continue
+            for key, meta in cat_vals.items():
+                if isinstance(meta, dict) and "_python_const" in meta:
+                    pc = meta["_python_const"]
+                    if not self.SCREAMING_SNAKE_RE.match(pc):
+                        violations.append(f"status.json/{cat_name}/{key}: '{pc}'")
+        assert not violations, (
+            f"_python_const values not SCREAMING_SNAKE_CASE: {violations}"
+        )
+
+    @pytest.mark.parametrize(
+        "filename,wrapper_key",
+        [
+            (fn, wk)
+            for fn, wks in FILES_WITH_PYTHON_CONST.items()
+            for wk in wks
+        ],
+    )
+    def test_python_consts_are_screaming_snake_case(
+        self, filename: str, wrapper_key: str
+    ):
+        data = _load_json(filename)
+        entries = data[wrapper_key]
+
+        violations = []
+        for key, meta in entries.items():
+            if isinstance(meta, dict) and "_python_const" in meta:
+                pc = meta["_python_const"]
+                if not self.SCREAMING_SNAKE_RE.match(pc):
+                    violations.append(f"{filename}/{wrapper_key}/{key}: '{pc}'")
+        assert not violations, (
+            f"_python_const values not SCREAMING_SNAKE_CASE: {violations}"
         )
 
 

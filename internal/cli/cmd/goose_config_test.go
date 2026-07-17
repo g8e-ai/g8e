@@ -37,7 +37,7 @@ func TestGooseGovernanceConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	existingConfigPath := filepath.Join(configDir, "config.yaml")
-	existingData := []byte("extensions:\n  existing:\n    enabled: true\n    config:\n      type: stdio\n      name: existing\n      cmd: existing-cmd\n")
+	existingData := []byte("provider:\n  name: openai\n  model: gpt-4o\nextensions:\n  existing:\n    enabled: true\n    config:\n      type: stdio\n      name: existing\n      cmd: existing-cmd\n")
 	err = os.WriteFile(existingConfigPath, existingData, 0644)
 	require.NoError(t, err)
 
@@ -72,6 +72,19 @@ func TestGooseGovernanceConfig(t *testing.T) {
 	assert.Equal(t, "g8e", cfg.Extensions["g8e"].Config.Name)
 	assert.Equal(t, binaryPath, cfg.Extensions["g8e"].Config.Cmd)
 	assert.Equal(t, []string{"mcp", "stdio"}, cfg.Extensions["g8e"].Config.Args)
+
+	// Existing extension must be preserved (not wiped out)
+	assert.Contains(t, cfg.Extensions, "existing", "existing extension should be preserved")
+	assert.True(t, cfg.Extensions["existing"].Enabled)
+
+	// Provider and other non-extension fields must be preserved
+	var raw map[string]any
+	err = yaml.Unmarshal(configData, &raw)
+	require.NoError(t, err)
+	provider, ok := raw["provider"].(map[string]any)
+	require.True(t, ok, "provider field should be preserved")
+	assert.Equal(t, "openai", provider["name"])
+	assert.Equal(t, "gpt-4o", provider["model"])
 }
 
 func TestGooseLaunchArgs_NoProfile(t *testing.T) {

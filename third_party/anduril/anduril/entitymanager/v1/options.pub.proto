@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package anduril.entitymanager.v1;
+
+import "google/protobuf/descriptor.proto";
+
+option csharp_namespace = "Anduril.Entitymanager.V1";
+option go_package = "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager";
+option java_multiple_files = true;
+option java_outer_classname = "OptionsProto";
+option java_package = "com.anduril.entitymanager.v1";
+option objc_class_prefix = "AEX";
+
+extend google.protobuf.FieldOptions {
+  bool overridable = 1001;
+  // When flagged on a field in a repeated component, provides an indication that the
+  // the repeated component should be treated as a set. No components sharing
+  // identical 'componentIdentifier' field should appear in the set
+  bool componentIdentifier = 1002;
+}

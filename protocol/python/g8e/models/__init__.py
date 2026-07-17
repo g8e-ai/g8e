@@ -15,6 +15,7 @@ from .base import G8eBaseModel, UTCDatetime, Field, ConfigDict
 from .context import RequestContext, BoundOperator
 from .internal_api import (
     ResourceCreationRequest,
+    LLMOverrides,
     ChatMessageRequest,
     ChatStartedResponse,
 )
@@ -42,6 +43,15 @@ from .events import (
     ChatTurnCompletePayload,
     TriageClarificationQuestionsPayload,
 )
+from .governance import (
+    GovernanceEnvelope,
+    GovernanceMetadata,
+    GovernanceL1,
+    GovernanceL2,
+    GovernanceL2Vote,
+    GovernanceL3,
+    compute_transaction_hash,
+)
 
 __all__ = [
     "G8eBaseModel",
@@ -51,6 +61,7 @@ __all__ = [
     "RequestContext",
     "BoundOperator",
     "ResourceCreationRequest",
+    "LLMOverrides",
     "ChatMessageRequest",
     "ChatStartedResponse",
     "G8eeUserSettings",
@@ -73,4 +84,11 @@ __all__ = [
     "ChatThinkingPayload",
     "ChatTurnCompletePayload",
     "TriageClarificationQuestionsPayload",
+    "GovernanceEnvelope",
+    "GovernanceMetadata",
+    "GovernanceL1",
+    "GovernanceL2",
+    "GovernanceL2Vote",
+    "GovernanceL3",
+    "compute_transaction_hash",
 ]

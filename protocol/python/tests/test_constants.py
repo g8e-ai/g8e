@@ -26,6 +26,12 @@ from g8e.constants import (
     WEB_SESSION_ID_HEADER,
     CLI_SESSION_ID_HEADER,
     OPERATOR_ID_HEADER,
+    collection,
+    channel,
+    intent,
+    prompt,
+    kv_key,
+    kv_session_type,
 )
 
 
@@ -162,3 +168,52 @@ class TestHttpHeaderConstants:
         ]
         for h in g8e_headers:
             assert h.startswith("X-G8E-"), f"Header '{h}' should start with 'X-G8E-'"
+
+
+class TestAccessorFunctions:
+    """Verify constants accessor utility functions."""
+
+    def test_collection_accessor(self):
+        assert collection("cases") == "cases"
+        assert collection("account_locks") == "account_locks"
+        assert collection("users") == "users"
+
+    def test_channel_accessor(self):
+        assert channel("Governance") == "governance"
+        assert channel("SseEvent") == "sse_event"
+
+    def test_intent_accessor(self):
+        assert intent("ApigatewayDiscovery") == "apigateway_discovery"
+        assert intent("Ec2Discovery") == "ec2_discovery"
+
+    def test_prompt_accessor(self):
+        assert prompt("SectionSafety") == "safety"
+        assert prompt("SectionIdentity") == "identity"
+
+    def test_kv_key_accessor_without_kwargs(self):
+        result = kv_key("CachePrefix")
+        assert result == "g8e"
+
+    def test_kv_key_accessor_with_kwargs(self):
+        result = kv_key("SessionWeb", **{"session.type": "web", "session.id": "abc"})
+        assert result == "g8e:sessions:web:abc"
+
+    def test_kv_key_accessor_with_dot_kwargs(self):
+        result = kv_key("SessionWeb", **{"session.type": "operator", "session.id": "xyz"})
+        assert result == "g8e:sessions:operator:xyz"
+
+    def test_kv_session_type_accessor(self):
+        assert kv_session_type("Web") == "web"
+        assert kv_session_type("Operator") == "operator"
+
+    def test_collection_invalid_key_raises(self):
+        with pytest.raises(KeyError):
+            collection("nonexistent")
+
+    def test_channel_invalid_key_raises(self):
+        with pytest.raises(KeyError):
+            channel("nonexistent")
+
+    def test_kv_key_invalid_name_raises(self):
+        with pytest.raises(KeyError):
+            kv_key("nonexistent")

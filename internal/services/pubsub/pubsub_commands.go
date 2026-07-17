@@ -699,6 +699,12 @@ func (rs *OperatorPubSubService) SetL4Warden(w *governance.L4Warden) {
 	rs.l4warden = w
 }
 
+// HeartbeatService returns the heartbeat service for external components
+// (e.g. the Lattice adapter) to register periodic sink callbacks.
+func (rs *OperatorPubSubService) HeartbeatService() *HeartbeatService {
+	return rs.heartbeat
+}
+
 // ExecuteVerifiedTransaction implements governance.ExecutionHandler.
 // This is called by Actuator to execute verified transactions, making Actuator the execution boundary.
 func (rs *OperatorPubSubService) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {

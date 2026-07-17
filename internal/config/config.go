@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/adapters/lattice"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 )
@@ -76,6 +77,9 @@ type LoadOptions struct {
 
 	// Monitoring
 	HeartbeatInterval time.Duration // --heartbeat-interval: overrides the 30s default when non-zero
+
+	// Lattice adapter (nil when disabled)
+	Lattice *lattice.LatticeConfig
 }
 
 // GatewayConfig holds configuration for gateway mode.
@@ -204,6 +208,9 @@ type Config struct {
 
 	// Gateway mode configuration
 	Gateway GatewayConfig
+
+	// Lattice adapter configuration (nil when disabled)
+	Lattice *lattice.LatticeConfig
 }
 
 // FindProjectRoot returns the current working directory.
@@ -545,6 +552,9 @@ func Load(opts LoadOptions) (*Config, error) {
 
 		// Governance posture - default to notary for outbound mode (L1/L2/L3 strictly enforced)
 		Posture: opts.Posture,
+
+		// Lattice adapter (nil when disabled)
+		Lattice: opts.Lattice,
 	}
 	if cfg.Posture == "" {
 		cfg.Posture = PostureNotary

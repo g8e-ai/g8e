@@ -11,6 +11,7 @@ from g8e.models import (
     PlatformSettings,
     G8eeUserSettings,
     ResourceCreationRequest,
+    LLMOverrides,
     ChatMessageRequest,
     ChatStartedResponse,
     SessionEventWire,
@@ -20,6 +21,13 @@ from g8e.models import (
     ChatTurnCompletePayload,
     AiProcessingStoppedPayload,
     AIToolLifecyclePayload,
+    TriageClarificationQuestionsPayload,
+    GovernanceEnvelope,
+    GovernanceMetadata,
+    GovernanceL1,
+    GovernanceL2,
+    GovernanceL3,
+    compute_transaction_hash,
 )
 from g8e.models.settings import LLMSettings, SearchSettings
 
@@ -248,3 +256,260 @@ class TestG8eBaseModel:
         op = BoundOperator.model_validate(data)
         assert op.operator_id == "op-1"
         assert not hasattr(op, "unknown_field")
+
+
+class TestTriageClarificationPayload:
+    """Verify TriageClarificationQuestionsPayload optional fields."""
+
+    def test_minimal_with_only_questions(self):
+        payload = TriageClarificationQuestionsPayload(questions=["What happened?"])
+        assert payload.questions == ["What happened?"]
+        assert payload.complexity is None
+        assert payload.intent is None
+
+    def test_full_instantiation(self):
+        payload = TriageClarificationQuestionsPayload(
+            questions=["Q1", "Q2"],
+            complexity="high",
+            complexity_confidence="0.9",
+            intent="discovery",
+            intent_confidence="0.8",
+            intent_summary="testing",
+            request_posture="active",
+            posture_confidence="0.7",
+        )
+        assert payload.complexity == "high"
+        assert payload.intent == "discovery"
+
+
+class TestLLMOverrides:
+    """Verify LLMOverrides mixin and ChatMessageRequest inheritance."""
+
+    def test_llm_overrides_standalone(self):
+        overrides = LLMOverrides(llm_primary_provider="openai")
+        assert overrides.llm_primary_provider == "openai"
+        assert overrides.llm_assistant_provider is None
+
+    def test_chat_message_request_inherits_overrides(self):
+        ctx = RequestContext(
+            web_session_id="web-1",
+            user_id="user-1",
+            source_component=ComponentName.CLIENT,
+        )
+        req = ChatMessageRequest(
+            context=ctx,
+            message="Hello",
+            llm_primary_provider="anthropic",
+            llm_primary_model="claude-3",
+        )
+        assert req.llm_primary_provider == "anthropic"
+        assert req.llm_primary_model == "claude-3"
+        assert req.llm_lite_provider is None
+
+    def test_llm_overrides_all_fields_present(self):
+        overrides = LLMOverrides(
+            llm_primary_provider="a",
+            llm_assistant_provider="b",
+            llm_lite_provider="c",
+            llm_primary_model="d",
+            llm_assistant_model="e",
+            llm_lite_model="f",
+            llm_primary_api_key="k1",
+            llm_primary_endpoint="u1",
+            llm_assistant_api_key="k2",
+            llm_assistant_endpoint="u2",
+            llm_lite_api_key="k3",
+            llm_lite_endpoint="u3",
+        )
+        for field in (
+            "llm_primary_provider",
+            "llm_assistant_provider",
+            "llm_lite_provider",
+            "llm_primary_model",
+            "llm_assistant_model",
+            "llm_lite_model",
+            "llm_primary_api_key",
+            "llm_primary_endpoint",
+            "llm_assistant_api_key",
+            "llm_assistant_endpoint",
+            "llm_lite_api_key",
+            "llm_lite_endpoint",
+        ):
+            assert getattr(overrides, field) is not None
+
+
+class TestEventFactoryMethods:
+    """Verify factory methods on SessionEventWire and BackgroundEventWire."""
+
+    def test_session_event_wire_from_session_event(self):
+        wire = SessionEventWire.from_session_event(
+            "chat.chunk",
+            {"content": "hello"},
+            web_session_id="web-1",
+            user_id="user-1",
+        )
+        assert wire.user_id == "user-1"
+        assert wire.web_session_id == "web-1"
+        assert wire.event.type == "chat.chunk"
+        assert wire.event.data == {"content": "hello"}
+
+    def test_session_event_wire_from_session_event_round_trip(self):
+        wire = SessionEventWire.from_session_event(
+            "chat.complete",
+            {"content": "done", "finish_reason": "stop"},
+            cli_session_id="cli-1",
+            user_id="user-2",
+        )
+        data = wire.model_dump(mode="json")
+        restored = SessionEventWire.model_validate(data)
+        assert restored.event.type == "chat.complete"
+        assert restored.event.data["finish_reason"] == "stop"
+        assert restored.cli_session_id == "cli-1"
+
+    def test_background_event_wire_from_background_event(self):
+        wire = BackgroundEventWire.from_background_event(
+            "system.alert",
+            {"level": "warning"},
+            user_id="user-1",
+        )
+        assert wire.user_id == "user-1"
+        assert wire.event.type == "system.alert"
+        assert wire.event.data == {"level": "warning"}
+
+
+class TestGovernanceEnvelope:
+    """Verify GovernanceEnvelope model and compute_transaction_hash."""
+
+    def test_compute_transaction_hash_deterministic(self):
+        kwargs = dict(
+            action_type="EXECUTE_BASH",
+            target_resource="/tmp",
+            payload="dGVzdA==",
+            state_merkle_root="abc123",
+            nonce="nonce-1",
+            expires_at="2026-01-01T00:00:00Z",
+            intent_data={"command": "ls", "working_directory": "/tmp"},
+            requestor_user_id="user-1",
+            acting_app_id="app-1",
+        )
+        hash1 = compute_transaction_hash(**kwargs)
+        hash2 = compute_transaction_hash(**kwargs)
+        assert hash1 == hash2
+        assert len(hash1) == 64
+
+    def test_compute_transaction_hash_changes_with_fields(self):
+        base_kwargs = dict(
+            action_type="EXECUTE_BASH",
+            target_resource="/tmp",
+            payload="dGVzdA==",
+            state_merkle_root="abc123",
+            nonce="nonce-1",
+            expires_at="2026-01-01T00:00:00Z",
+            intent_data={"command": "ls"},
+            requestor_user_id="user-1",
+            acting_app_id="app-1",
+        )
+        hash1 = compute_transaction_hash(**base_kwargs)
+        modified = {**base_kwargs, "action_type": "FILE_EDIT"}
+        hash2 = compute_transaction_hash(**modified)
+        assert hash1 != hash2
+
+    def test_compute_transaction_hash_intent_ordering(self):
+        kwargs1 = dict(
+            action_type="EXECUTE_BASH",
+            target_resource="/tmp",
+            payload="dGVzdA==",
+            state_merkle_root="abc",
+            nonce="n1",
+            expires_at="2026-01-01T00:00:00Z",
+            intent_data={"a": "1", "b": "2"},
+        )
+        kwargs2 = dict(
+            action_type="EXECUTE_BASH",
+            target_resource="/tmp",
+            payload="dGVzdA==",
+            state_merkle_root="abc",
+            nonce="n1",
+            expires_at="2026-01-01T00:00:00Z",
+            intent_data={"b": "2", "a": "1"},
+        )
+        assert compute_transaction_hash(**kwargs1) == compute_transaction_hash(**kwargs2)
+
+    def test_compute_transaction_hash_optional_fields(self):
+        hash_with_none = compute_transaction_hash(
+            action_type="EXECUTE_BASH",
+            target_resource="/tmp",
+            payload="dGVzdA==",
+            state_merkle_root="abc",
+            nonce="n1",
+            expires_at="2026-01-01T00:00:00Z",
+            intent_data={},
+        )
+        hash_with_empty = compute_transaction_hash(
+            action_type="EXECUTE_BASH",
+            target_resource="/tmp",
+            payload="dGVzdA==",
+            state_merkle_root="abc",
+            nonce="n1",
+            expires_at="2026-01-01T00:00:00Z",
+            intent_data={},
+            requestor_user_id="",
+            acting_app_id="",
+        )
+        assert hash_with_none == hash_with_empty
+
+    def test_governance_envelope_serialization_round_trip(self):
+        tx_hash = compute_transaction_hash(
+            action_type="EXECUTE_BASH",
+            target_resource="/tmp",
+            payload="dGVzdA==",
+            state_merkle_root="root",
+            nonce="nonce-1",
+            expires_at="2026-01-01T00:00:00Z",
+            intent_data={"command": "ls"},
+            requestor_user_id="user-1",
+            acting_app_id="app-1",
+        )
+        envelope = GovernanceEnvelope(
+            id=tx_hash,
+            timestamp="2026-01-01T00:00:00Z",
+            expires_at="2026-01-01T00:00:00Z",
+            source_component="COMPONENT_CLIENT",
+            event_type="g8e.v1.operator.command.requested",
+            payload="dGVzdA==",
+            intent_data={"command": "ls"},
+            action_type="EXECUTE_BASH",
+            target_resource="/tmp",
+            state_merkle_root="root",
+            nonce="nonce-1",
+            transaction_hash=tx_hash,
+            requestor_user_id="user-1",
+            acting_app_id="app-1",
+        )
+        data = envelope.model_dump(mode="json")
+        restored = GovernanceEnvelope.model_validate(data)
+        assert restored.id == tx_hash
+        assert restored.action_type == "EXECUTE_BASH"
+        assert restored.governance.l1.validated is False
+
+    def test_governance_envelope_with_full_governance(self):
+        envelope = GovernanceEnvelope(
+            id="hash-1",
+            timestamp="2026-01-01T00:00:00Z",
+            expires_at="2026-01-01T01:00:00Z",
+            source_component="COMPONENT_CLIENT",
+            event_type="g8e.v1.operator.command.requested",
+            payload="dGVzdA==",
+            action_type="EXECUTE_BASH",
+            target_resource="/tmp",
+            state_merkle_root="root",
+            nonce="n1",
+            governance=GovernanceMetadata(
+                l1=GovernanceL1(validated=True, violations=[]),
+                l2=GovernanceL2(consensus_reached=True, threshold=3),
+                l3=GovernanceL3(notary_id="notary-1", signature="sig"),
+            ),
+        )
+        assert envelope.governance.l1.validated is True
+        assert envelope.governance.l2.consensus_reached is True
+        assert envelope.governance.l3.notary_id == "notary-1"

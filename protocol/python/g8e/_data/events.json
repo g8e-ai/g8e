@@ -1,0 +1,1160 @@
+{
+  "events": {
+    "AiAgentConflictDetected": {
+      "_go_const": "EventAiAgentConflictDetected",
+      "value": "g8e.v1.ai.agent.conflict.detected"
+    },
+    "AiAgentConflictResolved": {
+      "_go_const": "EventAiAgentConflictResolved",
+      "value": "g8e.v1.ai.agent.conflict.resolved"
+    },
+    "AiAgentContinueApprovalGranted": {
+      "_go_const": "EventAiAgentContinueApprovalGranted",
+      "value": "g8e.v1.ai.agent.continue.approval.granted"
+    },
+    "AiAgentContinueApprovalRejected": {
+      "_go_const": "EventAiAgentContinueApprovalRejected",
+      "value": "g8e.v1.ai.agent.continue.approval.rejected"
+    },
+    "AiAgentContinueApprovalRequested": {
+      "_go_const": "EventAiAgentContinueApprovalRequested",
+      "value": "g8e.v1.ai.agent.continue.approval.requested"
+    },
+    "AiLLMChatFilterEvent": {
+      "_go_const": "EventAiLLMChatFilterEvent",
+      "value": "g8e.v1.ai.llm.chat.filter.event"
+    },
+    "AiLLMChatIterationCitationsReceived": {
+      "_go_const": "EventAiLLMChatIterationCitationsReceived",
+      "value": "g8e.v1.ai.llm.chat.iteration.citations.received"
+    },
+    "AiLLMChatIterationCompleted": {
+      "_go_const": "EventAiLLMChatIterationCompleted",
+      "value": "g8e.v1.ai.llm.chat.iteration.completed"
+    },
+    "AiLLMChatIterationFailed": {
+      "_go_const": "EventAiLLMChatIterationFailed",
+      "value": "g8e.v1.ai.llm.chat.iteration.failed"
+    },
+    "AiLLMChatIterationRetry": {
+      "_go_const": "EventAiLLMChatIterationRetry",
+      "value": "g8e.v1.ai.llm.chat.iteration.retry"
+    },
+    "AiLLMChatIterationStarted": {
+      "_go_const": "EventAiLLMChatIterationStarted",
+      "value": "g8e.v1.ai.llm.chat.iteration.started"
+    },
+    "AiLLMChatIterationStopped": {
+      "_go_const": "EventAiLLMChatIterationStopped",
+      "value": "g8e.v1.ai.llm.chat.iteration.stopped"
+    },
+    "AiLLMChatIterationStreamCompleted": {
+      "_go_const": "EventAiLLMChatIterationStreamCompleted",
+      "value": "g8e.v1.ai.llm.chat.iteration.stream.completed"
+    },
+    "AiLLMChatIterationStreamDeltaReceived": {
+      "_go_const": "EventAiLLMChatIterationStreamDeltaReceived",
+      "value": "g8e.v1.ai.llm.chat.iteration.stream.delta.received"
+    },
+    "AiLLMChatIterationStreamFailed": {
+      "_go_const": "EventAiLLMChatIterationStreamFailed",
+      "value": "g8e.v1.ai.llm.chat.iteration.stream.failed"
+    },
+    "AiLLMChatIterationStreamStarted": {
+      "_go_const": "EventAiLLMChatIterationStreamStarted",
+      "value": "g8e.v1.ai.llm.chat.iteration.stream.started"
+    },
+    "AiLLMChatIterationTextChunkReceived": {
+      "_go_const": "EventAiLLMChatIterationTextChunkReceived",
+      "value": "g8e.v1.ai.llm.chat.iteration.text.chunk.received"
+    },
+    "AiLLMChatIterationTextCompleted": {
+      "_go_const": "EventAiLLMChatIterationTextCompleted",
+      "value": "g8e.v1.ai.llm.chat.iteration.text.completed"
+    },
+    "AiLLMChatIterationTextReceived": {
+      "_go_const": "EventAiLLMChatIterationTextReceived",
+      "value": "g8e.v1.ai.llm.chat.iteration.text.received"
+    },
+    "AiLLMChatIterationTextTruncated": {
+      "_go_const": "EventAiLLMChatIterationTextTruncated",
+      "value": "g8e.v1.ai.llm.chat.iteration.text.truncated"
+    },
+    "AiLLMChatIterationThinkingEnd": {
+      "_go_const": "EventAiLLMChatIterationThinkingEnd",
+      "value": "g8e.v1.ai.llm.chat.iteration.thinking.end"
+    },
+    "AiLLMChatIterationThinkingStarted": {
+      "_go_const": "EventAiLLMChatIterationThinkingStarted",
+      "value": "g8e.v1.ai.llm.chat.iteration.thinking.started"
+    },
+    "AiLLMChatIterationThinkingUpdate": {
+      "_go_const": "EventAiLLMChatIterationThinkingUpdate",
+      "value": "g8e.v1.ai.llm.chat.iteration.thinking.update"
+    },
+    "AiLLMChatMessageDeadLettered": {
+      "_go_const": "EventAiLLMChatMessageDeadLettered",
+      "value": "g8e.v1.ai.llm.chat.message.dead.lettered"
+    },
+    "AiLLMChatMessageProcessingFailed": {
+      "_go_const": "EventAiLLMChatMessageProcessingFailed",
+      "value": "g8e.v1.ai.llm.chat.message.processing.failed"
+    },
+    "AiLLMChatMessageReplayed": {
+      "_go_const": "EventAiLLMChatMessageReplayed",
+      "value": "g8e.v1.ai.llm.chat.message.replayed"
+    },
+    "AiLLMChatMessageSent": {
+      "_go_const": "EventAiLLMChatMessageSent",
+      "value": "g8e.v1.ai.llm.chat.message.sent"
+    },
+    "AiLLMChatStopHide": {
+      "_go_const": "EventAiLLMChatStopHide",
+      "value": "g8e.v1.ai.llm.chat.stop.hide"
+    },
+    "AiLLMChatStopShow": {
+      "_go_const": "EventAiLLMChatStopShow",
+      "value": "g8e.v1.ai.llm.chat.stop.show"
+    },
+    "AiLLMChatSubmitted": {
+      "_go_const": "EventAiLLMChatSubmitted",
+      "value": "g8e.v1.ai.llm.chat.submitted"
+    },
+    "AiLLMConfigFailed": {
+      "_go_const": "EventAiLLMConfigFailed",
+      "value": "g8e.v1.ai.llm.config.failed"
+    },
+    "AiLLMConfigReceived": {
+      "_go_const": "EventAiLLMConfigReceived",
+      "value": "g8e.v1.ai.llm.config.received"
+    },
+    "AiLLMConfigRequested": {
+      "_go_const": "EventAiLLMConfigRequested",
+      "value": "g8e.v1.ai.llm.config.requested"
+    },
+    "AiLLMLifecycleCompleted": {
+      "_go_const": "EventAiLLMLifecycleCompleted",
+      "value": "g8e.v1.ai.llm.lifecycle.completed"
+    },
+    "AiLLMLifecycleErrorOccurred": {
+      "_go_const": "EventAiLLMLifecycleErrorOccurred",
+      "value": "g8e.v1.ai.llm.lifecycle.error.occurred"
+    },
+    "AiLLMLifecycleFailed": {
+      "_go_const": "EventAiLLMLifecycleFailed",
+      "value": "g8e.v1.ai.llm.lifecycle.failed"
+    },
+    "AiLLMLifecycleRequested": {
+      "_go_const": "EventAiLLMLifecycleRequested",
+      "value": "g8e.v1.ai.llm.lifecycle.requested"
+    },
+    "AiLLMLifecycleStarted": {
+      "_go_const": "EventAiLLMLifecycleStarted",
+      "value": "g8e.v1.ai.llm.lifecycle.started"
+    },
+    "AiLLMLifecycleStopped": {
+      "_go_const": "EventAiLLMLifecycleStopped",
+      "value": "g8e.v1.ai.llm.lifecycle.stopped"
+    },
+    "AiLLMToolG8eCommandConstraintsCompleted": {
+      "_go_const": "EventAiLLMToolG8eCommandConstraintsCompleted",
+      "value": "g8e.v1.ai.llm.tool.g8e.command.constraints.completed"
+    },
+    "AiLLMToolG8eCommandConstraintsFailed": {
+      "_go_const": "EventAiLLMToolG8eCommandConstraintsFailed",
+      "value": "g8e.v1.ai.llm.tool.g8e.command.constraints.failed"
+    },
+    "AiLLMToolG8eCommandConstraintsReceived": {
+      "_go_const": "EventAiLLMToolG8eCommandConstraintsReceived",
+      "value": "g8e.v1.ai.llm.tool.g8e.command.constraints.received"
+    },
+    "AiLLMToolG8eCommandConstraintsRequested": {
+      "_go_const": "EventAiLLMToolG8eCommandConstraintsRequested",
+      "value": "g8e.v1.ai.llm.tool.g8e.command.constraints.requested"
+    },
+    "AiLLMToolG8eInvestigationQueryCompleted": {
+      "_go_const": "EventAiLLMToolG8eInvestigationQueryCompleted",
+      "value": "g8e.v1.ai.llm.tool.g8e.investigation.query.completed"
+    },
+    "AiLLMToolG8eInvestigationQueryFailed": {
+      "_go_const": "EventAiLLMToolG8eInvestigationQueryFailed",
+      "value": "g8e.v1.ai.llm.tool.g8e.investigation.query.failed"
+    },
+    "AiLLMToolG8eInvestigationQueryReceived": {
+      "_go_const": "EventAiLLMToolG8eInvestigationQueryReceived",
+      "value": "g8e.v1.ai.llm.tool.g8e.investigation.query.received"
+    },
+    "AiLLMToolG8eInvestigationQueryRequested": {
+      "_go_const": "EventAiLLMToolG8eInvestigationQueryRequested",
+      "value": "g8e.v1.ai.llm.tool.g8e.investigation.query.requested"
+    },
+    "AiLLMToolG8eWebSearchCompleted": {
+      "_go_const": "EventAiLLMToolG8eWebSearchCompleted",
+      "value": "g8e.v1.ai.llm.tool.g8e.web.search.completed"
+    },
+    "AiLLMToolG8eWebSearchFailed": {
+      "_go_const": "EventAiLLMToolG8eWebSearchFailed",
+      "value": "g8e.v1.ai.llm.tool.g8e.web.search.failed"
+    },
+    "AiLLMToolG8eWebSearchReceived": {
+      "_go_const": "EventAiLLMToolG8eWebSearchReceived",
+      "value": "g8e.v1.ai.llm.tool.g8e.web.search.received"
+    },
+    "AiLLMToolG8eWebSearchRequested": {
+      "_go_const": "EventAiLLMToolG8eWebSearchRequested",
+      "value": "g8e.v1.ai.llm.tool.g8e.web.search.requested"
+    },
+    "AiTriageClarificationAnswered": {
+      "_go_const": "EventAiTriageClarificationAnswered",
+      "value": "g8e.v1.ai.triage.clarification.answered"
+    },
+    "AiTriageClarificationQuestions": {
+      "_go_const": "EventAiTriageClarificationQuestions",
+      "value": "g8e.v1.ai.triage.clarification.questions"
+    },
+    "AiTriageClarificationSkipped": {
+      "_go_const": "EventAiTriageClarificationSkipped",
+      "value": "g8e.v1.ai.triage.clarification.skipped"
+    },
+    "AiTriageClarificationTimeout": {
+      "_go_const": "EventAiTriageClarificationTimeout",
+      "value": "g8e.v1.ai.triage.clarification.timeout"
+    },
+    "AppCaseAssigned": {
+      "_go_const": "EventAppCaseAssigned",
+      "value": "g8e.v1.app.case.assigned"
+    },
+    "AppCaseCleared": {
+      "_go_const": "EventAppCaseCleared",
+      "value": "g8e.v1.app.case.cleared"
+    },
+    "AppCaseClosed": {
+      "_go_const": "EventAppCaseClosed",
+      "value": "g8e.v1.app.case.closed"
+    },
+    "AppCaseCreated": {
+      "_go_const": "EventAppCaseCreated",
+      "value": "g8e.v1.app.case.created"
+    },
+    "AppCaseCreationRequested": {
+      "_go_const": "EventAppCaseCreationRequested",
+      "value": "g8e.v1.app.case.creation.requested"
+    },
+    "AppCaseEscalated": {
+      "_go_const": "EventAppCaseEscalated",
+      "value": "g8e.v1.app.case.escalated"
+    },
+    "AppCaseResolved": {
+      "_go_const": "EventAppCaseResolved",
+      "value": "g8e.v1.app.case.resolved"
+    },
+    "AppCaseSelected": {
+      "_go_const": "EventAppCaseSelected",
+      "value": "g8e.v1.app.case.selected"
+    },
+    "AppCaseSwitched": {
+      "_go_const": "EventAppCaseSwitched",
+      "value": "g8e.v1.app.case.switched"
+    },
+    "AppCaseUpdateRequested": {
+      "_go_const": "EventAppCaseUpdateRequested",
+      "value": "g8e.v1.app.case.update.requested"
+    },
+    "AppCaseUpdated": {
+      "_go_const": "EventAppCaseUpdated",
+      "value": "g8e.v1.app.case.updated"
+    },
+    "AppInvestigationChatMessageAi": {
+      "_go_const": "EventAppInvestigationChatMessageAi",
+      "value": "g8e.v1.app.investigation.chat.message.ai"
+    },
+    "AppInvestigationChatMessageSystem": {
+      "_go_const": "EventAppInvestigationChatMessageSystem",
+      "value": "g8e.v1.app.investigation.chat.message.system"
+    },
+    "AppInvestigationChatMessageUser": {
+      "_go_const": "EventAppInvestigationChatMessageUser",
+      "value": "g8e.v1.app.investigation.chat.message.user"
+    },
+    "AppInvestigationClosed": {
+      "_go_const": "EventAppInvestigationClosed",
+      "value": "g8e.v1.app.investigation.closed"
+    },
+    "AppInvestigationCreated": {
+      "_go_const": "EventAppInvestigationCreated",
+      "value": "g8e.v1.app.investigation.created"
+    },
+    "AppInvestigationEscalated": {
+      "_go_const": "EventAppInvestigationEscalated",
+      "value": "g8e.v1.app.investigation.escalated"
+    },
+    "AppInvestigationListCompleted": {
+      "_go_const": "EventAppInvestigationListCompleted",
+      "value": "g8e.v1.app.investigation.list.completed"
+    },
+    "AppInvestigationListFailed": {
+      "_go_const": "EventAppInvestigationListFailed",
+      "value": "g8e.v1.app.investigation.list.failed"
+    },
+    "AppInvestigationListReceived": {
+      "_go_const": "EventAppInvestigationListReceived",
+      "value": "g8e.v1.app.investigation.list.received"
+    },
+    "AppInvestigationListRequested": {
+      "_go_const": "EventAppInvestigationListRequested",
+      "value": "g8e.v1.app.investigation.list.requested"
+    },
+    "AppInvestigationLoaded": {
+      "_go_const": "EventAppInvestigationLoaded",
+      "value": "g8e.v1.app.investigation.loaded"
+    },
+    "AppInvestigationRequested": {
+      "_go_const": "EventAppInvestigationRequested",
+      "value": "g8e.v1.app.investigation.requested"
+    },
+    "AppInvestigationStarted": {
+      "_go_const": "EventAppInvestigationStarted",
+      "value": "g8e.v1.app.investigation.started"
+    },
+    "AppInvestigationStatusUpdatedClosed": {
+      "_go_const": "EventAppInvestigationStatusUpdatedClosed",
+      "value": "g8e.v1.app.investigation.status.updated.closed"
+    },
+    "AppInvestigationStatusUpdatedEscalated": {
+      "_go_const": "EventAppInvestigationStatusUpdatedEscalated",
+      "value": "g8e.v1.app.investigation.status.updated.escalated"
+    },
+    "AppInvestigationStatusUpdatedOpen": {
+      "_go_const": "EventAppInvestigationStatusUpdatedOpen",
+      "value": "g8e.v1.app.investigation.status.updated.open"
+    },
+    "AppInvestigationStatusUpdatedResolved": {
+      "_go_const": "EventAppInvestigationStatusUpdatedResolved",
+      "value": "g8e.v1.app.investigation.status.updated.resolved"
+    },
+    "AppInvestigationUpdated": {
+      "_go_const": "EventAppInvestigationUpdated",
+      "value": "g8e.v1.app.investigation.updated"
+    },
+    "AppTaskAssigned": {
+      "_go_const": "EventAppTaskAssigned",
+      "value": "g8e.v1.app.task.assigned"
+    },
+    "AppTaskCompleted": {
+      "_go_const": "EventAppTaskCompleted",
+      "value": "g8e.v1.app.task.completed"
+    },
+    "AppTaskCreated": {
+      "_go_const": "EventAppTaskCreated",
+      "value": "g8e.v1.app.task.created"
+    },
+    "AppTaskFailed": {
+      "_go_const": "EventAppTaskFailed",
+      "value": "g8e.v1.app.task.failed"
+    },
+    "AppTaskStarted": {
+      "_go_const": "EventAppTaskStarted",
+      "value": "g8e.v1.app.task.started"
+    },
+    "AppTaskUpdated": {
+      "_go_const": "EventAppTaskUpdated",
+      "value": "g8e.v1.app.task.updated"
+    },
+    "OperatorA2aCallRequested": {
+      "_go_const": "EventOperatorA2aCallRequested",
+      "value": "g8e.v1.operator.a2a.call.requested"
+    },
+    "OperatorAuditAiRecorded": {
+      "_go_const": "EventOperatorAuditAiRecorded",
+      "value": "g8e.v1.operator.audit.ai.recorded"
+    },
+    "OperatorAuditCommandRecorded": {
+      "_go_const": "EventOperatorAuditCommandRecorded",
+      "value": "g8e.v1.operator.audit.command.recorded"
+    },
+    "OperatorAuditDirectCommandRecorded": {
+      "_go_const": "EventOperatorAuditDirectCommandRecorded",
+      "value": "g8e.v1.operator.audit.direct.command.recorded"
+    },
+    "OperatorAuditDirectCommandResultRecorded": {
+      "_go_const": "EventOperatorAuditDirectCommandResultRecorded",
+      "value": "g8e.v1.operator.audit.direct.command.result.recorded"
+    },
+    "OperatorAuditMcpCallRecorded": {
+      "_go_const": "EventOperatorAuditMcpCallRecorded",
+      "value": "g8e.v1.operator.audit.mcp.call.recorded"
+    },
+    "OperatorAuditUserRecorded": {
+      "_go_const": "EventOperatorAuditUserRecorded",
+      "value": "g8e.v1.operator.audit.user.recorded"
+    },
+    "OperatorBootstrapCompleted": {
+      "_go_const": "EventOperatorBootstrapCompleted",
+      "value": "g8e.v1.operator.bootstrap.completed"
+    },
+    "OperatorBootstrapConfigReceived": {
+      "_go_const": "EventOperatorBootstrapConfigReceived",
+      "value": "g8e.v1.operator.bootstrap.config.received"
+    },
+    "OperatorBootstrapFailed": {
+      "_go_const": "EventOperatorBootstrapFailed",
+      "value": "g8e.v1.operator.bootstrap.failed"
+    },
+    "OperatorBootstrapReceived": {
+      "_go_const": "EventOperatorBootstrapReceived",
+      "value": "g8e.v1.operator.bootstrap.received"
+    },
+    "OperatorBootstrapRequested": {
+      "_go_const": "EventOperatorBootstrapRequested",
+      "value": "g8e.v1.operator.bootstrap.requested"
+    },
+    "OperatorBound": {
+      "_go_const": "EventOperatorBound",
+      "value": "g8e.v1.operator.bound"
+    },
+    "OperatorCommandApprovalGranted": {
+      "_go_const": "EventOperatorCommandApprovalGranted",
+      "value": "g8e.v1.operator.command.approval.granted"
+    },
+    "OperatorCommandApprovalPreparing": {
+      "_go_const": "EventOperatorCommandApprovalPreparing",
+      "value": "g8e.v1.operator.command.approval.preparing"
+    },
+    "OperatorCommandApprovalRejected": {
+      "_go_const": "EventOperatorCommandApprovalRejected",
+      "value": "g8e.v1.operator.command.approval.rejected"
+    },
+    "OperatorCommandApprovalRequested": {
+      "_go_const": "EventOperatorCommandApprovalRequested",
+      "value": "g8e.v1.operator.command.approval.requested"
+    },
+    "OperatorCommandCancelAcknowledged": {
+      "_go_const": "EventOperatorCommandCancelAcknowledged",
+      "value": "g8e.v1.operator.command.cancel.acknowledged"
+    },
+    "OperatorCommandCancelFailed": {
+      "_go_const": "EventOperatorCommandCancelFailed",
+      "value": "g8e.v1.operator.command.cancel.failed"
+    },
+    "OperatorCommandCancelRequested": {
+      "_go_const": "EventOperatorCommandCancelRequested",
+      "value": "g8e.v1.operator.command.cancel.requested"
+    },
+    "OperatorCommandCancelled": {
+      "_go_const": "EventOperatorCommandCancelled",
+      "value": "g8e.v1.operator.command.cancelled"
+    },
+    "OperatorCommandCompleted": {
+      "_go_const": "EventOperatorCommandCompleted",
+      "value": "g8e.v1.operator.command.completed"
+    },
+    "OperatorCommandExecution": {
+      "_go_const": "EventOperatorCommandExecution",
+      "value": "g8e.v1.operator.command.execution"
+    },
+    "OperatorCommandFailed": {
+      "_go_const": "EventOperatorCommandFailed",
+      "value": "g8e.v1.operator.command.failed"
+    },
+    "OperatorCommandOutputReceived": {
+      "_go_const": "EventOperatorCommandOutputReceived",
+      "value": "g8e.v1.operator.command.output.received"
+    },
+    "OperatorCommandRequested": {
+      "_go_const": "EventOperatorCommandRequested",
+      "value": "g8e.v1.operator.command.requested"
+    },
+    "OperatorCommandResult": {
+      "_go_const": "EventOperatorCommandResult",
+      "value": "g8e.v1.operator.command.result"
+    },
+    "OperatorCommandStarted": {
+      "_go_const": "EventOperatorCommandStarted",
+      "value": "g8e.v1.operator.command.started"
+    },
+    "OperatorCommandStatusUpdatedCancelled": {
+      "_go_const": "EventOperatorCommandStatusUpdatedCancelled",
+      "value": "g8e.v1.operator.command.status.updated.cancelled"
+    },
+    "OperatorCommandStatusUpdatedCompleted": {
+      "_go_const": "EventOperatorCommandStatusUpdatedCompleted",
+      "value": "g8e.v1.operator.command.status.updated.completed"
+    },
+    "OperatorCommandStatusUpdatedFailed": {
+      "_go_const": "EventOperatorCommandStatusUpdatedFailed",
+      "value": "g8e.v1.operator.command.status.updated.failed"
+    },
+    "OperatorCommandStatusUpdatedQueued": {
+      "_go_const": "EventOperatorCommandStatusUpdatedQueued",
+      "value": "g8e.v1.operator.command.status.updated.queued"
+    },
+    "OperatorCommandStatusUpdatedRunning": {
+      "_go_const": "EventOperatorCommandStatusUpdatedRunning",
+      "value": "g8e.v1.operator.command.status.updated.running"
+    },
+    "OperatorContextChanged": {
+      "_go_const": "EventOperatorContextChanged",
+      "value": "g8e.v1.operator.context.changed"
+    },
+    "OperatorDeviceRegistered": {
+      "_go_const": "EventOperatorDeviceRegistered",
+      "value": "g8e.v1.operator.device.registered"
+    },
+    "OperatorEvalAnswerRequested": {
+      "_go_const": "EventOperatorEvalAnswerRequested",
+      "value": "g8e.v1.operator.eval.answer.requested"
+    },
+    "OperatorFieldReadAccessDenied": {
+      "_go_const": "EventOperatorFieldReadAccessDenied",
+      "value": "g8e.v1.operator.field.read.access.denied"
+    },
+    "OperatorFieldReadAccessGranted": {
+      "_go_const": "EventOperatorFieldReadAccessGranted",
+      "value": "g8e.v1.operator.field.read.access.granted"
+    },
+    "OperatorFieldReadRequested": {
+      "_go_const": "EventOperatorFieldReadRequested",
+      "value": "g8e.v1.operator.field.read.requested"
+    },
+    "OperatorFileDiffFetchCompleted": {
+      "_go_const": "EventOperatorFileDiffFetchCompleted",
+      "value": "g8e.v1.operator.file.diff.fetch.completed"
+    },
+    "OperatorFileDiffFetchFailed": {
+      "_go_const": "EventOperatorFileDiffFetchFailed",
+      "value": "g8e.v1.operator.file.diff.fetch.failed"
+    },
+    "OperatorFileDiffFetchReceived": {
+      "_go_const": "EventOperatorFileDiffFetchReceived",
+      "value": "g8e.v1.operator.file.diff.fetch.received"
+    },
+    "OperatorFileDiffFetchRequested": {
+      "_go_const": "EventOperatorFileDiffFetchRequested",
+      "value": "g8e.v1.operator.file.diff.fetch.requested"
+    },
+    "OperatorFileDiffFetchStarted": {
+      "_go_const": "EventOperatorFileDiffFetchStarted",
+      "value": "g8e.v1.operator.file.diff.fetch.started"
+    },
+    "OperatorFileEditApprovalFeedback": {
+      "_go_const": "EventOperatorFileEditApprovalFeedback",
+      "value": "g8e.v1.operator.file.edit.approval.feedback"
+    },
+    "OperatorFileEditApprovalGranted": {
+      "_go_const": "EventOperatorFileEditApprovalGranted",
+      "value": "g8e.v1.operator.file.edit.approval.granted"
+    },
+    "OperatorFileEditApprovalRejected": {
+      "_go_const": "EventOperatorFileEditApprovalRejected",
+      "value": "g8e.v1.operator.file.edit.approval.rejected"
+    },
+    "OperatorFileEditApprovalRequested": {
+      "_go_const": "EventOperatorFileEditApprovalRequested",
+      "value": "g8e.v1.operator.file.edit.approval.requested"
+    },
+    "OperatorFileEditCompleted": {
+      "_go_const": "EventOperatorFileEditCompleted",
+      "value": "g8e.v1.operator.file.edit.completed"
+    },
+    "OperatorFileEditFailed": {
+      "_go_const": "EventOperatorFileEditFailed",
+      "value": "g8e.v1.operator.file.edit.failed"
+    },
+    "OperatorFileEditRequested": {
+      "_go_const": "EventOperatorFileEditRequested",
+      "value": "g8e.v1.operator.file.edit.requested"
+    },
+    "OperatorFileEditStarted": {
+      "_go_const": "EventOperatorFileEditStarted",
+      "value": "g8e.v1.operator.file.edit.started"
+    },
+    "OperatorFileEditTimeout": {
+      "_go_const": "EventOperatorFileEditTimeout",
+      "value": "g8e.v1.operator.file.edit.timeout"
+    },
+    "OperatorFileHistoryFetchCompleted": {
+      "_go_const": "EventOperatorFileHistoryFetchCompleted",
+      "value": "g8e.v1.operator.file.history.fetch.completed"
+    },
+    "OperatorFileHistoryFetchFailed": {
+      "_go_const": "EventOperatorFileHistoryFetchFailed",
+      "value": "g8e.v1.operator.file.history.fetch.failed"
+    },
+    "OperatorFileHistoryFetchReceived": {
+      "_go_const": "EventOperatorFileHistoryFetchReceived",
+      "value": "g8e.v1.operator.file.history.fetch.received"
+    },
+    "OperatorFileHistoryFetchRequested": {
+      "_go_const": "EventOperatorFileHistoryFetchRequested",
+      "value": "g8e.v1.operator.file.history.fetch.requested"
+    },
+    "OperatorFileHistoryFetchStarted": {
+      "_go_const": "EventOperatorFileHistoryFetchStarted",
+      "value": "g8e.v1.operator.file.history.fetch.started"
+    },
+    "OperatorFileRestoreCompleted": {
+      "_go_const": "EventOperatorFileRestoreCompleted",
+      "value": "g8e.v1.operator.file.restore.completed"
+    },
+    "OperatorFileRestoreFailed": {
+      "_go_const": "EventOperatorFileRestoreFailed",
+      "value": "g8e.v1.operator.file.restore.failed"
+    },
+    "OperatorFileRestoreReceived": {
+      "_go_const": "EventOperatorFileRestoreReceived",
+      "value": "g8e.v1.operator.file.restore.received"
+    },
+    "OperatorFileRestoreRequested": {
+      "_go_const": "EventOperatorFileRestoreRequested",
+      "value": "g8e.v1.operator.file.restore.requested"
+    },
+    "OperatorFilesystemGrepCompleted": {
+      "_go_const": "EventOperatorFilesystemGrepCompleted",
+      "value": "g8e.v1.operator.filesystem.grep.completed"
+    },
+    "OperatorFilesystemGrepFailed": {
+      "_go_const": "EventOperatorFilesystemGrepFailed",
+      "value": "g8e.v1.operator.filesystem.grep.failed"
+    },
+    "OperatorFilesystemGrepReceived": {
+      "_go_const": "EventOperatorFilesystemGrepReceived",
+      "value": "g8e.v1.operator.filesystem.grep.received"
+    },
+    "OperatorFilesystemGrepRequested": {
+      "_go_const": "EventOperatorFilesystemGrepRequested",
+      "value": "g8e.v1.operator.filesystem.grep.requested"
+    },
+    "OperatorFilesystemGrepStarted": {
+      "_go_const": "EventOperatorFilesystemGrepStarted",
+      "value": "g8e.v1.operator.filesystem.grep.started"
+    },
+    "OperatorFilesystemListCompleted": {
+      "_go_const": "EventOperatorFilesystemListCompleted",
+      "value": "g8e.v1.operator.filesystem.list.completed"
+    },
+    "OperatorFilesystemListFailed": {
+      "_go_const": "EventOperatorFilesystemListFailed",
+      "value": "g8e.v1.operator.filesystem.list.failed"
+    },
+    "OperatorFilesystemListReceived": {
+      "_go_const": "EventOperatorFilesystemListReceived",
+      "value": "g8e.v1.operator.filesystem.list.received"
+    },
+    "OperatorFilesystemListRequested": {
+      "_go_const": "EventOperatorFilesystemListRequested",
+      "value": "g8e.v1.operator.filesystem.list.requested"
+    },
+    "OperatorFilesystemListStarted": {
+      "_go_const": "EventOperatorFilesystemListStarted",
+      "value": "g8e.v1.operator.filesystem.list.started"
+    },
+    "OperatorFilesystemReadCompleted": {
+      "_go_const": "EventOperatorFilesystemReadCompleted",
+      "value": "g8e.v1.operator.filesystem.read.completed"
+    },
+    "OperatorFilesystemReadFailed": {
+      "_go_const": "EventOperatorFilesystemReadFailed",
+      "value": "g8e.v1.operator.filesystem.read.failed"
+    },
+    "OperatorFilesystemReadReceived": {
+      "_go_const": "EventOperatorFilesystemReadReceived",
+      "value": "g8e.v1.operator.filesystem.read.received"
+    },
+    "OperatorFilesystemReadRequested": {
+      "_go_const": "EventOperatorFilesystemReadRequested",
+      "value": "g8e.v1.operator.filesystem.read.requested"
+    },
+    "OperatorFilesystemReadStarted": {
+      "_go_const": "EventOperatorFilesystemReadStarted",
+      "value": "g8e.v1.operator.filesystem.read.started"
+    },
+    "OperatorHeartbeatMissed": {
+      "_go_const": "EventOperatorHeartbeatMissed",
+      "value": "g8e.v1.operator.heartbeat.missed"
+    },
+    "OperatorHeartbeatReceived": {
+      "_go_const": "EventOperatorHeartbeatReceived",
+      "value": "g8e.v1.operator.heartbeat.received"
+    },
+    "OperatorHeartbeatRequested": {
+      "_go_const": "EventOperatorHeartbeatRequested",
+      "value": "g8e.v1.operator.heartbeat.requested"
+    },
+    "OperatorHeartbeatSent": {
+      "_go_const": "EventOperatorHeartbeatSent",
+      "value": "g8e.v1.operator.heartbeat.sent"
+    },
+    "OperatorHistoryFetchCompleted": {
+      "_go_const": "EventOperatorHistoryFetchCompleted",
+      "value": "g8e.v1.operator.history.fetch.completed"
+    },
+    "OperatorHistoryFetchFailed": {
+      "_go_const": "EventOperatorHistoryFetchFailed",
+      "value": "g8e.v1.operator.history.fetch.failed"
+    },
+    "OperatorHistoryFetchReceived": {
+      "_go_const": "EventOperatorHistoryFetchReceived",
+      "value": "g8e.v1.operator.history.fetch.received"
+    },
+    "OperatorHistoryFetchRequested": {
+      "_go_const": "EventOperatorHistoryFetchRequested",
+      "value": "g8e.v1.operator.history.fetch.requested"
+    },
+    "OperatorLogsFetchCompleted": {
+      "_go_const": "EventOperatorLogsFetchCompleted",
+      "value": "g8e.v1.operator.logs.fetch.completed"
+    },
+    "OperatorLogsFetchFailed": {
+      "_go_const": "EventOperatorLogsFetchFailed",
+      "value": "g8e.v1.operator.logs.fetch.failed"
+    },
+    "OperatorLogsFetchReceived": {
+      "_go_const": "EventOperatorLogsFetchReceived",
+      "value": "g8e.v1.operator.logs.fetch.received"
+    },
+    "OperatorLogsFetchRequested": {
+      "_go_const": "EventOperatorLogsFetchRequested",
+      "value": "g8e.v1.operator.logs.fetch.requested"
+    },
+    "OperatorMcpCallRequested": {
+      "_go_const": "EventOperatorMcpCallRequested",
+      "value": "g8e.v1.operator.mcp.call.requested"
+    },
+    "OperatorNetworkPingCompleted": {
+      "_go_const": "EventOperatorNetworkPingCompleted",
+      "value": "g8e.v1.operator.network.ping.completed"
+    },
+    "OperatorNetworkPingFailed": {
+      "_go_const": "EventOperatorNetworkPingFailed",
+      "value": "g8e.v1.operator.network.ping.failed"
+    },
+    "OperatorNetworkPingReceived": {
+      "_go_const": "EventOperatorNetworkPingReceived",
+      "value": "g8e.v1.operator.network.ping.received"
+    },
+    "OperatorNetworkPingRequested": {
+      "_go_const": "EventOperatorNetworkPingRequested",
+      "value": "g8e.v1.operator.network.ping.requested"
+    },
+    "OperatorNetworkPortCheckCompleted": {
+      "_go_const": "EventOperatorNetworkPortCheckCompleted",
+      "value": "g8e.v1.operator.network.port.check.completed"
+    },
+    "OperatorNetworkPortCheckFailed": {
+      "_go_const": "EventOperatorNetworkPortCheckFailed",
+      "value": "g8e.v1.operator.network.port.check.failed"
+    },
+    "OperatorNetworkPortCheckReceived": {
+      "_go_const": "EventOperatorNetworkPortCheckReceived",
+      "value": "g8e.v1.operator.network.port.check.received"
+    },
+    "OperatorNetworkPortCheckRequested": {
+      "_go_const": "EventOperatorNetworkPortCheckRequested",
+      "value": "g8e.v1.operator.network.port.check.requested"
+    },
+    "OperatorNetworkPortCheckStarted": {
+      "_go_const": "EventOperatorNetworkPortCheckStarted",
+      "value": "g8e.v1.operator.network.port.check.started"
+    },
+    "OperatorNotaryApprovalRequested": {
+      "_go_const": "EventOperatorNotaryApprovalRequested",
+      "value": "g8e.v1.operator.notary.approval.requested"
+    },
+    "OperatorNotaryTransactionExpired": {
+      "_go_const": "EventOperatorNotaryTransactionExpired",
+      "value": "g8e.v1.operator.notary.transaction.expired"
+    },
+    "OperatorPanelListUpdated": {
+      "_go_const": "EventOperatorPanelListUpdated",
+      "value": "g8e.v1.operator.panel.list.updated"
+    },
+    "OperatorReputationCommitmentCreated": {
+      "_go_const": "EventOperatorReputationCommitmentCreated",
+      "value": "g8e.v1.operator.reputation.commitment.created"
+    },
+    "OperatorReputationCommitmentFailed": {
+      "_go_const": "EventOperatorReputationCommitmentFailed",
+      "value": "g8e.v1.operator.reputation.commitment.failed"
+    },
+    "OperatorReputationCommitmentVerified": {
+      "_go_const": "EventOperatorReputationCommitmentVerified",
+      "value": "g8e.v1.operator.reputation.commitment.verified"
+    },
+    "OperatorReputationSlashTier1": {
+      "_go_const": "EventOperatorReputationSlashTier1",
+      "value": "g8e.v1.operator.reputation.slash.tier1"
+    },
+    "OperatorReputationSlashTier2": {
+      "_go_const": "EventOperatorReputationSlashTier2",
+      "value": "g8e.v1.operator.reputation.slash.tier2"
+    },
+    "OperatorReputationSlashTier3": {
+      "_go_const": "EventOperatorReputationSlashTier3",
+      "value": "g8e.v1.operator.reputation.slash.tier3"
+    },
+    "OperatorReputationStateUpdated": {
+      "_go_const": "EventOperatorReputationStateUpdated",
+      "value": "g8e.v1.operator.reputation.state.updated"
+    },
+    "OperatorShutdownAcknowledged": {
+      "_go_const": "EventOperatorShutdownAcknowledged",
+      "value": "g8e.v1.operator.shutdown.acknowledged"
+    },
+    "OperatorShutdownRequested": {
+      "_go_const": "EventOperatorShutdownRequested",
+      "value": "g8e.v1.operator.shutdown.requested"
+    },
+    "OperatorSlotInitializationFailed": {
+      "_go_const": "EventOperatorSlotInitializationFailed",
+      "value": "g8e.v1.operator.slot.initialization.failed"
+    },
+    "OperatorStatusUpdatedActive": {
+      "_go_const": "EventOperatorStatusUpdatedActive",
+      "value": "g8e.v1.operator.status.updated.active"
+    },
+    "OperatorStatusUpdatedAvailable": {
+      "_go_const": "EventOperatorStatusUpdatedAvailable",
+      "value": "g8e.v1.operator.status.updated.available"
+    },
+    "OperatorStatusUpdatedBound": {
+      "_go_const": "EventOperatorStatusUpdatedBound",
+      "value": "g8e.v1.operator.status.updated.bound"
+    },
+    "OperatorStatusUpdatedOffline": {
+      "_go_const": "EventOperatorStatusUpdatedOffline",
+      "value": "g8e.v1.operator.status.updated.offline"
+    },
+    "OperatorStatusUpdatedStale": {
+      "_go_const": "EventOperatorStatusUpdatedStale",
+      "value": "g8e.v1.operator.status.updated.stale"
+    },
+    "OperatorStatusUpdatedStopped": {
+      "_go_const": "EventOperatorStatusUpdatedStopped",
+      "value": "g8e.v1.operator.status.updated.stopped"
+    },
+    "OperatorStatusUpdatedTerminated": {
+      "_go_const": "EventOperatorStatusUpdatedTerminated",
+      "value": "g8e.v1.operator.status.updated.terminated"
+    },
+    "OperatorStatusUpdatedUnavailable": {
+      "_go_const": "EventOperatorStatusUpdatedUnavailable",
+      "value": "g8e.v1.operator.status.updated.unavailable"
+    },
+    "OperatorStreamApprovalGranted": {
+      "_go_const": "EventOperatorStreamApprovalGranted",
+      "value": "g8e.v1.operator.stream.approval.granted"
+    },
+    "OperatorStreamApprovalRejected": {
+      "_go_const": "EventOperatorStreamApprovalRejected",
+      "value": "g8e.v1.operator.stream.approval.rejected"
+    },
+    "OperatorStreamApprovalRequested": {
+      "_go_const": "EventOperatorStreamApprovalRequested",
+      "value": "g8e.v1.operator.stream.approval.requested"
+    },
+    "OperatorTerminalApprovalDenied": {
+      "_go_const": "EventOperatorTerminalApprovalDenied",
+      "value": "g8e.v1.operator.terminal.approval.denied"
+    },
+    "OperatorTerminalAuthStateChanged": {
+      "_go_const": "EventOperatorTerminalAuthStateChanged",
+      "value": "g8e.v1.operator.terminal.auth.state.changed"
+    },
+    "OperatorTerminalThinkingAppend": {
+      "_go_const": "EventOperatorTerminalThinkingAppend",
+      "value": "g8e.v1.operator.terminal.thinking.append"
+    },
+    "OperatorTerminalThinkingComplete": {
+      "_go_const": "EventOperatorTerminalThinkingComplete",
+      "value": "g8e.v1.operator.terminal.thinking.complete"
+    },
+    "OperatorUnbound": {
+      "_go_const": "EventOperatorUnbound",
+      "value": "g8e.v1.operator.unbound"
+    },
+    "PlatformAuthComponentInitializedAuthstate": {
+      "_go_const": "EventPlatformAuthComponentInitializedAuthstate",
+      "value": "g8e.v1.platform.auth.component.initialized.authstate"
+    },
+    "PlatformAuthComponentInitializedChat": {
+      "_go_const": "EventPlatformAuthComponentInitializedChat",
+      "value": "g8e.v1.platform.auth.component.initialized.chat"
+    },
+    "PlatformAuthComponentInitializedOperator": {
+      "_go_const": "EventPlatformAuthComponentInitializedOperator",
+      "value": "g8e.v1.platform.auth.component.initialized.operator"
+    },
+    "PlatformAuthInfo": {
+      "_go_const": "EventPlatformAuthInfo",
+      "value": "g8e.v1.platform.auth.info"
+    },
+    "PlatformAuthLoginFailed": {
+      "_go_const": "EventPlatformAuthLoginFailed",
+      "value": "g8e.v1.platform.auth.login.failed"
+    },
+    "PlatformAuthLoginRequested": {
+      "_go_const": "EventPlatformAuthLoginRequested",
+      "value": "g8e.v1.platform.auth.login.requested"
+    },
+    "PlatformAuthLoginSucceeded": {
+      "_go_const": "EventPlatformAuthLoginSucceeded",
+      "value": "g8e.v1.platform.auth.login.succeeded"
+    },
+    "PlatformAuthLogoutFailed": {
+      "_go_const": "EventPlatformAuthLogoutFailed",
+      "value": "g8e.v1.platform.auth.logout.failed"
+    },
+    "PlatformAuthLogoutRequested": {
+      "_go_const": "EventPlatformAuthLogoutRequested",
+      "value": "g8e.v1.platform.auth.logout.requested"
+    },
+    "PlatformAuthLogoutSucceeded": {
+      "_go_const": "EventPlatformAuthLogoutSucceeded",
+      "value": "g8e.v1.platform.auth.logout.succeeded"
+    },
+    "PlatformAuthSessionExpired": {
+      "_go_const": "EventPlatformAuthSessionExpired",
+      "value": "g8e.v1.platform.auth.session.expired"
+    },
+    "PlatformAuthSessionValidationFailed": {
+      "_go_const": "EventPlatformAuthSessionValidationFailed",
+      "value": "g8e.v1.platform.auth.session.validation.failed"
+    },
+    "PlatformAuthSessionValidationRequested": {
+      "_go_const": "EventPlatformAuthSessionValidationRequested",
+      "value": "g8e.v1.platform.auth.session.validation.requested"
+    },
+    "PlatformAuthSessionValidationSucceeded": {
+      "_go_const": "EventPlatformAuthSessionValidationSucceeded",
+      "value": "g8e.v1.platform.auth.session.validation.succeeded"
+    },
+    "PlatformAuthUserAuthenticated": {
+      "_go_const": "EventPlatformAuthUserAuthenticated",
+      "value": "g8e.v1.platform.auth.user.authenticated"
+    },
+    "PlatformAuthUserUnauthenticated": {
+      "_go_const": "EventPlatformAuthUserUnauthenticated",
+      "value": "g8e.v1.platform.auth.user.unauthenticated"
+    },
+    "PlatformConsoleLogConnectedConfirmed": {
+      "_go_const": "EventPlatformConsoleLogConnectedConfirmed",
+      "value": "g8e.v1.platform.console.log.connected.confirmed"
+    },
+    "PlatformConsoleLogEntryReceived": {
+      "_go_const": "EventPlatformConsoleLogEntryReceived",
+      "value": "g8e.v1.platform.console.log.entry.received"
+    },
+    "PlatformExternalServiceConfigured": {
+      "_go_const": "EventPlatformExternalServiceConfigured",
+      "value": "g8e.v1.platform.external.service.configured"
+    },
+    "PlatformNotification": {
+      "_go_const": "EventPlatformNotification",
+      "value": "g8e.v1.platform.notification"
+    },
+    "PlatformVaultModeChanged": {
+      "_go_const": "EventPlatformVaultModeChanged",
+      "value": "g8e.v1.platform.sentinel.mode.changed"
+    },
+    "PlatformSseConnectionClosed": {
+      "_go_const": "EventPlatformSseConnectionClosed",
+      "value": "g8e.v1.platform.sse.connection.closed"
+    },
+    "PlatformSseConnectionError": {
+      "_go_const": "EventPlatformSseConnectionError",
+      "value": "g8e.v1.platform.sse.connection.error"
+    },
+    "PlatformSseConnectionEstablished": {
+      "_go_const": "EventPlatformSseConnectionEstablished",
+      "value": "g8e.v1.platform.sse.connection.established"
+    },
+    "PlatformSseConnectionFailed": {
+      "_go_const": "EventPlatformSseConnectionFailed",
+      "value": "g8e.v1.platform.sse.connection.failed"
+    },
+    "PlatformSseConnectionOpened": {
+      "_go_const": "EventPlatformSseConnectionOpened",
+      "value": "g8e.v1.platform.sse.connection.opened"
+    },
+    "PlatformSseKeepaliveSent": {
+      "_go_const": "EventPlatformSseKeepaliveSent",
+      "value": "g8e.v1.platform.sse.keepalive.sent"
+    },
+    "PlatformTelemetryAuditLogged": {
+      "_go_const": "EventPlatformTelemetryAuditLogged",
+      "value": "g8e.v1.platform.telemetry.audit.logged"
+    },
+    "PlatformTelemetryErrorLogged": {
+      "_go_const": "EventPlatformTelemetryErrorLogged",
+      "value": "g8e.v1.platform.telemetry.error.logged"
+    },
+    "PlatformTelemetryHealthReported": {
+      "_go_const": "EventPlatformTelemetryHealthReported",
+      "value": "g8e.v1.platform.telemetry.health.reported"
+    },
+    "PlatformTelemetryPerformanceRecorded": {
+      "_go_const": "EventPlatformTelemetryPerformanceRecorded",
+      "value": "g8e.v1.platform.telemetry.performance.recorded"
+    },
+    "PlatformTerminalClosed": {
+      "_go_const": "EventPlatformTerminalClosed",
+      "value": "g8e.v1.platform.terminal.closed"
+    },
+    "PlatformTerminalMaximized": {
+      "_go_const": "EventPlatformTerminalMaximized",
+      "value": "g8e.v1.platform.terminal.maximized"
+    },
+    "PlatformTerminalMinimized": {
+      "_go_const": "EventPlatformTerminalMinimized",
+      "value": "g8e.v1.platform.terminal.minimized"
+    },
+    "PlatformTerminalOpened": {
+      "_go_const": "EventPlatformTerminalOpened",
+      "value": "g8e.v1.platform.terminal.opened"
+    },
+    "PlatformUsageUpdated": {
+      "_go_const": "EventPlatformUsageUpdated",
+      "value": "g8e.v1.platform.usage.updated"
+    },
+    "ReputationStateUpdated": {
+      "_go_const": "EventReputationStateUpdated",
+      "value": "g8e.v1.ai.reputation.state.updated"
+    },
+    "SourceAiAssistant": {
+      "_go_const": "EventSourceAiAssistant",
+      "value": "g8e.v1.source.ai.assistant"
+    },
+    "SourceAiPrimary": {
+      "_go_const": "EventSourceAiPrimary",
+      "value": "g8e.v1.source.ai.primary"
+    },
+    "SourceAiTriage": {
+      "_go_const": "EventSourceAiTriage",
+      "value": "g8e.v1.source.ai.triage"
+    },
+    "SourceSystem": {
+      "_go_const": "EventSourceSystem",
+      "value": "g8e.v1.source.system"
+    },
+    "SourceUserChat": {
+      "_go_const": "EventSourceUserChat",
+      "value": "g8e.v1.source.user.chat"
+    },
+    "SourceUserTerminal": {
+      "_go_const": "EventSourceUserTerminal",
+      "value": "g8e.v1.source.user.terminal"
+    },
+    "AiTribunalSessionStarted": {
+      "_go_const": "EventAiTribunalSessionStarted",
+      "value": "g8e.v1.ai.tribunal.session.started"
+    },
+    "AiTribunalSessionCompleted": {
+      "_go_const": "EventAiTribunalSessionCompleted",
+      "value": "g8e.v1.ai.tribunal.session.completed"
+    },
+    "AiTribunalSessionDisabled": {
+      "_go_const": "EventAiTribunalSessionDisabled",
+      "value": "g8e.v1.ai.tribunal.session.disabled"
+    },
+    "AiTribunalSessionGenerationFailed": {
+      "_go_const": "EventAiTribunalSessionGenerationFailed",
+      "value": "g8e.v1.ai.tribunal.session.generation.failed"
+    },
+    "AiTribunalSessionModelNotConfigured": {
+      "_go_const": "EventAiTribunalSessionModelNotConfigured",
+      "value": "g8e.v1.ai.tribunal.session.model.not.configured"
+    },
+    "AiTribunalSessionProviderUnavailable": {
+      "_go_const": "EventAiTribunalSessionProviderUnavailable",
+      "value": "g8e.v1.ai.tribunal.session.provider.unavailable"
+    },
+    "AiTribunalSessionSystemError": {
+      "_go_const": "EventAiTribunalSessionSystemError",
+      "value": "g8e.v1.ai.tribunal.session.system.error"
+    },
+    "AiTribunalSessionAuditorFailed": {
+      "_go_const": "EventAiTribunalSessionAuditorFailed",
+      "value": "g8e.v1.ai.tribunal.session.auditor.failed"
+    },
+    "AiTribunalSessionWardenBlocked": {
+      "_go_const": "EventAiTribunalSessionWardenBlocked",
+      "value": "g8e.v1.ai.tribunal.session.warden.blocked"
+    },
+    "AiTribunalVotingPassCompleted": {
+      "_go_const": "EventAiTribunalVotingPassCompleted",
+      "value": "g8e.v1.ai.tribunal.voting.pass.completed"
+    },
+    "AiTribunalVotingConsensusReached": {
+      "_go_const": "EventAiTribunalVotingConsensusReached",
+      "value": "g8e.v1.ai.tribunal.voting.consensus.reached"
+    },
+    "AiTribunalVotingConsensusNotReached": {
+      "_go_const": "EventAiTribunalVotingConsensusNotReached",
+      "value": "g8e.v1.ai.tribunal.voting.consensus.not.reached"
+    },
+    "AiTribunalVotingConsensusFailed": {
+      "_go_const": "EventAiTribunalVotingConsensusFailed",
+      "value": "g8e.v1.ai.tribunal.voting.consensus.failed"
+    },
+    "AiTribunalVotingRoundStarted": {
+      "_go_const": "EventAiTribunalVotingRoundStarted",
+      "value": "g8e.v1.ai.tribunal.voting.round.started"
+    },
+    "AiTribunalVotingRoundCompleted": {
+      "_go_const": "EventAiTribunalVotingRoundCompleted",
+      "value": "g8e.v1.ai.tribunal.voting.round.completed"
+    },
+    "AiTribunalVotingRound2Started": {
+      "_go_const": "EventAiTribunalVotingRound2Started",
+      "value": "g8e.v1.ai.tribunal.voting.round.2.started"
+    },
+    "AiTribunalVotingRound2ConsensusReached": {
+      "_go_const": "EventAiTribunalVotingRound2ConsensusReached",
+      "value": "g8e.v1.ai.tribunal.voting.round.2.consensus.reached"
+    },
+    "AiTribunalVotingRound2ConsensusFailed": {
+      "_go_const": "EventAiTribunalVotingRound2ConsensusFailed",
+      "value": "g8e.v1.ai.tribunal.voting.round.2.consensus.failed"
+    },
+    "AiTribunalVotingDissentRecorded": {
+      "_go_const": "EventAiTribunalVotingDissentRecorded",
+      "value": "g8e.v1.ai.tribunal.voting.dissent.recorded"
+    },
+    "AiTribunalVotingAuditStarted": {
+      "_go_const": "EventAiTribunalVotingAuditStarted",
+      "value": "g8e.v1.ai.tribunal.voting.audit.started"
+    },
+    "AiTribunalVotingAuditCompleted": {
+      "_go_const": "EventAiTribunalVotingAuditCompleted",
+      "value": "g8e.v1.ai.tribunal.voting.audit.completed"
+    },
+    "AiLlmChatIterationThinkingStopped": {
+      "_go_const": "EventAiLLMChatIterationThinkingStopped",
+      "value": "g8e.v1.ai.llm.chat.iteration.thinking.stopped"
+    },
+    "AiReputationStateUpdated": {
+      "_go_const": "EventAiReputationStateUpdated",
+      "value": "g8e.v1.ai.reputation.state.updated"
+    },
+    "AppCaseDeleted": {
+      "_go_const": "EventAppCaseDeleted",
+      "value": "g8e.v1.app.case.deleted"
+    },
+    "AppInvestigationDeleted": {
+      "_go_const": "EventAppInvestigationDeleted",
+      "value": "g8e.v1.app.investigation.deleted"
+    },
+    "AppMemoryCreated": {
+      "_go_const": "EventAppMemoryCreated",
+      "value": "g8e.v1.app.memory.created"
+    },
+    "AppMemoryUpdated": {
+      "_go_const": "EventAppMemoryUpdated",
+      "value": "g8e.v1.app.memory.updated"
+    },
+    "OperatorPortCheckRequested": {
+      "_go_const": "EventOperatorPortCheckRequested",
+      "value": "g8e.v1.operator.port.check.requested"
+    }
+  }
+}

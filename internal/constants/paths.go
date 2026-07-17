@@ -347,10 +347,10 @@ const (
 
 // Agent config constants for AI tool config directories and filenames.
 const (
-	AgentConfigDirGemini    = ".gemini"
-	AgentConfigDirGoose     = ".config/goose"
-	AgentConfigFileMCP      = "mcp.json"
-	AgentConfigFileSettings = "settings.json"
+	AgentConfigDirGemini     = ".gemini"
+	AgentConfigDirGoose      = ".config/goose"
+	AgentConfigFileMCP       = "mcp.json"
+	AgentConfigFileSettings  = "settings.json"
 	AgentConfigFileGooseYAML = "config.yaml"
 )
 
@@ -437,6 +437,11 @@ const (
 // Tribunal bootstrap config filename for declarative tribunal seeding.
 const (
 	TribunalBootstrapConfigFilename = "tribunal-bootstrap.json"
+)
+
+// Lattice adapter constants for entity ID persistence.
+const (
+	LatticeEntityIDFilename = "lattice_entity_id"
 )
 
 // Operational limits for filesystem, grep, and execution operations.

@@ -19,8 +19,18 @@ from __future__ import annotations
 import re
 from enum import IntEnum
 from functools import lru_cache
+from typing import Any
 
-from g8e.constants import STATUS, EVENTS, StrEnum
+from g8e.constants import (
+    STATUS,
+    EVENTS,
+    CHANNELS,
+    INTENTS,
+    PROMPTS,
+    COLLECTIONS,
+    KV,
+    StrEnum,
+)
 
 
 # Categories that use integer values
@@ -51,21 +61,27 @@ def _pascal_to_screaming_snake(name: str) -> str:
     return s.upper()
 
 
-@lru_cache(maxsize=None)
-def _build_enum(cat_name: str) -> type:
-    """Build an enum class from a STATUS category."""
-    cat_vals = STATUS["status"][cat_name]
+def _build_enum_from_dict(
+    data: dict[str, dict[str, Any]],
+    cls_name: str,
+) -> type:
+    """Build an enum class from a dict of ``{key: {"_python_const": ..., "value": ...}}``.
 
-    # Determine base class
-    sample_val = next(iter(cat_vals.values()))["value"]
+    Works with any top-level constant dict structure (STATUS categories,
+    CHANNELS, INTENTS, etc.).  Integer-like values produce ``IntEnum``;
+    all others produce ``StrEnum``.
+    """
+    if not data:
+        raise ValueError(f"Cannot build enum {cls_name!r} from empty dict")
+
+    sample_val = next(iter(data.values()))["value"]
     is_int = isinstance(sample_val, (int,)) or (
         isinstance(sample_val, str) and sample_val.lstrip("-").isdigit()
     )
-    base = IntEnum if (is_int or cat_name in _INT_CATEGORIES) else StrEnum
+    base = IntEnum if is_int else StrEnum
 
-    # Build members
     members: dict[str, str | int] = {}
-    for _key, meta in cat_vals.items():
+    for _key, meta in data.items():
         py_name = meta["_python_const"]
         raw_val = meta["value"]
         if base is IntEnum:
@@ -73,9 +89,39 @@ def _build_enum(cat_name: str) -> type:
         else:
             members[py_name] = str(raw_val)
 
+    return base(cls_name, members)  # type: ignore[arg-type]
+
+
+@lru_cache(maxsize=None)
+def _build_enum(cat_name: str) -> type:
+    """Build an enum class from a STATUS category."""
+    cat_vals = STATUS["status"][cat_name]
     cls_name = _to_pascal(cat_name)
-    cls = base(cls_name, members)  # type: ignore[arg-type]
+    cls = _build_enum_from_dict(cat_vals, cls_name)
+    # Override to IntEnum if forced by _INT_CATEGORIES
+    if cat_name in _INT_CATEGORIES and not issubclass(cls, IntEnum):
+        members = {m.name: m.value for m in cls}
+        cls = IntEnum(cls_name, {k: int(v) for k, v in members.items()})
     return cls
+
+
+# Registry of non-STATUS enum categories.
+# Maps attribute name -> (constants dict, top-level key, enum class name)
+_EXTRA_ENUMS: dict[str, tuple[dict, str, str]] = {
+    "Channel": (CHANNELS, "channels", "Channel"),
+    "Intent": (INTENTS, "intents", "Intent"),
+    "Prompt": (PROMPTS, "prompts", "Prompt"),
+    "Collection": (COLLECTIONS, "collections", "Collection"),
+    "KVKey": (KV, "kv_keys", "KVKey"),
+    "SessionType": (KV, "session_types", "SessionType"),
+}
+
+
+@lru_cache(maxsize=None)
+def _build_extra_enum(attr_name: str) -> type:
+    """Build an enum from a non-STATUS constant category."""
+    data_dict, top_key, cls_name = _EXTRA_ENUMS[attr_name]
+    return _build_enum_from_dict(data_dict[top_key], cls_name)
 
 
 @lru_cache(maxsize=None)
@@ -109,9 +155,12 @@ def _to_snake(pascal: str) -> str:
 
 
 def __getattr__(name: str):
-    """Dynamic attribute access: g8e.enums.OperatorToolName, EventType, etc."""
+    """Dynamic attribute access: g8e.enums.OperatorToolName, EventType, Channel, etc."""
     if name == "EventType":
         return _build_event_type_enum()
+
+    if name in _EXTRA_ENUMS:
+        return _build_extra_enum(name)
 
     snake = _to_snake(name)
     if snake in STATUS["status"]:
@@ -130,7 +179,8 @@ def __dir__() -> list[str]:
     """List all available enum class names."""
     names = [_to_pascal(cat) for cat in STATUS["status"]]
     names.append("EventType")
+    names.extend(_EXTRA_ENUMS.keys())
     return names
 
 
-__all__ = [_to_pascal(cat) for cat in STATUS["status"]] + ["EventType"]
+__all__ = [_to_pascal(cat) for cat in STATUS["status"]] + ["EventType"] + list(_EXTRA_ENUMS.keys())

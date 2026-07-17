@@ -1,0 +1,15 @@
+{
+  "description": "Canonical G8E networking ports for the gateway.",
+  "ports": {
+    "OperatorHttp": {
+      "_go_const": "Ports.OperatorHttp",
+      "value": 8080,
+      "description": "Gateway HTTP port (plaintext, for health checks and redirects)"
+    },
+    "OperatorHttps": {
+      "_go_const": "Ports.OperatorHttps",
+      "value": 8443,
+      "description": "Gateway HTTPS port (mTLS, for all operator traffic)"
+    }
+  }
+}

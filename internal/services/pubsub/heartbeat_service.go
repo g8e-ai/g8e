@@ -46,6 +46,8 @@ type HeartbeatService struct {
 	results  ResultsPublisher
 	actuator *governance.L5Actuator
 
+	sinks []HeartbeatSink
+
 	ctx    context.Context
 	mu     sync.Mutex
 	wg     *sync.WaitGroup
@@ -75,6 +77,52 @@ func (hs *HeartbeatService) SetResultsPublisher(results ResultsPublisher) {
 // SetContext sets the context for the HeartbeatService.
 func (hs *HeartbeatService) SetContext(ctx context.Context) {
 	hs.ctx = ctx
+}
+
+// HeartbeatSink is a callback invoked after each automatic heartbeat cycle.
+// External components (e.g. the Lattice adapter) register sinks to piggyback
+// periodic work on the heartbeat scheduler.
+type HeartbeatSink func(ctx context.Context)
+
+// RegisterSink adds a sink that is called after each SendAutomatic cycle.
+// The sink receives the service context. Sinks are called in registration order.
+func (hs *HeartbeatService) RegisterSink(sink HeartbeatSink) {
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+	hs.sinks = append(hs.sinks, sink)
+}
+
+// UnregisterSink removes a previously registered sink.
+func (hs *HeartbeatService) UnregisterSink(sink HeartbeatSink) {
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+	for i, s := range hs.sinks {
+		if &s == &sink {
+			hs.sinks = append(hs.sinks[:i], hs.sinks[i+1:]...)
+			return
+		}
+	}
+}
+
+// notifySinks calls all registered sinks with the service context.
+// Called under the mutex to prevent concurrent slice mutation. Sink panics
+// are recovered to prevent a misbehaving sink from crashing the heartbeat cycle.
+func (hs *HeartbeatService) notifySinks() {
+	hs.mu.Lock()
+	sinks := make([]HeartbeatSink, len(hs.sinks))
+	copy(sinks, hs.sinks)
+	hs.mu.Unlock()
+
+	for _, sink := range sinks {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					hs.logger.Error("[HEARTBEAT] Sink panicked", "error", r)
+				}
+			}()
+			sink(hs.ctx)
+		}()
+	}
 }
 
 // Build constructs a complete Heartbeat payload of the given type.
@@ -349,6 +397,8 @@ func (hs *HeartbeatService) SendAutomatic() error {
 	} else {
 		hs.logger.Warn("[HEARTBEAT] Actuator service not set, skipping receipted heartbeat dispatch")
 	}
+
+	hs.notifySinks()
 
 	return nil
 }

@@ -456,6 +456,24 @@ The following packages are test-only and are not part of the production dependen
 - `test/e2e/mcp_stdio_e2e_test.go` - E2E MCP stdio config output, JSON-RPC parsing, config template validation (build tag: `e2e`)
 - `test/e2e/main_test.go` - E2E test main entry point and fixture setup (build tag: `e2e`)
 
+## Python Protocol Package
+
+**`protocol/python/g8e/`** - Python SDK for g8e protocol consumers (g8ee, external integrations)
+
+- **`constants.py`**: Protocol constants loader. Loads all JSON files from `protocol/constants/` (or bundled `_data/` in PyPI installs). Exports typed dicts (`EVENTS`, `STATUS`, `COLLECTIONS`, `KV`, `CHANNELS`, `INTENTS`, `PROMPTS`, etc.) and accessor functions: `collection()`, `channel()`, `intent()`, `prompt()`, `kv_key()` (with dotted-placeholder support via regex substitution), `kv_session_type()`. Also exports `ComponentName` enum and HTTP header constants.
+- **`enums.py`**: Dynamic enum generation from protocol JSON. `_build_enum()` generates `StrEnum`/`IntEnum` from `status.json` categories. `_build_enum_from_dict()` + `_EXTRA_ENUMS` registry generates enums from channels, intents, prompts, collections, kv_keys, and session_types. Access via `g8e.enums.Channel`, `g8e.enums.Intent`, etc. using `__getattr__` with `lru_cache`.
+- **`models/governance.py`**: `GovernanceEnvelope` model with L1/L2/L3 governance metadata, `GovernanceL1`, `GovernanceL2Vote`, `GovernanceL2`, `GovernanceL3`, `GovernanceMetadata` sub-models. `compute_transaction_hash()` produces SHA-256 over pipe-delimited canonical fields.
+- **`models/events.py`**: Event wire models including `SessionEventWire` (with `from_session_event()` factory), `BackgroundEventWire` (with `from_background_event()` factory), `TriageClarificationQuestionsPayload` (all metadata fields optional).
+- **`models/internal_api.py`**: `ChatMessageRequest` with `LLMOverrides` mixin (12 override fields extracted to reusable base class).
+- **`models/base.py`**: `G8eBaseModel` — Pydantic base with `extra="ignore"` and `model_dump()` excluding `None` fields.
+- **`models/context.py`**: Context models for session, user, operator, and target information.
+- **`models/settings.py`**: Platform settings models.
+- **`_data/`**: Bundled JSON constants (populated by `make python-build` for PyPI distribution).
+
+**Build**: `make python-build` copies `protocol/constants/*.json` to `g8e/_data/` and runs `python -m build`. Output: `protocol/python/dist/g8e-*.whl`.
+
+**Tests**: `protocol/python/tests/` — `test_constants.py`, `test_enums.py`, `test_models.py`, `test_version.py` (132 tests). Conformance tests in `protocol/conformance/test_constants.py` validate `_python_const` field presence and SCREAMING_SNAKE_CASE naming across all constant files (151 tests).
+
 ## Agent Harness & Demos
 
 **`internal/tools/agent_harness/`** - Reference client for real governance envelope submission

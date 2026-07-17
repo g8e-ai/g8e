@@ -1,0 +1,148 @@
+{
+  "platform": {
+    "AuthLoginFailed": {
+      "_go_const": "PlatformAuthLoginFailed",
+      "value": "g8e.v1.platform.auth.login.failed"
+    },
+    "AuthLoginRequested": {
+      "_go_const": "PlatformAuthLoginRequested",
+      "value": "g8e.v1.platform.auth.login.requested"
+    },
+    "AuthLoginSucceeded": {
+      "_go_const": "PlatformAuthLoginSucceeded",
+      "value": "g8e.v1.platform.auth.login.succeeded"
+    },
+    "AuthLogoutFailed": {
+      "_go_const": "PlatformAuthLogoutFailed",
+      "value": "g8e.v1.platform.auth.logout.failed"
+    },
+    "AuthLogoutRequested": {
+      "_go_const": "PlatformAuthLogoutRequested",
+      "value": "g8e.v1.platform.auth.logout.requested"
+    },
+    "AuthLogoutSucceeded": {
+      "_go_const": "PlatformAuthLogoutSucceeded",
+      "value": "g8e.v1.platform.auth.logout.succeeded"
+    },
+    "ConsoleLogEntryReceived": {
+      "_go_const": "PlatformConsoleLogEntryReceived",
+      "value": "g8e.v1.platform.console.log.entry.received"
+    },
+    "Notification": {
+      "_go_const": "PlatformNotification",
+      "value": "g8e.v1.platform.notification"
+    },
+    "SentinelModeChanged": {
+      "_go_const": "PlatformSentinelModeChanged",
+      "value": "g8e.v1.platform.sentinel.mode.changed"
+    },
+    "SseConnectionClosed": {
+      "_go_const": "PlatformSseConnectionClosed",
+      "value": "g8e.v1.platform.sse.connection.closed"
+    },
+    "SseConnectionEstablished": {
+      "_go_const": "PlatformSseConnectionEstablished",
+      "value": "g8e.v1.platform.sse.connection.established"
+    },
+    "SseConnectionOpened": {
+      "_go_const": "PlatformSseConnectionOpened",
+      "value": "g8e.v1.platform.sse.connection.opened"
+    },
+    "SseKeepaliveSent": {
+      "_go_const": "PlatformSseKeepaliveSent",
+      "value": "g8e.v1.platform.sse.keepalive.sent"
+    },
+    "TelemetryHealthReported": {
+      "_go_const": "PlatformTelemetryHealthReported",
+      "value": "g8e.v1.platform.telemetry.health.reported"
+    },
+    "TerminalClosed": {
+      "_go_const": "PlatformTerminalClosed",
+      "value": "g8e.v1.platform.terminal.closed"
+    },
+    "TerminalOpened": {
+      "_go_const": "PlatformTerminalOpened",
+      "value": "g8e.v1.platform.terminal.opened"
+    },
+    "UsageUpdated": {
+      "_go_const": "PlatformUsageUpdated",
+      "value": "g8e.v1.platform.usage.updated"
+    },
+    "AuthSessionValidationRequested": {
+      "_go_const": "PlatformAuthSessionValidationRequested",
+      "value": "g8e.v1.platform.auth.session.validation.requested"
+    },
+    "AuthSessionValidationSucceeded": {
+      "_go_const": "PlatformAuthSessionValidationSucceeded",
+      "value": "g8e.v1.platform.auth.session.validation.succeeded"
+    },
+    "AuthSessionValidationFailed": {
+      "_go_const": "PlatformAuthSessionValidationFailed",
+      "value": "g8e.v1.platform.auth.session.validation.failed"
+    },
+    "AuthSessionExpired": {
+      "_go_const": "PlatformAuthSessionExpired",
+      "value": "g8e.v1.platform.auth.session.expired"
+    },
+    "AuthUserAuthenticated": {
+      "_go_const": "PlatformAuthUserAuthenticated",
+      "value": "g8e.v1.platform.auth.user.authenticated"
+    },
+    "AuthUserUnauthenticated": {
+      "_go_const": "PlatformAuthUserUnauthenticated",
+      "value": "g8e.v1.platform.auth.user.unauthenticated"
+    },
+    "AuthComponentInitializedAuthstate": {
+      "_go_const": "PlatformAuthComponentInitializedAuthstate",
+      "value": "g8e.v1.platform.auth.component.initialized.authstate"
+    },
+    "AuthComponentInitializedChat": {
+      "_go_const": "PlatformAuthComponentInitializedChat",
+      "value": "g8e.v1.platform.auth.component.initialized.chat"
+    },
+    "AuthComponentInitializedOperator": {
+      "_go_const": "PlatformAuthComponentInitializedOperator",
+      "value": "g8e.v1.platform.auth.component.initialized.operator"
+    },
+    "AuthInfo": {
+      "_go_const": "PlatformAuthInfo",
+      "value": "g8e.v1.platform.auth.info"
+    },
+    "SseConnectionFailed": {
+      "_go_const": "PlatformSseConnectionFailed",
+      "value": "g8e.v1.platform.sse.connection.failed"
+    },
+    "SseConnectionError": {
+      "_go_const": "PlatformSseConnectionError",
+      "value": "g8e.v1.platform.sse.connection.error"
+    },
+    "TerminalMinimized": {
+      "_go_const": "PlatformTerminalMinimized",
+      "value": "g8e.v1.platform.terminal.minimized"
+    },
+    "TerminalMaximized": {
+      "_go_const": "PlatformTerminalMaximized",
+      "value": "g8e.v1.platform.terminal.maximized"
+    },
+    "ExternalServiceConfigured": {
+      "_go_const": "PlatformExternalServiceConfigured",
+      "value": "g8e.v1.platform.external.service.configured"
+    },
+    "TelemetryPerformanceRecorded": {
+      "_go_const": "PlatformTelemetryPerformanceRecorded",
+      "value": "g8e.v1.platform.telemetry.performance.recorded"
+    },
+    "TelemetryErrorLogged": {
+      "_go_const": "PlatformTelemetryErrorLogged",
+      "value": "g8e.v1.platform.telemetry.error.logged"
+    },
+    "TelemetryAuditLogged": {
+      "_go_const": "PlatformTelemetryAuditLogged",
+      "value": "g8e.v1.platform.telemetry.audit.logged"
+    },
+    "ConsoleLogConnectedConfirmed": {
+      "_go_const": "PlatformConsoleLogConnectedConfirmed",
+      "value": "g8e.v1.platform.console.log.connected.confirmed"
+    }
+  }
+}

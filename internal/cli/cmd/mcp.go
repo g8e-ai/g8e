@@ -1141,8 +1141,8 @@ type gooseConfig struct {
 
 // gooseExtension represents a single extension entry in Goose's config.yaml.
 type gooseExtension struct {
-	Enabled bool             `yaml:"enabled"`
-	Config  gooseExtConfig   `yaml:"config"`
+	Enabled bool           `yaml:"enabled"`
+	Config  gooseExtConfig `yaml:"config"`
 }
 
 // gooseExtConfig holds the stdio transport configuration for a Goose extension.
@@ -1263,26 +1263,43 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 
 	case string(constants.AgentBinaryGoose):
 		// Goose uses ~/.config/goose/config.yaml with an extensions map.
-		// We write g8e as the only extension. The --no-profile flag in
-		// agentLaunchArgs skips all profile extensions (including the developer
-		// extension that provides shell/file tools), and --with-extension on the
-		// command line loads g8e as the sole MCP server for the session.
-		gooseCfg := gooseConfig{
-			Extensions: map[string]gooseExtension{
-				"g8e": {
-					Enabled: true,
-					Config: gooseExtConfig{
-						Type:        "stdio",
-						Name:        "g8e",
-						Cmd:         binaryPath,
-						Args:        []string{"mcp", "stdio"},
-						Description: "g8e governance gateway",
-						Timeout:     300,
-					},
-				},
+		// We merge g8e into the existing config, preserving provider and other
+		// settings. The --no-profile flag in agentLaunchArgs skips all profile
+		// extensions (including the developer extension that provides shell/file
+		// tools), and --with-extension on the command line loads g8e as the
+		// sole MCP server for the session.
+		g8eExt := map[string]any{
+			"enabled": true,
+			"config": map[string]any{
+				"type":        "stdio",
+				"name":        "g8e",
+				"cmd":         binaryPath,
+				"args":        []string{"mcp", "stdio"},
+				"description": "g8e governance gateway",
+				"timeout":     300,
 			},
 		}
-		configYAML, err := yaml.Marshal(gooseCfg)
+
+		// Read existing config if present, preserving all fields (provider, etc.)
+		var rawConfig map[string]any
+		if existingData, err := os.ReadFile(agentPaths.GooseYAMLConfigPath); err == nil {
+			if err := yaml.Unmarshal(existingData, &rawConfig); err != nil {
+				return "", nil, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+			}
+		}
+		if rawConfig == nil {
+			rawConfig = make(map[string]any)
+		}
+
+		// Get or create extensions map and add g8e
+		extMap, _ := rawConfig["extensions"].(map[string]any)
+		if extMap == nil {
+			extMap = make(map[string]any)
+		}
+		extMap["g8e"] = g8eExt
+		rawConfig["extensions"] = extMap
+
+		configYAML, err := yaml.Marshal(rawConfig)
 		if err != nil {
 			return "", nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
 		}
