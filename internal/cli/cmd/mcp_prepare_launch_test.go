@@ -97,10 +97,11 @@ func TestPrepareAgentLaunch_Goose_VerifyTrue(t *testing.T) {
 	assert.FileExists(t, configPath)
 	assert.Contains(t, launchArgs, "--no-profile")
 	assert.Contains(t, launchArgs, "session")
+	assert.Contains(t, launchArgs, "--with-extension")
 
-	// Verify goose settings.json was written to the fake HOME
-	gooseSettings := filepath.Join(tmpHome, ".goose", "settings.json")
-	assert.FileExists(t, gooseSettings)
+	// Verify goose config.yaml was written to the fake HOME
+	gooseConfig := filepath.Join(tmpHome, ".config", "goose", "config.yaml")
+	assert.FileExists(t, gooseConfig)
 }
 
 func TestPrepareAgentLaunch_Gemini_VerifyTrue(t *testing.T) {

@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -65,7 +66,7 @@ const (
 // nativeToolsToDisable lists built-in tools that Claude Code and Codex must
 // disable via --disallowed-tools to force all I/O through g8e's MCP gateway.
 // Other agents use different mechanisms:
-//   - Goose: --no-profile flag (zero extensions)
+//   - Goose: --no-profile flag (zero extensions) + --with-extension for g8e MCP
 //   - Gemini: tools.core: [] in settings.json (empty allowlist)
 var nativeToolsToDisable = []string{
 	"Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch",
@@ -1132,6 +1133,28 @@ type geminiSettings struct {
 	Tools      *geminiToolsConfig        `json:"tools,omitempty"`
 }
 
+// gooseConfig represents the Goose config.yaml structure.
+// Goose uses ~/.config/goose/config.yaml with an extensions map.
+type gooseConfig struct {
+	Extensions map[string]gooseExtension `yaml:"extensions"`
+}
+
+// gooseExtension represents a single extension entry in Goose's config.yaml.
+type gooseExtension struct {
+	Enabled bool             `yaml:"enabled"`
+	Config  gooseExtConfig   `yaml:"config"`
+}
+
+// gooseExtConfig holds the stdio transport configuration for a Goose extension.
+type gooseExtConfig struct {
+	Type        string   `yaml:"type"`
+	Name        string   `yaml:"name"`
+	Cmd         string   `yaml:"cmd"`
+	Args        []string `yaml:"args"`
+	Description string   `yaml:"description"`
+	Timeout     int      `yaml:"timeout"`
+}
+
 // geminiToolsConfig controls Gemini's built-in tool enablement.
 // When tools.core is set to any value, only the listed tools are enabled.
 // An empty array means zero built-in tools — all actions must go through MCP.
@@ -1239,10 +1262,31 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		return agentPaths.GeminiConfigPath, nil, nil
 
 	case string(constants.AgentBinaryGoose):
-		// Goose does not support native tool disabling via config.
-		// Governance is enforced by --no-profile flag in agentLaunchArgs and
-		// g8e being the only MCP server in settings.json.
-		return writeConfigWithBackup(agentPaths.GooseConfigDir, agentPaths.GooseConfigPath, configJSON)
+		// Goose uses ~/.config/goose/config.yaml with an extensions map.
+		// We write g8e as the only extension. The --no-profile flag in
+		// agentLaunchArgs skips all profile extensions (including the developer
+		// extension that provides shell/file tools), and --with-extension on the
+		// command line loads g8e as the sole MCP server for the session.
+		gooseCfg := gooseConfig{
+			Extensions: map[string]gooseExtension{
+				"g8e": {
+					Enabled: true,
+					Config: gooseExtConfig{
+						Type:        "stdio",
+						Name:        "g8e",
+						Cmd:         binaryPath,
+						Args:        []string{"mcp", "stdio"},
+						Description: "g8e governance gateway",
+						Timeout:     300,
+					},
+				},
+			},
+		}
+		configYAML, err := yaml.Marshal(gooseCfg)
+		if err != nil {
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
+		}
+		return writeConfigWithBackup(agentPaths.GooseYAMLConfigDir, agentPaths.GooseYAMLConfigPath, configYAML)
 
 	default:
 		// For agents that use CLI flags (claude, codex), write a temp config file.
@@ -1361,7 +1405,7 @@ func prepareAgentLaunch(agentID string, verify bool) (string, func(), []string, 
 		return "", nil, nil, fmt.Errorf("mcp: write agent config: %w", err)
 	}
 
-	launchArgs, err := agentLaunchArgs(agentID, configPath)
+	launchArgs, err := agentLaunchArgs(agentID, configPath, binaryPath)
 	if err != nil {
 		if cleanup != nil {
 			cleanup()
@@ -1418,7 +1462,7 @@ func launchAgentProcess(agentID string, extraArgs, launchArgs []string, cfg *con
 // agentLaunchArgs returns the argv to pass to the agent binary for a governed session.
 // Governance is enforced by making g8e the only MCP server in the agent's config.
 // For agents that support native tool disabling via CLI flags, those are added here.
-func agentLaunchArgs(agentID, mcpConfigPath string) ([]string, error) {
+func agentLaunchArgs(agentID, mcpConfigPath, binaryPath string) ([]string, error) {
 	switch strings.ToLower(agentID) {
 	case "claude", "codex":
 		// --mcp-config          load g8e as the only MCP server
@@ -1431,11 +1475,11 @@ func agentLaunchArgs(agentID, mcpConfigPath string) ([]string, error) {
 			"--disallowed-tools", strings.Join(nativeToolsToDisable, ","),
 		}, nil
 	case "goose":
-		// --no-profile starts goose with zero built-in extensions (no developer
-		// extension, which provides shell/file tools). This forces ALL tool calls
-		// through the g8e MCP gateway. The g8e MCP server is still loaded from
-		// settings.json because MCP servers are separate from profile extensions.
-		return []string{"session", "--no-profile"}, nil
+		// --no-profile starts goose with zero profile extensions (no developer
+		// extension, which provides shell/file tools). --with-extension loads
+		// g8e as the sole MCP server for the session, since --no-profile also
+		// skips extensions defined in config.yaml.
+		return []string{"session", "--no-profile", "--with-extension", binaryPath + " mcp stdio"}, nil
 	case "gemini":
 		// Gemini uses `gemini mcp add` to register servers, no config file needed
 		// Governance enforced by g8e being the only MCP server
@@ -1500,17 +1544,24 @@ func verifyClaudeCodexInterception(configPath string, launchArgs []string) error
 }
 
 // verifyGooseInterception verifies that launch args include --no-profile and
-// that the goose settings.json config file exists with the g8e MCP server.
+// --with-extension, and that the goose config.yaml file exists with the g8e
+// extension entry.
 func verifyGooseInterception(configPath string, launchArgs []string) error {
 	hasNoProfile := false
-	for _, arg := range launchArgs {
+	hasWithExtension := false
+	for i, arg := range launchArgs {
 		if arg == "--no-profile" {
 			hasNoProfile = true
-			break
+		}
+		if arg == "--with-extension" && i+1 < len(launchArgs) {
+			hasWithExtension = true
 		}
 	}
 	if !hasNoProfile {
 		return fmt.Errorf("launch args missing --no-profile flag")
+	}
+	if !hasWithExtension {
+		return fmt.Errorf("launch args missing --with-extension flag")
 	}
 
 	data, err := os.ReadFile(configPath)
@@ -1518,13 +1569,13 @@ func verifyGooseInterception(configPath string, launchArgs []string) error {
 		return fmt.Errorf("read goose config %q: %w", configPath, err)
 	}
 
-	var cfg agentMCPConfig
-	if err := json.Unmarshal(data, &cfg); err != nil {
+	var cfg gooseConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return fmt.Errorf("parse goose config: %w", err)
 	}
 
-	if _, ok := cfg.MCPServers["g8e"]; !ok {
-		return fmt.Errorf("goose config missing g8e server entry")
+	if _, ok := cfg.Extensions["g8e"]; !ok {
+		return fmt.Errorf("goose config missing g8e extension entry")
 	}
 
 	return nil

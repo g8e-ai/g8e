@@ -348,9 +348,10 @@ const (
 // Agent config constants for AI tool config directories and filenames.
 const (
 	AgentConfigDirGemini    = ".gemini"
-	AgentConfigDirGoose     = ".goose"
+	AgentConfigDirGoose     = ".config/goose"
 	AgentConfigFileMCP      = "mcp.json"
 	AgentConfigFileSettings = "settings.json"
+	AgentConfigFileGooseYAML = "config.yaml"
 )
 
 // API path constants for enrollment and well-known endpoints.

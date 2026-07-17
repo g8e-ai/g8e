@@ -378,20 +378,20 @@ func GetSuspendedTransactionsDBPath(dataDir string) string {
 // AgentConfigPaths holds precomputed agent configuration paths for a given home directory.
 // Call once per command with the user's home directory to avoid repeated filepath.Join calls.
 type AgentConfigPaths struct {
-	GeminiConfigDir  string
-	GeminiConfigPath string
-	GooseConfigDir   string
-	GooseConfigPath  string
+	GeminiConfigDir     string
+	GeminiConfigPath    string
+	GooseYAMLConfigDir  string
+	GooseYAMLConfigPath string
 }
 
 // GetAgentConfigPaths precomputes all agent configuration paths from the given home directory.
 // Used by CLI commands that write agent MCP configurations.
 func GetAgentConfigPaths(homeDir string) AgentConfigPaths {
 	return AgentConfigPaths{
-		GeminiConfigDir:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirGemini),
-		GeminiConfigPath: pathutil.SafeJoin(homeDir, constants.AgentConfigDirGemini, constants.AgentConfigFileSettings),
-		GooseConfigDir:   pathutil.SafeJoin(homeDir, constants.AgentConfigDirGoose),
-		GooseConfigPath:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirGoose, constants.AgentConfigFileSettings),
+		GeminiConfigDir:     pathutil.SafeJoin(homeDir, constants.AgentConfigDirGemini),
+		GeminiConfigPath:    pathutil.SafeJoin(homeDir, constants.AgentConfigDirGemini, constants.AgentConfigFileSettings),
+		GooseYAMLConfigDir:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirGoose),
+		GooseYAMLConfigPath: pathutil.SafeJoin(homeDir, constants.AgentConfigDirGoose, constants.AgentConfigFileGooseYAML),
 	}
 }
 

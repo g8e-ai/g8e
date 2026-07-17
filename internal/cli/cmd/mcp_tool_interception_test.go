@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -122,11 +123,11 @@ func TestVerifyClaudeCodexInterception_InvalidJSON(t *testing.T) {
 // ─── verifyGooseInterception ──────────────────────────────────────────────────
 
 func TestVerifyGooseInterception_ValidConfig(t *testing.T) {
-	t.Run("passes with --no-profile flag and valid config", func(t *testing.T) {
+	t.Run("passes with --no-profile and --with-extension flags and valid config", func(t *testing.T) {
 		tmpDir := testutil.TempDir(t)
-		configPath := writeTestMCPConfig(t, tmpDir)
+		configPath := writeTestGooseConfig(t, tmpDir)
 
-		launchArgs := []string{"session", "--no-profile"}
+		launchArgs := []string{"session", "--no-profile", "--with-extension", "/fake/g8e mcp stdio"}
 
 		err := verifyGooseInterception(configPath, launchArgs)
 		require.NoError(t, err)
@@ -136,9 +137,9 @@ func TestVerifyGooseInterception_ValidConfig(t *testing.T) {
 func TestVerifyGooseInterception_MissingNoProfile(t *testing.T) {
 	t.Run("fails when --no-profile flag is missing", func(t *testing.T) {
 		tmpDir := testutil.TempDir(t)
-		configPath := writeTestMCPConfig(t, tmpDir)
+		configPath := writeTestGooseConfig(t, tmpDir)
 
-		launchArgs := []string{"session"}
+		launchArgs := []string{"session", "--with-extension", "/fake/g8e mcp stdio"}
 
 		err := verifyGooseInterception(configPath, launchArgs)
 		require.Error(t, err)
@@ -146,25 +147,61 @@ func TestVerifyGooseInterception_MissingNoProfile(t *testing.T) {
 	})
 }
 
-func TestVerifyGooseInterception_MissingG8EServer(t *testing.T) {
-	t.Run("fails when config has no g8e MCP server entry", func(t *testing.T) {
+func TestVerifyGooseInterception_MissingWithExtension(t *testing.T) {
+	t.Run("fails when --with-extension flag is missing", func(t *testing.T) {
 		tmpDir := testutil.TempDir(t)
-		configPath := filepath.Join(tmpDir, "settings.json")
-		require.NoError(t, os.WriteFile(configPath, []byte(`{"mcpServers":{}}`), 0644))
+		configPath := writeTestGooseConfig(t, tmpDir)
 
-		err := verifyGooseInterception(configPath, []string{"session", "--no-profile"})
+		launchArgs := []string{"session", "--no-profile"}
+
+		err := verifyGooseInterception(configPath, launchArgs)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "missing g8e server entry")
+		assert.Contains(t, err.Error(), "missing --with-extension")
+	})
+}
+
+func TestVerifyGooseInterception_MissingG8EExtension(t *testing.T) {
+	t.Run("fails when config has no g8e extension entry", func(t *testing.T) {
+		tmpDir := testutil.TempDir(t)
+		configPath := filepath.Join(tmpDir, "config.yaml")
+		require.NoError(t, os.WriteFile(configPath, []byte("extensions: {}\n"), 0644))
+
+		err := verifyGooseInterception(configPath, []string{"session", "--no-profile", "--with-extension", "/fake/g8e mcp stdio"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "missing g8e extension entry")
 	})
 }
 
 func TestVerifyGooseInterception_MissingConfigFile(t *testing.T) {
 	t.Run("fails when config file does not exist", func(t *testing.T) {
-		missingPath := filepath.Join(testutil.TempDir(t), "nonexistent.json")
-		err := verifyGooseInterception(missingPath, []string{"session", "--no-profile"})
+		missingPath := filepath.Join(testutil.TempDir(t), "nonexistent.yaml")
+		err := verifyGooseInterception(missingPath, []string{"session", "--no-profile", "--with-extension", "/fake/g8e mcp stdio"})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "read goose config")
 	})
+}
+
+// writeTestGooseConfig writes a valid goose config.yaml with g8e as the sole extension.
+func writeTestGooseConfig(t *testing.T, dir string) string {
+	t.Helper()
+	configPath := filepath.Join(dir, "config.yaml")
+	cfg := gooseConfig{
+		Extensions: map[string]gooseExtension{
+			"g8e": {
+				Enabled: true,
+				Config: gooseExtConfig{
+					Type: "stdio",
+					Name: "g8e",
+					Cmd:  "g8e",
+					Args: []string{"mcp", "stdio"},
+				},
+			},
+		},
+	}
+	data, err := yaml.Marshal(cfg)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(configPath, data, 0644))
+	return configPath
 }
 
 // ─── verifyGeminiInterception ─────────────────────────────────────────────────

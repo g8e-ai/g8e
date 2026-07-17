@@ -14,7 +14,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -22,6 +21,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestGooseGovernanceConfig(t *testing.T) {
@@ -32,12 +32,12 @@ func TestGooseGovernanceConfig(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, homeDir)
 
-	configDir := filepath.Join(homeDir, ".goose")
+	configDir := filepath.Join(homeDir, ".config", "goose")
 	err = os.MkdirAll(configDir, 0755)
 	require.NoError(t, err)
 
-	existingConfigPath := filepath.Join(configDir, "settings.json")
-	existingData := []byte(`{"mcpServers": {"existing": {}}}`)
+	existingConfigPath := filepath.Join(configDir, "config.yaml")
+	existingData := []byte("extensions:\n  existing:\n    enabled: true\n    config:\n      type: stdio\n      name: existing\n      cmd: existing-cmd\n")
 	err = os.WriteFile(existingConfigPath, existingData, 0644)
 	require.NoError(t, err)
 
@@ -62,19 +62,22 @@ func TestGooseGovernanceConfig(t *testing.T) {
 	configData, err := os.ReadFile(configPath)
 	require.NoError(t, err)
 
-	var config struct {
-		MCPServers   map[string]interface{} `json:"mcpServers"`
-		ExcludeTools []string               `json:"excludeTools"`
-	}
-	err = json.Unmarshal(configData, &config)
+	var cfg gooseConfig
+	err = yaml.Unmarshal(configData, &cfg)
 	require.NoError(t, err)
 
-	assert.Contains(t, config.MCPServers, "g8e")
+	assert.Contains(t, cfg.Extensions, "g8e")
+	assert.True(t, cfg.Extensions["g8e"].Enabled)
+	assert.Equal(t, "stdio", cfg.Extensions["g8e"].Config.Type)
+	assert.Equal(t, "g8e", cfg.Extensions["g8e"].Config.Name)
+	assert.Equal(t, binaryPath, cfg.Extensions["g8e"].Config.Cmd)
+	assert.Equal(t, []string{"mcp", "stdio"}, cfg.Extensions["g8e"].Config.Args)
 }
 
 func TestGooseLaunchArgs_NoProfile(t *testing.T) {
-	args, err := agentLaunchArgs("goose", "/tmp/mcp-config.json")
+	args, err := agentLaunchArgs("goose", "/tmp/mcp-config.json", "/fake/g8e")
 	require.NoError(t, err)
 	assert.Contains(t, args, "session")
 	assert.Contains(t, args, "--no-profile")
+	assert.Contains(t, args, "--with-extension")
 }

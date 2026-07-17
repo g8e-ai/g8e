@@ -1273,7 +1273,7 @@ func TestWriteAgentConfig(t *testing.T) {
 
 func TestAgentLaunchArgs(t *testing.T) {
 	t.Run("claude returns governance flags", func(t *testing.T) {
-		args, err := agentLaunchArgs("claude", "/path/to/config.json")
+		args, err := agentLaunchArgs("claude", "/path/to/config.json", "/fake/g8e")
 		require.NoError(t, err)
 		assert.Contains(t, args, "--mcp-config")
 		assert.Contains(t, args, "/path/to/config.json")
@@ -1282,57 +1282,58 @@ func TestAgentLaunchArgs(t *testing.T) {
 	})
 
 	t.Run("codex returns governance flags", func(t *testing.T) {
-		args, err := agentLaunchArgs("codex", "/path/to/config.json")
+		args, err := agentLaunchArgs("codex", "/path/to/config.json", "/fake/g8e")
 		require.NoError(t, err)
 		assert.Contains(t, args, "--mcp-config")
 		assert.Contains(t, args, "--strict-mcp-config")
 	})
 
 	t.Run("goose returns no-profile args", func(t *testing.T) {
-		args, err := agentLaunchArgs("goose", "/path/to/config.json")
+		args, err := agentLaunchArgs("goose", "/path/to/config.json", "/fake/g8e")
 		require.NoError(t, err)
 		assert.Contains(t, args, "session")
 		assert.Contains(t, args, "--no-profile")
+		assert.Contains(t, args, "--with-extension")
 	})
 
 	t.Run("gemini returns empty args", func(t *testing.T) {
-		args, err := agentLaunchArgs("gemini", "/path/to/config.json")
+		args, err := agentLaunchArgs("gemini", "/path/to/config.json", "/fake/g8e")
 		require.NoError(t, err)
 		assert.Empty(t, args)
 	})
 
 	t.Run("cursor returns error", func(t *testing.T) {
-		_, err := agentLaunchArgs("cursor", "/path/to/config.json")
+		_, err := agentLaunchArgs("cursor", "/path/to/config.json", "/fake/g8e")
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
 	})
 
 	t.Run("devin returns error", func(t *testing.T) {
-		_, err := agentLaunchArgs("devin", "/path/to/config.json")
+		_, err := agentLaunchArgs("devin", "/path/to/config.json", "/fake/g8e")
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
 	})
 
 	t.Run("aider returns error", func(t *testing.T) {
-		_, err := agentLaunchArgs("aider", "/path/to/config.json")
+		_, err := agentLaunchArgs("aider", "/path/to/config.json", "/fake/g8e")
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
 	})
 
 	t.Run("ollama returns error", func(t *testing.T) {
-		_, err := agentLaunchArgs("ollama", "/path/to/config.json")
+		_, err := agentLaunchArgs("ollama", "/path/to/config.json", "/fake/g8e")
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
 	})
 
 	t.Run("unknown agent returns error", func(t *testing.T) {
-		_, err := agentLaunchArgs("unknown-agent", "/path/to/config.json")
+		_, err := agentLaunchArgs("unknown-agent", "/path/to/config.json", "/fake/g8e")
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
 	})
 
 	t.Run("case-insensitive", func(t *testing.T) {
-		args, err := agentLaunchArgs("CLAUDE", "/path/to/config.json")
+		args, err := agentLaunchArgs("CLAUDE", "/path/to/config.json", "/fake/g8e")
 		require.NoError(t, err)
 		assert.Contains(t, args, "--mcp-config")
 	})

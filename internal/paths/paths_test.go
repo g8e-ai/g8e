@@ -421,8 +421,8 @@ func TestGetAgentConfigPaths(t *testing.T) {
 	}{
 		{"GeminiConfigDir", got.GeminiConfigDir, pathutil.SafeJoin(home, constants.AgentConfigDirGemini)},
 		{"GeminiConfigPath", got.GeminiConfigPath, pathutil.SafeJoin(home, constants.AgentConfigDirGemini, constants.AgentConfigFileSettings)},
-		{"GooseConfigDir", got.GooseConfigDir, pathutil.SafeJoin(home, constants.AgentConfigDirGoose)},
-		{"GooseConfigPath", got.GooseConfigPath, pathutil.SafeJoin(home, constants.AgentConfigDirGoose, constants.AgentConfigFileSettings)},
+		{"GooseYAMLConfigDir", got.GooseYAMLConfigDir, pathutil.SafeJoin(home, constants.AgentConfigDirGoose)},
+		{"GooseYAMLConfigPath", got.GooseYAMLConfigPath, pathutil.SafeJoin(home, constants.AgentConfigDirGoose, constants.AgentConfigFileGooseYAML)},
 	}
 
 	for _, tc := range tests {
@@ -440,7 +440,7 @@ func TestGetAgentConfigPaths_AllFieldsPopulated(t *testing.T) {
 	if got.GeminiConfigDir == "" || got.GeminiConfigPath == "" {
 		t.Error("Gemini fields should be populated")
 	}
-	if got.GooseConfigDir == "" || got.GooseConfigPath == "" {
+	if got.GooseYAMLConfigDir == "" || got.GooseYAMLConfigPath == "" {
 		t.Error("Goose fields should be populated")
 	}
 }
@@ -455,7 +455,7 @@ func TestGetAgentConfigPaths_ConfigPathInsideConfigDir(t *testing.T) {
 		name string
 	}{
 		{got.GeminiConfigDir, got.GeminiConfigPath, "Gemini"},
-		{got.GooseConfigDir, got.GooseConfigPath, "Goose"},
+		{got.GooseYAMLConfigDir, got.GooseYAMLConfigPath, "Goose"},
 	}
 
 	for _, p := range pairs {

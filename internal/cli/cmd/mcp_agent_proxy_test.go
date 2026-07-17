@@ -26,7 +26,7 @@ import (
 )
 
 func TestAgentLaunchArgs_ClaudeIncludesMcpConfigAndDisallowedTools(t *testing.T) {
-	args, err := agentLaunchArgs("claude", "/tmp/mcp-config.json")
+	args, err := agentLaunchArgs("claude", "/tmp/mcp-config.json", "/fake/g8e")
 	require.NoError(t, err)
 	assert.Contains(t, args, "--mcp-config")
 	assert.Contains(t, args, "/tmp/mcp-config.json")
@@ -35,7 +35,7 @@ func TestAgentLaunchArgs_ClaudeIncludesMcpConfigAndDisallowedTools(t *testing.T)
 }
 
 func TestAgentLaunchArgs_CodexIncludesMcpConfigAndDisallowedTools(t *testing.T) {
-	args, err := agentLaunchArgs("codex", "/tmp/mcp-config.json")
+	args, err := agentLaunchArgs("codex", "/tmp/mcp-config.json", "/fake/g8e")
 	require.NoError(t, err)
 	assert.Contains(t, args, "--mcp-config")
 	assert.Contains(t, args, "--strict-mcp-config")
@@ -43,50 +43,52 @@ func TestAgentLaunchArgs_CodexIncludesMcpConfigAndDisallowedTools(t *testing.T) 
 }
 
 func TestAgentLaunchArgs_GooseReturnsNoProfileArgs(t *testing.T) {
-	args, err := agentLaunchArgs("goose", "/tmp/mcp-config.json")
+	args, err := agentLaunchArgs("goose", "/tmp/mcp-config.json", "/fake/g8e")
 	require.NoError(t, err)
 	assert.Contains(t, args, "session")
 	assert.Contains(t, args, "--no-profile")
+	assert.Contains(t, args, "--with-extension")
+	assert.Contains(t, args, "/fake/g8e mcp stdio")
 }
 
 func TestAgentLaunchArgs_GeminiReturnsEmptyArgs(t *testing.T) {
-	args, err := agentLaunchArgs("gemini", "/tmp/mcp-config.json")
+	args, err := agentLaunchArgs("gemini", "/tmp/mcp-config.json", "/fake/g8e")
 	require.NoError(t, err)
 	assert.Empty(t, args)
 }
 
 func TestAgentLaunchArgs_CursorReturnsError(t *testing.T) {
-	_, err := agentLaunchArgs("cursor", "/tmp/mcp-config.json")
+	_, err := agentLaunchArgs("cursor", "/tmp/mcp-config.json", "/fake/g8e")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
 }
 
 func TestAgentLaunchArgs_DevinReturnsError(t *testing.T) {
-	_, err := agentLaunchArgs("devin", "/tmp/mcp-config.json")
+	_, err := agentLaunchArgs("devin", "/tmp/mcp-config.json", "/fake/g8e")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
 }
 
 func TestAgentLaunchArgs_AiderReturnsError(t *testing.T) {
-	_, err := agentLaunchArgs("aider", "/tmp/mcp-config.json")
+	_, err := agentLaunchArgs("aider", "/tmp/mcp-config.json", "/fake/g8e")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
 }
 
 func TestAgentLaunchArgs_OllamaReturnsError(t *testing.T) {
-	_, err := agentLaunchArgs("ollama", "/tmp/mcp-config.json")
+	_, err := agentLaunchArgs("ollama", "/tmp/mcp-config.json", "/fake/g8e")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
 }
 
 func TestAgentLaunchArgs_UnknownAgentReturnsError(t *testing.T) {
-	_, err := agentLaunchArgs("unknown-agent", "/tmp/mcp-config.json")
+	_, err := agentLaunchArgs("unknown-agent", "/tmp/mcp-config.json", "/fake/g8e")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
 }
 
 func TestAgentLaunchArgs_IsCaseInsensitive(t *testing.T) {
-	args, err := agentLaunchArgs("CLAUDE", "/tmp/mcp-config.json")
+	args, err := agentLaunchArgs("CLAUDE", "/tmp/mcp-config.json", "/fake/g8e")
 	require.NoError(t, err)
 	assert.Contains(t, args, "--mcp-config")
 }

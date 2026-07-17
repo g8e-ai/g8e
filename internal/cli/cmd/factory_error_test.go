@@ -16,8 +16,6 @@ package cmd
 import (
 	"bytes"
 	"errors"
-	"fmt"
-	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -384,23 +382,12 @@ func TestVaultImportCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 
 func TestEnrollCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
-	// Start a dummy TCP listener so CheckOperatorRunning does not fail before fileSvcFactory is called
-	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", constants.Ports.OperatorHttp))
-	require.NoError(t, err)
-	defer ln.Close()
-	go func() {
-		conn, _ := ln.Accept()
-		if conn != nil {
-			conn.Close()
-		}
-	}()
-	config.SetEndpointOverride(fmt.Sprintf("127.0.0.1:%d", constants.Ports.OperatorHttp))
-	defer config.SetEndpointOverride("")
-	cmd := enrollCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+	stubCheckOperatorRunning := func(*config.Config) error { return nil }
+	cmd := enrollCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory), stubCheckOperatorRunning)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
-	err = cmd.RunE(cmd, nil)
+	err := cmd.RunE(cmd, nil)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
 	assert.ErrorIs(t, err, errFactory)
@@ -462,6 +449,8 @@ func TestSecurityPKIEnrollCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 
 func TestTestE2ECmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
+	config.SetEndpointOverride("127.0.0.1:1")
+	defer config.SetEndpointOverride("")
 	cmd := testE2ECmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
