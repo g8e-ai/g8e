@@ -1284,18 +1284,9 @@ func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, 
 		return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 	}
 
-	// Ensure CLI credentials exist, auto-enroll if needed
-	creds, err := auth.LoadCredentials(fileSvc, cfg)
-	if err != nil || creds == nil {
-		fmt.Fprintf(os.Stderr, "[g8e] No CLI credentials found, enrolling...\n")
-		if err := auth.EnrollCLI(fileSvc, cfg, false); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
-		}
-		fmt.Fprintf(os.Stderr, "[g8e] CLI enrolled successfully\n")
-		creds, err = auth.LoadCredentials(fileSvc, cfg)
-		if err != nil || creds == nil {
-			return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
-		}
+	creds, err := ensureCLIAuth(fileSvc, cfg)
+	if err != nil {
+		return err
 	}
 
 	// Enroll the agent as an external app for audit trail attribution
@@ -1304,7 +1295,40 @@ func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, 
 		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 	}
 
-	// Require an authenticated human with passkey registration; auto-register if missing
+	if err := ensurePasskeyRegistration(fileSvc, cfg, creds); err != nil {
+		return err
+	}
+
+	_, cleanup, launchArgs, err := prepareAgentLaunch(agentID, verify)
+	if err != nil {
+		return err
+	}
+	if cleanup != nil {
+		defer cleanup()
+	}
+
+	return launchAgentProcess(agentID, extraArgs, launchArgs, cfg, appID, appCert, appKey)
+}
+
+// ensureCLIAuth loads existing CLI credentials or auto-enrolls if none exist.
+func ensureCLIAuth(fileSvc fs.RuntimeFileService, cfg *config.Config) (*auth.Credentials, error) {
+	creds, err := auth.LoadCredentials(fileSvc, cfg)
+	if err != nil || creds == nil {
+		fmt.Fprintf(os.Stderr, "[g8e] No CLI credentials found, enrolling...\n")
+		if err := auth.EnrollCLI(fileSvc, cfg, false); err != nil {
+			return nil, fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
+		}
+		fmt.Fprintf(os.Stderr, "[g8e] CLI enrolled successfully\n")
+		creds, err = auth.LoadCredentials(fileSvc, cfg)
+		if err != nil || creds == nil {
+			return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
+		}
+	}
+	return creds, nil
+}
+
+// ensurePasskeyRegistration verifies a passkey is registered and auto-registers if missing.
+func ensurePasskeyRegistration(fileSvc fs.RuntimeFileService, cfg *config.Config, creds *auth.Credentials) error {
 	hasPasskey, err := auth.VerifyPasskeyRegistration(fileSvc, cfg, creds.UserID, creds.CLISessionID)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrNoPasskeysRegistered, err)
@@ -1315,36 +1339,54 @@ func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, 
 			return fmt.Errorf("%w: %w", constants.ErrPasskeyRegistrationFailed, err)
 		}
 	}
+	return nil
+}
 
-	// Validate agent binary exists before writing any config files
+// prepareAgentLaunch validates the agent binary, writes the agent config, computes launch
+// args, and optionally verifies tool interception. Returns configPath, cleanup func, launchArgs.
+func prepareAgentLaunch(agentID string, verify bool) (string, func(), []string, error) {
 	agentBin, err := exec.LookPath(agentID)
 	if err != nil {
-		return fmt.Errorf("%w: %q not found in PATH — is it installed?", constants.ErrAgentNotInPath, agentID)
+		return "", nil, nil, fmt.Errorf("%w: %q not found in PATH — is it installed?", constants.ErrAgentNotInPath, agentID)
 	}
+	_ = agentBin // used by caller via launchAgentProcess
 
 	binaryPath, err := os.Executable()
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
+		return "", nil, nil, fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
 
 	configPath, cleanup, err := WriteAgentConfig(agentID, binaryPath)
 	if err != nil {
-		return fmt.Errorf("mcp: write agent config: %w", err)
-	}
-	if cleanup != nil {
-		defer cleanup()
+		return "", nil, nil, fmt.Errorf("mcp: write agent config: %w", err)
 	}
 
 	launchArgs, err := agentLaunchArgs(agentID, configPath)
 	if err != nil {
-		return fmt.Errorf("mcp: get launch args: %w", err)
+		if cleanup != nil {
+			cleanup()
+		}
+		return "", nil, nil, fmt.Errorf("mcp: get launch args: %w", err)
 	}
 
 	if verify {
 		if err := verifyToolInterception(agentID, configPath, launchArgs); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrToolInterceptionVerification, err)
+			if cleanup != nil {
+				cleanup()
+			}
+			return "", nil, nil, fmt.Errorf("%w: %w", constants.ErrToolInterceptionVerification, err)
 		}
 		fmt.Fprintf(os.Stderr, "[g8e] Tool interception verified — native tools disabled, all I/O routed through g8e MCP\n")
+	}
+
+	return configPath, cleanup, launchArgs, nil
+}
+
+// launchAgentProcess spawns the agent binary with governance environment variables.
+func launchAgentProcess(agentID string, extraArgs, launchArgs []string, cfg *config.Config, appID, appCert, appKey string) error {
+	agentBin, err := exec.LookPath(agentID)
+	if err != nil {
+		return fmt.Errorf("%w: %q not found in PATH — is it installed?", constants.ErrAgentNotInPath, agentID)
 	}
 
 	fmt.Fprintf(os.Stderr, "[g8e] Launching %s with L1-L5 governance via gateway\n", agentID)
@@ -1535,6 +1577,12 @@ func runMCPAgentRun(args []string, downstreamURL string, verify bool, fileSvcFac
 	}
 
 	// MCP server (--url or -- command) → run as L1 governance reverse proxy.
+	return runMCPProxy(args, downstreamURL)
+}
+
+// runMCPProxy runs an L1 governance reverse proxy in front of a downstream MCP
+// server (HTTP via --url, or subprocess via -- command).
+func runMCPProxy(args []string, downstreamURL string) error {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
 	var ds mcpDownstreamProxy
