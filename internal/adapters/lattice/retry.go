@@ -87,8 +87,12 @@ func retryWithBackoff(ctx context.Context, op func(context.Context) error, opts 
 
 		if attempt < opts.MaxAttempts-1 {
 			backoff := opts.InitialBackoff * time.Duration(1<<attempt)
-			jitter := time.Duration(rand.Int63n(int64(backoff) / 5))
-			backoff = backoff + jitter - (jitter / 2)
+			// ±20% jitter: random value in [-backoff/5, +backoff/5]
+			jitterMag := time.Duration(rand.Int63n(int64(backoff)/5 + 1))
+			backoff = backoff + jitterMag - backoff/5
+			if backoff < 0 {
+				backoff = 0
+			}
 			select {
 			case <-time.After(backoff):
 			case <-ctx.Done():

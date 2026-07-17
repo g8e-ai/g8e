@@ -121,11 +121,10 @@ func (a *ClientCredentialsAuth) acquireToken(ctx context.Context) (*authToken, e
 }
 
 // getToken returns a valid token, refreshing proactively at 2/3 of lifetime
-// with ±10% jitter. Thread-safe via mutex.
+// with ±10% jitter. Thread-safe via mutex. The mutex is released before the
+// HTTP call to avoid blocking concurrent gRPC calls during token refresh.
 func (a *ClientCredentialsAuth) getToken(ctx context.Context) (*authToken, error) {
 	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	if a.token != nil && a.token.isValid() {
 		// Refresh proactively at 2/3 of lifetime, jittered ±10%.
 		lifetime := a.token.Expiry.Sub(time.Now())
@@ -135,15 +134,21 @@ func (a *ClientCredentialsAuth) getToken(ctx context.Context) (*authToken, error
 		refreshAt = refreshAt.Add(jitter - jitterRange/2)
 
 		if time.Now().Before(refreshAt) {
-			return a.token, nil
+			token := a.token
+			a.mu.Unlock()
+			return token, nil
 		}
 	}
+	a.mu.Unlock()
 
 	token, err := a.acquireToken(ctx)
 	if err != nil {
 		return nil, err
 	}
+
+	a.mu.Lock()
 	a.token = token
+	a.mu.Unlock()
 	return token, nil
 }
 
