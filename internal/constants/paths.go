@@ -347,18 +347,10 @@ const (
 
 // Agent config constants for AI tool config directories and filenames.
 const (
-	AgentConfigDirCursor    = ".cursor"
-	AgentConfigDirDevin     = ".codeium/windsurf"
 	AgentConfigDirGemini    = ".gemini"
 	AgentConfigDirGoose     = ".goose"
-	AgentConfigDirVSCode    = ".vscode"
-	AgentConfigDirCodeium   = ".codeium"
-	AgentConfigDirTabby     = ".tabby"
-	AgentConfigDirContinue  = ".continue"
 	AgentConfigFileMCP      = "mcp.json"
-	AgentConfigFileMCPDevin = "mcp_config.json"
 	AgentConfigFileSettings = "settings.json"
-	AgentConfigFileAider    = ".aider.conf.yml"
 )
 
 // API path constants for enrollment and well-known endpoints.

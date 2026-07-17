@@ -378,44 +378,20 @@ func GetSuspendedTransactionsDBPath(dataDir string) string {
 // AgentConfigPaths holds precomputed agent configuration paths for a given home directory.
 // Call once per command with the user's home directory to avoid repeated filepath.Join calls.
 type AgentConfigPaths struct {
-	CursorConfigDir    string
-	CursorConfigPath   string
-	DevinConfigDir     string
-	DevinConfigPath    string
-	GeminiConfigDir    string
-	GeminiConfigPath   string
-	GooseConfigDir     string
-	GooseConfigPath    string
-	VSCodeConfigDir    string
-	VSCodeConfigPath   string
-	CodeiumConfigDir   string
-	CodeiumConfigPath  string
-	TabbyConfigDir     string
-	TabbyConfigPath    string
-	ContinueConfigDir  string
-	ContinueConfigPath string
+	GeminiConfigDir  string
+	GeminiConfigPath string
+	GooseConfigDir   string
+	GooseConfigPath  string
 }
 
 // GetAgentConfigPaths precomputes all agent configuration paths from the given home directory.
 // Used by CLI commands that write agent MCP configurations.
 func GetAgentConfigPaths(homeDir string) AgentConfigPaths {
 	return AgentConfigPaths{
-		CursorConfigDir:    pathutil.SafeJoin(homeDir, constants.AgentConfigDirCursor),
-		CursorConfigPath:   pathutil.SafeJoin(homeDir, constants.AgentConfigDirCursor, constants.AgentConfigFileMCP),
-		DevinConfigDir:     pathutil.SafeJoin(homeDir, constants.AgentConfigDirDevin),
-		DevinConfigPath:    pathutil.SafeJoin(homeDir, constants.AgentConfigDirDevin, constants.AgentConfigFileMCPDevin),
-		GeminiConfigDir:    pathutil.SafeJoin(homeDir, constants.AgentConfigDirGemini),
-		GeminiConfigPath:   pathutil.SafeJoin(homeDir, constants.AgentConfigDirGemini, constants.AgentConfigFileSettings),
-		GooseConfigDir:     pathutil.SafeJoin(homeDir, constants.AgentConfigDirGoose),
-		GooseConfigPath:    pathutil.SafeJoin(homeDir, constants.AgentConfigDirGoose, constants.AgentConfigFileSettings),
-		VSCodeConfigDir:    pathutil.SafeJoin(homeDir, constants.AgentConfigDirVSCode),
-		VSCodeConfigPath:   pathutil.SafeJoin(homeDir, constants.AgentConfigDirVSCode, constants.AgentConfigFileMCP),
-		CodeiumConfigDir:   pathutil.SafeJoin(homeDir, constants.AgentConfigDirCodeium),
-		CodeiumConfigPath:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirCodeium, constants.AgentConfigFileMCP),
-		TabbyConfigDir:     pathutil.SafeJoin(homeDir, constants.AgentConfigDirTabby),
-		TabbyConfigPath:    pathutil.SafeJoin(homeDir, constants.AgentConfigDirTabby, constants.AgentConfigFileMCP),
-		ContinueConfigDir:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirContinue),
-		ContinueConfigPath: pathutil.SafeJoin(homeDir, constants.AgentConfigDirContinue, constants.AgentConfigFileSettings),
+		GeminiConfigDir:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirGemini),
+		GeminiConfigPath: pathutil.SafeJoin(homeDir, constants.AgentConfigDirGemini, constants.AgentConfigFileSettings),
+		GooseConfigDir:   pathutil.SafeJoin(homeDir, constants.AgentConfigDirGoose),
+		GooseConfigPath:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirGoose, constants.AgentConfigFileSettings),
 	}
 }
 

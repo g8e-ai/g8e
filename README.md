@@ -65,7 +65,7 @@ g8e is actor-agnostic and governs actions rather than actors. AI agents, human u
 ```mermaid
 graph TD
     subgraph Clients ["Any AI client, agent-agnostic"]
-        C1["MCP client<br/>(Claude / Cursor / Windsurf)"]
+        C1["MCP client<br/>(Claude / Codex / Goose / Gemini)"]
         C2["Agentic ensemble<br/>(A2A / tool calls)"]
     end
 

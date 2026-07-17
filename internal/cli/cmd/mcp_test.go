@@ -64,14 +64,13 @@ func TestAgentCmd(t *testing.T) {
 		require.NoError(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "claude")
-		assert.Contains(t, output, "cursor")
-		assert.Contains(t, output, "devin")
-		assert.Contains(t, output, "vscode")
-		assert.Contains(t, output, "continue")
-		assert.Contains(t, output, "aider")
-		assert.Contains(t, output, "codeium")
-		assert.Contains(t, output, "tabby")
-		assert.Contains(t, output, "generic")
+		assert.Contains(t, output, "codex")
+		assert.Contains(t, output, "gemini")
+		assert.Contains(t, output, "goose")
+		assert.NotContains(t, output, "cursor")
+		assert.NotContains(t, output, "devin")
+		assert.NotContains(t, output, "aider")
+		assert.NotContains(t, output, "generic")
 	})
 
 	t.Run("agent show command requires exactly one argument", func(t *testing.T) {
@@ -95,7 +94,7 @@ func TestAgentCmd(t *testing.T) {
 		assert.Contains(t, output, "Stdio Transport")
 	})
 
-	agents := []string{"cursor", "devin", "vscode", "continue", "aider", "codeium", "tabby", "generic", "goose"}
+	agents := []string{"gemini", "goose"}
 	for _, agent := range agents {
 		t.Run("agent show generates gateway configs for "+agent, func(t *testing.T) {
 			cmd := agentShowCmd()
@@ -875,19 +874,19 @@ func TestGetSupportedAgents(t *testing.T) {
 		agents := getSupportedAgents()
 		assert.NotEmpty(t, agents)
 
-		// Check for expected agents
 		agentIDs := make(map[string]bool)
 		for _, agent := range agents {
 			agentIDs[agent.ID] = true
 		}
 
 		assert.True(t, agentIDs["claude"], "should include claude")
-		assert.True(t, agentIDs["cursor"], "should include cursor")
-		assert.True(t, agentIDs["devin"], "should include devin")
-		assert.True(t, agentIDs["vscode"], "should include vscode")
-		assert.True(t, agentIDs["continue"], "should include continue")
-		assert.True(t, agentIDs["aider"], "should include aider")
-		assert.True(t, agentIDs["generic"], "should include generic")
+		assert.True(t, agentIDs["codex"], "should include codex")
+		assert.True(t, agentIDs["gemini"], "should include gemini")
+		assert.True(t, agentIDs["goose"], "should include goose")
+		assert.False(t, agentIDs["cursor"], "should not include cursor")
+		assert.False(t, agentIDs["devin"], "should not include devin")
+		assert.False(t, agentIDs["aider"], "should not include aider")
+		assert.False(t, agentIDs["generic"], "should not include generic")
 	})
 
 	t.Run("each agent has non-empty ID and description", func(t *testing.T) {
@@ -1220,90 +1219,12 @@ func TestMcpStdioCmd(t *testing.T) {
 }
 
 func TestWriteAgentConfig(t *testing.T) {
-	t.Run("cursor writes config file", func(t *testing.T) {
-		t.Setenv("HOME", testutil.TempDir(t))
-		binaryPath, err := os.Executable()
-		require.NoError(t, err)
-
-		configPath, cleanup, err := WriteAgentConfig("cursor", binaryPath)
-		require.NoError(t, err)
-		assert.NotEmpty(t, configPath)
-		if cleanup != nil {
-			cleanup()
-		}
-	})
-
-	t.Run("devin writes config file", func(t *testing.T) {
-		t.Setenv("HOME", testutil.TempDir(t))
-		binaryPath, err := os.Executable()
-		require.NoError(t, err)
-
-		configPath, cleanup, err := WriteAgentConfig("devin", binaryPath)
-		require.NoError(t, err)
-		assert.NotEmpty(t, configPath)
-		if cleanup != nil {
-			cleanup()
-		}
-	})
-
-	t.Run("vscode writes config file", func(t *testing.T) {
-		t.Setenv("HOME", testutil.TempDir(t))
-		binaryPath, err := os.Executable()
-		require.NoError(t, err)
-
-		configPath, cleanup, err := WriteAgentConfig("vscode", binaryPath)
-		require.NoError(t, err)
-		assert.NotEmpty(t, configPath)
-		if cleanup != nil {
-			cleanup()
-		}
-	})
-
-	t.Run("continue writes config file", func(t *testing.T) {
-		t.Setenv("HOME", testutil.TempDir(t))
-		binaryPath, err := os.Executable()
-		require.NoError(t, err)
-
-		configPath, cleanup, err := WriteAgentConfig("continue", binaryPath)
-		require.NoError(t, err)
-		assert.NotEmpty(t, configPath)
-		if cleanup != nil {
-			cleanup()
-		}
-	})
-
 	t.Run("goose writes config file", func(t *testing.T) {
 		t.Setenv("HOME", testutil.TempDir(t))
 		binaryPath, err := os.Executable()
 		require.NoError(t, err)
 
 		configPath, cleanup, err := WriteAgentConfig("goose", binaryPath)
-		require.NoError(t, err)
-		assert.NotEmpty(t, configPath)
-		if cleanup != nil {
-			cleanup()
-		}
-	})
-
-	t.Run("codeium writes config file", func(t *testing.T) {
-		t.Setenv("HOME", testutil.TempDir(t))
-		binaryPath, err := os.Executable()
-		require.NoError(t, err)
-
-		configPath, cleanup, err := WriteAgentConfig("codeium", binaryPath)
-		require.NoError(t, err)
-		assert.NotEmpty(t, configPath)
-		if cleanup != nil {
-			cleanup()
-		}
-	})
-
-	t.Run("tabby writes config file", func(t *testing.T) {
-		t.Setenv("HOME", testutil.TempDir(t))
-		binaryPath, err := os.Executable()
-		require.NoError(t, err)
-
-		configPath, cleanup, err := WriteAgentConfig("tabby", binaryPath)
 		require.NoError(t, err)
 		assert.NotEmpty(t, configPath)
 		if cleanup != nil {
@@ -1327,56 +1248,8 @@ func TestWriteAgentConfig(t *testing.T) {
 		data, err := os.ReadFile(configPath)
 		require.NoError(t, err)
 		assert.Contains(t, string(data), "g8e")
-		assert.Contains(t, string(data), "excludeTools")
-	})
-
-	t.Run("aider returns error when config already exists", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		t.Chdir(tmpDir)
-
-		existingPath := filepath.Join(tmpDir, ".aider.conf.yml")
-		require.NoError(t, os.WriteFile(existingPath, []byte("existing"), 0644))
-
-		binaryPath, err := os.Executable()
-		require.NoError(t, err)
-
-		_, _, err = WriteAgentConfig("aider", binaryPath)
-		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrConfigFileExists)
-	})
-
-	t.Run("aider writes config when no existing file", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		t.Chdir(tmpDir)
-
-		binaryPath, err := os.Executable()
-		require.NoError(t, err)
-
-		configPath, _, err := WriteAgentConfig("aider", binaryPath)
-		require.NoError(t, err)
-		assert.NotEmpty(t, configPath)
-
-		data, err := os.ReadFile(configPath)
-		require.NoError(t, err)
-		assert.Contains(t, string(data), "g8e")
-	})
-
-	t.Run("ollama writes temp file with cleanup", func(t *testing.T) {
-		t.Setenv("HOME", testutil.TempDir(t))
-		binaryPath, err := os.Executable()
-		require.NoError(t, err)
-
-		configPath, cleanup, err := WriteAgentConfig("ollama", binaryPath)
-		require.NoError(t, err)
-		assert.NotEmpty(t, configPath)
-
-		_, err = os.Stat(configPath)
-		require.NoError(t, err)
-
-		cleanup()
-
-		_, err = os.Stat(configPath)
-		assert.True(t, os.IsNotExist(err))
+		assert.Contains(t, string(data), "tools")
+		assert.Contains(t, string(data), "core")
 	})
 
 	t.Run("unknown agent writes temp file with cleanup", func(t *testing.T) {
@@ -1415,58 +1288,35 @@ func TestAgentLaunchArgs(t *testing.T) {
 		assert.Contains(t, args, "--strict-mcp-config")
 	})
 
-	t.Run("cursor returns empty args", func(t *testing.T) {
-		args, err := agentLaunchArgs("cursor", "/path/to/config.json")
-		require.NoError(t, err)
-		assert.Empty(t, args)
-	})
-
-	t.Run("devin returns empty args", func(t *testing.T) {
-		args, err := agentLaunchArgs("devin", "/path/to/config.json")
-		require.NoError(t, err)
-		assert.Empty(t, args)
-	})
-
-	t.Run("continue returns empty args", func(t *testing.T) {
-		args, err := agentLaunchArgs("continue", "/path/to/config.json")
-		require.NoError(t, err)
-		assert.Empty(t, args)
-	})
-
-	t.Run("aider returns empty args", func(t *testing.T) {
-		args, err := agentLaunchArgs("aider", "/path/to/config.json")
-		require.NoError(t, err)
-		assert.Empty(t, args)
-	})
-
-	t.Run("goose returns empty args", func(t *testing.T) {
+	t.Run("goose returns no-profile args", func(t *testing.T) {
 		args, err := agentLaunchArgs("goose", "/path/to/config.json")
 		require.NoError(t, err)
-		assert.Empty(t, args)
-	})
-
-	t.Run("vscode returns empty args", func(t *testing.T) {
-		args, err := agentLaunchArgs("vscode", "/path/to/config.json")
-		require.NoError(t, err)
-		assert.Empty(t, args)
-	})
-
-	t.Run("codeium returns empty args", func(t *testing.T) {
-		args, err := agentLaunchArgs("codeium", "/path/to/config.json")
-		require.NoError(t, err)
-		assert.Empty(t, args)
-	})
-
-	t.Run("tabby returns empty args", func(t *testing.T) {
-		args, err := agentLaunchArgs("tabby", "/path/to/config.json")
-		require.NoError(t, err)
-		assert.Empty(t, args)
+		assert.Contains(t, args, "session")
+		assert.Contains(t, args, "--no-profile")
 	})
 
 	t.Run("gemini returns empty args", func(t *testing.T) {
 		args, err := agentLaunchArgs("gemini", "/path/to/config.json")
 		require.NoError(t, err)
 		assert.Empty(t, args)
+	})
+
+	t.Run("cursor returns error", func(t *testing.T) {
+		_, err := agentLaunchArgs("cursor", "/path/to/config.json")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
+	})
+
+	t.Run("devin returns error", func(t *testing.T) {
+		_, err := agentLaunchArgs("devin", "/path/to/config.json")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
+	})
+
+	t.Run("aider returns error", func(t *testing.T) {
+		_, err := agentLaunchArgs("aider", "/path/to/config.json")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
 	})
 
 	t.Run("ollama returns error", func(t *testing.T) {
@@ -1490,13 +1340,13 @@ func TestAgentLaunchArgs(t *testing.T) {
 
 func TestRunMCPAgentRun_NoArgs(t *testing.T) {
 	t.Run("returns error when no args and no url", func(t *testing.T) {
-		err := runMCPAgentRun(nil, "", newFileSvc)
+		err := runMCPAgentRun(nil, "", false, newFileSvc)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "specify an agent name")
 	})
 
 	t.Run("returns error for unknown agent", func(t *testing.T) {
-		err := runMCPAgentRun([]string{"unknown-agent-xyz"}, "", newFileSvc)
+		err := runMCPAgentRun([]string{"unknown-agent-xyz"}, "", false, newFileSvc)
 		require.Error(t, err)
 	})
 }

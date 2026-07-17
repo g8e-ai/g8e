@@ -312,7 +312,7 @@ The `g8e` binary (`internal/cli/cmd/main.go`) registers the following subcommand
   - **`security`**: Security validation checks. Subcommands: `validate`, `pki`.
   - **`tunnel`**: Manage Cloudflare Tunnel for public gateway access. Subcommands: `create`, `run`, `status`.
 - **`auth`**: Authentication and session management. Subcommands: `enroll` (CSR-based enrollment with passkey registration), `logout`, `approve` (interactive OOB approval of suspended transactions via passkey).
-- **`mcp`**: MCP protocol operations. Subcommands: `stdio` (run g8e as an MCP server over stdio), `agent` (agent integration commands for AI coding tools). `agent` subcommands: `list` (list supported agent binaries), `show` (print MCP client configuration for a specific agent), `run` (launch an agent with g8e MCP configuration).
+- **`mcp`**: MCP protocol operations. Subcommands: `stdio` (run g8e as an MCP server over stdio), `agent` (agent integration commands for AI coding tools). `agent` subcommands: `list` (list supported agent binaries), `show` (print MCP client configuration for a specific agent), `run` (launch an agent with g8e MCP configuration and native tools disabled; includes `verifyToolInterception` pre-launch config verification via `--verify` flag, enabled by default). Supported agents: Claude Code, OpenAI Codex, Goose, Gemini CLI.
 - **`operator`**: Manage Operator instances. Subcommands: `list`, `start`, `cp`, `scp`, `deploy`, `stream`.
 - **`vault`**: Encryption vault management. Subcommands: `init`, `unlock`, `rekey`, `status`, `reset`, `export`, `import`.
 - **`test`**: Run test suites. Subcommands: `unit`, `integration`, `e2e`, `coverage`, `lint`, `chaos`, `summary`.

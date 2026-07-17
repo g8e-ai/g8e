@@ -42,64 +42,35 @@ func TestAgentLaunchArgs_CodexIncludesMcpConfigAndDisallowedTools(t *testing.T) 
 	assert.Contains(t, args, "--disallowed-tools")
 }
 
-func TestAgentLaunchArgs_CursorReturnsEmptyArgs(t *testing.T) {
-	args, err := agentLaunchArgs("cursor", "/tmp/mcp-config.json")
-	require.NoError(t, err)
-	assert.Empty(t, args)
-}
-
-func TestAgentLaunchArgs_DevinReturnsEmptyArgs(t *testing.T) {
-	args, err := agentLaunchArgs("devin", "/tmp/mcp-config.json")
-	require.NoError(t, err)
-	assert.Empty(t, args)
-}
-
-func TestAgentLaunchArgs_AiderReturnsEmptyArgs(t *testing.T) {
-	args, err := agentLaunchArgs("aider", "/tmp/mcp-config.json")
-	require.NoError(t, err)
-	assert.Empty(t, args)
-}
-
-func TestAgentLaunchArgs_GooseReturnsEmptyArgs(t *testing.T) {
+func TestAgentLaunchArgs_GooseReturnsNoProfileArgs(t *testing.T) {
 	args, err := agentLaunchArgs("goose", "/tmp/mcp-config.json")
 	require.NoError(t, err)
-	assert.Empty(t, args)
-}
-
-func TestAgentLaunchArgs_VSCodeReturnsEmptyArgs(t *testing.T) {
-	args, err := agentLaunchArgs("vscode", "/tmp/mcp-config.json")
-	require.NoError(t, err)
-	assert.Empty(t, args)
-}
-
-func TestAgentLaunchArgs_ContinueReturnsEmptyArgs(t *testing.T) {
-	args, err := agentLaunchArgs("continue", "/tmp/mcp-config.json")
-	require.NoError(t, err)
-	assert.Empty(t, args)
-}
-
-func TestAgentLaunchArgs_ContinueAliasReturnsEmptyArgs(t *testing.T) {
-	args, err := agentLaunchArgs("cn", "/tmp/mcp-config.json")
-	require.NoError(t, err)
-	assert.Empty(t, args)
-}
-
-func TestAgentLaunchArgs_CodeiumReturnsEmptyArgs(t *testing.T) {
-	args, err := agentLaunchArgs("codeium", "/tmp/mcp-config.json")
-	require.NoError(t, err)
-	assert.Empty(t, args)
-}
-
-func TestAgentLaunchArgs_TabbyReturnsEmptyArgs(t *testing.T) {
-	args, err := agentLaunchArgs("tabby", "/tmp/mcp-config.json")
-	require.NoError(t, err)
-	assert.Empty(t, args)
+	assert.Contains(t, args, "session")
+	assert.Contains(t, args, "--no-profile")
 }
 
 func TestAgentLaunchArgs_GeminiReturnsEmptyArgs(t *testing.T) {
 	args, err := agentLaunchArgs("gemini", "/tmp/mcp-config.json")
 	require.NoError(t, err)
 	assert.Empty(t, args)
+}
+
+func TestAgentLaunchArgs_CursorReturnsError(t *testing.T) {
+	_, err := agentLaunchArgs("cursor", "/tmp/mcp-config.json")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
+}
+
+func TestAgentLaunchArgs_DevinReturnsError(t *testing.T) {
+	_, err := agentLaunchArgs("devin", "/tmp/mcp-config.json")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
+}
+
+func TestAgentLaunchArgs_AiderReturnsError(t *testing.T) {
+	_, err := agentLaunchArgs("aider", "/tmp/mcp-config.json")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
 }
 
 func TestAgentLaunchArgs_OllamaReturnsError(t *testing.T) {
@@ -121,13 +92,13 @@ func TestAgentLaunchArgs_IsCaseInsensitive(t *testing.T) {
 }
 
 func TestRunMCPAgentRun_NoArgsReturnsError(t *testing.T) {
-	err := runMCPAgentRun(nil, "", newFileSvc)
+	err := runMCPAgentRun(nil, "", false, newFileSvc)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "specify an agent name")
 }
 
 func TestRunMCPAgentRun_UnknownAgentReturnsError(t *testing.T) {
-	err := runMCPAgentRun([]string{"unknown-agent"}, "", newFileSvc)
+	err := runMCPAgentRun([]string{"unknown-agent"}, "", false, newFileSvc)
 	require.Error(t, err)
 }
 
@@ -138,39 +109,13 @@ func TestGetSupportedAgents_ReturnsAllExpectedAgents(t *testing.T) {
 		ids[a.ID] = true
 	}
 	assert.True(t, ids["claude"])
-	assert.True(t, ids["cursor"])
-	assert.True(t, ids["devin"])
-	assert.True(t, ids["vscode"])
-	assert.True(t, ids["aider"])
-	assert.True(t, ids["generic"])
-}
-
-func TestWriteAgentConfig_CursorWritesConfigFile(t *testing.T) {
-	t.Setenv("HOME", testutil.TempDir(t))
-
-	configPath, cleanup, err := WriteAgentConfig("cursor", "/fake/g8e")
-	require.NoError(t, err)
-	if cleanup != nil {
-		t.Cleanup(cleanup)
-	}
-	assert.FileExists(t, configPath)
-
-	data, err := os.ReadFile(configPath)
-	require.NoError(t, err)
-	assert.Contains(t, string(data), "g8e")
-	assert.Contains(t, string(data), "mcp")
-	assert.Contains(t, string(data), "stdio")
-}
-
-func TestWriteAgentConfig_DevinWritesConfigFile(t *testing.T) {
-	t.Setenv("HOME", testutil.TempDir(t))
-
-	configPath, cleanup, err := WriteAgentConfig("devin", "/fake/g8e")
-	require.NoError(t, err)
-	if cleanup != nil {
-		t.Cleanup(cleanup)
-	}
-	assert.FileExists(t, configPath)
+	assert.True(t, ids["codex"])
+	assert.True(t, ids["goose"])
+	assert.True(t, ids["gemini"])
+	assert.False(t, ids["cursor"])
+	assert.False(t, ids["devin"])
+	assert.False(t, ids["aider"])
+	assert.False(t, ids["generic"])
 }
 
 func TestWriteAgentConfig_GooseWritesConfigFile(t *testing.T) {
@@ -181,65 +126,6 @@ func TestWriteAgentConfig_GooseWritesConfigFile(t *testing.T) {
 	if cleanup != nil {
 		t.Cleanup(cleanup)
 	}
-	assert.FileExists(t, configPath)
-}
-
-func TestWriteAgentConfig_VSCodeWritesConfigFile(t *testing.T) {
-	t.Setenv("HOME", testutil.TempDir(t))
-
-	configPath, cleanup, err := WriteAgentConfig("vscode", "/fake/g8e")
-	require.NoError(t, err)
-	if cleanup != nil {
-		t.Cleanup(cleanup)
-	}
-	assert.FileExists(t, configPath)
-}
-
-func TestWriteAgentConfig_ContinueWritesConfigFile(t *testing.T) {
-	t.Setenv("HOME", testutil.TempDir(t))
-
-	configPath, cleanup, err := WriteAgentConfig("continue", "/fake/g8e")
-	require.NoError(t, err)
-	if cleanup != nil {
-		t.Cleanup(cleanup)
-	}
-	assert.FileExists(t, configPath)
-}
-
-func TestWriteAgentConfig_AiderWritesYamlInCwd(t *testing.T) {
-	tmpDir := chdirTemp(t)
-
-	configPath, cleanup, err := WriteAgentConfig("aider", "/fake/g8e")
-	require.NoError(t, err)
-	if cleanup != nil {
-		t.Cleanup(cleanup)
-	}
-	assert.FileExists(t, filepath.Join(tmpDir, configPath))
-}
-
-func TestWriteAgentConfig_AiderFailsIfConfigAlreadyExists(t *testing.T) {
-	chdirTemp(t)
-
-	require.NoError(t, os.WriteFile(constants.AgentConfigFileAider, []byte("existing"), 0o644))
-
-	_, _, err := WriteAgentConfig("aider", "/fake/g8e")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrConfigFileExists)
-}
-
-func TestWriteAgentConfig_OllamaWritesTempFile(t *testing.T) {
-	configPath, cleanup, err := WriteAgentConfig("ollama", "/fake/g8e")
-	require.NoError(t, err)
-	require.NotNil(t, cleanup)
-	t.Cleanup(cleanup)
-	assert.FileExists(t, configPath)
-}
-
-func TestWriteAgentConfig_GenericWritesTempFile(t *testing.T) {
-	configPath, cleanup, err := WriteAgentConfig("generic", "/fake/g8e")
-	require.NoError(t, err)
-	require.NotNil(t, cleanup)
-	t.Cleanup(cleanup)
 	assert.FileExists(t, configPath)
 }
 
@@ -256,7 +142,8 @@ func TestWriteAgentConfig_GeminiWritesSettingsFile(t *testing.T) {
 	data, err := os.ReadFile(configPath)
 	require.NoError(t, err)
 	assert.Contains(t, string(data), "g8e")
-	assert.Contains(t, string(data), "excludeTools")
+	assert.Contains(t, string(data), "tools")
+	assert.Contains(t, string(data), "core")
 }
 
 func TestWriteAgentConfig_GeminiMergesExistingSettings(t *testing.T) {

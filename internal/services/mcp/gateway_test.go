@@ -35,6 +35,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/network"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/storage/storagetest"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -1699,6 +1700,13 @@ func withCircuitBreaker(maxFailures int, cooldown time.Duration) testGatewayOpti
 	}
 }
 
+// withScrubbingService sets a custom scrubbing service for the test GatewayService
+func withScrubbingService(svc *scrubbing.ScrubbingService) testGatewayOption {
+	return func(g *GatewayService) {
+		g.scrubbingService = svc
+	}
+}
+
 // withMaxPayloadBytes sets a custom max payload size for the test GatewayService
 func withMaxPayloadBytes(bytes int64) testGatewayOption {
 	return func(g *GatewayService) {
@@ -1932,6 +1940,62 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 		require.Contains(t, err.Error(), "MCP error")
 	})
 
+}
+
+func TestGatewayService_DispatchToDownstream_Scrubbing(t *testing.T) {
+	t.Parallel()
+
+	scrubSvc := scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), slog.Default(), nil)
+
+	t.Run("SSN in downstream response is scrubbed", func(t *testing.T) {
+		t.Parallel()
+		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Record found: SSN 123-45-6789 for John Doe"}]}}`))
+		}))
+		defer downstream.Close()
+
+		g := newTestGatewayService(t, withDownstreamURL(downstream.URL), withScrubbingService(scrubSvc))
+
+		result, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`), "test-session-id")
+		require.NoError(t, err)
+		assert.NotContains(t, result, "123-45-6789")
+		assert.Contains(t, result, "[PII]")
+	})
+
+	t.Run("API key in downstream response is scrubbed", func(t *testing.T) {
+		t.Parallel()
+		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Config loaded with key g8e_prod_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}]}}`))
+		}))
+		defer downstream.Close()
+
+		g := newTestGatewayService(t, withDownstreamURL(downstream.URL), withScrubbingService(scrubSvc))
+
+		result, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`), "test-session-id")
+		require.NoError(t, err)
+		assert.NotContains(t, result, "g8e_prod_")
+		assert.Contains(t, result, "[REDACTED_API_KEY]")
+	})
+
+	t.Run("clean downstream response passes through", func(t *testing.T) {
+		t.Parallel()
+		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Operation completed successfully"}]}}`))
+		}))
+		defer downstream.Close()
+
+		g := newTestGatewayService(t, withDownstreamURL(downstream.URL), withScrubbingService(scrubSvc))
+
+		result, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`), "test-session-id")
+		require.NoError(t, err)
+		assert.Contains(t, result, "Operation completed successfully")
+	})
 }
 
 func TestGatewayService_DispatchToA2ADownstream(t *testing.T) {

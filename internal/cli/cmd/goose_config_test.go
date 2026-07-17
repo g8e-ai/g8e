@@ -70,6 +70,11 @@ func TestGooseGovernanceConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, config.MCPServers, "g8e")
-	assert.Contains(t, config.ExcludeTools, "Bash")
-	assert.Contains(t, config.ExcludeTools, "Write")
+}
+
+func TestGooseLaunchArgs_NoProfile(t *testing.T) {
+	args, err := agentLaunchArgs("goose", "/tmp/mcp-config.json")
+	require.NoError(t, err)
+	assert.Contains(t, args, "session")
+	assert.Contains(t, args, "--no-profile")
 }
