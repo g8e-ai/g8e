@@ -832,3 +832,35 @@ func TestLedgerService_GetStateMerkleRoot_DisabledVault(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, root)
 }
+
+func TestTruncateHash(t *testing.T) {
+	t.Parallel()
+
+	t.Run("long hash truncated to 12 chars", func(t *testing.T) {
+		t.Parallel()
+		hash := "0123456789abcdef0123456789abcdef01234567"
+		result := truncateHash(hash)
+		assert.Len(t, result, 12)
+		assert.Equal(t, "0123456789ab", result)
+	})
+
+	t.Run("exactly 12 chars returned as-is", func(t *testing.T) {
+		t.Parallel()
+		hash := "0123456789ab"
+		result := truncateHash(hash)
+		assert.Equal(t, hash, result)
+	})
+
+	t.Run("short hash returned as-is", func(t *testing.T) {
+		t.Parallel()
+		hash := "abc123"
+		result := truncateHash(hash)
+		assert.Equal(t, hash, result)
+	})
+
+	t.Run("empty string returned as-is", func(t *testing.T) {
+		t.Parallel()
+		result := truncateHash("")
+		assert.Empty(t, result)
+	})
+}

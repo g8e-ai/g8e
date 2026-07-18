@@ -782,6 +782,113 @@ func TestDetector_DetectWindowsIdentity_WhitespaceHostname(t *testing.T) {
 	assert.Equal(t, "TESTHOST.example.com", winID.ADFQDN)
 }
 
+func TestGetExternalInterfaceIP_ErrorOnAddrs(t *testing.T) {
+	t.Parallel()
+
+	mockInterfaces := []net.Interface{
+		{Name: "eth0"},
+	}
+
+	getInterfaces := func() ([]net.Interface, error) {
+		return mockInterfaces, nil
+	}
+
+	getAddrs := func(iface net.Interface) ([]net.Addr, error) {
+		return nil, assert.AnError
+	}
+
+	result := getExternalInterfaceIPWithFunc(getInterfaces, getAddrs)
+	assert.Equal(t, "localhost", result)
+}
+
+func TestGetExternalInterfaceIP_LoopbackOnly(t *testing.T) {
+	t.Parallel()
+
+	mockInterfaces := []net.Interface{
+		{Name: "lo"},
+	}
+
+	getInterfaces := func() ([]net.Interface, error) {
+		return mockInterfaces, nil
+	}
+
+	getAddrs := func(iface net.Interface) ([]net.Addr, error) {
+		return []net.Addr{
+			&net.IPNet{IP: net.ParseIP("127.0.0.1"), Mask: net.CIDRMask(8, 32)},
+		}, nil
+	}
+
+	result := getExternalInterfaceIPWithFunc(getInterfaces, getAddrs)
+	assert.Equal(t, "localhost", result)
+}
+
+func TestGetExternalIP(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns first non-loopback non-link-local IPv4", func(t *testing.T) {
+		t.Parallel()
+		ips := []string{"127.0.0.1", "169.254.1.1", "192.168.1.100", "10.0.0.5"}
+		result := getExternalIP(ips)
+		assert.Equal(t, "192.168.1.100", result)
+	})
+
+	t.Run("returns empty when only loopback and link-local", func(t *testing.T) {
+		t.Parallel()
+		ips := []string{"127.0.0.1", "169.254.1.1"}
+		result := getExternalIP(ips)
+		assert.Empty(t, result)
+	})
+
+	t.Run("returns empty for empty list", func(t *testing.T) {
+		t.Parallel()
+		result := getExternalIP([]string{})
+		assert.Empty(t, result)
+	})
+
+	t.Run("returns empty for nil list", func(t *testing.T) {
+		t.Parallel()
+		result := getExternalIP(nil)
+		assert.Empty(t, result)
+	})
+
+	t.Run("skips invalid IP string", func(t *testing.T) {
+		t.Parallel()
+		ips := []string{"not-an-ip", "192.168.1.1"}
+		result := getExternalIP(ips)
+		assert.Equal(t, "192.168.1.1", result)
+	})
+}
+
+func TestFilterOutIP(t *testing.T) {
+	t.Parallel()
+
+	t.Run("removes matching IP", func(t *testing.T) {
+		t.Parallel()
+		ips := []string{"10.0.0.1", "10.0.0.2", "10.0.0.3"}
+		result := filterOutIP(ips, "10.0.0.2")
+		assert.Equal(t, []string{"10.0.0.1", "10.0.0.3"}, result)
+	})
+
+	t.Run("returns all when exclude not found", func(t *testing.T) {
+		t.Parallel()
+		ips := []string{"10.0.0.1", "10.0.0.2"}
+		result := filterOutIP(ips, "192.168.1.1")
+		assert.Equal(t, []string{"10.0.0.1", "10.0.0.2"}, result)
+	})
+
+	t.Run("returns empty for empty input", func(t *testing.T) {
+		t.Parallel()
+		result := filterOutIP([]string{}, "10.0.0.1")
+		assert.Empty(t, result)
+	})
+
+	t.Run("returns nil for nil input", func(t *testing.T) {
+		t.Parallel()
+		result := filterOutIP(nil, "10.0.0.1")
+		assert.Nil(t, result)
+	})
+}
+
 func TestGetExternalInterfaceIP_PublicWrapper(t *testing.T) {
 	t.Parallel()
 	// Test the public wrapper function - it should return a valid result
