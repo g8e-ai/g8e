@@ -15,7 +15,6 @@ package lattice
 
 import (
 	"context"
-	"math/rand"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -88,7 +87,7 @@ func retryWithBackoff(ctx context.Context, op func(context.Context) error, opts 
 		if attempt < opts.MaxAttempts-1 {
 			backoff := opts.InitialBackoff * time.Duration(1<<attempt)
 			// ±20% jitter: random value in [-backoff/5, +backoff/5]
-			jitterMag := time.Duration(rand.Int63n(int64(backoff)/5 + 1))
+			jitterMag := time.Duration(cryptoRandInt63n(int64(backoff)/5 + 1))
 			backoff = backoff + jitterMag - backoff/5
 			if backoff < 0 {
 				backoff = 0

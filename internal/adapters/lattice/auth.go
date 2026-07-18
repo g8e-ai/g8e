@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"strings"
@@ -125,10 +124,10 @@ func (a *ClientCredentialsAuth) getToken(ctx context.Context) (*authToken, error
 	a.mu.Lock()
 	if a.token != nil && a.token.isValid() {
 		// Refresh proactively at 2/3 of lifetime, jittered ±10%.
-		lifetime := a.token.Expiry.Sub(time.Now())
+		lifetime := time.Until(a.token.Expiry)
 		refreshAt := a.token.Expiry.Add(-lifetime / 3)
 		jitterRange := lifetime / 30 // ±10% of lifetime = 1/10, half of that for ±
-		jitter := time.Duration(rand.Int63n(int64(jitterRange)))
+		jitter := time.Duration(cryptoRandInt63n(int64(jitterRange)))
 		refreshAt = refreshAt.Add(jitter - jitterRange/2)
 
 		if time.Now().Before(refreshAt) {
