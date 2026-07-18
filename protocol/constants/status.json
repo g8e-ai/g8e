@@ -102,12 +102,6 @@
         "_python_const": "INVESTIGATION_CREATE",
         "value": "INVESTIGATION_CREATE"
       },
-      "LATTICE_TASK_EXECUTE": {
-        "_go_const": "ActionTypeLatticeTaskExecute",
-        "_mutation": true,
-        "_python_const": "LATTICE_TASK_EXECUTE",
-        "value": "LATTICE_TASK_EXECUTE"
-      },
       "MCP_CALL": {
         "_go_const": "ActionTypeMcpCall",
         "_mutation": true,

@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,7 +26,7 @@ func TestLatticeConfigValidate_ReturnsErrLatticeConfigMissingWhenNil(t *testing.
 
 	var cfg *LatticeConfig
 	err := cfg.Validate()
-	assert.ErrorIs(t, err, constants.ErrLatticeConfigMissing)
+	assert.ErrorIs(t, err, ErrLatticeConfigMissing)
 }
 
 func TestLatticeConfigValidate_ReturnsErrLatticeEndpointRequiredWhenEndpointEmpty(t *testing.T) {
@@ -39,7 +38,7 @@ func TestLatticeConfigValidate_ReturnsErrLatticeEndpointRequiredWhenEndpointEmpt
 		Entity:       EntityConfig{Name: "g8e-operator"},
 	}
 	err := cfg.Validate()
-	assert.ErrorIs(t, err, constants.ErrLatticeEndpointRequired)
+	assert.ErrorIs(t, err, ErrLatticeEndpointRequired)
 }
 
 func TestLatticeConfigValidate_ReturnsErrLatticeClientIDRequiredWhenClientIDEmpty(t *testing.T) {
@@ -51,7 +50,7 @@ func TestLatticeConfigValidate_ReturnsErrLatticeClientIDRequiredWhenClientIDEmpt
 		Entity:       EntityConfig{Name: "g8e-operator"},
 	}
 	err := cfg.Validate()
-	assert.ErrorIs(t, err, constants.ErrLatticeClientIDRequired)
+	assert.ErrorIs(t, err, ErrLatticeClientIDRequired)
 }
 
 func TestLatticeConfigValidate_ReturnsErrLatticeClientSecretRequiredWhenClientSecretEmpty(t *testing.T) {
@@ -63,7 +62,7 @@ func TestLatticeConfigValidate_ReturnsErrLatticeClientSecretRequiredWhenClientSe
 		Entity:   EntityConfig{Name: "g8e-operator"},
 	}
 	err := cfg.Validate()
-	assert.ErrorIs(t, err, constants.ErrLatticeClientSecretRequired)
+	assert.ErrorIs(t, err, ErrLatticeClientSecretRequired)
 }
 
 func TestLatticeConfigValidate_ReturnsErrorWhenEntityNameEmpty(t *testing.T) {
@@ -76,7 +75,7 @@ func TestLatticeConfigValidate_ReturnsErrorWhenEntityNameEmpty(t *testing.T) {
 	}
 	err := cfg.Validate()
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrLatticeConfigMissing)
+	assert.ErrorIs(t, err, ErrLatticeConfigMissing)
 }
 
 func TestLatticeConfigValidate_DefaultsPostureFloorToConsensusWhenEmpty(t *testing.T) {
@@ -112,28 +111,28 @@ func TestValidateHeartbeatInterval_RejectsZero(t *testing.T) {
 	t.Parallel()
 
 	err := ValidateHeartbeatInterval(0)
-	assert.ErrorIs(t, err, constants.ErrLatticeHeartbeatIntervalInvalid)
+	assert.ErrorIs(t, err, ErrLatticeHeartbeatIntervalInvalid)
 }
 
 func TestValidateHeartbeatInterval_RejectsNegative(t *testing.T) {
 	t.Parallel()
 
 	err := ValidateHeartbeatInterval(-1 * time.Second)
-	assert.ErrorIs(t, err, constants.ErrLatticeHeartbeatIntervalInvalid)
+	assert.ErrorIs(t, err, ErrLatticeHeartbeatIntervalInvalid)
 }
 
 func TestValidateHeartbeatInterval_RejectsFourMinutes(t *testing.T) {
 	t.Parallel()
 
 	err := ValidateHeartbeatInterval(4 * time.Minute)
-	assert.ErrorIs(t, err, constants.ErrLatticeHeartbeatIntervalInvalid)
+	assert.ErrorIs(t, err, ErrLatticeHeartbeatIntervalInvalid)
 }
 
 func TestValidateHeartbeatInterval_RejectsAboveFourMinutes(t *testing.T) {
 	t.Parallel()
 
 	err := ValidateHeartbeatInterval(5 * time.Minute)
-	assert.ErrorIs(t, err, constants.ErrLatticeHeartbeatIntervalInvalid)
+	assert.ErrorIs(t, err, ErrLatticeHeartbeatIntervalInvalid)
 }
 
 func TestValidateHeartbeatInterval_AcceptsThirtySeconds(t *testing.T) {

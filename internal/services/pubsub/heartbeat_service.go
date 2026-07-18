@@ -46,7 +46,7 @@ type HeartbeatService struct {
 	results  ResultsPublisher
 	actuator *governance.L5Actuator
 
-	sinks     []sinkEntry
+	sinks      []sinkEntry
 	nextSinkID int64
 
 	ctx    context.Context

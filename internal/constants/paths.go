@@ -439,11 +439,6 @@ const (
 	TribunalBootstrapConfigFilename = "tribunal-bootstrap.json"
 )
 
-// Lattice adapter constants for entity ID persistence.
-const (
-	LatticeEntityIDFilename = "lattice_entity_id"
-)
-
 // Operational limits for filesystem, grep, and execution operations.
 const (
 	FsListMaxDepth       = 3

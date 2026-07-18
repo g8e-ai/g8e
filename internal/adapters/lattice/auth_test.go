@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -54,11 +53,11 @@ func newTestOAuthServer(t *testing.T, token string, expiresIn int) *httptest.Ser
 
 // newInspectOAuthServer returns a server that records request headers for inspection.
 type oauthRequestInspector struct {
-	sandboxHeader  string
-	authHeader     string
-	contentType    string
-	body           string
-	requestCount   atomic.Int32
+	sandboxHeader string
+	authHeader    string
+	contentType   string
+	body          string
+	requestCount  atomic.Int32
 }
 
 func newInspectOAuthServer(t *testing.T, token string, expiresIn int) (*httptest.Server, *oauthRequestInspector) {
@@ -187,7 +186,7 @@ func TestAcquireToken_ReturnsErrLatticeTokenAcquireFailedOnNon200(t *testing.T) 
 	auth := NewClientCredentialsAuth("bad-id", "bad-secret", "", srv.URL+"/oauth/token")
 	_, err := auth.GetRequestMetadata(context.Background())
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrLatticeTokenAcquireFailed)
+	assert.ErrorIs(t, err, ErrLatticeTokenAcquireFailed)
 }
 
 func TestAcquireToken_SendsFormEncodedClientCredentials(t *testing.T) {
@@ -223,7 +222,7 @@ func TestAcquireToken_ReturnsErrLatticeTokenAcquireFailedOnEmptyAccessToken(t *t
 	auth := NewClientCredentialsAuth("id", "secret", "", srv.URL+"/oauth/token")
 	_, err := auth.GetRequestMetadata(context.Background())
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrLatticeTokenAcquireFailed)
+	assert.ErrorIs(t, err, ErrLatticeTokenAcquireFailed)
 }
 
 func TestNewClientCredentialsAuth_SetsHttpClientTimeout(t *testing.T) {

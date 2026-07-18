@@ -16,8 +16,6 @@ package lattice
 import (
 	"fmt"
 	"time"
-
-	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // LatticeConfig holds configuration for the Lattice gRPC adapter.
@@ -28,9 +26,9 @@ type LatticeConfig struct {
 	ClientSecret   string // LATTICE_CLIENT_SECRET
 	SandboxesToken string // SANDBOXES_TOKEN (sandbox only)
 
-	Entity      EntityConfig
+	Entity       EntityConfig
 	PostureFloor string   // refuse to start below this posture
-	TaskCatalog []string // taskSpecificationUrl values
+	TaskCatalog  []string // taskSpecificationUrl values
 }
 
 // EntityConfig holds entity model parameters for presence publishing.
@@ -44,19 +42,19 @@ type EntityConfig struct {
 // Validate checks that all required fields are present and valid.
 func (c *LatticeConfig) Validate() error {
 	if c == nil {
-		return constants.ErrLatticeConfigMissing
+		return ErrLatticeConfigMissing
 	}
 	if c.Endpoint == "" {
-		return constants.ErrLatticeEndpointRequired
+		return ErrLatticeEndpointRequired
 	}
 	if c.ClientID == "" {
-		return constants.ErrLatticeClientIDRequired
+		return ErrLatticeClientIDRequired
 	}
 	if c.ClientSecret == "" {
-		return constants.ErrLatticeClientSecretRequired
+		return ErrLatticeClientSecretRequired
 	}
 	if c.Entity.Name == "" {
-		return fmt.Errorf("%w: entity.name required", constants.ErrLatticeConfigMissing)
+		return fmt.Errorf("%w: entity.name required", ErrLatticeConfigMissing)
 	}
 	if c.PostureFloor == "" {
 		c.PostureFloor = "consensus"
@@ -70,7 +68,7 @@ func (c *LatticeConfig) Validate() error {
 // the 5-minute window with margin for retry backoff.
 func ValidateHeartbeatInterval(interval time.Duration) error {
 	if interval <= 0 || interval >= 4*time.Minute {
-		return constants.ErrLatticeHeartbeatIntervalInvalid
+		return ErrLatticeHeartbeatIntervalInvalid
 	}
 	return nil
 }

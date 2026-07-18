@@ -42,7 +42,6 @@ const (
 	ActionTypeFsRead              ActionType = "FS_READ"
 	ActionTypeHeartbeat           ActionType = "HEARTBEAT"
 	ActionTypeInvestigationCreate ActionType = "INVESTIGATION_CREATE"
-	ActionTypeLatticeTaskExecute  ActionType = "LATTICE_TASK_EXECUTE"
 	ActionTypeMcpCall             ActionType = "MCP_CALL"
 	ActionTypeMcpPromptGet        ActionType = "MCP_PROMPT_GET"
 	ActionTypeMcpPromptList       ActionType = "MCP_PROMPT_LIST"
@@ -70,7 +69,6 @@ var AllActionTypes = []ActionType{
 	ActionTypeFsRead,
 	ActionTypeHeartbeat,
 	ActionTypeInvestigationCreate,
-	ActionTypeLatticeTaskExecute,
 	ActionTypeMcpCall,
 	ActionTypeMcpPromptGet,
 	ActionTypeMcpPromptList,
@@ -89,7 +87,6 @@ func (a ActionType) IsMutation() bool {
 		ActionTypeCancel,
 		ActionTypeExecuteBash,
 		ActionTypeFileEdit,
-		ActionTypeLatticeTaskExecute,
 		ActionTypeMcpCall,
 		ActionTypeRestoreFile,
 		ActionTypeShutdown:
