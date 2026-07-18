@@ -40,12 +40,6 @@ type ExecutionHandler interface {
 	ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error)
 }
 
-//go:generate mockery --name TransactionAuditStore --output ./mocks --dir .
-
-type TransactionAuditStore interface {
-	DocSet(collection, id string, data json.RawMessage) error
-}
-
 // Rehydratable is implemented by payload messages that support sovereignty
 // rehydration. The ScrubbingService rehydrates the payload bytes in place
 // before execution dispatch.

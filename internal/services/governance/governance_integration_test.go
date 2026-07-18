@@ -23,6 +23,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	govtypes "github.com/g8e-ai/g8e/internal/governance"
+	"github.com/g8e-ai/g8e/internal/services/governance/governancetest"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -122,7 +123,7 @@ func TestGovernanceFailClosed(t *testing.T) {
 	}
 
 	t.Run("NilReplayStore_FailClosed", func(t *testing.T) {
-		warden := makeWarden(nil, &SimpleStateRootProvider{Root: "root-1"}, nil, NewL1Doctrine(), "doctrine")
+		warden := makeWarden(nil, &governancetest.SimpleStateRootProvider{Root: "root-1"}, nil, NewL1Doctrine(), "doctrine")
 		env := buildValidEnvelope(t)
 		_, err := warden.VerifyEnvelope(context.Background(), env)
 		if !errors.Is(err, ErrReplayStoreMissing) {
@@ -140,7 +141,7 @@ func TestGovernanceFailClosed(t *testing.T) {
 	})
 
 	t.Run("EmptyStateRoot_FailClosed", func(t *testing.T) {
-		warden := makeWarden(testutil.NewStatefulMockReplayStore(), &SimpleStateRootProvider{Root: ""}, nil, NewL1Doctrine(), "doctrine")
+		warden := makeWarden(testutil.NewStatefulMockReplayStore(), &governancetest.SimpleStateRootProvider{Root: ""}, nil, NewL1Doctrine(), "doctrine")
 		env := buildValidEnvelope(t)
 		_, err := warden.VerifyEnvelope(context.Background(), env)
 		if !errors.Is(err, constants.ErrTxProviderMisconfigured) {
@@ -149,7 +150,7 @@ func TestGovernanceFailClosed(t *testing.T) {
 	})
 
 	t.Run("NilDoctrine_DefaultsToValid", func(t *testing.T) {
-		warden := makeWarden(testutil.NewStatefulMockReplayStore(), &SimpleStateRootProvider{Root: "root-1"}, nil, nil, "doctrine")
+		warden := makeWarden(testutil.NewStatefulMockReplayStore(), &governancetest.SimpleStateRootProvider{Root: "root-1"}, nil, nil, "doctrine")
 		env := buildValidEnvelope(t)
 		verified, err := warden.VerifyEnvelope(context.Background(), env)
 		if err != nil {
@@ -161,7 +162,7 @@ func TestGovernanceFailClosed(t *testing.T) {
 	})
 
 	t.Run("NilTribunalStore_ConsensusFailClosed", func(t *testing.T) {
-		warden := makeWarden(testutil.NewStatefulMockReplayStore(), &SimpleStateRootProvider{Root: "root-1"}, nil, NewL1Doctrine(), "consensus")
+		warden := makeWarden(testutil.NewStatefulMockReplayStore(), &governancetest.SimpleStateRootProvider{Root: "root-1"}, nil, NewL1Doctrine(), "consensus")
 		env := buildValidEnvelope(t)
 		_, err := warden.VerifyEnvelope(context.Background(), env)
 		if !errors.Is(err, ErrL2TribunalNotConfigured) {
