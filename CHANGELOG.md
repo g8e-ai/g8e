@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Description | Notes |
 |---------|------|-------------|-------|
-| — | — | — | — |
+| 1.5.7 | 2026-07-18 | Test coverage improvement and governance interface refactoring. Raises aggregate test coverage to 75.9% (threshold: 75%). Adds approximately 60 new tests across 12 packages. Extracts governance interfaces from `l4_warden.go` into separate files, moves test fixtures to `governancetest` package, and introduces shared test doubles (`TestTokenStore`, `TestResultsPublisher`). Exports `SentinelKeyPrefix` constant. Removes dead `FilesystemSignerStore.logger` field. Refactors `getMachineID` for unsupported OS branch testability. | [v1.5.7](docs/release_notes/v1.5.x/v1.5.7.md) |
 
 ## v1.5.x
 

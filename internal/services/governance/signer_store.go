@@ -50,7 +50,6 @@ func (s *SimpleSignerStore) GetTrustedSigner(keyID string) (ed25519.PublicKey, e
 // content is a hex-encoded ED25519 public key.
 type FilesystemSignerStore struct {
 	signers map[string]ed25519.PublicKey
-	logger  *slog.Logger
 }
 
 // NewFilesystemSignerStore loads all .pub files from the specified directory.
@@ -117,7 +116,6 @@ func NewFilesystemSignerStore(dir string, logger *slog.Logger) (*FilesystemSigne
 
 	return &FilesystemSignerStore{
 		signers: signers,
-		logger:  logger,
 	}, nil
 }
 

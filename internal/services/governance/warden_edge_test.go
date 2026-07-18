@@ -141,7 +141,7 @@ func TestFilesystemSignerStore_SkipsNonPubFiles(t *testing.T) {
 
 func TestFilesystemSignerStore_GetTrustedSigner_NilMap(t *testing.T) {
 	t.Parallel()
-	store := &FilesystemSignerStore{signers: nil, logger: testutil.NewTestLogger()}
+	store := &FilesystemSignerStore{signers: nil}
 	pubKey, err := store.GetTrustedSigner("key1")
 	require.NoError(t, err)
 	assert.Nil(t, pubKey)
