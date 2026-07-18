@@ -1,0 +1,410 @@
+syntax = "proto3";
+
+package anduril.taskmanager.v1;
+
+import "anduril/api/v1/annotations.proto";
+import "anduril/entitymanager/v1/entity.pub.proto";
+import "google/protobuf/any.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option csharp_namespace = "Anduril.Taskmanager.V1";
+option go_package = "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/taskmanager/v1;taskmanager";
+option java_multiple_files = true;
+option java_outer_classname = "TaskProto";
+option java_package = "com.anduril.taskmanager.v1";
+option objc_class_prefix = "ATX";
+
+// A task represents a structured unit of work that can be assigned to an agent for execution.
+//
+// Tasks are the fundamental building blocks of work assignment in the Lattice.
+// Each task has a unique identifier, a specification defining what needs to be done,
+// status information tracking its progress, and various metadata facilitating its lifecycle management.
+//
+// Tasks can be related to each other, through parent-child relationships, assigned to
+// specific agents, and tracked through a well-defined state machine from creation to completion.
+// They support rich status reporting, including progress updates, error handling, and results.
+message Task {
+  option (anduril.api.v1.message_options) = {force_generate: true};
+  // Version of this task.
+  TaskVersion version = 1;
+  // DEPRECATED: Human readable display name for this task, should be short (<100 chars).
+  string display_name = 2 [deprecated = true];
+  // The path for the Protobuf task definition, and the complete task data.
+  google.protobuf.Any specification = 3;
+  // Records who created this task. This field will not change after the task has been created.
+  Principal created_by = 16;
+  // Records who updated this task last.
+  Principal last_updated_by = 4;
+  // Records the time of last update.
+  google.protobuf.Timestamp last_update_time = 9;
+  // The status of this task.
+  TaskStatus status = 5;
+  // If the task has been scheduled to execute, what time it should execute at.
+  google.protobuf.Timestamp scheduled_time = 6;
+  reserved 7;
+  // Any related Tasks associated with this, typically includes an assignee for this task and/or a parent.
+  Relations relations = 8;
+  // Longer, free form human readable description of this task
+  string description = 10;
+  // If set, execution of this task is managed elsewhere, not by Task Manager.
+  // In other words, task manager will not attempt to update the assigned agent with execution instructions.
+  bool is_executed_elsewhere = 11;
+  // Time of task creation.
+  google.protobuf.Timestamp create_time = 13;
+  // If populated, designates this to be a replicated task.
+  Replication replication = 14;
+  // If populated, indicates an initial set of entities that can be used to execute an entity aware task
+  // For example, an entity Objective, an entity Keep In Zone, etc.
+  // These will not be updated during execution. If a taskable agent needs continuous updates on the entities from the
+  // COP, can call entity-manager, or use an AlternateId escape hatch.
+  repeated TaskEntity initial_entities = 15;
+  // The networked owner of this task. It is used to ensure that linear writes occur on the node responsible
+  // for replication of task data to other nodes running Task Manager.
+  Owner owner = 12;
+  // Sets an optional try strategy for tasks. Use this option to control how Lattice attempts to retry delivery of tasks to assets with intermittent access or network connectivity to your environment.
+  RetryStrategy retry_strategy = 18;
+  // The current delivery state of a task.
+  DeliveryState delivery_state = 19;
+}
+
+// Comprehensive status information for a task at a given point in time.
+//
+// TaskStatus contains all status-related information for a task, including its current state,
+// any error conditions, progress details, results, timing information, and resource allocations.
+// This object evolves throughout a task's lifecycle, providing increasing detail as the task
+// progresses from creation through execution to completion.
+message TaskStatus {
+  // Status of the task.
+  Status status = 1;
+  // Any errors associated with the task.
+  TaskError task_error = 2;
+  // Any incremental progress on the task, should be from the tasks/v*/progress folder.
+  google.protobuf.Any progress = 4;
+  // Any final result of the task, should be from tasks/v*/result folder.
+  google.protobuf.Any result = 5;
+  // Time the task began execution, may not be known even for executing Tasks.
+  google.protobuf.Timestamp start_time = 6;
+  // Any estimate for how the task will progress, should be from tasks/v*/estimates folder.
+  google.protobuf.Any estimate = 7;
+  // Any allocated agents of the task.
+  Allocation allocation = 8;
+}
+
+// Error information associated with a task.
+//
+// TaskError contains structured error details, including an error code, a human-readable
+// message, and optional extended error information. This structure is used when a task
+// encounters problems during its lifecycle.
+message TaskError {
+  // Error code for task error.
+  ErrorCode code = 1;
+  // Descriptive human-readable string regarding this error.
+  string message = 2;
+  // Any additional details regarding this error.
+  google.protobuf.Any error_details = 3;
+}
+
+// A Principal is an entity that has authority over this task.
+message Principal {
+  // A Principal can be either a human user, or a system.
+  oneof agent {
+    System system = 1;
+    User user = 2;
+    Team team = 4;
+  }
+  // The Principal _this_ Principal is acting on behalf of.
+  //
+  // Likely only populated once in the nesting (i.e. the "on_behalf_of" Principal would not have another "on_behalf_of" in most cases).
+  Principal on_behalf_of = 3;
+}
+
+// System Principal representing some autonomous system.
+message System {
+  // Name of the service associated with this System.
+  string service_name = 1;
+  // The Entity ID of the System.
+  string entity_id = 2;
+  // Whether the System Principal (for example, an Asset) can own scheduling.
+  // This means we bypass manager-owned scheduling and defer to the system
+  // Principal to handle scheduling and give us status updates for the task.
+  // Regardless of the value defined by the client, the Task Manager will
+  // determine and set this value appropriately.
+  bool manages_own_scheduling = 4;
+
+  reserved 3;
+}
+
+// A User Principal representing a human.
+message User {
+  // The User ID associated with this User.
+  string user_id = 1;
+}
+
+// Describes the relationships associated with this task: the system assigned to
+// execute the task, and the parent task, if one exists.
+message Relations {
+  // The system, user, or team assigned to the task.
+  Principal assignee = 1;
+  // Identifies the parent task if the task is a sub-task.
+  string parent_task_id = 2;
+}
+
+// A task combined with information about an event affecting that task.
+//
+// TaskEvent pairs a task with metadata about a specific event that occurred to that task,
+// such as creation or updates. This structure is used for time-series tracking of task
+// state changes throughout the system.
+message TaskEvent {
+  // Type of Event.
+  EventType event_type = 1;
+  // task associated with this TaskEvent.
+  Task task = 2;
+  // View associated with this task.
+  TaskView task_view = 3;
+
+  // ===== Time Series Updates =====
+  //
+  // Timestamp for time-series to index.
+  google.protobuf.Timestamp time = 4;
+}
+
+// Versioning information for a task.
+//
+// TaskVersion provides a unique identifier for each task, along with separate version counters
+// for tracking changes to the task's definition and its status. This versioning system enables
+// optimistic concurrency control, ensuring that updates from multiple sources don't conflict.
+message TaskVersion {
+  // The unique identifier for this task, used to distinguish it from all other tasks in the system.
+  string task_id = 1;
+  // Counter that increments on changes to the task definition.
+  // Unset (0) initially, starts at 1 on creation, and increments with each update to task fields.
+  uint32 definition_version = 2;
+  // Counter that increments on changes to TaskStatus.
+  // Unset (0) initially, starts at 1 on creation, and increments with each status update.
+  uint32 status_version = 3;
+}
+
+// Status values that track a task's progression through its lifecycle.
+//
+// The Status enum defines the state machine for task execution, representing all possible
+// states a task can be in at any point in its lifecycle. Status values follow a defined
+// progression, typically from creation through scheduling, acknowledgment, execution, and
+// completion. Each definition version of a task can have its own status, allowing for
+// proper handling of task updates.
+//
+// For example, definition v1 might progress from CREATED to SENT to WILCO to REPLACED, while v2
+// could simultaneously be in the SENT state awaiting acknowledgment from the agent.
+enum Status {
+  STATUS_INVALID = 0;
+  // Initial creation Status.
+  STATUS_CREATED = 1;
+  // Scheduled within Task Manager to be sent at a future time.
+  STATUS_SCHEDULED_IN_MANAGER = 2;
+  // Sent to another system (Asset), no receipt yet.
+  STATUS_SENT = 3;
+  // task was sent to Assignee, and some system was reachable and responded.
+  // However, the system responsible for execution on the Assignee has not yet acknowledged the task.
+  STATUS_MACHINE_RECEIPT = 4;
+  // System responsible for execution on the Assignee has acknowledged the task.
+  STATUS_ACK = 5;
+  // Assignee confirmed they "will comply" / intend to execute task.
+  STATUS_WILCO = 6;
+  // task was started and is actively executing.
+  STATUS_EXECUTING = 7;
+  // task is on hold, waiting for additional updates/information before proceeding.
+  STATUS_WAITING_FOR_UPDATE = 8;
+  // task was completed successfully.
+  STATUS_DONE_OK = 9;
+  // task has reached a terminal state but did not complete successfully, see error code/message.
+  STATUS_DONE_NOT_OK = 10;
+  // This definition version was replaced.
+  STATUS_REPLACED = 11;
+  // A task was requested to be cancelled but not yet confirmed, will eventually move to DONE_NOT_OK.
+  STATUS_CANCEL_REQUESTED = 12;
+  // A task was requested to be completed successfully but not yet confirmed, will eventually move to DONE_NOT_OK / DONE_OK.
+  STATUS_COMPLETE_REQUESTED = 13;
+  // This definition version was rejected, intended to be used when an Agent does not accept a new version of a task
+  // and continues using previous version
+  STATUS_VERSION_REJECTED = 14;
+}
+
+// Error code associated with a task error.
+enum ErrorCode {
+  ERROR_CODE_INVALID = 0;
+  // The task was cancelled by requester.
+  ERROR_CODE_CANCELLED = 1;
+  // The task was rejected by assignee, see message for details.
+  ERROR_CODE_REJECTED = 2;
+  // The Manager gave up waiting for a receipt/ack from assignee.
+  ERROR_CODE_TIMEOUT = 3;
+  // The task attempted to execute, but failed.
+  ERROR_CODE_FAILED = 4;
+}
+
+// The type of task event.
+enum EventType {
+  EVENT_TYPE_INVALID = 0;
+  // The task was created.
+  EVENT_TYPE_CREATED = 1;
+  // The task was updated.
+  EVENT_TYPE_UPDATE = 2;
+  // The task already existed, but sent on a new stream connection.
+  EVENT_TYPE_PREEXISTING = 3;
+}
+
+// View of a task through its lifecycle.
+// For example, a definition v1 of a task may be running on an agent, indicated by TASK_VIEW_AGENT,
+// while the definition v2 may not have been received yet, indicated by TASK_VIEW_MANAGER.
+enum TaskView {
+  TASK_VIEW_INVALID = 0;
+  // Represents the most recent version of the task known to Task Manager
+  TASK_VIEW_MANAGER = 1;
+  // Represents the most recent version of the task acknowledged or updated by an Agent
+  TASK_VIEW_AGENT = 2;
+}
+
+// An update to a task's status.
+//
+// StatusUpdate contains all the information needed to update a task's status, including
+// versioning information to ensure proper concurrency control, the new status details,
+// and metadata about the update author and scheduling.
+message StatusUpdate {
+  // The version of the task.
+  TaskVersion version = 1;
+  // The status of the task.
+  TaskStatus status = 2;
+  // The author of the StatusUpdate message. Used to set the LastUpdatedBy field of the task.
+  Principal author = 3;
+  // Typically provided if a user is manually managing a task, or if an asset owns scheduling.
+  google.protobuf.Timestamp scheduled_time = 4;
+}
+
+// A message for creating or updating a task's definition.
+//
+// DefinitionUpdate carries the full task definition for creation or updates. When used for updates,
+// the definition_version in the contained task must be incremented by the client to ensure
+// proper versioning and concurrency control.
+message DefinitionUpdate {
+  // New task definition being created or updated.
+  // The last_updated_by and specification fields inside the task object must be defined.
+  // Definition version must also be incremented by the publisher on updates.
+  // We do not look at the fields create_time or last_update_time in this object,
+  // they are instead set by task-manager.
+  Task task = 1;
+}
+
+// Owner designates the entity responsible for writes of task data.
+message Owner {
+  // Entity ID of the owner.
+  string entity_id = 2;
+
+  reserved 1;
+}
+
+// Any metadata associated with the replication of a task.
+message Replication {
+  // The time by which this task should be assumed to be stale.
+  google.protobuf.Timestamp stale_time = 1;
+}
+
+// Allocation contains a list of agents allocated to a task.
+message Allocation {
+  // Agents actively being utilized in a task.
+  repeated Agent active_agents = 1;
+}
+
+// Represents a team of agents
+message Team {
+  // Entity ID of the team
+  string entity_id = 1;
+  repeated Agent members = 2;
+}
+
+// Represents an agent capable of processing tasks.
+message Agent {
+  // Entity ID of the agent.
+  string entity_id = 2;
+
+  reserved 1;
+}
+
+// An entity wrapper used in task definitions, with additional metadata.
+//
+// TaskEntity wraps an entity reference with additional contextual information for task execution.
+// This structure allows entities to be passed to tasks with supplementary metadata that aids
+// in proper task execution, while also serving as an extension point for future capabilities.
+message TaskEntity {
+  // The wrapped entity.
+  entitymanager.v1.Entity entity = 1;
+  // Indicates that this entity was generated from a snapshot of a live entity.
+  bool snapshot = 2;
+}
+
+// Sets an optional try strategy for tasks. Use this option to control how Lattice attempts to retry delivery of tasks to assets with intermittent access or network connectivity to your environment.
+message RetryStrategy {
+  oneof strategy {
+    FixedRetry fixed_retry_strategy = 1;
+  }
+}
+
+// Defaults to an interval of 5 seconds. If the DeliverBefore field in the task's DeliveryConstraints isn't populated, Lattice does not retry delivery and instead logs a warning.
+message FixedRetry {
+  // Specifies the interval between retries. A default interval of 5 seconds is used if this field is not set.
+  google.protobuf.Duration retry_interval = 1;
+}
+
+// Defines the current state of a task's delivery.
+message DeliveryState {
+  // The current status of the delivery.
+  DeliveryStatus status = 1;
+  // Errors associated with the delivery, if any.
+  DeliveryError error = 2;
+  // Optional scheduling constraints for Lattice delivery of the task.
+  DeliveryConstraints delivery_constraints = 3;
+}
+
+// Enumerates possible stages for task delivery.
+enum DeliveryStatus {
+  DELIVERY_STATUS_INVALID = 0;
+  // Indicates that task delivery has been completed.
+  DELIVERY_STATUS_DELIVERED = 1;
+  // The task is awaiting delivery to be processed by the EXECUTE endpoint.
+  DELIVERY_STATUS_PENDING_EXECUTE = 2;
+  // The task is awaiting delivery to be processed by the CANCEL endpoint.
+  DELIVERY_STATUS_PENDING_CANCEL = 3;
+  // The task is awaiting delivery to be processed by the COMPLETE endpoint.
+  DELIVERY_STATUS_PENDING_COMPLETE = 4;
+}
+
+// DeliveryErrorCode enumerates possible error codes for task delivery.
+enum DeliveryErrorCode {
+  DELIVERY_ERROR_CODE_INVALID = 0;
+  // Delivery was attempted, but the agent is unavailable or offline. Task delivery may be retried if a RetryStrategy is provided.
+  DELIVERY_ERROR_CODE_UNAVAILABLE = 1;
+  // Indicates that task delivery has timed out, and will not be further retried by Lattice.
+  DELIVERY_ERROR_CODE_TIMEOUT = 2;
+  // The task was delivered, but the agent rejected the task.
+  // For example, the task was sent to the incorrect agent, or contained invalid fields that could not be processed.
+  // Specific error details about the cause should be stored in the message field of DeliveryError.
+  DELIVERY_ERROR_CODE_REJECTED = 3;
+}
+
+// DeliveryError contains an error code and message associated with task delivery.
+message DeliveryError {
+  // Error code for Delivery error.
+  DeliveryErrorCode code = 1;
+  // Descriptive human-readable string regarding this delivery error.
+  string message = 2;
+}
+
+// DeliveryConstraints defines when Lattice should deliver the task to the agent.
+message DeliveryConstraints {
+  // Optional earliest time the task can attempt to be delivered.
+  google.protobuf.Timestamp deliver_after = 1;
+  // The latest time by which the task should be delivered.
+  // If this deadline passes without successful delivery of the task, then the task will time
+  // out with DELIVERY_ERROR_CODE_TIMEOUT.
+  // This field is only required for tasks with retry strategies.
+  google.protobuf.Timestamp deliver_before = 2;
+}

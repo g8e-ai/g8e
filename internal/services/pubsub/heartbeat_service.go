@@ -46,6 +46,9 @@ type HeartbeatService struct {
 	results  ResultsPublisher
 	actuator *governance.L5Actuator
 
+	sinks      []sinkEntry
+	nextSinkID int64
+
 	ctx    context.Context
 	mu     sync.Mutex
 	wg     *sync.WaitGroup
@@ -75,6 +78,61 @@ func (hs *HeartbeatService) SetResultsPublisher(results ResultsPublisher) {
 // SetContext sets the context for the HeartbeatService.
 func (hs *HeartbeatService) SetContext(ctx context.Context) {
 	hs.ctx = ctx
+}
+
+// HeartbeatSink is a callback invoked after each automatic heartbeat cycle.
+// External components (e.g. the Lattice adapter) register sinks to piggyback
+// periodic work on the heartbeat scheduler.
+type HeartbeatSink func(ctx context.Context)
+
+// sinkEntry pairs a sink function with its registration ID.
+type sinkEntry struct {
+	id   int64
+	sink HeartbeatSink
+}
+
+// RegisterSink adds a sink that is called after each SendAutomatic cycle.
+// The sink receives the service context. Sinks are called in registration order.
+// Returns a registration ID for use with UnregisterSink.
+func (hs *HeartbeatService) RegisterSink(sink HeartbeatSink) int64 {
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+	hs.nextSinkID++
+	hs.sinks = append(hs.sinks, sinkEntry{id: hs.nextSinkID, sink: sink})
+	return hs.nextSinkID
+}
+
+// UnregisterSink removes a previously registered sink by its registration ID.
+func (hs *HeartbeatService) UnregisterSink(id int64) {
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+	for i, s := range hs.sinks {
+		if s.id == id {
+			hs.sinks = append(hs.sinks[:i], hs.sinks[i+1:]...)
+			return
+		}
+	}
+}
+
+// notifySinks calls all registered sinks with the service context.
+// Sink panics are recovered to prevent a misbehaving sink from crashing the
+// heartbeat cycle.
+func (hs *HeartbeatService) notifySinks() {
+	hs.mu.Lock()
+	sinks := make([]sinkEntry, len(hs.sinks))
+	copy(sinks, hs.sinks)
+	hs.mu.Unlock()
+
+	for _, entry := range sinks {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					hs.logger.Error("[HEARTBEAT] Sink panicked", "error", r)
+				}
+			}()
+			entry.sink(hs.ctx)
+		}()
+	}
 }
 
 // Build constructs a complete Heartbeat payload of the given type.
@@ -349,6 +407,8 @@ func (hs *HeartbeatService) SendAutomatic() error {
 	} else {
 		hs.logger.Warn("[HEARTBEAT] Actuator service not set, skipping receipted heartbeat dispatch")
 	}
+
+	hs.notifySinks()
 
 	return nil
 }

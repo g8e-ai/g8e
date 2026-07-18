@@ -4,8 +4,8 @@ title: g8e Protocol Library
 
 # g8e Protocol Library
 
-Last Updated: 2026-07-14
-Version: v1.5.1
+Last Updated: 2026-07-18
+Version: v1.5.6
 
 The g8e Protocol Library is the canonical wire contract for all mutations in the g8e zero-trust execution platform. It provides protobuf schema definitions, JSON constant registries, JSON model schemas, Pydantic models, dynamic enum generation, SPIFFE workload identity helpers, and example programs for building g8e-compatible clients and services.
 
@@ -298,8 +298,8 @@ Example MCP server configurations are in `protocol/examples/mcp_server/`:
 
 - **`g8e_gateway_mcp_config.json`**: HTTP + mTLS MCP server configuration with literal cert paths for production deployments. Uses the unified `/mcp` endpoint on port 8443.
 - **`g8e_gateway_mcp_config_env.json`**: HTTP + mTLS MCP server configuration with env-var cert paths for containerized deployments.
-- **`g8e_stdio_mcp_config.json`**: Stdio MCP server configuration for local development with native tools. Requires a running gateway; the g8e binary proxies all requests to the gateway over mTLS. Compatible with Claude Code, Codex, Cursor, Devin, VS Code, Continue, Aider, Goose, Gemini, and other MCP-compatible clients.
-- **`g8e_agent_mcp_config.json`**: Agent MCP config example demonstrating the format written by `g8e mcp agent run` to agent-specific config files. Uses the `excludeTools` schema to disable native agent tools, forcing all I/O through g8e's governed MCP tools so every action is audited at L1-L5.
+- **`g8e_stdio_mcp_config.json`**: Stdio MCP server configuration for local development with native tools. Requires a running gateway; the g8e binary proxies all requests to the gateway over mTLS. Compatible with Claude Code, Codex, Goose, Gemini CLI, and other MCP-compatible clients.
+- **`g8e_agent_mcp_config.json`**: Agent MCP config example demonstrating the format written by `g8e mcp agent run` to agent-specific config files. Disables native agent tools to force all I/O through g8e's governed MCP tools so every action is audited at L1-L5. The tool-disabling mechanism varies by agent: `excludeTools` for Claude/Codex, `tools.core: []` for Gemini, `--no-profile` with `--with-extension` for Goose.
 
 ---
 

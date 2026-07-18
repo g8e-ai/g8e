@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package anduril.tasks.v2;
+
+import "anduril/taskmanager/v1/task.pub.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/tasks/v2/shared;tasks";
+option java_multiple_files = true;
+option java_package = "com.anduril.tasks.v2";
+
+// Describes an edge. When its statement is true, transition to next_phase_id.
+message Transition {
+  string transition_id = 1;
+  // When this resolves true, transition to next_phase_id.
+  Statement statement = 2;
+  // Phase to transition to. Cannot be duplicated across a phase's transitions.
+  string next_phase_id = 3;
+}
+
+// A boolean logic statement.
+message Statement {
+  oneof operation {
+    Predicate predicate = 1;
+  }
+}
+
+// A boolean predicate.
+message Predicate {
+  oneof predicate_type {
+    // Satisfied when the code word is active.
+    CodeWordPredicate code_word = 1;
+    // Satisfied when the phase's task queue terminates.
+    TaskQueueTerminatedPredicate task_queue_terminated = 2;
+    // Satisfied when the current time is within the bounds.
+    TimeIntervalPredicate time_interval = 3;
+    // Satisfied when the phase has been active for the given duration.
+    PhaseTimeoutPredicate timeout = 4;
+  }
+}
+
+// Satisfied when the referenced code word is active.
+message CodeWordPredicate {
+  string code_word_id = 1;
+}
+
+// A human readable flag that is either active or inactive.
+message CodeWord {
+  string id = 1;
+  // Human readable string for this code word.
+  string code_word = 2;
+}
+
+// Satisfied when the phase's task queue terminates.
+message TaskQueueTerminatedPredicate {
+  // The final task ended with status DONE_OK.
+  message DoneOk {}
+
+  // A task ended with status DONE_NOT_OK.
+  message DoneNotOk {
+    // If unset, any NOT_OK status satisfies the predicate; otherwise only a matching error_code does.
+    taskmanager.v1.ErrorCode error_code = 1;
+  }
+
+  oneof termination_condition {
+    DoneOk ok = 1;
+    DoneNotOk not_ok = 2;
+  }
+}
+
+// Satisfied when the current time is within the bounds. End must not precede start; at least one bound is required.
+message TimeIntervalPredicate {
+  // Satisfied after this time. If unset, no lower bound.
+  google.protobuf.Timestamp interval_start = 1;
+  // Satisfied before this time. If unset, no upper bound.
+  google.protobuf.Timestamp interval_end = 2;
+}
+
+// Satisfied when the phase has been active for the given duration. Negative durations are invalid.
+message PhaseTimeoutPredicate {
+  google.protobuf.Duration timeout_duration = 1;
+}

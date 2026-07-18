@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package anduril.tasks.v2;
+
+import "anduril/taskmanager/v1/task.pub.proto";
+import "anduril/tasks/v2/shared/transitions.pub.proto";
+
+option go_package = "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/tasks/v2/shared;tasks";
+option java_multiple_files = true;
+option java_package = "com.anduril.tasks.v2";
+
+// A multi-step plan that a single agent executes autonomously.
+//
+// While a single task tells an agent to do one thing, an AgentPlanGraph describes a whole
+// mission as a graph of phases: each phase runs a set of tasks and declares transitions,
+// boolean conditions that decide which phase runs next. This lets the agent branch, loop,
+// react to events (e.g. a code word becoming active, a timeout, or a task completing), and
+// move through the plan on its own, without a controller issuing each task in turn.
+//
+// Use this instead of sending individual tasks for a complete, self-contained plan up front.
+// Execution begins at root_phase_id and follows transitions from there.
+message AgentPlanGraph {
+  // Phases keyed by phase ID.
+  map<string, AgentPlanPhase> agent_plan_phases = 1;
+  // ID of the starting phase.
+  string root_phase_id = 2;
+  // Code words relevant to this plan, keyed by code word UUID.
+  map<string, CodeWord> code_words = 3;
+}
+
+// A phase: the tasks the agent runs and the transitions to other phases.
+message AgentPlanPhase {
+  string agent_plan_phase_id = 1;
+  // Tasks to execute, in sequence.
+  // Deprecated: Use tasks_to_execute instead.
+  repeated AgentPlanTask task_queue = 2 [deprecated = true];
+  // Edges of this phase. All edges must be unique: two transitions cannot share a next_phase_id.
+  repeated Transition transitions = 3;
+  // Execution model for this phase's tasks.
+  TaskExecutionModel tasks_to_execute = 4;
+}
+
+// A task with room for plan-specific metadata.
+message AgentPlanTask {
+  taskmanager.v1.Task task = 1;
+}
+
+// Defines how a phase's tasks are executed. This might constrain each task's ExecutionConstraints.
+message TaskExecutionModel {
+  // Tasks run sequentially, in order. Tasks cannot set ExecutionConstraints.
+  message Sequential {
+    repeated AgentPlanTask tasks = 1;
+  }
+
+  oneof model {
+    Sequential sequential = 1;
+  }
+}

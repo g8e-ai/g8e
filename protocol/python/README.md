@@ -18,9 +18,31 @@ The `g8e.constants` module loads JSON protocol constants from `protocol/constant
 
 Set the `G8E_PROTOCOL_DIR` environment variable to override the default protocol directory resolution. The loader checks this variable first, then falls back to the relative path from the package, then to `/app/protocol/constants` for containerized environments.
 
+#### Accessor Functions
+
+The module provides typed accessor functions that resolve constant keys to their wire values:
+
+- **`collection(name)`** — collection wire value (e.g. `collection("cases")`)
+- **`channel(name)`** — channel wire value
+- **`intent(name)`** — intent wire value
+- **`prompt(name)`** — prompt section wire value
+- **`kv_key(name, **kwargs)`** — formatted KV key with placeholder substitution (e.g. `kv_key("SessionWeb", **{"session.type": "web", "session.id": "abc"})`)
+- **`kv_session_type(name)`** — session type wire value
+
+The `kv_key()` function uses regex substitution to handle dotted placeholder names like `{session.type}` in KV key templates.
+
 ### Enums
 
 The `g8e.enums` module dynamically generates `StrEnum` and `IntEnum` classes from the `STATUS` and `EVENTS` protocol constants. Enum member names use SCREAMING_SNAKE_CASE; values preserve the raw protocol wire format. Integer-valued categories produce `IntEnum`; all others produce `StrEnum`. Access enums by PascalCase name via attribute lookup, for example `g8e.enums.OperatorToolName` or `g8e.enums.EventType`.
+
+In addition to STATUS-derived enums, the module generates enums from other constant categories:
+
+- **`g8e.enums.Channel`** — from `channels.json`
+- **`g8e.enums.Intent`** — from `intents.json`
+- **`g8e.enums.Prompt`** — from `prompts.json`
+- **`g8e.enums.Collection`** — from `collections.json`
+- **`g8e.enums.KVKey`** — from `kv_keys.json`
+- **`g8e.enums.SessionType`** — from `session_types` in `kv_keys.json`
 
 ### Models
 
@@ -28,9 +50,10 @@ The `g8e.models` package provides Pydantic v2 models for protocol data structure
 
 - **`g8e/models/base.py`**: `G8eBaseModel`, `UTCDatetime`, and re-exports of Pydantic `Field`, `ConfigDict`, `field_validator`, `model_validator`.
 - **`g8e/models/context.py`**: `RequestContext` and `BoundOperator`. `RequestContext` validates session identity for `CLIENT` source components, requiring either `web_session_id` or `cli_session_id` and a `user_id`.
-- **`g8e/models/events.py`**: SSE wire models (`SessionEventWire`, `BackgroundEventWire`) and AI event payload models for chat processing, tool lifecycle, citations, errors, thinking, turn completion, retry, and triage clarification.
-- **`g8e/models/internal_api.py`**: `ChatMessageRequest`, `ChatStartedResponse`, and `ResourceCreationRequest` for internal API interactions.
+- **`g8e/models/events.py`**: SSE wire models (`SessionEventWire`, `BackgroundEventWire`) with factory methods `from_session_event()` and `from_background_event()` for construction from event type + data. AI event payload models for chat processing, tool lifecycle, citations, errors, thinking, turn completion, retry, and triage clarification.
+- **`g8e/models/internal_api.py`**: `ChatMessageRequest`, `ChatStartedResponse`, and `ResourceCreationRequest` for internal API interactions. `ChatMessageRequest` inherits from `LLMOverrides`, which provides 12 optional LLM provider/model/endpoint override fields.
 - **`g8e/models/settings.py`**: `G8eeUserSettings`, `PlatformSettings`, and nested settings models for LLM providers, search, eval judge, command validation, and batch execution.
+- **`g8e/models/governance.py`**: `GovernanceEnvelope`, `GovernanceMetadata`, `GovernanceL1`, `GovernanceL2`, `GovernanceL3`, and `compute_transaction_hash()`. The `GovernanceEnvelope` model mirrors the canonical wire format for all mutations. `compute_transaction_hash()` produces a deterministic SHA-256 over pipe-delimited canonical fields.
 
 ### Examples
 
@@ -38,9 +61,9 @@ Working examples are in `protocol/python/examples/`. Run `constants_example.py` 
 
 ## Components
 
-- **`g8e/constants.py`**: Runtime loader for JSON protocol constants from `protocol/constants/`. Exports dict constants, `ComponentName` enum, and HTTP header string constants.
-- **`g8e/enums.py`**: Dynamic `StrEnum` and `IntEnum` generation from `STATUS` and `EVENTS` protocol constants.
-- **`g8e/models/`**: Pydantic v2 models for protocol data structures, SSE events, internal API requests, and user settings.
+- **`g8e/constants.py`**: Runtime loader for JSON protocol constants from `protocol/constants/`. Exports dict constants, `ComponentName` enum, HTTP header string constants, and accessor functions (`collection()`, `channel()`, `intent()`, `prompt()`, `kv_key()`, `kv_session_type()`).
+- **`g8e/enums.py`**: Dynamic `StrEnum` and `IntEnum` generation from `STATUS`, `EVENTS`, and other constant categories (channels, intents, prompts, collections, kv_keys, session_types).
+- **`g8e/models/`**: Pydantic v2 models for protocol data structures, SSE events, internal API requests, user settings, and governance envelopes.
 
 ## Protocol Versioning
 

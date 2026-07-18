@@ -4,8 +4,8 @@ title: MCP Protocol
 
 # MCP Protocol
 
-Last Updated: 2026-07-14
-Version: v1.5.1
+Last Updated: 2026-07-18
+Version: v1.5.6
 
 The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer governance verification sequence (L1Doctrine/L2Consensus/L3Notary/L4Warden/L5Actuator), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
@@ -164,20 +164,10 @@ g8e mcp agent show <agent>
 ```
 
 Replace `<agent>` with one of the supported agents:
-- `claude` - Anthropic Claude Desktop / Claude Code
+- `claude` - Anthropic Claude Code
 - `codex` - OpenAI Codex AI coding assistant
-- `cursor` - Cursor AI IDE
-- `devin` - Devin AI IDE (formerly Windsurf)
-- `vscode` - Visual Studio Code with MCP extension
-- `continue` - Continue.dev AI coding assistant
-- `cn` - Continue.dev AI coding assistant (alias)
-- `aider` - Aider AI pair programmer
-- `codeium` - Codeium AI assistant
-- `tabby` - Tabby AI autocomplete
-- `ollama` - Ollama local LLM runner
-- `gemini` - Google Gemini CLI
 - `goose` - Goose AI coding assistant
-- `generic` - Generic MCP-compatible agent
+- `gemini` - Google Gemini CLI
 
 To list all supported agents:
 
@@ -187,11 +177,11 @@ g8e mcp agent list
 
 The `show` command displays three configuration modes:
 
-**g8e.local (mTLS)**: Production environments with DNS configured. Requires DNS or `/etc/hosts` entry for `g8e.local` resolution. Suitable for Cursor, Devin, VS Code MCP clients.
+**g8e.local (mTLS)**: Production environments with DNS configured. Requires DNS or `/etc/hosts` entry for `g8e.local` resolution. Suitable for Claude Code, Codex, Goose, Gemini CLI MCP clients.
 
-**IP Address (mTLS)**: Environments without DNS or for direct IP access. Uses external interface IP without DNS setup. Suitable for Cursor, Devin, VS Code MCP clients.
+**IP Address (mTLS)**: Environments without DNS or for direct IP access. Uses external interface IP without DNS setup. Suitable for Claude Code, Codex, Goose, Gemini CLI MCP clients.
 
-**Stdio Transport**: Direct native tool access without gateway. Requires g8e binary in PATH or full path in config. Suitable for Claude Code, Cursor, Devin, VS Code MCP clients.
+**Stdio Transport**: Direct native tool access without gateway. Requires g8e binary in PATH or full path in config. Suitable for Claude Code, Codex, Goose, Gemini CLI MCP clients.
 
 #### Claude Code & Codex Custom Connector Registration
 

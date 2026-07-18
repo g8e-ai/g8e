@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package anduril.taskmanager.v1;
+
+import "anduril/api/v1/annotations.proto";
+import "anduril/taskmanager/v1/task.pub.proto";
+
+option csharp_namespace = "Anduril.Taskmanager.V1";
+option go_package = "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/taskmanager/v1;taskmanager";
+option java_multiple_files = true;
+option java_outer_classname = "TaskApiProto";
+option java_package = "com.anduril.taskmanager.v1";
+option objc_class_prefix = "ATX";
+
+// The request to execute a task.
+// Contains the unique ID of the task to execute.
+message ExecuteRequest {
+  option (anduril.api.v1.message_options) = {force_generate: true};
+  // The task to execute.
+  Task task = 1;
+}
+
+// The request to cancel a task.
+// Contains the task, and the assignee of the request to cancel the task.
+message CancelRequest {
+  option (anduril.api.v1.message_options) = {force_generate: true};
+  // The unique task ID of the task to cancel.
+  string task_id = 1;
+  // The assignee of the Task. Useful for agent routing where an endpoint owns multiple agents,
+  // especially onBehalfOf assignees.
+  Principal assignee = 2;
+  // The principal that requested to cancel the task.
+  Principal author = 3;
+}
+
+// The request to complete a task.
+// Contains the unique ID of the task to complete.
+message CompleteRequest {
+  option (anduril.api.v1.message_options) = {force_generate: true};
+  // ID of the task to complete.
+  string task_id = 1;
+}

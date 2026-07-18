@@ -130,14 +130,14 @@ func testE2ECmdWithConfig(configLoader func(string) (*config.Config, error), fil
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 3 (Live Platform E2E) tests...")
 
-			_, err := configLoader("")
+			cfg, err := configLoader("")
 			if err != nil {
 				return err
 			}
 
 			// Try HTTP check first (works for Docker/foreground/background modes)
 			// Use plain HTTP with short timeout to avoid hanging when gateway is not running
-			healthURL := fmt.Sprintf("http://127.0.0.1:%d/api/v1/health", constants.Ports.OperatorHttp)
+			healthURL := cfg.OperatorDiscoveryURL() + constants.APIPaths.Health
 			httpClient := &http.Client{Timeout: 5 * time.Second}
 			isRunning := false
 			resp, err := httpClient.Get(healthURL)

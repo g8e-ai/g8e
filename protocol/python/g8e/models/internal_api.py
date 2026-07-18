@@ -20,13 +20,8 @@ class ResourceCreationRequest(G8eBaseModel):
     create_case: bool = Field(default=False)
     case_title: str | None = Field(default=None)
 
-class ChatMessageRequest(G8eBaseModel):
-    """Request model for chat messages."""
-    context: RequestContext = Field(...)
-    message: str = Field(...)
-    attachments: list[dict[str, Any]] | None = Field(default_factory=list)
-    sentinel_mode: bool = Field(default=True)
-    resource_creation: ResourceCreationRequest | None = Field(default=None)
+class LLMOverrides(G8eBaseModel):
+    """Reusable LLM configuration override fields."""
     llm_primary_provider: str | None = Field(default=None)
     llm_assistant_provider: str | None = Field(default=None)
     llm_lite_provider: str | None = Field(default=None)
@@ -39,6 +34,15 @@ class ChatMessageRequest(G8eBaseModel):
     llm_assistant_endpoint: str | None = Field(default=None)
     llm_lite_api_key: str | None = Field(default=None)
     llm_lite_endpoint: str | None = Field(default=None)
+
+
+class ChatMessageRequest(LLMOverrides):
+    """Request model for chat messages."""
+    context: RequestContext = Field(...)
+    message: str = Field(...)
+    attachments: list[dict[str, Any]] | None = Field(default_factory=list)
+    sentinel_mode: bool = Field(default=True)
+    resource_creation: ResourceCreationRequest | None = Field(default=None)
 
 class ChatStartedResponse(G8eBaseModel):
     """Response for POST /chat."""

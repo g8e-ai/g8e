@@ -1,0 +1,149 @@
+{
+  "agents": {
+    "AgentNameDash": {
+      "_go_const": "AgentNameDash",
+      "_python_const": "DASH",
+      "value": "dash"
+    },
+    "AgentNameSage": {
+      "_go_const": "AgentNameSage",
+      "_python_const": "SAGE",
+      "value": "sage"
+    }
+  },
+  "agent_binaries": {
+    "claude": {
+      "_go_const": "AgentBinaryClaude",
+      "_python_const": "CLAUDE",
+      "value": "claude"
+    },
+    "codex": {
+      "_go_const": "AgentBinaryCodex",
+      "_python_const": "CODEX",
+      "value": "codex"
+    },
+    "cursor": {
+      "_go_const": "AgentBinaryCursor",
+      "_python_const": "CURSOR",
+      "value": "cursor"
+    },
+    "devin": {
+      "_go_const": "AgentBinaryDevin",
+      "_python_const": "DEVIN",
+      "value": "devin"
+    },
+    "vscode": {
+      "_go_const": "AgentBinaryVSCode",
+      "_python_const": "VSCODE",
+      "value": "vscode"
+    },
+    "continue": {
+      "_go_const": "AgentBinaryContinue",
+      "_python_const": "CONTINUE",
+      "value": "continue"
+    },
+    "cn": {
+      "_go_const": "AgentBinaryContinueAlias",
+      "_python_const": "CONTINUE_ALIAS",
+      "value": "cn"
+    },
+    "aider": {
+      "_go_const": "AgentBinaryAider",
+      "_python_const": "AIDER",
+      "value": "aider"
+    },
+    "codeium": {
+      "_go_const": "AgentBinaryCodeium",
+      "_python_const": "CODEIUM",
+      "value": "codeium"
+    },
+    "tabby": {
+      "_go_const": "AgentBinaryTabby",
+      "_python_const": "TABBY",
+      "value": "tabby"
+    },
+    "ollama": {
+      "_go_const": "AgentBinaryOllama",
+      "_python_const": "OLLAMA",
+      "value": "ollama"
+    },
+    "gemini": {
+      "_go_const": "AgentBinaryGemini",
+      "_python_const": "GEMINI",
+      "value": "gemini"
+    },
+    "goose": {
+      "_go_const": "AgentBinaryGoose",
+      "_python_const": "GOOSE",
+      "value": "goose"
+    },
+    "generic": {
+      "_go_const": "AgentBinaryGeneric",
+      "_python_const": "GENERIC",
+      "value": "generic"
+    }
+  },
+  "triage_complexity": {
+    "simple": {
+      "_go_const": "TriageComplexitySimple",
+      "_python_const": "SIMPLE",
+      "value": "simple"
+    },
+    "complex": {
+      "_go_const": "TriageComplexityComplex",
+      "_python_const": "COMPLEX",
+      "value": "complex"
+    }
+  },
+  "triage_confidence": {
+    "high": {
+      "_go_const": "TriageConfidenceHigh",
+      "_python_const": "HIGH",
+      "value": "high"
+    },
+    "low": {
+      "_go_const": "TriageConfidenceLow",
+      "_python_const": "LOW",
+      "value": "low"
+    }
+  },
+  "triage_intent": {
+    "information": {
+      "_go_const": "TriageIntentInformation",
+      "_python_const": "INFORMATION",
+      "value": "information"
+    },
+    "action": {
+      "_go_const": "TriageIntentAction",
+      "_python_const": "ACTION",
+      "value": "action"
+    },
+    "unknown": {
+      "_go_const": "TriageIntentUnknown",
+      "_python_const": "UNKNOWN",
+      "value": "unknown"
+    }
+  },
+  "triage_posture": {
+    "normal": {
+      "_go_const": "TriagePostureNormal",
+      "_python_const": "NORMAL",
+      "value": "normal"
+    },
+    "escalated": {
+      "_go_const": "TriagePostureEscalated",
+      "_python_const": "ESCALATED",
+      "value": "escalated"
+    },
+    "adversarial": {
+      "_go_const": "TriagePostureAdversarial",
+      "_python_const": "ADVERSARIAL",
+      "value": "adversarial"
+    },
+    "confused": {
+      "_go_const": "TriagePostureConfused",
+      "_python_const": "CONFUSED",
+      "value": "confused"
+    }
+  }
+}

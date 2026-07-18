@@ -1,0 +1,12 @@
+version: v2
+plugins:
+  # Go generation (module prefix stripped from go_package to determine output path)
+  - local: protoc-gen-go
+    out: internal/adapters/lattice/gen
+    opt:
+      - module=github.com/g8e-ai/g8e/internal/adapters/lattice/gen/
+  # gRPC Go generation
+  - local: protoc-gen-go-grpc
+    out: internal/adapters/lattice/gen
+    opt:
+      - module=github.com/g8e-ai/g8e/internal/adapters/lattice/gen/

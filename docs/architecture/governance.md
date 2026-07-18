@@ -1,7 +1,7 @@
 # Governance
 
-Last Updated: 2026-07-13
-Version: v1.5.0
+Last Updated: 2026-07-18
+Version: v1.5.6
 
 ## Overview
 
@@ -155,7 +155,7 @@ This section walks through the complete transaction process from initial intent 
 
 A **Principal** (human user or AI agent) submits an intent to perform an action. This intent can be submitted through multiple channels:
 
-- **MCP client**: Using Claude, Cursor, Windsurf, or other MCP-compatible AI IDEs
+- **MCP client**: Using Claude Code, Codex, Goose, Gemini CLI, or other MCP-compatible AI agents
 - **Agentic ensemble**: Through A2A (Agent-to-Agent) protocols or tool calls
 - **Native application**: Direct integration with g8e protocols
 
@@ -182,7 +182,7 @@ The signed envelope is now ready for submission to the governance gateway.
 The producer submits the signed GovernanceEnvelope to the **Governance Gateway**. The gateway serves as the Policy Decision Point and acts as the system's PKI authority.
 
 The gateway accepts connections through:
-- **HTTP/mTLS universal endpoint**: For MCP clients (Claude, Cursor, Windsurf)
+- **HTTP/mTLS universal endpoint**: For MCP clients (Claude Code, Codex, Goose, Gemini CLI)
 - **Standard protocols**: For agentic ensembles and A2A communications
 
 #### Step 4: Gateway Admission Control

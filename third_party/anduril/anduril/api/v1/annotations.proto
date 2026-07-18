@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package anduril.api.v1;
+
+import "anduril/api/v1/http.proto";
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/api/v1;annotations";
+option java_multiple_files = true;
+option java_outer_classname = "AnnotationsProto";
+option java_package = "com.anduril.api";
+option objc_class_prefix = "AAPI";
+
+extend google.protobuf.MethodOptions {
+  // See `HttpRule`.
+  HttpRule http = 50000;
+}
+
+extend google.protobuf.MessageOptions {
+  MessageOptions message_options = 49999;
+}

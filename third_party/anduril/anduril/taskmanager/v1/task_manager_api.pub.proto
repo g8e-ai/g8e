@@ -1,0 +1,491 @@
+syntax = "proto3";
+
+package anduril.taskmanager.v1;
+
+import "anduril/taskmanager/v1/manual_control.pub.proto";
+import "anduril/taskmanager/v1/task.pub.proto";
+import "anduril/taskmanager/v1/task_api.pub.proto";
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+
+option csharp_namespace = "Anduril.Taskmanager.V1";
+option go_package = "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/taskmanager/v1;taskmanager";
+option java_multiple_files = true;
+option java_outer_classname = "TaskManagerApiProto";
+option java_package = "com.anduril.taskmanager.v1";
+option objc_class_prefix = "ATX";
+
+// A task is a data structure for modeling deliberate, sequential actions that an operator can assign to an asset or team of assets.
+//
+// Task Manager is a comprehensive service for the lifecycle management and execution of tasks within the
+// Lattice platform. It coordinates task distribution across the common operational picture (COP),
+// enabling operators to create, monitor, and manage tasks while maintaining up-to-date status information.
+//
+// The service handles both state management and execution routing, ensuring that tasks are properly
+// tracked, assigned to appropriate agents, and monitored through their complete lifecycle from creation
+// to completion. It supports a well-defined task workflow that maintains consistency across the system.
+//
+// Key capabilities:
+// - Task creation and assignment to specific agents
+// - Lifecycle state tracking (sent, acknowledged, executing, completed)
+// - Status updates and progress reporting
+// - Task querying with filtering options
+// - Agent-specific task streaming for execution
+service TaskManagerAPI {
+  // Creates a new Task in the system with the specified parameters.
+  //
+  // This method initiates a new task with a unique ID, if one is not provided,
+  // sets the initial task state to STATUS_SENT, and establishes task ownership. The task
+  // must be assigned to a specific agent using the Relations field.
+  //
+  // Once created, a task enters the lifecycle workflow and can be tracked, updated, and managed
+  // through other Task Manager APIs.
+  rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
+  // Retrieves a specific Task by its ID, with options to select a particular task version or view.
+  //
+  // This method returns detailed information about a task including its current status,
+  // specification, relations, and other metadata. The response includes the complete Task object
+  // with all associated fields.
+  //
+  // By default, the method returns the latest definition version of the task from the manager's
+  // perspective. The definition_version parameter allows retrieving a specific historical version,
+  // while the task_view parameter controls whether to show the task from the manager's or agent's
+  // perspective.
+  rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
+  // Searches for Tasks that match specified filtering criteria and returns matching tasks in paginated form.
+  //
+  // This method allows filtering tasks based on multiple criteria including:
+  // - Parent task relationships
+  // - Task status (with inclusive or exclusive filtering)
+  // - Update time ranges
+  // - Task view (manager or agent perspective)
+  // - Task assignee
+  // - Task type (via exact URL matches or prefix matching)
+  //
+  // Results are returned in pages. When more results are available than can be returned in a single
+  // response, a page_token is provided that can be used in subsequent requests to retrieve the next
+  // set of results.
+  //
+  // By default, this returns the latest task version for each matching task from the manager's perspective.
+  rpc QueryTasks(QueryTasksRequest) returns (QueryTasksResponse);
+  // Updates the status of a Task as it progresses through its lifecycle.
+  //
+  // This method allows agents or operators to report the current state of a task,
+  // which could include changes to task status and error information.
+  //
+  // Each status update increments the task's status_version. When updating status,
+  // clients must provide the current version to ensure consistency. The system rejects
+  // updates with mismatched versions to prevent race conditions.
+  //
+  // Terminal states (`STATUS_DONE_OK` and `STATUS_DONE_NOT_OK`) are permanent; once a task
+  // reaches these states, no further updates are allowed.
+  rpc UpdateStatus(UpdateStatusRequest) returns (UpdateStatusResponse);
+  // Cancels a task by marking it for cancellation in the system.
+
+  // This method initiates task cancellation based on the task's current state:
+  // - If the task has not been sent to an agent, it cancels immediately and transitions the task
+  //   to a terminal state (`STATUS_DONE_NOT_OK` with `ERROR_CODE_CANCELLED`).
+  // - If the task has already been sent to an agent, the cancellation request is routed to the agent.
+  //   The agent is then responsible for deciding whether cancellation is possible or not:
+  //   - If the task can be cancelled, the agent must use `UpdateStatus` and set the task status to `STATUS_DONE_NOT_OK`.
+  //   - If the task cannot be cancelled, the agent must use `UpdateStatus` to attach a `TaskError` to the task with the error code `ERROR_CODE_REJECTED`
+  //     and a `message` explaining why the task cannot be cancelled.
+  rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse);
+  // Establishes a server streaming connection that delivers tasks to taskable agents for execution.
+  //
+  // This method creates a persistent connection from Task Manager to an agent, allowing the server
+  // to push tasks to the agent as they become available. The agent receives a stream of tasks that
+  // match its selector criteria (e.g., entity IDs).
+  //
+  // The stream delivers three types of requests:
+  // - ExecuteRequest: Contains a new task for the agent to execute
+  // - CancelRequest: Indicates a task should be canceled
+  // - CompleteRequest: Indicates a task should be completed
+  //
+  // This is the primary method for taskable agents to receive and process tasks in real-time.
+  // Agents should maintain this connection and process incoming tasks according to their capabilities.
+  //
+  // When an agent receives a task, it should update the task status using the `UpdateStatus` RPC
+  // to provide progress information back to Task Manager.
+  //
+  // When `heartbeat_interval_ms` is set on the request, heartbeat messages are sent periodically to
+  // maintain the connection during idle periods when no tasks are being delivered.
+  rpc ListenAsAgent(ListenAsAgentRequest) returns (stream ListenAsAgentResponse);
+  // Establishes a server streaming connection for receiving manual control frames for a specific task.
+  //
+  // Agents call this RPC to subscribe to manual control frames for a task they are executing.
+  // Task Manager forwards frames from the operator's `SendManualControlFrames` stream, including
+  // epoch and sequence metadata for handling concurrent control sessions and detecting stale frames.
+  //
+  // The agent should open this stream before setting the task status to `STATUS_EXECUTING` to ensure it is ready
+  // to receive control input as soon as the operator begins sending frames.
+  //
+  // The stream terminates when the task reaches a terminal state, either `STATUS_DONE_OK` or `STATUS_DONE_NOT_OK`.
+  rpc ListenForManualControlFrames(ListenForManualControlFramesRequest) returns (stream ListenForManualControlFramesResponse);
+  // Establishes a server streaming connection that delivers task updates in real-time.
+  //
+  // The stream delivers all existing non-terminal tasks when first connected, followed by real-time
+  // updates for task creation and status changes. Additionally, heartbeat messages are sent
+  // periodically to maintain the connection.
+  //
+  // The stream delivers two types of responses:
+  // - Heartbeat: A periodic message to maintain connection health
+  // - TaskEvent: Contains a task and an event type indicating whether the task was created,
+  //   updated, or was preexisting when the stream was established
+  //
+  // Filtering options allow narrowing the stream to specific task types, statuses, assignees,
+  // parent tasks, or tasks updated after a certain time.
+  rpc StreamTasks(StreamTasksRequest) returns (stream StreamTasksResponse);
+}
+
+//--------------------//
+// Request / Response //
+//--------------------//
+
+// Request to create a new Task in the system.
+//
+// This message contains all the information needed to define a task, including its
+// specification, author, relations (such as assignee), and other metadata. When this
+// request is processed, the Task Manager assigns a unique ID, if one is not provided, and
+// creates the task in the system with an initial STATUS_SENT state.
+message CreateTaskRequest {
+  // DEPRECATED: Human-readable display name for this Task, should be short (<100 chars).
+  string display_name = 1 [deprecated = true];
+  // The path for the Protobuf task definition, and the complete task data.
+  google.protobuf.Any specification = 2;
+  // Who or what is creating this Task. For example, if a user created this Task via a UI, it would
+  //  contain the "user" Principal type with the user ID of that user. Or if a service is calling the
+  //  CreateTask endpoint, then a "service" Principal type is to be provided.
+  Principal author = 3;
+  reserved 4;
+  // Any relationships associated with this Task, such as a parent Task or an assignee this Task is designated to
+  //  for execution.
+  Relations relations = 5;
+  // Longer, free-form, human-readable description of this Task.
+  string description = 6;
+  // If set, then task-manager will not trigger execution of this task on an agent. Useful for when ingesting
+  // tasks from an external system that is triggering execution of tasks on agents.
+  bool is_executed_elsewhere = 7;
+  // If non-empty, will set the requested Task ID, otherwise will generate a new random GUID.
+  //  Will reject if supplied Task ID does not match `[A-Za-z0-9_-.]{5,36}`.
+  string task_id = 8;
+  // Indicates an initial set of entities that can be used to execute an entity aware task.
+  // For example, an entity Objective, an entity Keep In Zone, etc.
+  repeated TaskEntity initial_entities = 9;
+  reserved 10;
+  // Any retry strategy for task execution or update.
+  RetryStrategy retry_strategy = 11;
+  reserved 12;
+  // Any scheduling constraints for Lattice delivery of the task.
+  DeliveryConstraints delivery_constraints = 13;
+}
+
+// Response returned after successfully creating a Task.
+//
+// This message contains the complete Task object that was created, including
+// all fields with their final values as stored in the system. The Task will have
+// its ID, version information, and creation timestamp populated.
+message CreateTaskResponse {
+  // Task that was created.
+  Task task = 1;
+}
+
+// Request to retrieve a specific Task by its unique identifier.
+//
+// This message allows fetching a task with options to control which version
+// of the task to retrieve (latest or specific) and from which perspective
+// (manager or agent). By default, it returns the latest version from the
+// manager's view.
+message GetTaskRequest {
+  // ID of Task to get.
+  string task_id = 1;
+  //If set to a number greater than zero, retrieves specific definition_version, otherwise retrieves the
+  // latest definition_version.
+  uint32 definition_version = 2;
+  // Optional - select which view of the task to fetch. If not set, defaults to TASK_VIEW_MANAGER.
+  TaskView task_view = 3;
+}
+
+// Response containing the requested Task information.
+//
+// This message returns the complete Task object with all of its fields populated
+// according to the version and view requested. If the task doesn't exist or the
+// requested version is not available, the system will return an appropriate error.
+message GetTaskResponse {
+  // The Task returned from Lattice.
+  Task task = 1;
+}
+
+// Request to search for Tasks based on various filtering criteria.
+//
+// This message allows filtering and retrieving tasks that match specific conditions
+// such as status, update time, parent-child relationships, assignee, or task type.
+// Results are paginated, with the ability to request subsequent pages using a page token.
+//
+// By default, with no filters applied, this returns the latest version of all tasks.
+// Filters can be combined to narrow down results, but note that parent_task_id filtering
+// is mutually exclusive with other filtering options.
+message QueryTasksRequest {
+  // A time range filter for Tasks based on their update times.
+  //
+  // This nested message allows specifying a time window to filter tasks that were
+  // updated within that period. Both start and end times are optional - providing
+  // only a start time will return tasks updated after that time, while providing
+  // only an end time will return tasks updated before that time. Providing both
+  // creates a bounded time window.
+  message TimeRange {
+    // If provided, returns Tasks only updated after this time.
+    google.protobuf.Timestamp update_start_time = 1;
+    // If provided, returns Tasks only updated before this time.
+    google.protobuf.Timestamp update_end_time = 2;
+  }
+  // The type of filter.
+  enum FilterType {
+    FILTER_TYPE_INVALID = 0;
+    FILTER_TYPE_INCLUSIVE = 1;
+    FILTER_TYPE_EXCLUSIVE = 2;
+  }
+  // A filter that includes or excludes Tasks based on their status values.
+  //
+  // This nested message defines a list of statuses to filter by, along with whether
+  // the filter should include tasks with those statuses (FILTER_TYPE_INCLUSIVE) or
+  // exclude tasks with those statuses (FILTER_TYPE_EXCLUSIVE). This allows for
+  // queries such as "show only executing tasks" or "show all tasks except completed ones".
+  message StatusFilter {
+    // Statuses to be part of the filter.
+    repeated Status status = 1;
+    // The type of filter to apply.
+    FilterType filter_type = 2;
+  }
+  // If present matches Tasks with this parent Task ID.
+  // This is mutually exclusive with all other query parameters, i.e., either provide parent Task ID, or
+  //  any of the remaining parameters, but not both.
+  string parent_task_id = 1;
+  reserved 2;
+  // If set, returns results starting from the given page token.
+  string page_token = 3;
+  // Filters on provided status types in the filter.
+  StatusFilter status_filter = 4;
+  // If provided, only provides Tasks updated within the time range.
+  TimeRange update_time_range = 5;
+  // The filter for view of a Task.
+  // If not set, defaults to TASK_VIEW_MANAGER.
+  TaskView view = 6;
+  // If provided, returns Tasks that match this assignee.
+  Principal assignee = 7;
+  // A filter to stream tasks with either a URL in taskTypeURLs, or
+  //  a type that begins with the specified task_type_prefix.
+  // If no task_type filter is provided, all tasks will be streamed.
+  oneof task_type {
+    TaskTypeURLs task_type_urls = 8;
+    string task_type_prefix = 9;
+  }
+}
+
+message TaskTypeURLs {
+  repeated string task_type_urls = 1;
+}
+
+// Response containing tasks that match the query criteria.
+//
+// This message returns a list of Task objects that satisfy the filter conditions
+// specified in the request. When there are more matching tasks than can be returned
+// in a single response, a page_token is provided to retrieve the next batch in
+// a subsequent request. An empty tasks list with no page_token indicates that
+// there are no more matching tasks.
+message QueryTasksResponse {
+  // Tasks matching the Query Task request.
+  repeated Task tasks = 1;
+  // Page token to the next page of Tasks.
+  string page_token = 2;
+}
+
+// Request to update the status of an existing Task.
+//
+// This message contains a status update that includes the task's version information
+// and the new status details. The Task Manager uses optimistic concurrency control
+// to handle updates - the status_version in the request must match the current version
+// in the system, otherwise the update will be rejected. Each successful update
+// increments the task's status_version.
+message UpdateStatusRequest {
+  // The updated status.
+  StatusUpdate status_update = 1;
+}
+
+// Response returned after successfully updating a Task's status.
+//
+// This message contains the complete Task object with its updated status information,
+// incremented status_version, and any other fields that may have been modified as part
+// of the update. This provides a complete and current view of the Task after the
+// status change has been applied.
+message UpdateStatusResponse {
+  // The updated Task.
+  Task task = 1;
+}
+
+// Request to cancel a Task.
+//
+// This message initiates cancellation for the specified task.
+message CancelTaskRequest {
+  // The ID of the Task being cancelled.
+  string task_id = 1;
+  // Who or what is requesting to cancel this task.
+  Principal author = 2;
+}
+
+// The response to a request to cancel a task.
+//
+// This message returns the task after the cancellation has been processed.
+// The task might not be cancelled if the cancellation
+// request fails, for example, because the task was already in a terminal state.
+message CancelTaskResponse {
+  // The updated task, regardless of whether the cancellation request was confirmed or denied by the agent.
+  Task task = 1;
+}
+
+// Request to establish a streaming connection for receiving Tasks as an agent.
+//
+// This message defines the criteria for which tasks the agent wants to receive,
+// typically based on the agent's identity (through entity_ids). When an agent
+// establishes this connection, the Task Manager will stream relevant tasks
+// to that agent for execution, cancellation, or completion.
+message ListenAsAgentRequest {
+  reserved 2;
+  // The selector criteria to determine which Agent Tasks the agent receives
+  oneof agent_selector {
+    // The requesting agent will only receive Agent Tasks in the stream that have any of these specified entity ids as the task's assignee
+    EntityIds entity_ids = 1;
+  }
+  // The time interval, in milliseconds, that determines the frequency at which to send
+  // heartbeat events. If unset or set to 0, no heartbeat messages are sent.
+  uint32 heartbeat_interval_ms = 3;
+}
+
+// Response streamed to an agent containing task actions to perform.
+//
+// This message is streamed from Task Manager to agents and contains one of three
+// possible requests: execute a task, cancel a task, or complete a task. The agent
+// should process these requests according to its capabilities and report status
+// updates back to Task Manager using the UpdateStatus RPC.
+//
+// Multiple responses may be sent for different tasks, and the agent should maintain
+// the connection to receive ongoing task requests. The connection may also be used
+// for heartbeat messages to ensure the agent is still responsive.
+message ListenAsAgentResponse {
+  reserved 4, 5;
+  // The action for agent to execute
+  oneof request {
+    ExecuteRequest execute_request = 1;
+    CancelRequest cancel_request = 2;
+    CompleteRequest complete_request = 3;
+  }
+  // Heartbeat message signaling liveliness of the stream.
+  Heartbeat heartbeat = 6;
+}
+
+// The parameters for controlling the rate at which updates are sent for tasks.
+//
+// This message allows clients to specify rate limiting behavior for task updates
+// to prevent overwhelming systems with high-frequency updates. By setting a minimum
+// interval between updates for the same task, the system can down-sample updates
+// while still ensuring all critical state changes are delivered.
+message RateLimit {
+  // Specifies a minimum duration in milliseconds after an update for a given task before another one
+  // will be sent for the same task.
+  // A value of 0 is treated as unset. If set, value must be >= 250.
+  // Example: if set to 1000, and 4 events occur (ms since start) at T0, T500, T900, T2100, then
+  // event from T0 will be sent at T0, T500 will be dropped, T900 will be sent at minimum of T1000,
+  // and T2100 will be sent on time (2100)
+  // This will only limit updates, other events will be sent immediately, with a delete clearing anything held
+  uint32 update_per_task_limit_ms = 1;
+}
+
+// A heartbeat message used to maintain connection health in streaming RPCs.
+//
+// This message is sent periodically in streaming connections to confirm that
+// both parties are still active and the connection is healthy. It contains
+// a timestamp indicating when the heartbeat was generated, which can be used
+// to assess connection latency and ensure timeouts don't occur during periods
+// of inactivity.
+message Heartbeat {
+  // The time at which the Heartbeat was sent.
+  google.protobuf.Timestamp timestamp = 1;
+}
+
+// A wrapper for a collection of entity identifiers.
+//
+// This message encapsulates a list of entity IDs, typically used for agent selection
+// in task streaming requests. Agents use this to indicate which entities they are
+// responsible for, allowing Task Manager to route tasks to the appropriate agent
+// based on the task's assignee entity ID.
+message EntityIds {
+  repeated string entity_ids = 1;
+}
+
+// Request to establish a streaming connection for receiving task events.
+//
+// This message defines the filtering criteria for which tasks the client wants to receive
+// events for, along with rate limiting and heartbeat configurations.
+message StreamTasksRequest {
+  // Rate limit configuration for task update events.
+  RateLimit rate_limit = 1;
+  // Optional additional views of a Task.
+  // If not set, defaults to TASK_VIEW_MANAGER.
+  repeated TaskView views = 2;
+  // The time interval, in milliseconds, that determines the frequency at which to send
+  // heartbeat events. Defaults to 30000 (30 seconds).
+  uint32 heartbeat_interval_ms = 3;
+  // Optional flag to only include tasks created or updated after the stream is initiated,
+  // and not any previous preexisting tasks.
+  // If unset or false, the stream will include any new tasks and task updates, as well as
+  // all preexisting tasks.
+  bool exclude_preexisting_tasks = 4;
+  // Optional filter that only returns tasks with specific types. If not provided, all task
+  // types will be streamed.
+  oneof task_type {
+    TaskTypeURLs task_type_urls = 5;
+    string task_type_prefix = 6;
+  }
+  // If provided, returns tasks which have been updated since the given time.
+  google.protobuf.Timestamp update_start_time = 7;
+  // A filter for tasks with a specific parent task ID.
+  // Note: This filter is mutually exclusive with all other filter fields.
+  string parent_task_id = 8;
+  // A filter for tasks assigned to a specific principal.
+  Principal assignee = 9;
+  // Filters on provided status types in the filter.
+  QueryTasksRequest.StatusFilter status_filter = 10;
+  reserved 11, 12;
+}
+
+// Response streamed to clients containing task events or heartbeats.
+//
+// Each message in the stream contains either a heartbeat to maintain connection health,
+// or a task event indicating a change in task state. The TaskEvent includes the task_view
+// field indicating which view perspective the task represents.
+message StreamTasksResponse {
+  // Task event associated with the streaming request.
+  TaskEvent task_event = 1;
+  // Heartbeat message signaling liveliness of the stream.
+  Heartbeat heartbeat = 2;
+}
+
+// Request to establish a stream for receiving manual control frames.
+//
+// This message is sent by agents to Task Manager to subscribe to control
+// frames for a specific manual control task. The agent opens this stream
+// before setting the task status to `STATUS_EXECUTING` to ensure readiness.
+message ListenForManualControlFramesRequest {
+  // The task ID of the manual control task the agent listens for.
+  string task_id = 1;
+}
+
+// Response message streamed to agents in the `ListenForManualControlFrames` RPC.
+//
+// Each message on the stream contains a single manual control frame forwarded from
+// a client's `SendManualControlFrames` stream. The frame includes epoch and sequence
+// metadata for handling concurrent control and detecting stale connections.
+message ListenForManualControlFramesResponse {
+  // The manual control frame. Contains the control instructions and sequencing metadata.
+  ManualControlFrame frame = 1;
+}

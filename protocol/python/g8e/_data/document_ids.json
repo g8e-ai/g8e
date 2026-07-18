@@ -1,0 +1,13 @@
+{
+  "description": "Canonical document IDs used throughout the platform for identifying documents in the governance system.",
+  "document_ids": {
+    "platform_settings": {
+      "_go_const": "DocIDPlatformSettings",
+      "value": "platform_settings"
+    },
+    "user_settings_prefix": {
+      "_go_const": "DocIDUserSettingsPrefix",
+      "value": "user_settings_"
+    }
+  }
+}

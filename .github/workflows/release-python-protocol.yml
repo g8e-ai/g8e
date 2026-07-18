@@ -130,7 +130,14 @@ jobs:
           else
             source testenv/bin/activate
           fi
-          python -c "from g8e.constants import EVENTS, STATUS, ComponentName; print('Constants OK')"
-          python -c "from g8e.models import RequestContext, PlatformSettings; print('Models OK')"
+          python -c "from g8e.constants import EVENTS, STATUS, COLLECTIONS, KV, CHANNELS, INTENTS, PROMPTS, ComponentName; \
+              assert len(EVENTS) > 0, 'EVENTS empty'; \
+              assert len(COLLECTIONS) > 0, 'COLLECTIONS empty'; \
+              assert len(KV) > 0, 'KV empty'; \
+              assert len(CHANNELS) > 0, 'CHANNELS empty'; \
+              assert len(INTENTS) > 0, 'INTENTS empty'; \
+              assert len(PROMPTS) > 0, 'PROMPTS empty'; \
+              print('All constants OK')"
+          python -c "from g8e.models import RequestContext, PlatformSettings, GovernanceEnvelope, compute_transaction_hash; print('Models OK')"
           python -c "import g8e.enums; print('Enums OK')"
 

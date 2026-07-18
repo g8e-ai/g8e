@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-07-15
-Version: v1.5.2
+Last Updated: 2026-07-18
+Version: v1.5.6
 
 ---
 
@@ -305,18 +305,18 @@ Both services use the root `Dockerfile` for image builds. The gateway exposes po
 
 ## MCP Agent Integration
 
-g8e integrates with popular AI agent binaries (Claude, Cursor, Devin, etc.) to provide governed MCP tool access.
+g8e integrates with popular AI agent binaries (Claude Code, Codex, Goose, Gemini CLI) to provide governed MCP tool access.
 
 ### Launch an agent with governance
 
 Launch an agent with native tools disabled, forcing all I/O through the g8e MCP pipeline:
 
 ```bash
-# Launch Claude with L1-L5 governance
+# Launch Claude Code with L1-L5 governance
 ./g8e mcp agent run claude
 
-# Launch Cursor with g8e MCP configuration
-./g8e mcp agent run cursor
+# Launch Goose with g8e MCP configuration
+./g8e mcp agent run goose
 ```
 
 ### List supported agents

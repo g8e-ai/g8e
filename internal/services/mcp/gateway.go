@@ -1197,6 +1197,11 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 		resultSummary = "completed"
 	}
 
+	// Scrub downstream MCP output to prevent sensitive data leakage
+	if g.scrubbingService != nil {
+		resultSummary = g.scrubbingService.ScrubText(resultSummary)
+	}
+
 	// Audit downstream MCP call execution
 	if g.auditStore != nil {
 		event := &storage.Event{

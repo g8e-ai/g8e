@@ -1,0 +1,168 @@
+{
+  "headers": {
+    "Accept": {
+      "_go_const": "HeaderAccept",
+      "value": "Accept"
+    },
+    "AcceptLanguage": {
+      "_go_const": "HeaderAcceptLanguage",
+      "value": "Accept-Language"
+    },
+    "AccessControlAllowCredentials": {
+      "_go_const": "HeaderAccessControlAllowCredentials",
+      "value": "Access-Control-Allow-Credentials"
+    },
+    "AccessControlAllowOrigin": {
+      "_go_const": "HeaderAccessControlAllowOrigin",
+      "value": "Access-Control-Allow-Origin"
+    },
+    "AccessControlRequestHeaders": {
+      "_go_const": "HeaderAccessControlRequestHeaders",
+      "value": "Access-Control-Request-Headers"
+    },
+    "AccessControlRequestMethod": {
+      "_go_const": "HeaderAccessControlRequestMethod",
+      "value": "Access-Control-Request-Method"
+    },
+    "Authorization": {
+      "_go_const": "HeaderAuthorization",
+      "value": "Authorization"
+    },
+    "BoundOperators": {
+      "_go_const": "HeaderBoundOperators",
+      "value": "X-G8E-Bound-Operators"
+    },
+    "CLISessionID": {
+      "_go_const": "HeaderCLISessionID",
+      "value": "X-G8E-CLI-Session-ID"
+    },
+    "CacheControl": {
+      "_go_const": "HeaderCacheControl",
+      "value": "Cache-Control"
+    },
+    "CaseID": {
+      "_go_const": "HeaderCaseID",
+      "value": "X-G8E-Case-ID"
+    },
+    "ContentDisposition": {
+      "_go_const": "HeaderContentDisposition",
+      "value": "Content-Disposition"
+    },
+    "ContentLanguage": {
+      "_go_const": "HeaderContentLanguage",
+      "value": "Content-Language"
+    },
+    "ContentLength": {
+      "_go_const": "HeaderContentLength",
+      "value": "Content-Length"
+    },
+    "ContentType": {
+      "_go_const": "HeaderContentType",
+      "value": "Content-Type"
+    },
+    "Cookie": {
+      "_go_const": "HeaderCookie",
+      "value": "Cookie"
+    },
+    "ExecutionID": {
+      "_go_const": "HeaderExecutionID",
+      "value": "X-G8E-Execution-ID"
+    },
+    "InvestigationID": {
+      "_go_const": "HeaderInvestigationID",
+      "value": "X-G8E-Investigation-ID"
+    },
+    "LastEventID": {
+      "_go_const": "HeaderLastEventID",
+      "value": "Last-Event-ID"
+    },
+    "OperatorID": {
+      "_go_const": "HeaderOperatorID",
+      "value": "X-G8E-Operator-ID"
+    },
+    "OperatorSessionID": {
+      "_go_const": "HeaderOperatorSessionID",
+      "value": "X-G8E-Operator-Session-ID"
+    },
+    "OrganizationID": {
+      "_go_const": "HeaderOrganizationID",
+      "value": "X-G8E-Organization-ID"
+    },
+    "Pragma": {
+      "_go_const": "HeaderPragma",
+      "value": "Pragma"
+    },
+    "RequestID": {
+      "_go_const": "HeaderRequestID",
+      "value": "X-G8E-Request-ID"
+    },
+    "RequestedWith": {
+      "_go_const": "HeaderRequestedWith",
+      "value": "X-Requested-With"
+    },
+    "SetCookie": {
+      "_go_const": "HeaderSetCookie",
+      "value": "Set-Cookie"
+    },
+    "SourceComponent": {
+      "_go_const": "HeaderSourceComponent",
+      "value": "X-G8E-Source-Component"
+    },
+    "SystemFingerprint": {
+      "_go_const": "HeaderSystemFingerprint",
+      "value": "X-G8E-System-Fingerprint"
+    },
+    "TaskID": {
+      "_go_const": "HeaderTaskID",
+      "value": "X-G8E-Task-ID"
+    },
+    "UserAgent": {
+      "_go_const": "HeaderUserAgent",
+      "value": "User-Agent"
+    },
+    "UserID": {
+      "_go_const": "HeaderUserID",
+      "value": "X-G8E-User-ID"
+    },
+    "WebSessionID": {
+      "_go_const": "HeaderWebSessionID",
+      "value": "X-G8E-Web-Session-ID"
+    },
+    "XAccelBuffering": {
+      "_go_const": "HeaderXAccelBuffering",
+      "value": "X-Accel-Buffering"
+    },
+    "XContentTypeOptions": {
+      "_go_const": "HeaderXContentTypeOptions",
+      "value": "X-Content-Type-Options"
+    },
+    "XForwardedFor": {
+      "_go_const": "HeaderXForwardedFor",
+      "value": "X-Forwarded-For"
+    },
+    "XForwardedHost": {
+      "_go_const": "HeaderXForwardedHost",
+      "value": "X-Forwarded-Host"
+    },
+    "XForwardedProto": {
+      "_go_const": "HeaderXForwardedProto",
+      "value": "X-Forwarded-Proto"
+    },
+    "XFrameOptions": {
+      "_go_const": "HeaderXFrameOptions",
+      "value": "X-Frame-Options"
+    },
+    "XProxyOrganizationID": {
+      "_go_const": "HeaderXProxyOrganizationID",
+      "value": "X-Proxy-Organization-Id"
+    },
+    "XProxyUserID": {
+      "_go_const": "HeaderXProxyUserID",
+      "value": "X-Proxy-User-Id"
+    },
+    "XRequestTimestamp": {
+      "_go_const": "HeaderXRequestTimestamp",
+      "value": "X-Request-Timestamp"
+    }
+  }
+}

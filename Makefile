@@ -178,6 +178,18 @@ help:
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean         Remove all build artifacts and runtime state"
+	@echo ""
+	@echo "Python Protocol:"
+	@echo "  python-build  Copy constants and build the Python protocol package"
+
+.PHONY: python-build
+python-build:
+	@echo "Building Python protocol package..."
+	@mkdir -p protocol/python/g8e/_data
+	@cp protocol/constants/*.json protocol/python/g8e/_data/
+	@cp -r protocol/constants/doctrine protocol/python/g8e/_data/
+	@cd protocol/python && python -m build
+	@echo "Python package built. Check protocol/python/dist/"
 
 # =============================================================================
 # PROTOCOL GENERATION

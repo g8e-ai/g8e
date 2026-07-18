@@ -723,7 +723,11 @@ func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payl
 		return nil, nil
 
 	default:
-		return nil, constants.ErrTxUnknownActionType
+		// Known action type without a typed proto decode case (e.g.
+		// adapter-specific action types). Treat payload as raw bytes,
+		// same as INVESTIGATION_CREATE. Unknown action types are
+		// rejected before reaching this function (knownActionTypes check).
+		return nil, nil
 	}
 	if err := proto.Unmarshal(payload, msg); err != nil {
 		return nil, err

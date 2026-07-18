@@ -45,12 +45,13 @@ func authCmd() *cobra.Command {
 }
 
 func enrollCmd() *cobra.Command {
-	return enrollCmdWithConfig(loadConfig, newFileSvc)
+	return enrollCmdWithConfig(loadConfig, newFileSvc, auth.CheckOperatorRunning)
 }
 
 func enrollCmdWithConfig(
 	configLoader func(string) (*config.Config, error),
 	fileSvcFactory func() (fs.RuntimeFileService, error),
+	checkOperatorRunning func(*config.Config) error,
 ) *cobra.Command {
 	var useTPM bool
 
@@ -68,7 +69,7 @@ The Gateway must already be running (use './g8e gw start' first).`,
 				return err
 			}
 
-			if err := auth.CheckOperatorRunning(cfg); err != nil {
+			if err := checkOperatorRunning(cfg); err != nil {
 				return err
 			}
 
