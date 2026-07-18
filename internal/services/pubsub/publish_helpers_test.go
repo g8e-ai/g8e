@@ -569,7 +569,7 @@ func TestExtractContentText(t *testing.T) {
 	t.Run("RestoreFileResult returns formatted string", func(t *testing.T) {
 		t.Parallel()
 		payload := &operatorv1.RestoreFileResult{
-			FilePath:  "/etc/hosts",
+			FilePath:   "/etc/hosts",
 			CommitHash: "abc123",
 		}
 		result := extractContentText(payload)
