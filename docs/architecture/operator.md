@@ -4,8 +4,8 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-07-14
-Version: v1.5.1
+Last Updated: 2026-07-18
+Version: v1.5.6
 
 The **g8e Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
@@ -185,7 +185,7 @@ Configure your AI client to connect to the Gateway's universal HTTP MCP endpoint
 
 ```bash
 # Generate MCP configuration for a specific agent
-./g8e mcp agent show cursor
+./g8e mcp agent show claude
 
 # The command outputs JSON configurations for three transport modes:
 #   g8e.local (mTLS), IP Address (mTLS), and Stdio Transport
@@ -194,7 +194,7 @@ Configure your AI client to connect to the Gateway's universal HTTP MCP endpoint
 
 **Protocol Integration:**
 - **All Clients**: Use the universal HTTP endpoint with mTLS authentication
-- **Supported Agents (Cursor, Devin, Claude Code, Codex, VS Code, Continue, Aider, Codeium, Tabby, Ollama, Gemini, Goose)**: Configure MCP client with HTTP transport
+- **Supported Agents (Claude Code, Codex, Goose, Gemini CLI)**: Configure MCP client with HTTP transport
 - **Custom BYO Clients**: Use HTTP MCP or A2A protocol endpoints
 
 ### 4. Test with a Simple Mutation
