@@ -7,6 +7,7 @@ import pytest
 from g8e.constants import StrEnum
 import g8e.enums
 from g8e.enums import _build_enum, _build_event_type_enum, _to_pascal, _pascal_to_screaming_snake, _to_snake
+from g8e.constants import CHANNELS, INTENTS, PROMPTS, COLLECTIONS, KV
 
 
 class TestNameConversions:
@@ -122,3 +123,76 @@ class TestDynamicAttributeAccess:
         names = dir(g8e.enums)
         assert "EventType" in names
         assert "ActionStatus" in names
+        assert "Channel" in names
+        assert "Intent" in names
+        assert "Prompt" in names
+        assert "Collection" in names
+        assert "KVKey" in names
+        assert "SessionType" in names
+
+
+class TestExtraEnumGeneration:
+    """Verify that non-STATUS constant categories produce valid enums."""
+
+    def test_channel_enum_has_members(self):
+        cls = g8e.enums.Channel
+        members = list(cls)
+        assert len(members) == len(CHANNELS["channels"])
+
+    def test_channel_enum_values_preserve_wire_format(self):
+        cls = g8e.enums.Channel
+        assert cls.GOVERNANCE == "governance"
+        assert cls.SSE_EVENT == "sse_event"
+
+    def test_intent_enum_has_members(self):
+        cls = g8e.enums.Intent
+        members = list(cls)
+        assert len(members) == len(INTENTS["intents"])
+
+    def test_intent_enum_values_preserve_wire_format(self):
+        cls = g8e.enums.Intent
+        assert cls.APIGATEWAY_DISCOVERY == "apigateway_discovery"
+
+    def test_prompt_enum_has_members(self):
+        cls = g8e.enums.Prompt
+        members = list(cls)
+        assert len(members) == len(PROMPTS["prompts"])
+
+    def test_prompt_enum_values_preserve_wire_format(self):
+        cls = g8e.enums.Prompt
+        assert cls.SECTION_SAFETY == "safety"
+
+    def test_collection_enum_has_members(self):
+        cls = g8e.enums.Collection
+        members = list(cls)
+        assert len(members) == len(COLLECTIONS["collections"])
+
+    def test_collection_enum_values_preserve_wire_format(self):
+        cls = g8e.enums.Collection
+        assert cls.CASES == "cases"
+        assert cls.ACCOUNT_LOCKS == "account_locks"
+
+    def test_kv_key_enum_has_members(self):
+        cls = g8e.enums.KVKey
+        members = list(cls)
+        assert len(members) == len(KV["kv_keys"])
+
+    def test_kv_key_enum_values_preserve_wire_format(self):
+        cls = g8e.enums.KVKey
+        assert cls.CACHE_PREFIX == "g8e"
+        assert cls.SESSION_WEB == "g8e:sessions:{session.type}:{session.id}"
+
+    def test_session_type_enum_has_members(self):
+        cls = g8e.enums.SessionType
+        members = list(cls)
+        assert len(members) == len(KV["session_types"])
+
+    def test_session_type_enum_values_preserve_wire_format(self):
+        cls = g8e.enums.SessionType
+        assert cls.WEB == "web"
+        assert cls.OPERATOR == "operator"
+
+    def test_all_extra_enums_are_str_enum(self):
+        for name in ("Channel", "Intent", "Prompt", "Collection", "KVKey", "SessionType"):
+            cls = getattr(g8e.enums, name)
+            assert issubclass(cls, StrEnum), f"{name} should be StrEnum"

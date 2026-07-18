@@ -14,6 +14,7 @@
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -80,6 +81,39 @@ except ImportError:
     from enum import Enum
     class StrEnum(str, Enum):
         pass
+
+
+def collection(name: str) -> str:
+    """Get the wire value for a collection by key. e.g. collection("cases") -> "cases" """
+    return COLLECTIONS["collections"][name]["value"]
+
+
+def channel(name: str) -> str:
+    """Get the wire value for a channel by key."""
+    return CHANNELS["channels"][name]["value"]
+
+
+def intent(name: str) -> str:
+    """Get the wire value for an intent by key."""
+    return INTENTS["intents"][name]["value"]
+
+
+def prompt(name: str) -> str:
+    """Get the wire value for a prompt section by key."""
+    return PROMPTS["prompts"][name]["value"]
+
+
+def kv_key(name: str, **kwargs: str) -> str:
+    """Get a formatted KV key. e.g. kv_key("SessionWeb", **{"session.type": "web", "session.id": "abc"}) -> "g8e:sessions:web:abc" """
+    template = KV["kv_keys"][name]["value"]
+    if not kwargs:
+        return template
+    return re.sub(r"\{([^}]+)\}", lambda m: kwargs[m.group(1)], template)
+
+
+def kv_session_type(name: str) -> str:
+    """Get the wire value for a session type."""
+    return KV["session_types"][name]["value"]
 
 # Helper to get Component names (formerly ComponentName enum)
 class ComponentName(StrEnum):

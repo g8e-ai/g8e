@@ -238,8 +238,8 @@ Filesystem paths for Operator data, certificates, ledger, system paths, and conf
 - Runtime directories: `RuntimeDirname` (`.g8e`), `DataDirname`, `VaultDirname`, `SecretsDirname`, `LedgerDirname`, `PidDirname`, `DocsDirname`, `ProtocolDirname`, `ProtocolConstantsDirname`, `ProtocolModelsDirname`, `BinDirname`, `LogDirname`
 - Ledger directories: `FilesDirname`, `SessionsDirname`, `GitDirname`, `GitignoreFilename`, `GoModFilename`
 - SSH config: `SshConfigFilename`, `SshDirname`, `SshConfigBasename`, `SshKnownHostsBasename`, `SshKeyEd25519`, `SshKeyECDSA`, `SshKeyRSA`
-- Agent config directories: `AgentConfigDirCursor`, `AgentConfigDirDevin`, `AgentConfigDirGemini`, `AgentConfigDirGoose`, `AgentConfigDirVSCode`, `AgentConfigDirCodeium`, `AgentConfigDirTabby`, `AgentConfigDirContinue`
-- Agent config files: `AgentConfigFileMCP`, `AgentConfigFileMCPDevin`, `AgentConfigFileSettings`, `AgentConfigFileAider`
+- Agent config directories: `AgentConfigDirGemini`, `AgentConfigDirGoose`
+- Agent config files: `AgentConfigFileMCP`, `AgentConfigFileSettings`, `AgentConfigFileGooseYAML`
 - File permission modes: `PermDirPrivate` (0700), `PermDirStandard` (0755), `PermFilePrivate` (0600), `PermFilePublic` (0644)
 - Filesystem listing limits: `FsListMaxDepth` (3), `FsListDefaultDepth` (0), `FsListMaxEntries` (500), `FsListDefaultEntries` (100), `FsListBatchSize` (100)
 - Grep limits: `FsGrepDefaultMaxMatches` (100), `FsGrepMaxMatches` (500), `FsGrepScannerInitialBufSize` (64 KiB), `FsGrepScannerMaxBufSize` (1 MiB)
@@ -305,7 +305,7 @@ Agent persona and triage classification constants:
 - `TriageIntent` (typed): `TriageIntentInformation`, `TriageIntentAction`, `TriageIntentUnknown`
 - `TriagePosture` (typed): `TriagePostureNormal`, `TriagePostureEscalated`, `TriagePostureAdversarial`, `TriagePostureConfused`
 - `AgentName` (typed): `AgentNameSage` (`sage`), `AgentNameDash` (`dash`)
-- `AgentBinary` (typed): `AgentBinaryClaude`, `AgentBinaryCodex`, `AgentBinaryCursor`, `AgentBinaryDevin`, `AgentBinaryVSCode`, `AgentBinaryContinue`, `AgentBinaryContinueAlias` (`cn`), `AgentBinaryAider`, `AgentBinaryCodeium`, `AgentBinaryTabby`, `AgentBinaryOllama`, `AgentBinaryGemini`, `AgentBinaryGoose`, `AgentBinaryGeneric`
+- `AgentBinary` (typed): `AgentBinaryClaude`, `AgentBinaryCodex`, `AgentBinaryGemini`, `AgentBinaryGoose`
 
 ### RPC Errors (`rpc_errors.go`)
 

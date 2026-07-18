@@ -1,0 +1,37 @@
+{
+  "description": "Exit codes for the g8e Operator. These enable the g8e script to provide accurate error messages.",
+  "exit_codes": {
+    "ExitSuccess": {
+      "value": 0,
+      "description": "Indicates the Operator exited normally"
+    },
+    "ExitGeneralError": {
+      "value": 1,
+      "description": "Default error code for unspecified errors"
+    },
+    "ExitAuthFailure": {
+      "value": 2,
+      "description": "Authentication with g8e failed (deleted Operator slot, invalid credentials)"
+    },
+    "ExitPermissionDenied": {
+      "value": 3,
+      "description": "Filesystem permission error (cannot create directories, cannot write files)"
+    },
+    "ExitNetworkError": {
+      "value": 4,
+      "description": "Network connectivity issue (cannot reach g8e servers, DNS failure, timeout)"
+    },
+    "ExitConfigError": {
+      "value": 5,
+      "description": "Configuration error (missing required config, invalid config values)"
+    },
+    "ExitStorageError": {
+      "value": 6,
+      "description": "Storage/database initialization error (SQLite init failed, git init failed, disk full)"
+    },
+    "ExitCertTrustFailure": {
+      "value": 7,
+      "description": "Operator cannot verify the server's TLS certificate. This is a non-retryable condition caused by a stale embedded CA certificate. The Operator must self-terminate to prevent noisy retry loops against the server. Resolution: download a new Node binary with updated certificates."
+    }
+  }
+}

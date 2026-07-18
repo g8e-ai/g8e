@@ -1,0 +1,2792 @@
+{
+  "status": {
+    "action_status": {
+      "cancelled": {
+        "_go_const": "ActionStatusCancelled",
+        "_python_const": "CANCELLED",
+        "value": "cancelled"
+      },
+      "completed": {
+        "_go_const": "ActionStatusCompleted",
+        "_python_const": "COMPLETED",
+        "value": "completed"
+      },
+      "failed": {
+        "_go_const": "ActionStatusFailed",
+        "_python_const": "FAILED",
+        "value": "failed"
+      },
+      "timeout": {
+        "_go_const": "ActionStatusTimeout",
+        "_python_const": "TIMEOUT",
+        "value": "timeout"
+      },
+      "user.cancelled": {
+        "_go_const": "ActionStatusUserCancelled",
+        "_python_const": "USER_CANCELLED",
+        "value": "user.cancelled"
+      }
+    },
+    "action_type": {
+      "A2A_CALL": {
+        "_go_const": "ActionTypeA2aCall",
+        "_mutation": true,
+        "_python_const": "A2A_CALL",
+        "value": "A2A_CALL"
+      },
+      "CANCEL": {
+        "_go_const": "ActionTypeCancel",
+        "_mutation": true,
+        "_python_const": "CANCEL",
+        "value": "CANCEL"
+      },
+      "EVAL_ANSWER": {
+        "_go_const": "ActionTypeEvalAnswer",
+        "_python_const": "EVAL_ANSWER",
+        "value": "EVAL_ANSWER"
+      },
+      "EXECUTE_BASH": {
+        "_go_const": "ActionTypeExecuteBash",
+        "_mutation": true,
+        "_python_const": "EXECUTE_BASH",
+        "value": "EXECUTE_BASH"
+      },
+      "FETCH_FILE_DIFF": {
+        "_go_const": "ActionTypeFetchFileDiff",
+        "_python_const": "FETCH_FILE_DIFF",
+        "value": "FETCH_FILE_DIFF"
+      },
+      "FETCH_FILE_HISTORY": {
+        "_go_const": "ActionTypeFetchFileHistory",
+        "_python_const": "FETCH_FILE_HISTORY",
+        "value": "FETCH_FILE_HISTORY"
+      },
+      "FETCH_HISTORY": {
+        "_go_const": "ActionTypeFetchHistory",
+        "_python_const": "FETCH_HISTORY",
+        "value": "FETCH_HISTORY"
+      },
+      "FETCH_LOGS": {
+        "_go_const": "ActionTypeFetchLogs",
+        "_python_const": "FETCH_LOGS",
+        "value": "FETCH_LOGS"
+      },
+      "FILE_EDIT": {
+        "_go_const": "ActionTypeFileEdit",
+        "_mutation": true,
+        "_python_const": "FILE_EDIT",
+        "value": "FILE_EDIT"
+      },
+      "FS_GREP": {
+        "_go_const": "ActionTypeFsGrep",
+        "_python_const": "FS_GREP",
+        "value": "FS_GREP"
+      },
+      "FS_LIST": {
+        "_go_const": "ActionTypeFsList",
+        "_python_const": "FS_LIST",
+        "value": "FS_LIST"
+      },
+      "FS_READ": {
+        "_go_const": "ActionTypeFsRead",
+        "_python_const": "FS_READ",
+        "value": "FS_READ"
+      },
+      "HEARTBEAT": {
+        "_go_const": "ActionTypeHeartbeat",
+        "_python_const": "HEARTBEAT",
+        "value": "HEARTBEAT"
+      },
+      "INVESTIGATION_CREATE": {
+        "_go_const": "ActionTypeInvestigationCreate",
+        "_python_const": "INVESTIGATION_CREATE",
+        "value": "INVESTIGATION_CREATE"
+      },
+      "MCP_CALL": {
+        "_go_const": "ActionTypeMcpCall",
+        "_mutation": true,
+        "_python_const": "MCP_CALL",
+        "value": "MCP_CALL"
+      },
+      "MCP_PROMPT_GET": {
+        "_go_const": "ActionTypeMcpPromptGet",
+        "_python_const": "MCP_PROMPT_GET",
+        "value": "MCP_PROMPT_GET"
+      },
+      "MCP_PROMPT_LIST": {
+        "_go_const": "ActionTypeMcpPromptList",
+        "_python_const": "MCP_PROMPT_LIST",
+        "value": "MCP_PROMPT_LIST"
+      },
+      "MCP_RESOURCE_LIST": {
+        "_go_const": "ActionTypeMcpResourceList",
+        "_python_const": "MCP_RESOURCE_LIST",
+        "value": "MCP_RESOURCE_LIST"
+      },
+      "MCP_RESOURCE_READ": {
+        "_go_const": "ActionTypeMcpResourceRead",
+        "_python_const": "MCP_RESOURCE_READ",
+        "value": "MCP_RESOURCE_READ"
+      },
+      "PORT_CHECK": {
+        "_go_const": "ActionTypePortCheck",
+        "_python_const": "PORT_CHECK",
+        "value": "PORT_CHECK"
+      },
+      "RESTORE_FILE": {
+        "_go_const": "ActionTypeRestoreFile",
+        "_mutation": true,
+        "_python_const": "RESTORE_FILE",
+        "value": "RESTORE_FILE"
+      },
+      "SHUTDOWN": {
+        "_go_const": "ActionTypeShutdown",
+        "_mutation": true,
+        "_python_const": "SHUTDOWN",
+        "value": "SHUTDOWN"
+      }
+    },
+    "ai_source": {
+      "ai.terminal.anchored": {
+        "_go_const": "AISourceTerminalAnchored",
+        "_python_const": "TERMINAL_ANCHORED",
+        "value": "ai.terminal.anchored"
+      },
+      "ai.terminal.direct": {
+        "_go_const": "AISourceTerminalDirect",
+        "_python_const": "TERMINAL_DIRECT",
+        "value": "ai.terminal.direct"
+      },
+      "ai.tool.call": {
+        "_go_const": "AISourceToolCall",
+        "_python_const": "TOOL_CALL",
+        "value": "ai.tool.call"
+      }
+    },
+    "ai_task_id": {
+      "ai.agent.continue": {
+        "_go_const": "AITaskIDAgentContinue",
+        "_python_const": "AGENT_CONTINUE",
+        "value": "ai.agent.continue"
+      },
+      "ai.chat": {
+        "_go_const": "AITaskIDChat",
+        "_python_const": "CHAT",
+        "value": "ai.chat"
+      },
+      "ai.command": {
+        "_go_const": "AITaskIDCommand",
+        "_python_const": "COMMAND",
+        "value": "ai.command"
+      },
+      "ai.direct.command": {
+        "_go_const": "AITaskIDDirectCommand",
+        "_python_const": "DIRECT_COMMAND",
+        "value": "ai.direct.command"
+      },
+      "ai.fetch.file.diff": {
+        "_go_const": "AITaskIDFetchFileDiff",
+        "_python_const": "FETCH_FILE_DIFF",
+        "value": "ai.fetch.file.diff"
+      },
+      "ai.fetch.file.history": {
+        "_go_const": "AITaskIDFetchFileHistory",
+        "_python_const": "FETCH_FILE_HISTORY",
+        "value": "ai.fetch.file.history"
+      },
+      "ai.fetch.history": {
+        "_go_const": "AITaskIDFetchHistory",
+        "_python_const": "FETCH_HISTORY",
+        "value": "ai.fetch.history"
+      },
+      "ai.fetch.logs": {
+        "_go_const": "AITaskIDFetchLogs",
+        "_python_const": "FETCH_LOGS",
+        "value": "ai.fetch.logs"
+      },
+      "ai.file.edit": {
+        "_go_const": "AITaskIDFileEdit",
+        "_python_const": "FILE_EDIT",
+        "value": "ai.file.edit"
+      },
+      "ai.fs.list": {
+        "_go_const": "AITaskIDFsList",
+        "_python_const": "FS_LIST",
+        "value": "ai.fs.list"
+      },
+      "ai.fs.read": {
+        "_go_const": "AITaskIDFsRead",
+        "_python_const": "FS_READ",
+        "value": "ai.fs.read"
+      },
+      "ai.intent.grant": {
+        "_go_const": "AITaskIDIntentGrant",
+        "_python_const": "INTENT_GRANT",
+        "value": "ai.intent.grant"
+      },
+      "ai.intent.revoke": {
+        "_go_const": "AITaskIDIntentRevoke",
+        "_python_const": "INTENT_REVOKE",
+        "value": "ai.intent.revoke"
+      },
+      "ai.port.check": {
+        "_go_const": "AITaskIDPortCheck",
+        "_python_const": "PORT_CHECK",
+        "value": "ai.port.check"
+      },
+      "ai.recursive_grep": {
+        "_go_const": "AITaskIDRecursiveGrep",
+        "_python_const": "RECURSIVE_GREP",
+        "value": "ai.recursive_grep"
+      },
+      "ai.restore.file": {
+        "_go_const": "AITaskIDRestoreFile",
+        "_python_const": "RESTORE_FILE",
+        "value": "ai.restore.file"
+      },
+      "chat": {
+        "_go_const": "AITaskIdChat",
+        "_python_const": "CHAT",
+        "value": "ai.chat"
+      },
+      "case": {
+        "_go_const": "AITaskIdCase",
+        "_python_const": "CASE",
+        "value": "ai.case"
+      },
+      "memory": {
+        "_go_const": "AITaskIdMemory",
+        "_python_const": "MEMORY",
+        "value": "ai.memory"
+      },
+      "command": {
+        "_go_const": "AITaskIdCommand",
+        "_python_const": "COMMAND",
+        "value": "ai.command"
+      },
+      "command_execution": {
+        "_go_const": "AITaskIdCommandExecution",
+        "_python_const": "COMMAND_EXECUTION",
+        "value": "ai.command.execution"
+      },
+      "direct_command": {
+        "_go_const": "AITaskIdDirectCommand",
+        "_python_const": "DIRECT_COMMAND",
+        "value": "ai.direct.command"
+      },
+      "intent_grant": {
+        "_go_const": "AITaskIdIntentGrant",
+        "_python_const": "INTENT_GRANT",
+        "value": "ai.intent.grant"
+      },
+      "intent_revoke": {
+        "_go_const": "AITaskIdIntentRevoke",
+        "_python_const": "INTENT_REVOKE",
+        "value": "ai.intent.revoke"
+      },
+      "file_edit": {
+        "_go_const": "AITaskIdFileEdit",
+        "_python_const": "FILE_EDIT",
+        "value": "ai.file.edit"
+      },
+      "file_operation": {
+        "_go_const": "AITaskIdFileOperation",
+        "_python_const": "FILE_OPERATION",
+        "value": "ai.file.operation"
+      },
+      "fs_list": {
+        "_go_const": "AITaskIdFsList",
+        "_python_const": "FS_LIST",
+        "value": "ai.fs.list"
+      },
+      "recursive_grep": {
+        "_go_const": "AITaskIdRecursiveGrep",
+        "_python_const": "RECURSIVE_GREP",
+        "value": "ai.recursive.grep"
+      },
+      "port_check": {
+        "_go_const": "AITaskIdPortCheck",
+        "_python_const": "PORT_CHECK",
+        "value": "ai.port.check"
+      },
+      "agent_continue": {
+        "_go_const": "AITaskIdAgentContinue",
+        "_python_const": "AGENT_CONTINUE",
+        "value": "ai.agent.continue"
+      },
+      "investigation_query": {
+        "_go_const": "AITaskIdInvestigationQuery",
+        "_python_const": "INVESTIGATION_QUERY",
+        "value": "ai.investigation.query"
+      }
+    },
+    "approval.error.type": {
+      "approval.exception": {
+        "_go_const": "ApprovalErrorTypeApprovalException",
+        "_python_const": "APPROVAL_EXCEPTION",
+        "value": "approval.exception"
+      },
+      "approval.publish.failure": {
+        "_go_const": "ApprovalErrorTypeApprovalPublishFailure",
+        "_python_const": "APPROVAL_PUBLISH_FAILURE",
+        "value": "approval.publish.failure"
+      },
+      "approval.timeout": {
+        "_go_const": "ApprovalErrorTypeApprovalTimeout",
+        "_python_const": "APPROVAL_TIMEOUT",
+        "value": "approval.timeout"
+      },
+      "intent.approval.exception": {
+        "_go_const": "ApprovalErrorTypeIntentApprovalException",
+        "_python_const": "INTENT_APPROVAL_EXCEPTION",
+        "value": "intent.approval.exception"
+      },
+      "invalid.intent": {
+        "_go_const": "ApprovalErrorTypeInvalidIntent",
+        "_python_const": "INVALID_INTENT",
+        "value": "invalid.intent"
+      }
+    },
+    "approval_type": {
+      "agent.continue": {
+        "_go_const": "ApprovalTypeAgentContinue",
+        "_python_const": "AGENT_CONTINUE",
+        "value": "agent.continue"
+      },
+      "command": {
+        "_go_const": "ApprovalTypeCommand",
+        "_python_const": "COMMAND",
+        "value": "command"
+      },
+      "file.edit": {
+        "_go_const": "ApprovalTypeFileEdit",
+        "_python_const": "FILE_EDIT",
+        "value": "file.edit"
+      },
+      "intent": {
+        "_go_const": "ApprovalTypeIntent",
+        "_python_const": "INTENT",
+        "value": "intent"
+      },
+      "stream": {
+        "_go_const": "ApprovalTypeStream",
+        "_python_const": "STREAM",
+        "value": "stream"
+      }
+    },
+    "attachment.type": {
+      "image": {
+        "_go_const": "AttachmentTypeImage",
+        "_python_const": "IMAGE",
+        "value": "image"
+      },
+      "other": {
+        "_go_const": "AttachmentTypeOther",
+        "_python_const": "OTHER",
+        "value": "other"
+      },
+      "pdf": {
+        "_go_const": "AttachmentTypePdf",
+        "_python_const": "PDF",
+        "value": "pdf"
+      },
+      "text": {
+        "_go_const": "AttachmentTypeText",
+        "_python_const": "TEXT",
+        "value": "text"
+      }
+    },
+    "audit_event_source": {
+      "conversation": {
+        "_go_const": "AuditEventSourceConversation",
+        "_python_const": "CONVERSATION",
+        "value": "conversation"
+      }
+    },
+    "audit_event_type": {
+      "command.approved": {
+        "_go_const": "AuditEventTypeCommandApproved",
+        "_python_const": "COMMAND_APPROVED",
+        "value": "command.approved"
+      },
+      "command.denied": {
+        "_go_const": "AuditEventTypeCommandDenied",
+        "_python_const": "COMMAND_DENIED",
+        "value": "command.denied"
+      },
+      "command.executed": {
+        "_go_const": "AuditEventTypeCommandExecuted",
+        "_python_const": "COMMAND_EXECUTED",
+        "value": "command.executed"
+      },
+      "command.started": {
+        "_go_const": "AuditEventTypeCommandStarted",
+        "_python_const": "COMMAND_STARTED",
+        "value": "command.started"
+      },
+      "config.changed": {
+        "_go_const": "AuditEventTypeConfigChanged",
+        "_python_const": "CONFIG_CHANGED",
+        "value": "config.changed"
+      },
+      "escalation.approved": {
+        "_go_const": "AuditEventTypeEscalationApproved",
+        "_python_const": "ESCALATION_APPROVED",
+        "value": "escalation.approved"
+      },
+      "escalation.requested": {
+        "_go_const": "AuditEventTypeEscalationRequested",
+        "_python_const": "ESCALATION_REQUESTED",
+        "value": "escalation.requested"
+      },
+      "file.created": {
+        "_go_const": "AuditEventTypeFileCreated",
+        "_python_const": "FILE_CREATED",
+        "value": "file.created"
+      },
+      "file.deleted": {
+        "_go_const": "AuditEventTypeFileDeleted",
+        "_python_const": "FILE_DELETED",
+        "value": "file.deleted"
+      },
+      "file.modified": {
+        "_go_const": "AuditEventTypeFileModified",
+        "_python_const": "FILE_MODIFIED",
+        "value": "file.modified"
+      },
+      "g8e.bound": {
+        "_go_const": "AuditEventTypeG8eBound",
+        "_python_const": "G8E_BOUND",
+        "value": "g8e.bound"
+      },
+      "message": {
+        "_go_const": "AuditEventTypeMessage",
+        "_python_const": "MESSAGE",
+        "value": "message"
+      },
+      "permission.granted": {
+        "_go_const": "AuditEventTypePermissionGranted",
+        "_python_const": "PERMISSION_GRANTED",
+        "value": "permission.granted"
+      },
+      "permission.revoked": {
+        "_go_const": "AuditEventTypePermissionRevoked",
+        "_python_const": "PERMISSION_REVOKED",
+        "value": "permission.revoked"
+      },
+      "session.started": {
+        "_go_const": "AuditEventTypeSessionStarted",
+        "_python_const": "SESSION_STARTED",
+        "value": "session.started"
+      }
+    },
+    "audit_sse_event_type": {
+      "audit.complete": {
+        "_go_const": "AuditSseEventTypeComplete",
+        "_python_const": "COMPLETE",
+        "value": "audit.complete"
+      },
+      "audit.connected": {
+        "_go_const": "AuditSseEventTypeConnected",
+        "_python_const": "CONNECTED",
+        "value": "audit.connected"
+      },
+      "audit.error": {
+        "_go_const": "AuditSseEventTypeError",
+        "_python_const": "ERROR",
+        "value": "audit.error"
+      },
+      "audit.event": {
+        "_go_const": "AuditSseEventTypeEvent",
+        "_python_const": "EVENT",
+        "value": "audit.event"
+      },
+      "audit.metadata": {
+        "_go_const": "AuditSseEventTypeMetadata",
+        "_python_const": "METADATA",
+        "value": "audit.metadata"
+      }
+    },
+    "auth_audit_event_type": {
+      "auth_failed": {
+        "_go_const": "AuthAuditEventTypeAuthFailed",
+        "_python_const": "AUTH_FAILED",
+        "value": "auth_failed"
+      },
+      "auth_success": {
+        "_go_const": "AuthAuditEventTypeAuthSuccess",
+        "_python_const": "AUTH_SUCCESS",
+        "value": "auth_success"
+      }
+    },
+    "auth_audit_result": {
+      "failure": {
+        "_go_const": "AuthAuditResultFailure",
+        "_python_const": "FAILURE",
+        "value": "failure"
+      },
+      "invalid_api_key": {
+        "_go_const": "AuthAuditResultInvalidAPIKey",
+        "_python_const": "INVALID_API_KEY",
+        "value": "invalid_api_key"
+      },
+      "success": {
+        "_go_const": "AuthAuditResultSuccess",
+        "_python_const": "SUCCESS",
+        "value": "success"
+      }
+    },
+    "auth_method": {
+      "kv_pubsub": {
+        "_go_const": "AuthMethodKvPubSub",
+        "_python_const": "KV_PUBSUB",
+        "value": "kv_pubsub"
+      },
+      "session": {
+        "_go_const": "AuthMethodSession",
+        "_python_const": "SESSION",
+        "value": "session"
+      }
+    },
+    "auth_provider": {
+      "jwt": {
+        "_go_const": "AuthProviderJWT",
+        "_python_const": "JWT",
+        "value": "jwt"
+      },
+      "local": {
+        "_go_const": "AuthProviderLocal",
+        "_python_const": "LOCAL",
+        "value": "local"
+      },
+      "passkey": {
+        "_go_const": "AuthProviderPasskey",
+        "_python_const": "PASSKEY",
+        "value": "passkey"
+      }
+    },
+    "case_status": {
+      "Closed": {
+        "_go_const": "CaseStatusClosed",
+        "_python_const": "CLOSED",
+        "value": "Closed"
+      },
+      "Escalated": {
+        "_go_const": "CaseStatusEscalated",
+        "_python_const": "ESCALATED",
+        "value": "Escalated"
+      },
+      "HumanReview": {
+        "_go_const": "CaseStatusHumanReview",
+        "_python_const": "HUMAN_REVIEW",
+        "value": "HumanReview"
+      },
+      "InProgress": {
+        "_go_const": "CaseStatusInProgress",
+        "_python_const": "IN_PROGRESS",
+        "value": "InProgress"
+      },
+      "New": {
+        "_go_const": "CaseStatusNew",
+        "_python_const": "NEW",
+        "value": "New"
+      },
+      "Resolved": {
+        "_go_const": "CaseStatusResolved",
+        "_python_const": "RESOLVED",
+        "value": "Resolved"
+      },
+      "Triage": {
+        "_go_const": "CaseStatusTriage",
+        "_python_const": "TRIAGE",
+        "value": "Triage"
+      },
+      "WaitingForCustomer": {
+        "_go_const": "CaseStatusWaitingForCustomer",
+        "_python_const": "WAITING_FOR_CUSTOMER",
+        "value": "WaitingForCustomer"
+      }
+    },
+    "citation_layout": {
+      "120": {
+        "_go_const": "CitationLayoutSentenceLookaheadChars",
+        "_python_const": "SENTENCE_LOOKAHEAD_CHARS",
+        "value": "120"
+      },
+      "16": {
+        "_go_const": "CitationLayoutFaviconSizePx",
+        "_python_const": "FAVICON_SIZE_PX",
+        "value": "16"
+      },
+      "200": {
+        "_go_const": "CitationLayoutParagraphLookaheadChars",
+        "_python_const": "PARAGRAPH_LOOKAHEAD_CHARS",
+        "value": "200"
+      },
+      "360": {
+        "_go_const": "CitationLayoutHoverCardWidthPx",
+        "_python_const": "HOVER_CARD_WIDTH_PX",
+        "value": "360"
+      },
+      "60": {
+        "_go_const": "CitationLayoutHeadingSegmentMaxLength",
+        "_python_const": "HEADING_SEGMENT_MAX_LENGTH",
+        "value": "60"
+      },
+      "8": {
+        "_go_const": "CitationLayoutHoverCardViewportMarginPx",
+        "_python_const": "HOVER_CARD_VIEWPORT_MARGIN_PX",
+        "value": "8"
+      }
+    },
+    "cloud_subtype": {
+      "aws": {
+        "_go_const": "CloudSubtypeAWS",
+        "_python_const": "AWS",
+        "value": "aws"
+      },
+      "azure": {
+        "_go_const": "CloudSubtypeAzure",
+        "_python_const": "AZURE",
+        "value": "azure"
+      },
+      "gcp": {
+        "_go_const": "CloudSubtypeGCP",
+        "_python_const": "GCP",
+        "value": "gcp"
+      }
+    },
+    "command_category": {
+      "csv_whitelist": {
+        "_go_const": "CommandCategoryCSVWhitelist",
+        "_python_const": "CSV_WHITELIST",
+        "value": "csv_whitelist"
+      },
+      "network_diagnostics": {
+        "_go_const": "CommandCategoryNetworkDiagnostics",
+        "_python_const": "NETWORK_DIAGNOSTICS",
+        "value": "network_diagnostics"
+      },
+      "system_diagnostics": {
+        "_go_const": "CommandCategorySystemDiagnostics",
+        "_python_const": "SYSTEM_DIAGNOSTICS",
+        "value": "system_diagnostics"
+      }
+    },
+    "command_error_type": {
+      "agent.conflict": {
+        "_go_const": "CommandErrorTypeAgentConflict",
+        "_python_const": "AGENT_CONFLICT",
+        "value": "agent.conflict"
+      },
+      "approval.denied": {
+        "_go_const": "CommandErrorTypeApprovalDenied",
+        "_python_const": "APPROVAL_DENIED",
+        "value": "approval.denied"
+      },
+      "approval.timeout": {
+        "_go_const": "CommandErrorTypeApprovalTimeout",
+        "_python_const": "APPROVAL_TIMEOUT",
+        "value": "approval.timeout"
+      },
+      "binding.violation": {
+        "_go_const": "CommandErrorTypeBindingViolation",
+        "_python_const": "BINDING_VIOLATION",
+        "value": "binding.violation"
+      },
+      "blacklist.violation": {
+        "_go_const": "CommandErrorTypeBlacklistViolation",
+        "_python_const": "BLACKLIST_VIOLATION",
+        "value": "blacklist.violation"
+      },
+      "cloud.operator.required": {
+        "_go_const": "CommandErrorTypeCloudOperatorRequired",
+        "_python_const": "CLOUD_OPERATOR_REQUIRED",
+        "value": "cloud.operator.required"
+      },
+      "command.execution.failed": {
+        "_go_const": "CommandErrorTypeCommandExecutionFailed",
+        "_python_const": "COMMAND_EXECUTION_FAILED",
+        "value": "command.execution.failed"
+      },
+      "command.timeout": {
+        "_go_const": "CommandErrorTypeCommandTimeout",
+        "_python_const": "COMMAND_TIMEOUT",
+        "value": "command.timeout"
+      },
+      "configuration.error": {
+        "_go_const": "CommandErrorTypeConfigurationError",
+        "_python_const": "CONFIGURATION_ERROR",
+        "value": "configuration.error"
+      },
+      "execution.error": {
+        "_go_const": "CommandErrorTypeExecutionError",
+        "_python_const": "EXECUTION_ERROR",
+        "value": "execution.error"
+      },
+      "execution.failed": {
+        "_go_const": "CommandErrorTypeExecutionFailed",
+        "_python_const": "EXECUTION_FAILED",
+        "value": "execution.failed"
+      },
+      "fetch.file.diff.failed": {
+        "_go_const": "CommandErrorTypeFetchFileDiffFailed",
+        "_python_const": "FETCH_FILE_DIFF_FAILED",
+        "value": "fetch.file.diff.failed"
+      },
+      "fetch.file.history.failed": {
+        "_go_const": "CommandErrorTypeFetchFileHistoryFailed",
+        "_python_const": "FETCH_FILE_HISTORY_FAILED",
+        "value": "fetch.file.history.failed"
+      },
+      "fetch.history.failed": {
+        "_go_const": "CommandErrorTypeFetchHistoryFailed",
+        "_python_const": "FETCH_HISTORY_FAILED",
+        "value": "fetch.history.failed"
+      },
+      "fetch.logs.failed": {
+        "_go_const": "CommandErrorTypeFetchLogsFailed",
+        "_python_const": "FETCH_LOGS_FAILED",
+        "value": "fetch.logs.failed"
+      },
+      "fs.list.failed": {
+        "_go_const": "CommandErrorTypeFsListFailed",
+        "_python_const": "FS_LIST_FAILED",
+        "value": "fs.list.failed"
+      },
+      "fs.read.failed": {
+        "_go_const": "CommandErrorTypeFsReadFailed",
+        "_python_const": "FS_READ_FAILED",
+        "value": "fs.read.failed"
+      },
+      "g8e.resolution.error": {
+        "_go_const": "CommandErrorTypeG8eResolutionError",
+        "_python_const": "G8E_RESOLUTION_ERROR",
+        "value": "g8e.resolution.error"
+      },
+      "invalid.intent": {
+        "_go_const": "CommandErrorTypeInvalidIntent",
+        "_python_const": "INVALID_INTENT",
+        "value": "invalid.intent"
+      },
+      "missing.operator.id": {
+        "_go_const": "CommandErrorTypeMissingOperatorID",
+        "_python_const": "MISSING_OPERATOR_ID",
+        "value": "missing.operator.id"
+      },
+      "no.operators.available": {
+        "_go_const": "CommandErrorTypeNoOperatorsAvailable",
+        "_python_const": "NO_OPERATORS_AVAILABLE",
+        "value": "no.operators.available"
+      },
+      "operation.timeout": {
+        "_go_const": "CommandErrorTypeOperationTimeout",
+        "_python_const": "OPERATION_TIMEOUT",
+        "value": "operation.timeout"
+      },
+      "partial.iam.detach.failed": {
+        "_go_const": "CommandErrorTypePartialIAMDetachFailed",
+        "_python_const": "PARTIAL_IAM_DETACH_FAILED",
+        "value": "partial.iam.detach.failed"
+      },
+      "partial.iam.update.failed": {
+        "_go_const": "CommandErrorTypePartialIAMUpdateFailed",
+        "_python_const": "PARTIAL_IAM_UPDATE_FAILED",
+        "value": "partial.iam.update.failed"
+      },
+      "permission.denied": {
+        "_go_const": "CommandErrorTypePermissionDenied",
+        "_python_const": "PERMISSION_DENIED",
+        "value": "permission.denied"
+      },
+      "permission.error": {
+        "_go_const": "CommandErrorTypePermissionError",
+        "_python_const": "PERMISSION_ERROR",
+        "value": "permission.error"
+      },
+      "port.check.failed": {
+        "_go_const": "CommandErrorTypePortCheckFailed",
+        "_python_const": "PORT_CHECK_FAILED",
+        "value": "port.check.failed"
+      },
+      "pubsub.subscription.not.ready": {
+        "_go_const": "CommandErrorTypePubSubSubscriptionNotReady",
+        "_python_const": "PUBSUB_SUBSCRIPTION_NOT_READY",
+        "value": "pubsub.subscription.not.ready"
+      },
+      "restore.file.failed": {
+        "_go_const": "CommandErrorTypeRestoreFileFailed",
+        "_python_const": "RESTORE_FILE_FAILED",
+        "value": "restore.file.failed"
+      },
+      "risk.analysis.blocked": {
+        "_go_const": "CommandErrorTypeRiskAnalysisBlocked",
+        "_python_const": "RISK_ANALYSIS_BLOCKED",
+        "value": "risk.analysis.blocked"
+      },
+      "security.error": {
+        "_go_const": "CommandErrorTypeSecurityError",
+        "_python_const": "SECURITY_ERROR",
+        "value": "security.error"
+      },
+      "security.violation": {
+        "_go_const": "CommandErrorTypeSecurityViolation",
+        "_python_const": "SECURITY_VIOLATION",
+        "value": "security.violation"
+      },
+      "unknown.tool": {
+        "_go_const": "CommandErrorTypeUnknownTool",
+        "_python_const": "UNKNOWN_TOOL",
+        "value": "unknown.tool"
+      },
+      "user.cancelled": {
+        "_go_const": "CommandErrorTypeUserCancelled",
+        "_python_const": "USER_CANCELLED",
+        "value": "user.cancelled"
+      },
+      "user.denied": {
+        "_go_const": "CommandErrorTypeUserDenied",
+        "_python_const": "USER_DENIED",
+        "value": "user.denied"
+      },
+      "user.feedback": {
+        "_go_const": "CommandErrorTypeUserFeedback",
+        "_python_const": "USER_FEEDBACK",
+        "value": "user.feedback"
+      },
+      "validation.error": {
+        "_go_const": "CommandErrorTypeValidationError",
+        "_python_const": "VALIDATION_ERROR",
+        "value": "validation.error"
+      },
+      "whitelist.violation": {
+        "_go_const": "CommandErrorTypeWhitelistViolation",
+        "_python_const": "WHITELIST_VIOLATION",
+        "value": "whitelist.violation"
+      }
+    },
+    "command_status": {
+      "cancelled": {
+        "_go_const": "CommandStatusCancelled",
+        "_python_const": "CANCELLED",
+        "value": "cancelled"
+      },
+      "completed": {
+        "_go_const": "CommandStatusCompleted",
+        "_python_const": "COMPLETED",
+        "value": "completed"
+      },
+      "executing": {
+        "_go_const": "CommandStatusExecuting",
+        "_python_const": "EXECUTING",
+        "value": "executing"
+      },
+      "failed": {
+        "_go_const": "CommandStatusFailed",
+        "_python_const": "FAILED",
+        "value": "failed"
+      },
+      "output": {
+        "_go_const": "CommandStatusOutput",
+        "_python_const": "OUTPUT",
+        "value": "output"
+      },
+      "pending": {
+        "_go_const": "CommandStatusPending",
+        "_python_const": "PENDING",
+        "value": "pending"
+      },
+      "timeout": {
+        "_go_const": "CommandStatusTimeout",
+        "_python_const": "TIMEOUT",
+        "value": "timeout"
+      }
+    },
+    "component_name": {
+      "client": {
+        "_go_const": "ComponentNameClient",
+        "_python_const": "CLIENT",
+        "value": "client"
+      },
+      "g8eo": {
+        "_go_const": "ComponentNameG8EO",
+        "_python_const": "G8EO",
+        "value": "g8eo"
+      },
+      "g8eo-gateway": {
+        "_go_const": "ComponentNameG8EOGateway",
+        "_python_const": "G8EO_GATEWAY",
+        "value": "g8eo-gateway"
+      }
+    },
+    "component_status": {
+      "active": {
+        "_go_const": "ComponentStatusActive",
+        "_python_const": "ACTIVE",
+        "value": "active"
+      },
+      "error": {
+        "_go_const": "ComponentStatusError",
+        "_python_const": "ERROR",
+        "value": "error"
+      },
+      "inactive": {
+        "_go_const": "ComponentStatusInactive",
+        "_python_const": "INACTIVE",
+        "value": "inactive"
+      },
+      "maintenance": {
+        "_go_const": "ComponentStatusMaintenance",
+        "_python_const": "MAINTENANCE",
+        "value": "maintenance"
+      },
+      "degraded": {
+        "_go_const": "ComponentStatusDegraded",
+        "_python_const": "DEGRADED",
+        "value": "degraded"
+      }
+    },
+    "connection_state": {
+      "closed": {
+        "_go_const": "ConnectionStateClosed",
+        "_python_const": "CLOSED",
+        "value": "closed"
+      },
+      "connected": {
+        "_go_const": "ConnectionStateConnected",
+        "_python_const": "CONNECTED",
+        "value": "connected"
+      },
+      "connecting": {
+        "_go_const": "ConnectionStateConnecting",
+        "_python_const": "CONNECTING",
+        "value": "connecting"
+      },
+      "disconnected": {
+        "_go_const": "ConnectionStateDisconnected",
+        "_python_const": "DISCONNECTED",
+        "value": "disconnected"
+      },
+      "error": {
+        "_go_const": "ConnectionStateError",
+        "_python_const": "ERROR",
+        "value": "error"
+      },
+      "reconnecting": {
+        "_go_const": "ConnectionStateReconnecting",
+        "_python_const": "RECONNECTING",
+        "value": "reconnecting"
+      }
+    },
+    "conversation_status": {
+      "active": {
+        "_go_const": "ConversationStatusActive",
+        "_python_const": "ACTIVE",
+        "value": "active"
+      },
+      "completed": {
+        "_go_const": "ConversationStatusCompleted",
+        "_python_const": "COMPLETED",
+        "value": "completed"
+      },
+      "inactive": {
+        "_go_const": "ConversationStatusInactive",
+        "_python_const": "INACTIVE",
+        "value": "inactive"
+      }
+    },
+    "download_audit_event_type": {
+      "download_token_failed": {
+        "_go_const": "DownloadAuditEventTypeDownloadTokenFailed",
+        "_python_const": "DOWNLOAD_TOKEN_FAILED",
+        "value": "download_token_failed"
+      },
+      "download_token_success": {
+        "_go_const": "DownloadAuditEventTypeDownloadTokenSuccess",
+        "_python_const": "DOWNLOAD_TOKEN_SUCCESS",
+        "value": "download_token_success"
+      }
+    },
+    "environment": {
+      "dev": {
+        "_go_const": "EnvironmentDev",
+        "_python_const": "DEV",
+        "value": "dev"
+      },
+      "production": {
+        "_go_const": "EnvironmentProduction",
+        "_python_const": "PRODUCTION",
+        "value": "production"
+      },
+      "test": {
+        "_go_const": "EnvironmentTest",
+        "_python_const": "TEST",
+        "value": "test"
+      }
+    },
+    "escalation_risk": {
+      "critical": {
+        "_go_const": "EscalationRiskCritical",
+        "_python_const": "CRITICAL",
+        "value": "critical"
+      },
+      "high": {
+        "_go_const": "EscalationRiskHigh",
+        "_python_const": "HIGH",
+        "value": "high"
+      },
+      "low": {
+        "_go_const": "EscalationRiskLow",
+        "_python_const": "LOW",
+        "value": "low"
+      },
+      "medium": {
+        "_go_const": "EscalationRiskMedium",
+        "_python_const": "MEDIUM",
+        "value": "medium"
+      }
+    },
+    "execution_status": {
+      "cancel_requested": {
+        "_go_const": "ExecutionStatusCancelRequested",
+        "_python_const": "CANCEL_REQUESTED",
+        "value": "cancel_requested"
+      },
+      "cancelled": {
+        "_go_const": "ExecutionStatusCancelled",
+        "_python_const": "CANCELLED",
+        "value": "cancelled"
+      },
+      "completed": {
+        "_go_const": "ExecutionStatusCompleted",
+        "_python_const": "COMPLETED",
+        "value": "completed"
+      },
+      "denied": {
+        "_go_const": "ExecutionStatusDenied",
+        "_python_const": "DENIED",
+        "value": "denied"
+      },
+      "executing": {
+        "_go_const": "ExecutionStatusExecuting",
+        "_python_const": "EXECUTING",
+        "value": "executing"
+      },
+      "failed": {
+        "_go_const": "ExecutionStatusFailed",
+        "_python_const": "FAILED",
+        "value": "failed"
+      },
+      "feedback": {
+        "_go_const": "ExecutionStatusFeedback",
+        "_python_const": "FEEDBACK",
+        "value": "feedback"
+      },
+      "pending": {
+        "_go_const": "ExecutionStatusPending",
+        "_python_const": "PENDING",
+        "value": "pending"
+      },
+      "timeout": {
+        "_go_const": "ExecutionStatusTimeout",
+        "_python_const": "TIMEOUT",
+        "value": "timeout"
+      }
+    },
+    "file_operation": {
+      "create": {
+        "_go_const": "FileOperationCreate",
+        "_python_const": "CREATE",
+        "value": "create"
+      },
+      "delete": {
+        "_go_const": "FileOperationDelete",
+        "_python_const": "DELETE",
+        "value": "delete"
+      },
+      "insert": {
+        "_go_const": "FileOperationInsert",
+        "_python_const": "INSERT",
+        "value": "insert"
+      },
+      "patch": {
+        "_go_const": "FileOperationPatch",
+        "_python_const": "PATCH",
+        "value": "patch"
+      },
+      "read": {
+        "_go_const": "FileOperationRead",
+        "_python_const": "READ",
+        "value": "read"
+      },
+      "replace": {
+        "_go_const": "FileOperationReplace",
+        "_python_const": "REPLACE",
+        "value": "replace"
+      },
+      "update": {
+        "_go_const": "FileOperationUpdate",
+        "_python_const": "UPDATE",
+        "value": "update"
+      },
+      "write": {
+        "_go_const": "FileOperationWrite",
+        "_python_const": "WRITE",
+        "value": "write"
+      }
+    },
+    "g8e_action_type": {
+      "g8e.port.check": {
+        "_go_const": "G8eActionTypePortCheck",
+        "_python_const": "PORT_CHECK",
+        "value": "g8e.port.check"
+      },
+      "operator.command.executed": {
+        "_go_const": "G8eActionTypeCommandExecuted",
+        "_python_const": "COMMAND_EXECUTED",
+        "value": "operator.command.executed"
+      },
+      "operator.command.execution": {
+        "_go_const": "G8eActionTypeCommandExecution",
+        "_python_const": "COMMAND_EXECUTION",
+        "value": "operator.command.execution"
+      },
+      "operator.file.edit": {
+        "_go_const": "G8eActionTypeFileEdit",
+        "_python_const": "FILE_EDIT",
+        "value": "operator.file.edit"
+      },
+      "operator.file.list": {
+        "_go_const": "G8eActionTypeFileList",
+        "_python_const": "FILE_LIST",
+        "value": "operator.file.list"
+      },
+      "operator.file.read": {
+        "_go_const": "G8eActionTypeFileRead",
+        "_python_const": "FILE_READ",
+        "value": "operator.file.read"
+      }
+    },
+    "g8e_availability": {
+      "OFFLINE": {
+        "_go_const": "G8eAvailabilityOffline",
+        "_python_const": "OFFLINE",
+        "value": "OFFLINE"
+      },
+      "ONLINE": {
+        "_go_const": "G8eAvailabilityOnline",
+        "_python_const": "ONLINE",
+        "value": "ONLINE"
+      }
+    },
+    "gateway_mode": {
+      "gateway": {
+        "_go_const": "GatewayModeGateway",
+        "_python_const": "GATEWAY",
+        "value": "gateway"
+      },
+      "ok": {
+        "_go_const": "GatewayModeStatusOK",
+        "_python_const": "STATUS_OK",
+        "value": "ok"
+      }
+    },
+    "health_status": {
+      "healthy": {
+        "_go_const": "HealthStatusHealthy",
+        "_python_const": "HEALTHY",
+        "value": "healthy"
+      },
+      "unhealthy": {
+        "_go_const": "HealthStatusUnhealthy",
+        "_python_const": "UNHEALTHY",
+        "value": "unhealthy"
+      }
+    },
+    "heartbeat_type": {
+      "automatic": {
+        "_go_const": "HeartbeatTypeAutomatic",
+        "_python_const": "AUTOMATIC",
+        "value": "automatic"
+      },
+      "bootstrap": {
+        "_go_const": "HeartbeatTypeBootstrap",
+        "_python_const": "BOOTSTRAP",
+        "value": "bootstrap"
+      },
+      "requested": {
+        "_go_const": "HeartbeatTypeRequested",
+        "_python_const": "REQUESTED",
+        "value": "requested"
+      }
+    },
+    "history_actor": {
+      "": {
+        "_go_const": "HistoryActorNone",
+        "_python_const": "NONE",
+        "value": ""
+      },
+      "g8eo": {
+        "_go_const": "HistoryActorG8EO",
+        "_python_const": "G8EO",
+        "value": "g8eo"
+      },
+      "system": {
+        "_go_const": "HistoryActorSystem",
+        "_python_const": "SYSTEM",
+        "value": "system"
+      },
+      "user": {
+        "_go_const": "HistoryActorUser",
+        "_python_const": "USER",
+        "value": "user"
+      }
+    },
+    "infrastructure_status": {
+      "critical": {
+        "_go_const": "InfrastructureStatusCritical",
+        "_python_const": "CRITICAL",
+        "value": "critical"
+      },
+      "degraded": {
+        "_go_const": "InfrastructureStatusDegraded",
+        "_python_const": "DEGRADED",
+        "value": "degraded"
+      },
+      "healthy": {
+        "_go_const": "InfrastructureStatusHealthy",
+        "_python_const": "HEALTHY",
+        "value": "healthy"
+      },
+      "stable": {
+        "_go_const": "InfrastructureStatusStable",
+        "_python_const": "STABLE",
+        "value": "stable"
+      },
+      "unknown": {
+        "_go_const": "InfrastructureStatusUnknown",
+        "_python_const": "UNKNOWN",
+        "value": "unknown"
+      }
+    },
+    "investigation_status": {
+      "Closed": {
+        "_go_const": "InvestigationStatusClosed",
+        "_python_const": "CLOSED",
+        "value": "Closed"
+      },
+      "Escalated": {
+        "_go_const": "InvestigationStatusEscalated",
+        "_python_const": "ESCALATED",
+        "value": "Escalated"
+      },
+      "Open": {
+        "_go_const": "InvestigationStatusOpen",
+        "_python_const": "OPEN",
+        "value": "Open"
+      },
+      "Resolved": {
+        "_go_const": "InvestigationStatusResolved",
+        "_python_const": "RESOLVED",
+        "value": "Resolved"
+      }
+    },
+    "llm_models": {
+      "claude-haiku-4-5": {
+        "_go_const": "LLMsAnthropicClaude45Haiku",
+        "_python_const": "ANTHROPIC_CLAUDE_4_5_HAIKU",
+        "value": "claude-haiku-4-5"
+      },
+      "claude-opus-4-6": {
+        "_go_const": "LLMsAnthropicClaude46Opus",
+        "_python_const": "ANTHROPIC_CLAUDE_4_6_OPUS",
+        "value": "claude-opus-4-6"
+      },
+      "claude-sonnet-4-6": {
+        "_go_const": "LLMsAnthropicClaude46Sonnet",
+        "_python_const": "ANTHROPIC_CLAUDE_4_6_SONNET",
+        "value": "claude-sonnet-4-6"
+      },
+      "gemini-3-flash-preview": {
+        "_go_const": "LLMsGemini3Flash",
+        "_python_const": "GEMINI_3_FLASH",
+        "value": "gemini-3-flash-preview"
+      },
+      "gemini-3.1-flash-lite": {
+        "_go_const": "LLMsGemini31FlashLite",
+        "_python_const": "GEMINI_3_1_FLASH_LITE",
+        "value": "gemini-3.1-flash-lite"
+      },
+      "gemini-3.1-pro-preview": {
+        "_go_const": "LLMsGemini31Pro",
+        "_python_const": "GEMINI_3_1_PRO",
+        "value": "gemini-3.1-pro-preview"
+      },
+      "gemma4:26b": {
+        "_go_const": "LLMsOllamaGemma426b",
+        "_python_const": "OLLAMA_GEMMA4_26B",
+        "value": "gemma4:26b"
+      },
+      "gemma4:e2b": {
+        "_go_const": "LLMsOllamaGemma4E2b",
+        "_python_const": "OLLAMA_GEMMA4_E2B",
+        "value": "gemma4:e2b"
+      },
+      "gemma4:e4b": {
+        "_go_const": "LLMsOllamaGemma4E4b",
+        "_python_const": "OLLAMA_GEMMA4_E4B",
+        "value": "gemma4:e4b"
+      },
+      "glm-5.1:cloud": {
+        "_go_const": "LLMsOllamaGlm51",
+        "_python_const": "OLLAMA_GLM_5_1",
+        "value": "glm-5.1:cloud"
+      },
+      "google_gemma-4-E2B-it-Q4_K_M.gguf": {
+        "_go_const": "LLMsLlamacppGemma4E2b",
+        "_python_const": "LLAMACPP_GEMMA4_E2B",
+        "value": "google_gemma-4-E2B-it-Q4_K_M.gguf"
+      },
+      "gpt-5.4": {
+        "_go_const": "LLMsOpenaiGpt54",
+        "_python_const": "OPENAI_GPT_5_4",
+        "value": "gpt-5.4"
+      },
+      "gpt-5.4-mini": {
+        "_go_const": "LLMsOpenaiGpt54Mini",
+        "_python_const": "OPENAI_GPT_5_4_MINI",
+        "value": "gpt-5.4-mini"
+      },
+      "gpt-5.4-nano": {
+        "_go_const": "LLMsOpenaiGpt54Nano",
+        "_python_const": "OPENAI_GPT_5_4_NANO",
+        "value": "gpt-5.4-nano"
+      },
+      "gpt-5.4-pro": {
+        "_go_const": "LLMsOpenaiGpt54Pro",
+        "_python_const": "OPENAI_GPT_5_4_PRO",
+        "value": "gpt-5.4-pro"
+      },
+      "llama3.2:3b": {
+        "_go_const": "LLMsOllamaLlama323b",
+        "_python_const": "OLLAMA_LLAMA_3_2_3B",
+        "value": "llama3.2:3b"
+      },
+      "nemotron-3-nano:30b": {
+        "_go_const": "LLMsOllamaNemotron330b",
+        "_python_const": "OLLAMA_NEMOTRON_3_30B",
+        "value": "nemotron-3-nano:30b"
+      },
+      "qwen3.5:122b": {
+        "_go_const": "LLMsOllamaQwen35122b",
+        "_python_const": "OLLAMA_QWEN3_5_122B",
+        "value": "qwen3.5:122b"
+      },
+      "qwen3.5:2b": {
+        "_go_const": "LLMsOllamaQwen352b",
+        "_python_const": "OLLAMA_QWEN3_5_2B",
+        "value": "qwen3.5:2b"
+      }
+    },
+    "login_audit_event_type": {
+      "account_locked": {
+        "_go_const": "LoginAuditEventTypeAccountLocked",
+        "_python_const": "ACCOUNT_LOCKED",
+        "value": "account_locked"
+      },
+      "account_unlocked": {
+        "_go_const": "LoginAuditEventTypeAccountUnlocked",
+        "_python_const": "ACCOUNT_UNLOCKED",
+        "value": "account_unlocked"
+      },
+      "login_anomaly": {
+        "_go_const": "LoginAuditEventTypeLoginAnomaly",
+        "_python_const": "LOGIN_ANOMALY",
+        "value": "login_anomaly"
+      },
+      "login_failed": {
+        "_go_const": "LoginAuditEventTypeLoginFailed",
+        "_python_const": "LOGIN_FAILED",
+        "value": "login_failed"
+      },
+      "login_success": {
+        "_go_const": "LoginAuditEventTypeLoginSuccess",
+        "_python_const": "LOGIN_SUCCESS",
+        "value": "login_success"
+      }
+    },
+    "network_protocol": {
+      "tcp": {
+        "_go_const": "NetworkProtocolTCP",
+        "_python_const": "TCP",
+        "value": "tcp"
+      },
+      "udp": {
+        "_go_const": "NetworkProtocolUDP",
+        "_python_const": "UDP",
+        "value": "udp"
+      }
+    },
+    "operator_history_event_type": {
+      "api.key.refreshed": {
+        "_go_const": "HistoryEventTypeAPIKeyRefreshed",
+        "_python_const": "API_KEY_REFRESHED",
+        "value": "api.key.refreshed"
+      },
+      "authenticated": {
+        "_go_const": "HistoryEventTypeAuthenticated",
+        "_python_const": "AUTHENTICATED",
+        "value": "authenticated"
+      },
+      "bound": {
+        "_go_const": "HistoryEventTypeBound",
+        "_python_const": "BOUND",
+        "value": "bound"
+      },
+      "claimed": {
+        "_go_const": "HistoryEventTypeClaimed",
+        "_python_const": "CLAIMED",
+        "value": "claimed"
+      },
+      "created": {
+        "_go_const": "HistoryEventTypeCreated",
+        "_python_const": "CREATED",
+        "value": "created"
+      },
+      "created.from.refresh": {
+        "_go_const": "HistoryEventTypeCreatedFromRefresh",
+        "_python_const": "CREATED_FROM_REFRESH",
+        "value": "created.from.refresh"
+      },
+      "deactivated": {
+        "_go_const": "HistoryEventTypeDeactivated",
+        "_python_const": "DEACTIVATED",
+        "value": "deactivated"
+      },
+      "heartbeat.received": {
+        "_go_const": "HistoryEventTypeHeartbeatReceived",
+        "_python_const": "HEARTBEAT_RECEIVED",
+        "value": "heartbeat.received"
+      },
+      "reconnected": {
+        "_go_const": "HistoryEventTypeReconnected",
+        "_python_const": "RECONNECTED",
+        "value": "reconnected"
+      },
+      "registered": {
+        "_go_const": "HistoryEventTypeRegistered",
+        "_python_const": "REGISTERED",
+        "value": "registered"
+      },
+      "reset": {
+        "_go_const": "HistoryEventTypeReset",
+        "_python_const": "RESET",
+        "value": "reset"
+      },
+      "shutdown.requested": {
+        "_go_const": "HistoryEventTypeShutdownRequested",
+        "_python_const": "SHUTDOWN_REQUESTED",
+        "value": "shutdown.requested"
+      },
+      "slot.consumed": {
+        "_go_const": "HistoryEventTypeSlotConsumed",
+        "_python_const": "SLOT_CONSUMED",
+        "value": "slot.consumed"
+      },
+      "slot.created": {
+        "_go_const": "HistoryEventTypeSlotCreated",
+        "_python_const": "SLOT_CREATED",
+        "value": "slot.created"
+      },
+      "slot.released": {
+        "_go_const": "HistoryEventTypeSlotReleased",
+        "_python_const": "SLOT_RELEASED",
+        "value": "slot.released"
+      },
+      "status.changed": {
+        "_go_const": "HistoryEventTypeStatusChanged",
+        "_python_const": "STATUS_CHANGED",
+        "value": "status.changed"
+      },
+      "stopped": {
+        "_go_const": "HistoryEventTypeStopped",
+        "_python_const": "STOPPED",
+        "value": "stopped"
+      },
+      "terminated": {
+        "_go_const": "HistoryEventTypeTerminated",
+        "_python_const": "TERMINATED",
+        "value": "terminated"
+      },
+      "terminated.for.refresh": {
+        "_go_const": "HistoryEventTypeTerminatedForRefresh",
+        "_python_const": "TERMINATED_FOR_REFRESH",
+        "value": "terminated.for.refresh"
+      },
+      "unbound": {
+        "_go_const": "HistoryEventTypeUnbound",
+        "_python_const": "UNBOUND",
+        "value": "unbound"
+      }
+    },
+    "operator_status": {
+      "active": {
+        "_go_const": "OperatorStatusActive",
+        "_python_const": "ACTIVE",
+        "value": "active"
+      },
+      "available": {
+        "_go_const": "OperatorStatusAvailable",
+        "_python_const": "AVAILABLE",
+        "value": "available"
+      },
+      "bound": {
+        "_go_const": "OperatorStatusBound",
+        "_python_const": "BOUND",
+        "value": "bound"
+      },
+      "offline": {
+        "_go_const": "OperatorStatusOffline",
+        "_python_const": "OFFLINE",
+        "value": "offline"
+      },
+      "stale": {
+        "_go_const": "OperatorStatusStale",
+        "_python_const": "STALE",
+        "value": "stale"
+      },
+      "stopped": {
+        "_go_const": "OperatorStatusStopped",
+        "_python_const": "STOPPED",
+        "value": "stopped"
+      },
+      "terminated": {
+        "_go_const": "OperatorStatusTerminated",
+        "_python_const": "TERMINATED",
+        "value": "terminated"
+      },
+      "unavailable": {
+        "_go_const": "OperatorStatusUnavailable",
+        "_python_const": "UNAVAILABLE",
+        "value": "unavailable"
+      }
+    },
+    "operator_tool_name": {
+      "check_port_status": {
+        "_go_const": "G8eToolNameCheckPort",
+        "_python_const": "CHECK_PORT",
+        "value": "check_port_status"
+      },
+      "fetch_execution_output": {
+        "_go_const": "G8eToolNameFetchExecutionOutput",
+        "_python_const": "FETCH_EXECUTION_OUTPUT",
+        "value": "fetch_execution_output"
+      },
+      "fetch_file_diff": {
+        "_go_const": "G8eToolNameFetchFileDiff",
+        "_python_const": "FETCH_FILE_DIFF",
+        "value": "fetch_file_diff"
+      },
+      "fetch_file_history": {
+        "_go_const": "G8eToolNameFetchFileHistory",
+        "_python_const": "FETCH_FILE_HISTORY",
+        "value": "fetch_file_history"
+      },
+      "fetch_session_history": {
+        "_go_const": "G8eToolNameFetchSessionHistory",
+        "_python_const": "FETCH_SESSION_HISTORY",
+        "value": "fetch_session_history"
+      },
+      "file_create_on_operator": {
+        "_go_const": "G8eToolNameFileCreate",
+        "_python_const": "FILE_CREATE",
+        "value": "file_create_on_operator"
+      },
+      "file_read_on_operator": {
+        "_go_const": "G8eToolNameFileRead",
+        "_python_const": "FILE_READ",
+        "value": "file_read_on_operator"
+      },
+      "file_update_on_operator": {
+        "_go_const": "G8eToolNameFileUpdate",
+        "_python_const": "FILE_UPDATE",
+        "value": "file_update_on_operator"
+      },
+      "file_write_on_operator": {
+        "_go_const": "G8eToolNameFileWrite",
+        "_python_const": "FILE_WRITE",
+        "value": "file_write_on_operator"
+      },
+      "g8e_web_search": {
+        "_go_const": "G8eToolNameG8eWebSearch",
+        "_python_const": "G8E_SEARCH_WEB",
+        "value": "g8e_web_search"
+      },
+      "get_command_constraints": {
+        "_go_const": "G8eToolNameGetCommandConstraints",
+        "_python_const": "GET_COMMAND_CONSTRAINTS",
+        "value": "get_command_constraints"
+      },
+      "list_files_and_directories_with_detailed_metadata": {
+        "_go_const": "G8eToolNameListFiles",
+        "_python_const": "LIST_FILES",
+        "value": "list_files_and_directories_with_detailed_metadata"
+      },
+      "list_ssh_inventory": {
+        "_go_const": "G8eToolNameListSSHInventory",
+        "_python_const": "SSH_INVENTORY",
+        "value": "list_ssh_inventory"
+      },
+      "query_investigation_context": {
+        "_go_const": "G8eToolNameQueryInvestigationContext",
+        "_python_const": "QUERY_INVESTIGATION_CONTEXT",
+        "value": "query_investigation_context"
+      },
+      "read_file_content": {
+        "_go_const": "G8eToolNameReadFileContent",
+        "_python_const": "READ_FILE_CONTENT",
+        "value": "read_file_content"
+      },
+      "recursive_grep_search": {
+        "_go_const": "G8eToolNameRecursiveGrep",
+        "_python_const": "RECURSIVE_GREP",
+        "value": "recursive_grep_search"
+      },
+      "restore_file": {
+        "_go_const": "G8eToolNameRestoreFile",
+        "_python_const": "RESTORE_FILE",
+        "value": "restore_file"
+      },
+      "run_commands_with_operator": {
+        "_go_const": "G8eToolNameRunCommands",
+        "_python_const": "RUN_COMMANDS",
+        "value": "run_commands_with_operator"
+      },
+      "stream_operator_to_ssh_fleet": {
+        "_go_const": "G8eToolNameStreamOperator",
+        "_python_const": "STREAM_OPERATOR",
+        "value": "stream_operator_to_ssh_fleet"
+      }
+    },
+    "operator_type": {
+      "cloud": {
+        "_go_const": "OperatorTypeCloud",
+        "_python_const": "CLOUD",
+        "value": "cloud"
+      },
+      "system": {
+        "_go_const": "OperatorTypeSystem",
+        "_python_const": "SYSTEM",
+        "value": "system"
+      }
+    },
+    "platform": {
+      "darwin": {
+        "_go_const": "PlatformDarwin",
+        "_python_const": "DARWIN",
+        "value": "darwin"
+      },
+      "linux": {
+        "_go_const": "PlatformLinux",
+        "_python_const": "LINUX",
+        "value": "linux"
+      },
+      "windows": {
+        "_go_const": "PlatformWindows",
+        "_python_const": "WINDOWS",
+        "value": "windows"
+      }
+    },
+    "priority": {
+      "1": {
+        "_go_const": "PriorityLow",
+        "_python_const": "LOW",
+        "value": "1"
+      },
+      "2": {
+        "_go_const": "PriorityMedium",
+        "_python_const": "MEDIUM",
+        "value": "2"
+      },
+      "3": {
+        "_go_const": "PriorityHigh",
+        "_python_const": "HIGH",
+        "value": "3"
+      },
+      "4": {
+        "_go_const": "PriorityCritical",
+        "_python_const": "CRITICAL",
+        "value": "4"
+      }
+    },
+    "risk_level": {
+      "HIGH": {
+        "_go_const": "RiskLevelHigh",
+        "_python_const": "HIGH",
+        "value": "HIGH"
+      },
+      "LOW": {
+        "_go_const": "RiskLevelLow",
+        "_python_const": "LOW",
+        "value": "LOW"
+      },
+      "MEDIUM": {
+        "_go_const": "RiskLevelMedium",
+        "_python_const": "MEDIUM",
+        "value": "MEDIUM"
+      }
+    },
+    "risk_threshold": {
+      "high": {
+        "_go_const": "RiskThresholdHigh",
+        "_python_const": "HIGH",
+        "value": "high"
+      },
+      "low": {
+        "_go_const": "RiskThresholdLow",
+        "_python_const": "LOW",
+        "value": "low"
+      },
+      "medium": {
+        "_go_const": "RiskThresholdMedium",
+        "_python_const": "MEDIUM",
+        "value": "medium"
+      }
+    },
+    "scrubber_priority": {
+      "10": {
+        "_go_const": "ScrubberPriorityExactCredential",
+        "_python_const": "EXACT_CREDENTIAL",
+        "value": "10"
+      },
+      "20": {
+        "_go_const": "ScrubberPriorityUrlOrConnection",
+        "_python_const": "URL_OR_CONNECTION",
+        "value": "20"
+      },
+      "30": {
+        "_go_const": "ScrubberPriorityContextualCredential",
+        "_python_const": "CONTEXTUAL_CREDENTIAL",
+        "value": "30"
+      },
+      "40": {
+        "_go_const": "ScrubberPriorityGenericPII",
+        "_python_const": "GENERIC_PII",
+        "value": "40"
+      }
+    },
+    "sentinel_status": {
+      "error": {
+        "_go_const": "SentinelStatusError",
+        "_python_const": "ERROR",
+        "value": "error"
+      },
+      "failure": {
+        "_go_const": "SentinelStatusFailure",
+        "_python_const": "FAILURE",
+        "value": "failure"
+      },
+      "interrupted": {
+        "_go_const": "SentinelStatusInterrupted",
+        "_python_const": "INTERRUPTED",
+        "value": "interrupted"
+      },
+      "invalid_exit": {
+        "_go_const": "SentinelStatusInvalidExit",
+        "_python_const": "INVALID_EXIT",
+        "value": "invalid_exit"
+      },
+      "killed": {
+        "_go_const": "SentinelStatusKilled",
+        "_python_const": "KILLED",
+        "value": "killed"
+      },
+      "misuse": {
+        "_go_const": "SentinelStatusMisuse",
+        "_python_const": "MISUSE",
+        "value": "misuse"
+      },
+      "not_executable": {
+        "_go_const": "SentinelStatusNotExecutable",
+        "_python_const": "NOT_EXECUTABLE",
+        "value": "not_executable"
+      },
+      "not_found": {
+        "_go_const": "SentinelStatusNotFound",
+        "_python_const": "NOT_FOUND",
+        "value": "not_found"
+      },
+      "success": {
+        "_go_const": "SentinelStatusSuccess",
+        "_python_const": "SUCCESS",
+        "value": "success"
+      },
+      "terminated": {
+        "_go_const": "SentinelStatusTerminated",
+        "_python_const": "TERMINATED",
+        "value": "terminated"
+      }
+    },
+    "session_end_reason": {
+      "integrity_failure": {
+        "_go_const": "SessionEndReasonIntegrityFailure",
+        "_python_const": "INTEGRITY_FAILURE",
+        "value": "integrity_failure"
+      },
+      "invalidate_all": {
+        "_go_const": "SessionEndReasonInvalidateAll",
+        "_python_const": "INVALIDATE_ALL",
+        "value": "invalidate_all"
+      },
+      "session_regeneration": {
+        "_go_const": "SessionEndReasonSessionRegeneration",
+        "_python_const": "SESSION_REGENERATION",
+        "value": "session_regeneration"
+      },
+      "timeout_absolute": {
+        "_go_const": "SessionEndReasonTimeoutAbsolute",
+        "_python_const": "TIMEOUT_ABSOLUTE",
+        "value": "timeout_absolute"
+      },
+      "timeout_idle": {
+        "_go_const": "SessionEndReasonTimeoutIdle",
+        "_python_const": "TIMEOUT_IDLE",
+        "value": "timeout_idle"
+      },
+      "user_deleted": {
+        "_go_const": "SessionEndReasonUserDeleted",
+        "_python_const": "USER_DELETED",
+        "value": "user_deleted"
+      },
+      "user_logout": {
+        "_go_const": "SessionEndReasonUserLogout",
+        "_python_const": "LOGOUT",
+        "value": "user_logout"
+      }
+    },
+    "session_event_type": {
+      "g8e.bound": {
+        "_go_const": "SessionEventTypeG8eBound",
+        "_python_const": "G8E_BOUND",
+        "value": "g8e.bound"
+      },
+      "g8e.unbound": {
+        "_go_const": "SessionEventTypeG8eUnbound",
+        "_python_const": "G8E_UNBOUND",
+        "value": "g8e.unbound"
+      },
+      "session.created": {
+        "_go_const": "SessionEventTypeSessionCreated",
+        "_python_const": "SESSION_CREATED",
+        "value": "session.created"
+      },
+      "session.ended": {
+        "_go_const": "SessionEventTypeSessionEnded",
+        "_python_const": "SESSION_ENDED",
+        "value": "session.ended"
+      },
+      "session.regenerated": {
+        "_go_const": "SessionEventTypeSessionRegenerated",
+        "_python_const": "SESSION_REGENERATED",
+        "value": "session.regenerated"
+      },
+      "session.suspicious_activity": {
+        "_go_const": "SessionEventTypeSessionSuspiciousActivity",
+        "_python_const": "SESSION_SUSPICIOUS_ACTIVITY",
+        "value": "session.suspicious_activity"
+      },
+      "session.timeout.absolute": {
+        "_go_const": "SessionEventTypeSessionTimeoutAbsolute",
+        "_python_const": "SESSION_TIMEOUT_ABSOLUTE",
+        "value": "session.timeout.absolute"
+      },
+      "session.timeout.idle": {
+        "_go_const": "SessionEventTypeSessionTimeoutIdle",
+        "_python_const": "SESSION_TIMEOUT_IDLE",
+        "value": "session.timeout.idle"
+      }
+    },
+    "session_key_prefix": {
+      "cli_session": {
+        "_go_const": "SessionKeyPrefixCLI",
+        "_python_const": "CLI",
+        "value": "cli_session"
+      },
+      "operator_session": {
+        "_go_const": "SessionKeyPrefixOperator",
+        "_python_const": "OPERATOR",
+        "value": "operator_session"
+      },
+      "web_session": {
+        "_go_const": "SessionKeyPrefixWeb",
+        "_python_const": "WEB",
+        "value": "web_session"
+      }
+    },
+    "session_suspicious_reason": {
+      "excessive_ip_changes": {
+        "_go_const": "SessionSuspiciousReasonExcessiveIPChanges",
+        "_python_const": "EXCESSIVE_IP_CHANGES",
+        "value": "excessive_ip_changes"
+      }
+    },
+    "session_type": {
+      "cli": {
+        "_go_const": "SessionTypeCLI",
+        "_python_const": "CLI",
+        "value": "cli"
+      },
+      "operator": {
+        "_go_const": "SessionTypeOperator",
+        "_python_const": "OPERATOR",
+        "value": "operator"
+      },
+      "web": {
+        "_go_const": "SessionTypeWeb",
+        "_python_const": "WEB",
+        "value": "web"
+      }
+    },
+    "severity": {
+      "1": {
+        "_go_const": "SeverityLow",
+        "_python_const": "LOW",
+        "value": "1"
+      },
+      "2": {
+        "_go_const": "SeverityMedium",
+        "_python_const": "MEDIUM",
+        "value": "2"
+      },
+      "3": {
+        "_go_const": "SeverityHigh",
+        "_python_const": "HIGH",
+        "value": "3"
+      },
+      "4": {
+        "_go_const": "SeverityCritical",
+        "_python_const": "CRITICAL",
+        "value": "4"
+      }
+    },
+    "slash_tier": {
+      "1": {
+        "_go_const": "SlashTier1",
+        "_python_const": "TIER_1",
+        "value": "1"
+      },
+      "2": {
+        "_go_const": "SlashTier2",
+        "_python_const": "TIER_2",
+        "value": "2"
+      },
+      "3": {
+        "_go_const": "SlashTier3",
+        "_python_const": "TIER_3",
+        "value": "3"
+      }
+    },
+    "stream_status": {
+      "cancelled": {
+        "_go_const": "StreamStatusCancelled",
+        "_python_const": "CANCELLED",
+        "value": "cancelled"
+      },
+      "completed": {
+        "_go_const": "StreamStatusCompleted",
+        "_python_const": "COMPLETED",
+        "value": "completed"
+      },
+      "exited": {
+        "_go_const": "StreamStatusExited",
+        "_python_const": "EXITED",
+        "value": "exited"
+      },
+      "failed": {
+        "_go_const": "StreamStatusFailed",
+        "_python_const": "FAILED",
+        "value": "failed"
+      },
+      "summary": {
+        "_go_const": "StreamStatusSummary",
+        "_python_const": "SUMMARY",
+        "value": "summary"
+      }
+    },
+    "system_health": {
+      "degraded": {
+        "_go_const": "SystemHealthDegraded",
+        "_python_const": "DEGRADED",
+        "value": "degraded"
+      },
+      "healthy": {
+        "_go_const": "SystemHealthHealthy",
+        "_python_const": "HEALTHY",
+        "value": "healthy"
+      },
+      "unhealthy": {
+        "_go_const": "SystemHealthUnhealthy",
+        "_python_const": "UNHEALTHY",
+        "value": "unhealthy"
+      },
+      "unknown": {
+        "_go_const": "SystemHealthUnknown",
+        "_python_const": "UNKNOWN",
+        "value": "unknown"
+      }
+    },
+    "task_status": {
+      "cancelled": {
+        "_go_const": "TaskStatusCancelled",
+        "_python_const": "CANCELLED",
+        "value": "cancelled"
+      },
+      "completed": {
+        "_go_const": "TaskStatusCompleted",
+        "_python_const": "COMPLETED",
+        "value": "completed"
+      },
+      "executing": {
+        "_go_const": "TaskStatusInProgress",
+        "_python_const": "IN_PROGRESS",
+        "value": "executing"
+      },
+      "failed": {
+        "_go_const": "TaskStatusFailed",
+        "_python_const": "FAILED",
+        "value": "failed"
+      },
+      "pending": {
+        "_go_const": "TaskStatusPending",
+        "_python_const": "PENDING",
+        "value": "pending"
+      }
+    },
+    "thinking_action_type": {
+      "end": {
+        "_go_const": "ThinkingActionTypeEnd",
+        "_python_const": "END",
+        "value": "end"
+      },
+      "start": {
+        "_go_const": "ThinkingActionTypeStart",
+        "_python_const": "START",
+        "value": "start"
+      },
+      "update": {
+        "_go_const": "ThinkingActionTypeUpdate",
+        "_python_const": "UPDATE",
+        "value": "update"
+      }
+    },
+    "tool_call_defaults": {
+      "Processing": {
+        "_go_const": "ToolCallDefaultsLabel",
+        "_python_const": "LABEL",
+        "value": "Processing"
+      },
+      "general": {
+        "_go_const": "ToolCallDefaultsCategory",
+        "_python_const": "CATEGORY",
+        "value": "general"
+      },
+      "sync": {
+        "_go_const": "ToolCallDefaultsIcon",
+        "_python_const": "ICON",
+        "value": "sync"
+      }
+    },
+    "tool_call_status": {
+      "completed": {
+        "_go_const": "ToolCallStatusCompleted",
+        "_python_const": "COMPLETED",
+        "value": "completed"
+      },
+      "started": {
+        "_go_const": "ToolCallStatusStarted",
+        "_python_const": "STARTED",
+        "value": "started"
+      }
+    },
+    "tool_display_category": {
+      "execution": {
+        "_go_const": "ToolDisplayCategoryExecution",
+        "_python_const": "EXECUTION",
+        "value": "execution"
+      },
+      "file": {
+        "_go_const": "ToolDisplayCategoryFile",
+        "_python_const": "FILE",
+        "value": "file"
+      },
+      "general": {
+        "_go_const": "ToolDisplayCategoryGeneral",
+        "_python_const": "GENERAL",
+        "value": "general"
+      },
+      "network": {
+        "_go_const": "ToolDisplayCategoryNetwork",
+        "_python_const": "NETWORK",
+        "value": "network"
+      },
+      "search": {
+        "_go_const": "ToolDisplayCategorySearch",
+        "_python_const": "SEARCH",
+        "value": "search"
+      }
+    },
+    "tool_scope": {
+      "operator_gated": {
+        "_go_const": "ToolScopeOperatorGated",
+        "_python_const": "OPERATOR_GATED",
+        "value": "operator_gated"
+      },
+      "universal": {
+        "_go_const": "ToolScopeUniversal",
+        "_python_const": "UNIVERSAL",
+        "value": "universal"
+      }
+    },
+    "user_role": {
+      "admin": {
+        "_go_const": "UserRoleAdmin",
+        "_python_const": "ADMIN",
+        "value": "admin"
+      },
+      "operator": {
+        "_go_const": "UserRoleOperator",
+        "_python_const": "OPERATOR",
+        "value": "operator"
+      },
+      "owner": {
+        "_go_const": "UserRoleOwner",
+        "_python_const": "OWNER",
+        "value": "owner"
+      },
+      "user": {
+        "_go_const": "UserRoleUser",
+        "_python_const": "USER",
+        "value": "user"
+      }
+    },
+    "user_status": {
+      "active": {
+        "_go_const": "UserStatusActive",
+        "_python_const": "ACTIVE",
+        "value": "active"
+      },
+      "disabled": {
+        "_go_const": "UserStatusDisabled",
+        "_python_const": "DISABLED",
+        "value": "disabled"
+      }
+    },
+    "vault_mode": {
+      "raw": {
+        "_go_const": "SentinelModeRaw",
+        "_python_const": "RAW",
+        "value": "raw"
+      },
+      "scrubbed": {
+        "_go_const": "VaultModeScrubbed",
+        "_python_const": "SCRUBBED",
+        "value": "scrubbed"
+      }
+    },
+    "version_stability": {
+      "beta": {
+        "_go_const": "VersionStabilityBeta",
+        "_python_const": "BETA",
+        "value": "beta"
+      },
+      "dev": {
+        "_go_const": "VersionStabilityDev",
+        "_python_const": "DEV",
+        "value": "dev"
+      },
+      "stable": {
+        "_go_const": "VersionStabilityStable",
+        "_python_const": "STABLE",
+        "value": "stable"
+      },
+      "unstable": {
+        "_go_const": "VersionStabilityUnstable",
+        "_python_const": "UNSTABLE",
+        "value": "unstable"
+      },
+      "deprecated": {
+        "_go_const": "VersionStabilityDeprecated",
+        "_python_const": "DEPRECATED",
+        "value": "deprecated"
+      }
+    },
+    "workflow_type": {
+      "g8e.bound": {
+        "_go_const": "WorkflowTypeG8eBound",
+        "_python_const": "G8E_BOUND",
+        "value": "g8e.bound"
+      },
+      "g8e.cloud.bound": {
+        "_go_const": "WorkflowTypeG8eCloudBound",
+        "_python_const": "G8E_CLOUD_BOUND",
+        "value": "g8e.cloud.bound"
+      },
+      "g8e.not.bound": {
+        "_go_const": "WorkflowTypeG8eNotBound",
+        "_python_const": "G8E_NOT_BOUND",
+        "value": "g8e.not.bound"
+      },
+      "triage": {
+        "_go_const": "WorkflowTypeTriage",
+        "_python_const": "TRIAGE",
+        "value": "triage"
+      },
+      "investigation": {
+        "_go_const": "WorkflowTypeInvestigation",
+        "_python_const": "INVESTIGATION",
+        "value": "investigation"
+      }
+    },
+    "error_code": {
+      "generic_error": {
+        "_go_const": "ErrorCodeGenericError",
+        "_python_const": "GENERIC_ERROR",
+        "value": "G8E-1000"
+      },
+      "unexpected_error": {
+        "_go_const": "ErrorCodeUnexpectedError",
+        "_python_const": "UNEXPECTED_ERROR",
+        "value": "G8E-1001"
+      },
+      "not_implemented": {
+        "_go_const": "ErrorCodeNotImplemented",
+        "_python_const": "NOT_IMPLEMENTED",
+        "value": "G8E-1002"
+      },
+      "config_error": {
+        "_go_const": "ErrorCodeConfigError",
+        "_python_const": "CONFIG_ERROR",
+        "value": "G8E-1100"
+      },
+      "missing_env_var": {
+        "_go_const": "ErrorCodeMissingEnvVar",
+        "_python_const": "MISSING_ENV_VAR",
+        "value": "G8E-1101"
+      },
+      "invalid_settings": {
+        "_go_const": "ErrorCodeInvalidSettings",
+        "_python_const": "INVALID_SETTINGS",
+        "value": "G8E-1102"
+      },
+      "service_init_error": {
+        "_go_const": "ErrorCodeServiceInitError",
+        "_python_const": "SERVICE_INIT_ERROR",
+        "value": "G8E-1103"
+      },
+      "auth_error": {
+        "_go_const": "ErrorCodeAuthError",
+        "_python_const": "AUTH_ERROR",
+        "value": "G8E-1200"
+      },
+      "token_expired": {
+        "_go_const": "ErrorCodeTokenExpired",
+        "_python_const": "TOKEN_EXPIRED",
+        "value": "G8E-1201"
+      },
+      "invalid_token": {
+        "_go_const": "ErrorCodeInvalidToken",
+        "_python_const": "INVALID_TOKEN",
+        "value": "G8E-1202"
+      },
+      "insufficient_permissions": {
+        "_go_const": "ErrorCodeInsufficientPermissions",
+        "_python_const": "INSUFFICIENT_PERMISSIONS",
+        "value": "G8E-1203"
+      },
+      "db_connection_error": {
+        "_go_const": "ErrorCodeDBConnectionError",
+        "_python_const": "DB_CONNECTION_ERROR",
+        "value": "G8E-1300"
+      },
+      "db_query_error": {
+        "_go_const": "ErrorCodeDBQueryError",
+        "_python_const": "DB_QUERY_ERROR",
+        "value": "G8E-1301"
+      },
+      "db_document_not_found": {
+        "_go_const": "ErrorCodeDBDocumentNotFound",
+        "_python_const": "DB_DOCUMENT_NOT_FOUND",
+        "value": "G8E-1302"
+      },
+      "db_write_error": {
+        "_go_const": "ErrorCodeDBWriteError",
+        "_python_const": "DB_WRITE_ERROR",
+        "value": "G8E-1303"
+      },
+      "db_transaction_error": {
+        "_go_const": "ErrorCodeDBTransactionError",
+        "_python_const": "DB_TRANSACTION_ERROR",
+        "value": "G8E-1304"
+      },
+      "pubsub_connection_error": {
+        "_go_const": "ErrorCodePubSubConnectionError",
+        "_python_const": "PUBSUB_CONNECTION_ERROR",
+        "value": "G8E-1400"
+      },
+      "pubsub_publish_error": {
+        "_go_const": "ErrorCodePubSubPublishError",
+        "_python_const": "PUBSUB_PUBLISH_ERROR",
+        "value": "G8E-1401"
+      },
+      "pubsub_subscribe_error": {
+        "_go_const": "ErrorCodePubSubSubscribeError",
+        "_python_const": "PUBSUB_SUBSCRIBE_ERROR",
+        "value": "G8E-1402"
+      },
+      "pubsub_topic_error": {
+        "_go_const": "ErrorCodePubSubTopicError",
+        "_python_const": "PUBSUB_TOPIC_ERROR",
+        "value": "G8E-1403"
+      },
+      "storage_connection_error": {
+        "_go_const": "ErrorCodeStorageConnectionError",
+        "_python_const": "STORAGE_CONNECTION_ERROR",
+        "value": "G8E-1500"
+      },
+      "storage_read_error": {
+        "_go_const": "ErrorCodeStorageReadError",
+        "_python_const": "STORAGE_READ_ERROR",
+        "value": "G8E-1501"
+      },
+      "storage_write_error": {
+        "_go_const": "ErrorCodeStorageWriteError",
+        "_python_const": "STORAGE_WRITE_ERROR",
+        "value": "G8E-1502"
+      },
+      "storage_delete_error": {
+        "_go_const": "ErrorCodeStorageDeleteError",
+        "_python_const": "STORAGE_DELETE_ERROR",
+        "value": "G8E-1503"
+      },
+      "api_connection_error": {
+        "_go_const": "ErrorCodeAPIConnectionError",
+        "_python_const": "API_CONNECTION_ERROR",
+        "value": "G8E-1600"
+      },
+      "api_timeout_error": {
+        "_go_const": "ErrorCodeAPITimeoutError",
+        "_python_const": "API_TIMEOUT_ERROR",
+        "value": "G8E-1601"
+      },
+      "api_response_error": {
+        "_go_const": "ErrorCodeAPIResponseError",
+        "_python_const": "API_RESPONSE_ERROR",
+        "value": "G8E-1602"
+      },
+      "api_request_error": {
+        "_go_const": "ErrorCodeAPIRequestError",
+        "_python_const": "API_REQUEST_ERROR",
+        "value": "G8E-1603"
+      },
+      "api_rate_limit_error": {
+        "_go_const": "ErrorCodeAPIRateLimitError",
+        "_python_const": "API_RATE_LIMIT_ERROR",
+        "value": "G8E-1604"
+      },
+      "generic_not_found": {
+        "_go_const": "ErrorCodeGenericNotFound",
+        "_python_const": "GENERIC_NOT_FOUND",
+        "value": "G8E-1605"
+      },
+      "external_service_error": {
+        "_go_const": "ErrorCodeExternalServiceError",
+        "_python_const": "EXTERNAL_SERVICE_ERROR",
+        "value": "G8E-1607"
+      },
+      "validation_error": {
+        "_go_const": "ErrorCodeValidationError",
+        "_python_const": "VALIDATION_ERROR",
+        "value": "G8E-1700"
+      },
+      "missing_required_field": {
+        "_go_const": "ErrorCodeMissingRequiredField",
+        "_python_const": "MISSING_REQUIRED_FIELD",
+        "value": "G8E-1701"
+      },
+      "invalid_field_format": {
+        "_go_const": "ErrorCodeInvalidFieldFormat",
+        "_python_const": "INVALID_FIELD_FORMAT",
+        "value": "G8E-1702"
+      },
+      "invalid_field_value": {
+        "_go_const": "ErrorCodeInvalidFieldValue",
+        "_python_const": "INVALID_FIELD_VALUE",
+        "value": "G8E-1703"
+      },
+      "invalid_field_type": {
+        "_go_const": "ErrorCodeInvalidFieldType",
+        "_python_const": "INVALID_FIELD_TYPE",
+        "value": "G8E-1704"
+      },
+      "schema_validation_failed": {
+        "_go_const": "ErrorCodeSchemaValidationFailed",
+        "_python_const": "SCHEMA_VALIDATION_FAILED",
+        "value": "G8E-1705"
+      },
+      "schema_not_found": {
+        "_go_const": "ErrorCodeSchemaNotFound",
+        "_python_const": "SCHEMA_NOT_FOUND",
+        "value": "G8E-1706"
+      },
+      "invalid_input": {
+        "_go_const": "ErrorCodeInvalidInput",
+        "_python_const": "INVALID_INPUT",
+        "value": "G8E-1707"
+      },
+      "business_logic_error": {
+        "_go_const": "ErrorCodeBusinessLogicError",
+        "_python_const": "BUSINESS_LOGIC_ERROR",
+        "value": "G8E-1800"
+      },
+      "workflow_error": {
+        "_go_const": "ErrorCodeWorkflowError",
+        "_python_const": "WORKFLOW_ERROR",
+        "value": "G8E-1801"
+      },
+      "state_transition_error": {
+        "_go_const": "ErrorCodeStateTransitionError",
+        "_python_const": "STATE_TRANSITION_ERROR",
+        "value": "G8E-1802"
+      },
+      "resource_conflict": {
+        "_go_const": "ErrorCodeResourceConflict",
+        "_python_const": "RESOURCE_CONFLICT",
+        "value": "G8E-1803"
+      },
+      "task_creation_failed": {
+        "_go_const": "ErrorCodeTaskCreationFailed",
+        "_python_const": "TASK_CREATION_FAILED",
+        "value": "G8E-1804"
+      },
+      "operation_failed": {
+        "_go_const": "ErrorCodeOperationFailed",
+        "_python_const": "OPERATION_FAILED",
+        "value": "G8E-1805"
+      },
+      "governance_rejected": {
+        "_go_const": "ErrorCodeGovernanceRejected",
+        "_python_const": "GOVERNANCE_REJECTED",
+        "value": "G8E-1806"
+      },
+      "model_capability_unsupported": {
+        "_go_const": "ErrorCodeModelCapabilityUnsupported",
+        "_python_const": "MODEL_CAPABILITY_UNSUPPORTED",
+        "value": "G8E-1807"
+      },
+      "service_unavailable_error": {
+        "_go_const": "ErrorCodeServiceUnavailableError",
+        "_python_const": "SERVICE_UNAVAILABLE_ERROR",
+        "value": "G8E-1900"
+      }
+    },
+    "error_category": {
+      "validation": {
+        "_go_const": "ErrorCategoryValidation",
+        "_python_const": "VALIDATION",
+        "value": "validation"
+      },
+      "business_logic": {
+        "_go_const": "ErrorCategoryBusinessLogic",
+        "_python_const": "BUSINESS_LOGIC",
+        "value": "business_logic"
+      },
+      "configuration": {
+        "_go_const": "ErrorCategoryConfiguration",
+        "_python_const": "CONFIGURATION",
+        "value": "configuration"
+      },
+      "auth": {
+        "_go_const": "ErrorCategoryAuth",
+        "_python_const": "AUTH",
+        "value": "auth"
+      },
+      "permission": {
+        "_go_const": "ErrorCategoryPermission",
+        "_python_const": "PERMISSION",
+        "value": "permission"
+      },
+      "resource_not_found": {
+        "_go_const": "ErrorCategoryResourceNotFound",
+        "_python_const": "RESOURCE_NOT_FOUND",
+        "value": "resource_not_found"
+      },
+      "conflict": {
+        "_go_const": "ErrorCategoryConflict",
+        "_python_const": "CONFLICT",
+        "value": "conflict"
+      },
+      "rate_limit": {
+        "_go_const": "ErrorCategoryRateLimit",
+        "_python_const": "RATE_LIMIT",
+        "value": "rate_limit"
+      },
+      "service_unavailable": {
+        "_go_const": "ErrorCategoryServiceUnavailable",
+        "_python_const": "SERVICE_UNAVAILABLE",
+        "value": "service_unavailable"
+      },
+      "external_service": {
+        "_go_const": "ErrorCategoryExternalService",
+        "_python_const": "EXTERNAL_SERVICE",
+        "value": "external_service"
+      },
+      "timeout": {
+        "_go_const": "ErrorCategoryTimeout",
+        "_python_const": "TIMEOUT",
+        "value": "timeout"
+      },
+      "database": {
+        "_go_const": "ErrorCategoryDatabase",
+        "_python_const": "DATABASE",
+        "value": "database"
+      },
+      "network": {
+        "_go_const": "ErrorCategoryNetwork",
+        "_python_const": "NETWORK",
+        "value": "network"
+      },
+      "pubsub": {
+        "_go_const": "ErrorCategoryPubSub",
+        "_python_const": "PUBSUB",
+        "value": "pubsub"
+      },
+      "storage": {
+        "_go_const": "ErrorCategoryStorage",
+        "_python_const": "STORAGE",
+        "value": "storage"
+      },
+      "internal": {
+        "_go_const": "ErrorCategoryInternal",
+        "_python_const": "INTERNAL",
+        "value": "internal"
+      },
+      "dependency": {
+        "_go_const": "ErrorCategoryDependency",
+        "_python_const": "DEPENDENCY",
+        "value": "dependency"
+      }
+    },
+    "error_severity": {
+      "low": {
+        "_go_const": "ErrorSeverityLow",
+        "_python_const": "LOW",
+        "value": "low"
+      },
+      "medium": {
+        "_go_const": "ErrorSeverityMedium",
+        "_python_const": "MEDIUM",
+        "value": "medium"
+      },
+      "high": {
+        "_go_const": "ErrorSeverityHigh",
+        "_python_const": "HIGH",
+        "value": "high"
+      },
+      "critical": {
+        "_go_const": "ErrorSeverityCritical",
+        "_python_const": "CRITICAL",
+        "value": "critical"
+      },
+      "info": {
+        "_go_const": "ErrorSeverityInfo",
+        "_python_const": "INFO",
+        "value": "info"
+      }
+    },
+    "tribunal_member": {
+      "axiom": {
+        "_go_const": "TribunalMemberAxiom",
+        "_python_const": "AXIOM",
+        "value": "axiom"
+      },
+      "concord": {
+        "_go_const": "TribunalMemberConcord",
+        "_python_const": "CONCORD",
+        "value": "concord"
+      },
+      "variance": {
+        "_go_const": "TribunalMemberVariance",
+        "_python_const": "VARIANCE",
+        "value": "variance"
+      },
+      "pragma": {
+        "_go_const": "TribunalMemberPragma",
+        "_python_const": "PRAGMA",
+        "value": "pragma"
+      },
+      "nemesis": {
+        "_go_const": "TribunalMemberNemesis",
+        "_python_const": "NEMESIS",
+        "value": "nemesis"
+      }
+    },
+    "tribunal_audit_mode": {
+      "unanimous": {
+        "_go_const": "TribunalAuditModeUnanimous",
+        "_python_const": "UNANIMOUS",
+        "value": "unanimous"
+      },
+      "majority": {
+        "_go_const": "TribunalAuditModeMajority",
+        "_python_const": "MAJORITY",
+        "value": "majority"
+      },
+      "tied": {
+        "_go_const": "TribunalAuditModeTied",
+        "_python_const": "TIED",
+        "value": "tied"
+      }
+    },
+    "tribunal_audit_status": {
+      "ok": {
+        "_go_const": "TribunalAuditStatusOk",
+        "_python_const": "OK",
+        "value": "ok"
+      },
+      "revised": {
+        "_go_const": "TribunalAuditStatusRevised",
+        "_python_const": "REVISED",
+        "value": "revised"
+      },
+      "swap": {
+        "_go_const": "TribunalAuditStatusSwap",
+        "_python_const": "SWAP",
+        "value": "swap"
+      }
+    },
+    "auditor_reason": {
+      "ok": {
+        "_go_const": "AuditorReasonOk",
+        "_python_const": "OK",
+        "value": "ok"
+      },
+      "revised": {
+        "_go_const": "AuditorReasonRevised",
+        "_python_const": "REVISED",
+        "value": "revised"
+      },
+      "revised_from_dissent": {
+        "_go_const": "AuditorReasonRevisedFromDissent",
+        "_python_const": "REVISED_FROM_DISSENT",
+        "value": "revised_from_dissent"
+      },
+      "swapped_to_dissenter": {
+        "_go_const": "AuditorReasonSwappedToDissenter",
+        "_python_const": "SWAPPED_TO_DISSENTER",
+        "value": "swapped_to_dissenter"
+      },
+      "whitelist_violation": {
+        "_go_const": "AuditorReasonWhitelistViolation",
+        "_python_const": "WHITELIST_VIOLATION",
+        "value": "whitelist_violation"
+      },
+      "no_valid_revision": {
+        "_go_const": "AuditorReasonNoValidRevision",
+        "_python_const": "NO_VALID_REVISION",
+        "value": "no_valid_revision"
+      },
+      "auditor_error": {
+        "_go_const": "AuditorReasonAuditorError",
+        "_python_const": "AUDITOR_ERROR",
+        "value": "auditor_error"
+      },
+      "empty_response": {
+        "_go_const": "AuditorReasonEmptyResponse",
+        "_python_const": "EMPTY_RESPONSE",
+        "value": "empty_response"
+      }
+    },
+    "tie_break_reason": {
+      "shortest": {
+        "_go_const": "TieBreakReasonShortest",
+        "_python_const": "SHORTEST",
+        "value": "shortest"
+      },
+      "excluded_nemesis": {
+        "_go_const": "TieBreakReasonExcludedNemesis",
+        "_python_const": "EXCLUDED_NEMESIS",
+        "value": "excluded_nemesis"
+      }
+    },
+    "reasoning_agent": {
+      "sage": {
+        "_go_const": "ReasoningAgentSage",
+        "_python_const": "SAGE",
+        "value": "sage"
+      },
+      "dash": {
+        "_go_const": "ReasoningAgentDash",
+        "_python_const": "DASH",
+        "value": "dash"
+      }
+    },
+    "triage_complexity_classification": {
+      "simple": {
+        "_go_const": "TriageComplexitySimple",
+        "_python_const": "SIMPLE",
+        "value": "simple"
+      },
+      "complex": {
+        "_go_const": "TriageComplexityComplex",
+        "_python_const": "COMPLEX",
+        "value": "complex"
+      }
+    },
+    "triage_confidence": {
+      "high": {
+        "_go_const": "TriageConfidenceHigh",
+        "_python_const": "HIGH",
+        "value": "high"
+      },
+      "low": {
+        "_go_const": "TriageConfidenceLow",
+        "_python_const": "LOW",
+        "value": "low"
+      }
+    },
+    "triage_intent_classification": {
+      "action": {
+        "_go_const": "TriageIntentAction",
+        "_python_const": "ACTION",
+        "value": "action"
+      },
+      "information": {
+        "_go_const": "TriageIntentInformation",
+        "_python_const": "INFORMATION",
+        "value": "information"
+      },
+      "unknown": {
+        "_go_const": "TriageIntentUnknown",
+        "_python_const": "UNKNOWN",
+        "value": "unknown"
+      }
+    },
+    "triage_request_posture": {
+      "normal": {
+        "_go_const": "TriagePostureNormal",
+        "_python_const": "NORMAL",
+        "value": "normal"
+      },
+      "adversarial": {
+        "_go_const": "TriagePostureAdversarial",
+        "_python_const": "ADVERSARIAL",
+        "value": "adversarial"
+      },
+      "escalated": {
+        "_go_const": "TriagePostureEscalated",
+        "_python_const": "ESCALATED",
+        "value": "escalated"
+      }
+    }
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "source": "mcp_vectors",
+  "version": "1.0.0",
+  "last_updated": "2026-05-22",
+  "license": "Proprietary",
+  "doctrines": [
+    {
+      "id": "mcp_tool_response_injection",
+      "name": "Tool Response Injection",
+      "category": "tool_response_injection",
+      "severity": "critical",
+      "pattern": "(?i)(eval|exec|system)\\s*\\(.*result\\.content",
+      "mitre_attack": "T1059.004",
+      "mitre_tactic": "Execution",
+      "confidence": 0.90,
+      "enabled": true
+    },
+    {
+      "id": "mcp_unsafe_arg_handling",
+      "name": "Unsafe Argument Handling in MCP Tools",
+      "category": "unsafe_argument_handling",
+      "severity": "high",
+      "pattern": "(?i)subprocess\\.(call|run|Popen)\\s*\\(.*user_input",
+      "mitre_attack": "T1059.006",
+      "mitre_tactic": "Execution",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "mcp_prompt_injection_via_output",
+      "name": "Prompt Injection via Tool Outputs",
+      "category": "prompt_injection_via_output",
+      "severity": "critical",
+      "pattern": "(?i)(ignore|override)\\s+(previous|all)\\s+(instructions|commands)",
+      "mitre_attack": "T1566.001",
+      "mitre_tactic": "Initial Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "mcp_credential_exposure",
+      "name": "Credential Exposure in Tool Responses",
+      "category": "credential_exposure_in_tool_responses",
+      "severity": "critical",
+      "pattern": "(?i)(password|secret|token|key)\\s*[\"']?[:=]\\s*[\"']?[a-zA-Z0-9_\\-]{16,}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.80,
+      "enabled": true
+    },
+    {
+      "id": "mcp_envelope_field_abuse",
+      "name": "GovernanceEnvelope Field Abuse",
+      "category": "governance_envelope_field_abuse",
+      "severity": "high",
+      "pattern": "(?i)(transaction_hash|nonce|expiry)\\s*[\"']?[:=]\\s*[\"']?(null|undefined|0)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "mcp_protocol_misuse",
+      "name": "MCP Protocol Misuse",
+      "category": "mcp_protocol_misuse",
+      "severity": "medium",
+      "pattern": "(?i)(jsonrpc|method|params)\\s*[\"']?[:=]\\s*[\"']?(undefined|null)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.75,
+      "enabled": true
+    }
+  ]
+}

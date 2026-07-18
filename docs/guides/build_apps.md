@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-07-14
-Version: v1.5.1
+Last Updated: 2026-07-18
+Version: v1.5.6
 
 ---
 
@@ -102,7 +102,7 @@ Applications constructing `GovernanceEnvelope` transactions or parsing `ActionRe
 The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.5.1
+go get github.com/g8e-ai/g8e@v1.5.6
 ```
 
 The Go package provides protobuf message types for governance envelopes, governance metadata (L1, L2, L3), and all typed payload messages for first-class operations. It also provides SPIFFE workload identity helpers for URI SAN generation and validation.
@@ -114,14 +114,14 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 Install from PyPI:
 
 ```bash
-pip install g8e==1.5.1
+pip install g8e==1.5.6
 ```
 
 The package provides:
 
-- **`g8e.constants`**: Runtime loader for JSON protocol constants, including events, status, collections, headers, channels, and API paths
-- **`g8e.enums`**: Dynamic enum generation from protocol constants, including event types and operator tool names
-- **`g8e.models`**: Pydantic v2 models for protocol data structures, including request contexts, platform settings, and SSE event wire models
+- **`g8e.constants`**: Runtime loader for JSON protocol constants, including events, status, collections, headers, channels, and API paths. Accessor functions (`collection()`, `channel()`, `intent()`, `prompt()`, `kv_key()`, `kv_session_type()`) resolve constant keys to wire values.
+- **`g8e.enums`**: Dynamic enum generation from protocol constants, including event types, operator tool names, channels, intents, prompts, collections, KV keys, and session types
+- **`g8e.models`**: Pydantic v2 models for protocol data structures, including request contexts, platform settings, SSE event wire models, `LLMOverrides` mixin for chat request overrides, and `GovernanceEnvelope` with `compute_transaction_hash()` for deterministic transaction hash generation
 
 Requires Python 3.10+. Set `G8E_PROTOCOL_DIR` to override the default protocol constants directory. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference and example scripts.
 
@@ -948,8 +948,8 @@ The system does not use the LLM as a bulk transport channel:
   delivery when Sentinel mode is enabled.
 - **Output budget**: `max_tokens` and provider-specific output limits bound visible model
   output.
-- **Operator payloads**: The Operator rejects command and pubsub payloads above the protocol
-  ceiling of 5 MB.
+- **Operator payloads**: The Operator rejects command and pubsub payloads above the configured
+  maximum (default: 512 KB).
 - **Operator output**: Scrubbed before publishing results. The scrubbing service classifies
   output by size and applies structured boundaries.
 - **Filesystem access**: Typed operations, not unconstrained shell dumps. Scoped reads with

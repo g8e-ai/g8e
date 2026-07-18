@@ -419,22 +419,10 @@ func TestGetAgentConfigPaths(t *testing.T) {
 		got  string
 		want string
 	}{
-		{"CursorConfigDir", got.CursorConfigDir, pathutil.SafeJoin(home, constants.AgentConfigDirCursor)},
-		{"CursorConfigPath", got.CursorConfigPath, pathutil.SafeJoin(home, constants.AgentConfigDirCursor, constants.AgentConfigFileMCP)},
-		{"DevinConfigDir", got.DevinConfigDir, pathutil.SafeJoin(home, constants.AgentConfigDirDevin)},
-		{"DevinConfigPath", got.DevinConfigPath, pathutil.SafeJoin(home, constants.AgentConfigDirDevin, constants.AgentConfigFileMCPDevin)},
 		{"GeminiConfigDir", got.GeminiConfigDir, pathutil.SafeJoin(home, constants.AgentConfigDirGemini)},
 		{"GeminiConfigPath", got.GeminiConfigPath, pathutil.SafeJoin(home, constants.AgentConfigDirGemini, constants.AgentConfigFileSettings)},
-		{"GooseConfigDir", got.GooseConfigDir, pathutil.SafeJoin(home, constants.AgentConfigDirGoose)},
-		{"GooseConfigPath", got.GooseConfigPath, pathutil.SafeJoin(home, constants.AgentConfigDirGoose, constants.AgentConfigFileSettings)},
-		{"VSCodeConfigDir", got.VSCodeConfigDir, pathutil.SafeJoin(home, constants.AgentConfigDirVSCode)},
-		{"VSCodeConfigPath", got.VSCodeConfigPath, pathutil.SafeJoin(home, constants.AgentConfigDirVSCode, constants.AgentConfigFileMCP)},
-		{"CodeiumConfigDir", got.CodeiumConfigDir, pathutil.SafeJoin(home, constants.AgentConfigDirCodeium)},
-		{"CodeiumConfigPath", got.CodeiumConfigPath, pathutil.SafeJoin(home, constants.AgentConfigDirCodeium, constants.AgentConfigFileMCP)},
-		{"TabbyConfigDir", got.TabbyConfigDir, pathutil.SafeJoin(home, constants.AgentConfigDirTabby)},
-		{"TabbyConfigPath", got.TabbyConfigPath, pathutil.SafeJoin(home, constants.AgentConfigDirTabby, constants.AgentConfigFileMCP)},
-		{"ContinueConfigDir", got.ContinueConfigDir, pathutil.SafeJoin(home, constants.AgentConfigDirContinue)},
-		{"ContinueConfigPath", got.ContinueConfigPath, pathutil.SafeJoin(home, constants.AgentConfigDirContinue, constants.AgentConfigFileSettings)},
+		{"GooseYAMLConfigDir", got.GooseYAMLConfigDir, pathutil.SafeJoin(home, constants.AgentConfigDirGoose)},
+		{"GooseYAMLConfigPath", got.GooseYAMLConfigPath, pathutil.SafeJoin(home, constants.AgentConfigDirGoose, constants.AgentConfigFileGooseYAML)},
 	}
 
 	for _, tc := range tests {
@@ -449,29 +437,11 @@ func TestGetAgentConfigPaths(t *testing.T) {
 func TestGetAgentConfigPaths_AllFieldsPopulated(t *testing.T) {
 	got := GetAgentConfigPaths("/home/user")
 
-	if got.CursorConfigDir == "" || got.CursorConfigPath == "" {
-		t.Error("Cursor fields should be populated")
-	}
-	if got.DevinConfigDir == "" || got.DevinConfigPath == "" {
-		t.Error("Devin fields should be populated")
-	}
 	if got.GeminiConfigDir == "" || got.GeminiConfigPath == "" {
 		t.Error("Gemini fields should be populated")
 	}
-	if got.GooseConfigDir == "" || got.GooseConfigPath == "" {
+	if got.GooseYAMLConfigDir == "" || got.GooseYAMLConfigPath == "" {
 		t.Error("Goose fields should be populated")
-	}
-	if got.VSCodeConfigDir == "" || got.VSCodeConfigPath == "" {
-		t.Error("VSCode fields should be populated")
-	}
-	if got.CodeiumConfigDir == "" || got.CodeiumConfigPath == "" {
-		t.Error("Codeium fields should be populated")
-	}
-	if got.TabbyConfigDir == "" || got.TabbyConfigPath == "" {
-		t.Error("Tabby fields should be populated")
-	}
-	if got.ContinueConfigDir == "" || got.ContinueConfigPath == "" {
-		t.Error("Continue fields should be populated")
 	}
 }
 
@@ -484,14 +454,8 @@ func TestGetAgentConfigPaths_ConfigPathInsideConfigDir(t *testing.T) {
 		path string
 		name string
 	}{
-		{got.CursorConfigDir, got.CursorConfigPath, "Cursor"},
-		{got.DevinConfigDir, got.DevinConfigPath, "Devin"},
 		{got.GeminiConfigDir, got.GeminiConfigPath, "Gemini"},
-		{got.GooseConfigDir, got.GooseConfigPath, "Goose"},
-		{got.VSCodeConfigDir, got.VSCodeConfigPath, "VSCode"},
-		{got.CodeiumConfigDir, got.CodeiumConfigPath, "Codeium"},
-		{got.TabbyConfigDir, got.TabbyConfigPath, "Tabby"},
-		{got.ContinueConfigDir, got.ContinueConfigPath, "Continue"},
+		{got.GooseYAMLConfigDir, got.GooseYAMLConfigPath, "Goose"},
 	}
 
 	for _, p := range pairs {
@@ -509,8 +473,8 @@ func TestGetAgentConfigPaths_DifferentHomeDirs(t *testing.T) {
 	for _, home := range homes {
 		t.Run(home, func(t *testing.T) {
 			got := GetAgentConfigPaths(home)
-			if !strings.HasPrefix(filepath.ToSlash(got.CursorConfigDir), filepath.ToSlash(home)) {
-				t.Errorf("CursorConfigDir %q should start with %q", got.CursorConfigDir, home)
+			if !strings.HasPrefix(filepath.ToSlash(got.GeminiConfigDir), filepath.ToSlash(home)) {
+				t.Errorf("GeminiConfigDir %q should start with %q", got.GeminiConfigDir, home)
 			}
 		})
 	}

@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 )
@@ -31,7 +32,7 @@ func TestEnrollCmdWithConfig_ConfigLoaderError(t *testing.T) {
 		return nil, errors.New("config load error")
 	}
 
-	cmd := enrollCmdWithConfig(failLoader, newFileSvc)
+	cmd := enrollCmdWithConfig(failLoader, newFileSvc, auth.CheckOperatorRunning)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -51,7 +52,7 @@ func TestEnrollCmdWithConfig_OperatorNotRunningReturnsError(t *testing.T) {
 		return cfg, nil
 	}
 
-	cmd := enrollCmdWithConfig(loader, newFileSvc)
+	cmd := enrollCmdWithConfig(loader, newFileSvc, auth.CheckOperatorRunning)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -61,7 +62,7 @@ func TestEnrollCmdWithConfig_OperatorNotRunningReturnsError(t *testing.T) {
 }
 
 func TestEnrollCmdWithConfig_NoTPMFlagOnNonWindows(t *testing.T) {
-	cmd := enrollCmdWithConfig(loadConfig, newFileSvc)
+	cmd := enrollCmdWithConfig(loadConfig, newFileSvc, auth.CheckOperatorRunning)
 	tpmFlag := cmd.Flags().Lookup("tpm")
 	if tpmFlag != nil {
 		assert.Equal(t, "false", tpmFlag.DefValue)
@@ -69,7 +70,7 @@ func TestEnrollCmdWithConfig_NoTPMFlagOnNonWindows(t *testing.T) {
 }
 
 func TestEnrollCmdWithConfig_HasRunE(t *testing.T) {
-	cmd := enrollCmdWithConfig(loadConfig, newFileSvc)
+	cmd := enrollCmdWithConfig(loadConfig, newFileSvc, auth.CheckOperatorRunning)
 	require.NotNil(t, cmd.RunE)
 }
 
@@ -81,7 +82,7 @@ func TestPerformEnroll_NoLocalCredsGatewayDownReturnsError(t *testing.T) {
 
 	cmd := enrollCmdWithConfig(func(string) (*config.Config, error) {
 		return cfg, nil
-	}, newFileSvc)
+	}, newFileSvc, auth.CheckOperatorRunning)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -101,7 +102,7 @@ func TestPerformEnroll_WithLocalCredsGatewayDownReturnsError(t *testing.T) {
 
 	cmd := enrollCmdWithConfig(func(string) (*config.Config, error) {
 		return cfg, nil
-	}, newFileSvc)
+	}, newFileSvc, auth.CheckOperatorRunning)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -117,7 +118,7 @@ func TestEnrollCmdWithConfig_UsesInjectedConfigLoader(t *testing.T) {
 		return nil, errors.New("injected error")
 	}
 
-	cmd := enrollCmdWithConfig(loader, newFileSvc)
+	cmd := enrollCmdWithConfig(loader, newFileSvc, auth.CheckOperatorRunning)
 	_ = cmd.RunE(cmd, nil)
 
 	assert.True(t, called, "config loader should have been called")
@@ -129,7 +130,7 @@ func TestEnrollCmdWithConfig_PropagatesConfigError(t *testing.T) {
 		return nil, expectedErr
 	}
 
-	cmd := enrollCmdWithConfig(loader, newFileSvc)
+	cmd := enrollCmdWithConfig(loader, newFileSvc, auth.CheckOperatorRunning)
 	err := cmd.RunE(cmd, nil)
 	require.Error(t, err)
 }

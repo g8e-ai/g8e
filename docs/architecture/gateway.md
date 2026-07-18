@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-07-15
-Version: v1.5.2
+Last Updated: 2026-07-18
+Version: v1.5.6
 
 The g8e Protocol platform is composed of two logically distinct roles, both implemented by the reference g8e binary file:
 
@@ -342,7 +342,7 @@ Performs isolated boundary tool dispatch (via MCP/A2A) and signed receipt produc
 
 ## Out-of-Band (OOB) Suspension & WebAuthn Approval Flow
 
-When a standard AI client (such as Claude, Codex, or Cursor) requests a mutation, it typically cannot generate an L3 Notary human signature.
+When a standard AI client (such as Claude Code, Codex, Goose, or Gemini CLI) requests a mutation, it typically cannot generate an L3 Notary human signature.
 
 1.  **Suspension**: The gateway detects missing L3 Notary proof and suspends the transaction in the SQLite `suspended_transactions` store.
 2.  **Challenge**: The gateway returns an OOB WebAuthn challenge URL to the AI client.
@@ -398,23 +398,24 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 
 ## Agent Integration
 
-The g8e Gateway provides zero-config ingress for agentic CLI coding tools (Claude Code, Codex, Cursor, VS Code) through the MCP agent subcommands.
+The g8e Gateway provides zero-config ingress for agentic CLI coding tools (Claude Code, OpenAI Codex, Goose, Gemini CLI) through the MCP agent subcommands. Each supported agent has its native/built-in tools disabled at launch, forcing all I/O through the g8e MCP gateway for full L1-L5 governance enforcement.
 
 ### Agent Subcommands
 
 The agent integration provides the following subcommands:
 
-**`g8e mcp agent list`**: Lists all supported agent binaries that g8e supports for MCP integration, including Claude, Codex, Cursor, Devin, VS Code, Continue, Aider, Codeium, Tabby, Ollama, Gemini, Goose, and generic MCP-compatible agents.
+**`g8e mcp agent list`**: Lists all supported agent binaries that g8e supports for MCP integration: Claude Code, OpenAI Codex, Goose, and Gemini CLI.
 
 **`g8e mcp agent show <agent>`**: Prints MCP client configuration for connecting to the g8e Gateway from local coding tools. Displays three configuration matrices:
 - g8e.local (mTLS): For production environments with DNS configured
 - IP Address (mTLS): For environments without DNS or direct IP access
 - Stdio Transport: For direct native tool access without gateway
 
-**`g8e mcp agent run [--url <url>] [-- <command> [args...]]`**: Launches an AI agent or wraps an external MCP server with g8e governance. Supports:
-- Launching supported agents (claude, codex, cursor, devin, continue, aider, goose, vscode, codeium, tabby, gemini) with automatic MCP configuration
+**`g8e mcp agent run [--url <url>] [--verify] [-- <command> [args...]]`**: Launches an AI agent or wraps an external MCP server with g8e governance. Supports:
+- Launching supported agents (claude, codex, goose, gemini) with automatic MCP configuration and native tool disabling
 - Wrapping external MCP servers via HTTP or subprocess for governance reverse proxy
 - Forwarding extra arguments to the agent binary
+- Runtime verification (`--verify`, enabled by default): before launching the agent, g8e verifies that the agent's tool-disabling configuration was correctly written — checking MCP config files, CLI flags, and agent-specific settings (e.g., `tools.core: []` for Gemini, `--disallowed-tools` for Claude/Codex, `--no-profile` for Goose). Use `--verify=false` to skip verification (e.g., for CI/CD pipelines where the config is pre-validated).
 
 ### Stdio Proxy
 

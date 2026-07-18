@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package anduril.taskmanager.v1;
+
+import "anduril/api/v1/annotations.proto";
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+
+option csharp_namespace = "Anduril.Taskmanager.V1";
+option go_package = "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/taskmanager/v1;taskmanager";
+option java_multiple_files = true;
+option java_outer_classname = "ManualControlProto";
+option java_package = "com.anduril.taskmanager.v1";
+option objc_class_prefix = "ATX";
+
+// A single frame of manual control input forwarded by Lattice to an agent.
+//
+// When an operator sends manual control input, for example, joystick movements using
+// `SendManualControlFrames`, Lattice packages each input into a `ManualControlFrame`
+// and forwards it to the executing agent via the `ListenForManualControlFrames`
+// streaming RPC.
+//
+// Each frame carries sequencing metadata to support concurrent control sessions,
+// detect stale frames, and ensure proper ordering.
+message ManualControlFrame {
+  option (anduril.api.v1.message_options) = {force_generate: true};
+  // The ID of the manual control task this frame belongs to.
+  string task_id = 1;
+  // Unix timestamp in microseconds identifying the control session.
+  // Increments each time a client opens a new stream for this task.
+  // Agents should ignore frames with a lower epoch to handle stale streams
+  // or operator handoffs.
+  uint64 epoch_micros = 2;
+  // The sequence number for a stream, incremented for each frame.
+  // Agents can use this to detect out-of-order delivery within the same epoch.
+  uint64 sequence = 3;
+  // The time at which this frame was created.
+  // Agents can use this to detect stale frame data.
+  google.protobuf.Timestamp creation_time = 4;
+  // The control instructions for this frame, passed through from the client.
+  // The format of each task is specific to the task, and not visible to Lattice.
+  google.protobuf.Any specification = 5;
+}
