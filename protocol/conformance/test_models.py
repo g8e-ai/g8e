@@ -440,22 +440,22 @@ class TestEventPayloadConformance:
 
         event = SessionEventWire(
             user_id="user-1",
-            event={"type": "chat_error", "data": {"error": "test"}},
+            event={"type": "g8e.v1.ai.llm.chat.message.processing.failed", "data": {"error": "test"}},
         )
         parsed = json.loads(event.model_dump_json())
         assert parsed["user_id"] == "user-1"
-        assert parsed["event"]["type"] == "chat_error"
+        assert parsed["event"]["type"] == "g8e.v1.ai.llm.chat.message.processing.failed"
 
     def test_background_event_wire_round_trip(self):
         from g8e.models import BackgroundEventWire
 
         event = BackgroundEventWire(
             user_id="user-1",
-            event={"type": "chat_error", "data": {"error": "test"}},
+            event={"type": "g8e.v1.operator.command.requested", "data": {"error": "test"}},
         )
         parsed = json.loads(event.model_dump_json())
         assert parsed["user_id"] == "user-1"
-        assert parsed["event"]["type"] == "chat_error"
+        assert parsed["event"]["type"] == "g8e.v1.operator.command.requested"
 
 
 class TestUserSchemaZeroPII:

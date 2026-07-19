@@ -219,22 +219,29 @@ class TestEventPayloads:
         assert payload.status == "completed"
 
     def test_session_event_wire(self):
-        event_body = {"type": "chat.chunk", "data": {"content": "hello"}}
+        event_body = {"type": "g8e.v1.ai.llm.chat.iteration.text.chunk.received", "data": {"content": "hello"}}
         wire = SessionEventWire(
             user_id="user-1",
             event=event_body,
         )
         assert wire.user_id == "user-1"
-        assert wire.event.type == "chat.chunk"
+        assert wire.event.type == "g8e.v1.ai.llm.chat.iteration.text.chunk.received"
 
     def test_background_event_wire(self):
-        event_body = {"type": "system.alert", "data": {"level": "warning"}}
+        event_body = {"type": "g8e.v1.operator.command.requested", "data": {"level": "warning"}}
         wire = BackgroundEventWire(
             user_id="user-1",
             event=event_body,
         )
         assert wire.user_id == "user-1"
-        assert wire.event.type == "system.alert"
+        assert wire.event.type == "g8e.v1.operator.command.requested"
+
+    def test_sse_event_body_rejects_invalid_event_type(self):
+        with pytest.raises(ValidationError):
+            SessionEventWire(
+                user_id="user-1",
+                event={"type": "not.a.real.event", "data": {}},
+            )
 
 
 class TestG8eBaseModel:
@@ -343,37 +350,37 @@ class TestEventFactoryMethods:
 
     def test_session_event_wire_from_session_event(self):
         wire = SessionEventWire.from_session_event(
-            "chat.chunk",
+            "g8e.v1.ai.llm.chat.iteration.text.chunk.received",
             {"content": "hello"},
             web_session_id="web-1",
             user_id="user-1",
         )
         assert wire.user_id == "user-1"
         assert wire.web_session_id == "web-1"
-        assert wire.event.type == "chat.chunk"
+        assert wire.event.type == "g8e.v1.ai.llm.chat.iteration.text.chunk.received"
         assert wire.event.data == {"content": "hello"}
 
     def test_session_event_wire_from_session_event_round_trip(self):
         wire = SessionEventWire.from_session_event(
-            "chat.complete",
+            "g8e.v1.ai.llm.chat.iteration.text.completed",
             {"content": "done", "finish_reason": "stop"},
             cli_session_id="cli-1",
             user_id="user-2",
         )
         data = wire.model_dump(mode="json")
         restored = SessionEventWire.model_validate(data)
-        assert restored.event.type == "chat.complete"
+        assert restored.event.type == "g8e.v1.ai.llm.chat.iteration.text.completed"
         assert restored.event.data["finish_reason"] == "stop"
         assert restored.cli_session_id == "cli-1"
 
     def test_background_event_wire_from_background_event(self):
         wire = BackgroundEventWire.from_background_event(
-            "system.alert",
+            "g8e.v1.operator.command.requested",
             {"level": "warning"},
             user_id="user-1",
         )
         assert wire.user_id == "user-1"
-        assert wire.event.type == "system.alert"
+        assert wire.event.type == "g8e.v1.operator.command.requested"
         assert wire.event.data == {"level": "warning"}
 
 

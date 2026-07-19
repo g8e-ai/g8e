@@ -756,6 +756,38 @@
       "_go_const": "EventOperatorNetworkPortCheckStarted",
       "value": "g8e.v1.operator.network.port.check.started"
     },
+    "OperatorIntentApprovalGranted": {
+      "_go_const": "EventOperatorIntentApprovalGranted",
+      "value": "g8e.v1.operator.intent.approval.granted"
+    },
+    "OperatorIntentApprovalRejected": {
+      "_go_const": "EventOperatorIntentApprovalRejected",
+      "value": "g8e.v1.operator.intent.approval.rejected"
+    },
+    "OperatorIntentApprovalRequested": {
+      "_go_const": "EventOperatorIntentApprovalRequested",
+      "value": "g8e.v1.operator.intent.approval.requested"
+    },
+    "OperatorIntentDenied": {
+      "_go_const": "EventOperatorIntentDenied",
+      "value": "g8e.v1.operator.intent.denied"
+    },
+    "OperatorIntentGranted": {
+      "_go_const": "EventOperatorIntentGranted",
+      "value": "g8e.v1.operator.intent.granted"
+    },
+    "OperatorIntentRequested": {
+      "_go_const": "EventOperatorIntentRequested",
+      "value": "g8e.v1.operator.intent.requested"
+    },
+    "OperatorIntentRevokeRequested": {
+      "_go_const": "EventOperatorIntentRevokeRequested",
+      "value": "g8e.v1.operator.intent.revoke.requested"
+    },
+    "OperatorIntentRevoked": {
+      "_go_const": "EventOperatorIntentRevoked",
+      "value": "g8e.v1.operator.intent.revoked"
+    },
     "OperatorNotaryApprovalRequested": {
       "_go_const": "EventOperatorNotaryApprovalRequested",
       "value": "g8e.v1.operator.notary.approval.requested"

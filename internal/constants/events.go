@@ -159,6 +159,14 @@ const EventOperatorAuditCommandRecorded EventType = "g8e.v1.operator.audit.comma
 const EventOperatorAuditDirectCommandRecorded EventType = "g8e.v1.operator.audit.direct.command.recorded"
 const EventOperatorAuditDirectCommandResultRecorded EventType = "g8e.v1.operator.audit.direct.command.result.recorded"
 const EventOperatorAuditMcpCallRecorded EventType = "g8e.v1.operator.audit.mcp.call.recorded"
+const EventOperatorIntentApprovalGranted EventType = "g8e.v1.operator.intent.approval.granted"
+const EventOperatorIntentApprovalRejected EventType = "g8e.v1.operator.intent.approval.rejected"
+const EventOperatorIntentApprovalRequested EventType = "g8e.v1.operator.intent.approval.requested"
+const EventOperatorIntentDenied EventType = "g8e.v1.operator.intent.denied"
+const EventOperatorIntentGranted EventType = "g8e.v1.operator.intent.granted"
+const EventOperatorIntentRequested EventType = "g8e.v1.operator.intent.requested"
+const EventOperatorIntentRevokeRequested EventType = "g8e.v1.operator.intent.revoke.requested"
+const EventOperatorIntentRevoked EventType = "g8e.v1.operator.intent.revoked"
 const EventOperatorNotaryApprovalRequested EventType = "g8e.v1.operator.notary.approval.requested"
 const EventOperatorNotaryTransactionExpired EventType = "g8e.v1.operator.notary.transaction.expired"
 const EventOperatorBootstrapRequested EventType = "g8e.v1.operator.bootstrap.requested"
@@ -419,6 +427,16 @@ type _EventOperatorFsRead struct {
 type _EventOperatorMcp struct {
 	CallRequested EventType
 }
+type _EventOperatorIntent struct {
+	ApprovalGranted   EventType
+	ApprovalRejected  EventType
+	ApprovalRequested EventType
+	Denied            EventType
+	Granted           EventType
+	Requested         EventType
+	RevokeRequested   EventType
+	Revoked           EventType
+}
 type _EventOperatorNotary struct {
 	ApprovalRequested  EventType
 	TransactionExpired EventType
@@ -480,6 +498,7 @@ type _EventOperator struct {
 	HeartbeatMissed          EventType
 	HeartbeatReceived        EventType
 	HeartbeatRequested       EventType
+	Intent                   _EventOperatorIntent
 	Mcp                      _EventOperatorMcp
 	NetworkPing              _EventOperatorNetworkPing
 	Notary                   _EventOperatorNotary
@@ -612,6 +631,16 @@ var Event = struct {
 		HeartbeatMissed:    EventOperatorHeartbeatMissed,
 		HeartbeatReceived:  EventOperatorHeartbeatReceived,
 		HeartbeatRequested: EventOperatorHeartbeatRequested,
+		Intent: _EventOperatorIntent{
+			ApprovalGranted:   EventOperatorIntentApprovalGranted,
+			ApprovalRejected:  EventOperatorIntentApprovalRejected,
+			ApprovalRequested: EventOperatorIntentApprovalRequested,
+			Denied:            EventOperatorIntentDenied,
+			Granted:           EventOperatorIntentGranted,
+			Requested:         EventOperatorIntentRequested,
+			RevokeRequested:   EventOperatorIntentRevokeRequested,
+			Revoked:           EventOperatorIntentRevoked,
+		},
 		Mcp: _EventOperatorMcp{
 			CallRequested: EventOperatorMcpCallRequested,
 		},

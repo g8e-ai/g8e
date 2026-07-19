@@ -20,6 +20,11 @@
       "value": "g8e:sessions:{session.type}:{session.id}",
       "_python_const": "SESSION_WEB"
     },
+    "SessionOperator": {
+      "_go_const": "KVKeySessionOperator",
+      "value": "g8e:sessions:operator:{operator.session.id}",
+      "_python_const": "SESSION_OPERATOR"
+    },
     "SessionOperatorBind": {
       "_go_const": "KVKeySessionOperatorBind",
       "value": "g8e:sessions:operator:{operator.session.id}:bind",
