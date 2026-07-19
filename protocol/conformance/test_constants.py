@@ -66,6 +66,7 @@ WRAPPER_KEY_FILES = {
     "env_vars.json": "env_vars",
     "field_paths.json": "field_paths",
     "output.json": "output",
+    "ports.json": "ports",
 }
 
 # status.json has a nested structure: status -> category -> entries
@@ -74,11 +75,22 @@ STATUS_FILE = "status.json"
 # api_paths.json is a flat structure with no wrapper key
 API_PATHS_FILE = "api_paths.json"
 
-# Files where entries have _go_const (exit_codes and field_paths use different schemas)
-FILES_WITH_GO_CONST = set(WRAPPER_KEY_FILES.keys()) - {"exit_codes.json", "field_paths.json"}
+# Files where entries have _go_const (exit_codes uses a different schema)
+FILES_WITH_GO_CONST = set(WRAPPER_KEY_FILES.keys()) - {"exit_codes.json"}
 
 # Files where entries have a 'value' field (field_paths uses allowed_paths/forbidden_paths)
 FILES_WITH_VALUE = set(WRAPPER_KEY_FILES.keys()) - {"field_paths.json"}
+
+# auth.json has multiple wrapper keys, each containing entries with _go_const and value
+AUTH_WRAPPER_KEYS = [
+    "passkey_purposes",
+    "webauthn_types",
+    "webauthn_algorithms",
+    "webauthn_attestation",
+    "webauthn_requirements",
+    "pki_leaf_types",
+    "context_keys",
+]
 
 # Files where value uniqueness is enforced (events allow aliases)
 FILES_WITH_UNIQUE_VALUES = set(WRAPPER_KEY_FILES.keys()) - {"events.json"}
@@ -94,7 +106,7 @@ class TestJSONStructuralIntegrity:
 
     @pytest.mark.parametrize(
         "filename",
-        list(WRAPPER_KEY_FILES.keys()) + [STATUS_FILE, API_PATHS_FILE],
+        list(WRAPPER_KEY_FILES.keys()) + [STATUS_FILE, API_PATHS_FILE, "auth.json"],
     )
     def test_json_file_loads_successfully(self, filename: str):
         data = _load_json(filename)
@@ -599,3 +611,91 @@ class TestStatusMutationFlags:
                 assert isinstance(meta["_mutation"], bool), (
                     f"action_type/{key}: _mutation must be boolean, got {type(meta['_mutation'])}"
                 )
+
+
+# ---------------------------------------------------------------------------
+# Tests: auth.json multi-wrapper structure
+# ---------------------------------------------------------------------------
+
+
+class TestAuthJsonConstants:
+    """auth.json has multiple wrapper keys, each with entries containing _go_const and value."""
+
+    @pytest.mark.parametrize("wrapper_key", AUTH_WRAPPER_KEYS)
+    def test_auth_wrapper_key_exists(self, wrapper_key: str):
+        data = _load_json("auth.json")
+        assert wrapper_key in data, f"auth.json missing top-level key '{wrapper_key}'"
+        entries = data[wrapper_key]
+        assert isinstance(entries, dict), f"auth.json/{wrapper_key} must be a dict"
+        assert len(entries) > 0, f"auth.json/{wrapper_key} has no entries"
+
+    @pytest.mark.parametrize("wrapper_key", AUTH_WRAPPER_KEYS)
+    def test_auth_entries_have_go_const(self, wrapper_key: str):
+        data = _load_json("auth.json")
+        entries = data[wrapper_key]
+
+        missing = []
+        for key, meta in entries.items():
+            if isinstance(meta, dict) and "_go_const" not in meta:
+                missing.append(key)
+        assert not missing, (
+            f"auth.json/{wrapper_key}: entries missing _go_const: {missing}"
+        )
+
+    @pytest.mark.parametrize("wrapper_key", AUTH_WRAPPER_KEYS)
+    def test_auth_entries_have_value(self, wrapper_key: str):
+        data = _load_json("auth.json")
+        entries = data[wrapper_key]
+
+        missing = []
+        for key, meta in entries.items():
+            if isinstance(meta, dict):
+                if "value" not in meta:
+                    missing.append(key)
+                elif meta["value"] is None or (isinstance(meta["value"], str) and not meta["value"]):
+                    missing.append(key)
+        assert not missing, (
+            f"auth.json/{wrapper_key}: entries missing or empty 'value': {missing}"
+        )
+
+    # webauthn_requirements: resident_key_required and user_verification_required
+    # intentionally share the value "required" (different concepts, same wire value)
+    _SKIP_AUTH_UNIQUENESS = {"webauthn_requirements"}
+
+    @pytest.mark.parametrize("wrapper_key", AUTH_WRAPPER_KEYS)
+    def test_auth_values_unique_within_wrapper(self, wrapper_key: str):
+        if wrapper_key in self._SKIP_AUTH_UNIQUENESS:
+            return
+
+        data = _load_json("auth.json")
+        entries = data[wrapper_key]
+
+        seen: dict[str, str] = {}
+        duplicates = []
+        for key, meta in entries.items():
+            if isinstance(meta, dict) and "value" in meta:
+                val = str(meta["value"])
+                if val in seen:
+                    duplicates.append(f"{key} duplicates {seen[val]} (value={val})")
+                else:
+                    seen[val] = key
+        assert not duplicates, (
+            f"auth.json/{wrapper_key}: duplicate values: {duplicates}"
+        )
+
+    def test_auth_go_consts_are_pascalcase(self):
+        pascal_re = re.compile(r"^[A-Z][A-Za-z0-9.]*$")
+        relaxed_re = re.compile(r"^[a-z]+[A-Z][A-Za-z0-9.]*$")
+
+        data = _load_json("auth.json")
+        for wrapper_key in AUTH_WRAPPER_KEYS:
+            entries = data[wrapper_key]
+            for key, meta in entries.items():
+                if isinstance(meta, dict) and "_go_const" in meta:
+                    go_const = meta["_go_const"]
+                    if not go_const:
+                        continue
+                    base_name = go_const.split(".")[-1]
+                    assert pascal_re.match(base_name) or relaxed_re.match(base_name), (
+                        f"auth.json/{wrapper_key}/{key}: _go_const '{go_const}' is not PascalCase"
+                    )

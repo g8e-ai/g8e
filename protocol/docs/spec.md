@@ -4,8 +4,8 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-07-14
-Version: v1.5.1
+Last Updated: 2026-07-22
+Version: v1.5.8
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -368,7 +368,6 @@ The g8e platform uses CLI flags for production configuration. All paths are comp
 - `G8E_TRIBUNAL_BOOTSTRAP`: Path to a JSON file that seeds a TribunalPolicy and trusted signers at startup (overrides `--tribunal-bootstrap`)
 - `G8E_VAULT_DIR`: Directory for vault data (overrides `--vault-dir`)
 - `G8E_VAULT_KEY`: Path to vault private key (overrides `--vault-key`)
-- `G8E_VAULT_REQUIRE_UNLOCK`: Set to `true` to require vault unlock at startup (overrides `--vault-require-unlock`)
 - `G8E_PASSKEY_RP_ID`: RP ID for passkey operations (overrides `--passkey-rp-id`)
 - `G8E_PASSKEY_RP_NAME`: RP Name for passkey operations (overrides `--passkey-rp-name`)
 - `G8E_PASSKEY_RP_ORIGINS`: Comma-separated additional RP origins for passkey operations (overrides `--passkey-rp-origin`)
@@ -383,7 +382,6 @@ CLI flags:
 - `--secrets-dir <dir>`: Directory for platform secrets (default: `.g8e/secrets`)
 - `--vault-dir <dir>`: Directory for vault data (default: `.g8e/secrets/vault`)
 - `--vault-key <path>`: Path to vault private key (default: auto-generated in vault dir)
-- `--vault-require-unlock`: Require vault to be unlocked at startup (fail if vault cannot be unlocked)
 - `--http-port <port>`: HTTP port for bootstrap and MCP routes (flag default: 0, auto-resolved from `constants.Ports`; effective default: 8080)
 - `--https-port <port>`: HTTPS port for mTLS API and public surface (flag default: 0, auto-resolved from `constants.Ports`; effective default: 8443)
 - `--passkey-rp-id <id>`: RP ID for passkey operations (default: localhost)
@@ -401,6 +399,7 @@ CLI flags:
 - `--cors-origin <origin>`: Allowed CORS origin for cross-origin browser access (repeatable, env: `G8E_ALLOWED_ORIGINS`)
 - `--passkey-rp-origin <origin>`: Additional RP origin for passkey operations (repeatable, env: `G8E_PASSKEY_RP_ORIGINS`)
 - `--follow`: Run gateway in foreground (Ctrl+C stops gateway)
+- `--interactive` / `-i`: Launch interactive onboarding wizard before starting the gateway
 
 ---
 

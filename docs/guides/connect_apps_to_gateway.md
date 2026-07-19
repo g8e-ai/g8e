@@ -65,13 +65,13 @@ The g8e Gateway exposes two consolidated protocol surfaces. Each surface serves 
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **HTTP Surface** | 8080 (HTTP) | None | Health checks, bootstrap enrollment, PKI discovery endpoints, catch-all redirect to HTTPS |
+| **HTTP Surface** | 8080 (HTTP) | None | Health checks, bootstrap enrollment, PKI discovery endpoints, deploy scripts |
 | **HTTPS Surface** | 8443 (TLS) | mTLS (app-layer) + URI SAN | Governance envelopes, MCP/A2A APIs, document store, WebSocket pub/sub, console SPA |
 
 ### Port Separation
 
 The g8e Gateway enforces strict port separation for security:
-- **HTTP Surface**: Plain HTTP for health checks, bootstrap enrollment, PKI discovery, and catch-all redirect to HTTPS. No MCP, A2A, governance, or mutation endpoints are exposed on this surface.
+- **HTTP Surface**: Plain HTTP for health checks, bootstrap enrollment, PKI discovery, and deploy scripts. No MCP, A2A, governance, or mutation endpoints are exposed on this surface.
 - **HTTPS Surface**: TLS with optional client certificate verification at the TLS layer. mTLS enforcement occurs at the application layer, where every route is classified into one of four auth modes: public (no auth), mTLS (client certificate required), web session (cookie-based browser auth), and dual (mTLS preferred, cookie fallback). Public routes (health, console SPA, bootstrap, passkey console, approval page) bypass mTLS; mTLS routes require a valid client certificate; web session routes validate a session cookie; dual routes try mTLS first and fall back to cookie auth.
 
 Port mixing is prohibited. The gateway fails startup if the HTTP and HTTPS surfaces are assigned to the same port, as this would conflate plain-HTTP bootstrap routes with TLS-protected API routes.

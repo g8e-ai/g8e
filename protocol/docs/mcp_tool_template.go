@@ -12,7 +12,6 @@
 // limitations under the License.
 
 //go:build ignore
-// +build ignore
 
 // TEMPLATE: Copy this file to create a new native tool
 //
@@ -21,10 +20,17 @@
 // 2. Replace YOUR_TOOL_NAME with your tool name (snake_case)
 // 3. Replace YourTool with your tool name (PascalCase)
 // 4. Implement the Execute() method
-// 5. Add YourToolRequest and YourToolResult structs to internal/services/mcp/models.go
+// 5. Keep YourToolRequest and YourToolResult structs in this file (not models.go)
 // 6. Add your tool to the tools list in RegisterNativeTools() in native_tool_registry.go
 // 7. Create a test file internal/services/mcp/your_tool_name_test.go
 // 8. Done! No init() function needed
+//
+// CONVENTIONS (see docs/devs/devs.md):
+// - Three import blocks: standard library, external, internal
+// - Wrap errors with context: fmt.Errorf("your_tool_name: action: %w", err)
+// - Return Go error for programming errors (unmarshal, marshal failures)
+// - Return CallToolResult{IsError: true, ...} for operational errors (tool ran but failed)
+// - Use context.Context for cancellation; check ctx.Err() in long-running loops
 
 package mcp
 
@@ -35,14 +41,14 @@ import (
 )
 
 // YourToolRequest represents the input for your tool.
-// Ideally, move this to internal/services/mcp/models.go
+// Keep request/result structs in this tool file, not in models.go.
 type YourToolRequest struct {
 	Param1 string `json:"param1"`
 	Param2 int    `json:"param2,omitempty"`
 }
 
 // YourToolResult represents the output of your tool.
-// Ideally, move this to internal/services/mcp/models.go
+// Keep request/result structs in this tool file, not in models.go.
 type YourToolResult struct {
 	Success bool   `json:"success"`
 	Data    string `json:"data"`
@@ -75,24 +81,31 @@ func (t *YourTool) InputSchema() *InputSchema {
 				Type:        "integer",
 				Description: "Description of param2 (optional)",
 			},
+			"mode": {
+				Type:        "string",
+				Description: "Operating mode (optional, enum example)",
+				Enum:        []string{"fast", "thorough"},
+			},
 		},
 		Required: []string{"param1"},
 	}
 }
 
-// Execute implements the tool logic
+// Execute implements the tool logic.
+// Return a Go error for programming failures (unmarshal, marshal).
+// Return CallToolResult{IsError: true, ...} for operational failures (tool ran but action failed).
 func (t *YourTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
 	var req YourToolRequest
 	if err := json.Unmarshal(args, &req); err != nil {
 		return CallToolResult{}, fmt.Errorf("your_tool_name: unmarshal arguments: %w", err)
 	}
 
-	// Validate required fields (optional, but good practice for clarity)
+	// Validate required fields
 	if req.Param1 == "" {
 		return CallToolResult{}, fmt.Errorf("your_tool_name: param1 is required")
 	}
 
-	// Example: Check context for cancellation
+	// Check context for cancellation
 	if err := ctx.Err(); err != nil {
 		return CallToolResult{}, err
 	}
@@ -103,6 +116,25 @@ func (t *YourTool) Execute(ctx context.Context, args json.RawMessage) (CallToolR
 		Success: true,
 		Data:    "Tool executed successfully",
 	}
+
+	// Example: operational error (tool ran but action failed)
+	// Return IsError=true so the client sees the error in the tool result,
+	// not as a JSON-RPC error.
+	//
+	// result = YourToolResult{
+	// 	Success: false,
+	// 	Error:   "resource not found",
+	// }
+	// resultJSON, _ := json.Marshal(result)
+	// return CallToolResult{
+	// 	IsError: true,
+	// 	Content: []TextContent{
+	// 		{
+	// 			Type: "text",
+	// 			Text: string(resultJSON),
+	// 		},
+	// 	},
+	// }, nil
 
 	// Marshal result to JSON
 	resultJSON, err := json.Marshal(result)

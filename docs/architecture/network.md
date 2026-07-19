@@ -1,7 +1,7 @@
 # Network Architecture
 
-Last Updated: 2026-07-15
-Version: v1.5.2
+Last Updated: 2026-07-19
+Version: v1.5.8
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
 
@@ -197,7 +197,7 @@ The g8e Operator uses dial-out WebSocket pub/sub connections with zero inbound p
 
 ### WebSocket Pub/Sub
 
-The gateway provides a WebSocket fan-out via `/api/v1/pubsub/stream`, authenticated by mTLS middleware. The channel naming convention is `cmd:<operator_id>:<operator_session_id>` for commands and `results:<operator_id>:<operator_session_id>` for results. All channels require mTLS authentication, and topic ACLs enforce that subscribers can only subscribe to channels matching their mTLS workload identity.
+The gateway provides a WebSocket fan-out via `/api/v1/pubsub/stream`, authenticated by mTLS middleware. The channel naming convention is `cmd:<operator_id>:<operator_session_id>` for commands, `results:<operator_id>:<operator_session_id>` for results, and `heartbeat:<operator_id>:<operator_session_id>` for operator heartbeats. All channels require mTLS authentication, and topic ACLs enforce that subscribers can only subscribe to channels matching their mTLS workload identity.
 
 ### Server-Sent Events (SSE)
 

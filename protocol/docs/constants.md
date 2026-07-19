@@ -173,9 +173,9 @@ Internal enumeration constants, each defined as a typed string:
 - `AISource`: `AISourceTerminalAnchored`, `AISourceTerminalDirect`, `AISourceToolCall`
 - `ComponentStatus`: `ComponentStatusActive`, `ComponentStatusError`, `ComponentStatusInactive`, `ComponentStatusMaintenance`, `ComponentStatusDegraded`
 - `InfrastructureStatus`: `InfrastructureStatusCritical`, `InfrastructureStatusDegraded`, `InfrastructureStatusHealthy`, `InfrastructureStatusStable`, `InfrastructureStatusUnknown`, `InfrastructureStatusOperational`, `InfrastructureStatusDown`
-- `AuthMethod`: `AuthMethodKVPubSub`, `AuthMethodSession`, `AuthMethodProxy`, `AuthMethodOperatorSession`, `AuthMethodTest`
+- `AuthMethod`: `AuthMethodKvPubSub`, `AuthMethodSession`, `AuthMethodProxy`, `AuthMethodOperatorSession`, `AuthMethodTest`
 - `WorkflowType`: `WorkflowTypeG8eBound`, `WorkflowTypeG8eCloudBound`, `WorkflowTypeG8eNotBound`, `WorkflowTypeTriage`, `WorkflowTypeInvestigation`
-- `AITaskId`: `AITaskIDAgentContinue`, `AITaskIDChat`, `AITaskIDCommand`, `AITaskIDDirectCommand`, `AITaskIDFetchFileDiff`, `AITaskIDFetchFileHistory`, `AITaskIDFetchHistory`, `AITaskIDFetchLogs`, `AITaskIDFileEdit`, `AITaskIDFsList`, `AITaskIDFsRead`, `AITaskIDIntentGrant`, `AITaskIDIntentRevoke`, `AITaskIDPortCheck`, `AITaskIDRecursiveGrep`, `AITaskIDRestoreFile`, plus additional task ID aliases for chat, case, memory, command execution, direct command, file operation, recursive grep, and investigation query
+- `AITaskId`: `AITaskIDAgentContinue`, `AITaskIDChat`, `AITaskIDCommand`, `AITaskIDDirectCommand`, `AITaskIDFetchFileDiff`, `AITaskIDFetchFileHistory`, `AITaskIDFetchHistory`, `AITaskIDFetchLogs`, `AITaskIDFileEdit`, `AITaskIDFsList`, `AITaskIDFsRead`, `AITaskIDIntentGrant`, `AITaskIDIntentRevoke`, `AITaskIDPortCheck`, `AITaskIDRecursiveGrep`, `AITaskIDRestoreFile`, plus additional task ID aliases (`AITaskId*` casing) for chat, case, memory, command, command execution, direct command, intent grant, intent revoke, file edit, file operation, fs list, recursive grep, port check, agent continue, and investigation query
 - `TribunalMember`: `TribunalMemberAxiom`, `TribunalMemberConcord`, `TribunalMemberVariance`, `TribunalMemberPragma`, `TribunalMemberNemesis`
 - `TribunalAuditMode`: `TribunalAuditModeUnanimous`, `TribunalAuditModeMajority`, `TribunalAuditModeTied`
 - `TribunalAuditStatus`: `TribunalAuditStatusOk`, `TribunalAuditStatusRevised`, `TribunalAuditStatusSwap`
@@ -243,7 +243,7 @@ Filesystem paths for Operator data, certificates, ledger, system paths, and conf
 - SSH config: `SshConfigFilename`, `SshDirname`, `SshConfigBasename`, `SshKnownHostsBasename`, `SshKeyEd25519`, `SshKeyECDSA`, `SshKeyRSA`
 - Agent config directories: `AgentConfigDirGemini`, `AgentConfigDirGoose`
 - Agent config files: `AgentConfigFileMCP`, `AgentConfigFileSettings`, `AgentConfigFileGooseYAML`
-- File permission modes: `PermDirPrivate` (0700), `PermDirStandard` (0755), `PermFilePrivate` (0600), `PermFilePublic` (0644)
+- File permission modes: `PermDirPrivate` (0700), `PermDirStandard` (0755), `PermFilePrivate` (0600), `PermFilePublic` (0644), `PermFileReadOnly` (0400)
 - Filesystem listing limits: `FsListMaxDepth` (3), `FsListDefaultDepth` (0), `FsListMaxEntries` (500), `FsListDefaultEntries` (100), `FsListBatchSize` (100)
 - Grep limits: `FsGrepDefaultMaxMatches` (100), `FsGrepMaxMatches` (500), `FsGrepScannerInitialBufSize` (64 KiB), `FsGrepScannerMaxBufSize` (1 MiB)
 - Execution limits: `ExecutionMaxStreamSize` (10 MB), `ExecutionMaxLines` (50), `ExecutionPreviewLength` (300), `FileEditMaxSize` (50 MB)
@@ -285,7 +285,7 @@ Platform error variables defined as `error` values using `errors.New()`. The fil
 Typed environment variable names, typed as `EnvVarKey` and grouped in a struct `EnvVar`:
 
 - `TribunalID` (`G8E_TRIBUNAL_ID`), `TribunalURL` (`G8E_TRIBUNAL_URL`), `TribunalBootstrap` (`G8E_TRIBUNAL_BOOTSTRAP`)
-- `VaultDir` (`G8E_VAULT_DIR`), `VaultKey` (`G8E_VAULT_KEY`), `VaultRequireUnlock` (`G8E_VAULT_REQUIRE_UNLOCK`)
+- `VaultDir` (`G8E_VAULT_DIR`), `VaultKey` (`G8E_VAULT_KEY`)
 - `OperatorSessionID` (`G8E_OPERATOR_SESSION_ID`)
 - `PasskeyRpID` (`G8E_PASSKEY_RP_ID`), `PasskeyRpName` (`G8E_PASSKEY_RP_NAME`), `PasskeyRpOrigins` (`G8E_PASSKEY_RP_ORIGINS`)
 - `PublicBaseURL` (`G8E_PUBLIC_BASE_URL`), `AllowedOrigins` (`G8E_ALLOWED_ORIGINS`)
@@ -328,6 +328,7 @@ Canonical document ID constants, typed as `DocumentID`:
 
 Key-value store key patterns and session type constants:
 
+- Sentinel prefix: `SentinelKeyPrefix` (`g8e:sentinel:`)
 - Cache prefix: `KVCachePrefix` (`g8e`)
 - Cache keys: `KVKeyCacheDoc`, `KVKeyCacheQuery`
 - Session keys: `KVKeySessionWeb`, `KVKeySessionOperator`, `KVKeySessionOperatorBind`, `KVKeySessionWebBind`
@@ -406,8 +407,8 @@ Shell command execution constants:
 - `LocalhostHostname` (`localhost`), `LocalhostIP` (`127.0.0.1`)
 - `RemoteEphemeralScriptTemplate`: bash script template for remote Operator deployment with graceful cleanup
 - `RemoteInjectedBinaryMessage`, `RemoteInjectedScriptMinimal`: constants for binary injection without execution
-- `DangerousCommands`: list of commands blocked by safety policy (rm, dd, mkfs, fdisk, format, del, erase, shred, wipe, killall, pkill, reboot, shutdown, halt, poweroff, init, systemctl, service, iptables, ip6tables, nft, ufw, firewall-cmd, route, ifconfig, ip, brctl, tc, modprobe, insmod, rmmod, depmod, mount, umount, swapon, swapoff, mkswap, lvcreate, lvremove, lvchange, vgcreate, vgremove, pvcreate, pvremove, cryptsetup, passwd, chpasswd, usermod, userdel, groupmod, crontab, at, batch, sudo, su, doas, runuser)
-- `DangerousPatterns`: list of command patterns blocked by safety policy (rm -rf /, dd if=/dev/zero, mkfs, chmod 777 /, chown -R, wget, curl, nc -l, ncat -l, ssh, scp, rsync, etc.)
+- `DangerousCommands`: list of commands blocked by safety policy (rm, dd, mkfs, fdisk, format, del, erase, shred, wipe, killall, pkill, reboot, shutdown, halt, poweroff, init, systemctl, service, iptables, ip6tables, nft, ufw, firewall-cmd, route, ifconfig, ip, brctl, tc, modprobe, insmod, rmmod, depmod, mount, umount, swapon, swapoff, mkswap, lvcreate, lvremove, lvchange, vgcreate, vgremove, pvcreate, pvremove, cryptsetup, passwd, chpasswd, usermod, userdel, groupmod, crontab, at, batch, sudo, su, doas, runuser, curl, wget)
+- `DangerousPatterns`: list of command patterns blocked by safety policy (rm -rf /, rm -rf /*, fork bomb, dd if=/dev/zero, mkfs, > /dev/sda, > /dev/vda, chmod 777 /, chown -R, nc -l, ncat -l, ssh, scp, rsync)
 - `ShellInjectionPatterns`: `$(`, backtick, `|`
 - `ShellMetacharacters`: `$`, backtick, `\`, `;`, `&`, `|`, `>`, `<`, newline, carriage return
 

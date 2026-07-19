@@ -4,8 +4,8 @@ title: A2A Protocol
 
 # A2A Protocol
 
-Last Updated: 2026-07-14
-Version: v1.5.1
+Last Updated: 2026-07-19
+Version: v1.5.8
 
 The g8e Operator supports Agent-to-Agent (A2A) protocol integration. A2A agents submit HTTP/JSON skill invocation requests to the g8e Gateway, which encapsulates them in a governance envelope, executes the 5-layer verification sequence (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator), and dispatches verified payloads to a configured downstream A2A server.
 
@@ -92,7 +92,7 @@ A2A calls are also dispatched through the unified MCP endpoint at `/mcp` (`Handl
 
 ### Skill Discovery
 
-Skill discovery is not currently implemented. The A2A downstream URL is configured via `internal/config/config.go` (`Gateway.A2ADownstreamURL`) and passed to the gateway service via `SetA2ADependencies`, but no discovery endpoint exists. Skills must be known a priori or discovered through out-of-band mechanisms.
+Skill discovery is not currently implemented. The A2A downstream URL is configured via `internal/config/config.go` (`Gateway.A2ADownstreamURL`) and passed to the gateway service through the `GatewayServiceDeps.A2ADownstreamURL` field in `NewGatewayService`, but no discovery endpoint exists. Skills must be known a priori or discovered through out-of-band mechanisms.
 
 ### BYO Clients
 
@@ -131,13 +131,13 @@ The g8e platform enforces security across five layers:
 
 - **Ed25519 signatures**: Consensus agents sign envelopes with Ed25519 private keys.
 - **Signer verification**: The gateway verifies signatures against trusted signers in the SQLite store.
-- **Gateway bypass**: In doctrine mode, the gateway signs envelopes locally (single-agent consensus).
+- **Doctrine mode**: L2 signatures are not required; the L2 status is recorded as `L2_STATUS_NOT_REQUIRED`.
 - **L2 status tracking**: `ActionReceipt.l2_status` distinguishes between `L2_STATUS_NOT_REQUIRED`, `L2_STATUS_REQUIRED_VALID`, and `L2_STATUS_REQUIRED_FAILED`.
 
 ### L3 Notary (Authorization)
 
 - **mTLS fingerprint**: CLI sessions use mTLS certificate fingerprints as proof. The `CLISessionVerifier` in `internal/services/gateway/cli_session_verifier.go` performs user active, session validity, and certificate revocation checks.
-- **Unified notary**: `NewGatewayL3Notary` in `internal/services/governance/l3_notary.go` creates a composite `L3Notary` that dispatches based on proof type: proofs with `mtls_cert_fingerprint` use the CLI verification path; all others delegate to the passkey (WebAuthn) verifier.
+- **Unified notary**: `NewGatewayL3Notary` in `internal/services/governance/l3_notary.go` creates a composite `L3Notary` that uses a layered model: passkey (WebAuthn) verification is always required first, and CLI mTLS session verification is additionally performed when `mtls_cert_fingerprint` is present in the proof.
 - **Suspension**: Transactions requiring L3 approval are suspended and stored for later resumption via WebAuthn or CLI proof.
 - **L3 status tracking**: `ActionReceipt.l3_status` distinguishes between `L3_STATUS_NOT_REQUIRED`, `L3_STATUS_REQUIRED_VALID`, and `L3_STATUS_REQUIRED_FAILED`.
 

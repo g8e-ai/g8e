@@ -2,7 +2,7 @@
 
 # g8e
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Python Tests](https://img.shields.io/badge/Python%20Tests-94%20passed-3776AB.svg)](protocol/python/tests/) [![Conformance](https://img.shields.io/badge/Conformance-151%20tests-3776AB.svg)](protocol/conformance/) [![Secrets](https://img.shields.io/badge/secrets-gitleaks-006600.svg)](https://github.com/gitleaks/gitleaks) [![Licenses](https://img.shields.io/badge/licenses-go--licenses-006600.svg)](https://github.com/google/go-licenses) [![Signed](https://img.shields.io/badge/binaries-cosign%20signed-676BFF.svg)](https://github.com/sigstore/cosign) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](protocol/docs/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](protocol/docs/spec.md)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Python Tests](https://img.shields.io/badge/Python%20Tests-151%20passed-3776AB.svg)](protocol/python/tests/) [![Conformance](https://img.shields.io/badge/Conformance-330%20tests-3776AB.svg)](protocol/conformance/) [![Secrets](https://img.shields.io/badge/secrets-gitleaks-006600.svg)](https://github.com/gitleaks/gitleaks) [![Licenses](https://img.shields.io/badge/licenses-go--licenses-006600.svg)](https://github.com/google/go-licenses) [![Signed](https://img.shields.io/badge/binaries-cosign%20signed-676BFF.svg)](https://github.com/sigstore/cosign) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](protocol/docs/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](protocol/docs/spec.md)
 
 </div>
 
@@ -212,7 +212,7 @@ If you only need the g8e wire protocol for your own client or service, consume t
 **Go module** (requires Go 1.26+):
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.5.0
+go get github.com/g8e-ai/g8e@v1.5.8
 ```
 
 **Python package** (requires Python 3.10+):
@@ -258,6 +258,7 @@ We welcome contributions of all kinds — bug reports, feature ideas, documentat
 - [Docker Gateway](docs/guides/docker_gateway.md)
 - [Cloudflare Tunnel Integration](docs/guides/cloudflare_tunnel.md)
 - [Lovable Frontend Integration](docs/guides/lovable.md)
+- [GUI Enrollment](docs/guides/gui_enrollment.md)
 - [Live Swarm Demo](demos/live-swarm/README.md)
 
 #### Architecture
@@ -269,6 +270,7 @@ We welcome contributions of all kinds — bug reports, feature ideas, documentat
 - [Network Model](docs/architecture/network.md)
 - [Server-Sent Events](docs/architecture/sse.md)
 - [Governance](docs/architecture/governance.md)
+- [Protocol Library](docs/architecture/protocol.md)
 - [Scripts](docs/architecture/scripts.md)
 
 #### Reference

@@ -9,7 +9,7 @@ The finance demo demonstrates:
 - **8 trading control doctrine rules** evaluated on every transaction
 - **Network isolation** preventing unauthorized access from net_untrusted to the trading ledger
 - **Dual-control authorization** enforcement (no single-approval bypass)
-- **Market manipulation detection** (spoofing, layering, wash trades, front running)
+- **Market manipulation detection** (spoofing, layering, wash trades, pump and dump, front running)
 - **Insider trading detection** via MNPI pattern matching
 - **Audit trail integrity** with hash-chained ledger receipts
 
@@ -36,7 +36,7 @@ The demo includes 8 trading control doctrine rules covering:
 
 - **Trading Limits**: Transaction limit exceeded, position limit violation
 - **Authorization**: Dual control bypass, unauthorized trade execution
-- **Market Integrity**: Market manipulation (spoofing, layering, wash trade, front running), insider trading
+- **Market Integrity**: Market manipulation (spoofing, layering, wash trade, pump and dump, front running), insider trading
 - **Settlement**: Settlement risk violation
 - **Audit**: Audit trail bypass detection
 
@@ -62,10 +62,22 @@ cd demos/finance
 docker compose up -d
 ```
 
+Alternatively, use the g8e CLI from the repository root:
+
+```bash
+g8e demos start finance
+```
+
 ### Check service status
 
 ```bash
 docker compose ps
+```
+
+Or via the g8e CLI:
+
+```bash
+g8e demos status finance
 ```
 
 ### View logs
@@ -82,6 +94,8 @@ docker compose logs -f observability
 ```
 
 ## Demo Scenarios
+
+The `g8e demos run` command automatically starts the demo environment if it is not already running. Use `-v` for verbose step-by-step output, or `--tui` for the tactical governance TUI overlay.
 
 ### Scenario 1: Unauthorized Trade Blocked
 
@@ -114,6 +128,8 @@ The gateway runs in doctrine mode (the default), meaning:
 - L2 Consensus signatures are audited but not required
 - L3 Notary proofs are audited but not required
 
+Layers L4 (Warden) and L5 (Actuator) are always active regardless of posture, providing pre-dispatch verification and signed receipt production on every transaction.
+
 ### Data Sovereignty
 
 All audit data is committed locally:
@@ -126,6 +142,13 @@ All audit data is committed locally:
 ```bash
 docker compose down
 docker compose down -v  # also removes volumes
+```
+
+Or via the g8e CLI:
+
+```bash
+g8e demos stop finance
+g8e demos clean finance  # removes containers, volumes, and networks
 ```
 
 ## License

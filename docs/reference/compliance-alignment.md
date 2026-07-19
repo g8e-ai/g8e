@@ -1,8 +1,8 @@
 # Compliance Alignment Report
 
-**Document Version:** 1.5.1  
-**Last Updated:** 2026-07-14  
-**Platform:** g8e v1.5.1  
+**Document Version:** 1.5.8  
+**Last Updated:** 2026-07-19  
+**Platform:** g8e v1.5.8  
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -535,14 +535,22 @@ NIST SP 800-63B-4 (July 2025) supersedes SP 800-63B (2020) and defines technical
 - **SSE-based L3 approval notifications** replacing polling with real-time event subscriptions for passkey approval delivery
 - **Thread-safe dependency wiring** via atomic pointers for late-bound gateway dependencies, eliminating data races in concurrent request handling
 - **Configurable CORS middleware** validating request origins against an allowlist for cross-origin browser access
-- **75% test coverage threshold** enforced in CI/CD across gateway, governance, storage, and CLI subsystems
+- **75.9% test coverage** (75% threshold enforced in CI/CD) across gateway, governance, storage, and CLI subsystems
 - **RuntimeFileService abstraction** (`internal/services/fs`) as canonical `.g8e/` file I/O layer, replacing direct `os.*` calls across gateway, keystore, PKI, and CLI subsystems
 - **Unified Go module** merging the separate protocol module into the root module, eliminating version skew between protocol and platform
 - **Cosign/sigstore artifact signing** providing cryptographic signatures for release binaries
 - **Gitleaks secret scanning** in CI/CD preventing credential leakage in source code
 - **Go-licenses license compliance** auditing transitive dependencies for license compatibility
 - **Cross-OS CI matrix** (Ubuntu, macOS, Windows) ensuring platform parity
-- **Python protocol conformance suite** (151 tests) validating protocol implementation against the specification
+- **Python protocol test suite** (151 tests) validating constant accessors, enum generation, and model serialization
+- **Python protocol conformance suite** (330 tests) enforcing parity between Go constants, Python runtime values, and canonical JSON SSOT files
+- **Interactive gateway onboarding wizard** (`g8e gw start --interactive`) guiding users through network, security, agent, and review configuration steps
+- **Anduril Lattice gRPC adapter** with OAuth2 client credentials authentication, gRPC retry with status code classification, and heartbeat interval validation
+- **MCP tool interception verification** (`--verify` flag) ensuring agent tool-disabling configurations are correctly applied before agent launch
+- **MCP gateway output scrubbing** preventing sensitive data leakage in downstream MCP audit logs
+- **Agent support consolidation** to 4 supported agents (Claude Code, Codex, Goose, Gemini CLI) reducing attack surface
+- **Governance interface extraction** separating verification concerns (replay store, signer store, tribunal store, app policy store, state root provider) into dedicated files
+- **Protocol wire-format documentation** for EventType, AgentMode, and SessionEventWire ensuring consumer compatibility
 
 ### Planned Enhancements
 
@@ -560,6 +568,7 @@ NIST SP 800-63B-4 (July 2025) supersedes SP 800-63B (2020) and defines technical
 - **No Cloud SaaS:** Platform is designed for local deployment; cloud SaaS version not available
 - **No RBAC:** Role-based access control is in development
 - **No External Audits:** Third-party security assessments are planned but not yet completed
+- **Receipt signature verification:** The Gateway signs ActionReceipts with its Actuator Ed25519 private key, but no attested channel exists for distributing the public key to Engine instances. Consumers must obtain the public key out-of-band from the gateway PKI directory. An attested bootstrap flow is planned for a future release
 
 ---
 
@@ -642,6 +651,7 @@ For specific compliance questions or audit support, contact:
 | 1.4.0 | 2026-07-12 | Lateralus Labs | Updated platform version to v1.4.0; added frontend enrollment (`g8e gui`), Cloudflare Tunnel management (`g8e tunnel`), L5 Actuator `ExecutionHandler` interface refactor, OpenAPI/Swagger annotations across gateway endpoints, consolidated web-cert trust scripts, `operator start` rename, and default TUI launch to current strengths |
 | 1.5.0 | 2026-07-13 | Lateralus Labs | Updated platform version to v1.5.0; added unified Go module, Cosign/sigstore artifact signing, Gitleaks secret scanning, Go-licenses compliance, cross-OS CI matrix, Python protocol conformance suite (151 tests), Go performance benchmarks, and smoke test scripts to current strengths |
 | 1.5.1 | 2026-07-14 | Lateralus Labs | Updated platform version to v1.5.1; added NIST SP 800-63B-4 alignment section; updated NIST SP 800-53 to Rev 5.2.0 with new controls SA-15(13), SA-24, SI-02(07); updated PCI DSS to v4.0.1; added ISO 27001 Amendment 1:2024 reference; corrected ZIG pillars to match DoW seven-pillar framework; added NIST SP 800-207A reference; updated DoD to DoW naming; added RuntimeFileService to current strengths; verified all evidence paths against live codebase |
+| 1.5.8 | 2026-07-19 | Lateralus Labs | Updated platform version to v1.5.8; added interactive gateway onboarding wizard, Anduril Lattice gRPC adapter, MCP tool interception verification, MCP gateway output scrubbing, agent support consolidation, governance interface extraction, and protocol wire-format documentation to current strengths; corrected Python protocol test suite (151 tests) and conformance suite (330 tests) counts; updated test coverage to 75.9%; added receipt signature verification known limitation; verified all evidence paths against live codebase |
 
 ---
 

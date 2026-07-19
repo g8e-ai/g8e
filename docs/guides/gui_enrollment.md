@@ -5,8 +5,8 @@ parent: Guides
 
 # GUI Frontend Enrollment
 
-Last Updated: 2026-07-15
-Version: v1.5.2
+Last Updated: 2026-07-19
+Version: v1.5.8
 
 ---
 
@@ -248,7 +248,7 @@ interface User {
   roles?: string[];
   status?: string;
   is_bootstrap?: boolean;
-  local_os_user?: { domain?: string; username?: string; uid?: string };
+  local_os_user?: { domain?: string; username?: string; uid?: string; gid?: string; sid?: string };
   webauthn_user_id?: string;
 }
 

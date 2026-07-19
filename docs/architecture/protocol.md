@@ -4,8 +4,8 @@ title: g8e Protocol Library
 
 # g8e Protocol Library
 
-Last Updated: 2026-07-18
-Version: v1.5.6
+Last Updated: 2026-07-19
+Version: v1.5.8
 
 The g8e Protocol Library is the canonical wire contract for all mutations in the g8e zero-trust execution platform. It provides protobuf schema definitions, JSON constant registries, JSON model schemas, Pydantic models, dynamic enum generation, SPIFFE workload identity helpers, and example programs for building g8e-compatible clients and services.
 
@@ -164,13 +164,15 @@ pip install g8e==X.Y.Z
 The Python package is in `protocol/python/` and installs as `g8e`. The import namespace is `g8e`. The package includes a `py.typed` marker for PEP 561 type-checker support. Unit tests are in `protocol/python/tests/` and cover constants loading, enum generation, model validation, and version sync.
 
 - **`g8e/__init__.py`**: Package init exporting `__version__`
-- **`g8e/constants.py`**: Runtime loader for JSON protocol constants from `protocol/constants/`
-- **`g8e/enums.py`**: Dynamic `StrEnum` and `IntEnum` generation from `STATUS` and `EVENTS` protocol constants
+- **`g8e/constants.py`**: Runtime loader for JSON protocol constants from `protocol/constants/` or bundled `_data/` directory
+- **`g8e/enums.py`**: Dynamic `StrEnum` and `IntEnum` generation from `STATUS`, `EVENTS`, `CHANNELS`, `INTENTS`, `PROMPTS`, `COLLECTIONS`, and `KV` protocol constants
+- **`g8e/_data/`**: Bundled JSON protocol constants for PyPI installs (populated during release build)
 - **`g8e/models/`**: Pydantic v2 models for protocol data structures
   - `base.py`: `G8eBaseModel` base class, `UTCDatetime` annotated type
   - `context.py`: `RequestContext`, `BoundOperator`
   - `events.py`: SSE event wire models and AI event payload models
-  - `internal_api.py`: `ChatMessageRequest`, `ChatStartedResponse`, `ResourceCreationRequest`
+  - `governance.py`: `GovernanceEnvelope`, `GovernanceMetadata`, `GovernanceL1`, `GovernanceL2`, `GovernanceL2Vote`, `GovernanceL3`, and `compute_transaction_hash` utility
+  - `internal_api.py`: `ChatMessageRequest`, `ChatStartedResponse`, `ResourceCreationRequest`, `LLMOverrides`
   - `settings.py`: `PlatformSettings`, `G8eeUserSettings`, and nested settings models
 
 ### Python Constants Module
@@ -202,13 +204,13 @@ The module also exports the `ComponentName` `StrEnum` (`CLIENT`, `G8EE`, `G8EO`,
 
 ### Python Enums Module
 
-The `g8e.enums` module dynamically generates `StrEnum` and `IntEnum` classes from the `STATUS` and `EVENTS` protocol constants. Key characteristics:
+The `g8e.enums` module dynamically generates `StrEnum` and `IntEnum` classes from the `STATUS`, `EVENTS`, `CHANNELS`, `INTENTS`, `PROMPTS`, `COLLECTIONS`, and `KV` protocol constants. Key characteristics:
 
 - Enum member names use SCREAMING_SNAKE_CASE
 - Values preserve the raw protocol wire format (e.g., `"g8e.v1.ai.llm.chat.iteration.started"`, `"user.cancelled"`, `"G8E-1000"`)
 - Integer-valued categories produce `IntEnum`; all others produce `StrEnum`
 - Enums are built lazily via `__getattr__` and cached with `lru_cache`
-- Access enums by PascalCase name: `g8e.enums.OperatorToolName`, `g8e.enums.EventType`
+- Access enums by PascalCase name: `g8e.enums.OperatorToolName`, `g8e.enums.EventType`, `g8e.enums.Channel`, `g8e.enums.Intent`, `g8e.enums.Collection`, `g8e.enums.KVKey`
 
 ### Python Models Module
 
@@ -219,7 +221,8 @@ The `g8e.models` package provides Pydantic v2 models for protocol data structure
 | `g8e.models.base` | `G8eBaseModel`, `UTCDatetime`, re-exports of `Field`, `ConfigDict`, `field_validator`, `model_validator`, `ValidationError` |
 | `g8e.models.context` | `RequestContext`, `BoundOperator` — `RequestContext` validates session identity for `CLIENT` source components, requiring either `web_session_id` or `cli_session_id` and a `user_id` |
 | `g8e.models.events` | `SessionEventWire`, `BackgroundEventWire`, and AI event payload models for chat processing, tool lifecycle, citations, errors, thinking, turn completion, retry, and triage clarification |
-| `g8e.models.internal_api` | `ChatMessageRequest`, `ChatStartedResponse`, `ResourceCreationRequest` |
+| `g8e.models.governance` | `GovernanceEnvelope`, `GovernanceMetadata`, `GovernanceL1`, `GovernanceL2`, `GovernanceL2Vote`, `GovernanceL3`, and `compute_transaction_hash` utility implementing the SHA-256 transaction hash algorithm |
+| `g8e.models.internal_api` | `ChatMessageRequest`, `ChatStartedResponse`, `ResourceCreationRequest`, `LLMOverrides` |
 | `g8e.models.settings` | `G8eeUserSettings`, `PlatformSettings`, and nested settings models for LLM providers, search, eval judge, command validation, and batch execution |
 
 ### Python Usage Examples
@@ -243,8 +246,9 @@ Run it from `protocol/python` after `pip install -e .` with `python examples/mod
 The constants loader resolves the protocol directory in the following order:
 
 1. **`G8E_PROTOCOL_DIR`** environment variable — if set, uses `$G8E_PROTOCOL_DIR/constants`
-2. **Relative path** — `protocol/constants/` relative to the package (for development checkouts)
-3. **Container fallback** — `/app/protocol/constants` (for Docker/containerized deployments)
+2. **Package bundled data** — `g8e/_data/` within the installed package (for PyPI installs)
+3. **Relative path** — `protocol/constants/` relative to the package (for development checkouts)
+4. **Container fallback** — `/app/protocol/constants` (for Docker/containerized deployments)
 
 Override the default:
 
@@ -355,28 +359,19 @@ Version string conventions:
 
 ### Release Workflow
 
-The release process is automated through two Make targets:
+The release process is automated through a single Make target:
 
-#### Step 1: `make release` — Preparation (no git operations)
+#### `make release` — Sync, Build, Tag & Push
 
 1. Syncs `protocol/python/pyproject.toml` and `protocol/python/g8e/__init__.py` from `VERSION`
-2. Runs protocol tests
-3. Builds binaries
-4. Prints next-step instructions
-
-#### Step 2: Manual commit
-
-```bash
-git add -A && git commit -m "release: vX.Y.Z"
-```
-
-#### Step 3: `make release-tag` — Tag & Push
-
-1. Verifies working tree is clean
-2. Verifies Python versions match `VERSION`
-3. Verifies tags don't already exist
-4. Creates `vX.Y.Z` and `protocol/vX.Y.Z` tags on the current commit
-5. Pushes both tags to origin
+2. Verifies working tree is clean after version sync
+3. Verifies release notes file exists at `docs/release_notes/vX.Y.x/vX.Y.Z.md`
+4. Verifies tags `vX.Y.Z` and `protocol/vX.Y.Z` do not already exist
+5. Verifies GitHub CLI (`gh`) is available
+6. Builds binaries
+7. Creates `vX.Y.Z` and `protocol/vX.Y.Z` tags on the current commit
+8. Pushes both tags to origin
+9. Creates a GitHub release with release notes from the notes file
 
 ### CI Workflows
 
@@ -394,14 +389,15 @@ The Python protocol workflow (`.github/workflows/release-python-protocol.yml`):
 1. Checks out the repository with full history
 2. Sets up Python 3.14
 3. Validates package metadata (name, version, license, authors, classifiers, URLs)
-4. Builds the package: `python -m build` (produces sdist + wheel in `protocol/python/dist/`)
-5. Validates with `twine check dist/*`
-6. Publishes to PyPI using trusted publishing (OIDC `id-token: write`)
-7. Verifies fresh PyPI install and imports on Ubuntu, macOS, and Windows
+4. Copies protocol constants into `protocol/python/g8e/_data/` for bundled distribution
+5. Builds the package: `python -m build` (produces sdist + wheel in `protocol/python/dist/`)
+6. Validates with `twine check dist/*`
+7. Publishes to PyPI using trusted publishing (OIDC `id-token: write`)
+8. Verifies fresh PyPI install and imports on Ubuntu, macOS, and Windows
 
 ### Version Sync Enforcement
 
-The `make release-tag` target verifies that `pyproject.toml` and `__init__.py` versions match `VERSION` before creating tags. A mismatch will abort the tag operation.
+The `make release` target verifies that `pyproject.toml` and `__init__.py` versions match `VERSION` before creating tags. A mismatch will abort the release.
 
 Additionally, `.github/workflows/build-and-test.yml` includes a version sync check that fails CI if `pyproject.toml` or `__init__.py` don't match `VERSION`.
 
@@ -446,9 +442,11 @@ protocol/
     g8e/                     Import namespace (g8e)
       __init__.py            Package version
       constants.py           Runtime loader for JSON protocol constants
-      enums.py               Dynamic StrEnum/IntEnum generation from STATUS and EVENTS
+      enums.py               Dynamic StrEnum/IntEnum generation from STATUS, EVENTS, CHANNELS, INTENTS, PROMPTS, COLLECTIONS, KV
       py.typed               PEP 561 marker for type-checker support
+      _data/                 Bundled JSON protocol constants (for PyPI installs)
       models/                Pydantic v2 models for protocol data structures
+        governance.py        GovernanceEnvelope model and transaction hash utility
     tests/                   Python package unit tests
     examples/                Python example scripts
     pyproject.toml           Package metadata and dependencies
