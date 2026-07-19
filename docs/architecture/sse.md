@@ -4,8 +4,8 @@ title: SSE Streaming
 
 # SSE Streaming
 
-Last Updated: 2026-07-14
-Version: v1.5.1
+Last Updated: 2026-07-19
+Version: v1.5.8
 
 The g8e Gateway provides a Server-Sent Events (SSE) streaming infrastructure that enables real-time event delivery from app workloads to browser and CLI clients. g8e-compatible agentic ensembles publish typed events, including audit events, for downstream consumption. The gateway also produces SSE events internally for platform workflows such as passkey registration and L3 transaction approval.
 
@@ -187,7 +187,7 @@ Events are ephemeral telemetry, not governance state. SSE event inserts do not a
 
 **Automatic cleanup**: The gateway maintenance loop prunes events older than 1 hour, running every 30 seconds.
 
-**Admin endpoints**: Administrators can wipe all events or query the total count via mTLS-authenticated admin endpoints on the data API.
+**Admin endpoints**: Administrators can wipe all events or query the total count via authenticated admin endpoints on the data API.
 
 ---
 

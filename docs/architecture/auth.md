@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-07-15
-Version: v1.5.2
+Last Updated: 2026-07-19
+Version: v1.5.8
 
 This document explains how to authenticate and authorize actions in the g8e platform. The platform is built as a zero-trust execution environment where every action is verified before execution.
 
@@ -42,10 +42,10 @@ There are three enrollment scenarios:
 
 Enrollment involves two phases that use different ports and protocols:
 
-1. **Discovery/bootstrap phase** (plain HTTP) — CA bundle fetch, bootstrap status check, CSR trust bundle retrieval
-2. **mTLS API phase** (HTTPS) — Enrollment token generation, CSR submission, SSE stream, API client operations
+1. **Discovery/bootstrap phase** (plain HTTP): CA bundle fetch, bootstrap status check, CSR trust bundle retrieval
+2. **mTLS API phase** (HTTPS): Enrollment token generation, CSR submission, SSE stream, API client operations
 
-By default, the CLI connects to `g8e.local` (or the machine IP fallback) on the default ports (HTTP 8080, HTTPS 8443). When the gateway's HTTP and HTTPS ports are mapped to different host ports — as in Docker demos — use the split endpoint flags:
+By default, the CLI connects to `g8e.local` (or the machine IP fallback) on the default ports (HTTP 8080, HTTPS 8443). When the gateway's HTTP and HTTPS ports are mapped to different host ports, as in Docker demos, use the split endpoint flags:
 
 | Flags | HTTP override | HTTPS override | Use case |
 |---|---|---|---|

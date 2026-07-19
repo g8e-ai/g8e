@@ -1,7 +1,7 @@
 # Governance
 
-Last Updated: 2026-07-18
-Version: v1.5.6
+Last Updated: 2026-07-19
+Version: v1.5.8
 
 ## Overview
 

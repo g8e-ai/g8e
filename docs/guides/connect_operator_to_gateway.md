@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-07-15
-Version: v1.5.2
+Last Updated: 2026-07-19
+Version: v1.5.8
 
 ---
 
@@ -107,7 +107,7 @@ On the remote host, start the operator with the enrolled certificates:
 ./g8e operator start -e <gateway-ip>
 ```
 
-When `--endpoint` is provided, the operator automatically performs CSR enrollment with the gateway if no local certificates are found, making step 3 optional. The operator will:
+When `--endpoint` is provided, the operator automatically performs CSR enrollment with the gateway, making step 3 optional. The operator will:
 - Load the mTLS certificates from the PKI directory (or auto-enroll via `--endpoint`)
 - Connect to the gateway control plane on port 8443 (HTTPS) and bootstrap on port 8080 (HTTP)
 - Start the local audit vault and execution services
@@ -169,7 +169,7 @@ curl -X POST https://localhost:8443/mcp \
   --cert .g8e/cli.crt \
   --key .g8e/cli.key \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"shell.execute","arguments":{"command":"ls -la"}}}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_shell_command","arguments":{"command":"ls -la"}}}'
 ```
 
 > Note: Documentation uses default ports: HTTP 8080, HTTPS 8443.
@@ -179,7 +179,7 @@ curl -X POST https://localhost:8443/mcp \
 ```bash
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"shell.execute","arguments":{"command":"ls -la"}}}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_shell_command","arguments":{"command":"ls -la"}}}
 ```
 
 **List supported agents:**
@@ -194,11 +194,11 @@ curl -X POST http://localhost:8080/mcp \
 ./g8e mcp agent show <agent>
 ```
 
-Replace `<agent>` with a supported agent (claude, codex, cursor, devin, vscode, continue, aider, codeium, tabby, ollama, gemini, goose, generic). This displays configurations side-by-side for different transport modes (g8e.local mTLS, IP Address mTLS, Stdio Transport).
+Replace `<agent>` with a supported agent (claude, codex, gemini, goose). This displays configurations side-by-side for different transport modes (g8e.local mTLS, IP Address mTLS, Stdio Transport).
 
 ### L3 Transaction Approval
 
-When the gateway is running in doctrine or consensus posture, certain transactions suspend at L3 (Notary) pending human approval. Approve a suspended transaction using:
+When the gateway is running in notary posture, certain transactions suspend at L3 (Notary) pending human approval. Approve a suspended transaction using:
 
 ```bash
 ./g8e auth approve <transaction_hash>
@@ -229,7 +229,7 @@ Operators and CLI clients connecting to the g8e Gateway can use the g8e Protocol
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.5.1
+go get github.com/g8e-ai/g8e@v1.5.8
 ```
 
 The module provides protobuf types for governance envelopes, operator messages, and common protocol structures. It also includes SPIFFE workload identity helpers for generating operator, CLI, and gateway identities used in mTLS enrollment.
@@ -241,7 +241,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For operator-side tooling or Python-based services:
 
 ```bash
-pip install g8e==1.5.1
+pip install g8e==1.5.8
 ```
 
 Provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.

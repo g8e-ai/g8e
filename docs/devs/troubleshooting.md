@@ -1,7 +1,7 @@
 # Developer Troubleshooting
 
-Last Updated: 2026-07-22
-Version: v1.5.1
+Last Updated: 2026-07-19
+Version: v1.5.8
 
 This page covers common setup failures, runtime friction, and operational
 caveats for contributors working on g8e from a fresh checkout. The platform
@@ -456,6 +456,185 @@ them before they expire.
 SSE event inserts do not alter the state root. This is intentional to
 allow high-frequency event streaming without governance overhead. Events
 are considered ephemeral telemetry, not governance state.
+
+## CORS and cross-origin session issues
+
+Browser-based frontends connecting to the gateway require explicit
+CORS configuration. If API calls return 401 despite being logged in, or
+the browser console shows `Access-Control-Allow-Origin` errors, the
+gateway was not started with `--cors-origin` matching the frontend
+origin.
+
+Restart the gateway with the correct origin:
+
+```bash
+./g8e gw start --cors-origin https://your-app.example.com --passkey-rp-origin https://your-app.example.com
+```
+
+Ensure every `fetch` call includes `credentials: 'include'`. The
+gateway sets `SameSite=None` on session cookies only when `--cors-origin`
+is configured, which is required for cross-origin cookie delivery.
+
+For SSE connections from browser clients, construct `EventSource` with
+`withCredentials: true`. Without authenticated session cookies, the SSE
+endpoints return 401. Verify the `web_session_id` is valid via
+`GET /api/v1/auth/sessions/me`. See
+[GUI Enrollment](../guides/gui_enrollment.md) for the full browser
+integration flow.
+
+## WebAuthn passkey RP ID mismatch
+
+If the WebAuthn ceremony fails with "RP ID is not a valid domain" or
+similar, the `--passkey-rp-id` flag does not match the frontend app's
+registrable domain. The RP ID must be a registrable domain suffix of
+the current page's origin. For example, when accessing the gateway via
+`console.g8e.ai`, the RP ID must be `console.g8e.ai`, not `localhost`.
+
+When accessing via a Cloudflare tunnel, set `--passkey-rp-id` to the
+tunnel hostname. See
+[Cloudflare Tunnel Integration](../guides/cloudflare_tunnel.md) for
+tunnel-specific configuration.
+
+## Stale trust bundle after PKI regeneration
+
+If authentication fails after the gateway PKI is regenerated, the local
+trust bundle and client certificates may be stale. Log out and re-enroll
+to obtain fresh credentials:
+
+```bash
+./g8e auth logout && ./g8e auth enroll
+```
+
+## Cloudflare tunnel issues
+
+When exposing the gateway via a Cloudflare tunnel, additional failure
+modes apply beyond local gateway troubleshooting. See
+[Cloudflare Tunnel Integration](../guides/cloudflare_tunnel.md) for
+full setup instructions.
+
+### 502 Bad Gateway
+
+The tunnel is connected but the gateway is not running or not listening
+on `localhost:8443`. Verify the gateway health endpoint and tunnel
+status:
+
+```bash
+curl -sk https://localhost:8443/api/v1/health
+g8e gw tunnel status --hostname console.g8e.ai --name g8e
+```
+
+### DNS record conflict
+
+If DNS routing fails with "record already exists," use `--skip-dns`
+with `g8e gw tunnel create` to skip the DNS step. Alternatively, delete
+the old DNS record in the Cloudflare dashboard or use a different
+hostname.
+
+### Tunnel version outdated
+
+If the tunnel exhibits unexpected behavior, check and update
+`cloudflared`:
+
+```bash
+cloudflared --version
+```
+
+If installed via dpkg, download and install the latest release from the
+Cloudflare GitHub releases page.
+
+## Receipt signature verification
+
+The Gateway signs `ActionReceipt`s with its Actuator Ed25519 private
+key. The actuator public key is exported to the PKI directory during
+gateway boot in both PEM and JSON formats.
+
+No mechanism exists for distributing the Gateway's public key to Engine
+instances via an attested channel. Consumers that need to
+cryptographically verify receipt authenticity must obtain the public key
+out-of-band by reading the exported files from the gateway PKI
+directory. The g8e Python package does not currently expose a receipt
+verification utility. Consumers can implement Ed25519 verification
+using `nacl.signing.VerifyKey` with the exported public key.
+
+See [Encryption Architecture](../architecture/encryption.md) for
+receipt signature details.
+
+## Docker demo issues
+
+### Demo port conflicts
+
+The frontend demo uses ports 8083 and 8446, which overlap with the
+`secure-data` demo. Do not run both demos simultaneously. Check which
+demos are running:
+
+```bash
+docker compose ps
+```
+
+### Drone simulator not running (swarm demo)
+
+The drone simulator in the swarm demo is mounted but not executed by
+default. The operator container image does not include Python3. Install
+it first, then run the simulator manually via `docker compose exec`.
+
+### High memory usage (swarm demo)
+
+The swarm demo with 20 operators requires significant resources. If
+containers are killed by the OOM killer, reduce the number of operators
+in `demos/swarm/compose.yml`.
+
+### Metabase startup failure (healthcare demo)
+
+Metabase requires the `reporting-db` PostgreSQL container to be healthy
+before it can initialize. If Metabase is stuck, verify the database
+status and restart Metabase:
+
+```bash
+docker compose ps reporting-db
+docker compose restart compliance-dashboard
+```
+
+### RabbitMQ management UI unreachable (healthcare demo)
+
+The RabbitMQ management plugin is mapped to port 15673 on the host
+(from 15672 inside the container). Use `localhost:15673` to access the
+management UI.
+
+## Live-swarm build issues
+
+### Protoc version conflict with PX4
+
+If `/usr/local/bin/protoc` (v35, from g8e's proto tooling) shadows the
+system protoc 3.21 that matches `libprotobuf-dev`, PX4 `gz_msgs`
+codegen fails with `google/protobuf/runtime_version.h: No such file or
+directory`. Fix: remove the PX4 build directory and rebuild with
+`/usr/local/bin` stripped from `PATH`. Do not remove the v35 protoc;
+g8e requires it.
+
+### L1 doctrine rules compiled into binary
+
+L1 doctrine rules are compiled into the g8e binary at build time. There
+is no `--doctrine-dir` flag or runtime doctrine loading mechanism. To
+change doctrine rules, modify the doctrine source and rebuild.
+
+### Passkey RP origin for non-default origins
+
+The `--passkey-rp-origin` flag is only needed for non-default origins.
+The defaults target `localhost`. Verify during dry runs; add the flag
+only if the browser ceremony reports an origin mismatch.
+
+## Known platform limitations
+
+- **No RBAC**: Role-based access control is in development.
+  Authentication is binary (enrolled or not) without role
+differentiation.
+- **No Cloud SaaS**: The platform is designed for local deployment. A
+  cloud-hosted SaaS version is not available.
+- **No external audits**: Third-party security assessments are planned
+  but not yet completed.
+- **Receipt signature distribution**: No attested channel exists for
+  distributing the Gateway's public key to Engine instances. See the
+  Receipt Signature Verification section above.
 
 ## Windows-specific issues
 

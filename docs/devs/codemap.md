@@ -186,14 +186,14 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── scrubbing.ScrubbingService
 │   ├── mcp.FieldPathRegistry
 │   ├── mcp.NativeToolHandler
-│   ├── mcp.FieldReader (gateway.DocumentStoreService) [SHARED]
 │   ├── RuntimeDependencies (atomic.Pointer, set once via SetRuntimeDeps before first request):
 │   │   ├── mcp.SessionValidator (set by in-process OperatorPubSubService in both modes)
 │   │   ├── mcp.AuditLogger (pubsubAuditLogger, set by in-process OperatorPubSubService in both modes)
 │   │   ├── governance.EnvelopeProcessor (set by in-process OperatorPubSubService in both modes)
 │   │   ├── StateRootProvider (set by in-process OperatorPubSubService in both modes)
 │   │   ├── Ed25519 signing key/keyID (set by in-process OperatorPubSubService in both modes)
-│   │   └── downstreamURL (MCP egress, set by in-process OperatorPubSubService in both modes)
+│   │   ├── downstreamURL (MCP egress, set by in-process OperatorPubSubService in both modes)
+│   │   └── DBService (mcp.FieldReader, gateway.DocumentStoreService) [SHARED] (set by in-process OperatorPubSubService in gateway mode; nil in outbound mode)
 │   ├── tribunal.TribunalDeliberator (atomic.Value, tribunal.LocalDeliberator in gateway mode, nil in outbound)
 │   ├── a2aDownstreamURL (construction-phase, immutable after NewGatewayService)
 │   └── publicBaseURL (construction-phase, immutable after NewGatewayService)
@@ -316,7 +316,7 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 
 The `g8e` binary (`internal/cli/cmd/main.go`) registers the following subcommands on the root Cobra command:
 
-- **`gw`** (alias `gateway`): Gateway lifecycle management. Subcommands: `start` (background process; `--follow` flag runs in foreground as the re-exec target; `--interactive`/`-i` flag launches the onboarding wizard before startup), `stop`, `status`, `restart`, `logs`, `settings`, `reset`, `clean`. Also includes `data`, `security`, and `tunnel` subcommand groups.
+- **`gw`** (alias `gateway`): Gateway lifecycle management. Subcommands: `start` (background process; `--follow` flag runs in foreground as the re-exec target; `--interactive`/`-i` flag launches the onboarding wizard before startup), `stop`, `status`, `restart`, `logs`, `settings`, `reset`, `clean`, `setup` (interactive onboarding wizard; standalone entry point for `g8e gw setup`). Also includes `data`, `security`, and `tunnel` subcommand groups.
   - **`data`**: Administer the local platform over mTLS. Subcommands: `users`, `operators`, `settings`, `store`, `audit`.
   - **`security`**: Security validation checks. Subcommands: `validate`, `pki`.
   - **`tunnel`**: Manage Cloudflare Tunnel for public gateway access. Subcommands: `create`, `run`, `status`.
