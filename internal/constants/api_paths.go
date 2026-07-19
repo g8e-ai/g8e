@@ -35,6 +35,9 @@ var APIPaths = struct {
 	OperatorsUnbind string `json:"operators_unbind"`
 	OperatorsTarget string `json:"operators_target"`
 	OperatorsReauth string `json:"operators_reauth"`
+	// Intent routes
+	GrantIntent  string `json:"grant_intent"`
+	RevokeIntent string `json:"revoke_intent"`
 	// Data routes
 	DataSettings    string `json:"data_settings"`
 	DataDB          string `json:"data_db"`
@@ -156,6 +159,9 @@ var APIPaths = struct {
 	OperatorsUnbind: "/api/v1/operators/unbind",
 	OperatorsTarget: "/api/v1/operators/target",
 	OperatorsReauth: "/api/v1/operators/reauth",
+	// Intent routes
+	GrantIntent:  "/api/v1/operators/{operator_id}/intents/grant",
+	RevokeIntent: "/api/v1/operators/{operator_id}/intents/revoke",
 	// Data routes
 	DataSettings:    "/api/v1/data/settings",
 	DataDB:          "/api/v1/data/",

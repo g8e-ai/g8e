@@ -7,7 +7,7 @@ import pytest
 from g8e.constants import StrEnum
 import g8e.enums
 from g8e.enums import _build_enum, _build_event_type_enum, _to_pascal, _pascal_to_screaming_snake, _to_snake
-from g8e.constants import CHANNELS, INTENTS, PROMPTS, COLLECTIONS, KV
+from g8e.constants import CHANNELS, INTENTS, PROMPTS, COLLECTIONS, KV, STATUS
 
 
 class TestNameConversions:
@@ -185,14 +185,87 @@ class TestExtraEnumGeneration:
     def test_session_type_enum_has_members(self):
         cls = g8e.enums.SessionType
         members = list(cls)
-        assert len(members) == len(KV["session_types"])
+        assert len(members) == len(STATUS["status"]["session_type"])
 
     def test_session_type_enum_values_preserve_wire_format(self):
         cls = g8e.enums.SessionType
         assert cls.WEB == "web"
         assert cls.OPERATOR == "operator"
+        assert cls.CLI == "cli"
 
     def test_all_extra_enums_are_str_enum(self):
-        for name in ("Channel", "Intent", "Prompt", "Collection", "KVKey", "SessionType"):
+        for name in ("Channel", "Intent", "Prompt", "Collection", "KVKey"):
             cls = getattr(g8e.enums, name)
             assert issubclass(cls, StrEnum), f"{name} should be StrEnum"
+
+
+class TestInfrastructureStatusEnum:
+    """Verify InfrastructureStatus enum includes operational and down members."""
+
+    def test_infrastructure_status_is_str_enum(self):
+        cls = g8e.enums.InfrastructureStatus
+        assert issubclass(cls, StrEnum)
+
+    def test_infrastructure_status_has_operational(self):
+        cls = g8e.enums.InfrastructureStatus
+        assert cls.OPERATIONAL == "operational"
+
+    def test_infrastructure_status_has_down(self):
+        cls = g8e.enums.InfrastructureStatus
+        assert cls.DOWN == "down"
+
+
+class TestAuthMethodEnum:
+    """Verify AuthMethod enum includes proxy, operator_session, and test members."""
+
+    def test_auth_method_is_str_enum(self):
+        cls = g8e.enums.AuthMethod
+        assert issubclass(cls, StrEnum)
+
+    def test_auth_method_has_proxy(self):
+        cls = g8e.enums.AuthMethod
+        assert cls.PROXY == "proxy"
+
+    def test_auth_method_has_operator_session(self):
+        cls = g8e.enums.AuthMethod
+        assert cls.OPERATOR_SESSION == "operator_session"
+
+    def test_auth_method_has_test(self):
+        cls = g8e.enums.AuthMethod
+        assert cls.TEST == "test"
+
+
+class TestIntentEventTypeMembers:
+    """Verify intent EventType members are present in EventType enum."""
+
+    def test_operator_intent_requested_exists(self):
+        cls = g8e.enums.EventType
+        assert cls.OPERATOR_INTENT_REQUESTED == "g8e.v1.operator.intent.requested"
+
+    def test_operator_intent_revoke_requested_exists(self):
+        cls = g8e.enums.EventType
+        assert cls.OPERATOR_INTENT_REVOKE_REQUESTED == "g8e.v1.operator.intent.revoke.requested"
+
+    def test_operator_intent_approval_requested_exists(self):
+        cls = g8e.enums.EventType
+        assert cls.OPERATOR_INTENT_APPROVAL_REQUESTED == "g8e.v1.operator.intent.approval.requested"
+
+    def test_operator_intent_denied_exists(self):
+        cls = g8e.enums.EventType
+        assert cls.OPERATOR_INTENT_DENIED == "g8e.v1.operator.intent.denied"
+
+    def test_operator_intent_granted_exists(self):
+        cls = g8e.enums.EventType
+        assert cls.OPERATOR_INTENT_GRANTED == "g8e.v1.operator.intent.granted"
+
+    def test_operator_intent_revoked_exists(self):
+        cls = g8e.enums.EventType
+        assert cls.OPERATOR_INTENT_REVOKED == "g8e.v1.operator.intent.revoked"
+
+    def test_operator_intent_approval_rejected_exists(self):
+        cls = g8e.enums.EventType
+        assert cls.OPERATOR_INTENT_APPROVAL_REJECTED == "g8e.v1.operator.intent.approval.rejected"
+
+    def test_operator_intent_approval_granted_exists(self):
+        cls = g8e.enums.EventType
+        assert cls.OPERATOR_INTENT_APPROVAL_GRANTED == "g8e.v1.operator.intent.approval.granted"

@@ -72,7 +72,7 @@
     },
     "SectionVaultMode": {
       "_go_const": "PromptSectionVaultMode",
-      "value": "vault_mode",
+      "value": "sentinel_mode",
       "_python_const": "SECTION_VAULT_MODE"
     },
     "SectionSystemContext": {

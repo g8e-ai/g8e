@@ -189,6 +189,7 @@ class TestAccessorFunctions:
     def test_prompt_accessor(self):
         assert prompt("SectionSafety") == "safety"
         assert prompt("SectionIdentity") == "identity"
+        assert prompt("SectionVaultMode") == "sentinel_mode"
 
     def test_kv_key_accessor_without_kwargs(self):
         result = kv_key("CachePrefix")
@@ -201,6 +202,18 @@ class TestAccessorFunctions:
     def test_kv_key_accessor_with_dot_kwargs(self):
         result = kv_key("SessionWeb", **{"session.type": "operator", "session.id": "xyz"})
         assert result == "g8e:sessions:operator:xyz"
+
+    def test_kv_key_accessor_session_operator(self):
+        result = kv_key("SessionOperator", **{"operator.session.id": "abc"})
+        assert result == "g8e:sessions:operator:abc"
+
+    def test_api_paths_has_grant_intent(self):
+        assert "grant_intent" in API_PATHS
+        assert API_PATHS["grant_intent"] == "/api/v1/operators/{operator_id}/intents/grant"
+
+    def test_api_paths_has_revoke_intent(self):
+        assert "revoke_intent" in API_PATHS
+        assert API_PATHS["revoke_intent"] == "/api/v1/operators/{operator_id}/intents/revoke"
 
     def test_kv_session_type_accessor(self):
         assert kv_session_type("Web") == "web"

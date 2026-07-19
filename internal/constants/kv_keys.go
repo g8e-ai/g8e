@@ -28,6 +28,7 @@ const (
 	KVKeyCacheDoc                     = "g8e:cache:doc:{collection}:{id}"
 	KVKeyCacheQuery                   = "g8e:cache:query:{collection}:{hash}"
 	KVKeySessionWeb                   = "g8e:sessions:{session.type}:{session.id}"
+	KVKeySessionOperator              = "g8e:sessions:operator:{operator.session.id}"
 	KVKeySessionOperatorBind          = "g8e:sessions:operator:{operator.session.id}:bind"
 	KVKeySessionWebBind               = "g8e:sessions:web:{web.session.id}:bind"
 	KVKeyOperatorFirstDeployed        = "g8e:operator:{operator.id}:first.deployed"
