@@ -186,15 +186,16 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── scrubbing.ScrubbingService
 │   ├── mcp.FieldPathRegistry
 │   ├── mcp.NativeToolHandler
+│   ├── storage.SQLAuditStore (field exists but not wired in production; nil — only set in tests via withAuditStore)
 │   ├── RuntimeDependencies (atomic.Pointer, set once via SetRuntimeDeps before first request):
-│   │   ├── mcp.SessionValidator (set by in-process OperatorPubSubService in both modes)
-│   │   ├── mcp.AuditLogger (pubsubAuditLogger, set by in-process OperatorPubSubService in both modes)
-│   │   ├── governance.EnvelopeProcessor (set by in-process OperatorPubSubService in both modes)
-│   │   ├── StateRootProvider (set by in-process OperatorPubSubService in both modes)
-│   │   ├── Ed25519 signing key/keyID (set by in-process OperatorPubSubService in both modes)
-│   │   ├── downstreamURL (MCP egress, set by in-process OperatorPubSubService in both modes)
-│   │   └── DBService (mcp.FieldReader, gateway.DocumentStoreService) [SHARED] (set by in-process OperatorPubSubService in gateway mode; nil in outbound mode)
-│   ├── tribunal.TribunalDeliberator (atomic.Value, tribunal.LocalDeliberator in gateway mode, nil in outbound)
+│   │   ├── mcp.SessionValidator (set by in-process OperatorPubSubService in gateway mode)
+│   │   ├── mcp.AuditLogger (pubsubAuditLogger, set by in-process OperatorPubSubService in gateway mode)
+│   │   ├── governance.EnvelopeProcessor (set by in-process OperatorPubSubService in gateway mode)
+│   │   ├── StateRootProvider (set by in-process OperatorPubSubService in gateway mode)
+│   │   ├── Ed25519 signing key/keyID (set by in-process OperatorPubSubService in gateway mode)
+│   │   ├── downstreamURL (MCP egress, set by in-process OperatorPubSubService in gateway mode)
+│   │   └── DBService (mcp.FieldReader, gateway.DocumentStoreService) [SHARED] (set by in-process OperatorPubSubService in gateway mode; not applicable in outbound mode)
+│   ├── tribunal.TribunalDeliberator (atomic.Value, tribunal.LocalDeliberator in gateway mode, not applicable in outbound mode)
 │   ├── a2aDownstreamURL (construction-phase, immutable after NewGatewayService)
 │   └── publicBaseURL (construction-phase, immutable after NewGatewayService)
 └── response.Writer
@@ -275,7 +276,7 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 
 ### Transport & Protocol Layer
 - `pubsub.OperatorPubSubService` is the dispatcher for outbound mode (WebSocket pub/sub).
-- `mcp.GatewayService` handles MCP/A2A protocol translation and downstream dispatch (shared between modes).
+- `mcp.GatewayService` handles MCP/A2A protocol translation and downstream dispatch (gateway mode only; shared between HTTP ingress and OperatorPubSubService egress).
 - `gateway.HTTPHandler` builds the HTTP/WebSocket surface for gateway mode.
 - `gateway.GatewayWebSocketHandler` is the in-process pub/sub broker for gateway mode.
 - `gateway.PKIAuthority` manages PKI hierarchy and certificate lifecycle for gateway mode.
