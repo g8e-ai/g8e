@@ -20,37 +20,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/governance/governancetest"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
-
-func TestSimpleAppPolicyStore_NilMap(t *testing.T) {
-	t.Parallel()
-	s := &SimpleAppPolicyStore{}
-	policy, err := s.GetAppPolicy("app1")
-	require.NoError(t, err)
-	assert.Nil(t, policy)
-}
-
-func TestSimpleAppPolicyStore_NotFound(t *testing.T) {
-	t.Parallel()
-	s := &SimpleAppPolicyStore{Policies: map[string]*models.AppPolicy{}}
-	policy, err := s.GetAppPolicy("nonexistent")
-	require.NoError(t, err)
-	assert.Nil(t, policy)
-}
-
-func TestSimpleAppPolicyStore_Found(t *testing.T) {
-	t.Parallel()
-	expected := &models.AppPolicy{AppID: "app1"}
-	s := &SimpleAppPolicyStore{Policies: map[string]*models.AppPolicy{"app1": expected}}
-	policy, err := s.GetAppPolicy("app1")
-	require.NoError(t, err)
-	assert.Equal(t, expected, policy)
-}
 
 func TestSimpleSignerStore_NilMap(t *testing.T) {
 	t.Parallel()
@@ -76,38 +52,6 @@ func TestSimpleSignerStore_Found(t *testing.T) {
 	result, err := s.GetTrustedSigner("key1")
 	require.NoError(t, err)
 	assert.Equal(t, pub, result)
-}
-
-func TestSimpleStateRootProvider_EmptyRoot(t *testing.T) {
-	t.Parallel()
-	s := &SimpleStateRootProvider{Root: ""}
-	_, err := s.GetCurrentStateRoot()
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrTxProviderMisconfigured)
-}
-
-func TestSimpleStateRootProvider_ValidRoot(t *testing.T) {
-	t.Parallel()
-	s := &SimpleStateRootProvider{Root: "abc123"}
-	root, err := s.GetCurrentStateRoot()
-	require.NoError(t, err)
-	assert.Equal(t, "abc123", root)
-}
-
-func TestSimpleTribunalStore_NilMap(t *testing.T) {
-	t.Parallel()
-	s := &SimpleTribunalStore{}
-	tribunal, err := s.GetTribunal("trib1")
-	require.NoError(t, err)
-	assert.Nil(t, tribunal)
-}
-
-func TestSimpleTribunalStore_NotFound(t *testing.T) {
-	t.Parallel()
-	s := &SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{}}
-	tribunal, err := s.GetTribunal("nonexistent")
-	require.NoError(t, err)
-	assert.Nil(t, tribunal)
 }
 
 func TestFilesystemSignerStore_NonexistentDir(t *testing.T) {
@@ -197,7 +141,7 @@ func TestFilesystemSignerStore_SkipsNonPubFiles(t *testing.T) {
 
 func TestFilesystemSignerStore_GetTrustedSigner_NilMap(t *testing.T) {
 	t.Parallel()
-	store := &FilesystemSignerStore{signers: nil, logger: testutil.NewTestLogger()}
+	store := &FilesystemSignerStore{signers: nil}
 	pubKey, err := store.GetTrustedSigner("key1")
 	require.NoError(t, err)
 	assert.Nil(t, pubKey)
@@ -236,10 +180,10 @@ func TestL4Warden_Posture_And_Doctrine(t *testing.T) {
 	warden := NewL4Warden(
 		logger,
 		nil,
-		&SimpleStateRootProvider{Root: "root"},
+		&governancetest.SimpleStateRootProvider{Root: "root"},
 		&SimpleSignerStore{},
-		&SimpleTribunalStore{},
-		&SimpleAppPolicyStore{},
+		&governancetest.SimpleTribunalStore{},
+		&governancetest.SimpleAppPolicyStore{},
 		nil,
 		NewL1Doctrine(),
 		[]constants.ActionType{constants.ActionTypeFileEdit},

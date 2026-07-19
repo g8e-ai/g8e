@@ -8,16 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## Unreleased
-
-| Version | Date | Description | Notes |
-|---------|------|-------------|-------|
-| — | — | — | — |
-
 ## v1.5.x
 
 | Version | Date | Description | Notes |
 |---------|------|-------------|-------|
+| 1.5.7 | 2026-07-18 | Test coverage improvement and governance interface refactoring. Raises aggregate test coverage to 75.9% (threshold: 75%). Adds approximately 60 new tests across 12 packages. Extracts governance interfaces from `l4_warden.go` into separate files, moves test fixtures to `governancetest` package, and introduces shared test doubles (`TestTokenStore`, `TestResultsPublisher`). Exports `SentinelKeyPrefix` constant. Removes dead `FilesystemSignerStore.logger` field. Refactors `getMachineID` for unsupported OS branch testability. | [v1.5.7](docs/release_notes/v1.5.x/v1.5.7.md) |
 | 1.5.6 | 2026-07-18 | Lattice gRPC adapter, MCP tool interception verification, agent support consolidation, and Python protocol enhancements. Adds Anduril Lattice adapter with OAuth2 client credentials auth and gRPC retry. Introduces pre-launch tool interception verification (`--verify` flag) for `g8e mcp agent run`. Consolidates supported agents to Claude Code, Codex, Goose, and Gemini CLI. Adds `GovernanceEnvelope` model with `compute_transaction_hash()`, dynamic enums, and `_python_const` fields to the Python protocol package. Adds heartbeat sink registration for external components. Fixes L4 Warden raw-bytes passthrough for adapter-specific action types. | [v1.5.6](docs/release_notes/v1.5.x/v1.5.6.md) |
 | 1.5.5 | 2026-07-15 | Python protocol package fix. Bundles JSON constants files into the PyPI package and updates the constants directory lookup logic to find bundled files first, fixing runtime failures when the package is installed from PyPI without the protocol source tree. | [v1.5.5](docs/release_notes/v1.5.x/v1.5.5.md) |
 | 1.5.4 | 2026-07-15 | Release process and test cleanup. Adds `make lint` to the `make release` target, updates release process documentation to reflect lint inclusion, and fixes unreachable code after `t.Fatal` in DHS scenario test. | [v1.5.4](docs/release_notes/v1.5.x/v1.5.4.md) |

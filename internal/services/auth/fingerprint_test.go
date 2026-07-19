@@ -281,15 +281,11 @@ func TestGetDarwinMachineID_FallbackContainsHostname(t *testing.T) {
 	assert.Contains(t, id, hostname, "fallback ID must embed hostname")
 }
 
-func TestGetMachineID_UnsupportedOS(t *testing.T) {
+func TestGetMachineIDWithPlatform_UnsupportedOS(t *testing.T) {
 	t.Parallel()
-	// This test covers the error path for unsupported OS
-	// Since we can't easily mock runtime.GOOS, we rely on the fact that
-	// the test will run on a supported OS and this is a documentation
-	// of the expected behavior
-	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" && runtime.GOOS != "freebsd" && runtime.GOOS != "windows" {
-		_, err := getMachineID(testutil.NewTestLogger())
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "unsupported operating system")
-	}
+
+	_, err := getMachineIDWithPlatform(testutil.NewTestLogger(), "solaris")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFingerprintUnsupportedOS)
+	assert.Contains(t, err.Error(), "solaris")
 }

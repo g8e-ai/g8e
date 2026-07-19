@@ -947,3 +947,81 @@ func TestSuspendedTransactionStore_FullWorkflow(t *testing.T) {
 	_, found, _ = sts.GetSuspendedTransaction(ctx, "workflow-hash")
 	assert.False(t, found)
 }
+
+func TestSuspendedTransactionPrune_DeletesExpired(t *testing.T) {
+	t.Parallel()
+
+	sts := setupTestSuspendedTransactionStore(t)
+	ctx := context.Background()
+
+	now := time.Now().UTC()
+
+	transactions := []*models.SuspendedTransaction{
+		{
+			TransactionHash: "prune-active",
+			Envelope:        []byte("active"),
+			CreatedAt:       now,
+			ExpiresAt:       now.Add(time.Hour),
+			UserID:          "user-1",
+			OperatorID:      "op-1",
+		},
+		{
+			TransactionHash: "prune-expired-1",
+			Envelope:        []byte("expired1"),
+			CreatedAt:       now,
+			ExpiresAt:       now.Add(-time.Hour),
+			UserID:          "user-1",
+			OperatorID:      "op-1",
+		},
+		{
+			TransactionHash: "prune-expired-2",
+			Envelope:        []byte("expired2"),
+			CreatedAt:       now,
+			ExpiresAt:       now.Add(-2 * time.Hour),
+			UserID:          "user-1",
+			OperatorID:      "op-1",
+		},
+	}
+
+	for _, tx := range transactions {
+		err := sts.StoreSuspendedTransaction(ctx, tx)
+		require.NoError(t, err)
+	}
+
+	pruneFunc := suspendedTransactionPrune(sts.config)
+	err := pruneFunc(ctx, sts.db, sts.logger)
+	require.NoError(t, err)
+
+	txs, err := sts.ListSuspendedTransactions(ctx, "")
+	require.NoError(t, err)
+	assert.Len(t, txs, 1)
+	assert.Equal(t, "prune-active", txs[0].TransactionHash)
+}
+
+func TestSuspendedTransactionPrune_NoExpired_NoError(t *testing.T) {
+	t.Parallel()
+
+	sts := setupTestSuspendedTransactionStore(t)
+	ctx := context.Background()
+
+	now := time.Now().UTC()
+	tx := &models.SuspendedTransaction{
+		TransactionHash: "prune-no-expired",
+		Envelope:        []byte("active"),
+		CreatedAt:       now,
+		ExpiresAt:       now.Add(time.Hour),
+		UserID:          "user-1",
+		OperatorID:      "op-1",
+	}
+
+	err := sts.StoreSuspendedTransaction(ctx, tx)
+	require.NoError(t, err)
+
+	pruneFunc := suspendedTransactionPrune(sts.config)
+	err = pruneFunc(ctx, sts.db, sts.logger)
+	require.NoError(t, err)
+
+	txs, err := sts.ListSuspendedTransactions(ctx, "")
+	require.NoError(t, err)
+	assert.Len(t, txs, 1)
+}
