@@ -142,8 +142,7 @@ help:
 	@echo "  ci-platform   Run platform-only CI (operator, protocol, proto, docs)"
 	@echo ""
 	@echo "Release:"
-	@echo "  release          Sync Python versions + build binaries (no tests, no git ops)"
-	@echo "  release-tag      Tag & push v<VERSION> + protocol/v<VERSION> (Python release trigger)"
+	@echo "  release          Tag v<VERSION> + protocol/v<VERSION>, push, create GitHub release"
 	@echo ""
 	@echo "Protocol Generation:"
 	@echo "  generate      Generate all protocol artifacts (proto)"
@@ -670,17 +669,17 @@ _ci-test:
 # RELEASE
 # =============================================================================
 # VERSION is the single source of truth. `make release` syncs pyproject.toml
-# and __init__.py from VERSION, then builds binaries. It does NOT run tests,
-# lint, or touch git — CI handles quality gates on push.
+# and __init__.py from VERSION (if needed), builds binaries for verification,
+# tags the current commit as v<VERSION> + protocol/v<VERSION>, pushes both tags,
+# and creates a GitHub release using the corresponding docs/release_notes file.
 #
 # Workflow:
-#   1. Edit VERSION
-#   2. make release        (syncs Python versions + builds)
-#   3. git add -A && git commit -m "release: v<VERSION>"
-#   4. make release-tag    (tags + pushes, triggers CI release workflows)
+#   1. Merge PRs (CI enforces version sync, proto/swagger generation, tests)
+#   2. git pull origin main
+#   3. make release        (tags, pushes, creates GitHub release)
 #
 # The protocol/v* tag triggers the Python PyPI release workflow.
-# The Go module is now part of the root module (github.com/g8e-ai/g8e)
+# The Go module is part of the root module (github.com/g8e-ai/g8e)
 # and is versioned by the v* tag. External consumers use:
 #   go get github.com/g8e-ai/g8e@vX.Y.Z
 # The protocol/v* tag is NOT used for Go module versioning.
@@ -688,7 +687,12 @@ _ci-test:
 .PHONY: release
 release:
 	@VERSION=$$(cat VERSION | tr -d '\n' | sed 's/^v//'); \
-	echo "=== release: v$$VERSION ==="; \
+	TAG="v$$VERSION"; \
+	PYTHON_TAG="protocol/v$$VERSION"; \
+	MAJOR_MINOR=$$(echo $$VERSION | cut -d. -f1-2); \
+	NOTES_FILE="docs/release_notes/v$$MAJOR_MINOR.x/v$$VERSION.md"; \
+	echo "=== release: $$TAG ==="; \
+	\
 	PY_FILE=protocol/python/pyproject.toml; \
 	PY_INIT=protocol/python/g8e/__init__.py; \
 	PY_VERSION=$$(grep -E '^version = ' $$PY_FILE | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
@@ -709,27 +713,13 @@ release:
 	else \
 		echo "  __init__.py already in sync."; \
 	fi; \
-	echo "Building binaries..."; \
-	$(MAKE) build; \
-	echo ""; \
-	echo "Release prep complete. Review changes, then:"; \
-	echo "  git add -A && git commit -m \"release: v$$VERSION\""; \
-	echo "  make release-tag"
-
-.PHONY: release-tag
-release-tag:
-	@VERSION=$$(cat VERSION | tr -d '\n' | sed 's/^v//'); \
-	TAG="v$$VERSION"; \
-	PYTHON_TAG="protocol/v$$VERSION"; \
-	PY_VERSION=$$(grep -E '^version = ' protocol/python/pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
-	PY_INIT_VERSION=$$(grep -E '^__version__ = ' protocol/python/g8e/__init__.py | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
-	echo "=== release-tag: $$TAG + $$PYTHON_TAG ==="; \
+	\
 	if [ -n "$$(git status --porcelain)" ]; then \
-		echo "Error: working tree is dirty; commit or stash before tagging."; exit 1; \
+		echo "Error: working tree is dirty after version sync."; \
+		echo "Python versions were out of sync. Commit synced files, push, merge PR, then retry."; exit 1; \
 	fi; \
-	if [ "$$PY_VERSION" != "$$VERSION" ] || [ "$$PY_INIT_VERSION" != "$$VERSION" ]; then \
-		echo "Error: Python version mismatch — pyproject.toml ($$PY_VERSION), __init__.py ($$PY_INIT_VERSION) != VERSION ($$VERSION)."; \
-		echo "Run 'make release' first, commit, then retry."; exit 1; \
+	if [ ! -f "$$NOTES_FILE" ]; then \
+		echo "Error: release notes file $$NOTES_FILE not found."; exit 1; \
 	fi; \
 	if git rev-parse -q --verify "refs/tags/$$TAG" >/dev/null; then \
 		echo "Error: tag $$TAG already exists."; exit 1; \
@@ -737,9 +727,22 @@ release-tag:
 	if git rev-parse -q --verify "refs/tags/$$PYTHON_TAG" >/dev/null; then \
 		echo "Error: tag $$PYTHON_TAG already exists."; exit 1; \
 	fi; \
+	if ! command -v gh &> /dev/null; then \
+		echo "Error: GitHub CLI (gh) not found. Install from https://cli.github.com/"; exit 1; \
+	fi; \
+	\
+	echo "Building binaries..."; \
+	$(MAKE) build; \
+	\
+	echo "Tagging $$TAG + $$PYTHON_TAG..."; \
 	git tag "$$TAG" && git tag "$$PYTHON_TAG"; \
 	git push origin "$$TAG" && git push origin "$$PYTHON_TAG"; \
+	\
+	echo "Creating GitHub release from $$NOTES_FILE..."; \
+	gh release create "$$TAG" --title "g8e $$TAG" --notes-file "$$NOTES_FILE" || \
+		gh release edit "$$TAG" --title "g8e $$TAG" --notes-file "$$NOTES_FILE"; \
+	\
 	echo ""; \
-	echo "Pushed $$TAG + $$PYTHON_TAG."; \
+	echo "Release $$TAG created."; \
 	echo "Monitor: gh run watch --workflow=release-binary.yml"; \
 	echo "Monitor: gh run watch --workflow=release-python-protocol.yml"
