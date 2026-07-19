@@ -72,6 +72,25 @@ func TestOtherNewEventConstants(t *testing.T) {
 	}
 }
 
+func TestOperatorIntentEventConstants(t *testing.T) {
+	cases := []struct {
+		goConst EventType
+		value   string
+	}{
+		{EventOperatorIntentApprovalGranted, "g8e.v1.operator.intent.approval.granted"},
+		{EventOperatorIntentApprovalRejected, "g8e.v1.operator.intent.approval.rejected"},
+		{EventOperatorIntentApprovalRequested, "g8e.v1.operator.intent.approval.requested"},
+		{EventOperatorIntentDenied, "g8e.v1.operator.intent.denied"},
+		{EventOperatorIntentGranted, "g8e.v1.operator.intent.granted"},
+		{EventOperatorIntentRequested, "g8e.v1.operator.intent.requested"},
+		{EventOperatorIntentRevokeRequested, "g8e.v1.operator.intent.revoke.requested"},
+		{EventOperatorIntentRevoked, "g8e.v1.operator.intent.revoked"},
+	}
+	for _, tc := range cases {
+		assert.Equal(t, tc.value, string(tc.goConst))
+	}
+}
+
 func TestEventsJSONValidity(t *testing.T) {
 	data, err := os.ReadFile("../../protocol/constants/events.json")
 	require.NoError(t, err)

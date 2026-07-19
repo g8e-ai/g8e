@@ -582,3 +582,27 @@ const (
 	ErrorSeverityCritical ErrorSeverity = "critical"
 	ErrorSeverityInfo     ErrorSeverity = "info"
 )
+
+// InfrastructureStatus is a typed string for infrastructure status.
+type InfrastructureStatus string
+
+const (
+	InfrastructureStatusCritical    InfrastructureStatus = "critical"
+	InfrastructureStatusDegraded    InfrastructureStatus = "degraded"
+	InfrastructureStatusHealthy     InfrastructureStatus = "healthy"
+	InfrastructureStatusStable      InfrastructureStatus = "stable"
+	InfrastructureStatusUnknown     InfrastructureStatus = "unknown"
+	InfrastructureStatusOperational InfrastructureStatus = "operational"
+	InfrastructureStatusDown        InfrastructureStatus = "down"
+)
+
+// AuthMethod is a typed string for authentication method.
+type AuthMethod string
+
+const (
+	AuthMethodKvPubSub        AuthMethod = "kv_pubsub"
+	AuthMethodSession         AuthMethod = "session"
+	AuthMethodProxy           AuthMethod = "proxy"
+	AuthMethodOperatorSession AuthMethod = "operator_session"
+	AuthMethodTest            AuthMethod = "test"
+)

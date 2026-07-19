@@ -13,9 +13,10 @@
 
 from typing import Any
 from .base import G8eBaseModel, UTCDatetime
+from g8e.enums import EventType
 
 class _SSEEventBody(G8eBaseModel):
-    type: str
+    type: EventType
     data: dict[str, Any]
 
 

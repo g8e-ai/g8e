@@ -229,7 +229,7 @@ From `protocol/constants/ports.json`:
 
 ### Python Test Suite
 
-The Python protocol package (`protocol/python/`) includes a pytest suite in `protocol/python/tests/` with 94 tests across 4 files:
+The Python protocol package (`protocol/python/`) includes a pytest suite in `protocol/python/tests/` with 151 tests across 4 files:
 
 - `test_constants.py` — Constant dict loading, value integrity, and namespace conventions
 - `test_enums.py` — Enum generation, name conversion helpers, and dynamic attribute access
@@ -247,7 +247,7 @@ CI runs pytest on a Python 3.10-3.14 matrix (`python-tests` job).
 
 ### Protocol Conformance Suite
 
-The conformance suite in `protocol/conformance/` contains 303 tests across 2 files that enforce parity between Go constants, Python runtime values, and canonical JSON in `protocol/constants/`:
+The conformance suite in `protocol/conformance/` contains 330 tests across 2 files that enforce parity between Go constants, Python runtime values, and canonical JSON in `protocol/constants/`:
 
 - `test_constants.py` — JSON file structure, `_go_const`/`_python_const` presence, value uniqueness, Go naming conventions, Python-JSON parity, event value namespace conventions
 - `test_models.py` — Model schema integrity, field parity between Python Pydantic models and JSON schemas, serialization round-trips, validation rules
@@ -298,7 +298,7 @@ GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 **Additional CI jobs**:
 - `python-tests` — Pytest on Python 3.10-3.14 matrix with version sync verification
 - `python-audit` — pip-audit `--skip-editable` for Python dependency vulnerability scanning
-- `conformance` — Protocol conformance suite (303 tests) on Python 3.14
+- `conformance` — Protocol conformance suite (330 tests) on Python 3.14
 - `smoke-test` — Clean-environment install verification for both Python and Go packages
 - `secret-scan` — gitleaks full-history secret scanning
 - `license-check` — go-licenses report with forbidden copyleft license detection (GPL, AGPL, LGPL, SSPL, BUSL)

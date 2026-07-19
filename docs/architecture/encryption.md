@@ -1,7 +1,7 @@
 # Encryption Architecture
 
-Last Updated: 2026-07-15
-Version: v1.5.2
+Last Updated: 2026-07-19
+Version: v1.5.8
 
 ## Overview
 
@@ -247,3 +247,17 @@ If services fail with "vault not initialized":
 # Restart gateway
 ./g8e gw restart
 ```
+
+## Receipt Signature Verification
+
+### Current State
+
+The Gateway signs `ActionReceipt`s with its Actuator Ed25519 private key. The actuator public key is written to the PKI directory during gateway boot (`ExportActuatorPublicKey` in `internal/cli/serve/gateway.go`), enabling offline verification by external harnesses.
+
+### Known Limitation
+
+No mechanism exists for distributing the Gateway's public key to Engine instances via an attested channel. Consumers that need to cryptographically verify receipt authenticity must obtain the public key out-of-band (e.g., by reading the exported `actuator_pub.json` from the gateway PKI directory directly). A full attested bootstrap flow, where the public key is distributed via PKI certificate embedding during enrollment, is planned for a future release.
+
+### Verification Utility
+
+The g8e Python package does not currently expose a receipt verification utility. Consumers can implement Ed25519 verification using `nacl.signing.VerifyKey` with the exported public key. The actuator public key is available in two formats in the gateway PKI directory: JSON (with key ID) and PEM.

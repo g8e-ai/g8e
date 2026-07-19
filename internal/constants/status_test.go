@@ -335,3 +335,37 @@ func TestStatusJSONTribunalMemberMatches(t *testing.T) {
 		assert.Equal(t, exp, entry.Value)
 	}
 }
+
+func TestInfrastructureStatusConstants(t *testing.T) {
+	cases := []struct {
+		goConst InfrastructureStatus
+		value   string
+	}{
+		{InfrastructureStatusCritical, "critical"},
+		{InfrastructureStatusDegraded, "degraded"},
+		{InfrastructureStatusHealthy, "healthy"},
+		{InfrastructureStatusStable, "stable"},
+		{InfrastructureStatusUnknown, "unknown"},
+		{InfrastructureStatusOperational, "operational"},
+		{InfrastructureStatusDown, "down"},
+	}
+	for _, tc := range cases {
+		assert.Equal(t, tc.value, string(tc.goConst))
+	}
+}
+
+func TestAuthMethodConstants(t *testing.T) {
+	cases := []struct {
+		goConst AuthMethod
+		value   string
+	}{
+		{AuthMethodKvPubSub, "kv_pubsub"},
+		{AuthMethodSession, "session"},
+		{AuthMethodProxy, "proxy"},
+		{AuthMethodOperatorSession, "operator_session"},
+		{AuthMethodTest, "test"},
+	}
+	for _, tc := range cases {
+		assert.Equal(t, tc.value, string(tc.goConst))
+	}
+}

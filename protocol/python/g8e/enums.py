@@ -113,7 +113,6 @@ _EXTRA_ENUMS: dict[str, tuple[dict, str, str]] = {
     "Prompt": (PROMPTS, "prompts", "Prompt"),
     "Collection": (COLLECTIONS, "collections", "Collection"),
     "KVKey": (KV, "kv_keys", "KVKey"),
-    "SessionType": (KV, "session_types", "SessionType"),
 }
 
 

@@ -43,6 +43,7 @@ Typed event identifiers for the pub/sub system, typed as `EventType`. The file d
 - Operator Bootstrap: requested, received, completed, failed, config.received
 - Operator Audit: `EventOperatorAuditUserRecorded`, `EventOperatorAuditAiRecorded`, `EventOperatorAuditCommandRecorded`, `EventOperatorAuditDirectCommandRecorded`, `EventOperatorAuditDirectCommandResultRecorded`, `EventOperatorAuditMcpCallRecorded`
 - Operator Notary: `EventOperatorNotaryApprovalRequested`, `EventOperatorNotaryTransactionExpired`
+- Operator Intent: `EventOperatorIntentRequested`, `EventOperatorIntentRevokeRequested`, `EventOperatorIntentApprovalRequested`, `EventOperatorIntentDenied`, `EventOperatorIntentGranted`, `EventOperatorIntentRevoked`, `EventOperatorIntentApprovalRejected`, `EventOperatorIntentApprovalGranted`. Values follow the `g8e.v1.operator.intent.*` namespace. Accessible via `Event.Operator.Intent.*`.
 - Operator Reputation: commitment created/verified/failed, state updated, slash tier1/tier2/tier3
 - Operator Terminal: thinking append/complete, approval denied, auth state changed
 - Operator Device: `EventOperatorDeviceRegistered`
@@ -82,7 +83,7 @@ HTTP route paths for the Gateway REST API, defined as a struct `APIPaths` with J
 - MCP: `MCPEndpoint` (`/mcp`)
 - A2A: `A2ACall` (`/api/v1/a2a/call`), `A2APrefix` (`/api/v1/a2a/`)
 - Governance: `GovernanceEnvelopes`, `GovernanceSigners`, `GovernanceSignersByID`, `GovernanceSignersPrefix`
-- Operator: `Operators`, `OperatorsByID`, `OperatorsBind`, `OperatorsUnbind`, `OperatorsTarget`, `OperatorsReauth`
+- Operator: `Operators`, `OperatorsByID`, `OperatorsBind`, `OperatorsUnbind`, `OperatorsTarget`, `OperatorsReauth`, `GrantIntent`, `RevokeIntent`
 - Data: `DataSettings`, `DataDB`, `DataBlobs`, `DataPrefix`, `DataItems`, `DataBlobsPrefix`, `QueryPrefix` (`/_query`)
 - KV: `KV` (`/api/v1/kv/`), `KVPrefix` (`/api/v1/kv/`)
 - PubSub: `PubSubPublish`, `PubSubStream`, `PubSubWebSocket` (`/ws/pubsub`)
@@ -145,7 +146,7 @@ Internal enumeration constants, each defined as a typed string:
 - `CloudSubtype`: `CloudSubtypeAWS`, `CloudSubtypeAzure`, `CloudSubtypeGCP`, `CloudSubtypeG8EP`
 - `UserStatus`: `UserStatusActive`, `UserStatusDisabled`
 - `AuthProvider`: `AuthProviderJWT`, `AuthProviderLocal`, `AuthProviderPasskey`
-- `ApprovalType`: `ApprovalTypeAgentContinue`, `ApprovalTypeCommand`, `ApprovalTypeFileEdit`, `ApprovalTypeIntent`, `ApprovalTypeStream`
+- `ApprovalType`: `ApprovalTypeAgentContinue` (`agent.continue`), `ApprovalTypeCommand` (`command`), `ApprovalTypeFileEdit` (`file.edit`), `ApprovalTypeIntent` (`intent`), `ApprovalTypeStream` (`stream`). Values use dot-separated format consistent with `EventType` naming conventions.
 - `SessionType`: `SessionTypeCLI`, `SessionTypeOperator`, `SessionTypeWeb`
 - `StreamStatus`: `StreamStatusCancelled`, `StreamStatusCompleted`, `StreamStatusExited`, `StreamStatusFailed`, `StreamStatusSummary`
 - `CommandExitStatus`: `CommandExitStatusError`, `CommandExitStatusFailure`, `CommandExitStatusInterrupted`, `CommandExitStatusInvalidExit`, `CommandExitStatusKilled`, `CommandExitStatusMisuse`, `CommandExitStatusNotExecutable`, `CommandExitStatusNotFound`, `CommandExitStatusSuccess`, `CommandExitStatusTerminated`, `CommandExitStatusSignal1` (SIGHUP), `CommandExitStatusSignal2` (SIGINT), `CommandExitStatusSignal3` (SIGQUIT), `CommandExitStatusSignal6` (SIGABRT), `CommandExitStatusSignal9` (SIGKILL), `CommandExitStatusSignal11` (SIGSEGV), `CommandExitStatusSignal13` (SIGPIPE), `CommandExitStatusSignal15` (SIGTERM)
@@ -171,6 +172,8 @@ Internal enumeration constants, each defined as a typed string:
 - `HistoryActor`: `HistoryActorNone`, `HistoryActorG8EO`, `HistoryActorSystem`, `HistoryActorUser`
 - `AISource`: `AISourceTerminalAnchored`, `AISourceTerminalDirect`, `AISourceToolCall`
 - `ComponentStatus`: `ComponentStatusActive`, `ComponentStatusError`, `ComponentStatusInactive`, `ComponentStatusMaintenance`, `ComponentStatusDegraded`
+- `InfrastructureStatus`: `InfrastructureStatusCritical`, `InfrastructureStatusDegraded`, `InfrastructureStatusHealthy`, `InfrastructureStatusStable`, `InfrastructureStatusUnknown`, `InfrastructureStatusOperational`, `InfrastructureStatusDown`
+- `AuthMethod`: `AuthMethodKVPubSub`, `AuthMethodSession`, `AuthMethodProxy`, `AuthMethodOperatorSession`, `AuthMethodTest`
 - `WorkflowType`: `WorkflowTypeG8eBound`, `WorkflowTypeG8eCloudBound`, `WorkflowTypeG8eNotBound`, `WorkflowTypeTriage`, `WorkflowTypeInvestigation`
 - `AITaskId`: `AITaskIDAgentContinue`, `AITaskIDChat`, `AITaskIDCommand`, `AITaskIDDirectCommand`, `AITaskIDFetchFileDiff`, `AITaskIDFetchFileHistory`, `AITaskIDFetchHistory`, `AITaskIDFetchLogs`, `AITaskIDFileEdit`, `AITaskIDFsList`, `AITaskIDFsRead`, `AITaskIDIntentGrant`, `AITaskIDIntentRevoke`, `AITaskIDPortCheck`, `AITaskIDRecursiveGrep`, `AITaskIDRestoreFile`, plus additional task ID aliases for chat, case, memory, command execution, direct command, file operation, recursive grep, and investigation query
 - `TribunalMember`: `TribunalMemberAxiom`, `TribunalMemberConcord`, `TribunalMemberVariance`, `TribunalMemberPragma`, `TribunalMemberNemesis`
@@ -327,7 +330,7 @@ Key-value store key patterns and session type constants:
 
 - Cache prefix: `KVCachePrefix` (`g8e`)
 - Cache keys: `KVKeyCacheDoc`, `KVKeyCacheQuery`
-- Session keys: `KVKeySessionWeb`, `KVKeySessionOperatorBind`, `KVKeySessionWebBind`
+- Session keys: `KVKeySessionWeb`, `KVKeySessionOperator`, `KVKeySessionOperatorBind`, `KVKeySessionWebBind`
 - Operator keys: `KVKeyOperatorFirstDeployed`, `KVKeyOperatorTrackedStatus`
 - User keys: `KVKeyUserOperators`, `KVKeyUserWebSessions`, `KVKeyUserMemories`
 - Investigation keys: `KVKeyInvestigationAttachment`, `KVKeyInvestigationAttachmentIndex`

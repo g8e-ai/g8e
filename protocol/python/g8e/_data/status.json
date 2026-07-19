@@ -546,6 +546,21 @@
         "_go_const": "AuthMethodSession",
         "_python_const": "SESSION",
         "value": "session"
+      },
+      "proxy": {
+        "_go_const": "AuthMethodProxy",
+        "_python_const": "PROXY",
+        "value": "proxy"
+      },
+      "operator_session": {
+        "_go_const": "AuthMethodOperatorSession",
+        "_python_const": "OPERATOR_SESSION",
+        "value": "operator_session"
+      },
+      "test": {
+        "_go_const": "AuthMethodTest",
+        "_python_const": "TEST",
+        "value": "test"
       }
     },
     "auth_provider": {
@@ -1267,6 +1282,16 @@
         "_go_const": "InfrastructureStatusUnknown",
         "_python_const": "UNKNOWN",
         "value": "unknown"
+      },
+      "operational": {
+        "_go_const": "InfrastructureStatusOperational",
+        "_python_const": "OPERATIONAL",
+        "value": "operational"
+      },
+      "down": {
+        "_go_const": "InfrastructureStatusDown",
+        "_python_const": "DOWN",
+        "value": "down"
       }
     },
     "investigation_status": {
