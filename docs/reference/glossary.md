@@ -4,8 +4,8 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 2026-07-14
-Version: v1.5.1
+Last Updated: 2026-07-19
+Version: v1.5.8
 
 Core terminology for the g8e protocol, g8e Gateway, g8e Operator, and ecosystem integration (MCP, A2A). Terms are organized alphabetically.
 
@@ -39,7 +39,7 @@ A just-in-time, single-action, self-dissolving permission derived from a verifie
 
 The embedded SQLite database used by the g8e Gateway for durable storage of users, operators, and platform data. The g8e Gateway running in gateway mode is the single source of truth: a single SQLite database in WAL mode shared by all components via the g8e Gateway's document store, KV, and pub/sub APIs. BYO agentic clients and other components are stateless with respect to persistence and access all data through the g8e Gateway's HTTP API.
 
-Collections include users, operators, organizations, operator_sessions, cli_sessions, web_sessions, bound_sessions, cases, investigations, tasks, memories, personas, app_policies, trusted_signers, tribunals, enrollment_tokens, revoked_certificates, reputation_state, reputation_commitments, stake_resolutions, agent_activity_metadata, and others. The database includes a `state_tier` column to distinguish bound-state from observed-state entries.
+Collections include users, operators, organizations, operator_sessions, cli_sessions, web_sessions, bound_sessions, cases, investigations, tasks, memories, personas, app_policies, trusted_signers, tribunals, enrollment_tokens, revoked_certificates, reputation_state, reputation_commitments, stake_resolutions, agent_activity_metadata, account_locks, login_audit, auth_admin_audit, console_audit, operator_usage, passkey_challenges, settings, and others. The database includes a `state_tier` column to distinguish bound-state from observed-state entries.
 
 ---
 

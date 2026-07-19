@@ -17,11 +17,12 @@ constants load the JSON directly at runtime.
 
 ### `test_constants.py`
 
-- **JSON structural integrity**: All 20 protocol constant files load
+- **JSON structural integrity**: All 22 protocol constant files load
   successfully and have the expected wrapper key structure.
 - **`_go_const` presence**: Every entry in every constant file (except
-  `exit_codes.json` and `field_paths.json`, which use different schemas)
-  has a `_go_const` field, ensuring Go code can mirror it.
+  `exit_codes.json`, which uses a different schema) has a `_go_const`
+  field, ensuring Go code can mirror it. `auth.json` is verified via
+  dedicated multi-wrapper tests.
 - **`_python_const` presence**: Every entry in `status.json` has a
   `_python_const` field, ensuring Python enum generation works.
 - **Value uniqueness**: No duplicate wire-format values within any single
@@ -37,8 +38,8 @@ constants load the JSON directly at runtime.
 
 ### `test_models.py`
 
-- **Model schema integrity**: All 48 model JSON schemas load and have
-  expected structure.
+- **Model schema integrity**: All 55 model JSON schemas (including 6
+  agent definition files in `agents/`) load and have expected structure.
 - **PlatformSettings field parity**: Python `PlatformSettings` model fields
   match the JSON schema definition.
 - **RequestContext validation**: Client component requires session and user

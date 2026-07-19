@@ -24,7 +24,7 @@ Documentation must be useful for humans to understand how to authenticate, autho
 - Document data structures and field definitions
 - Include protocol constants and error handling
 
-**General principle:** If a document is in `docs/architecture/` or `docs/guides/`, it should be human-readable and practical. If it's in `protocol/docs/` or `docs/devs/`, implementation details are acceptable.
+**General principle:** If a document is in `docs/architecture/`, `docs/guides/`, or `docs/core/`, it should be human-readable and practical. If it's in `protocol/docs/` or `docs/devs/`, implementation details are acceptable.
 
 ## Always
 

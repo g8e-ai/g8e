@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Gateway
 
-Last Updated: 2026-07-15
-Version: v1.5.2
+Last Updated: 2026-07-19
+Version: v1.5.8
 
 ---
 
@@ -141,6 +141,7 @@ To start the gateway, use the CLI gateway command:
 - `--public-base-url <url>` - Public base URL for approval links and host validation behind reverse proxies or Cloudflare Tunnels (e.g., `https://demo.g8e.ai`)
 - `--cors-origin <origin>` - Allowed CORS origin for cross-origin browser access (repeatable, e.g., `https://lovable.dev`)
 - `-f, --follow` - Run gateway in foreground instead of background (Ctrl+C stops gateway)
+- `-i, --interactive` - Launch the interactive onboarding wizard before starting the gateway
 
 ---
 
@@ -153,7 +154,7 @@ Custom gateway implementations need the g8e Protocol Library for protobuf schema
 The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.5.1
+go get github.com/g8e-ai/g8e@v1.5.8
 ```
 
 Import the protobuf types and SPIFFE workload identity helpers from the Go module. The package provides governance envelope definitions, the Operator gRPC service, pub/sub message types, and workload identity helpers for SPIFFE URI SAN generation and validation across all identity types (Operator, CLI, App, User, Hub, GatewayPeer).
@@ -165,7 +166,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For gateway-side tooling, testing, or Python-based services that need to consume protocol constants:
 
 ```bash
-pip install g8e==1.5.1
+pip install g8e==1.5.8
 ```
 
 The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
@@ -377,6 +378,16 @@ Destructively remove all gateway state including databases, secrets, logs, and P
 ```
 
 **Warning:** This permanently destroys all trust routes and credentials. Use `--force` or `--yes` to skip the confirmation prompt.
+
+### Gateway Setup
+
+Run the interactive setup wizard to configure gateway settings such as posture, tribunal, passkey, CORS, and certificate options:
+
+```bash
+./g8e gw setup
+```
+
+Any flags provided on the command line are used as initial values in the wizard. The wizard guides you through each setting and produces a resolved configuration. Run `./g8e gw start` afterward to launch the gateway with the configured settings.
 
 ### Security Validation
 

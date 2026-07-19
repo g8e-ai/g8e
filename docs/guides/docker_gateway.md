@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
-Last Updated: 2026-07-15
-Version: v1.5.2
+Last Updated: 2026-07-19
+Version: v1.5.8
 
 This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
 
@@ -150,7 +150,7 @@ Specify the security posture at startup using the `--posture` flag. Three values
 
 The `Dockerfile` employs a multi-stage build process:
 
-1. **Build Stage**: Uses a pinned Go toolchain image to compile the `g8e` binary from `cmd/g8e`.
+1. **Build Stage**: Uses a pinned Go toolchain image to compile the `g8e` binary.
 2. **Runtime Stage**: Uses a pinned Debian Bookworm image for the execution environment.
 
 The image includes:
@@ -161,7 +161,7 @@ The image includes:
 The protocol constants are bundled from the `protocol/` directory. The Python package (`g8e`) is not included in the Docker image by default. If you need Python protocol access inside a container, install it separately:
 
 ```bash
-pip install g8e==1.5.1
+pip install g8e==1.5.8
 ```
 
 Or set `G8E_PROTOCOL_DIR=/protocol` to point the Python package at the bundled constants. See the [Protocol Library documentation](../architecture/protocol.md) for details.
@@ -198,6 +198,6 @@ docker exec g8e-gateway /g8e gw status
 
 - **Base Image**: The image uses Debian Bookworm. Maintain regular updates to the base image for security patches.
 - **Resource Constraints**: The root `docker-compose.yml` defines CPU and memory limits (2 CPUs / 1G per service with 0.5 CPU / 256M reservations). Adjust these for production workloads.
-- **Vault Management**: The vault must be initialized for production operations. Use `G8E_VAULT_KEY` to provide the vault key path so the gateway can decrypt the vault at startup.
+- **Vault Management**: The vault auto-initializes on first run with a generated key. Use `G8E_VAULT_KEY` to override the default key file path, or `--vault-key` to specify it via CLI. The vault must be unlocked at startup; if the key cannot be read, the gateway fails to start.
 - **Certificates**: By default, the gateway generates self-signed certificates. For production, provide valid certificates via the `--pki-dir` volume or use `--cert-mode full` with appropriate hostnames.
 - **Operator Connectivity**: The operator connects to the gateway via `g8e.local`, resolved through the Docker network alias on the shared bridge network. Ensure this hostname matches the gateway certificate SANs in production deployments.

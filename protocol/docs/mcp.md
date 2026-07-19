@@ -4,8 +4,8 @@ title: MCP Protocol
 
 # MCP Protocol
 
-Last Updated: 2026-07-18
-Version: v1.5.6
+Last Updated: 2026-07-19
+Version: v1.5.8
 
 The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer governance verification sequence (L1Doctrine/L2Consensus/L3Notary/L4Warden/L5Actuator), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
@@ -310,14 +310,12 @@ Validation failures are rejected before envelope construction, ensuring maliciou
 - **Signer verification**: Gateway verifies signatures against trusted signers in SQLite store
 - **Tribunal deliberation**: Under `consensus` posture, the gateway delegates L2 deliberation to an enrolled Tribunal service, which produces L2 votes (Ed25519 signatures over the transaction hash). The gateway does not self-sign L2 votes.
 - **Quorum verification**: L4 Warden verifies the quorum of valid L2 votes against the TribunalPolicy
-- **Reputation staking**: Signers stake reputation on their decisions
 
 ### L3 Notary (Authorization)
 
 - **mTLS fingerprint**: CLI sessions use mTLS certificate fingerprint as proof via the CLI session verifier (`internal/services/gateway/cli_session_verifier.go`)
 - **WebAuthn**: Browser-based clients authenticate with passkeys via PasskeyService
-- **Gateway L3 notary**: `NewGatewayL3Notary` in `internal/services/governance/l3_notary.go` dispatches based on proof type: proofs with `mtls_cert_fingerprint` use the CLI verification path; all others delegate to the passkey verifier
-- **Auto-approval**: Benign diagnostic commands may skip human prompt after L1/L2 pass
+- **Gateway L3 notary**: `NewGatewayL3Notary` in `internal/services/governance/l3_notary.go` uses a layered model: passkey authorization is required for all proofs (browser and CLI), and CLI callers additionally present mTLS fields for transport-layer authentication via the CLI session verifier
 
 ### L4 Warden (Pre-Dispatch Verification)
 
@@ -401,7 +399,7 @@ Default ports (configurable via flags or `constants.Ports`):
 
 ### Configuration
 
-The g8e platform uses CLI flags for production configuration. All paths are computed relative to project root. See [g8e Protocol](./spec.md) for the full environment variable list. Configuration is via CLI flags:
+The g8e platform uses CLI flags for production configuration. All paths are computed relative to the working directory. See [g8e Protocol](./spec.md) for the full environment variable list. Configuration is via CLI flags:
 
 - `--data-dir <dir>`: Data directory for SQLite database (default: `.g8e/data` in working directory)
 - `--pki-dir <dir>`: Directory for TLS certificates (default: `.g8e/pki`)

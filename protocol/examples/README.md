@@ -16,8 +16,9 @@ Demonstrates the canonical governance envelope pattern:
 
 1. Constructs a `GovernanceEnvelope` with all identity, intent, state, and governance proof fields
 2. Creates a `CommandRequested` payload and marshals it as the envelope's `payload` bytes
-3. Serializes the envelope to canonical protojson wire format
-4. Parses the JSON back and extracts the command payload
+3. Computes the canonical transaction hash from critical envelope fields via `governance.GenerateMessageID` and assigns it to both `Id` and `TransactionHash`
+4. Serializes the envelope to canonical protojson wire format
+5. Parses the JSON back and extracts the command payload
 
 **Run:**
 
@@ -45,7 +46,7 @@ Demonstrates SPIFFE workload identity operations:
 
 - Generates SPIFFE IDs for operator, CLI, app, hub, user, and gateway peer workloads
 - Validates identities with `Matches*` methods
-- Extracts session IDs, user IDs, and gateway IDs from SPIFFE IDs
+- Extracts CLI session IDs, user IDs (from both CLI and User SAN SPIFFE IDs), operator session IDs, and gateway IDs from SPIFFE IDs
 - Parses SPIFFE URLs
 
 **Run:**

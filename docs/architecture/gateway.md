@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-07-18
-Version: v1.5.6
+Last Updated: 2026-07-19
+Version: v1.5.8
 
 The g8e Protocol platform is composed of two logically distinct roles, both implemented by the reference g8e binary file:
 
@@ -27,7 +27,7 @@ The g8e Protocol platform is composed of two logically distinct roles, both impl
 - **Canonical JSON (GovernanceEnvelope)**: Every mutation action is governed by a canonical JSON `GovernanceEnvelope` (protojson). This is the single canonical container for all g8e mutations, binding identity, intent, state, and governance proofs into one transaction.
 - **Transaction Invariants**: Every transaction is identified by a deterministic `transaction_hash` computed from its content. The envelope `id` must match this hash for the transaction to be valid.
 - **Protocol vs Implementation**: The protocol is the Gateway. Conforming implementations of the g8e Gateway and g8e Operator enforce these invariants.
-- **Sovereign Authority (PKI)**: The g8e Gateway owns the platform's PKI and is the only entity permitted to sign certificates. PKI file operations use `RuntimeFileService` (`internal/services/fs`) with relative paths under `constants.PkiDirname`. See [Network Architecture](./network.md) for the complete PKI hierarchy and certificate management.
+- **Sovereign Authority (PKI)**: The g8e Gateway owns the platform's PKI and is the only entity permitted to sign certificates. PKI files are stored under a platform-managed directory. See [Network Architecture](./network.md) for the complete PKI hierarchy and certificate management.
 - **CSR-Based Enrollment**: Participants enroll by submitting a Certificate Signing Request (CSR) to the g8e Gateway. Identities are encoded as SPIFFE URI SANs. See [Network Architecture](./network.md) for detailed enrollment procedures.
 
 ---
@@ -105,11 +105,11 @@ The g8e Gateway exposes two logical protocol surfaces. To maintain the mTLS exec
 
 ### Configuration Propagation
 
-Vault and rate-limit settings flow from CLI flags through `serve.RunGateway()` → `config.GatewayOptions` → `config.LoadGateway()`. The `GatewayOptions` struct carries `VaultDir`, `VaultKeyPath`, `RateLimitRPS`, and `RateLimitBurst` from the resolved CLI flags. `LoadGateway` uses these values with fallback to `paths.Infra.*` defaults for vault paths, and applies rate limits as configured (zero disables limiting).
+Vault and rate-limit settings flow from CLI flags through the gateway configuration loader. Vault paths default to platform infrastructure directories when not explicitly specified. Rate limiting is disabled when the requests-per-second value is zero.
 
 ### Onboarding Wizard
 
-`g8e gw start --interactive` (or `-i`) launches a Bubble Tea TUI wizard (`internal/cli/wizard/`) before gateway startup. The wizard guides users through four steps: Network & Identity, Security & Governance Posture, Agent Tooling & Routing, and Review & Confirm. The wizard produces a focused `Config` containing only wizard-owned fields; the `cmd` package merges the result into resolved `GatewayFlags` via `applyWizardConfig`, preserving non-wizard flags (ports, directories, log level, rate limits). Cancellation returns without starting the gateway. The wizard is explicit opt-in only; existing flags and automation continue to work unchanged.
+`g8e gw start --interactive` (or `-i`) launches an interactive TUI wizard before gateway startup. The wizard guides users through four steps: Network & Identity, Security & Governance Posture, Agent Tooling & Routing, and Review & Confirm. The wizard produces a focused configuration containing only wizard-owned fields; the gateway startup process merges the result into resolved CLI flags, preserving non-wizard flags (ports, directories, log level, rate limits). Cancellation returns without starting the gateway. The wizard is explicit opt-in only; existing flags and automation continue to work unchanged.
 
 ---
 
@@ -145,15 +145,15 @@ The public HTTPS router registers the following route categories:
 
 ### RouteAuthRegistry
 
-The RouteAuthRegistry classifies every route by its auth requirement using a `RouteAuthMode` enum: `RouteAuthNone` (public), `RouteAuthMTLS`, `RouteAuthWebSession`, and `RouteAuthDual` (mTLS or web session). It maintains exact paths and prefix mappings. The `AuthMode` method checks exact matches first (highest priority), then longest prefix match. Unknown routes default to `RouteAuthMTLS` (fail-closed).
+The RouteAuthRegistry classifies every route by its auth requirement using a `RouteAuthMode` enum: `RouteAuthNone` (public), `RouteAuthMTLS`, `RouteAuthWebSession`, and `RouteAuthDual` (mTLS or web session). It maintains exact paths and prefix mappings. The registry checks exact matches first (highest priority), then longest prefix match. Unknown routes default to `RouteAuthMTLS` (fail-closed).
 
 ### PrivilegedRouteRegistry
 
-The PrivilegedRouteRegistry defines routes that require operator or CLI authentication. App certificates are blocked from these routes. The registry covers governance envelope submission (`/api/v1/governance/envelopes`) and query endpoints (`/_query`). The `IsPrivileged` method performs prefix matching to determine whether a request path requires operator or CLI identity.
+The PrivilegedRouteRegistry defines routes that require operator or CLI authentication. App certificates are blocked from these routes. The registry covers governance envelope submission (`/api/v1/governance/envelopes`) and query endpoints (`/_query`). The registry performs prefix matching to determine whether a request path requires operator or CLI identity.
 
 ### Auth Middleware
 
-The auth middleware is a single unified middleware that dispatches based on RouteAuthRegistry.AuthMode:
+The auth middleware is a single unified middleware that dispatches based on the route's auth mode:
 1. **`RouteAuthNone`**: Calls the next handler directly, bypassing authentication.
 2. **`RouteAuthMTLS`**: Enforces mTLS by requiring a client certificate, verifying revocation status via the PKI controller, and dispatching identity extraction: operator session (from mTLS SPIFFE URI SAN), CLI session (via `X-G8E-CLI-Session-ID` header), or App certificate. App auth consults the PrivilegedRouteRegistry to block App certificates from governance and query endpoints.
 3. **`RouteAuthWebSession`**: Validates the web session cookie and stamps context with user and session IDs.
@@ -415,7 +415,7 @@ The agent integration provides the following subcommands:
 - Launching supported agents (claude, codex, goose, gemini) with automatic MCP configuration and native tool disabling
 - Wrapping external MCP servers via HTTP or subprocess for governance reverse proxy
 - Forwarding extra arguments to the agent binary
-- Runtime verification (`--verify`, enabled by default): before launching the agent, g8e verifies that the agent's tool-disabling configuration was correctly written — checking MCP config files, CLI flags, and agent-specific settings (e.g., `tools.core: []` for Gemini, `--disallowed-tools` for Claude/Codex, `--no-profile` for Goose). Use `--verify=false` to skip verification (e.g., for CI/CD pipelines where the config is pre-validated).
+- Runtime verification (`--verify`, enabled by default): before launching the agent, g8e verifies that the agent's tool-disabling configuration was correctly written, checking MCP config files, CLI flags, and agent-specific settings (e.g., `tools.core: []` for Gemini, `--disallowed-tools` for Claude/Codex, `--no-profile` for Goose). Use `--verify=false` to skip verification (e.g., for CI/CD pipelines where the config is pre-validated).
 
 ### Stdio Proxy
 

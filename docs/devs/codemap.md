@@ -186,15 +186,16 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── scrubbing.ScrubbingService
 │   ├── mcp.FieldPathRegistry
 │   ├── mcp.NativeToolHandler
-│   ├── mcp.FieldReader (gateway.DocumentStoreService) [SHARED]
+│   ├── storage.SQLAuditStore (field exists but not wired in production; nil — only set in tests via withAuditStore)
 │   ├── RuntimeDependencies (atomic.Pointer, set once via SetRuntimeDeps before first request):
-│   │   ├── mcp.SessionValidator (set by in-process OperatorPubSubService in both modes)
-│   │   ├── mcp.AuditLogger (pubsubAuditLogger, set by in-process OperatorPubSubService in both modes)
-│   │   ├── governance.EnvelopeProcessor (set by in-process OperatorPubSubService in both modes)
-│   │   ├── StateRootProvider (set by in-process OperatorPubSubService in both modes)
-│   │   ├── Ed25519 signing key/keyID (set by in-process OperatorPubSubService in both modes)
-│   │   └── downstreamURL (MCP egress, set by in-process OperatorPubSubService in both modes)
-│   ├── tribunal.TribunalDeliberator (atomic.Value, tribunal.LocalDeliberator in gateway mode, nil in outbound)
+│   │   ├── mcp.SessionValidator (set by in-process OperatorPubSubService in gateway mode)
+│   │   ├── mcp.AuditLogger (pubsubAuditLogger, set by in-process OperatorPubSubService in gateway mode)
+│   │   ├── governance.EnvelopeProcessor (set by in-process OperatorPubSubService in gateway mode)
+│   │   ├── StateRootProvider (set by in-process OperatorPubSubService in gateway mode)
+│   │   ├── Ed25519 signing key/keyID (set by in-process OperatorPubSubService in gateway mode)
+│   │   ├── downstreamURL (MCP egress, set by in-process OperatorPubSubService in gateway mode)
+│   │   └── DBService (mcp.FieldReader, gateway.DocumentStoreService) [SHARED] (set by in-process OperatorPubSubService in gateway mode; not applicable in outbound mode)
+│   ├── tribunal.TribunalDeliberator (atomic.Value, tribunal.LocalDeliberator in gateway mode, not applicable in outbound mode)
 │   ├── a2aDownstreamURL (construction-phase, immutable after NewGatewayService)
 │   └── publicBaseURL (construction-phase, immutable after NewGatewayService)
 └── response.Writer
@@ -275,7 +276,7 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 
 ### Transport & Protocol Layer
 - `pubsub.OperatorPubSubService` is the dispatcher for outbound mode (WebSocket pub/sub).
-- `mcp.GatewayService` handles MCP/A2A protocol translation and downstream dispatch (shared between modes).
+- `mcp.GatewayService` handles MCP/A2A protocol translation and downstream dispatch (gateway mode only; shared between HTTP ingress and OperatorPubSubService egress).
 - `gateway.HTTPHandler` builds the HTTP/WebSocket surface for gateway mode.
 - `gateway.GatewayWebSocketHandler` is the in-process pub/sub broker for gateway mode.
 - `gateway.PKIAuthority` manages PKI hierarchy and certificate lifecycle for gateway mode.
@@ -316,7 +317,7 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 
 The `g8e` binary (`internal/cli/cmd/main.go`) registers the following subcommands on the root Cobra command:
 
-- **`gw`** (alias `gateway`): Gateway lifecycle management. Subcommands: `start` (background process; `--follow` flag runs in foreground as the re-exec target; `--interactive`/`-i` flag launches the onboarding wizard before startup), `stop`, `status`, `restart`, `logs`, `settings`, `reset`, `clean`. Also includes `data`, `security`, and `tunnel` subcommand groups.
+- **`gw`** (alias `gateway`): Gateway lifecycle management. Subcommands: `start` (background process; `--follow` flag runs in foreground as the re-exec target; `--interactive`/`-i` flag launches the onboarding wizard before startup), `stop`, `status`, `restart`, `logs`, `settings`, `reset`, `clean`, `setup` (interactive onboarding wizard; standalone entry point for `g8e gw setup`). Also includes `data`, `security`, and `tunnel` subcommand groups.
   - **`data`**: Administer the local platform over mTLS. Subcommands: `users`, `operators`, `settings`, `store`, `audit`.
   - **`security`**: Security validation checks. Subcommands: `validate`, `pki`.
   - **`tunnel`**: Manage Cloudflare Tunnel for public gateway access. Subcommands: `create`, `run`, `status`.

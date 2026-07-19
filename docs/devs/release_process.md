@@ -2,18 +2,18 @@
 
 This document is the definitive checklist for updating all version-bearing files and documentation when bumping a g8e release. The protocol (Go + Python) and the platform binary share the same version number — there are no separate protocol releases.
 
-> **`make release` handles version syncing, lint, tests, and builds.** It does NOT touch git. The release prep changes are committed and opened as a PR. After the PR is merged, run `make release-tag` on the merged main branch to tag and push. See [Release Workflow](#release-workflow).
+> **`make release` handles version syncing, building, tagging, pushing, and GitHub release creation.** It does NOT run lint or tests; CI handles those on PRs. The release prep changes (VERSION, CHANGELOG, release notes, doc headers) are committed and opened as a PR. After the PR is merged, pull main and run `make release` to build, tag, push, and create the GitHub release. See [Release Workflow](#release-workflow).
 
 ## How to Use This Document
 
 1. Determine the new version number (see [Versioning Rules](#versioning-rules))
 2. Set `VERSION` to the new version (the single source of truth)
-3. Run `make release` — this auto-syncs `pyproject.toml` and `__init__.py`, runs lint, runs the full test suite, and builds binaries
+3. Sync `protocol/python/pyproject.toml` and `protocol/python/g8e/__init__.py` from `VERSION` — run `make release` to auto-sync (it will sync and then exit, since the working tree will be dirty), or update both files manually
 4. Update `CHANGELOG.md` and create release notes (see [Manual Updates](#manual-updates))
 5. Review release content for [documentation accuracy](#content-accuracy-review) — protocol specs, architecture docs, and guides must reflect any code refactors or behavioral changes shipped in this release
 6. Run the [Verification](#verification) section to catch any missed files
-7. Commit all changes and open a PR — review, approve, and merge the PR on GitHub
-8. After merge, pull main and run `make release-tag` to tag and push (see [Release Workflow](#release-workflow))
+7. Commit all changes and open a PR — CI runs lint, tests, and version sync checks. Review, approve, and merge the PR on GitHub
+8. After merge, pull main and run `make release` to build, tag, push, and create the GitHub release (see [Release Workflow](#release-workflow))
 
 ---
 
@@ -51,7 +51,7 @@ The following files contain version strings. `VERSION` is the single source of t
 | 3 | `protocol/python/pyproject.toml` | **Auto** — `make release` syncs from `VERSION` | `version = "X.Y.Z"` (no `v` prefix) |
 | 4 | `protocol/python/g8e/__init__.py` | **Auto** — `make release` syncs from `VERSION` | `__version__ = "X.Y.Z"` (no `v` prefix) |
 
-> ⚠️ Items 3 and 4 are auto-synced by `make release` and verified by `make release-tag` and CI. A mismatch will fail the release.
+> ⚠️ Items 3 and 4 are auto-synced by `make release` and verified by CI. A mismatch will fail CI and the release.
 
 #### CHANGELOG.md Format
 
@@ -170,7 +170,7 @@ Any file in the output that carries a version/date header should have that heade
 | 14 | `docs/architecture/sse.md` |
 | 15 | `docs/architecture/storage.md` |
 
-#### Guide Docs (`docs/guides/`) — 10 files
+#### Guide Docs (`docs/guides/`) — 11 files
 
 | # | File | Note |
 |---|------|------|
@@ -183,23 +183,24 @@ Any file in the output that carries a version/date header should have that heade
 | 22 | `docs/guides/connect_operator_to_gateway.md` | |
 | 23 | `docs/guides/docker_gateway.md` | |
 | 24 | `docs/guides/getting_started.md` | |
-| 25 | `docs/guides/lovable.md` | |
+| 25 | `docs/guides/gui_enrollment.md` | |
+| 26 | `docs/guides/lovable.md` | |
 
 
 #### Reference Docs (`docs/reference/`) — 2 files
 
 | # | File | Note |
 |---|------|------|
-| 26 | `docs/reference/glossary.md` | plain `Version:` header |
-| 27 | `docs/reference/compliance-alignment.md` | `**Document Version:**` (no `v` prefix) |
+| 27 | `docs/reference/glossary.md` | plain `Version:` header |
+| 28 | `docs/reference/compliance-alignment.md` | `**Document Version:**` (no `v` prefix) |
 
 #### Protocol Docs (`protocol/docs/`) — 3 files
 
 | # | File | Note |
 |---|------|------|
-| 28 | `protocol/docs/spec.md` | has both `Version:` and `Last Updated:` |
-| 29 | `protocol/docs/a2a.md` | has both `Version:` and `Last Updated:` |
-| 30 | `protocol/docs/mcp.md` | has both `Version:` and `Last Updated:` |
+| 29 | `protocol/docs/spec.md` | has both `Version:` and `Last Updated:` |
+| 30 | `protocol/docs/a2a.md` | has both `Version:` and `Last Updated:` |
+| 31 | `protocol/docs/mcp.md` | has both `Version:` and `Last Updated:` |
 
 #### Update Pattern for Each Modified Doc
 
@@ -229,13 +230,13 @@ The following doc directories intentionally do **not** carry release `Version:` 
 
 ### E. Go Protocol Module
 
-The Go protocol code is part of the root module `github.com/g8e-ai/g8e`. There is no separate `protocol/go.mod` to update. The Go module version is derived from git tags (`vX.Y.Z`), created by `make release-tag`. External consumers use `go get github.com/g8e-ai/g8e@vX.Y.Z`.
+The Go protocol code is part of the root module `github.com/g8e-ai/g8e`. There is no separate `protocol/go.mod` to update. The Go module version is derived from git tags (`vX.Y.Z`), created by `make release`. External consumers use `go get github.com/g8e-ai/g8e@vX.Y.Z`.
 
 ### F. Build & CI Files (No Version Update Required)
 
 The following files read the version dynamically from `VERSION` at build time and do **not** require manual updates:
 
-- `Makefile` — Reads `VERSION` via `$(shell cat VERSION)`; `make release` syncs Python files; `make release-tag` tags and pushes
+- `Makefile` — Reads `VERSION` via `$(shell cat VERSION)`; `make release` syncs Python files, builds, tags, pushes, and creates the GitHub release
 - `Dockerfile` — Receives version as build arg
 - `docker-compose.yml` — References build context, not version
 - `.github/workflows/*.yml` — Triggered by git tags, no hardcoded version. CI includes a version sync check that fails if Python files don't match `VERSION`.
@@ -288,20 +289,20 @@ grep -rnE 'oldCommandName|OldEndpointPath|OLD_CONSTANT' docs/ protocol/docs/ --i
 
 ## Manual Updates
 
-`make release` handles version syncing, lint, tests, and builds automatically. The following must still be done manually:
+`make release` handles version syncing, building, tagging, pushing, and GitHub release creation. Lint and tests are handled by CI on PRs. The following must still be done manually:
 
 - [ ] **1. `VERSION`** — Set to `vX.Y.Z`
-- [ ] **2. `make release`** — Auto-syncs `pyproject.toml` + `__init__.py`, runs lint, runs the full test suite, builds binaries
+- [ ] **2. Sync Python files** — Run `make release` to auto-sync `pyproject.toml` + `__init__.py` from `VERSION` (it will sync and exit due to dirty working tree), or update both files manually
 - [ ] **3. `CHANGELOG.md`** — Add a table row to the major-version section (no `v` prefix in version column)
 - [ ] **4. `docs/release_notes/vX.Y.x/vX.Y.Z.md`** — Create new release notes file
 - [ ] **5. Documentation headers** — Update version/date headers **only** in docs that were actually reviewed or modified in this release (use `git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/` to identify them). Do not blanket-bump all headers. See [Section C](#c-documentation-with-version--date-headers) for the full list of files that carry headers.
 - [ ] **6. Content review** — Complete the [Content Accuracy Review](#content-accuracy-review). Only update docs to fix inaccuracies or document missing features — do not rewrite accurate docs.
-- [ ] **7. Commit and open PR** — `git add -A && git commit -m "release: vX.Y.Z"`, push, and open a PR on GitHub
-- [ ] **8. Merge and tag** — After the PR is merged, pull main and run `make release-tag` to create and push tags
+- [ ] **7. Commit and open PR** — `git add -A && git commit -m "release: vX.Y.Z"`, push, and open a PR on GitHub. CI runs lint, tests, and version sync checks.
+- [ ] **8. Merge and release** — After the PR is merged, pull main and run `make release` to build, tag, push, and create the GitHub release
 
 **Only 2 files need manual version edits** (VERSION + CHANGELOG). The Python package files are auto-synced. Release notes and doc header updates are content-driven, not mechanical version bumps.
 
-> **Workflow note:** All release prep (steps 1–7) happens on a feature branch and is merged via PR. Tagging and pushing (step 8) happens on the merged main branch, not on the feature branch.
+> **Workflow note:** All release prep (steps 1–7) happens on a feature branch and is merged via PR. Building, tagging, pushing, and GitHub release creation (step 8) happens on the merged main branch via `make release`.
 
 ---
 
@@ -350,25 +351,23 @@ If step 4 shows a mismatch, run `make release` again to re-sync. Steps 5 and 6 w
 
 ## Release Workflow
 
-The protocol (Go + Python) and platform binary share a single version number. There are no separate protocol releases. The `make release` / `make release-tag` workflow handles everything:
+The protocol (Go + Python) and platform binary share a single version number. There are no separate protocol releases. The `make release` target handles version syncing, building, tagging, pushing, and GitHub release creation in a single step. CI handles lint, tests, and version sync verification on PRs.
 
-### `make release` — Prep (no git operations)
+### `make release` — Build, Tag, Push, Release
 
-1. Syncs `protocol/python/pyproject.toml` and `protocol/python/g8e/__init__.py` from `VERSION`
-2. Runs lint (`make lint` — golangci-lint, vulncheck, doctrine validation, swagger)
-3. Runs the full test suite (`make test`)
-4. Builds binaries
-5. Prints next-step instructions
+> **Run this on the merged main branch**, not on a feature branch. The tags must point at the merge commit on main.
 
-### `make release-tag` — Tag & Push (run after PR merge)
+1. Syncs `protocol/python/pyproject.toml` and `protocol/python/g8e/__init__.py` from `VERSION` (if already in sync, no changes are made)
+2. Verifies working tree is clean (fails if Python files were out of sync; commit synced files and go through the PR process first)
+3. Verifies release notes file exists at `docs/release_notes/vX.Y.x/vX.Y.Z.md`
+4. Verifies tags `vX.Y.Z` and `protocol/vX.Y.Z` don't already exist
+5. Verifies GitHub CLI (`gh`) is available
+6. Builds binaries (`make build`)
+7. Creates `vX.Y.Z` and `protocol/vX.Y.Z` tags on the current commit
+8. Pushes both tags to origin
+9. Creates GitHub release from the release notes file via `gh release create`
 
-> **Run this on the merged main branch**, not on the feature branch. The tags must point at the merge commit on main.
-
-1. Verifies working tree is clean
-2. Verifies Python versions match `VERSION`
-3. Verifies tags don't already exist
-4. Creates `vX.Y.Z` and `protocol/vX.Y.Z` tags on the current commit
-5. Pushes both tags to origin
+> **Lint and tests are handled by CI** (`.github/workflows/build-and-test.yml`) on pull requests, not by `make release`. The CI workflow includes a version sync check that fails if `pyproject.toml` or `__init__.py` don't match `VERSION`.
 
 The `protocol/v*` tag triggers the Python PyPI release workflow only. The Go module is versioned by the `v*` tag.
 
@@ -376,12 +375,10 @@ The `protocol/v*` tag triggers the Python PyPI release workflow only. The Go mod
 
 | Tag | Workflow | What It Does |
 |-----|----------|-------------|
-| `vX.Y.Z` | `.github/workflows/release-binary.yml` | Builds all platforms, creates GitHub release with binary assets and `go get` install instructions |
-| `protocol/vX.Y.Z` | `.github/workflows/release-python-protocol.yml` | Builds and publishes Python package to PyPI |
+| `vX.Y.Z` | `.github/workflows/release-binary.yml` | Builds all platforms, signs binaries with cosign, uploads assets to GitHub release, and verifies fresh `go install` works on Ubuntu, macOS, and Windows |
+| `protocol/vX.Y.Z` | `.github/workflows/release-python-protocol.yml` | Builds and publishes Python package to PyPI, verifies fresh PyPI install and imports on Ubuntu, macOS, and Windows |
 
 The `protocol/v*` tag is used only as a trigger for the Python PyPI release workflow. It is NOT used for Go module versioning — the Go module is part of the root module and is versioned by `v*` tags.
-
-Additionally, `.github/workflows/build-and-test.yml` includes a version sync check that fails CI if `pyproject.toml` or `__init__.py` don't match `VERSION`.
 
 ---
 
@@ -390,23 +387,22 @@ Additionally, `.github/workflows/build-and-test.yml` includes a version sync che
 For critical security issues or production bugs:
 
 1. Apply the minimal fix necessary to the appropriate branch
-2. Set `VERSION` and run `make release`
-3. Update `CHANGELOG.md` and release notes
-4. Complete the [Content Accuracy Review](#content-accuracy-review) for the touched areas
-5. Commit, open a PR, merge, then run `make release-tag` on main
+2. Set `VERSION`, sync Python files, update `CHANGELOG.md` and release notes
+3. Complete the [Content Accuracy Review](#content-accuracy-review) for the touched areas
+4. Commit, open a PR, merge, then pull main and run `make release` to tag, push, and create the release
 
 ---
 
 ## Out of Scope: Manual Git Steps
 
-The only git operations not automated by `make release` / `make release-tag` are:
+The only git operations not automated by `make release` are:
 
 - Staging and committing the release-prep changes (`git add`, `git commit`)
 - Pushing the branch and opening a PR (`git push`, GitHub PR)
 - Merging the PR on GitHub
 - Pulling main after merge (`git checkout main && git pull`)
 
-`make release-tag` handles tag creation and tag pushing automatically — run it on the merged main branch.
+`make release` handles tag creation, tag pushing, and GitHub release creation automatically — run it on the merged main branch.
 
 ---
 

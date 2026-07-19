@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-07-18
+Last Updated: 2026-07-19
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -288,6 +288,7 @@ CI runs both scripts on every PR (`smoke-test` job).
 GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 
 **Core CI** (`ci` job, runs on `ubuntu-latest`):
+- Version sync verification (`VERSION` file vs `protocol/python/pyproject.toml` vs `protocol/python/g8e/__init__.py`)
 - Proto verification and doctrine validation
 - Swagger generation and validation
 - golangci-lint
@@ -315,6 +316,7 @@ CI does **not** run Tier 3 Docker E2E tests.
 
 **Python releases** (`.github/workflows/release-python-protocol.yml`, triggered by `protocol/v*` tags):
 - Package metadata validation (required fields, name, URLs)
+- Copy protocol constants and doctrine files into package (`protocol/constants/*.json` and `protocol/constants/doctrine/` into `g8e/_data/`)
 - `twine check` on built dist
-- `py.typed` PEP 561 marker for type checker support
+- Package includes `py.typed` PEP 561 marker for type checker support
 - Post-publish `verify-install` job: fresh `pip install g8e==<version>` from PyPI on ubuntu/macos/windows with import verification
