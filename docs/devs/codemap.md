@@ -492,7 +492,7 @@ The following packages are test-only and are not part of the production dependen
 
 **Build**: `make python-build` copies `protocol/constants/*.json` to `g8e/_data/` and runs `python -m build`. Output: `protocol/python/dist/g8e-*.whl`.
 
-**Tests**: `protocol/python/tests/` — `test_constants.py`, `test_enums.py`, `test_models.py`, `test_version.py` (132 tests). Conformance tests in `protocol/conformance/test_constants.py` validate `_python_const` field presence and SCREAMING_SNAKE_CASE naming across all constant files (151 tests).
+**Tests**: `protocol/python/tests/` — `test_constants.py`, `test_enums.py`, `test_models.py`, `test_version.py` (151 tests). Conformance tests in `protocol/conformance/` validate `_python_const` field presence and SCREAMING_SNAKE_CASE naming across all constant files, plus model schema integrity and serialization round-trips (330 tests).
 
 ## Agent Harness & Demos
 
