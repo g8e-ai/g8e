@@ -26,6 +26,14 @@ def _load_model_schema(filename: str) -> dict[str, Any]:
         return json.load(f)
 
 
+_SCHEMA_FIELD_KEYS = {"type", "description", "required", "items", "default", "_ref"}
+
+
+def _is_field_definition(val: Any) -> bool:
+    """Check if a value looks like a field definition (not a section/container)."""
+    return isinstance(val, dict) and any(k in val for k in _SCHEMA_FIELD_KEYS)
+
+
 def _extract_field_names(schema: dict[str, Any], section: str = "settings") -> set[str]:
     """Extract field names from a model schema section."""
     fields = set()
@@ -33,7 +41,7 @@ def _extract_field_names(schema: dict[str, Any], section: str = "settings") -> s
         section_data = schema[section]
         if isinstance(section_data, dict):
             for key, val in section_data.items():
-                if isinstance(val, dict) and "type" in val:
+                if _is_field_definition(val):
                     fields.add(key)
                 elif isinstance(val, dict):
                     fields.update(_extract_field_names(val))
@@ -41,11 +49,15 @@ def _extract_field_names(schema: dict[str, Any], section: str = "settings") -> s
 
 
 def _extract_all_field_names(schema: dict[str, Any]) -> set[str]:
-    """Recursively extract all field names with a 'type' key from a schema."""
+    """Recursively extract all field names from a schema.
+
+    A field is identified by having at least one schema property key
+    (type, description, required, items, default, _ref) in its definition.
+    """
     fields = set()
     if isinstance(schema, dict):
         for key, val in schema.items():
-            if isinstance(val, dict) and "type" in val:
+            if _is_field_definition(val):
                 fields.add(key)
             elif isinstance(val, dict):
                 fields.update(_extract_all_field_names(val))
@@ -105,6 +117,12 @@ class TestModelSchemaIntegrity:
         "user_settings.json",
         "web_session.json",
         "webauthn_response.json",
+        "agents/agent_harness.json",
+        "agents/assistant.json",
+        "agents/lite.json",
+        "agents/primary.json",
+        "agents/title_generator.json",
+        "agents/triage.json",
     ]
 
     @pytest.mark.parametrize("filename", MODEL_FILES)
@@ -488,6 +506,10 @@ class TestSchemaCrossReference:
                     refs.append((path, val))
                 elif isinstance(val, dict):
                     refs.extend(self._find_refs(val, f"{path}.{key}"))
+                elif isinstance(val, list):
+                    for i, item in enumerate(val):
+                        if isinstance(item, dict):
+                            refs.extend(self._find_refs(item, f"{path}.{key}[{i}]"))
         return refs
 
     @pytest.mark.parametrize("filename", TestModelSchemaIntegrity.MODEL_FILES)

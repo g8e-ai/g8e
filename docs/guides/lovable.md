@@ -5,8 +5,8 @@ parent: Guides
 
 # Lovable Frontend Integration
 
-Last Updated: 2026-07-15
-Version: v1.5.2
+Last Updated: 2026-07-19
+Version: v1.5.8
 
 ---
 
@@ -87,6 +87,35 @@ Copy the outputted TypeScript config snippet into the Lovable project as the sta
 
 ---
 
+## 11. Verification Checklist
+
+After the Lovable AI agent generates the app, verify:
+
+- [ ] **CORS headers**: Open browser DevTools > Network tab. Make any API call and confirm `Access-Control-Allow-Origin` reflects your Lovable app's origin and `Access-Control-Allow-Credentials: true` is present.
+- [ ] **Preflight OPTIONS**: Confirm OPTIONS requests succeed with 200/204 status before actual POST requests.
+- [ ] **Passkey registration**: Click "Enroll Passkey" and confirm the browser's WebAuthn dialog appears with RP ID `lovable.app` (or your configured `--passkey-rp-id`).
+- [ ] **Passkey authentication**: Click "Sign In with Passkey" and confirm the WebAuthn dialog appears and login succeeds.
+- [ ] **Session cookie**: After login, check DevTools > Application > Cookies for `g8e_web_session_cookie` with `SameSite=None` and `Secure` attributes.
+- [ ] **Authenticated API calls**: Confirm `GET /api/v1/users/me` returns user data (not 401) after login.
+- [ ] **SSE stream**: Click "Connect" on the audit stream card and confirm live events appear.
+- [ ] **Approvals**: If a suspended transaction exists, confirm the "Approve" button triggers WebAuthn and the transaction is approved.
+- [ ] **Logout**: Click "Sign Out" and confirm redirect to login page and cookie cleared.
+- [ ] **URL hash handling**: Navigate to `#approve={txHash}` and confirm auto-approval flow triggers.
+- [ ] **`g8e gui verify`**: Run `g8e gui verify --origin https://your-app.lovable.app` and confirm all checklist items pass.
+
+---
+
+## See Also
+
+- [GUI Frontend Enrollment](./gui_enrollment.md) - General-purpose GUI enrollment guide (commands, API reference, WebAuthn flows, SSE, TypeScript types)
+- [Cloudflare Tunnel Integration](./cloudflare_tunnel.md) - Setting up the tunnel between Cloudflare and the g8e Gateway
+- [Connect Apps to Gateway](./connect_apps_to_gateway.md) - General application connectivity patterns
+- [Architecture: Auth](../architecture/auth.md) - WebAuthn passkey authentication architecture
+- [Architecture: Gateway](../architecture/gateway.md) - Gateway service architecture
+- [Protocol Library](../architecture/protocol.md) - Go module and Python package API reference for building g8e-compatible clients and services
+
+---
+
 <!-- ═══════════════════════════════════════════════════════════════ -->
 <!-- BEGIN LOVABLE AI AGENT PROMPT                                    -->
 <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -94,7 +123,6 @@ Copy the outputted TypeScript config snippet into the Lovable project as the sta
 ## Lovable AI Agent Prompt
 
 > **Paste everything below this line into your Lovable AI agent.**
-> **Stop at the "Verification Checklist" section.**
 >
 > The content below describes **what is required** for the integration to work.
 > Let Lovable generate the implementation code. Do not attempt to paste code from this document; paste the requirements and let Lovable build the app.
@@ -533,32 +561,3 @@ src/
 <!-- ═══════════════════════════════════════════════════════════════ -->
 <!-- END LOVABLE AI AGENT PROMPT                                      -->
 <!-- ═══════════════════════════════════════════════════════════════ -->
-
----
-
-## 11. Verification Checklist
-
-After the Lovable AI agent generates the app, verify:
-
-- [ ] **CORS headers**: Open browser DevTools > Network tab. Make any API call and confirm `Access-Control-Allow-Origin` reflects your Lovable app's origin and `Access-Control-Allow-Credentials: true` is present.
-- [ ] **Preflight OPTIONS**: Confirm OPTIONS requests succeed with 200/204 status before actual POST requests.
-- [ ] **Passkey registration**: Click "Enroll Passkey" and confirm the browser's WebAuthn dialog appears with RP ID `lovable.app` (or your configured `--passkey-rp-id`).
-- [ ] **Passkey authentication**: Click "Sign In with Passkey" and confirm the WebAuthn dialog appears and login succeeds.
-- [ ] **Session cookie**: After login, check DevTools > Application > Cookies for `g8e_web_session_cookie` with `SameSite=None` and `Secure` attributes.
-- [ ] **Authenticated API calls**: Confirm `GET /api/v1/users/me` returns user data (not 401) after login.
-- [ ] **SSE stream**: Click "Connect" on the audit stream card and confirm live events appear.
-- [ ] **Approvals**: If a suspended transaction exists, confirm the "Approve" button triggers WebAuthn and the transaction is approved.
-- [ ] **Logout**: Click "Sign Out" and confirm redirect to login page and cookie cleared.
-- [ ] **URL hash handling**: Navigate to `#approve={txHash}` and confirm auto-approval flow triggers.
-- [ ] **`g8e gui verify`**: Run `g8e gui verify --origin https://your-app.lovable.app` and confirm all checklist items pass.
-
----
-
-## See Also
-
-- [GUI Frontend Enrollment](./gui_enrollment.md) - General-purpose GUI enrollment guide (commands, API reference, WebAuthn flows, SSE, TypeScript types)
-- [Cloudflare Tunnel Integration](./cloudflare_tunnel.md) - Setting up the tunnel between Cloudflare and the g8e Gateway
-- [Connect Apps to Gateway](./connect_apps_to_gateway.md) - General application connectivity patterns
-- [Architecture: Auth](../architecture/auth.md) - WebAuthn passkey authentication architecture
-- [Architecture: Gateway](../architecture/gateway.md) - Gateway service architecture
-- [Protocol Library](../architecture/protocol.md) - Go module and Python package API reference for building g8e-compatible clients and services
