@@ -29,6 +29,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/governance/governancetest"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
@@ -43,7 +44,7 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 		replayStore,
 		stateRootProvider,
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key": pubKey}},
-		&SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{
+		&governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{
 			"test-tribunal": {
 				ID:              "test-tribunal",
 				MemberAppIDs:    []string{"test-key"},
@@ -240,7 +241,7 @@ func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStor
 		replayStore,
 		stateRootProvider,
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"spiffe://g8e.local/app/test-app-id": pubKey}},
-		&SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{
+		&governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{
 			"test-tribunal": {
 				ID:              "test-tribunal",
 				MemberAppIDs:    []string{"spiffe://g8e.local/app/test-app-id"},

@@ -463,3 +463,146 @@ func TestPublishObservedStateEvidence(t *testing.T) {
 		assert.Contains(t, events[0].ContentText, "secret123")
 	})
 }
+
+func TestExtractContentText(t *testing.T) {
+	t.Run("nil payload returns empty", func(t *testing.T) {
+		t.Parallel()
+		assert.Empty(t, extractContentText(nil))
+	})
+
+	t.Run("FsListResult with empty entries returns empty", func(t *testing.T) {
+		t.Parallel()
+		payload := &operatorv1.FsListResult{Entries: []*operatorv1.FsEntry{}}
+		assert.Empty(t, extractContentText(payload))
+	})
+
+	t.Run("FsListResult with entries returns JSON", func(t *testing.T) {
+		t.Parallel()
+		payload := &operatorv1.FsListResult{
+			Entries: []*operatorv1.FsEntry{{Name: "file.txt", Size: 100}},
+		}
+		result := extractContentText(payload)
+		assert.Contains(t, result, "file.txt")
+	})
+
+	t.Run("FsReadResult returns content", func(t *testing.T) {
+		t.Parallel()
+		payload := &operatorv1.FsReadResult{Content: "hello world"}
+		assert.Equal(t, "hello world", extractContentText(payload))
+	})
+
+	t.Run("FsReadResult empty content returns empty", func(t *testing.T) {
+		t.Parallel()
+		payload := &operatorv1.FsReadResult{Content: ""}
+		assert.Empty(t, extractContentText(payload))
+	})
+
+	t.Run("FsGrepResult with empty matches returns empty", func(t *testing.T) {
+		t.Parallel()
+		payload := &operatorv1.FsGrepResult{Matches: []*operatorv1.FsGrepMatch{}}
+		assert.Empty(t, extractContentText(payload))
+	})
+
+	t.Run("FsGrepResult with matches returns JSON", func(t *testing.T) {
+		t.Parallel()
+		payload := &operatorv1.FsGrepResult{
+			Matches: []*operatorv1.FsGrepMatch{{Path: "test.go", LineNumber: 42}},
+		}
+		result := extractContentText(payload)
+		assert.Contains(t, result, "test.go")
+	})
+
+	t.Run("PortCheckResult with empty results returns empty", func(t *testing.T) {
+		t.Parallel()
+		payload := &operatorv1.PortCheckResult{Results: []*operatorv1.PortCheckEntry{}}
+		assert.Empty(t, extractContentText(payload))
+	})
+
+	t.Run("FetchLogsResult returns formatted string", func(t *testing.T) {
+		t.Parallel()
+		payload := &operatorv1.FetchLogsResult{
+			Command:    "journalctl",
+			ReturnCode: 0,
+			StdoutSize: 1024,
+			StderrSize: 0,
+		}
+		result := extractContentText(payload)
+		assert.Contains(t, result, "journalctl")
+		assert.Contains(t, result, "exit_code: 0")
+	})
+
+	t.Run("FetchHistoryResult returns formatted string", func(t *testing.T) {
+		t.Parallel()
+		payload := &operatorv1.FetchHistoryResult{Total: 42}
+		result := extractContentText(payload)
+		assert.Contains(t, result, "42 events")
+	})
+
+	t.Run("FetchFileHistoryResult returns formatted string", func(t *testing.T) {
+		t.Parallel()
+		payload := &operatorv1.FetchFileHistoryResult{
+			FilePath: "/etc/hosts",
+			History:  []*operatorv1.FileHistoryEntry{{}},
+		}
+		result := extractContentText(payload)
+		assert.Contains(t, result, "/etc/hosts")
+		assert.Contains(t, result, "1 entries")
+	})
+
+	t.Run("FetchFileDiffResult with diff returns formatted string", func(t *testing.T) {
+		t.Parallel()
+		payload := &operatorv1.FetchFileDiffResult{
+			Diff: &operatorv1.FileDiffEntry{FilePath: "/etc/hosts", Operation: "modify"},
+		}
+		result := extractContentText(payload)
+		assert.Contains(t, result, "/etc/hosts")
+		assert.Contains(t, result, "modify")
+	})
+
+	t.Run("FetchFileDiffResult without diff returns count", func(t *testing.T) {
+		t.Parallel()
+		payload := &operatorv1.FetchFileDiffResult{Total: 5}
+		result := extractContentText(payload)
+		assert.Contains(t, result, "5 diffs")
+	})
+
+	t.Run("RestoreFileResult returns formatted string", func(t *testing.T) {
+		t.Parallel()
+		payload := &operatorv1.RestoreFileResult{
+			FilePath:   "/etc/hosts",
+			CommitHash: "abc123",
+		}
+		result := extractContentText(payload)
+		assert.Contains(t, result, "/etc/hosts")
+		assert.Contains(t, result, "abc123")
+	})
+
+	t.Run("HeartbeatResult returns formatted string", func(t *testing.T) {
+		t.Parallel()
+		payload := &operatorv1.HeartbeatResult{
+			OperatorId: "op-1",
+			Status:     "healthy",
+		}
+		result := extractContentText(payload)
+		assert.Contains(t, result, "op-1")
+		assert.Contains(t, result, "healthy")
+	})
+
+	t.Run("EvalAnswerRequested returns formatted string", func(t *testing.T) {
+		t.Parallel()
+		payload := &operatorv1.EvalAnswerRequested{
+			Benchmark: "bench-1",
+			PromptId:  "prompt-1",
+		}
+		result := extractContentText(payload)
+		assert.Contains(t, result, "bench-1")
+		assert.Contains(t, result, "prompt-1")
+	})
+
+	t.Run("unknown payload type falls back to JSON marshal", func(t *testing.T) {
+		t.Parallel()
+		payload := &operatorv1.CommandRequested{Command: "ls -la"}
+		result := extractContentText(payload)
+		assert.Contains(t, result, "ls -la")
+	})
+}

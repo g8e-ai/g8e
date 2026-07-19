@@ -9,6 +9,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
+	"net/http"
 	"testing"
 	"time"
 
@@ -106,4 +107,38 @@ func TestBuildMTLSClient_InvalidTrustBundle(t *testing.T) {
 	_, err = BuildMTLSClient(fileSvc, cfg, 30*time.Second)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrCAParseFailed)
+}
+
+func TestBuildMTLSClient_ValidCertsAndBundle(t *testing.T) {
+	fileSvc, cfg := newAuthTestEnv(t)
+	writeTestCLICert(t, fileSvc, cfg)
+
+	caCertPEM, _ := generateTestCertificateWithSPIFFE(t, "test-ca", time.Now().Add(time.Hour))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), cfg.DefaultTrustBundleRelPath(), []byte(caCertPEM), constants.PermFilePublic))
+
+	client, err := BuildMTLSClient(fileSvc, cfg, 30*time.Second)
+	require.NoError(t, err)
+	require.NotNil(t, client)
+
+	transport, ok := client.Transport.(*http.Transport)
+	require.True(t, ok)
+	tlsConfig := transport.TLSClientConfig
+	require.NotNil(t, tlsConfig)
+	assert.Len(t, tlsConfig.Certificates, 1)
+	assert.NotNil(t, tlsConfig.RootCAs)
+	assert.Equal(t, uint16(0x0304), tlsConfig.MinVersion) // tls.VersionTLS13
+	assert.Equal(t, 30*time.Second, client.Timeout)
+}
+
+func TestBuildMTLSClient_ZeroTimeoutForSSEStreaming(t *testing.T) {
+	fileSvc, cfg := newAuthTestEnv(t)
+	writeTestCLICert(t, fileSvc, cfg)
+
+	caCertPEM, _ := generateTestCertificateWithSPIFFE(t, "test-ca", time.Now().Add(time.Hour))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), cfg.DefaultTrustBundleRelPath(), []byte(caCertPEM), constants.PermFilePublic))
+
+	client, err := BuildMTLSClient(fileSvc, cfg, 0)
+	require.NoError(t, err)
+	require.NotNil(t, client)
+	assert.Equal(t, time.Duration(0), client.Timeout)
 }

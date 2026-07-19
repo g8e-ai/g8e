@@ -6,7 +6,7 @@ parent: Guides
 # Build g8e-Compatible Applications
 
 Last Updated: 2026-07-18
-Version: v1.5.6
+Version: v1.5.7
 
 ---
 
@@ -407,12 +407,9 @@ voting with Ed25519 signatures. That service is the
 articulates intent, translates it through a Byzantine ensemble, classifies risk, and
 produces signed governance envelopes for the Gateway to validate.
 
-The reference implementation of this system is **g8ee** (the "g8e Agentic Ensemble"), a
-native g8e application maintained in its own repository. g8ee is a first-class g8e client:
-it holds no privileged Gateway role, authenticates over mTLS, and produces signed
-governance envelopes like any other L2 consensus producer. This guide documents its design
-as the canonical pattern so that any agentic system built on g8e, in any language, can
-follow it. g8ee is the worked example; the patterns below are the contract.
+The [Reference Implementation](#reference-implementation) section above introduces g8ee,
+the canonical worked example for these patterns. The design below is the contract; g8ee is
+one concrete realization of it.
 
 ### Table of Contents
 
@@ -948,8 +945,8 @@ The system does not use the LLM as a bulk transport channel:
   delivery when Sentinel mode is enabled.
 - **Output budget**: `max_tokens` and provider-specific output limits bound visible model
   output.
-- **Operator payloads**: The Operator rejects command and pubsub payloads above the configured
-  maximum (default: 512 KB).
+- **Gateway payloads**: The Gateway rejects request bodies above the configured maximum
+  (default: 512 KB).
 - **Operator output**: Scrubbed before publishing results. The scrubbing service classifies
   output by size and applies structured boundaries.
 - **Filesystem access**: Typed operations, not unconstrained shell dumps. Scoped reads with

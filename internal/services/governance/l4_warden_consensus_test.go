@@ -24,6 +24,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	govtypes "github.com/g8e-ai/g8e/internal/governance"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/governance/governancetest"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -266,7 +267,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 			testutil.NewStatefulMockReplayStore(),
 			testutil.NewMockStateRootProvider("root-1"),
 			&SimpleSignerStore{Signers: signers},
-			&SimpleTribunalStore{Tribunals: tribunals},
+			&governancetest.SimpleTribunalStore{Tribunals: tribunals},
 			nil,
 			testutil.NewConfigurableMockL3Notary(true),
 			nil,

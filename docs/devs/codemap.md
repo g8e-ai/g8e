@@ -237,6 +237,15 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - **L5**: `governance.L5Actuator` (isolated boundary tool dispatch via MCP/A2A, signed receipt production, audit logging). Does NOT re-verify L2/L3 proofs; trusts `VerifiedTransaction` from L4Warden. The L4→L5 separation is the defense-in-depth boundary: L4 verifies, L5 executes and records.
 
 ### Shared Interface Implementations
+
+Governance store interfaces are defined in dedicated files under `internal/services/governance/`:
+- `replay_store.go` — `ReplayStore` interface
+- `state_root_provider.go` — `StateRootProvider` interface
+- `signer_store.go` — `SignerStore` interface + `SimpleSignerStore` (production fail-closed fallback) + `FilesystemSignerStore` (outbound impl)
+- `tribunal_store.go` — `TribunalStore` interface
+- `app_policy_store.go` — `AppPolicyStore` interface
+- `transaction_audit_store.go` — `TransactionAuditStore` interface
+
 - `gateway.SignerStoreService` implements: `governance.SignerStore` (gateway mode dedicated implementation).
 - `gateway.TribunalStoreService` implements: `governance.TribunalStore` (gateway mode dedicated implementation, provides TribunalPolicy lookup for L4 Warden quorum verification).
 - `gateway.AppPolicyStoreService` implements: `governance.AppPolicyStore` (gateway mode dedicated implementation).
@@ -414,9 +423,10 @@ Test helpers (per-package, build-tagged `integration` or test-only):
 
 The following packages are test-only and are not part of the production dependency tree:
 
-**`internal/services/storage/storagetest/`** - Test-only audit storage implementations
+**`internal/services/storage/storagetest/`** - Test-only audit storage and token store implementations
 - `TestSQLAuditStore` - Test-only monolithic audit service with Git ledger integration
 - Implements `TransactionAuditStore` interface via a no-op `DocSet` method
+- `TestTokenStore` - Thread-safe in-memory `storage.TokenStore` with TTL expiry support
 - Production code uses `storage.SQLAuditStore` from `audit_store.go`
 
 **`internal/services/pubsub/pubsubtest/`** - Test-only PubSub client mock
@@ -424,12 +434,22 @@ The following packages are test-only and are not part of the production dependen
 - Used by pubsub service tests and g8eo lifecycle/integration tests
 - Follows the same pattern as `storagetest`, which keeps mock infrastructure out of production code
 
+**`internal/services/pubsub/publisherstest/`** - Test-only ResultsPublisher recording fake
+- `TestResultsPublisher` - In-memory recording fake implementing `pubsub.ResultsPublisher`
+- Records all published results by method; `SetError` for injecting failures; `Results()` and `Heartbeats()` accessors
+- Separate from `pubsubtest` to avoid import cycle (`pubsubtest` is imported by `pubsub` test files, so it cannot itself import `pubsub`)
+
+**`internal/services/governance/governancetest/`** - Test-only governance store fixtures
+- `SimpleTribunalStore`, `SimpleAppPolicyStore`, `SimpleStateRootProvider` - In-memory implementations of governance store interfaces for unit tests
+- Used by governance, pubsub, and chaos tests
+- `SimpleSignerStore` remains in `governance/signer_store.go` (not here) because `pubsub_commands.go` uses it as a production fail-closed fallback
+
 **`internal/tools/chaos/`** - Test-only chaos testing for governance stack
 - Generates a realistic distribution of governance events (70% good actor, 20% prompt injection, 10% MitM) against the local audit stack
 - Drives `TransactionVerifier` + `Actuator` stack directly in-process, bypassing network/TLS
 - Uses `storagetest.TestSQLAuditStore` and should not be used in production code paths
 
-**Key distinction**: Test infrastructure is separated from production code to avoid import cycles. The `storagetest`, `pubsubtest`, and `chaos` packages provide test implementations that should never be used in production code paths.
+**Key distinction**: Test infrastructure is separated from production code to avoid import cycles. The `storagetest`, `pubsubtest`, `publisherstest`, `governancetest`, and `chaos` packages provide test implementations that should never be used in production code paths.
 
 **`test/fixtures/gateway_fixture.go`** - In-process gateway test fixture (build tag: `integration`)
 - `GatewayFixture` spins up a real `GatewayModeService` with `httptest.Server`, mTLS PKI, tribunal enrollment, and in-process `OperatorPubSubService` wired with full governance dependencies

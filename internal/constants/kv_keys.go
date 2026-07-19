@@ -20,6 +20,10 @@ const (
 	KVCachePrefix = "g8e"
 )
 
+// SentinelKeyPrefix namespaces sentinel UEI tokens in kv_store to avoid collisions
+// with cache/doc invalidation entries written by the document store triggers.
+const SentinelKeyPrefix = "g8e:sentinel:"
+
 const (
 	KVKeyCacheDoc                     = "g8e:cache:doc:{collection}:{id}"
 	KVKeyCacheQuery                   = "g8e:cache:query:{collection}:{hash}"

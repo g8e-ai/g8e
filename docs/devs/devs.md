@@ -136,7 +136,10 @@ Return centralized error constants from `internal/constants/errors.go` for known
 - See [Testing Guide](tests.md) for detailed test patterns and infrastructure
 
 **Test infrastructure separation:**
-- `internal/services/storage/storagetest/` - Test-only audit storage (`TestSQLAuditStore` with Git ledger, no-op `DocSet`)
+- `internal/services/storage/storagetest/` - Test-only audit storage (`TestSQLAuditStore` with Git ledger, no-op `DocSet`) and `TestTokenStore` (in-memory `TokenStore` with TTL)
+- `internal/services/pubsub/pubsubtest/` - Test-only `PubSubClient` mock (`MockOperatorPubSubClient`)
+- `internal/services/pubsub/publisherstest/` - Test-only `ResultsPublisher` recording fake (`TestResultsPublisher`)
+- `internal/services/governance/governancetest/` - Test-only governance store fixtures (`SimpleTribunalStore`, `SimpleAppPolicyStore`, `SimpleStateRootProvider`)
 - `internal/tools/chaos/` - Chaos engineering infrastructure (uses `storagetest.TestSQLAuditStore`)
 - Production gateway mode wires `DocumentStoreService` as `TransactionAuditStore`
 - Production outbound mode uses `auditStoreTransactionStore` adapter in `g8eo.go`

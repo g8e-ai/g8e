@@ -23,10 +23,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/vault"
 )
 
-// sentinelKeyPrefix namespaces sentinel UEI tokens in kv_store to avoid collisions
-// with cache/doc invalidation entries written by the document store triggers.
-const sentinelKeyPrefix = "g8e:sentinel:"
-
 // EncryptedKVAdapter bridges KVStoreService (in the canonical gateway DB) to the
 // storage.TokenStore interface expected by ScrubbingService. Values are encrypted
 // at rest via the vault. Entries are written as state_tier='observed' so they
@@ -52,11 +48,11 @@ func (a *EncryptedKVAdapter) KVSet(_ context.Context, key, value string, ttlSeco
 	if err != nil {
 		return fmt.Errorf("failed to encrypt value for key %s: %w", key, err)
 	}
-	return a.kv.KVSetObserved(sentinelKeyPrefix+key, string(encrypted), ttlSeconds)
+	return a.kv.KVSetObserved(constants.SentinelKeyPrefix+key, string(encrypted), ttlSeconds)
 }
 
 func (a *EncryptedKVAdapter) KVGet(_ context.Context, key string) (string, error) {
-	value, found := a.kv.KVGet(sentinelKeyPrefix + key)
+	value, found := a.kv.KVGet(constants.SentinelKeyPrefix + key)
 	if !found {
 		return "", fmt.Errorf("encrypted_kv_adapter: key %s: %w", key, constants.ErrKeyNotFound)
 	}
@@ -71,7 +67,7 @@ func (a *EncryptedKVAdapter) KVGet(_ context.Context, key string) (string, error
 }
 
 func (a *EncryptedKVAdapter) KVScanPrefix(_ context.Context, prefix string) (map[string]string, error) {
-	fullKeys, err := a.kv.KVKeys(sentinelKeyPrefix + prefix + "*")
+	fullKeys, err := a.kv.KVKeys(constants.SentinelKeyPrefix + prefix + "*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan keys with prefix %q: %w", prefix, err)
 	}
@@ -90,7 +86,7 @@ func (a *EncryptedKVAdapter) KVScanPrefix(_ context.Context, prefix string) (map
 		if err != nil {
 			return nil, fmt.Errorf("failed to decrypt value for key %s: %w", fullKey, err)
 		}
-		result[strings.TrimPrefix(fullKey, sentinelKeyPrefix)] = string(decrypted)
+		result[strings.TrimPrefix(fullKey, constants.SentinelKeyPrefix)] = string(decrypted)
 	}
 	return result, nil
 }

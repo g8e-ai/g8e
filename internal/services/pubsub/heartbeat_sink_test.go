@@ -161,6 +161,76 @@ func TestHeartbeatService_RegisterSink_PanickingSinkDoesNotCrashHeartbeatCycle(t
 	assert.True(t, afterPanicCalled.Load(), "sink after the panicking sink should still be called")
 }
 
+func TestHeartbeatService_UnregisterSink_RemovesSink(t *testing.T) {
+	t.Parallel()
+
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+	svc := NewHeartbeatService(cfg, logger, nil)
+	svc.SetContext(context.Background())
+
+	mockHandler := &mockExecutionHandler{
+		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
+			return "test-receipt-id", nil
+		},
+	}
+	privKey := ed25519.NewKeyFromSeed(make([]byte, 32))
+	mockActuator := &governance.L5Actuator{
+		Logger:           logger,
+		ExecutionHandler: mockHandler,
+		SigningKey:       privKey,
+		KeyID:            "test-key",
+	}
+	svc.SetActuator(mockActuator)
+
+	var sinkCalled atomic.Bool
+	id := svc.RegisterSink(func(ctx context.Context) {
+		sinkCalled.Store(true)
+	})
+
+	svc.UnregisterSink(id)
+
+	sinkCalled.Store(false)
+	err := svc.SendAutomatic()
+	require.NoError(t, err)
+	assert.False(t, sinkCalled.Load(), "unregistered sink should not be called")
+}
+
+func TestHeartbeatService_UnregisterSink_NonexistentIDIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+	svc := NewHeartbeatService(cfg, logger, nil)
+	svc.SetContext(context.Background())
+
+	mockHandler := &mockExecutionHandler{
+		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
+			return "test-receipt-id", nil
+		},
+	}
+	privKey := ed25519.NewKeyFromSeed(make([]byte, 32))
+	mockActuator := &governance.L5Actuator{
+		Logger:           logger,
+		ExecutionHandler: mockHandler,
+		SigningKey:       privKey,
+		KeyID:            "test-key",
+	}
+	svc.SetActuator(mockActuator)
+
+	var sinkCalled atomic.Bool
+	svc.RegisterSink(func(ctx context.Context) {
+		sinkCalled.Store(true)
+	})
+
+	svc.UnregisterSink(99999)
+
+	sinkCalled.Store(false)
+	err := svc.SendAutomatic()
+	require.NoError(t, err)
+	assert.True(t, sinkCalled.Load(), "registered sink should still be called after unregistering nonexistent ID")
+}
+
 func TestOperatorPubSubService_HeartbeatService_ReturnsNonNilAfterConstruction(t *testing.T) {
 	t.Parallel()
 

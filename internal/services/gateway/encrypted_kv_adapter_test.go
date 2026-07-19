@@ -205,7 +205,7 @@ func TestEncryptedKVAdapter_RoundtripEncryption(t *testing.T) {
 	require.NoError(t, adapter.KVSet(ctx, "secret", testValue, 0))
 
 	// Verify the raw stored value is NOT the plaintext
-	raw, found := kv.KVGet(sentinelKeyPrefix + "secret")
+	raw, found := kv.KVGet(constants.SentinelKeyPrefix + "secret")
 	require.True(t, found)
 	assert.NotEqual(t, testValue, raw, "stored value should be encrypted")
 

@@ -18,70 +18,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/storage/storagetest"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// fakeTokenStore is an in-memory storage.TokenStore for use in unit tests.
-type fakeTokenStore struct {
-	mu   sync.RWMutex
-	data map[string]fakeEntry
-}
-
-type fakeEntry struct {
-	value     string
-	expiresAt time.Time // zero means no expiry
-}
-
-func newFakeTokenStore() *fakeTokenStore {
-	return &fakeTokenStore{data: make(map[string]fakeEntry)}
-}
-
-func (f *fakeTokenStore) KVSet(_ context.Context, key, value string, ttlSeconds int) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	var exp time.Time
-	if ttlSeconds > 0 {
-		exp = time.Now().Add(time.Duration(ttlSeconds) * time.Second)
-	}
-	f.data[key] = fakeEntry{value: value, expiresAt: exp}
-	return nil
-}
-
-func (f *fakeTokenStore) KVGet(_ context.Context, key string) (string, error) {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-	e, ok := f.data[key]
-	if !ok {
-		return "", fmt.Errorf("key not found: %s", key)
-	}
-	if !e.expiresAt.IsZero() && time.Now().After(e.expiresAt) {
-		return "", fmt.Errorf("key expired: %s", key)
-	}
-	return e.value, nil
-}
-
-func (f *fakeTokenStore) KVScanPrefix(_ context.Context, prefix string) (map[string]string, error) {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-	result := make(map[string]string)
-	for k, e := range f.data {
-		if !strings.HasPrefix(k, prefix) {
-			continue
-		}
-		if !e.expiresAt.IsZero() && time.Now().After(e.expiresAt) {
-			continue
-		}
-		result[k] = e.value
-	}
-	return result, nil
-}
 
 func TestDefaultConfig(t *testing.T) {
 	t.Parallel()
@@ -705,7 +650,7 @@ func TestScrubbingService_ScrubText_JWT(t *testing.T) {
 func TestScrubbingService_TokenPersistence(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	tokenStore := newFakeTokenStore()
+	tokenStore := storagetest.NewTestTokenStore()
 
 	config := &Config{
 		StrictMode:         false,
@@ -754,7 +699,7 @@ func TestScrubbingService_TokenPersistence_FailClosed(t *testing.T) {
 func TestScrubbingService_TokenPersistence_TTL(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	tokenStore := newFakeTokenStore()
+	tokenStore := storagetest.NewTestTokenStore()
 
 	config := &Config{
 		StrictMode:         false,

@@ -97,6 +97,45 @@ func TestEncodeCertAndKey_ValidECKeyPEMRoundTrip(t *testing.T) {
 	assert.True(t, key.Equal(parsedKey))
 }
 
+func TestParseCertFromPEM_ValidCertificate(t *testing.T) {
+	key := mustGenerateECKey(t)
+	certPEM := mustGenerateCertPEM(t, key)
+
+	cert, err := ParseCertFromPEM([]byte(certPEM))
+	require.NoError(t, err)
+	require.NotNil(t, cert)
+	assert.Equal(t, "test", cert.Subject.CommonName)
+	assert.Equal(t, big.NewInt(1), cert.SerialNumber)
+}
+
+func TestParseCertFromPEM_InvalidPEMReturnsErrPEMDecodeFailed(t *testing.T) {
+	_, err := ParseCertFromPEM([]byte("not a pem block at all"))
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrPEMDecodeFailed)
+}
+
+func TestParseCertFromPEM_WrongPEMTypeReturnsErrInvalidPEMType(t *testing.T) {
+	keyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "EC PRIVATE KEY",
+		Bytes: []byte("dummy"),
+	})
+
+	_, err := ParseCertFromPEM(keyPEM)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInvalidPEMType)
+}
+
+func TestParseCertFromPEM_MalformedCertBytesReturnsErrCertParseFailed(t *testing.T) {
+	badCertPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: []byte("not a real certificate"),
+	})
+
+	_, err := ParseCertFromPEM(badCertPEM)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrCertParseFailed)
+}
+
 func TestEncodeCertAndKey_NilKeyReturnsError(t *testing.T) {
 	_, _, err := EncodeCertAndKey("cert", "", nil)
 	require.Error(t, err)

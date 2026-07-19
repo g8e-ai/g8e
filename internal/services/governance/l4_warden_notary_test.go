@@ -23,6 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	govtypes "github.com/g8e-ai/g8e/internal/governance"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/governance/governancetest"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -268,7 +269,7 @@ func TestL4Warden_Notary_NonceRaceCondition(t *testing.T) {
 func TestL4Warden_Notary_AppPolicyStore_L3Required_Mutation(t *testing.T) {
 	t.Parallel()
 
-	appPolicyStore := &SimpleAppPolicyStore{
+	appPolicyStore := &governancetest.SimpleAppPolicyStore{
 		Policies: map[string]*models.AppPolicy{
 			"spiffe://g8e.local/app/test-app-id": {
 				AppID: "spiffe://g8e.local/app/test-app-id",
@@ -297,7 +298,7 @@ func TestL4Warden_Notary_AppPolicyStore_L3Required_Mutation(t *testing.T) {
 func TestL4Warden_Notary_AppPolicyStore_NoPolicy_Fallback(t *testing.T) {
 	t.Parallel()
 
-	appPolicyStore := &SimpleAppPolicyStore{
+	appPolicyStore := &governancetest.SimpleAppPolicyStore{
 		Policies: map[string]*models.AppPolicy{},
 	}
 

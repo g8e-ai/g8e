@@ -655,4 +655,17 @@ func TestRebuildTransportWithOperatorCert(t *testing.T) {
 		err := svc.rebuildTransportWithOperatorCert("", keyPEM)
 		require.Error(t, err)
 	})
+
+	t.Run("valid cert and key rebuilds transport", func(t *testing.T) {
+		t.Parallel()
+		certPEM, keyPEM := testutil.GenerateTestCertificate(t, "operator-cert")
+		err := svc.rebuildTransportWithOperatorCert(certPEM, keyPEM)
+		require.NoError(t, err)
+
+		transport, ok := svc.httpClient.Transport.(*http.Transport)
+		require.True(t, ok, "expected *http.Transport after cert rebuild")
+		require.NotNil(t, transport.TLSClientConfig)
+		assert.Len(t, transport.TLSClientConfig.Certificates, 1)
+		assert.Equal(t, tls.VersionTLS13, int(transport.TLSClientConfig.MinVersion))
+	})
 }

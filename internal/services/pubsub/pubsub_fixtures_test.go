@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/governance"
+	"github.com/g8e-ai/g8e/internal/services/governance/governancetest"
 	pubsubtest "github.com/g8e-ai/g8e/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
@@ -48,7 +49,7 @@ func signL2Vote(privKey ed25519.PrivateKey, keyID, hash string, decision bool) *
 // policy whose sole member is "test-key". This mirrors the single trusted signer
 // registered by the pubsub test fixtures so L4 quorum verification can pass.
 func testTribunalStore() governance.TribunalStore {
-	return &governance.SimpleTribunalStore{
+	return &governancetest.SimpleTribunalStore{
 		Tribunals: map[string]*models.TribunalPolicy{
 			"test-tribunal": {
 				ID:              "test-tribunal",
