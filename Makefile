@@ -142,7 +142,7 @@ help:
 	@echo "  ci-platform   Run platform-only CI (operator, protocol, proto, docs)"
 	@echo ""
 	@echo "Release:"
-	@echo "  release          Sync version, run lint, run tests, build binaries (no git ops)"
+	@echo "  release          Sync Python versions + build binaries (no tests, no git ops)"
 	@echo "  release-tag      Tag & push v<VERSION> + protocol/v<VERSION> (Python release trigger)"
 	@echo ""
 	@echo "Protocol Generation:"
@@ -670,8 +670,14 @@ _ci-test:
 # RELEASE
 # =============================================================================
 # VERSION is the single source of truth. `make release` syncs pyproject.toml
-# from VERSION, runs tests, and builds binaries — but does NOT touch git.
-# Review the changes, commit, then run `make release-tag` to tag and push.
+# and __init__.py from VERSION, then builds binaries. It does NOT run tests,
+# lint, or touch git — CI handles quality gates on push.
+#
+# Workflow:
+#   1. Edit VERSION
+#   2. make release        (syncs Python versions + builds)
+#   3. git add -A && git commit -m "release: v<VERSION>"
+#   4. make release-tag    (tags + pushes, triggers CI release workflows)
 #
 # The protocol/v* tag triggers the Python PyPI release workflow.
 # The Go module is now part of the root module (github.com/g8e-ai/g8e)
@@ -703,12 +709,6 @@ release:
 	else \
 		echo "  __init__.py already in sync."; \
 	fi; \
-	echo "Running lint..."; \
-	$(MAKE) lint; \
-	echo "  lint passed."; \
-	echo "Running full test suite..."; \
-	$(MAKE) test; \
-	echo "  full test suite passed."; \
 	echo "Building binaries..."; \
 	$(MAKE) build; \
 	echo ""; \
@@ -739,4 +739,7 @@ release-tag:
 	fi; \
 	git tag "$$TAG" && git tag "$$PYTHON_TAG"; \
 	git push origin "$$TAG" && git push origin "$$PYTHON_TAG"; \
-	echo "Pushed $$TAG + $$PYTHON_TAG — binary and Python protocol releases will run in CI."
+	echo ""; \
+	echo "Pushed $$TAG + $$PYTHON_TAG."; \
+	echo "Monitor: gh run watch --workflow=release-binary.yml"; \
+	echo "Monitor: gh run watch --workflow=release-python-protocol.yml"
