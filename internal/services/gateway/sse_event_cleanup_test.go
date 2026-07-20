@@ -27,7 +27,7 @@ import (
 // removes events older than the specified max age while preserving newer ones.
 // This guards against unbounded ring buffer growth between reconnections.
 func TestSSEEventService_CleanupDeletesOldEvents(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 
 	route := SSERoute{CLISessionID: "cli-cleanup-test"}
 
@@ -68,7 +68,7 @@ func TestSSEEventService_CleanupDeletesOldEvents(t *testing.T) {
 // degenerate case that confirms the cleanup query works correctly when
 // the cutoff is "now".
 func TestSSEEventService_CleanupWithZeroAgeDeletesAll(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 
 	route := SSERoute{CLISessionID: "cli-cleanup-zero"}
 
@@ -94,7 +94,7 @@ func TestSSEEventService_CleanupWithZeroAgeDeletesAll(t *testing.T) {
 // This guards against misrouted events where a web_session_id and
 // cli_session_id are both provided.
 func TestSSEEventService_AppendRejectsMutuallyExclusiveRoute(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 
 	route := SSERoute{
 		WebSessionID: "web-123",
@@ -108,7 +108,7 @@ func TestSSEEventService_AppendRejectsMutuallyExclusiveRoute(t *testing.T) {
 // TestSSEEventService_AppendRejectsEmptyRoute verifies that SSEEventsAppend
 // returns an error when no routing ID is set.
 func TestSSEEventService_AppendRejectsEmptyRoute(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 
 	route := SSERoute{}
 

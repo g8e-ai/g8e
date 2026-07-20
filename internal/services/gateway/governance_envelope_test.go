@@ -95,9 +95,9 @@ func (f *fakeEnvelopeProcessor) ProcessEnvelope(ctx context.Context, payload []b
 
 func newGovernanceEnvelopeHandler(t *testing.T, proc governance.EnvelopeProcessor) *HTTPHandler {
 	t.Helper()
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	if proc != nil {
-		h.envProc.Store(&proc)
+		h.governanceController.SetEnvelopeProcessor(proc)
 	}
 	return h
 }
@@ -108,7 +108,7 @@ func TestGovernanceEnvelope_NotConfigured_Returns503(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
 	w := httptest.NewRecorder()
 
-	h.handleGovernanceEnvelope(w, req)
+	h.governanceController.handleGovernanceEnvelope(w, req)
 
 	require.Equal(t, http.StatusServiceUnavailable, w.Code)
 }
@@ -120,7 +120,7 @@ func TestGovernanceEnvelope_NonPostMethod_Returns405(t *testing.T) {
 	for _, m := range []string{http.MethodGet, http.MethodPut, http.MethodPatch, http.MethodDelete} {
 		req := httptest.NewRequest(m, "/api/governance/envelope", nil)
 		w := httptest.NewRecorder()
-		h.handleGovernanceEnvelope(w, req)
+		h.governanceController.handleGovernanceEnvelope(w, req)
 		require.Equal(t, http.StatusMethodNotAllowed, w.Code, "method=%s", m)
 	}
 	require.Zero(t, proc.calls, "envelope processor must not be called for non-POST methods")
@@ -133,7 +133,7 @@ func TestGovernanceEnvelope_EmptyBody_Returns400(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader(nil))
 	w := httptest.NewRecorder()
 
-	h.handleGovernanceEnvelope(w, req)
+	h.governanceController.handleGovernanceEnvelope(w, req)
 
 	require.Equal(t, http.StatusBadRequest, w.Code)
 	require.Zero(t, proc.calls, "envelope processor must not be called for empty body")
@@ -168,7 +168,7 @@ func TestGovernanceEnvelope_VerificationErrors_Return403(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{"id":"x"}`)))
 			w := httptest.NewRecorder()
 
-			h.handleGovernanceEnvelope(w, req)
+			h.governanceController.handleGovernanceEnvelope(w, req)
 
 			require.Equal(t, http.StatusForbidden, w.Code, "error %v should map to 403", tc.err)
 
@@ -188,7 +188,7 @@ func TestGovernanceEnvelope_DecodeFailure_Returns400(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`not-json`)))
 	w := httptest.NewRecorder()
 
-	h.handleGovernanceEnvelope(w, req)
+	h.governanceController.handleGovernanceEnvelope(w, req)
 
 	require.Equal(t, http.StatusBadRequest, w.Code)
 }
@@ -200,7 +200,7 @@ func TestGovernanceEnvelope_OversizedPayload_Returns400(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
 	w := httptest.NewRecorder()
 
-	h.handleGovernanceEnvelope(w, req)
+	h.governanceController.handleGovernanceEnvelope(w, req)
 
 	require.Equal(t, http.StatusBadRequest, w.Code)
 }
@@ -224,7 +224,7 @@ func TestGovernanceEnvelope_Success_Returns200WithSignedReceipt(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
-	h.handleGovernanceEnvelope(w, req)
+	h.governanceController.handleGovernanceEnvelope(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
 	require.Equal(t, 1, proc.calls)
@@ -258,7 +258,7 @@ func TestGovernanceEnvelope_FailedExecution_StillReturns200(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{"id":"tx-fail"}`)))
 	w := httptest.NewRecorder()
 
-	h.handleGovernanceEnvelope(w, req)
+	h.governanceController.handleGovernanceEnvelope(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
 }
@@ -272,7 +272,7 @@ func TestGovernanceEnvelope_NilReceiptNilError_Returns500(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
 	w := httptest.NewRecorder()
 
-	h.handleGovernanceEnvelope(w, req)
+	h.governanceController.handleGovernanceEnvelope(w, req)
 
 	require.Equal(t, http.StatusInternalServerError, w.Code)
 }
@@ -370,7 +370,7 @@ func TestGatewayModeService_SetEnvelopeProcessor(t *testing.T) {
 	ls, _ := setupTestGatewayService(t)
 
 	// Initially envProc should be nil
-	require.Nil(t, ls.handler.envProc.Load(), "envProc should be nil initially")
+	require.Nil(t, ls.handler.governanceController.envProc.Load(), "envProc should be nil initially")
 
 	// Create a fake processor
 	fakeProc := &fakeEnvelopeProcessor{}
@@ -379,10 +379,10 @@ func TestGatewayModeService_SetEnvelopeProcessor(t *testing.T) {
 	ls.SetEnvelopeProcessor(fakeProc)
 
 	// Verify it was set
-	require.NotNil(t, ls.handler.envProc.Load(), "envProc should be set to the provided processor")
-	require.Equal(t, fakeProc, *ls.handler.envProc.Load(), "envProc should be set to the provided processor")
+	require.NotNil(t, ls.handler.governanceController.envProc.Load(), "envProc should be set to the provided processor")
+	require.Equal(t, fakeProc, *ls.handler.governanceController.envProc.Load(), "envProc should be set to the provided processor")
 
 	// Set to nil to disable
 	ls.SetEnvelopeProcessor(nil)
-	require.Nil(t, ls.handler.envProc.Load(), "envProc should be nil after setting to nil")
+	require.Nil(t, ls.handler.governanceController.envProc.Load(), "envProc should be nil after setting to nil")
 }

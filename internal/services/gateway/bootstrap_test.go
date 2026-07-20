@@ -38,7 +38,7 @@ import (
 )
 
 func TestBootstrapFlow(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 
 	// Generate real CSRs for the test
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -142,7 +142,7 @@ func TestBootstrapFlow(t *testing.T) {
 		{Field: "target", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", bootstrapUserID))},
 		{Field: "action", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", models.AdminAuditActionRetireLocalOwner))},
 	}
-	results, err := h.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionAuthAdminAudit), filters, "", 0)
+	results, err := h.docStore.DocQuery(marshaler.CollectionName(constants.CollectionAuthAdminAudit), filters, "", 0)
 	require.NoError(t, err)
 	require.Len(t, results, 1, "Expected exactly one audit entry for bootstrap retirement")
 

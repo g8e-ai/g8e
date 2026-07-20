@@ -34,17 +34,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupTestDBController(t *testing.T) (*DBController, *CanonicalDBService) {
+func setupTestDBController(t *testing.T) (*DBController, *Stores) {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
 
-	dbController := newDBController(infra.Cfg, infra.Logger, infra.DB, infra.Auth, infra.Pubsub, infra.UserSvc, infra.Responder)
+	dbController := newDBController(infra.Cfg, infra.Logger, infra.Stores.DocStore, infra.Stores.KVStore, infra.Stores.SSEStore, infra.Stores.BlobStore, infra.Stores.AuditStore, infra.Stores.SignerStore, infra.Auth, infra.Pubsub, infra.UserSvc, infra.Responder)
 
-	return dbController, infra.DB
+	return dbController, infra.Stores
 }
 
 func TestDBControllerHandleDB(t *testing.T) {
-	dbController, db := setupTestDBController(t)
+	dbController, stores := setupTestDBController(t)
 
 	t.Run("BadRequest - no collection", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/data/", nil)
@@ -117,8 +117,8 @@ func TestDBControllerHandleDB(t *testing.T) {
 	})
 
 	t.Run("Query", func(t *testing.T) {
-		db.DocStore.DocSet("items", "i1", mustDocJSON(t, map[string]int{"val": 10}))
-		db.DocStore.DocSet("items", "i2", mustDocJSON(t, map[string]int{"val": 20}))
+		stores.DocStore.DocSet("items", "i1", mustDocJSON(t, map[string]int{"val": 10}))
+		stores.DocStore.DocSet("items", "i2", mustDocJSON(t, map[string]int{"val": 20}))
 
 		query := models.DocQueryRequest{
 			Limit: 1,
@@ -194,7 +194,7 @@ func TestDBControllerHandleDB(t *testing.T) {
 	})
 
 	t.Run("SSE Events count", func(t *testing.T) {
-		db.SSEStore.SSEEventsAppend(SSERoute{WebSessionID: "s1"}, "T", "{}", "")
+		stores.SSEStore.SSEEventsAppend(SSERoute{WebSessionID: "s1"}, "T", "{}", "")
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/data/_sse_events/count", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleSSEEvents(rr, req, "count")
@@ -217,7 +217,7 @@ func TestDBControllerHandleDB(t *testing.T) {
 }
 
 func TestDBControllerHandleKV(t *testing.T) {
-	dbController, db := setupTestDBController(t)
+	dbController, stores := setupTestDBController(t)
 
 	t.Run("PUT and GET", func(t *testing.T) {
 		reqPut := httptest.NewRequest(http.MethodPut, "/api/v1/kv/k1", bytes.NewReader(mustDocJSON(t, models.KVSetRequest{Value: "g8e"})))
@@ -245,8 +245,8 @@ func TestDBControllerHandleKV(t *testing.T) {
 	})
 
 	t.Run("Scan and DeletePattern", func(t *testing.T) {
-		db.KVStore.KVSet("pref:1", "a", 0)
-		db.KVStore.KVSet("pref:2", "b", 0)
+		stores.KVStore.KVSet("pref:1", "a", 0)
+		stores.KVStore.KVSet("pref:2", "b", 0)
 
 		reqScan := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_scan", bytes.NewReader(mustDocJSON(t, models.KVPatternRequest{Pattern: "pref:*"})))
 		rrScan := httptest.NewRecorder()
@@ -276,7 +276,7 @@ func TestDBControllerHandleKV(t *testing.T) {
 	})
 
 	t.Run("KV Keys", func(t *testing.T) {
-		db.KVStore.KVSet("key1", "val1", 0)
+		stores.KVStore.KVSet("key1", "val1", 0)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_keys", strings.NewReader(`{"pattern":"key*"}`))
 		rr := httptest.NewRecorder()
 		dbController.handleKVKeys(rr, req)
@@ -550,22 +550,22 @@ func TestDBControllerHandlePubSubPublish(t *testing.T) {
 }
 
 func TestDBControllerHandleRevokeApp(t *testing.T) {
-	_, db := setupTestDBController(t)
-	userSvc := NewUserService(db, testutil.NewTestLogger())
+	_, stores := setupTestDBController(t)
+	userSvc := NewUserService(stores.DocStore, testutil.NewTestLogger())
 	logger := testutil.NewTestLogger()
 	cfg := testutil.NewTestConfig(t)
 	resp := response.NewWriter(logger)
-	adminController := newAdminController(cfg, logger, db, userSvc, resp)
+	adminController := newAdminController(cfg, logger, stores.DocStore, stores.SignerStore, stores.TribunalStore, userSvc, resp)
 
 	bootstrapUser, err := userSvc.CreateBootstrapUserWithOSUser(nil)
 	require.NoError(t, err)
 	require.NotNil(t, bootstrapUser)
-	t.Cleanup(func() { db.DocStore.DocDelete("users", bootstrapUser.ID) })
+	t.Cleanup(func() { stores.DocStore.DocDelete("users", bootstrapUser.ID) })
 
 	regularUser, err := userSvc.CreateUser()
 	require.NoError(t, err)
 	require.NotNil(t, regularUser)
-	t.Cleanup(func() { db.DocStore.DocDelete("users", regularUser.ID) })
+	t.Cleanup(func() { stores.DocStore.DocDelete("users", regularUser.ID) })
 
 	t.Run("reject app revocation without admin authorization", func(t *testing.T) {
 		appID := "spiffe://g8e.local/app/test-no-auth"
@@ -578,9 +578,9 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			UpdatedAt:          time.Now().UTC(),
 		}
 		policyBytes := mustMarshalJSON(t, policy)
-		err := db.DocStore.DocSet("app_policies", appID, policyBytes)
+		err := stores.DocStore.DocSet("app_policies", appID, policyBytes)
 		require.NoError(t, err)
-		t.Cleanup(func() { db.DocStore.DocDelete("app_policies", appID) })
+		t.Cleanup(func() { stores.DocStore.DocDelete("app_policies", appID) })
 
 		reqBody := map[string]string{"app_id": appID}
 		bodyBytes := mustMarshalJSON(t, reqBody)
@@ -605,9 +605,9 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			UpdatedAt:          time.Now().UTC(),
 		}
 		policyBytes := mustMarshalJSON(t, policy)
-		err := db.DocStore.DocSet("app_policies", appID, policyBytes)
+		err := stores.DocStore.DocSet("app_policies", appID, policyBytes)
 		require.NoError(t, err)
-		t.Cleanup(func() { db.DocStore.DocDelete("app_policies", appID) })
+		t.Cleanup(func() { stores.DocStore.DocDelete("app_policies", appID) })
 
 		reqBody := map[string]string{"app_id": appID}
 		bodyBytes := mustMarshalJSON(t, reqBody)
@@ -644,10 +644,10 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			UpdatedAt:          time.Now().UTC(),
 		}
 		policyBytes := mustMarshalJSON(t, policy)
-		err := db.DocStore.DocSet("app_policies", appID, policyBytes)
+		err := stores.DocStore.DocSet("app_policies", appID, policyBytes)
 		require.NoError(t, err)
 
-		policyDoc, err := db.DocStore.DocGet("app_policies", appID)
+		policyDoc, err := stores.DocStore.DocGet("app_policies", appID)
 		require.NoError(t, err)
 		require.NotNil(t, policyDoc)
 
@@ -661,7 +661,7 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		policyDoc, err = db.DocStore.DocGet("app_policies", appID)
+		policyDoc, err = stores.DocStore.DocGet("app_policies", appID)
 		require.NoError(t, err)
 		assert.Nil(t, policyDoc)
 	})
@@ -677,7 +677,7 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			UpdatedAt:          time.Now().UTC(),
 		}
 		policyBytes := mustMarshalJSON(t, policy)
-		err := db.DocStore.DocSet("app_policies", appID, policyBytes)
+		err := stores.DocStore.DocSet("app_policies", appID, policyBytes)
 		require.NoError(t, err)
 
 		signer := models.TrustedSigner{
@@ -687,14 +687,14 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			Enabled:   true,
 		}
 		signerBytes := mustMarshalJSON(t, signer)
-		err = db.DocStore.DocSet("trusted_signers", appID, signerBytes)
+		err = stores.DocStore.DocSet("trusted_signers", appID, signerBytes)
 		require.NoError(t, err)
 
-		policyDoc, err := db.DocStore.DocGet("app_policies", appID)
+		policyDoc, err := stores.DocStore.DocGet("app_policies", appID)
 		require.NoError(t, err)
 		require.NotNil(t, policyDoc)
 
-		signerDoc, err := db.DocStore.DocGet("trusted_signers", appID)
+		signerDoc, err := stores.DocStore.DocGet("trusted_signers", appID)
 		require.NoError(t, err)
 		require.NotNil(t, signerDoc)
 
@@ -708,11 +708,11 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		policyDoc, err = db.DocStore.DocGet("app_policies", appID)
+		policyDoc, err = stores.DocStore.DocGet("app_policies", appID)
 		require.NoError(t, err)
 		assert.Nil(t, policyDoc)
 
-		signerDoc, err = db.DocStore.DocGet("trusted_signers", appID)
+		signerDoc, err = stores.DocStore.DocGet("trusted_signers", appID)
 		require.NoError(t, err)
 		assert.Nil(t, signerDoc)
 	})
@@ -728,7 +728,7 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			UpdatedAt:          time.Now().UTC(),
 		}
 		policyBytes := mustMarshalJSON(t, policy)
-		err := db.DocStore.DocSet("app_policies", appID, policyBytes)
+		err := stores.DocStore.DocSet("app_policies", appID, policyBytes)
 		require.NoError(t, err)
 
 		signer := models.TrustedSigner{
@@ -738,7 +738,7 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			Enabled:   true,
 		}
 		signerBytes := mustMarshalJSON(t, signer)
-		err = db.DocStore.DocSet("trusted_signers", appID, signerBytes)
+		err = stores.DocStore.DocSet("trusted_signers", appID, signerBytes)
 		require.NoError(t, err)
 
 		reqBody := map[string]string{"app_id": appID}
@@ -751,11 +751,11 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		policyDoc, err := db.DocStore.DocGet("app_policies", appID)
+		policyDoc, err := stores.DocStore.DocGet("app_policies", appID)
 		require.NoError(t, err)
 		assert.Nil(t, policyDoc)
 
-		signerDoc, err := db.DocStore.DocGet("trusted_signers", appID)
+		signerDoc, err := stores.DocStore.DocGet("trusted_signers", appID)
 		require.NoError(t, err)
 		assert.Nil(t, signerDoc)
 	})
@@ -843,14 +843,14 @@ func TestDBController_BlobNamespaceAllowlist(t *testing.T) {
 }
 
 func TestDBControllerHandleDataSettings(t *testing.T) {
-	dbController, db := setupTestDBController(t)
+	dbController, stores := setupTestDBController(t)
 
 	t.Run("GET - success", func(t *testing.T) {
 		// First create settings
 		settings := map[string]string{"mode": "test"}
-		err := db.DocStore.DocSet("settings", "platform_settings", mustDocJSON(t, settings))
+		err := stores.DocStore.DocSet("settings", "platform_settings", mustDocJSON(t, settings))
 		require.NoError(t, err)
-		t.Cleanup(func() { db.DocStore.DocDelete("settings", "platform_settings") })
+		t.Cleanup(func() { stores.DocStore.DocDelete("settings", "platform_settings") })
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/data/settings", nil)
 		rr := httptest.NewRecorder()
@@ -865,13 +865,13 @@ func TestDBControllerHandleDataSettings(t *testing.T) {
 		rr := httptest.NewRecorder()
 		dbController.handleDataSettings(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
-		t.Cleanup(func() { db.DocStore.DocDelete("settings", "platform_settings") })
+		t.Cleanup(func() { stores.DocStore.DocDelete("settings", "platform_settings") })
 	})
 
 	t.Run("PATCH - success", func(t *testing.T) {
 		// First create settings
 		settings := map[string]string{"mode": "test"}
-		err := db.DocStore.DocSet("settings", "platform_settings", mustDocJSON(t, settings))
+		err := stores.DocStore.DocSet("settings", "platform_settings", mustDocJSON(t, settings))
 		require.NoError(t, err)
 
 		patch := map[string]string{"mode": "production"}
@@ -879,7 +879,7 @@ func TestDBControllerHandleDataSettings(t *testing.T) {
 		rr := httptest.NewRecorder()
 		dbController.handleDataSettings(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
-		t.Cleanup(func() { db.DocStore.DocDelete("settings", "platform_settings") })
+		t.Cleanup(func() { stores.DocStore.DocDelete("settings", "platform_settings") })
 	})
 
 	t.Run("Method Not Allowed", func(t *testing.T) {
@@ -978,7 +978,7 @@ func TestDBControllerHandleAuditReceiptsExport(t *testing.T) {
 }
 
 func TestDBControllerHandleGovernanceSigners(t *testing.T) {
-	dbController, db := setupTestDBController(t)
+	dbController, stores := setupTestDBController(t)
 
 	t.Run("GET - success", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/governance/signers", nil)
@@ -1000,7 +1000,7 @@ func TestDBControllerHandleGovernanceSigners(t *testing.T) {
 		rr := httptest.NewRecorder()
 		dbController.handleGovernanceSigners(rr, req)
 		assert.Equal(t, http.StatusCreated, rr.Code)
-		t.Cleanup(func() { db.DocStore.DocDelete("trusted_signers", "test-signer-1") })
+		t.Cleanup(func() { stores.DocStore.DocDelete("trusted_signers", "test-signer-1") })
 	})
 
 	t.Run("POST - missing id", func(t *testing.T) {
@@ -1043,7 +1043,7 @@ func TestDBControllerHandleGovernanceSigners(t *testing.T) {
 }
 
 func TestDBControllerHandleGovernanceSignerByID(t *testing.T) {
-	dbController, db := setupTestDBController(t)
+	dbController, stores := setupTestDBController(t)
 
 	t.Run("GET - not found", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/governance/signers/nonexistent", nil)
@@ -1061,9 +1061,9 @@ func TestDBControllerHandleGovernanceSignerByID(t *testing.T) {
 			Enabled:   true,
 		}
 		signerBytes := mustMarshalJSON(t, signer)
-		err := db.DocStore.DocSet("trusted_signers", "test-signer-get", signerBytes)
+		err := stores.DocStore.DocSet("trusted_signers", "test-signer-get", signerBytes)
 		require.NoError(t, err)
-		t.Cleanup(func() { db.DocStore.DocDelete("trusted_signers", "test-signer-get") })
+		t.Cleanup(func() { stores.DocStore.DocDelete("trusted_signers", "test-signer-get") })
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/governance/signers/test-signer-get", nil)
 		rr := httptest.NewRecorder()
@@ -1081,7 +1081,7 @@ func TestDBControllerHandleGovernanceSignerByID(t *testing.T) {
 			Enabled:   true,
 		}
 		signerBytes := mustMarshalJSON(t, signer)
-		err := db.DocStore.DocSet("trusted_signers", "test-signer-delete", signerBytes)
+		err := stores.DocStore.DocSet("trusted_signers", "test-signer-delete", signerBytes)
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/governance/signers/test-signer-delete", nil)
