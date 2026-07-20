@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from g8e.models.governance import compute_transaction_hash
+from g8e.models.governance import _canonicalize_value, compute_transaction_hash
 
 VECTORS_PATH = Path(__file__).parent / "hash_vectors.json"
 
@@ -119,3 +119,9 @@ def test_hash_parity_deterministic() -> None:
     h2 = compute_transaction_hash(**kwargs)
     assert h1 == h2
     assert len(h1) == 64
+
+
+def test_canonicalize_value_rejects_unknown_type() -> None:
+    """Unsupported types must raise TypeError, not silently produce mismatched output."""
+    with pytest.raises(TypeError):
+        _canonicalize_value(object())

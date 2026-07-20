@@ -26,7 +26,9 @@ from g8e.models import (
     GovernanceMetadata,
     GovernanceL1,
     GovernanceL2,
+    GovernanceL2Vote,
     GovernanceL3,
+    GovernanceL3Proof,
     compute_transaction_hash,
 )
 from g8e.models.settings import LLMSettings, SearchSettings
@@ -512,11 +514,32 @@ class TestGovernanceEnvelope:
             state_merkle_root="root",
             nonce="n1",
             governance=GovernanceMetadata(
-                l1=GovernanceL1(validated=True, violations=[]),
-                l2=GovernanceL2(consensus_reached=True, threshold=3),
-                l3=GovernanceL3(notary_id="notary-1", signature="sig"),
+                l1=GovernanceL1(validated=True, violations=["policy_violation"]),
+                l2=GovernanceL2(
+                    tribunal_id="tribunal-1",
+                    votes=[
+                        GovernanceL2Vote(
+                            signer_key_id="signer-1",
+                            consensus_signature="sig-1",
+                            decision=True,
+                        ),
+                    ],
+                ),
+                l3=GovernanceL3(
+                    proof=GovernanceL3Proof(
+                        client_data_json="data",
+                        authenticator_data="auth",
+                        signature="sig",
+                        credential_id="cred-1",
+                    ),
+                ),
             ),
         )
         assert envelope.governance.l1.validated is True
-        assert envelope.governance.l2.consensus_reached is True
-        assert envelope.governance.l3.notary_id == "notary-1"
+        assert envelope.governance.l1.violations == ["policy_violation"]
+        assert envelope.governance.l2.tribunal_id == "tribunal-1"
+        assert len(envelope.governance.l2.votes) == 1
+        assert envelope.governance.l2.votes[0].signer_key_id == "signer-1"
+        assert envelope.governance.l2.votes[0].decision is True
+        assert envelope.governance.l3.proof.signature == "sig"
+        assert envelope.governance.l3.proof.credential_id == "cred-1"

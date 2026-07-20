@@ -1,0 +1,263 @@
+{
+  "_comment": "Canonical governance wire shapes matching protocol/proto/g8e/common/v1/common.proto. Defines L1Metadata, L2Vote, L2Metadata, L3Proof, L3Metadata, GovernanceMetadata, and GovernanceEnvelope.",
+
+  "_authority": "proto",
+  "_consumers": ["agent", "client", "g8eo"],
+
+  "l1_metadata": {
+    "_description": "L1 Technical Bedrock proof. Serialized from L1Metadata (common.proto).",
+    "validated": {
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "description": "Whether L1 doctrine validation passed"
+    },
+    "violations": {
+      "type": "array",
+      "items": "string",
+      "required": false,
+      "default": [],
+      "description": "List of L1 doctrine violation strings"
+    }
+  },
+
+  "l2_vote": {
+    "_description": "A single L2 consensus vote from a Tribunal member. Serialized from L2Vote (common.proto).",
+    "signer_key_id": {
+      "type": "string",
+      "required": true,
+      "description": "Member appID matching TrustedSigner.ID"
+    },
+    "consensus_signature": {
+      "type": "string",
+      "required": true,
+      "description": "Ed25519 signature over <transaction_hash>|<decision>"
+    },
+    "decision": {
+      "type": "boolean",
+      "required": true,
+      "description": "Member's safe (true) or unsafe (false) vote"
+    }
+  },
+
+  "l2_metadata": {
+    "_description": "L2 Consensus proof: a vote set from an enrolled Tribunal. Serialized from L2Metadata (common.proto).",
+    "tribunal_id": {
+      "type": "string",
+      "required": false,
+      "default": "",
+      "description": "TribunalPolicy.id that produced this vote set"
+    },
+    "votes": {
+      "type": "array",
+      "items": "L2Vote",
+      "required": false,
+      "default": [],
+      "description": "Independent member votes. Each item conforms to the l2_vote shape above."
+    }
+  },
+
+  "l3_proof": {
+    "_description": "L3 Notary proof (union: WebAuthn or CLI/mTLS). Fields 1-4 are WebAuthn, fields 5-6 are CLI/mTLS. Exactly one proof type should be populated per instance. Serialized from L3Proof (common.proto).",
+    "client_data_json": {
+      "type": "string",
+      "required": false,
+      "description": "WebAuthn: client data JSON from the authenticator assertion"
+    },
+    "authenticator_data": {
+      "type": "string",
+      "required": false,
+      "description": "WebAuthn: authenticator data bytes (base64)"
+    },
+    "signature": {
+      "type": "string",
+      "required": false,
+      "description": "WebAuthn: signature over the authenticator assertion"
+    },
+    "credential_id": {
+      "type": "string",
+      "required": false,
+      "description": "WebAuthn: credential ID used for the assertion"
+    },
+    "mtls_cert_fingerprint": {
+      "type": "string",
+      "required": false,
+      "description": "CLI/mTLS: SHA-256 fingerprint of the CLI certificate"
+    },
+    "cli_signature": {
+      "type": "string",
+      "required": false,
+      "description": "CLI/mTLS: Ed25519 signature over transaction_hash using the operator private key"
+    }
+  },
+
+  "l3_metadata": {
+    "_description": "L3 Notary metadata. Serialized from L3Metadata (common.proto).",
+    "proof": {
+      "type": "object",
+      "items": "L3Proof",
+      "required": false,
+      "description": "WebAuthn or CLI/mTLS proof. Conforms to the l3_proof shape above."
+    }
+  },
+
+  "governance_metadata": {
+    "_description": "Unified governance metadata attached to an envelope. Serialized from GovernanceMetadata (common.proto).",
+    "l1": {
+      "type": "object",
+      "items": "L1Metadata",
+      "required": false,
+      "description": "L1 Technical Bedrock proof. Conforms to the l1_metadata shape above."
+    },
+    "l2": {
+      "type": "object",
+      "items": "L2Metadata",
+      "required": false,
+      "description": "L2 Consensus proof. Conforms to the l2_metadata shape above."
+    },
+    "l3": {
+      "type": "object",
+      "items": "L3Metadata",
+      "required": false,
+      "description": "L3 Notary proof. Conforms to the l3_metadata shape above."
+    }
+  },
+
+  "governance_envelope": {
+    "_description": "Canonical wire format for all g8e mutations. Serialized from GovernanceEnvelope (common.proto). Binds identity, intent, state, and governance proofs into one transaction.",
+
+    "id": {
+      "type": "string",
+      "required": true,
+      "description": "Deterministic transaction hash"
+    },
+    "timestamp": {
+      "type": "string",
+      "required": true,
+      "description": "Creation timestamp (RFC3339Nano UTC)"
+    },
+    "expires_at": {
+      "type": "string",
+      "required": true,
+      "description": "Expiry timestamp (RFC3339Nano UTC)"
+    },
+    "source_component": {
+      "type": "string",
+      "required": true,
+      "description": "Source component enum (COMPONENT_AGENT, COMPONENT_G8EO, COMPONENT_CLIENT)"
+    },
+    "operator_id": {
+      "type": "string",
+      "required": false,
+      "description": "Operator identifier"
+    },
+    "operator_session_id": {
+      "type": "string",
+      "required": false,
+      "description": "Operator session identifier"
+    },
+    "web_session_id": {
+      "type": "string",
+      "required": false,
+      "description": "Web session identifier"
+    },
+    "cli_session_id": {
+      "type": "string",
+      "required": false,
+      "description": "CLI session identifier"
+    },
+    "event_type": {
+      "type": "string",
+      "required": true,
+      "description": "Canonical pub/sub routing key from events.json"
+    },
+    "payload": {
+      "type": "string",
+      "required": true,
+      "description": "Base64-encoded raw protobuf payload"
+    },
+    "intent_data": {
+      "type": "object",
+      "required": false,
+      "default": {},
+      "description": "Structured JSON-first view of the intent"
+    },
+    "action_type": {
+      "type": "string",
+      "required": true,
+      "description": "UAP-compatible action classification (e.g., EXECUTE_BASH, FILE_EDIT)"
+    },
+    "target_resource": {
+      "type": "string",
+      "required": true,
+      "description": "UAP-compatible target resource path or identifier"
+    },
+    "state_merkle_root": {
+      "type": "string",
+      "required": true,
+      "description": "Current state Merkle root from the Gateway"
+    },
+    "nonce": {
+      "type": "string",
+      "required": true,
+      "description": "Unique nonce for replay defense"
+    },
+    "transaction_hash": {
+      "type": "string",
+      "required": false,
+      "description": "Deterministic SHA-256 transaction hash"
+    },
+    "protocol_version": {
+      "type": "string",
+      "required": false,
+      "default": "1.0",
+      "description": "UAP-compatible protocol version"
+    },
+    "governance": {
+      "type": "object",
+      "items": "GovernanceMetadata",
+      "required": false,
+      "description": "Governance proofs (L1/L2/L3). Conforms to the governance_metadata shape above."
+    },
+    "requestor_user_id": {
+      "type": "string",
+      "required": false,
+      "description": "Human user who authorized the action (delegator)"
+    },
+    "acting_app_id": {
+      "type": "string",
+      "required": false,
+      "description": "App/tool acting on behalf of the user (delegate)"
+    },
+    "case_id": {
+      "type": "string",
+      "required": false,
+      "description": "Current case ID"
+    },
+    "investigation_id": {
+      "type": "string",
+      "required": false,
+      "description": "Current investigation ID"
+    },
+    "task_id": {
+      "type": "string",
+      "required": false,
+      "description": "Current task ID"
+    },
+    "system_fingerprint": {
+      "type": "string",
+      "required": false,
+      "description": "System fingerprint of the caller"
+    },
+    "tenant_id": {
+      "type": "string",
+      "required": false,
+      "description": "Tenant identifier"
+    },
+    "binding_persona": {
+      "type": "string",
+      "required": false,
+      "description": "Binding persona identifier"
+    }
+  }
+}

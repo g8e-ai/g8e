@@ -491,6 +491,7 @@ func (rs *OperatorPubSubService) listenForCommands(channelName string) {
 
 		rs.logger.Info("Channel established - Ready to receive")
 		reconnectDelay = rs.reconnectBaseDelay
+		attempts = 0
 
 		if err := rs.heartbeat.SendAutomatic(); err != nil {
 			rs.logger.Error("Failed to send automatic heartbeat", "error", err)

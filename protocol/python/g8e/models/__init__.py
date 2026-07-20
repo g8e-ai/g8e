@@ -50,6 +50,7 @@ from .governance import (
     GovernanceL2,
     GovernanceL2Vote,
     GovernanceL3,
+    GovernanceL3Proof,
     compute_transaction_hash,
 )
 
@@ -90,5 +91,6 @@ __all__ = [
     "GovernanceL2",
     "GovernanceL2Vote",
     "GovernanceL3",
+    "GovernanceL3Proof",
     "compute_transaction_hash",
 ]

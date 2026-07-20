@@ -81,7 +81,11 @@ func (s *EnrollmentTokenService) GenerateToken(userID, cliSessionID string) (*mo
 		return nil, constants.ErrEnrollmentTokenPersistenceFailed
 	}
 
-	s.logger.Info("Generated enrollment token", "user_id", userID, "cli_session_id_prefix", cliSessionID[:8], "token_prefix", token[:8])
+	cliSessionIDPrefix := cliSessionID
+	if len(cliSessionIDPrefix) > 8 {
+		cliSessionIDPrefix = cliSessionIDPrefix[:8]
+	}
+	s.logger.Info("Generated enrollment token", "user_id", userID, "cli_session_id_prefix", cliSessionIDPrefix, "token_prefix", token[:8])
 	return enrollmentToken, nil
 }
 

@@ -31,7 +31,6 @@ before the human notary is asked.
 from __future__ import annotations
 
 import hashlib
-import json
 from datetime import datetime, timezone
 from typing import Any
 
@@ -46,30 +45,35 @@ except ImportError:
 class GovernanceL1(G8eBaseModel):
     """L1 Technical Bedrock proof."""
     validated: bool = False
-    violations: list[dict[str, Any]] = Field(default_factory=list)
+    violations: list[str] = Field(default_factory=list)
 
 
 class GovernanceL2Vote(G8eBaseModel):
     """A single L2 consensus vote."""
-    voter_id: str
-    decision: str
-    timestamp: str | None = None
-    signature: str | None = None
+    signer_key_id: str
+    consensus_signature: str
+    decision: bool
 
 
 class GovernanceL2(G8eBaseModel):
     """L2 Consensus proof."""
+    tribunal_id: str = ""
     votes: list[GovernanceL2Vote] = Field(default_factory=list)
-    consensus_reached: bool = False
-    threshold: int | None = None
+
+
+class GovernanceL3Proof(G8eBaseModel):
+    """L3 Notary proof (union: WebAuthn or CLI/mTLS)."""
+    client_data_json: str | None = None
+    authenticator_data: str | None = None
+    signature: str | None = None
+    credential_id: str | None = None
+    mtls_cert_fingerprint: str | None = None
+    cli_signature: str | None = None
 
 
 class GovernanceL3(G8eBaseModel):
     """L3 Notary proof."""
-    notary_id: str | None = None
-    signature: str | None = None
-    timestamp: str | None = None
-    certificate_chain: list[str] | None = None
+    proof: GovernanceL3Proof | None = None
 
 
 class GovernanceMetadata(G8eBaseModel):
@@ -177,7 +181,7 @@ def _canonicalize_value(v: Any) -> str:
         return "[" + ",".join(_canonicalize_value(item) for item in v) + "]"
     if isinstance(v, dict):
         return _canonicalize_map(v)
-    return json.dumps(v, ensure_ascii=False)
+    raise TypeError(f"unsupported type {type(v).__name__} in intent_data canonicalization")
 
 
 def _canonicalize_intent_data(intent_data: dict[str, Any]) -> str:

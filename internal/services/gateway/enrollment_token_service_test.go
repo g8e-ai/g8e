@@ -106,6 +106,22 @@ func TestEnrollmentToken_ShortStringDoesNotPanic(t *testing.T) {
 	assert.True(t, errors.Is(err, constants.ErrEnrollmentTokenInvalid))
 }
 
+func TestEnrollmentToken_GenerateTokenShortCLISessionIDDoesNotPanic(t *testing.T) {
+	svc := newTestEnrollmentTokenService(t)
+
+	// cliSessionID shorter than 8 characters should not panic on prefix slicing
+	token, err := svc.GenerateToken("user-short", "abc")
+	require.NoError(t, err)
+	assert.NotEmpty(t, token.Token)
+	assert.Equal(t, "abc", token.CLISessionID)
+
+	// Empty cliSessionID should also not panic
+	token2, err := svc.GenerateToken("user-empty", "")
+	require.NoError(t, err)
+	assert.NotEmpty(t, token2.Token)
+	assert.Equal(t, "", token2.CLISessionID)
+}
+
 func TestEnrollmentToken_CleanupExpiredTokens(t *testing.T) {
 	svc := newTestEnrollmentTokenService(t)
 

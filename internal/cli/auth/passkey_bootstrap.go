@@ -188,10 +188,12 @@ func VerifyPasskeyRegistration(fileSvc fs.RuntimeFileService, cfg *config.Config
 }
 
 // monitorPasskeyRegistration runs the SSE client and sends messages to the
-// provided program when the passkey is registered or the context expires.
-// On a passkey.registered event, it sends passkeyRegisteredMsg which causes
-// the enroll model to exit with success. On context cancellation (timeout),
-// it sends enrollErrMsg with ErrPasskeyRegistrationTimedOut.
+// provided program when the passkey is registered, the context expires, or
+// the SSE stream closes unexpectedly. On a passkey.registered event, it sends
+// passkeyRegisteredMsg which causes the enroll model to exit with success.
+// On context cancellation (timeout), it sends enrollErrMsg with
+// ErrPasskeyRegistrationTimedOut. On clean SSE disconnect without a
+// registration event, it sends enrollErrMsg with ErrPasskeySSEStreamClosed.
 func monitorPasskeyRegistration(ctx context.Context, sseClient *sse.Client, sender programSender) {
 	sseClient.Run(ctx, func(eventType, data string) {
 		if eventType == "passkey.registered" {
@@ -200,5 +202,7 @@ func monitorPasskeyRegistration(ctx context.Context, sseClient *sse.Client, send
 	})
 	if ctx.Err() != nil {
 		sender.Send(enrollErrMsg{err: constants.ErrPasskeyRegistrationTimedOut})
+	} else {
+		sender.Send(enrollErrMsg{err: constants.ErrPasskeySSEStreamClosed})
 	}
 }

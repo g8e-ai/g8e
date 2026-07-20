@@ -106,6 +106,41 @@ func TestMonitorPasskeyRegistration_TimeoutSendsEnrollErrMsg(t *testing.T) {
 	assert.ErrorIs(t, errMsg.err, constants.ErrPasskeyRegistrationTimedOut)
 }
 
+func TestMonitorPasskeyRegistration_SSEStreamClosedSendsEnrollErrMsg(t *testing.T) {
+	fileSvc, cfg := newAuthTestEnv(t)
+	writeTestCLICert(t, fileSvc, cfg)
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher, ok := w.(http.Flusher)
+		require.True(t, ok, "ResponseWriter must support flushing")
+		flusher.Flush()
+		// Immediately close the connection without sending any events
+	}
+
+	server := startTLSEnrollServer(t, cfg, handler)
+
+	sseURL := fmt.Sprintf("%s/sse?cli_session_id=test-session&since_id=1", server.URL)
+	httpClient, err := BuildMTLSClient(fileSvc, cfg, 0)
+	require.NoError(t, err)
+	sseClient := sse.NewClient(sseURL, httpClient)
+
+	// Use a long context timeout so the SSE stream close is what triggers the message,
+	// not the context expiry.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	sender := newMockProgramSender()
+	go monitorPasskeyRegistration(ctx, sseClient, sender)
+
+	msg, ok := sender.waitForMsg(5 * time.Second)
+	require.True(t, ok, "expected enrollErrMsg within timeout after SSE stream closed")
+	errMsg, isErr := msg.(enrollErrMsg)
+	assert.True(t, isErr, "expected enrollErrMsg, got %T", msg)
+	assert.ErrorIs(t, errMsg.err, constants.ErrPasskeySSEStreamClosed)
+}
+
 func TestGenerateEnrollmentToken_NetworkErrorReturnsErrHTTPRequestExecuteFailed(t *testing.T) {
 	fileSvc, cfg := newAuthTestEnv(t)
 	writeTestCLICert(t, fileSvc, cfg)

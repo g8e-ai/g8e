@@ -82,6 +82,16 @@ func TestHashParity_VectorFile(t *testing.T) {
 	}
 }
 
+func TestHashParity_UnknownTypeReturnsError(t *testing.T) {
+	// canonicalizeValue should reject unsupported types rather than silently
+	// falling back to JSON, which would produce mismatched hashes across
+	// Go and Python.
+	_, err := canonicalizeValue(complex128(1 + 2i))
+	if err == nil {
+		t.Error("expected error for unsupported type complex128, got nil")
+	}
+}
+
 func TestHashParity_TimestampNormalization(t *testing.T) {
 	// Verify that timestamps with and without fractional seconds produce the same hash,
 	// matching Go's timesvc.FormatTimestamp normalization.
