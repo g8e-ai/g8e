@@ -247,10 +247,11 @@ CI runs pytest on a Python 3.10-3.14 matrix (`python-tests` job).
 
 ### Protocol Conformance Suite
 
-The conformance suite in `protocol/conformance/` contains 330 tests across 2 files that enforce parity between Go constants, Python runtime values, and canonical JSON in `protocol/constants/`:
+The conformance suite in `protocol/conformance/` contains 341 tests across 3 files that enforce parity between Go constants, Python runtime values, and canonical JSON in `protocol/constants/`:
 
 - `test_constants.py` — JSON file structure, `_go_const`/`_python_const` presence, value uniqueness, Go naming conventions, Python-JSON parity, event value namespace conventions
 - `test_models.py` — Model schema integrity, field parity between Python Pydantic models and JSON schemas, serialization round-trips, validation rules
+- `test_hash_parity.py` — Cross-language transaction hash parity using shared test vectors (`hash_vectors.json`), verifying Python `compute_transaction_hash` matches Go `GenerateMessageID` for standard, nested intent, unicode, empty payload, empty intent, optional omitted, and timestamp normalization cases
 
 Run locally:
 ```bash
@@ -299,7 +300,7 @@ GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 **Additional CI jobs**:
 - `python-tests` — Pytest on Python 3.10-3.14 matrix with version sync verification
 - `python-audit` — pip-audit `--skip-editable` for Python dependency vulnerability scanning
-- `conformance` — Protocol conformance suite (330 tests) on Python 3.14
+- `conformance` — Protocol conformance suite (341 tests) on Python 3.14
 - `smoke-test` — Clean-environment install verification for both Python and Go packages
 - `secret-scan` — gitleaks full-history secret scanning
 - `license-check` — go-licenses report with forbidden copyleft license detection (GPL, AGPL, LGPL, SSPL, BUSL)
