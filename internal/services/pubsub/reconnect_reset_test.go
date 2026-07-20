@@ -32,11 +32,11 @@ import (
 // subsequent calls. This verifies that a successful Subscribe resets the
 // attempts counter even when no messages are received before the channel closes.
 type subscribeCloseImmediatelyClient struct {
-	mu          sync.Mutex
-	callCount   int
-	failCount   int
-	failErr     error
-	subscribed  bool
+	mu         sync.Mutex
+	callCount  int
+	failCount  int
+	failErr    error
+	subscribed bool
 }
 
 func (c *subscribeCloseImmediatelyClient) Subscribe(_ context.Context, _ string) (<-chan []byte, error) {

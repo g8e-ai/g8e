@@ -157,4 +157,3 @@ func TestGenerateEnrollmentToken_NetworkErrorReturnsErrHTTPRequestExecuteFailed(
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrHTTPRequestExecuteFailed)
 }
-

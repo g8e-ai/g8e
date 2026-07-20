@@ -34,47 +34,47 @@ import (
 
 // HTTPHandlerDependencies groups all dependencies for HTTPHandler to reduce constructor bloat.
 type HTTPHandlerDependencies struct {
-	Cfg                *config.Config
-	Logger             *slog.Logger
-	DB                 *CanonicalDBService
-	Pubsub             *GatewayWebSocketHandler
-	Auth               *AuthService
-	PKI                *PKIAuthority
-	CLISessionSvc      *CLISessionService
-	OperatorSessionSvc *OperatorSessionService
-	WebSessionSvc      *WebSessionService
-	Reg                *RegistrationService
-	Passkey            *PasskeyHandler
-	UserSvc            *UserService
-	Responder          *response.Writer
-	MCPGateway         *mcp.GatewayService
-	AppEnrollment      *AppEnrollmentService
-	Tribunal           *tribunal.TribunalService
-	IsReady             func() bool
-	IsGovernanceReady   func() bool
+	Cfg                  *config.Config
+	Logger               *slog.Logger
+	DB                   *CanonicalDBService
+	Pubsub               *GatewayWebSocketHandler
+	Auth                 *AuthService
+	PKI                  *PKIAuthority
+	CLISessionSvc        *CLISessionService
+	OperatorSessionSvc   *OperatorSessionService
+	WebSessionSvc        *WebSessionService
+	Reg                  *RegistrationService
+	Passkey              *PasskeyHandler
+	UserSvc              *UserService
+	Responder            *response.Writer
+	MCPGateway           *mcp.GatewayService
+	AppEnrollment        *AppEnrollmentService
+	Tribunal             *tribunal.TribunalService
+	IsReady              func() bool
+	IsGovernanceReady    func() bool
 	SSEHeartbeatInterval time.Duration
 }
 
 // HTTPHandler manages the web API for the gateway service.
 type HTTPHandler struct {
-	cfg                *config.Config
-	logger             *slog.Logger
-	db                 *CanonicalDBService
-	pubsub             *GatewayWebSocketHandler
-	auth               *AuthService
-	pki                *PKIAuthority
-	cliSessionSvc      *CLISessionService
-	operatorSessionSvc *OperatorSessionService
-	webSessionSvc      *WebSessionService
-	reg                *RegistrationService
-	passkey            *PasskeyHandler
-	userSvc            *UserService
-	responder          *response.Writer
-	mcp                *mcp.GatewayService
-	tribunal           atomic.Pointer[tribunal.TribunalService]
-	appEnrollment      *AppEnrollmentService
-	isReady             func() bool
-	isGovernanceReady   func() bool
+	cfg                  *config.Config
+	logger               *slog.Logger
+	db                   *CanonicalDBService
+	pubsub               *GatewayWebSocketHandler
+	auth                 *AuthService
+	pki                  *PKIAuthority
+	cliSessionSvc        *CLISessionService
+	operatorSessionSvc   *OperatorSessionService
+	webSessionSvc        *WebSessionService
+	reg                  *RegistrationService
+	passkey              *PasskeyHandler
+	userSvc              *UserService
+	responder            *response.Writer
+	mcp                  *mcp.GatewayService
+	tribunal             atomic.Pointer[tribunal.TribunalService]
+	appEnrollment        *AppEnrollmentService
+	isReady              func() bool
+	isGovernanceReady    func() bool
 	sseHeartbeatInterval time.Duration
 	// envProc is the synchronous fail-closed Gateway mutation gate. It is
 	// nil until SetEnvelopeProcessor is called by the boot sequence after
@@ -100,26 +100,26 @@ type HTTPHandler struct {
 
 func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	h := &HTTPHandler{
-		cfg:                deps.Cfg,
-		logger:             deps.Logger,
-		db:                 deps.DB,
-		pubsub:             deps.Pubsub,
-		auth:               deps.Auth,
-		pki:                deps.PKI,
-		cliSessionSvc:      deps.CLISessionSvc,
-		operatorSessionSvc: deps.OperatorSessionSvc,
-		webSessionSvc:      deps.WebSessionSvc,
-		reg:                deps.Reg,
-		passkey:            deps.Passkey,
-		userSvc:            deps.UserSvc,
-		responder:          deps.Responder,
-		mcp:                deps.MCPGateway,
-		appEnrollment:      deps.AppEnrollment,
-		isReady:             deps.IsReady,
-		isGovernanceReady:   deps.IsGovernanceReady,
+		cfg:                  deps.Cfg,
+		logger:               deps.Logger,
+		db:                   deps.DB,
+		pubsub:               deps.Pubsub,
+		auth:                 deps.Auth,
+		pki:                  deps.PKI,
+		cliSessionSvc:        deps.CLISessionSvc,
+		operatorSessionSvc:   deps.OperatorSessionSvc,
+		webSessionSvc:        deps.WebSessionSvc,
+		reg:                  deps.Reg,
+		passkey:              deps.Passkey,
+		userSvc:              deps.UserSvc,
+		responder:            deps.Responder,
+		mcp:                  deps.MCPGateway,
+		appEnrollment:        deps.AppEnrollment,
+		isReady:              deps.IsReady,
+		isGovernanceReady:    deps.IsGovernanceReady,
 		sseHeartbeatInterval: deps.SSEHeartbeatInterval,
-		limiters:            make(map[string]*tokenBucket),
-		limiterLastUsed:     make(map[string]time.Time),
+		limiters:             make(map[string]*tokenBucket),
+		limiterLastUsed:      make(map[string]time.Time),
 	}
 
 	if h.sseHeartbeatInterval == 0 {

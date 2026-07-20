@@ -27,17 +27,17 @@ import (
 
 // hashVector is a single test case from the shared hash_vectors.json file.
 type hashVector struct {
-	Name             string          `json:"name"`
-	ActionType       string          `json:"action_type"`
-	TargetResource   string          `json:"target_resource"`
-	PayloadB64       string          `json:"payload_b64"`
-	StateMerkleRoot  string          `json:"state_merkle_root"`
-	Nonce            string          `json:"nonce"`
-	ExpiresAt        string          `json:"expires_at"`
-	IntentData       map[string]any  `json:"intent_data"`
-	RequestorUserID  *string         `json:"requestor_user_id"`
-	ActingAppID      *string         `json:"acting_app_id"`
-	ExpectedHash     string          `json:"expected_hash"`
+	Name            string         `json:"name"`
+	ActionType      string         `json:"action_type"`
+	TargetResource  string         `json:"target_resource"`
+	PayloadB64      string         `json:"payload_b64"`
+	StateMerkleRoot string         `json:"state_merkle_root"`
+	Nonce           string         `json:"nonce"`
+	ExpiresAt       string         `json:"expires_at"`
+	IntentData      map[string]any `json:"intent_data"`
+	RequestorUserID *string        `json:"requestor_user_id"`
+	ActingAppID     *string        `json:"acting_app_id"`
+	ExpectedHash    string         `json:"expected_hash"`
 }
 
 type hashVectorsFile struct {
