@@ -240,7 +240,7 @@ type cacheEntry struct {
 
 // AuthService handles authentication for the Gateway service.
 type AuthService struct {
-	db         *CanonicalDBService
+	db         *DocumentStoreService
 	pki        *PKIAuthority
 	logger     *slog.Logger
 	userSvc    *UserService
@@ -265,10 +265,10 @@ type AuthService struct {
 }
 
 // NewAuthService creates a new AuthService.
-func NewAuthService(db *CanonicalDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, personaSvc *PersonaService, responder *response.Writer, secretsDir string, jwks *JWKSProvider, jwtRole, jwtIssuer, jwtAudience string) *AuthService {
+func NewAuthService(docStore *DocumentStoreService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, personaSvc *PersonaService, responder *response.Writer, secretsDir string, jwks *JWKSProvider, jwtRole, jwtIssuer, jwtAudience string) *AuthService {
 	jwksEnabled := jwks != nil
 	return &AuthService{
-		db:               db,
+		db:               docStore,
 		pki:              pki,
 		logger:           logger,
 		userSvc:          userSvc,
@@ -339,7 +339,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 		{Field: "operator_session_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", operatorSessionID))},
 	}
 
-	docs, err := s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: auth: query operator session: %w", err)
 	}
@@ -575,7 +575,7 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 		wid := protocol.NewWorkloadIdentity()
 		cert := r.TLS.PeerCertificates[0]
 
-		cliDoc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		cliDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		if err != nil {
 			s.logger.Error("gateway: auth: load CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: load CLI session %s: %w", cliSessionID, constants.ErrNotFound))
 			s.responder.Error(w, http.StatusInternalServerError, constants.ErrSessionLoadFailed.Error())
@@ -664,7 +664,7 @@ func (s *AuthService) handleAppAuth(w http.ResponseWriter, r *http.Request, next
 			uriStr := uri.String()
 			if strings.HasPrefix(uriStr, "spiffe://"+protocol.TrustDomain+"/app/") {
 				appID := uriStr
-				doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
+				doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
 				if err != nil || doc == nil {
 					s.logger.Warn("gateway: auth: app policy not found", "app_id", appID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: load app policy %s: %w", appID, constants.ErrNotFound))
 					s.responder.Error(w, http.StatusForbidden, constants.ErrAppPolicyNotFound.Error())
@@ -799,7 +799,7 @@ func (s *AuthService) cliCertBoundToOperator(certURIs []*url.URL, cliSessionID, 
 	if !uriMatch {
 		return false, nil
 	}
-	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 	if err != nil {
 		return false, fmt.Errorf("gateway: auth: load CLI session %s for cert binding: %w", cliSessionID, constants.ErrNotFound)
 	}
@@ -834,7 +834,7 @@ func (s *AuthService) ValidateWebSessionCookie(r *http.Request) (webSessionID, u
 		return "", "", constants.ErrWebSessionCookieInvalid
 	}
 
-	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID)
+	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID)
 	if err != nil {
 		s.logger.Error("gateway: auth: load web session", "web_session_id", webSessionID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: load web session %s: %w", webSessionID, constants.ErrNotFound))
 		return "", "", constants.ErrWebSessionValidationFailed

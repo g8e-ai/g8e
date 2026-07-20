@@ -76,7 +76,7 @@ type revocationDocument struct {
 type PKIAuthority struct {
 	mu     sync.RWMutex
 	logger *slog.Logger
-	db     *CanonicalDBService
+	db     *DocumentStoreService
 
 	fileSvc       fs.RuntimeFileService
 	secretManager secretManagerInterface
@@ -97,10 +97,10 @@ type PKIAuthority struct {
 	serviceCert tls.Certificate
 }
 
-func newPKIAuthority(fileSvc fs.RuntimeFileService, db *CanonicalDBService, secretManager secretManagerInterface, logger *slog.Logger) *PKIAuthority {
+func newPKIAuthority(fileSvc fs.RuntimeFileService, docStore *DocumentStoreService, secretManager secretManagerInterface, logger *slog.Logger) *PKIAuthority {
 	return &PKIAuthority{
 		fileSvc:       fileSvc,
-		db:            db,
+		db:            docStore,
 		secretManager: secretManager,
 		logger:        logger,
 	}
@@ -519,7 +519,7 @@ func (pki *PKIAuthority) RevokeCertificate(serial string, reason string) error {
 		return fmt.Errorf("%s: %w", constants.ErrPKIRevokeCertificate, err)
 	}
 
-	return pki.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionRevokedCertificates), serial, body)
+	return pki.db.DocSet(marshaler.CollectionName(constants.CollectionRevokedCertificates), serial, body)
 }
 
 // GenerateCRL creates a standard X.509 Certificate Revocation List (CRL) signed by the Operator intermediate CA.
@@ -536,7 +536,7 @@ func (pki *PKIAuthority) GenerateCRL() (crlDER []byte, err error) {
 		return nil, constants.ErrPKIOperatorCANotLoaded
 	}
 
-	docs, err := pki.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionRevokedCertificates), nil, "revoked_at", 0)
+	docs, err := pki.db.DocQuery(marshaler.CollectionName(constants.CollectionRevokedCertificates), nil, "revoked_at", 0)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", constants.ErrPKIGenerateCRL, err)
 	}
@@ -596,7 +596,7 @@ func (pki *PKIAuthority) IsRevoked(serial string) (bool, error) {
 		return false, constants.ErrPKIDatabaseNotAvailable
 	}
 
-	doc, err := pki.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionRevokedCertificates), serial)
+	doc, err := pki.db.DocGet(marshaler.CollectionName(constants.CollectionRevokedCertificates), serial)
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", constants.ErrPKICheckRevocation, err)
 	}

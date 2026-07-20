@@ -55,24 +55,11 @@ func GatewaySchema() string {
 	return gatewaySchema
 }
 
-// CanonicalDBService provides the unified SQLite persistence layer for gateway mode.
-// Three subsystems:
-//   - Document store: collection/id based CRUD (replaces client+agent separate SQLite DBs)
-//   - KV store with TTL: key/value with optional expiration
-//   - SSE event buffer: per-session event ring buffer
-//
-// This service is used in both gateway mode (full database service) and outbound mode
-// (state root calculation only).
-//
-// The service delegates domain logic to extracted single-responsibility services.
-// Callers should use the extracted service fields directly (e.g., db.DocStore.DocGet()).
-type CanonicalDBService struct {
-	db         *sqliteutil.DB
-	logger     *slog.Logger
-	AuditStore *storage.SQLAuditStore
-	vault      *vault.Vault
-
-	// Extracted services - initialized in OpenCanonicalDBService
+// Stores holds the extracted single-responsibility store services.
+// It is returned by OpenCanonicalDBService and passed to consumers that
+// need specific stores. CanonicalDBService retains a private reference for
+// lifecycle management (maintenance, close).
+type Stores struct {
 	DocStore       *DocumentStoreService
 	AppPolicyStore *AppPolicyStoreService
 	SignerStore    *SignerStoreService
@@ -82,7 +69,25 @@ type CanonicalDBService struct {
 	KVStore        *KVStoreService
 	SSEStore       *SSEEventService
 	BlobStore      *BlobStoreService
-	sm             *SecretManager
+	AuditStore     *storage.SQLAuditStore
+}
+
+// CanonicalDBService manages the lifecycle of the unified SQLite persistence
+// layer for gateway mode. It owns the database connection, vault, secret
+// manager, and background maintenance. Domain logic is delegated to the
+// extracted store services in Stores, which are returned separately by
+// OpenCanonicalDBService for injection into consumers.
+//
+// This service is used in both gateway mode (full database service) and
+// outbound mode (state root calculation only).
+type CanonicalDBService struct {
+	db     *sqliteutil.DB
+	logger *slog.Logger
+	vault  *vault.Vault
+	sm     *SecretManager
+
+	// stores holds the extracted services for lifecycle management (maintenance, close).
+	stores *Stores
 
 	// Shutdown tracking
 	mu      sync.Mutex
@@ -96,13 +101,13 @@ type CanonicalDBService struct {
 // vaultKeyPath is the path to the vault private key file (hex-encoded).
 // ks is an optional pre-initialized keystore (non-nil for tests to bypass OS keychain,
 // nil for production which creates via OS keychain).
-func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger, vaultKeyPath string, ks *keystore.Keystore, fileSvc fs.RuntimeFileService) (*CanonicalDBService, error) {
+func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger, vaultKeyPath string, ks *keystore.Keystore, fileSvc fs.RuntimeFileService) (*CanonicalDBService, *Stores, error) {
 	dbPath := filepath.Join(dataDir, constants.DbFilename)
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 
 	db, err := sqliteutil.OpenDB(cfg, logger)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrDatabaseLocked, err)
+		return nil, nil, fmt.Errorf("%w: %w", constants.ErrDatabaseLocked, err)
 	}
 
 	vaultConfig := &vault.VaultConfig{
@@ -112,7 +117,7 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	encryptionVault, err := vault.NewVault(vaultConfig)
 	if err != nil {
 		db.Close()
-		return nil, fmt.Errorf("%w: %w", constants.ErrVaultCreateFailed, err)
+		return nil, nil, fmt.Errorf("%w: %w", constants.ErrVaultCreateFailed, err)
 	}
 
 	// Resolve vault key path.
@@ -131,33 +136,33 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	if !vault.VaultHeaderExists(vaultDir) {
 		if err := os.MkdirAll(vaultDir, constants.PermDirPrivate); err != nil {
 			db.Close()
-			return nil, fmt.Errorf("gateway: create vault dir: %w", err)
+			return nil, nil, fmt.Errorf("gateway: create vault dir: %w", err)
 		}
 
 		initKey := make([]byte, vault.KeySize)
 		if _, err := rand.Read(initKey); err != nil {
 			db.Close()
-			return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyGenerateFailed, err)
+			return nil, nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyGenerateFailed, err)
 		}
 
 		header, _, err := vault.NewVaultHeader(initKey)
 		if err != nil {
 			db.Close()
 			vault.SecureZero(initKey)
-			return nil, fmt.Errorf("%w: %w", constants.ErrVaultHeaderCreateFailed, err)
+			return nil, nil, fmt.Errorf("%w: %w", constants.ErrVaultHeaderCreateFailed, err)
 		}
 
 		if err := header.Save(vaultDir); err != nil {
 			db.Close()
 			vault.SecureZero(initKey)
-			return nil, fmt.Errorf("%w: %w", constants.ErrVaultHeaderSaveFailed, err)
+			return nil, nil, fmt.Errorf("%w: %w", constants.ErrVaultHeaderSaveFailed, err)
 		}
 
 		keyData := []byte(hex.EncodeToString(initKey) + "\n")
 		if err := os.WriteFile(vaultKeyPath, keyData, constants.PermFilePrivate); err != nil {
 			db.Close()
 			vault.SecureZero(initKey)
-			return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyWriteFailed, err)
+			return nil, nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyWriteFailed, err)
 		}
 
 		vault.SecureZero(initKey)
@@ -170,19 +175,19 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	privateKey, err := vault.ReadVaultKey(vaultKeyPath)
 	if err != nil {
 		db.Close()
-		return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyReadFailed, err)
+		return nil, nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyReadFailed, err)
 	}
 	defer vault.SecureZero(privateKey)
 
 	if err := encryptionVault.Unlock(privateKey); err != nil {
 		db.Close()
 		if errors.Is(err, constants.ErrVaultNotInitialized) {
-			return nil, fmt.Errorf("%w: %s", constants.ErrVaultNotInitialized, vaultDir)
+			return nil, nil, fmt.Errorf("%w: %s", constants.ErrVaultNotInitialized, vaultDir)
 		}
 		if errors.Is(err, constants.ErrVaultInvalidPrivateKey) {
-			return nil, fmt.Errorf("%w: %s", constants.ErrVaultKeyDecodeFailed, vaultKeyPath)
+			return nil, nil, fmt.Errorf("%w: %s", constants.ErrVaultKeyDecodeFailed, vaultKeyPath)
 		}
-		return nil, fmt.Errorf("%w: %w", constants.ErrVaultUnlockFailed, err)
+		return nil, nil, fmt.Errorf("%w: %w", constants.ErrVaultUnlockFailed, err)
 	}
 	logger.Info("Vault unlocked successfully", "vault_dir", vaultDir)
 
@@ -192,40 +197,43 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	auditStore, err := storage.NewSQLAuditStore(auditStoreConfig, logger, fileSvc)
 	if err != nil {
 		db.Close()
-		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
+		return nil, nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	svc := &CanonicalDBService{
-		db:         db,
-		logger:     logger,
-		AuditStore: auditStore,
-		vault:      encryptionVault,
-		ctx:        ctx,
-		cancel:     cancel,
-		running:    true,
+		db:     db,
+		logger: logger,
+		vault:  encryptionVault,
+		ctx:    ctx,
+		cancel: cancel,
+		running: true,
 	}
 
 	// Initialize extracted services with the same db connection
-	svc.DocStore = NewDocumentStoreService(db, logger)
-	svc.AppPolicyStore = NewAppPolicyStoreService(db, logger, svc.DocStore)
-	svc.SignerStore = NewSignerStoreService(db, logger, svc.DocStore)
-	svc.TribunalStore = NewTribunalStoreService(db, logger, svc.DocStore, svc.SignerStore)
-	svc.StateRootSvc = NewStateRootService(db, logger)
-	svc.ReplayStore = NewReplayStoreService(db, logger)
-	svc.KVStore = NewKVStoreService(db, logger)
-	svc.SSEStore = NewSSEEventService(db, logger)
-	svc.BlobStore = NewBlobStoreService(db, logger)
+	stores := &Stores{
+		DocStore:       NewDocumentStoreService(db, logger),
+		StateRootSvc:   NewStateRootService(db, logger),
+		ReplayStore:    NewReplayStoreService(db, logger),
+		KVStore:        NewKVStoreService(db, logger),
+		SSEStore:       NewSSEEventService(db, logger),
+		BlobStore:      NewBlobStoreService(db, logger),
+		AuditStore:     auditStore,
+	}
+	stores.AppPolicyStore = NewAppPolicyStoreService(db, logger, stores.DocStore)
+	stores.SignerStore = NewSignerStoreService(db, logger, stores.DocStore)
+	stores.TribunalStore = NewTribunalStoreService(db, logger, stores.DocStore, stores.SignerStore)
+	svc.stores = stores
 
 	if err := svc.initSchema(fileSvc, ks); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
+		return nil, nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	// Initialize state root if missing
 	if err := svc.initStateRoot(); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
+		return nil, nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	// Start background maintenance
@@ -233,7 +241,7 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	go svc.RunMaintenance(svc.ctx)
 
 	logger.Info("Gateway database initialized", "path", dbPath)
-	return svc, nil
+	return svc, stores, nil
 }
 
 func (s *CanonicalDBService) initStateRoot() error {
@@ -243,7 +251,7 @@ func (s *CanonicalDBService) initStateRoot() error {
 		return fmt.Errorf("canonicalDB: init state root: count: %w", err)
 	}
 	if count == 0 {
-		root, err := s.StateRootSvc.CalculateStateRoot()
+		root, err := s.stores.StateRootSvc.CalculateStateRoot()
 		if err != nil {
 			return fmt.Errorf("canonicalDB: init state root: calculate: %w", err)
 		}
@@ -270,16 +278,16 @@ func (s *CanonicalDBService) RunMaintenance(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := s.KVStore.RunMaintenance(); err != nil {
+			if err := s.stores.KVStore.RunMaintenance(); err != nil {
 				s.logger.Warn("KV store maintenance error", "error", err)
 			}
-			if err := s.BlobStore.RunMaintenance(); err != nil {
+			if err := s.stores.BlobStore.RunMaintenance(); err != nil {
 				s.logger.Warn("Blob store maintenance error", "error", err)
 			}
-			if err := s.ReplayStore.CleanupExpiredNonces(); err != nil {
+			if err := s.stores.ReplayStore.CleanupExpiredNonces(); err != nil {
 				s.logger.Warn("Replay store maintenance error", "error", err)
 			}
-			if _, err := s.SSEStore.SSEEventsCleanup(time.Hour); err != nil {
+			if _, err := s.stores.SSEStore.SSEEventsCleanup(time.Hour); err != nil {
 				s.logger.Warn("SSE event cleanup error", "error", err)
 			}
 		}
@@ -353,8 +361,8 @@ func (s *CanonicalDBService) Close() error {
 		s.logger.Warn("CanonicalDBService shutdown timeout, forcing close")
 	}
 
-	if s.AuditStore != nil {
-		if err := s.AuditStore.Close(); err != nil {
+	if s.stores != nil && s.stores.AuditStore != nil {
+		if err := s.stores.AuditStore.Close(); err != nil {
 			s.logger.Error("AuditStore close error", "error", err)
 		}
 	}

@@ -19,15 +19,12 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/config"
-	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
-	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/tribunal"
 )
@@ -36,7 +33,7 @@ import (
 type HTTPHandlerDependencies struct {
 	Cfg                  *config.Config
 	Logger               *slog.Logger
-	DB                   *CanonicalDBService
+	Stores               *Stores
 	Pubsub               *GatewayWebSocketHandler
 	Auth                 *AuthService
 	PKI                  *PKIAuthority
@@ -59,7 +56,10 @@ type HTTPHandlerDependencies struct {
 type HTTPHandler struct {
 	cfg                  *config.Config
 	logger               *slog.Logger
-	db                   *CanonicalDBService
+	docStore             *DocumentStoreService
+	kvStore              *KVStoreService
+	sseStore             *SSEEventService
+	stateRootSvc         *StateRootService
 	pubsub               *GatewayWebSocketHandler
 	auth                 *AuthService
 	pki                  *PKIAuthority
@@ -71,23 +71,19 @@ type HTTPHandler struct {
 	userSvc              *UserService
 	responder            *response.Writer
 	mcp                  *mcp.GatewayService
-	tribunal             atomic.Pointer[tribunal.TribunalService]
 	appEnrollment        *AppEnrollmentService
 	isReady              func() bool
 	isGovernanceReady    func() bool
 	sseHeartbeatInterval time.Duration
-	// envProc is the synchronous fail-closed Gateway mutation gate. It is
-	// nil until SetEnvelopeProcessor is called by the boot sequence after
-	// the in-process command service has initialized the verifier and
-	// Actuator. While nil, /api/v1/governance/envelopes returns 503.
-	envProc atomic.Pointer[governance.EnvelopeProcessor]
-
 	// Controllers for domain-specific endpoints
-	pkiController      *PKIController
-	dbController       *DBController
-	authController     *AuthController
-	adminController    *AdminController
-	operatorController *OperatorController
+	pkiController        *PKIController
+	dbController         *DBController
+	authController       *AuthController
+	adminController      *AdminController
+	operatorController   *OperatorController
+	sseController        *SSEController
+	healthController     *HealthController
+	governanceController *GovernanceController
 
 	// Main router cached at construction to avoid rebuilding on every request
 	router http.Handler
@@ -102,7 +98,10 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	h := &HTTPHandler{
 		cfg:                  deps.Cfg,
 		logger:               deps.Logger,
-		db:                   deps.DB,
+		docStore:             deps.Stores.DocStore,
+		kvStore:              deps.Stores.KVStore,
+		sseStore:             deps.Stores.SSEStore,
+		stateRootSvc:         deps.Stores.StateRootSvc,
 		pubsub:               deps.Pubsub,
 		auth:                 deps.Auth,
 		pki:                  deps.PKI,
@@ -132,16 +131,16 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	}
 
 	// Initialize controllers
-	h.pkiController = newPKIController(deps.Cfg, deps.Logger, deps.DB, deps.PKI, deps.AppEnrollment, deps.Reg, deps.Responder)
-	h.dbController = newDBController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Pubsub, deps.UserSvc, deps.Responder)
+	h.pkiController = newPKIController(deps.Cfg, deps.Logger, deps.PKI, deps.AppEnrollment, deps.Reg, deps.Responder)
+	h.dbController = newDBController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.KVStore, deps.Stores.SSEStore, deps.Stores.BlobStore, deps.Stores.AuditStore, deps.Stores.SignerStore, deps.Auth, deps.Pubsub, deps.UserSvc, deps.Responder)
 
 	// Initialize actuator key reader for device enrollment
 	actuatorKeyReader := &fileActuatorKeyReader{path: paths.Infra.ActuatorPubJSONPath}
-	enrollmentTokenSvc := NewEnrollmentTokenService(deps.DB, deps.Logger)
+	enrollmentTokenSvc := NewEnrollmentTokenService(deps.Stores.DocStore, deps.Logger)
 	h.authController = newAuthController(AuthControllerDeps{
 		Cfg:                deps.Cfg,
 		Logger:             deps.Logger,
-		DB:                 deps.DB,
+		DocStore:           deps.Stores.DocStore,
 		Auth:               deps.Auth,
 		Passkey:            deps.Passkey,
 		UserSvc:            deps.UserSvc,
@@ -155,14 +154,12 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 		ActuatorKeyReader:  actuatorKeyReader,
 		CrossOrigin:        len(deps.Cfg.Gateway.AllowedOrigins) > 0,
 	})
-	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.DB, deps.UserSvc, deps.Responder)
+	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.SignerStore, deps.Stores.TribunalStore, deps.UserSvc, deps.Responder)
 	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)
 
-	// Wire tribunal if provided at construction time (may be nil — set
-	// later via SetTribunal during boot).
-	if deps.Tribunal != nil {
-		h.tribunal.Store(deps.Tribunal)
-	}
+	h.sseController = newSSEController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.KVStore, deps.Stores.SSEStore, deps.Pubsub, deps.Auth, deps.Responder, deps.SSEHeartbeatInterval)
+	h.healthController = newHealthController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.StateRootSvc, deps.Responder, deps.IsReady, deps.IsGovernanceReady)
+	h.governanceController = newGovernanceController(deps.Cfg, deps.Logger, deps.Responder, deps.Tribunal)
 
 	// Build router once to avoid per-request overhead
 	h.router = h.buildPublicRouter()
@@ -171,7 +168,11 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 }
 
 func (h *HTTPHandler) readBody(r *http.Request) ([]byte, error) {
-	r.Body = http.MaxBytesReader(nil, r.Body, h.cfg.Gateway.MaxPayloadBytes)
+	return readRequestBody(r, h.cfg.Gateway.MaxPayloadBytes)
+}
+
+func readRequestBody(r *http.Request, maxPayloadBytes int64) ([]byte, error) {
+	r.Body = http.MaxBytesReader(nil, r.Body, maxPayloadBytes)
 	return io.ReadAll(r.Body)
 }
 
@@ -185,23 +186,11 @@ func (h *HTTPHandler) GetMCPGateway() *mcp.GatewayService {
 
 // SetTribunal sets the Tribunal service for L2 consensus deliberation.
 // Called by the boot sequence after the TribunalService is constructed.
-// Thread-safe via atomic.Pointer — no router rebuild needed because the
-// tribunal deliberate route is always registered and the handler checks
-// the atomic pointer at request time.
+// Thread-safe via atomic.Pointer on GovernanceController — no router rebuild
+// needed because the tribunal deliberate route is always registered and the
+// handler checks the atomic pointer at request time.
 func (h *HTTPHandler) SetTribunal(ts *tribunal.TribunalService) {
-	h.tribunal.Store(ts)
-}
-
-// handleTribunalDeliberate is the always-registered HTTP handler for the
-// tribunal deliberate endpoint. It loads the atomic pointer and delegates
-// to the TribunalService if wired, or returns 503 if not yet configured.
-func (h *HTTPHandler) handleTribunalDeliberate(w http.ResponseWriter, r *http.Request) {
-	ts := h.tribunal.Load()
-	if ts == nil {
-		h.responder.Error(w, http.StatusServiceUnavailable, constants.ErrTribunalNotConfigured.Error())
-		return
-	}
-	(*ts).HandleDeliberate(w, r)
+	h.governanceController.SetTribunal(ts)
 }
 
 func (h *HTTPHandler) GetPasskeyHandler() *PasskeyHandler {

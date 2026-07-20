@@ -28,14 +28,14 @@ import (
 // Operator sessions authenticate the host agent via mTLS URI SAN and are used
 // by g8e-compatible agentic ensembles to look up sessions by ID.
 type OperatorSessionService struct {
-	db     *CanonicalDBService
+	db     *DocumentStoreService
 	logger *slog.Logger
 }
 
 // NewOperatorSessionService creates a new OperatorSessionService instance.
-func NewOperatorSessionService(db *CanonicalDBService, logger *slog.Logger) *OperatorSessionService {
+func NewOperatorSessionService(docStore *DocumentStoreService, logger *slog.Logger) *OperatorSessionService {
 	return &OperatorSessionService{
-		db:     db,
+		db:     docStore,
 		logger: logger,
 	}
 }
@@ -65,7 +65,7 @@ func (s *OperatorSessionService) PersistOperatorSession(operatorSessionID, userI
 		return fmt.Errorf("failed to marshal Operator session document: %w", err)
 	}
 
-	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID, operatorSessionBytes); err != nil {
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID, operatorSessionBytes); err != nil {
 		s.logger.Error("Failed to persist Operator session document", string(constants.ConnectionStateError), err)
 		return fmt.Errorf("failed to persist Operator session document: %w", err)
 	}

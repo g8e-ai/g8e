@@ -41,7 +41,8 @@ const (
 
 // RegistrationService handles Gateway-native device enrollment via CSR-based authentication.
 type RegistrationService struct {
-	db                 *CanonicalDBService
+	docStore           *DocumentStoreService
+	kvStore            *KVStoreService
 	pki                *PKIAuthority
 	logger             *slog.Logger
 	userSvc            *UserService
@@ -51,9 +52,10 @@ type RegistrationService struct {
 }
 
 // NewRegistrationService creates a new RegistrationService.
-func NewRegistrationService(db *CanonicalDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, cliSessionSvc *CLISessionService, operatorSessionSvc *OperatorSessionService, cfg *config.GatewayConfig) *RegistrationService {
+func NewRegistrationService(docStore *DocumentStoreService, kvStore *KVStoreService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, cliSessionSvc *CLISessionService, operatorSessionSvc *OperatorSessionService, cfg *config.GatewayConfig) *RegistrationService {
 	return &RegistrationService{
-		db:                 db,
+		docStore:           docStore,
+		kvStore:            kvStore,
 		pki:                pki,
 		logger:             logger,
 		userSvc:            userSvc,
@@ -81,7 +83,7 @@ func (s *RegistrationService) ListOperatorSlots(userID string) ([]models.Operato
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 		{Field: "is_slot", Op: "==", Value: json.RawMessage("true")},
 	}
-	docs, err := s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "slot_number", 0)
+	docs, err := s.docStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "slot_number", 0)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +106,7 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 		return constants.ErrRegistrationUserIDRequired
 	}
 
-	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), operatorID)
+	doc, err := s.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), operatorID)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrRegistrationOperatorNotFound, err)
 	}
@@ -142,7 +144,7 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
-	if _, err := s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operatorID, updateBytes); err != nil {
+	if _, err := s.docStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operatorID, updateBytes); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
@@ -187,7 +189,7 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 		{Field: "system_fingerprint", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", sanitizedFingerprint))},
 	}
-	docs, err := s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
+	docs, err := s.docStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 	if err == nil && len(docs) > 0 {
 		operator, _ = s.toOperatorDoc(docs[0])
 	}
@@ -198,7 +200,7 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 			{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 			{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.OperatorStatusOffline))},
 		}
-		docs, err = s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
+		docs, err = s.docStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 		if err == nil && len(docs) > 0 {
 			operator, _ = s.toOperatorDoc(docs[0])
 		}
@@ -335,7 +337,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
-	_, updateErr := s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operator.ID, updateBytes)
+	_, updateErr := s.docStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operator.ID, updateBytes)
 	if updateErr != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, updateErr)
 	}
@@ -414,7 +416,7 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*models.Operator
 	filters := []models.DocFilter{
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 	}
-	docs, err := s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 0)
+	docs, err := s.docStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 0)
 	if err == nil {
 		slotNumber = len(docs) + 1
 	}
@@ -437,7 +439,7 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*models.Operator
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
-	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), id, b); err != nil {
+	if err := s.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), id, b); err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
@@ -461,7 +463,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 	var lastErr error
 
 	for _, opID := range req.OperatorIDs {
-		doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), opID)
+		doc, err := s.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), opID)
 		if err != nil {
 			failed = append(failed, opID)
 			lastErr = err
@@ -491,7 +493,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 
 		// 1. Update KV binding
 		// sessionBindOperators(operatorSessionId) -> webSessionId
-		if err := s.db.KVStore.KVSet(sessionOperatorBindKey(op.OperatorSessionID), req.WebSessionID, 0); err != nil {
+		if err := s.kvStore.KVSet(sessionOperatorBindKey(op.OperatorSessionID), req.WebSessionID, 0); err != nil {
 			failed = append(failed, opID)
 			lastErr = err
 			continue
@@ -500,7 +502,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 		// sessionWebBind(webSessionId) -> operatorSessionId (SET)
 		// We use a JSON array for the SET since our KV store is simple
 		webBindKey := sessionWebBindKey(req.WebSessionID)
-		raw, kvFound := s.db.KVStore.KVGet(webBindKey)
+		raw, kvFound := s.kvStore.KVGet(webBindKey)
 		var sessionIDs []string
 		if kvFound {
 			if err := json.Unmarshal([]byte(raw), &sessionIDs); err != nil {
@@ -522,7 +524,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 				lastErr = fmt.Errorf("%w: %w", constants.ErrRegistrationFailedToMarshalSessionIDs, err)
 				continue
 			}
-			if err := s.db.KVStore.KVSet(webBindKey, string(body), 0); err != nil {
+			if err := s.kvStore.KVSet(webBindKey, string(body), 0); err != nil {
 				failed = append(failed, opID)
 				lastErr = fmt.Errorf("%w: %w", constants.ErrRegistrationFailedToSetKVBinding, err)
 				continue
@@ -531,7 +533,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 
 		// 2. Update durability document
 		docID := req.WebSessionID
-		existingDoc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), docID)
+		existingDoc, err := s.docStore.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), docID)
 		if err != nil {
 			failed = append(failed, opID)
 			lastErr = fmt.Errorf("%w: %w", constants.ErrRegistrationFailedToGetBoundSessions, err)
@@ -554,7 +556,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 				lastErr = fmt.Errorf("%w: %w", constants.ErrRegistrationFailedToMarshalBoundSessions, err)
 				continue
 			}
-			if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body); err != nil {
+			if err := s.docStore.DocSet(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body); err != nil {
 				failed = append(failed, opID)
 				lastErr = fmt.Errorf("%w: %w", constants.ErrRegistrationFailedToSetBoundSessions, err)
 				continue
@@ -591,7 +593,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 					lastErr = fmt.Errorf("%w: %w", constants.ErrRegistrationFailedToMarshalBoundSessions, err)
 					continue
 				}
-				if _, err := s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body); err != nil {
+				if _, err := s.docStore.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body); err != nil {
 					failed = append(failed, opID)
 					lastErr = fmt.Errorf("%w: %w", constants.ErrRegistrationFailedToUpdateBoundSessions, err)
 					continue
@@ -600,7 +602,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 		}
 
 		// 3. Update Operator document itself (for UI)
-		if _, err := s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(fmt.Sprintf(`{"bound_web_session_id": %q}`, req.WebSessionID))); err != nil {
+		if _, err := s.docStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(fmt.Sprintf(`{"bound_web_session_id": %q}`, req.WebSessionID))); err != nil {
 			s.logger.Warn("[REGISTRATION] Failed to update operator bound session", "error", err, "operator_id", opID)
 		}
 
@@ -634,7 +636,7 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 	var lastErr error
 
 	for _, opID := range req.OperatorIDs {
-		doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), opID)
+		doc, err := s.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), opID)
 		if err != nil {
 			failed = append(failed, opID)
 			lastErr = err
@@ -659,12 +661,12 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 
 		// 1. Update KV binding
 		if op.OperatorSessionID != "" {
-			if err := s.db.KVStore.KVDelete(sessionOperatorBindKey(op.OperatorSessionID)); err != nil {
+			if err := s.kvStore.KVDelete(sessionOperatorBindKey(op.OperatorSessionID)); err != nil {
 				s.logger.Warn("[REGISTRATION] Failed to delete operator session binding", "error", err, "operator_session_id", op.OperatorSessionID)
 			}
 
 			webBindKey := sessionWebBindKey(req.WebSessionID)
-			raw, kvFound := s.db.KVStore.KVGet(webBindKey)
+			raw, kvFound := s.kvStore.KVGet(webBindKey)
 			if kvFound {
 				var sessionIDs []string
 				if err := json.Unmarshal([]byte(raw), &sessionIDs); err != nil {
@@ -678,7 +680,7 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 					}
 				}
 				if len(newSessionIDs) == 0 {
-					if err := s.db.KVStore.KVDelete(webBindKey); err != nil {
+					if err := s.kvStore.KVDelete(webBindKey); err != nil {
 						s.logger.Warn("[REGISTRATION] Failed to delete web session binding", "error", err)
 					}
 				} else {
@@ -687,7 +689,7 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 						s.logger.Warn("[REGISTRATION] Failed to marshal session IDs", "error", err)
 						continue
 					}
-					if err := s.db.KVStore.KVSet(webBindKey, string(body), 0); err != nil {
+					if err := s.kvStore.KVSet(webBindKey, string(body), 0); err != nil {
 						s.logger.Warn("[REGISTRATION] Failed to set session IDs", "error", err)
 					}
 				}
@@ -696,7 +698,7 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 
 		// 2. Update durability document
 		docID := req.WebSessionID
-		existingDoc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), docID)
+		existingDoc, err := s.docStore.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), docID)
 		if err != nil {
 			s.logger.Warn("[REGISTRATION] Failed to get bound sessions document", "error", err)
 			continue
@@ -732,13 +734,13 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 				s.logger.Warn("[REGISTRATION] Failed to marshal updated bound sessions document", "error", err)
 				continue
 			}
-			if _, err := s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body); err != nil {
+			if _, err := s.docStore.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body); err != nil {
 				s.logger.Warn("[REGISTRATION] Failed to update bound sessions document", "error", err)
 			}
 		}
 
 		// 3. Update Operator document itself
-		if _, err := s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(`{"bound_web_session_id": ""}`)); err != nil {
+		if _, err := s.docStore.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(`{"bound_web_session_id": ""}`)); err != nil {
 			s.logger.Warn("[REGISTRATION] Failed to update operator bound session", "error", err, "operator_id", opID)
 		}
 
@@ -770,7 +772,7 @@ func (s *RegistrationService) SetTargetContext(req models.SetTargetContextReques
 	// For now, "target context" is just making sure the Operator is bound to the Operator session.
 	// In the future, this might set a specific "active" flag in the Operator session state.
 
-	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), req.OperatorID)
+	doc, err := s.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), req.OperatorID)
 	if err != nil {
 		return nil, err
 	}

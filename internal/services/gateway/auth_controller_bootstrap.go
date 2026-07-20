@@ -151,7 +151,7 @@ func (c *AuthController) handleLocalBootstrapWithURL(w http.ResponseWriter, r *h
 			c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
 			return
 		}
-		if err := c.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
+		if err := c.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
 			c.logger.Error("Failed to persist Operator document", "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
 			return
@@ -294,7 +294,7 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 			c.responder.Error(w, http.StatusInternalServerError, "failed to update user")
 			return
 		}
-		if err := c.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), bootstrapUser.ID, userData); err != nil {
+		if err := c.docStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), bootstrapUser.ID, userData); err != nil {
 			c.logger.Error("Failed to update bootstrap user with OS user info", "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to update user")
 			return
@@ -330,7 +330,7 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 		c.responder.Error(w, http.StatusInternalServerError, "failed to create operator record")
 		return
 	}
-	if err := c.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
+	if err := c.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
 		c.logger.Error("Failed to persist operator document during CLI enrollment", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to persist operator record")
 		return
@@ -533,7 +533,7 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 		c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
 		return
 	}
-	if err := c.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
+	if err := c.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
 		c.logger.Error("Failed to persist Operator document", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
 		return

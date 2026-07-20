@@ -50,7 +50,7 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	doc, err := h.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
+	doc, err := h.docStore.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
 	if err != nil {
 		h.logger.Error("Health check failed to query platform_settings", string(constants.ConnectionStateError), err)
 		h.responder.Error(w, http.StatusServiceUnavailable, "platform_settings not ready")
@@ -62,7 +62,7 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	root, err := h.db.StateRootSvc.GetCurrentStateRoot()
+	root, err := h.stateRootSvc.GetCurrentStateRoot()
 	if err != nil {
 		h.logger.Error("Health check failed to calculate state root", string(constants.ConnectionStateError), err)
 		h.responder.Error(w, http.StatusServiceUnavailable, "state root calculation failed")
@@ -114,7 +114,7 @@ func (h *HTTPHandler) handleState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	root, err := h.db.StateRootSvc.GetCurrentStateRoot()
+	root, err := h.stateRootSvc.GetCurrentStateRoot()
 	if err != nil {
 		h.logger.Error("State endpoint failed to calculate state root", string(constants.ConnectionStateError), err)
 		h.responder.Error(w, http.StatusServiceUnavailable, "state root calculation failed")
