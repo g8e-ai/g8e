@@ -19,8 +19,10 @@ described in the protocol specification.
 
 The hash is a SHA-256 digest over canonicalized fields in protocol field order:
 action_type, target_resource, payload (base64), state_merkle_root, nonce,
-expires_at (UTC RFC3339Nano), intent_data (canonicalized map),
-requestor_user_id, acting_app_id.
+expires_at (normalized to fixed microsecond UTC), intent_data (canonicalized
+``key=value`` map), requestor_user_id, acting_app_id.  Empty fields are
+omitted; a trailing ``|`` follows each present field.  This matches Go's
+``GenerateMessageID`` canonicalization exactly.
 
 L3 proof is intentionally excluded from the hash so that L2 consensus can sign
 before the human notary is asked.
@@ -29,39 +31,49 @@ before the human notary is asked.
 from __future__ import annotations
 
 import hashlib
-import json
+from datetime import datetime, timezone
 from typing import Any
 
 from .base import G8eBaseModel, Field, UTCDatetime
+
+try:
+    from datetime import UTC
+except ImportError:
+    UTC = timezone.utc
 
 
 class GovernanceL1(G8eBaseModel):
     """L1 Technical Bedrock proof."""
     validated: bool = False
-    violations: list[dict[str, Any]] = Field(default_factory=list)
+    violations: list[str] = Field(default_factory=list)
 
 
 class GovernanceL2Vote(G8eBaseModel):
     """A single L2 consensus vote."""
-    voter_id: str
-    decision: str
-    timestamp: str | None = None
-    signature: str | None = None
+    signer_key_id: str
+    consensus_signature: str
+    decision: bool
 
 
 class GovernanceL2(G8eBaseModel):
     """L2 Consensus proof."""
+    tribunal_id: str = ""
     votes: list[GovernanceL2Vote] = Field(default_factory=list)
-    consensus_reached: bool = False
-    threshold: int | None = None
+
+
+class GovernanceL3Proof(G8eBaseModel):
+    """L3 Notary proof (union: WebAuthn or CLI/mTLS)."""
+    client_data_json: str | None = None
+    authenticator_data: str | None = None
+    signature: str | None = None
+    credential_id: str | None = None
+    mtls_cert_fingerprint: str | None = None
+    cli_signature: str | None = None
 
 
 class GovernanceL3(G8eBaseModel):
     """L3 Notary proof."""
-    notary_id: str | None = None
-    signature: str | None = None
-    timestamp: str | None = None
-    certificate_chain: list[str] | None = None
+    proof: GovernanceL3Proof | None = None
 
 
 class GovernanceMetadata(G8eBaseModel):
@@ -122,12 +134,65 @@ class GovernanceEnvelope(G8eBaseModel):
     protocol_version: str = "1.0"
 
 
-def _canonicalize_intent_data(intent_data: dict[str, Any]) -> str:
-    """Canonicalize intent_data to a deterministic JSON string.
+def _normalize_timestamp(ts: str) -> str:
+    """Normalize a timestamp string to fixed 6-digit microsecond UTC format.
 
-    Keys are sorted recursively; values are serialized with compact separators.
+    Matches Go's ``timesvc.FormatTimestamp`` which produces
+    ``2026-01-01T00:00:00.000000Z``.  Accepts any RFC3339Nano input.
     """
-    return json.dumps(intent_data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    s = ts.strip()
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    dt = datetime.fromisoformat(s)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    dt = dt.astimezone(UTC)
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt.microsecond:06d}Z"
+
+
+def _canonicalize_map(m: dict[str, Any]) -> str:
+    """Recursively convert a map to Go-compatible ``key=value,key=value`` format.
+
+    Keys are sorted alphabetically.  Matches Go's ``canonicalizeMap`` exactly.
+    """
+    if len(m) == 0:
+        return ""
+    keys = sorted(m.keys())
+    parts = []
+    for k in keys:
+        parts.append(f"{k}={_canonicalize_value(m[k])}")
+    return ",".join(parts)
+
+
+def _canonicalize_value(v: Any) -> str:
+    """Convert a value to its canonical string representation.
+
+    Matches Go's ``canonicalizeValue`` type switch exactly.
+    """
+    if v is None:
+        return ""
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, str):
+        return v
+    if isinstance(v, (int, float)):
+        return f"{float(v):f}"
+    if isinstance(v, list):
+        return "[" + ",".join(_canonicalize_value(item) for item in v) + "]"
+    if isinstance(v, dict):
+        return _canonicalize_map(v)
+    raise TypeError(f"unsupported type {type(v).__name__} in intent_data canonicalization")
+
+
+def _canonicalize_intent_data(intent_data: dict[str, Any]) -> str:
+    """Canonicalize intent_data to Go-compatible ``key=value,key=value`` format.
+
+    Keys are sorted alphabetically; nested maps are recursed.  This matches
+    Go's ``canonicalizeMap``/``canonicalizeValue`` exactly.
+    """
+    if not intent_data:
+        return ""
+    return _canonicalize_map(intent_data)
 
 
 def compute_transaction_hash(
@@ -146,8 +211,12 @@ def compute_transaction_hash(
 
     The hash is computed over the following fields in protocol field order:
     action_type, target_resource, payload (base64-encoded), state_merkle_root,
-    nonce, expires_at (UTC RFC3339Nano), intent_data (canonicalized map),
-    requestor_user_id, acting_app_id.
+    nonce, expires_at (normalized to fixed microsecond UTC), intent_data
+    (canonicalized ``key=value`` map), requestor_user_id, acting_app_id.
+
+    Empty/None fields are omitted entirely (no value, no separator).  A
+    trailing ``|`` is appended after each present field, matching Go's
+    ``GenerateMessageID`` canonicalization exactly.
 
     L3 proof is intentionally excluded so that L2 consensus can sign before the
     human notary is asked.
@@ -155,28 +224,40 @@ def compute_transaction_hash(
     Args:
         action_type: UAP-compatible action type (e.g. ``"EXECUTE_BASH"``).
         target_resource: Target resource path or identifier.
-        payload: Base64-encoded protobuf payload bytes.
+        payload: Base64-encoded payload bytes (standard encoding, as produced
+            by ``base64.b64encode``).  Empty string is omitted.
         state_merkle_root: Current state Merkle root from the Gateway.
         nonce: Unique nonce for replay defense.
-        expires_at: Expiry timestamp in UTC RFC3339Nano format.
-        intent_data: Structured JSON view of the intent.
-        requestor_user_id: Human delegator user ID.
-        acting_app_id: Delegate tool/app ID.
+        expires_at: Expiry timestamp in RFC3339Nano format.  Normalized to
+            fixed 6-digit microsecond UTC (e.g. ``2026-01-01T00:00:00.000000Z``).
+        intent_data: Structured JSON view of the intent.  Empty dict is omitted.
+        requestor_user_id: Human delegator user ID.  None/empty omitted.
+        acting_app_id: Delegate tool/app ID.  None/empty omitted.
 
     Returns:
         Hex-encoded SHA-256 digest string.
     """
+    parts: list[str] = []
+
+    if action_type:
+        parts.append(action_type + "|")
+    if target_resource:
+        parts.append(target_resource + "|")
+    if payload:
+        parts.append(payload + "|")
+    if state_merkle_root:
+        parts.append(state_merkle_root + "|")
+    if nonce:
+        parts.append(nonce + "|")
+    if expires_at:
+        parts.append(_normalize_timestamp(expires_at) + "|")
     canonical_intent = _canonicalize_intent_data(intent_data)
-    parts = [
-        action_type,
-        target_resource,
-        payload,
-        state_merkle_root,
-        nonce,
-        expires_at,
-        canonical_intent,
-        requestor_user_id or "",
-        acting_app_id or "",
-    ]
-    message = "|".join(parts)
+    if canonical_intent:
+        parts.append(canonical_intent + "|")
+    if requestor_user_id:
+        parts.append(requestor_user_id + "|")
+    if acting_app_id:
+        parts.append(acting_app_id + "|")
+
+    message = "".join(parts)
     return hashlib.sha256(message.encode("utf-8")).hexdigest()

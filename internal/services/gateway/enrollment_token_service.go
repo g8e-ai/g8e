@@ -81,13 +81,18 @@ func (s *EnrollmentTokenService) GenerateToken(userID, cliSessionID string) (*mo
 		return nil, constants.ErrEnrollmentTokenPersistenceFailed
 	}
 
-	s.logger.Info("Generated enrollment token", "user_id", userID, "cli_session_id_prefix", cliSessionID[:8], "token_prefix", token[:8])
+	cliSessionIDPrefix := cliSessionID
+	if len(cliSessionIDPrefix) > 8 {
+		cliSessionIDPrefix = cliSessionIDPrefix[:8]
+	}
+	s.logger.Info("Generated enrollment token", "user_id", userID, "cli_session_id_prefix", cliSessionIDPrefix, "token_prefix", token[:8])
 	return enrollmentToken, nil
 }
 
 // ValidateAndConsumeToken checks if a token is valid, not expired, and not already consumed.
-// If valid, it marks the token as consumed and returns the associated user_id and cli_session_id.
-// Returns nil if the token is invalid, expired, or already consumed.
+// If valid, it atomically marks the token as consumed and returns the associated user_id and cli_session_id.
+// The atomic conditional UPDATE prevents TOCTOU races where concurrent callers could both
+// read consumed=false before either writes consumed=true.
 func (s *EnrollmentTokenService) ValidateAndConsumeToken(token string) (*models.EnrollmentToken, error) {
 	tokenPrefix := token
 	if len(tokenPrefix) > 8 {
@@ -129,21 +134,31 @@ func (s *EnrollmentTokenService) ValidateAndConsumeToken(token string) (*models.
 		return nil, constants.ErrEnrollmentTokenConsumed
 	}
 
-	// Mark token as consumed
+	// Atomically mark token as consumed: only updates if consumed is still false.
+	// This prevents TOCTOU races where concurrent callers both read consumed=false.
 	now := time.Now().UTC()
+	nowStr := now.Format(time.RFC3339Nano)
+	applied, err := s.db.DocConditionalUpdate(
+		marshaler.CollectionName(constants.CollectionEnrollmentTokens),
+		token,
+		map[string]interface{}{
+			"consumed":    true,
+			"consumed_at": nowStr,
+		},
+		"consumed", 0,
+	)
+	if err != nil {
+		s.logger.Error("Failed to atomically consume enrollment token", "error", err, "token_prefix", tokenPrefix)
+		return nil, constants.ErrEnrollmentTokenPersistenceFailed
+	}
+	if !applied {
+		// Another goroutine consumed it between our read and the conditional update.
+		s.logger.Warn("Enrollment token consumed by concurrent caller", "token_prefix", tokenPrefix)
+		return nil, constants.ErrEnrollmentTokenConsumed
+	}
+
 	enrollmentToken.Consumed = true
 	enrollmentToken.ConsumedAt = &now
-
-	updatedData, err := json.Marshal(enrollmentToken)
-	if err != nil {
-		s.logger.Error("Failed to marshal consumed enrollment token", "error", err, "token_prefix", tokenPrefix)
-		return nil, constants.ErrEnrollmentTokenPersistenceFailed
-	}
-
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionEnrollmentTokens), token, updatedData); err != nil {
-		s.logger.Error("Failed to update consumed enrollment token", "error", err, "token_prefix", tokenPrefix)
-		return nil, constants.ErrEnrollmentTokenPersistenceFailed
-	}
 
 	cliSessionIDPrefix := enrollmentToken.CLISessionID
 	if len(cliSessionIDPrefix) > 8 {

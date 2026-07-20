@@ -450,6 +450,7 @@ var (
 	ErrPasskeyRegistrationTimedOut = errors.New("passkey registration timed out")
 	ErrPasskeyRegistrationFailed   = errors.New("passkey registration failed")
 	ErrPasskeyStatusUnauthorized   = errors.New("passkey status endpoint returned unauthorized")
+	ErrPasskeySSEStreamClosed      = errors.New("SSE stream closed unexpectedly")
 
 	// Enrollment token errors
 	ErrEnrollmentTokenGenerationFailed  = errors.New("enrollment token generation failed")

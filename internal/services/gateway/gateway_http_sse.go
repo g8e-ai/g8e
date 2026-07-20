@@ -507,7 +507,7 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 
 	// Stream from pubsub
 	ctx := r.Context()
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(h.sseHeartbeatInterval)
 	defer ticker.Stop()
 
 	h.logger.Info("SSE Stream: client connected", "channel", channel, "client", clientLabel)
