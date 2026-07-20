@@ -1099,6 +1099,9 @@ func TestHandleInternalSSEStream_PubSubEventDelivery(t *testing.T) {
 
 func TestHandleInternalSSEStream_HeartbeatSent(t *testing.T) {
 	h, _ := setupTestHTTPHandler(t)
+	// Override to a short interval so the test can observe a real heartbeat.
+	h.sseHeartbeatInterval = 50 * time.Millisecond
+
 	opSessID := "opsess-heartbeat"
 	userID := "user-heartbeat"
 	cliSessionID := "cli-heartbeat"
@@ -1117,15 +1120,14 @@ func TestHandleInternalSSEStream_HeartbeatSent(t *testing.T) {
 		close(done)
 	}()
 
-	// Wait longer than the 30s ticker — but we can't wait 30s in a test.
-	// Instead, just verify the stream starts and we can cancel cleanly.
-	time.Sleep(100 * time.Millisecond)
+	// Wait long enough for at least one heartbeat tick (50ms interval).
+	time.Sleep(200 * time.Millisecond)
 	cancel()
 	<-done
 
-	// The stream should have written at least the connection log, no heartbeat
-	// since ticker is 30s. But headers should be set.
+	body := rr.Body.String()
 	assert.Equal(t, "text/event-stream", rr.Header().Get("Content-Type"))
+	assert.Contains(t, body, ": heartbeat\n\n", "expected at least one heartbeat comment in SSE stream")
 }
 
 func TestHandleInternalSSEStream_ClientLabelOperatorSession(t *testing.T) {

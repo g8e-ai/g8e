@@ -1,7 +1,7 @@
 # Governance
 
-Last Updated: 2026-07-19
-Version: v1.5.9
+Last Updated: 2026-07-20
+Version: v1.6.0
 
 ## Overview
 
@@ -225,7 +225,7 @@ The **L4 Warden** is the primary orchestrator for the verification pipeline. It 
 
 1. **In-flight tracking** (stage 0): Prevents the same nonce from being processed concurrently.
 2. **Nonce reservation and expiry** (stage 1): Atomically reserves the nonce in durable storage to prevent replay attacks even if the operator crashes mid-execution. Checks expiry relative to an injectable clock.
-3. **Stateless validation** (stage 2): Structural checks (transaction ID, action type, payload presence), typed payload decoding, L1 Doctrine validation, and transaction hash recomputation and comparison. The hash is computed over the following fields in proto definition order: action type, target resource, payload (base64-encoded), state Merkle root, nonce, expiry timestamp (UTC RFC3339Nano), intent data (canonicalized), requestor user ID, and acting app ID. L3 proof is intentionally not included in the transaction hash so that L2 (machine consensus) can sign the hash before L3 (human notary) is asked. Tamper-evidence for L3 is provided at verification time, when the proof is checked against the transaction hash.
+3. **Stateless validation** (stage 2): Structural checks (transaction ID, action type, payload presence), typed payload decoding, L1 Doctrine validation, and transaction hash recomputation and comparison. The hash is computed over the following fields in proto definition order: action type, target resource, payload (base64-encoded), state Merkle root, nonce, expiry timestamp (UTC RFC3339Nano), intent data (canonicalized), requestor user ID, and acting app ID. Intent data canonicalization rejects unsupported types with an error (no silent fallback), ensuring cross-language hash parity between Go and Python. L3 proof is intentionally not included in the transaction hash so that L2 (machine consensus) can sign the hash before L3 (human notary) is asked. Tamper-evidence for L3 is provided at verification time, when the proof is checked against the transaction hash.
 4. **Stateful validation** (stage 3): State Merkle root validation against the operator's current state root.
 5. **Posture validation** (stage 4): L2 and L3 checks gated by the configured GovernancePosture.
 

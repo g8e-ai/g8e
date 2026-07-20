@@ -146,7 +146,10 @@ func parseSSEStream(ctx context.Context, r io.Reader, handler EventHandler) erro
 		if strings.HasPrefix(line, "event: ") {
 			eventType = strings.TrimPrefix(line, "event: ")
 		} else if strings.HasPrefix(line, "data: ") {
-			data = strings.TrimPrefix(line, "data: ")
+			if data != "" {
+				data += "\n"
+			}
+			data += strings.TrimPrefix(line, "data: ")
 		}
 	}
 

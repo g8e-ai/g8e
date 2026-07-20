@@ -17,7 +17,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -88,7 +87,11 @@ func GenerateMessageID(env *GovernanceEnvelope) (string, error) {
 	// 7. intent_data (struct) - canonicalized recursively
 	if env.IntentData != nil {
 		intentMap := env.IntentData.AsMap()
-		canonical.WriteString(canonicalizeMap(intentMap))
+		intentStr, err := canonicalizeMap(intentMap)
+		if err != nil {
+			return "", fmt.Errorf("canonicalize intent_data: %w", err)
+		}
+		canonical.WriteString(intentStr)
 		canonical.WriteByte('|')
 	}
 
@@ -120,9 +123,10 @@ func GenerateMessageID(env *GovernanceEnvelope) (string, error) {
 
 // canonicalizeMap recursively converts a map to a deterministic string representation.
 // Keys are sorted alphabetically. Values are serialized based on type.
-func canonicalizeMap(m map[string]interface{}) string {
+// Returns an error if any value is of an unsupported type.
+func canonicalizeMap(m map[string]interface{}) (string, error) {
 	if len(m) == 0 {
-		return ""
+		return "", nil
 	}
 
 	// Sort keys for deterministic ordering
@@ -136,44 +140,49 @@ func canonicalizeMap(m map[string]interface{}) string {
 	for i, k := range keys {
 		canonical.WriteString(k)
 		canonical.WriteByte('=')
-		canonical.WriteString(canonicalizeValue(m[k]))
+		valStr, err := canonicalizeValue(m[k])
+		if err != nil {
+			return "", fmt.Errorf("key %q: %w", k, err)
+		}
+		canonical.WriteString(valStr)
 		if i < len(keys)-1 {
 			canonical.WriteByte(',')
 		}
 	}
-	return canonical.String()
+	return canonical.String(), nil
 }
 
 // canonicalizeValue converts a value to its canonical string representation.
-func canonicalizeValue(v interface{}) string {
+// Returns an error for types outside the explicit switch cases to ensure
+// cross-language hash parity — unknown types would produce different output
+// in Go vs Python.
+func canonicalizeValue(v interface{}) (string, error) {
 	switch val := v.(type) {
 	case string:
-		return val
+		return val, nil
 	case int, int8, int16, int32, int64:
-		return fmt.Sprintf("%d", val)
+		return fmt.Sprintf("%d", val), nil
 	case uint, uint8, uint16, uint32, uint64:
-		return fmt.Sprintf("%d", val)
+		return fmt.Sprintf("%d", val), nil
 	case float32, float64:
-		return fmt.Sprintf("%f", val)
+		return fmt.Sprintf("%f", val), nil
 	case bool:
-		return fmt.Sprintf("%t", val)
+		return fmt.Sprintf("%t", val), nil
 	case []interface{}:
-		// Arrays are not expected in intent_data, but handle defensively
 		var parts []string
 		for _, item := range val {
-			parts = append(parts, canonicalizeValue(item))
+			part, err := canonicalizeValue(item)
+			if err != nil {
+				return "", err
+			}
+			parts = append(parts, part)
 		}
-		return "[" + strings.Join(parts, ",") + "]"
+		return "[" + strings.Join(parts, ",") + "]", nil
 	case map[string]interface{}:
 		return canonicalizeMap(val)
 	case nil:
-		return ""
+		return "", nil
 	default:
-		// Fallback to JSON for unknown types
-		bytes, err := json.Marshal(v)
-		if err != nil {
-			return ""
-		}
-		return string(bytes)
+		return "", fmt.Errorf("unsupported type %T in intent_data canonicalization", v)
 	}
 }

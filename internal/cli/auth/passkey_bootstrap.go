@@ -35,6 +35,13 @@ import (
 // via SSE before giving up.
 const passkeyEnrollTimeout = 5 * time.Minute
 
+// programSender is the interface for sending messages to a bubbletea program.
+// *tea.Program implements this via its Send method. Tests use a channel-based
+// mock to verify message delivery without running a real terminal program.
+type programSender interface {
+	Send(msg tea.Msg)
+}
+
 // RegisterPasskeyViaBrowser opens the gateway's console UI in the user's browser
 // for passkey registration, then subscribes to an SSE stream scoped to the CLI
 // session. When the browser completes WebAuthn registration, the gateway emits
@@ -72,16 +79,7 @@ func RegisterPasskeyViaBrowser(fileSvc fs.RuntimeFileService, cfg *config.Config
 	model := newEnrollModel(consoleURL)
 	p := tea.NewProgram(model)
 
-	go func() {
-		sseClient.Run(ctx, func(eventType, data string) {
-			if eventType == "passkey.registered" {
-				p.Send(passkeyRegisteredMsg{})
-			}
-		})
-		if ctx.Err() != nil {
-			p.Send(enrollErrMsg{err: constants.ErrPasskeyRegistrationTimedOut})
-		}
-	}()
+	go monitorPasskeyRegistration(ctx, sseClient, p)
 
 	finalModel, err := p.Run()
 	if err != nil {
@@ -187,4 +185,24 @@ func VerifyPasskeyRegistration(fileSvc fs.RuntimeFileService, cfg *config.Config
 	}
 
 	return len(result.Credentials) > 0, nil
+}
+
+// monitorPasskeyRegistration runs the SSE client and sends messages to the
+// provided program when the passkey is registered, the context expires, or
+// the SSE stream closes unexpectedly. On a passkey.registered event, it sends
+// passkeyRegisteredMsg which causes the enroll model to exit with success.
+// On context cancellation (timeout), it sends enrollErrMsg with
+// ErrPasskeyRegistrationTimedOut. On clean SSE disconnect without a
+// registration event, it sends enrollErrMsg with ErrPasskeySSEStreamClosed.
+func monitorPasskeyRegistration(ctx context.Context, sseClient *sse.Client, sender programSender) {
+	sseClient.Run(ctx, func(eventType, data string) {
+		if eventType == "passkey.registered" {
+			sender.Send(passkeyRegisteredMsg{})
+		}
+	})
+	if ctx.Err() != nil {
+		sender.Send(enrollErrMsg{err: constants.ErrPasskeyRegistrationTimedOut})
+	} else {
+		sender.Send(enrollErrMsg{err: constants.ErrPasskeySSEStreamClosed})
+	}
 }

@@ -1,0 +1,109 @@
+{
+  "description": "Shared test vectors for cross-language transaction hash parity (Go vs Python). Each vector specifies envelope fields and the expected SHA-256 hex digest. Go tests decode payload_b64 to []byte; Python tests use payload_b64 directly as the payload string.",
+  "vectors": [
+    {
+      "name": "standard",
+      "action_type": "EXECUTE_BASH",
+      "target_resource": "localhost",
+      "payload_b64": "ZWNobyB0ZXN0",
+      "state_merkle_root": "root-abc",
+      "nonce": "nonce-123",
+      "expires_at": "2026-05-12T12:00:00Z",
+      "intent_data": {"command": "echo test", "cwd": "/home"},
+      "requestor_user_id": "user-1",
+      "acting_app_id": "app-1",
+      "expected_hash": "1bc10612aba230df27a2ec63cb0bcc88ce4ddfa1ee886f95d74b446d5f7f2c4d"
+    },
+    {
+      "name": "nested_intent",
+      "action_type": "FILE_EDIT",
+      "target_resource": "/etc/hosts",
+      "payload_b64": "ZWNobyB0ZXN0",
+      "state_merkle_root": "merkle-001",
+      "nonce": "nonce-nested",
+      "expires_at": "2026-01-15T08:30:45.123456Z",
+      "intent_data": {"a": "1", "b": "2", "c": {"x": true, "y": false}, "n": 42},
+      "requestor_user_id": "admin",
+      "acting_app_id": "editor-app",
+      "expected_hash": "96e7a9f2574121d88852e4fd2814781362ee1e67ec1072edee643b1c8acd5aec"
+    },
+    {
+      "name": "unicode",
+      "action_type": "EXECUTE_BASH",
+      "target_resource": "localhost",
+      "payload_b64": "ZWNobyB0ZXN0",
+      "state_merkle_root": "root-uni",
+      "nonce": "nonce-uni",
+      "expires_at": "2026-03-20T18:00:00Z",
+      "intent_data": {"command": "echo \"héllo wörld\"", "label": "日本語"},
+      "requestor_user_id": "user-uni",
+      "acting_app_id": "app-uni",
+      "expected_hash": "5a8ddcfaea16f7fee1f5023d58621d20f21b323253782bdf865dff3fb0f2efec"
+    },
+    {
+      "name": "empty_payload",
+      "action_type": "HEARTBEAT",
+      "target_resource": "localhost",
+      "payload_b64": "",
+      "state_merkle_root": "root-empty",
+      "nonce": "nonce-empty-payload",
+      "expires_at": "2026-06-01T00:00:00Z",
+      "intent_data": {"status": "ok"},
+      "requestor_user_id": "user-1",
+      "acting_app_id": "app-1",
+      "expected_hash": "9f23bcd7defc8ec7ccd94c8b00070a01345ef76434107a44512e6b017d2b6179"
+    },
+    {
+      "name": "empty_intent",
+      "action_type": "HEARTBEAT",
+      "target_resource": "localhost",
+      "payload_b64": "ZWNobyB0ZXN0",
+      "state_merkle_root": "root-no-intent",
+      "nonce": "nonce-no-intent",
+      "expires_at": "2026-06-01T00:00:00Z",
+      "intent_data": {},
+      "requestor_user_id": "user-1",
+      "acting_app_id": "app-1",
+      "expected_hash": "5bec2b7316f197ad400d7c8df775c43e0c2f1efb69d688cdbad1bd51a86891a8"
+    },
+    {
+      "name": "optional_omitted",
+      "action_type": "EXECUTE_BASH",
+      "target_resource": "localhost",
+      "payload_b64": "ZWNobyB0ZXN0",
+      "state_merkle_root": "root-opt",
+      "nonce": "nonce-opt",
+      "expires_at": "2026-07-04T12:00:00Z",
+      "intent_data": {"command": "ls"},
+      "requestor_user_id": null,
+      "acting_app_id": null,
+      "expected_hash": "93bc9a1770129dddd37b76fa4fc8e3dfd9778444faf44add7d0ebd5a450c1d3f"
+    },
+    {
+      "name": "timestamp_no_fractional",
+      "action_type": "EXECUTE_BASH",
+      "target_resource": "localhost",
+      "payload_b64": "ZWNobyB0ZXN0",
+      "state_merkle_root": "root-ts",
+      "nonce": "nonce-ts",
+      "expires_at": "2026-01-01T00:00:00Z",
+      "intent_data": {"command": "date"},
+      "requestor_user_id": null,
+      "acting_app_id": null,
+      "expected_hash": "96cc051b3927a8b9b6308466a100d6e42a8eb6db6c239411fbf430e3506a4d66"
+    },
+    {
+      "name": "timestamp_with_fractional",
+      "action_type": "EXECUTE_BASH",
+      "target_resource": "localhost",
+      "payload_b64": "ZWNobyB0ZXN0",
+      "state_merkle_root": "root-ts",
+      "nonce": "nonce-ts",
+      "expires_at": "2026-01-01T00:00:00.000000Z",
+      "intent_data": {"command": "date"},
+      "requestor_user_id": null,
+      "acting_app_id": null,
+      "expected_hash": "96cc051b3927a8b9b6308466a100d6e42a8eb6db6c239411fbf430e3506a4d66"
+    }
+  ]
+}

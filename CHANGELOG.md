@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## v1.6.x
+
+| Version | Date | Description | Notes |
+|---------|------|-------------|-------|
+| 1.6.0 | 2026-07-20 | Cross-language governance hash parity, enrollment token TOCTOU fix, SSE resilience improvements, and governance model schema alignment. Aligns Go and Python transaction hash canonicalization to produce identical digests, adds atomic conditional update for enrollment token consumption, makes SSE heartbeat interval configurable, fixes multi-line SSE data parsing, improves pubsub reconnect backoff reset, updates Python governance models to match proto definitions, adds governance JSON schema, and expands test coverage by ~1,665 lines across 15 new test files. | [v1.6.0](docs/release_notes/v1.6.x/v1.6.0.md) |
+
 ## v1.5.x
 
 | Version | Date | Description | Notes |

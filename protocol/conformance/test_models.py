@@ -123,6 +123,7 @@ class TestModelSchemaIntegrity:
         "agents/primary.json",
         "agents/title_generator.json",
         "agents/triage.json",
+        "governance.json",
     ]
 
     @pytest.mark.parametrize("filename", MODEL_FILES)
@@ -539,3 +540,288 @@ class TestSchemaCrossReference:
                         f"{filename}: _ref '{ref_value}' at {ref_path} "
                         f"points to undefined section '{target_section}' in '{target_file}'"
                     )
+
+
+class TestGovernanceL1Conformance:
+    """Verify GovernanceL1 Python model matches proto and JSON schema."""
+
+    def test_l1_violations_serializes_as_string_list(self):
+        from g8e.models import GovernanceL1
+
+        l1 = GovernanceL1(validated=True, violations=["policy_violation", "regex_match"])
+        parsed = json.loads(l1.model_dump_json())
+        assert parsed["validated"] is True
+        assert parsed["violations"] == ["policy_violation", "regex_match"]
+        assert all(isinstance(v, str) for v in parsed["violations"])
+
+    def test_l1_round_trip(self):
+        from g8e.models import GovernanceL1
+
+        l1 = GovernanceL1(validated=False, violations=["bad_command"])
+        data = l1.model_dump(mode="json")
+        restored = GovernanceL1.model_validate(data)
+        assert restored.validated is False
+        assert restored.violations == ["bad_command"]
+
+    def test_l1_default_empty_violations(self):
+        from g8e.models import GovernanceL1
+
+        l1 = GovernanceL1()
+        parsed = json.loads(l1.model_dump_json())
+        assert parsed["validated"] is False
+        assert parsed["violations"] == []
+
+    def test_l1_schema_fields_match_model(self):
+        from g8e.models import GovernanceL1
+
+        schema = _load_model_schema("governance.json")
+        schema_fields = _extract_all_field_names(schema.get("l1_metadata", {}))
+        py_fields = set(GovernanceL1.model_fields.keys())
+        schema_only = schema_fields - py_fields
+        assert not schema_only, f"Schema L1 fields not in Python model: {schema_only}"
+
+
+class TestGovernanceL2VoteConformance:
+    """Verify GovernanceL2Vote Python model matches proto and JSON schema."""
+
+    def test_l2_vote_round_trip(self):
+        from g8e.models import GovernanceL2Vote
+
+        vote = GovernanceL2Vote(
+            signer_key_id="signer-1",
+            consensus_signature="sig-abc",
+            decision=True,
+        )
+        data = vote.model_dump(mode="json")
+        restored = GovernanceL2Vote.model_validate(data)
+        assert restored.signer_key_id == "signer-1"
+        assert restored.consensus_signature == "sig-abc"
+        assert restored.decision is True
+
+    def test_l2_vote_decision_serializes_as_boolean(self):
+        from g8e.models import GovernanceL2Vote
+
+        vote_true = GovernanceL2Vote(
+            signer_key_id="s1", consensus_signature="sig", decision=True,
+        )
+        parsed_true = json.loads(vote_true.model_dump_json())
+        assert parsed_true["decision"] is True
+
+        vote_false = GovernanceL2Vote(
+            signer_key_id="s1", consensus_signature="sig", decision=False,
+        )
+        parsed_false = json.loads(vote_false.model_dump_json())
+        assert parsed_false["decision"] is False
+
+    def test_l2_vote_schema_fields_match_model(self):
+        from g8e.models import GovernanceL2Vote
+
+        schema = _load_model_schema("governance.json")
+        schema_fields = _extract_all_field_names(schema.get("l2_vote", {}))
+        py_fields = set(GovernanceL2Vote.model_fields.keys())
+        schema_only = schema_fields - py_fields
+        assert not schema_only, f"Schema L2Vote fields not in Python model: {schema_only}"
+
+
+class TestGovernanceL2Conformance:
+    """Verify GovernanceL2 Python model matches proto and JSON schema."""
+
+    def test_l2_round_trip_with_votes(self):
+        from g8e.models import GovernanceL2, GovernanceL2Vote
+
+        l2 = GovernanceL2(
+            tribunal_id="tribunal-1",
+            votes=[
+                GovernanceL2Vote(
+                    signer_key_id="signer-1",
+                    consensus_signature="sig-1",
+                    decision=True,
+                ),
+                GovernanceL2Vote(
+                    signer_key_id="signer-2",
+                    consensus_signature="sig-2",
+                    decision=False,
+                ),
+            ],
+        )
+        data = l2.model_dump(mode="json")
+        restored = GovernanceL2.model_validate(data)
+        assert restored.tribunal_id == "tribunal-1"
+        assert len(restored.votes) == 2
+        assert restored.votes[0].signer_key_id == "signer-1"
+        assert restored.votes[0].decision is True
+        assert restored.votes[1].signer_key_id == "signer-2"
+        assert restored.votes[1].decision is False
+
+    def test_l2_default_empty(self):
+        from g8e.models import GovernanceL2
+
+        l2 = GovernanceL2()
+        parsed = json.loads(l2.model_dump_json())
+        assert parsed["tribunal_id"] == ""
+        assert parsed["votes"] == []
+
+    def test_l2_schema_fields_match_model(self):
+        from g8e.models import GovernanceL2
+
+        schema = _load_model_schema("governance.json")
+        schema_fields = _extract_all_field_names(schema.get("l2_metadata", {}))
+        py_fields = set(GovernanceL2.model_fields.keys())
+        schema_only = schema_fields - py_fields
+        assert not schema_only, f"Schema L2 fields not in Python model: {schema_only}"
+
+
+class TestGovernanceL3Conformance:
+    """Verify GovernanceL3 and GovernanceL3Proof Python models match proto and JSON schema."""
+
+    def test_l3_webauthn_proof_round_trip(self):
+        from g8e.models import GovernanceL3, GovernanceL3Proof
+
+        l3 = GovernanceL3(
+            proof=GovernanceL3Proof(
+                client_data_json="client-data",
+                authenticator_data="auth-data",
+                signature="webauthn-sig",
+                credential_id="cred-1",
+            ),
+        )
+        data = l3.model_dump(mode="json")
+        restored = GovernanceL3.model_validate(data)
+        assert restored.proof is not None
+        assert restored.proof.client_data_json == "client-data"
+        assert restored.proof.authenticator_data == "auth-data"
+        assert restored.proof.signature == "webauthn-sig"
+        assert restored.proof.credential_id == "cred-1"
+        assert restored.proof.mtls_cert_fingerprint is None
+        assert restored.proof.cli_signature is None
+
+    def test_l3_cli_mtls_proof_round_trip(self):
+        from g8e.models import GovernanceL3, GovernanceL3Proof
+
+        l3 = GovernanceL3(
+            proof=GovernanceL3Proof(
+                mtls_cert_fingerprint="sha256:abc",
+                cli_signature="ed25519-sig",
+            ),
+        )
+        data = l3.model_dump(mode="json")
+        restored = GovernanceL3.model_validate(data)
+        assert restored.proof is not None
+        assert restored.proof.mtls_cert_fingerprint == "sha256:abc"
+        assert restored.proof.cli_signature == "ed25519-sig"
+        assert restored.proof.client_data_json is None
+
+    def test_l3_default_none_proof(self):
+        from g8e.models import GovernanceL3
+
+        l3 = GovernanceL3()
+        parsed = json.loads(l3.model_dump_json())
+        assert "proof" not in parsed
+
+    def test_l3_proof_schema_fields_match_model(self):
+        from g8e.models import GovernanceL3Proof
+
+        schema = _load_model_schema("governance.json")
+        schema_fields = _extract_all_field_names(schema.get("l3_proof", {}))
+        py_fields = set(GovernanceL3Proof.model_fields.keys())
+        schema_only = schema_fields - py_fields
+        assert not schema_only, f"Schema L3Proof fields not in Python model: {schema_only}"
+
+    def test_l3_metadata_schema_fields_match_model(self):
+        from g8e.models import GovernanceL3
+
+        schema = _load_model_schema("governance.json")
+        schema_fields = _extract_all_field_names(schema.get("l3_metadata", {}))
+        py_fields = set(GovernanceL3.model_fields.keys())
+        schema_only = schema_fields - py_fields
+        assert not schema_only, f"Schema L3Metadata fields not in Python model: {schema_only}"
+
+
+class TestGovernanceMetadataConformance:
+    """Verify GovernanceMetadata Python model matches proto and JSON schema."""
+
+    def test_metadata_round_trip(self):
+        from g8e.models import (
+            GovernanceMetadata, GovernanceL1, GovernanceL2,
+            GovernanceL2Vote, GovernanceL3, GovernanceL3Proof,
+        )
+
+        meta = GovernanceMetadata(
+            l1=GovernanceL1(validated=True, violations=[]),
+            l2=GovernanceL2(
+                tribunal_id="trib-1",
+                votes=[GovernanceL2Vote(
+                    signer_key_id="s1", consensus_signature="sig", decision=True,
+                )],
+            ),
+            l3=GovernanceL3(
+                proof=GovernanceL3Proof(signature="notary-sig"),
+            ),
+        )
+        data = meta.model_dump(mode="json")
+        restored = GovernanceMetadata.model_validate(data)
+        assert restored.l1.validated is True
+        assert restored.l2.tribunal_id == "trib-1"
+        assert len(restored.l2.votes) == 1
+        assert restored.l3.proof.signature == "notary-sig"
+
+    def test_metadata_schema_fields_match_model(self):
+        from g8e.models import GovernanceMetadata
+
+        schema = _load_model_schema("governance.json")
+        schema_fields = _extract_all_field_names(schema.get("governance_metadata", {}))
+        py_fields = set(GovernanceMetadata.model_fields.keys())
+        schema_only = schema_fields - py_fields
+        assert not schema_only, f"Schema GovernanceMetadata fields not in Python model: {schema_only}"
+
+
+class TestGovernanceEnvelopeConformance:
+    """Verify GovernanceEnvelope Python model matches proto and JSON schema."""
+
+    def test_envelope_schema_fields_match_model(self):
+        from g8e.models import GovernanceEnvelope
+
+        schema = _load_model_schema("governance.json")
+        schema_fields = _extract_all_field_names(schema.get("governance_envelope", {}))
+        py_fields = set(GovernanceEnvelope.model_fields.keys())
+        schema_only = schema_fields - py_fields
+        assert not schema_only, f"Schema GovernanceEnvelope fields not in Python model: {schema_only}"
+
+    def test_governance_envelope_protocol_version_default(self):
+        from g8e.models import GovernanceEnvelope
+
+        envelope = GovernanceEnvelope(
+            id="test-id",
+            timestamp="2026-01-01T00:00:00Z",
+            expires_at="2026-01-01T01:00:00Z",
+            source_component="COMPONENT_CLIENT",
+            event_type="g8e.v1.operator.command.requested",
+            payload="dGVzdA==",
+            action_type="EXECUTE_BASH",
+            target_resource="/tmp",
+            state_merkle_root="root",
+            nonce="n1",
+        )
+        assert envelope.protocol_version == "1.0"
+        data = envelope.model_dump(mode="json")
+        assert data["protocol_version"] == "1.0"
+
+    def test_governance_envelope_protocol_version_non_default(self):
+        from g8e.models import GovernanceEnvelope
+
+        envelope = GovernanceEnvelope(
+            id="test-id",
+            timestamp="2026-01-01T00:00:00Z",
+            expires_at="2026-01-01T01:00:00Z",
+            source_component="COMPONENT_CLIENT",
+            event_type="g8e.v1.operator.command.requested",
+            payload="dGVzdA==",
+            action_type="EXECUTE_BASH",
+            target_resource="/tmp",
+            state_merkle_root="root",
+            nonce="n1",
+            protocol_version="2.0",
+        )
+        assert envelope.protocol_version == "2.0"
+        data = envelope.model_dump(mode="json")
+        assert data["protocol_version"] == "2.0"

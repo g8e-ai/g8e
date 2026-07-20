@@ -87,6 +87,14 @@ jobs:
       - name: Cross-Compile (Windows)
         run: make build-windows
 
+      - name: Verify Static Linking
+        run: |
+          make build-linux
+          file bin/g8e-linux-amd64 | grep -q "statically linked" || \
+            { echo "ERROR: binary is not statically linked"; file bin/g8e-linux-amd64; exit 1; }
+          ldd bin/g8e-linux-amd64 2>&1 | grep -q "not a dynamic executable" || \
+            { echo "ERROR: binary has dynamic dependencies"; ldd bin/g8e-linux-amd64; exit 1; }
+
   python-tests:
     name: Python Package Tests
     runs-on: ubuntu-latest
