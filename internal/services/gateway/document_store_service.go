@@ -206,6 +206,43 @@ func (s *DocumentStoreService) DocUpdate(collection, id string, fields json.RawM
 	return scanDocument(collection, id, string(dataJSON), createdAtStr, nowStr)
 }
 
+// DocConditionalUpdate atomically updates a document's JSON fields only if the
+// existing data satisfies a JSON path condition. This prevents TOCTOU races by
+// performing the check and write in a single SQL statement.
+// Returns (true, nil) if the update was applied, (false, nil) if the condition
+// was not met or the document was not found.
+func (s *DocumentStoreService) DocConditionalUpdate(collection, id string, setFields map[string]interface{}, conditionField string, conditionValue interface{}) (bool, error) {
+	now := time.Now().UTC()
+	nowStr := timesvc.FormatTimestamp(now)
+
+	// Build json_set chain for each field to set.
+	// Values are wrapped in json(?) so that Go true/false become JSON booleans
+	// (not integers 1/0) and strings are properly quoted in the JSON document.
+	dataExpr := "data"
+	args := []interface{}{}
+	for field, val := range setFields {
+		jsonVal, err := json.Marshal(val)
+		if err != nil {
+			return false, fmt.Errorf("gateway: document store: conditional update: marshal value: %w", err)
+		}
+		dataExpr = "json_set(" + dataExpr + ", ?, json(?))"
+		args = append(args, "$."+field, string(jsonVal))
+	}
+
+	query := "UPDATE documents SET data = " + dataExpr + ", updated_at = ? WHERE collection = ? AND id = ? AND json_extract(data, ?) = ?"
+	args = append(args, nowStr, collection, id, "$."+conditionField, conditionValue)
+
+	result, err := s.db.ExecWithRetry(query, args...)
+	if err != nil {
+		return false, fmt.Errorf("gateway: document store: conditional update: %w", err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("gateway: document store: conditional update: rows affected: %w", err)
+	}
+	return n > 0, nil
+}
+
 // DocDelete removes a document. Returns (true, nil) if deleted, (false, nil) if not found.
 func (s *DocumentStoreService) DocDelete(collection, id string) (bool, error) {
 	result, err := s.db.ExecWithRetry(

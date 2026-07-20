@@ -31,11 +31,12 @@ type PublishedMessage struct {
 // MockOperatorPubSubClient is an in-memory PubSubClient for tests.
 // It implements the pubsub.PubSubClient interface structurally.
 type MockOperatorPubSubClient struct {
-	mu           sync.Mutex
-	subscribers  map[string][]chan []byte
-	published    []PublishedMessage
-	closed       bool
-	publishError error
+	mu             sync.Mutex
+	subscribers    map[string][]chan []byte
+	published      []PublishedMessage
+	closed         bool
+	publishError   error
+	subscribeError error
 }
 
 // NewMockOperatorPubSubClient creates a new MockOperatorPubSubClient.
@@ -49,6 +50,10 @@ func NewMockOperatorPubSubClient() *MockOperatorPubSubClient {
 func (m *MockOperatorPubSubClient) Subscribe(_ context.Context, channel string) (<-chan []byte, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if m.subscribeError != nil {
+		return nil, m.subscribeError
+	}
 
 	if m.closed {
 		return nil, constants.ErrClientClosed
@@ -156,4 +161,12 @@ func (m *MockOperatorPubSubClient) SetPublishError(shouldError bool) {
 	} else {
 		m.publishError = nil
 	}
+}
+
+// SetSubscribeError configures the mock to return the given error on subsequent
+// Subscribe calls. Pass nil to clear the error and resume normal behavior.
+func (m *MockOperatorPubSubClient) SetSubscribeError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.subscribeError = err
 }

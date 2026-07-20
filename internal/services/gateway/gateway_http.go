@@ -50,8 +50,9 @@ type HTTPHandlerDependencies struct {
 	MCPGateway         *mcp.GatewayService
 	AppEnrollment      *AppEnrollmentService
 	Tribunal           *tribunal.TribunalService
-	IsReady            func() bool
-	IsGovernanceReady  func() bool
+	IsReady             func() bool
+	IsGovernanceReady   func() bool
+	SSEHeartbeatInterval time.Duration
 }
 
 // HTTPHandler manages the web API for the gateway service.
@@ -72,8 +73,9 @@ type HTTPHandler struct {
 	mcp                *mcp.GatewayService
 	tribunal           atomic.Pointer[tribunal.TribunalService]
 	appEnrollment      *AppEnrollmentService
-	isReady            func() bool
-	isGovernanceReady  func() bool
+	isReady             func() bool
+	isGovernanceReady   func() bool
+	sseHeartbeatInterval time.Duration
 	// envProc is the synchronous fail-closed Gateway mutation gate. It is
 	// nil until SetEnvelopeProcessor is called by the boot sequence after
 	// the in-process command service has initialized the verifier and
@@ -113,10 +115,15 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 		responder:          deps.Responder,
 		mcp:                deps.MCPGateway,
 		appEnrollment:      deps.AppEnrollment,
-		isReady:            deps.IsReady,
-		isGovernanceReady:  deps.IsGovernanceReady,
-		limiters:           make(map[string]*tokenBucket),
-		limiterLastUsed:    make(map[string]time.Time),
+		isReady:             deps.IsReady,
+		isGovernanceReady:   deps.IsGovernanceReady,
+		sseHeartbeatInterval: deps.SSEHeartbeatInterval,
+		limiters:            make(map[string]*tokenBucket),
+		limiterLastUsed:     make(map[string]time.Time),
+	}
+
+	if h.sseHeartbeatInterval == 0 {
+		h.sseHeartbeatInterval = 30 * time.Second
 	}
 
 	// Initialize script templates

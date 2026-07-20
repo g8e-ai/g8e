@@ -477,7 +477,7 @@ func (rs *OperatorPubSubService) listenForCommands(channelName string) {
 				return
 			}
 			attempts++
-			if attempts >= maxReconnectAttempts {
+			if shouldGiveUp(attempts, maxReconnectAttempts) {
 				rs.logger.Error("[RECONNECT] Max reconnection attempts reached, giving up",
 					"attempts", attempts, string(constants.ConnectionStateError), err)
 				return
@@ -485,7 +485,7 @@ func (rs *OperatorPubSubService) listenForCommands(channelName string) {
 			rs.logger.Warn("[RECONNECT] Failed to connect, will retry...",
 				"attempt", attempts, "max", maxReconnectAttempts, string(constants.ConnectionStateError), err)
 			time.Sleep(reconnectDelay)
-			reconnectDelay = min(reconnectDelay*2, maxReconnectDelay)
+			reconnectDelay = nextReconnectDelay(reconnectDelay, maxReconnectDelay)
 			continue
 		}
 
@@ -507,7 +507,7 @@ func (rs *OperatorPubSubService) listenForCommands(channelName string) {
 			case payload, ok := <-msgCh:
 				if !ok {
 					attempts++
-					if attempts >= maxReconnectAttempts {
+					if shouldGiveUp(attempts, maxReconnectAttempts) {
 						rs.logger.Error("[RECONNECT] Channel closed repeatedly, max attempts reached - giving up",
 							"attempts", attempts)
 						return
@@ -531,8 +531,20 @@ func (rs *OperatorPubSubService) listenForCommands(channelName string) {
 
 		rs.logger.Info("[RECONNECT] Waiting before reconnection attempt...", "delay_seconds", reconnectDelay.Seconds())
 		time.Sleep(reconnectDelay)
-		reconnectDelay = min(reconnectDelay*2, maxReconnectDelay)
+		reconnectDelay = nextReconnectDelay(reconnectDelay, maxReconnectDelay)
 	}
+}
+
+// nextReconnectDelay doubles the current delay, capped at max. This implements
+// exponential backoff for the reconnect loop.
+func nextReconnectDelay(current, max time.Duration) time.Duration {
+	return min(current*2, max)
+}
+
+// shouldGiveUp returns true when the attempt count has reached or exceeded the
+// maximum allowed reconnect attempts.
+func shouldGiveUp(attempts, maxAttempts int) bool {
+	return attempts >= maxAttempts
 }
 
 func (rs *OperatorPubSubService) handleCommandPayload(payload []byte) {
