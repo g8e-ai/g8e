@@ -299,7 +299,7 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 ### Transport & Protocol Layer
 - `pubsub.OperatorPubSubService` is the dispatcher for outbound mode (WebSocket pub/sub).
 - `mcp.GatewayService` handles MCP/A2A protocol translation and downstream dispatch (gateway mode only; shared between HTTP ingress and OperatorPubSubService egress).
-- `gateway.HTTPHandler` builds the HTTP/WebSocket surface for gateway mode.
+- `gateway.HTTPHandler` is a thin router and middleware shell for gateway mode. It holds only router infrastructure (rate limiting, CORS, path traversal guard), direct accessors (`passkey`, `mcp`, `pubsub`), and 8 controller fields. All domain handler logic lives on controllers (`PKIController`, `DBController`, `AuthController`, `AdminController`, `OperatorController`, `SSEController`, `HealthController`, `GovernanceController`).
 - `gateway.GatewayWebSocketHandler` is the in-process pub/sub broker for gateway mode.
 - `gateway.PKIAuthority` manages PKI hierarchy and certificate lifecycle for gateway mode.
 - `network.Detector` detects host IP addresses and DNS names to configure TLS certificate identities dynamically during boot and renewal.
@@ -314,7 +314,6 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - **`PrivilegedRouteRegistry`** blocks app certificates from governance envelope submission and query endpoints. Only operator and CLI auth are accepted on these routes.
 - **`gateway_http_middleware.go`**: `rateLimitMiddleware` applies per-IP token bucket rate limiting with 5-minute stale entry cleanup. `pathTraversalGuard` rejects requests containing `..` path segments before ServeMux normalization. `isPrivateIP` reports whether an IP address is in a private network range, used by the HTTP router's safe-host check.
 - **`gateway_http_cors.go`**: CORS middleware for handling cross-origin requests from enrolled frontend applications. Validates origins against the gateway's configured allowed origins list.
-- **`gateway_http_sse.go`**: Documentation-only file (SSE endpoint comment block). SSE handler implementations live on `SSEController` in `sse_controller.go`.
 - **`health_controller.go`**: Health check endpoint (`/health`) returns platform settings and state root status. Landing page handler redirects `/` to `/console/`. Bootstrap health check on the HTTP port returns a simplified health response. (Previously in `gateway_http_health.go`, now deleted.)
 - **`gateway/docs/`**: Embedded OpenAPI/Swagger specifications (`docs.go` embeds `swagger.json` and `swagger.yaml`) served at `/swagger/` with Swagger UI.
 - **`gateway/scripts/`**: Thread-safe deploy script templates (`g8e-deploy.sh`, `g8e-deploy.ps1`) with Go bindings in `templates.go`, initialized via `sync.Once`. Documented centrally in [scripts.md](../architecture/scripts.md#remote-deploy-scripts-gateway-served).
@@ -326,6 +325,9 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - **`gateway.AuthController`** (`auth_controller.go`, `auth_controller_bootstrap.go`, `auth_controller_session.go`): Local bootstrap with URL, bootstrap status, CLI enrollment, device enrollment, user creation, user me, web session, logout. Decomposed into three files: core constructor, bootstrap flows, and session/user management.
 - **`gateway.AdminController`** (`admin_controller.go`): App policy management by signer, app revocation, tribunal CRUD.
 - **`gateway.OperatorController`** (`operator_controller.go`): Operator list, terminate, bind/unbind operators, set target context, reauth.
+- **`gateway.SSEController`** (`sse_controller.go`): SSE event push, poll, and stream endpoints. Includes `authorizeSSERoute` for dual-auth (mTLS or web session) authorization. Heartbeat interval defaults to 30s via `newSSEController`.
+- **`gateway.HealthController`** (`health_controller.go`): Health check, bootstrap health, state endpoint, and landing page. Previously in `gateway_http_health.go` (deleted).
+- **`gateway.GovernanceController`** (`governance_controller.go`): Governance envelope submission, tribunal deliberation, `SetTribunal`/`SetEnvelopeProcessor` late-bound dependency setters. Uses `atomic.Pointer` for tribunal and `atomic.Value` (via `envProcHolder`) for envelope processor, following the thread-safety pattern in `docs/devs/devs.md`.
 
 ### JWT Authentication
 - **`gateway.JWKSProvider`** (`jwks.go`): Optional external IdP JWT validation via JWKS endpoint. When configured, MCP/A2A routes accept JWT auth in addition to mTLS.

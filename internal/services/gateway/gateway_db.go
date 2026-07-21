@@ -203,24 +203,24 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 
 	ctx, cancel := context.WithCancel(context.Background())
 	svc := &CanonicalDBService{
-		db:     db,
-		logger: logger,
-		vault:  encryptionVault,
-		ctx:    ctx,
-		cancel: cancel,
+		db:      db,
+		logger:  logger,
+		vault:   encryptionVault,
+		ctx:     ctx,
+		cancel:  cancel,
 		running: true,
 	}
 
 	// Initialize extracted services with the same db connection
 	stores := &Stores{
-		DB:             db,
-		DocStore:       NewDocumentStoreService(db, logger),
-		StateRootSvc:   NewStateRootService(db, logger),
-		ReplayStore:    NewReplayStoreService(db, logger),
-		KVStore:        NewKVStoreService(db, logger),
-		SSEStore:       NewSSEEventService(db, logger),
-		BlobStore:      NewBlobStoreService(db, logger),
-		AuditStore:     auditStore,
+		DB:           db,
+		DocStore:     NewDocumentStoreService(db, logger),
+		StateRootSvc: NewStateRootService(db, logger),
+		ReplayStore:  NewReplayStoreService(db, logger),
+		KVStore:      NewKVStoreService(db, logger),
+		SSEStore:     NewSSEEventService(db, logger),
+		BlobStore:    NewBlobStoreService(db, logger),
+		AuditStore:   auditStore,
 	}
 	stores.AppPolicyStore = NewAppPolicyStoreService(db, logger, stores.DocStore)
 	stores.SignerStore = NewSignerStoreService(db, logger, stores.DocStore)

@@ -115,7 +115,7 @@ Vault and rate-limit settings flow from CLI flags through the gateway configurat
 
 ## HTTP Router Architecture
 
-The gateway builds two distinct HTTP routers, one per protocol surface. The HTTP handler orchestrates both routers and their controllers.
+The gateway builds two distinct HTTP routers, one per protocol surface. `HTTPHandler` is a thin router and middleware shell that holds only router infrastructure (rate limiting, CORS, path traversal guard), direct accessors (`passkey`, `mcp`, `pubsub`), and 8 controller fields. All domain handler logic lives on controllers: `PKIController`, `DBController`, `AuthController`, `AdminController`, `OperatorController`, `SSEController`, `HealthController`, and `GovernanceController`. The `GatewayModeService` delegates late-bound dependency wiring (`SetTribunal`, `SetEnvelopeProcessor`) through `HTTPHandler` to `GovernanceController`.
 
 ### Bootstrap HTTP Router
 
