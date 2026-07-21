@@ -33,32 +33,32 @@ import (
 // --- handleLandingPage ---
 
 func TestHandleLandingPage_NonRootPathReturns404(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/some/other/path", nil)
 	rr := httptest.NewRecorder()
 
-	h.handleLandingPage(rr, req)
+	h.healthController.handleLandingPage(rr, req)
 	assert.Equal(t, http.StatusNotFound, rr.Code)
 }
 
 // --- handleHealth ---
 
 func TestHandleHealth_NotReadyReturns503(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
-	h.isReady = func() bool { return false }
+	h, _, _ := setupTestHTTPHandler(t)
+	h.healthController.isReady = func() bool { return false }
 
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 	rr := httptest.NewRecorder()
 
-	h.handleHealth(rr, req)
+	h.healthController.handleHealth(rr, req)
 	assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
 	assert.JSONEq(t, `{"error":"service initializing"}`, rr.Body.String())
 }
 
 func TestHandleHealth_GovernanceReadyTrueWhenCallbackTrue(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
-	h.isGovernanceReady = func() bool { return true }
+	h, _, infra := setupTestHTTPHandler(t)
+	h.healthController.isGovernanceReady = func() bool { return true }
 
 	settings := models.SettingsDocument{
 		Settings:  &models.PlatformSettings{ActuatorKeyID: "test-key-id"},
@@ -67,7 +67,7 @@ func TestHandleHealth_GovernanceReadyTrueWhenCallbackTrue(t *testing.T) {
 	}
 	settingsBytes, err := json.Marshal(settings)
 	require.NoError(t, err)
-	require.NoError(t, h.db.DocStore.DocSet(
+	require.NoError(t, infra.Stores.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionSettings),
 		marshaler.DocumentID(constants.DocIDPlatformSettings),
 		settingsBytes,
@@ -76,7 +76,7 @@ func TestHandleHealth_GovernanceReadyTrueWhenCallbackTrue(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 	rr := httptest.NewRecorder()
 
-	h.handleHealth(rr, req)
+	h.healthController.handleHealth(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 
 	var resp models.HealthResponse
@@ -85,8 +85,8 @@ func TestHandleHealth_GovernanceReadyTrueWhenCallbackTrue(t *testing.T) {
 }
 
 func TestHandleHealth_GovernanceReadyFalseWhenCallbackFalse(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
-	h.isGovernanceReady = func() bool { return false }
+	h, _, infra := setupTestHTTPHandler(t)
+	h.healthController.isGovernanceReady = func() bool { return false }
 
 	settings := models.SettingsDocument{
 		Settings:  &models.PlatformSettings{ActuatorKeyID: "test-key-id"},
@@ -95,7 +95,7 @@ func TestHandleHealth_GovernanceReadyFalseWhenCallbackFalse(t *testing.T) {
 	}
 	settingsBytes, err := json.Marshal(settings)
 	require.NoError(t, err)
-	require.NoError(t, h.db.DocStore.DocSet(
+	require.NoError(t, infra.Stores.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionSettings),
 		marshaler.DocumentID(constants.DocIDPlatformSettings),
 		settingsBytes,
@@ -104,7 +104,7 @@ func TestHandleHealth_GovernanceReadyFalseWhenCallbackFalse(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 	rr := httptest.NewRecorder()
 
-	h.handleHealth(rr, req)
+	h.healthController.handleHealth(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 
 	var resp models.HealthResponse
@@ -113,8 +113,8 @@ func TestHandleHealth_GovernanceReadyFalseWhenCallbackFalse(t *testing.T) {
 }
 
 func TestHandleHealth_GovernanceReadyFalseWhenCallbackNil(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
-	h.isGovernanceReady = nil
+	h, _, infra := setupTestHTTPHandler(t)
+	h.healthController.isGovernanceReady = nil
 
 	settings := models.SettingsDocument{
 		Settings:  &models.PlatformSettings{ActuatorKeyID: "test-key-id"},
@@ -123,7 +123,7 @@ func TestHandleHealth_GovernanceReadyFalseWhenCallbackNil(t *testing.T) {
 	}
 	settingsBytes, err := json.Marshal(settings)
 	require.NoError(t, err)
-	require.NoError(t, h.db.DocStore.DocSet(
+	require.NoError(t, infra.Stores.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionSettings),
 		marshaler.DocumentID(constants.DocIDPlatformSettings),
 		settingsBytes,
@@ -132,7 +132,7 @@ func TestHandleHealth_GovernanceReadyFalseWhenCallbackNil(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 	rr := httptest.NewRecorder()
 
-	h.handleHealth(rr, req)
+	h.healthController.handleHealth(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 
 	var resp models.HealthResponse
@@ -141,7 +141,7 @@ func TestHandleHealth_GovernanceReadyFalseWhenCallbackNil(t *testing.T) {
 }
 
 func TestHandleHealth_VersionAndStateRootPopulated(t *testing.T) {
-	h, cfg := setupTestHTTPHandler(t)
+	h, cfg, infra := setupTestHTTPHandler(t)
 	cfg.Version = "9.9.9-test"
 
 	settings := models.SettingsDocument{
@@ -151,7 +151,7 @@ func TestHandleHealth_VersionAndStateRootPopulated(t *testing.T) {
 	}
 	settingsBytes, err := json.Marshal(settings)
 	require.NoError(t, err)
-	require.NoError(t, h.db.DocStore.DocSet(
+	require.NoError(t, infra.Stores.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionSettings),
 		marshaler.DocumentID(constants.DocIDPlatformSettings),
 		settingsBytes,
@@ -160,7 +160,7 @@ func TestHandleHealth_VersionAndStateRootPopulated(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 	rr := httptest.NewRecorder()
 
-	h.handleHealth(rr, req)
+	h.healthController.handleHealth(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 
 	var resp models.HealthResponse
@@ -171,11 +171,11 @@ func TestHandleHealth_VersionAndStateRootPopulated(t *testing.T) {
 }
 
 func TestHandleHealth_IsReadyNilProceedsToDBCheck(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
-	h.isReady = nil
+	h, _, infra := setupTestHTTPHandler(t)
+	h.healthController.isReady = nil
 
 	// Ensure platform_settings does not exist so we hit the 503 path
-	h.db.DocStore.DocDelete(
+	infra.Stores.DocStore.DocDelete(
 		marshaler.CollectionName(constants.CollectionSettings),
 		marshaler.DocumentID(constants.DocIDPlatformSettings),
 	)
@@ -183,7 +183,7 @@ func TestHandleHealth_IsReadyNilProceedsToDBCheck(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 	rr := httptest.NewRecorder()
 
-	h.handleHealth(rr, req)
+	h.healthController.handleHealth(rr, req)
 	assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
 	assert.JSONEq(t, `{"error":"platform_settings not ready"}`, rr.Body.String())
 }
@@ -191,14 +191,14 @@ func TestHandleHealth_IsReadyNilProceedsToDBCheck(t *testing.T) {
 // --- handleBootstrapHealth ---
 
 func TestHandleBootstrapHealth_GovernanceReadyTrueWhenCallbackTrue(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
-	h.isReady = func() bool { return true }
-	h.isGovernanceReady = func() bool { return true }
+	h, _, _ := setupTestHTTPHandler(t)
+	h.healthController.isReady = func() bool { return true }
+	h.healthController.isGovernanceReady = func() bool { return true }
 
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 	rr := httptest.NewRecorder()
 
-	h.handleBootstrapHealth(rr, req)
+	h.healthController.handleBootstrapHealth(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 
 	var resp models.HealthResponse
@@ -207,14 +207,14 @@ func TestHandleBootstrapHealth_GovernanceReadyTrueWhenCallbackTrue(t *testing.T)
 }
 
 func TestHandleBootstrapHealth_GovernanceReadyFalseWhenCallbackFalse(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
-	h.isReady = func() bool { return true }
-	h.isGovernanceReady = func() bool { return false }
+	h, _, _ := setupTestHTTPHandler(t)
+	h.healthController.isReady = func() bool { return true }
+	h.healthController.isGovernanceReady = func() bool { return false }
 
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 	rr := httptest.NewRecorder()
 
-	h.handleBootstrapHealth(rr, req)
+	h.healthController.handleBootstrapHealth(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 
 	var resp models.HealthResponse
@@ -223,14 +223,14 @@ func TestHandleBootstrapHealth_GovernanceReadyFalseWhenCallbackFalse(t *testing.
 }
 
 func TestHandleBootstrapHealth_GovernanceReadyFalseWhenCallbackNil(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
-	h.isReady = func() bool { return true }
-	h.isGovernanceReady = nil
+	h, _, _ := setupTestHTTPHandler(t)
+	h.healthController.isReady = func() bool { return true }
+	h.healthController.isGovernanceReady = nil
 
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 	rr := httptest.NewRecorder()
 
-	h.handleBootstrapHealth(rr, req)
+	h.healthController.handleBootstrapHealth(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 
 	var resp models.HealthResponse
@@ -239,14 +239,14 @@ func TestHandleBootstrapHealth_GovernanceReadyFalseWhenCallbackNil(t *testing.T)
 }
 
 func TestHandleBootstrapHealth_VersionPopulatedFromConfig(t *testing.T) {
-	h, cfg := setupTestHTTPHandler(t)
-	h.isReady = func() bool { return true }
+	h, cfg, _ := setupTestHTTPHandler(t)
+	h.healthController.isReady = func() bool { return true }
 	cfg.Version = "3.3.3-bootstrap"
 
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 	rr := httptest.NewRecorder()
 
-	h.handleBootstrapHealth(rr, req)
+	h.healthController.handleBootstrapHealth(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 
 	var resp models.HealthResponse
@@ -258,38 +258,38 @@ func TestHandleBootstrapHealth_VersionPopulatedFromConfig(t *testing.T) {
 }
 
 func TestHandleBootstrapHealth_IsReadyNilReturns200(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
-	h.isReady = nil
+	h, _, _ := setupTestHTTPHandler(t)
+	h.healthController.isReady = nil
 
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 	rr := httptest.NewRecorder()
 
-	h.handleBootstrapHealth(rr, req)
+	h.healthController.handleBootstrapHealth(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
 // --- handleState ---
 
 func TestHandleState_NotReadyReturns503(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
-	h.isReady = func() bool { return false }
+	h, _, _ := setupTestHTTPHandler(t)
+	h.healthController.isReady = func() bool { return false }
 
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.State, nil)
 	rr := httptest.NewRecorder()
 
-	h.handleState(rr, req)
+	h.healthController.handleState(rr, req)
 	assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
 	assert.JSONEq(t, `{"error":"service initializing"}`, rr.Body.String())
 }
 
 func TestHandleState_ReturnsStateMerkleRoot(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
-	h.isReady = func() bool { return true }
+	h, _, _ := setupTestHTTPHandler(t)
+	h.healthController.isReady = func() bool { return true }
 
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.State, nil)
 	rr := httptest.NewRecorder()
 
-	h.handleState(rr, req)
+	h.healthController.handleState(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 
 	var resp models.StateResponse
@@ -298,29 +298,29 @@ func TestHandleState_ReturnsStateMerkleRoot(t *testing.T) {
 }
 
 func TestHandleState_StateRootFailureReturns503(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
-	h.isReady = func() bool { return true }
+	h, _, infra := setupTestHTTPHandler(t)
+	h.healthController.isReady = func() bool { return true }
 
 	// Force state root calculation to fail by dropping a table it queries
-	_, err := h.db.db.Exec("DROP TABLE kv_store")
+	_, err := infra.DB.db.Exec("DROP TABLE kv_store")
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.State, nil)
 	rr := httptest.NewRecorder()
 
-	h.handleState(rr, req)
+	h.healthController.handleState(rr, req)
 	assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
 	assert.JSONEq(t, `{"error":"state root calculation failed"}`, rr.Body.String())
 }
 
 func TestHandleState_IsReadyNilReturns200(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
-	h.isReady = nil
+	h, _, _ := setupTestHTTPHandler(t)
+	h.healthController.isReady = nil
 
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.State, nil)
 	rr := httptest.NewRecorder()
 
-	h.handleState(rr, req)
+	h.healthController.handleState(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	var resp models.StateResponse

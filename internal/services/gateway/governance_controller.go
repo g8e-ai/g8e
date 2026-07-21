@@ -31,6 +31,13 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
+// envProcHolder wraps an EnvelopeProcessor so that atomic.Value can store
+// nil (atomic.Value panics on Store(nil)). The zero value (proc == nil)
+// means the processor is not wired.
+type envProcHolder struct {
+	proc governance.EnvelopeProcessor
+}
+
 // GovernanceController handles governance envelope submission and tribunal
 // deliberation endpoints. Both depend on late-bound dependencies (envelope
 // processor and tribunal service) that are wired after construction via
@@ -40,7 +47,7 @@ type GovernanceController struct {
 	logger    *slog.Logger
 	responder *response.Writer
 	tribunal  atomic.Pointer[tribunal.TribunalService]
-	envProc   atomic.Pointer[governance.EnvelopeProcessor]
+	envProc   atomic.Value // stores *envProcHolder
 }
 
 // newGovernanceController creates a GovernanceController with the given
@@ -72,11 +79,7 @@ func (c *GovernanceController) SetTribunal(ts *tribunal.TribunalService) {
 // service has been constructed and before BYO clients submit transactions
 // to /api/v1/governance/envelopes. Calling with nil disables the endpoint.
 func (c *GovernanceController) SetEnvelopeProcessor(p governance.EnvelopeProcessor) {
-	if p == nil {
-		c.envProc.Store(nil)
-		return
-	}
-	c.envProc.Store(&p)
+	c.envProc.Store(&envProcHolder{proc: p})
 }
 
 // handleTribunalDeliberate is the always-registered HTTP handler for the
@@ -209,8 +212,13 @@ func (c *GovernanceController) handleGovernanceEnvelope(w http.ResponseWriter, r
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
-	p := c.envProc.Load()
-	if p == nil {
+	v := c.envProc.Load()
+	if v == nil {
+		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrEnvelopeProcessorNotInit.Error())
+		return
+	}
+	proc := v.(*envProcHolder).proc
+	if proc == nil {
 		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrEnvelopeProcessorNotInit.Error())
 		return
 	}
@@ -237,7 +245,7 @@ func (c *GovernanceController) handleGovernanceEnvelope(w http.ResponseWriter, r
 		}
 	}
 
-	receipt, procErr := (*p).ProcessEnvelope(r.Context(), body)
+	receipt, procErr := proc.ProcessEnvelope(r.Context(), body)
 	if procErr != nil {
 		status := classifyEnvelopeError(procErr)
 		c.responder.Error(w, status, procErr.Error())

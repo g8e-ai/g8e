@@ -369,7 +369,7 @@ func TestVerifyEnvelopeIdentityBinding_NoIdentityFields_ReturnsNil(t *testing.T)
 func TestGatewayModeService_SetEnvelopeProcessor(t *testing.T) {
 	ls, _ := setupTestGatewayService(t)
 
-	// Initially envProc should be nil
+	// Initially envProc should be nil (no Store called yet)
 	require.Nil(t, ls.handler.governanceController.envProc.Load(), "envProc should be nil initially")
 
 	// Create a fake processor
@@ -379,10 +379,13 @@ func TestGatewayModeService_SetEnvelopeProcessor(t *testing.T) {
 	ls.SetEnvelopeProcessor(fakeProc)
 
 	// Verify it was set
-	require.NotNil(t, ls.handler.governanceController.envProc.Load(), "envProc should be set to the provided processor")
-	require.Equal(t, fakeProc, *ls.handler.governanceController.envProc.Load(), "envProc should be set to the provided processor")
+	v := ls.handler.governanceController.envProc.Load()
+	require.NotNil(t, v, "envProc should be set to the provided processor")
+	require.Equal(t, fakeProc, v.(*envProcHolder).proc, "envProc should be set to the provided processor")
 
 	// Set to nil to disable
 	ls.SetEnvelopeProcessor(nil)
-	require.Nil(t, ls.handler.governanceController.envProc.Load(), "envProc should be nil after setting to nil")
+	v = ls.handler.governanceController.envProc.Load()
+	require.NotNil(t, v, "envProc holder should still be present")
+	require.Nil(t, v.(*envProcHolder).proc, "envProc proc should be nil after setting to nil")
 }

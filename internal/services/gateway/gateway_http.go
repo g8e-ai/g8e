@@ -56,10 +56,6 @@ type HTTPHandlerDependencies struct {
 type HTTPHandler struct {
 	cfg                  *config.Config
 	logger               *slog.Logger
-	docStore             *DocumentStoreService
-	kvStore              *KVStoreService
-	sseStore             *SSEEventService
-	stateRootSvc         *StateRootService
 	pubsub               *GatewayWebSocketHandler
 	auth                 *AuthService
 	pki                  *PKIAuthority
@@ -98,10 +94,6 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	h := &HTTPHandler{
 		cfg:                  deps.Cfg,
 		logger:               deps.Logger,
-		docStore:             deps.Stores.DocStore,
-		kvStore:              deps.Stores.KVStore,
-		sseStore:             deps.Stores.SSEStore,
-		stateRootSvc:         deps.Stores.StateRootSvc,
 		pubsub:               deps.Pubsub,
 		auth:                 deps.Auth,
 		pki:                  deps.PKI,
