@@ -34,13 +34,13 @@ import (
 
 func newPasskeyServiceHTTPForTest(t *testing.T) (*PasskeyHandler, *WebSessionService, *models.User) {
 	t.Helper()
-	db := newTestDB(t)
+	_, stores := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	user, err := NewUserService(db, logger).CreateUser()
+	user, err := NewUserService(stores.DocStore, logger).CreateUser()
 	require.NoError(t, err)
-	webSessionSvc := NewWebSessionService(db, logger)
+	webSessionSvc := NewWebSessionService(stores.DocStore, logger)
 	resp := response.NewWriter(logger)
-	svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	svc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	require.NoError(t, err)
 	handler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:       svc,
@@ -502,11 +502,11 @@ func TestPasskeyReadBodyRejectsOversized(t *testing.T) {
 
 func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
 	t.Run("emitPasskeyRegisteredSSE appends event and publishes", func(t *testing.T) {
-		db := newTestDB(t)
+		db, stores := newTestDB(t)
 		logger := testutil.NewTestLogger()
-		webSessionSvc := NewWebSessionService(db, logger)
+		webSessionSvc := NewWebSessionService(stores.DocStore, logger)
 		resp := response.NewWriter(logger)
-		svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+		svc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 		require.NoError(t, err)
 		sseStore := NewSSEEventService(db.GetDB(), logger)
 		pubsub := NewGatewayWebSocketHandler(logger)
@@ -535,11 +535,11 @@ func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
 	})
 
 	t.Run("no SSE emission when dependencies not set", func(t *testing.T) {
-		db := newTestDB(t)
+		db, stores := newTestDB(t)
 		logger := testutil.NewTestLogger()
-		webSessionSvc := NewWebSessionService(db, logger)
+		webSessionSvc := NewWebSessionService(stores.DocStore, logger)
 		resp := response.NewWriter(logger)
-		svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+		svc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 		require.NoError(t, err)
 		handler := NewPasskeyHandler(PasskeyHandlerDeps{
 			Service:       svc,

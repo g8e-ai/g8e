@@ -25,7 +25,7 @@ import (
 
 func newStateRootService(t *testing.T) *StateRootService {
 	t.Helper()
-	db := newTestDB(t)
+	db, stores := newTestDB(t)
 	return NewStateRootService(db.GetDB(), testutil.NewTestLogger())
 }
 
@@ -44,7 +44,7 @@ func TestStateRootService_GetCurrentStateRoot(t *testing.T) {
 }
 
 func TestStateRootService_InvalidateCache(t *testing.T) {
-	db := newTestDB(t)
+	db, stores := newTestDB(t)
 	svc := NewStateRootService(db.GetDB(), testutil.NewTestLogger())
 
 	// Get initial state root
@@ -57,7 +57,7 @@ func TestStateRootService_InvalidateCache(t *testing.T) {
 
 	// Add a document to change state
 	docData := mustDocJSON(t, map[string]interface{}{"key": "value"})
-	err = db.DocStore.DocSet("test", "doc1", docData)
+	err = stores.DocStore.DocSet("test", "doc1", docData)
 	require.NoError(t, err)
 
 	// Get state root after invalidation - should recalculate
@@ -67,7 +67,7 @@ func TestStateRootService_InvalidateCache(t *testing.T) {
 }
 
 func TestStateRootService_StateChangeDetection(t *testing.T) {
-	db := newTestDB(t)
+	db, stores := newTestDB(t)
 	svc := NewStateRootService(db.GetDB(), testutil.NewTestLogger())
 
 	// Get initial state root
@@ -76,7 +76,7 @@ func TestStateRootService_StateChangeDetection(t *testing.T) {
 
 	// Add a document
 	docData := mustDocJSON(t, map[string]interface{}{"key": "value"})
-	err = db.DocStore.DocSet("test", "doc1", docData)
+	err = stores.DocStore.DocSet("test", "doc1", docData)
 	require.NoError(t, err)
 
 	// Get state root after change - should be different
@@ -113,7 +113,7 @@ func TestStateRootService_CachingBehavior(t *testing.T) {
 }
 
 func TestStateRootService_StateVersionMissing(t *testing.T) {
-	db := newTestDB(t)
+	db, stores := newTestDB(t)
 	svc := NewStateRootService(db.GetDB(), testutil.NewTestLogger())
 
 	// Delete the state_version table — GetCurrentStateRoot should now return an error
@@ -131,7 +131,7 @@ func TestStateRootService_StateVersionMissing(t *testing.T) {
 // This is a regression test for the bug where cache-key churn in kv_store caused
 // state root mismatches.
 func TestStateRootService_NoCacheLeakOnDocumentWrite(t *testing.T) {
-	db := newTestDB(t)
+	db, stores := newTestDB(t)
 	svc := NewStateRootService(db.GetDB(), testutil.NewTestLogger())
 
 	// Get initial state root
@@ -140,7 +140,7 @@ func TestStateRootService_NoCacheLeakOnDocumentWrite(t *testing.T) {
 	assert.NotEmpty(t, root1)
 
 	// Add a cache entry (simulating cache invalidation)
-	err = db.KVStore.KVSet("g8e:cache:doc:test:doc1", "cached_value", 3600)
+	err = stores.KVStore.KVSet("g8e:cache:doc:test:doc1", "cached_value", 3600)
 	require.NoError(t, err)
 
 	// Get state root - should NOT change because cache keys are excluded
@@ -149,7 +149,7 @@ func TestStateRootService_NoCacheLeakOnDocumentWrite(t *testing.T) {
 	assert.Equal(t, root1, root2, "state root should not change when cache keys are added")
 
 	// Add another cache entry with different prefix
-	err = db.KVStore.KVSet("g8e:cache:query:SELECT * FROM test", "query_result", 3600)
+	err = stores.KVStore.KVSet("g8e:cache:query:SELECT * FROM test", "query_result", 3600)
 	require.NoError(t, err)
 
 	// Get state root - should still not change
@@ -158,7 +158,7 @@ func TestStateRootService_NoCacheLeakOnDocumentWrite(t *testing.T) {
 	assert.Equal(t, root2, root3, "state root should not change when more cache keys are added")
 
 	// Add a non-cache KV entry (authoritative state)
-	err = db.KVStore.KVSet("authoritative:key", "value", 0)
+	err = stores.KVStore.KVSet("authoritative:key", "value", 0)
 	require.NoError(t, err)
 
 	// Get state root - should now change
@@ -168,7 +168,7 @@ func TestStateRootService_NoCacheLeakOnDocumentWrite(t *testing.T) {
 
 	// Add a document (which triggers cache invalidation internally)
 	docData := mustDocJSON(t, map[string]interface{}{"key": "value"})
-	err = db.DocStore.DocSet("test", "doc1", docData)
+	err = stores.DocStore.DocSet("test", "doc1", docData)
 	require.NoError(t, err)
 
 	// Get state root - should change due to document, not due to cache churn
@@ -178,7 +178,7 @@ func TestStateRootService_NoCacheLeakOnDocumentWrite(t *testing.T) {
 
 	// Add another document to verify consistent behavior
 	docData2 := mustDocJSON(t, map[string]interface{}{"key2": "value2"})
-	err = db.DocStore.DocSet("test", "doc2", docData2)
+	err = stores.DocStore.DocSet("test", "doc2", docData2)
 	require.NoError(t, err)
 
 	root6, err := svc.GetCurrentStateRoot()

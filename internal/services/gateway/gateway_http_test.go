@@ -310,7 +310,7 @@ func TestAuthMiddleware(t *testing.T) {
 	}
 	settingsBytes, err := json.Marshal(settings)
 	require.NoError(t, err)
-	err = h.docStore.DocSet("settings", "platform_settings", settingsBytes)
+	err = h.dbController.docStore.DocSet("settings", "platform_settings", settingsBytes)
 	require.NoError(t, err)
 
 	handler := h.auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -348,7 +348,7 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 	}))
 
 	t.Run("Uninitialized token - deny unauthenticated access", func(t *testing.T) {
-		h.docStore.DocDelete("settings", "platform_settings")
+		h.dbController.docStore.DocDelete("settings", "platform_settings")
 
 		paths := []string{
 			"/db/settings/platform_settings",
@@ -375,11 +375,11 @@ func TestHandleHealth(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 
 	t.Run("Returns 503 when platform_settings not found", func(t *testing.T) {
-		h.docStore.DocDelete("settings", "platform_settings")
+		h.dbController.docStore.DocDelete("settings", "platform_settings")
 		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 		rr := httptest.NewRecorder()
 
-		h.handleHealth(rr, req)
+		h.healthController.handleHealth(rr, req)
 		assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
 		assert.JSONEq(t, `{"error":"platform_settings not ready"}`, rr.Body.String())
 	})
@@ -394,13 +394,13 @@ func TestHandleHealth(t *testing.T) {
 		}
 		settingsBytes, err := json.Marshal(settings)
 		require.NoError(t, err)
-		err = h.docStore.DocSet("settings", "platform_settings", settingsBytes)
+		err = h.dbController.docStore.DocSet("settings", "platform_settings", settingsBytes)
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 		rr := httptest.NewRecorder()
 
-		h.handleHealth(rr, req)
+		h.healthController.handleHealth(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var resp models.HealthResponse
@@ -422,7 +422,7 @@ func TestHandleHealth_StateRootFailure(t *testing.T) {
 	}
 	settingsBytes, err := json.Marshal(settings)
 	require.NoError(t, err)
-	err = h.docStore.DocSet("settings", "platform_settings", settingsBytes)
+	err = h.dbController.docStore.DocSet("settings", "platform_settings", settingsBytes)
 	require.NoError(t, err)
 
 	// Force state root calculation to fail by dropping a table it queries
@@ -432,7 +432,7 @@ func TestHandleHealth_StateRootFailure(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 	rr := httptest.NewRecorder()
 
-	h.handleHealth(rr, req)
+	h.healthController.handleHealth(rr, req)
 	assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
 	assert.JSONEq(t, `{"error":"state root calculation failed"}`, rr.Body.String())
 }
@@ -441,21 +441,21 @@ func TestHandleBootstrapHealth(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 
 	t.Run("Returns 503 when not ready", func(t *testing.T) {
-		h.isReady = func() bool { return false }
+		h.healthController.isReady = func() bool { return false }
 		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 		rr := httptest.NewRecorder()
 
-		h.handleBootstrapHealth(rr, req)
+		h.healthController.handleBootstrapHealth(rr, req)
 		assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
 		assert.JSONEq(t, `{"error":"service initializing"}`, rr.Body.String())
 	})
 
 	t.Run("Returns 200 when ready", func(t *testing.T) {
-		h.isReady = func() bool { return true }
+		h.healthController.isReady = func() bool { return true }
 		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 		rr := httptest.NewRecorder()
 
-		h.handleBootstrapHealth(rr, req)
+		h.healthController.handleBootstrapHealth(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		var resp models.HealthResponse
@@ -515,9 +515,9 @@ func TestNewHTTPHandler(t *testing.T) {
 	assert.NotNil(t, h)
 	assert.NotNil(t, h.cfg)
 	assert.NotNil(t, h.logger)
-	assert.NotNil(t, h.docStore)
-	assert.NotNil(t, h.kvStore)
-	assert.NotNil(t, h.sseStore)
+	assert.NotNil(t, h.dbController.docStore)
+	assert.NotNil(t, h.dbController.kvStore)
+	assert.NotNil(t, h.dbController.sseStore)
 	assert.NotNil(t, h.pubsub)
 	assert.NotNil(t, h.auth)
 	assert.NotNil(t, h.pki)
@@ -648,7 +648,7 @@ func TestCLICertBoundToOperator(t *testing.T) {
 		ExpiresAt:         time.Now().Add(24 * time.Hour),
 	}
 	b, _ := json.Marshal(cliSess)
-	require.NoError(t, h.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b))
+	require.NoError(t, h.dbController.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b))
 
 	wid := protocol.NewWorkloadIdentity()
 	cliURI, err := wid.CLISPIFFEURL(userID, cliSessionID)
@@ -688,7 +688,7 @@ func TestCLICertBoundToOperator(t *testing.T) {
 			ExpiresAt:         time.Now().Add(-1 * time.Hour),
 		}
 		eb, _ := json.Marshal(expired)
-		require.NoError(t, h.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), "cli-expired", eb))
+		require.NoError(t, h.dbController.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), "cli-expired", eb))
 		expiredURI, err := wid.CLISPIFFEURL(userID, "cli-expired")
 		require.NoError(t, err)
 		bound, err := h.auth.cliCertBoundToOperator(
@@ -738,7 +738,7 @@ func TestHTTPHandler_handleLandingPage(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rr := httptest.NewRecorder()
 
-	h.handleLandingPage(rr, req)
+	h.healthController.handleLandingPage(rr, req)
 	assert.Equal(t, http.StatusFound, rr.Code)
 	assert.Equal(t, "/console/", rr.Header().Get("Location"))
 }
@@ -954,7 +954,7 @@ func TestHTTPHandler_handleInternalSSEStream_CLIMTLSAuth(t *testing.T) {
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 	}
 	b, _ := json.Marshal(cliSess)
-	require.NoError(t, h.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b))
+	require.NoError(t, h.dbController.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b))
 
 	t.Run("CLI mTLS auth with matching user ID passes auth", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)

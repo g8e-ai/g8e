@@ -27,7 +27,7 @@ import (
 
 func newTestReplayStoreService(t *testing.T) (*ReplayStoreService, *sqliteutil.DB) {
 	t.Helper()
-	db := newTestDB(t)
+	db, _ := newTestDB(t)
 	svc := NewReplayStoreService(db.GetDB(), testutil.NewTestLogger())
 	return svc, db.GetDB()
 }
