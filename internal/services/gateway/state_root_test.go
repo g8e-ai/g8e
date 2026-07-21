@@ -117,8 +117,8 @@ func TestStateRootSemantics(t *testing.T) {
 }
 
 func TestStateRootDeterministicOrder(t *testing.T) {
-	db1 := newTestDB(t)
-	db2 := newTestDB(t)
+	db1, stores1 := newTestDB(t)
+	db2, stores2 := newTestDB(t)
 
 	// Wipe initial random platform settings to have a clean slate for order comparison
 	_, err := db1.db.Exec("DELETE FROM documents")
@@ -132,19 +132,19 @@ func TestStateRootDeterministicOrder(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert in one order into db1
-	require.NoError(t, db1.DocStore.DocSet("test", "a", json.RawMessage(`{"v":1}`)))
-	require.NoError(t, db1.DocStore.DocSet("test", "b", json.RawMessage(`{"v":2}`)))
-	require.NoError(t, db1.KVStore.KVSet("k1", "v1", 0))
-	require.NoError(t, db1.KVStore.KVSet("k2", "v2", 0))
-	root1, err := db1.StateRootSvc.GetCurrentStateRoot()
+	require.NoError(t, stores1.DocStore.DocSet("test", "a", json.RawMessage(`{"v":1}`)))
+	require.NoError(t, stores1.DocStore.DocSet("test", "b", json.RawMessage(`{"v":2}`)))
+	require.NoError(t, stores1.KVStore.KVSet("k1", "v1", 0))
+	require.NoError(t, stores1.KVStore.KVSet("k2", "v2", 0))
+	root1, err := stores1.StateRootSvc.GetCurrentStateRoot()
 	require.NoError(t, err)
 
 	// Insert in different order into db2
-	require.NoError(t, db2.KVStore.KVSet("k2", "v2", 0))
-	require.NoError(t, db2.DocStore.DocSet("test", "b", json.RawMessage(`{"v":2}`)))
-	require.NoError(t, db2.KVStore.KVSet("k1", "v1", 0))
-	require.NoError(t, db2.DocStore.DocSet("test", "a", json.RawMessage(`{"v":1}`)))
-	root2, err := db2.StateRootSvc.GetCurrentStateRoot()
+	require.NoError(t, stores2.KVStore.KVSet("k2", "v2", 0))
+	require.NoError(t, stores2.DocStore.DocSet("test", "b", json.RawMessage(`{"v":2}`)))
+	require.NoError(t, stores2.KVStore.KVSet("k1", "v1", 0))
+	require.NoError(t, stores2.DocStore.DocSet("test", "a", json.RawMessage(`{"v":1}`)))
+	root2, err := stores2.StateRootSvc.GetCurrentStateRoot()
 	require.NoError(t, err)
 
 	assert.Equal(t, root1, root2, "State root must be deterministic regardless of insertion order")
@@ -247,7 +247,7 @@ func BenchmarkStateRootLargeDataset(b *testing.B) {
 }
 
 func TestStateRoot_ObservedKVDoesNotChurnBoundRoot(t *testing.T) {
-	db, stores := newTestDB(t)
+	_, stores := newTestDB(t)
 
 	// Get initial bound root
 	root1, err := stores.StateRootSvc.GetCurrentStateRoot()
@@ -271,7 +271,7 @@ func TestStateRoot_ObservedKVDoesNotChurnBoundRoot(t *testing.T) {
 }
 
 func TestStateRoot_ObservedBlobDoesNotChurnBoundRoot(t *testing.T) {
-	db, stores := newTestDB(t)
+	_, stores := newTestDB(t)
 
 	// Get initial bound root
 	root1, err := stores.StateRootSvc.GetCurrentStateRoot()
@@ -295,7 +295,7 @@ func TestStateRoot_ObservedBlobDoesNotChurnBoundRoot(t *testing.T) {
 }
 
 func TestStateRoot_ObservedStateRootIsSeparate(t *testing.T) {
-	db, stores := newTestDB(t)
+	_, stores := newTestDB(t)
 
 	// Get initial observed root (may be empty hash if no observed state)
 	obsRoot1, err := stores.StateRootSvc.GetObservedStateRoot()
@@ -328,7 +328,7 @@ func TestStateRoot_ObservedStateRootIsSeparate(t *testing.T) {
 }
 
 func TestStateRoot_ObservedStateRootCaching(t *testing.T) {
-	db, stores := newTestDB(t)
+	_, stores := newTestDB(t)
 
 	// Get observed root — should cache it
 	root1, err := stores.StateRootSvc.GetObservedStateRoot()

@@ -58,58 +58,61 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   └── sqliteutil.DB
 ├── scrubbing.ScrubbingService
 │   └── storage.TokenStore (gateway.EncryptedKVAdapter)
-└── gateway.CanonicalDBService [SHARED]
+└── gateway.CanonicalDBService [SHARED] (lifecycle only: Open, Close, GetVault, schema/migrations, maintenance loop)
     ├── sqliteutil.DB
-    ├── storage.SQLAuditStore
     ├── vault.Vault
-    ├── gateway.DocumentStoreService
-    ├── gateway.AppPolicyStoreService
-    ├── gateway.SignerStoreService
-    ├── gateway.TribunalStoreService
-    ├── gateway.StateRootService
-    ├── gateway.ReplayStoreService
-    ├── gateway.KVStoreService
-    ├── gateway.SSEEventService
-    └── gateway.BlobStoreService
+    └── gateway.Stores (returned by OpenCanonicalDBService)
+        ├── gateway.DocumentStoreService
+        ├── gateway.AppPolicyStoreService
+        ├── gateway.SignerStoreService
+        ├── gateway.TribunalStoreService
+        ├── gateway.StateRootService
+        ├── gateway.ReplayStoreService
+        ├── gateway.KVStoreService
+        ├── gateway.SSEEventService
+        ├── gateway.BlobStoreService
+        └── storage.SQLAuditStore
 
 GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
-├── gateway.CanonicalDBService [SHARED] (lifecycle only: Open, Close, Wait, GetDB, GetVault, schema/migrations, maintenance loop)
+├── gateway.CanonicalDBService [SHARED] (lifecycle only: Open, Close, GetVault, schema/migrations, maintenance loop)
 │   ├── sqliteutil.DB
-│   ├── storage.SQLAuditStore
 │   ├── vault.Vault
-│   ├── gateway.DocumentStoreService (extracted field)
-│   ├── gateway.AppPolicyStoreService (extracted field)
-│   ├── gateway.SignerStoreService (extracted field)
-│   ├── gateway.TribunalStoreService (extracted field)
-│   ├── gateway.StateRootService (extracted field)
-│   ├── gateway.ReplayStoreService (extracted field)
-│   ├── gateway.KVStoreService (extracted field)
-│   ├── gateway.SSEEventService (extracted field)
-│   └── gateway.BlobStoreService (extracted field)
+│   └── gateway.Stores (returned by OpenCanonicalDBService, held as private stores field)
+│       ├── gateway.DocumentStoreService
+│       ├── gateway.AppPolicyStoreService
+│       ├── gateway.SignerStoreService
+│       ├── gateway.TribunalStoreService
+│       ├── gateway.StateRootService
+│       ├── gateway.ReplayStoreService
+│       ├── gateway.KVStoreService
+│       ├── gateway.SSEEventService
+│       ├── gateway.BlobStoreService
+│       └── storage.SQLAuditStore
 ├── storage.SuspendedTransactionService (for L3 approval workflow)
 │   └── sqliteutil.DB
 ├── gateway.GatewayWebSocketHandler
 ├── gateway.AuthService
-│   ├── gateway.CanonicalDBService [SHARED]
+│   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   ├── gateway.PKIAuthority
 │   ├── gateway.UserService
 │   ├── gateway.PersonaService
-│   │   └── gateway.CanonicalDBService [SHARED]
+│   │   └── gateway.DocumentStoreService (from Stores [SHARED])
 │   ├── gateway.JWKSProvider (optional, for external IdP JWT auth)
 │   └── response.Writer
 ├── gateway.PKIAuthority
-│   ├── gateway.CanonicalDBService [SHARED]
+│   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   └── gateway.SecretManager (local variable in NewGatewayModeService, not a retained field)
 │       ├── sqliteutil.DB
 │       └── keystore.Keystore (via gateway.CanonicalDBService)
 ├── gateway.RegistrationService
-│   ├── gateway.CanonicalDBService [SHARED]
+│   ├── gateway.DocumentStoreService (from Stores [SHARED])
+│   ├── gateway.KVStoreService (from Stores [SHARED])
 │   ├── gateway.PKIAuthority
 │   ├── gateway.UserService
 │   ├── gateway.CLISessionService
 │   └── gateway.OperatorSessionService
 ├── gateway.PasskeyService (domain logic only)
-│   └── gateway.CanonicalDBService [SHARED] (via dbUserStore and dbSessionStore wrappers)
+│   └── gateway.DocumentStoreService (from Stores [SHARED]) (via dbUserStore and dbSessionStore wrappers)
 ├── gateway.PasskeyHandler (HTTP layer, embeds *PasskeyService)
 │   ├── gateway.PasskeyService [SHARED]
 │   ├── gateway.WebSessionService (for session creation on browser flows)
@@ -119,15 +122,14 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.SSEEventService (via PasskeyHandlerDeps constructor)
 │   └── gateway.GatewayWebSocketHandler (via PasskeyHandlerDeps constructor)
 ├── gateway.UserService
-│   └── gateway.CanonicalDBService [SHARED]
+│   └── gateway.DocumentStoreService (from Stores [SHARED])
 ├── gateway.CLISessionService
-│   └── gateway.CanonicalDBService [SHARED]
+│   └── gateway.DocumentStoreService (from Stores [SHARED])
 ├── gateway.OperatorSessionService
-│   └── gateway.CanonicalDBService [SHARED]
+│   └── gateway.DocumentStoreService (from Stores [SHARED])
 ├── gateway.WebSessionService
-│   └── gateway.CanonicalDBService [SHARED]
-├── gateway.HTTPHandler
-│   ├── gateway.CanonicalDBService [SHARED]
+│   └── gateway.DocumentStoreService (from Stores [SHARED])
+├── gateway.HTTPHandler (receives Stores via HTTPHandlerDependencies, delegates to controllers)
 │   ├── gateway.GatewayWebSocketHandler
 │   ├── gateway.AuthService
 │   ├── gateway.PKIAuthority
@@ -142,14 +144,21 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   └── gateway.GatewayWebSocketHandler (via PasskeyHandlerDeps constructor)
 │   ├── gateway.UserService
 │   ├── gateway.AppEnrollmentService
-│   │   ├── gateway.CanonicalDBService [SHARED]
+│   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   │   └── gateway.PKIAuthority
 │   ├── gateway/console (Console SPA embed filesystem)
 │   ├── mcp.GatewayService [SHARED]
-│   ├── tribunal.TribunalService (atomic.Pointer, set by boot sequence via SetTribunal — no router rebuild)
-│   ├── governance.EnvelopeProcessor (atomic.Pointer, set by boot sequence via SetEnvelopeProcessor)
+│   ├── gateway.GovernanceController (governance envelope submission, tribunal deliberation)
+│   │   ├── tribunal.TribunalService (atomic.Pointer, set by boot sequence via SetTribunal — no router rebuild)
+│   │   └── governance.EnvelopeProcessor (atomic.Value via envProcHolder, set by boot sequence via SetEnvelopeProcessor)
 │   ├── gateway.PKIController (PKI enrollment, CSR signing, trust scripts, deploy scripts)
 │   ├── gateway.DBController (audit receipts, audit events, data DB, KV, blobs, governance signers, pub/sub)
+│   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
+│   │   ├── gateway.KVStoreService (from Stores [SHARED])
+│   │   ├── gateway.SSEEventService (from Stores [SHARED])
+│   │   ├── gateway.BlobStoreService (from Stores [SHARED])
+│   │   ├── storage.SQLAuditStore (from Stores [SHARED])
+│   │   └── gateway.SignerStoreService (from Stores [SHARED])
 │   ├── gateway.AuthController (bootstrap, CLI enrollment, device enrollment, user management, web session)
 │   │   ├── gateway.AuthService [SHARED]
 │   │   ├── gateway.PasskeyHandler [SHARED]
@@ -159,23 +168,33 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   ├── gateway.WebSessionService [SHARED]
 │   │   ├── gateway.CLISessionService [SHARED]
 │   │   ├── gateway.OperatorSessionService [SHARED]
-│   │   ├── gateway.CanonicalDBService [SHARED]
+│   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   │   ├── gateway.EnrollmentTokenService (created in HTTPHandler constructor, manages enrollment token lifecycle with TTL-based cleanup)
 │   │   ├── response.Writer
 │   │   └── actuatorKeyReader (fileActuatorKeyReader, reads actuator public key from disk)
 │   ├── gateway.AdminController (app policies, tribunals, app revocation)
+│   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
+│   │   ├── gateway.SignerStoreService (from Stores [SHARED])
+│   │   └── gateway.TribunalStoreService (from Stores [SHARED])
+│   ├── gateway.SSEController (SSE push, events, stream)
+│   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
+│   │   ├── gateway.KVStoreService (from Stores [SHARED])
+│   │   └── gateway.SSEEventService (from Stores [SHARED])
+│   ├── gateway.HealthController (health checks, state root)
+│   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
+│   │   └── gateway.StateRootService (from Stores [SHARED])
 │   ├── gateway.OperatorController (operator list, terminate, bind/unbind, target context, reauth)
 │   └── response.Writer
 ├── http.Server (HTTPS port, mTLS-enforced public router)
 ├── http.Server (HTTP port, bootstrap-only router)
 ├── governance.gatewayNotary (via governance.NewGatewayL3Notary, implements governance.L3Notary)
 │   ├── gateway.cliSessionVerifier (via NewCLISessionVerifier, implements governance.CLISessionVerifier)
-│   │   ├── gateway.CanonicalDBService [SHARED]
+│   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   │   ├── gateway.PKIAuthority
 │   │   ├── gateway.UserService
 │   │   └── gateway.CLISessionService
 │   └── gateway.PasskeyService (as governance.L3Notary for WebAuthn proofs, domain logic only)
-│       └── gateway.CanonicalDBService [SHARED]
+│       └── gateway.DocumentStoreService (from Stores [SHARED])
 ├── tribunal.TribunalService
 │   ├── governance.L1Doctrine
 │   ├── tribunal.TribunalMember (one or more enrolled members with Ed25519 keys)

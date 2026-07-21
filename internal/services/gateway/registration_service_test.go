@@ -155,7 +155,7 @@ func TestPKIPhase3_CLI_CSR_Optional(t *testing.T) {
 		cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 		operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
 		cfg := &config.GatewayConfig{}
-		regSvc := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
+		regSvc := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
 		// Generate only Operator CSR, no CLI CSR
 		opCSR := testutil.GenerateTestCSRP256(t, "test-operator")
@@ -701,7 +701,7 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 		cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 		operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
 		cfg := &config.GatewayConfig{}
-		regSvc := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
+		regSvc := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
 		opCSR := testutil.GenerateTestCSRP256(t, "test-operator")
 		req := models.OperatorRegistrationRequest{
@@ -733,7 +733,7 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 		cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 		operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
 		cfg := &config.GatewayConfig{}
-		regSvc := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
+		regSvc := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
 		opCSR := testutil.GenerateTestCSRP256(t, "test-operator")
 		req := models.OperatorRegistrationRequest{
@@ -765,7 +765,7 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 		cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 		operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
 		cfg := &config.GatewayConfig{}
-		regSvc := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
+		regSvc := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
 		req := models.OperatorRegistrationRequest{
 			SystemFingerprint: "test-fingerprint",
@@ -796,7 +796,7 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 		cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 		operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
 		cfg := &config.GatewayConfig{}
-		regSvc := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
+		regSvc := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
 		opCSR := testutil.GenerateTestCSRP256(t, "test-operator")
 		req := models.OperatorRegistrationRequest{
@@ -831,7 +831,7 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 		cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 		operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
 		cfg := &config.GatewayConfig{}
-		regSvc := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
+		regSvc := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
 		slot, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)
@@ -865,7 +865,7 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 		cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 		operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
 		cfg := &config.GatewayConfig{}
-		regSvc := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
+		regSvc := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
 		slot, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)
@@ -904,7 +904,7 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 		cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 		operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
 		cfg := &config.GatewayConfig{}
-		regSvc := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
+		regSvc := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
 		slot, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)

@@ -25,7 +25,7 @@ import (
 
 func newStateRootService(t *testing.T) *StateRootService {
 	t.Helper()
-	db, stores := newTestDB(t)
+	db, _ := newTestDB(t)
 	return NewStateRootService(db.GetDB(), testutil.NewTestLogger())
 }
 
@@ -113,7 +113,7 @@ func TestStateRootService_CachingBehavior(t *testing.T) {
 }
 
 func TestStateRootService_StateVersionMissing(t *testing.T) {
-	db, stores := newTestDB(t)
+	db, _ := newTestDB(t)
 	svc := NewStateRootService(db.GetDB(), testutil.NewTestLogger())
 
 	// Delete the state_version table — GetCurrentStateRoot should now return an error
