@@ -114,7 +114,7 @@ func TestBootstrapFlow(t *testing.T) {
 	assert.True(t, statusResp.Bootstrapped)
 
 	// 4. Verify bootstrap user is active
-	user, err := h.userSvc.GetByID(bootstrapUserID)
+	user, err := h.adminController.userSvc.GetByID(bootstrapUserID)
 	require.NoError(t, err)
 	assert.True(t, user.IsActive())
 	assert.True(t, user.IsBootstrap)
@@ -128,11 +128,11 @@ func TestBootstrapFlow(t *testing.T) {
 	// We'll call the retirement logic directly as if RegistrationService did it
 	realUserID := "user-real-123"
 	realOperatorID := "op-real-456"
-	err = h.userSvc.Disable(bootstrapUserID, "retired_by_real_login", realUserID, realOperatorID)
+	err = h.adminController.userSvc.Disable(bootstrapUserID, "retired_by_real_login", realUserID, realOperatorID)
 	require.NoError(t, err)
 
 	// 7. Verify bootstrap user is now inactive
-	user, err = h.userSvc.GetByID(bootstrapUserID)
+	user, err = h.adminController.userSvc.GetByID(bootstrapUserID)
 	require.NoError(t, err)
 	assert.False(t, user.IsActive())
 	assert.Equal(t, constants.UserStatusDisabled, user.Status)

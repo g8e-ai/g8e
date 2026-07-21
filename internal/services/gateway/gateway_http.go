@@ -31,46 +31,35 @@ import (
 
 // HTTPHandlerDependencies groups all dependencies for HTTPHandler to reduce constructor bloat.
 type HTTPHandlerDependencies struct {
-	Cfg                  *config.Config
-	Logger               *slog.Logger
-	Stores               *Stores
-	Pubsub               *GatewayWebSocketHandler
-	Auth                 *AuthService
-	PKI                  *PKIAuthority
-	CLISessionSvc        *CLISessionService
-	OperatorSessionSvc   *OperatorSessionService
-	WebSessionSvc        *WebSessionService
-	Reg                  *RegistrationService
-	Passkey              *PasskeyHandler
-	UserSvc              *UserService
-	Responder            *response.Writer
-	MCPGateway           *mcp.GatewayService
-	AppEnrollment        *AppEnrollmentService
-	Tribunal             *tribunal.TribunalService
-	IsReady              func() bool
-	IsGovernanceReady    func() bool
-	SSEHeartbeatInterval time.Duration
+	Cfg                *config.Config
+	Logger             *slog.Logger
+	Stores             *Stores
+	Pubsub             *GatewayWebSocketHandler
+	Auth               *AuthService
+	PKI                *PKIAuthority
+	CLISessionSvc      *CLISessionService
+	OperatorSessionSvc *OperatorSessionService
+	WebSessionSvc      *WebSessionService
+	Reg                *RegistrationService
+	Passkey            *PasskeyHandler
+	UserSvc            *UserService
+	Responder          *response.Writer
+	MCPGateway         *mcp.GatewayService
+	AppEnrollment      *AppEnrollmentService
+	Tribunal           *tribunal.TribunalService
+	IsReady            func() bool
+	IsGovernanceReady  func() bool
 }
 
 // HTTPHandler manages the web API for the gateway service.
 type HTTPHandler struct {
-	cfg                  *config.Config
-	logger               *slog.Logger
-	pubsub               *GatewayWebSocketHandler
-	auth                 *AuthService
-	pki                  *PKIAuthority
-	cliSessionSvc        *CLISessionService
-	operatorSessionSvc   *OperatorSessionService
-	webSessionSvc        *WebSessionService
-	reg                  *RegistrationService
-	passkey              *PasskeyHandler
-	userSvc              *UserService
-	responder            *response.Writer
-	mcp                  *mcp.GatewayService
-	appEnrollment        *AppEnrollmentService
-	isReady              func() bool
-	isGovernanceReady    func() bool
-	sseHeartbeatInterval time.Duration
+	cfg       *config.Config
+	logger    *slog.Logger
+	pubsub    *GatewayWebSocketHandler
+	auth      *AuthService
+	passkey   *PasskeyHandler
+	responder *response.Writer
+	mcp       *mcp.GatewayService
 	// Controllers for domain-specific endpoints
 	pkiController        *PKIController
 	dbController         *DBController
@@ -92,29 +81,15 @@ type HTTPHandler struct {
 
 func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	h := &HTTPHandler{
-		cfg:                  deps.Cfg,
-		logger:               deps.Logger,
-		pubsub:               deps.Pubsub,
-		auth:                 deps.Auth,
-		pki:                  deps.PKI,
-		cliSessionSvc:        deps.CLISessionSvc,
-		operatorSessionSvc:   deps.OperatorSessionSvc,
-		webSessionSvc:        deps.WebSessionSvc,
-		reg:                  deps.Reg,
-		passkey:              deps.Passkey,
-		userSvc:              deps.UserSvc,
-		responder:            deps.Responder,
-		mcp:                  deps.MCPGateway,
-		appEnrollment:        deps.AppEnrollment,
-		isReady:              deps.IsReady,
-		isGovernanceReady:    deps.IsGovernanceReady,
-		sseHeartbeatInterval: deps.SSEHeartbeatInterval,
-		limiters:             make(map[string]*tokenBucket),
-		limiterLastUsed:      make(map[string]time.Time),
-	}
-
-	if h.sseHeartbeatInterval == 0 {
-		h.sseHeartbeatInterval = 30 * time.Second
+		cfg:             deps.Cfg,
+		logger:          deps.Logger,
+		pubsub:          deps.Pubsub,
+		auth:            deps.Auth,
+		passkey:         deps.Passkey,
+		responder:       deps.Responder,
+		mcp:             deps.MCPGateway,
+		limiters:        make(map[string]*tokenBucket),
+		limiterLastUsed: make(map[string]time.Time),
 	}
 
 	// Initialize script templates
@@ -149,7 +124,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.SignerStore, deps.Stores.TribunalStore, deps.UserSvc, deps.Responder)
 	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)
 
-	h.sseController = newSSEController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.KVStore, deps.Stores.SSEStore, deps.Pubsub, deps.Auth, deps.Responder, deps.SSEHeartbeatInterval)
+	h.sseController = newSSEController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.KVStore, deps.Stores.SSEStore, deps.Pubsub, deps.Auth, deps.Responder, 0)
 	h.healthController = newHealthController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.StateRootSvc, deps.Responder, deps.IsReady, deps.IsGovernanceReady)
 	h.governanceController = newGovernanceController(deps.Cfg, deps.Logger, deps.Responder, deps.Tribunal)
 

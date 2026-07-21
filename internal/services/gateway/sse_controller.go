@@ -30,6 +30,8 @@ package gateway
 // The Gateway refuses to talk about a bare session id - every routing
 // target is tagged at the type level so a web_session_id can never be
 // mis-delivered as a cli_session_id (or vice versa).
+//
+// All SSE handlers live on SSEController (sse_controller.go).
 
 import (
 	"encoding/json"
