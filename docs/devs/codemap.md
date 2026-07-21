@@ -21,16 +21,16 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   ├── pubsub.HistoryService
 │   ├── governance.L4Warden
 │   │   ├── governance.ReplayStore (storage.SQLReplayStore)
-│   │   ├── governance.StateRootProvider (gateway.StateRootService via CanonicalDBService) [SHARED]
+│   │   ├── governance.StateRootProvider (gateway.StateRootService via Stores) [SHARED]
 │   │   ├── governance.SignerStore (governance.FilesystemSignerStore)
-│   │   ├── governance.AppPolicyStore (gateway.AppPolicyStoreService via CanonicalDBService) [SHARED]
+│   │   ├── governance.AppPolicyStore (gateway.AppPolicyStoreService via Stores) [SHARED]
 │   │   ├── governance.TribunalStore (via GovernanceDeps; nil in outbound mode, gateway.TribunalStoreService in gateway mode)
 │   │   ├── governance.L1Doctrine (created internally by L4Warden when doctrine param is nil)
 │   │   └── governance.L3Notary (governance.outboundNotary implementation)
 │   │       └── storage.SuspendedTransactionService
 │   ├── governance.L5Actuator
 │   │   ├── execution.ExecutionService
-│   │   ├── storage.SQLAuditStore (from CanonicalDBService.AuditStore) [SHARED]
+│   │   ├── storage.SQLAuditStore (from Stores.AuditStore) [SHARED]
 │   │   ├── governance.TransactionAuditStore (auditStoreTransactionStore wrapper)
 │   │   ├── scrubbing.ScrubbingService
 │   │   └── governance.StateRootProvider
@@ -45,14 +45,14 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   ├── sqliteutil.DB
 │   └── vault.Vault (shared with CanonicalDBService)
 ├── gateway.EncryptedKVAdapter (implements storage.TokenStore)
-│   ├── gateway.KVStoreService (from CanonicalDBService) [SHARED]
+│   ├── gateway.KVStoreService (from Stores) [SHARED]
 │   └── vault.Vault (shared with CanonicalDBService)
 ├── storage.SuspendedTransactionService
 │   └── sqliteutil.DB
 ├── storage.GitLedgerService
 │   └── vault.Vault (shared with CanonicalDBService)
 ├── storage.HistoryHandler
-│   ├── storage.SQLAuditStore (from CanonicalDBService.AuditStore) [SHARED]
+│   ├── storage.SQLAuditStore (from Stores.AuditStore) [SHARED]
 │   └── storage.GitLedgerService
 ├── governance.ReplayStore (storage.SQLReplayStore)
 │   └── sqliteutil.DB
@@ -242,7 +242,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - **`Stores.DB`** provides the raw `sqliteutil.DB` connection for consumers needing direct DB access (e.g., `NewTribunalStoreService`, `NewStateRootService`). Accessible via the `DB` field on `Stores` (returned by `OpenCanonicalDBService`), eliminating the need to go through `CanonicalDBService.GetDB()`.
 - **`storage.SuspendedTransactionService`** is the L3 approval workflow store used consistently in both gateway and outbound modes (implements `storage.SuspendedTransactionStore`).
 - **`storage.ExecutionVaultService`** is the execution log and file diff storage for outbound mode.
-- **`gateway.EncryptedKVAdapter`** implements `storage.TokenStore` and provides Sentinel token persistence for outbound mode. It wraps `gateway.KVStoreService` (from CanonicalDBService) and encrypts values at rest via `vault.Vault`.
+- **`gateway.EncryptedKVAdapter`** implements `storage.TokenStore` and provides Sentinel token persistence for outbound mode. It wraps `gateway.KVStoreService` (from Stores) and encrypts values at rest via `vault.Vault`.
 - **`storage.SQLAuditStore`** is held in `Stores` as the `AuditStore` field and provides the SQL-based audit storage foundation for both gateway and outbound modes. In outbound mode, the standalone instance has been removed; `g8eo.go` reuses `Stores.AuditStore` for all audit writes (L5Actuator, HistoryHandler, session management), eliminating a redundant connection pool and pruner on the same `g8e.db` file.
 - **`vault.Vault`** is shared across all storage services in outbound mode (reused from CanonicalDBService).
 
