@@ -25,8 +25,8 @@ import (
 
 func newStateRootService(t *testing.T) *StateRootService {
 	t.Helper()
-	db, _ := newTestDB(t)
-	return NewStateRootService(db.GetDB(), testutil.NewTestLogger())
+	_, stores := newTestDB(t)
+	return NewStateRootService(stores.DB, testutil.NewTestLogger())
 }
 
 func TestStateRootService_GetCurrentStateRoot(t *testing.T) {
@@ -44,8 +44,8 @@ func TestStateRootService_GetCurrentStateRoot(t *testing.T) {
 }
 
 func TestStateRootService_InvalidateCache(t *testing.T) {
-	db, stores := newTestDB(t)
-	svc := NewStateRootService(db.GetDB(), testutil.NewTestLogger())
+	_, stores := newTestDB(t)
+	svc := NewStateRootService(stores.DB, testutil.NewTestLogger())
 
 	// Get initial state root
 	root1, err := svc.GetCurrentStateRoot()
@@ -67,8 +67,8 @@ func TestStateRootService_InvalidateCache(t *testing.T) {
 }
 
 func TestStateRootService_StateChangeDetection(t *testing.T) {
-	db, stores := newTestDB(t)
-	svc := NewStateRootService(db.GetDB(), testutil.NewTestLogger())
+	_, stores := newTestDB(t)
+	svc := NewStateRootService(stores.DB, testutil.NewTestLogger())
 
 	// Get initial state root
 	root1, err := svc.GetCurrentStateRoot()
@@ -113,11 +113,11 @@ func TestStateRootService_CachingBehavior(t *testing.T) {
 }
 
 func TestStateRootService_StateVersionMissing(t *testing.T) {
-	db, _ := newTestDB(t)
-	svc := NewStateRootService(db.GetDB(), testutil.NewTestLogger())
+	_, stores := newTestDB(t)
+	svc := NewStateRootService(stores.DB, testutil.NewTestLogger())
 
 	// Delete the state_version table — GetCurrentStateRoot should now return an error
-	_, err := db.GetDB().Exec("DROP TABLE IF EXISTS state_version")
+	_, err := stores.DB.Exec("DROP TABLE IF EXISTS state_version")
 	require.NoError(t, err)
 
 	_, err = svc.GetCurrentStateRoot()
@@ -131,8 +131,8 @@ func TestStateRootService_StateVersionMissing(t *testing.T) {
 // This is a regression test for the bug where cache-key churn in kv_store caused
 // state root mismatches.
 func TestStateRootService_NoCacheLeakOnDocumentWrite(t *testing.T) {
-	db, stores := newTestDB(t)
-	svc := NewStateRootService(db.GetDB(), testutil.NewTestLogger())
+	_, stores := newTestDB(t)
+	svc := NewStateRootService(stores.DB, testutil.NewTestLogger())
 
 	// Get initial state root
 	root1, err := svc.GetCurrentStateRoot()

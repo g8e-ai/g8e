@@ -502,13 +502,13 @@ func TestPasskeyReadBodyRejectsOversized(t *testing.T) {
 
 func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
 	t.Run("emitPasskeyRegisteredSSE appends event and publishes", func(t *testing.T) {
-		db, stores := newTestDB(t)
+		_, stores := newTestDB(t)
 		logger := testutil.NewTestLogger()
 		webSessionSvc := NewWebSessionService(stores.DocStore, logger)
 		resp := response.NewWriter(logger)
 		svc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 		require.NoError(t, err)
-		sseStore := NewSSEEventService(db.GetDB(), logger)
+		sseStore := NewSSEEventService(stores.DB, logger)
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
 		handler := NewPasskeyHandler(PasskeyHandlerDeps{
@@ -535,7 +535,7 @@ func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
 	})
 
 	t.Run("no SSE emission when dependencies not set", func(t *testing.T) {
-		db, stores := newTestDB(t)
+		_, stores := newTestDB(t)
 		logger := testutil.NewTestLogger()
 		webSessionSvc := NewWebSessionService(stores.DocStore, logger)
 		resp := response.NewWriter(logger)
@@ -553,7 +553,7 @@ func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
 
 		handler.emitPasskeyRegisteredSSE(userID, cliSessionID)
 
-		sseStore := NewSSEEventService(db.GetDB(), logger)
+		sseStore := NewSSEEventService(stores.DB, logger)
 		route := SSERoute{CLISessionID: cliSessionID}
 		events, err := sseStore.SSEEventsListSince(route, 0, 10)
 		require.NoError(t, err)

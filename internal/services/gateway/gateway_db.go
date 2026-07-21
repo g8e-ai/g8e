@@ -60,6 +60,7 @@ func GatewaySchema() string {
 // need specific stores. CanonicalDBService retains a private reference for
 // lifecycle management (maintenance, close).
 type Stores struct {
+	DB             *sqliteutil.DB
 	DocStore       *DocumentStoreService
 	AppPolicyStore *AppPolicyStoreService
 	SignerStore    *SignerStoreService
@@ -212,6 +213,7 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 
 	// Initialize extracted services with the same db connection
 	stores := &Stores{
+		DB:             db,
 		DocStore:       NewDocumentStoreService(db, logger),
 		StateRootSvc:   NewStateRootService(db, logger),
 		ReplayStore:    NewReplayStoreService(db, logger),

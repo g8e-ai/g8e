@@ -426,7 +426,7 @@ func TestHandleHealth_StateRootFailure(t *testing.T) {
 	require.NoError(t, err)
 
 	// Force state root calculation to fail by dropping a table it queries
-	_, err = infra.DB.GetDB().Exec("DROP TABLE kv_store")
+	_, err = infra.Stores.DB.Exec("DROP TABLE kv_store")
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
