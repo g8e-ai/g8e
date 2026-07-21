@@ -669,14 +669,14 @@ _ci-test:
 # RELEASE
 # =============================================================================
 # VERSION is the single source of truth. `make release` syncs pyproject.toml
-# and __init__.py from VERSION (if needed), builds binaries for verification,
-# tags the current commit as v<VERSION> + protocol/v<VERSION>, pushes both tags,
-# and creates a GitHub release using the corresponding docs/release_notes file.
+# and __init__.py from VERSION (if needed), tags the current commit as
+# v<VERSION> + protocol/v<VERSION>, and pushes both tags. The GitHub Actions
+# workflows create the GitHub release and upload binary assets.
 #
 # Workflow:
 #   1. Merge PRs (CI enforces version sync, proto/swagger generation, tests)
 #   2. git pull origin main
-#   3. make release        (tags, pushes, creates GitHub release)
+#   3. make release        (tags, pushes — workflows create the release)
 #
 # The protocol/v* tag triggers the Python PyPI release workflow.
 # The Go module is part of the root module (github.com/g8e-ai/g8e)
@@ -727,22 +727,12 @@ release:
 	if git rev-parse -q --verify "refs/tags/$$PYTHON_TAG" >/dev/null; then \
 		echo "Error: tag $$PYTHON_TAG already exists."; exit 1; \
 	fi; \
-	if ! command -v gh &> /dev/null; then \
-		echo "Error: GitHub CLI (gh) not found. Install from https://cli.github.com/"; exit 1; \
-	fi; \
-	\
-	echo "Building binaries..."; \
-	$(MAKE) build; \
-	\
 	echo "Tagging $$TAG + $$PYTHON_TAG..."; \
 	git tag "$$TAG" && git tag "$$PYTHON_TAG"; \
 	git push origin "$$TAG" && git push origin "$$PYTHON_TAG"; \
 	\
-	echo "Creating GitHub release from $$NOTES_FILE..."; \
-	gh release create "$$TAG" --title "g8e $$TAG" --notes-file "$$NOTES_FILE" || \
-		gh release edit "$$TAG" --title "g8e $$TAG" --notes-file "$$NOTES_FILE"; \
-	\
 	echo ""; \
-	echo "Release $$TAG created."; \
+	echo "Tags $$TAG + $$PYTHON_TAG pushed."; \
+	echo "The GitHub Actions workflows will create the release and upload assets."; \
 	echo "Monitor: gh run watch --workflow=release-binary.yml"; \
 	echo "Monitor: gh run watch --workflow=release-python-protocol.yml"

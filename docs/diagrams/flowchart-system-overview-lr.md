@@ -22,7 +22,7 @@ flowchart LR
     L5Actuator --> Vault
 ```
 
-The Gateway receives signed `GovernanceEnvelope` messages via two paths: MCP and A2A tool calls are translated into envelopes by the MCP gateway layer (`internal/services/mcp/gateway.go`), while BYO clients POST protojson envelopes directly to `/api/v1/governance/envelopes` (`internal/services/gateway/governance_envelope.go`). Both paths perform mTLS identity binding before forwarding to the Operator.
+The Gateway receives signed `GovernanceEnvelope` messages via two paths: MCP and A2A tool calls are translated into envelopes by the MCP gateway layer (`internal/services/mcp/gateway.go`), while BYO clients POST protojson envelopes directly to `/api/v1/governance/envelopes` (`internal/services/gateway/governance_controller.go`). Both paths perform mTLS identity binding before forwarding to the Operator.
 
 The L4 Warden (`internal/services/governance/l4_warden.go`) performs pre-dispatch verification: nonce reservation and replay prevention, expiry validation, stateless validation (transaction hash and L1 Doctrine pattern matching), stateful validation (state Merkle root), and posture-aware L2 Consensus and L3 Notary checks.
 

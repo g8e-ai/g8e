@@ -53,25 +53,25 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, "", ks, fileSvc)
+	db, stores, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
 	sm := db.GetSecretManager()
 
-	pki := newPKIAuthority(fileSvc, db, sm, logger)
+	pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
-	userSvc := NewUserService(db, logger)
-	personaSvc := NewPersonaService(db, logger)
+	userSvc := NewUserService(stores.DocStore, logger)
+	personaSvc := NewPersonaService(stores.DocStore, logger)
 	resp := response.NewWriter(logger)
-	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, fileSvc.Resolve(constants.SecretsDirname), nil, "", "", "")
-	cliSessionSvc := NewCLISessionService(db, logger)
-	operatorSessionSvc := NewOperatorSessionService(db, logger)
-	webSessionSvc := NewWebSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
-	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, resp, fileSvc.Resolve(constants.SecretsDirname), nil, "", "", "")
+	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
+	operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
+	webSessionSvc := NewWebSessionService(stores.DocStore, logger)
+	reg := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
+	passkey, _ := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
 	// Initialize suspended transaction service for tests
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
@@ -107,11 +107,11 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 		SuspendedStore: suspendedTxService,
 	})
 
-	enrollmentTokenSvc := NewEnrollmentTokenService(db, logger)
+	enrollmentTokenSvc := NewEnrollmentTokenService(stores.DocStore, logger)
 	authController := newAuthController(AuthControllerDeps{
 		Cfg:                cfg,
 		Logger:             logger,
-		DB:                 db,
+		DocStore:           stores.DocStore,
 		Auth:               auth,
 		Passkey:            passkeyHandler,
 		UserSvc:            userSvc,
@@ -136,14 +136,14 @@ func setupTestPasskeyService(t *testing.T) (*PasskeyHandler, *UserService, stora
 
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
-	db, err := openTestDB(t, dbDir, filepath.Join(dbDir, constants.VaultDirname), fileSvc, logger)
+	db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, constants.VaultDirname), fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	userSvc := NewUserService(db, logger)
+	userSvc := NewUserService(stores.DocStore, logger)
 	resp := response.NewWriter(logger)
-	webSessionSvc := NewWebSessionService(db, logger)
-	passkey, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	webSessionSvc := NewWebSessionService(stores.DocStore, logger)
+	passkey, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	require.NoError(t, err)
 
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{

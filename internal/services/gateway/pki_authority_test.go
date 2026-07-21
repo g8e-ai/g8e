@@ -77,6 +77,7 @@ type testPKIContext struct {
 	dataDir string
 	fileSvc fs.RuntimeFileService
 	db      *CanonicalDBService
+	stores  *Stores
 	sm      *SecretManager
 	logger  *slog.Logger
 }
@@ -92,13 +93,13 @@ func setupTestPKI(t *testing.T) *testPKIContext {
 	fileSvc := newTestFileSvc(t)
 	pkiDir := fileSvc.Resolve(constants.PkiDirname)
 
-	db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
+	db, stores, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
 	require.NoError(t, err, "failed to open test database")
 	t.Cleanup(func() { db.Close() })
 
 	sm := newTestSecretManager(t, db.db, fileSvc)
 
-	pki := newPKIAuthority(fileSvc, db, sm, logger)
+	pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err, "failed to initialize PKI hierarchy")
 
@@ -108,6 +109,7 @@ func setupTestPKI(t *testing.T) *testPKIContext {
 		dataDir: dataDir,
 		fileSvc: fileSvc,
 		db:      db,
+		stores:  stores,
 		sm:      sm,
 		logger:  logger,
 	}
@@ -494,7 +496,7 @@ func TestPKIAuthority_ReuseExisting(t *testing.T) {
 	cert1 := parsePEMCertificate(t, rootCertPEM1)
 	serial1 := cert1.SerialNumber
 
-	pki2 := newPKIAuthority(ctx.fileSvc, ctx.db, ctx.sm, ctx.logger)
+	pki2 := newPKIAuthority(ctx.fileSvc, ctx.stores.DocStore, ctx.sm, ctx.logger)
 	err := pki2.InitializePKI(nil)
 	require.NoError(t, err)
 
@@ -719,12 +721,12 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
+		db, stores, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(fileSvc, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
@@ -748,12 +750,12 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
+		db, stores, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(fileSvc, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
@@ -768,12 +770,12 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
+		db, stores, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(fileSvc, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
@@ -799,12 +801,12 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
+		db, stores, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(fileSvc, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
@@ -833,12 +835,12 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
+		db, stores, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(fileSvc, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
@@ -853,12 +855,12 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
+		db, stores, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(fileSvc, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
@@ -878,12 +880,12 @@ func TestPKIAuthority_Phase5_Permissions(t *testing.T) {
 		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
+		db, stores, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(fileSvc, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
@@ -912,12 +914,12 @@ func TestPKIAuthority_Phase5_Permissions(t *testing.T) {
 		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
+		db, stores, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(fileSvc, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
@@ -934,12 +936,12 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
+		db, stores, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(fileSvc, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
@@ -962,12 +964,12 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
+		db, stores, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(fileSvc, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
@@ -990,12 +992,12 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
+		db, stores, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(fileSvc, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
@@ -1018,12 +1020,12 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
+		db, stores, err := openTestDB(t, dataDir, filepath.Join(dataDir, constants.VaultDirname), fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(fileSvc, db, sm, logger)
+		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 

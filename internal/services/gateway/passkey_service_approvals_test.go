@@ -424,13 +424,13 @@ func TestPasskeyService_HandleApprovalPage(t *testing.T) {
 
 func TestEmitApprovalCompletedSSE(t *testing.T) {
 	t.Run("appends event and publishes", func(t *testing.T) {
-		db := newTestDB(t)
+		_, stores := newTestDB(t)
 		logger := testutil.NewTestLogger()
-		webSessionSvc := NewWebSessionService(db, logger)
+		webSessionSvc := NewWebSessionService(stores.DocStore, logger)
 		resp := response.NewWriter(logger)
-		svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+		svc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 		require.NoError(t, err)
-		sseStore := NewSSEEventService(db.GetDB(), logger)
+		sseStore := NewSSEEventService(stores.DB, logger)
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
 		handler := NewPasskeyHandler(PasskeyHandlerDeps{
@@ -467,11 +467,11 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 	})
 
 	t.Run("no-ops when SSE dependencies not set", func(t *testing.T) {
-		db := newTestDB(t)
+		_, stores := newTestDB(t)
 		logger := testutil.NewTestLogger()
-		webSessionSvc := NewWebSessionService(db, logger)
+		webSessionSvc := NewWebSessionService(stores.DocStore, logger)
 		resp := response.NewWriter(logger)
-		svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+		svc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 		require.NoError(t, err)
 		handler := NewPasskeyHandler(PasskeyHandlerDeps{
 			Service:       svc,
@@ -485,7 +485,7 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 
 		handler.emitApprovalCompletedSSE(userID, txHash)
 
-		sseStore := NewSSEEventService(db.GetDB(), logger)
+		sseStore := NewSSEEventService(stores.DB, logger)
 		route := SSERoute{UserID: userID}
 		events, err := sseStore.SSEEventsListSince(route, 0, 10)
 		require.NoError(t, err)
@@ -493,13 +493,13 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 	})
 
 	t.Run("no-ops when userID is empty", func(t *testing.T) {
-		db := newTestDB(t)
+		_, stores := newTestDB(t)
 		logger := testutil.NewTestLogger()
-		webSessionSvc := NewWebSessionService(db, logger)
+		webSessionSvc := NewWebSessionService(stores.DocStore, logger)
 		resp := response.NewWriter(logger)
-		svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+		svc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 		require.NoError(t, err)
-		sseStore := NewSSEEventService(db.GetDB(), logger)
+		sseStore := NewSSEEventService(stores.DB, logger)
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
 		handler := NewPasskeyHandler(PasskeyHandlerDeps{
@@ -520,13 +520,13 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 }
 
 func TestHandleApprovalVerify_SSE_EmittedToApproverWhenSuspendedTxUserIDEmpty(t *testing.T) {
-	db := newTestDB(t)
+	_, stores := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	webSessionSvc := NewWebSessionService(db, logger)
+	webSessionSvc := NewWebSessionService(stores.DocStore, logger)
 	resp := response.NewWriter(logger)
-	svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	svc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	require.NoError(t, err)
-	sseStore := NewSSEEventService(db.GetDB(), logger)
+	sseStore := NewSSEEventService(stores.DB, logger)
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 

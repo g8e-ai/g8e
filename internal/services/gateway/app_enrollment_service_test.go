@@ -31,12 +31,12 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 
 	// Setup test infrastructure (PKI is now initialized by setupTestGatewayService)
 	gateway, _ := setupTestGatewayService(t)
-	db := gateway.db
+	docStore := gateway.stores.DocStore
 	logger := gateway.logger
 	pki := gateway.pki
 
 	// Create AppEnrollmentService
-	appEnrollment := NewAppEnrollmentService(db, pki, logger)
+	appEnrollment := NewAppEnrollmentService(docStore, pki, logger)
 
 	// Test cases
 	tests := []struct {
@@ -61,7 +61,7 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 			teardown: func() {
 				// Clean up the enrolled app (identity-only, no signer to delete)
 				appID := "spiffe://g8e.local/app/test-mcp-client"
-				if _, err := db.DocStore.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID); err != nil {
+				if _, err := docStore.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID); err != nil {
 					t.Logf("Failed to delete signer document: %v", err)
 				}
 			},
@@ -189,7 +189,7 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 				assert.NotEmpty(t, resp.AppID)
 
 				// Verify the L2 signer was NOT registered automatically (identity-only enrollment)
-				signerDoc, err := db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), resp.AppID)
+				signerDoc, err := docStore.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), resp.AppID)
 				require.NoError(t, err)
 				require.Nil(t, signerDoc)
 

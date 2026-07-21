@@ -238,7 +238,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 
 	// Add Actuator key to SignerStore so Implicit L2 signatures from the gateway are trusted
 	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
-	err = ls.GetDB().SignerStore.AddTrustedSigner(models.TrustedSigner{
+	err = ls.GetStores().SignerStore.AddTrustedSigner(models.TrustedSigner{
 		ID:        ActuatorKeyID,
 		PublicKey: hex.EncodeToString(ActuatorPub),
 		AddedAt:   time.Now().UTC(),
@@ -291,7 +291,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	}
 
 	// Seed platform_settings required for health check
-	err = ls.GetDB().DocStore.DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
+	err = ls.GetStores().DocStore.DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
 	require.NoError(t, err)
 
 	// Start the gateway service. The Start error is delivered on a buffered
@@ -409,7 +409,7 @@ func EnrollClientIdentity(t *testing.T, f *GatewayFixture, userID, organizationI
 	}
 	userBytes, err := json.Marshal(user)
 	require.NoError(t, err)
-	err = f.Service.GetDB().DocStore.DocSet(string(constants.CollectionUsers), userID, userBytes)
+	err = f.Service.GetStores().DocStore.DocSet(string(constants.CollectionUsers), userID, userBytes)
 	require.NoError(t, err)
 
 	// Generate CSR for client certificate using P-256 (required by PKI curve enforcement)
@@ -508,7 +508,7 @@ func EnrollClientIdentity(t *testing.T, f *GatewayFixture, userID, organizationI
 
 	// Wait for operator session to be persisted in database
 	require.Eventually(t, func() bool {
-		op, err := f.Service.GetDB().DocStore.DocGet(string(constants.CollectionOperators), regResp.OperatorID)
+		op, err := f.Service.GetStores().DocStore.DocGet(string(constants.CollectionOperators), regResp.OperatorID)
 		if err != nil || op == nil {
 			return false
 		}
@@ -665,7 +665,7 @@ func SetupTribunal(t *testing.T, f *GatewayFixture, tribunalID string, nMembers,
 		pub, priv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 
-		err = f.Service.GetDB().SignerStore.AddTrustedSigner(models.TrustedSigner{
+		err = f.Service.GetStores().SignerStore.AddTrustedSigner(models.TrustedSigner{
 			ID:        appID,
 			PublicKey: hex.EncodeToString(pub),
 			AddedAt:   time.Now().UTC(),
@@ -689,7 +689,7 @@ func SetupTribunal(t *testing.T, f *GatewayFixture, tribunalID string, nMembers,
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	err := f.Service.GetDB().TribunalStore.AddTribunal(policy)
+	err := f.Service.GetStores().TribunalStore.AddTribunal(policy)
 	require.NoError(t, err)
 
 	keyProvider := tribunal.KeyProviderFunc(func(appID string) (ed25519.PrivateKey, error) {

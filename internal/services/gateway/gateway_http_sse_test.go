@@ -102,7 +102,7 @@ func seedOperatorDoc(t *testing.T, h *HTTPHandler, opID, userID, operatorSession
 	}
 	opBytes, err := json.Marshal(op)
 	require.NoError(t, err)
-	err = h.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorSessionID, opBytes)
+	err = h.dbController.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorSessionID, opBytes)
 	require.NoError(t, err)
 }
 
@@ -113,7 +113,7 @@ func seedUserDoc(t *testing.T, h *HTTPHandler, userID string) {
 		"status": string(constants.UserStatusActive),
 	})
 	require.NoError(t, err)
-	err = h.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes)
+	err = h.dbController.docStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes)
 	require.NoError(t, err)
 }
 
@@ -127,7 +127,7 @@ func seedCLISessionDoc(t *testing.T, h *HTTPHandler, cliSessionID, userID, opera
 	}
 	cliBytes, err := json.Marshal(cliSess)
 	require.NoError(t, err)
-	err = h.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes)
+	err = h.dbController.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes)
 	require.NoError(t, err)
 }
 
@@ -136,14 +136,14 @@ func bindWebSessionToOperators(t *testing.T, h *HTTPHandler, webSessionID string
 	t.Helper()
 	raw, err := json.Marshal(operatorSessionIDs)
 	require.NoError(t, err)
-	err = h.db.KVStore.KVSet(sessionWebBindKey(webSessionID), string(raw), 0)
+	err = h.dbController.kvStore.KVSet(sessionWebBindKey(webSessionID), string(raw), 0)
 	require.NoError(t, err)
 }
 
 // bindOperatorToWebSession sets the KV binding from operator session to web session ID.
 func bindOperatorToWebSession(t *testing.T, h *HTTPHandler, operatorSessionID, webSessionID string) {
 	t.Helper()
-	err := h.db.KVStore.KVSet(sessionOperatorBindKey(operatorSessionID), webSessionID, 0)
+	err := h.dbController.kvStore.KVSet(sessionOperatorBindKey(operatorSessionID), webSessionID, 0)
 	require.NoError(t, err)
 }
 
@@ -162,84 +162,84 @@ func TestSSEAuthError_Message(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestHandleInternalSSEPush_MethodNotAllowed(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	req := makeTLSRequest(http.MethodGet, "/api/v1/sse/push", "", nil)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEPush(rr, req)
+	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 }
 
 func TestHandleInternalSSEPush_MissingMTLSCertificate(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/sse/push", strings.NewReader("{}"))
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEPush(rr, req)
+	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	assert.Contains(t, rr.Body.String(), "mTLS client certificate required")
 }
 
 func TestHandleInternalSSEPush_NotAppWorkloadIdentity(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	cert := makeTestAppCert(t, []string{"spiffe://g8e.local/operator/org1/op1/sess1"})
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", "{}", cert)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEPush(rr, req)
+	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusForbidden, rr.Code)
 	assert.Contains(t, rr.Body.String(), "unauthorized client identity")
 }
 
 func TestHandleInternalSSEPush_OperatorIdentityRejected(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	cert := makeTestAppCert(t, []string{"spiffe://g8e.local/app/g8eo"})
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", "{}", cert)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEPush(rr, req)
+	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusForbidden, rr.Code)
 }
 
 func TestHandleInternalSSEPush_GatewayIdentityRejected(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	cert := makeTestAppCert(t, []string{"spiffe://g8e.local/app/g8eg"})
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", "{}", cert)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEPush(rr, req)
+	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusForbidden, rr.Code)
 }
 
 func TestHandleInternalSSEPush_InvalidJSONBody(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	cert := makeTestAppCert(t, []string{"spiffe://g8e.local/app/op1"})
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", "{invalid json", cert)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEPush(rr, req)
+	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 	assert.Contains(t, rr.Body.String(), "invalid JSON body")
 }
 
 func TestHandleInternalSSEPush_MissingEventField(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	cert := makeTestAppCert(t, []string{"spiffe://g8e.local/app/op1"})
 	body := `{"cli_session_id":"sess1"}`
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEPush(rr, req)
+	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 	assert.Contains(t, rr.Body.String(), "event field is required")
 }
 
 func TestHandleInternalSSEPush_NoRoutingTarget(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	cert := makeTestAppCert(t, []string{"spiffe://g8e.local/app/op1"})
 	body := `{"event":{"type":"test"}}`
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEPush(rr, req)
+	h.sseController.handleInternalSSEPush(rr, req)
 	// SSEEventsAppend will fail with route validation error since no routing target
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestHandleInternalSSEPush_CLISessionSuccess(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opID := "op-push-cli"
 	opSessID := "opsess-push-cli"
 	userID := "user-push-cli"
@@ -253,7 +253,7 @@ func TestHandleInternalSSEPush_CLISessionSuccess(t *testing.T) {
 	body := fmt.Sprintf(`{"cli_session_id":"%s","event":{"type":"message","data":"hello"}}`, cliSessionID)
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEPush(rr, req)
+	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	var resp models.SSEPushResponse
@@ -263,7 +263,7 @@ func TestHandleInternalSSEPush_CLISessionSuccess(t *testing.T) {
 }
 
 func TestHandleInternalSSEPush_CLISessionNotFound(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opID := "op-push-cli-notfound"
 	opSessID := "opsess-push-cli-notfound"
 	seedOperatorDoc(t, h, opID, "user-x", opSessID)
@@ -273,13 +273,13 @@ func TestHandleInternalSSEPush_CLISessionNotFound(t *testing.T) {
 	body := `{"cli_session_id":"nonexistent-session","event":{"type":"test"}}`
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEPush(rr, req)
+	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusForbidden, rr.Code)
 	assert.Contains(t, rr.Body.String(), "target session not found")
 }
 
 func TestHandleInternalSSEPush_CLISessionOperatorNotFound(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	cliSessionID := "cli-orphan"
 	seedCLISessionDoc(t, h, cliSessionID, "user-orphan", "nonexistent-opsess")
 
@@ -287,13 +287,13 @@ func TestHandleInternalSSEPush_CLISessionOperatorNotFound(t *testing.T) {
 	body := fmt.Sprintf(`{"cli_session_id":"%s","event":{"type":"test"}}`, cliSessionID)
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEPush(rr, req)
+	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusForbidden, rr.Code)
 	assert.Contains(t, rr.Body.String(), "operator session not found")
 }
 
 func TestHandleInternalSSEPush_CLISessionAppNotAuthorized(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opID := "op-auth-cli"
 	opSessID := "opsess-auth-cli"
 	userID := "user-auth-cli"
@@ -307,13 +307,13 @@ func TestHandleInternalSSEPush_CLISessionAppNotAuthorized(t *testing.T) {
 	body := fmt.Sprintf(`{"cli_session_id":"%s","event":{"type":"test"}}`, cliSessionID)
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEPush(rr, req)
+	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusForbidden, rr.Code)
 	assert.Contains(t, rr.Body.String(), "unauthorized for target session")
 }
 
 func TestHandleInternalSSEPush_WebSessionSuccess(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opID := "op-push-web"
 	opSessID := "opsess-push-web"
 	webSessionID := "web-push-test"
@@ -326,7 +326,7 @@ func TestHandleInternalSSEPush_WebSessionSuccess(t *testing.T) {
 	body := fmt.Sprintf(`{"web_session_id":"%s","event":{"type":"update"}}`, webSessionID)
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEPush(rr, req)
+	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	var resp models.SSEPushResponse
@@ -335,18 +335,18 @@ func TestHandleInternalSSEPush_WebSessionSuccess(t *testing.T) {
 }
 
 func TestHandleInternalSSEPush_WebSessionNoBindings(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	cert := makeTestAppCert(t, []string{"spiffe://g8e.local/app/op1"})
 	body := `{"web_session_id":"unbound-session","event":{"type":"test"}}`
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEPush(rr, req)
+	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusForbidden, rr.Code)
 	assert.Contains(t, rr.Body.String(), "target session not found or not bound")
 }
 
 func TestHandleInternalSSEPush_WebSessionAppNotAuthorized(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opID := "op-web-auth"
 	opSessID := "opsess-web-auth"
 	webSessionID := "web-auth-test"
@@ -359,13 +359,13 @@ func TestHandleInternalSSEPush_WebSessionAppNotAuthorized(t *testing.T) {
 	body := fmt.Sprintf(`{"web_session_id":"%s","event":{"type":"test"}}`, webSessionID)
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEPush(rr, req)
+	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusForbidden, rr.Code)
 	assert.Contains(t, rr.Body.String(), "unauthorized for target session")
 }
 
 func TestHandleInternalSSEPush_UserIDSuccess(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opID := "op-push-user"
 	opSessID := "opsess-push-user"
 	userID := "user-push-target"
@@ -377,7 +377,7 @@ func TestHandleInternalSSEPush_UserIDSuccess(t *testing.T) {
 	body := fmt.Sprintf(`{"user_id":"%s","event":{"type":"broadcast"}}`, userID)
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEPush(rr, req)
+	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	var resp models.SSEPushResponse
@@ -386,18 +386,18 @@ func TestHandleInternalSSEPush_UserIDSuccess(t *testing.T) {
 }
 
 func TestHandleInternalSSEPush_UserIDNoOperators(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	cert := makeTestAppCert(t, []string{"spiffe://g8e.local/app/op1"})
 	body := `{"user_id":"user-without-ops","event":{"type":"test"}}`
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEPush(rr, req)
+	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusForbidden, rr.Code)
 	assert.Contains(t, rr.Body.String(), "unauthorized for target user")
 }
 
 func TestHandleInternalSSEPush_UserIDAppNotAuthorized(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opID := "op-user-mismatch"
 	opSessID := "opsess-user-mismatch"
 	userID := "user-mismatch"
@@ -409,13 +409,13 @@ func TestHandleInternalSSEPush_UserIDAppNotAuthorized(t *testing.T) {
 	body := fmt.Sprintf(`{"user_id":"%s","event":{"type":"test"}}`, userID)
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEPush(rr, req)
+	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusForbidden, rr.Code)
 	assert.Contains(t, rr.Body.String(), "unauthorized for target user")
 }
 
 func TestHandleInternalSSEPush_EventWithoutTypeDefaultsToUnknown(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opID := "op-notype"
 	opSessID := "opsess-notype"
 	userID := "user-notype"
@@ -430,12 +430,12 @@ func TestHandleInternalSSEPush_EventWithoutTypeDefaultsToUnknown(t *testing.T) {
 	body := fmt.Sprintf(`{"cli_session_id":"%s","event":{"data":"no type here"}}`, cliSessionID)
 	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEPush(rr, req)
+	h.sseController.handleInternalSSEPush(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	// Verify the event was stored with type "unknown"
 	route := SSERoute{CLISessionID: cliSessionID}
-	rows, err := h.db.SSEStore.SSEEventsListSince(route, 0, 10)
+	rows, err := h.dbController.sseStore.SSEEventsListSince(route, 0, 10)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	assert.Equal(t, string(constants.SystemHealthUnknown), rows[0].EventType)
@@ -446,10 +446,10 @@ func TestHandleInternalSSEPush_EventWithoutTypeDefaultsToUnknown(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAuthorizeSSERoute_MissingAuthIdentity(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	route := SSERoute{CLISessionID: "sess1"}
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events?cli_session_id=sess1", nil)
-	_, err := h.authorizeSSERoute(route, req)
+	_, err := h.sseController.authorizeSSERoute(route, req)
 	require.Error(t, err)
 	sseErr, ok := err.(*sseAuthError)
 	require.True(t, ok)
@@ -457,11 +457,11 @@ func TestAuthorizeSSERoute_MissingAuthIdentity(t *testing.T) {
 }
 
 func TestAuthorizeSSERoute_MultipleRoutingTargets(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	route := SSERoute{CLISessionID: "sess1", WebSessionID: "web1"}
 	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, "opsess1")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events", nil).WithContext(ctx)
-	_, err := h.authorizeSSERoute(route, req)
+	_, err := h.sseController.authorizeSSERoute(route, req)
 	require.Error(t, err)
 	sseErr, ok := err.(*sseAuthError)
 	require.True(t, ok)
@@ -470,11 +470,11 @@ func TestAuthorizeSSERoute_MultipleRoutingTargets(t *testing.T) {
 }
 
 func TestAuthorizeSSERoute_NoRoutingTarget(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	route := SSERoute{}
 	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, "opsess1")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events", nil).WithContext(ctx)
-	_, err := h.authorizeSSERoute(route, req)
+	_, err := h.sseController.authorizeSSERoute(route, req)
 	require.Error(t, err)
 	sseErr, ok := err.(*sseAuthError)
 	require.True(t, ok)
@@ -482,7 +482,7 @@ func TestAuthorizeSSERoute_NoRoutingTarget(t *testing.T) {
 }
 
 func TestAuthorizeSSERoute_CLISession_OperatorMTLSAuth_Success(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opSessID := "opsess-auth-cli-ok"
 	userID := "user-auth-cli-ok"
 	cliSessionID := "cli-auth-ok"
@@ -493,13 +493,13 @@ func TestAuthorizeSSERoute_CLISession_OperatorMTLSAuth_Success(t *testing.T) {
 	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, opSessID)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events", nil).WithContext(ctx)
 
-	channel, err := h.authorizeSSERoute(route, req)
+	channel, err := h.sseController.authorizeSSERoute(route, req)
 	require.NoError(t, err)
 	assert.Equal(t, "sse:cli:"+cliSessionID, channel)
 }
 
 func TestAuthorizeSSERoute_CLISession_OperatorMTLSAuth_WrongOperator(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opSessID := "opsess-owner"
 	cliSessionID := "cli-owned"
 	seedCLISessionDoc(t, h, cliSessionID, "user1", opSessID)
@@ -508,7 +508,7 @@ func TestAuthorizeSSERoute_CLISession_OperatorMTLSAuth_WrongOperator(t *testing.
 	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, "different-opsess")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events", nil).WithContext(ctx)
 
-	_, err := h.authorizeSSERoute(route, req)
+	_, err := h.sseController.authorizeSSERoute(route, req)
 	require.Error(t, err)
 	sseErr, ok := err.(*sseAuthError)
 	require.True(t, ok)
@@ -517,7 +517,7 @@ func TestAuthorizeSSERoute_CLISession_OperatorMTLSAuth_WrongOperator(t *testing.
 }
 
 func TestAuthorizeSSERoute_CLISession_CLIMTLSAuth_Success(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opSessID := "opsess-cli-mtls"
 	userID := "user-cli-mtls"
 	cliSessionID := "cli-mtls-ok"
@@ -528,13 +528,13 @@ func TestAuthorizeSSERoute_CLISession_CLIMTLSAuth_Success(t *testing.T) {
 	ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, userID)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events", nil).WithContext(ctx)
 
-	channel, err := h.authorizeSSERoute(route, req)
+	channel, err := h.sseController.authorizeSSERoute(route, req)
 	require.NoError(t, err)
 	assert.Equal(t, "sse:cli:"+cliSessionID, channel)
 }
 
 func TestAuthorizeSSERoute_CLISession_CLIMTLSAuth_WrongUser(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opSessID := "opsess-cli-wrong"
 	userID := "user-owner"
 	cliSessionID := "cli-wrong-user"
@@ -544,7 +544,7 @@ func TestAuthorizeSSERoute_CLISession_CLIMTLSAuth_WrongUser(t *testing.T) {
 	ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, "different-user")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events", nil).WithContext(ctx)
 
-	_, err := h.authorizeSSERoute(route, req)
+	_, err := h.sseController.authorizeSSERoute(route, req)
 	require.Error(t, err)
 	sseErr, ok := err.(*sseAuthError)
 	require.True(t, ok)
@@ -553,7 +553,7 @@ func TestAuthorizeSSERoute_CLISession_CLIMTLSAuth_WrongUser(t *testing.T) {
 }
 
 func TestAuthorizeSSERoute_CLISession_CookieAuth_Success(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opSessID := "opsess-cookie"
 	userID := "user-cookie"
 	cliSessionID := "cli-cookie-ok"
@@ -564,13 +564,13 @@ func TestAuthorizeSSERoute_CLISession_CookieAuth_Success(t *testing.T) {
 	ctx = context.WithValue(ctx, constants.ContextKeyUserID, userID)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events", nil).WithContext(ctx)
 
-	channel, err := h.authorizeSSERoute(route, req)
+	channel, err := h.sseController.authorizeSSERoute(route, req)
 	require.NoError(t, err)
 	assert.Equal(t, "sse:cli:"+cliSessionID, channel)
 }
 
 func TestAuthorizeSSERoute_CLISession_CookieAuth_WrongUser(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opSessID := "opsess-cookie-wrong"
 	userID := "user-cookie-owner"
 	cliSessionID := "cli-cookie-wrong"
@@ -581,7 +581,7 @@ func TestAuthorizeSSERoute_CLISession_CookieAuth_WrongUser(t *testing.T) {
 	ctx = context.WithValue(ctx, constants.ContextKeyUserID, "different-user")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events", nil).WithContext(ctx)
 
-	_, err := h.authorizeSSERoute(route, req)
+	_, err := h.sseController.authorizeSSERoute(route, req)
 	require.Error(t, err)
 	sseErr, ok := err.(*sseAuthError)
 	require.True(t, ok)
@@ -589,12 +589,12 @@ func TestAuthorizeSSERoute_CLISession_CookieAuth_WrongUser(t *testing.T) {
 }
 
 func TestAuthorizeSSERoute_CLISession_NotFound(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	route := SSERoute{CLISessionID: "nonexistent"}
 	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, "opsess1")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events", nil).WithContext(ctx)
 
-	_, err := h.authorizeSSERoute(route, req)
+	_, err := h.sseController.authorizeSSERoute(route, req)
 	require.Error(t, err)
 	sseErr, ok := err.(*sseAuthError)
 	require.True(t, ok)
@@ -603,7 +603,7 @@ func TestAuthorizeSSERoute_CLISession_NotFound(t *testing.T) {
 }
 
 func TestAuthorizeSSERoute_WebSession_OperatorMTLSAuth_Success(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opSessID := "opsess-web-mtls"
 	webSessionID := "web-mtls-ok"
 	bindOperatorToWebSession(t, h, opSessID, webSessionID)
@@ -612,13 +612,13 @@ func TestAuthorizeSSERoute_WebSession_OperatorMTLSAuth_Success(t *testing.T) {
 	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, opSessID)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events", nil).WithContext(ctx)
 
-	channel, err := h.authorizeSSERoute(route, req)
+	channel, err := h.sseController.authorizeSSERoute(route, req)
 	require.NoError(t, err)
 	assert.Equal(t, "sse:web:"+webSessionID, channel)
 }
 
 func TestAuthorizeSSERoute_WebSession_OperatorMTLSAuth_WrongBinding(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opSessID := "opsess-web-bound"
 	webSessionID := "web-bound"
 	bindOperatorToWebSession(t, h, opSessID, webSessionID)
@@ -627,7 +627,7 @@ func TestAuthorizeSSERoute_WebSession_OperatorMTLSAuth_WrongBinding(t *testing.T
 	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, opSessID)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events", nil).WithContext(ctx)
 
-	_, err := h.authorizeSSERoute(route, req)
+	_, err := h.sseController.authorizeSSERoute(route, req)
 	require.Error(t, err)
 	sseErr, ok := err.(*sseAuthError)
 	require.True(t, ok)
@@ -636,12 +636,12 @@ func TestAuthorizeSSERoute_WebSession_OperatorMTLSAuth_WrongBinding(t *testing.T
 }
 
 func TestAuthorizeSSERoute_WebSession_OperatorMTLSAuth_NoBinding(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	route := SSERoute{WebSessionID: "web-unbound"}
 	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, "opsess-unbound")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events", nil).WithContext(ctx)
 
-	_, err := h.authorizeSSERoute(route, req)
+	_, err := h.sseController.authorizeSSERoute(route, req)
 	require.Error(t, err)
 	sseErr, ok := err.(*sseAuthError)
 	require.True(t, ok)
@@ -649,7 +649,7 @@ func TestAuthorizeSSERoute_WebSession_OperatorMTLSAuth_NoBinding(t *testing.T) {
 }
 
 func TestAuthorizeSSERoute_WebSession_CookieAuth_Success(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	webSessionID := "web-cookie-ok"
 	userID := "user-web-cookie"
 
@@ -658,19 +658,19 @@ func TestAuthorizeSSERoute_WebSession_CookieAuth_Success(t *testing.T) {
 	ctx = context.WithValue(ctx, constants.ContextKeyUserID, userID)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events", nil).WithContext(ctx)
 
-	channel, err := h.authorizeSSERoute(route, req)
+	channel, err := h.sseController.authorizeSSERoute(route, req)
 	require.NoError(t, err)
 	assert.Equal(t, "sse:web:"+webSessionID, channel)
 }
 
 func TestAuthorizeSSERoute_WebSession_CookieAuth_Mismatch(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	route := SSERoute{WebSessionID: "web-expected"}
 	ctx := context.WithValue(context.Background(), constants.ContextKeyWebSessionID, "web-actual")
 	ctx = context.WithValue(ctx, constants.ContextKeyUserID, "user1")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events", nil).WithContext(ctx)
 
-	_, err := h.authorizeSSERoute(route, req)
+	_, err := h.sseController.authorizeSSERoute(route, req)
 	require.Error(t, err)
 	sseErr, ok := err.(*sseAuthError)
 	require.True(t, ok)
@@ -679,7 +679,7 @@ func TestAuthorizeSSERoute_WebSession_CookieAuth_Mismatch(t *testing.T) {
 }
 
 func TestAuthorizeSSERoute_UserID_OperatorMTLSAuth_Success(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opID := "op-user-mtls"
 	opSessID := "opsess-user-mtls"
 	userID := "user-mtls-ok"
@@ -690,13 +690,13 @@ func TestAuthorizeSSERoute_UserID_OperatorMTLSAuth_Success(t *testing.T) {
 	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, opSessID)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events", nil).WithContext(ctx)
 
-	channel, err := h.authorizeSSERoute(route, req)
+	channel, err := h.sseController.authorizeSSERoute(route, req)
 	require.NoError(t, err)
 	assert.Equal(t, "sse:user:"+userID, channel)
 }
 
 func TestAuthorizeSSERoute_UserID_OperatorMTLSAuth_DifferentUser(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opID := "op-user-diff"
 	opSessID := "opsess-user-diff"
 	userID := "user-owner"
@@ -707,7 +707,7 @@ func TestAuthorizeSSERoute_UserID_OperatorMTLSAuth_DifferentUser(t *testing.T) {
 	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, opSessID)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events", nil).WithContext(ctx)
 
-	_, err := h.authorizeSSERoute(route, req)
+	_, err := h.sseController.authorizeSSERoute(route, req)
 	require.Error(t, err)
 	sseErr, ok := err.(*sseAuthError)
 	require.True(t, ok)
@@ -716,12 +716,12 @@ func TestAuthorizeSSERoute_UserID_OperatorMTLSAuth_DifferentUser(t *testing.T) {
 }
 
 func TestAuthorizeSSERoute_UserID_OperatorMTLSAuth_InvalidSession(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	route := SSERoute{UserID: "user1"}
 	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, "nonexistent-opsess")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events", nil).WithContext(ctx)
 
-	_, err := h.authorizeSSERoute(route, req)
+	_, err := h.sseController.authorizeSSERoute(route, req)
 	require.Error(t, err)
 	sseErr, ok := err.(*sseAuthError)
 	require.True(t, ok)
@@ -730,26 +730,26 @@ func TestAuthorizeSSERoute_UserID_OperatorMTLSAuth_InvalidSession(t *testing.T) 
 }
 
 func TestAuthorizeSSERoute_UserID_CookieAuth_Success(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	userID := "user-cookie-ok"
 	route := SSERoute{UserID: userID}
 	ctx := context.WithValue(context.Background(), constants.ContextKeyWebSessionID, "web-sess")
 	ctx = context.WithValue(ctx, constants.ContextKeyUserID, userID)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events", nil).WithContext(ctx)
 
-	channel, err := h.authorizeSSERoute(route, req)
+	channel, err := h.sseController.authorizeSSERoute(route, req)
 	require.NoError(t, err)
 	assert.Equal(t, "sse:user:"+userID, channel)
 }
 
 func TestAuthorizeSSERoute_UserID_CookieAuth_Mismatch(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	route := SSERoute{UserID: "user-expected"}
 	ctx := context.WithValue(context.Background(), constants.ContextKeyWebSessionID, "web-sess")
 	ctx = context.WithValue(ctx, constants.ContextKeyUserID, "user-actual")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events", nil).WithContext(ctx)
 
-	_, err := h.authorizeSSERoute(route, req)
+	_, err := h.sseController.authorizeSSERoute(route, req)
 	require.Error(t, err)
 	sseErr, ok := err.(*sseAuthError)
 	require.True(t, ok)
@@ -758,7 +758,7 @@ func TestAuthorizeSSERoute_UserID_CookieAuth_Mismatch(t *testing.T) {
 }
 
 func TestAuthorizeSSERoute_AppCertExcludedFromMTLSAuth(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	userID := "user-app-test"
 	route := SSERoute{UserID: userID}
 	// App cert stamps both userID and appID — should NOT be treated as mTLS auth
@@ -766,7 +766,7 @@ func TestAuthorizeSSERoute_AppCertExcludedFromMTLSAuth(t *testing.T) {
 	ctx = context.WithValue(ctx, constants.ContextKeyAppID, "spiffe://g8e.local/app/op1")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events", nil).WithContext(ctx)
 
-	_, err := h.authorizeSSERoute(route, req)
+	_, err := h.sseController.authorizeSSERoute(route, req)
 	require.Error(t, err)
 	sseErr, ok := err.(*sseAuthError)
 	require.True(t, ok)
@@ -779,32 +779,32 @@ func TestAuthorizeSSERoute_AppCertExcludedFromMTLSAuth(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestHandleInternalSSEEvents_MethodNotAllowed(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/sse/events", nil)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEEvents(rr, req)
+	h.sseController.handleInternalSSEEvents(rr, req)
 	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 }
 
 func TestHandleInternalSSEEvents_AuthFailure(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events?cli_session_id=sess1", nil)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEEvents(rr, req)
+	h.sseController.handleInternalSSEEvents(rr, req)
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHandleInternalSSEEvents_BadRequestFromMultipleTargets(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, "opsess1")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events?cli_session_id=sess1&web_session_id=web1", nil).WithContext(ctx)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEEvents(rr, req)
+	h.sseController.handleInternalSSEEvents(rr, req)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestHandleInternalSSEEvents_Success(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opSessID := "opsess-events-ok"
 	userID := "user-events-ok"
 	cliSessionID := "cli-events-ok"
@@ -812,14 +812,14 @@ func TestHandleInternalSSEEvents_Success(t *testing.T) {
 
 	// Push an event first
 	route := SSERoute{CLISessionID: cliSessionID}
-	err := h.db.SSEStore.SSEEventsAppend(route, "test_event", `{"event":{"type":"test_event"}}`, "test-app")
+	err := h.dbController.sseStore.SSEEventsAppend(route, "test_event", `{"event":{"type":"test_event"}}`, "test-app")
 	require.NoError(t, err)
 
 	// Query events with operator mTLS auth
 	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, opSessID)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events?cli_session_id="+cliSessionID+"&since_id=0&limit=10", nil).WithContext(ctx)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEEvents(rr, req)
+	h.sseController.handleInternalSSEEvents(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	var resp models.SSEEventsResponse
@@ -830,7 +830,7 @@ func TestHandleInternalSSEEvents_Success(t *testing.T) {
 }
 
 func TestHandleInternalSSEEvents_EmptyResult(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opSessID := "opsess-empty"
 	userID := "user-empty"
 	cliSessionID := "cli-empty"
@@ -839,7 +839,7 @@ func TestHandleInternalSSEEvents_EmptyResult(t *testing.T) {
 	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, opSessID)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events?cli_session_id="+cliSessionID, nil).WithContext(ctx)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEEvents(rr, req)
+	h.sseController.handleInternalSSEEvents(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	var resp models.SSEEventsResponse
@@ -853,32 +853,32 @@ func TestHandleInternalSSEEvents_EmptyResult(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestHandleInternalSSEStream_MethodNotAllowed(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/sse/stream", nil)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEStream(rr, req)
+	h.sseController.handleInternalSSEStream(rr, req)
 	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 }
 
 func TestHandleInternalSSEStream_AuthFailure(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream?cli_session_id=sess1", nil)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEStream(rr, req)
+	h.sseController.handleInternalSSEStream(rr, req)
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHandleInternalSSEStream_BadRequestFromMultipleTargets(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, "opsess1")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream?cli_session_id=sess1&user_id=user1", nil).WithContext(ctx)
 	rr := httptest.NewRecorder()
-	h.handleInternalSSEStream(rr, req)
+	h.sseController.handleInternalSSEStream(rr, req)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestHandleInternalSSEStream_SSEHeadersSet(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opSessID := "opsess-stream-headers"
 	userID := "user-stream-headers"
 	cliSessionID := "cli-stream-headers"
@@ -895,7 +895,7 @@ func TestHandleInternalSSEStream_SSEHeadersSet(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		h.handleInternalSSEStream(rr, req)
+		h.sseController.handleInternalSSEStream(rr, req)
 		close(done)
 	}()
 
@@ -911,7 +911,7 @@ func TestHandleInternalSSEStream_SSEHeadersSet(t *testing.T) {
 }
 
 func TestHandleInternalSSEStream_SSEHeadersNoOrigin(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opSessID := "opsess-stream-wildcard"
 	userID := "user-stream-wildcard"
 	cliSessionID := "cli-stream-wildcard"
@@ -927,7 +927,7 @@ func TestHandleInternalSSEStream_SSEHeadersNoOrigin(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		h.handleInternalSSEStream(rr, req)
+		h.sseController.handleInternalSSEStream(rr, req)
 		close(done)
 	}()
 
@@ -942,7 +942,7 @@ func TestHandleInternalSSEStream_SSEHeadersNoOrigin(t *testing.T) {
 }
 
 func TestHandleInternalSSEStream_LastEventIDOverridesSinceID(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opSessID := "opsess-last-event"
 	userID := "user-last-event"
 	cliSessionID := "cli-last-event"
@@ -950,11 +950,11 @@ func TestHandleInternalSSEStream_LastEventIDOverridesSinceID(t *testing.T) {
 
 	// Push two events
 	route := SSERoute{CLISessionID: cliSessionID}
-	require.NoError(t, h.db.SSEStore.SSEEventsAppend(route, "event1", `{"event":{"type":"event1"}}`, "app1"))
-	require.NoError(t, h.db.SSEStore.SSEEventsAppend(route, "event2", `{"event":{"type":"event2"}}`, "app1"))
+	require.NoError(t, h.dbController.sseStore.SSEEventsAppend(route, "event1", `{"event":{"type":"event1"}}`, "app1"))
+	require.NoError(t, h.dbController.sseStore.SSEEventsAppend(route, "event2", `{"event":{"type":"event2"}}`, "app1"))
 
 	// Get all events to find the first event's ID
-	rows, err := h.db.SSEStore.SSEEventsListSince(route, 0, 100)
+	rows, err := h.dbController.sseStore.SSEEventsListSince(route, 0, 100)
 	require.NoError(t, err)
 	require.Len(t, rows, 2)
 	firstID := rows[0].ID
@@ -969,7 +969,7 @@ func TestHandleInternalSSEStream_LastEventIDOverridesSinceID(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		h.handleInternalSSEStream(rr, req)
+		h.sseController.handleInternalSSEStream(rr, req)
 		close(done)
 	}()
 
@@ -984,7 +984,7 @@ func TestHandleInternalSSEStream_LastEventIDOverridesSinceID(t *testing.T) {
 }
 
 func TestHandleInternalSSEStream_ReplaysEventsFromDB(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opSessID := "opsess-replay"
 	userID := "user-replay"
 	cliSessionID := "cli-replay"
@@ -992,11 +992,11 @@ func TestHandleInternalSSEStream_ReplaysEventsFromDB(t *testing.T) {
 
 	route := SSERoute{CLISessionID: cliSessionID}
 	// Push a dummy event first so the real event gets ID > 1
-	require.NoError(t, h.db.SSEStore.SSEEventsAppend(route, "dummy_event", `{"event":{"type":"dummy_event"}}`, "app1"))
-	require.NoError(t, h.db.SSEStore.SSEEventsAppend(route, "replay_event", `{"event":{"type":"replay_event"}}`, "app1"))
+	require.NoError(t, h.dbController.sseStore.SSEEventsAppend(route, "dummy_event", `{"event":{"type":"dummy_event"}}`, "app1"))
+	require.NoError(t, h.dbController.sseStore.SSEEventsAppend(route, "replay_event", `{"event":{"type":"replay_event"}}`, "app1"))
 
 	// Get all events to find IDs
-	rows, err := h.db.SSEStore.SSEEventsListSince(route, 0, 100)
+	rows, err := h.dbController.sseStore.SSEEventsListSince(route, 0, 100)
 	require.NoError(t, err)
 	require.Len(t, rows, 2)
 	dummyID := rows[0].ID
@@ -1013,7 +1013,7 @@ func TestHandleInternalSSEStream_ReplaysEventsFromDB(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		h.handleInternalSSEStream(rr, req)
+		h.sseController.handleInternalSSEStream(rr, req)
 		close(done)
 	}()
 
@@ -1028,14 +1028,14 @@ func TestHandleInternalSSEStream_ReplaysEventsFromDB(t *testing.T) {
 }
 
 func TestHandleInternalSSEStream_NoReplayWhenSinceIDZero(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opSessID := "opsess-no-replay"
 	userID := "user-no-replay"
 	cliSessionID := "cli-no-replay"
 	seedCLISessionDoc(t, h, cliSessionID, userID, opSessID)
 
 	route := SSERoute{CLISessionID: cliSessionID}
-	require.NoError(t, h.db.SSEStore.SSEEventsAppend(route, "no_replay_event", `{"event":{"type":"no_replay_event"}}`, "app1"))
+	require.NoError(t, h.dbController.sseStore.SSEEventsAppend(route, "no_replay_event", `{"event":{"type":"no_replay_event"}}`, "app1"))
 
 	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, opSessID)
 	// since_id=0 and no Last-Event-ID → no replay should occur
@@ -1047,7 +1047,7 @@ func TestHandleInternalSSEStream_NoReplayWhenSinceIDZero(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		h.handleInternalSSEStream(rr, req)
+		h.sseController.handleInternalSSEStream(rr, req)
 		close(done)
 	}()
 
@@ -1061,7 +1061,7 @@ func TestHandleInternalSSEStream_NoReplayWhenSinceIDZero(t *testing.T) {
 }
 
 func TestHandleInternalSSEStream_PubSubEventDelivery(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opSessID := "opsess-pubsub"
 	userID := "user-pubsub"
 	cliSessionID := "cli-pubsub"
@@ -1076,7 +1076,7 @@ func TestHandleInternalSSEStream_PubSubEventDelivery(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		h.handleInternalSSEStream(rr, req)
+		h.sseController.handleInternalSSEStream(rr, req)
 		close(done)
 	}()
 
@@ -1098,9 +1098,9 @@ func TestHandleInternalSSEStream_PubSubEventDelivery(t *testing.T) {
 }
 
 func TestHandleInternalSSEStream_HeartbeatSent(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	// Override to a short interval so the test can observe a real heartbeat.
-	h.sseHeartbeatInterval = 50 * time.Millisecond
+	h.sseController.heartbeat = 50 * time.Millisecond
 
 	opSessID := "opsess-heartbeat"
 	userID := "user-heartbeat"
@@ -1116,7 +1116,7 @@ func TestHandleInternalSSEStream_HeartbeatSent(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		h.handleInternalSSEStream(rr, req)
+		h.sseController.handleInternalSSEStream(rr, req)
 		close(done)
 	}()
 
@@ -1131,7 +1131,7 @@ func TestHandleInternalSSEStream_HeartbeatSent(t *testing.T) {
 }
 
 func TestHandleInternalSSEStream_ClientLabelOperatorSession(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opSessID := "opsess-label"
 	userID := "user-label"
 	cliSessionID := "cli-label"
@@ -1146,7 +1146,7 @@ func TestHandleInternalSSEStream_ClientLabelOperatorSession(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		h.handleInternalSSEStream(rr, req)
+		h.sseController.handleInternalSSEStream(rr, req)
 		close(done)
 	}()
 
@@ -1159,7 +1159,7 @@ func TestHandleInternalSSEStream_ClientLabelOperatorSession(t *testing.T) {
 }
 
 func TestHandleInternalSSEStream_ClientLabelWebSession(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	webSessionID := "web-label"
 	userID := "user-web-label"
 
@@ -1173,7 +1173,7 @@ func TestHandleInternalSSEStream_ClientLabelWebSession(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		h.handleInternalSSEStream(rr, req)
+		h.sseController.handleInternalSSEStream(rr, req)
 		close(done)
 	}()
 
@@ -1185,7 +1185,7 @@ func TestHandleInternalSSEStream_ClientLabelWebSession(t *testing.T) {
 }
 
 func TestHandleInternalSSEStream_ClientLabelUserID(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
+	h, _, _ := setupTestHTTPHandler(t)
 	opID := "op-label-user"
 	opSessID := "opsess-label-user"
 	userID := "user-label-id"
@@ -1201,7 +1201,7 @@ func TestHandleInternalSSEStream_ClientLabelUserID(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		h.handleInternalSSEStream(rr, req)
+		h.sseController.handleInternalSSEStream(rr, req)
 		close(done)
 	}()
 

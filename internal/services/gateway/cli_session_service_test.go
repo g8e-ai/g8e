@@ -31,10 +31,10 @@ import (
 func TestNewCLISessionService(t *testing.T) {
 	infra := setupTestInfrastructure(t, true)
 
-	svc := NewCLISessionService(infra.DB, infra.Logger)
+	svc := NewCLISessionService(infra.Stores.DocStore, infra.Logger)
 
 	require.NotNil(t, svc)
-	assert.Equal(t, infra.DB, svc.db)
+	assert.Equal(t, infra.Stores.DocStore, svc.db)
 	assert.Equal(t, infra.Logger, svc.logger)
 }
 
@@ -55,7 +55,7 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify the session was persisted in the DB
-		doc, err := infra.DB.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
@@ -108,7 +108,7 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 		require.NoError(t, err) // Service doesn't validate empty sessionID
 
 		// Verify it was still persisted with empty ID
-		doc, err := infra.DB.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), "")
+		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), "")
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 	})
@@ -119,7 +119,7 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 		require.NoError(t, err) // Service doesn't validate empty operatorSessionID
 
 		// Verify it was persisted
-		doc, err := infra.DB.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
@@ -137,7 +137,7 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 		require.NoError(t, err) // Service doesn't validate empty userID
 
 		// Verify it was persisted
-		doc, err := infra.DB.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
@@ -155,7 +155,7 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 		require.NoError(t, err) // Service doesn't validate empty loginMethod
 
 		// Verify it was persisted
-		doc, err := infra.DB.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
@@ -168,7 +168,7 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 	})
 
 	t.Run("Nil Database", func(t *testing.T) {
-		svcNilDB := NewCLISessionService(nil, infra.Logger)
+		svcNilDB := NewCLISessionService((*DocumentStoreService)(nil), infra.Logger)
 
 		// Nil database causes a panic when accessing DocStore
 		assert.Panics(t, func() {
@@ -177,14 +177,14 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 	})
 
 	t.Run("Nil Logger", func(t *testing.T) {
-		svcNilLogger := NewCLISessionService(infra.DB, nil)
+		svcNilLogger := NewCLISessionService(infra.Stores.DocStore, nil)
 
 		// Should still work without logger (error logging is optional)
 		err := svcNilLogger.PersistCLISession("cli-session-nil-logger", "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
 		require.NoError(t, err)
 
 		// Verify it was persisted
-		doc, err := infra.DB.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), "cli-session-nil-logger")
+		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), "cli-session-nil-logger")
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 	})
@@ -194,7 +194,7 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 		err := svc.PersistCLISession(cliSessionID, "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.DB.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 
 		var stored models.CLISession
@@ -211,7 +211,7 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 		err := svc.PersistCLISession(cliSessionID, "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.DB.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 
 		var stored models.CLISession
@@ -228,7 +228,7 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 		err := svc.PersistCLISession(cliSessionID, "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.DB.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 
 		var stored models.CLISession
@@ -247,7 +247,7 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 		err := svc.PersistCLISession(cliSessionID, "operator-session-456", "user-789", "system-fp", "cert-fp", "serial", "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.DB.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 
 		var stored models.CLISession
@@ -272,7 +272,7 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify the session was overwritten
-		doc, err := infra.DB.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 
 		var stored models.CLISession
@@ -298,7 +298,7 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 		err := svc.PersistCLISession(cliSessionID, "operator-session-456", "user-789", specialSystemFP, specialCertFP, specialSerial, "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.DB.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 
 		var stored models.CLISession
@@ -322,7 +322,7 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 		err := svc.PersistCLISession(cliSessionID, "operator-session-456", "user-789", longString, longString, longString, "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.DB.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		require.NoError(t, err)
 
 		var stored models.CLISession

@@ -37,6 +37,7 @@ type TestInfrastructure struct {
 	Cfg                *config.Config
 	Logger             *slog.Logger
 	DB                 *CanonicalDBService
+	Stores             *Stores
 	Pubsub             *GatewayWebSocketHandler
 	SecretMgr          *SecretManager
 	PKI                *PKIAuthority
@@ -81,7 +82,7 @@ func newTestKeystore(tb testing.TB, fileSvc fs.RuntimeFileService, logger *slog.
 // openTestDB wraps OpenCanonicalDBService for tests, creating a keystore
 // with an in-memory keyring so callers don't need to manage a keystore.
 // Vault auto-initializes on first open; the keystore is for secret operations.
-func openTestDB(t *testing.T, dataDir, vaultDir string, fileSvc fs.RuntimeFileService, logger *slog.Logger) (*CanonicalDBService, error) {
+func openTestDB(t *testing.T, dataDir, vaultDir string, fileSvc fs.RuntimeFileService, logger *slog.Logger) (*CanonicalDBService, *Stores, error) {
 	t.Helper()
 	ks := newTestKeystore(t, fileSvc, logger)
 	return OpenCanonicalDBService(dataDir, vaultDir, logger, "", ks, fileSvc)
@@ -101,7 +102,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 
 	ks := newTestKeystore(t, fileSvc, logger)
 
-	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, "", ks, fileSvc)
+	db, stores, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -110,21 +111,21 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 
 	sm := db.GetSecretManager()
 
-	pki := newPKIAuthority(fileSvc, db, sm, logger)
+	pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
-	userSvc := NewUserService(db, logger)
-	personaSvc := NewPersonaService(db, logger)
+	userSvc := NewUserService(stores.DocStore, logger)
+	personaSvc := NewPersonaService(stores.DocStore, logger)
 	resp := response.NewWriter(logger)
-	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "", "", "")
 	// Wire up auth service to user service for cache invalidation
 	userSvc.SetAuthService(auth)
-	cliSessionSvc := NewCLISessionService(db, logger)
-	operatorSessionSvc := NewOperatorSessionService(db, logger)
-	webSessionSvc := NewWebSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
-	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
+	operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
+	webSessionSvc := NewWebSessionService(stores.DocStore, logger)
+	reg := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
+	passkey, _ := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
 	// Initialize suspended transaction service for tests
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
@@ -150,6 +151,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 		Cfg:                cfg,
 		Logger:             logger,
 		DB:                 db,
+		Stores:             stores,
 		Pubsub:             pubsub,
 		SecretMgr:          sm,
 		PKI:                pki,

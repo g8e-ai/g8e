@@ -32,15 +32,15 @@ import (
 // Enrollment is identity-only by default: apps receive mTLS certificates but no L2 consensus power.
 // L2 signers must be explicitly registered by an admin via POST /api/admin/app-policies/{app_id}/signer.
 type AppEnrollmentService struct {
-	db     *CanonicalDBService
+	db     *DocumentStoreService
 	pki    *PKIAuthority
 	logger *slog.Logger
 }
 
 // NewAppEnrollmentService creates a new AppEnrollmentService.
-func NewAppEnrollmentService(db *CanonicalDBService, pki *PKIAuthority, logger *slog.Logger) *AppEnrollmentService {
+func NewAppEnrollmentService(docStore *DocumentStoreService, pki *PKIAuthority, logger *slog.Logger) *AppEnrollmentService {
 	return &AppEnrollmentService{
-		db:     db,
+		db:     docStore,
 		pki:    pki,
 		logger: logger,
 	}
@@ -151,7 +151,7 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 		s.logger.Error("Failed to marshal app policy", "app_id", appID, "error", err)
 		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollMarshalAppPolicy.Error()}, nil
 	}
-	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionAppPolicies), appID, data); err != nil {
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionAppPolicies), appID, data); err != nil {
 		s.logger.Error("Failed to persist app policy", "app_id", appID, "error", err)
 		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollPersistAppPolicy.Error()}, nil
 	}

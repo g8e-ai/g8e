@@ -29,7 +29,7 @@ import (
 // cliSessionVerifier implements governance.CLISessionVerifier using gateway-specific
 // services (UserService, CLISessionService, PKIAuthority, CanonicalDBService).
 type cliSessionVerifier struct {
-	db            *CanonicalDBService
+	db            *DocumentStoreService
 	pki           *PKIAuthority
 	logger        *slog.Logger
 	userSvc       *UserService
@@ -38,9 +38,9 @@ type cliSessionVerifier struct {
 
 // NewCLISessionVerifier creates a governance.CLISessionVerifier that validates
 // user active status, CLI session validity, and certificate revocation.
-func NewCLISessionVerifier(db *CanonicalDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, cliSessionSvc *CLISessionService) governance.CLISessionVerifier {
+func NewCLISessionVerifier(docStore *DocumentStoreService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, cliSessionSvc *CLISessionService) governance.CLISessionVerifier {
 	return &cliSessionVerifier{
-		db:            db,
+		db:            docStore,
 		pki:           pki,
 		logger:        logger,
 		userSvc:       userSvc,
@@ -99,7 +99,7 @@ func (v *cliSessionVerifier) verifyCLISession(userID, cliSessionID, certFingerpr
 		return nil, constants.ErrCLIL3SessionIDRequired
 	}
 
-	doc, err := v.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+	doc, err := v.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 	if err != nil {
 		v.logger.Error("Failed to load CLI session for L3 verification", "cli_session_id", cliSessionID, "error", err)
 		return nil, fmt.Errorf("cli session verifier: load cli session: %w", err)

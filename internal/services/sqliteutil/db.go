@@ -83,7 +83,7 @@ func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 		return nil, fmt.Errorf("sqliteutil: create database directory %s: %w", dir, err)
 	}
 
-	dsn := fmt.Sprintf("file:%s?_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=%d&_mutex=full",
+	dsn := fmt.Sprintf("file:%s?_synchronous=NORMAL&_journal_mode=WAL&_busy_timeout=%d&_mutex=full",
 		cfg.Path, cfg.BusyTimeoutMs)
 
 	sqlDB, err := sql.Open("sqlite", dsn)
@@ -104,8 +104,8 @@ func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 
 	cacheSizeKB := cfg.CacheSizeMB * 1024
 	pragmas := []string{
-		"PRAGMA journal_mode = WAL",
 		"PRAGMA synchronous = NORMAL",
+		"PRAGMA journal_mode = WAL",
 		"PRAGMA foreign_keys = ON",
 		fmt.Sprintf("PRAGMA cache_size = -%d", cacheSizeKB),
 		"PRAGMA auto_vacuum = INCREMENTAL",

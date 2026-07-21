@@ -58,12 +58,12 @@ func TestNewOperatorController(t *testing.T) {
 
 func TestHandleReauth_MalformedJSON(t *testing.T) {
 
-	db := newTestDB(t)
+	_, stores := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(db, logger)
-	personaSvc := NewPersonaService(db, logger)
+	userSvc := NewUserService(stores.DocStore, logger)
+	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 	reg := &RegistrationService{}
 	cfg := &config.Config{Gateway: config.GatewayConfig{MaxPayloadBytes: 1024}}
 	controller := newOperatorController(cfg, logger, reg, auth, res)
@@ -79,7 +79,7 @@ func TestHandleReauth_MalformedJSON(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocStore.DocSet("operators", "op-123", opBytes))
+	require.NoError(t, stores.DocStore.DocSet("operators", "op-123", opBytes))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/reauth", strings.NewReader("{invalid json"))
 	req.Header.Set("Content-Type", "application/json")

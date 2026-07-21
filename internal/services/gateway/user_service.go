@@ -42,9 +42,9 @@ type UserService struct {
 }
 
 // NewUserService creates a new UserService.
-func NewUserService(db *CanonicalDBService, logger *slog.Logger) *UserService {
+func NewUserService(docStore *DocumentStoreService, logger *slog.Logger) *UserService {
 	return &UserService{
-		db:     db.DocStore,
+		db:     docStore,
 		logger: logger,
 	}
 }
@@ -389,9 +389,9 @@ type PersonaService struct {
 }
 
 // NewPersonaService creates a new PersonaService.
-func NewPersonaService(db *CanonicalDBService, logger *slog.Logger) *PersonaService {
+func NewPersonaService(docStore *DocumentStoreService, logger *slog.Logger) *PersonaService {
 	return &PersonaService{
-		db:     db.DocStore,
+		db:     docStore,
 		logger: logger,
 	}
 }

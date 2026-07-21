@@ -32,20 +32,24 @@ import (
 
 // AdminController handles admin-only endpoints for app policy management.
 type AdminController struct {
-	cfg       *config.Config
-	logger    *slog.Logger
-	db        *CanonicalDBService
-	userSvc   *UserService
-	responder *response.Writer
+	cfg           *config.Config
+	logger        *slog.Logger
+	docStore      *DocumentStoreService
+	signerStore   *SignerStoreService
+	tribunalStore *TribunalStoreService
+	userSvc       *UserService
+	responder     *response.Writer
 }
 
-func newAdminController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, userSvc *UserService, responder *response.Writer) *AdminController {
+func newAdminController(cfg *config.Config, logger *slog.Logger, docStore *DocumentStoreService, signerStore *SignerStoreService, tribunalStore *TribunalStoreService, userSvc *UserService, responder *response.Writer) *AdminController {
 	return &AdminController{
-		cfg:       cfg,
-		logger:    logger,
-		db:        db,
-		userSvc:   userSvc,
-		responder: responder,
+		cfg:           cfg,
+		logger:        logger,
+		docStore:      docStore,
+		signerStore:   signerStore,
+		tribunalStore: tribunalStore,
+		userSvc:       userSvc,
+		responder:     responder,
 	}
 }
 
@@ -83,7 +87,7 @@ func (c *AdminController) handleAppPolicySigner(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	policyDoc, err := c.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
+	policyDoc, err := c.docStore.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to check app policy")
 		return
@@ -128,7 +132,7 @@ func (c *AdminController) handleAppPolicySigner(w http.ResponseWriter, r *http.R
 		Enabled:   true,
 	}
 
-	if err := c.db.SignerStore.AddTrustedSigner(signer); err != nil {
+	if err := c.signerStore.AddTrustedSigner(signer); err != nil {
 		c.logger.Error("failed to add trusted signer", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to add trusted signer")
 		return
@@ -178,13 +182,13 @@ func (c *AdminController) handleRevokeApp(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	_, err = c.db.DocStore.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), req.AppID)
+	_, err = c.docStore.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), req.AppID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to delete app policy")
 		return
 	}
 
-	_, err = c.db.DocStore.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), req.AppID)
+	_, err = c.docStore.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), req.AppID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to delete trusted signer")
 		return
@@ -226,7 +230,7 @@ func (c *AdminController) handleTribunals(w http.ResponseWriter, r *http.Request
 			return
 		}
 
-		if err := c.db.TribunalStore.AddTribunal(policy); err != nil {
+		if err := c.tribunalStore.AddTribunal(policy); err != nil {
 			c.logger.Error("failed to add tribunal", "error", err)
 			c.responder.Error(w, http.StatusBadRequest, err.Error())
 			return
@@ -236,7 +240,7 @@ func (c *AdminController) handleTribunals(w http.ResponseWriter, r *http.Request
 		c.responder.JSON(w, http.StatusCreated, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	case http.MethodGet:
-		tribunals, err := c.db.TribunalStore.ListTribunals()
+		tribunals, err := c.tribunalStore.ListTribunals()
 		if err != nil {
 			c.logger.Error("failed to list tribunals", "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to list tribunals")
@@ -278,7 +282,7 @@ func (c *AdminController) handleDeleteTribunal(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	deleted, err := c.db.TribunalStore.DeleteTribunal(tribunalID)
+	deleted, err := c.tribunalStore.DeleteTribunal(tribunalID)
 	if err != nil {
 		c.logger.Error("failed to delete tribunal", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to delete tribunal")

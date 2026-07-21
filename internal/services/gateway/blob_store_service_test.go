@@ -33,11 +33,11 @@ func setupBlobStoreTest(t *testing.T) (*BlobStoreService, *CanonicalDBService) {
 	dbDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(dbDir, constants.VaultDirname)
 
-	db, err := openTestDB(t, dbDir, vaultDir, fileSvc, logger)
+	db, stores, err := openTestDB(t, dbDir, vaultDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	return db.BlobStore, db
+	return stores.BlobStore, db
 }
 
 func TestBlobStoreService_BlobPut(t *testing.T) {

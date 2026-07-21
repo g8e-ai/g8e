@@ -109,13 +109,13 @@ func encodeChallenge(challenge []byte) string {
 	return base64.RawURLEncoding.EncodeToString(challenge)
 }
 
-// dbUserStore implements userStore using CanonicalDBService.
+// dbUserStore implements userStore using DocumentStoreService.
 type dbUserStore struct {
-	db *CanonicalDBService
+	db *DocumentStoreService
 }
 
 func (s *dbUserStore) GetUser(userID string) (*models.User, error) {
-	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionUsers), userID)
+	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionUsers), userID)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +141,7 @@ func (s *dbUserStore) UpdateUser(userID string, user *models.User) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal user: %w", err)
 	}
-	_, err = s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, data)
+	_, err = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, data)
 	return err
 }
 
@@ -161,23 +161,23 @@ func (s *dbUserStore) CreateUser() (*models.User, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal user: %w", err)
 	}
-	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, data); err != nil {
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, data); err != nil {
 		return nil, fmt.Errorf("failed to store user: %w", err)
 	}
 	return u, nil
 }
 
 func (s *dbUserStore) HasAnyUsers() (bool, error) {
-	docs, err := s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{}, "", 1)
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{}, "", 1)
 	if err != nil {
 		return false, err
 	}
 	return len(docs) > 0, nil
 }
 
-// dbSessionStore implements sessionStore using CanonicalDBService.
+// dbSessionStore implements sessionStore using DocumentStoreService.
 type dbSessionStore struct {
-	db *CanonicalDBService
+	db *DocumentStoreService
 }
 
 func (s *dbSessionStore) StoreSession(userID string, session *webauthn.SessionData) error {
@@ -185,11 +185,11 @@ func (s *dbSessionStore) StoreSession(userID string, session *webauthn.SessionDa
 	if err != nil {
 		return err
 	}
-	return s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID, data)
+	return s.db.DocSet(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID, data)
 }
 
 func (s *dbSessionStore) GetSession(userID string) (*webauthn.SessionData, error) {
-	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID)
+	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID)
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +210,7 @@ func (s *dbSessionStore) GetSession(userID string) (*webauthn.SessionData, error
 }
 
 func (s *dbSessionStore) DeleteSession(userID string) error {
-	_, err := s.db.DocStore.DocDelete(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID)
+	_, err := s.db.DocDelete(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID)
 	return err
 }
 
@@ -269,7 +269,7 @@ func buildRPOrigins(cfg *PasskeyConfig) []string {
 }
 
 // NewPasskeyService creates a new PasskeyService with the given configuration.
-func NewPasskeyService(db *CanonicalDBService, logger *slog.Logger, cfg *PasskeyConfig) (*PasskeyService, error) {
+func NewPasskeyService(docStore *DocumentStoreService, logger *slog.Logger, cfg *PasskeyConfig) (*PasskeyService, error) {
 	rpName := cfg.RpName
 	if rpName == "" {
 		rpName = "g8e"
@@ -287,8 +287,8 @@ func NewPasskeyService(db *CanonicalDBService, logger *slog.Logger, cfg *Passkey
 	}
 
 	return &PasskeyService{
-		userStore:    &dbUserStore{db: db},
-		sessionStore: &dbSessionStore{db: db},
+		userStore:    &dbUserStore{db: docStore},
+		sessionStore: &dbSessionStore{db: docStore},
 		webauthn:     &realWebauthnClient{w: w},
 		logger:       logger,
 		rpID:         cfg.RpID,

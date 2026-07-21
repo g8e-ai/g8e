@@ -203,7 +203,7 @@ func TestHandleEnrollmentTokenValidate(t *testing.T) {
 
 func TestEnrollmentTokenRouteRegistration(t *testing.T) {
 	t.Run("Generate endpoint is registered on public router behind mTLS", func(t *testing.T) {
-		h, _ := setupTestHTTPHandler(t)
+		h, _, _ := setupTestHTTPHandler(t)
 		router := h.buildPublicRouter()
 
 		body, _ := json.Marshal(map[string]string{"token": "test"})
@@ -216,7 +216,7 @@ func TestEnrollmentTokenRouteRegistration(t *testing.T) {
 	})
 
 	t.Run("Validate endpoint is registered on public router", func(t *testing.T) {
-		h, _ := setupTestHTTPHandler(t)
+		h, _, _ := setupTestHTTPHandler(t)
 		router := h.buildPublicRouter()
 
 		body, _ := json.Marshal(map[string]string{"token": "nonexistenttoken1234567890abcdef"})
