@@ -29,7 +29,7 @@ import (
 
 func TestTribunalStoreService_AddTribunal(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	tribunalSvc := NewTribunalStoreService(infra.DB.GetDB(), infra.Logger, infra.DB.DocStore, infra.DB.SignerStore)
+	tribunalSvc := NewTribunalStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
 
 	// Generate test signers
 	pubKey1, _, err := ed25519.GenerateKey(nil)
@@ -59,17 +59,17 @@ func TestTribunalStoreService_AddTribunal(t *testing.T) {
 	}
 
 	// Register signers
-	err = infra.DB.SignerStore.AddTrustedSigner(signer1)
+	err = infra.Stores.SignerStore.AddTrustedSigner(signer1)
 	require.NoError(t, err)
-	t.Cleanup(func() { infra.DB.SignerStore.DeleteTrustedSigner("member-1") })
+	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("member-1") })
 
-	err = infra.DB.SignerStore.AddTrustedSigner(signer2)
+	err = infra.Stores.SignerStore.AddTrustedSigner(signer2)
 	require.NoError(t, err)
-	t.Cleanup(func() { infra.DB.SignerStore.DeleteTrustedSigner("member-2") })
+	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("member-2") })
 
-	err = infra.DB.SignerStore.AddTrustedSigner(disabledSigner)
+	err = infra.Stores.SignerStore.AddTrustedSigner(disabledSigner)
 	require.NoError(t, err)
-	t.Cleanup(func() { infra.DB.SignerStore.DeleteTrustedSigner("disabled-member") })
+	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("disabled-member") })
 
 	tests := []struct {
 		name        string
@@ -253,7 +253,7 @@ func TestTribunalStoreService_AddTribunal(t *testing.T) {
 
 func TestTribunalStoreService_GetTribunal(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	tribunalSvc := NewTribunalStoreService(infra.DB.GetDB(), infra.Logger, infra.DB.DocStore, infra.DB.SignerStore)
+	tribunalSvc := NewTribunalStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
 
 	// Create a test signer
 	pubKey, _, err := ed25519.GenerateKey(nil)
@@ -264,9 +264,9 @@ func TestTribunalStoreService_GetTribunal(t *testing.T) {
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
 	}
-	err = infra.DB.SignerStore.AddTrustedSigner(signer)
+	err = infra.Stores.SignerStore.AddTrustedSigner(signer)
 	require.NoError(t, err)
-	t.Cleanup(func() { infra.DB.SignerStore.DeleteTrustedSigner("test-member") })
+	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("test-member") })
 
 	// Create a test tribunal
 	policy := models.TribunalPolicy{
@@ -298,7 +298,7 @@ func TestTribunalStoreService_GetTribunal(t *testing.T) {
 
 func TestTribunalStoreService_ListTribunals(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	tribunalSvc := NewTribunalStoreService(infra.DB.GetDB(), infra.Logger, infra.DB.DocStore, infra.DB.SignerStore)
+	tribunalSvc := NewTribunalStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
 
 	// Create test signers
 	pubKey1, _, err := ed25519.GenerateKey(nil)
@@ -319,13 +319,13 @@ func TestTribunalStoreService_ListTribunals(t *testing.T) {
 		Enabled:   true,
 	}
 
-	err = infra.DB.SignerStore.AddTrustedSigner(signer1)
+	err = infra.Stores.SignerStore.AddTrustedSigner(signer1)
 	require.NoError(t, err)
-	t.Cleanup(func() { infra.DB.SignerStore.DeleteTrustedSigner("list-member-1") })
+	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("list-member-1") })
 
-	err = infra.DB.SignerStore.AddTrustedSigner(signer2)
+	err = infra.Stores.SignerStore.AddTrustedSigner(signer2)
 	require.NoError(t, err)
-	t.Cleanup(func() { infra.DB.SignerStore.DeleteTrustedSigner("list-member-2") })
+	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("list-member-2") })
 
 	// Create test tribunals
 	policy1 := models.TribunalPolicy{
@@ -366,7 +366,7 @@ func TestTribunalStoreService_ListTribunals(t *testing.T) {
 
 func TestTribunalStoreService_DeleteTribunal(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	tribunalSvc := NewTribunalStoreService(infra.DB.GetDB(), infra.Logger, infra.DB.DocStore, infra.DB.SignerStore)
+	tribunalSvc := NewTribunalStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
 
 	// Create a test signer
 	pubKey, _, err := ed25519.GenerateKey(nil)
@@ -377,9 +377,9 @@ func TestTribunalStoreService_DeleteTribunal(t *testing.T) {
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
 	}
-	err = infra.DB.SignerStore.AddTrustedSigner(signer)
+	err = infra.Stores.SignerStore.AddTrustedSigner(signer)
 	require.NoError(t, err)
-	t.Cleanup(func() { infra.DB.SignerStore.DeleteTrustedSigner("delete-member") })
+	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("delete-member") })
 
 	// Create a test tribunal
 	policy := models.TribunalPolicy{
@@ -410,7 +410,7 @@ func TestTribunalStoreService_DeleteTribunal(t *testing.T) {
 
 func TestTribunalStoreService_UpdateDisableTribunal(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	tribunalSvc := NewTribunalStoreService(infra.DB.GetDB(), infra.Logger, infra.DB.DocStore, infra.DB.SignerStore)
+	tribunalSvc := NewTribunalStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
 
 	pubKey, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -420,9 +420,9 @@ func TestTribunalStoreService_UpdateDisableTribunal(t *testing.T) {
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
 	}
-	err = infra.DB.SignerStore.AddTrustedSigner(signer)
+	err = infra.Stores.SignerStore.AddTrustedSigner(signer)
 	require.NoError(t, err)
-	t.Cleanup(func() { infra.DB.SignerStore.DeleteTrustedSigner("update-member") })
+	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("update-member") })
 
 	// Create enabled tribunal
 	policy := models.TribunalPolicy{
@@ -450,7 +450,7 @@ func TestTribunalStoreService_UpdateDisableTribunal(t *testing.T) {
 
 func TestTribunalStoreService_AddTribunal_AlreadyExists(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	tribunalSvc := NewTribunalStoreService(infra.DB.GetDB(), infra.Logger, infra.DB.DocStore, infra.DB.SignerStore)
+	tribunalSvc := NewTribunalStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
 
 	pubKey, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -460,9 +460,9 @@ func TestTribunalStoreService_AddTribunal_AlreadyExists(t *testing.T) {
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
 	}
-	err = infra.DB.SignerStore.AddTrustedSigner(signer)
+	err = infra.Stores.SignerStore.AddTrustedSigner(signer)
 	require.NoError(t, err)
-	t.Cleanup(func() { infra.DB.SignerStore.DeleteTrustedSigner("exists-member") })
+	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("exists-member") })
 
 	policy := models.TribunalPolicy{
 		ID:              "exists-tribunal",

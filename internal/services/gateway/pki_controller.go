@@ -42,18 +42,16 @@ import (
 type PKIController struct {
 	cfg           *config.Config
 	logger        *slog.Logger
-	db            *CanonicalDBService
 	pki           *PKIAuthority
 	appEnrollment *AppEnrollmentService
 	registration  *RegistrationService
 	responder     *response.Writer
 }
 
-func newPKIController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, pki *PKIAuthority, appEnrollment *AppEnrollmentService, registration *RegistrationService, responder *response.Writer) *PKIController {
+func newPKIController(cfg *config.Config, logger *slog.Logger, pki *PKIAuthority, appEnrollment *AppEnrollmentService, registration *RegistrationService, responder *response.Writer) *PKIController {
 	return &PKIController{
 		cfg:           cfg,
 		logger:        logger,
-		db:            db,
 		pki:           pki,
 		appEnrollment: appEnrollment,
 		registration:  registration,

@@ -54,11 +54,10 @@ func newTestDocumentStoreService(t *testing.T) *DocumentStoreService {
 	return NewDocumentStoreService(db, testutil.NewTestLogger())
 }
 
-// newTestCanonicalDBService creates a CanonicalDBService with a test DocumentStoreService.
-func newTestCanonicalDBService(t *testing.T) *CanonicalDBService {
+// newTestCanonicalDBService creates a DocumentStoreService for unit tests.
+func newTestCanonicalDBService(t *testing.T) *DocumentStoreService {
 	t.Helper()
-	docStore := newTestDocumentStoreService(t)
-	return &CanonicalDBService{DocStore: docStore}
+	return newTestDocumentStoreService(t)
 }
 
 // mockAuthService is a mock implementation of AuthService for cache invalidation

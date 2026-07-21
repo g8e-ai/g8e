@@ -29,10 +29,10 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux := http.NewServeMux()
 
 	// Health endpoint (full health check: platform_settings + state root)
-	mux.HandleFunc(constants.APIPaths.Health, h.handleHealth)
+	mux.HandleFunc(constants.APIPaths.Health, h.healthController.handleHealth)
 
 	// State endpoint (for envelope state root binding)
-	mux.HandleFunc(constants.APIPaths.State, h.handleState)
+	mux.HandleFunc(constants.APIPaths.State, h.healthController.handleState)
 
 	// Swagger UI documentation
 	mux.HandleFunc("/swagger/", handleSwaggerUI)
@@ -52,7 +52,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.Handle("/console/", http.StripPrefix("/console", console.Handler()))
 
 	// Landing page and health
-	mux.HandleFunc(constants.APIPaths.Landing, h.handleLandingPage)
+	mux.HandleFunc(constants.APIPaths.Landing, h.healthController.handleLandingPage)
 	mux.HandleFunc(constants.APIPaths.AuthLogout, h.authController.handlePublicAuthLogout)
 	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handleLocalBootstrapWithURL)
 	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.authController.handleBootstrapStatus)
@@ -114,11 +114,11 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// Always registered — the handler checks the atomic pointer and returns
 	// 503 if tribunal is not yet wired, eliminating the need for a router
 	// rebuild when SetTribunal is called later in the boot sequence.
-	mux.HandleFunc(constants.APIPaths.TribunalDeliberate, h.handleTribunalDeliberate)
+	mux.HandleFunc(constants.APIPaths.TribunalDeliberate, h.governanceController.handleTribunalDeliberate)
 
 	// Rate-limited governance envelope
 	govEnvMux := http.NewServeMux()
-	govEnvMux.HandleFunc(constants.APIPaths.GovernanceEnvelopes, h.handleGovernanceEnvelope)
+	govEnvMux.HandleFunc(constants.APIPaths.GovernanceEnvelopes, h.governanceController.handleGovernanceEnvelope)
 	govEnvHandler := h.rateLimitMiddleware(govEnvMux)
 	mux.Handle(constants.APIPaths.GovernanceEnvelopes, govEnvHandler)
 
@@ -128,9 +128,9 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuditSummary, h.dbController.handleAuditSummary)
 	mux.HandleFunc(constants.APIPaths.AuditReport, h.dbController.handleAuditReport)
 
-	mux.HandleFunc(constants.APIPaths.SSEPush, h.handleInternalSSEPush)
-	mux.HandleFunc(constants.APIPaths.SSEEvents, h.handleInternalSSEEvents)
-	mux.HandleFunc(constants.APIPaths.SSEStream, h.handleInternalSSEStream)
+	mux.HandleFunc(constants.APIPaths.SSEPush, h.sseController.handleInternalSSEPush)
+	mux.HandleFunc(constants.APIPaths.SSEEvents, h.sseController.handleInternalSSEEvents)
+	mux.HandleFunc(constants.APIPaths.SSEStream, h.sseController.handleInternalSSEStream)
 	mux.Handle(constants.APIPaths.DataDB, http.HandlerFunc(h.dbController.handleDataDB))
 	mux.Handle(constants.APIPaths.KV, http.HandlerFunc(h.dbController.handleKV))
 	mux.HandleFunc(constants.APIPaths.PubSubPublish, h.dbController.handlePubSubPublish)
@@ -193,10 +193,10 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	mux := http.NewServeMux()
 
 	// Health check - available on HTTP port for initialization monitoring
-	mux.HandleFunc(constants.APIPaths.Health, h.handleBootstrapHealth)
+	mux.HandleFunc(constants.APIPaths.Health, h.healthController.handleBootstrapHealth)
 
 	// State endpoint (for envelope state root binding)
-	mux.HandleFunc(constants.APIPaths.State, h.handleState)
+	mux.HandleFunc(constants.APIPaths.State, h.healthController.handleState)
 
 	// Bootstrap routes - plain HTTP for initial CA discovery and bootstrap
 	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handleLocalBootstrapWithURL)

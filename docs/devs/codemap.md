@@ -21,16 +21,16 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   ├── pubsub.HistoryService
 │   ├── governance.L4Warden
 │   │   ├── governance.ReplayStore (storage.SQLReplayStore)
-│   │   ├── governance.StateRootProvider (gateway.StateRootService via CanonicalDBService) [SHARED]
+│   │   ├── governance.StateRootProvider (gateway.StateRootService via Stores) [SHARED]
 │   │   ├── governance.SignerStore (governance.FilesystemSignerStore)
-│   │   ├── governance.AppPolicyStore (gateway.AppPolicyStoreService via CanonicalDBService) [SHARED]
+│   │   ├── governance.AppPolicyStore (gateway.AppPolicyStoreService via Stores) [SHARED]
 │   │   ├── governance.TribunalStore (via GovernanceDeps; nil in outbound mode, gateway.TribunalStoreService in gateway mode)
 │   │   ├── governance.L1Doctrine (created internally by L4Warden when doctrine param is nil)
 │   │   └── governance.L3Notary (governance.outboundNotary implementation)
 │   │       └── storage.SuspendedTransactionService
 │   ├── governance.L5Actuator
 │   │   ├── execution.ExecutionService
-│   │   ├── storage.SQLAuditStore (from CanonicalDBService.AuditStore) [SHARED]
+│   │   ├── storage.SQLAuditStore (from Stores.AuditStore) [SHARED]
 │   │   ├── governance.TransactionAuditStore (auditStoreTransactionStore wrapper)
 │   │   ├── scrubbing.ScrubbingService
 │   │   └── governance.StateRootProvider
@@ -45,71 +45,76 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   ├── sqliteutil.DB
 │   └── vault.Vault (shared with CanonicalDBService)
 ├── gateway.EncryptedKVAdapter (implements storage.TokenStore)
-│   ├── gateway.KVStoreService (from CanonicalDBService) [SHARED]
+│   ├── gateway.KVStoreService (from Stores) [SHARED]
 │   └── vault.Vault (shared with CanonicalDBService)
 ├── storage.SuspendedTransactionService
 │   └── sqliteutil.DB
 ├── storage.GitLedgerService
 │   └── vault.Vault (shared with CanonicalDBService)
 ├── storage.HistoryHandler
-│   ├── storage.SQLAuditStore (from CanonicalDBService.AuditStore) [SHARED]
+│   ├── storage.SQLAuditStore (from Stores.AuditStore) [SHARED]
 │   └── storage.GitLedgerService
 ├── governance.ReplayStore (storage.SQLReplayStore)
 │   └── sqliteutil.DB
 ├── scrubbing.ScrubbingService
 │   └── storage.TokenStore (gateway.EncryptedKVAdapter)
-└── gateway.CanonicalDBService [SHARED]
+└── gateway.CanonicalDBService [SHARED] (lifecycle only: Open, Close, GetVault, schema/migrations, maintenance loop)
     ├── sqliteutil.DB
-    ├── storage.SQLAuditStore
     ├── vault.Vault
-    ├── gateway.DocumentStoreService
-    ├── gateway.AppPolicyStoreService
-    ├── gateway.SignerStoreService
-    ├── gateway.TribunalStoreService
-    ├── gateway.StateRootService
-    ├── gateway.ReplayStoreService
-    ├── gateway.KVStoreService
-    ├── gateway.SSEEventService
-    └── gateway.BlobStoreService
+    └── gateway.Stores (returned by OpenCanonicalDBService)
+        ├── gateway.DocumentStoreService
+        ├── gateway.AppPolicyStoreService
+        ├── gateway.SignerStoreService
+        ├── gateway.TribunalStoreService
+        ├── gateway.StateRootService
+        ├── gateway.ReplayStoreService
+        ├── gateway.KVStoreService
+        ├── gateway.SSEEventService
+        ├── gateway.BlobStoreService
+        ├── storage.SQLAuditStore
+        └── sqliteutil.DB (raw SQLite connection for consumers needing direct DB access)
 
 GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
-├── gateway.CanonicalDBService [SHARED] (lifecycle only: Open, Close, Wait, GetDB, GetVault, schema/migrations, maintenance loop)
+├── gateway.CanonicalDBService [SHARED] (lifecycle only: Open, Close, GetVault, schema/migrations, maintenance loop)
 │   ├── sqliteutil.DB
-│   ├── storage.SQLAuditStore
 │   ├── vault.Vault
-│   ├── gateway.DocumentStoreService (extracted field)
-│   ├── gateway.AppPolicyStoreService (extracted field)
-│   ├── gateway.SignerStoreService (extracted field)
-│   ├── gateway.TribunalStoreService (extracted field)
-│   ├── gateway.StateRootService (extracted field)
-│   ├── gateway.ReplayStoreService (extracted field)
-│   ├── gateway.KVStoreService (extracted field)
-│   ├── gateway.SSEEventService (extracted field)
-│   └── gateway.BlobStoreService (extracted field)
+│   └── gateway.Stores (returned by OpenCanonicalDBService, held as private stores field)
+│       ├── gateway.DocumentStoreService
+│       ├── gateway.AppPolicyStoreService
+│       ├── gateway.SignerStoreService
+│       ├── gateway.TribunalStoreService
+│       ├── gateway.StateRootService
+│       ├── gateway.ReplayStoreService
+│       ├── gateway.KVStoreService
+│       ├── gateway.SSEEventService
+│       ├── gateway.BlobStoreService
+│       ├── storage.SQLAuditStore
+│       └── sqliteutil.DB (raw SQLite connection for consumers needing direct DB access)
 ├── storage.SuspendedTransactionService (for L3 approval workflow)
 │   └── sqliteutil.DB
 ├── gateway.GatewayWebSocketHandler
 ├── gateway.AuthService
-│   ├── gateway.CanonicalDBService [SHARED]
+│   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   ├── gateway.PKIAuthority
 │   ├── gateway.UserService
 │   ├── gateway.PersonaService
-│   │   └── gateway.CanonicalDBService [SHARED]
+│   │   └── gateway.DocumentStoreService (from Stores [SHARED])
 │   ├── gateway.JWKSProvider (optional, for external IdP JWT auth)
 │   └── response.Writer
 ├── gateway.PKIAuthority
-│   ├── gateway.CanonicalDBService [SHARED]
+│   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   └── gateway.SecretManager (local variable in NewGatewayModeService, not a retained field)
 │       ├── sqliteutil.DB
 │       └── keystore.Keystore (via gateway.CanonicalDBService)
 ├── gateway.RegistrationService
-│   ├── gateway.CanonicalDBService [SHARED]
+│   ├── gateway.DocumentStoreService (from Stores [SHARED])
+│   ├── gateway.KVStoreService (from Stores [SHARED])
 │   ├── gateway.PKIAuthority
 │   ├── gateway.UserService
 │   ├── gateway.CLISessionService
 │   └── gateway.OperatorSessionService
 ├── gateway.PasskeyService (domain logic only)
-│   └── gateway.CanonicalDBService [SHARED] (via dbUserStore and dbSessionStore wrappers)
+│   └── gateway.DocumentStoreService (from Stores [SHARED]) (via dbUserStore and dbSessionStore wrappers)
 ├── gateway.PasskeyHandler (HTTP layer, embeds *PasskeyService)
 │   ├── gateway.PasskeyService [SHARED]
 │   ├── gateway.WebSessionService (for session creation on browser flows)
@@ -119,15 +124,14 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.SSEEventService (via PasskeyHandlerDeps constructor)
 │   └── gateway.GatewayWebSocketHandler (via PasskeyHandlerDeps constructor)
 ├── gateway.UserService
-│   └── gateway.CanonicalDBService [SHARED]
+│   └── gateway.DocumentStoreService (from Stores [SHARED])
 ├── gateway.CLISessionService
-│   └── gateway.CanonicalDBService [SHARED]
+│   └── gateway.DocumentStoreService (from Stores [SHARED])
 ├── gateway.OperatorSessionService
-│   └── gateway.CanonicalDBService [SHARED]
+│   └── gateway.DocumentStoreService (from Stores [SHARED])
 ├── gateway.WebSessionService
-│   └── gateway.CanonicalDBService [SHARED]
-├── gateway.HTTPHandler
-│   ├── gateway.CanonicalDBService [SHARED]
+│   └── gateway.DocumentStoreService (from Stores [SHARED])
+├── gateway.HTTPHandler (receives Stores via HTTPHandlerDependencies, delegates to controllers)
 │   ├── gateway.GatewayWebSocketHandler
 │   ├── gateway.AuthService
 │   ├── gateway.PKIAuthority
@@ -142,14 +146,21 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   └── gateway.GatewayWebSocketHandler (via PasskeyHandlerDeps constructor)
 │   ├── gateway.UserService
 │   ├── gateway.AppEnrollmentService
-│   │   ├── gateway.CanonicalDBService [SHARED]
+│   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   │   └── gateway.PKIAuthority
 │   ├── gateway/console (Console SPA embed filesystem)
 │   ├── mcp.GatewayService [SHARED]
-│   ├── tribunal.TribunalService (atomic.Pointer, set by boot sequence via SetTribunal — no router rebuild)
-│   ├── governance.EnvelopeProcessor (atomic.Pointer, set by boot sequence via SetEnvelopeProcessor)
+│   ├── gateway.GovernanceController (governance envelope submission, tribunal deliberation)
+│   │   ├── tribunal.TribunalService (atomic.Pointer, set by boot sequence via SetTribunal — no router rebuild)
+│   │   └── governance.EnvelopeProcessor (atomic.Value via envProcHolder, set by boot sequence via SetEnvelopeProcessor)
 │   ├── gateway.PKIController (PKI enrollment, CSR signing, trust scripts, deploy scripts)
 │   ├── gateway.DBController (audit receipts, audit events, data DB, KV, blobs, governance signers, pub/sub)
+│   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
+│   │   ├── gateway.KVStoreService (from Stores [SHARED])
+│   │   ├── gateway.SSEEventService (from Stores [SHARED])
+│   │   ├── gateway.BlobStoreService (from Stores [SHARED])
+│   │   ├── storage.SQLAuditStore (from Stores [SHARED])
+│   │   └── gateway.SignerStoreService (from Stores [SHARED])
 │   ├── gateway.AuthController (bootstrap, CLI enrollment, device enrollment, user management, web session)
 │   │   ├── gateway.AuthService [SHARED]
 │   │   ├── gateway.PasskeyHandler [SHARED]
@@ -159,23 +170,33 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   ├── gateway.WebSessionService [SHARED]
 │   │   ├── gateway.CLISessionService [SHARED]
 │   │   ├── gateway.OperatorSessionService [SHARED]
-│   │   ├── gateway.CanonicalDBService [SHARED]
+│   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   │   ├── gateway.EnrollmentTokenService (created in HTTPHandler constructor, manages enrollment token lifecycle with TTL-based cleanup)
 │   │   ├── response.Writer
 │   │   └── actuatorKeyReader (fileActuatorKeyReader, reads actuator public key from disk)
 │   ├── gateway.AdminController (app policies, tribunals, app revocation)
+│   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
+│   │   ├── gateway.SignerStoreService (from Stores [SHARED])
+│   │   └── gateway.TribunalStoreService (from Stores [SHARED])
+│   ├── gateway.SSEController (SSE push, events, stream)
+│   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
+│   │   ├── gateway.KVStoreService (from Stores [SHARED])
+│   │   └── gateway.SSEEventService (from Stores [SHARED])
+│   ├── gateway.HealthController (health checks, state root)
+│   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
+│   │   └── gateway.StateRootService (from Stores [SHARED])
 │   ├── gateway.OperatorController (operator list, terminate, bind/unbind, target context, reauth)
 │   └── response.Writer
 ├── http.Server (HTTPS port, mTLS-enforced public router)
 ├── http.Server (HTTP port, bootstrap-only router)
 ├── governance.gatewayNotary (via governance.NewGatewayL3Notary, implements governance.L3Notary)
 │   ├── gateway.cliSessionVerifier (via NewCLISessionVerifier, implements governance.CLISessionVerifier)
-│   │   ├── gateway.CanonicalDBService [SHARED]
+│   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   │   ├── gateway.PKIAuthority
 │   │   ├── gateway.UserService
 │   │   └── gateway.CLISessionService
 │   └── gateway.PasskeyService (as governance.L3Notary for WebAuthn proofs, domain logic only)
-│       └── gateway.CanonicalDBService [SHARED]
+│       └── gateway.DocumentStoreService (from Stores [SHARED])
 ├── tribunal.TribunalService
 │   ├── governance.L1Doctrine
 │   ├── tribunal.TribunalMember (one or more enrolled members with Ed25519 keys)
@@ -210,18 +231,19 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 
 ### Data Handling Convergence
 - **`gateway.CanonicalDBService`** is the canonical SQLite root for gateway mode; it now contains only lifecycle code (Open, Close, Wait, GetDB, GetVault, schema/migrations, maintenance loop). All domain logic has been extracted to dedicated service fields. In outbound mode, it is used only for state root calculation and provides the shared vault instance.
-- **`gateway.DocumentStoreService`** provides collection/ID-based document CRUD operations for gateway mode (implements governance.TransactionAuditStore). Callers access it directly via the `DocStore` field on CanonicalDBService - no delegation wrappers.
-- **`gateway.StateRootService`** provides state merkle root calculation with caching for gateway mode (implements governance.StateRootProvider). Callers access it directly via the `StateRootSvc` field on CanonicalDBService - no delegation wrappers.
-- **`gateway.SignerStoreService`** provides trusted signer CRUD operations for gateway mode (implements governance.SignerStore). Callers access it directly via the `SignerStore` field on CanonicalDBService - no delegation wrappers.
-- **`gateway.AppPolicyStoreService`** provides app policy retrieval for gateway mode (implements governance.AppPolicyStore). Callers access it directly via the `AppPolicyStore` field on CanonicalDBService - no delegation wrappers.
-- **`gateway.ReplayStoreService`** provides nonce replay protection for gateway mode (implements governance.ReplayStore). Callers access it directly via the `ReplayStore` field on CanonicalDBService - no delegation wrappers.
-- **`gateway.KVStoreService`** provides TTL-aware ephemeral state with GLOB pattern scanning for gateway mode. Callers access it directly via the `KVStore` field on CanonicalDBService - no delegation wrappers.
-- **`gateway.SSEEventService`** provides Server-Sent Events fan-out for gateway mode. Callers access it directly via the `SSEStore` field on CanonicalDBService - no delegation wrappers.
-- **`gateway.BlobStoreService`** provides binary persistence for attachments and certificate material for gateway mode. Callers access it directly via the `BlobStore` field on CanonicalDBService - no delegation wrappers.
+- **`gateway.DocumentStoreService`** provides collection/ID-based document CRUD operations for gateway mode (implements governance.TransactionAuditStore). Callers access it directly via the `DocStore` field on `Stores` (returned by `OpenCanonicalDBService`) - no delegation wrappers.
+- **`gateway.StateRootService`** provides state merkle root calculation with caching for gateway mode (implements governance.StateRootProvider). Callers access it directly via the `StateRootSvc` field on `Stores` (returned by `OpenCanonicalDBService`) - no delegation wrappers.
+- **`gateway.SignerStoreService`** provides trusted signer CRUD operations for gateway mode (implements governance.SignerStore). Callers access it directly via the `SignerStore` field on `Stores` (returned by `OpenCanonicalDBService`) - no delegation wrappers.
+- **`gateway.AppPolicyStoreService`** provides app policy retrieval for gateway mode (implements governance.AppPolicyStore). Callers access it directly via the `AppPolicyStore` field on `Stores` (returned by `OpenCanonicalDBService`) - no delegation wrappers.
+- **`gateway.ReplayStoreService`** provides nonce replay protection for gateway mode (implements governance.ReplayStore). Callers access it directly via the `ReplayStore` field on `Stores` (returned by `OpenCanonicalDBService`) - no delegation wrappers.
+- **`gateway.KVStoreService`** provides TTL-aware ephemeral state with GLOB pattern scanning for gateway mode. Callers access it directly via the `KVStore` field on `Stores` (returned by `OpenCanonicalDBService`) - no delegation wrappers.
+- **`gateway.SSEEventService`** provides Server-Sent Events fan-out for gateway mode. Callers access it directly via the `SSEStore` field on `Stores` (returned by `OpenCanonicalDBService`) - no delegation wrappers.
+- **`gateway.BlobStoreService`** provides binary persistence for attachments and certificate material for gateway mode. Callers access it directly via the `BlobStore` field on `Stores` (returned by `OpenCanonicalDBService`) - no delegation wrappers.
+- **`Stores.DB`** provides the raw `sqliteutil.DB` connection for consumers needing direct DB access (e.g., `NewTribunalStoreService`, `NewStateRootService`). Accessible via the `DB` field on `Stores` (returned by `OpenCanonicalDBService`), eliminating the need to go through `CanonicalDBService.GetDB()`.
 - **`storage.SuspendedTransactionService`** is the L3 approval workflow store used consistently in both gateway and outbound modes (implements `storage.SuspendedTransactionStore`).
 - **`storage.ExecutionVaultService`** is the execution log and file diff storage for outbound mode.
-- **`gateway.EncryptedKVAdapter`** implements `storage.TokenStore` and provides Sentinel token persistence for outbound mode. It wraps `gateway.KVStoreService` (from CanonicalDBService) and encrypts values at rest via `vault.Vault`.
-- **`storage.SQLAuditStore`** is embedded in CanonicalDBService as the `AuditStore` field and provides the SQL-based audit storage foundation for both gateway and outbound modes. In outbound mode, the standalone instance has been removed; `g8eo.go` reuses `CanonicalDBService.AuditStore` for all audit writes (L5Actuator, HistoryHandler, session management), eliminating a redundant connection pool and pruner on the same `g8e.db` file.
+- **`gateway.EncryptedKVAdapter`** implements `storage.TokenStore` and provides Sentinel token persistence for outbound mode. It wraps `gateway.KVStoreService` (from Stores) and encrypts values at rest via `vault.Vault`.
+- **`storage.SQLAuditStore`** is held in `Stores` as the `AuditStore` field and provides the SQL-based audit storage foundation for both gateway and outbound modes. In outbound mode, the standalone instance has been removed; `g8eo.go` reuses `Stores.AuditStore` for all audit writes (L5Actuator, HistoryHandler, session management), eliminating a redundant connection pool and pruner on the same `g8e.db` file.
 - **`vault.Vault`** is shared across all storage services in outbound mode (reused from CanonicalDBService).
 
 ### Dependency Flow
@@ -277,11 +299,11 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 ### Transport & Protocol Layer
 - `pubsub.OperatorPubSubService` is the dispatcher for outbound mode (WebSocket pub/sub).
 - `mcp.GatewayService` handles MCP/A2A protocol translation and downstream dispatch (gateway mode only; shared between HTTP ingress and OperatorPubSubService egress).
-- `gateway.HTTPHandler` builds the HTTP/WebSocket surface for gateway mode.
+- `gateway.HTTPHandler` is a thin router and middleware shell for gateway mode. It holds only router infrastructure (rate limiting, CORS, path traversal guard), direct accessors (`passkey`, `mcp`, `pubsub`), and 8 controller fields. All domain handler logic lives on controllers (`PKIController`, `DBController`, `AuthController`, `AdminController`, `OperatorController`, `SSEController`, `HealthController`, `GovernanceController`).
 - `gateway.GatewayWebSocketHandler` is the in-process pub/sub broker for gateway mode.
 - `gateway.PKIAuthority` manages PKI hierarchy and certificate lifecycle for gateway mode.
 - `network.Detector` detects host IP addresses and DNS names to configure TLS certificate identities dynamically during boot and renewal.
-- `governance_envelope.go` provides the synchronous envelope-processing endpoint at `/api/v1/governance/envelopes`. `SetEnvelopeProcessor` wires the in-process `OperatorPubSubService` into the gateway HTTP surface via `atomic.Pointer`. `verifyEnvelopeIdentityBinding` enforces transport-to-envelope identity binding by matching mTLS certificate URI SANs against the envelope's internal identity claims. The tribunal deliberate route is always registered in the router; `handleTribunalDeliberate` checks the `atomic.Pointer` at request time and returns 503 if not yet wired, eliminating the need for a router rebuild when `SetTribunal` is called.
+- `governance_envelope.go` is a thin delegation shim: `SetEnvelopeProcessor` on `GatewayModeService` delegates to `GovernanceController.SetEnvelopeProcessor`. The synchronous envelope-processing endpoint at `/api/v1/governance/envelopes` and all governance logic (`verifyEnvelopeIdentityBinding`, `isAppComponent`, `classifyEnvelopeError`, `handleGovernanceEnvelope`) live on `GovernanceController` in `governance_controller.go`. `GovernanceController.envProc` uses `atomic.Value` (via `envProcHolder` wrapper) for the envelope processor; `GovernanceController.tribunal` uses `atomic.Pointer[tribunal.TribunalService]`. Both follow the thread-safety pattern in `docs/devs/devs.md` §"Thread Safety for Late-Bound Dependencies": routes are always registered, handlers check `.Load()` for nil and fail-closed with 503.
 - `gateway_db.go` embeds the SQLite schema from `db/schema.sql` and provides `GatewaySchema()` for database initialization. `gateway_certs.go` defines certificate validity periods and common names for all g8e CAs (root, intermediate, serving, leaf, peer).
 - `gateway_pubsub.go` defines `GatewayWebSocketHandler` for WebSocket-based publish/subscribe channels, including subscriber management and in-process handlers for governance command processing and SSE streaming.
 
@@ -292,8 +314,7 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - **`PrivilegedRouteRegistry`** blocks app certificates from governance envelope submission and query endpoints. Only operator and CLI auth are accepted on these routes.
 - **`gateway_http_middleware.go`**: `rateLimitMiddleware` applies per-IP token bucket rate limiting with 5-minute stale entry cleanup. `pathTraversalGuard` rejects requests containing `..` path segments before ServeMux normalization. `isPrivateIP` reports whether an IP address is in a private network range, used by the HTTP router's safe-host check.
 - **`gateway_http_cors.go`**: CORS middleware for handling cross-origin requests from enrolled frontend applications. Validates origins against the gateway's configured allowed origins list.
-- **`gateway_http_sse.go`**: SSE event bridge with three endpoints. `POST /api/v1/sse/push` for event production, `GET /api/v1/sse/events` for polling, `GET /api/v1/sse/stream` for SSE streaming. Events are routed by `web_session_id`, `cli_session_id`, or `user_id`.
-- **`gateway_http_health.go`**: Health check endpoint (`/health`) returns platform settings and state root status. Landing page handler redirects `/` to `/console/`. Bootstrap health check on the HTTP port returns a simplified health response.
+- **`health_controller.go`**: Health check endpoint (`/health`) returns platform settings and state root status. Landing page handler redirects `/` to `/console/`. Bootstrap health check on the HTTP port returns a simplified health response. (Previously in `gateway_http_health.go`, now deleted.)
 - **`gateway/docs/`**: Embedded OpenAPI/Swagger specifications (`docs.go` embeds `swagger.json` and `swagger.yaml`) served at `/swagger/` with Swagger UI.
 - **`gateway/scripts/`**: Thread-safe deploy script templates (`g8e-deploy.sh`, `g8e-deploy.ps1`) with Go bindings in `templates.go`, initialized via `sync.Once`. Documented centrally in [scripts.md](../architecture/scripts.md#remote-deploy-scripts-gateway-served).
 - **`gateway/console/`**: Embedded Console SPA (`console.go` exposes `Handler()` serving the static filesystem from `static/`).
@@ -304,6 +325,9 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - **`gateway.AuthController`** (`auth_controller.go`, `auth_controller_bootstrap.go`, `auth_controller_session.go`): Local bootstrap with URL, bootstrap status, CLI enrollment, device enrollment, user creation, user me, web session, logout. Decomposed into three files: core constructor, bootstrap flows, and session/user management.
 - **`gateway.AdminController`** (`admin_controller.go`): App policy management by signer, app revocation, tribunal CRUD.
 - **`gateway.OperatorController`** (`operator_controller.go`): Operator list, terminate, bind/unbind operators, set target context, reauth.
+- **`gateway.SSEController`** (`sse_controller.go`): SSE event push, poll, and stream endpoints. Includes `authorizeSSERoute` for dual-auth (mTLS or web session) authorization. Heartbeat interval defaults to 30s via `newSSEController`.
+- **`gateway.HealthController`** (`health_controller.go`): Health check, bootstrap health, state endpoint, and landing page. Previously in `gateway_http_health.go` (deleted).
+- **`gateway.GovernanceController`** (`governance_controller.go`): Governance envelope submission, tribunal deliberation, `SetTribunal`/`SetEnvelopeProcessor` late-bound dependency setters. Uses `atomic.Pointer` for tribunal and `atomic.Value` (via `envProcHolder`) for envelope processor, following the thread-safety pattern in `docs/devs/devs.md`.
 
 ### JWT Authentication
 - **`gateway.JWKSProvider`** (`jwks.go`): Optional external IdP JWT validation via JWKS endpoint. When configured, MCP/A2A routes accept JWT auth in addition to mTLS.

@@ -60,6 +60,7 @@ type GatewayModeService struct {
 	fileSvc fs.RuntimeFileService
 
 	db                 *CanonicalDBService
+	stores             *Stores
 	pubsub             *GatewayWebSocketHandler
 	auth               *AuthService
 	pki                *PKIAuthority
@@ -95,6 +96,7 @@ type gatewayServiceBuilder struct {
 
 	// Pre-built components (test only). When nil, build() constructs them.
 	preBuiltDB     *CanonicalDBService
+	preBuiltStores *Stores
 	preBuiltPubsub *GatewayWebSocketHandler
 }
 
@@ -103,9 +105,10 @@ func newGatewayServiceBuilder(cfg *config.Config, fileSvc fs.RuntimeFileService,
 	return &gatewayServiceBuilder{cfg: cfg, logger: logger, fileSvc: fileSvc}
 }
 
-// withPreBuiltDB sets a pre-built CanonicalDBService (test only).
-func (b *gatewayServiceBuilder) withPreBuiltDB(db *CanonicalDBService) *gatewayServiceBuilder {
+// withPreBuiltDB sets a pre-built CanonicalDBService and Stores (test only).
+func (b *gatewayServiceBuilder) withPreBuiltDB(db *CanonicalDBService, stores *Stores) *gatewayServiceBuilder {
 	b.preBuiltDB = db
+	b.preBuiltStores = stores
 	return b
 }
 
@@ -122,9 +125,10 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 
 	// --- DB and pubsub ---
 	db := b.preBuiltDB
+	stores := b.preBuiltStores
 	if db == nil {
 		var err error
-		db, err = OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.VaultDir, logger, cfg.Gateway.VaultKeyPath, nil, b.fileSvc)
+		db, stores, err = OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.VaultDir, logger, cfg.Gateway.VaultKeyPath, nil, b.fileSvc)
 		if err != nil {
 			return nil, fmt.Errorf("gateway: failed to initialize database: %w", err)
 		}
@@ -139,10 +143,10 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	sm := db.GetSecretManager()
 
 	// --- PKI ---
-	pki := newPKIAuthority(b.fileSvc, db, sm, logger)
+	pki := newPKIAuthority(b.fileSvc, stores.DocStore, sm, logger)
 
 	// --- Core services ---
-	userSvc := NewUserService(db, logger)
+	userSvc := NewUserService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
 
 	var jwksProvider *JWKSProvider
@@ -150,7 +154,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		jwksProvider = NewJWKSProvider(cfg.Gateway.JWKSURL)
 	}
 
-	personaSvc := NewPersonaService(db, logger)
+	personaSvc := NewPersonaService(stores.DocStore, logger)
 	for _, persona := range DefaultPersonaDefinitions() {
 		existing, err := personaSvc.GetByID(persona.ID)
 		if err != nil {
@@ -166,12 +170,12 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	jwtRoleClaim := cfg.Gateway.JWTRoleClaim
 	jwtIssuer := cfg.Gateway.JWTIssuer
 	jwtAudience := cfg.Gateway.JWTAudience
-	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, jwksProvider, jwtRoleClaim, jwtIssuer, jwtAudience)
+	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, jwksProvider, jwtRoleClaim, jwtIssuer, jwtAudience)
 	userSvc.SetAuthService(auth)
 
-	cliSessionSvc := NewCLISessionService(db, logger)
-	operatorSessionSvc := NewOperatorSessionService(db, logger)
-	webSessionSvc := NewWebSessionService(db, logger)
+	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
+	operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
+	webSessionSvc := NewWebSessionService(stores.DocStore, logger)
 
 	// --- Certificate identity and PKI initialization ---
 	extraIPs, extraDNSNames, err := resolveGatewayCertificateIdentity(cfg.Gateway.CertMode, cfg.Gateway.NetworkIdentityFile, network.NewDetector(logger), logger)
@@ -188,7 +192,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		}
 	}
 
-	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
+	reg := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 
 	// --- Passkey ---
 	passkeyCfg := &PasskeyConfig{
@@ -198,7 +202,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		HTTPPort:  cfg.Gateway.HTTPPort,
 		HTTPSPort: cfg.Gateway.HTTPSPort,
 	}
-	passkey, err := NewPasskeyService(db, logger, passkeyCfg)
+	passkey, err := NewPasskeyService(stores.DocStore, logger, passkeyCfg)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: failed to initialize passkey service: %w", err)
 	}
@@ -245,7 +249,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		MaxPayload:     cfg.Gateway.MaxPayloadBytes,
 		MCPSvc:         mcpGateway,
 		SuspendedStore: suspendedTxService,
-		SSEStore:       db.SSEStore,
+		SSEStore:       stores.SSEStore,
 		Pubsub:         pubsub,
 		CrossOrigin:    len(cfg.Gateway.AllowedOrigins) > 0,
 	})
@@ -255,6 +259,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		logger:             logger,
 		fileSvc:            b.fileSvc,
 		db:                 db,
+		stores:             stores,
 		pubsub:             pubsub,
 		auth:               auth,
 		pki:                pki,
@@ -373,9 +378,9 @@ func detectBasicNonLoopbackIPv4Addresses() []net.IP {
 
 // newGatewayModeServiceForTest assembles a GatewayModeService from pre-built components.
 // Used in tests where the DB and pub/sub broker are constructed independently.
-func newGatewayModeServiceForTest(cfg *config.Config, fileSvc fs.RuntimeFileService, logger *slog.Logger, db *CanonicalDBService, pubsub *GatewayWebSocketHandler) (*GatewayModeService, error) {
+func newGatewayModeServiceForTest(cfg *config.Config, fileSvc fs.RuntimeFileService, logger *slog.Logger, db *CanonicalDBService, stores *Stores, pubsub *GatewayWebSocketHandler) (*GatewayModeService, error) {
 	return newGatewayServiceBuilder(cfg, fileSvc, logger).
-		withPreBuiltDB(db).
+		withPreBuiltDB(db, stores).
 		withPreBuiltPubsub(pubsub).
 		build()
 }
@@ -383,7 +388,6 @@ func newGatewayModeServiceForTest(cfg *config.Config, fileSvc fs.RuntimeFileServ
 func (ls *GatewayModeService) initHandlersAndServers() error {
 	cfg := ls.cfg
 	logger := ls.logger
-	db := ls.db
 	pubsub := ls.pubsub
 	auth := ls.auth
 	pki := ls.pki
@@ -395,12 +399,12 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 	userSvc := ls.userSvc
 
 	// Initialize AppEnrollmentService for external app enrollment
-	appEnrollment := NewAppEnrollmentService(db, pki, logger)
+	appEnrollment := NewAppEnrollmentService(ls.stores.DocStore, pki, logger)
 
 	handler, err := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:                cfg,
 		Logger:             logger,
-		DB:                 db,
+		Stores:             ls.stores,
 		Pubsub:             pubsub,
 		Auth:               auth,
 		PKI:                pki,
@@ -480,6 +484,11 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 // GetDB returns the underlying database service.
 func (ls *GatewayModeService) GetDB() *CanonicalDBService {
 	return ls.db
+}
+
+// GetStores returns the extracted store services for direct injection.
+func (ls *GatewayModeService) GetStores() *Stores {
+	return ls.stores
 }
 
 // GetSecretManager returns the secret manager initialized during database open.
@@ -562,7 +571,7 @@ func (ls *GatewayModeService) IsGovernanceReady() bool {
 	if ls.cfg.Gateway.Posture == config.PostureDoctrine || ls.cfg.Gateway.Posture == "" {
 		return true
 	}
-	ready, err := ls.db.SignerStore.HasTrustedSigners()
+	ready, err := ls.stores.SignerStore.HasTrustedSigners()
 	if err != nil {
 		ls.logger.Error("Failed to check if governance is ready", "state", string(constants.ConnectionStateError), "error", err)
 		return false
@@ -575,18 +584,18 @@ func (ls *GatewayModeService) IsGovernanceReady() bool {
 // The L3 notary handles both WebAuthn (web sessions) and mTLS (CLI sessions).
 func (ls *GatewayModeService) GetGovernanceDeps() *pubsub.GovernanceDeps {
 	// Create unified L3 notary that handles both CLI (mTLS) and passkey (WebAuthn) proofs
-	cliVerifier := NewCLISessionVerifier(ls.db, ls.pki, ls.logger, ls.userSvc, ls.cliSessionSvc)
+	cliVerifier := NewCLISessionVerifier(ls.stores.DocStore, ls.pki, ls.logger, ls.userSvc, ls.cliSessionSvc)
 	l3Notary := governance.NewGatewayL3Notary(ls.suspendedTxService, cliVerifier, ls.passkey.PasskeyService, ls.logger)
 
 	return &pubsub.GovernanceDeps{
-		ReplayStore:       ls.db.ReplayStore,
-		StateRootProvider: ls.db.StateRootSvc,
-		TransactionAudit:  ls.db.DocStore,
+		ReplayStore:       ls.stores.ReplayStore,
+		StateRootProvider: ls.stores.StateRootSvc,
+		TransactionAudit:  ls.stores.DocStore,
 		L3Notary:          l3Notary,
-		SignerStore:       ls.db.SignerStore,
-		AppPolicyStore:    ls.db.AppPolicyStore,
-		TribunalStore:     ls.db.TribunalStore,
-		FieldReader:       ls.db.DocStore,
+		SignerStore:       ls.stores.SignerStore,
+		AppPolicyStore:    ls.stores.AppPolicyStore,
+		TribunalStore:     ls.stores.TribunalStore,
+		FieldReader:       ls.stores.DocStore,
 	}
 }
 
@@ -877,7 +886,7 @@ func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte
 		return
 	}
 
-	if _, err := ls.db.DocStore.DocUpdate(string(constants.CollectionOperators), env.GetOperatorId(), update); err != nil {
+	if _, err := ls.stores.DocStore.DocUpdate(string(constants.CollectionOperators), env.GetOperatorId(), update); err != nil {
 		ls.logger.Warn("heartbeat: failed to update operator document", "operator_id", env.GetOperatorId(), "error", err)
 		return
 	}

@@ -30,20 +30,57 @@ package gateway
 // The Gateway refuses to talk about a bare session id - every routing
 // target is tagged at the type level so a web_session_id can never be
 // mis-delivered as a cli_session_id (or vice versa).
+//
+// All SSE handlers live on SSEController (sse_controller.go).
 
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/protocol"
 )
+
+// SSEController handles SSE event push, poll, and stream endpoints.
+type SSEController struct {
+	cfg       *config.Config
+	logger    *slog.Logger
+	docStore  *DocumentStoreService
+	kvStore   *KVStoreService
+	sseStore  *SSEEventService
+	pubsub    *GatewayWebSocketHandler
+	auth      *AuthService
+	responder *response.Writer
+	heartbeat time.Duration
+}
+
+// newSSEController creates an SSEController with the given dependencies.
+// If heartbeat is 0, a 30s default is applied.
+func newSSEController(cfg *config.Config, logger *slog.Logger, docStore *DocumentStoreService, kvStore *KVStoreService, sseStore *SSEEventService, pubsub *GatewayWebSocketHandler, auth *AuthService, responder *response.Writer, heartbeat time.Duration) *SSEController {
+	if heartbeat == 0 {
+		heartbeat = 30 * time.Second
+	}
+	return &SSEController{
+		cfg:       cfg,
+		logger:    logger,
+		docStore:  docStore,
+		kvStore:   kvStore,
+		sseStore:  sseStore,
+		pubsub:    pubsub,
+		auth:      auth,
+		responder: responder,
+		heartbeat: heartbeat,
+	}
+}
 
 // @Summary		Push SSE event
 // @Description	Appends an event to the SSE event store and publishes it to the pub/sub channel.
@@ -58,16 +95,16 @@ import (
 // @Failure		401		{string}	string			"Unauthorized — mTLS required"
 // @Failure		403		{string}	string			"Forbidden — not app workload or unauthorized target"
 // @Router			/api/v1/sse/push [post]
-func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Request) {
+func (c *SSEController) handleInternalSSEPush(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	// Strictly verify that the caller is an app workload via mTLS peer certificate URI SAN
 	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
-		h.logger.Warn("Unauthorized SSE push attempt: missing mTLS client certificate", "path", r.URL.Path)
-		h.responder.Error(w, http.StatusUnauthorized, "mTLS client certificate required")
+		c.logger.Warn("Unauthorized SSE push attempt: missing mTLS client certificate", "path", r.URL.Path)
+		c.responder.Error(w, http.StatusUnauthorized, "mTLS client certificate required")
 		return
 	}
 
@@ -85,25 +122,25 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	if !isAppWorkload {
-		h.logger.Warn("Unauthorized SSE push attempt: not app workload identity", "path", r.URL.Path, "uris", cert.URIs)
-		h.responder.Error(w, http.StatusForbidden, "unauthorized client identity")
+		c.logger.Warn("Unauthorized SSE push attempt: not app workload identity", "path", r.URL.Path, "uris", cert.URIs)
+		c.responder.Error(w, http.StatusForbidden, "unauthorized client identity")
 		return
 	}
 
-	body, err := h.readBody(r)
+	body, err := readRequestBody(r, c.cfg.Gateway.MaxPayloadBytes)
 	if err != nil {
-		h.responder.Error(w, http.StatusBadRequest, "failed to read body")
+		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return
 	}
 
 	var p models.SSEPushPayload
 	if err := json.Unmarshal(body, &p); err != nil {
-		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
 	if len(p.Event) == 0 {
-		h.responder.Error(w, http.StatusBadRequest, "event field is required")
+		c.responder.Error(w, http.StatusBadRequest, "event field is required")
 		return
 	}
 
@@ -122,9 +159,9 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		inner.Type = string(constants.SystemHealthUnknown)
 	}
 
-	if err := h.db.SSEStore.SSEEventsAppend(route, inner.Type, string(body), appID); err != nil {
-		h.logger.Error("SSE push: failed to append event", string(constants.ConnectionStateError), err, "type", inner.Type)
-		h.responder.Error(w, http.StatusBadRequest, err.Error())
+	if err := c.sseStore.SSEEventsAppend(route, inner.Type, string(body), appID); err != nil {
+		c.logger.Error("SSE push: failed to append event", string(constants.ConnectionStateError), err, "type", inner.Type)
+		c.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -132,23 +169,23 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 	// The app identity extracted from the peer certificate must be associated with the target.
 	if route.WebSessionID != "" {
 		webBindKey := sessionWebBindKey(route.WebSessionID)
-		raw, ok := h.db.KVStore.KVGet(webBindKey)
+		raw, ok := c.kvStore.KVGet(webBindKey)
 		if !ok {
-			h.logger.Warn("SSE push: target web session has no bound operators", "web_session_id", route.WebSessionID, "app_id", appID)
-			h.responder.Error(w, http.StatusForbidden, "target session not found or not bound")
+			c.logger.Warn("SSE push: target web session has no bound operators", "web_session_id", route.WebSessionID, "app_id", appID)
+			c.responder.Error(w, http.StatusForbidden, "target session not found or not bound")
 			return
 		}
 		var operatorSessionIDs []string
 		if err := json.Unmarshal([]byte(raw), &operatorSessionIDs); err != nil {
-			h.logger.Error("SSE push: failed to parse web session bindings", "web_session_id", route.WebSessionID, "error", err)
-			h.responder.Error(w, http.StatusInternalServerError, "failed to verify session ownership")
+			c.logger.Error("SSE push: failed to parse web session bindings", "web_session_id", route.WebSessionID, "error", err)
+			c.responder.Error(w, http.StatusInternalServerError, "failed to verify session ownership")
 			return
 		}
 
 		// Check if any bound Operator session is associated with this appID
 		authorized := false
 		for _, opSessID := range operatorSessionIDs {
-			opDoc, err := h.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), opSessID)
+			opDoc, err := c.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), opSessID)
 			if err != nil || opDoc == nil {
 				continue
 			}
@@ -168,42 +205,42 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		}
 
 		if !authorized {
-			h.logger.Warn("SSE push: app not authorized for target web session", "app_id", appID, "web_session_id", route.WebSessionID)
-			h.responder.Error(w, http.StatusForbidden, "unauthorized for target session")
+			c.logger.Warn("SSE push: app not authorized for target web session", "app_id", appID, "web_session_id", route.WebSessionID)
+			c.responder.Error(w, http.StatusForbidden, "unauthorized for target session")
 			return
 		}
 	} else if route.CLISessionID != "" {
-		doc, err := h.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
+		doc, err := c.docStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
 		if err != nil || doc == nil {
-			h.logger.Warn("SSE push: target CLI session not found", "cli_session_id", route.CLISessionID, "app_id", appID)
-			h.responder.Error(w, http.StatusForbidden, "target session not found")
+			c.logger.Warn("SSE push: target CLI session not found", "cli_session_id", route.CLISessionID, "app_id", appID)
+			c.responder.Error(w, http.StatusForbidden, "target session not found")
 			return
 		}
 		var cliSess models.CLISession
 		b, err := json.Marshal(doc.Data)
 		if err != nil {
-			h.logger.Error("SSE push: failed to marshal CLI session", "cli_session_id", route.CLISessionID, "error", err)
-			h.responder.Error(w, http.StatusInternalServerError, "failed to verify session ownership")
+			c.logger.Error("SSE push: failed to marshal CLI session", "cli_session_id", route.CLISessionID, "error", err)
+			c.responder.Error(w, http.StatusInternalServerError, "failed to verify session ownership")
 			return
 		}
 		if err := json.Unmarshal(b, &cliSess); err != nil {
-			h.logger.Error("SSE push: failed to parse CLI session", "cli_session_id", route.CLISessionID, "error", err)
-			h.responder.Error(w, http.StatusInternalServerError, "failed to verify session ownership")
+			c.logger.Error("SSE push: failed to parse CLI session", "cli_session_id", route.CLISessionID, "error", err)
+			c.responder.Error(w, http.StatusInternalServerError, "failed to verify session ownership")
 			return
 		}
 
 		// Verify app owns the Operator session bound to this CLI session
-		opDoc, err := h.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), cliSess.OperatorSessionID)
+		opDoc, err := c.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), cliSess.OperatorSessionID)
 		if err != nil || opDoc == nil {
-			h.logger.Warn("SSE push: Operator session for CLI session not found", "operator_session_id", cliSess.OperatorSessionID, "cli_session_id", route.CLISessionID)
-			h.responder.Error(w, http.StatusForbidden, "operator session not found")
+			c.logger.Warn("SSE push: Operator session for CLI session not found", "operator_session_id", cliSess.OperatorSessionID, "cli_session_id", route.CLISessionID)
+			c.responder.Error(w, http.StatusForbidden, "operator session not found")
 			return
 		}
 
 		wid := protocol.NewWorkloadIdentity()
 		if !wid.MatchesApp(appID, opDoc.ID) {
-			h.logger.Warn("SSE push: app not authorized for target CLI session", "app_id", appID, "cli_session_id", route.CLISessionID)
-			h.responder.Error(w, http.StatusForbidden, "unauthorized for target session")
+			c.logger.Warn("SSE push: app not authorized for target CLI session", "app_id", appID, "cli_session_id", route.CLISessionID)
+			c.responder.Error(w, http.StatusForbidden, "unauthorized for target session")
 			return
 		}
 	} else if route.UserID != "" {
@@ -212,10 +249,10 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		filters := []models.DocFilter{
 			{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", route.UserID))},
 		}
-		docs, err := h.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 100)
+		docs, err := c.docStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 100)
 		if err != nil || len(docs) == 0 {
-			h.logger.Warn("SSE push: user has no operators", "user_id", route.UserID, "app_id", appID)
-			h.responder.Error(w, http.StatusForbidden, "unauthorized for target user")
+			c.logger.Warn("SSE push: user has no operators", "user_id", route.UserID, "app_id", appID)
+			c.responder.Error(w, http.StatusForbidden, "unauthorized for target user")
 			return
 		}
 
@@ -230,8 +267,8 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		}
 
 		if !authorized {
-			h.logger.Warn("SSE push: app not authorized for target user", "app_id", appID, "user_id", route.UserID)
-			h.responder.Error(w, http.StatusForbidden, "unauthorized for target user")
+			c.logger.Warn("SSE push: app not authorized for target user", "app_id", appID, "user_id", route.UserID)
+			c.responder.Error(w, http.StatusForbidden, "unauthorized for target user")
 			return
 		}
 	}
@@ -251,10 +288,10 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 	if channel != "" {
 		// We publish the full body which is the models.SSEPushPayload JSON.
 		// The streamer will wrap this in SSE format.
-		h.pubsub.Publish(channel, body)
+		c.pubsub.Publish(channel, body)
 	}
 
-	h.responder.JSON(w, http.StatusOK, models.SSEPushResponse{
+	c.responder.JSON(w, http.StatusOK, models.SSEPushResponse{
 		Success:   true,
 		Delivered: 1,
 	})
@@ -273,7 +310,7 @@ func (e *sseAuthError) Error() string { return e.message }
 // channel string on success. The middleware stamps context with either
 // ContextKeyOperatorSessionID (mTLS path) or ContextKeyWebSessionID +
 // ContextKeyUserID (cookie path); this helper enforces ownership for both.
-func (h *HTTPHandler) authorizeSSERoute(route SSERoute, r *http.Request) (string, error) {
+func (c *SSEController) authorizeSSERoute(route SSERoute, r *http.Request) (string, error) {
 	operatorSessionID, _ := r.Context().Value(constants.ContextKeyOperatorSessionID).(string)
 	webSessionID, _ := r.Context().Value(constants.ContextKeyWebSessionID).(string)
 	userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
@@ -291,9 +328,9 @@ func (h *HTTPHandler) authorizeSSERoute(route SSERoute, r *http.Request) (string
 
 	switch {
 	case route.CLISessionID != "" && route.WebSessionID == "" && route.UserID == "":
-		doc, err := h.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
+		doc, err := c.docStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
 		if err != nil {
-			h.logger.Error("SSE: failed to fetch CLI session", string(constants.ConnectionStateError), err, "cli_session_id", route.CLISessionID)
+			c.logger.Error("SSE: failed to fetch CLI session", string(constants.ConnectionStateError), err, "cli_session_id", route.CLISessionID)
 			return "", &sseAuthError{status: http.StatusInternalServerError, message: "failed to verify cli session"}
 		}
 		if doc == nil {
@@ -329,7 +366,7 @@ func (h *HTTPHandler) authorizeSSERoute(route SSERoute, r *http.Request) (string
 	case route.WebSessionID != "" && route.CLISessionID == "" && route.UserID == "":
 		if isMTLSAuth {
 			operatorBindKey := sessionOperatorBindKey(operatorSessionID)
-			boundWebSessionID, ok := h.db.KVStore.KVGet(operatorBindKey)
+			boundWebSessionID, ok := c.kvStore.KVGet(operatorBindKey)
 			if !ok || boundWebSessionID != route.WebSessionID {
 				return "", &sseAuthError{status: http.StatusForbidden, message: "operator session does not own this web session"}
 			}
@@ -342,7 +379,7 @@ func (h *HTTPHandler) authorizeSSERoute(route SSERoute, r *http.Request) (string
 
 	case route.UserID != "" && route.WebSessionID == "" && route.CLISessionID == "":
 		if isMTLSAuth {
-			op, err := h.auth.ValidateOperatorSession(operatorSessionID)
+			op, err := c.auth.ValidateOperatorSession(operatorSessionID)
 			if err != nil {
 				return "", &sseAuthError{status: http.StatusUnauthorized, message: "invalid Operator session"}
 			}
@@ -375,9 +412,9 @@ func (h *HTTPHandler) authorizeSSERoute(route SSERoute, r *http.Request) (string
 // @Failure		400			{string}	string				"Bad Request"
 // @Failure		403			{string}	string				"Forbidden — unauthorized"
 // @Router			/api/v1/sse/events [get]
-func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Request) {
+func (c *SSEController) handleInternalSSEEvents(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	q := r.URL.Query()
@@ -392,22 +429,22 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 	// Authorization: verify the authenticated identity (from context) has the
 	// right to access the requested routing buffer. Without this check, any
 	// authenticated client could drain any other client's event buffer.
-	_, err := h.authorizeSSERoute(route, r)
+	_, err := c.authorizeSSERoute(route, r)
 	if err != nil {
 		if sseErr, ok := err.(*sseAuthError); ok {
-			h.responder.Error(w, sseErr.status, sseErr.message)
+			c.responder.Error(w, sseErr.status, sseErr.message)
 		} else {
-			h.responder.Error(w, http.StatusInternalServerError, err.Error())
+			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		}
 		return
 	}
 
-	rows, err := h.db.SSEStore.SSEEventsListSince(route, sinceID, limit)
+	rows, err := c.sseStore.SSEEventsListSince(route, sinceID, limit)
 	if err != nil {
-		h.responder.Error(w, http.StatusBadRequest, err.Error())
+		c.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	h.responder.JSON(w, http.StatusOK, models.SSEEventsResponse{
+	c.responder.JSON(w, http.StatusOK, models.SSEEventsResponse{
 		Events: rows,
 		Count:  len(rows),
 	})
@@ -427,9 +464,9 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 // @Failure		400			{string}	string			"Bad Request"
 // @Failure		403			{string}	string			"Forbidden — unauthorized"
 // @Router			/api/v1/sse/stream [get]
-func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Request) {
+func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -447,12 +484,12 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 
 	// Authorization: verify the authenticated identity (from context) has the
 	// right to access the requested routing buffer. Returns the pub/sub channel.
-	channel, err := h.authorizeSSERoute(route, r)
+	channel, err := c.authorizeSSERoute(route, r)
 	if err != nil {
 		if sseErr, ok := err.(*sseAuthError); ok {
-			h.responder.Error(w, sseErr.status, sseErr.message)
+			c.responder.Error(w, sseErr.status, sseErr.message)
 		} else {
-			h.responder.Error(w, http.StatusInternalServerError, err.Error())
+			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		}
 		return
 	}
@@ -485,18 +522,18 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 
 	// Subscribe to real-time events FIRST to avoid missing any during replay
 	eventCh := make(chan []byte, 100)
-	unregister := h.pubsub.RegisterHandler(channel, func(ch string, data []byte) {
+	unregister := c.pubsub.RegisterHandler(channel, func(ch string, data []byte) {
 		select {
 		case eventCh <- data:
 		default:
-			h.logger.Warn("SSE Stream: back-pressure dropping event", "channel", channel)
+			c.logger.Warn("SSE Stream: back-pressure dropping event", "channel", channel)
 		}
 	})
 	defer unregister()
 
 	// Replay from DB if sinceID is provided
 	if sinceID > 0 {
-		rows, err := h.db.SSEStore.SSEEventsListSince(route, sinceID, 1000)
+		rows, err := c.sseStore.SSEEventsListSince(route, sinceID, 1000)
 		if err == nil {
 			for _, row := range rows {
 				fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", row.ID, row.EventType, row.Payload)
@@ -507,15 +544,15 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 
 	// Stream from pubsub
 	ctx := r.Context()
-	ticker := time.NewTicker(h.sseHeartbeatInterval)
+	ticker := time.NewTicker(c.heartbeat)
 	defer ticker.Stop()
 
-	h.logger.Info("SSE Stream: client connected", "channel", channel, "client", clientLabel)
+	c.logger.Info("SSE Stream: client connected", "channel", channel, "client", clientLabel)
 
 	for {
 		select {
 		case <-ctx.Done():
-			h.logger.Info("SSE Stream: client disconnected", "channel", channel)
+			c.logger.Info("SSE Stream: client disconnected", "channel", channel)
 			return
 		case <-ticker.C:
 			fmt.Fprintf(w, ": heartbeat\n\n")

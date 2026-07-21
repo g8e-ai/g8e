@@ -54,7 +54,7 @@ func (r *fileActuatorKeyReader) ReadActuatorPublicKey() (keyID, publicKey string
 type AuthControllerDeps struct {
 	Cfg                *config.Config
 	Logger             *slog.Logger
-	DB                 *CanonicalDBService
+	DocStore           *DocumentStoreService
 	Auth               *AuthService
 	Passkey            *PasskeyHandler
 	UserSvc            *UserService
@@ -73,7 +73,7 @@ type AuthControllerDeps struct {
 type AuthController struct {
 	cfg                *config.Config
 	logger             *slog.Logger
-	db                 *CanonicalDBService
+	docStore           *DocumentStoreService
 	auth               *AuthService
 	passkey            *PasskeyHandler
 	userSvc            *UserService
@@ -92,7 +92,7 @@ func newAuthController(deps AuthControllerDeps) *AuthController {
 	return &AuthController{
 		cfg:                deps.Cfg,
 		logger:             deps.Logger,
-		db:                 deps.DB,
+		docStore:           deps.DocStore,
 		auth:               deps.Auth,
 		passkey:            deps.Passkey,
 		userSvc:            deps.UserSvc,

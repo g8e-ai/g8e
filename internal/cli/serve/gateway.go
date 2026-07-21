@@ -186,7 +186,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		return fmt.Errorf("gateway: startup validation: %w", err)
 	}
 	if cfg.Posture == config.PostureConsensus || cfg.Posture == config.PostureNotary {
-		policy, err := svc.GetDB().TribunalStore.GetTribunal(cfg.TribunalID)
+		policy, err := svc.GetStores().TribunalStore.GetTribunal(cfg.TribunalID)
 		if err != nil {
 			return fmt.Errorf("gateway: load tribunal policy: %w", err)
 		}
@@ -240,8 +240,8 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	// Get the GatewayDBService's AuditStore for full audit storage
 	// This ensures ActionReceipts are persisted in the receipts table
 	var auditStore *storage.SQLAuditStore
-	if svc.GetDB() != nil && svc.GetDB().AuditStore != nil {
-		auditStore = svc.GetDB().AuditStore
+	if svc.GetStores() != nil && svc.GetStores().AuditStore != nil {
+		auditStore = svc.GetStores().AuditStore
 		logger.Info("Gateway AuditStore enabled for full audit storage")
 	} else {
 		logger.Warn("Gateway AuditStore not available - ActionReceipts will not be stored in audit store")
@@ -437,7 +437,7 @@ func bootstrapTribunalPolicy(svc *gateway.GatewayModeService, bootstrapPath stri
 	}
 
 	// Check if tribunal already exists (idempotent)
-	existing, err := svc.GetDB().TribunalStore.GetTribunal(boot.TribunalID)
+	existing, err := svc.GetStores().TribunalStore.GetTribunal(boot.TribunalID)
 	if err != nil {
 		return fmt.Errorf("tribunal bootstrap: check existing: %w", err)
 	}
@@ -478,7 +478,7 @@ func bootstrapTribunalPolicy(svc *gateway.GatewayModeService, bootstrapPath stri
 			AddedAt:   time.Now().UTC(),
 			Enabled:   true,
 		}
-		if err := svc.GetDB().SignerStore.AddTrustedSigner(signer); err != nil {
+		if err := svc.GetStores().SignerStore.AddTrustedSigner(signer); err != nil {
 			return fmt.Errorf("tribunal bootstrap: register signer %s: %w", appID, err)
 		}
 		if err := tribunal.SaveMemberKey(secretsDir, boot.TribunalID, appID, privKey); err != nil {
@@ -495,7 +495,7 @@ func bootstrapTribunalPolicy(svc *gateway.GatewayModeService, bootstrapPath stri
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	if err := svc.GetDB().TribunalStore.AddTribunal(policy); err != nil {
+	if err := svc.GetStores().TribunalStore.AddTribunal(policy); err != nil {
 		return fmt.Errorf("tribunal bootstrap: create policy: %w", err)
 	}
 	logger.Info("Tribunal policy created", "tribunal_id", boot.TribunalID, "members", len(boot.MemberAppIDs), "quorum", boot.Quorum)
@@ -511,7 +511,7 @@ func BootstrapTribunal(svc *gateway.GatewayModeService, tribunalID string, actua
 	if svc == nil {
 		return nil, constants.ErrGatewayServiceNil
 	}
-	policy, err := svc.GetDB().TribunalStore.GetTribunal(tribunalID)
+	policy, err := svc.GetStores().TribunalStore.GetTribunal(tribunalID)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap tribunal: load policy: %w", err)
 	}

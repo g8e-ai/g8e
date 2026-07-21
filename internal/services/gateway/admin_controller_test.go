@@ -36,7 +36,7 @@ import (
 func setupTestAdminController(t *testing.T) *AdminController {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
-	return newAdminController(infra.Cfg, infra.Logger, infra.DB, infra.UserSvc, infra.Responder)
+	return newAdminController(infra.Cfg, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore, infra.Stores.TribunalStore, infra.UserSvc, infra.Responder)
 }
 
 func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
@@ -46,13 +46,13 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 	bootstrapUser, err := adminController.userSvc.CreateBootstrapUserWithOSUser(nil)
 	require.NoError(t, err)
 	require.NotNil(t, bootstrapUser)
-	t.Cleanup(func() { adminController.db.DocStore.DocDelete("users", bootstrapUser.ID) })
+	t.Cleanup(func() { adminController.docStore.DocDelete("users", bootstrapUser.ID) })
 
 	// Create a non-bootstrap user for testing
 	regularUser, err := adminController.userSvc.CreateUser()
 	require.NoError(t, err)
 	require.NotNil(t, regularUser)
-	t.Cleanup(func() { adminController.db.DocStore.DocDelete("users", regularUser.ID) })
+	t.Cleanup(func() { adminController.docStore.DocDelete("users", regularUser.ID) })
 
 	// Create an app policy document for testing
 	now := time.Now()
@@ -69,9 +69,9 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 	}
 	policyDoc, err := json.Marshal(appPolicy)
 	require.NoError(t, err)
-	err = adminController.db.DocStore.DocSet("app_policies", "test-app-id", policyDoc)
+	err = adminController.docStore.DocSet("app_policies", "test-app-id", policyDoc)
 	require.NoError(t, err)
-	t.Cleanup(func() { adminController.db.DocStore.DocDelete("app_policies", "test-app-id") })
+	t.Cleanup(func() { adminController.docStore.DocDelete("app_policies", "test-app-id") })
 
 	// Generate a valid Ed25519 public key for testing
 	pubKey, _, err := ed25519.GenerateKey(nil)
@@ -182,7 +182,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, rr.Code)
 
 		// Verify the signer was added to the database
-		signerDoc, err := adminController.db.DocStore.DocGet("trusted_signers", "test-app-id")
+		signerDoc, err := adminController.docStore.DocGet("trusted_signers", "test-app-id")
 		require.NoError(t, err)
 		require.NotNil(t, signerDoc)
 		assert.Equal(t, "test-app-id", signerDoc.ID)
@@ -204,13 +204,13 @@ func TestAdminControllerHandleTribunals(t *testing.T) {
 	bootstrapUser, err := adminController.userSvc.CreateBootstrapUserWithOSUser(nil)
 	require.NoError(t, err)
 	require.NotNil(t, bootstrapUser)
-	t.Cleanup(func() { adminController.db.DocStore.DocDelete("users", bootstrapUser.ID) })
+	t.Cleanup(func() { adminController.docStore.DocDelete("users", bootstrapUser.ID) })
 
 	// Create a non-bootstrap user for testing
 	regularUser, err := adminController.userSvc.CreateUser()
 	require.NoError(t, err)
 	require.NotNil(t, regularUser)
-	t.Cleanup(func() { adminController.db.DocStore.DocDelete("users", regularUser.ID) })
+	t.Cleanup(func() { adminController.docStore.DocDelete("users", regularUser.ID) })
 
 	// Create test signers
 	pubKey1, _, err := ed25519.GenerateKey(nil)
@@ -231,13 +231,13 @@ func TestAdminControllerHandleTribunals(t *testing.T) {
 		Enabled:   true,
 	}
 
-	err = adminController.db.SignerStore.AddTrustedSigner(signer1)
+	err = adminController.signerStore.AddTrustedSigner(signer1)
 	require.NoError(t, err)
-	t.Cleanup(func() { adminController.db.SignerStore.DeleteTrustedSigner("tribunal-member-1") })
+	t.Cleanup(func() { adminController.signerStore.DeleteTrustedSigner("tribunal-member-1") })
 
-	err = adminController.db.SignerStore.AddTrustedSigner(signer2)
+	err = adminController.signerStore.AddTrustedSigner(signer2)
 	require.NoError(t, err)
-	t.Cleanup(func() { adminController.db.SignerStore.DeleteTrustedSigner("tribunal-member-2") })
+	t.Cleanup(func() { adminController.signerStore.DeleteTrustedSigner("tribunal-member-2") })
 
 	t.Run("POST - unauthorized (no user)", func(t *testing.T) {
 		ctx := context.Background()
@@ -284,12 +284,12 @@ func TestAdminControllerHandleTribunals(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, rr.Code)
 
 		// Verify the tribunal was created
-		tribunal, err := adminController.db.TribunalStore.GetTribunal("test-tribunal")
+		tribunal, err := adminController.tribunalStore.GetTribunal("test-tribunal")
 		require.NoError(t, err)
 		require.NotNil(t, tribunal)
 		assert.Equal(t, "test-tribunal", tribunal.ID)
 		assert.Equal(t, 2, tribunal.Quorum)
-		t.Cleanup(func() { adminController.db.TribunalStore.DeleteTribunal("test-tribunal") })
+		t.Cleanup(func() { adminController.tribunalStore.DeleteTribunal("test-tribunal") })
 	})
 
 	t.Run("GET - unauthorized (no user)", func(t *testing.T) {
@@ -340,13 +340,13 @@ func TestAdminControllerHandleDeleteTribunal(t *testing.T) {
 	bootstrapUser, err := adminController.userSvc.CreateBootstrapUserWithOSUser(nil)
 	require.NoError(t, err)
 	require.NotNil(t, bootstrapUser)
-	t.Cleanup(func() { adminController.db.DocStore.DocDelete("users", bootstrapUser.ID) })
+	t.Cleanup(func() { adminController.docStore.DocDelete("users", bootstrapUser.ID) })
 
 	// Create a non-bootstrap user for testing
 	regularUser, err := adminController.userSvc.CreateUser()
 	require.NoError(t, err)
 	require.NotNil(t, regularUser)
-	t.Cleanup(func() { adminController.db.DocStore.DocDelete("users", regularUser.ID) })
+	t.Cleanup(func() { adminController.docStore.DocDelete("users", regularUser.ID) })
 
 	// Create a test signer
 	pubKey, _, err := ed25519.GenerateKey(nil)
@@ -357,9 +357,9 @@ func TestAdminControllerHandleDeleteTribunal(t *testing.T) {
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
 	}
-	err = adminController.db.SignerStore.AddTrustedSigner(signer)
+	err = adminController.signerStore.AddTrustedSigner(signer)
 	require.NoError(t, err)
-	t.Cleanup(func() { adminController.db.SignerStore.DeleteTrustedSigner("delete-tribunal-member") })
+	t.Cleanup(func() { adminController.signerStore.DeleteTrustedSigner("delete-tribunal-member") })
 
 	// Create a test tribunal
 	policy := models.TribunalPolicy{
@@ -369,7 +369,7 @@ func TestAdminControllerHandleDeleteTribunal(t *testing.T) {
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	err = adminController.db.TribunalStore.AddTribunal(policy)
+	err = adminController.tribunalStore.AddTribunal(policy)
 	require.NoError(t, err)
 
 	t.Run("DELETE - unauthorized (no user)", func(t *testing.T) {
@@ -412,7 +412,7 @@ func TestAdminControllerHandleDeleteTribunal(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		// Verify the tribunal was deleted
-		tribunal, err := adminController.db.TribunalStore.GetTribunal("delete-test-tribunal")
+		tribunal, err := adminController.tribunalStore.GetTribunal("delete-test-tribunal")
 		require.NoError(t, err)
 		assert.Nil(t, tribunal)
 	})

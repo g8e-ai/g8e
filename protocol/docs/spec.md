@@ -4,8 +4,8 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-07-19
-Version: v1.5.9
+Last Updated: 2026-07-21
+Version: v1.6.1
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -460,7 +460,7 @@ All tests follow a Tier 1 philosophy where possible (no external network/DB requ
 | Suspended transaction store | `../../internal/services/storage/suspended_transaction_store.go` |
 | Network identity detector | `../../internal/services/network/identity.go` |
 | Network architecture | [../../docs/architecture/network.md](../../docs/architecture/network.md) |
-| Gateway envelope construction | `../../internal/services/gateway/governance_envelope.go` |
+| Gateway envelope construction | `../../internal/services/gateway/governance_controller.go` |
 | Gateway HTTP handler | `../../internal/services/gateway/gateway_http.go` |
 | Gateway HTTP routing | `../../internal/services/gateway/gateway_http_router.go` |
 | Pub/Sub command service | `../../internal/services/pubsub/pubsub_commands.go` |

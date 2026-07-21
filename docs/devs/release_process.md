@@ -2,7 +2,7 @@
 
 This document is the definitive checklist for updating all version-bearing files and documentation when bumping a g8e release. The protocol (Go + Python) and the platform binary share the same version number — there are no separate protocol releases.
 
-> **`make release` handles version syncing, building, tagging, pushing, and GitHub release creation.** It does NOT run lint or tests; CI handles those on PRs. The release prep changes (VERSION, CHANGELOG, release notes, doc headers) are committed and opened as a PR. After the PR is merged, pull main and run `make release` to build, tag, push, and create the GitHub release. See [Release Workflow](#release-workflow).
+> **`make release` handles version syncing, tagging, and pushing.** It does NOT build binaries, run lint or tests, or create GitHub releases — CI and GitHub Actions workflows handle those. The release prep changes (VERSION, CHANGELOG, release notes, doc headers) are committed and opened as a PR. After the PR is merged, pull main and run `make release` to tag and push. GitHub Actions workflows create the GitHub release and upload assets. See [Release Workflow](#release-workflow).
 
 ## How to Use This Document
 
@@ -13,7 +13,7 @@ This document is the definitive checklist for updating all version-bearing files
 5. Review release content for [documentation accuracy](#content-accuracy-review) — protocol specs, architecture docs, and guides must reflect any code refactors or behavioral changes shipped in this release
 6. Run the [Verification](#verification) section to catch any missed files
 7. Commit all changes and open a PR — CI runs lint, tests, and version sync checks. Review, approve, and merge the PR on GitHub
-8. After merge, pull main and run `make release` to build, tag, push, and create the GitHub release (see [Release Workflow](#release-workflow))
+8. After merge, pull main and run `make release` to tag and push — GitHub Actions workflows create the release and upload assets (see [Release Workflow](#release-workflow))
 
 ---
 
@@ -236,7 +236,7 @@ The Go protocol code is part of the root module `github.com/g8e-ai/g8e`. There i
 
 The following files read the version dynamically from `VERSION` at build time and do **not** require manual updates:
 
-- `Makefile` — Reads `VERSION` via `$(shell cat VERSION)`; `make release` syncs Python files, builds, tags, pushes, and creates the GitHub release
+- `Makefile` — Reads `VERSION` via `$(shell cat VERSION)`; `make release` syncs Python files, tags, and pushes (GitHub Actions workflows create the release)
 - `Dockerfile` — Receives version as build arg
 - `docker-compose.yml` — References build context, not version
 - `.github/workflows/*.yml` — Triggered by git tags, no hardcoded version. CI includes a version sync check that fails if Python files don't match `VERSION`.
@@ -289,7 +289,7 @@ grep -rnE 'oldCommandName|OldEndpointPath|OLD_CONSTANT' docs/ protocol/docs/ --i
 
 ## Manual Updates
 
-`make release` handles version syncing, building, tagging, pushing, and GitHub release creation. Lint and tests are handled by CI on PRs. The following must still be done manually:
+`make release` handles version syncing, tagging, and pushing. Lint and tests are handled by CI on PRs. GitHub Actions workflows handle release creation and asset uploads. The following must still be done manually:
 
 - [ ] **1. `VERSION`** — Set to `vX.Y.Z`
 - [ ] **2. Sync Python files** — Run `make release` to auto-sync `pyproject.toml` + `__init__.py` from `VERSION` (it will sync and exit due to dirty working tree), or update both files manually
@@ -298,11 +298,11 @@ grep -rnE 'oldCommandName|OldEndpointPath|OLD_CONSTANT' docs/ protocol/docs/ --i
 - [ ] **5. Documentation headers** — Update version/date headers **only** in docs that were actually reviewed or modified in this release (use `git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/` to identify them). Do not blanket-bump all headers. See [Section C](#c-documentation-with-version--date-headers) for the full list of files that carry headers.
 - [ ] **6. Content review** — Complete the [Content Accuracy Review](#content-accuracy-review). Only update docs to fix inaccuracies or document missing features — do not rewrite accurate docs.
 - [ ] **7. Commit and open PR** — `git add -A && git commit -m "release: vX.Y.Z"`, push, and open a PR on GitHub. CI runs lint, tests, and version sync checks.
-- [ ] **8. Merge and release** — After the PR is merged, pull main and run `make release` to build, tag, push, and create the GitHub release
+- [ ] **8. Merge and release** — After the PR is merged, pull main and run `make release` to tag and push — GitHub Actions workflows create the release and upload assets
 
 **Only 2 files need manual version edits** (VERSION + CHANGELOG). The Python package files are auto-synced. Release notes and doc header updates are content-driven, not mechanical version bumps.
 
-> **Workflow note:** All release prep (steps 1–7) happens on a feature branch and is merged via PR. Building, tagging, pushing, and GitHub release creation (step 8) happens on the merged main branch via `make release`.
+> **Workflow note:** All release prep (steps 1–7) happens on a feature branch and is merged via PR. Tagging and pushing (step 8) happens on the merged main branch via `make release`; GitHub Actions workflows handle release creation and asset uploads.
 
 ---
 
@@ -351,9 +351,9 @@ If step 4 shows a mismatch, run `make release` again to re-sync. Steps 5 and 6 w
 
 ## Release Workflow
 
-The protocol (Go + Python) and platform binary share a single version number. There are no separate protocol releases. The `make release` target handles version syncing, building, tagging, pushing, and GitHub release creation in a single step. CI handles lint, tests, and version sync verification on PRs.
+The protocol (Go + Python) and platform binary share a single version number. There are no separate protocol releases. The `make release` target handles version syncing, tagging, and pushing in a single step. CI handles lint, tests, and version sync verification on PRs. GitHub Actions workflows handle release creation and asset uploads.
 
-### `make release` — Build, Tag, Push, Release
+### `make release` — Tag and Push
 
 > **Run this on the merged main branch**, not on a feature branch. The tags must point at the merge commit on main.
 
@@ -361,11 +361,10 @@ The protocol (Go + Python) and platform binary share a single version number. Th
 2. Verifies working tree is clean (fails if Python files were out of sync; commit synced files and go through the PR process first)
 3. Verifies release notes file exists at `docs/release_notes/vX.Y.x/vX.Y.Z.md`
 4. Verifies tags `vX.Y.Z` and `protocol/vX.Y.Z` don't already exist
-5. Verifies GitHub CLI (`gh`) is available
-6. Builds binaries (`make build`)
-7. Creates `vX.Y.Z` and `protocol/vX.Y.Z` tags on the current commit
-8. Pushes both tags to origin
-9. Creates GitHub release from the release notes file via `gh release create`
+5. Creates `vX.Y.Z` and `protocol/vX.Y.Z` tags on the current commit
+6. Pushes both tags to origin
+
+The `vX.Y.Z` tag triggers the `release-binary.yml` workflow, which builds all platforms, signs binaries, creates the GitHub release, and uploads assets. The `protocol/vX.Y.Z` tag triggers the `release-python-protocol.yml` workflow, which publishes the Python package to PyPI.
 
 > **Lint and tests are handled by CI** (`.github/workflows/build-and-test.yml`) on pull requests, not by `make release`. The CI workflow includes a version sync check that fails if `pyproject.toml` or `__init__.py` don't match `VERSION`.
 
@@ -389,7 +388,7 @@ For critical security issues or production bugs:
 1. Apply the minimal fix necessary to the appropriate branch
 2. Set `VERSION`, sync Python files, update `CHANGELOG.md` and release notes
 3. Complete the [Content Accuracy Review](#content-accuracy-review) for the touched areas
-4. Commit, open a PR, merge, then pull main and run `make release` to tag, push, and create the release
+4. Commit, open a PR, merge, then pull main and run `make release` to tag and push — GitHub Actions workflows create the release
 
 ---
 
@@ -402,7 +401,7 @@ The only git operations not automated by `make release` are:
 - Merging the PR on GitHub
 - Pulling main after merge (`git checkout main && git pull`)
 
-`make release` handles tag creation, tag pushing, and GitHub release creation automatically — run it on the merged main branch.
+`make release` handles tag creation and tag pushing automatically — run it on the merged main branch. GitHub Actions workflows handle release creation and asset uploads.
 
 ---
 

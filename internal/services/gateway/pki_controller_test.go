@@ -76,16 +76,16 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	fileSvc := newTestFileSvc(t)
 
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, "", ks, fileSvc)
+	db, stores, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err, "failed to open gateway DB service")
 	t.Cleanup(func() { db.Close() })
 
 	sm := db.GetSecretManager()
 
-	pki := newPKIAuthority(fileSvc, db, sm, logger)
+	pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
 	require.NoError(t, pki.InitializePKI(nil), "failed to ensure PKI")
 
-	appEnrollment := NewAppEnrollmentService(db, pki, logger)
+	appEnrollment := NewAppEnrollmentService(stores.DocStore, pki, logger)
 	resp := response.NewWriter(logger)
 
 	// Initialize script templates
@@ -94,12 +94,12 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	}
 
 	// Create minimal registration service for tests that need it
-	userSvc := NewUserService(db, logger)
-	cliSessionSvc := NewCLISessionService(db, logger)
-	operatorSessionSvc := NewOperatorSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
+	userSvc := NewUserService(stores.DocStore, logger)
+	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
+	operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
+	reg := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 
-	controller := newPKIController(cfg, logger, db, pki, appEnrollment, reg, resp)
+	controller := newPKIController(cfg, logger, pki, appEnrollment, reg, resp)
 	return controller, cfg, db
 }
 
@@ -476,18 +476,16 @@ func TestNewPKIController(t *testing.T) {
 		t.Fatalf("Failed to initialize script templates: %v", err)
 	}
 
-	db := &CanonicalDBService{}
 	pki := &PKIAuthority{}
 	appEnrollment := &AppEnrollmentService{}
 	registration := &RegistrationService{}
 	responder := &response.Writer{}
 
-	controller := newPKIController(cfg, logger, db, pki, appEnrollment, registration, responder)
+	controller := newPKIController(cfg, logger, pki, appEnrollment, registration, responder)
 
 	assert.NotNil(t, controller)
 	assert.Equal(t, cfg, controller.cfg)
 	assert.Equal(t, logger, controller.logger)
-	assert.Equal(t, db, controller.db)
 	assert.Equal(t, pki, controller.pki)
 	assert.Equal(t, appEnrollment, controller.appEnrollment)
 	assert.Equal(t, registration, controller.registration)
@@ -759,7 +757,6 @@ func TestPKIController_HandlePKIAppsEnroll(t *testing.T) {
 	t.Run("Failure - app enrollment service not available", func(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		db := &CanonicalDBService{}
 		pki := &PKIAuthority{}
 		resp := response.NewWriter(logger)
 
@@ -768,7 +765,7 @@ func TestPKIController_HandlePKIAppsEnroll(t *testing.T) {
 			t.Fatalf("Failed to initialize script templates: %v", err)
 		}
 
-		controller := newPKIController(cfg, logger, db, pki, nil, nil, resp)
+		controller := newPKIController(cfg, logger, pki, nil, nil, resp)
 
 		validPayload := map[string]string{
 			"csr_pem":  testutil.GenerateTestCSRP256(t, "test-app"),

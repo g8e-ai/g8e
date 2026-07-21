@@ -41,9 +41,9 @@ type EnrollmentTokenService struct {
 }
 
 // NewEnrollmentTokenService creates a new EnrollmentTokenService.
-func NewEnrollmentTokenService(db *CanonicalDBService, logger *slog.Logger) *EnrollmentTokenService {
+func NewEnrollmentTokenService(docStore *DocumentStoreService, logger *slog.Logger) *EnrollmentTokenService {
 	return &EnrollmentTokenService{
-		db:     db.DocStore,
+		db:     docStore,
 		logger: logger,
 	}
 }
