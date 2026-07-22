@@ -995,7 +995,9 @@ var (
 	ErrApprovalSSETimeout = errors.New("L3 approval: timed out waiting for SSE event")
 
 	// Agent harness errors
-	ErrHarnessNoScenarios = errors.New("no scenarios selected")
+	ErrHarnessNoScenarios       = errors.New("no scenarios selected")
+	ErrHarnessGovKitNotInit     = errors.New("gov kit not initialized (call SetGovKit)")
+	ErrHarnessGovKitMissingSign = errors.New("gov kit not initialized (need ensemble + principal)")
 
 	// Browser errors
 	ErrBrowserURLEmpty = errors.New("browser URL cannot be empty")

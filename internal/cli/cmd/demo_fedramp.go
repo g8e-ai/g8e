@@ -25,14 +25,11 @@ import (
 
 // defaultFedRAMPHarnessConfig returns the config matching the FedRAMP compose topology.
 func defaultFedRAMPHarnessConfig() harnessConfig {
-	cfg := defaultHarnessConfig("agent-runtime")
-	cfg.ConsensusSeed = constants.ContainerEnsembleSeed
-	cfg.TribunalID = "fedramp-tribunal"
-	return cfg
+	return defaultGovernedHarnessConfig("agent-runtime", "fedramp-tribunal")
 }
 
-func ensureFedRAMPPosture(demoDir, posture string) error {
-	return ensureDemoPosture(demoDir, posture, "8088")
+func switchFedRAMPPosture(demoDir, posture string) error {
+	return switchDemoPosture(demoDir, posture, "8088")
 }
 
 func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
@@ -59,7 +56,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln("          receipt is written to the hash-chained ledger.")
 		demoPrintln()
 
-		if err := ensureFedRAMPPosture(demoDir, "consensus"); err != nil {
+		if err := switchFedRAMPPosture(demoDir, "consensus"); err != nil {
 			fmt.Printf("  [WARNING] Failed to set consensus posture: %v\n", err)
 		}
 
@@ -134,7 +131,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln("          The audit trail remains tamper-evident and intact.")
 		demoPrintln()
 
-		if err := ensureFedRAMPPosture(demoDir, "doctrine"); err != nil {
+		if err := switchFedRAMPPosture(demoDir, "doctrine"); err != nil {
 			fmt.Printf("  [WARNING] Failed to set doctrine posture: %v\n", err)
 		}
 
@@ -196,7 +193,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln("  -- Step 1: Restart gateway in notary posture --")
 		demoPrintln("  Switching from consensus -> notary (L1/L2/L3 strictly enforced):")
 		demoPrintln()
-		if err := ensureFedRAMPPosture(demoDir, "notary"); err != nil {
+		if err := switchFedRAMPPosture(demoDir, "notary"); err != nil {
 			fmt.Printf("  [WARNING] Failed to switch to notary posture: %v\n", err)
 			fmt.Println("  Continuing — the gateway may already be in notary mode.")
 		}
@@ -286,7 +283,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Ledger(tui.LevelInfo, "L5 actuator recorded DESTROY — signed receipt in hash-chained ledger")
 
 		demoPrintln("  -- Step 7: Restore gateway to consensus posture --")
-		if err := ensureFedRAMPPosture(demoDir, "consensus"); err != nil {
+		if err := switchFedRAMPPosture(demoDir, "consensus"); err != nil {
 			fmt.Printf("  [WARNING] Failed to restore consensus posture: %v\n", err)
 		}
 
@@ -321,7 +318,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln("          through the full L1/L2/L3 pipeline with signed receipts.")
 		demoPrintln()
 
-		if err := ensureFedRAMPPosture(demoDir, "consensus"); err != nil {
+		if err := switchFedRAMPPosture(demoDir, "consensus"); err != nil {
 			fmt.Printf("  [WARNING] Failed to set consensus posture: %v\n", err)
 		}
 
@@ -393,7 +390,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln("          The audit vault remains tamper-evident and intact.")
 		demoPrintln()
 
-		if err := ensureFedRAMPPosture(demoDir, "doctrine"); err != nil {
+		if err := switchFedRAMPPosture(demoDir, "doctrine"); err != nil {
 			fmt.Printf("  [WARNING] Failed to set doctrine posture: %v\n", err)
 		}
 

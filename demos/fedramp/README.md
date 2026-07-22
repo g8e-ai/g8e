@@ -87,7 +87,7 @@ L1 doctrine is **compiled-in** threat detectors enforced by the Gateway at admis
 
 The scenarios that exercise real L1 enforcement:
 - **fedramp-deny**: `rm -rf /var/cloudsvc` is rejected at L1 admission (the `destroy_rm_rf_system_dirs` detector fires)
-- **fedramp-evidence-block**: `rm -rf /root/.g8e/data` is rejected at L1 admission (the `destroy_rm_rf_root` detector fires)
+- **fedramp-evidence-block**: `rm -rf /root/.g8e/data` is rejected at L1 admission (the `destroy_rm_rf_system_dirs` detector fires)
 - **fedramp-escalate**: L3 notary suspend/approve flow gates resource destruction
 
 ## Quick start
@@ -120,7 +120,7 @@ All scenarios run via `demos scenarios run`, a real g8e binary that submits genu
 **Scenario `fedramp-revert`**: A configuration revert is submitted to roll back a resource to its prior version. L1 doctrine admits the envelope; L2 consensus quorum is met. The revert is executed and the `cloudsvc` records a `REVERT` operation with the prior state hash. The revert appears in the ledger as an evidenced, attributed action.
 
 ### 5: Gateway Audit Vault Destruction Blocked (AU)
-**Scenario `fedramp-evidence-block`**: A compromised operator tries to wipe the gateway audit vault with `rm -rf /root/.g8e/data`. L1 doctrine rejects it at admission (the `destroy_rm_rf_root` detector fires). Even with valid L2 and L3 proofs, L1 runs first. The audit vault is tamper-evident.
+**Scenario `fedramp-evidence-block`**: A compromised operator tries to wipe the gateway audit vault with `rm -rf /root/.g8e/data`. L1 doctrine rejects it at admission (the `destroy_rm_rf_system_dirs` detector fires). Even with valid L2 and L3 proofs, L1 runs first. The audit vault is tamper-evident.
 
 ## Evidence export
 

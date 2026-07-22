@@ -5,9 +5,9 @@ package scenarios
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
 )
 
@@ -56,8 +56,7 @@ var FedRAMPArgs = struct {
 // operator's governed execution reach the actuator without tripping the
 // curl/wget denylist — exactly the DHS dataop pattern).
 func cloudopArgs(action, resourceID, detail string) string {
-	return fmt.Sprintf(`{"command":"cloudop","args":["%s","%s","%s","%s"],"timeout":10}`,
-		action, FedRAMPArgs.CloudSvcEndpoint, resourceID, detail)
+	return shellCommandArgs("cloudop", action, FedRAMPArgs.CloudSvcEndpoint, resourceID, detail)
 }
 
 func fedrampScenarios() []Scenario {
@@ -66,7 +65,7 @@ func fedrampScenarios() []Scenario {
 			Name: "fedramp-provision", Title: "FedRAMP: governed cloud resource provisioning with L2 consensus", Persona: fedrampCloudOperator, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
-					return errors.New("gov kit not initialized (need ensemble + principal)")
+					return constants.ErrHarnessGovKitMissingSign
 				}
 				root, err := c.StateRoot(ctx)
 				if err != nil {
@@ -102,7 +101,7 @@ func fedrampScenarios() []Scenario {
 			Name: "fedramp-deny", Title: "FedRAMP: unauthorized audit trail destruction blocked by L1 doctrine", Persona: fedrampCloudOperator, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
-					return errors.New("gov kit not initialized (need ensemble + principal)")
+					return constants.ErrHarnessGovKitMissingSign
 				}
 				root, err := c.StateRoot(ctx)
 				if err != nil {
@@ -139,7 +138,7 @@ func fedrampScenarios() []Scenario {
 			Name: "fedramp-escalate", Title: "FedRAMP: resource destruction gated on authorizing official approval (L3)", Persona: fedrampAuthorizingOfficial, RequiresPosture: Notary,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
-					return errors.New("gov kit not initialized (need ensemble + principal)")
+					return constants.ErrHarnessGovKitMissingSign
 				}
 				root, err := c.StateRoot(ctx)
 				if err != nil {
@@ -184,7 +183,7 @@ func fedrampScenarios() []Scenario {
 			Name: "fedramp-revert", Title: "FedRAMP: governed configuration revert under L2 consensus quorum", Persona: fedrampCloudOperator, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
-					return errors.New("gov kit not initialized (need ensemble + principal)")
+					return constants.ErrHarnessGovKitMissingSign
 				}
 				root, err := c.StateRoot(ctx)
 				if err != nil {
@@ -220,7 +219,7 @@ func fedrampScenarios() []Scenario {
 			Name: "fedramp-evidence-block", Title: "FedRAMP: attempt to wipe the gateway audit vault is rejected by L1 doctrine", Persona: fedrampCloudOperator, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
-					return errors.New("gov kit not initialized (need ensemble + principal)")
+					return constants.ErrHarnessGovKitMissingSign
 				}
 				root, err := c.StateRoot(ctx)
 				if err != nil {

@@ -5,9 +5,9 @@ package scenarios
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
 )
 
@@ -40,7 +40,7 @@ func governanceScenarios() []Scenario {
 			Name: "consensus", Title: "L2 consensus envelope (mock ensemble co-sign)", Persona: ensembleProducer, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil {
-					return errors.New("gov kit not initialized (call SetGovKit)")
+					return constants.ErrHarnessGovKitNotInit
 				}
 				root, err := c.StateRoot(ctx)
 				if err != nil {
@@ -72,7 +72,7 @@ func governanceScenarios() []Scenario {
 			Name: "envelope-maximal", Title: "Official notary envelope: L2 consensus + principal L3 signing", Persona: ensembleProducer, RequiresPosture: Notary,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
-					return errors.New("gov kit not initialized (need ensemble + principal)")
+					return constants.ErrHarnessGovKitMissingSign
 				}
 				root, err := c.StateRoot(ctx)
 				if err != nil {
@@ -160,7 +160,7 @@ func governanceScenarios() []Scenario {
 			Name: "tribunal-quorum", Title: "Tribunal quorum: 2-of-3 co-sign, receipt records consensus", Persona: ensembleProducer, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil {
-					return errors.New("gov kit not initialized (call SetGovKit)")
+					return constants.ErrHarnessGovKitNotInit
 				}
 				root, err := c.StateRoot(ctx)
 				if err != nil {
@@ -195,7 +195,7 @@ func governanceScenarios() []Scenario {
 			Name: "tribunal-veto", Title: "Tribunal veto: one member votes false, envelope is rejected", Persona: ensembleProducer, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil {
-					return errors.New("gov kit not initialized (call SetGovKit)")
+					return constants.ErrHarnessGovKitNotInit
 				}
 				root, err := c.StateRoot(ctx)
 				if err != nil {
@@ -234,7 +234,7 @@ func governanceScenarios() []Scenario {
 			Name: "notary-oob", Title: "L3 notary OOB: suspend then principal approves out-of-band", Persona: principalActor, RequiresPosture: Notary,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
-					return errors.New("gov kit not initialized (need ensemble + principal)")
+					return constants.ErrHarnessGovKitMissingSign
 				}
 				root, err := c.StateRoot(ctx)
 				if err != nil {

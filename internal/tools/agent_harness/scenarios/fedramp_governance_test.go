@@ -5,14 +5,15 @@ package scenarios
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFedRAMPScenarios(t *testing.T) {
 	scenarios := fedrampScenarios()
 
-	if len(scenarios) != 5 {
-		t.Errorf("fedrampScenarios should return 5 scenarios, got %d", len(scenarios))
-	}
+	assert.Len(t, scenarios, 5, "fedrampScenarios should return 5 scenarios")
 
 	expectedNames := map[string]bool{
 		"fedramp-provision":      true,
@@ -23,12 +24,12 @@ func TestFedRAMPScenarios(t *testing.T) {
 	}
 
 	for _, sc := range scenarios {
-		if !expectedNames[sc.Name] {
-			t.Errorf("Unexpected fedramp scenario name: %q", sc.Name)
-		}
-		if sc.Run == nil {
-			t.Errorf("fedramp scenario %q should have non-nil Run function", sc.Name)
-		}
+		assert.Contains(t, expectedNames, sc.Name, "Unexpected fedramp scenario name")
+		assert.NotNil(t, sc.Run, "fedramp scenario %q should have non-nil Run function", sc.Name)
+		delete(expectedNames, sc.Name)
+	}
+	for name := range expectedNames {
+		assert.Fail(t, "Missing expected fedramp scenario", name)
 	}
 }
 
@@ -46,12 +47,14 @@ func TestFedRAMPScenarioTitles(t *testing.T) {
 	for _, sc := range scenarios {
 		expected, ok := expectedTitles[sc.Name]
 		if !ok {
-			t.Errorf("No expected title for scenario %q", sc.Name)
+			assert.Fail(t, "No expected title for scenario", sc.Name)
 			continue
 		}
-		if sc.Title != expected {
-			t.Errorf("Scenario %q should have title %q, got %q", sc.Name, expected, sc.Title)
-		}
+		assert.Equal(t, expected, sc.Title, "Scenario %q should have correct title", sc.Name)
+		delete(expectedTitles, sc.Name)
+	}
+	for name := range expectedTitles {
+		assert.Fail(t, "Missing expected fedramp scenario title", name)
 	}
 }
 
@@ -69,12 +72,14 @@ func TestFedRAMPScenarioPostures(t *testing.T) {
 	for _, sc := range scenarios {
 		expected, ok := expectedPostures[sc.Name]
 		if !ok {
-			t.Errorf("No expected posture for scenario %q", sc.Name)
+			assert.Fail(t, "No expected posture for scenario", sc.Name)
 			continue
 		}
-		if sc.RequiresPosture != expected {
-			t.Errorf("Scenario %q should require %s posture, got %q", sc.Name, expected, sc.RequiresPosture)
-		}
+		assert.Equal(t, expected, sc.RequiresPosture, "Scenario %q should require correct posture", sc.Name)
+		delete(expectedPostures, sc.Name)
+	}
+	for name := range expectedPostures {
+		assert.Fail(t, "Missing expected fedramp scenario posture", name)
 	}
 }
 
@@ -82,12 +87,8 @@ func TestFedRAMPScenarioPersonas(t *testing.T) {
 	scenarios := fedrampScenarios()
 
 	for _, sc := range scenarios {
-		if sc.Persona.ID == "" {
-			t.Errorf("fedramp scenario %q should have non-empty Persona.ID", sc.Name)
-		}
-		if sc.Persona.UserAgent == "" {
-			t.Errorf("fedramp scenario %q should have non-empty Persona.UserAgent", sc.Name)
-		}
+		assert.NotEmpty(t, sc.Persona.ID, "fedramp scenario %q should have non-empty Persona.ID", sc.Name)
+		assert.NotEmpty(t, sc.Persona.UserAgent, "fedramp scenario %q should have non-empty Persona.UserAgent", sc.Name)
 	}
 
 	var escalateScenario *Scenario
@@ -97,47 +98,28 @@ func TestFedRAMPScenarioPersonas(t *testing.T) {
 			break
 		}
 	}
-	if escalateScenario == nil {
-		t.Fatal("fedramp-escalate scenario not found")
-		return
-	}
-	if escalateScenario.Persona.ID != "fedramp-authorizing-official" {
-		t.Errorf("fedramp-escalate should use persona 'fedramp-authorizing-official', got %q", escalateScenario.Persona.ID)
-	}
+	require.NotNil(t, escalateScenario, "fedramp-escalate scenario not found")
+	assert.Equal(t, "fedramp-authorizing-official", escalateScenario.Persona.ID, "fedramp-escalate should use persona 'fedramp-authorizing-official'")
 
 	for _, sc := range scenarios {
 		if sc.Name == "fedramp-escalate" {
 			continue
 		}
-		if sc.Persona.ID != "fedramp-cloud-operator" {
-			t.Errorf("fedramp scenario %q should use persona 'fedramp-cloud-operator', got %q", sc.Name, sc.Persona.ID)
-		}
+		assert.Equal(t, "fedramp-cloud-operator", sc.Persona.ID, "fedramp scenario %q should use persona 'fedramp-cloud-operator'", sc.Name)
 	}
 }
 
 func TestFedRAMPArgsDefaults(t *testing.T) {
-	if FedRAMPArgs.CloudSvcEndpoint != "10.73.0.50:9100" {
-		t.Errorf("Default CloudSvcEndpoint should be 10.73.0.50:9100, got %s", FedRAMPArgs.CloudSvcEndpoint)
-	}
+	assert.Equal(t, "10.73.0.50:9100", FedRAMPArgs.CloudSvcEndpoint, "Default CloudSvcEndpoint should be 10.73.0.50:9100")
 }
 
 func TestCloudopArgs(t *testing.T) {
 	got := cloudopArgs("provision", "fedramp-vm-prod-01", "FIPS-199-MODERATE")
-	if !strings.Contains(got, "cloudop") {
-		t.Errorf("cloudopArgs should contain 'cloudop' command, got %s", got)
-	}
-	if !strings.Contains(got, "provision") {
-		t.Errorf("cloudopArgs should contain the action 'provision', got %s", got)
-	}
-	if !strings.Contains(got, "fedramp-vm-prod-01") {
-		t.Errorf("cloudopArgs should contain the resource ID, got %s", got)
-	}
-	if !strings.Contains(got, "FIPS-199-MODERATE") {
-		t.Errorf("cloudopArgs should contain the detail, got %s", got)
-	}
-	if !strings.Contains(got, "10.73.0.50:9100") {
-		t.Errorf("cloudopArgs should contain the CloudSvcEndpoint, got %s", got)
-	}
+	assert.Contains(t, got, "cloudop", "cloudopArgs should contain 'cloudop' command")
+	assert.Contains(t, got, "provision", "cloudopArgs should contain the action 'provision'")
+	assert.Contains(t, got, "fedramp-vm-prod-01", "cloudopArgs should contain the resource ID")
+	assert.Contains(t, got, "FIPS-199-MODERATE", "cloudopArgs should contain the detail")
+	assert.Contains(t, got, "10.73.0.50:9100", "cloudopArgs should contain the CloudSvcEndpoint")
 }
 
 func TestFedRAMPScenariosInRegistry(t *testing.T) {
@@ -151,39 +133,27 @@ func TestFedRAMPScenariosInRegistry(t *testing.T) {
 	for _, name := range expected {
 		sc, ok := Find(name)
 		if !ok {
-			t.Errorf("Registry should include %q scenario", name)
+			assert.Fail(t, "Registry should include scenario", name)
 			continue
 		}
-		if sc.Run == nil {
-			t.Errorf("Registry scenario %q should have non-nil Run function", name)
-		}
+		assert.NotNil(t, sc.Run, "Registry scenario %q should have non-nil Run function", name)
 	}
 }
 
 func TestFedRAMPScenarioPrefix(t *testing.T) {
 	scenarios := fedrampScenarios()
 	for _, sc := range scenarios {
-		if !strings.HasPrefix(sc.Name, FedRAMPScenarioPrefix) {
-			t.Errorf("fedramp scenario %q should start with %q prefix", sc.Name, FedRAMPScenarioPrefix)
-		}
+		assert.True(t, strings.HasPrefix(sc.Name, FedRAMPScenarioPrefix), "fedramp scenario %q should start with %q prefix", sc.Name, FedRAMPScenarioPrefix)
 	}
 }
 
 func TestFedRAMPProvisionRequiresConsensus(t *testing.T) {
 	sc, ok := Find("fedramp-provision")
-	if !ok {
-		t.Fatal("fedramp-provision scenario not found in registry")
-	}
-	if sc.RequiresPosture != Consensus {
-		t.Errorf("fedramp-provision should require Consensus posture, got %s", sc.RequiresPosture)
-	}
+	require.True(t, ok, "fedramp-provision scenario not found in registry")
+	assert.Equal(t, Consensus, sc.RequiresPosture, "fedramp-provision should require Consensus posture")
 }
 
 func TestFedRAMPArgsStructFields(t *testing.T) {
-	if FedRAMPArgs.CloudSvcEndpoint == "" {
-		t.Error("FedRAMPArgs.CloudSvcEndpoint should not be empty")
-	}
-	if !strings.Contains(FedRAMPArgs.CloudSvcEndpoint, ":") {
-		t.Errorf("FedRAMPArgs.CloudSvcEndpoint should contain host:port, got %q", FedRAMPArgs.CloudSvcEndpoint)
-	}
+	assert.NotEmpty(t, FedRAMPArgs.CloudSvcEndpoint, "FedRAMPArgs.CloudSvcEndpoint should not be empty")
+	assert.Contains(t, FedRAMPArgs.CloudSvcEndpoint, ":", "FedRAMPArgs.CloudSvcEndpoint should contain host:port")
 }

@@ -322,7 +322,7 @@ Then:
 cd demos/neworg && docker compose up
 ```
 
-The `demos/Dockerfile` is shared across all org directories. It copies the pre-built binary from `demos/bin/g8e` into a minimal Debian image — no compilation happens inside the container. Run `make build` first to produce the binary.
+The `demos/Dockerfile` is shared across all org directories. It copies the pre-built binary from `demos/bin/g8e` into a minimal Debian image; no compilation happens inside the container. Run `make build` first to produce the binary.
 
 ## Invariants
 

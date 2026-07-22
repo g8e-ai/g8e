@@ -27,14 +27,11 @@ import (
 
 // defaultDHSHarnessConfig returns the config matching the DHS compose topology.
 func defaultDHSHarnessConfig() harnessConfig {
-	cfg := defaultHarnessConfig("agent-coalition")
-	cfg.ConsensusSeed = constants.ContainerEnsembleSeed
-	cfg.TribunalID = "dhs-tribunal"
-	return cfg
+	return defaultGovernedHarnessConfig("agent-coalition", "dhs-tribunal")
 }
 
-func ensureDHSPosture(demoDir, posture string) error {
-	return ensureDemoPosture(demoDir, posture, "8087")
+func switchDHSPosture(demoDir, posture string) error {
+	return switchDemoPosture(demoDir, posture, "8087")
 }
 
 func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
@@ -62,7 +59,7 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln("          provable chain-of-custody.")
 		demoPrintln()
 
-		if err := ensureDHSPosture(demoDir, "consensus"); err != nil {
+		if err := switchDHSPosture(demoDir, "consensus"); err != nil {
 			fmt.Printf("  [WARNING] Failed to set consensus posture: %v\n", err)
 		}
 
@@ -144,7 +141,7 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln("  ── Step 1: Restart gateway in notary posture ────────────────────")
 		demoPrintln("  Switching from consensus → notary (L1/L2/L3 strictly enforced):")
 		demoPrintln()
-		if err := ensureDHSPosture(demoDir, "notary"); err != nil {
+		if err := switchDHSPosture(demoDir, "notary"); err != nil {
 			fmt.Printf("  [WARNING] Failed to switch to notary posture: %v\n", err)
 			fmt.Println("  Continuing — the gateway may already be in notary mode.")
 		}
@@ -241,7 +238,7 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 
 		// Step 7: Restore gateway to consensus posture
 		demoPrintln("  ── Step 7: Restore gateway to consensus posture ─────────────────")
-		if err := ensureDHSPosture(demoDir, "consensus"); err != nil {
+		if err := switchDHSPosture(demoDir, "consensus"); err != nil {
 			fmt.Printf("  [WARNING] Failed to restore consensus posture: %v\n", err)
 		}
 
@@ -277,7 +274,7 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln("          is restored.")
 		demoPrintln()
 
-		if err := ensureDHSPosture(demoDir, "consensus"); err != nil {
+		if err := switchDHSPosture(demoDir, "consensus"); err != nil {
 			fmt.Printf("  [WARNING] Failed to set consensus posture: %v\n", err)
 		}
 
@@ -366,7 +363,7 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln("          gate, not just an audit annotation.")
 		demoPrintln()
 
-		if err := ensureDHSPosture(demoDir, "consensus"); err != nil {
+		if err := switchDHSPosture(demoDir, "consensus"); err != nil {
 			fmt.Printf("  [WARNING] Failed to set consensus posture: %v\n", err)
 		}
 
@@ -462,7 +459,7 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln("          the PURGE with a cryptographic destruction receipt.")
 		demoPrintln()
 
-		if err := ensureDHSPosture(demoDir, "consensus"); err != nil {
+		if err := switchDHSPosture(demoDir, "consensus"); err != nil {
 			fmt.Printf("  [WARNING] Failed to set consensus posture: %v\n", err)
 		}
 

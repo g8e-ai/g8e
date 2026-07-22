@@ -12,70 +12,44 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
 )
 
 func TestRegistry(t *testing.T) {
 	scenarios := Registry()
 
-	if len(scenarios) == 0 {
-		t.Error("Registry should return at least one scenario")
-	}
+	assert.NotEmpty(t, scenarios, "Registry should return at least one scenario")
 
-	// Check that all scenarios have required fields
 	for _, sc := range scenarios {
-		if sc.Name == "" {
-			t.Error("Scenario should have a Name")
-		}
-		if sc.Title == "" {
-			t.Error("Scenario should have a Title")
-		}
-		if sc.Persona.ID == "" {
-			t.Error("Scenario should have a Persona with ID")
-		}
-		if sc.RequiresPosture == "" {
-			t.Error("Scenario should have a RequiresPosture")
-		}
-		if sc.Run == nil {
-			t.Error("Scenario should have a Run function")
-		}
+		assert.NotEmpty(t, sc.Name, "Scenario should have a Name")
+		assert.NotEmpty(t, sc.Title, "Scenario should have a Title")
+		assert.NotEmpty(t, sc.Persona.ID, "Scenario should have a Persona with ID")
+		assert.NotEmpty(t, sc.RequiresPosture, "Scenario should have a RequiresPosture")
+		assert.NotNil(t, sc.Run, "Scenario should have a Run function")
 	}
 }
 
 func TestFind(t *testing.T) {
 	scenarios := Registry()
 
-	if len(scenarios) == 0 {
-		t.Fatal("Registry should return at least one scenario for Find test")
-	}
+	require.NotEmpty(t, scenarios, "Registry should return at least one scenario for Find test")
 
-	// Test finding an existing scenario
 	firstName := scenarios[0].Name
 	found, ok := Find(firstName)
-	if !ok {
-		t.Errorf("Find should return true for existing scenario %q", firstName)
-	}
-	if found.Name != firstName {
-		t.Errorf("Find should return scenario with name %q, got %q", firstName, found.Name)
-	}
+	assert.True(t, ok, "Find should return true for existing scenario %q", firstName)
+	assert.Equal(t, firstName, found.Name, "Find should return scenario with correct name")
 
-	// Test finding a non-existent scenario
 	_, ok = Find("non-existent-scenario-name")
-	if ok {
-		t.Error("Find should return false for non-existent scenario")
-	}
+	assert.False(t, ok, "Find should return false for non-existent scenario")
 }
 
 func TestPostureConstants(t *testing.T) {
-	if Doctrine != Posture("doctrine") {
-		t.Error("Doctrine constant should be 'doctrine'")
-	}
-	if Consensus != Posture("consensus") {
-		t.Error("Consensus constant should be 'consensus'")
-	}
-	if Notary != Posture("notary") {
-		t.Error("Notary constant should be 'notary'")
-	}
+	assert.Equal(t, Posture("doctrine"), Doctrine, "Doctrine constant should be 'doctrine'")
+	assert.Equal(t, Posture("consensus"), Consensus, "Consensus constant should be 'consensus'")
+	assert.Equal(t, Posture("notary"), Notary, "Notary constant should be 'notary'")
 }
 
 func TestPostureStringValues(t *testing.T) {
@@ -89,76 +63,43 @@ func TestPostureStringValues(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		if string(tt.posture) != tt.expected {
-			t.Errorf("Posture %q should equal %q", tt.posture, tt.expected)
-		}
+		assert.Equal(t, tt.expected, string(tt.posture), "Posture %q should equal %q", tt.posture, tt.expected)
 	}
 }
 
 func TestPostureEquality(t *testing.T) {
-	if Doctrine != Posture("doctrine") {
-		t.Error("Doctrine should equal Posture(\"doctrine\")")
-	}
-	if Consensus != Posture("consensus") {
-		t.Error("Consensus should equal Posture(\"consensus\")")
-	}
-	if Notary != Posture("notary") {
-		t.Error("Notary should equal Posture(\"notary\")")
-	}
+	assert.Equal(t, Posture("doctrine"), Doctrine, "Doctrine should equal Posture(\"doctrine\")")
+	assert.Equal(t, Posture("consensus"), Consensus, "Consensus should equal Posture(\"consensus\")")
+	assert.Equal(t, Posture("notary"), Notary, "Notary should equal Posture(\"notary\")")
 
-	// Test inequality
-	if Doctrine == Consensus {
-		t.Error("Doctrine should not equal Consensus")
-	}
-	if Consensus == Notary {
-		t.Error("Consensus should not equal Notary")
-	}
-	if Doctrine == Notary {
-		t.Error("Doctrine should not equal Notary")
-	}
+	assert.NotEqual(t, Doctrine, Consensus, "Doctrine should not equal Consensus")
+	assert.NotEqual(t, Consensus, Notary, "Consensus should not equal Notary")
+	assert.NotEqual(t, Doctrine, Notary, "Doctrine should not equal Notary")
 }
 
 func TestResult_Note(t *testing.T) {
 	r := &Result{}
 	r.note("test note %d", 42)
 
-	if len(r.Notes) != 1 {
-		t.Errorf("note should add one entry, got %d", len(r.Notes))
-	}
-	if r.Notes[0] != "test note 42" {
-		t.Errorf("note should format correctly, got %q", r.Notes[0])
-	}
+	assert.Len(t, r.Notes, 1, "note should add one entry")
+	assert.Equal(t, "test note 42", r.Notes[0], "note should format correctly")
 
-	// Add another note
 	r.note("second note")
-	if len(r.Notes) != 2 {
-		t.Errorf("note should append, got %d", len(r.Notes))
-	}
+	assert.Len(t, r.Notes, 2, "note should append")
 }
 
 func TestResult_Tx(t *testing.T) {
 	r := &Result{}
 
-	// Add a valid hash
 	r.tx("hash1")
-	if len(r.TxHashes) != 1 {
-		t.Errorf("tx should add one entry for valid hash, got %d", len(r.TxHashes))
-	}
-	if r.TxHashes[0] != "hash1" {
-		t.Errorf("tx should store hash correctly, got %q", r.TxHashes[0])
-	}
+	assert.Len(t, r.TxHashes, 1, "tx should add one entry for valid hash")
+	assert.Equal(t, "hash1", r.TxHashes[0], "tx should store hash correctly")
 
-	// Add another valid hash
 	r.tx("hash2")
-	if len(r.TxHashes) != 2 {
-		t.Errorf("tx should append, got %d", len(r.TxHashes))
-	}
+	assert.Len(t, r.TxHashes, 2, "tx should append")
 
-	// Try to add empty hash (should be skipped)
 	r.tx("")
-	if len(r.TxHashes) != 2 {
-		t.Errorf("tx should skip empty hash, got %d", len(r.TxHashes))
-	}
+	assert.Len(t, r.TxHashes, 2, "tx should skip empty hash")
 }
 
 func TestResult(t *testing.T) {
@@ -166,162 +107,90 @@ func TestResult(t *testing.T) {
 		r := &Result{}
 		r.note("test note %d", 42)
 
-		if len(r.Notes) != 1 {
-			t.Errorf("note should add one entry, got %d", len(r.Notes))
-		}
-		if r.Notes[0] != "test note 42" {
-			t.Errorf("note should format correctly, got %q", r.Notes[0])
-		}
+		assert.Len(t, r.Notes, 1, "note should add one entry")
+		assert.Equal(t, "test note 42", r.Notes[0], "note should format correctly")
 
-		// Add another note
 		r.note("second note")
-		if len(r.Notes) != 2 {
-			t.Errorf("note should append, got %d", len(r.Notes))
-		}
+		assert.Len(t, r.Notes, 2, "note should append")
 	})
 
 	t.Run("tx method", func(t *testing.T) {
 		r := &Result{}
 
-		// Add a valid hash
 		r.tx("hash1")
-		if len(r.TxHashes) != 1 {
-			t.Errorf("tx should add one entry for valid hash, got %d", len(r.TxHashes))
-		}
-		if r.TxHashes[0] != "hash1" {
-			t.Errorf("tx should store hash correctly, got %q", r.TxHashes[0])
-		}
+		assert.Len(t, r.TxHashes, 1, "tx should add one entry for valid hash")
+		assert.Equal(t, "hash1", r.TxHashes[0], "tx should store hash correctly")
 
-		// Add another valid hash
 		r.tx("hash2")
-		if len(r.TxHashes) != 2 {
-			t.Errorf("tx should append, got %d", len(r.TxHashes))
-		}
+		assert.Len(t, r.TxHashes, 2, "tx should append")
 
-		// Try to add empty hash (should be skipped)
 		r.tx("")
-		if len(r.TxHashes) != 2 {
-			t.Errorf("tx should skip empty hash, got %d", len(r.TxHashes))
-		}
+		assert.Len(t, r.TxHashes, 2, "tx should skip empty hash")
 	})
 }
 
 func TestResultZeroValue(t *testing.T) {
 	var r Result
 
-	if r.Name != "" {
-		t.Errorf("zero Result Name should be empty, got %q", r.Name)
-	}
-	if r.Title != "" {
-		t.Errorf("zero Result Title should be empty, got %q", r.Title)
-	}
-	if r.Persona != "" {
-		t.Errorf("zero Result Persona should be empty, got %q", r.Persona)
-	}
-	if r.RequiresPosture != "" {
-		t.Errorf("zero Result RequiresPosture should be empty, got %q", r.RequiresPosture)
-	}
-	if !r.StartedAt.IsZero() {
-		t.Error("zero Result StartedAt should be zero time")
-	}
-	if r.DurationMS != 0 {
-		t.Errorf("zero Result DurationMS should be 0, got %d", r.DurationMS)
-	}
-	if r.Exchanges != nil {
-		t.Error("zero Result Exchanges should be nil")
-	}
-	if r.TxHashes != nil {
-		t.Error("zero Result TxHashes should be nil")
-	}
-	if r.Notes != nil {
-		t.Error("zero Result Notes should be nil")
-	}
-	if r.OK {
-		t.Error("zero Result OK should be false")
-	}
-	if r.Err != "" {
-		t.Errorf("zero Result Err should be empty, got %q", r.Err)
-	}
+	assert.Empty(t, r.Name, "zero Result Name should be empty")
+	assert.Empty(t, r.Title, "zero Result Title should be empty")
+	assert.Empty(t, r.Persona, "zero Result Persona should be empty")
+	assert.Empty(t, r.RequiresPosture, "zero Result RequiresPosture should be empty")
+	assert.True(t, r.StartedAt.IsZero(), "zero Result StartedAt should be zero time")
+	assert.Zero(t, r.DurationMS, "zero Result DurationMS should be 0")
+	assert.Nil(t, r.Exchanges, "zero Result Exchanges should be nil")
+	assert.Nil(t, r.TxHashes, "zero Result TxHashes should be nil")
+	assert.Nil(t, r.Notes, "zero Result Notes should be nil")
+	assert.False(t, r.OK, "zero Result OK should be false")
+	assert.Empty(t, r.Err, "zero Result Err should be empty")
 }
 
 func TestResultFields(t *testing.T) {
 	r := Result{}
 
-	// Test zero values
-	if r.Name != "" {
-		t.Error("Zero Result should have empty Name")
-	}
-	if r.Title != "" {
-		t.Error("Zero Result should have empty Title")
-	}
-	if r.Persona != "" {
-		t.Error("Zero Result should have empty Persona")
-	}
-	if r.RequiresPosture != "" {
-		t.Error("Zero Result should have empty RequiresPosture")
-	}
-	if !r.StartedAt.IsZero() {
-		t.Error("Zero Result should have zero StartedAt")
-	}
-	if r.DurationMS != 0 {
-		t.Error("Zero Result should have zero DurationMS")
-	}
-	if r.Exchanges != nil {
-		t.Error("Zero Result should have nil Exchanges")
-	}
-	if r.TxHashes != nil {
-		t.Error("Zero Result should have nil TxHashes")
-	}
-	if r.Notes != nil {
-		t.Error("Zero Result should have nil Notes")
-	}
-	if r.OK {
-		t.Error("Zero Result should have false OK")
-	}
-	if r.Err != "" {
-		t.Error("Zero Result should have empty Err")
-	}
+	assert.Empty(t, r.Name, "Zero Result should have empty Name")
+	assert.Empty(t, r.Title, "Zero Result should have empty Title")
+	assert.Empty(t, r.Persona, "Zero Result should have empty Persona")
+	assert.Empty(t, r.RequiresPosture, "Zero Result should have empty RequiresPosture")
+	assert.True(t, r.StartedAt.IsZero(), "Zero Result should have zero StartedAt")
+	assert.Zero(t, r.DurationMS, "Zero Result should have zero DurationMS")
+	assert.Nil(t, r.Exchanges, "Zero Result should have nil Exchanges")
+	assert.Nil(t, r.TxHashes, "Zero Result should have nil TxHashes")
+	assert.Nil(t, r.Notes, "Zero Result should have nil Notes")
+	assert.False(t, r.OK, "Zero Result should have false OK")
+	assert.Empty(t, r.Err, "Zero Result should have empty Err")
 }
 
 func TestResultNoteFormatting(t *testing.T) {
 	r := &Result{}
 
-	// Test various format strings
 	r.note("simple")
-	if len(r.Notes) != 1 || r.Notes[0] != "simple" {
-		t.Errorf("note formatting failed, got %q", r.Notes[0])
-	}
+	assert.Len(t, r.Notes, 1, "note should add one entry")
+	assert.Equal(t, "simple", r.Notes[0], "note formatting failed")
 
 	r.note("with %s", "arg")
-	if len(r.Notes) != 2 || r.Notes[1] != "with arg" {
-		t.Errorf("note formatting with arg failed, got %q", r.Notes[1])
-	}
+	assert.Len(t, r.Notes, 2, "note should append")
+	assert.Equal(t, "with arg", r.Notes[1], "note formatting with arg failed")
 
 	r.note("number %d", 42)
-	if len(r.Notes) != 3 || r.Notes[2] != "number 42" {
-		t.Errorf("note formatting with number failed, got %q", r.Notes[2])
-	}
+	assert.Len(t, r.Notes, 3, "note should append")
+	assert.Equal(t, "number 42", r.Notes[2], "note formatting with number failed")
 
 	r.note("multiple %s %d %v", "args", 123, true)
-	if len(r.Notes) != 4 || r.Notes[3] != "multiple args 123 true" {
-		t.Errorf("note formatting with multiple args failed, got %q", r.Notes[3])
-	}
+	assert.Len(t, r.Notes, 4, "note should append")
+	assert.Equal(t, "multiple args 123 true", r.Notes[3], "note formatting with multiple args failed")
 }
 
 func TestResultNoteWithNilArgs(t *testing.T) {
 	r := &Result{}
 
-	// Test with nil args (should not panic)
 	r.note("test")
-	if len(r.Notes) != 1 {
-		t.Errorf("note with no args should work, got %d notes", len(r.Notes))
-	}
+	assert.Len(t, r.Notes, 1, "note with no args should work")
 }
 
 func TestResultTxHashHandling(t *testing.T) {
 	r := &Result{}
 
-	// Test adding various hash formats
 	validHashes := []string{
 		"abc123",
 		"deadbeef",
@@ -333,45 +202,28 @@ func TestResultTxHashHandling(t *testing.T) {
 		r.tx(hash)
 	}
 
-	if len(r.TxHashes) != len(validHashes) {
-		t.Errorf("Should have %d hashes, got %d", len(validHashes), len(r.TxHashes))
-	}
+	assert.Len(t, r.TxHashes, len(validHashes), "Should have correct number of hashes")
 
-	// Verify order is preserved
 	for i, hash := range validHashes {
-		if r.TxHashes[i] != hash {
-			t.Errorf("Hash at index %d should be %q, got %q", i, hash, r.TxHashes[i])
-		}
+		assert.Equal(t, hash, r.TxHashes[i], "Hash at index %d should match", i)
 	}
 
-	// Test that empty strings are skipped
 	initialCount := len(r.TxHashes)
 	r.tx("")
-	if len(r.TxHashes) != initialCount {
-		t.Error("Empty hashes should be skipped")
-	}
+	assert.Len(t, r.TxHashes, initialCount, "Empty hashes should be skipped")
 
-	// Note: whitespace strings are NOT skipped by the tx function
-	// This is the current behavior
 	r.tx("  ")
-	if len(r.TxHashes) == initialCount {
-		t.Error("Whitespace hashes are currently added (not skipped)")
-	}
+	assert.NotEqual(t, initialCount, len(r.TxHashes), "Whitespace hashes are currently added (not skipped)")
 }
 
 func TestResultTxWithWhitespace(t *testing.T) {
 	r := &Result{}
 
-	// Test that whitespace-only strings are added (current behavior)
 	r.tx("  ")
-	if len(r.TxHashes) != 1 {
-		t.Error("whitespace-only hash should be added (current behavior)")
-	}
+	assert.Len(t, r.TxHashes, 1, "whitespace-only hash should be added (current behavior)")
 
 	r.tx("\t\n")
-	if len(r.TxHashes) != 2 {
-		t.Error("tab/newline hash should be added (current behavior)")
-	}
+	assert.Len(t, r.TxHashes, 2, "tab/newline hash should be added (current behavior)")
 }
 
 func TestResultJSONSerialization(t *testing.T) {
@@ -388,25 +240,15 @@ func TestResultJSONSerialization(t *testing.T) {
 		OK:              true,
 	}
 
-	// Test that Result can be serialized to JSON
 	data, err := json.Marshal(r)
-	if err != nil {
-		t.Errorf("Result should be JSON serializable: %v", err)
-	}
+	require.NoError(t, err, "Result should be JSON serializable")
 
-	// Test that it can be deserialized
 	var r2 Result
 	err = json.Unmarshal(data, &r2)
-	if err != nil {
-		t.Errorf("Result should be JSON deserializable: %v", err)
-	}
+	require.NoError(t, err, "Result should be JSON deserializable")
 
-	if r2.Name != r.Name {
-		t.Error("Deserialized Name should match")
-	}
-	if r2.Title != r.Title {
-		t.Error("Deserialized Title should match")
-	}
+	assert.Equal(t, r.Name, r2.Name, "Deserialized Name should match")
+	assert.Equal(t, r.Title, r2.Title, "Deserialized Title should match")
 }
 
 func TestResultWithError(t *testing.T) {
@@ -419,22 +261,14 @@ func TestResultWithError(t *testing.T) {
 	}
 
 	data, err := json.Marshal(r)
-	if err != nil {
-		t.Errorf("Result with error should be JSON serializable: %v", err)
-	}
+	require.NoError(t, err, "Result with error should be JSON serializable")
 
 	var r2 Result
 	err = json.Unmarshal(data, &r2)
-	if err != nil {
-		t.Errorf("Result with error should be JSON deserializable: %v", err)
-	}
+	require.NoError(t, err, "Result with error should be JSON deserializable")
 
-	if r2.OK {
-		t.Error("Deserialized OK should be false")
-	}
-	if r2.Err != "something went wrong" {
-		t.Errorf("Deserialized Err should match, got %q", r2.Err)
-	}
+	assert.False(t, r2.OK, "Deserialized OK should be false")
+	assert.Equal(t, "something went wrong", r2.Err, "Deserialized Err should match")
 }
 
 func TestScenarioStruct(t *testing.T) {
@@ -448,21 +282,11 @@ func TestScenarioStruct(t *testing.T) {
 		},
 	}
 
-	if sc.Name != "test-name" {
-		t.Errorf("Scenario Name should be set")
-	}
-	if sc.Title != "Test Title" {
-		t.Errorf("Scenario Title should be set")
-	}
-	if sc.Persona.ID != "test-persona" {
-		t.Errorf("Scenario Persona should be set")
-	}
-	if sc.RequiresPosture != Doctrine {
-		t.Errorf("Scenario RequiresPosture should be set")
-	}
-	if sc.Run == nil {
-		t.Errorf("Scenario Run should be set")
-	}
+	assert.Equal(t, "test-name", sc.Name, "Scenario Name should be set")
+	assert.Equal(t, "Test Title", sc.Title, "Scenario Title should be set")
+	assert.Equal(t, "test-persona", sc.Persona.ID, "Scenario Persona should be set")
+	assert.Equal(t, Doctrine, sc.RequiresPosture, "Scenario RequiresPosture should be set")
+	assert.NotNil(t, sc.Run, "Scenario Run should be set")
 }
 
 func TestScenarioFieldValidation(t *testing.T) {
@@ -531,9 +355,7 @@ func TestScenarioFieldValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			hasErr := tt.sc.Name == "" || tt.sc.Title == "" || tt.sc.Persona.ID == "" || tt.sc.RequiresPosture == "" || tt.sc.Run == nil
-			if hasErr != tt.wantErr {
-				t.Errorf("validation error mismatch, got %v, want %v", hasErr, tt.wantErr)
-			}
+			assert.Equal(t, tt.wantErr, hasErr, "validation error mismatch")
 		})
 	}
 }
@@ -558,29 +380,14 @@ func TestExecute(t *testing.T) {
 
 	result := Execute(ctx, mockClient, sc)
 
-	if !result.OK {
-		t.Errorf("Execute should succeed, got error: %s", result.Err)
-	}
-	if result.Name != "test-scenario" {
-		t.Errorf("Execute should set Name, got %q", result.Name)
-	}
-	if result.Title != "Test Scenario" {
-		t.Errorf("Execute should set Title, got %q", result.Title)
-	}
-	if result.Persona != "test-persona" {
-		t.Errorf("Execute should set Persona, got %q", result.Persona)
-	}
-	if len(result.Notes) != 1 {
-		t.Errorf("Execute should record notes, got %d", len(result.Notes))
-	}
-	if len(result.TxHashes) != 1 {
-		t.Errorf("Execute should record tx hashes, got %d", len(result.TxHashes))
-	}
-	if result.DurationMS < 0 {
-		t.Error("Execute should record non-negative duration")
-	}
+	assert.True(t, result.OK, "Execute should succeed, got error: %s", result.Err)
+	assert.Equal(t, "test-scenario", result.Name, "Execute should set Name")
+	assert.Equal(t, "Test Scenario", result.Title, "Execute should set Title")
+	assert.Equal(t, "test-persona", result.Persona, "Execute should set Persona")
+	assert.Len(t, result.Notes, 1, "Execute should record notes")
+	assert.Len(t, result.TxHashes, 1, "Execute should record tx hashes")
+	assert.GreaterOrEqual(t, result.DurationMS, int64(0), "Execute should record non-negative duration")
 
-	// Test failed execution
 	scFail := Scenario{
 		Name:    "fail-scenario",
 		Title:   "Fail Scenario",
@@ -592,12 +399,8 @@ func TestExecute(t *testing.T) {
 
 	resultFail := Execute(ctx, mockClient, scFail)
 
-	if resultFail.OK {
-		t.Error("Execute should fail when Run returns error")
-	}
-	if resultFail.Err != "test error" {
-		t.Errorf("Execute should set error, got %q", resultFail.Err)
-	}
+	assert.False(t, resultFail.OK, "Execute should fail when Run returns error")
+	assert.Equal(t, "test error", resultFail.Err, "Execute should set error")
 }
 
 func TestExecuteWithRecording(t *testing.T) {
@@ -619,11 +422,7 @@ func TestExecuteWithRecording(t *testing.T) {
 
 	result := Execute(ctx, mockClient, sc)
 
-	// Result should be successful
-	if !result.OK {
-		t.Errorf("Execute should succeed, got error: %s", result.Err)
-	}
-	// Exchanges slice may be nil if no HTTP calls were made
+	assert.True(t, result.OK, "Execute should succeed, got error: %s", result.Err)
 }
 
 func TestExecuteTiming(t *testing.T) {
@@ -643,12 +442,8 @@ func TestExecuteTiming(t *testing.T) {
 
 	result := Execute(ctx, mockClient, sc)
 
-	if result.DurationMS < 0 {
-		t.Errorf("Execute should record non-negative duration, got %dms", result.DurationMS)
-	}
-	if result.StartedAt.IsZero() {
-		t.Error("Execute should record StartedAt")
-	}
+	assert.GreaterOrEqual(t, result.DurationMS, int64(0), "Execute should record non-negative duration")
+	assert.False(t, result.StartedAt.IsZero(), "Execute should record StartedAt")
 }
 
 func TestExecuteContextCancellation(t *testing.T) {
@@ -691,9 +486,7 @@ func TestExecuteMultipleNotes(t *testing.T) {
 
 	result := Execute(ctx, mockClient, sc)
 
-	if len(result.Notes) != 10 {
-		t.Errorf("Should have 10 notes, got %d", len(result.Notes))
-	}
+	assert.Len(t, result.Notes, 10, "Should have 10 notes")
 }
 
 func TestExecuteMultipleTxHashes(t *testing.T) {
@@ -714,9 +507,7 @@ func TestExecuteMultipleTxHashes(t *testing.T) {
 
 	result := Execute(ctx, mockClient, sc)
 
-	if len(result.TxHashes) != 5 {
-		t.Errorf("Should have 5 tx hashes, got %d", len(result.TxHashes))
-	}
+	assert.Len(t, result.TxHashes, 5, "Should have 5 tx hashes")
 }
 
 func TestExecuteWithNilClient(t *testing.T) {
@@ -732,9 +523,7 @@ func TestExecuteWithNilClient(t *testing.T) {
 	}
 
 	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Execute with nil client should panic")
-		}
+		assert.NotNil(t, recover(), "Execute with nil client should panic")
 	}()
 
 	Execute(ctx, nil, sc)
@@ -753,34 +542,23 @@ func TestScenarioRunNilPanic(t *testing.T) {
 
 	// This should panic, which is expected behavior
 	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Scenario with nil Run should panic")
-		}
+		assert.NotNil(t, recover(), "Scenario with nil Run should panic")
 	}()
 
 	Execute(ctx, mockClient, sc)
 }
 
 func TestFindCaseSensitive(t *testing.T) {
-	// Find should be case-sensitive
 	_, ok := Find("MCP-PLAIN")
-	if ok {
-		t.Error("Find should be case-sensitive, 'MCP-PLAIN' should not match 'mcp-plain'")
-	}
+	assert.False(t, ok, "Find should be case-sensitive, 'MCP-PLAIN' should not match 'mcp-plain'")
 
 	_, ok = Find("mcp-plain")
-	if !ok {
-		t.Error("Find should find 'mcp-plain' with exact case")
-	}
+	assert.True(t, ok, "Find should find 'mcp-plain' with exact case")
 }
 
 func TestFindEmptyRegistry(t *testing.T) {
-	// This test verifies the behavior when looking for scenarios
-	// The actual Registry() always returns scenarios, so we test the lookup logic
 	_, ok := Find("non-existent")
-	if ok {
-		t.Error("Find should return false for non-existent scenario")
-	}
+	assert.False(t, ok, "Find should return false for non-existent scenario")
 }
 
 func TestRegistryScenarioOrder(t *testing.T) {
@@ -788,16 +566,10 @@ func TestRegistryScenarioOrder(t *testing.T) {
 
 	// Verify that scenarios are in the expected order:
 	// MCP scenarios first, then A2A scenarios, then governance scenarios
-	if len(scenarios) < 3 {
-		t.Fatal("Registry should have at least 3 scenarios")
-	}
+	require.GreaterOrEqual(t, len(scenarios), 3, "Registry should have at least 3 scenarios")
 
-	// First scenario should be an MCP scenario
-	if !strings.Contains(scenarios[0].Name, "mcp") {
-		t.Errorf("First scenario should be MCP, got %q", scenarios[0].Name)
-	}
+	assert.Contains(t, scenarios[0].Name, "mcp", "First scenario should be MCP")
 
-	// Last scenario should be a governance, dow, or dhs scenario
 	lastName := scenarios[len(scenarios)-1].Name
 	validLastPrefixes := []string{"consensus", "envelope", "notary", "tribunal", "delegation", "dow", "dhs", "gov", "finance", "secure", "migration", "swarm", "fedramp"}
 	found := false
@@ -807,9 +579,7 @@ func TestRegistryScenarioOrder(t *testing.T) {
 			break
 		}
 	}
-	if !found {
-		t.Errorf("Last scenario should be governance, dow, or dhs, got %q", lastName)
-	}
+	assert.True(t, found, "Last scenario should be governance, dow, or dhs, got %q", lastName)
 }
 
 func TestRegistryUniqueNames(t *testing.T) {
@@ -817,9 +587,7 @@ func TestRegistryUniqueNames(t *testing.T) {
 	nameSet := make(map[string]bool)
 
 	for _, sc := range scenarios {
-		if nameSet[sc.Name] {
-			t.Errorf("Registry should have unique scenario names, duplicate found: %q", sc.Name)
-		}
+		assert.False(t, nameSet[sc.Name], "Registry should have unique scenario names, duplicate found: %q", sc.Name)
 		nameSet[sc.Name] = true
 	}
 }
@@ -828,9 +596,7 @@ func TestRegistryCount(t *testing.T) {
 	scenarios := Registry()
 	expectedCount := len(mcpScenarios()) + len(a2aScenarios()) + len(governanceScenarios()) + len(dowScenarios()) + len(dhsScenarios()) + len(govFinanceScenarios()) + len(secureDataScenarios()) + len(swarmScenarios()) + len(fedrampScenarios())
 
-	if len(scenarios) != expectedCount {
-		t.Errorf("Registry should have %d scenarios (sum of module functions), got %d", expectedCount, len(scenarios))
-	}
+	assert.Equal(t, expectedCount, len(scenarios), "Registry should have correct scenario count")
 }
 
 func TestScenarioRequiresPostureValues(t *testing.T) {
@@ -842,9 +608,7 @@ func TestScenarioRequiresPostureValues(t *testing.T) {
 	}
 
 	for _, sc := range scenarios {
-		if !validPostures[sc.RequiresPosture] {
-			t.Errorf("Scenario %q has invalid posture %q", sc.Name, sc.RequiresPosture)
-		}
+		assert.True(t, validPostures[sc.RequiresPosture], "Scenario %q has invalid posture %q", sc.Name, sc.RequiresPosture)
 	}
 }
 
@@ -856,25 +620,16 @@ func TestScenarioPostureDistribution(t *testing.T) {
 		postureCount[sc.RequiresPosture]++
 	}
 
-	// Should have at least one scenario for each posture
-	if postureCount[Doctrine] == 0 {
-		t.Error("Registry should have at least one Doctrine scenario")
-	}
-	if postureCount[Consensus] == 0 {
-		t.Error("Registry should have at least one Consensus scenario")
-	}
-	if postureCount[Notary] == 0 {
-		t.Error("Registry should have at least one Notary scenario")
-	}
+	assert.NotZero(t, postureCount[Doctrine], "Registry should have at least one Doctrine scenario")
+	assert.NotZero(t, postureCount[Consensus], "Registry should have at least one Consensus scenario")
+	assert.NotZero(t, postureCount[Notary], "Registry should have at least one Notary scenario")
 }
 
 func TestScenarioRunNotNil(t *testing.T) {
 	scenarios := Registry()
 
 	for _, sc := range scenarios {
-		if sc.Run == nil {
-			t.Errorf("Scenario %q should have non-nil Run function", sc.Name)
-		}
+		assert.NotNil(t, sc.Run, "Scenario %q should have non-nil Run function", sc.Name)
 	}
 }
 
@@ -882,13 +637,8 @@ func TestScenarioTitles(t *testing.T) {
 	scenarios := Registry()
 
 	for _, sc := range scenarios {
-		if sc.Title == "" {
-			t.Errorf("Scenario %q should have a non-empty Title", sc.Name)
-		}
-		// Title should be different from name
-		if sc.Title == sc.Name {
-			t.Errorf("Scenario %q should have a Title different from Name", sc.Name)
-		}
+		assert.NotEmpty(t, sc.Title, "Scenario %q should have a non-empty Title", sc.Name)
+		assert.NotEqual(t, sc.Name, sc.Title, "Scenario %q should have a Title different from Name", sc.Name)
 	}
 }
 
@@ -896,9 +646,7 @@ func TestScenarioPersonaUserAgent(t *testing.T) {
 	scenarios := Registry()
 
 	for _, sc := range scenarios {
-		if sc.Persona.UserAgent == "" {
-			t.Errorf("Scenario %q should have a non-empty UserAgent in Persona", sc.Name)
-		}
+		assert.NotEmpty(t, sc.Persona.UserAgent, "Scenario %q should have a non-empty UserAgent in Persona", sc.Name)
 	}
 }
 
@@ -926,8 +674,6 @@ func TestPersonaConstants(t *testing.T) {
 	}
 
 	for _, expected := range expectedPersonas {
-		if !personaSet[expected] {
-			t.Errorf("Registry should use persona %q", expected)
-		}
+		assert.True(t, personaSet[expected], "Registry should use persona %q", expected)
 	}
 }

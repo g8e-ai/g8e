@@ -714,10 +714,10 @@ func demoHTTPSPort(org string) string {
 	}
 }
 
-// ensureDemoPosture restarts the gateway container with the specified posture.
+// switchDemoPosture restarts the gateway container with the specified posture.
 // It sets the G8E_GATEWAY_POSTURE environment variable and recreates the container,
 // then polls the health endpoint until the gateway is live or the 90s timeout expires.
-func ensureDemoPosture(demoDir, posture, httpPort string) error {
+func switchDemoPosture(demoDir, posture, httpPort string) error {
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 
 	if err := exec.Command("docker", "compose", "-f", composePath, "stop", "gateway").Run(); err != nil {
@@ -1521,6 +1521,17 @@ func defaultHarnessConfig(container string) harnessConfig {
 		EnsembleSize: 3,
 		L3Mode:       "mock",
 	}
+}
+
+// defaultGovernedHarnessConfig returns a harness config for demos that use
+// consensus seed and tribunal-based governance (DHS, FedRAMP, etc.).
+// It wraps defaultHarnessConfig with the shared ConsensusSeed and a
+// demo-specific TribunalID.
+func defaultGovernedHarnessConfig(container, tribunalID string) harnessConfig {
+	cfg := defaultHarnessConfig(container)
+	cfg.ConsensusSeed = constants.ContainerEnsembleSeed
+	cfg.TribunalID = tribunalID
+	return cfg
 }
 
 // harnessRun builds the docker compose command for a demos scenarios run.

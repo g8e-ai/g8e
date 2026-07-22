@@ -5,9 +5,9 @@ package scenarios
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
 )
 
@@ -56,8 +56,7 @@ var DHSSovereignArgs = struct {
 // operator's governed execution reach the actuator without tripping the
 // curl/wget denylist — exactly the DoW slew.sh pattern).
 func dataopArgs(op, recordID, detail string) string {
-	return fmt.Sprintf(`{"command":"dataop","args":["%s","%s","%s","%s"],"timeout":10}`,
-		op, DHSSovereignArgs.DataSvcEndpoint, recordID, detail)
+	return shellCommandArgs("dataop", op, DHSSovereignArgs.DataSvcEndpoint, recordID, detail)
 }
 
 func dhsScenarios() []Scenario {
@@ -66,7 +65,7 @@ func dhsScenarios() []Scenario {
 			Name: "dhs-ingest", Title: "DHS: governed multi-source ingest into the sovereign data plane", Persona: dhsConnector, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
-					return errors.New("gov kit not initialized (need ensemble + principal)")
+					return constants.ErrHarnessGovKitMissingSign
 				}
 				root, err := c.StateRoot(ctx)
 				if err != nil {
@@ -102,7 +101,7 @@ func dhsScenarios() []Scenario {
 			Name: "dhs-release", Title: "DHS: cross-domain release gated on out-of-band release-authority approval (L3)", Persona: dhsReleaseAuthority, RequiresPosture: Notary,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
-					return errors.New("gov kit not initialized (need ensemble + principal)")
+					return constants.ErrHarnessGovKitMissingSign
 				}
 				root, err := c.StateRoot(ctx)
 				if err != nil {
@@ -149,7 +148,7 @@ func dhsScenarios() []Scenario {
 			Name: "dhs-cue", Title: "DHS: authorized interdiction cue admitted under L2 consensus quorum", Persona: dhsConnector, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
-					return errors.New("gov kit not initialized (need ensemble + principal)")
+					return constants.ErrHarnessGovKitMissingSign
 				}
 				root, err := c.StateRoot(ctx)
 				if err != nil {
@@ -185,7 +184,7 @@ func dhsScenarios() []Scenario {
 			Name: "dhs-cue-veto", Title: "DHS: interdiction cue without quorum is vetoed by L2 consensus", Persona: dhsConnector, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil {
-					return errors.New("gov kit not initialized (call SetGovKit)")
+					return constants.ErrHarnessGovKitNotInit
 				}
 				root, err := c.StateRoot(ctx)
 				if err != nil {
@@ -223,7 +222,7 @@ func dhsScenarios() []Scenario {
 			Name: "dhs-evidence-block", Title: "DHS: attempt to wipe the audit trail is rejected by L1 doctrine", Persona: dhsConnector, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
-					return errors.New("gov kit not initialized (need ensemble + principal)")
+					return constants.ErrHarnessGovKitMissingSign
 				}
 				root, err := c.StateRoot(ctx)
 				if err != nil {
@@ -262,7 +261,7 @@ func dhsScenarios() []Scenario {
 			Name: "dhs-purge", Title: "DHS: governed retention destruction with cryptographic receipt", Persona: dhsConnector, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
-					return errors.New("gov kit not initialized (need ensemble + principal)")
+					return constants.ErrHarnessGovKitMissingSign
 				}
 				root, err := c.StateRoot(ctx)
 				if err != nil {

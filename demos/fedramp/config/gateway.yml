@@ -1,11 +1,15 @@
-posture: notary
+# g8e Gateway Configuration for FedRAMP Sovereign Cloud Governance Demo
+# The posture is set via the --posture CLI flag in the compose command,
+# not from this file. This file documents the intended configuration.
+posture: consensus
 http_port: 8080
 https_port: 8443
-doctrine_dir: /etc/g8e/doctrine
 data_dir: /root/.g8e/data
-passkey_rp_origins:
-  - https://localhost:8451
-rate_limits:
-  per_second: 100
-  burst: 200
-cert_mode: self-signed
+pki_dir: /root/.g8e/pki
+secrets_dir: /root/.g8e/secrets
+vault_dir: /root/.g8e/vault
+passkey_rpid: localhost
+passkey_rpname: g8e-fedramp-sovereign
+rate_limit_rps: 10
+rate_limit_burst: 20
+cert_mode: localhost
