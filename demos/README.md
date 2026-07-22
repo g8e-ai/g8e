@@ -65,6 +65,15 @@ demos/
 │   ├── target-data/            # Battlefield intelligence and fleet manifest
 │   ├── drone_simulator.py      # Per-drone telemetry simulation script
 │   └── README.md               # Swarm-specific documentation
+├── fedramp/                    # FedRAMP sovereign cloud governance demo
+│   ├── compose.yml
+│   ├── config/                 # Gateway/operator config, tribunal-bootstrap.json, ensemble-seed.hex
+│   ├── doctrine/               # FedRAMP L1 rules (CR-26 audit integrity, AC-2 access control, SC-8 cross-domain)
+│   ├── target-data/            # Cloud resources and KSI control categories
+│   ├── cloudop.sh              # Wrapper script bridging operator execution to cloudsvc
+│   ├── cloudsvc.py             # Sovereign Cloud Service (L5 actuator, Python HTTP server)
+│   ├── verify_ops.py           # Verifies cloudsvc recorded governed operations
+│   └── README.md               # FedRAMP-specific documentation
 ├── frontend/                   # Frontend enrollment demo
 │   ├── compose.yml
 │   ├── config/
@@ -84,7 +93,7 @@ Each org deploys five isolated networks:
 - **net_untrusted**: External/internet simulation. Bad actor services live here.
 - **net_perimeter**: DMZ equivalent. Gateway public surface and demo UI.
 - **net_internal**: Trusted application tier. AI agents, LLM backend, workflow orchestrators.
-- **net_secure**: Privileged tier. Operator and target system. No direct route from net_internal. In the `dow` and `dhs` demos, the Gateway is also attached to net_secure so it can reach the actuator boundary.
+- **net_secure**: Privileged tier. Operator and target system. No direct route from net_internal. In the `dow`, `dhs`, and `fedramp` demos, the Gateway is also attached to net_secure so it can reach the actuator boundary.
 - **net_mgmt**: Out-of-band observability. Log aggregator and audit tail viewer.
 
 The `secure-data` demo replaces the standard five-network topology with a two-domain layout: **net_src_internal** (source gateway, operator, connectors, source storage), **net_dst_internal** (destination gateway, operator, destination storage), **net_migration** (transfer bridge between source and destination operators), **net_untrusted** (bad actor), and **net_mgmt** (observability).
@@ -103,7 +112,7 @@ The `secure-data` demo replaces the standard five-network topology with a two-do
 
 \* Operator appears on net_internal only for its outbound mTLS tunnel to the Gateway. It accepts no inbound connections from net_internal.
 
-\† Gateway appears on net_secure only in the `dow` and `dhs` demos, where it needs direct access to the actuator boundary.
+\† Gateway appears on net_secure only in the `dow`, `dhs`, and `fedramp` demos, where it needs direct access to the actuator boundary.
 
 The `healthcare` demo adds PA workflow services on net_secure (pa-submission-service, provider-exemption-rules, pa-processing-worker, message-broker, reporting-db) and a Metabase compliance dashboard on net_perimeter. The `swarm` demo deploys 20 operator containers (8 recon, 6 attack, 4 support, 2 relay) plus a command interface on net_internal. The `secure-data` demo deploys two gateway-operator pairs (source and destination) with connectors on net_src_internal.
 
@@ -111,20 +120,22 @@ The `dow` demo deploys three sensor agent containers (SIGINT, EO/IR, PNT fusion)
 
 The `dhs` demo deploys a real `agent-coalition` container (running `demos scenarios run`) on net_internal, a real `datasvc` Python HTTP actuator on net_secure, display-only source connectors on net_internal and net_untrusted, and a partner fusion-COP plus a severable coalition datalink on net_perimeter, modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries. The `agent-coalition` container is a real g8e binary that submits genuine `GovernanceEnvelope`s. The display connectors are Alpine echo loops for narrative only.
 
+The `fedramp` demo deploys a real `agent-runtime` container (running `demos scenarios run`) on net_internal, a real `cloudsvc` Python HTTP actuator on net_secure, a `bad-actor` on net_untrusted, and an `observability` container on net_mgmt. The `agent-runtime` container is a real g8e binary that submits genuine `GovernanceEnvelope`s driving cloud resource operations (provision, configure, destroy, revert) through the `cloudop.sh` wrapper. The gateway runs in consensus posture by default and switches to notary posture for scenario 3 (resource destruction requiring authorizing official approval).
+
 The `frontend` demo deploys a nginx-served static HTML app on net_perimeter for WebAuthn passkey enrollment and SSE event streaming. No target system or bad actor container. The gateway runs in doctrine posture with CORS and passkey RP origins pre-configured for the frontend origin.
 
 ## Org Differentiation
 
 Each org demonstrates different compliance requirements and use cases:
 
-| Dimension | Gov | Healthcare | Finance | Secure-Data | DoW | Swarm | DHS | Frontend |
-|---|---|---|---|---|---|---|---|---|
-| Doctrine content | CUI, classification markings, CMMC rules | PHI scrub patterns, PA workflow gates | Tx limits, dual-control triggers | Migration-screening rules (bypass, exfil, cross-tenant) | GPS spoofing, cross-cue, EW, weapons control, PNT BFT | Weapons control, safety, navigation, command integrity | USPER PII minimization, cross-domain release, sovereign destruction | Unauthorized API access, CORS origin spoofing, session hijacking |
-| Target data content | Simulated classified document store | Simulated EHR / PA records | Simulated ledger / positions | Simulated SharePoint migration manifest | RF environment, PNT sources (incl. spoofed), payload manifest | Battlefield intelligence and drone fleet manifest | Mock multi-source coalition feeds + sovereign manifest | None (frontend enrollment demo) |
-| Gateway posture | doctrine | consensus | doctrine | doctrine | doctrine | doctrine | consensus | doctrine |
-| Agent principal type | DoD contractor agent | Clinical AI agent | Algorithmic trading agent | Data migration connector (rclone, SharePoint) | Tactical sensor agent (SIGINT, EO/IR, PNT fusion) | Autonomous drone operator (recon, attack, support, relay) | Coalition source connectors + predictive-analytics agent | Browser-based frontend app (WebAuthn + SSE) |
-| Target system mock | Classified doc API | EHR / PA processor | Trade execution API | Source and destination storage endpoints | Gimbal/flight controller actuator | Drone fleet with telemetry simulation | Sovereign data vault + partner fusion COP | None (nginx-served static HTML) |
-| Demo narrative | CUI exfil attempt blocked | PHI scrub + PA approval flow | Unauthorized trade blocked | Governed migration with chain-of-custody receipts | SIGINT cross-cue + BFT spoofing defense + disconnected ops | Adversary interception and safety violation detection | Sovereign coalition data plane: govern ingest, release, use, destruction | Third-party frontend enrollment with CORS and passkey authentication |
+| Dimension | Gov | Healthcare | Finance | Secure-Data | DoW | Swarm | DHS | FedRAMP | Frontend |
+|---|---|---|---|---|---|---|---|---|---|
+| Doctrine content | CUI, classification markings, CMMC rules | PHI scrub patterns, PA workflow gates | Tx limits, dual-control triggers | Migration-screening rules (bypass, exfil, cross-tenant) | GPS spoofing, cross-cue, EW, weapons control, PNT BFT | Weapons control, safety, navigation, command integrity | USPER PII minimization, cross-domain release, sovereign destruction | CR-26 audit integrity, AC-2 access control, SC-8 cross-domain, CM-7 config management | Unauthorized API access, CORS origin spoofing, session hijacking |
+| Target data content | Simulated classified document store | Simulated EHR / PA records | Simulated ledger / positions | Simulated SharePoint migration manifest | RF environment, PNT sources (incl. spoofed), payload manifest | Battlefield intelligence and drone fleet manifest | Mock multi-source coalition feeds + sovereign manifest | Cloud resources (VMs, DBs, IAM) and KSI control categories | None (frontend enrollment demo) |
+| Gateway posture | doctrine | consensus | doctrine | doctrine | doctrine | doctrine | consensus | notary | doctrine |
+| Agent principal type | DoD contractor agent | Clinical AI agent | Algorithmic trading agent | Data migration connector (rclone, SharePoint) | Tactical sensor agent (SIGINT, EO/IR, PNT fusion) | Autonomous drone operator (recon, attack, support, relay) | Coalition source connectors + predictive-analytics agent | FedRAMP cloud service operator + authorizing official | Browser-based frontend app (WebAuthn + SSE) |
+| Target system mock | Classified doc API | EHR / PA processor | Trade execution API | Source and destination storage endpoints | Gimbal/flight controller actuator | Drone fleet with telemetry simulation | Sovereign data vault + partner fusion COP | Sovereign cloud service (provision, configure, destroy, revert) | None (nginx-served static HTML) |
+| Demo narrative | CUI exfil attempt blocked | PHI scrub + PA approval flow | Unauthorized trade blocked | Governed migration with chain-of-custody receipts | SIGINT cross-cue + BFT spoofing defense + disconnected ops | Adversary interception and safety violation detection | Sovereign coalition data plane: govern ingest, release, use, destruction | Sovereign cloud governance: provision, destroy, revert, audit integrity | Third-party frontend enrollment with CORS and passkey authentication |
 
 ## Quick Start
 
@@ -246,6 +257,13 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 - `g8e demos run swarm 2` - Weapons Safety Doctrine Block
 - `g8e demos run swarm 3` - Navigation Boundary Violation Block
 
+**FedRAMP Sovereign Cloud Governance Demo Scenarios:**
+- `g8e demos run fedramp 1` - Governed Cloud Resource Provisioning
+- `g8e demos run fedramp 2` - Unauthorized Audit Trail Destruction Blocked (CR-26)
+- `g8e demos run fedramp 3` - Resource Destruction Requires Authorizing Official (L3)
+- `g8e demos run fedramp 4` - Governed Configuration Revert (CM-7)
+- `g8e demos run fedramp 5` - Gateway Audit Vault Destruction Blocked (CR-26)
+
 **Frontend Demo Scenarios:**
 - `g8e demos run frontend 1` - Third-Party Frontend Enrollment
 
@@ -310,7 +328,7 @@ The `demos/Dockerfile` is shared across all org directories. It copies the pre-b
 
 The following must hold in every org environment:
 
-1. The Operator is the only g8e process on net_secure. No agent, no observability service is co-located on net_secure. In the `dow` and `dhs` demos, the Gateway is also attached to net_secure so it can reach the actuator boundary.
+1. The Operator is the only g8e process on net_secure. No agent, no observability service is co-located on net_secure. In the `dow`, `dhs`, and `fedramp` demos, the Gateway is also attached to net_secure so it can reach the actuator boundary.
 2. No named volume is shared between services. Each service owns its own volume.
 3. No PKI material is pre-distributed via filesystem. Identity propagates through enrollment over mTLS.
 4. Doctrine is a bind mount, not baked into an image. Org behavior is data, not code.
@@ -329,6 +347,7 @@ Each org uses different host ports to allow simultaneous deployment:
 | secure-data (dst) | 8084 | 8447 | |
 | dow | 8086 | 8449 | |
 | swarm | 8085 | 8448 | Command Interface: 5005 |
+| fedramp | 8088 | 8451 | |
 | dhs | 8087 | 8450 | |
 | frontend | 8083 | 8446 | Frontend App: 3003 |
 

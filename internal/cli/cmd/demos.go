@@ -634,6 +634,10 @@ func printDemoEndpoints(cmd *cobra.Command, org string) {
 		cmd.Println("  Gateway HTTP:  http://localhost:8085")
 		cmd.Println("  Gateway HTTPS: https://localhost:8448")
 		cmd.Println("  Console:       https://localhost:8448/console/")
+	case constants.DemosOrgFedRAMP:
+		cmd.Println("  Gateway HTTP:  http://localhost:8088")
+		cmd.Println("  Gateway HTTPS: https://localhost:8451")
+		cmd.Println("  Console:       https://localhost:8451/console/")
 	case constants.DemosOrgFrontend:
 		cmd.Println("  Gateway HTTP:  http://localhost:8083")
 		cmd.Println("  Gateway HTTPS: https://localhost:8446")
@@ -673,6 +677,8 @@ func demoHTTPPort(org string) string {
 		return "8087"
 	case constants.DemosOrgSwarm:
 		return "8085"
+	case constants.DemosOrgFedRAMP:
+		return "8088"
 	case constants.DemosOrgFrontend:
 		return "8083"
 	default:
@@ -699,11 +705,39 @@ func demoHTTPSPort(org string) string {
 		return "8450"
 	case constants.DemosOrgSwarm:
 		return "8448"
+	case constants.DemosOrgFedRAMP:
+		return "8451"
 	case constants.DemosOrgFrontend:
 		return "8446"
 	default:
 		return ""
 	}
+}
+
+// ensureDemoPosture restarts the gateway container with the specified posture.
+// It sets the G8E_GATEWAY_POSTURE environment variable and recreates the container,
+// then polls the health endpoint until the gateway is live or the 90s timeout expires.
+func ensureDemoPosture(demoDir, posture, httpPort string) error {
+	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
+
+	if err := exec.Command("docker", "compose", "-f", composePath, "stop", "gateway").Run(); err != nil {
+		return fmt.Errorf("stop gateway: %w", err)
+	}
+
+	cmd := exec.Command("docker", "compose", "-f", composePath, "up", "-d", "--no-deps", "gateway")
+	cmd.Env = append(os.Environ(), "G8E_GATEWAY_POSTURE="+posture)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("restart gateway with posture %s: %w", posture, err)
+	}
+
+	for i := 0; i < 30; i++ {
+		time.Sleep(3 * time.Second)
+		if err := exec.Command("curl", "-sf", "http://localhost:"+httpPort+"/api/v1/health").Run(); err == nil {
+			demoPrintf("  Gateway is live in %s posture.\n", posture)
+			return nil
+		}
+	}
+	return fmt.Errorf("gateway did not become healthy in %s posture after 90s", posture)
 }
 
 func demosStopCmd() *cobra.Command {
@@ -1126,6 +1160,7 @@ var scenarioCounts = map[string]int{
 	constants.DemosOrgDoW:        3,
 	constants.DemosOrgDHS:        5,
 	constants.DemosOrgSwarm:      3,
+	constants.DemosOrgFedRAMP:    5,
 	constants.DemosOrgFrontend:   1,
 }
 
@@ -1165,6 +1200,12 @@ Available scenarios:
     1 - Authorized Recon Mission (Governed Drone Deployment)
     2 - Weapons Safety Doctrine Block
     3 - Navigation Boundary Violation Block
+  fedramp: 1-5
+    1 - Governed Cloud Resource Provisioning
+    2 - Unauthorized Audit Trail Destruction Blocked (CR-26)
+    3 - Resource Destruction Requires Authorizing Official (L3)
+    4 - Governed Configuration Revert (CM-7)
+    5 - Gateway Audit Vault Destruction Blocked (CR-26)
   frontend: 1
     1 - Third-Party Frontend Enrollment`,
 		Args: cobra.RangeArgs(1, 2),
@@ -1349,6 +1390,8 @@ func runScenarioWithResult(org, demoDir, scenario string) (scenarioResult, error
 		return runDHSScenario(demoDir, scenario)
 	case constants.DemosOrgSwarm:
 		return runSwarmScenario(demoDir, scenario)
+	case constants.DemosOrgFedRAMP:
+		return runFedRAMPScenario(demoDir, scenario)
 	case constants.DemosOrgFrontend:
 		return runFrontendScenario(demoDir, scenario)
 	default:

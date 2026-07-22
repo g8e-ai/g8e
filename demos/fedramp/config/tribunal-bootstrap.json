@@ -1,0 +1,10 @@
+{
+  "tribunal_id": "fedramp-tribunal",
+  "members": [
+    {"app_id": "fedramp-csp-auditor"},
+    {"app_id": "fedramp-3pao"},
+    {"app_id": "fedramp-jab"}
+  ],
+  "quorum": 2,
+  "seed": "fedramp-tribunal-deterministic-seed-v1"
+}

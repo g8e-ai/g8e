@@ -18,9 +18,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -35,32 +33,8 @@ func defaultDHSHarnessConfig() harnessConfig {
 	return cfg
 }
 
-// ensureDHSPosture restarts the DHS gateway container with the specified posture.
-// It sets the G8E_GATEWAY_POSTURE environment variable and recreates the container.
 func ensureDHSPosture(demoDir, posture string) error {
-	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
-
-	// Stop the gateway container
-	if err := exec.Command("docker", "compose", "-f", composePath, "stop", "gateway").Run(); err != nil {
-		return fmt.Errorf("stop gateway: %w", err)
-	}
-
-	// Recreate the gateway with the new posture via environment variable
-	cmd := exec.Command("docker", "compose", "-f", composePath, "up", "-d", "--no-deps", "gateway")
-	cmd.Env = append(os.Environ(), "G8E_GATEWAY_POSTURE="+posture)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("restart gateway with posture %s: %w", posture, err)
-	}
-
-	// Wait for the gateway to become healthy
-	for i := 0; i < 30; i++ {
-		time.Sleep(3 * time.Second)
-		if err := exec.Command("curl", "-sf", "http://localhost:8087/api/v1/health").Run(); err == nil {
-			demoPrintf("  Gateway is live in %s posture.\n", posture)
-			return nil
-		}
-	}
-	return fmt.Errorf("gateway did not become healthy in %s posture after 90s", posture)
+	return ensureDemoPosture(demoDir, posture, "8087")
 }
 
 func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {

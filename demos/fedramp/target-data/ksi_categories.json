@@ -1,0 +1,40 @@
+{
+  "ksi_categories": [
+    {
+      "id": "AC",
+      "name": "Access Control",
+      "controls": ["AC-2", "AC-3", "AC-6", "AC-17"],
+      "fedramp_level": "MODERATE"
+    },
+    {
+      "id": "AU",
+      "name": "Audit and Accountability",
+      "controls": ["AU-2", "AU-6", "AU-9", "AU-12"],
+      "fedramp_level": "MODERATE"
+    },
+    {
+      "id": "CM",
+      "name": "Configuration Management",
+      "controls": ["CM-7", "CM-8", "CM-10"],
+      "fedramp_level": "MODERATE"
+    },
+    {
+      "id": "SC",
+      "name": "System and Communications Protection",
+      "controls": ["SC-8", "SC-12", "SC-13"],
+      "fedramp_level": "MODERATE"
+    },
+    {
+      "id": "SI",
+      "name": "System and Information Integrity",
+      "controls": ["SI-4", "SI-7"],
+      "fedramp_level": "MODERATE"
+    },
+    {
+      "id": "CR",
+      "name": "Critical Requirements",
+      "controls": ["CR-26"],
+      "fedramp_level": "HIGH"
+    }
+  ]
+}

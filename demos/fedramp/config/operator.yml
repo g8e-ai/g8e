@@ -1,0 +1,8 @@
+endpoint: gateway:8443
+http_port: 8090
+posture: notary
+working_dir: /root/.g8e
+pki_dir: /root/.g8e/pki
+secrets_dir: /root/.g8e/secrets
+vault_dir: /root/.g8e/data
+log_level: info

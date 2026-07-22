@@ -464,7 +464,7 @@ func TestRunAgentHarness_ConfigLoadError(t *testing.T) {
 	})
 }
 
-// ─── ensureDHSPosture error path ─────────────────────────────────────────────
+// ─── ensureDemoPosture error path ────────────────────────────────────────────
 
 func TestEnsureDHSPosture_ErrorPath(t *testing.T) {
 	t.Run("returns error when docker compose file does not exist", func(t *testing.T) {
@@ -472,6 +472,15 @@ func TestEnsureDHSPosture_ErrorPath(t *testing.T) {
 		err := ensureDHSPosture(tempDir, "consensus")
 		require.Error(t, err)
 		// Docker will fail because the compose file doesn't exist
+		assert.Contains(t, err.Error(), "stop gateway")
+	})
+}
+
+func TestEnsureFedRAMPPosture_ErrorPath(t *testing.T) {
+	t.Run("returns error when docker compose file does not exist", func(t *testing.T) {
+		tempDir := testutil.TempDir(t)
+		err := ensureFedRAMPPosture(tempDir, "consensus")
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "stop gateway")
 	})
 }
