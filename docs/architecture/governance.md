@@ -1,7 +1,7 @@
 # Governance
 
-Last Updated: 2026-07-20
-Version: v1.6.0
+Last Updated: 2026-07-23
+Version: v1.6.2
 
 ## Overview
 
@@ -12,9 +12,9 @@ The posture is set at startup via `--posture <doctrine|consensus|notary>` and ca
 1. **L4 Warden**: gates transaction dispatch based on L2/L3 verification results.
 2. **L5 Actuator**: records L2/L3 status in the signed action receipt.
 
-A third enforcement point exists at startup:
+A third check point exists at startup:
 
-3. **Gateway startup**: validates consensus and notary posture prerequisites before any services start.
+3. **Gateway startup**: logs advisory warnings for consensus and notary postures if tribunal prerequisites are not yet configured. The gateway boots regardless; L2 enforcement happens at transaction time via L4Warden.
 
 ### GovernanceEnvelope
 
@@ -67,11 +67,11 @@ The canonical transaction container is the **GovernanceEnvelope**, a protobuf me
   - **Signature verification**: each vote's Ed25519 signature over `<transaction_hash>|<decision>` is verified against the trusted public key. Invalid signatures are excluded from quorum count.
   - **Quorum check**: the number of affirmative votes from valid, distinct members must meet or exceed the policy's quorum threshold.
 
-**Startup validation**: The gateway performs additional validation at startup for consensus and notary postures:
-- The tribunal ID must be non-empty.
-- The tribunal policy must exist in the database and be enabled.
-- Quorum must be >= 1. Quorum=1 is valid for single-member ensembles (e.g., demo deployments with a single-key ensemble).
-- The Tribunal service is bootstrapped in-process and wired as both the mTLS HTTP handler and the local deliberator.
+**Startup validation**: The gateway logs advisory warnings at startup for consensus and notary postures if the tribunal is not yet configured:
+- If the tribunal ID is empty, a warning is logged.
+- If the tribunal policy does not exist or is disabled, a warning is logged.
+- L2 enforcement happens at transaction time via L4Warden — L2-gated transactions are rejected until a tribunal is properly enrolled.
+- If the tribunal ID is set and the policy exists and is enabled, the Tribunal service is bootstrapped in-process and wired as both the mTLS HTTP handler and the local deliberator.
 
 **Tribunal bootstrap**: The Tribunal service is constructed from the tribunal policy stored in the database. For single-member tribunals, the gateway's actuator Ed25519 key is reused as the member signing key. For multi-member tribunals, member keys are loaded from disk. Members whose keys cannot be resolved are included without a private key; they can participate in policy but cannot sign votes, and a warning is logged.
 
@@ -105,7 +105,7 @@ The canonical transaction container is the **GovernanceEnvelope**, a protobuf me
 
 Non-mutation actions (e.g., `FS_READ`, `FS_LIST`, `FETCH_LOGS`, `HEARTBEAT`) do not require L3 proof even under notary posture.
 
-**Startup validation**: Same as consensus posture. Notary requires L2 signatures, so the gateway validates the tribunal ID, tribunal policy existence, and quorum at startup, and bootstraps the Tribunal service in-process.
+**Startup validation**: Same as consensus posture — advisory warnings if tribunal is not configured. L2 enforcement happens at transaction time via L4Warden. If the tribunal ID is set and the policy exists and is enabled, the Tribunal service is bootstrapped in-process.
 
 **Tribunal bootstrap**: Same as consensus posture. The Tribunal service is constructed and wired as both the mTLS HTTP handler and the local deliberator. The in-process local deliberator signs L2 votes with the gateway's actuator key for single-member tribunals.
 
@@ -134,14 +134,23 @@ Non-mutation actions (e.g., `FS_READ`, `FS_LIST`, `FETCH_LOGS`, `HEARTBEAT`) do 
 | L3 notary configured (mutations only) | Audited | Audited | **Enforced** |
 | L3 proof valid (mutations only) | Audited | Audited | **Enforced** |
 | L2/L3 status in receipt | Recorded | Recorded | Recorded |
-| Startup: tribunal ID required | - | **Enforced** | **Enforced** |
-| Startup: quorum >= 1 | - | **Enforced** | **Enforced** |
-| Startup: tribunal policy exists + enabled | - | **Enforced** | **Enforced** |
+| Startup: tribunal ID required | - | Advisory | Advisory |
+| Startup: quorum >= 1 | - | Advisory | Advisory |
+| Startup: tribunal policy exists + enabled | - | Advisory | Advisory |
 | Invalid posture name | **Enforced** | **Enforced** | **Enforced** |
 
 **Enforced** = fail-closed gate; transaction is rejected if the check fails.
 **Audited** = result is verified if present and recorded in the receipt, but does not gate execution.
 **Recorded** = L2/L3 status is reflected in the action receipt as enum values.
+**Advisory** = a warning is logged at startup but the gateway boots regardless; enforcement happens at transaction time via L4Warden.
+
+### Posture Enforcement Matrix
+
+| Posture | L1 Doctrine | L2 Consensus | L3 Notary |
+|---|---|---|---|
+| Doctrine | **Enforced** | Audited | Audited |
+| Consensus | **Enforced** | **Enforced** | Audited |
+| Notary | **Enforced** | **Enforced** | **Enforced** |
 
 ---
 
@@ -485,9 +494,9 @@ The local deliberator is an in-process adapter that calls the Tribunal Service d
 
 ### Tribunal Bootstrap at Gateway Startup
 
-When the gateway starts in consensus or notary posture, the Tribunal service is constructed and wired at startup. Under doctrine posture, the Tribunal is not constructed in-process; L2 votes must be obtained from an external Tribunal service when required.
+When the gateway starts in consensus or notary posture with a non-empty tribunal ID, the Tribunal service is constructed and wired at startup. If the tribunal ID is empty, an advisory warning is logged and the gateway boots without an in-process Tribunal — L2-gated transactions will be rejected by L4Warden until a tribunal is enrolled. Under doctrine posture, the Tribunal is not constructed in-process; L2 votes must be obtained from an external Tribunal service when required.
 
-1. **Load policy**: Retrieves the tribunal policy from the database. If missing, fails with an error.
+1. **Load policy**: Retrieves the tribunal policy from the database. If missing, bootstrap fails with an error.
 2. **Construct key provider**: Creates a file-based key provider for the configured secrets directory, then wraps it with the actuator key fallback logic.
 3. **Build service**: Constructs the Tribunal Service with the policy, composite key provider, shared L1 doctrine, logger, and response writer.
 4. **Wire handlers**: The resulting Tribunal Service is registered as both the mTLS HTTP handler for remote deliberation and the local deliberator for in-process calls.
