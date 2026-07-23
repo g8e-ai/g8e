@@ -171,32 +171,24 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		}
 	}
 
-	// Startup validation for L2-requiring postures (Phase 5.4):
-	// If posture is consensus or notary, TribunalID must be set and the
-	// TribunalPolicy must exist and be enabled in the database. Fail fast
-	// before starting any services.
-	//
-	// This is a two-phase check:
-	//   Phase 1 (line 160): fail-fast pre-check with quorum=1 before loading
-	//     the policy from the database. Catches missing TribunalID or
-	//     non-L2 posture misconfiguration without a DB round-trip.
-	//   Phase 2 (line 171): validates with the actual quorum from the
-	//     loaded TribunalPolicy. Catches quorum=0 or other DB-level issues.
-	if err := config.ValidateL2PostureStartup(string(cfg.Posture), cfg.TribunalID, 1); err != nil {
-		return fmt.Errorf("gateway: startup validation: %w", err)
-	}
+	// L2 posture advisory check for consensus/notary:
+	// The gateway starts regardless of tribunal configuration — L2 enforcement
+	// happens at transaction time via L4Warden. If no tribunal is configured yet,
+	// log a warning so the operator knows L2-gated transactions will be rejected
+	// until a tribunal policy is enrolled.
 	if cfg.Posture == config.PostureConsensus || cfg.Posture == config.PostureNotary {
-		policy, err := svc.GetStores().TribunalStore.GetTribunal(cfg.TribunalID)
-		if err != nil {
-			return fmt.Errorf("gateway: load tribunal policy: %w", err)
+		if cfg.TribunalID == "" {
+			logger.Warn("L2 posture requires tribunal but no --tribunal-id set; L2-gated transactions will be rejected until a tribunal is configured",
+				"posture", cfg.Posture)
+		} else {
+			policy, err := svc.GetStores().TribunalStore.GetTribunal(cfg.TribunalID)
+			if err != nil || policy == nil || !policy.Enabled {
+				logger.Warn("L2 posture requires tribunal but policy not found or disabled; L2-gated transactions will be rejected until tribunal is enrolled",
+					"posture", cfg.Posture, "tribunal_id", cfg.TribunalID)
+			} else {
+				logger.Info("Tribunal policy validated", "tribunal_id", cfg.TribunalID, "members", len(policy.MemberAppIDs), "quorum", policy.Quorum)
+			}
 		}
-		if policy == nil || !policy.Enabled {
-			return fmt.Errorf("gateway: tribunal policy not found or disabled: %w", constants.ErrTxL2TribunalNotConfigured)
-		}
-		if err := config.ValidateL2PostureStartup(string(cfg.Posture), cfg.TribunalID, policy.Quorum); err != nil {
-			return fmt.Errorf("gateway: startup validation (quorum=%d): %w", policy.Quorum, err)
-		}
-		logger.Info("Tribunal policy validated", "tribunal_id", cfg.TribunalID, "members", len(policy.MemberAppIDs), "quorum", policy.Quorum)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
