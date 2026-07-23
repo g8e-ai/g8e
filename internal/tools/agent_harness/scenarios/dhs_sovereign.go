@@ -93,6 +93,9 @@ func dhsScenarios() []Scenario {
 				if status >= 400 {
 					return fmt.Errorf("ingest envelope rejected (status %d): %s", status, string(body))
 				}
+				if summary, failed := receiptFailed(body); failed {
+					return fmt.Errorf("ingest tool execution failed: %s", summary)
+				}
 				r.note("admitted — operator executing dataop ingest via L5 actuator; provenance receipt written to ledger")
 				return nil
 			},
@@ -132,12 +135,15 @@ func dhsScenarios() []Scenario {
 				if h, ok := suspendedFromBody(body); ok {
 					txHash = h
 				}
-				ast, _, aerr := c.Approve(ctx, dhsReleaseAuthority, txHash)
+				ast, approveBody, aerr := c.Approve(ctx, dhsReleaseAuthority, txHash)
 				if aerr != nil {
 					return fmt.Errorf("release authority approve: %w", aerr)
 				}
 				if ast >= 400 {
 					return fmt.Errorf("release approval rejected (status %d)", ast)
+				}
+				if summary, failed := receiptFailed(approveBody); failed {
+					return fmt.Errorf("release tool execution failed: %s", summary)
 				}
 				r.note("release authority %q approved hash %s out-of-band (status %d)", kit.Principal.KeyID, short(txHash), ast)
 				r.note("cryptographic proof: principal Ed25519 signature over the exact transaction hash — release now executes")
@@ -175,6 +181,9 @@ func dhsScenarios() []Scenario {
 				r.note("cue envelope %s submitted (admission status %d)", short(txHash), status)
 				if status >= 400 {
 					return fmt.Errorf("authorized cue rejected (status %d): %s", status, string(body))
+				}
+				if summary, failed := receiptFailed(body); failed {
+					return fmt.Errorf("cue tool execution failed: %s", summary)
 				}
 				r.note("admitted — ensemble quorum reached; cue executed and recorded with full data lineage")
 				return nil
@@ -237,7 +246,7 @@ func dhsScenarios() []Scenario {
 					OperatorID:        kit.OperatorID,
 					OperatorSessionID: kit.OperatorSessionID,
 					ToolName:          "run_shell_command",
-					ArgumentsJSON:     `{"command":"rm -rf /var/log/g8e","timeout":10}`,
+					ArgumentsJSON:     shellCommandArgs("rm -rf /var/log/g8e"),
 					TargetResource:    "localhost",
 					StateRoot:         root,
 					Ensemble:          kit.Ensemble,
@@ -288,6 +297,9 @@ func dhsScenarios() []Scenario {
 				r.note("purge envelope %s submitted (admission status %d)", short(txHash), status)
 				if status >= 400 {
 					return fmt.Errorf("governed purge rejected (status %d): %s", status, string(body))
+				}
+				if summary, failed := receiptFailed(body); failed {
+					return fmt.Errorf("purge tool execution failed: %s", summary)
 				}
 				r.note("admitted — operator executed dataop purge; cryptographic destruction receipt written to ledger")
 				return nil

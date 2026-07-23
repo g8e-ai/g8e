@@ -4,13 +4,14 @@ services:
   gateway:
     build:
       context: ..
-      dockerfile: demos/Dockerfile
+      dockerfile: Dockerfile
     container_name: g8e-fedramp-gateway
     hostname: gateway
     volumes:
       - fedramp-gateway-state:/root/.g8e
       - ./doctrine:/etc/g8e/doctrine:ro
       - ./config/tribunal-bootstrap.json:/etc/g8e/tribunal-bootstrap.json:ro
+      - ./cloudop.sh:/usr/local/bin/cloudop:ro
     ports:
       - "8088:8080"
       - "8451:8443"
@@ -36,7 +37,7 @@ services:
   operator:
     build:
       context: ..
-      dockerfile: demos/Dockerfile
+      dockerfile: Dockerfile
     container_name: g8e-fedramp-operator
     hostname: operator
     volumes:
@@ -64,7 +65,7 @@ services:
   agent-runtime:
     build:
       context: ..
-      dockerfile: demos/Dockerfile
+      dockerfile: Dockerfile
     container_name: g8e-fedramp-agent
     hostname: agent-runtime
     entrypoint: ["sh", "-c", "sleep infinity"]

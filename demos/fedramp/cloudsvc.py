@@ -7,6 +7,7 @@ All operations are recorded with timestamps and caller metadata.
 """
 
 import json
+import logging
 import os
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -14,8 +15,6 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 LOG_PATH = os.environ.get("CLOUDSVC_LOG", "/var/cloudsvc/operations.jsonl")
 os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
 
-# Suppress all logging to stdout/stderr for clean demo output
-import logging
 logging.disable(logging.CRITICAL)
 
 

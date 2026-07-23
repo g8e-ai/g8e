@@ -2,7 +2,7 @@
 
 This demo shows how **g8e** provides governed, auditable cloud resource operations for a FedRAMP-authorized cloud service provider. Every provision, configure, destroy, and revert operation passes through the full 5-layer governance gauntlet before touching cloud infrastructure.
 
-It maps to FedRAMP CR26 Key Security Indicators (KSI) for access control (AC), audit and accountability (AU), configuration management (CM), system and communications protection (SC), and identification and authentication (IA).
+It maps to FedRAMP CR26 Key Security Indicators (KSI) for access control (AC), audit and accountability (AU), configuration management (CM), system and communications protection (SC), system and information integrity (SI), and critical requirements (CR).
 
 ## The teaming model
 
@@ -38,7 +38,8 @@ The cloud resources are **synthetic**; the point is to demonstrate how g8e gover
 | AU | Audit and Accountability | Scenario 2 (audit trail destruction blocked), Scenario 5 (audit vault wipe blocked), every scenario (signed receipts to hash-chained ledger) |
 | CM | Configuration Management | Scenario 1 (governed provisioning), Scenario 4 (governed configuration revert) |
 | SC | System and Communications Protection | Scenario 2 (cross-domain destruction blocked), mTLS identity required for all submissions |
-| IA | Identification and Authentication | Scenario 3 (L3 notary WebAuthn approval for resource destruction), mTLS enrollment for all agents |
+| SI | System and Information Integrity | Scenario 3 (privilege escalation detection via notary gating), integrity monitoring via hash-chained ledger |
+| CR | Critical Requirements | CR-26 audit trail integrity, tamper-evident ledger across all scenarios |
 
 ## Network topology
 
@@ -94,7 +95,7 @@ The scenarios that exercise real L1 enforcement:
 
 ```bash
 # from the repository root
-make build && cp g8e demos/bin/g8e
+make build
 
 g8e demos start fedramp
 g8e demos run fedramp        # run all five scenarios
@@ -113,7 +114,7 @@ All scenarios run via `demos scenarios run`, a real g8e binary that submits genu
 ### 2: Unauthorized Audit Trail Destruction Blocked (AC, SC)
 **Scenario `fedramp-deny`**: A compromised operator tries to destroy the cloud operations ledger with `rm -rf /var/cloudsvc`. L1 doctrine rejects it at admission (the `destroy_rm_rf_system_dirs` detector fires). Even with valid L2 and L3 proofs attached, L1 is the hard gate and runs first. Nothing reaches the actuator.
 
-### 3: Resource Destruction Requires Authorizing Official (IA, AC, AU)
+### 3: Resource Destruction Requires Authorizing Official (SI, AC, AU)
 **Scenario `fedramp-escalate`**: The gateway is restarted in **notary** posture. A resource destruction is submitted with L2 consensus only. Under notary posture the Gateway suspends the transaction pending an out-of-band L3 principal (authorizing official) approval. The scenario extracts the suspended transaction hash from the gateway's pending approvals API, then invokes `g8e approve`, which opens a browser for WebAuthn passkey approval of the exact transaction hash. Once approved, the destruction executes on the L5 actuator (cloudsvc records a `DESTROY` operation). The gateway is then restored to consensus posture.
 
 ### 4: Governed Configuration Revert (CM, AU)

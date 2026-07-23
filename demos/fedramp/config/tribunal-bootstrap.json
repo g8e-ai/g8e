@@ -1,10 +1,6 @@
 {
   "tribunal_id": "fedramp-tribunal",
-  "members": [
-    {"app_id": "fedramp-csp-auditor"},
-    {"app_id": "fedramp-3pao"},
-    {"app_id": "fedramp-jab"}
-  ],
+  "member_app_ids": ["fedramp-csp-auditor", "fedramp-3pao", "fedramp-jab"],
   "quorum": 2,
-  "seed": "fedramp-tribunal-deterministic-seed-v1"
+  "seed_hex": "a1200ca127d87aa6f6f986e64e1941fdd1d5a8bfd1de995cd4cd89f333c03030"
 }

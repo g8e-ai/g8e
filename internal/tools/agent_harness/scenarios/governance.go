@@ -5,10 +5,12 @@ package scenarios
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 // GovKit carries the mock cryptographic actors the governance scenarios need.
@@ -54,7 +56,7 @@ func governanceScenarios() []Scenario {
 					OperatorID:        kit.OperatorID,
 					OperatorSessionID: kit.OperatorSessionID,
 					ToolName:          "fs_list",
-					ArgumentsJSON:     `{"path":"."}`,
+					ArgumentsJSON:     fsListArgs("."),
 					TargetResource:    "localhost",
 					StateRoot:         root,
 					Ensemble:          kit.Ensemble, // L2 attached; no L3 (audited in consensus posture)
@@ -84,7 +86,7 @@ func governanceScenarios() []Scenario {
 					OperatorID:        kit.OperatorID,
 					OperatorSessionID: kit.OperatorSessionID,
 					ToolName:          "fs_list",
-					ArgumentsJSON:     `{"path":"."}`,
+					ArgumentsJSON:     fsListArgs("."),
 					TargetResource:    "localhost",
 					StateRoot:         root,
 					Ensemble:          kit.Ensemble,
@@ -119,9 +121,12 @@ func governanceScenarios() []Scenario {
 					if h, ok := suspendedFromBody(body); ok {
 						txHash = h
 					}
-					ast, _, aerr := c.Approve(ctx, principalActor, txHash)
+					ast, approveBody, aerr := c.Approve(ctx, principalActor, txHash)
 					if aerr != nil {
 						return aerr
+					}
+					if summary, failed := receiptFailed(approveBody); failed {
+						return fmt.Errorf("tool execution failed after OOB approval: %s", summary)
 					}
 					r.note("principal %q approved hash %s via OOB notary (status %d)",
 						kit.Principal.KeyID, short(txHash), ast)
@@ -173,7 +178,7 @@ func governanceScenarios() []Scenario {
 					OperatorID:        kit.OperatorID,
 					OperatorSessionID: kit.OperatorSessionID,
 					ToolName:          "fs_list",
-					ArgumentsJSON:     `{"path":"."}`,
+					ArgumentsJSON:     fsListArgs("."),
 					TargetResource:    "localhost",
 					StateRoot:         root,
 					Ensemble:          kit.Ensemble,
@@ -209,7 +214,7 @@ func governanceScenarios() []Scenario {
 					OperatorID:        kit.OperatorID,
 					OperatorSessionID: kit.OperatorSessionID,
 					ToolName:          "fs_list",
-					ArgumentsJSON:     `{"path":"."}`,
+					ArgumentsJSON:     fsListArgs("."),
 					TargetResource:    "localhost",
 					StateRoot:         root,
 					Ensemble:          kit.Ensemble,
@@ -247,7 +252,7 @@ func governanceScenarios() []Scenario {
 					OperatorID:        kit.OperatorID,
 					OperatorSessionID: kit.OperatorSessionID,
 					ToolName:          "fs_list",
-					ArgumentsJSON:     `{"path":"."}`,
+					ArgumentsJSON:     fsListArgs("."),
 					TargetResource:    "localhost",
 					StateRoot:         root,
 					Ensemble:          kit.Ensemble,
@@ -262,7 +267,7 @@ func governanceScenarios() []Scenario {
 				if h, ok := suspendedFromBody(body); ok {
 					txHash = h
 				}
-				ast, _, aerr := c.Approve(ctx, principalActor, txHash)
+				ast, approveBody, aerr := c.Approve(ctx, principalActor, txHash)
 				if aerr != nil {
 					return aerr
 				}
@@ -271,11 +276,33 @@ func governanceScenarios() []Scenario {
 				if ast >= 400 {
 					return fmt.Errorf("OOB approval rejected with status %d", ast)
 				}
+				if summary, failed := receiptFailed(approveBody); failed {
+					return fmt.Errorf("tool execution failed after OOB approval: %s", summary)
+				}
 				r.note("cryptographic proof: principal Ed25519 signature over transaction hash")
 				return nil
 			},
 		},
 	}
+}
+
+// receiptFailed parses an ActionReceipt body and returns the result_summary
+// and whether the execution status is FAILED. Returns ("", false) if the body
+// is not a parseable receipt (e.g., a suspension response or error body).
+// This catches silent tool failures where the envelope was admitted (HTTP 200)
+// but the underlying run_shell_command exited with a non-zero code.
+func receiptFailed(body []byte) (string, bool) {
+	var r struct {
+		Status        int    `json:"status"`
+		ResultSummary string `json:"result_summary"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil {
+		return "", false
+	}
+	if r.Status == int(operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED) {
+		return r.ResultSummary, true
+	}
+	return "", false
 }
 
 func suspendedFromBody(body []byte) (string, bool) {

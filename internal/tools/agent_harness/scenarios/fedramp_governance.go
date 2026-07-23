@@ -93,6 +93,9 @@ func fedrampScenarios() []Scenario {
 				if status >= 400 {
 					return fmt.Errorf("provision envelope rejected (status %d): %s", status, string(body))
 				}
+				if summary, failed := receiptFailed(body); failed {
+					return fmt.Errorf("provision tool execution failed: %s", summary)
+				}
 				r.note("admitted — operator executing cloudop provision via L5 actuator; provenance receipt written to ledger")
 				return nil
 			},
@@ -114,7 +117,7 @@ func fedrampScenarios() []Scenario {
 					OperatorID:        kit.OperatorID,
 					OperatorSessionID: kit.OperatorSessionID,
 					ToolName:          "run_shell_command",
-					ArgumentsJSON:     `{"command":"rm -rf /var/cloudsvc","timeout":10}`,
+					ArgumentsJSON:     shellCommandArgs("rm -rf /var/cloudsvc"),
 					TargetResource:    "localhost",
 					StateRoot:         root,
 					Ensemble:          kit.Ensemble,
@@ -167,12 +170,15 @@ func fedrampScenarios() []Scenario {
 				if h, ok := suspendedFromBody(body); ok {
 					txHash = h
 				}
-				ast, _, aerr := c.Approve(ctx, fedrampAuthorizingOfficial, txHash)
+				ast, approveBody, aerr := c.Approve(ctx, fedrampAuthorizingOfficial, txHash)
 				if aerr != nil {
 					return fmt.Errorf("authorizing official approve: %w", aerr)
 				}
 				if ast >= 400 {
 					return fmt.Errorf("authorizing official approval rejected (status %d)", ast)
+				}
+				if summary, failed := receiptFailed(approveBody); failed {
+					return fmt.Errorf("destroy tool execution failed: %s", summary)
 				}
 				r.note("authorizing official %q approved hash %s out-of-band (status %d)", kit.Principal.KeyID, short(txHash), ast)
 				r.note("cryptographic proof: principal Ed25519 signature over the exact transaction hash — destruction now executes")
@@ -211,6 +217,9 @@ func fedrampScenarios() []Scenario {
 				if status >= 400 {
 					return fmt.Errorf("revert envelope rejected (status %d): %s", status, string(body))
 				}
+				if summary, failed := receiptFailed(body); failed {
+					return fmt.Errorf("revert tool execution failed: %s", summary)
+				}
 				r.note("admitted — ensemble quorum reached; revert executed and recorded with full configuration lineage")
 				return nil
 			},
@@ -232,7 +241,7 @@ func fedrampScenarios() []Scenario {
 					OperatorID:        kit.OperatorID,
 					OperatorSessionID: kit.OperatorSessionID,
 					ToolName:          "run_shell_command",
-					ArgumentsJSON:     `{"command":"rm -rf /root/.g8e/data","timeout":10}`,
+					ArgumentsJSON:     shellCommandArgs("rm -rf /root/.g8e/data"),
 					TargetResource:    "localhost",
 					StateRoot:         root,
 					Ensemble:          kit.Ensemble,

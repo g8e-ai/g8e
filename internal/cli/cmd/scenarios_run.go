@@ -123,6 +123,19 @@ func runAgentHarness(cmd *cobra.Command, args []string) error {
 	}
 
 	printAgentHarnessSummary(cmd.OutOrStdout(), results)
+	return failedScenariosError(results)
+}
+
+func failedScenariosError(results []scenarios.Result) error {
+	var failed []string
+	for _, r := range results {
+		if !r.OK {
+			failed = append(failed, r.Name)
+		}
+	}
+	if len(failed) > 0 {
+		return fmt.Errorf("scenarios run: %d/%d scenarios failed: %s", len(failed), len(results), strings.Join(failed, ", "))
+	}
 	return nil
 }
 

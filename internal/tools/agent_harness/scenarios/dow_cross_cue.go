@@ -91,7 +91,7 @@ func dowScenarios() []Scenario {
 					OperatorID:        kit.OperatorID,
 					OperatorSessionID: kit.OperatorSessionID,
 					ToolName:          "run_shell_command",
-					ArgumentsJSON:     `{"command":"slew","args":["10.43.0.40:9000","99.0","99.0"],"timeout":10}`,
+					ArgumentsJSON:     shellCommandArgs("slew", "10.43.0.40:9000", "99.0", "99.0"),
 					TargetResource:    "localhost",
 					StateRoot:         root,
 					Ensemble:          kit.Ensemble,

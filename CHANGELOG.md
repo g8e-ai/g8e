@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Description | Notes |
 |---------|------|-------------|-------|
+| 1.6.2 | 2026-07-22 | FedRAMP sovereign cloud governance demo with 5 real-governance scenarios, agent harness refactoring (shared `switchDemoPosture`, `shellCommandArgs` JSON helper, governance error constants), and demo infrastructure updates. | [v1.6.2](docs/release_notes/v1.6.x/v1.6.2.md) |
 | 1.6.1 | 2026-07-21 | Gateway HTTP handler decomposition and CanonicalDBService refactor. Extracts `Stores` struct from `CanonicalDBService` for direct dependency injection, decomposes `HTTPHandler` into 3 new controllers (`SSEController`, `HealthController`, `GovernanceController`), simplifies `make release` to tag-and-push only (GitHub Actions workflows now create releases), and updates developer documentation. | [v1.6.1](docs/release_notes/v1.6.x/v1.6.1.md) |
 | 1.6.0 | 2026-07-20 | Cross-language governance hash parity, enrollment token TOCTOU fix, SSE resilience improvements, and governance model schema alignment. Aligns Go and Python transaction hash canonicalization to produce identical digests, adds atomic conditional update for enrollment token consumption, makes SSE heartbeat interval configurable, fixes multi-line SSE data parsing, improves pubsub reconnect backoff reset, updates Python governance models to match proto definitions, adds governance JSON schema, and expands test coverage by ~1,665 lines across 15 new test files. | [v1.6.0](docs/release_notes/v1.6.x/v1.6.0.md) |
 
