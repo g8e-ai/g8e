@@ -4,13 +4,13 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-07-21
-Version: v1.6.1
+Last Updated: 2026-07-24
+Version: v1.6.2
 
-The g8e Protocol platform is composed of two logically distinct roles, both implemented by the reference g8e binary file:
+The g8e Protocol platform is implemented as a single static binary that operates in two modes:
 
-1.  **g8e Gateway** (Policy Decision Point / PDP): Serves as the central, BFT-governed coordinator for the platform.
-2.  **g8e Operator** (Policy Execution Point / PEP): Runs on target hosts as the sovereign execution boundary and MCP server.
+1.  **Governance Gateway** (Policy Decision Point / PDP): The binary run in Gateway mode (`--posture doctrine`, `--posture consensus`, or `--posture notary`). The Gateway is an Operator with additional gateway services: it runs an in-process Operator that executes L1-L5 locally for operations on the gateway host itself, while also serving as the platform's central persistence layer, pub/sub broker, root CA, and policy decision point. The Gateway is governed by a multi-signature Tribunal (K-of-N Ed25519 votes), not Byzantine consensus.
+2.  **Governed Operator** (Policy Execution Point / PEP): The same binary run in Standard Mode (`operator start`). It runs on target hosts as the sovereign execution boundary and MCP server, executing L1-L5 locally for operations on its own host.
 
 ---
 
@@ -36,21 +36,23 @@ The g8e Protocol platform is composed of two logically distinct roles, both impl
 
 The g8e platform is built on the g8e Protocol. Conforming gateway and Operator implementations make that protocol live.
 
-- **g8e Gateway** (PDP): The g8e binary file run in **Gateway mode** (`--posture doctrine`, `--posture consensus`, or `--posture notary`). It acts as the platform's backbone; protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority.
-- **g8e Operator** (PEP): The g8e binary file run in **Standard Mode**. It acts as the sovereign tool execution boundary on a managed host, executing actions only after they carry a valid, signed gateway lease. Gateway mode operators automatically expose MCP endpoints.
+- **Governance Gateway** (PDP): The binary run in **Gateway mode** (`--posture doctrine`, `--posture consensus`, or `--posture notary`). It acts as the platform's backbone: protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority. The Gateway host also runs an in-process Operator that enforces L1-L5 locally for operations targeting the gateway host itself.
+- **Governed Operator** (PEP): The binary run in **Standard Mode** (`operator start`). It acts as the sovereign tool execution boundary on a managed host, executing actions only after they carry a valid, signed gateway lease. Operators automatically serve as MCP servers, exposing tool capabilities through the gateway's unified MCP endpoint. Each remote Governed Operator runs L1-L5 locally for operations on its own host.
 
 ```mermaid
 flowchart TD
-    subgraph Hub ["g8e Gateway (PDP)"]
+    subgraph Hub ["Governance Gateway (PDP)"]
         direction TB
-        subgraph Layers ["5-Layer Governance"]
-            L1["L1 Doctrine"]
-            L2["L2 Consensus"]
-            L3["L3 Notary"]
-            L4["L4 Warden"]
-            L5["L5 Actuator"]
-            
-            L1 --> L2 --> L3 --> L4 --> L5
+        subgraph GW_Op ["In-Process Operator"]
+            subgraph Layers ["5-Layer Governance (L1-L5)"]
+                L1["L1 Doctrine"]
+                L2["L2 Consensus"]
+                L3["L3 Notary"]
+                L4["L4 Warden"]
+                L5["L5 Actuator"]
+                
+                L1 --> L2 --> L3 --> L4 --> L5
+            end
         end
         db[("SQLite / KV")]
         ps[["Pub/Sub Broker"]]
@@ -68,11 +70,24 @@ flowchart TD
     ensemble -- "mTLS JSON" --> L1
 
     subgraph Host_A ["Managed Host A"]
-        g8eoA["g8e Operator (PEP)"] --- LFAA_A["LFAA Ledger & Vault"]
+        subgraph Remote_Op ["Remote Governed Operator"]
+            subgraph Remote_Layers ["5-Layer Governance (L1-L5)"]
+                RL1["L1 Doctrine"]
+                RL2["L2 Consensus"]
+                RL3["L3 Notary"]
+                RL4["L4 Warden"]
+                RL5["L5 Actuator"]
+                
+                RL1 --> RL2 --> RL3 --> RL4 --> RL5
+            end
+        end
+        g8eoA["Governed Operator (PEP)"] --- LFAA_A["LFAA Ledger & Vault"]
     end
 
     g8eoA -- "mTLS WSS (JSON)" --> ps
 ```
+
+Both the Gateway's in-process Operator and each remote Governed Operator run the full L1-L5 verification pipeline locally. The Gateway's in-process Operator handles operations targeting the gateway host itself; remote Governed Operators handle operations targeting their own hosts.
 
 ---
 
@@ -109,13 +124,13 @@ Vault and rate-limit settings flow from CLI flags through the gateway configurat
 
 ### Onboarding Wizard
 
-`g8e gw start --interactive` (or `-i`) launches an interactive TUI wizard before gateway startup. The wizard guides users through four steps: Network & Identity, Security & Governance Posture, Agent Tooling & Routing, and Review & Confirm. The wizard produces a focused configuration containing only wizard-owned fields; the gateway startup process merges the result into resolved CLI flags, preserving non-wizard flags (ports, directories, log level, rate limits). Cancellation returns without starting the gateway. The wizard is explicit opt-in only; existing flags and automation continue to work unchanged.
+`g8e gw start --interactive` (or `-i`) launches an interactive TUI wizard before gateway startup. The `g8e gw setup` command launches the same wizard without starting the gateway, producing a resolved configuration for inspection. The wizard guides users through four steps: Network & Identity, Security & Governance Posture, Agent Tooling & Routing, and Review & Confirm. The wizard produces a focused configuration containing only wizard-owned fields; the gateway startup process merges the result into resolved CLI flags, preserving non-wizard flags (ports, directories, log level, rate limits). Cancellation returns without starting the gateway. The wizard is explicit opt-in only; existing flags and automation continue to work unchanged.
 
 ---
 
 ## HTTP Router Architecture
 
-The gateway builds two distinct HTTP routers, one per protocol surface. `HTTPHandler` is a thin router and middleware shell that holds only router infrastructure (rate limiting, CORS, path traversal guard), direct accessors (`passkey`, `mcp`, `pubsub`), and 8 controller fields. All domain handler logic lives on controllers: `PKIController`, `DBController`, `AuthController`, `AdminController`, `OperatorController`, `SSEController`, `HealthController`, and `GovernanceController`. The `GatewayModeService` delegates late-bound dependency wiring (`SetTribunal`, `SetEnvelopeProcessor`) through `HTTPHandler` to `GovernanceController`.
+The gateway builds two distinct HTTP routers, one per protocol surface. The router layer is a thin shell holding middleware infrastructure (rate limiting, CORS, path traversal guard) and delegating all domain logic to dedicated controllers for PKI, data, auth, admin, operator, SSE, health, and governance. Late-bound dependencies (tribunal service, envelope processor) are wired into the governance controller after initial construction, allowing the router to be built once at startup without rebuilds.
 
 ### Bootstrap HTTP Router
 
@@ -127,7 +142,7 @@ Served on the HTTPS port (8443), this router handles all API, MCP, passkey, cons
 
 The public HTTPS router registers the following route categories:
 
-**Public Routes (no authentication)**: Health, state, Swagger UI (`/swagger/`, `/swagger/index.html`, `/swagger/doc.json`), CA bundle and fingerprint discovery, CRL, console SPA (`/console/`), landing page, logout, bootstrap enrollment, CLI and device enrollment, PKI devices enrollment, CSR signing, enrollment token validation, and the OOB approval page redirect.
+**Public Routes (no authentication)**: Health, state, Swagger UI (`/swagger/`, `/swagger/index.html`, `/swagger/doc.json`), CA bundle and fingerprint discovery, CRL, console SPA (`/console/`), landing page, logout, bootstrap enrollment, PKI devices enrollment, CSR signing, enrollment token validation, and the OOB approval page redirect.
 
 **MCP/A2A Routes**: Registered on the public mux. When JWKS is configured, MCP routes are wrapped with JWT auth middleware; otherwise they rely on mTLS via the outer auth middleware. Registered paths include `/mcp` (unified MCP JSON-RPC endpoint) and `/api/v1/a2a/call` (A2A endpoint).
 
@@ -198,7 +213,7 @@ The gateway maintains a centralized tool registry. The ToolRegistry provides thr
 The gateway implements a comprehensive input validation system with fail-closed security principles:
 - **SQL Query Validation**: Rejects empty queries, trailing semicolons to prevent statement chaining
 - **URL Validation**: Parses and validates URLs, restricting to http/https schemes, rejecting localhost and loopback addresses, and blocking private IP ranges to prevent SSRF attacks
-- **Protocol Validation**: Validates protocol strings for filesystem operations to prevent path traversal
+- **Protocol Validation**: Validates network protocol strings (tcp, udp, tcp6, udp6, raw) for socket audit operations to prevent path traversal
 - **Git Path Validation**: Validates repository paths and references to prevent path traversal and command injection
 - **Kubernetes Validation**: Validates resource names and namespaces against K8s naming conventions
 - **Cloud Metadata Validation**: Validates cloud metadata operation types
@@ -309,7 +324,7 @@ The bootstrap health endpoint on the HTTP port is a lighter check that verifies 
 
 ## 5-Layer Verification Sequence
 
-Every transaction submitted to `POST /api/v1/governance/envelopes` must pass through the following layers sequentially:
+Every transaction submitted to `POST /api/v1/governance/envelopes` must pass through the following layers sequentially. These layers run on the Gateway's in-process Operator for operations targeting the gateway host. Remote Governed Operators run the same L1-L5 pipeline locally for operations on their own hosts (see [Operator Architecture](./operator.md)).
 
 ### L1 Doctrine (Technical Bedrock)
 Enforces forbidden patterns (such as `sudo` or `rm -rf /`), blacklists, and whitelists. It also performs MITRE threat detection on incoming payloads.

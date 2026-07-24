@@ -4,12 +4,12 @@ title: g8e Protocol Library
 
 # g8e Protocol Library
 
-Last Updated: 2026-07-19
-Version: v1.5.9
+Last Updated: 2026-07-24
+Version: v1.6.2
 
 The g8e Protocol Library is the canonical wire contract for all mutations in the g8e zero-trust execution platform. It provides protobuf schema definitions, JSON constant registries, JSON model schemas, Pydantic models, dynamic enum generation, SPIFFE workload identity helpers, and example programs for building g8e-compatible clients and services.
 
-The protocol is published as two independent packages — a Go module (part of the root module) and a Python package — both sharing a single version number with the platform binary. There are no separate protocol-only releases; every g8e release ships the platform binary, the Go module, and the Python package at the same version.
+The protocol is published as two independent packages: a Go module (part of the root module) and a Python package, both sharing a single version number with the platform binary. There are no separate protocol-only releases; every g8e release ships the platform binary, the Go module, and the Python package at the same version.
 
 ---
 
@@ -71,9 +71,9 @@ go get github.com/g8e-ai/g8e@latest
 
 ### Go Module Path & Versioning
 
-The Go protocol code is part of the root module `github.com/g8e-ai/g8e`. There is no separate `go.mod` for the protocol directory. The module version is derived from git tags of the form `vX.Y.Z`, which are created by `make release-tag`. The Go module proxy resolves versions from these tags. See [Release & Distribution](#release--distribution) for details.
+The Go protocol code is part of the root module `github.com/g8e-ai/g8e`. There is no separate `go.mod` for the protocol directory. The module version is derived from git tags of the form `vX.Y.Z`, which are created by `make release`. The Go module proxy resolves versions from these tags. See [Release & Distribution](#release--distribution) for details.
 
-Import paths remain `github.com/g8e-ai/g8e/protocol/...` — the directory-relative import paths are unchanged by the module merge. Only the `require` line in a consumer's `go.mod` changes from `github.com/g8e-ai/g8e/protocol vX.Y.Z` to `github.com/g8e-ai/g8e vX.Y.Z`.
+Import paths remain `github.com/g8e-ai/g8e/protocol/...`; the directory-relative import paths are unchanged by the module merge. Only the `require` line in a consumer's `go.mod` changes from `github.com/g8e-ai/g8e/protocol vX.Y.Z` to `github.com/g8e-ai/g8e vX.Y.Z`.
 
 ### Go Package Contents
 
@@ -171,7 +171,7 @@ The Python package is in `protocol/python/` and installs as `g8e`. The import na
   - `base.py`: `G8eBaseModel` base class, `UTCDatetime` annotated type
   - `context.py`: `RequestContext`, `BoundOperator`
   - `events.py`: SSE event wire models and AI event payload models
-  - `governance.py`: `GovernanceEnvelope`, `GovernanceMetadata`, `GovernanceL1`, `GovernanceL2`, `GovernanceL2Vote`, `GovernanceL3`, and `compute_transaction_hash` utility
+  - `governance.py`: `GovernanceEnvelope`, `GovernanceMetadata`, `GovernanceL1`, `GovernanceL2`, `GovernanceL2Vote`, `GovernanceL3`, `GovernanceL3Proof`, and `compute_transaction_hash` utility
   - `internal_api.py`: `ChatMessageRequest`, `ChatStartedResponse`, `ResourceCreationRequest`, `LLMOverrides`
   - `settings.py`: `PlatformSettings`, `G8eeUserSettings`, and nested settings models
 
@@ -210,7 +210,7 @@ The `g8e.enums` module dynamically generates `StrEnum` and `IntEnum` classes fro
 - Values preserve the raw protocol wire format (e.g., `"g8e.v1.ai.llm.chat.iteration.started"`, `"user.cancelled"`, `"G8E-1000"`)
 - Integer-valued categories produce `IntEnum`; all others produce `StrEnum`
 - Enums are built lazily via `__getattr__` and cached with `lru_cache`
-- Access enums by PascalCase name: `g8e.enums.OperatorToolName`, `g8e.enums.EventType`, `g8e.enums.Channel`, `g8e.enums.Intent`, `g8e.enums.Collection`, `g8e.enums.KVKey`
+- Access enums by PascalCase name: `g8e.enums.OperatorToolName`, `g8e.enums.EventType`, `g8e.enums.Channel`, `g8e.enums.Intent`, `g8e.enums.Prompt`, `g8e.enums.Collection`, `g8e.enums.KVKey`
 
 ### Python Models Module
 
@@ -219,9 +219,9 @@ The `g8e.models` package provides Pydantic v2 models for protocol data structure
 | Submodule | Key Models |
 |-----------|------------|
 | `g8e.models.base` | `G8eBaseModel`, `UTCDatetime`, re-exports of `Field`, `ConfigDict`, `field_validator`, `model_validator`, `ValidationError` |
-| `g8e.models.context` | `RequestContext`, `BoundOperator` — `RequestContext` validates session identity for `CLIENT` source components, requiring either `web_session_id` or `cli_session_id` and a `user_id` |
+| `g8e.models.context` | `RequestContext`, `BoundOperator`: `RequestContext` validates session identity for `CLIENT` source components, requiring either `web_session_id` or `cli_session_id` and a `user_id` |
 | `g8e.models.events` | `SessionEventWire`, `BackgroundEventWire`, and AI event payload models for chat processing, tool lifecycle, citations, errors, thinking, turn completion, retry, and triage clarification |
-| `g8e.models.governance` | `GovernanceEnvelope`, `GovernanceMetadata`, `GovernanceL1`, `GovernanceL2`, `GovernanceL2Vote`, `GovernanceL3`, and `compute_transaction_hash` utility implementing the SHA-256 transaction hash algorithm |
+| `g8e.models.governance` | `GovernanceEnvelope`, `GovernanceMetadata`, `GovernanceL1`, `GovernanceL2`, `GovernanceL2Vote`, `GovernanceL3`, `GovernanceL3Proof`, and `compute_transaction_hash` utility implementing the SHA-256 transaction hash algorithm |
 | `g8e.models.internal_api` | `ChatMessageRequest`, `ChatStartedResponse`, `ResourceCreationRequest`, `LLMOverrides` |
 | `g8e.models.settings` | `G8eeUserSettings`, `PlatformSettings`, and nested settings models for LLM providers, search, eval judge, command validation, and batch execution |
 
@@ -245,10 +245,10 @@ Run it from `protocol/python` after `pip install -e .` with `python examples/mod
 
 The constants loader resolves the protocol directory in the following order:
 
-1. **`G8E_PROTOCOL_DIR`** environment variable — if set, uses `$G8E_PROTOCOL_DIR/constants`
-2. **Package bundled data** — `g8e/_data/` within the installed package (for PyPI installs)
-3. **Relative path** — `protocol/constants/` relative to the package (for development checkouts)
-4. **Container fallback** — `/app/protocol/constants` (for Docker/containerized deployments)
+1. **`G8E_PROTOCOL_DIR`** environment variable: if set, uses `$G8E_PROTOCOL_DIR/constants`
+2. **Package bundled data**: `g8e/_data/` within the installed package (for PyPI installs)
+3. **Relative path**: `protocol/constants/` relative to the package (for development checkouts)
+4. **Container fallback**: `/app/protocol/constants` (for Docker/containerized deployments)
 
 Override the default:
 
@@ -361,17 +361,16 @@ Version string conventions:
 
 The release process is automated through a single Make target:
 
-#### `make release` — Sync, Build, Tag & Push
+#### `make release`: Sync, Tag & Push
 
 1. Syncs `protocol/python/pyproject.toml` and `protocol/python/g8e/__init__.py` from `VERSION`
 2. Verifies working tree is clean after version sync
 3. Verifies release notes file exists at `docs/release_notes/vX.Y.x/vX.Y.Z.md`
 4. Verifies tags `vX.Y.Z` and `protocol/vX.Y.Z` do not already exist
-5. Verifies GitHub CLI (`gh`) is available
-6. Builds binaries
-7. Creates `vX.Y.Z` and `protocol/vX.Y.Z` tags on the current commit
-8. Pushes both tags to origin
-9. Creates a GitHub release with release notes from the notes file
+5. Creates `vX.Y.Z` and `protocol/vX.Y.Z` tags on the current commit
+6. Pushes both tags to origin
+
+Binary building, GitHub release creation, and asset uploading are handled by CI workflows triggered by the tag pushes.
 
 ### CI Workflows
 
@@ -379,8 +378,8 @@ Pushing the tags triggers two CI workflows:
 
 | Tag | Workflow File | What It Does |
 |-----|---------------|-------------|
-| `vX.Y.Z` | `.github/workflows/release-binary.yml` | Builds platform binaries for all OS/arch combinations, signs them with cosign, creates GitHub release with binary assets, SHA256 checksums, signatures, and `go get` install instructions. A verify-install job confirms `go install` works on Ubuntu, macOS, and Windows. |
-| `protocol/vX.Y.Z` | `.github/workflows/release-python-protocol.yml` | Builds Python sdist + wheel, publishes to [PyPI](https://pypi.org/project/g8e/), creates GitHub release with `pip install` instructions. A verify-install job confirms fresh PyPI install and import on Ubuntu, macOS, and Windows. |
+| `vX.Y.Z` | `.github/workflows/release-binary.yml` | Builds platform binaries for all OS/arch combinations, signs them with cosign, creates GitHub release with binary assets, SHA256 checksums, signatures, and release notes from the notes file. A verify-install job confirms `go install` works on Ubuntu, macOS, and Windows. |
+| `protocol/vX.Y.Z` | `.github/workflows/release-python-protocol.yml` | Builds Python sdist + wheel, publishes to [PyPI](https://pypi.org/project/g8e/). A verify-install job confirms fresh PyPI install and import on Ubuntu, macOS, and Windows. |
 
 #### Python Protocol CI Details
 
@@ -401,7 +400,7 @@ The `make release` target verifies that `pyproject.toml` and `__init__.py` versi
 
 Additionally, `.github/workflows/build-and-test.yml` includes a version sync check that fails CI if `pyproject.toml` or `__init__.py` don't match `VERSION`.
 
-The Go module version is not stored in a file — it is derived entirely from git tags (`vX.Y.Z`). The protocol code is part of the root module and does not have a separate `go.mod`.
+The Go module version is not stored in a file; it is derived entirely from git tags (`vX.Y.Z`). The protocol code is part of the root module and does not have a separate `go.mod`.
 
 ---
 
@@ -411,6 +410,7 @@ Cross-language conformance tests in `protocol/conformance/` validate that protoc
 
 - **`test_constants.py`**: Verifies JSON structural integrity, `_go_const` and `_python_const` field presence, value uniqueness, event namespace conventions, and Python-JSON parity for all 20+ protocol constant files.
 - **`test_models.py`**: Verifies model schema integrity, `PlatformSettings` field parity between Python and JSON schema, `RequestContext` validation rules, and serialization round-trip behavior.
+- **`test_hash_parity.py`**: Verifies cross-language transaction hash parity using shared test vectors from `hash_vectors.json`. Validates that Python's `compute_transaction_hash` produces identical SHA-256 digests to Go's `GenerateMessageID` for the same envelope fields, including timestamp normalization and optional field handling.
 
 A `conformance` CI job in `.github/workflows/build-and-test.yml` runs these tests on every push and PR using Python 3.14. See [Conformance Tests](../../protocol/conformance/README.md) for details.
 
@@ -438,6 +438,8 @@ protocol/
   conformance/               Cross-language conformance tests
     test_constants.py        Constant file structural integrity and parity tests
     test_models.py           Model schema parity and validation tests
+    test_hash_parity.py      Transaction hash parity tests (Python vs Go)
+    hash_vectors.json        Shared test vectors for hash parity tests
   python/                    Python package (g8e)
     g8e/                     Import namespace (g8e)
       __init__.py            Package version
@@ -474,11 +476,11 @@ The buf generation config resides at `buf.gen.yaml` in the repository root. It p
 
 ## References
 
-- [Protocol Specification](../../protocol/docs/spec.md) — GovernanceEnvelope structure and 5-layer interlock sequence
-- [Constants Reference](../../protocol/docs/constants.md) — Constants system
-- [A2A Protocol](../../protocol/docs/a2a.md) — A2A protocol integration
-- [MCP Protocol](../../protocol/docs/mcp.md) — MCP protocol integration
-- [Release Process](../devs/release_process.md) — Full release checklist and version management
+- [Protocol Specification](../../protocol/docs/spec.md): GovernanceEnvelope structure and 5-layer interlock sequence
+- [Constants Reference](../../protocol/docs/constants.md): Constants system
+- [A2A Protocol](../../protocol/docs/a2a.md): A2A protocol integration
+- [MCP Protocol](../../protocol/docs/mcp.md): MCP protocol integration
+- [Release Process](../devs/release_process.md): Full release checklist and version management
 - [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - [Go Module Versioning](https://go.dev/doc/modules/versioning)
 - [PyPI Packaging](https://packaging.python.org/en/latest/tutorials/packaging-projects/)

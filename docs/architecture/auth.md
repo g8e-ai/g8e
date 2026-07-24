@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-07-19
-Version: v1.5.9
+Last Updated: 2026-07-23
+Version: v1.6.2
 
 This document explains how to authenticate and authorize actions in the g8e platform. The platform is built as a zero-trust execution environment where every action is verified before execution.
 
@@ -214,7 +214,7 @@ The Actuator represents the execution boundary:
 - Issues signed action receipts for audit
 - Rehydrates sensitive data just before execution
 - Mints scoped, single-action capabilities
-- Dispatches to downstream executors (Shell, MCP, A2A)
+- Dispatches to downstream executors (Command, File Edit, MCP, and A2A)
 - Records transaction in audit store
 
 ---
@@ -247,13 +247,7 @@ When you use the Console, you can control multiple Operators on different hosts.
 
 ### 4.2 CLI Cert Binding
 
-CLI certificates are linked to Operator sessions, creating a chain:
-
-```
-CLI mTLS cert → CLI session → Operator session → Operator
-```
-
-This ensures CLI commands are scoped to the correct Operator.
+CLI certificates are linked to Operator sessions, creating a chain from CLI mTLS certificate to CLI session to Operator session to Operator. This ensures CLI commands are scoped to the correct Operator.
 
 ### 4.3 JWT Persona Binding
 
@@ -277,22 +271,23 @@ All sensitive data is encrypted at rest using AES-256-GCM:
 
 Vault operations are managed via CLI commands:
 
-- `./g8e vault init` - Initialize new vault
-- `./g8e vault unlock` - Unlock vault with key
-- `./g8e vault rekey` - Rotate vault keys
-- `./g8e vault status` - Check vault status
-- `./g8e vault export` - Export vault key
-- `./g8e vault import` - Import vault key
-- `./g8e vault reset` - Destroy vault (destructive)
+- `g8e vault init` - Initialize new vault
+- `g8e vault unlock` - Unlock vault with key
+- `g8e vault rekey` - Rotate vault keys
+- `g8e vault status` - Check vault status
+- `g8e vault export` - Export vault key
+- `g8e vault import` - Import vault key
+- `g8e vault reset` - Destroy vault (destructive)
 
 **Configuration:**
 
 Vault paths can be configured via:
-- CLI flags: `--vault-dir`, `--vault-key`
+- Gateway CLI flags: `--vault-dir`, `--vault-key`
+- Vault subcommand flags: `--vault-dir`, `--key-path`
 - Environment variables: `G8E_VAULT_DIR`, `G8E_VAULT_KEY`
 - Default paths: `.g8e/vault/` for vault data, `.g8e/secrets/key` for the vault key
 
-The vault key is optional. If provided, the gateway uses it to decrypt the vault at startup. If the key is missing or invalid, the gateway starts but storage services fail closed on first use.
+The vault is required. On first run, the gateway auto-initializes a new vault with a generated key. On subsequent starts, the vault key must be valid or the gateway fails to start.
 
 ---
 

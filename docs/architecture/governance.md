@@ -70,7 +70,7 @@ The canonical transaction container is the **GovernanceEnvelope**, a protobuf me
 **Startup validation**: The gateway logs advisory warnings at startup for consensus and notary postures if the tribunal is not yet configured:
 - If the tribunal ID is empty, a warning is logged.
 - If the tribunal policy does not exist or is disabled, a warning is logged.
-- L2 enforcement happens at transaction time via L4Warden — L2-gated transactions are rejected until a tribunal is properly enrolled.
+- L2 enforcement happens at transaction time via L4Warden; L2-gated transactions are rejected until a tribunal is properly enrolled.
 - If the tribunal ID is set and the policy exists and is enabled, the Tribunal service is bootstrapped in-process and wired as both the mTLS HTTP handler and the local deliberator.
 
 **Tribunal bootstrap**: The Tribunal service is constructed from the tribunal policy stored in the database. For single-member tribunals, the gateway's actuator Ed25519 key is reused as the member signing key. For multi-member tribunals, member keys are loaded from disk. Members whose keys cannot be resolved are included without a private key; they can participate in policy but cannot sign votes, and a warning is logged.
@@ -105,7 +105,7 @@ The canonical transaction container is the **GovernanceEnvelope**, a protobuf me
 
 Non-mutation actions (e.g., `FS_READ`, `FS_LIST`, `FETCH_LOGS`, `HEARTBEAT`) do not require L3 proof even under notary posture.
 
-**Startup validation**: Same as consensus posture — advisory warnings if tribunal is not configured. L2 enforcement happens at transaction time via L4Warden. If the tribunal ID is set and the policy exists and is enabled, the Tribunal service is bootstrapped in-process.
+**Startup validation**: Same as consensus posture; advisory warnings if tribunal is not configured. L2 enforcement happens at transaction time via L4Warden. If the tribunal ID is set and the policy exists and is enabled, the Tribunal service is bootstrapped in-process.
 
 **Tribunal bootstrap**: Same as consensus posture. The Tribunal service is constructed and wired as both the mTLS HTTP handler and the local deliberator. The in-process local deliberator signs L2 votes with the gateway's actuator key for single-member tribunals.
 
@@ -174,13 +174,14 @@ The intent represents what the principal wants to accomplish, for example, "read
 
 The **Producer** (g8e-compatible agentic ensemble, BYO agent, or MCP client) receives the raw intent and begins the governance process:
 
-1. **Reach Consensus (L2)**: The producer sends the envelope to the **Tribunal Service** for deliberation. Each tribunal member independently evaluates the payload using the L1 Doctrine and signs an Ed25519 vote over `<transaction_hash>|<decision>`. For single-binary deployments, the local deliberator calls the Tribunal Service in-process without an HTTP round-trip.
-2. **Create GovernanceEnvelope**: The producer wraps the intent in a GovernanceEnvelope, which includes:
+1. **Create GovernanceEnvelope**: The producer wraps the intent in a GovernanceEnvelope, which includes:
    - The original intent as a typed protobuf payload
-   - Tribunal L2 votes proving consensus
-   - L3 proof (WebAuthn assertion or mTLS certificate fingerprint)
    - Metadata about the request (timestamp, principal identity, nonce, state root)
    - Cryptographic proofs for verification
+
+2. **L2 Consensus (gateway-mediated)**: Under `consensus` and `notary` postures, the gateway's `processGatewayTransaction` automatically sends the envelope to the Tribunal for L2 deliberation before dispatch. Each tribunal member independently evaluates the payload using the L1 Doctrine and signs an Ed25519 vote over `<transaction_hash>|<decision>`. For single-binary deployments, the local deliberator calls the Tribunal Service in-process without an HTTP round-trip. Under `doctrine` posture, L2 votes are not required (audited only) and the Tribunal is not constructed in-process.
+
+3. **L3 Notary proof**: The envelope may include an L3 proof (WebAuthn assertion or mTLS certificate fingerprint) if the producer can generate one. However, standard AI clients (Claude Code, Codex, Goose, Gemini CLI) typically cannot generate an L3 Notary human signature. In this case, the gateway suspends the transaction, sends an OOB WebAuthn challenge URL to the client, the human approves via browser, and the gateway attaches the resulting proof to the envelope before resuming the L4/L5 flow (see [OOB Suspension](#out-of-band-oob-suspension--webauthn-approval-flow) in [Gateway Architecture](./gateway.md)).
 
 The signed envelope is now ready for submission to the governance gateway.
 
@@ -225,7 +226,7 @@ The operator now has the signed GovernanceEnvelope and begins the verification p
 
 ### Phase 4: Verification Pipeline (L1-L5)
 
-The operator runs the envelope through a five-layer verification pipeline orchestrated by the **Warden (L4)**. Each layer must pass; if any layer fails, the transaction fails closed (rejected with audit trail).
+The operator runs the envelope through a five-layer verification pipeline orchestrated by the **Warden (L4)**. This pipeline runs on both the Gateway's in-process Operator (for operations targeting the gateway host) and on each remote Governed Operator (for operations targeting their own hosts). Each layer must pass; if any layer fails, the transaction fails closed (rejected with audit trail).
 
 #### Step 7: Warden Pre-Dispatch Gate (L4)
 
@@ -493,7 +494,7 @@ The local deliberator is an in-process adapter that calls the Tribunal Service d
 
 ### Tribunal Bootstrap at Gateway Startup
 
-When the gateway starts in consensus or notary posture with a non-empty tribunal ID, the Tribunal service is constructed and wired at startup. If the tribunal ID is empty, an advisory warning is logged and the gateway boots without an in-process Tribunal — L2-gated transactions will be rejected by L4Warden until a tribunal is enrolled. Under doctrine posture, the Tribunal is not constructed in-process; L2 votes must be obtained from an external Tribunal service when required.
+When the gateway starts in consensus or notary posture with a non-empty tribunal ID, the Tribunal service is constructed and wired at startup. If the tribunal ID is empty, an advisory warning is logged and the gateway boots without an in-process Tribunal; L2-gated transactions will be rejected by L4Warden until a tribunal is enrolled. Under doctrine posture, the Tribunal is not constructed in-process; L2 votes must be obtained from an external Tribunal service when required.
 
 1. **Load policy**: Retrieves the tribunal policy from the database. If missing, bootstrap fails with an error.
 2. **Construct key provider**: Creates a file-based key provider for the configured secrets directory, then wraps it with the actuator key fallback logic.
@@ -566,8 +567,8 @@ The L5 Actuator records posture enforcement results in every action receipt:
 
 | Posture | L2 Status | L3 Status |
 |---|---|---|
-| Doctrine | Not required | Not required |
-| Consensus | Required (valid or failed) | Not required |
+| Doctrine | Audited | Audited |
+| Consensus | Required (valid or failed) | Audited |
 | Notary | Required (valid or failed) | Required (valid or failed) |
 
 These values are part of the canonical receipt JSON and are signed by the actuator's Ed25519 key. They are also persisted in the audit store.
@@ -613,7 +614,7 @@ Every verification layer fails closed: if any check fails, the transaction is re
 | Component | Role | Key Characteristics |
 |-----------|------|---------------------|
 | **Principal** | Initiates intent | Human or AI agent, authenticated via WebAuthn or CLI mTLS. |
-| **Producer** | Wraps intent in envelope | Reaches L2 consensus via Tribunal Service, creates GovernanceEnvelope with L2 votes and L3 proof. |
+| **Producer** | Wraps intent in envelope | Creates GovernanceEnvelope with intent, metadata, and optional L3 proof. L2 consensus is obtained by the gateway during transaction processing. |
 | **Governance Gateway** | Policy Decision Point | PKI authority, mTLS admission control, identity binding, replay store, universal endpoint. |
 | **GovernancePosture** | Verification Policy | Configures which layers are enforced vs audited (doctrine, consensus, notary). |
 | **L4 Warden** | Verification Orchestrator | Five-stage verification: in-flight tracking, nonce reservation, stateless validation (L1 + hash), stateful validation (state root), posture-gated L2/L3. |
@@ -628,7 +629,7 @@ Every verification layer fails closed: if any check fails, the transaction is re
 ## Transaction Flow Summary
 
 1. **Principal** submits intent
-2. **Producer** reaches L2 consensus via Tribunal Service and creates GovernanceEnvelope with L2 votes and L3 proof
+2. **Producer** creates GovernanceEnvelope with intent, metadata, and optional L3 proof. Gateway obtains L2 consensus via Tribunal during transaction processing
 3. **Gateway** admits envelope after mTLS, PKI, identity binding, and replay protection
 4. **Operator** fetches envelope via outbound mTLS or processes synchronously
 5. **Warden (L4)** performs five-stage verification: in-flight tracking, nonce reservation, stateless (L1 doctrine + hash), stateful (state root), and posture-gated L2/L3

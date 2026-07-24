@@ -1,7 +1,7 @@
 # Network Architecture
 
-Last Updated: 2026-07-19
-Version: v1.5.9
+Last Updated: 2026-07-24
+Version: v1.6.2
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
 
@@ -104,7 +104,7 @@ Since the g8e Gateway acts as a self-signed CA, clients must explicitly trust th
 
 ### CLI Endpoint Override Flags
 
-When the gateway's HTTP and HTTPS ports are mapped to different host ports — as in Docker demos where the container's internal ports (8080/8443) are exposed on different host ports (e.g., 8085/8448) — the CLI provides two flags to independently override each phase's endpoint:
+When the gateway's HTTP and HTTPS ports are mapped to different host ports, as in Docker demos where the container's internal ports (8080/8443) are exposed on different host ports (e.g., 8085/8448), the CLI provides two flags to independently override each phase's endpoint:
 
 | Flag | Purpose | Default |
 |---|---|---|
@@ -127,7 +127,7 @@ The platform supports setup without requiring `/etc/hosts` changes or DNS config
 
 On Windows, `g8e auth enroll` auto-detects the platform and uses the Windows Certificate Store for CLI session enrollment. This is a CLI session enrollment (mTLS cert-based), distinct from the browser-based WebAuthn passkey flow (cookie-based web session).
 
-1. **CLI Enrollment**: Run `./g8e auth enroll [--tpm]` to generate an ECDSA P-256 keypair in the Windows Certificate Store.
+1. **CLI Enrollment**: Run `g8e auth enroll [--tpm]` to generate an ECDSA P-256 keypair in the Windows Certificate Store.
 2. **CSR Signing**: The CLI submits a CSR to the g8e Gateway and receives a signed certificate with SPIFFE URI SAN.
 3. **Certificate Import**: The signed certificate is imported to `Cert:\CurrentUser\My` in the Windows Certificate Store for Windows Hello native API access.
 4. **Session Binding**: The g8e Gateway extracts the SPIFFE URI SAN from the client certificate and creates a `cli_session_id` bound to the user identity.
@@ -155,7 +155,7 @@ Default ports:
 
 ### Docker Port Mapping & CLI Split Endpoints
 
-In Docker demo environments, the gateway's internal HTTP (8080) and HTTPS (8443) ports are typically mapped to different host ports (e.g., 8085→8080, 8448→8443). Since enrollment uses both ports — HTTP for discovery/bootstrap and HTTPS for mTLS API operations — a single endpoint override cannot address both correctly.
+In Docker demo environments, the gateway's internal HTTP (8080) and HTTPS (8443) ports are typically mapped to different host ports (e.g., 8085→8080, 8448→8443). Since enrollment uses both ports, HTTP for discovery/bootstrap and HTTPS for mTLS API operations, a single endpoint override cannot address both correctly.
 
 The CLI solves this with split endpoint overrides (see [CLI Endpoint Override Flags](#cli-endpoint-override-flags) above). The `--endpoint` flag targets the HTTP discovery port and the `--port` flag targets the HTTPS/mTLS port, allowing the CLI to reach both surfaces through their mapped host ports independently.
 

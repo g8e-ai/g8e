@@ -5,7 +5,7 @@ Version: v1.6.2
 
 ## Overview
 
-L2 Consensus is a protocol concept defined in the g8e protocol (`L2Metadata`, `L2Vote`). The Tribunal is the **reference implementation** of the L2 Consensus layer shipped with g8e — an enrolled body of agentic applications that independently evaluate each transaction's payload against the L1 Doctrine and produce signed Ed25519 votes. A transaction must collect enough affirmative votes (quorum) from distinct tribunal members to pass L2 verification. Alternative implementations can be built against the same protocol interfaces.
+L2 Consensus is a protocol concept defined in the g8e protocol (`L2Metadata`, `L2Vote`). The Tribunal is the **reference implementation** of the L2 Consensus layer shipped with g8e: an enrolled body of agentic applications that independently evaluate each transaction's payload against the L1 Doctrine and produce signed Ed25519 votes. A transaction must collect enough affirmative votes (quorum) from distinct tribunal members to pass L2 verification. Alternative implementations can be built against the same protocol interfaces.
 
 The Tribunal operates as a **fail-closed gate** under the `consensus` and `notary` postures. Under `doctrine` posture, L2 votes are verified if present and recorded in the receipt, but do not gate execution.
 
@@ -31,10 +31,10 @@ The `TribunalPolicy` struct (`internal/models/auth.go:521`) defines a named cons
 
 Tribunal policies are persisted in the SQLite document store under the `tribunals` collection (`internal/constants/collections.go:46`). The `TribunalStoreService` (`internal/services/gateway/tribunal_store_service.go`) provides CRUD operations:
 
-- **`GetTribunal(id)`** — Retrieves a policy by ID; returns `nil, nil` if not found.
-- **`AddTribunal(policy)`** — Creates or updates a policy with fail-closed validation.
-- **`ListTribunals()`** — Returns all stored policies.
-- **`DeleteTribunal(id)`** — Removes a policy.
+- **`GetTribunal(id)`**: Retrieves a policy by ID; returns `nil, nil` if not found.
+- **`AddTribunal(policy)`**: Creates or updates a policy with fail-closed validation.
+- **`ListTribunals()`**: Returns all stored policies.
+- **`DeleteTribunal(id)`**: Removes a policy.
 
 The `TribunalStore` interface (`internal/services/governance/tribunal_store.go:19`) is the Tribunal-specific read interface. The L4 Warden now depends on the generic `L2ConsensusPolicyStore` interface, which `TribunalStoreService` satisfies via `GetConsensusPolicy` (adapting `TribunalPolicy` → `L2ConsensusPolicy`). External `TribunalStore` implementations can be adapted via `TribunalStoreAdapter`:
 
@@ -96,9 +96,9 @@ The `bootstrapTribunalPolicy` function (`internal/cli/serve/gateway.go:416`) exe
 
 Tribunals can also be created at runtime via the admin REST API (`internal/services/gateway/admin_controller.go:203`):
 
-- **`POST /api/v1/admin/tribunals`** — Create a new tribunal policy. Requires a bootstrap user (admin-only). Accepts a `TribunalPolicy` JSON body. Returns `201 Created` or `400 Bad Request` on validation failure.
-- **`GET /api/v1/admin/tribunals`** — List all tribunal policies. Requires a bootstrap user. Returns `200 OK` with a JSON array.
-- **`DELETE /api/v1/admin/tribunals/{id}`** — Delete a tribunal policy. Requires a bootstrap user. Returns `200 OK` or `404 Not Found`.
+- **`POST /api/v1/admin/tribunals`**: Create a new tribunal policy. Requires a bootstrap user (admin-only). Accepts a `TribunalPolicy` JSON body. Returns `201 Created` or `400 Bad Request` on validation failure.
+- **`GET /api/v1/admin/tribunals`**: List all tribunal policies. Requires a bootstrap user. Returns `200 OK` with a JSON array.
+- **`DELETE /api/v1/admin/tribunals/{id}`**: Delete a tribunal policy. Requires a bootstrap user. Returns `200 OK` or `404 Not Found`.
 
 ### Member Key Management
 
@@ -118,7 +118,7 @@ type KeyProvider interface {
 }
 ```
 
-In production bootstrap (`BootstrapTribunal`), the key provider tries `FileKeyProvider` first, then falls back to the gateway's actuator signing key if the member's AppID matches the actuator's key ID. Members whose keys cannot be resolved are included in the policy without a private key — they can participate in policy but cannot sign votes, and a warning is logged.
+In production bootstrap (`BootstrapTribunal`), the key provider tries `FileKeyProvider` first, then falls back to the gateway's actuator signing key if the member's AppID matches the actuator's key ID. Members whose keys cannot be resolved are included in the policy without a private key; they can participate in policy but cannot sign votes, and a warning is logged.
 
 ---
 
@@ -150,7 +150,7 @@ type TribunalMember struct {
 }
 ```
 
-The member's public key is registered as a `TrustedSigner` (keyID = AppID). Members never share the gateway identity key — even in single-binary deployments, each member has a distinct key.
+The member's public key is registered as a `TrustedSigner` (keyID = AppID). Members never share the gateway identity key; even in single-binary deployments, each member has a distinct key.
 
 ---
 
@@ -237,7 +237,7 @@ The Tribunal also exposes an mTLS-guarded HTTP endpoint for remote deliberation 
 - **Wire format**: canonical protojson `GovernanceEnvelope` (1 MiB max body)
 - **Response**: the envelope with L2 votes populated, as protojson
 
-The route is **always registered** on the mTLS mux. The handler loads the `TribunalService` via an atomic pointer — if the tribunal is not yet wired, it returns `503 Service Unavailable` (`internal/services/gateway/governance_controller.go:88`).
+The route is **always registered** on the mTLS mux. The handler loads the `TribunalService` via an atomic pointer; if the tribunal is not yet wired, it returns `503 Service Unavailable` (`internal/services/gateway/governance_controller.go:88`).
 
 #### 3. MCP Gateway Integration
 
@@ -275,7 +275,7 @@ When a `GovernanceEnvelope` arrives at the gateway, the L4 Warden's `verifyL2Pos
 
 5. **Duplicate signer detection**: if `RequireDistinct=true`, duplicate `SignerKeyId` values in the vote set are rejected with `ErrTxL2DuplicateSigner`.
 
-6. **Signature verification**: for each vote, the Ed25519 signature over `"<transaction_hash>|<decision>"` is verified against the trusted public key loaded from `SignerStore.GetTrustedSigner`. Invalid signatures are excluded from the quorum count (not rejected — the vote simply doesn't count).
+6. **Signature verification**: for each vote, the Ed25519 signature over `"<transaction_hash>|<decision>"` is verified against the trusted public key loaded from `SignerStore.GetTrustedSigner`. Invalid signatures are excluded from the quorum count (not rejected; the vote simply doesn't count).
 
 7. **Quorum check**: the count of affirmative votes from valid, distinct members must meet or exceed `policy.Quorum`. Under enforced postures, failure returns `ErrTxL2QuorumNotMet`.
 
@@ -301,7 +301,7 @@ return ed25519.Verify(pubKey, []byte(payload), sigBytes)
 | Signature verification | Audited | **Enforced** | **Enforced** |
 | Quorum met | Audited | **Enforced** | **Enforced** |
 
-Under `doctrine` posture, all L2 checks return `false, nil` when stores/policies are missing — the result is recorded in the receipt but does not gate execution.
+Under `doctrine` posture, all L2 checks return `false, nil` when stores/policies are missing; the result is recorded in the receipt but does not gate execution.
 
 ---
 
@@ -328,7 +328,7 @@ The full tribunal bootstrap sequence in `internal/cli/serve/gateway.go`:
 
 ### Thread-Safe Late Binding
 
-The `GovernanceController` uses `atomic.Pointer[tribunal.TribunalService]` for the tribunal reference (`internal/services/gateway/governance_controller.go:49`). The tribunal deliberate route is always registered on the mTLS mux — no router rebuild is needed when `SetTribunal` is called later in the boot sequence. The handler checks the atomic pointer at request time and returns `503` if not yet wired.
+The `GovernanceController` uses `atomic.Pointer[tribunal.TribunalService]` for the tribunal reference (`internal/services/gateway/governance_controller.go:49`). The tribunal deliberate route is always registered on the mTLS mux; no router rebuild is needed when `SetTribunal` is called later in the boot sequence. The handler checks the atomic pointer at request time and returns `503` if not yet wired.
 
 Similarly, the MCP gateway uses `atomic.Value` for the `L2ConsensusDeliberator` (`internal/services/mcp/gateway.go:116`), enabling thread-safe late binding after tribunal bootstrap.
 

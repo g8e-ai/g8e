@@ -1,7 +1,7 @@
 # Encryption Architecture
 
-Last Updated: 2026-07-19
-Version: v1.5.9
+Last Updated: 2026-07-24
+Version: v1.6.2
 
 ## Overview
 
@@ -41,19 +41,19 @@ All storage services require an unlocked vault at initialization. The following 
 
 ```bash
 # Generate new vault with auto-generated key
-./g8e vault init
+g8e vault init
 
 # Initialize with custom vault directory
-./g8e vault init --vault-dir /custom/path
+g8e vault init --vault-dir /custom/path
 
 # Initialize with custom key path
-./g8e vault init --key-path /custom/path/key
+g8e vault init --key-path /custom/path/key
 
 # Import key from hex string
-./g8e vault import --key-hex <hex-string>
+g8e vault import --key-hex <hex-string>
 
 # Import key from stdin
-./g8e vault import
+g8e vault import
 ```
 
 The gateway auto-initializes a vault on first start if no vault header exists. A random private key is generated and saved to the default key path. This enables zero-config startup for development and testing.
@@ -62,60 +62,60 @@ The gateway auto-initializes a vault on first start if no vault header exists. A
 
 ```bash
 # Unlock vault with key file
-./g8e vault unlock --key-path /path/to/vault/key
+g8e vault unlock --key-path /path/to/vault/key
 
 # Unlock with custom vault directory
-./g8e vault unlock --vault-dir /custom/path --key-path /custom/path/key
+g8e vault unlock --vault-dir /custom/path --key-path /custom/path/key
 
 # Unlock with environment variable (used by gateway/operator)
 export G8E_VAULT_KEY=/path/to/vault/key
-./g8e gw start
+g8e gw start
 
 # Or pass the key path directly to the gateway
-./g8e gw start --vault-key /path/to/vault/key
+g8e gw start --vault-key /path/to/vault/key
 ```
 
 ### Re-keying
 
 ```bash
 # Re-encrypt vault with new key
-./g8e vault rekey --key-path /path/to/vault/key --new-key-path /path/to/new.key
+g8e vault rekey --key-path /path/to/vault/key --new-key-path /path/to/new.key
 
 # Re-key with custom vault directory
-./g8e vault rekey --vault-dir /custom/path --key-path /custom/path/key --new-key-path /custom/path/key.new
+g8e vault rekey --vault-dir /custom/path --key-path /custom/path/key --new-key-path /custom/path/key.new
 ```
 
 ### Status
 
 ```bash
 # Check vault status
-./g8e vault status
+g8e vault status
 
 # Check status with custom vault directory
-./g8e vault status --vault-dir /custom/path
+g8e vault status --vault-dir /custom/path
 ```
 
 ### Reset
 
 ```bash
 # Destroy vault and all encrypted data (destructive)
-./g8e vault reset
+g8e vault reset
 
 # Reset with custom vault directory
-./g8e vault reset --vault-dir /custom/path
+g8e vault reset --vault-dir /custom/path
 
 # Skip interactive confirmation
-./g8e vault reset --confirm
+g8e vault reset --confirm
 ```
 
 ### Export
 
 ```bash
 # Export private key in hex format
-./g8e vault export --key-path /path/to/vault/key
+g8e vault export --key-path /path/to/vault/key
 
 # Export with default key path
-./g8e vault export
+g8e vault export
 ```
 
 ## Configuration
@@ -219,7 +219,7 @@ All certificates use ECDSA P-256 keys. CSRs with non-P-256 keys are rejected.
 
 ### mTLS Enforcement
 
-The HTTPS server enforces mutual TLS with `RequireAndVerifyClientCert` and TLS 1.3 as the minimum version. Client certificates are verified against a CA pool containing the Root CA and Operator Intermediate CA. The HTTP server accepts client certificates when presented but does not require them, enabling bootstrap and enrollment flows on plain HTTP.
+The HTTPS server uses TLS 1.3 as the minimum version and accepts client certificates when presented, with application-layer middleware enforcing mTLS on all non-public routes. Client certificates are verified against a CA pool containing the Root CA and Operator Intermediate CA. The HTTP server accepts client certificates when presented but does not require them, enabling bootstrap and enrollment flows on plain HTTP.
 
 Route-level mTLS enforcement is handled by the authentication middleware, which classifies routes by auth mode (none, mTLS, web session, or dual). See [Authentication & Authorization](./auth.md) for details.
 
@@ -270,16 +270,16 @@ The gateway automatically regenerates its serving certificate if it is missing o
 
 For existing deployments with unencrypted data:
 
-1. Initialize vault: `./g8e vault init`
-2. Unlock vault: `./g8e vault unlock --key-path .g8e/vault/key`
-3. Restart gateway: `./g8e gw restart`
+1. Initialize vault: `g8e vault init`
+2. Unlock vault: `g8e vault unlock --key-path .g8e/vault/key`
+3. Restart gateway: `g8e gw restart`
 4. New data is encrypted automatically.
 
 ### Key Rotation
 
 To rotate vault keys:
 
-1. Generate new key: `./g8e vault rekey --key-path .g8e/vault/key --new-key-path .g8e/vault/key.new`
+1. Generate new key: `g8e vault rekey --key-path .g8e/vault/key --new-key-path .g8e/vault/key.new`
 2. Update configuration to use new key.
 3. Restart gateway.
 
@@ -317,13 +317,13 @@ If services fail with "vault is locked":
 
 ```bash
 # Check vault status
-./g8e vault status
+g8e vault status
 
 # Unlock vault
-./g8e vault unlock --key-path /path/to/vault/key
+g8e vault unlock --key-path /path/to/vault/key
 
 # Restart gateway
-./g8e gw restart
+g8e gw restart
 ```
 
 ### Invalid Key
@@ -341,13 +341,13 @@ If services fail with "vault not initialized":
 
 ```bash
 # Initialize vault
-./g8e vault init
+g8e vault init
 
 # Unlock vault
-./g8e vault unlock --key-path .g8e/vault/key
+g8e vault unlock --key-path .g8e/vault/key
 
 # Restart gateway
-./g8e gw restart
+g8e gw restart
 ```
 
 ### Certificate Expired
