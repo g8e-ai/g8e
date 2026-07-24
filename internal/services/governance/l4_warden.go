@@ -46,17 +46,17 @@ type VerifiedTransaction struct {
 
 // L4Warden performs all pre-dispatch verification checks.
 type L4Warden struct {
-	logger            *slog.Logger
-	replayStore       ReplayStore
-	stateRootProvider StateRootProvider
-	signerStore       SignerStore
-	consensusPolicyStore     L2ConsensusPolicyStore
-	appPolicyStore    AppPolicyStore
-	l3Notary          L3Notary
-	doctrine          *L1Doctrine
-	knownActionTypes  map[constants.ActionType]struct{}
-	posture           GovernancePosture // Governance posture: doctrine, consensus, or notary
-	clock             system.Clock      // Injectable time source for deterministic testing
+	logger               *slog.Logger
+	replayStore          ReplayStore
+	stateRootProvider    StateRootProvider
+	signerStore          SignerStore
+	consensusPolicyStore L2ConsensusPolicyStore
+	appPolicyStore       AppPolicyStore
+	l3Notary             L3Notary
+	doctrine             *L1Doctrine
+	knownActionTypes     map[constants.ActionType]struct{}
+	posture              GovernancePosture // Governance posture: doctrine, consensus, or notary
+	clock                system.Clock      // Injectable time source for deterministic testing
 
 	inFlight sync.Map // Concurrent-safe tracking of in-flight nonces
 }
@@ -91,17 +91,17 @@ func NewL4Warden(
 	}
 
 	return &L4Warden{
-		logger:            logger,
-		replayStore:       replayStore,
-		stateRootProvider: stateRootProvider,
-		signerStore:       signerStore,
-		consensusPolicyStore:     consensusPolicyStore,
-		appPolicyStore:    appPolicyStore,
-		l3Notary:          l3Notary,
-		doctrine:          doctrine,
-		knownActionTypes:  knownActions,
-		posture:           NewGovernancePosture(posture),
-		clock:             clock,
+		logger:               logger,
+		replayStore:          replayStore,
+		stateRootProvider:    stateRootProvider,
+		signerStore:          signerStore,
+		consensusPolicyStore: consensusPolicyStore,
+		appPolicyStore:       appPolicyStore,
+		l3Notary:             l3Notary,
+		doctrine:             doctrine,
+		knownActionTypes:     knownActions,
+		posture:              NewGovernancePosture(posture),
+		clock:                clock,
 	}
 }
 
@@ -375,17 +375,17 @@ func (tv *L4Warden) verifyL2Posture(envelope *govtypes.GovernanceEnvelope, compu
 		return false, nil
 	}
 
-	policy, err := tv.consensusPolicyStore.GetConsensusPolicy(l2.TribunalId)
+	policy, err := tv.consensusPolicyStore.GetConsensusPolicy(l2.ConsensusSetId)
 	if err != nil {
 		if tv.posture.RequiresL2Signature() {
-			tv.logger.Error("Failed to load L2 consensus policy", "consensus_set_id", l2.TribunalId, string(constants.ConnectionStateError), err)
+			tv.logger.Error("Failed to load L2 consensus policy", "consensus_set_id", l2.ConsensusSetId, string(constants.ConnectionStateError), err)
 			return false, fmt.Errorf("l4 warden: verify L2 posture: %w", err)
 		}
 		return false, nil
 	}
 	if policy == nil || !policy.Enabled {
 		if tv.posture.RequiresL2Signature() {
-			tv.logger.Error("L2 consensus policy not found or disabled", "consensus_set_id", l2.TribunalId)
+			tv.logger.Error("L2 consensus policy not found or disabled", "consensus_set_id", l2.ConsensusSetId)
 			return false, constants.ErrTxL2ConsensusNotConfigured
 		}
 		return false, nil

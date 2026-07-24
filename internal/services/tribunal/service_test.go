@@ -88,7 +88,7 @@ func TestTribunalService_Deliberate_HappyPath(t *testing.T) {
 
 	require.NotNil(t, result.Envelope.Governance)
 	require.NotNil(t, result.Envelope.Governance.L2)
-	assert.Equal(t, "test-tribunal", result.Envelope.Governance.L2.TribunalId)
+	assert.Equal(t, "test-tribunal", result.Envelope.Governance.L2.ConsensusSetId)
 	assert.Len(t, result.Envelope.Governance.L2.Votes, 1)
 	assert.Equal(t, "member-1", result.Envelope.Governance.L2.Votes[0].SignerKeyId)
 	assert.NotEmpty(t, result.Envelope.Governance.L2.Votes[0].ConsensusSignature)
@@ -283,7 +283,7 @@ func TestTribunalService_HandleDeliberate_HTTP_HappyPath(t *testing.T) {
 
 	require.NotNil(t, resultEnv.Governance)
 	require.NotNil(t, resultEnv.Governance.L2)
-	assert.Equal(t, "test-tribunal", resultEnv.Governance.L2.TribunalId)
+	assert.Equal(t, "test-tribunal", resultEnv.Governance.L2.ConsensusSetId)
 	assert.Len(t, resultEnv.Governance.L2.Votes, 1)
 }
 

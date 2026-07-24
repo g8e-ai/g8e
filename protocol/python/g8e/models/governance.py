@@ -57,7 +57,7 @@ class GovernanceL2Vote(G8eBaseModel):
 
 class GovernanceL2(G8eBaseModel):
     """L2 Consensus proof."""
-    tribunal_id: str = ""
+    consensus_set_id: str = ""
     votes: list[GovernanceL2Vote] = Field(default_factory=list)
 
 

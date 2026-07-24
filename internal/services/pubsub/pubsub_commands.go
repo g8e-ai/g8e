@@ -96,14 +96,14 @@ type OperatorPubSubService struct {
 // gateway-only (nil in outbound mode) and backs the MCP gateway's read_field
 // operation.
 type GovernanceDeps struct {
-	ReplayStore       governance.ReplayStore
-	StateRootProvider governance.StateRootProvider
-	TransactionAudit  governance.TransactionAuditStore
-	L3Notary          governance.L3Notary
-	SignerStore       governance.SignerStore
-	AppPolicyStore    governance.AppPolicyStore
+	ReplayStore          governance.ReplayStore
+	StateRootProvider    governance.StateRootProvider
+	TransactionAudit     governance.TransactionAuditStore
+	L3Notary             governance.L3Notary
+	SignerStore          governance.SignerStore
+	AppPolicyStore       governance.AppPolicyStore
 	ConsensusPolicyStore governance.L2ConsensusPolicyStore
-	FieldReader       mcp.FieldReader
+	FieldReader          mcp.FieldReader
 }
 
 // CommandServiceConfig holds non-governance dependencies for

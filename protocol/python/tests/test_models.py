@@ -516,7 +516,7 @@ class TestGovernanceEnvelope:
             governance=GovernanceMetadata(
                 l1=GovernanceL1(validated=True, violations=["policy_violation"]),
                 l2=GovernanceL2(
-                    tribunal_id="tribunal-1",
+                    consensus_set_id="tribunal-1",
                     votes=[
                         GovernanceL2Vote(
                             signer_key_id="signer-1",
@@ -537,7 +537,7 @@ class TestGovernanceEnvelope:
         )
         assert envelope.governance.l1.validated is True
         assert envelope.governance.l1.violations == ["policy_violation"]
-        assert envelope.governance.l2.tribunal_id == "tribunal-1"
+        assert envelope.governance.l2.consensus_set_id == "tribunal-1"
         assert len(envelope.governance.l2.votes) == 1
         assert envelope.governance.l2.votes[0].signer_key_id == "signer-1"
         assert envelope.governance.l2.votes[0].decision is True

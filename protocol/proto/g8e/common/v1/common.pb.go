@@ -143,7 +143,7 @@ func (x *L1Metadata) GetViolations() []string {
 	return nil
 }
 
-// Consensus (L2) Governance: a vote from a single Tribunal member.
+// Consensus (L2) Governance: a vote from a single L2 consensus member.
 type L2Vote struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
 	SignerKeyId        string                 `protobuf:"bytes,1,opt,name=signer_key_id,json=signerKeyId,proto3" json:"signer_key_id,omitempty"`                    // member appID == TrustedSigner.ID
@@ -204,13 +204,13 @@ func (x *L2Vote) GetDecision() bool {
 	return false
 }
 
-// Consensus (L2) Governance: a vote set from an enrolled Tribunal.
+// Consensus (L2) Governance: a vote set from an enrolled consensus set.
 type L2Metadata struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TribunalId    string                 `protobuf:"bytes,1,opt,name=tribunal_id,json=tribunalId,proto3" json:"tribunal_id,omitempty"` // TribunalPolicy.id that produced this set
-	Votes         []*L2Vote              `protobuf:"bytes,2,rep,name=votes,proto3" json:"votes,omitempty"`                             // independent member votes
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ConsensusSetId string                 `protobuf:"bytes,1,opt,name=consensus_set_id,json=consensusSetId,proto3" json:"consensus_set_id,omitempty"` // ID of the consensus set that produced this vote set
+	Votes          []*L2Vote              `protobuf:"bytes,2,rep,name=votes,proto3" json:"votes,omitempty"`                                           // independent member votes
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *L2Metadata) Reset() {
@@ -243,9 +243,9 @@ func (*L2Metadata) Descriptor() ([]byte, []int) {
 	return file_g8e_common_v1_common_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *L2Metadata) GetTribunalId() string {
+func (x *L2Metadata) GetConsensusSetId() string {
 	if x != nil {
-		return x.TribunalId
+		return x.ConsensusSetId
 	}
 	return ""
 }
@@ -746,11 +746,10 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"\x06L2Vote\x12\"\n" +
 	"\rsigner_key_id\x18\x01 \x01(\tR\vsignerKeyId\x12/\n" +
 	"\x13consensus_signature\x18\x02 \x01(\tR\x12consensusSignature\x12\x1a\n" +
-	"\bdecision\x18\x03 \x01(\bR\bdecision\"Z\n" +
+	"\bdecision\x18\x03 \x01(\bR\bdecision\"c\n" +
 	"\n" +
-	"L2Metadata\x12\x1f\n" +
-	"\vtribunal_id\x18\x01 \x01(\tR\n" +
-	"tribunalId\x12+\n" +
+	"L2Metadata\x12(\n" +
+	"\x10consensus_set_id\x18\x01 \x01(\tR\x0econsensusSetId\x12+\n" +
 	"\x05votes\x18\x02 \x03(\v2\x15.g8e.common.v1.L2VoteR\x05votes\"\xfe\x01\n" +
 	"\aL3Proof\x12(\n" +
 	"\x10client_data_json\x18\x01 \x01(\tR\x0eclientDataJSON\x12-\n" +

@@ -91,11 +91,11 @@ func newPubsubFixture(t *testing.T) *pubsubFixture {
 		ActuatorSigningKey: priv,
 		ActuatorKeyID:      "Actuator-key",
 	}, GovernanceDeps{
-		ReplayStore:       &testutil.MockReplayStore{},
-		StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-		TransactionAudit:  &testutil.MockTransactionAudit{},
-		L3Notary:          &testutil.MockL3Notary{},
-		SignerStore:       signerStore,
+		ReplayStore:          &testutil.MockReplayStore{},
+		StateRootProvider:    testutil.NewMockStateRootProvider("test-state-root"),
+		TransactionAudit:     &testutil.MockTransactionAudit{},
+		L3Notary:             &testutil.MockL3Notary{},
+		SignerStore:          signerStore,
 		ConsensusPolicyStore: testTribunalStore(),
 	})
 	if err != nil {

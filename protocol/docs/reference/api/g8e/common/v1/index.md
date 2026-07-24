@@ -104,12 +104,12 @@ Doctrine (L1Doctrine) Governance: Technical Bedrock (Hard Gates)
 <a name="g8e-common-v1-L2Metadata"></a>
 
 ### L2Metadata
-Consensus (L2) Governance: a vote set from an enrolled Tribunal.
+Consensus (L2) Governance: a vote set from an enrolled consensus set.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| tribunal_id | [string](#string) |  | TribunalPolicy.id that produced this set |
+| consensus_set_id | [string](#string) |  | ID of the consensus set that produced this vote set |
 | votes | [L2Vote](#g8e-common-v1-L2Vote) | repeated | independent member votes |
 
 
@@ -120,7 +120,7 @@ Consensus (L2) Governance: a vote set from an enrolled Tribunal.
 <a name="g8e-common-v1-L2Vote"></a>
 
 ### L2Vote
-Consensus (L2) Governance: a vote from a single Tribunal member.
+Consensus (L2) Governance: a vote from a single L2 consensus member.
 
 
 | Field | Type | Label | Description |

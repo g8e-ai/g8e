@@ -478,7 +478,7 @@ The following packages are test-only and are not part of the production dependen
 
 **`test/fixtures/gateway_fixture.go`** - In-process gateway test fixture (build tag: `integration`)
 - `GatewayFixture` spins up a real `GatewayModeService` with `httptest.Server`, mTLS PKI, tribunal enrollment, and in-process `OperatorPubSubService` wired with full governance dependencies
-- Used by integration tests for MCP flow, A2A flow, tribunal consensus, governance envelope verification, OOB suspension/approval, and downstream integration
+- Used by integration tests for MCP flow, A2A flow, L2 consensus, governance envelope verification, OOB suspension/approval, and downstream integration
 
 **`test/e2e/harness.go`** - Docker-based E2E test fixture (build tag: `e2e`)
 - `DockerE2EFixture` spins up docker-compose, allocates host ports, waits for gateway health, and tears down on cleanup
@@ -536,7 +536,7 @@ The following packages are test-only and are not part of the production dependen
 - `scenarios/governance_test.go` - Governance scenario tests, including `TestReceiptFailed` table-driven test covering FAILED, COMPLETED, UNSPECIFIED, CANCELLED, non-receipt JSON, empty body, nil body, and malformed JSON.
 - `scenarios/dow_cross_cue.go` - DoW scenarios: `dow-cross-cue` (real slew envelope) and `dow-bft-veto` (veto envelope)
 - `scenarios/dow_cross_cue_test.go` - DoW scenario tests
-- `scenarios/dhs_sovereign.go` - DHS sovereign operations scenarios: multi-step governance workflow with tribunal consensus
+- `scenarios/dhs_sovereign.go` - DHS sovereign operations scenarios: multi-step governance workflow with L2 consensus
 - `scenarios/dhs_sovereign_test.go` - DHS sovereign scenario tests
 - `scenarios/mcp_a2a.go` - MCP and A2A protocol scenarios: plain MCP, mTLS MCP, A2A JSON, A2A mTLS, A2A protobuf
 - `scenarios/mcp_a2a_test.go` - MCP/A2A protocol scenario tests

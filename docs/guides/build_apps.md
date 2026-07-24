@@ -289,7 +289,7 @@ Add the L2 Consensus signatures to the envelope:
       "violations": []
     },
     "l2": {
-      "tribunal_id": "<tribunal_id>",
+      "consensus_set_id": "<consensus_set_id>",
       "votes": [
         {
           "signer_key_id": "<key_id>",
@@ -825,7 +825,7 @@ privileged channel.
 
 | Failure | Route |
 |---------|-------|
-| Tribunal consensus failure (after R2) | Back to Sage: re-articulate intent |
+| L2 consensus failure (after R2) | Back to Sage: re-articulate intent |
 | Warden first-strike (HIGH) | Back to Sage: propose safer alternative |
 | Warden second-strike | Human intervention: `AGENT_CONFLICT_DETECTED` |
 | Auditor catastrophic failure | Human intervention |

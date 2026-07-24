@@ -254,7 +254,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		env.TransactionHash = hash
 		env.Governance = &commonv1.GovernanceMetadata{
 			L2: &commonv1.L2Metadata{
-				TribunalId: tribunalID,
+				ConsensusSetId: tribunalID,
 				Votes:      votes,
 			},
 		}

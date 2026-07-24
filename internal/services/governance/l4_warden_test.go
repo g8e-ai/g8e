@@ -170,7 +170,7 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 	// L2 signs the hash (machine consensus before human notary)
 	env.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
-			TribunalId: "test-tribunal",
+			ConsensusSetId: "test-tribunal",
 			Votes: []*commonv1.L2Vote{
 				signL2Vote(privKey, "test-key", hash, true),
 			},

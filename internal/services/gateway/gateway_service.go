@@ -588,14 +588,14 @@ func (ls *GatewayModeService) GetGovernanceDeps() *pubsub.GovernanceDeps {
 	l3Notary := governance.NewGatewayL3Notary(ls.suspendedTxService, cliVerifier, ls.passkey.PasskeyService, ls.logger)
 
 	return &pubsub.GovernanceDeps{
-		ReplayStore:       ls.stores.ReplayStore,
-		StateRootProvider: ls.stores.StateRootSvc,
-		TransactionAudit:  ls.stores.DocStore,
-		L3Notary:          l3Notary,
-		SignerStore:       ls.stores.SignerStore,
-		AppPolicyStore:    ls.stores.AppPolicyStore,
+		ReplayStore:          ls.stores.ReplayStore,
+		StateRootProvider:    ls.stores.StateRootSvc,
+		TransactionAudit:     ls.stores.DocStore,
+		L3Notary:             l3Notary,
+		SignerStore:          ls.stores.SignerStore,
+		AppPolicyStore:       ls.stores.AppPolicyStore,
 		ConsensusPolicyStore: ls.stores.TribunalStore,
-		FieldReader:       ls.stores.DocStore,
+		FieldReader:          ls.stores.DocStore,
 	}
 }
 

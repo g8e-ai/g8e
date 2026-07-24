@@ -152,7 +152,7 @@ func TestL4Warden_L2SplitVote_QuorumNotMet(t *testing.T) {
 	env.TransactionHash = hash
 	env.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
-			TribunalId: "split-trib",
+			ConsensusSetId: "split-trib",
 			Votes: []*commonv1.L2Vote{
 				signL2Vote(priv1, "member-1", hash, true),
 				signL2Vote(priv2, "member-2", hash, false),
@@ -236,7 +236,7 @@ func TestL4Warden_L2VoteOrderingIndependence(t *testing.T) {
 		env.TransactionHash = hash
 		env.Governance = &commonv1.GovernanceMetadata{
 			L2: &commonv1.L2Metadata{
-				TribunalId: "order-trib",
+				ConsensusSetId: "order-trib",
 				Votes:      voteOrder,
 			},
 		}

@@ -267,7 +267,7 @@ If any stage fails, the nonce reservation is released and the transaction is rej
 
 #### Layer 2: Consensus Verification (L2)
 
-**Purpose**: Verify that the transaction has proper tribunal consensus.
+**Purpose**: Verify that the transaction has proper L2 consensus.
 
 **Checks** (see [Tribunal](#tribunal) for full details):
 - **Vote presence**: If the posture requires L2 signatures, the envelope must include L2 metadata with at least one vote.

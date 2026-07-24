@@ -56,7 +56,7 @@ func TestGovernanceFlow(t *testing.T) {
 	env.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{
-			TribunalId: "test-tribunal",
+			ConsensusSetId: "test-tribunal",
 			Votes: []*commonv1.L2Vote{
 				{
 					SignerKeyId:        nodeID,

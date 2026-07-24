@@ -211,8 +211,8 @@ message L2Vote {
 }
 
 message L2Metadata {
-  string tribunal_id    = 1; // TribunalPolicy.id that produced this set
-  repeated L2Vote votes = 2; // independent member votes
+  string consensus_set_id = 1; // ID of the consensus set that produced this vote set
+  repeated L2Vote votes   = 2; // independent member votes
 }
 ```
 

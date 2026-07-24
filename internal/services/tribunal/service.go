@@ -123,7 +123,7 @@ func (s *TribunalService) Deliberate(env *governance.GovernanceEnvelope) (*Delib
 	if env.Governance.L2 == nil {
 		env.Governance.L2 = &commonv1.L2Metadata{}
 	}
-	env.Governance.L2.TribunalId = s.tribunalID
+	env.Governance.L2.ConsensusSetId = s.tribunalID
 	env.Governance.L2.Votes = votes
 
 	return &DeliberateResult{Envelope: env}, nil
