@@ -1,0 +1,12 @@
+# g8e Operator Configuration for FedRAMP Sovereign Cloud Governance Demo
+# The endpoint is set via the -e CLI flag in the compose command,
+# not from this file. This file documents the intended configuration.
+operator_endpoint: gateway
+http_port: 8080
+https_port: 8443
+posture: consensus
+work_dir: /root/.g8e
+pki_dir: /root/.g8e/pki
+secrets_dir: /root/.g8e/secrets
+vault_dir: /root/.g8e/vault
+log_level: info

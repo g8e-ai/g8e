@@ -23,6 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 )
 
@@ -67,6 +68,25 @@ func (s *TribunalStoreService) GetTribunal(id string) (*models.TribunalPolicy, e
 	policy.ID = doc.ID
 
 	return &policy, nil
+}
+
+// GetConsensusPolicy implements governance.L2ConsensusPolicyStore by loading
+// the TribunalPolicy via GetTribunal and adapting it to the generic
+// L2ConsensusPolicy struct.
+func (s *TribunalStoreService) GetConsensusPolicy(id string) (*governance.L2ConsensusPolicy, error) {
+	policy, err := s.GetTribunal(id)
+	if err != nil {
+		return nil, err
+	}
+	if policy == nil {
+		return nil, nil
+	}
+	return &governance.L2ConsensusPolicy{
+		MemberKeyIDs:    policy.MemberAppIDs,
+		Quorum:          policy.Quorum,
+		RequireDistinct: policy.RequireDistinct,
+		Enabled:         policy.Enabled,
+	}, nil
 }
 
 // AddTribunal adds or updates a TribunalPolicy in the database.

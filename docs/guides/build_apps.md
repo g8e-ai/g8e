@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-07-19
-Version: v1.5.9
+Last Updated: 2026-07-24
+Version: v1.6.2
 
 ---
 
@@ -102,7 +102,7 @@ Applications constructing `GovernanceEnvelope` transactions or parsing `ActionRe
 The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.5.8
+go get github.com/g8e-ai/g8e@v1.6.2
 ```
 
 The Go package provides protobuf message types for governance envelopes, governance metadata (L1, L2, L3), and all typed payload messages for first-class operations. It also provides SPIFFE workload identity helpers for URI SAN generation and validation.
@@ -114,7 +114,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 Install from PyPI:
 
 ```bash
-pip install g8e==1.5.8
+pip install g8e==1.6.2
 ```
 
 The package provides:
@@ -179,7 +179,7 @@ Compute the deterministic transaction hash from the envelope's critical fields. 
 - payload (base64-encoded)
 - state_merkle_root
 - nonce
-- expires_at (UTC RFC3339Nano format)
+- expires_at (UTC RFC3339 with fixed microsecond precision)
 - intent_data (canonicalized map)
 - requestor_user_id
 - acting_app_id
@@ -289,7 +289,7 @@ Add the L2 Consensus signatures to the envelope:
       "violations": []
     },
     "l2": {
-      "tribunal_id": "<tribunal_id>",
+      "consensus_set_id": "<consensus_set_id>",
       "votes": [
         {
           "signer_key_id": "<key_id>",
@@ -825,7 +825,7 @@ privileged channel.
 
 | Failure | Route |
 |---------|-------|
-| Tribunal consensus failure (after R2) | Back to Sage: re-articulate intent |
+| L2 consensus failure (after R2) | Back to Sage: re-articulate intent |
 | Warden first-strike (HIGH) | Back to Sage: propose safer alternative |
 | Warden second-strike | Human intervention: `AGENT_CONFLICT_DETECTED` |
 | Auditor catastrophic failure | Human intervention |

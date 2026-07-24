@@ -1,0 +1,49 @@
+{
+  "resources": [
+    {
+      "id": "fedramp-vm-prod-01",
+      "type": "virtual_machine",
+      "classification": "FIPS-199-MODERATE",
+      "csp": "aws-govcloud",
+      "region": "us-gov-west-1",
+      "owner": "fedramp-csp-auditor",
+      "status": "running"
+    },
+    {
+      "id": "fedramp-db-prod-01",
+      "type": "database",
+      "classification": "FIPS-199-MODERATE",
+      "csp": "aws-govcloud",
+      "region": "us-gov-west-1",
+      "owner": "fedramp-csp-auditor",
+      "status": "running"
+    },
+    {
+      "id": "fedramp-storage-prod-01",
+      "type": "object_storage",
+      "classification": "FIPS-199-LOW",
+      "csp": "aws-govcloud",
+      "region": "us-gov-east-1",
+      "owner": "fedramp-3pao",
+      "status": "running"
+    },
+    {
+      "id": "fedramp-vm-classified-01",
+      "type": "virtual_machine",
+      "classification": "FIPS-199-HIGH",
+      "csp": "aws-govcloud",
+      "region": "us-gov-west-1",
+      "owner": "fedramp-jab",
+      "status": "running"
+    },
+    {
+      "id": "fedramp-iam-roles-01",
+      "type": "iam_policy",
+      "classification": "FIPS-199-MODERATE",
+      "csp": "aws-govcloud",
+      "region": "us-gov-west-1",
+      "owner": "fedramp-csp-auditor",
+      "status": "active"
+    }
+  ]
+}

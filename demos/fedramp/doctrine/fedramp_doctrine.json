@@ -1,0 +1,68 @@
+{
+  "source": "FedRAMP Program Management Office",
+  "version": "1.0",
+  "last_updated": "2026-01-15",
+  "license": "Apache-2.0",
+  "doctrines": [
+    {
+      "id": "fedramp-cr26-destruction",
+      "name": "FedRAMP CR26 Audit Trail Destruction Block",
+      "description": "Blocks any attempt to destroy, wipe, or delete audit trail files including operations logs, vault databases, and ledger files",
+      "category": "audit_integrity",
+      "severity": "critical",
+      "pattern": "rm\\s+-rf\\s+(/var/log|/var/cloudsvc|/root/\\.g8e/data|/var/lib/g8e)",
+      "mitre_attack": "T1070",
+      "mitre_tactic": "defense-evasion",
+      "confidence": 0.98,
+      "enabled": true
+    },
+    {
+      "id": "fedramp-ac2-unauthorized-destroy",
+      "name": "FedRAMP AC-2 Unauthorized Resource Destruction",
+      "description": "Blocks destruction of cloud resources without explicit authorization tag in the command payload",
+      "category": "access_control",
+      "severity": "high",
+      "pattern": "destroy.*without.*authorization",
+      "mitre_attack": "T1485",
+      "mitre_tactic": "impact",
+      "confidence": 0.92,
+      "enabled": true
+    },
+    {
+      "id": "fedramp-si4-privilege-escalation",
+      "name": "FedRAMP SI-4 Privilege Escalation via Cloud API",
+      "description": "Detects and blocks privilege escalation attempts through cloud API manipulation or IAM role assumption outside governed channels",
+      "category": "privilege_escalation",
+      "severity": "high",
+      "pattern": "(sudo|chmod|chown|iam-role|assume-role|escalate)",
+      "mitre_attack": "T1548",
+      "mitre_tactic": "privilege-escalation",
+      "confidence": 0.90,
+      "enabled": true
+    },
+    {
+      "id": "fedramp-sc8-cross-domain-transfer",
+      "name": "FedRAMP SC-8 Unauthorized Cross-Domain Data Transfer",
+      "description": "Blocks data transfers to endpoints outside the authorized cloud boundary without release authority approval",
+      "category": "data_protection",
+      "severity": "high",
+      "pattern": "(transfer|sync|replicate).*unauthorized|exfil",
+      "mitre_attack": "T1048",
+      "mitre_tactic": "exfiltration",
+      "confidence": 0.94,
+      "enabled": true
+    },
+    {
+      "id": "fedramp-cm7-unauthorized-config",
+      "name": "FedRAMP CM-7 Unauthorized Configuration Change",
+      "description": "Blocks configuration changes to cloud resources that are not submitted through the governed operator channel",
+      "category": "configuration_management",
+      "severity": "medium",
+      "pattern": "configure.*bypass|direct.*config|unauthorized.*config",
+      "mitre_attack": "T1565",
+      "mitre_tactic": "impact",
+      "confidence": 0.85,
+      "enabled": true
+    }
+  ]
+}

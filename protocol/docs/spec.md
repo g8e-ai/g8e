@@ -4,8 +4,8 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-07-21
-Version: v1.6.1
+Last Updated: 2026-07-24
+Version: v1.6.2
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -79,7 +79,7 @@ The `governance` field encapsulates all three governance layers:
 | Field | Type | Description |
 |---|---|---|
 | `l1` | L1Metadata | L1 Doctrine status (validated flag, violations list) |
-| `l2` | L2Metadata | L2 Consensus votes (tribunal_id, signed L2Vote list) |
+| `l2` | L2Metadata | L2 Consensus votes (consensus_set_id, signed L2Vote list) |
 | `l3` | L3Metadata | L3 Notary proof (WebAuthn or CLI signature) |
 
 ### L2Vote
@@ -141,7 +141,7 @@ The `L4Warden` operates as the primary pre-dispatch validation gate, executing t
 2. **Integrity**: Decodes the typed payload, enforces `id == transaction_hash == SHA256(canonical_fields)`, and validates the action type.
 3. **L1 Doctrine**: Scans the decoded typed payload against reflected `forbidden_patterns` and threat rules.
 4. **State Binding**: Validates that the `state_merkle_root` matches the local ledger root.
-5. **L2 Consensus**: Verifies Ed25519 signatures against the Operator's trusted `SignerStore` and checks quorum against the TribunalPolicy.
+5. **L2 Consensus**: Verifies Ed25519 signatures against the Operator's trusted `SignerStore` and checks quorum against the consensus policy.
 6. **L3 Notary**: Validates the WebAuthn or CLI proof, or applies explicit auto-approval policy for the action.
 
 ### Execution & Receipt Phase (L5Actuator)
@@ -164,10 +164,15 @@ Static, deterministic checks enforced before any code executes. Validated using 
 - **Critical System File Protection**: Blocks modifications to critical system paths including `/etc/passwd`, `/etc/shadow`, `/etc/sudoers`, `/etc/ssh/`, `/etc/pam.d/`, `/etc/ld.so.*`, system binaries in `/bin/`, `/sbin/`, `/usr/bin/`, `/usr/sbin/`, and boot configurations.
 - **Allow/Deny Lists**: Enforces per-host policy and user settings.
 
-### L2 Consensus: Tribunal Deliberation
-A cryptographic proof that an independent Tribunal (enrolled agentic application) deliberated on the instruction and produced signed votes. Tribunal service logic is defined in `../../internal/services/tribunal/service.go`.
+### L2 Consensus
+
+L2 Consensus is a protocol concept defined by the g8e protocol (`L2Metadata`, `L2Vote`). It requires a cryptographic proof that an independent consensus set deliberated on the instruction and produced signed votes. The protocol defines the wire format generically; any implementation that produces valid `L2Metadata` with signed `L2Vote` entries can satisfy L2 Consensus.
+
+#### Reference Implementation: Tribunal
+
+The Tribunal is the reference implementation of L2 Consensus shipped with g8e. It is an enrolled body of agentic applications that independently evaluate each transaction's payload. Tribunal service logic is defined in `../../internal/services/tribunal/service.go`.
 - Each Tribunal member independently evaluates the payload and signs an `L2Vote` over `transaction_hash | decision` using Ed25519.
-- The `L2Metadata` contains the `tribunal_id` and a list of `L2Vote` entries (signer key ID, signature, decision).
+- The `L2Metadata` contains the `consensus_set_id` and a list of `L2Vote` entries (signer key ID, signature, decision).
 - The gateway never self-signs L2 votes. Under `consensus` posture, the gateway calls the Tribunal's `/tribunal/v1/deliberate` endpoint before dispatch.
 - L4 Warden verifies quorum: at least `K` affirmative distinct signatures from the TribunalPolicy's member set, checked against the `SignerStore`.
 - For single-member tribunals (degenerate case), the gateway's actuator signing key may be used as the member key. Multi-member tribunals require a separate key provisioning flow.

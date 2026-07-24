@@ -870,7 +870,7 @@ var (
 	ErrTxL2SignatureInvalid          = errors.New("TX_QUORUM_L2_SIG_INVALID: Tribunal L2 consensus_signature failed verification")
 	ErrTxL2QuorumNotMet              = errors.New("TX_QUORUM_L2_NOT_MET: affirmative distinct signer count below tribunal quorum")
 	ErrTxL2SignerStoreNotConfigured  = errors.New("TX_QUORUM_L2_SIGNER_STORE_MISSING: signer store required but not configured")
-	ErrTxL2TribunalNotConfigured     = errors.New("TX_QUORUM_L2_TRIBUNAL_MISSING: tribunal policy not found or disabled")
+	ErrTxL2ConsensusNotConfigured    = errors.New("TX_QUORUM_L2_CONSENSUS_MISSING: consensus policy not found or disabled")
 	ErrTxL2DuplicateSigner           = errors.New("TX_QUORUM_L2_DUP_SIGNER: duplicate signer key in vote set with require_distinct")
 	ErrTribunalHashMismatch          = errors.New("TRIBUNAL_HASH_MISMATCH: envelope id does not match recomputed transaction hash")
 	ErrTribunalInvalidID             = errors.New("TRIBUNAL_INVALID_ID: tribunal ID must contain only alphanumeric characters, hyphens, and underscores")
@@ -878,6 +878,7 @@ var (
 	ErrTribunalFactoryNilPolicy      = errors.New("TRIBUNAL_FACTORY_NIL_POLICY: tribunal policy is nil")
 	ErrTribunalFactoryNilKeyProvider = errors.New("TRIBUNAL_FACTORY_NIL_KEY_PROVIDER: key provider is nil")
 	ErrTribunalNotConfigured         = errors.New("TRIBUNAL_NOT_CONFIGURED: tribunal service not yet initialized")
+	ErrTribunalNoSigningMembers      = errors.New("TRIBUNAL_NO_SIGNING_MEMBERS: no members with private keys available to sign votes")
 	ErrTxL3ProofMissing              = errors.New("TX_NOTARY_L3_PROOF_MISSING: Notary (L3Notary) WebAuthn proof required but missing")
 	ErrTxL3ProofInvalid              = errors.New("TX_NOTARY_L3_PROOF_INVALID: Notary (L3Notary) WebAuthn proof failed verification")
 	ErrTxL3NotaryNotConfigured       = errors.New("TX_NOTARY_L3_NOTARY_MISSING: Notary (L3Notary) required but not configured")
@@ -995,7 +996,9 @@ var (
 	ErrApprovalSSETimeout = errors.New("L3 approval: timed out waiting for SSE event")
 
 	// Agent harness errors
-	ErrHarnessNoScenarios = errors.New("no scenarios selected")
+	ErrHarnessNoScenarios       = errors.New("no scenarios selected")
+	ErrHarnessGovKitNotInit     = errors.New("gov kit not initialized (call SetGovKit)")
+	ErrHarnessGovKitMissingSign = errors.New("gov kit not initialized (need ensemble + principal)")
 
 	// Browser errors
 	ErrBrowserURLEmpty = errors.New("browser URL cannot be empty")

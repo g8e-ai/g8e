@@ -630,7 +630,7 @@ class TestGovernanceL2Conformance:
         from g8e.models import GovernanceL2, GovernanceL2Vote
 
         l2 = GovernanceL2(
-            tribunal_id="tribunal-1",
+            consensus_set_id="tribunal-1",
             votes=[
                 GovernanceL2Vote(
                     signer_key_id="signer-1",
@@ -646,7 +646,7 @@ class TestGovernanceL2Conformance:
         )
         data = l2.model_dump(mode="json")
         restored = GovernanceL2.model_validate(data)
-        assert restored.tribunal_id == "tribunal-1"
+        assert restored.consensus_set_id == "tribunal-1"
         assert len(restored.votes) == 2
         assert restored.votes[0].signer_key_id == "signer-1"
         assert restored.votes[0].decision is True
@@ -658,7 +658,7 @@ class TestGovernanceL2Conformance:
 
         l2 = GovernanceL2()
         parsed = json.loads(l2.model_dump_json())
-        assert parsed["tribunal_id"] == ""
+        assert parsed["consensus_set_id"] == ""
         assert parsed["votes"] == []
 
     def test_l2_schema_fields_match_model(self):
@@ -749,7 +749,7 @@ class TestGovernanceMetadataConformance:
         meta = GovernanceMetadata(
             l1=GovernanceL1(validated=True, violations=[]),
             l2=GovernanceL2(
-                tribunal_id="trib-1",
+                consensus_set_id="trib-1",
                 votes=[GovernanceL2Vote(
                     signer_key_id="s1", consensus_signature="sig", decision=True,
                 )],
@@ -761,7 +761,7 @@ class TestGovernanceMetadataConformance:
         data = meta.model_dump(mode="json")
         restored = GovernanceMetadata.model_validate(data)
         assert restored.l1.validated is True
-        assert restored.l2.tribunal_id == "trib-1"
+        assert restored.l2.consensus_set_id == "trib-1"
         assert len(restored.l2.votes) == 1
         assert restored.l3.proof.signature == "notary-sig"
 

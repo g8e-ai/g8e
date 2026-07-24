@@ -65,7 +65,7 @@ func main() {
 				Violations: []string{},
 			},
 			L2: &commonv1.L2Metadata{
-				TribunalId: "tribunal-1",
+				ConsensusSetId: "tribunal-1",
 				Votes: []*commonv1.L2Vote{
 					{
 						SignerKeyId:        "key-123",

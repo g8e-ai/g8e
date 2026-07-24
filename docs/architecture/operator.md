@@ -4,17 +4,17 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-07-19
-Version: v1.5.9
+Last Updated: 2026-07-24
+Version: v1.6.2
 
-The **g8e Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
+The **Governed Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
-The reference implementation of a g8e-compliant Policy Execution Point (PEP) is the g8e binary file. It functions as both a **g8e Operator** and a **Model Context Protocol (MCP) Server**. The same Go codebase provides the logic for both the g8e Gateway (PDP) and the g8e Operator (PEP), differentiated by CLI subcommands (`gw start` vs `operator start`):
+The reference implementation of a g8e-compliant Policy Execution Point (PEP) is the g8e binary file. The same binary operates in two modes:
 
-- **g8e Gateway (PDP)**: When run in Gateway mode (utilizing `L1Doctrine`, `L2Consensus`, and `L3Notary` as a central authority), it acts as the central Policy Decision Point (PDP) with platform persistence and pub/sub brokering.
-- **g8e Operator (PEP)**: When run as a host agent, it acts as the Policy Execution Point (PEP) and MCP server, enforcing local verification before host mutation.
+- **Governance Gateway (PDP)**: The binary run in Gateway mode. The Gateway is an Operator with additional gateway services (persistence, pub/sub broker, PKI, policy decision point). The Gateway host runs an in-process Operator that executes L1-L5 locally for operations on the gateway host itself.
+- **Governed Operator (PEP)**: The binary run in Standard Mode (`operator start`). It acts as the Policy Execution Point (PEP) and MCP server, enforcing local verification before host mutation. Each remote Governed Operator runs L1-L5 locally for operations on its own host.
 
-This document focuses on the **g8e Operator** (PEP) role.
+This document focuses on the **Governed Operator** (PEP) role.
 
 ---
 
@@ -34,26 +34,26 @@ When a command targets an Operator, it progresses through a strict, fail-closed 
 The **L1Doctrine** layer provides foundational hard gates. It blocks malicious strings at the schema level and executes real-time MITRE ATT&CK heuristics to detect threats like reverse shells, privilege escalation, and destructive disk operations. L1 is the first line of defense and cannot be bypassed.
 
 ### L2: Consensus
-The **L2Consensus** layer verifies the intent of the request via a Byzantine Fault Tolerant (BFT) quorum. It validates Ed25519 signatures from independent reasoning agents (the **Tribunal**) against the Operator's locally trusted signer store. This ensures that no single upstream agent can unilaterally mutate the host.
+The **L2Consensus** layer verifies the intent of the request via a multi-signature quorum. It validates Ed25519 signatures from independent reasoning agents (the **Tribunal**) against the Operator's locally trusted signer store. This ensures that no single upstream agent can unilaterally mutate the host. See [Tribunal](./tribunal.md) for tribunal configuration and setup.
 
 ### L3: Notary (Authorization)
-The **L3Notary** layer enforces human-in-the-loop authorization. For web-based sessions, it validates FIDO2/WebAuthn (Passkey) proofs. For CLI sessions, it validates mTLS certificate fingerprints and cryptographic signatures over the transaction hash. For operator sessions (outbound mode), it validates mTLS certificate fingerprints and cryptographic signatures without CLI session or certificate revocation checks (passkey auth is not available for operators). Mutations are blocked until a valid L3 proof is presented. Non-mutation actions (as classified by the action type's intrinsic mutation property) do not require L3 proof. L3 approval notifications use Server-Sent Events (SSE) for real-time delivery: the Gateway emits an `approval.completed` event scoped to the submitting user when a passkey approval is verified, and CLI clients subscribe to the SSE stream rather than polling. See [SSE Streaming](./sse.md) for the full SSE architecture.
+The **L3Notary** layer enforces human-in-the-loop authorization. In gateway mode, passkey (WebAuthn) authorization is required for all sessions. CLI callers additionally undergo mTLS session verification including certificate fingerprint matching, session validity, and revocation checks. In operator (outbound) mode, the Notary validates suspended transaction approval, mTLS certificate fingerprint matching, and Ed25519 signatures over the transaction hash. Passkey authentication is not available in outbound mode. Mutations are blocked until a valid L3 proof is presented. Non-mutation actions (as classified by the action type's intrinsic mutation property) do not require L3 proof. L3 approval notifications use Server-Sent Events (SSE) for real-time delivery: the Gateway emits an `approval.completed` event scoped to the submitting user when a passkey approval is verified, and CLI clients subscribe to the SSE stream rather than polling. See [SSE Streaming](./sse.md) for the full SSE architecture.
 
 ### L4: Warden (Pre-dispatch Gate)
 The **L4Warden** is the final verification gate before execution. It enforces:
-1. **Integrity**: Validates that `id == transaction_hash == SHA256(canonical_fields)`. The wire format is canonical JSON, but the signing basis is a deterministic hash of normalized fields.
+1. **Integrity**: Validates that the transaction ID, transaction hash, and computed hash of the canonical fields all match.
 2. **Freshness**: Enforces `expires_at` and checks for replay attacks via a local replay protection store.
-3. **State Binding**: Validates that the `state_merkle_root` matches the host's current ledger root.
+3. **State Binding**: Validates that the state Merkle root matches the host's current ledger root.
 4. **Quorum**: Confirms that L1, L2, and L3 proofs meet the current **Governance Posture** (`doctrine`, `consensus`, or `notary`).
 
 ### L5: Actuator (Execution Boundary)
 The **L5Actuator** is the singular execution boundary permitted to mutate host state. It dispatches verified payloads to internal handlers (shell, file edit, etc.) and uses a **dual-receipt model** with **JIT capability minting**:
-1. **Pre-execution**: Signs an `ActionReceipt` with status `EXECUTING` and commits it to the local audit vault.
+1. **Pre-execution**: Signs an execution receipt with status EXECUTING and commits it to the local audit vault.
 2. **Rehydration**: Restores sensitive data (PII, credentials) that was scrubbed upstream by the **Sovereign Execution Boundary**, using local tokens.
-3. **JIT Capability Minting**: Mints a scoped, single-action, self-dissolving `Capability` bound to the transaction hash and action type, enforcing zero standing privileges. The capability is injected into the execution context for downstream handlers.
+3. **JIT Capability Minting**: Mints a scoped, single-action, self-dissolving capability token bound to the transaction hash and action type, enforcing zero standing privileges. The capability is injected into the execution context for downstream handlers.
 4. **Execution**: Dispatches to the handler and captures the output.
 5. **Capability Dissolution**: Dissolves the JIT capability immediately after execution completes or fails, preventing reuse.
-6. **Post-execution**: Signs a final `ActionReceipt` with status `COMPLETED` or `FAILED`, captures the new `state_root_after`, and publishes the signed result back to the Gateway.
+6. **Post-execution**: Signs a final execution receipt with status COMPLETED or FAILED, captures the new state root, and publishes the signed result back to the Gateway.
 
 ---
 
@@ -63,7 +63,7 @@ The **L5Actuator** is the singular execution boundary permitted to mutate host s
 By exposing standard MCP and A2A interfaces, the Operator acts as the admission gate for BYO (Bring-Your-Own) AI clients. It isolates the complex requirements of the `GovernanceEnvelope` (such as transaction hashing and L2/L3 signature collection) behind a standardized tool-calling facade, mapping native JSON-RPC/HTTP requests directly to governed mutations.
 
 ### Native Tool Execution
-The g8e Operator compiles native tool playbooks directly into the g8e binary file to provide memory-safe, boundary-enforced execution for common operational tasks. These tools execute within the g8e Operator's execution boundary locally, without proxying to downstream MCP servers. AI agents interact with clean JSON schemas while the internal memory-safe execution layer enforces hard boundaries.
+The Governed Operator compiles native tool playbooks directly into the g8e binary file to provide memory-safe, boundary-enforced execution for common operational tasks. These tools execute within the Governed Operator's execution boundary locally, without proxying to downstream MCP servers. AI agents interact with clean JSON schemas while the internal memory-safe execution layer enforces hard boundaries.
 
 #### Database Triage & Performance Playbook
 - **db_discover_topology**: Automatically scans database schemas, tables, and column data types, returning a highly compressed JSON map. AI agents need this first to prevent hallucinated queries.
@@ -79,7 +79,7 @@ The g8e Operator compiles native tool playbooks directly into the g8e binary fil
 #### Resource & Process Governance Playbook
 - **proc_metric_top**: Extracts process IDs, memory maps, and CPU tracking from the host. It returns a tightly structured JSON array of the top resource-hogging processes.
 - **fs_disk_profile**: Recursively calculates directory sizes natively (equivalent to an optimized du --max-depth=2) starting from an approved path root. It instantly isolates unrotated log files or bloated tmp directories.
-- **proc_signal_safe**: Allows the AI to send explicit termination signals (SIGTERM, SIGKILL) to a process, but enforces a strict g8e binary file-level denylist (e.g., rejecting attempts to kill critical system processes or the g8e Operator itself).
+- **proc_signal_safe**: Allows the AI to send explicit termination signals (SIGTERM, SIGKILL) to a process, but enforces a strict g8e binary file-level denylist (e.g., rejecting attempts to kill critical system processes or the Governed Operator itself).
 - **proc_tree**: Inspects the process hierarchy to map parent-child relationships and identify process trees for targeted operations.
 
 #### Network & Connectivity Validation Playbook
@@ -112,30 +112,30 @@ The g8e Operator compiles native tool playbooks directly into the g8e binary fil
 - **run_shell_command**: Executes shell commands within the g8e execution boundary with strict argument validation and output capture.
 
 ### Identity, PKI, and mTLS
-The g8e Operator establishes workload identity bound to SPIFFE-style URI SANs, strictly enforced over mutual TLS (mTLS). See [Network Architecture](./network.md) for complete SPIFFE ID formats, PKI hierarchy, mTLS enforcement policies, and certificate revocation mechanisms.
+The Governed Operator establishes workload identity bound to SPIFFE-style URI SANs, strictly enforced over mutual TLS (mTLS). See [Network Architecture](./network.md) for complete SPIFFE ID formats, PKI hierarchy, mTLS enforcement policies, and certificate revocation mechanisms.
 
 ### JWT Authentication Isolation
-The g8e Operator is fully isolated from Identity Providers (IdP). The g8e Gateway handles all JWT validation, user provisioning, and role mapping. JIT provisioning is **owner-controlled**:
-- **Owner-Centric Model**: The first human to authenticate becomes the Platform Owner. Starting the Gateway is the owner's act of authorization -- no standing invite codes or manual approval steps are required for subsequent CSR enrollment.
+The Governed Operator is fully isolated from Identity Providers (IdP). The Governance Gateway handles all JWT validation, user provisioning, and role mapping. JIT provisioning is **owner-controlled**:
+- **Owner-Centric Model**: The first human to authenticate becomes the Platform Owner. Starting the Gateway is the owner's act of authorization; no standing invite codes or manual approval steps are required for subsequent CSR enrollment.
 - **CSR-Based Enrollment**: For mTLS-based authentication, clients enroll via Certificate Signing Request (CSR) where they generate their own key pair and the Gateway acts as a Certificate Authority (CA) to sign the certificate. No shared secrets, no API keys to leak.
-- **JWT-Based JIT**: When a JWT is presented, the g8e Gateway validates the signature and provisions the user subject to platform owner authorization. The user is bound to the owner's organization.
-- **Strict TTL**: Sessions have a 1-hour TTL by default. Long-lived access requires programmatic renewal or re-authentication.
-- **g8e Gateway Responsibility**: The g8e Gateway validates inbound `Authorization: Bearer <JWT>` tokens, performs JIT user provisioning subject to owner authorization, maps JWT roles to Personas, and injects `tenant_id` and `binding_persona` into the `GovernanceEnvelope`.
-- **g8e Operator Responsibility**: The g8e Operator receives only the pre-validated, enriched security metadata in the envelope. It decodes `tenant_id` and `binding_persona` from the envelope, propagates them into the execution context, and applies Persona-based data scrubbing (column masks, redaction) before returning results.
+- **JWT-Based JIT**: When a JWT is presented, the Governance Gateway validates the signature and provisions the user subject to platform owner authorization. The user is bound to the owner's organization.
+- **Strict TTL**: CLI sessions have a 1-hour TTL. Web sessions have a 24-hour TTL. Long-lived access requires programmatic renewal or re-authentication.
+- **Governance Gateway Responsibility**: The Governance Gateway validates inbound `Authorization: Bearer <JWT>` tokens, performs JIT user provisioning subject to owner authorization, maps JWT roles to Personas, and injects `tenant_id` and `binding_persona` into the `GovernanceEnvelope`.
+- **Governed Operator Responsibility**: The Governed Operator receives only the pre-validated, enriched security metadata in the envelope. It decodes `tenant_id` and `binding_persona` from the envelope, propagates them into the execution context, and applies Persona-based data scrubbing (column masks, redaction) before returning results.
 - **No IdP Dependency**: The Operator never requires outbound internet access to verify tokens or manage user state. This enables air-gapped and high-security deployments where the Operator has no external network connectivity.
 
 ### Local-First Audit Architecture (LFAA)
 The host is the authoritative source of truth for all mutations.
 - **Audit Vault**: An append-only audit log of every event and signed `ActionReceipt`. It is fail-closed: events missing a valid operator session ID are rejected. All sensitive content fields are [encrypted at rest](./encryption.md) using the vault subsystem.
 - **Scrubbed vs. Raw Logs**: Sensitive data scrubbing separates logs into a **Scrubbed Vault** (safe for AI reading) and a **Raw Vault** (unscrubbed forensic record for human security audits).
-- **Git-Backed Ledger**: Implements a two-phase commit (`state_root_before` / `state_root_after`) for file mutations. Files are mirrored and can be restored to any prior state. The ledger also encrypts mirrored files at rest when the vault is unlocked.
+- **Git-Backed Ledger**: Implements a two-phase commit with state root tracking before and after file mutations. Files are mirrored and can be restored to any prior state. The ledger also encrypts mirrored files at rest when the vault is unlocked.
 
 ---
 
 ## 4. Governance & Safety
 
 - **Sovereign Execution Boundary**: Data sovereignty is enforced at the boundary. Sensitive data is scrubbed before leaving the host and replaced with tokens. These tokens are rehydrated by the Actuator only at the moment of execution.
-- **Strict Canonical JSON**: While schemas are defined in Protobuf, the wire format for all client-facing surfaces is strictly canonical JSON for maximum ecosystem compatibility.
+- **Canonical JSON Wire Format**: All client-facing surfaces use canonical JSON as the wire format.
 - **Strict Protocol Enforcement**: The Operator enforces the current 5-layer verification protocol. Outdated formats, HMAC fallbacks, and unsigned inputs are rejected.
 
 ---
@@ -159,14 +159,14 @@ The reference implementation currently supports:
 
 ## 6. Post-Bootstrap Workflow
 
-After completing platform bootstrap via `./g8e auth enroll`, follow this workflow to begin using the Operator. Enrollment automatically registers a passkey via browser after successful CLI session enrollment, streamlining the onboarding flow.
+After completing platform bootstrap via `g8e auth enroll`, follow this workflow to begin using the Operator. Enrollment automatically registers a passkey via browser after successful CLI session enrollment.
 
 ### 1. Verify Gateway Health
 
-Confirm the g8e Gateway is running and accessible:
+Confirm the Governance Gateway is running and accessible:
 
 ```bash
-./g8e gw status
+g8e gw status
 ```
 
 ### 2. Enroll Remote Operators (Multi-Host Setups)
@@ -174,10 +174,10 @@ Confirm the g8e Gateway is running and accessible:
 For distributed enforcement across multiple hosts, enroll each remote operator:
 
 ```bash
-./g8e gw security pki enroll -e <gateway-ip>
+g8e gw security pki enroll -e <gateway-ip>
 ```
 
-Each Operator receives a unique SPIFFE workload identity bound to its mTLS certificate. To deploy the binary to remote hosts, use `./g8e operator deploy` or `./g8e operator stream`.
+Each Operator receives a unique SPIFFE workload identity bound to its mTLS certificate. To deploy the binary to remote hosts, use `g8e operator deploy` or `g8e operator stream`.
 
 ### 3. Configure AI Client Integration
 
@@ -185,7 +185,7 @@ Configure your AI client to connect to the Gateway's universal HTTP MCP endpoint
 
 ```bash
 # Generate MCP configuration for a specific agent
-./g8e mcp agent show claude
+g8e mcp agent show claude
 
 # The command outputs JSON configurations for three transport modes:
 #   g8e.local (mTLS), IP Address (mTLS), and Stdio Transport
@@ -220,19 +220,19 @@ Query the audit vault to verify governance enforcement:
 
 ```bash
 # List signed receipts (auto-discovers session from credentials)
-./g8e audit receipts
+g8e audit receipts
 
 # Query raw audit events with optional session filter
-./g8e audit events --limit 100
+g8e audit events --limit 100
 
-# Generate a compliance report (JSON)
-./g8e audit report
+# Generate a compliance report (JSON + Markdown)
+g8e audit report
 
 # Export the full receipts bundle for archival
-./g8e audit export --out receipts.json
+g8e audit export --out receipts.json
 
 # Aggregate summary by event type and receipt status
-./g8e audit summary
+g8e audit summary
 ```
 
 Each receipt includes:
@@ -270,4 +270,5 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 - [SSE Streaming](./sse.md) for real-time event delivery architecture
 - [Scripts](./scripts.md) for bootstrap and deploy script reference
 - [Storage Architecture](./storage.md) for audit vault and ledger internals
+- [Tribunal](./tribunal.md) for tribunal configuration and consensus setup
 - [Encryption](./encryption.md) for encryption at rest details

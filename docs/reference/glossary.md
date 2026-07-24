@@ -4,22 +4,22 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 2026-07-19
-Version: v1.5.9
+Last Updated: 2026-07-24
+Version: v1.6.2
 
-Core terminology for the g8e protocol, g8e Gateway, g8e Operator, and ecosystem integration (MCP, A2A). Terms are organized alphabetically.
+Core terminology for the g8e protocol, Governance Gateway, Governed Operator, and ecosystem integration (MCP, A2A). Terms are organized alphabetically.
 
 ---
 
 ## A2A (Agent2Agent)
 
-A protocol for agent-to-agent communication and orchestration. g8e supports A2A as a payload type within the GovernanceEnvelope, enabling standard AI agents to interact with the g8e Operator through the g8e protocol translation layer.
+A protocol for agent-to-agent communication and orchestration. g8e supports A2A as a payload type within the GovernanceEnvelope, enabling standard AI agents to interact with the Governed Operator through the g8e protocol translation layer.
 
 ---
 
 ## Actuator (L5Actuator)
 
-The **L5Actuator** is the execution boundary in the g8e Operator that performs actual command execution after L4 Warden verification. It is the only component permitted to mutate host state. The Actuator ensures that every execution is preceded by a signed intent to execute and followed by a signed **ActionReceipt**. It also handles local rehydration of tokens just before execution.
+The **L5Actuator** is the execution boundary in the Governed Operator that performs actual command execution after L4 Warden verification. It is the only component permitted to mutate host state. The Actuator ensures that every execution is preceded by a signed intent to execute and followed by a signed **ActionReceipt**. It also handles local rehydration of tokens just before execution.
 
 ---
 
@@ -37,7 +37,7 @@ A just-in-time, single-action, self-dissolving permission derived from a verifie
 
 ## Coordination Store
 
-The embedded SQLite database used by the g8e Gateway for durable storage of users, operators, and platform data. The g8e Gateway running in gateway mode is the single source of truth: a single SQLite database in WAL mode shared by all components via the g8e Gateway's document store, KV, and pub/sub APIs. BYO agentic clients and other components are stateless with respect to persistence and access all data through the g8e Gateway's HTTP API.
+The embedded SQLite database used by the Governance Gateway for durable storage of users, operators, and platform data. The Governance Gateway running in gateway mode is the single source of truth: a single SQLite database in WAL mode shared by all components via the Governance Gateway's document store, KV, and pub/sub APIs. BYO agentic clients and other components are stateless with respect to persistence and access all data through the Governance Gateway's HTTP API.
 
 Collections include users, operators, organizations, operator_sessions, cli_sessions, web_sessions, bound_sessions, cases, investigations, tasks, memories, personas, app_policies, trusted_signers, tribunals, enrollment_tokens, revoked_certificates, reputation_state, reputation_commitments, stake_resolutions, agent_activity_metadata, account_locks, login_audit, auth_admin_audit, console_audit, operator_usage, passkey_challenges, settings, and others. The database includes a `state_tier` column to distinguish bound-state from observed-state entries.
 
@@ -57,7 +57,7 @@ A one-time, cryptographically random token used for secure passkey enrollment. T
 
 ## Execution Vault
 
-An embedded SQLite database on the g8e Operator that stores command execution results and file diffs locally. Part of the Local-First Audit Architecture. The Execution Vault Service provides encrypted storage for execution logs and file mutation tracking. Data is encrypted at rest when configured with the encryption vault. The vault supports retention-based pruning and size limits.
+An embedded SQLite database on the Governed Operator that stores command execution results and file diffs locally. Part of the Local-First Audit Architecture. The Execution Vault Service provides encrypted storage for execution logs and file mutation tracking. Data is encrypted at rest when configured with the encryption vault. The vault supports retention-based pruning and size limits.
 
 ---
 
@@ -80,9 +80,9 @@ A gateway instance in a federated deployment that can communicate with other gat
 
 ---
 
-## g8e Gateway
+## Governance Gateway
 
-The g8e binary file launched with gateway flags, serving as the Policy Decision Point (PDP).
+The central coordinator that admits transactions, manages PKI, enforces the 5-layer governance pipeline, and brokers pub/sub channels to operators. The Gateway is an Operator with additional gateway services; its in-process Operator runs L1-L5 locally for operations on the gateway host. Serves as the Policy Decision Point (PDP). Formerly referred to as "g8e Gateway."
 
 ---
 
@@ -96,9 +96,9 @@ The posture is set at startup and affects whether L2 signatures and L3 proofs ar
 
 ---
 
-## g8e Operator
+## Governed Operator
 
-The g8e binary file launched to connect to a g8e Gateway, serving as the Policy Execution Point (PEP) and MCP server.
+A single static binary deployed on target hosts. It requires no installation, opens no inbound ports, and initiates an outbound-only mTLS tunnel to the Governance Gateway. The operator pulls work from a unique pub/sub channel, re-verifies every proof locally against its own state, and is the only component authorized to mutate the host. Each remote Governed Operator runs L1-L5 locally for operations on its own host. Serves as the Policy Execution Point (PEP) and MCP server. Formerly referred to as "g8e Operator."
 
 ---
 
@@ -110,7 +110,7 @@ The canonical protocol definitions (protobuf schemas, constant registries, gover
 
 ## Heartbeat
 
-A periodic health telemetry message sent by the g8e Operator to the g8e Gateway. Contains system identity (hostname, OS, architecture), performance metrics (CPU, memory, disk usage), network information, uptime data, and environment details (pwd, lang, timezone, term, container detection, init system). Used for g8e Operator health monitoring and status determination.
+A periodic health telemetry message sent by the Governed Operator to the Governance Gateway. Contains system identity (hostname, OS, architecture), performance metrics (CPU, memory, disk usage), network information, uptime data, and environment details (pwd, lang, timezone, term, container detection, init system). Used for Governed Operator health monitoring and status determination.
 
 ---
 
@@ -141,7 +141,7 @@ The CLI approval flow opens a browser to the console SPA for WebAuthn ceremony a
 
 ## L4 Warden (L4Warden)
 
-The fail-closed transaction verification gate in the g8e Gateway that enforces L1/L2/L3 governance before any execution. The Warden performs:
+The fail-closed transaction verification gate in the Governance Gateway that enforces L1/L2/L3 governance before any execution. The Warden performs:
 - Envelope integrity and decoding validation
 - Typed payload validation and action type matching
 - L1 forbidden pattern validation via L1Doctrine
@@ -156,19 +156,19 @@ The Warden rejects transactions that fail any check; only verified transactions 
 
 ## Ledger
 
-The file-mutation audit layer of the Local-First Audit Architecture. The g8e Operator implements a Multi-Ledger Architecture: each Operator session receives its own isolated git repository at `.g8e/data/ledger/sessions/<operator_session_id>/`. Every file mutation follows a two-phase commit: the Ledger snapshots the file's state before mutation (`LedgerHashBefore`), the g8e Operator executes, then the Ledger snapshots the result (`LedgerHashAfter`). Each phase produces a git commit with a timestamped message referencing the Operator session ID. The resulting git hash pair provides a cryptographically verifiable diff, enabling time-travel, rollback, and cross-session forensic comparison.
+The file-mutation audit layer of the Local-First Audit Architecture. The Governed Operator implements a Multi-Ledger Architecture: each Operator session receives its own isolated git repository at `.g8e/data/ledger/sessions/<operator_session_id>/`. Every file mutation follows a two-phase commit: the Ledger snapshots the file's state before mutation (`LedgerHashBefore`), the Governed Operator executes, then the Ledger snapshots the result (`LedgerHashAfter`). Each phase produces a git commit with a timestamped message referencing the Operator session ID. The resulting git hash pair provides a cryptographically verifiable diff, enabling time-travel, rollback, and cross-session forensic comparison.
 
 ---
 
 ## Local-First Audit Architecture
 
-An architecture where the g8e Operator is the System of Record for all execution logs and file mutations. The g8e Gateway acts as a stateless relay with no sensitive operational data persisting in Gateway storage. Core philosophy: "The g8e Gateway handles routing. The g8e Operator handles retention."
+An architecture where the Governed Operator is the System of Record for all execution logs and file mutations. The Governance Gateway acts as a stateless relay with no sensitive operational data persisting in Gateway storage. Core philosophy: "The Governance Gateway handles routing. The Governed Operator handles retention."
 
 ---
 
 ## MCP (Model Context Protocol)
 
-An open protocol for standardizing AI model interactions with tools and data sources. The g8e Operator exposes host tools as an MCP Server, enabling standard AI clients (OpenAI, Anthropic, LangChain, etc.) to execute commands through the g8e governance envelope. MCP tool calls are translated into GovernanceEnvelope transactions with typed `operator.proto` payloads.
+An open protocol for standardizing AI model interactions with tools and data sources. The Governed Operator exposes host tools as an MCP Server, enabling standard AI clients (OpenAI, Anthropic, LangChain, etc.) to execute commands through the g8e governance envelope. MCP tool calls are translated into GovernanceEnvelope transactions with typed `operator.proto` payloads.
 
 ---
 
@@ -180,31 +180,31 @@ A cryptographic artifact produced during L2 Consensus verification. It is a SHA-
 
 ## Mutual TLS (mTLS)
 
-Two-way TLS authentication where both client and server verify each other's certificates. Used between g8e Operators and the g8e Gateway to ensure g8e binary file authenticity and prevent forged connections. The g8e Gateway operates as a Certificate Authority (CA) issuing Operator certificates with SPIFFE URI SAN identity.
+Two-way TLS authentication where both client and server verify each other's certificates. Used between Governed Operators and the Governance Gateway to ensure g8e binary file authenticity and prevent forged connections. The Governance Gateway operates as a Certificate Authority (CA) issuing Operator certificates with SPIFFE URI SAN identity.
 
 ---
 
 ## g8e binary file
 
-The pre-compiled g8e binary file that can be launched as a g8e Gateway or g8e Operator. The same artifact serves both roles, selected by command-line flags.
+The pre-compiled g8e binary file that can be launched as a Governance Gateway or Governed Operator. The same artifact serves both roles, selected by command-line flags.
 
 ---
 
 ## Operator Session
 
-A unique execution context for a running g8e Operator instance. Identified by `operator_session_id`. Each session has its own isolated git-backed ledger for file mutation tracking. The Execution Vault is keyed by Operator session ID and enforces session validation before recording events.
+A unique execution context for a running Governed Operator instance. Identified by `operator_session_id`. Each session has its own isolated git-backed ledger for file mutation tracking. The Execution Vault is keyed by Operator session ID and enforces session validation before recording events.
 
 ---
 
 ## PKI (Public Key Infrastructure)
 
-The cryptographic infrastructure managed by the g8e Gateway for issuing and revoking Operator certificates. The g8e Gateway acts as a Certificate Authority (CA), issuing certificates with workload identity (URI SAN) for operators. Certificates are revoked via the g8e Gateway's revocation service, and operators fetch the revocation bundle to enforce revocation. TLS 1.3-only is enforced. The PKI also supports gateway peer certificates for federated deployments.
+The cryptographic infrastructure managed by the Governance Gateway for issuing and revoking Operator certificates. The Governance Gateway acts as a Certificate Authority (CA), issuing certificates with workload identity (URI SAN) for operators. Certificates are revoked via the Governance Gateway's revocation service, and operators fetch the revocation bundle to enforce revocation. TLS 1.3-only is enforced. The PKI also supports gateway peer certificates for federated deployments.
 
 ---
 
 ## Replay Protection
 
-Security mechanisms that prevent captured requests from being replayed by attackers. Implemented through nonce tracking in the g8e Gateway's replay store, timestamp validation (expiry), and transaction hash verification. The L4 Warden checks nonce uniqueness before accepting any transaction.
+Security mechanisms that prevent captured requests from being replayed by attackers. Implemented through nonce tracking in the Governance Gateway's replay store, timestamp validation (expiry), and transaction hash verification. The L4 Warden checks nonce uniqueness before accepting any transaction.
 
 ---
 
@@ -228,13 +228,13 @@ A separate Merkle root commitment computed over observed-tier KV and blob entrie
 
 ## Scrubbed Vault
 
-The local SQLite database on the g8e Operator managed by the **Sovereign Execution Boundary**. It stores command outputs where sensitive data (credentials, PII, network identifiers) has been replaced with safe placeholders like `{{UEI_N}}`. This ensures that raw sensitive data never leaves the sovereign host.
+The local SQLite database on the Governed Operator managed by the **Sovereign Execution Boundary**. It stores command outputs where sensitive data (credentials, PII, network identifiers) has been replaced with safe placeholders like `{{UEI_N}}`. This ensures that raw sensitive data never leaves the sovereign host.
 
 ---
 
 ## Sovereign Execution Boundary
 
-The data sovereignty and scrubbing system running within the g8e Operator (PEP), implemented as the `ScrubbingService`. It provides:
+The data sovereignty and scrubbing system running within the Governed Operator (PEP), implemented as the `ScrubbingService`. It provides:
 - **Egress Scrubbing**: Removes sensitive data (PII, credentials) from command output before transmission to the cloud.
 - **Local Rehydration**: Restores original tokens just before execution at the L5 Actuator, ensuring the host shell receives the actual required values while the cloud only sees placeholders.
 - **Token Persistence**: Maintains consistent mapping of placeholders across sessions via the TokenStore interface, implemented by the EncryptedKVAdapter against the canonical gateway DB.
@@ -243,19 +243,19 @@ The data sovereignty and scrubbing system running within the g8e Operator (PEP),
 
 ## SSE (Server-Sent Events)
 
-The streaming protocol used to push real-time events from the g8e Gateway to clients. Used for command execution results, heartbeat updates, and approval completion notifications. All clients (CLI, browser, operator) use the unified `/api/v1/sse/stream` endpoint. Approval requests are returned inline in the MCP or A2A response with an `approval_url` field, not pushed via SSE. Approval completions are delivered as `approval.completed` events on the SSE stream.
+The streaming protocol used to push real-time events from the Governance Gateway to clients. Used for command execution results, heartbeat updates, and approval completion notifications. All clients (CLI, browser, operator) use the unified `/api/v1/sse/stream` endpoint. Approval requests are returned inline in the MCP or A2A response with an `approval_url` field, not pushed via SSE. Approval completions are delivered as `approval.completed` events on the SSE stream.
 
 ---
 
 ## State Root
 
-A Merkle root representing the current bound state of the g8e Gateway's canonical database (documents, kv_store, blobs). The GovernanceEnvelope includes `state_merkle_root` for state binding. The L4 Warden verifies that the transaction's state root matches the current state root before accepting the transaction, ensuring the transaction is based on the correct state. Only bound-state rows (those with `state_tier='bound'`) are included in the state root computation. Observed-state rows are hashed separately in the observed-state root. The bound root also incorporates the token keymap hash from the ScrubbingService to bind rehydration mappings into the state.
+A Merkle root representing the current bound state of the Governance Gateway's canonical database (documents, kv_store, blobs). The GovernanceEnvelope includes `state_merkle_root` for state binding. The L4 Warden verifies that the transaction's state root matches the current state root before accepting the transaction, ensuring the transaction is based on the correct state. Only bound-state rows (those with `state_tier='bound'`) are included in the state root computation. Observed-state rows are hashed separately in the observed-state root. The bound root also incorporates the token keymap hash from the ScrubbingService to bind rehydration mappings into the state.
 
 ---
 
 ## System Fingerprint
 
-A unique identifier generated by each g8e Operator based on system characteristics including hostname, OS, architecture, CPU count, and machine ID. Used for g8e Operator identification and duplicate detection.
+A unique identifier generated by each Governed Operator based on system characteristics including hostname, OS, architecture, CPU count, and machine ID. Used for Governed Operator identification and duplicate detection.
 
 ---
 
@@ -267,7 +267,7 @@ The ability to restore files to any previous state using the Ledger's git histor
 
 ## Tool Calling Loop
 
-The execution pattern where BYO AI clients generate tool calls to interact with the g8e Operator via MCP or A2A protocols, receive results, and generate subsequent calls based on the outcomes. The g8e Operator exposes host tools as an MCP Server, enabling standard AI clients to execute commands through the governance envelope.
+The execution pattern where BYO AI clients generate tool calls to interact with the Governed Operator via MCP or A2A protocols, receive results, and generate subsequent calls based on the outcomes. The Governed Operator exposes host tools as an MCP Server, enabling standard AI clients to execute commands through the governance envelope.
 
 ---
 
@@ -294,7 +294,7 @@ The `state_tier` column was added to `kv_store` and `blobs` tables in v1.1.9.
 
 ## Workload Identity
 
-The identity of a g8e Operator as encoded in its TLS certificate via URI SAN (Subject Alternative Name). The workload identity is used for authentication and authorization in the mTLS connection between the g8e Operator and the g8e Gateway. The SPIFFE trust domain is `g8e.local`. Supported identity formats include:
+The identity of a Governed Operator as encoded in its TLS certificate via URI SAN (Subject Alternative Name). The workload identity is used for authentication and authorization in the mTLS connection between the Governed Operator and the Governance Gateway. The SPIFFE trust domain is `g8e.local`. Supported identity formats include:
 - Operator: `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>`
 - CLI: `spiffe://g8e.local/cli/<user_id>/<cli_session_id>`
 - App: `spiffe://g8e.local/app/<operator_id>`

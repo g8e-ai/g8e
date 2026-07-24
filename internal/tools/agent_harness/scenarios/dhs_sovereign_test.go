@@ -3,8 +3,10 @@
 package scenarios
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
 )
@@ -12,9 +14,7 @@ import (
 func TestDHSScenarios(t *testing.T) {
 	scenarios := dhsScenarios()
 
-	if len(scenarios) != 6 {
-		t.Errorf("dhsScenarios should return 6 scenarios, got %d", len(scenarios))
-	}
+	assert.Len(t, scenarios, 6, "dhsScenarios should return 6 scenarios")
 
 	expectedNames := map[string]bool{
 		"dhs-ingest":         true,
@@ -26,12 +26,12 @@ func TestDHSScenarios(t *testing.T) {
 	}
 
 	for _, sc := range scenarios {
-		if !expectedNames[sc.Name] {
-			t.Errorf("Unexpected dhs scenario name: %q", sc.Name)
-		}
-		if sc.Run == nil {
-			t.Errorf("dhs scenario %q should have non-nil Run function", sc.Name)
-		}
+		assert.Contains(t, expectedNames, sc.Name, "Unexpected dhs scenario name")
+		assert.NotNil(t, sc.Run, "dhs scenario %q should have non-nil Run function", sc.Name)
+		delete(expectedNames, sc.Name)
+	}
+	for name := range expectedNames {
+		assert.Fail(t, "Missing expected dhs scenario", name)
 	}
 }
 
@@ -50,12 +50,14 @@ func TestDHSScenarioTitles(t *testing.T) {
 	for _, sc := range scenarios {
 		expected, ok := expectedTitles[sc.Name]
 		if !ok {
-			t.Errorf("No expected title for scenario %q", sc.Name)
+			assert.Fail(t, "No expected title for scenario", sc.Name)
 			continue
 		}
-		if sc.Title != expected {
-			t.Errorf("Scenario %q should have title %q, got %q", sc.Name, expected, sc.Title)
-		}
+		assert.Equal(t, expected, sc.Title, "Scenario %q should have correct title", sc.Name)
+		delete(expectedTitles, sc.Name)
+	}
+	for name := range expectedTitles {
+		assert.Fail(t, "Missing expected dhs scenario title", name)
 	}
 }
 
@@ -74,12 +76,14 @@ func TestDHSScenarioPostures(t *testing.T) {
 	for _, sc := range scenarios {
 		expected, ok := expectedPostures[sc.Name]
 		if !ok {
-			t.Errorf("No expected posture for scenario %q", sc.Name)
+			assert.Fail(t, "No expected posture for scenario", sc.Name)
 			continue
 		}
-		if sc.RequiresPosture != expected {
-			t.Errorf("Scenario %q should require %s posture, got %q", sc.Name, expected, sc.RequiresPosture)
-		}
+		assert.Equal(t, expected, sc.RequiresPosture, "Scenario %q should require correct posture", sc.Name)
+		delete(expectedPostures, sc.Name)
+	}
+	for name := range expectedPostures {
+		assert.Fail(t, "Missing expected dhs scenario posture", name)
 	}
 }
 
@@ -87,12 +91,8 @@ func TestDHSScenarioPersonas(t *testing.T) {
 	scenarios := dhsScenarios()
 
 	for _, sc := range scenarios {
-		if sc.Persona.ID == "" {
-			t.Errorf("dhs scenario %q should have non-empty Persona.ID", sc.Name)
-		}
-		if sc.Persona.UserAgent == "" {
-			t.Errorf("dhs scenario %q should have non-empty Persona.UserAgent", sc.Name)
-		}
+		assert.NotEmpty(t, sc.Persona.ID, "dhs scenario %q should have non-empty Persona.ID", sc.Name)
+		assert.NotEmpty(t, sc.Persona.UserAgent, "dhs scenario %q should have non-empty Persona.UserAgent", sc.Name)
 	}
 
 	// dhs-release uses the release authority persona
@@ -103,48 +103,29 @@ func TestDHSScenarioPersonas(t *testing.T) {
 			break
 		}
 	}
-	if releaseScenario == nil {
-		t.Fatal("dhs-release scenario not found")
-		return
-	}
-	if releaseScenario.Persona.ID != "dhs-release-authority" {
-		t.Errorf("dhs-release should use persona 'dhs-release-authority', got %q", releaseScenario.Persona.ID)
-	}
+	require.NotNil(t, releaseScenario, "dhs-release scenario not found")
+	assert.Equal(t, "dhs-release-authority", releaseScenario.Persona.ID, "dhs-release should use persona 'dhs-release-authority'")
 
 	// All other scenarios use the connector persona
 	for _, sc := range scenarios {
 		if sc.Name == "dhs-release" {
 			continue
 		}
-		if sc.Persona.ID != "dhs-coalition-connector" {
-			t.Errorf("dhs scenario %q should use persona 'dhs-coalition-connector', got %q", sc.Name, sc.Persona.ID)
-		}
+		assert.Equal(t, "dhs-coalition-connector", sc.Persona.ID, "dhs scenario %q should use persona 'dhs-coalition-connector'", sc.Name)
 	}
 }
 
 func TestDHSSovereignArgsDefaults(t *testing.T) {
-	if DHSSovereignArgs.DataSvcEndpoint != "10.63.0.50:9100" {
-		t.Errorf("Default DataSvcEndpoint should be 10.63.0.50:9100, got %s", DHSSovereignArgs.DataSvcEndpoint)
-	}
+	assert.Equal(t, "10.63.0.50:9100", DHSSovereignArgs.DataSvcEndpoint, "Default DataSvcEndpoint should be 10.63.0.50:9100")
 }
 
 func TestDataopArgs(t *testing.T) {
 	got := dataopArgs("ingest", "TRK-CBP-0001", "NIPR")
-	if !strings.Contains(got, "dataop") {
-		t.Errorf("dataopArgs should contain 'dataop' command, got %s", got)
-	}
-	if !strings.Contains(got, "ingest") {
-		t.Errorf("dataopArgs should contain the operation 'ingest', got %s", got)
-	}
-	if !strings.Contains(got, "TRK-CBP-0001") {
-		t.Errorf("dataopArgs should contain the record ID, got %s", got)
-	}
-	if !strings.Contains(got, "NIPR") {
-		t.Errorf("dataopArgs should contain the detail, got %s", got)
-	}
-	if !strings.Contains(got, "10.63.0.50:9100") {
-		t.Errorf("dataopArgs should contain the DataSvcEndpoint, got %s", got)
-	}
+	assert.Contains(t, got, "dataop", "dataopArgs should contain 'dataop' command")
+	assert.Contains(t, got, "ingest", "dataopArgs should contain the operation 'ingest'")
+	assert.Contains(t, got, "TRK-CBP-0001", "dataopArgs should contain the record ID")
+	assert.Contains(t, got, "NIPR", "dataopArgs should contain the detail")
+	assert.Contains(t, got, "10.63.0.50:9100", "dataopArgs should contain the DataSvcEndpoint")
 }
 
 func TestDHSScenariosInRegistry(t *testing.T) {
@@ -159,12 +140,10 @@ func TestDHSScenariosInRegistry(t *testing.T) {
 	for _, name := range expected {
 		sc, ok := Find(name)
 		if !ok {
-			t.Errorf("Registry should include %q scenario", name)
+			assert.Fail(t, "Registry should include scenario", name)
 			continue
 		}
-		if sc.Run == nil {
-			t.Errorf("Registry scenario %q should have non-nil Run function", name)
-		}
+		assert.NotNil(t, sc.Run, "Registry scenario %q should have non-nil Run function", name)
 	}
 }
 
@@ -176,7 +155,7 @@ func TestDHSGovKitValidation(t *testing.T) {
 		OperatorID: "dhs-operator",
 	}
 
-	if kit.Ensemble == nil || kit.Principal == nil || kit.OperatorID == "" {
-		t.Error("Valid GovKit should pass validation")
-	}
+	assert.NotNil(t, kit.Ensemble, "Valid GovKit should have non-nil Ensemble")
+	assert.NotNil(t, kit.Principal, "Valid GovKit should have non-nil Principal")
+	assert.NotEmpty(t, kit.OperatorID, "Valid GovKit should have non-empty OperatorID")
 }

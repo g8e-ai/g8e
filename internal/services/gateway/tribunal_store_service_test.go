@@ -481,6 +481,46 @@ func TestTribunalStoreService_AddTribunal_AlreadyExists(t *testing.T) {
 	assert.Contains(t, err.Error(), "already exists")
 }
 
+func TestTribunalStoreService_GetConsensusPolicy(t *testing.T) {
+	infra := setupTestInfrastructure(t, false)
+	tribunalSvc := NewTribunalStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
+
+	pubKey, _, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	signer := models.TrustedSigner{
+		ID:        "consensus-member",
+		PublicKey: hex.EncodeToString(pubKey),
+		AddedAt:   time.Now().UTC(),
+		Enabled:   true,
+	}
+	err = infra.Stores.SignerStore.AddTrustedSigner(signer)
+	require.NoError(t, err)
+	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("consensus-member") })
+
+	policy := models.TribunalPolicy{
+		ID:              "consensus-test-tribunal",
+		MemberAppIDs:    []string{"consensus-member"},
+		Quorum:          1,
+		RequireDistinct: true,
+		Enabled:         true,
+	}
+	err = tribunalSvc.AddTribunal(policy)
+	require.NoError(t, err)
+	t.Cleanup(func() { tribunalSvc.DeleteTribunal("consensus-test-tribunal") })
+
+	consensusPolicy, err := tribunalSvc.GetConsensusPolicy("consensus-test-tribunal")
+	require.NoError(t, err)
+	require.NotNil(t, consensusPolicy)
+	assert.Equal(t, []string{"consensus-member"}, consensusPolicy.MemberKeyIDs)
+	assert.Equal(t, 1, consensusPolicy.Quorum)
+	assert.True(t, consensusPolicy.RequireDistinct)
+	assert.True(t, consensusPolicy.Enabled)
+
+	consensusPolicy, err = tribunalSvc.GetConsensusPolicy("non-existent")
+	require.NoError(t, err)
+	assert.Nil(t, consensusPolicy)
+}
+
 func TestIsValidTribunalID(t *testing.T) {
 	tests := []struct {
 		id   string

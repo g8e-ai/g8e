@@ -57,7 +57,7 @@ func TestView_ContainsAllPaneHeaders(t *testing.T) {
 	out := m.View()
 	assert.Contains(t, out, "EXECUTION PIPELINE")
 	assert.Contains(t, out, "SOVEREIGN AUDIT LEDGER")
-	assert.Contains(t, out, "L2 TRIBUNAL CONSENSUS")
+	assert.Contains(t, out, "L2 CONSENSUS")
 	assert.Contains(t, out, "g8e OPERATOR CONSOLE")
 }
 
@@ -553,7 +553,7 @@ func TestView_FullLayoutIntegration(t *testing.T) {
 	assert.Contains(t, out, "tribunal deliberating")
 	assert.Contains(t, out, "SOVEREIGN AUDIT LEDGER")
 	assert.Contains(t, out, "rate limit approaching")
-	assert.Contains(t, out, "L2 TRIBUNAL CONSENSUS")
+	assert.Contains(t, out, "L2 CONSENSUS")
 	assert.Contains(t, out, "[YES]")
 	assert.Contains(t, out, "v1.2.3")
 	assert.Contains(t, out, "SSE: CONNECTED")

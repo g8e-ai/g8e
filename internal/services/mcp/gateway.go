@@ -74,11 +74,11 @@ func approvalPausedMessage(approvalURL string) string {
 		approvalURL, int(ApprovalRequestTTL.Minutes()))
 }
 
-// TribunalDeliberator sends an envelope to the Tribunal service for L2 deliberation.
-// The Tribunal collects signed votes from its members and returns the envelope with
-// L2 metadata populated. This interface is implemented by an HTTP client that calls
-// the Tribunal's /tribunal/v1/deliberate endpoint.
-type TribunalDeliberator interface {
+// L2ConsensusDeliberator sends an envelope to an L2 consensus service for deliberation.
+// The consensus service collects signed votes from its members and returns the envelope
+// with L2 metadata populated. This interface is implemented by an HTTP client that calls
+// the consensus service's /tribunal/v1/deliberate endpoint, or by an in-process adapter.
+type L2ConsensusDeliberator interface {
 	Deliberate(ctx context.Context, envelopeBytes []byte) ([]byte, error)
 }
 
@@ -111,9 +111,9 @@ type GatewayService struct {
 	// runtimeReady() or getRuntimeDeps() before accessing these fields.
 	runtimeDeps atomic.Pointer[RuntimeDependencies]
 
-	// tribunalDeliberator is late-bound (set after tribunal bootstrap).
-	// Stores a TribunalDeliberator interface value via atomic.Value.
-	tribunalDeliberator atomic.Value
+	// l2ConsensusDeliberator is late-bound (set after tribunal bootstrap).
+	// Stores an L2ConsensusDeliberator interface value via atomic.Value.
+	l2ConsensusDeliberator atomic.Value
 
 	// Circuit breaker state
 	mu               sync.RWMutex
@@ -290,11 +290,11 @@ func (g *GatewayService) getRuntimeDeps() *RuntimeDependencies {
 	return g.runtimeDeps.Load()
 }
 
-// SetTribunalDeliberator sets the Tribunal deliberation client for L2 consensus votes.
+// SetL2ConsensusDeliberator sets the L2 consensus deliberation client for L2 consensus votes.
 // This is wired under consensus and notary postures when a Tribunal is configured.
 // Thread-safe via atomic.Value.
-func (g *GatewayService) SetTribunalDeliberator(td TribunalDeliberator) {
-	g.tribunalDeliberator.Store(td)
+func (g *GatewayService) SetL2ConsensusDeliberator(d L2ConsensusDeliberator) {
+	g.l2ConsensusDeliberator.Store(d)
 }
 
 // safeDownstreamURL returns the downstream URL from runtime deps, or empty string
@@ -306,13 +306,13 @@ func (g *GatewayService) safeDownstreamURL() string {
 	return ""
 }
 
-// getTribunalDeliberator returns the Tribunal deliberator or nil if not configured.
-func (g *GatewayService) getTribunalDeliberator() TribunalDeliberator {
-	v := g.tribunalDeliberator.Load()
+// getL2ConsensusDeliberator returns the L2 consensus deliberator or nil if not configured.
+func (g *GatewayService) getL2ConsensusDeliberator() L2ConsensusDeliberator {
+	v := g.l2ConsensusDeliberator.Load()
 	if v == nil {
 		return nil
 	}
-	return v.(TribunalDeliberator)
+	return v.(L2ConsensusDeliberator)
 }
 
 // isNativeTool checks if a tool name is a native tool compiled into the Operator.
@@ -795,11 +795,11 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 	// The Tribunal collects signed votes from its members and returns the
 	// envelope with L2 metadata populated. If the deliberator is not configured,
 	// the envelope proceeds without L2 votes and will fail-closed at L4 verification.
-	if (g.posture == "consensus" || g.posture == "notary") && g.getTribunalDeliberator() != nil {
-		deliberatedBytes, err := g.getTribunalDeliberator().Deliberate(ctx, envelopeBytes)
+	if (g.posture == "consensus" || g.posture == "notary") && g.getL2ConsensusDeliberator() != nil {
+		deliberatedBytes, err := g.getL2ConsensusDeliberator().Deliberate(ctx, envelopeBytes)
 		if err != nil {
-			g.logger.Error("Tribunal deliberation failed", "tx_hash", hash, "error", err)
-			return "", nil, fmt.Errorf("gateway: tribunal deliberation: %w", err)
+			g.logger.Error("L2 consensus deliberation failed", "tx_hash", hash, "error", err)
+			return "", nil, fmt.Errorf("gateway: l2 consensus deliberation: %w", err)
 		}
 		envelopeBytes = deliberatedBytes
 	}
@@ -925,7 +925,7 @@ func (g *GatewayService) mapGatewayError(err error) (int, string) {
 
 	case errors.Is(err, governance.ErrL2SignatureMissing),
 		errors.Is(err, governance.ErrL2SignatureInvalid),
-		errors.Is(err, governance.ErrL2TribunalNotConfigured),
+		errors.Is(err, governance.ErrL2ConsensusNotConfigured),
 		errors.Is(err, governance.ErrL2QuorumNotMet),
 		errors.Is(err, governance.ErrL2DuplicateSigner):
 		return constants.ErrCodeL2SignatureInvalid, msg

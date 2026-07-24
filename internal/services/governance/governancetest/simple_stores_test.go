@@ -78,3 +78,18 @@ func TestSimpleTribunalStore_NotFound(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, tribunal)
 }
+
+func TestSimpleTribunalStore_Found(t *testing.T) {
+	t.Parallel()
+	expected := &models.TribunalPolicy{
+		ID:              "trib1",
+		MemberAppIDs:    []string{"member-a", "member-b"},
+		Quorum:          2,
+		RequireDistinct: true,
+		Enabled:         true,
+	}
+	s := &SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{"trib1": expected}}
+	tribunal, err := s.GetTribunal("trib1")
+	require.NoError(t, err)
+	assert.Equal(t, expected, tribunal)
+}

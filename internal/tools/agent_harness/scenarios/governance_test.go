@@ -4,9 +4,14 @@
 package scenarios
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 func TestSetGovKit(t *testing.T) {
@@ -34,18 +39,10 @@ func TestGovKitStruct(t *testing.T) {
 		OperatorID: "test-operator-id",
 	}
 
-	if kit.Ensemble != ensemble {
-		t.Error("GovKit Ensemble should be set")
-	}
-	if kit.Principal != principal {
-		t.Error("GovKit Principal should be set")
-	}
-	if kit.L3Mode != "mock" {
-		t.Error("GovKit L3Mode should be set")
-	}
-	if kit.OperatorID != "test-operator-id" {
-		t.Error("GovKit OperatorID should be set")
-	}
+	assert.Equal(t, ensemble, kit.Ensemble, "GovKit Ensemble should be set")
+	assert.Equal(t, principal, kit.Principal, "GovKit Principal should be set")
+	assert.Equal(t, "mock", kit.L3Mode, "GovKit L3Mode should be set")
+	assert.Equal(t, "test-operator-id", kit.OperatorID, "GovKit OperatorID should be set")
 }
 
 func TestGovKitValidation(t *testing.T) {
@@ -104,9 +101,7 @@ func TestGovKitValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			hasErr := tt.kit == nil || tt.kit.Ensemble == nil || tt.kit.Principal == nil || tt.kit.OperatorID == ""
-			if hasErr != tt.wantErr {
-				t.Errorf("GovKit validation error mismatch, got %v, want %v", hasErr, tt.wantErr)
-			}
+			assert.Equal(t, tt.wantErr, hasErr, "GovKit validation error mismatch")
 		})
 	}
 }
@@ -126,9 +121,7 @@ func TestShort(t *testing.T) {
 
 	for _, tt := range tests {
 		result := short(tt.input)
-		if result != tt.expected {
-			t.Errorf("short(%q) = %q, want %q", tt.input, result, tt.expected)
-		}
+		assert.Equal(t, tt.expected, result, "short(%q)", tt.input)
 	}
 }
 
@@ -149,9 +142,7 @@ func TestShortEdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		result := short(tt.input)
-		if result != tt.expected {
-			t.Errorf("short(%q) = %q, want %q", tt.input, result, tt.expected)
-		}
+		assert.Equal(t, tt.expected, result, "short(%q)", tt.input)
 	}
 }
 
@@ -159,39 +150,27 @@ func TestSuspendedFromBody(t *testing.T) {
 	// Test with a body that contains an /approve/ URL with hex hash
 	body := []byte(`{"error":{"message":"L3 approval required","data":"https://localhost:8443/approve/abc123def456"}}`)
 	hash, ok := suspendedFromBody(body)
-	if !ok {
-		t.Error("suspendedFromBody should find hash in body with /approve/ URL")
-	}
-	if hash != "abc123def456" {
-		t.Errorf("suspendedFromBody should return correct hash, got %q", hash)
-	}
+	assert.True(t, ok, "suspendedFromBody should find hash in body with /approve/ URL")
+	assert.Equal(t, "abc123def456", hash, "suspendedFromBody should return correct hash")
 
 	// Test with body that doesn't contain an /approve/ URL
 	body = []byte(`{"other":"data"}`)
 	_, ok = suspendedFromBody(body)
-	if ok {
-		t.Error("suspendedFromBody should return false when no /approve/ URL found")
-	}
+	assert.False(t, ok, "suspendedFromBody should return false when no /approve/ URL found")
 
 	// Test with empty body
 	body = []byte{}
 	_, ok = suspendedFromBody(body)
-	if ok {
-		t.Error("suspendedFromBody should return false for empty body")
-	}
+	assert.False(t, ok, "suspendedFromBody should return false for empty body")
 
 	// Test with nil body
 	_, ok = suspendedFromBody(nil)
-	if ok {
-		t.Error("suspendedFromBody should return false for nil body")
-	}
+	assert.False(t, ok, "suspendedFromBody should return false for nil body")
 
 	// Test with body containing /approve/ but no hash
 	body = []byte(`{"data":"https://localhost:8443/approve/"}`)
 	_, ok = suspendedFromBody(body)
-	if ok {
-		t.Error("suspendedFromBody should return false when /approve/ has no hash")
-	}
+	assert.False(t, ok, "suspendedFromBody should return false when /approve/ has no hash")
 }
 
 func TestSuspendedFromBodyEdgeCases(t *testing.T) {
@@ -242,11 +221,9 @@ func TestSuspendedFromBodyEdgeCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			hash, ok := suspendedFromBody(tt.body)
-			if ok != tt.found {
-				t.Errorf("suspendedFromBody() found = %v, want %v", ok, tt.found)
-			}
-			if ok && hash != tt.expected {
-				t.Errorf("suspendedFromBody() hash = %q, want %q", hash, tt.expected)
+			assert.Equal(t, tt.found, ok, "suspendedFromBody() found mismatch")
+			if ok {
+				assert.Equal(t, tt.expected, hash, "suspendedFromBody() hash mismatch")
 			}
 		})
 	}
@@ -255,10 +232,7 @@ func TestSuspendedFromBodyEdgeCases(t *testing.T) {
 func TestGovernanceScenarios(t *testing.T) {
 	scenarios := governanceScenarios()
 
-	// Should have 6 governance scenarios
-	if len(scenarios) != 6 {
-		t.Errorf("governanceScenarios should return 6 scenarios, got %d", len(scenarios))
-	}
+	assert.Len(t, scenarios, 6, "governanceScenarios should return 6 scenarios")
 
 	// Should have expected names
 	expectedNames := []string{"consensus", "envelope-maximal", "agent-delegation", "tribunal-quorum", "tribunal-veto", "notary-oob"}
@@ -267,28 +241,18 @@ func TestGovernanceScenarios(t *testing.T) {
 		nameSet[sc.Name] = true
 	}
 	for _, name := range expectedNames {
-		if !nameSet[name] {
-			t.Errorf("governanceScenarios should include scenario %q", name)
-		}
+		assert.Contains(t, nameSet, name, "governanceScenarios should include scenario %q", name)
 	}
 
 	// consensus should require Consensus posture
 	consensusSc, ok := Find("consensus")
-	if !ok {
-		t.Fatal("Should find consensus scenario")
-	}
-	if consensusSc.RequiresPosture != Consensus {
-		t.Errorf("consensus scenario should require Consensus posture, got %q", consensusSc.RequiresPosture)
-	}
+	require.True(t, ok, "Should find consensus scenario")
+	assert.Equal(t, Consensus, consensusSc.RequiresPosture, "consensus scenario should require Consensus posture")
 
 	// envelope-maximal should require Notary posture
 	envelopeSc, ok := Find("envelope-maximal")
-	if !ok {
-		t.Fatal("Should find envelope-maximal scenario")
-	}
-	if envelopeSc.RequiresPosture != Notary {
-		t.Errorf("envelope-maximal scenario should require Notary posture, got %q", envelopeSc.RequiresPosture)
-	}
+	require.True(t, ok, "Should find envelope-maximal scenario")
+	assert.Equal(t, Notary, envelopeSc.RequiresPosture, "envelope-maximal scenario should require Notary posture")
 }
 
 func TestGovernanceScenarioNames(t *testing.T) {
@@ -304,9 +268,7 @@ func TestGovernanceScenarioNames(t *testing.T) {
 	}
 
 	for _, sc := range scenarios {
-		if !expectedNames[sc.Name] {
-			t.Errorf("Unexpected governance scenario name: %q", sc.Name)
-		}
+		assert.Contains(t, expectedNames, sc.Name, "Unexpected governance scenario name: %q", sc.Name)
 	}
 }
 
@@ -325,12 +287,10 @@ func TestGovernanceScenarioTitles(t *testing.T) {
 	for _, sc := range scenarios {
 		expectedTitle, ok := expectedTitles[sc.Name]
 		if !ok {
-			t.Errorf("No expected title defined for scenario %q", sc.Name)
+			assert.Fail(t, "No expected title defined for scenario %q", sc.Name)
 			continue
 		}
-		if sc.Title != expectedTitle {
-			t.Errorf("Scenario %q should have title %q, got %q", sc.Name, expectedTitle, sc.Title)
-		}
+		assert.Equal(t, expectedTitle, sc.Title, "Scenario %q should have correct title", sc.Name)
 	}
 }
 
@@ -349,12 +309,10 @@ func TestGovernanceScenarioPostures(t *testing.T) {
 	for _, sc := range scenarios {
 		expectedPosture, ok := expectedPostures[sc.Name]
 		if !ok {
-			t.Errorf("No expected posture defined for scenario %q", sc.Name)
+			assert.Fail(t, "No expected posture defined for scenario %q", sc.Name)
 			continue
 		}
-		if sc.RequiresPosture != expectedPosture {
-			t.Errorf("Scenario %q should require posture %q, got %q", sc.Name, expectedPosture, sc.RequiresPosture)
-		}
+		assert.Equal(t, expectedPosture, sc.RequiresPosture, "Scenario %q should require correct posture", sc.Name)
 	}
 }
 
@@ -373,12 +331,10 @@ func TestGovernanceScenarioPersonas(t *testing.T) {
 	for _, sc := range scenarios {
 		expected, ok := expectedPersonas[sc.Name]
 		if !ok {
-			t.Errorf("No expected persona defined for scenario %q", sc.Name)
+			assert.Fail(t, "No expected persona defined for scenario %q", sc.Name)
 			continue
 		}
-		if sc.Persona.ID != expected {
-			t.Errorf("Governance scenario %q should use persona %q, got %q", sc.Name, expected, sc.Persona.ID)
-		}
+		assert.Equal(t, expected, sc.Persona.ID, "Governance scenario %q should use correct persona", sc.Name)
 	}
 }
 
@@ -386,10 +342,78 @@ func TestGovernanceScenarioRunNotNil(t *testing.T) {
 	scenarios := governanceScenarios()
 
 	for _, sc := range scenarios {
-		if sc.Run == nil {
-			t.Errorf("Governance scenario %q should have non-nil Run function", sc.Name)
-		}
+		assert.NotNil(t, sc.Run, "Governance scenario %q should have non-nil Run function", sc.Name)
 	}
+}
+
+func TestReceiptFailed(t *testing.T) {
+	tests := []struct {
+		name        string
+		body        []byte
+		wantSummary string
+		wantFailed  bool
+	}{
+		{
+			name:        "FAILED status returns summary",
+			body:        []byte(`{"status":` + itoa(int(operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED)) + `,"result_summary":"exit code 1: cloudsvc unreachable"}`),
+			wantSummary: "exit code 1: cloudsvc unreachable",
+			wantFailed:  true,
+		},
+		{
+			name:        "COMPLETED status returns false",
+			body:        []byte(`{"status":` + itoa(int(operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED)) + `,"result_summary":"ok"}`),
+			wantSummary: "",
+			wantFailed:  false,
+		},
+		{
+			name:        "UNSPECIFIED status returns false",
+			body:        []byte(`{"status":` + itoa(int(operatorv1.ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED)) + `,"result_summary":""}`),
+			wantSummary: "",
+			wantFailed:  false,
+		},
+		{
+			name:        "CANCELLED status returns false",
+			body:        []byte(`{"status":` + itoa(int(operatorv1.ExecutionStatus_EXECUTION_STATUS_CANCELLED)) + `,"result_summary":"cancelled"}`),
+			wantSummary: "",
+			wantFailed:  false,
+		},
+		{
+			name:        "non-receipt JSON returns false",
+			body:        []byte(`{"error":{"message":"L3 approval required","data":"https://localhost:8443/approve/abc123"}}`),
+			wantSummary: "",
+			wantFailed:  false,
+		},
+		{
+			name:        "empty body returns false",
+			body:        []byte{},
+			wantSummary: "",
+			wantFailed:  false,
+		},
+		{
+			name:        "nil body returns false",
+			body:        nil,
+			wantSummary: "",
+			wantFailed:  false,
+		},
+		{
+			name:        "malformed JSON returns false",
+			body:        []byte(`{not json`),
+			wantSummary: "",
+			wantFailed:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			summary, failed := receiptFailed(tt.body)
+			assert.Equal(t, tt.wantFailed, failed, "receiptFailed failed flag mismatch")
+			assert.Equal(t, tt.wantSummary, summary, "receiptFailed summary mismatch")
+		})
+	}
+}
+
+func itoa(n int) string {
+	return fmt.Sprintf("%d", n)
 }
 
 func TestGovKitL3Modes(t *testing.T) {
@@ -430,9 +454,7 @@ func TestGovKitL3Modes(t *testing.T) {
 			}
 
 			isValid := kit.L3Mode == "mock" || kit.L3Mode == "suspend"
-			if isValid != tt.valid {
-				t.Errorf("L3Mode validation mismatch, got %v, want %v", isValid, tt.valid)
-			}
+			assert.Equal(t, tt.valid, isValid, "L3Mode validation mismatch")
 		})
 	}
 }

@@ -5,9 +5,9 @@ package scenarios
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
 )
 
@@ -36,7 +36,7 @@ func dowScenarios() []Scenario {
 			Name: "dow-cross-cue", Title: "DoW: SIGINT→EO/IR cross-cue with governed camera slew", Persona: dowSigintAgent, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil {
-					return errors.New("gov kit not initialized (call SetGovKit)")
+					return constants.ErrHarnessGovKitNotInit
 				}
 				root, err := c.StateRoot(ctx)
 				if err != nil {
@@ -44,8 +44,7 @@ func dowScenarios() []Scenario {
 				}
 				r.note("bound to state root %s", short(root))
 
-				argumentsJSON := fmt.Sprintf(`{"command":"slew","args":["%s","%s","%s"],"timeout":10}`,
-					DoWCrossCueArgs.GimbalEndpoint, DoWCrossCueArgs.Azimuth, DoWCrossCueArgs.Elevation)
+				argumentsJSON := shellCommandArgs("slew", DoWCrossCueArgs.GimbalEndpoint, DoWCrossCueArgs.Azimuth, DoWCrossCueArgs.Elevation)
 				r.note("submitting run_shell_command envelope: slew %s %s %s",
 					DoWCrossCueArgs.GimbalEndpoint, DoWCrossCueArgs.Azimuth, DoWCrossCueArgs.Elevation)
 
@@ -78,7 +77,7 @@ func dowScenarios() []Scenario {
 			Name: "dow-bft-veto", Title: "DoW: BFT veto rejects spoofed GNSS cross-cue", Persona: dowSigintAgent, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil {
-					return errors.New("gov kit not initialized (call SetGovKit)")
+					return constants.ErrHarnessGovKitNotInit
 				}
 				root, err := c.StateRoot(ctx)
 				if err != nil {
@@ -92,7 +91,7 @@ func dowScenarios() []Scenario {
 					OperatorID:        kit.OperatorID,
 					OperatorSessionID: kit.OperatorSessionID,
 					ToolName:          "run_shell_command",
-					ArgumentsJSON:     `{"command":"slew","args":["10.43.0.40:9000","99.0","99.0"],"timeout":10}`,
+					ArgumentsJSON:     shellCommandArgs("slew", "10.43.0.40:9000", "99.0", "99.0"),
 					TargetResource:    "localhost",
 					StateRoot:         root,
 					Ensemble:          kit.Ensemble,

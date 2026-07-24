@@ -84,7 +84,7 @@ func (s *TribunalService) Deliberate(env *governance.GovernanceEnvelope) (*Delib
 		return nil, constants.ErrTribunalHashMismatch
 	}
 
-	cmdData, intent, err := extractCommandData(env)
+	cmdData, err := extractCommandData(env)
 	if err != nil {
 		return nil, fmt.Errorf("tribunal: deliberate: %w", err)
 	}
@@ -95,7 +95,7 @@ func (s *TribunalService) Deliberate(env *governance.GovernanceEnvelope) (*Delib
 			continue
 		}
 
-		isSafe := s.evaluateSafety(s.doctrine, env.TargetResource, cmdData, intent)
+		isSafe := s.evaluateSafety(s.doctrine, cmdData)
 
 		sig, err := signDecision(member.PrivateKey, env.Id, isSafe)
 		if err != nil {
@@ -109,6 +109,10 @@ func (s *TribunalService) Deliberate(env *governance.GovernanceEnvelope) (*Delib
 		})
 	}
 
+	if len(votes) == 0 {
+		return nil, constants.ErrTribunalNoSigningMembers
+	}
+
 	if env.Governance == nil {
 		env.Governance = &commonv1.GovernanceMetadata{
 			L1: &commonv1.L1Metadata{},
@@ -119,7 +123,7 @@ func (s *TribunalService) Deliberate(env *governance.GovernanceEnvelope) (*Delib
 	if env.Governance.L2 == nil {
 		env.Governance.L2 = &commonv1.L2Metadata{}
 	}
-	env.Governance.L2.TribunalId = s.tribunalID
+	env.Governance.L2.ConsensusSetId = s.tribunalID
 	env.Governance.L2.Votes = votes
 
 	return &DeliberateResult{Envelope: env}, nil
@@ -173,7 +177,7 @@ func (s *TribunalService) HandleDeliberate(w http.ResponseWriter, r *http.Reques
 }
 
 // LocalDeliberator is an in-process adapter that satisfies the
-// mcp.TribunalDeliberator interface by calling TribunalService.Deliberate
+// mcp.L2ConsensusDeliberator interface by calling TribunalService.Deliberate
 // directly, without an HTTP round-trip. This is used when the Tribunal runs
 // in the same process as the gateway (single-binary deployment).
 type LocalDeliberator struct {

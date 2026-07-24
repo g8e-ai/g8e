@@ -905,7 +905,7 @@ func TestPKIController_HandlePKIAppsDelegated(t *testing.T) {
 		rr := httptest.NewRecorder()
 		c.handlePKIAppsDelegated(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error":"missing required field"}`, rr.Body.String())
+		assert.JSONEq(t, `{"error":"csr_pem is required"}`, rr.Body.String())
 	})
 
 	t.Run("Failure - missing app_name", func(t *testing.T) {
@@ -918,7 +918,7 @@ func TestPKIController_HandlePKIAppsDelegated(t *testing.T) {
 		rr := httptest.NewRecorder()
 		c.handlePKIAppsDelegated(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error":"missing required field"}`, rr.Body.String())
+		assert.JSONEq(t, `{"error":"app_name is required"}`, rr.Body.String())
 	})
 
 	t.Run("Failure - invalid app name (special characters)", func(t *testing.T) {
@@ -949,7 +949,7 @@ func TestPKIController_HandlePKIAppsDelegated(t *testing.T) {
 		rr := httptest.NewRecorder()
 		c.handlePKIAppsDelegated(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error":"pki: invalid CSR PEM"}`, rr.Body.String())
+		assert.JSONEq(t, `{"error":"invalid CSR PEM format"}`, rr.Body.String())
 	})
 }
 

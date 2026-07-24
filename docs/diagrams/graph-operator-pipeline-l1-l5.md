@@ -1,6 +1,8 @@
-# Graph: Operator Pipeline (L1 through L4 + L5 Actuator, Full Five Layers)
+# Graph: Operator Pipeline — L1 through L5 (PEP Substrate)
 
 First appeared in commit `8992215d`. Depicts the full five-layer interlock sequence as orchestrated by L4 Warden: L1 Doctrine, state Merkle root verification, L2 Consensus, L3 Notary, and L5 Actuator execution.
+
+This is the **Operator substrate** — the Policy Execution Point (PEP) that runs beneath every deployment mode. In **gateway mode** (PDP), the Gateway service stack ([graph-gateway-services.md](./graph-gateway-services.md)) sits on top of this substrate in the same process, connected via loopback pub/sub. In **outbound mode**, this same pipeline runs on a remote host, connected to the Gateway via outbound-only mTLS WebSocket. See [graph-system-50k.md](./graph-system-50k.md) for the 50k ft layering view.
 
 ```mermaid
 graph TD

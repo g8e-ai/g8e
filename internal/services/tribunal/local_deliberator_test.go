@@ -56,7 +56,7 @@ func TestLocalDeliberator_HappyPath(t *testing.T) {
 
 	require.NotNil(t, resultEnv.Governance)
 	require.NotNil(t, resultEnv.Governance.L2)
-	assert.Equal(t, "test-tribunal", resultEnv.Governance.L2.TribunalId)
+	assert.Equal(t, "test-tribunal", resultEnv.Governance.L2.ConsensusSetId)
 	assert.Len(t, resultEnv.Governance.L2.Votes, 1)
 }
 

@@ -62,7 +62,7 @@ func (m Model) View() string {
 	rightPane := m.renderLedger(rightWidth, topHeight)
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
 
-	// Bottom section: tribunal consensus
+	// Bottom section: L2 consensus
 	tribunalPane := m.renderTribunal(width)
 
 	// Status bar
@@ -159,10 +159,10 @@ func (m Model) renderLedger(width, height int) string {
 	return borderLedger.Width(width).Height(height).Render(content)
 }
 
-// renderTribunal renders the bottom pane: the L2 Tribunal Consensus status.
+// renderTribunal renders the bottom pane: the L2 Consensus status.
 func (m Model) renderTribunal(width int) string {
 	header := tribunalHeaderStyle.Render(
-		fmt.Sprintf("L2 TRIBUNAL CONSENSUS (k-of-n: %d/%d required)", m.quorum, m.total),
+		fmt.Sprintf("L2 CONSENSUS (k-of-n: %d/%d required)", m.quorum, m.total),
 	)
 
 	var memberBlocks []string

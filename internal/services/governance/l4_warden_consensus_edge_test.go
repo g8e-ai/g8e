@@ -31,19 +31,20 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-var errTribunalStoreDB = errors.New("tribunal store database unavailable")
+var errConsensusPolicyStoreDB = errors.New("consensus policy store database unavailable")
 
-// errorTribunalStore simulates a TribunalStore whose backing database is unavailable.
-type errorTribunalStore struct{}
+// errorConsensusPolicyStore simulates an L2ConsensusPolicyStore whose backing database is unavailable.
+type errorConsensusPolicyStore struct{}
 
-func (m *errorTribunalStore) GetTribunal(id string) (*models.TribunalPolicy, error) {
-	return nil, errTribunalStoreDB
+func (m *errorConsensusPolicyStore) GetConsensusPolicy(id string) (*L2ConsensusPolicy, error) {
+	return nil, errConsensusPolicyStoreDB
 }
 
-// TestL4Warden_TribunalStoreError_FailClosed verifies that when the TribunalStore
-// returns an error from GetTribunal, the warden fails closed under consensus posture
-// (where L2 is enforced) rather than silently accepting the envelope.
-func TestL4Warden_TribunalStoreError_FailClosed(t *testing.T) {
+// TestL4Warden_ConsensusPolicyStoreError_FailClosed verifies that when the consensus
+// policy store returns an error from GetConsensusPolicy, the warden fails closed
+// under consensus posture (where L2 is enforced) rather than silently accepting
+// the envelope.
+func TestL4Warden_ConsensusPolicyStoreError_FailClosed(t *testing.T) {
 	t.Parallel()
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
@@ -54,7 +55,7 @@ func TestL4Warden_TribunalStoreError_FailClosed(t *testing.T) {
 		testutil.NewStatefulMockReplayStore(),
 		testutil.NewMockStateRootProvider("root-1"),
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"member-1": pub}},
-		&errorTribunalStore{},
+		&errorConsensusPolicyStore{},
 		nil,
 		testutil.NewConfigurableMockL3Notary(true),
 		NewL1Doctrine(),
@@ -71,10 +72,10 @@ func TestL4Warden_TribunalStoreError_FailClosed(t *testing.T) {
 
 	_, err = warden.VerifyEnvelope(context.Background(), env)
 	if err == nil {
-		t.Fatal("expected error when TribunalStore fails, got nil")
+		t.Fatal("expected error when consensus policy store fails, got nil")
 	}
-	if !errors.Is(err, errTribunalStoreDB) {
-		t.Fatalf("expected error wrapping errTribunalStoreDB, got %v", err)
+	if !errors.Is(err, errConsensusPolicyStoreDB) {
+		t.Fatalf("expected error wrapping errConsensusPolicyStoreDB, got %v", err)
 	}
 }
 
@@ -115,7 +116,7 @@ func TestL4Warden_L2SplitVote_QuorumNotMet(t *testing.T) {
 		testutil.NewStatefulMockReplayStore(),
 		testutil.NewMockStateRootProvider("root-1"),
 		&SimpleSignerStore{Signers: signers},
-		&governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{"split-trib": tribunal3of3}},
+		&TribunalStoreAdapter{Inner: &governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{"split-trib": tribunal3of3}}},
 		nil,
 		testutil.NewConfigurableMockL3Notary(true),
 		NewL1Doctrine(),
@@ -151,7 +152,7 @@ func TestL4Warden_L2SplitVote_QuorumNotMet(t *testing.T) {
 	env.TransactionHash = hash
 	env.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
-			TribunalId: "split-trib",
+			ConsensusSetId: "split-trib",
 			Votes: []*commonv1.L2Vote{
 				signL2Vote(priv1, "member-1", hash, true),
 				signL2Vote(priv2, "member-2", hash, false),
@@ -198,7 +199,7 @@ func TestL4Warden_L2VoteOrderingIndependence(t *testing.T) {
 			testutil.NewStatefulMockReplayStore(),
 			testutil.NewMockStateRootProvider("root-1"),
 			&SimpleSignerStore{Signers: signers},
-			&governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{"order-trib": tribunal2of2}},
+			&TribunalStoreAdapter{Inner: &governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{"order-trib": tribunal2of2}}},
 			nil,
 			testutil.NewConfigurableMockL3Notary(true),
 			NewL1Doctrine(),
@@ -235,8 +236,8 @@ func TestL4Warden_L2VoteOrderingIndependence(t *testing.T) {
 		env.TransactionHash = hash
 		env.Governance = &commonv1.GovernanceMetadata{
 			L2: &commonv1.L2Metadata{
-				TribunalId: "order-trib",
-				Votes:      voteOrder,
+				ConsensusSetId: "order-trib",
+				Votes:          voteOrder,
 			},
 		}
 		return env

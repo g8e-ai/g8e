@@ -89,7 +89,7 @@ func TestNewOperatorPubSubService_StartsWithoutTrustedSignersButRejectsL2(t *tes
 
 	_, err = svc.l4warden.VerifyEnvelope(context.Background(), env)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, governance.ErrL2TribunalNotConfigured, "expected tribunal not configured error, got %v", err)
+	assert.ErrorIs(t, err, governance.ErrL2ConsensusNotConfigured, "expected consensus not configured error, got %v", err)
 }
 
 func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *govpkg.GovernanceEnvelope {
@@ -116,7 +116,7 @@ func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *govpkg
 	env.TransactionHash = hash
 	env.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
-			TribunalId: "test-tribunal",
+			ConsensusSetId: "test-tribunal",
 			Votes: []*commonv1.L2Vote{
 				{
 					SignerKeyId:        "missing-key",
@@ -282,7 +282,7 @@ func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 					Nonce:           "nonce-" + tc.name,
 					Governance: &commonv1.GovernanceMetadata{
 						L2: &commonv1.L2Metadata{
-							TribunalId: "test-tribunal",
+							ConsensusSetId: "test-tribunal",
 							Votes: []*commonv1.L2Vote{
 								{
 									SignerKeyId: "test-key",
@@ -344,7 +344,7 @@ func TestOperatorPubSubService_CancellationReceipt(t *testing.T) {
 			Nonce:           "nonce-cancel",
 			Governance: &commonv1.GovernanceMetadata{
 				L2: &commonv1.L2Metadata{
-					TribunalId: "test-tribunal",
+					ConsensusSetId: "test-tribunal",
 					Votes: []*commonv1.L2Vote{
 						{
 							SignerKeyId: "test-key",
@@ -690,7 +690,7 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 			Nonce:           "nonce-sync",
 			Governance: &commonv1.GovernanceMetadata{
 				L2: &commonv1.L2Metadata{
-					TribunalId: "test-tribunal",
+					ConsensusSetId: "test-tribunal",
 					Votes: []*commonv1.L2Vote{
 						{
 							SignerKeyId: "test-key",
@@ -1343,7 +1343,7 @@ func TestCommandServiceConfig_NoGatewayFields(t *testing.T) {
 	_ = gd.L3Notary
 	_ = gd.SignerStore
 	_ = gd.AppPolicyStore
-	_ = gd.TribunalStore
+	_ = gd.ConsensusPolicyStore
 	_ = gd.FieldReader
 
 	// GatewayCommandServiceConfig must have MCPGateway and GovDeps.

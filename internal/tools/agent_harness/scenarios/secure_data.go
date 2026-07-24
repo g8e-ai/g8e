@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
 )
 
@@ -20,7 +21,7 @@ func secureDataScenarios() []Scenario {
 			Name: "secure-data-migration", Title: "Governed migration with chain-of-custody receipt", Persona: migrationAgent, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil {
-					return fmt.Errorf("gov kit not initialized (call SetGovKit)")
+					return constants.ErrHarnessGovKitNotInit
 				}
 				root, err := c.StateRoot(ctx)
 				if err != nil {

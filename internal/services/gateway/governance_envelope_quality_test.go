@@ -52,7 +52,7 @@ func TestClassifyEnvelopeError_Exhaustive(t *testing.T) {
 		{governance.ErrStateRootMismatch, http.StatusForbidden},
 		{governance.ErrL2SignatureMissing, http.StatusForbidden},
 		{governance.ErrL2SignatureInvalid, http.StatusForbidden},
-		{governance.ErrL2TribunalNotConfigured, http.StatusForbidden},
+		{governance.ErrL2ConsensusNotConfigured, http.StatusForbidden},
 		{governance.ErrL3ProofMissing, http.StatusForbidden},
 		{governance.ErrL3ProofInvalid, http.StatusForbidden},
 		{governance.ErrL3NotaryNotConfigured, http.StatusForbidden},

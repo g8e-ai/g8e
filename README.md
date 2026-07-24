@@ -6,7 +6,7 @@
 
 </div>
 
-g8e is a sovereign execution platform that delivers frontier AI reasoning to the edge without surrendering data custody. It reduces cloud providers to stateless co-processors: the model reasons over commitments, while state, keys, and raw data remain on the host that owns them. The platform is implemented as a single static Go binary. All dependencies are resolved at build time; the compiled binary is statically linked and has zero runtime dependencies.
+g8e is a sovereign execution platform that delivers frontier AI reasoning to the edge without surrendering data custody. It reduces cloud providers to stateless co-processors: the model reasons over commitments, while state, keys, and raw data remain on the host that owns them. The platform is implemented as a single static Go binary. All dependencies are resolved at build time; the compiled binary is statically linked with zero external library dependencies. OS-level services (filesystem, optional OS keyring) are used at runtime.
 
 <p align="center">
   <img src="docs/media/jit-mcp-with-receipts.png" alt="JIT MCP with governance receipts" width="720" />
@@ -54,11 +54,11 @@ High-risk mutations require a WebAuthn/FIDO2 passkey assertion computed over the
 
 ## Architectural Model
 
-The platform operates as two roles, both implemented by the same static binary:
+The platform operates as two modes of the same static binary:
 
-- **Governance Gateway (`g8e gw`)**: Serves as the Policy Decision Point. It admits signed `GovernanceEnvelope` transactions, manages the platform PKI (mTLS, SPIFFE workload identities), and enforces freshness and replay defense. The gateway relays envelopes to operators and does not possess privileged bypass or execution authority. It does not initiate connections to operators. The gateway can run in the cloud or on-premises. See [Gateway Architecture](docs/architecture/gateway.md).
+- **Governance Gateway (`g8e gw`)**: Serves as the Policy Decision Point. The Gateway is an Operator with additional gateway services: it runs an in-process Operator that executes L1-L5 locally for operations on the gateway host, while also serving as the platform's PKI authority, persistence layer, and pub/sub broker. It admits signed `GovernanceEnvelope` transactions, manages the platform PKI (mTLS, SPIFFE workload identities), and enforces freshness and replay defense. The gateway relays envelopes to operators and does not possess privileged bypass or execution authority. It does not initiate connections to operators. The gateway can run in the cloud or on-premises. See [Gateway Architecture](docs/architecture/gateway.md).
 
-- **Governed Operator (`g8e operator`)**: Serves as the Policy Execution Point. It initiates outbound-only mTLS connections to the gateway and does not listen on any ports. It re-verifies every proof locally against its internal state and is the only component authorized to mutate the host. The operator runs at the site of the data owner. See [Operator Architecture](docs/architecture/operator.md).
+- **Governed Operator (`g8e operator`)**: Serves as the Policy Execution Point. It initiates outbound-only mTLS connections to the gateway and does not listen on any ports. It re-verifies every proof locally against its internal state and is the only component authorized to mutate the host. Each remote Governed Operator runs L1-L5 locally for operations on its own host. The operator runs at the site of the data owner. See [Operator Architecture](docs/architecture/operator.md).
 
 g8e is actor-agnostic and governs actions rather than actors. AI agents, human users, CI/CD pipelines, and scheduled tasks submit actions through the same admission API. Any component that produces a conformant `GovernanceEnvelope` is treated as a principal. See [Connecting Applications](docs/guides/connect_apps_to_gateway.md) for integration examples.
 

@@ -16,6 +16,7 @@
 package gateway
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
@@ -204,6 +206,41 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAppEnrollmentService_EnrollDelegatedApp(t *testing.T) {
+	gateway, _ := setupTestGatewayService(t)
+	docStore := gateway.stores.DocStore
+	logger := gateway.logger
+	pki := gateway.pki
+
+	appEnrollment := NewAppEnrollmentService(docStore, pki, logger)
+
+	csr := testutil.GenerateTestCSRP256(t, "goose")
+	userID := "test-user-001"
+
+	resp, err := appEnrollment.EnrollDelegatedApp(AppEnrollRequest{
+		CSR:     csr,
+		AppName: "goose",
+	}, userID)
+	require.NoError(t, err)
+	require.True(t, resp.Success, "enrollment should succeed, error: %s", resp.Error)
+	assert.NotEmpty(t, resp.AppCert)
+	assert.NotEmpty(t, resp.AppID)
+	assert.Equal(t, "spiffe://g8e.local/app/goose", resp.AppID)
+
+	policyDoc, err := docStore.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), resp.AppID)
+	require.NoError(t, err)
+	require.NotNil(t, policyDoc, "AppPolicy must be persisted for delegated enrollment")
+
+	policyBytes, err := json.Marshal(policyDoc.Data)
+	require.NoError(t, err)
+	var policy models.AppPolicy
+	require.NoError(t, json.Unmarshal(policyBytes, &policy))
+	assert.Equal(t, resp.AppID, policy.AppID)
+	assert.False(t, policy.RequireL3Approval, "delegated enrollment must not require L3 approval")
+	assert.Equal(t, 0, policy.RateLimitRPS, "delegated enrollment should have unlimited rate")
+	assert.Equal(t, int64(0), policy.MaxPayloadBytes, "delegated enrollment should have no payload cap")
 }
 
 func TestIsValidAppName(t *testing.T) {

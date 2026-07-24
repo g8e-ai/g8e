@@ -18,7 +18,6 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/governance"
 	govsvc "github.com/g8e-ai/g8e/internal/services/governance"
 )
@@ -36,13 +35,13 @@ type TribunalMember struct {
 // l2_consensus.go. The pluggable heterogeneous-reasoner backend is a
 // later extension point and is not stubbed in (devs.md: do not build
 // things that should not yet exist).
-func (s *TribunalService) evaluateSafety(doctrine *govsvc.L1Doctrine, resource string, cmdData string, intent constants.CloudIntent) bool {
-	return s.runMITREChecks(doctrine, resource, cmdData)
+func (s *TribunalService) evaluateSafety(doctrine *govsvc.L1Doctrine, cmdData string) bool {
+	return s.runMITREChecks(doctrine, cmdData)
 }
 
 // runMITREChecks leverages L1Doctrine to identify malicious activity patterns.
 // Fail-closed: if Doctrine is nil, the payload is NOT safe.
-func (s *TribunalService) runMITREChecks(doctrine *govsvc.L1Doctrine, resource string, data string) bool {
+func (s *TribunalService) runMITREChecks(doctrine *govsvc.L1Doctrine, data string) bool {
 	if doctrine == nil {
 		return false
 	}
@@ -55,16 +54,15 @@ func (s *TribunalService) runMITREChecks(doctrine *govsvc.L1Doctrine, resource s
 	return true
 }
 
-// extractCommandData extracts command data and intent from the envelope.
+// extractCommandData extracts command data from the envelope.
 // Relocated from l2_consensus.go.
-func extractCommandData(env *governance.GovernanceEnvelope) (string, constants.CloudIntent, error) {
+func extractCommandData(env *governance.GovernanceEnvelope) (string, error) {
 	var cmdData string
-	var intent constants.CloudIntent
 
 	if env.IntentData != nil && len(env.IntentData.Fields) > 0 {
 		jsonBytes, err := env.IntentData.MarshalJSON()
 		if err != nil {
-			return "", "", fmt.Errorf("tribunal: extract command data: %w", err)
+			return "", fmt.Errorf("tribunal: extract command data: %w", err)
 		}
 		cmdData = string(jsonBytes)
 
@@ -72,7 +70,7 @@ func extractCommandData(env *governance.GovernanceEnvelope) (string, constants.C
 		cmdData = string(env.Payload)
 	}
 
-	return cmdData, intent, nil
+	return cmdData, nil
 }
 
 // signDecision creates a cryptographic signature of the decision.
