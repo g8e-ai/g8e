@@ -40,11 +40,11 @@ func (m *errorConsensusPolicyStore) GetConsensusPolicy(id string) (*L2ConsensusP
 	return nil, errConsensusPolicyStoreDB
 }
 
-// TestL4Warden_TribunalStoreError_FailClosed verifies that when the consensus
+// TestL4Warden_ConsensusPolicyStoreError_FailClosed verifies that when the consensus
 // policy store returns an error from GetConsensusPolicy, the warden fails closed
 // under consensus posture (where L2 is enforced) rather than silently accepting
 // the envelope.
-func TestL4Warden_TribunalStoreError_FailClosed(t *testing.T) {
+func TestL4Warden_ConsensusPolicyStoreError_FailClosed(t *testing.T) {
 	t.Parallel()
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
@@ -237,7 +237,7 @@ func TestL4Warden_L2VoteOrderingIndependence(t *testing.T) {
 		env.Governance = &commonv1.GovernanceMetadata{
 			L2: &commonv1.L2Metadata{
 				ConsensusSetId: "order-trib",
-				Votes:      voteOrder,
+				Votes:          voteOrder,
 			},
 		}
 		return env

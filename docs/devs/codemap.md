@@ -491,7 +491,7 @@ The following packages are test-only and are not part of the production dependen
 
 **Integration test files** (`test/`):
 - `universal_gateway_integration_test.go` - MCP/A2A flow, multi-protocol auto-detection, governance envelope verification, OOB suspension/approval, downstream integration, canonical JSON wire format
-- `tribunal_consensus_integration_test.go` - Tribunal idempotent enrollment, malformed CSR rejection, delegated app enrollment, quorum reached/not reached, veto by MITRE, L1-to-L5 walkthrough
+- `l2_consensus_integration_test.go` - L2 consensus idempotent enrollment, malformed CSR rejection, delegated app enrollment, quorum reached/not reached, veto by MITRE, L1-to-L5 walkthrough
 - `mcp_gateway_test.go` - MCP gateway end-to-end, tools/list, tools/call, suspended transaction handling
 - `mcp_gateway_config_test.go` - MCP gateway configuration validation tests
 - `a2a_gateway_test.go` - A2A protocol gateway tests
