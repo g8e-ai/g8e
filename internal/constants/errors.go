@@ -870,7 +870,7 @@ var (
 	ErrTxL2SignatureInvalid          = errors.New("TX_QUORUM_L2_SIG_INVALID: Tribunal L2 consensus_signature failed verification")
 	ErrTxL2QuorumNotMet              = errors.New("TX_QUORUM_L2_NOT_MET: affirmative distinct signer count below tribunal quorum")
 	ErrTxL2SignerStoreNotConfigured  = errors.New("TX_QUORUM_L2_SIGNER_STORE_MISSING: signer store required but not configured")
-	ErrTxL2TribunalNotConfigured     = errors.New("TX_QUORUM_L2_TRIBUNAL_MISSING: tribunal policy not found or disabled")
+	ErrTxL2ConsensusNotConfigured     = errors.New("TX_QUORUM_L2_CONSENSUS_MISSING: consensus policy not found or disabled")
 	ErrTxL2DuplicateSigner           = errors.New("TX_QUORUM_L2_DUP_SIGNER: duplicate signer key in vote set with require_distinct")
 	ErrTribunalHashMismatch          = errors.New("TRIBUNAL_HASH_MISMATCH: envelope id does not match recomputed transaction hash")
 	ErrTribunalInvalidID             = errors.New("TRIBUNAL_INVALID_ID: tribunal ID must contain only alphanumeric characters, hyphens, and underscores")

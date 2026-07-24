@@ -89,7 +89,7 @@ func TestNewOperatorPubSubService_StartsWithoutTrustedSignersButRejectsL2(t *tes
 
 	_, err = svc.l4warden.VerifyEnvelope(context.Background(), env)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, governance.ErrL2TribunalNotConfigured, "expected tribunal not configured error, got %v", err)
+	assert.ErrorIs(t, err, governance.ErrL2ConsensusNotConfigured, "expected consensus not configured error, got %v", err)
 }
 
 func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *govpkg.GovernanceEnvelope {
@@ -1343,7 +1343,7 @@ func TestCommandServiceConfig_NoGatewayFields(t *testing.T) {
 	_ = gd.L3Notary
 	_ = gd.SignerStore
 	_ = gd.AppPolicyStore
-	_ = gd.TribunalStore
+	_ = gd.ConsensusPolicyStore
 	_ = gd.FieldReader
 
 	// GatewayCommandServiceConfig must have MCPGateway and GovDeps.

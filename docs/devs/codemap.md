@@ -24,7 +24,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   │   ├── governance.StateRootProvider (gateway.StateRootService via Stores) [SHARED]
 │   │   ├── governance.SignerStore (governance.FilesystemSignerStore)
 │   │   ├── governance.AppPolicyStore (gateway.AppPolicyStoreService via Stores) [SHARED]
-│   │   ├── governance.TribunalStore (via GovernanceDeps; nil in outbound mode, gateway.TribunalStoreService in gateway mode)
+│   │   ├── governance.L2ConsensusPolicyStore (via GovernanceDeps.ConsensusPolicyStore; nil in outbound mode, gateway.TribunalStoreService in gateway mode)
 │   │   ├── governance.L1Doctrine (created internally by L4Warden when doctrine param is nil)
 │   │   └── governance.L3Notary (governance.outboundNotary implementation)
 │   │       └── storage.SuspendedTransactionService
@@ -227,7 +227,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 ### Mode Bifurcation
 - **Mode-specific services**: `G8eoService` (outbound mode only), `GatewayModeService` (gateway mode only), `mcp.GatewayService` (gateway-only; `MCPGateway` is in `GatewayCommandServiceConfig` and wired via `NewGatewayOperatorPubSubService`; not present in outbound mode's `CommandServiceConfig`)
 - **Shared services**: `CanonicalDBService` (used in both modes for state root calculation - full service in gateway mode, state root calculation only in outbound mode)
-- **Governance dependencies**: `FieldReader`, `TribunalStore`, `ReplayStore`, `StateRootProvider`, `TransactionAudit`, `L3Notary`, `SignerStore`, and `AppPolicyStore` are consolidated in `pubsub.GovernanceDeps`, passed as a separate parameter to `NewOperatorPubSubService` and embedded via `GovDeps *GovernanceDeps` in `GatewayCommandServiceConfig`. In outbound mode, `TribunalStore` and `FieldReader` are nil; in gateway mode, all fields are populated via `GetGovernanceDeps()`
+- **Governance dependencies**: `FieldReader`, `ConsensusPolicyStore`, `ReplayStore`, `StateRootProvider`, `TransactionAudit`, `L3Notary`, `SignerStore`, and `AppPolicyStore` are consolidated in `pubsub.GovernanceDeps`, passed as a separate parameter to `NewOperatorPubSubService` and embedded via `GovDeps *GovernanceDeps` in `GatewayCommandServiceConfig`. In outbound mode, `ConsensusPolicyStore` and `FieldReader` are nil; in gateway mode, all fields are populated via `GetGovernanceDeps()`
 
 ### Data Handling Convergence
 - **`gateway.CanonicalDBService`** is the canonical SQLite root for gateway mode; it now contains only lifecycle code (Open, Close, Wait, GetDB, GetVault, schema/migrations, maintenance loop). All domain logic has been extracted to dedicated service fields. In outbound mode, it is used only for state root calculation and provides the shared vault instance.
@@ -254,7 +254,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 
 ### Governance Stack (L1-L5)
 - **L1**: `governance.L1Doctrine` (technical bedrock validation, threat detection, forbidden pattern matching)
-- **L2**: `tribunal.TribunalService` (Tribunal-based deliberation producing L2 votes via Ed25519 signatures; gateway delegates deliberation via `LocalDeliberator`). The `TribunalStore` interface in `governance.L4Warden` loads `TribunalPolicy` for quorum verification.
+- **L2**: `tribunal.TribunalService` (Tribunal-based deliberation producing L2 votes via Ed25519 signatures; gateway delegates deliberation via `LocalDeliberator`). The `L2ConsensusPolicyStore` interface in `governance.L4Warden` loads consensus policy for quorum verification.
 - **L3**: `governance.L3Notary` (gateway mode uses `governance.gatewayNotary` via `governance.NewGatewayL3Notary`, combining WebAuthn passkey proofs via `PasskeyService` and mTLS CLI proofs via `cliSessionVerifier`; outbound mode uses `governance.outboundNotary` via `governance.NewOutboundL3Notary` for CLI-based approval via suspended transactions; gateway CLI mode uses `governance.cliNotary` via `governance.NewCLIL3Notary` for CLI session verification + suspended transaction checks)
 - **L4**: `governance.L4Warden` (pre-dispatch verification gating, validating signatures, replay prevention, expiry, nonces, and state Merkle root)
 - **L5**: `governance.L5Actuator` (isolated boundary tool dispatch via MCP/A2A, signed receipt production, audit logging). Does NOT re-verify L2/L3 proofs; trusts `VerifiedTransaction` from L4Warden. The L4→L5 separation is the defense-in-depth boundary: L4 verifies, L5 executes and records.
@@ -265,12 +265,12 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - `replay_store.go` — `ReplayStore` interface
 - `state_root_provider.go` — `StateRootProvider` interface
 - `signer_store.go` — `SignerStore` interface + `SimpleSignerStore` (production fail-closed fallback) + `FilesystemSignerStore` (outbound impl)
-- `tribunal_store.go` — `TribunalStore` interface
+- `tribunal_store.go` — `TribunalStore` interface, `L2ConsensusPolicyStore` interface, `TribunalStoreAdapter`
 - `app_policy_store.go` — `AppPolicyStore` interface
 - `transaction_audit_store.go` — `TransactionAuditStore` interface
 
 - `gateway.SignerStoreService` implements: `governance.SignerStore` (gateway mode dedicated implementation).
-- `gateway.TribunalStoreService` implements: `governance.TribunalStore` (gateway mode dedicated implementation, provides TribunalPolicy lookup for L4 Warden quorum verification).
+- `gateway.TribunalStoreService` implements: `governance.TribunalStore` and `governance.L2ConsensusPolicyStore` (gateway mode dedicated implementation, provides TribunalPolicy lookup for L4 Warden quorum verification).
 - `gateway.AppPolicyStoreService` implements: `governance.AppPolicyStore` (gateway mode dedicated implementation).
 - `gateway.ReplayStoreService` implements: `governance.ReplayStore` (gateway mode dedicated implementation).
 - `gateway.StateRootService` implements: `governance.StateRootProvider` (gateway mode dedicated implementation).

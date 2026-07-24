@@ -925,7 +925,7 @@ func (g *GatewayService) mapGatewayError(err error) (int, string) {
 
 	case errors.Is(err, governance.ErrL2SignatureMissing),
 		errors.Is(err, governance.ErrL2SignatureInvalid),
-		errors.Is(err, governance.ErrL2TribunalNotConfigured),
+		errors.Is(err, governance.ErrL2ConsensusNotConfigured),
 		errors.Is(err, governance.ErrL2QuorumNotMet),
 		errors.Is(err, governance.ErrL2DuplicateSigner):
 		return constants.ErrCodeL2SignatureInvalid, msg

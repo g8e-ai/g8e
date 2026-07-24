@@ -165,8 +165,8 @@ func TestGovernanceFailClosed(t *testing.T) {
 		warden := makeWarden(testutil.NewStatefulMockReplayStore(), &governancetest.SimpleStateRootProvider{Root: "root-1"}, nil, NewL1Doctrine(), "consensus")
 		env := buildValidEnvelope(t)
 		_, err := warden.VerifyEnvelope(context.Background(), env)
-		if !errors.Is(err, ErrL2TribunalNotConfigured) {
-			t.Fatalf("expected ErrL2TribunalNotConfigured, got %v", err)
+		if !errors.Is(err, ErrL2ConsensusNotConfigured) {
+			t.Fatalf("expected ErrL2ConsensusNotConfigured, got %v", err)
 		}
 	})
 }

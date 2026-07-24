@@ -31,18 +31,19 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-var errTribunalStoreDB = errors.New("tribunal store database unavailable")
+var errConsensusPolicyStoreDB = errors.New("consensus policy store database unavailable")
 
-// errorTribunalStore simulates an L2ConsensusPolicyStore whose backing database is unavailable.
-type errorTribunalStore struct{}
+// errorConsensusPolicyStore simulates an L2ConsensusPolicyStore whose backing database is unavailable.
+type errorConsensusPolicyStore struct{}
 
-func (m *errorTribunalStore) GetConsensusPolicy(id string) (*L2ConsensusPolicy, error) {
-	return nil, errTribunalStoreDB
+func (m *errorConsensusPolicyStore) GetConsensusPolicy(id string) (*L2ConsensusPolicy, error) {
+	return nil, errConsensusPolicyStoreDB
 }
 
-// TestL4Warden_TribunalStoreError_FailClosed verifies that when the TribunalStore
-// returns an error from GetTribunal, the warden fails closed under consensus posture
-// (where L2 is enforced) rather than silently accepting the envelope.
+// TestL4Warden_TribunalStoreError_FailClosed verifies that when the consensus
+// policy store returns an error from GetConsensusPolicy, the warden fails closed
+// under consensus posture (where L2 is enforced) rather than silently accepting
+// the envelope.
 func TestL4Warden_TribunalStoreError_FailClosed(t *testing.T) {
 	t.Parallel()
 	pub, priv, err := ed25519.GenerateKey(nil)
@@ -54,7 +55,7 @@ func TestL4Warden_TribunalStoreError_FailClosed(t *testing.T) {
 		testutil.NewStatefulMockReplayStore(),
 		testutil.NewMockStateRootProvider("root-1"),
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"member-1": pub}},
-		&errorTribunalStore{},
+		&errorConsensusPolicyStore{},
 		nil,
 		testutil.NewConfigurableMockL3Notary(true),
 		NewL1Doctrine(),
@@ -71,10 +72,10 @@ func TestL4Warden_TribunalStoreError_FailClosed(t *testing.T) {
 
 	_, err = warden.VerifyEnvelope(context.Background(), env)
 	if err == nil {
-		t.Fatal("expected error when TribunalStore fails, got nil")
+		t.Fatal("expected error when consensus policy store fails, got nil")
 	}
-	if !errors.Is(err, errTribunalStoreDB) {
-		t.Fatalf("expected error wrapping errTribunalStoreDB, got %v", err)
+	if !errors.Is(err, errConsensusPolicyStoreDB) {
+		t.Fatalf("expected error wrapping errConsensusPolicyStoreDB, got %v", err)
 	}
 }
 

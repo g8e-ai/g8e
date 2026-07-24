@@ -594,7 +594,7 @@ func (ls *GatewayModeService) GetGovernanceDeps() *pubsub.GovernanceDeps {
 		L3Notary:          l3Notary,
 		SignerStore:       ls.stores.SignerStore,
 		AppPolicyStore:    ls.stores.AppPolicyStore,
-		TribunalStore:     ls.stores.TribunalStore,
+		ConsensusPolicyStore: ls.stores.TribunalStore,
 		FieldReader:       ls.stores.DocStore,
 	}
 }

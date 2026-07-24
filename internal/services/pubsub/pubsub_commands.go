@@ -102,7 +102,7 @@ type GovernanceDeps struct {
 	L3Notary          governance.L3Notary
 	SignerStore       governance.SignerStore
 	AppPolicyStore    governance.AppPolicyStore
-	TribunalStore     governance.L2ConsensusPolicyStore
+	ConsensusPolicyStore governance.L2ConsensusPolicyStore
 	FieldReader       mcp.FieldReader
 }
 
@@ -301,7 +301,7 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, go
 		govDeps.ReplayStore,
 		govDeps.StateRootProvider,
 		rs.signerStore,
-		govDeps.TribunalStore,
+		govDeps.ConsensusPolicyStore,
 		govDeps.AppPolicyStore,
 		govDeps.L3Notary,
 		nil, // DoctrineValidator defaults to L1Doctrine

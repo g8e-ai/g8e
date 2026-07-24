@@ -96,7 +96,7 @@ func newPubsubFixture(t *testing.T) *pubsubFixture {
 		TransactionAudit:  &testutil.MockTransactionAudit{},
 		L3Notary:          &testutil.MockL3Notary{},
 		SignerStore:       signerStore,
-		TribunalStore:     testTribunalStore(),
+		ConsensusPolicyStore: testTribunalStore(),
 	})
 	if err != nil {
 		t.Fatalf("failed to create OperatorPubSubService: %v", err)

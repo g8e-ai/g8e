@@ -508,7 +508,7 @@ func BootstrapTribunal(svc *gateway.GatewayModeService, tribunalID string, actua
 		return nil, fmt.Errorf("bootstrap tribunal: load policy: %w", err)
 	}
 	if policy == nil {
-		return nil, fmt.Errorf("bootstrap tribunal: %w: %s", constants.ErrTxL2TribunalNotConfigured, tribunalID)
+		return nil, fmt.Errorf("bootstrap tribunal: %w: %s", constants.ErrTxL2ConsensusNotConfigured, tribunalID)
 	}
 
 	fileProvider := tribunal.NewFileKeyProvider(secretsDir, tribunalID)

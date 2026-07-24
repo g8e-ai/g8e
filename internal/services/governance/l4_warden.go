@@ -50,7 +50,7 @@ type L4Warden struct {
 	replayStore       ReplayStore
 	stateRootProvider StateRootProvider
 	signerStore       SignerStore
-	tribunalStore     L2ConsensusPolicyStore
+	consensusPolicyStore     L2ConsensusPolicyStore
 	appPolicyStore    AppPolicyStore
 	l3Notary          L3Notary
 	doctrine          *L1Doctrine
@@ -95,7 +95,7 @@ func NewL4Warden(
 		replayStore:       replayStore,
 		stateRootProvider: stateRootProvider,
 		signerStore:       signerStore,
-		tribunalStore:     consensusPolicyStore,
+		consensusPolicyStore:     consensusPolicyStore,
 		appPolicyStore:    appPolicyStore,
 		l3Notary:          l3Notary,
 		doctrine:          doctrine,
@@ -367,15 +367,15 @@ func (tv *L4Warden) verifyL2Posture(envelope *govtypes.GovernanceEnvelope, compu
 		return false, nil
 	}
 
-	if tv.tribunalStore == nil {
+	if tv.consensusPolicyStore == nil {
 		if tv.posture.RequiresL2Signature() {
 			tv.logger.Error("L2 consensus policy store not configured but required by posture", "posture", tv.posture.Name())
-			return false, constants.ErrTxL2TribunalNotConfigured
+			return false, constants.ErrTxL2ConsensusNotConfigured
 		}
 		return false, nil
 	}
 
-	policy, err := tv.tribunalStore.GetConsensusPolicy(l2.TribunalId)
+	policy, err := tv.consensusPolicyStore.GetConsensusPolicy(l2.TribunalId)
 	if err != nil {
 		if tv.posture.RequiresL2Signature() {
 			tv.logger.Error("Failed to load L2 consensus policy", "consensus_set_id", l2.TribunalId, string(constants.ConnectionStateError), err)
@@ -386,7 +386,7 @@ func (tv *L4Warden) verifyL2Posture(envelope *govtypes.GovernanceEnvelope, compu
 	if policy == nil || !policy.Enabled {
 		if tv.posture.RequiresL2Signature() {
 			tv.logger.Error("L2 consensus policy not found or disabled", "consensus_set_id", l2.TribunalId)
-			return false, constants.ErrTxL2TribunalNotConfigured
+			return false, constants.ErrTxL2ConsensusNotConfigured
 		}
 		return false, nil
 	}

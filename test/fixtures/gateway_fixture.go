@@ -265,7 +265,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 			StateRootProvider: govDeps.StateRootProvider,
 			TransactionAudit:  govDeps.TransactionAudit,
 			SignerStore:       govDeps.SignerStore,
-			TribunalStore:     govDeps.TribunalStore,
+			ConsensusPolicyStore: govDeps.ConsensusPolicyStore,
 			L3Notary:          RejectingL3Notary{},
 			FieldReader:       govDeps.FieldReader,
 		},

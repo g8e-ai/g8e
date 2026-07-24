@@ -267,9 +267,9 @@ When a `GovernanceEnvelope` arrives at the gateway, the L4 Warden's `verifyL2Pos
    - Under `consensus`/`notary` posture: reject with `ErrTxL2SignatureMissing`
    - Under `doctrine` posture: return `false, nil` (audited, not enforced)
 
-2. **Store checks**: verifies `signerStore` and `tribunalStore` are configured. Under enforced postures, missing stores are fail-closed.
+2. **Store checks**: verifies `signerStore` and `consensusPolicyStore` are configured. Under enforced postures, missing stores are fail-closed.
 
-3. **Tribunal policy lookup**: loads the `TribunalPolicy` by `L2.TribunalId`. Under enforced postures, a missing or disabled policy is rejected with `ErrTxL2TribunalNotConfigured`.
+3. **Consensus policy lookup**: loads the consensus policy by `L2.TribunalId`. Under enforced postures, a missing or disabled policy is rejected with `ErrTxL2ConsensusNotConfigured`.
 
 4. **Member validation**: votes from `SignerKeyId` values not in the policy's `MemberAppIDs` are silently excluded from the quorum count.
 

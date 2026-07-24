@@ -377,7 +377,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 				}
 				return env
 			}(),
-			wantErr: ErrL2TribunalNotConfigured,
+			wantErr: ErrL2ConsensusNotConfigured,
 			wantL2:  false,
 		},
 		{
@@ -392,7 +392,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 				}
 				return env
 			}(),
-			wantErr: ErrL2TribunalNotConfigured,
+			wantErr: ErrL2ConsensusNotConfigured,
 			wantL2:  false,
 		},
 	}
