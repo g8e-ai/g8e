@@ -15,7 +15,6 @@ package gateway
 
 import (
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
@@ -28,7 +27,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
-	"time"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -364,6 +362,11 @@ func (c *PKIController) handlePKIAppsDelegated(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	if c.appEnrollment == nil {
+		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrServiceUnavailable.Error())
+		return
+	}
+
 	// Require mTLS authentication from a human CLI session
 	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
 		c.responder.Error(w, http.StatusUnauthorized, constants.ErrMissingCertificate.Error())
@@ -389,88 +392,18 @@ func (c *PKIController) handlePKIAppsDelegated(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Validate request
-	if req.CSR == "" {
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrMissingRequiredField.Error())
-		return
-	}
-	if req.AppName == "" {
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrMissingRequiredField.Error())
-		return
-	}
-
-	// Sanitize app name
-	sanitizedName := req.AppName
-	if !isValidAppName(sanitizedName) {
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrValidationFailed.Error())
-		return
-	}
-
-	// Validate CSR format
-	block, _ := pem.Decode([]byte(req.CSR))
-	if block == nil || block.Type != "CERTIFICATE REQUEST" {
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrPKIInvalidCSR.Error())
-		return
-	}
-
-	csr, err := x509.ParseCertificateRequest(block.Bytes)
+	resp, err := c.appEnrollment.EnrollDelegatedApp(req, userID)
 	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrPKIParseCSR.Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("%w: %v", constants.ErrEnrollmentFailed, err).Error())
 		return
 	}
 
-	if err := csr.CheckSignature(); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrPKICSRSignatureCheck.Error())
+	if !resp.Success {
+		c.responder.Error(w, http.StatusBadRequest, resp.Error)
 		return
 	}
 
-	// Sign the CSR with dual SANs (app + requestor)
-	// Use a short TTL (1 hour) for delegated credentials
-	certPEM, chainPEM, err := c.pki.SignDelegatedCSR(req.CSR, sanitizedName, userID)
-	if err != nil {
-		c.logger.Error("Failed to sign delegated CSR", "app_name", sanitizedName, "user_id", userID, "error", err)
-		c.responder.Error(w, http.StatusInternalServerError, constants.ErrPKISignCSR.Error())
-		return
-	}
-
-	// Extract the appID from the signed certificate
-	certBlock, _ := pem.Decode([]byte(certPEM))
-	if certBlock == nil {
-		c.responder.Error(w, http.StatusInternalServerError, constants.ErrPEMDecodeFailed.Error())
-		return
-	}
-	parsedCert, err := x509.ParseCertificate(certBlock.Bytes)
-	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("%w: %v", constants.ErrCertParseFailed, err).Error())
-		return
-	}
-	if len(parsedCert.URIs) == 0 {
-		c.responder.Error(w, http.StatusInternalServerError, constants.ErrValidationFailed.Error())
-		return
-	}
-	appID := parsedCert.URIs[0].String()
-
-	// Fetch trust bundle
-	trustBundle, err := c.pki.GatewayTrustBundle()
-	if err != nil {
-		c.logger.Error("Failed to fetch trust bundle", "error", err)
-		trustBundle = []byte{}
-	}
-
-	c.logger.Info("[DELEGATED_CREDENTIAL] Minted delegated credential",
-		"app_id", appID,
-		"app_name", sanitizedName,
-		"user_id", userID,
-		"expires_at", parsedCert.NotAfter.UTC().Format(time.RFC3339))
-
-	c.responder.JSON(w, http.StatusCreated, AppEnrollResponse{
-		Success:     true,
-		AppCert:     certPEM,
-		CertChain:   chainPEM,
-		TrustBundle: string(trustBundle),
-		AppID:       appID,
-		ExpiresAt:   parsedCert.NotAfter.UTC().Format(time.RFC3339),
-	})
+	c.responder.JSON(w, http.StatusCreated, resp)
 }
 
 // @Summary		Web cert trust script (Linux/macOS)

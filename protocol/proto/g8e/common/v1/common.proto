@@ -44,17 +44,17 @@ message L1Metadata {
   repeated string violations = 2;
 }
 
-// Consensus (L2) Governance: a vote from a single Tribunal member.
+// Consensus (L2) Governance: a vote from a single L2 consensus member.
 message L2Vote {
   string signer_key_id       = 1; // member appID == TrustedSigner.ID
   string consensus_signature = 2; // ed25519 over "<transaction_hash>|<decision>"
   bool   decision            = 3; // member's safe (true) / unsafe (false) vote
 }
 
-// Consensus (L2) Governance: a vote set from an enrolled Tribunal.
+// Consensus (L2) Governance: a vote set from an enrolled consensus set.
 message L2Metadata {
-  string tribunal_id    = 1;      // TribunalPolicy.id that produced this set
-  repeated L2Vote votes = 2;      // independent member votes
+  string consensus_set_id = 1;    // ID of the consensus set that produced this vote set
+  repeated L2Vote votes   = 2;    // independent member votes
 }
 
 // Notary (L3Notary) Governance: Authorization (Human-in-the-loop)

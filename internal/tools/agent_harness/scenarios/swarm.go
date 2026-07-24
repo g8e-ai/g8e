@@ -5,9 +5,9 @@ package scenarios
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
 )
 
@@ -22,7 +22,7 @@ func swarmScenarios() []Scenario {
 			Name: "swarm-recon-mission", Title: "Swarm: authorized recon mission with governed drone deployment", Persona: swarmCommandAgent, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil {
-					return errors.New("gov kit not initialized (call SetGovKit)")
+					return constants.ErrHarnessGovKitNotInit
 				}
 				root, err := c.StateRoot(ctx)
 				if err != nil {

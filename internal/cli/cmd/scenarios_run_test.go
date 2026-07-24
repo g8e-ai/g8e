@@ -20,6 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
+	"github.com/g8e-ai/g8e/internal/tools/agent_harness/scenarios"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -176,5 +177,60 @@ func TestApplyAgentHarnessFlags(t *testing.T) {
 		applyAgentHarnessFlags(&cfg)
 		assert.True(t, cfg.Verbose)
 		harnessVerbose = false
+	})
+}
+
+func TestFailedScenariosError(t *testing.T) {
+	t.Run("all results OK returns nil", func(t *testing.T) {
+		results := []scenarios.Result{
+			{Name: "scenario-a", OK: true},
+			{Name: "scenario-b", OK: true},
+		}
+		err := failedScenariosError(results)
+		assert.NoError(t, err)
+	})
+
+	t.Run("all results failed returns error with all names", func(t *testing.T) {
+		results := []scenarios.Result{
+			{Name: "scenario-a", OK: false},
+			{Name: "scenario-b", OK: false},
+		}
+		err := failedScenariosError(results)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "2/2 scenarios failed")
+		assert.Contains(t, err.Error(), "scenario-a")
+		assert.Contains(t, err.Error(), "scenario-b")
+	})
+
+	t.Run("mixed results returns error with only failed names", func(t *testing.T) {
+		results := []scenarios.Result{
+			{Name: "scenario-a", OK: true},
+			{Name: "scenario-b", OK: false},
+			{Name: "scenario-c", OK: true},
+			{Name: "scenario-d", OK: false},
+		}
+		err := failedScenariosError(results)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "2/4 scenarios failed")
+		assert.Contains(t, err.Error(), "scenario-b")
+		assert.Contains(t, err.Error(), "scenario-d")
+		assert.NotContains(t, err.Error(), "scenario-a")
+		assert.NotContains(t, err.Error(), "scenario-c")
+	})
+
+	t.Run("empty results returns nil", func(t *testing.T) {
+		results := []scenarios.Result{}
+		err := failedScenariosError(results)
+		assert.NoError(t, err)
+	})
+
+	t.Run("single failed result returns error", func(t *testing.T) {
+		results := []scenarios.Result{
+			{Name: "only-failed", OK: false},
+		}
+		err := failedScenariosError(results)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "1/1 scenarios failed")
+		assert.Contains(t, err.Error(), "only-failed")
 	})
 }

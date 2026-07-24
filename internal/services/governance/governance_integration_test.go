@@ -56,7 +56,7 @@ func TestGovernanceFlow(t *testing.T) {
 	env.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{
-			TribunalId: "test-tribunal",
+			ConsensusSetId: "test-tribunal",
 			Votes: []*commonv1.L2Vote{
 				{
 					SignerKeyId:        nodeID,
@@ -106,13 +106,13 @@ func TestGovernanceFailClosed(t *testing.T) {
 		return signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
 	}
 
-	makeWarden := func(replayStore ReplayStore, stateRootProvider StateRootProvider, tribunalStore TribunalStore, doctrine *L1Doctrine, posture string) *L4Warden {
+	makeWarden := func(replayStore ReplayStore, stateRootProvider StateRootProvider, consensusPolicyStore L2ConsensusPolicyStore, doctrine *L1Doctrine, posture string) *L4Warden {
 		return NewL4Warden(
 			testutil.NewTestLogger(),
 			replayStore,
 			stateRootProvider,
 			&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{}},
-			tribunalStore,
+			consensusPolicyStore,
 			nil, // AppPolicyStore
 			nil, // L3Notary
 			doctrine,
@@ -165,8 +165,8 @@ func TestGovernanceFailClosed(t *testing.T) {
 		warden := makeWarden(testutil.NewStatefulMockReplayStore(), &governancetest.SimpleStateRootProvider{Root: "root-1"}, nil, NewL1Doctrine(), "consensus")
 		env := buildValidEnvelope(t)
 		_, err := warden.VerifyEnvelope(context.Background(), env)
-		if !errors.Is(err, ErrL2TribunalNotConfigured) {
-			t.Fatalf("expected ErrL2TribunalNotConfigured, got %v", err)
+		if !errors.Is(err, ErrL2ConsensusNotConfigured) {
+			t.Fatalf("expected ErrL2ConsensusNotConfigured, got %v", err)
 		}
 	})
 }

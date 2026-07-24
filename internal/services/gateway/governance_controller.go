@@ -292,7 +292,7 @@ func classifyEnvelopeError(err error) int {
 		errors.Is(err, constants.ErrTxStateRootMismatch),
 		errors.Is(err, constants.ErrTxL2SignatureMissing),
 		errors.Is(err, constants.ErrTxL2SignatureInvalid),
-		errors.Is(err, constants.ErrTxL2TribunalNotConfigured),
+		errors.Is(err, constants.ErrTxL2ConsensusNotConfigured),
 		errors.Is(err, constants.ErrTxL2QuorumNotMet),
 		errors.Is(err, constants.ErrTxL2DuplicateSigner),
 		errors.Is(err, constants.ErrTxL3ProofMissing),

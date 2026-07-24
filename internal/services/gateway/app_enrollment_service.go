@@ -135,25 +135,8 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 	}
 	appID := parsedCert.URIs[0].String()
 
-	// Persist default AppPolicy for the enrolled app
-	// This is required for handleAppAuth to accept the app certificate
-	policy := models.AppPolicy{
-		AppID:              appID, // full SPIFFE ID string from certificate
-		AllowedCollections: nil,   // not used for /mcp
-		RateLimitRPS:       0,     // 0 = unlimited (enforceAppPolicy skips when 0)
-		MaxPayloadBytes:    0,     // 0 = no extra cap (gateway maxPayloadBytes still applies)
-		RequireL3Approval:  false, // agent runs must not block on WebAuthn
-		CreatedAt:          time.Now().UTC(),
-		UpdatedAt:          time.Now().UTC(),
-	}
-	data, err := json.Marshal(policy)
-	if err != nil {
-		s.logger.Error("Failed to marshal app policy", "app_id", appID, "error", err)
-		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollMarshalAppPolicy.Error()}, nil
-	}
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionAppPolicies), appID, data); err != nil {
-		s.logger.Error("Failed to persist app policy", "app_id", appID, "error", err)
-		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollPersistAppPolicy.Error()}, nil
+	if err := s.persistAppPolicy(appID); err != nil {
+		return &AppEnrollResponse{Success: false, Error: err.Error()}, nil
 	}
 
 	// Fetch trust bundle
@@ -176,9 +159,106 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 		TrustBundle: string(trustBundle),
 		AppID:       appID,
 		ExpiresAt:   parsedCert.NotAfter.UTC().Format(time.RFC3339),
-		// L2SignerID is deliberately omitted as enrollment is identity-only by default.
-		// App policies and signers must be explicitly configured by an admin.
 	}, nil
+}
+
+// EnrollDelegatedApp handles delegated app enrollment with dual SANs (app + requestor).
+// The certificate is short-lived (1 hour) and binds both the app identity and the requesting user.
+// Like EnrollApp, it persists a default AppPolicy so handleAppAuth accepts the app certificate.
+func (s *AppEnrollmentService) EnrollDelegatedApp(req AppEnrollRequest, userID string) (*AppEnrollResponse, error) {
+	if req.CSR == "" {
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollCSRRequired.Error()}, nil
+	}
+	if req.AppName == "" {
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollAppNameRequired.Error()}, nil
+	}
+
+	sanitizedName := strings.Trim(req.AppName, " ")
+	if !isValidAppName(sanitizedName) {
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollInvalidAppName.Error()}, nil
+	}
+
+	block, _ := pem.Decode([]byte(req.CSR))
+	if block == nil || block.Type != "CERTIFICATE REQUEST" {
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollInvalidCSRPEM.Error()}, nil
+	}
+
+	csr, err := x509.ParseCertificateRequest(block.Bytes)
+	if err != nil {
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollParseCSR.Error()}, nil
+	}
+
+	if err := csr.CheckSignature(); err != nil {
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollCSRSignatureCheck.Error()}, nil
+	}
+
+	certPEM, chainPEM, err := s.pki.SignDelegatedCSR(req.CSR, sanitizedName, userID)
+	if err != nil {
+		s.logger.Error("Failed to sign delegated CSR", "app_name", sanitizedName, "user_id", userID, "error", err)
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollSignCertificate.Error()}, nil
+	}
+
+	certBlock, _ := pem.Decode([]byte(certPEM))
+	if certBlock == nil {
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollParseIssuedCert.Error()}, nil
+	}
+	parsedCert, err := x509.ParseCertificate(certBlock.Bytes)
+	if err != nil {
+		return &AppEnrollResponse{Success: false, Error: fmt.Sprintf("%s: %v", constants.ErrAppEnrollParseIssuedCert.Error(), err)}, nil
+	}
+	if len(parsedCert.URIs) == 0 {
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollNoURISAN.Error()}, nil
+	}
+	appID := parsedCert.URIs[0].String()
+
+	if err := s.persistAppPolicy(appID); err != nil {
+		return &AppEnrollResponse{Success: false, Error: err.Error()}, nil
+	}
+
+	trustBundle, err := s.pki.GatewayTrustBundle()
+	if err != nil {
+		s.logger.Error("Failed to fetch trust bundle", "error", err)
+		trustBundle = []byte{}
+	}
+
+	s.logger.Info("[DELEGATED_CREDENTIAL] Minted delegated credential",
+		"app_id", appID,
+		"app_name", sanitizedName,
+		"user_id", userID,
+		"expires_at", parsedCert.NotAfter.UTC().Format(time.RFC3339))
+
+	return &AppEnrollResponse{
+		Success:     true,
+		AppCert:     certPEM,
+		CertChain:   chainPEM,
+		TrustBundle: string(trustBundle),
+		AppID:       appID,
+		ExpiresAt:   parsedCert.NotAfter.UTC().Format(time.RFC3339),
+	}, nil
+}
+
+// persistAppPolicy writes a default AppPolicy for the given appID to the doc store.
+// This is required for handleAppAuth to accept the app certificate.
+func (s *AppEnrollmentService) persistAppPolicy(appID string) error {
+	policy := models.AppPolicy{
+		AppID:              appID,
+		AllowedCollections: nil,
+		RateLimitRPS:       0,
+		MaxPayloadBytes:    0,
+		RequireL3Approval:  false,
+		CreatedAt:          time.Now().UTC(),
+		UpdatedAt:          time.Now().UTC(),
+	}
+	data, err := json.Marshal(policy)
+	if err != nil {
+		s.logger.Error("Failed to marshal app policy", "app_id", appID, "error", err)
+		return constants.ErrAppEnrollMarshalAppPolicy
+	}
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionAppPolicies), appID, data); err != nil {
+		s.logger.Error("Failed to persist app policy", "app_id", appID, "error", err)
+		return constants.ErrAppEnrollPersistAppPolicy
+	}
+	return nil
 }
 
 // isValidAppName validates that the app name contains only allowed characters.

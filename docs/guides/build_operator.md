@@ -5,14 +5,14 @@ parent: Guides
 
 # Build a g8e Operator
 
-Last Updated: 2026-07-15
-Version: v1.5.2
+Last Updated: 2026-07-24
+Version: v1.6.2
 
 ---
 
 ## Overview
 
-A g8e-compatible g8e Operator implements the host-side Policy Execution Point (PEP) of the platform. It receives transactions, enforces the 5-layer verification sequence, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
+A g8e-compatible Operator implements the host-side Policy Execution Point (PEP) of the platform. It receives transactions, enforces the 5-layer verification sequence, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
 The reference implementation is a single Go codebase that compiles into the g8e binary. The same binary serves both g8e Gateway (PDP) and g8e Operator (PEP) roles, selected via subcommands. Custom Operator implementations must implement the same protocol contracts and invariants.
 
@@ -139,7 +139,7 @@ Custom operator implementations need the g8e Protocol Library for protobuf schem
 The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.5.0
+go get github.com/g8e-ai/g8e@v1.6.2
 ```
 
 Import the protobuf types and SPIFFE workload identity helpers:
@@ -164,7 +164,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For operator-side tooling, testing, or Python-based actuator services that need to consume protocol constants:
 
 ```bash
-pip install g8e==1.5.0
+pip install g8e==1.6.2
 ```
 
 The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
@@ -173,7 +173,7 @@ The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dyn
 
 ## Custom Operator Implementation
 
-To build a custom g8e-compatible g8e Operator, your implementation must satisfy the following protocol contracts.
+To build a custom g8e-compatible Operator, your implementation must satisfy the following protocol contracts.
 
 ### Required Capabilities
 

@@ -911,7 +911,7 @@ func TestEnsemble_TribunalID(t *testing.T) {
 		l2 := ens.Vote("abc123", true)
 
 		require.NotEmpty(t, l2.Votes)
-		assert.Equal(t, "dhs-tribunal", l2.TribunalId,
+		assert.Equal(t, "dhs-tribunal", l2.ConsensusSetId,
 			"Vote() must use the configured TribunalID")
 	})
 }

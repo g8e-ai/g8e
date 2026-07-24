@@ -44,7 +44,7 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 		replayStore,
 		stateRootProvider,
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key": pubKey}},
-		&governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{
+		&TribunalStoreAdapter{Inner: &governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{
 			"test-tribunal": {
 				ID:              "test-tribunal",
 				MemberAppIDs:    []string{"test-key"},
@@ -52,7 +52,7 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 				RequireDistinct: true,
 				Enabled:         true,
 			},
-		}},
+		}}},
 		nil, // AppPolicyStore not used in tests
 		l3Notary,
 		nil,                      // doctrine defaults to L1Doctrine
@@ -170,7 +170,7 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 	// L2 signs the hash (machine consensus before human notary)
 	env.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
-			TribunalId: "test-tribunal",
+			ConsensusSetId: "test-tribunal",
 			Votes: []*commonv1.L2Vote{
 				signL2Vote(privKey, "test-key", hash, true),
 			},
@@ -241,7 +241,7 @@ func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStor
 		replayStore,
 		stateRootProvider,
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"spiffe://g8e.local/app/test-app-id": pubKey}},
-		&governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{
+		&TribunalStoreAdapter{Inner: &governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{
 			"test-tribunal": {
 				ID:              "test-tribunal",
 				MemberAppIDs:    []string{"spiffe://g8e.local/app/test-app-id"},
@@ -249,7 +249,7 @@ func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStor
 				RequireDistinct: true,
 				Enabled:         true,
 			},
-		}},
+		}}},
 		appPolicyStore,
 		l3Notary,
 		nil, // doctrine defaults to L1Doctrine

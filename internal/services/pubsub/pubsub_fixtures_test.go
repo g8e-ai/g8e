@@ -45,11 +45,12 @@ func signL2Vote(privKey ed25519.PrivateKey, keyID, hash string, decision bool) *
 	}
 }
 
-// testTribunalStore returns a TribunalStore with a single 1-of-1 "test-tribunal"
-// policy whose sole member is "test-key". This mirrors the single trusted signer
-// registered by the pubsub test fixtures so L4 quorum verification can pass.
-func testTribunalStore() governance.TribunalStore {
-	return &governancetest.SimpleTribunalStore{
+// testTribunalStore returns an L2ConsensusPolicyStore with a single 1-of-1
+// "test-tribunal" policy whose sole member is "test-key". This mirrors the
+// single trusted signer registered by the pubsub test fixtures so L4 quorum
+// verification can pass.
+func testTribunalStore() governance.L2ConsensusPolicyStore {
+	return &governance.TribunalStoreAdapter{Inner: &governancetest.SimpleTribunalStore{
 		Tribunals: map[string]*models.TribunalPolicy{
 			"test-tribunal": {
 				ID:              "test-tribunal",
@@ -59,7 +60,7 @@ func testTribunalStore() governance.TribunalStore {
 				Enabled:         true,
 			},
 		},
-	}
+	}}
 }
 
 type pubsubFixture struct {
@@ -90,12 +91,12 @@ func newPubsubFixture(t *testing.T) *pubsubFixture {
 		ActuatorSigningKey: priv,
 		ActuatorKeyID:      "Actuator-key",
 	}, GovernanceDeps{
-		ReplayStore:       &testutil.MockReplayStore{},
-		StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-		TransactionAudit:  &testutil.MockTransactionAudit{},
-		L3Notary:          &testutil.MockL3Notary{},
-		SignerStore:       signerStore,
-		TribunalStore:     testTribunalStore(),
+		ReplayStore:          &testutil.MockReplayStore{},
+		StateRootProvider:    testutil.NewMockStateRootProvider("test-state-root"),
+		TransactionAudit:     &testutil.MockTransactionAudit{},
+		L3Notary:             &testutil.MockL3Notary{},
+		SignerStore:          signerStore,
+		ConsensusPolicyStore: testTribunalStore(),
 	})
 	if err != nil {
 		t.Fatalf("failed to create OperatorPubSubService: %v", err)

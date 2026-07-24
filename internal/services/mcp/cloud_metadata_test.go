@@ -147,21 +147,21 @@ func TestConvertToFieldValue_NestedNullInArray(t *testing.T) {
 	assert.Equal(t, "a", *v.Array[1].Str)
 }
 
-func TestSetTribunalDeliberator(t *testing.T) {
+func TestSetL2ConsensusDeliberator(t *testing.T) {
 	t.Parallel()
 
 	g := &GatewayService{}
-	assert.Nil(t, g.getTribunalDeliberator())
+	assert.Nil(t, g.getL2ConsensusDeliberator())
 
-	mock := &mockTribunalDeliberator{}
-	g.SetTribunalDeliberator(mock)
-	assert.NotNil(t, g.getTribunalDeliberator())
-	assert.Same(t, mock, g.getTribunalDeliberator())
+	mock := &mockL2ConsensusDeliberator{}
+	g.SetL2ConsensusDeliberator(mock)
+	assert.NotNil(t, g.getL2ConsensusDeliberator())
+	assert.Same(t, mock, g.getL2ConsensusDeliberator())
 }
 
-type mockTribunalDeliberator struct{}
+type mockL2ConsensusDeliberator struct{}
 
-func (m *mockTribunalDeliberator) Deliberate(ctx context.Context, envelopeBytes []byte) ([]byte, error) {
+func (m *mockL2ConsensusDeliberator) Deliberate(ctx context.Context, envelopeBytes []byte) ([]byte, error) {
 	return nil, nil
 }
 

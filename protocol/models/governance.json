@@ -41,12 +41,12 @@
   },
 
   "l2_metadata": {
-    "_description": "L2 Consensus proof: a vote set from an enrolled Tribunal. Serialized from L2Metadata (common.proto).",
-    "tribunal_id": {
+    "_description": "L2 Consensus proof: a vote set from an enrolled consensus set. Serialized from L2Metadata (common.proto).",
+    "consensus_set_id": {
       "type": "string",
       "required": false,
       "default": "",
-      "description": "TribunalPolicy.id that produced this vote set"
+      "description": "ID of the consensus set that produced this vote set"
     },
     "votes": {
       "type": "array",

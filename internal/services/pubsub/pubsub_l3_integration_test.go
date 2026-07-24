@@ -74,12 +74,12 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 		ActuatorKeyID:      "test-key",
 		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
 	}, GovernanceDeps{
-		L3Notary:          rejectingL3,
-		ReplayStore:       replayStore,
-		StateRootProvider: stateRootProvider,
-		TransactionAudit:  &testutil.MockTransactionAudit{},
-		SignerStore:       signerStore,
-		TribunalStore:     testTribunalStore(),
+		L3Notary:             rejectingL3,
+		ReplayStore:          replayStore,
+		StateRootProvider:    stateRootProvider,
+		TransactionAudit:     &testutil.MockTransactionAudit{},
+		SignerStore:          signerStore,
+		ConsensusPolicyStore: testTribunalStore(),
 	})
 	if err != nil {
 		t.Fatalf("failed to create command service: %v", err)
@@ -123,7 +123,7 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 	envelope.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{
-			TribunalId: "test-tribunal",
+			ConsensusSetId: "test-tribunal",
 			Votes: []*commonv1.L2Vote{
 				signL2Vote(privKey, "test-key", txHash, true),
 			},
@@ -199,12 +199,12 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 		ActuatorKeyID:      "test-key",
 		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
 	}, GovernanceDeps{
-		L3Notary:          acceptingL3,
-		ReplayStore:       replayStore,
-		StateRootProvider: stateRootProvider,
-		TransactionAudit:  &testutil.MockTransactionAudit{},
-		SignerStore:       signerStore,
-		TribunalStore:     testTribunalStore(),
+		L3Notary:             acceptingL3,
+		ReplayStore:          replayStore,
+		StateRootProvider:    stateRootProvider,
+		TransactionAudit:     &testutil.MockTransactionAudit{},
+		SignerStore:          signerStore,
+		ConsensusPolicyStore: testTribunalStore(),
 	})
 	if err != nil {
 		t.Fatalf("failed to create command service: %v", err)
@@ -248,7 +248,7 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 	envelope.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{
-			TribunalId: "test-tribunal",
+			ConsensusSetId: "test-tribunal",
 			Votes: []*commonv1.L2Vote{
 				signL2Vote(privKey, "test-key", txHash, true),
 			},
@@ -325,12 +325,12 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 		ActuatorKeyID:      "test-key",
 		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
 	}, GovernanceDeps{
-		L3Notary:          nil, // Explicitly nil to test fail-closed
-		ReplayStore:       replayStore,
-		StateRootProvider: stateRootProvider,
-		TransactionAudit:  &testutil.MockTransactionAudit{},
-		SignerStore:       signerStore,
-		TribunalStore:     testTribunalStore(),
+		L3Notary:             nil, // Explicitly nil to test fail-closed
+		ReplayStore:          replayStore,
+		StateRootProvider:    stateRootProvider,
+		TransactionAudit:     &testutil.MockTransactionAudit{},
+		SignerStore:          signerStore,
+		ConsensusPolicyStore: testTribunalStore(),
 	})
 	if err != nil {
 		t.Fatalf("failed to create command service: %v", err)
@@ -374,7 +374,7 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 	envelope.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{
-			TribunalId: "test-tribunal",
+			ConsensusSetId: "test-tribunal",
 			Votes: []*commonv1.L2Vote{
 				signL2Vote(privKey, "test-key", txHash, true),
 			},

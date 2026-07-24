@@ -96,14 +96,14 @@ type OperatorPubSubService struct {
 // gateway-only (nil in outbound mode) and backs the MCP gateway's read_field
 // operation.
 type GovernanceDeps struct {
-	ReplayStore       governance.ReplayStore
-	StateRootProvider governance.StateRootProvider
-	TransactionAudit  governance.TransactionAuditStore
-	L3Notary          governance.L3Notary
-	SignerStore       governance.SignerStore
-	AppPolicyStore    governance.AppPolicyStore
-	TribunalStore     governance.TribunalStore
-	FieldReader       mcp.FieldReader
+	ReplayStore          governance.ReplayStore
+	StateRootProvider    governance.StateRootProvider
+	TransactionAudit     governance.TransactionAuditStore
+	L3Notary             governance.L3Notary
+	SignerStore          governance.SignerStore
+	AppPolicyStore       governance.AppPolicyStore
+	ConsensusPolicyStore governance.L2ConsensusPolicyStore
+	FieldReader          mcp.FieldReader
 }
 
 // CommandServiceConfig holds non-governance dependencies for
@@ -301,7 +301,7 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, go
 		govDeps.ReplayStore,
 		govDeps.StateRootProvider,
 		rs.signerStore,
-		govDeps.TribunalStore,
+		govDeps.ConsensusPolicyStore,
 		govDeps.AppPolicyStore,
 		govDeps.L3Notary,
 		nil, // DoctrineValidator defaults to L1Doctrine

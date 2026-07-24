@@ -149,6 +149,7 @@ func TestDemoHTTPPort_AllKnownOrgs(t *testing.T) {
 		{constants.DemosOrgDoW, "8086"},
 		{constants.DemosOrgDHS, "8087"},
 		{constants.DemosOrgSwarm, "8085"},
+		{constants.DemosOrgFedRAMP, "8088"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.org, func(t *testing.T) {
@@ -159,6 +160,31 @@ func TestDemoHTTPPort_AllKnownOrgs(t *testing.T) {
 
 func TestDemoHTTPPort_UnknownOrgReturnsEmpty(t *testing.T) {
 	assert.Equal(t, "", demoHTTPPort("unknown-org"))
+}
+
+func TestDemoHTTPSPort_AllKnownOrgs(t *testing.T) {
+	tests := []struct {
+		org      string
+		expected string
+	}{
+		{constants.DemosOrgHealthcare, "8444"},
+		{constants.DemosOrgGov, "8443"},
+		{constants.DemosOrgFinance, "8445"},
+		{constants.DemosOrgSecureData, "8446"},
+		{constants.DemosOrgDoW, "8449"},
+		{constants.DemosOrgDHS, "8450"},
+		{constants.DemosOrgSwarm, "8448"},
+		{constants.DemosOrgFedRAMP, "8451"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.org, func(t *testing.T) {
+			assert.Equal(t, tt.expected, demoHTTPSPort(tt.org))
+		})
+	}
+}
+
+func TestDemoHTTPSPort_UnknownOrgReturnsEmpty(t *testing.T) {
+	assert.Equal(t, "", demoHTTPSPort("unknown-org"))
 }
 
 func TestBuildScpArgs_AllFlagsEnabled(t *testing.T) {

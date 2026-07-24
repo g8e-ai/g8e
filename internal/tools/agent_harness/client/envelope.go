@@ -97,7 +97,7 @@ func (e *Ensemble) Vote(txHash string, decision bool) *commonv1.L2Metadata {
 	basis := fmt.Sprintf("%s|%v", txHash, decision) // matches l2_consensus.SignDecision
 	sig := ed25519.Sign(e.priv, []byte(basis))
 	return &commonv1.L2Metadata{
-		TribunalId: e.TribunalID,
+		ConsensusSetId: e.TribunalID,
 		Votes: []*commonv1.L2Vote{
 			{
 				SignerKeyId:        e.KeyID,

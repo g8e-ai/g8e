@@ -229,10 +229,11 @@ func TestScenarioCounts(t *testing.T) {
 		assert.Equal(t, 3, scenarioCounts["dow"])
 		assert.Equal(t, 5, scenarioCounts["dhs"])
 		assert.Equal(t, 3, scenarioCounts["swarm"])
+		assert.Equal(t, 5, scenarioCounts["fedramp"])
 	})
 
 	t.Run("scenario counts map has expected entries", func(t *testing.T) {
-		expectedOrgs := []string{"healthcare", "gov", "finance", "secure-data", "dow", "dhs", "swarm"}
+		expectedOrgs := []string{"healthcare", "gov", "finance", "secure-data", "dow", "dhs", "swarm", "fedramp"}
 		for _, org := range expectedOrgs {
 			_, exists := scenarioCounts[org]
 			assert.True(t, exists, "scenarioCounts should have entry for %s", org)
@@ -352,6 +353,21 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "g8e auth enroll -e localhost:8085 --port 8448")
 	})
 
+	t.Run("prints fedramp endpoints", func(t *testing.T) {
+		var buf bytes.Buffer
+		cmd := &cobra.Command{}
+		cmd.SetOut(&buf)
+
+		printDemoEndpoints(cmd, "fedramp")
+
+		output := buf.String()
+		assert.Contains(t, output, "Available endpoints:")
+		assert.Contains(t, output, "http://localhost:8088")
+		assert.Contains(t, output, "https://localhost:8451")
+		assert.Contains(t, output, "https://localhost:8451/console/")
+		assert.Contains(t, output, "g8e auth enroll -e localhost:8088 --port 8451")
+	})
+
 	t.Run("prints default message for unknown org", func(t *testing.T) {
 		var buf bytes.Buffer
 		cmd := &cobra.Command{}
@@ -423,6 +439,13 @@ func TestRunScenario(t *testing.T) {
 		assert.Contains(t, err.Error(), "valid: 1-3")
 	})
 
+	t.Run("returns error with valid range for invalid fedramp scenario number", func(t *testing.T) {
+		_, err := runFedRAMPScenario("/tmp", "99")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid scenario number for fedramp")
+		assert.Contains(t, err.Error(), "valid: 1-5")
+	})
+
 	t.Run("healthcare scenario functions exist", func(t *testing.T) {
 		// Verify the scenario function exists and doesn't panic on valid input
 		// We don't execute it since it requires Docker
@@ -451,6 +474,10 @@ func TestRunScenario(t *testing.T) {
 
 	t.Run("swarm scenario functions exist", func(t *testing.T) {
 		assert.NotNil(t, runSwarmScenario)
+	})
+
+	t.Run("fedramp scenario functions exist", func(t *testing.T) {
+		assert.NotNil(t, runFedRAMPScenario)
 	})
 }
 
@@ -500,6 +527,12 @@ func TestRunAllScenarios(t *testing.T) {
 
 	t.Run("dhs has 5 scenarios", func(t *testing.T) {
 		count, ok := scenarioCounts["dhs"]
+		assert.True(t, ok)
+		assert.Equal(t, 5, count)
+	})
+
+	t.Run("fedramp has 5 scenarios", func(t *testing.T) {
+		count, ok := scenarioCounts["fedramp"]
 		assert.True(t, ok)
 		assert.Equal(t, 5, count)
 	})
@@ -748,6 +781,7 @@ func TestDemoScenarioFilesCallHarnessRun(t *testing.T) {
 		"demo_dow.go",
 		"demo_dhs.go",
 		"demo_swarm.go",
+		"demo_fedramp.go",
 	}
 
 	for _, file := range demoFiles {
@@ -772,6 +806,7 @@ func TestNoGatewayBypassInDemoFiles(t *testing.T) {
 		"demo_dow.go",
 		"demo_dhs.go",
 		"demo_swarm.go",
+		"demo_fedramp.go",
 	}
 
 	for _, file := range demoFiles {
@@ -798,6 +833,7 @@ func TestNoSqliteBackdoorInScenarioFiles(t *testing.T) {
 		"demo_dow.go",
 		"demo_dhs.go",
 		"demo_swarm.go",
+		"demo_fedramp.go",
 	}
 
 	for _, file := range scenarioFiles {
@@ -824,6 +860,7 @@ func TestNoCopyPasteInScenarioFiles(t *testing.T) {
 		"demo_dow.go",
 		"demo_dhs.go",
 		"demo_swarm.go",
+		"demo_fedramp.go",
 	}
 
 	for _, file := range scenarioFiles {
