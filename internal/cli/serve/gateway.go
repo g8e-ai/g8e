@@ -285,7 +285,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 			return fmt.Errorf("gateway: bootstrap tribunal service: %w", err)
 		}
 		svc.SetTribunal(tribunalSvc)
-		mcpSvc.SetTribunalDeliberator(tribunal.NewLocalDeliberator(tribunalSvc))
+		mcpSvc.SetL2ConsensusDeliberator(tribunal.NewLocalDeliberator(tribunalSvc))
 		logger.Info("Tribunal service bootstrapped", "tribunal_id", cfg.TribunalID)
 	}
 

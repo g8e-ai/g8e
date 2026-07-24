@@ -60,7 +60,7 @@ func tuiCmdWithDeps(deps tuiDeps) *cobra.Command {
 		Short: "Launch the Tactical Governance Console (TUI)",
 		Long: `Launch the Tactical Governance Console — a real-time terminal UI that
 connects to a running g8e Gateway via SSE and visualizes the execution
-pipeline (L1-L5), Sovereign Audit Ledger, and L2 Tribunal Consensus.
+pipeline (L1-L5), Sovereign Audit Ledger, and L2 Consensus.
 
 The Gateway must be running and the CLI must be enrolled (g8e auth enroll)
 before launching the TUI.

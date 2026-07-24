@@ -33,10 +33,10 @@ import (
 
 var errTribunalStoreDB = errors.New("tribunal store database unavailable")
 
-// errorTribunalStore simulates a TribunalStore whose backing database is unavailable.
+// errorTribunalStore simulates an L2ConsensusPolicyStore whose backing database is unavailable.
 type errorTribunalStore struct{}
 
-func (m *errorTribunalStore) GetTribunal(id string) (*models.TribunalPolicy, error) {
+func (m *errorTribunalStore) GetConsensusPolicy(id string) (*L2ConsensusPolicy, error) {
 	return nil, errTribunalStoreDB
 }
 
@@ -115,7 +115,7 @@ func TestL4Warden_L2SplitVote_QuorumNotMet(t *testing.T) {
 		testutil.NewStatefulMockReplayStore(),
 		testutil.NewMockStateRootProvider("root-1"),
 		&SimpleSignerStore{Signers: signers},
-		&governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{"split-trib": tribunal3of3}},
+		&TribunalStoreAdapter{Inner: &governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{"split-trib": tribunal3of3}}},
 		nil,
 		testutil.NewConfigurableMockL3Notary(true),
 		NewL1Doctrine(),
@@ -198,7 +198,7 @@ func TestL4Warden_L2VoteOrderingIndependence(t *testing.T) {
 			testutil.NewStatefulMockReplayStore(),
 			testutil.NewMockStateRootProvider("root-1"),
 			&SimpleSignerStore{Signers: signers},
-			&governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{"order-trib": tribunal2of2}},
+			&TribunalStoreAdapter{Inner: &governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{"order-trib": tribunal2of2}}},
 			nil,
 			testutil.NewConfigurableMockL3Notary(true),
 			NewL1Doctrine(),

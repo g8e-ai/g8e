@@ -267,7 +267,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 			testutil.NewStatefulMockReplayStore(),
 			testutil.NewMockStateRootProvider("root-1"),
 			&SimpleSignerStore{Signers: signers},
-			&governancetest.SimpleTribunalStore{Tribunals: tribunals},
+			&TribunalStoreAdapter{Inner: &governancetest.SimpleTribunalStore{Tribunals: tribunals}},
 			nil,
 			testutil.NewConfigurableMockL3Notary(true),
 			nil,

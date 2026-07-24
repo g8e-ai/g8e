@@ -89,7 +89,7 @@ func (e *DemoEmitter) Ledger(level tui.LedgerLevel, message string) {
 	e.program.Send(tui.LedgerMsg{Level: level, Message: message})
 }
 
-// Consensus emits a tribunal consensus update to the TUI.
+// Consensus emits an L2 consensus update to the TUI.
 func (e *DemoEmitter) Consensus(member constants.TribunalMember, decision, signed bool, quorum, total int, result tui.ConsensusResult, hash string) {
 	if e == nil || e.program == nil {
 		return

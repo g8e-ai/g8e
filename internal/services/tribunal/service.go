@@ -84,7 +84,7 @@ func (s *TribunalService) Deliberate(env *governance.GovernanceEnvelope) (*Delib
 		return nil, constants.ErrTribunalHashMismatch
 	}
 
-	cmdData, intent, err := extractCommandData(env)
+	cmdData, err := extractCommandData(env)
 	if err != nil {
 		return nil, fmt.Errorf("tribunal: deliberate: %w", err)
 	}
@@ -95,7 +95,7 @@ func (s *TribunalService) Deliberate(env *governance.GovernanceEnvelope) (*Delib
 			continue
 		}
 
-		isSafe := s.evaluateSafety(s.doctrine, env.TargetResource, cmdData, intent)
+		isSafe := s.evaluateSafety(s.doctrine, cmdData)
 
 		sig, err := signDecision(member.PrivateKey, env.Id, isSafe)
 		if err != nil {
@@ -107,6 +107,10 @@ func (s *TribunalService) Deliberate(env *governance.GovernanceEnvelope) (*Delib
 			ConsensusSignature: sig,
 			Decision:           isSafe,
 		})
+	}
+
+	if len(votes) == 0 {
+		return nil, constants.ErrTribunalNoSigningMembers
 	}
 
 	if env.Governance == nil {
@@ -173,7 +177,7 @@ func (s *TribunalService) HandleDeliberate(w http.ResponseWriter, r *http.Reques
 }
 
 // LocalDeliberator is an in-process adapter that satisfies the
-// mcp.TribunalDeliberator interface by calling TribunalService.Deliberate
+// mcp.L2ConsensusDeliberator interface by calling TribunalService.Deliberate
 // directly, without an HTTP round-trip. This is used when the Tribunal runs
 // in the same process as the gateway (single-binary deployment).
 type LocalDeliberator struct {

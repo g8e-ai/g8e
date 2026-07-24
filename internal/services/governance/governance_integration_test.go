@@ -106,13 +106,13 @@ func TestGovernanceFailClosed(t *testing.T) {
 		return signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
 	}
 
-	makeWarden := func(replayStore ReplayStore, stateRootProvider StateRootProvider, tribunalStore TribunalStore, doctrine *L1Doctrine, posture string) *L4Warden {
+	makeWarden := func(replayStore ReplayStore, stateRootProvider StateRootProvider, consensusPolicyStore L2ConsensusPolicyStore, doctrine *L1Doctrine, posture string) *L4Warden {
 		return NewL4Warden(
 			testutil.NewTestLogger(),
 			replayStore,
 			stateRootProvider,
 			&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{}},
-			tribunalStore,
+			consensusPolicyStore,
 			nil, // AppPolicyStore
 			nil, // L3Notary
 			doctrine,

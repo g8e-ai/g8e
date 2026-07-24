@@ -642,7 +642,7 @@ type TribunalSetup struct {
 // member's public key as a TrustedSigner, creates a TribunalPolicy in the TribunalStore,
 // constructs a TribunalService via the shared tribunal.NewTribunalFromPolicy factory,
 // and wires it into both the gateway service (SetTribunal) and the MCP gateway
-// (SetTribunalDeliberator).
+// (SetL2ConsensusDeliberator).
 //
 // If nServiceMembers < nMembers, only the first nServiceMembers are given private keys
 // — the remaining policy members exist in the store but cannot vote (their keys resolve
@@ -705,7 +705,7 @@ func SetupTribunal(t *testing.T, f *GatewayFixture, tribunalID string, nMembers,
 	require.NoError(t, err)
 
 	f.Service.SetTribunal(tribunalSvc)
-	f.MCPGateway.SetTribunalDeliberator(tribunal.NewLocalDeliberator(tribunalSvc))
+	f.MCPGateway.SetL2ConsensusDeliberator(tribunal.NewLocalDeliberator(tribunalSvc))
 
 	return &TribunalSetup{
 		TribunalID: tribunalID,

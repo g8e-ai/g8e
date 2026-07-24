@@ -394,7 +394,7 @@ The L4 Warden verifies L2 votes with identical logic regardless of posture; the 
 
 ## Tribunal
 
-The Tribunal is the enrolled agentic application that deliberates on governance envelopes and produces L2 consensus votes. It is the core component of the L2 Consensus verification layer. Each member is a distinct enrolled principal with its own Ed25519 key, registered as a trusted signer in the gateway's signer store.
+The Tribunal is the **reference implementation** of L2 Consensus shipped with g8e. L2 Consensus is a protocol concept defined by the g8e protocol (`L2Metadata`, `L2Vote`); the Tribunal is one concrete implementation. Alternative implementations can be built against the same protocol interfaces. Each member is a distinct enrolled principal with its own Ed25519 key, registered as a trusted signer in the gateway's signer store.
 
 ### Tribunal Policy
 

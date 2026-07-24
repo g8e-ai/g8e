@@ -149,7 +149,7 @@ Return centralized error constants from `internal/constants/errors.go` for known
 Several services have dependencies that cannot be passed to the constructor because they are created later in the boot sequence (circular or late-resolved dependency graphs). The canonical pattern for these is:
 
 - **`atomic.Pointer[T]`** for pointer-typed late-bound deps (e.g., `GovernanceController.tribunal`, `mcp.GatewayService.runtimeDeps`).
-- **`atomic.Value`** for interface-typed late-bound deps (e.g., `mcp.GatewayService.tribunalDeliberator`, `GovernanceController.envProc`).
+- **`atomic.Value`** for interface-typed late-bound deps (e.g., `mcp.GatewayService.l2ConsensusDeliberator`, `GovernanceController.envProc`).
 
 **Pattern rules:**
 

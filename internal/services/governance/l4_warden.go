@@ -50,7 +50,7 @@ type L4Warden struct {
 	replayStore       ReplayStore
 	stateRootProvider StateRootProvider
 	signerStore       SignerStore
-	tribunalStore     TribunalStore
+	tribunalStore     L2ConsensusPolicyStore
 	appPolicyStore    AppPolicyStore
 	l3Notary          L3Notary
 	doctrine          *L1Doctrine
@@ -67,7 +67,7 @@ func NewL4Warden(
 	replayStore ReplayStore,
 	stateRootProvider StateRootProvider,
 	signerStore SignerStore,
-	tribunalStore TribunalStore,
+	consensusPolicyStore L2ConsensusPolicyStore,
 	appPolicyStore AppPolicyStore,
 	l3Notary L3Notary,
 	doctrine *L1Doctrine,
@@ -95,7 +95,7 @@ func NewL4Warden(
 		replayStore:       replayStore,
 		stateRootProvider: stateRootProvider,
 		signerStore:       signerStore,
-		tribunalStore:     tribunalStore,
+		tribunalStore:     consensusPolicyStore,
 		appPolicyStore:    appPolicyStore,
 		l3Notary:          l3Notary,
 		doctrine:          doctrine,
@@ -332,7 +332,7 @@ func (tv *L4Warden) verifyStateful(envelope *govtypes.GovernanceEnvelope) (time.
 // L2 (machine consensus) is verified first. Only if L2 passes does L3
 // (human-presence) run. This preserves the architectural invariant: the
 // human's approval bond is spent only on transactions that have already
-// cleared tribunal consensus. A human should never be asked to authorize
+// cleared L2 consensus. A human should never be asked to authorize
 // content the machines have not yet vetted.
 func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *govtypes.GovernanceEnvelope, computedHash string) (bool, bool, error) {
 	l2Valid, err := tv.verifyL2Posture(envelope, computedHash)
@@ -369,30 +369,30 @@ func (tv *L4Warden) verifyL2Posture(envelope *govtypes.GovernanceEnvelope, compu
 
 	if tv.tribunalStore == nil {
 		if tv.posture.RequiresL2Signature() {
-			tv.logger.Error("Tribunal store not configured but required by posture", "posture", tv.posture.Name())
+			tv.logger.Error("L2 consensus policy store not configured but required by posture", "posture", tv.posture.Name())
 			return false, constants.ErrTxL2TribunalNotConfigured
 		}
 		return false, nil
 	}
 
-	policy, err := tv.tribunalStore.GetTribunal(l2.TribunalId)
+	policy, err := tv.tribunalStore.GetConsensusPolicy(l2.TribunalId)
 	if err != nil {
 		if tv.posture.RequiresL2Signature() {
-			tv.logger.Error("Failed to load tribunal policy", "tribunal_id", l2.TribunalId, string(constants.ConnectionStateError), err)
+			tv.logger.Error("Failed to load L2 consensus policy", "consensus_set_id", l2.TribunalId, string(constants.ConnectionStateError), err)
 			return false, fmt.Errorf("l4 warden: verify L2 posture: %w", err)
 		}
 		return false, nil
 	}
 	if policy == nil || !policy.Enabled {
 		if tv.posture.RequiresL2Signature() {
-			tv.logger.Error("Tribunal policy not found or disabled", "tribunal_id", l2.TribunalId)
+			tv.logger.Error("L2 consensus policy not found or disabled", "consensus_set_id", l2.TribunalId)
 			return false, constants.ErrTxL2TribunalNotConfigured
 		}
 		return false, nil
 	}
 
-	members := make(map[string]bool, len(policy.MemberAppIDs))
-	for _, m := range policy.MemberAppIDs {
+	members := make(map[string]bool, len(policy.MemberKeyIDs))
+	for _, m := range policy.MemberKeyIDs {
 		members[m] = true
 	}
 

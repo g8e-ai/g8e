@@ -878,6 +878,7 @@ var (
 	ErrTribunalFactoryNilPolicy      = errors.New("TRIBUNAL_FACTORY_NIL_POLICY: tribunal policy is nil")
 	ErrTribunalFactoryNilKeyProvider = errors.New("TRIBUNAL_FACTORY_NIL_KEY_PROVIDER: key provider is nil")
 	ErrTribunalNotConfigured         = errors.New("TRIBUNAL_NOT_CONFIGURED: tribunal service not yet initialized")
+	ErrTribunalNoSigningMembers     = errors.New("TRIBUNAL_NO_SIGNING_MEMBERS: no members with private keys available to sign votes")
 	ErrTxL3ProofMissing              = errors.New("TX_NOTARY_L3_PROOF_MISSING: Notary (L3Notary) WebAuthn proof required but missing")
 	ErrTxL3ProofInvalid              = errors.New("TX_NOTARY_L3_PROOF_INVALID: Notary (L3Notary) WebAuthn proof failed verification")
 	ErrTxL3NotaryNotConfigured       = errors.New("TX_NOTARY_L3_NOTARY_MISSING: Notary (L3Notary) required but not configured")

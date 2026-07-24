@@ -210,7 +210,7 @@ func TestTribunalService_Deliberate_WithIntentData(t *testing.T) {
 	assert.True(t, result.Envelope.Governance.L2.Votes[0].Decision)
 }
 
-func TestTribunalService_Deliberate_NilPrivateKey_Skipped(t *testing.T) {
+func TestTribunalService_Deliberate_NoSigningMembers_FailFast(t *testing.T) {
 	t.Parallel()
 	doctrine := govsvc.NewL1Doctrine()
 	members := []TribunalMember{
@@ -220,9 +220,26 @@ func TestTribunalService_Deliberate_NilPrivateKey_Skipped(t *testing.T) {
 
 	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))
 
-	result, err := svc.Deliberate(env)
-	require.NoError(t, err)
-	assert.Empty(t, result.Envelope.Governance.L2.Votes, "nil-key members should be skipped, producing zero votes")
+	_, err := svc.Deliberate(env)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrTribunalNoSigningMembers), "expected ErrTribunalNoSigningMembers when no members have private keys")
+}
+
+func TestTribunalService_Deliberate_MultipleKeylessMembers_FailFast(t *testing.T) {
+	t.Parallel()
+	doctrine := govsvc.NewL1Doctrine()
+	members := []TribunalMember{
+		{AppID: "keyless-1", PrivateKey: nil},
+		{AppID: "keyless-2", PrivateKey: nil},
+		{AppID: "keyless-3", PrivateKey: nil},
+	}
+	svc := NewTribunalService("test-tribunal", members, doctrine, slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+
+	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))
+
+	_, err := svc.Deliberate(env)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrTribunalNoSigningMembers))
 }
 
 func TestTribunalService_Deliberate_InitializesGovernance(t *testing.T) {

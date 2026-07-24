@@ -16,7 +16,7 @@
 package tests
 
 /*
-TestTribunalConsensus exercises the tribunal consensus and L1–L5 governance
+TestTribunalConsensus exercises the L2 consensus and L1–L5 governance
 pipeline through the in-process GatewayFixture. These integration tests prove:
 
 1. Idempotent client enrollment (re-enroll same identity succeeds)

@@ -164,8 +164,13 @@ Static, deterministic checks enforced before any code executes. Validated using 
 - **Critical System File Protection**: Blocks modifications to critical system paths including `/etc/passwd`, `/etc/shadow`, `/etc/sudoers`, `/etc/ssh/`, `/etc/pam.d/`, `/etc/ld.so.*`, system binaries in `/bin/`, `/sbin/`, `/usr/bin/`, `/usr/sbin/`, and boot configurations.
 - **Allow/Deny Lists**: Enforces per-host policy and user settings.
 
-### L2 Consensus: Tribunal Deliberation
-A cryptographic proof that an independent Tribunal (enrolled agentic application) deliberated on the instruction and produced signed votes. Tribunal service logic is defined in `../../internal/services/tribunal/service.go`.
+### L2 Consensus
+
+L2 Consensus is a protocol concept defined by the g8e protocol (`L2Metadata`, `L2Vote`). It requires a cryptographic proof that an independent consensus set deliberated on the instruction and produced signed votes. The protocol defines the wire format generically; any implementation that produces valid `L2Metadata` with signed `L2Vote` entries can satisfy L2 Consensus.
+
+#### Reference Implementation: Tribunal
+
+The Tribunal is the reference implementation of L2 Consensus shipped with g8e. It is an enrolled body of agentic applications that independently evaluate each transaction's payload. Tribunal service logic is defined in `../../internal/services/tribunal/service.go`.
 - Each Tribunal member independently evaluates the payload and signs an `L2Vote` over `transaction_hash | decision` using Ed25519.
 - The `L2Metadata` contains the `tribunal_id` and a list of `L2Vote` entries (signer key ID, signature, decision).
 - The gateway never self-signs L2 votes. Under `consensus` posture, the gateway calls the Tribunal's `/tribunal/v1/deliberate` endpoint before dispatch.
