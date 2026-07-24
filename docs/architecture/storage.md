@@ -1,13 +1,13 @@
 # Storage Architecture
 
-Last Updated: 2026-07-19
-Version: v1.5.9
+Last Updated: 2026-07-24
+Version: v1.6.2
 
 ## Overview
 
 The g8e storage layer is split into discrete services, each responsible for a specific persistence concern. Most services use SQLite as their backing store; the Ledger uses git for file version control, and the History Handler is a stateless coordinator that delegates to the Audit Store and Ledger. Mandatory [encryption at rest](./encryption.md) is enforced for sensitive data.
 
-Services that handle sensitive content require a vault. The Audit Store, Execution Vault, and Token Store fail closed when the vault is locked, returning errors rather than writing plaintext. The Ledger encrypts file copies when the vault is unlocked and fails closed for file retrieval and restoration. Services that store only public or non-sensitive data (nonces, governance envelopes, attestations) do not require encryption. The Audit Store and Token Store both operate on the shared gateway database (`g8e.db`), managed by the CanonicalDBService, rather than maintaining separate database files.
+Services that handle sensitive content require a vault. The Audit Store, Execution Vault, and Token Store fail closed when the vault is locked, returning errors rather than writing plaintext. The Ledger encrypts file copies when the vault is unlocked and fails closed for file retrieval and restoration. Services that store only public or non-sensitive data (nonces, governance envelopes, attestations) do not require encryption. The Audit Store, Token Store, and Replay Store operate on the shared gateway database (`g8e.db`) in gateway mode, managed by the CanonicalDBService. The CanonicalDBService owns the database connection, vault, and background maintenance, while domain logic is delegated to individual store services returned as a `Stores` struct. In outbound mode, the Replay Store uses a standalone SQLite database.
 
 The storage layer consists of the following services:
 
@@ -86,6 +86,7 @@ The Token Store provides encrypted key-value persistence for Sentinel tokens use
 - Supports TTL-based expiration for token entries
 - Supports prefix-based scanning to retrieve all tokens matching a namespace
 - Sentinel keys are namespaced with a dedicated prefix to avoid collisions with cache and document invalidation entries in the same table
+- Writes entries as observed-state so they do not participate in the bound state root hash
 
 ---
 
@@ -93,13 +94,15 @@ The Token Store provides encrypted key-value persistence for Sentinel tokens use
 
 The Replay Store provides nonce-based replay protection for governance transactions. It relies on SQLite's UNIQUE constraint on the nonce column for atomic replay detection, avoiding race conditions from separate read-then-write patterns.
 
+In gateway mode, the Replay Store operates on the shared gateway database (`g8e.db`) alongside the Audit Store and Token Store. In outbound mode, the Replay Store uses a standalone SQLite database with its own schema.
+
 **Capabilities:**
 
 - Atomically reserves nonces using a UNIQUE constraint to detect duplicates without application-level locking
 - Supports a nonce lifecycle: reserve, then either finalize (mark as used) or release (delete on transaction failure)
 - Fails closed on any SQLite error during cleanup or insertion, preventing replay protection from being silently bypassed
 - Provides expired nonce cleanup to prevent stale entries from accumulating
-- Provides stale reservation cleanup for recovery after crashes
+- Provides stale reservation cleanup for recovery after crashes (outbound mode)
 - Does not require encryption, as nonce data contains no sensitive content
 - Does not start a background pruner; callers invoke pruning and cleanup directly
 
@@ -218,12 +221,11 @@ Paths are normalized for platform-appropriate separators on Windows, converting 
 
 ### Transaction Flow
 
-1. The Replay Store atomically reserves the nonce.
-2. The governance layer executes the transaction through the [five-layer interlock](./auth.md).
-3. The Execution Vault stores the execution result.
-4. The Audit Store records the signed action receipt.
-5. The Replay Store finalizes the nonce.
-6. The Commitment Ledger appends the attestation.
+1. The governance layer processes the transaction through the [five-layer interlock](./auth.md); the L4 Warden reserves the nonce via the Replay Store as stage 1 of L4 processing.
+2. The Execution Vault stores the execution result.
+3. The Audit Store records the signed action receipt.
+4. The Replay Store finalizes the nonce.
+5. The Commitment Ledger appends the attestation.
 
 ### Approval Flow (L3)
 

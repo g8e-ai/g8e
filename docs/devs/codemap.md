@@ -10,6 +10,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   └── gateway.CanonicalDBService (for keystore DB access) [SHARED]
 ├── execution.ExecutionService
 ├── execution.FileEditService
+├── pubsub.PubSubClient (created in Start() if nil; used by OperatorPubSubService and PubSubResultsService)
 ├── pubsub.OperatorPubSubService
 │   ├── pubsub.HeartbeatService
 │   ├── pubsub.CommandService
@@ -61,6 +62,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 └── gateway.CanonicalDBService [SHARED] (lifecycle only: Open, Close, GetVault, schema/migrations, maintenance loop)
     ├── sqliteutil.DB
     ├── vault.Vault
+    ├── keystore.Keystore (passed to OpenCanonicalDBService)
     └── gateway.Stores (returned by OpenCanonicalDBService)
         ├── gateway.DocumentStoreService
         ├── gateway.AppPolicyStoreService
@@ -152,15 +154,24 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── mcp.GatewayService [SHARED]
 │   ├── gateway.GovernanceController (governance envelope submission, tribunal deliberation)
 │   │   ├── tribunal.TribunalService (atomic.Pointer, set by boot sequence via SetTribunal — no router rebuild)
-│   │   └── governance.EnvelopeProcessor (atomic.Value via envProcHolder, set by boot sequence via SetEnvelopeProcessor)
+│   │   ├── governance.EnvelopeProcessor (atomic.Value via envProcHolder, set by boot sequence via SetEnvelopeProcessor)
+│   │   └── response.Writer
 │   ├── gateway.PKIController (PKI enrollment, CSR signing, trust scripts, deploy scripts)
+│   │   ├── gateway.PKIAuthority [SHARED]
+│   │   ├── gateway.AppEnrollmentService [SHARED]
+│   │   ├── gateway.RegistrationService [SHARED]
+│   │   └── response.Writer
 │   ├── gateway.DBController (audit receipts, audit events, data DB, KV, blobs, governance signers, pub/sub)
 │   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   │   ├── gateway.KVStoreService (from Stores [SHARED])
 │   │   ├── gateway.SSEEventService (from Stores [SHARED])
 │   │   ├── gateway.BlobStoreService (from Stores [SHARED])
 │   │   ├── storage.SQLAuditStore (from Stores [SHARED])
-│   │   └── gateway.SignerStoreService (from Stores [SHARED])
+│   │   ├── gateway.SignerStoreService (from Stores [SHARED])
+│   │   ├── gateway.AuthService [SHARED]
+│   │   ├── gateway.GatewayWebSocketHandler [SHARED]
+│   │   ├── gateway.UserService [SHARED]
+│   │   └── response.Writer
 │   ├── gateway.AuthController (bootstrap, CLI enrollment, device enrollment, user management, web session)
 │   │   ├── gateway.AuthService [SHARED]
 │   │   ├── gateway.PasskeyHandler [SHARED]
@@ -177,15 +188,24 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.AdminController (app policies, tribunals, app revocation)
 │   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   │   ├── gateway.SignerStoreService (from Stores [SHARED])
-│   │   └── gateway.TribunalStoreService (from Stores [SHARED])
+│   │   ├── gateway.TribunalStoreService (from Stores [SHARED])
+│   │   ├── gateway.UserService [SHARED]
+│   │   └── response.Writer
 │   ├── gateway.SSEController (SSE push, events, stream)
 │   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   │   ├── gateway.KVStoreService (from Stores [SHARED])
-│   │   └── gateway.SSEEventService (from Stores [SHARED])
+│   │   ├── gateway.SSEEventService (from Stores [SHARED])
+│   │   ├── gateway.GatewayWebSocketHandler [SHARED]
+│   │   ├── gateway.AuthService [SHARED]
+│   │   └── response.Writer
 │   ├── gateway.HealthController (health checks, state root)
 │   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
-│   │   └── gateway.StateRootService (from Stores [SHARED])
+│   │   ├── gateway.StateRootService (from Stores [SHARED])
+│   │   └── response.Writer
 │   ├── gateway.OperatorController (operator list, terminate, bind/unbind, target context, reauth)
+│   │   ├── gateway.RegistrationService [SHARED]
+│   │   ├── gateway.AuthService [SHARED]
+│   │   └── response.Writer
 │   └── response.Writer
 ├── http.Server (HTTPS port, mTLS-enforced public router)
 ├── http.Server (HTTP port, bootstrap-only router)
@@ -343,7 +363,7 @@ The `g8e` binary (`internal/cli/cmd/main.go`) registers the following subcommand
 
 - **`gw`** (alias `gateway`): Gateway lifecycle management. Subcommands: `start` (background process; `--follow` flag runs in foreground as the re-exec target; `--interactive`/`-i` flag launches the onboarding wizard before startup), `stop`, `status`, `restart`, `logs`, `settings`, `reset`, `clean`, `setup` (interactive onboarding wizard; standalone entry point for `g8e gw setup`). Also includes `data`, `security`, and `tunnel` subcommand groups.
   - **`data`**: Administer the local platform over mTLS. Subcommands: `users`, `operators`, `settings`, `store`, `audit`.
-  - **`security`**: Security validation checks. Subcommands: `validate`, `pki`.
+  - **`security`**: Security validation checks. Subcommands: `validate`, `pki` (with `enroll` subcommand).
   - **`tunnel`**: Manage Cloudflare Tunnel for public gateway access. Subcommands: `create`, `run`, `status`.
 - **`auth`**: Authentication and session management. Subcommands: `enroll` (CSR-based enrollment with passkey registration), `logout`, `approve` (interactive OOB approval of suspended transactions via passkey).
 - **`mcp`**: MCP protocol operations. Subcommands: `stdio` (run g8e as an MCP server over stdio), `agent` (agent integration commands for AI coding tools). `agent` subcommands: `list` (list supported agent binaries), `show` (print MCP client configuration for a specific agent), `run` (launch an agent with g8e MCP configuration and native tools disabled; includes `verifyToolInterception` pre-launch config verification via `--verify` flag, enabled by default). Supported agents: Claude Code, OpenAI Codex, Goose, Gemini CLI.
@@ -550,6 +570,8 @@ The following packages are test-only and are not part of the production dependen
 - `scenarios/fedramp_governance_test.go` - FedRAMP scenario tests
 - `scenarios/shell_command.go` - Shared `shellCommandArgs` helper using `json.Marshal` with typed `shellCommandJSON` struct, replacing ad-hoc `fmt.Sprintf` JSON construction across scenario files.
 - `scenarios/shell_command_test.go` - Tests for `shellCommandArgs`: valid JSON construction, no-args case, special character escaping.
+- `scenarios/fs_list.go` - Shared `fsListArgs` helper using `json.Marshal` with typed `fsListJSON` struct, replacing ad-hoc JSON construction for `fs_list` tool invocations.
+- `scenarios/fs_list_test.go` - Tests for `fsListArgs`: valid JSON construction, special character escaping.
 - `scenarios/scenario.go` - Scenario registry, `Execute`, `Posture` types
 - `scenarios/scenario_test.go` - Scenario registry and execution tests
 

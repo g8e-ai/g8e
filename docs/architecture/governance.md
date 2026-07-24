@@ -201,8 +201,7 @@ The gateway performs initial admission checks on the envelope:
 1. **mTLS enforcement**: The HTTPS port accepts and verifies client certificates when present but does not require them at the TLS layer. mTLS enforcement for protected routes happens at the application layer, which checks client cert presence and validity for all non-public routes. Browser clients (console, WebAuthn flows) reach public routes without a client cert. The mTLS middleware extracts operator session IDs from certificate SPIFFE URI SANs and authenticates Operator, CLI, or App identities.
 2. **Certificate revocation check**: The gateway verifies that the client certificate is not revoked via the PKI authority.
 3. **Transport-to-envelope identity binding**: The gateway enforces that mTLS certificate URI SANs match envelope identity claims (operator session ID, operator ID), preventing impersonation.
-4. **Replay protection**: The gateway atomically reserves nonces in durable storage to prevent replay attacks at the gateway level.
-5. **Rate limiting**: The governance envelope submission endpoint is rate-limited.
+4. **Rate limiting**: The governance envelope submission endpoint is rate-limited.
 
 If the envelope passes admission, it is queued for processing. If it fails, the gateway rejects it immediately with a typed error and audit entry.
 
@@ -234,7 +233,7 @@ The **L4 Warden** is the primary orchestrator for the verification pipeline. It 
 
 1. **In-flight tracking** (stage 0): Prevents the same nonce from being processed concurrently.
 2. **Nonce reservation and expiry** (stage 1): Atomically reserves the nonce in durable storage to prevent replay attacks even if the operator crashes mid-execution. Checks expiry relative to an injectable clock.
-3. **Stateless validation** (stage 2): Structural checks (transaction ID, action type, payload presence), typed payload decoding, L1 Doctrine validation, and transaction hash recomputation and comparison. The hash is computed over the following fields in proto definition order: action type, target resource, payload (base64-encoded), state Merkle root, nonce, expiry timestamp (UTC RFC3339Nano), intent data (canonicalized), requestor user ID, and acting app ID. Intent data canonicalization rejects unsupported types with an error (no silent fallback), ensuring cross-language hash parity between Go and Python. L3 proof is intentionally not included in the transaction hash so that L2 (machine consensus) can sign the hash before L3 (human notary) is asked. Tamper-evidence for L3 is provided at verification time, when the proof is checked against the transaction hash.
+3. **Stateless validation** (stage 2): Structural checks (transaction ID, action type, payload presence), typed payload decoding, L1 Doctrine validation, and transaction hash recomputation and comparison. The hash is computed over the following fields in proto definition order: action type, target resource, payload (base64-encoded), state Merkle root, nonce, expiry timestamp (UTC fixed-microsecond format), intent data (canonicalized), requestor user ID, and acting app ID. Intent data canonicalization rejects unsupported types with an error (no silent fallback), ensuring cross-language hash parity between Go and Python. L3 proof is intentionally not included in the transaction hash so that L2 (machine consensus) can sign the hash before L3 (human notary) is asked. Tamper-evidence for L3 is provided at verification time, when the proof is checked against the transaction hash.
 4. **Stateful validation** (stage 3): State Merkle root validation against the operator's current state root.
 5. **Posture validation** (stage 4): L2 and L3 checks gated by the configured GovernancePosture.
 
