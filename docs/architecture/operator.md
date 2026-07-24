@@ -7,7 +7,7 @@ title: g8e Operator
 Last Updated: 2026-07-24
 Version: v1.6.2
 
-The **g8e Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
+The **Governed Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
 The reference implementation of a g8e-compliant Policy Execution Point (PEP) is the g8e binary file. The same binary operates in two modes:
 
@@ -63,7 +63,7 @@ The **L5Actuator** is the singular execution boundary permitted to mutate host s
 By exposing standard MCP and A2A interfaces, the Operator acts as the admission gate for BYO (Bring-Your-Own) AI clients. It isolates the complex requirements of the `GovernanceEnvelope` (such as transaction hashing and L2/L3 signature collection) behind a standardized tool-calling facade, mapping native JSON-RPC/HTTP requests directly to governed mutations.
 
 ### Native Tool Execution
-The g8e Operator compiles native tool playbooks directly into the g8e binary file to provide memory-safe, boundary-enforced execution for common operational tasks. These tools execute within the g8e Operator's execution boundary locally, without proxying to downstream MCP servers. AI agents interact with clean JSON schemas while the internal memory-safe execution layer enforces hard boundaries.
+The Governed Operator compiles native tool playbooks directly into the g8e binary file to provide memory-safe, boundary-enforced execution for common operational tasks. These tools execute within the Governed Operator's execution boundary locally, without proxying to downstream MCP servers. AI agents interact with clean JSON schemas while the internal memory-safe execution layer enforces hard boundaries.
 
 #### Database Triage & Performance Playbook
 - **db_discover_topology**: Automatically scans database schemas, tables, and column data types, returning a highly compressed JSON map. AI agents need this first to prevent hallucinated queries.
@@ -79,7 +79,7 @@ The g8e Operator compiles native tool playbooks directly into the g8e binary fil
 #### Resource & Process Governance Playbook
 - **proc_metric_top**: Extracts process IDs, memory maps, and CPU tracking from the host. It returns a tightly structured JSON array of the top resource-hogging processes.
 - **fs_disk_profile**: Recursively calculates directory sizes natively (equivalent to an optimized du --max-depth=2) starting from an approved path root. It instantly isolates unrotated log files or bloated tmp directories.
-- **proc_signal_safe**: Allows the AI to send explicit termination signals (SIGTERM, SIGKILL) to a process, but enforces a strict g8e binary file-level denylist (e.g., rejecting attempts to kill critical system processes or the g8e Operator itself).
+- **proc_signal_safe**: Allows the AI to send explicit termination signals (SIGTERM, SIGKILL) to a process, but enforces a strict g8e binary file-level denylist (e.g., rejecting attempts to kill critical system processes or the Governed Operator itself).
 - **proc_tree**: Inspects the process hierarchy to map parent-child relationships and identify process trees for targeted operations.
 
 #### Network & Connectivity Validation Playbook
@@ -112,16 +112,16 @@ The g8e Operator compiles native tool playbooks directly into the g8e binary fil
 - **run_shell_command**: Executes shell commands within the g8e execution boundary with strict argument validation and output capture.
 
 ### Identity, PKI, and mTLS
-The g8e Operator establishes workload identity bound to SPIFFE-style URI SANs, strictly enforced over mutual TLS (mTLS). See [Network Architecture](./network.md) for complete SPIFFE ID formats, PKI hierarchy, mTLS enforcement policies, and certificate revocation mechanisms.
+The Governed Operator establishes workload identity bound to SPIFFE-style URI SANs, strictly enforced over mutual TLS (mTLS). See [Network Architecture](./network.md) for complete SPIFFE ID formats, PKI hierarchy, mTLS enforcement policies, and certificate revocation mechanisms.
 
 ### JWT Authentication Isolation
-The g8e Operator is fully isolated from Identity Providers (IdP). The g8e Gateway handles all JWT validation, user provisioning, and role mapping. JIT provisioning is **owner-controlled**:
+The Governed Operator is fully isolated from Identity Providers (IdP). The Governance Gateway handles all JWT validation, user provisioning, and role mapping. JIT provisioning is **owner-controlled**:
 - **Owner-Centric Model**: The first human to authenticate becomes the Platform Owner. Starting the Gateway is the owner's act of authorization; no standing invite codes or manual approval steps are required for subsequent CSR enrollment.
 - **CSR-Based Enrollment**: For mTLS-based authentication, clients enroll via Certificate Signing Request (CSR) where they generate their own key pair and the Gateway acts as a Certificate Authority (CA) to sign the certificate. No shared secrets, no API keys to leak.
-- **JWT-Based JIT**: When a JWT is presented, the g8e Gateway validates the signature and provisions the user subject to platform owner authorization. The user is bound to the owner's organization.
+- **JWT-Based JIT**: When a JWT is presented, the Governance Gateway validates the signature and provisions the user subject to platform owner authorization. The user is bound to the owner's organization.
 - **Strict TTL**: CLI sessions have a 1-hour TTL. Web sessions have a 24-hour TTL. Long-lived access requires programmatic renewal or re-authentication.
-- **g8e Gateway Responsibility**: The g8e Gateway validates inbound `Authorization: Bearer <JWT>` tokens, performs JIT user provisioning subject to owner authorization, maps JWT roles to Personas, and injects `tenant_id` and `binding_persona` into the `GovernanceEnvelope`.
-- **g8e Operator Responsibility**: The g8e Operator receives only the pre-validated, enriched security metadata in the envelope. It decodes `tenant_id` and `binding_persona` from the envelope, propagates them into the execution context, and applies Persona-based data scrubbing (column masks, redaction) before returning results.
+- **Governance Gateway Responsibility**: The Governance Gateway validates inbound `Authorization: Bearer <JWT>` tokens, performs JIT user provisioning subject to owner authorization, maps JWT roles to Personas, and injects `tenant_id` and `binding_persona` into the `GovernanceEnvelope`.
+- **Governed Operator Responsibility**: The Governed Operator receives only the pre-validated, enriched security metadata in the envelope. It decodes `tenant_id` and `binding_persona` from the envelope, propagates them into the execution context, and applies Persona-based data scrubbing (column masks, redaction) before returning results.
 - **No IdP Dependency**: The Operator never requires outbound internet access to verify tokens or manage user state. This enables air-gapped and high-security deployments where the Operator has no external network connectivity.
 
 ### Local-First Audit Architecture (LFAA)
@@ -163,7 +163,7 @@ After completing platform bootstrap via `g8e auth enroll`, follow this workflow 
 
 ### 1. Verify Gateway Health
 
-Confirm the g8e Gateway is running and accessible:
+Confirm the Governance Gateway is running and accessible:
 
 ```bash
 g8e gw status

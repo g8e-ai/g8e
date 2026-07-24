@@ -26,9 +26,9 @@ The g8e Protocol platform is implemented as a single static binary that operates
 - **Local-First Audit Architecture (LFAA)**: The target host remains the source of truth for command history and file mutations, stored in a tamper-evident local ledger and SQL audit store.
 - **Canonical JSON (GovernanceEnvelope)**: Every mutation action is governed by a canonical JSON `GovernanceEnvelope` (protojson). This is the single canonical container for all g8e mutations, binding identity, intent, state, and governance proofs into one transaction.
 - **Transaction Invariants**: Every transaction is identified by a deterministic `transaction_hash` computed from its content. The envelope `id` must match this hash for the transaction to be valid.
-- **Protocol vs Implementation**: The protocol is the Gateway. Conforming implementations of the g8e Gateway and g8e Operator enforce these invariants.
-- **Sovereign Authority (PKI)**: The g8e Gateway owns the platform's PKI and is the only entity permitted to sign certificates. PKI files are stored under a platform-managed directory. See [Network Architecture](./network.md) for the complete PKI hierarchy and certificate management.
-- **CSR-Based Enrollment**: Participants enroll by submitting a Certificate Signing Request (CSR) to the g8e Gateway. Identities are encoded as SPIFFE URI SANs. See [Network Architecture](./network.md) for detailed enrollment procedures.
+- **Protocol vs Implementation**: The protocol is the Gateway. Conforming implementations of the Governance Gateway and Governed Operator enforce these invariants.
+- **Sovereign Authority (PKI)**: The Governance Gateway owns the platform's PKI and is the only entity permitted to sign certificates. PKI files are stored under a platform-managed directory. See [Network Architecture](./network.md) for the complete PKI hierarchy and certificate management.
+- **CSR-Based Enrollment**: Participants enroll by submitting a Certificate Signing Request (CSR) to the Governance Gateway. Identities are encoded as SPIFFE URI SANs. See [Network Architecture](./network.md) for detailed enrollment procedures.
 
 ---
 
@@ -112,7 +112,7 @@ By passing `--posture doctrine`, `--posture consensus`, or `--posture notary`, t
 
 ### Port Topology
 
-The g8e Gateway exposes two logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port. See [Network Architecture](./network.md) for detailed port topology, authentication requirements, and port constraints.
+The Governance Gateway exposes two logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port. See [Network Architecture](./network.md) for detailed port topology, authentication requirements, and port constraints.
 
 **HTTP Port (8080)**: Plain HTTP for bootstrap enrollment and PKI discovery endpoints only. This port serves the platform trust scripts (e.g., `/web-cert.sh`, `/web-cert.ps1`) required for self-signed CA trust. No MCP routes are available on this port.
 
@@ -182,7 +182,7 @@ The console SPA is an embedded single-page application served at `/console/`. Th
 
 ## MCP Endpoint Architecture
 
-The g8e Gateway (g8eg) implements a unified MCP (Model Context Protocol) endpoint. This endpoint provides a single-URL JSON-RPC dispatch contract that standard MCP clients expect.
+The Governance Gateway (g8eg) implements a unified MCP (Model Context Protocol) endpoint. This endpoint provides a single-URL JSON-RPC dispatch contract that standard MCP clients expect.
 
 ### Unified Endpoint Contract
 
@@ -368,35 +368,35 @@ When a standard AI client (such as Claude Code, Codex, Goose, or Gemini CLI) req
 
 ## JWT Authentication & JIT User Provisioning
 
-The g8e Gateway (g8eg) provides JWT authentication and Just-In-Time (JIT) user provisioning flows that fully isolate the downstream g8e Operator (g8eo) from Identity Providers (IdP). The g8e Gateway (g8eg) acts as the authentication brain, while the g8e Operator (g8eo) receives a pre-validated, enriched payload via the pub/sub pipe.
+The Governance Gateway (g8eg) provides JWT authentication and Just-In-Time (JIT) user provisioning flows that fully isolate the downstream Governed Operator (g8eo) from Identity Providers (IdP). The Governance Gateway (g8eg) acts as the authentication brain, while the Governed Operator (g8eo) receives a pre-validated, enriched payload via the pub/sub pipe.
 
 ### 4-Step JWT Flow
 The JWT authentication logic is implemented in the gateway auth middleware.
 
 **Step 1: Inbound HTTP Handshake and JWT Verification**
-The g8e Gateway (g8eg) intercepts inbound `Authorization: Bearer <JWT>` tokens on public MCP endpoints before routing to downstream execution logic. The middleware cryptographically verifies the JWT signature using JWKS, validates `exp`, `nbf`, `iss`, and `aud` claims, and extracts identity claims (`sub`, `tenant_id`, `roles`).
+The Governance Gateway (g8eg) intercepts inbound `Authorization: Bearer <JWT>` tokens on public MCP endpoints before routing to downstream execution logic. The middleware cryptographically verifies the JWT signature using JWKS, validates `exp`, `nbf`, `iss`, and `aud` claims, and extracts identity claims (`sub`, `tenant_id`, `roles`).
 
 **Step 2: Edge Validation and JIT Account Management**
-Following successful token validation, the g8e Gateway (g8eg) ensures the user exists locally and maps their roles:
+Following successful token validation, the Governance Gateway (g8eg) ensures the user exists locally and maps their roles:
 - **JIT Provisioning**: Checks the SQLite `users` collection for the `sub` (User ID). If the user does not exist, provisions the user account subject to platform owner authorization.
 - **Persona Mapping**: Loads declarative Persona definitions (e.g., `security-analyst`, `admin`) from the `personas` collection in the document store. Evaluates the JWT `roles` against these persona definitions to determine the active `binding_persona`.
 - **Context Injection**: Stores the resolved `binding_persona` and `tenant_id` into the request context.
 
 **Step 3: Enriched Pub/Sub Handoff (GovernanceEnvelope)**
-The g8e Gateway (g8eg) strips the heavy JWT and injects the evaluated security requirements directly into the canonical mutation envelope before passing it to the pub/sub broker:
+The Governance Gateway (g8eg) strips the heavy JWT and injects the evaluated security requirements directly into the canonical mutation envelope before passing it to the pub/sub broker:
 - The `GovernanceEnvelope` carries `tenant_id` and `binding_persona` as typed fields.
 - The pub/sub payload is strictly a canonical `GovernanceEnvelope` carrying typed payloads (e.g., `McpCallRequested`) alongside the validated security metadata.
 - The heavy JWT is discarded, reducing payload size.
 
-**Step 4: Native Execution and Data Scrubbing (g8e Operator)**
-When the outbound g8e Operator (g8eo) pulls the message off the pub/sub queue, it acts natively on the injected security metadata without second-guessing the g8e Gateway (g8eg):
-- The g8e Operator (g8eo) decodes the `GovernanceEnvelope` and extracts `tenant_id` and `binding_persona`.
+**Step 4: Native Execution and Data Scrubbing (Governed Operator)**
+When the outbound Governed Operator (g8eo) pulls the message off the pub/sub queue, it acts natively on the injected security metadata without second-guessing the Governance Gateway (g8eg):
+- The Governed Operator (g8eo) decodes the `GovernanceEnvelope` and extracts `tenant_id` and `binding_persona`.
 - These fields propagate into the execution context.
 - Native tool isolation applies column masks or data redaction (e.g., stripping `password_hash`, masking emails) directly based on the Persona before returning results.
 
 ### Operator Isolation from IdP
 
-This architecture ensures the g8e Operator (g8eo) never requires outbound internet access to verify tokens or manage user state. The g8e Gateway (g8eg) handles all IdP communication, JWT validation, and user lifecycle management. The g8e Operator (g8eo) receives only the pre-validated, enriched security metadata needed for execution.
+This architecture ensures the Governed Operator (g8eo) never requires outbound internet access to verify tokens or manage user state. The Governance Gateway (g8eg) handles all IdP communication, JWT validation, and user lifecycle management. The Governed Operator (g8eo) receives only the pre-validated, enriched security metadata needed for execution.
 
 ---
 
@@ -404,7 +404,7 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 
 | Session Type | Identifier | Purpose | Authentication |
 |---|---|---|---|
-| **Operator Session** | `operator_session_id` | Authenticates a specific **g8e Operator (g8eo)** (PEP). | mTLS (Operator Cert) |
+| **Operator Session** | `operator_session_id` | Authenticates a specific **Governed Operator (g8eo)** (PEP). | mTLS (Operator Cert) |
 | **CLI Session** | `cli_session_id` | Authenticates a **BYO/CLI client**. | mTLS (CLI Cert) |
 | **Web Session** | `web_session_id` | Authenticates a **browser-based client**. | Passkey (WebAuthn) |
 | **JWT Session** | `sub` (User ID) | Authenticates via external IdP JWT. | JWT (validated at Gateway) |
@@ -413,7 +413,7 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 
 ## Agent Integration
 
-The g8e Gateway provides zero-config ingress for agentic CLI coding tools (Claude Code, OpenAI Codex, Goose, Gemini CLI) through the MCP agent subcommands. Each supported agent has its native/built-in tools disabled at launch, forcing all I/O through the g8e MCP gateway for full L1-L5 governance enforcement.
+The Governance Gateway provides zero-config ingress for agentic CLI coding tools (Claude Code, OpenAI Codex, Goose, Gemini CLI) through the MCP agent subcommands. Each supported agent has its native/built-in tools disabled at launch, forcing all I/O through the g8e MCP gateway for full L1-L5 governance enforcement.
 
 ### Agent Subcommands
 
@@ -421,7 +421,7 @@ The agent integration provides the following subcommands:
 
 **`g8e mcp agent list`**: Lists all supported agent binaries that g8e supports for MCP integration: Claude Code, OpenAI Codex, Goose, and Gemini CLI.
 
-**`g8e mcp agent show <agent>`**: Prints MCP client configuration for connecting to the g8e Gateway from local coding tools. Displays three configuration matrices:
+**`g8e mcp agent show <agent>`**: Prints MCP client configuration for connecting to the Governance Gateway from local coding tools. Displays three configuration matrices:
 - g8e.local (mTLS): For production environments with DNS configured
 - IP Address (mTLS): For environments without DNS or direct IP access
 - Stdio Transport: For direct native tool access without gateway

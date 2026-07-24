@@ -20,7 +20,7 @@ The use of `g8e.local` and the underlying network architecture are driven by sev
 
 ## 1. PKI Hierarchy & Trust Domain
 
-The platform uses a four-tier PKI hierarchy issued by the g8e Gateway:
+The platform uses a four-tier PKI hierarchy issued by the Governance Gateway:
 
 | Tier | Certificate | Purpose | Validity |
 | :--- | :--- | :--- | :--- |
@@ -52,18 +52,18 @@ Each system component receives a SPIFFE ID, embedded as a Uniform Resource Ident
 
 | Workload Type | SPIFFE ID Format |
 | :--- | :--- |
-| **g8e Operator** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` |
+| **Governed Operator** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` |
 | **CLI / BYO Client** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` |
 | **Application / Agent** | `spiffe://g8e.local/app/<operator_id>` |
 | **User (Human Delegator)** | `spiffe://g8e.local/user/<user_id>` |
-| **g8e Gateway** | `spiffe://g8e.local/hub/operator-listen` |
+| **Governance Gateway** | `spiffe://g8e.local/hub/operator-listen` |
 | **Gateway Peer** | `spiffe://g8e.local/gateway/<gateway_id>` |
 
 ---
 
 ## 3. mTLS Enforcement
 
-The g8e Gateway enforces TLS 1.3 for all L7 communication.
+The Governance Gateway enforces TLS 1.3 for all L7 communication.
 
 ### Application-Layer mTLS Enforcement
 
@@ -88,12 +88,12 @@ Clients enroll in the platform using a Certificate Signing Request (CSR) bootstr
 
 1. **CA Discovery**: Clients fetch the platform gateway trust bundle (root CA, hub intermediate, operator intermediate, and gateway peer intermediate) from the endpoint `/.well-known/g8e/pki/ca-bundle`.
 2. **CSR Submission**: Clients generate a local ECDSA P-256 key pair and submit a CSR to `/api/v1/pki/csr/sign`.
-3. **Registration**: The g8e Gateway validates the CSR and binds the certificate to a user identity.
-4. **Session Issuance**: Upon successful enrollment, the g8e Gateway issues a specific `operator_session_id` or `cli_session_id`.
+3. **Registration**: The Governance Gateway validates the CSR and binds the certificate to a user identity.
+4. **Session Issuance**: Upon successful enrollment, the Governance Gateway issues a specific `operator_session_id` or `cli_session_id`.
 
 ### Trusting the Self-Signed Root CA
 
-Since the g8e Gateway acts as a self-signed CA, clients must explicitly trust the platform Root CA to allow secure HTTPS communication, especially for browser-based WebAuthn registration. The gateway serves platform-specific bootstrap scripts that automate the installation of the CA bundle into the system trust store.
+Since the Governance Gateway acts as a self-signed CA, clients must explicitly trust the platform Root CA to allow secure HTTPS communication, especially for browser-based WebAuthn registration. The gateway serves platform-specific bootstrap scripts that automate the installation of the CA bundle into the system trust store.
 
 | Platform | Endpoint | Action |
 | :--- | :--- | :--- |
@@ -128,9 +128,9 @@ The platform supports setup without requiring `/etc/hosts` changes or DNS config
 On Windows, `g8e auth enroll` auto-detects the platform and uses the Windows Certificate Store for CLI session enrollment. This is a CLI session enrollment (mTLS cert-based), distinct from the browser-based WebAuthn passkey flow (cookie-based web session).
 
 1. **CLI Enrollment**: Run `g8e auth enroll [--tpm]` to generate an ECDSA P-256 keypair in the Windows Certificate Store.
-2. **CSR Signing**: The CLI submits a CSR to the g8e Gateway and receives a signed certificate with SPIFFE URI SAN.
+2. **CSR Signing**: The CLI submits a CSR to the Governance Gateway and receives a signed certificate with SPIFFE URI SAN.
 3. **Certificate Import**: The signed certificate is imported to `Cert:\CurrentUser\My` in the Windows Certificate Store for Windows Hello native API access.
-4. **Session Binding**: The g8e Gateway extracts the SPIFFE URI SAN from the client certificate and creates a `cli_session_id` bound to the user identity.
+4. **Session Binding**: The Governance Gateway extracts the SPIFFE URI SAN from the client certificate and creates a `cli_session_id` bound to the user identity.
 
 **TPM-Backed Keys**: The `--tpm` flag (Windows-only) utilizes the Microsoft Platform Crypto Provider KSP to generate keys in hardware. Currently, the implementation uses a software-backed key with TPM annotation as the full CNG API integration is pending.
 
@@ -138,7 +138,7 @@ On Windows, `g8e auth enroll` auto-detects the platform and uses the Windows Cer
 
 ## 5. Port Topology
 
-The g8e Gateway utilizes a consolidated 2-port design. Surfaces with different TLS requirements are isolated by port.
+The Governance Gateway utilizes a consolidated 2-port design. Surfaces with different TLS requirements are isolated by port.
 
 Default ports:
 
@@ -193,7 +193,7 @@ When `g8e.local` does not resolve via system DNS, the CLI falls back to the mach
 
 ### Outbound-Only WebSocket Connectivity
 
-The g8e Operator uses dial-out WebSocket pub/sub connections with zero inbound port requirements. The operator establishes a persistent WebSocket connection to the gateway's `/api/v1/pubsub/stream` endpoint using mTLS. This eliminates the need to open inbound ports on managed hosts, reducing the attack surface.
+The Governed Operator uses dial-out WebSocket pub/sub connections with zero inbound port requirements. The operator establishes a persistent WebSocket connection to the gateway's `/api/v1/pubsub/stream` endpoint using mTLS. This eliminates the need to open inbound ports on managed hosts, reducing the attack surface.
 
 ### WebSocket Pub/Sub
 

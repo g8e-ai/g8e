@@ -7,7 +7,7 @@ title: SSE Streaming
 Last Updated: 2026-07-24
 Version: v1.6.2
 
-The g8e Gateway provides a Server-Sent Events (SSE) streaming infrastructure that enables real-time event delivery from app workloads to browser and CLI clients. g8e-compatible agentic ensembles publish typed events, including audit events, for downstream consumption. The gateway also produces SSE events internally for platform workflows such as passkey registration and L3 transaction approval.
+The Governance Gateway provides a Server-Sent Events (SSE) streaming infrastructure that enables real-time event delivery from app workloads to browser and CLI clients. g8e-compatible agentic ensembles publish typed events, including audit events, for downstream consumption. The gateway also produces SSE events internally for platform workflows such as passkey registration and L3 transaction approval.
 
 ---
 
@@ -36,7 +36,7 @@ flowchart TD
         producer["Event Producer"]
     end
 
-    subgraph Gateway ["g8e Gateway"]
+    subgraph Gateway ["Governance Gateway"]
         push["POST /api/v1/sse/push"]
         internal["Internal Producers\n(approval, passkey)"]
         db[("Event Store")]

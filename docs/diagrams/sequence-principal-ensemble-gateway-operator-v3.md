@@ -1,14 +1,14 @@
 # Sequence: Principal → Ensemble → Gateway → Operator (v3)
 
-First appeared in commit `8992215d`. Depicts the outbound-mode transaction flow where the g8e Operator runs as a separate process from the g8e Gateway. In gateway mode, the Operator service runs in-process and the pub/sub steps are replaced by a synchronous call to `ProcessEnvelope` (`internal/services/pubsub/pubsub_commands.go`).
+First appeared in commit `8992215d`. Depicts the outbound-mode transaction flow where the Governed Operator runs as a separate process from the Governance Gateway. In gateway mode, the Operator service runs in-process and the pub/sub steps are replaced by a synchronous call to `ProcessEnvelope` (`internal/services/pubsub/pubsub_commands.go`).
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant Principal as Principal<br/>(Human / AI Agent)
     participant Ensemble as Agentic Ensemble<br/>(g8e-compatible / BYO / MCP client)
-    participant Gateway as g8e Gateway<br/>(g8eg)
-    participant Operator as g8e Operator<br/>(g8eo)
+    participant Gateway as Governance Gateway<br/>(g8eg)
+    participant Operator as Governed Operator<br/>(g8eo)
 
     Operator->>Gateway: Establish mTLS WebSocket connection<br/>(wss://, subscribe to cmd channel)
 

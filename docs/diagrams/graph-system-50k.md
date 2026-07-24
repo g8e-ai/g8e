@@ -2,14 +2,14 @@
 
 The 50k ft view. The g8e binary file deploys as two logical roles from a single binary:
 
-- **g8e Gateway (PDP)**: The Policy Decision Point. Sits on top of the Operator substrate in the same process. Owns PKI, persistence, pub/sub brokering, and the governance envelope entry point. Listens for inbound work and publishes it via pub/sub.
-- **g8e Operator (PEP)**: The Policy Execution Point. The substrate beneath every deployment. Runs L4 Warden verification and L5 Actuator execution. In gateway mode, it receives work via loopback pub/sub. In outbound mode, it runs on a remote host and pulls work from the Gateway via outbound-only mTLS WebSocket.
+- **Governance Gateway (PDP)**: The Policy Decision Point. Sits on top of the Operator substrate in the same process. Owns PKI, persistence, pub/sub brokering, and the governance envelope entry point. Listens for inbound work and publishes it via pub/sub.
+- **Governed Operator (PEP)**: The Policy Execution Point. The substrate beneath every deployment. Runs L4 Warden verification and L5 Actuator execution. In gateway mode, it receives work via loopback pub/sub. In outbound mode, it runs on a remote host and pulls work from the Gateway via outbound-only mTLS WebSocket.
 
 The Gateway is not a separate program — it is the Operator with a service stack layered on top.
 
 ```mermaid
 graph TD
-    subgraph GatewayProcess ["g8e Gateway (PDP) — same binary, gateway mode"]
+    subgraph GatewayProcess ["Governance Gateway (PDP) — same binary, gateway mode"]
         direction TB
 
         subgraph GWStack ["Gateway Service Stack"]
@@ -36,7 +36,7 @@ graph TD
 
     subgraph RemoteHost ["Remote Host"]
         direction TB
-        RemoteOp["g8e Operator (PEP) — same binary, outbound mode"]
+        RemoteOp["Governed Operator (PEP) — same binary, outbound mode"]
         RemoteL4["L4 Warden<br/>re-validates L1–L4 locally"]
         RemoteL5["L5 Actuator<br/>execution + signed receipt"]
         RemoteLedger[("LFAA Ledger<br/>& Audit Vault")]
