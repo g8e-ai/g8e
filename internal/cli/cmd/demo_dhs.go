@@ -14,15 +14,11 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
 )
 
 // defaultDHSHarnessConfig returns the config matching the DHS compose topology.
@@ -478,17 +474,4 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		return scenarioResult{}, fmt.Errorf("invalid scenario number for dhs: %q (valid: 1-5)", scenario)
 	}
 	return result, nil
-}
-
-// extractFirstTxHash parses the JSON response from GET /api/v1/approvals/pending
-// and returns the first transaction_hash, or "" if none found.
-func extractFirstTxHash(jsonBody string) string {
-	var resp models.SuspendedTransactionsResponse
-	if err := json.Unmarshal([]byte(jsonBody), &resp); err != nil {
-		return ""
-	}
-	if len(resp.Transactions) == 0 {
-		return ""
-	}
-	return resp.Transactions[0].TransactionHash
 }

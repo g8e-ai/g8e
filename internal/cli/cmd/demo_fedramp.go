@@ -15,8 +15,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/g8e-ai/g8e/internal/cli/tui"

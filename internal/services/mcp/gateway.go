@@ -1166,9 +1166,9 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 	// Construct MCP tools/call request with proper params envelope.
 	// The MCP tools/call protocol requires Params: {"name": toolName, "arguments": toolArgs}.
 	// Sending raw toolArgs as Params causes downstream servers to fail tool name lookup.
-	mcpParams, err := json.Marshal(map[string]any{
-		"name":      toolName,
-		"arguments": toolArgs,
+	mcpParams, err := json.Marshal(CallToolRequest{
+		Name:      toolName,
+		Arguments: toolArgs,
 	})
 	if err != nil {
 		return "", fmt.Errorf("gateway: %w", constants.ErrInternal)

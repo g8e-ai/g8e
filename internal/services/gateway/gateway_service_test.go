@@ -360,6 +360,78 @@ func TestGatewayModeService_GetGovernanceDeps(t *testing.T) {
 	assert.Equal(t, stores.DocStore, deps.FieldReader)
 }
 
+func TestGatewayModeService_GetGovernanceDeps_L3MockWiring(t *testing.T) {
+	t.Run("G8E_L3_MOCK=true returns demo notary that auto-approves", func(t *testing.T) {
+		t.Setenv("G8E_L3_MOCK", "true")
+
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+
+		dbDir := testutil.TempDir(t)
+		pkiDir := testutil.TempDir(t)
+		fileSvc := newTestFileSvc(t)
+		db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
+		require.NoError(t, err)
+		t.Cleanup(func() { db.Close() })
+
+		pubsub := NewGatewayWebSocketHandler(logger)
+		t.Cleanup(func() { pubsub.Close() })
+
+		cfg.Gateway.PKIDir = pkiDir
+		cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
+		cfg.Gateway.DataDir = dbDir
+		cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
+
+		ls, err := newGatewayModeServiceForTest(cfg, fileSvc, logger, db, stores, pubsub)
+		require.NoError(t, err)
+		t.Cleanup(func() { ls.Stop(context.Background()) })
+
+		deps := ls.GetGovernanceDeps()
+		require.NotNil(t, deps.L3Notary)
+
+		// demoL3Notary auto-approves any non-nil proof, even without credential_id.
+		proof := &commonv1.L3Proof{}
+		ok, err := deps.L3Notary.VerifyL3Proof(context.Background(), "test-user", "test-hash", "", proof)
+		assert.True(t, ok)
+		assert.NoError(t, err)
+	})
+
+	t.Run("G8E_L3_MOCK unset returns gateway notary that requires passkey", func(t *testing.T) {
+		t.Setenv("G8E_L3_MOCK", "")
+
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+
+		dbDir := testutil.TempDir(t)
+		pkiDir := testutil.TempDir(t)
+		fileSvc := newTestFileSvc(t)
+		db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
+		require.NoError(t, err)
+		t.Cleanup(func() { db.Close() })
+
+		pubsub := NewGatewayWebSocketHandler(logger)
+		t.Cleanup(func() { pubsub.Close() })
+
+		cfg.Gateway.PKIDir = pkiDir
+		cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
+		cfg.Gateway.DataDir = dbDir
+		cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
+
+		ls, err := newGatewayModeServiceForTest(cfg, fileSvc, logger, db, stores, pubsub)
+		require.NoError(t, err)
+		t.Cleanup(func() { ls.Stop(context.Background()) })
+
+		deps := ls.GetGovernanceDeps()
+		require.NotNil(t, deps.L3Notary)
+
+		// gatewayNotary rejects proofs without credential_id.
+		proof := &commonv1.L3Proof{}
+		ok, err := deps.L3Notary.VerifyL3Proof(context.Background(), "test-user", "test-hash", "", proof)
+		assert.False(t, ok)
+		assert.ErrorIs(t, err, constants.ErrPasskeyProofRequired)
+	})
+}
+
 func TestGatewayModeService_StartStop(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
