@@ -62,14 +62,17 @@ type HTTPHandler struct {
 	responder *response.Writer
 	mcp       *mcp.GatewayService
 	// Controllers for domain-specific endpoints
-	pkiController        *PKIController
-	dbController         *DBController
-	authController       *AuthController
-	adminController      *AdminController
-	operatorController   *OperatorController
-	sseController        *SSEController
-	healthController     *HealthController
-	governanceController *GovernanceController
+	pkiController            *PKIController
+	dbController             *DBController
+	bootstrapController       *BootstrapController
+	enrollmentTokenController *EnrollmentTokenController
+	userController            *UserController
+	sessionController         *SessionController
+	adminController           *AdminController
+	operatorController        *OperatorController
+	sseController             *SSEController
+	healthController          *HealthController
+	governanceController      *GovernanceController
 
 	// Main router cached at construction to avoid rebuilding on every request
 	router http.Handler
@@ -115,25 +118,36 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 		Responder:   deps.Responder,
 	})
 
-	// Initialize actuator key reader for device enrollment
-	actuatorKeyReader := &fileActuatorKeyReader{path: paths.Infra.ActuatorPubJSONPath}
+	// Initialize auth sub-controllers
 	enrollmentTokenSvc := NewEnrollmentTokenService(deps.Stores.DocStore, deps.Logger)
-	h.authController = newAuthController(AuthControllerDeps{
+	h.bootstrapController = newBootstrapController(BootstrapControllerDeps{
 		Cfg:                deps.Cfg,
 		Logger:             deps.Logger,
 		DocStore:           deps.Stores.DocStore,
-		Auth:               deps.Auth,
-		Passkey:            deps.Passkey,
 		UserSvc:            deps.UserSvc,
-		Reg:                deps.Reg,
 		PKI:                deps.PKI,
-		WebSessionSvc:      deps.WebSessionSvc,
 		CLISessionSvc:      deps.CLISessionSvc,
 		OperatorSessionSvc: deps.OperatorSessionSvc,
+		Responder:          deps.Responder,
+		ActuatorKeyReader:  &fileActuatorKeyReader{path: paths.Infra.ActuatorPubJSONPath},
+	})
+	h.enrollmentTokenController = newEnrollmentTokenController(EnrollmentTokenControllerDeps{
+		Cfg:                deps.Cfg,
+		Logger:             deps.Logger,
 		EnrollmentTokenSvc: enrollmentTokenSvc,
 		Responder:          deps.Responder,
-		ActuatorKeyReader:  actuatorKeyReader,
-		CrossOrigin:        len(deps.Cfg.Gateway.AllowedOrigins) > 0,
+	})
+	h.userController = newUserController(UserControllerDeps{
+		Cfg:       deps.Cfg,
+		Logger:    deps.Logger,
+		UserSvc:   deps.UserSvc,
+		Responder: deps.Responder,
+	})
+	h.sessionController = newSessionController(SessionControllerDeps{
+		Logger:      deps.Logger,
+		DocStore:    deps.Stores.DocStore,
+		Responder:   deps.Responder,
+		CrossOrigin: len(deps.Cfg.Gateway.AllowedOrigins) > 0,
 	})
 	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.SignerStore, deps.Stores.TribunalStore, deps.UserSvc, deps.Responder)
 	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)

@@ -15,12 +15,39 @@ package gateway
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
+	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/response"
 )
+
+// UserControllerDeps groups all dependencies for UserController.
+type UserControllerDeps struct {
+	Cfg       *config.Config
+	Logger    *slog.Logger
+	UserSvc   *UserService
+	Responder *response.Writer
+}
+
+// UserController handles user CRUD and profile retrieval.
+type UserController struct {
+	cfg       *config.Config
+	logger    *slog.Logger
+	userSvc   *UserService
+	responder *response.Writer
+}
+
+func newUserController(deps UserControllerDeps) *UserController {
+	return &UserController{
+		cfg:       deps.Cfg,
+		logger:    deps.Logger,
+		userSvc:   deps.UserSvc,
+		responder: deps.Responder,
+	}
+}
 
 // @Summary		Create user
 // @Description	Creates a new user with a generated ID. Zero-PII: users are created with only
@@ -32,13 +59,13 @@ import (
 // @Failure		405		{string}	string	"Method Not Allowed"
 // @Failure		409		{string}	string	"Conflict — user creation failed"
 // @Router			/api/v1/users [post]
-func (c *AuthController) handleUsers(w http.ResponseWriter, r *http.Request) {
+func (c *UserController) handleUsers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
-	body, err := c.readBody(w, r)
+	body, err := readRequestBody(r, c.cfg.Gateway.MaxPayloadBytes)
 	if err != nil {
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
@@ -67,42 +94,6 @@ func (c *AuthController) handleUsers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Browser Auth Handlers (Public Router)
-// =============================================================================
-
-// @Summary		Logout
-// @Description	Clears the web session cookie and deletes the session from the database.
-// @Tags			auth
-// @Produce		json
-// @Success		200	{object}	models.StatusResponse
-// @Router			/api/v1/auth/logout [post]
-func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(constants.WebSessionCookieName)
-	if err == nil {
-		// Best effort delete web session from DB
-		if _, err := c.docStore.DocDelete(marshaler.CollectionName(constants.CollectionWebSessions), cookie.Value); err != nil {
-			c.logger.Warn("Failed to delete web session during logout", "error", err, "sessionID", cookie.Value)
-		}
-	}
-
-	// Clear cookie
-	clearCookie := &http.Cookie{
-		Name:     constants.WebSessionCookieName,
-		Value:    "",
-		Path:     constants.PathRoot,
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	}
-	if c.crossOrigin {
-		clearCookie.SameSite = http.SameSiteNoneMode
-	}
-	http.SetCookie(w, clearCookie)
-
-	c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
-}
-
 // @Summary		Get current user
 // @Description	Returns the authenticated user's profile. Identity comes from the auth context
 // @Description	(mTLS or web session cookie).
@@ -112,7 +103,7 @@ func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.R
 // @Failure		401	{string}	string	"Unauthorized"
 // @Failure		404	{string}	string	"User not found"
 // @Router			/api/v1/users/me [get]
-func (c *AuthController) handleUserMe(w http.ResponseWriter, r *http.Request) {
+func (c *UserController) handleUserMe(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok {
 		c.responder.Error(w, http.StatusUnauthorized, constants.ErrNotAuthenticated.Error())
@@ -132,32 +123,5 @@ func (c *AuthController) handleUserMe(w http.ResponseWriter, r *http.Request) {
 	c.responder.JSON(w, http.StatusOK, models.UserMeResponse{
 		Success: true,
 		User:    user,
-	})
-}
-
-// @Summary		Get current web session
-// @Description	Returns the authenticated user's ID and web session ID from the session cookie.
-// @Tags			auth
-// @Produce		json
-// @Success		200	{object}	models.WebSessionResponse
-// @Failure		401	{string}	string	"Unauthorized"
-// @Router			/api/v1/auth/sessions/me [get]
-func (c *AuthController) handleWebSession(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
-	if !ok {
-		c.responder.Error(w, http.StatusUnauthorized, constants.ErrNotAuthenticated.Error())
-		return
-	}
-
-	cookie, _ := r.Cookie(constants.WebSessionCookieName)
-	webSessionID := ""
-	if cookie != nil {
-		webSessionID = cookie.Value
-	}
-
-	c.responder.JSON(w, http.StatusOK, models.WebSessionResponse{
-		Success:      true,
-		UserID:       userID,
-		WebSessionID: webSessionID,
 	})
 }

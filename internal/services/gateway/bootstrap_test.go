@@ -68,7 +68,7 @@ func TestBootstrapFlow(t *testing.T) {
 	// 1. Initial status - not bootstrapped
 	req := httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/status", nil)
 	rr := httptest.NewRecorder()
-	h.authController.handleBootstrapStatus(rr, req)
+	h.bootstrapController.handleBootstrapStatus(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 	var statusResp models.BootstrapStatusResponse
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &statusResp))
@@ -85,7 +85,7 @@ func TestBootstrapFlow(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPost, "/api/auth/bootstrap", bytes.NewReader(body))
 	req.RemoteAddr = "127.0.0.1:12345"
 	rr = httptest.NewRecorder()
-	h.authController.handleLocalBootstrapWithURL(rr, req)
+	h.bootstrapController.handleLocalBootstrapWithURL(rr, req)
 	require.Equal(t, http.StatusCreated, rr.Code, "Bootstrap failed: %s", rr.Body.String())
 
 	var resp models.BootstrapResponse
@@ -108,7 +108,7 @@ func TestBootstrapFlow(t *testing.T) {
 	// 3. Status - now bootstrapped
 	req = httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/status", nil)
 	rr = httptest.NewRecorder()
-	h.authController.handleBootstrapStatus(rr, req)
+	h.bootstrapController.handleBootstrapStatus(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &statusResp))
 	assert.True(t, statusResp.Bootstrapped)

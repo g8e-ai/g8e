@@ -793,10 +793,10 @@ func (ls *GatewayModeService) runEnrollmentTokenCleanup(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if ls.handler == nil || ls.handler.authController == nil || ls.handler.authController.enrollmentTokenSvc == nil {
+			if ls.handler == nil || ls.handler.enrollmentTokenController == nil || ls.handler.enrollmentTokenController.enrollmentTokenSvc == nil {
 				continue
 			}
-			if err := ls.handler.authController.enrollmentTokenSvc.CleanupExpiredTokens(); err != nil {
+			if err := ls.handler.enrollmentTokenController.enrollmentTokenSvc.CleanupExpiredTokens(); err != nil {
 				ls.logger.Warn("Enrollment token cleanup error", "error", err)
 			}
 		}

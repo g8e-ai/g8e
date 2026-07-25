@@ -53,16 +53,16 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 
 	// Landing page and health
 	mux.HandleFunc(constants.APIPaths.Landing, h.healthController.handleLandingPage)
-	mux.HandleFunc(constants.APIPaths.AuthLogout, h.authController.handlePublicAuthLogout)
-	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handleLocalBootstrapWithURL)
-	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.authController.handleBootstrapStatus)
-	mux.HandleFunc(constants.APIPaths.AuthCLIEnroll, h.authController.handleCLIEnrollment)
-	mux.HandleFunc(constants.APIPaths.AuthDeviceEnroll, h.authController.handleDeviceEnrollment)
+	mux.HandleFunc(constants.APIPaths.AuthLogout, h.sessionController.handlePublicAuthLogout)
+	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.bootstrapController.handleLocalBootstrapWithURL)
+	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.bootstrapController.handleBootstrapStatus)
+	mux.HandleFunc(constants.APIPaths.AuthCLIEnroll, h.bootstrapController.handleCLIEnrollment)
+	mux.HandleFunc(constants.APIPaths.AuthDeviceEnroll, h.bootstrapController.handleDeviceEnrollment)
 	mux.HandleFunc(constants.APIPaths.PKIAppsEnroll, h.pkiController.handlePKIAppsEnroll)
 	mux.HandleFunc(constants.APIPaths.PKIDevicesEnroll, h.pkiController.handlePKIDevicesEnroll)
 
 	// Enrollment token validation (public — the token itself is the credential)
-	mux.HandleFunc(constants.APIPaths.AuthEnrollmentTokenValidate, h.authController.handleEnrollmentTokenValidate)
+	mux.HandleFunc(constants.APIPaths.AuthEnrollmentTokenValidate, h.enrollmentTokenController.handleEnrollmentTokenValidate)
 
 	// MCP/A2A ingress (rate-limited, JWT when JWKS is configured, else mTLS via main middleware)
 	mcpHandler := h.buildMCPHandler()
@@ -143,13 +143,13 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.PKIRevocationBundle, h.pkiController.handlePKIRevocationBundle)
 
 	// User management routes (require mTLS)
-	mux.HandleFunc(constants.APIPaths.Users, h.authController.handleUsers)
+	mux.HandleFunc(constants.APIPaths.Users, h.userController.handleUsers)
 
 	// Passkey CLI status (require mTLS)
 	mux.HandleFunc(constants.APIPaths.AuthPasskeysCLIStatus, h.passkey.CLIStatus)
 
 	// Enrollment token generation (require mTLS CLI session)
-	mux.HandleFunc(constants.APIPaths.AuthEnrollmentTokenGenerate, h.authController.handleEnrollmentTokenGenerate)
+	mux.HandleFunc(constants.APIPaths.AuthEnrollmentTokenGenerate, h.enrollmentTokenController.handleEnrollmentTokenGenerate)
 
 	// OOB Approval UI for suspended MCP/A2A transactions
 	mux.HandleFunc(constants.APIPaths.ApprovePage, h.passkey.handleApprovalPage)
@@ -157,8 +157,8 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.ApprovalsCLIList, h.passkey.handleCLIListSuspended)
 
 	// Browser-facing routes (RouteAuthWebSession — unified middleware validates cookie)
-	mux.HandleFunc(constants.APIPaths.UsersMe, h.authController.handleUserMe)
-	mux.HandleFunc(constants.APIPaths.AuthSessionsMe, h.authController.handleWebSession)
+	mux.HandleFunc(constants.APIPaths.UsersMe, h.userController.handleUserMe)
+	mux.HandleFunc(constants.APIPaths.AuthSessionsMe, h.sessionController.handleWebSession)
 	mux.Handle(constants.APIPaths.ApprovalsByID, http.HandlerFunc(h.passkey.handleApprovalAction))
 	mux.HandleFunc(constants.APIPaths.Approvals, h.passkey.handleListSuspendedTransactions)
 	mux.HandleFunc(constants.APIPaths.AuthPasskeys, h.passkey.ListCredentials)
@@ -199,10 +199,10 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.State, h.healthController.handleState)
 
 	// Bootstrap routes - plain HTTP for initial CA discovery and bootstrap
-	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handleLocalBootstrapWithURL)
-	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.authController.handleBootstrapStatus)
-	mux.HandleFunc(constants.APIPaths.AuthCLIEnroll, h.authController.handleCLIEnrollment)
-	mux.HandleFunc(constants.APIPaths.AuthDeviceEnroll, h.authController.handleDeviceEnrollment)
+	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.bootstrapController.handleLocalBootstrapWithURL)
+	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.bootstrapController.handleBootstrapStatus)
+	mux.HandleFunc(constants.APIPaths.AuthCLIEnroll, h.bootstrapController.handleCLIEnrollment)
+	mux.HandleFunc(constants.APIPaths.AuthDeviceEnroll, h.bootstrapController.handleDeviceEnrollment)
 	mux.HandleFunc(constants.APIPaths.PKIAppsEnroll, h.pkiController.handlePKIAppsEnroll)
 	mux.HandleFunc(constants.APIPaths.PKICSRSign, h.pkiController.handlePKICSRSign)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)

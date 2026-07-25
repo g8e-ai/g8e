@@ -172,19 +172,23 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   ├── gateway.GatewayWebSocketHandler [SHARED]
 │   │   ├── gateway.UserService [SHARED]
 │   │   └── response.Writer
-│   ├── gateway.AuthController (bootstrap, CLI enrollment, device enrollment, user management, web session)
-│   │   ├── gateway.AuthService [SHARED]
-│   │   ├── gateway.PasskeyHandler [SHARED]
+│   ├── gateway.BootstrapController (bootstrap, CLI enrollment, device enrollment, bootstrap status)
 │   │   ├── gateway.UserService [SHARED]
-│   │   ├── gateway.RegistrationService [SHARED]
 │   │   ├── gateway.PKIAuthority [SHARED]
-│   │   ├── gateway.WebSessionService [SHARED]
 │   │   ├── gateway.CLISessionService [SHARED]
 │   │   ├── gateway.OperatorSessionService [SHARED]
 │   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
-│   │   ├── gateway.EnrollmentTokenService (created in HTTPHandler constructor, manages enrollment token lifecycle with TTL-based cleanup)
 │   │   ├── response.Writer
 │   │   └── actuatorKeyReader (fileActuatorKeyReader, reads actuator public key from disk)
+│   ├── gateway.EnrollmentTokenController (enrollment token generate, validate)
+│   │   ├── gateway.EnrollmentTokenService (created in HTTPHandler constructor, manages enrollment token lifecycle with TTL-based cleanup)
+│   │   ├── response.Writer
+│   ├── gateway.UserController (user creation, user me)
+│   │   ├── gateway.UserService [SHARED]
+│   │   ├── response.Writer
+│   ├── gateway.SessionController (logout, web session)
+│   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
+│   │   ├── response.Writer
 │   ├── gateway.AdminController (app policies, tribunals, app revocation)
 │   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   │   ├── gateway.SignerStoreService (from Stores [SHARED])
@@ -310,7 +314,7 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - **`PasskeyHandler`** struct embeds `*PasskeyService` and adds HTTP concerns (`webSessionSvc`, `responder`, `maxPayload`, `mcpSvc`, `suspendedStore`, `sseStore`, `pubsub`). `NewPasskeyHandler(deps PasskeyHandlerDeps)` constructor wires all dependencies at construction time.
 - **`gateway_service.go`**: `passkey` field → `*PasskeyHandler`, both constructors updated, `GetGovernanceDeps` returns `*pubsub.GovernanceDeps` (consolidating all governance dependencies including `L3Notary` which wraps `ls.passkey.PasskeyService` via `NewGatewayL3Notary`).
 - **`gateway_http.go`**: `HTTPHandlerDeps.Passkey` and `HTTPHandler.passkey` → `*PasskeyHandler`. `GetPasskeyService()` renamed to `GetPasskeyHandler()`.
-- **`auth_controller.go`**: `AuthController.passkey` field and `newAuthController` param → `*PasskeyHandler`.
+- **`gateway.auth_controller.go`**: `AuthController.passkey` field and `newAuthController` param → `*PasskeyHandler`. (Historical note: `AuthController` has since been split into 4 sub-controllers — see HTTP Controller Decomposition below.)
 - **`passkey_service_approvals_test.go`**: Tests all handlers on `*PasskeyHandler` with mocked dependencies.
 - **`passkey_service_http_test.go`**: Tests for the 7 passkey HTTP handlers on `*PasskeyHandler`.
 - **`passkey_service_test.go`**: Tests for `PasskeyService` domain logic, including `VerifyL3Proof` WebAuthn assertion verification.
@@ -319,7 +323,7 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 ### Transport & Protocol Layer
 - `pubsub.OperatorPubSubService` is the dispatcher for outbound mode (WebSocket pub/sub).
 - `mcp.GatewayService` handles MCP/A2A protocol translation and downstream dispatch (gateway mode only; shared between HTTP ingress and OperatorPubSubService egress).
-- `gateway.HTTPHandler` is a thin router and middleware shell for gateway mode. It holds only router infrastructure (rate limiting, CORS, path traversal guard), direct accessors (`passkey`, `mcp`, `pubsub`), and 8 controller fields. All domain handler logic lives on controllers (`PKIController`, `DBController`, `AuthController`, `AdminController`, `OperatorController`, `SSEController`, `HealthController`, `GovernanceController`).
+- `gateway.HTTPHandler` is a thin router and middleware shell for gateway mode. It holds only router infrastructure (rate limiting, CORS, path traversal guard), direct accessors (`passkey`, `mcp`, `pubsub`), and 11 controller fields. All domain handler logic lives on controllers (`PKIController`, `DBController`, `BootstrapController`, `EnrollmentTokenController`, `UserController`, `SessionController`, `AdminController`, `OperatorController`, `SSEController`, `HealthController`, `GovernanceController`).
 - `gateway.GatewayWebSocketHandler` is the in-process pub/sub broker for gateway mode.
 - `gateway.PKIAuthority` manages PKI hierarchy and certificate lifecycle for gateway mode.
 - `network.Detector` detects host IP addresses and DNS names to configure TLS certificate identities dynamically during boot and renewal.
@@ -342,7 +346,10 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 ### HTTP Controller Decomposition
 - **`gateway.PKIController`** (`pki_controller.go`): PKI enrollment, CSR signing, CA bundle, trust scripts (Linux/macOS/Windows), deploy scripts, certificate revocation, app enrollment.
 - **`gateway.DBController`** (`db_controller.go`): Audit receipts, audit events, audit summary, audit report, data DB, KV store, blob storage, governance signers, pub/sub publish and stream.
-- **`gateway.AuthController`** (`auth_controller.go`, `auth_controller_bootstrap.go`, `auth_controller_session.go`): Local bootstrap with URL, bootstrap status, CLI enrollment, device enrollment, user creation, user me, web session, logout. Decomposed into three files: core constructor, bootstrap flows, and session/user management.
+- **`gateway.BootstrapController`** (`bootstrap_controller.go`): Local bootstrap with URL, bootstrap status, CLI enrollment, device enrollment. 9 dependencies (cfg, logger, docStore, userSvc, pki, cliSessionSvc, operatorSessionSvc, responder, actuatorKeyReader).
+- **`gateway.EnrollmentTokenController`** (`enrollment_token_controller.go`): Enrollment token generation (mTLS-protected) and validation (public). 4 dependencies (cfg, logger, enrollmentTokenSvc, responder).
+- **`gateway.UserController`** (`user_controller.go`): User creation (mTLS-protected), user me (web session). 4 dependencies (cfg, logger, userSvc, responder).
+- **`gateway.SessionController`** (`session_controller.go`): Logout (clear cookie + delete web session), web session info. 4 dependencies (logger, docStore, responder, crossOrigin).
 - **`gateway.AdminController`** (`admin_controller.go`): App policy management by signer, app revocation, tribunal CRUD.
 - **`gateway.OperatorController`** (`operator_controller.go`): Operator list, terminate, bind/unbind operators, set target context, reauth.
 - **`gateway.SSEController`** (`sse_controller.go`): SSE event push, poll, and stream endpoints. Includes `authorizeSSERoute` for dual-auth (mTLS or web session) authorization. Heartbeat interval defaults to 30s via `newSSEController`.
