@@ -16,11 +16,13 @@ package services
 import (
 	"context"
 	"crypto/tls"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/certs"
 	"github.com/g8e-ai/g8e/internal/services/auth"
+	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -135,6 +137,49 @@ func TestG8eoService_Stop(t *testing.T) {
 	running := service.running
 	service.mu.RUnlock()
 	assert.False(t, running)
+}
+
+func TestG8eoService_SuspendedTxStoreSingleField(t *testing.T) {
+	t.Parallel()
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+
+	service, err := NewG8eoService(cfg, logger, newTestTLSConfig(t))
+	require.NoError(t, err)
+
+	// Create a real SuspendedTransactionService with a temp DB
+	suspendedTxConfig := storage.DefaultSuspendedTransactionConfig()
+	suspendedTxConfig.DBPath = filepath.Join(testutil.TempDir(t), "suspended_tx.db")
+	suspendedTxService, err := storage.NewSuspendedTransactionService(suspendedTxConfig, logger)
+	require.NoError(t, err)
+
+	service.suspendedTxStore = suspendedTxService
+
+	t.Run("suspendedTxStore is non-nil", func(t *testing.T) {
+		assert.NotNil(t, service.suspendedTxStore)
+	})
+
+	t.Run("suspendedTxStore satisfies SuspendedTransactionStore interface", func(t *testing.T) {
+		var _ storage.SuspendedTransactionStore = service.suspendedTxStore
+	})
+
+	t.Run("Stop closes suspendedTxStore without error", func(t *testing.T) {
+		service.mu.Lock()
+		service.running = true
+		service.mu.Unlock()
+
+		err := service.Stop(context.Background())
+		assert.NoError(t, err)
+	})
+
+	t.Run("Stop is idempotent after suspendedTxStore closed", func(t *testing.T) {
+		service.mu.Lock()
+		service.running = true
+		service.mu.Unlock()
+
+		err := service.Stop(context.Background())
+		assert.NoError(t, err)
+	})
 }
 
 func TestG8eoService_ConcurrentStateAccess(t *testing.T) {
