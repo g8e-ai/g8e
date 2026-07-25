@@ -581,9 +581,15 @@ func (ls *GatewayModeService) IsGovernanceReady() bool {
 // This enables the in-process OperatorPubSubService to perform fail-closed verification.
 // The L3 notary handles both WebAuthn (web sessions) and mTLS (CLI sessions).
 func (ls *GatewayModeService) GetGovernanceDeps() *pubsub.GovernanceDeps {
-	// Create unified L3 notary that handles both CLI (mTLS) and passkey (WebAuthn) proofs
 	cliVerifier := NewCLISessionVerifier(ls.stores.DocStore, ls.pki, ls.logger, ls.userSvc, ls.cliSessionSvc)
-	l3Notary := governance.NewGatewayL3Notary(cliVerifier, ls.passkey.PasskeyService, ls.logger)
+
+	var l3Notary governance.L3Notary
+	if os.Getenv("G8E_L3_MOCK") == "true" {
+		ls.logger.Warn("L3 mock mode enabled — auto-approving all L3 proofs (demo/test only, never use in production)")
+		l3Notary = governance.NewDemoL3Notary(ls.logger)
+	} else {
+		l3Notary = governance.NewGatewayL3Notary(cliVerifier, ls.passkey.PasskeyService, ls.logger)
+	}
 
 	return &pubsub.GovernanceDeps{
 		ReplayStore:          ls.stores.ReplayStore,

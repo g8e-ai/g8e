@@ -2014,6 +2014,41 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 		require.Contains(t, err.Error(), "MCP error")
 	})
 
+	t.Run("downstream request has proper MCP tools/call envelope", func(t *testing.T) {
+		t.Parallel()
+		var capturedBody []byte
+		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedBody, _ = io.ReadAll(r.Body)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"ok"}]}}`))
+		}))
+		defer downstream.Close()
+
+		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
+
+		_, err := g.DispatchToDownstream(context.Background(), "my-tool", json.RawMessage(`{"key":"value"}`), "test-session-id")
+		require.NoError(t, err)
+
+		var req response.JSONRPCRequest
+		require.NoError(t, json.Unmarshal(capturedBody, &req), "downstream request should be valid JSON-RPC")
+		assert.Equal(t, "2.0", req.JSONRPC)
+		assert.Equal(t, "tools/call", req.Method)
+
+		var params map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(req.Params, &params), "params should be a JSON object")
+		assert.Contains(t, params, "name", "params must contain 'name' field")
+		assert.Contains(t, params, "arguments", "params must contain 'arguments' field")
+
+		var name string
+		require.NoError(t, json.Unmarshal(params["name"], &name))
+		assert.Equal(t, "my-tool", name, "params.name should match the requested tool name")
+
+		var arguments json.RawMessage
+		require.NoError(t, json.Unmarshal(params["arguments"], &arguments))
+		assert.JSONEq(t, `{"key":"value"}`, string(arguments), "params.arguments should contain the original tool args")
+	})
+
 }
 
 func TestGatewayService_DispatchToDownstream_Scrubbing(t *testing.T) {

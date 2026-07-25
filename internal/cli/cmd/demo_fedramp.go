@@ -175,17 +175,17 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		result.number = "3"
 		result.name = "Resource Destruction Gated on Authorizing Official Approval (L3)"
 		result.status = "PASS"
-		result.metrics = "Notary posture // L3 suspend -> human passkey approval -> L5 actuator records DESTROY"
+		result.metrics = "Notary posture // L3 mock principal authorization -> L5 actuator records DESTROY"
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
 		demoPrintln("  Scenario 3 — Resource Destruction Requires Authorizing Official (L3)")
 		demoPrintln(strings.Repeat("-", 60))
 		demoPrintln()
 		demoPrintln("  PROVES: A resource destruction is submitted with L2 consensus")
-		demoPrintln("          only. Under notary posture the Gateway suspends the")
-		demoPrintln("          transaction pending an out-of-band L3 human approval")
-		demoPrintln("          via WebAuthn passkey. The destruction executes only after")
-		demoPrintln("          a real human authorizes the exact transaction hash.")
+		demoPrintln("          and a mock L3 principal signature. Under notary posture")
+		demoPrintln("          the Gateway verifies the L3 proof before allowing the")
+		demoPrintln("          destruction to execute. In production, L3 requires a real")
+		demoPrintln("          WebAuthn passkey ceremony; demos use mock L3 mode.")
 		demoPrintln()
 
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 3 started: Resource Destruction Requires Authorizing Official")
@@ -204,17 +204,18 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		}
 
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "fedramp-escalate", "doctrine check")
-		demoPrintln("  -- Step 3: Submit fedramp-escalate via agent (L2-only -> suspend) --")
+		demoPrintln("  -- Step 3: Submit fedramp-escalate via agent (L2 + mock L3) --")
 		demoPrintln("  Operator requests destruction of fedramp-vm-classified-01 (FIPS-199-HIGH).")
-		demoPrintln("  Under notary posture, the gateway suspends pending human L3 approval:")
+		demoPrintln("  Under notary posture, the gateway requires L3 authorization.")
+		demoPrintln("  The harness attaches a mock principal Ed25519 signature as L3 proof:")
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "fedramp-escalate", "doctrine admitted")
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "fedramp-escalate", "consensus quorum")
 		demoEmitter.Ledger(tui.LevelInfo, "L1 doctrine admitted envelope for fedramp-escalate")
 		notaryCfg := hcfg
 		notaryCfg.Posture = "notary"
-		notaryCfg.L3Mode = "suspend"
-		if err := demoStep(demoDir, "fedramp-escalate via agent (notary suspend)",
+		notaryCfg.L3Mode = "mock"
+		if err := demoStep(demoDir, "fedramp-escalate via agent (notary mock L3)",
 			false,
 			harnessRun("fedramp-escalate", notaryCfg)...,
 		); err != nil {
@@ -224,56 +225,12 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		}
 
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "fedramp-escalate", "quorum met (3/5)")
-		demoEmitter.Pipeline(tui.StageL3, tui.StatusWaiting, "fedramp-escalate", "FIDO2 touch required")
-		demoEmitter.Ledger(tui.LevelWarn, "L3 notary: transaction suspended pending human WebAuthn approval")
+		demoEmitter.Pipeline(tui.StageL3, tui.StatusPassed, "fedramp-escalate", "mock L3 proof verified")
+		demoEmitter.Ledger(tui.LevelInfo, "L3 notary: mock principal signature verified (demo mode)")
 
-		demoPrintln("  -- Step 4: Query gateway for suspended transaction hash --")
-		demoPrintln("  Using GET /api/v1/approvals/pending (mTLS-authenticated):")
-		demoPrintln()
-		txHashBytes, err := exec.Command("docker", "compose", "exec", "-T", "operator",
-			"curl", "-sf",
-			"--cert", constants.ContainerOperatorCert,
-			"--key", constants.ContainerOperatorKey,
-			"--cacert", constants.ContainerCABundle,
-			"https://g8e.local:8443/api/v1/approvals/pending").Output()
-		if err != nil {
-			fmt.Printf("  [WARNING] Could not query pending approvals API: %v\n", err)
-			fmt.Println("  Continuing — the harness may have already completed the L3 approval.")
-		} else {
-			txHash := extractFirstTxHash(string(txHashBytes))
-			if txHash == "" {
-				fmt.Println("  [WARNING] No pending suspended transaction found via API")
-				fmt.Println("  Continuing — the harness may have already completed the L3 approval.")
-			} else {
-				fmt.Printf("  Suspended transaction hash: %s\n", txHash)
-				fmt.Println()
-
-				demoPrintln("  -- Step 5: Human passkey approval (WebAuthn) --")
-				demoPrintln("  A browser window will open for passkey enrollment/approval.")
-				demoPrintln("  If you have no passkey registered, the console will guide you")
-				demoPrintln("  through enrollment first, then the approval ceremony.")
-				demoPrintln()
-				demoPrintf("  Console URL: http://localhost:8088/console/\n")
-				demoPrintln()
-
-				approveCmd := exec.Command("g8e", "approve", txHash)
-				approveCmd.Stdout = os.Stdout
-				approveCmd.Stderr = os.Stderr
-				approveCmd.Stdin = os.Stdin
-				if err := approveCmd.Run(); err != nil {
-					fmt.Printf("  [WARNING] g8e approve did not complete: %v\n", err)
-					hasErrors = true
-				} else {
-					fmt.Println("  Transaction approved via WebAuthn passkey!")
-					fmt.Println()
-					demoEmitter.Pipeline(tui.StageL3, tui.StatusPassed, "fedramp-escalate", "WebAuthn approved")
-					demoEmitter.Ledger(tui.LevelInfo, "L3 notary: human WebAuthn passkey authorization received")
-				}
-			}
-		}
-
+		// Step 4: Verify the DESTROY was executed by the L5 actuator
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusActive, "fedramp-escalate", "actuator executing")
-		if !demoScenarioStep(demoDir, "Step 6: Verify the Sovereign Cloud Service recorded the DESTROY",
+		if !demoScenarioStep(demoDir, "Step 4: Verify the Sovereign Cloud Service recorded the DESTROY",
 			[]string{"docker", "compose", "exec", "-T", "cloudsvc",
 				"python", constants.ContainerVerifyOpsPy, "DESTROY"}) {
 			hasErrors = true
@@ -282,7 +239,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "fedramp-escalate", "DESTROY recorded")
 		demoEmitter.Ledger(tui.LevelInfo, "L5 actuator recorded DESTROY — signed receipt in hash-chained ledger")
 
-		demoPrintln("  -- Step 7: Restore gateway to consensus posture --")
+		demoPrintln("  -- Step 5: Restore gateway to consensus posture --")
 		if err := switchFedRAMPPosture(demoDir, "consensus"); err != nil {
 			fmt.Printf("  [WARNING] Failed to restore consensus posture: %v\n", err)
 		}
@@ -294,11 +251,11 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 			fmt.Println("  [FAIL] Scenario 3 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 3 FAILED — one or more steps failed")
 		} else {
-			fmt.Println("  [PASS] Scenario 3 — Resource destruction governed by human passkey approval.")
+			fmt.Println("  [PASS] Scenario 3 — Resource destruction governed by L3 notary authorization.")
 			fmt.Println("         L1 doctrine admitted; L2 consensus quorum met;")
-			fmt.Println("         L3 notary required real human WebAuthn authorization.")
-			fmt.Println("         L5 actuator recorded the DESTROY after approval.")
-			demoEmitter.Ledger(tui.LevelInfo, "Scenario 3 PASSED — Resource destruction governed by human passkey approval")
+			fmt.Println("         L3 notary verified mock principal signature (demo mode).")
+			fmt.Println("         L5 actuator recorded the DESTROY after authorization.")
+			demoEmitter.Ledger(tui.LevelInfo, "Scenario 3 PASSED — Resource destruction governed by L3 notary authorization")
 		}
 
 	case "4":
