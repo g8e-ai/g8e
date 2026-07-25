@@ -502,7 +502,8 @@ The following packages are test-only and are not part of the production dependen
 **`internal/services/pubsub/publisherstest/`** - Test-only ResultsPublisher recording fake
 - `TestResultsPublisher` - In-memory recording fake implementing `pubsub.ResultsPublisher`
 - Records all published results by method; `SetError` for injecting failures; `Results()` and `Heartbeats()` accessors
-- Separate from `pubsubtest` to avoid import cycle (`pubsubtest` is imported by `pubsub` test files, so it cannot itself import `pubsub`)
+- Separate from `pubsubtest` to avoid import cycle: all `pubsub` test files use `package pubsub` (internal tests), so they cannot import a package that itself imports `pubsub`. `publisherstest` imports `pubsub` for `PubSubCommandMessage` (used in `ResultsPublisher` interface methods), which `pubsubtest` cannot do
+- Split accepted as deliberate trade-off: `publisherstest` has zero external consumers (only referenced within its own test file), and extracting `PubSubCommandMessage` into a shared types package would require updating 251 references across 23 files for minimal benefit
 
 **`internal/services/governance/governancetest/`** - Test-only governance store fixtures
 - `SimpleTribunalStore`, `SimpleAppPolicyStore`, `SimpleStateRootProvider` - In-memory implementations of governance store interfaces for unit tests
