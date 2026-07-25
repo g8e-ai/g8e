@@ -267,7 +267,6 @@ We welcome contributions of all kinds — bug reports, feature ideas, documentat
 - [Cloudflare Tunnel Integration](docs/guides/cloudflare_tunnel.md)
 - [Lovable Frontend Integration](docs/guides/lovable.md)
 - [Build a g8e-Compatible Frontend](docs/guides/build_frontend.md)
-- [Live Swarm Demo](demos/live-swarm/README.md)
 
 #### Architecture
 - [Gateway Architecture](docs/architecture/gateway.md)

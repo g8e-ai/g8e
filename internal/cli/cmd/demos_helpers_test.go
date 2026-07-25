@@ -145,11 +145,9 @@ func TestDemoHTTPPort_AllKnownOrgs(t *testing.T) {
 		{constants.DemosOrgHealthcare, "8081"},
 		{constants.DemosOrgGov, "8080"},
 		{constants.DemosOrgFinance, "8082"},
-		{constants.DemosOrgSecureData, "8083"},
-		{constants.DemosOrgDoW, "8086"},
 		{constants.DemosOrgDHS, "8087"},
-		{constants.DemosOrgSwarm, "8085"},
 		{constants.DemosOrgFedRAMP, "8088"},
+		{constants.DemosOrgFrontend, "8083"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.org, func(t *testing.T) {
@@ -170,11 +168,9 @@ func TestDemoHTTPSPort_AllKnownOrgs(t *testing.T) {
 		{constants.DemosOrgHealthcare, "8444"},
 		{constants.DemosOrgGov, "8443"},
 		{constants.DemosOrgFinance, "8445"},
-		{constants.DemosOrgSecureData, "8446"},
-		{constants.DemosOrgDoW, "8449"},
 		{constants.DemosOrgDHS, "8450"},
-		{constants.DemosOrgSwarm, "8448"},
 		{constants.DemosOrgFedRAMP, "8451"},
+		{constants.DemosOrgFrontend, "8446"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.org, func(t *testing.T) {

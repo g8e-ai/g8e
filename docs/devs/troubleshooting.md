@@ -563,25 +563,11 @@ receipt signature details.
 
 ### Demo port conflicts
 
-The frontend demo uses ports 8083 and 8446, which overlap with the
-`secure-data` demo. Do not run both demos simultaneously. Check which
-demos are running:
+If multiple demos are running simultaneously, port conflicts may occur. Check which demos are running:
 
 ```bash
 docker compose ps
 ```
-
-### Drone simulator not running (swarm demo)
-
-The drone simulator in the swarm demo is mounted but not executed by
-default. The operator container image does not include Python3. Install
-it first, then run the simulator manually via `docker compose exec`.
-
-### High memory usage (swarm demo)
-
-The swarm demo with 20 operators requires significant resources. If
-containers are killed by the OOM killer, reduce the number of operators
-in `demos/swarm/compose.yml`.
 
 ### Metabase startup failure (healthcare demo)
 
@@ -599,29 +585,6 @@ docker compose restart compliance-dashboard
 The RabbitMQ management plugin is mapped to port 15673 on the host
 (from 15672 inside the container). Use `localhost:15673` to access the
 management UI.
-
-## Live-swarm build issues
-
-### Protoc version conflict with PX4
-
-If `/usr/local/bin/protoc` (v35, from g8e's proto tooling) shadows the
-system protoc 3.21 that matches `libprotobuf-dev`, PX4 `gz_msgs`
-codegen fails with `google/protobuf/runtime_version.h: No such file or
-directory`. Fix: remove the PX4 build directory and rebuild with
-`/usr/local/bin` stripped from `PATH`. Do not remove the v35 protoc;
-g8e requires it.
-
-### L1 doctrine rules compiled into binary
-
-L1 doctrine rules are compiled into the g8e binary at build time. There
-is no `--doctrine-dir` flag or runtime doctrine loading mechanism. To
-change doctrine rules, modify the doctrine source and rebuild.
-
-### Passkey RP origin for non-default origins
-
-The `--passkey-rp-origin` flag is only needed for non-default origins.
-The defaults target `localhost`. Verify during dry runs; add the flag
-only if the browser ceremony reports an origin mismatch.
 
 ## Known platform limitations
 
