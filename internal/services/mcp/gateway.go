@@ -160,6 +160,11 @@ type Dependencies struct {
 	Posture          string // Gateway posture: doctrine, consensus, or notary
 	A2ADownstreamURL string // A2A downstream server URL (construction-phase)
 	PublicBaseURL    string // Public base URL for approval links (construction-phase)
+
+	// FieldPathRegistryFactory overrides the default NewFieldPathRegistry constructor.
+	// When nil, NewFieldPathRegistry is used. This allows tests to inject a failing
+	// factory to verify error handling in NewGatewayService.
+	FieldPathRegistryFactory func(*slog.Logger) (*FieldPathRegistry, error)
 }
 
 // RuntimeDependencies bundles all runtime-phase dependencies that are set once
@@ -187,7 +192,11 @@ func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 		return nil, fmt.Errorf("gateway: invalid posture '%s': must be one of doctrine, consensus, or notary: %w", deps.Posture, constants.ErrGatewayInvalidPosture)
 	}
 
-	fieldPathRegistry, err := NewFieldPathRegistry(deps.Logger)
+	registryFactory := deps.FieldPathRegistryFactory
+	if registryFactory == nil {
+		registryFactory = NewFieldPathRegistry
+	}
+	fieldPathRegistry, err := registryFactory(deps.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: initialize field path registry: %w", err)
 	}

@@ -62,8 +62,8 @@ type HTTPHandler struct {
 	responder *response.Writer
 	mcp       *mcp.GatewayService
 	// Controllers for domain-specific endpoints
-	pkiController            *PKIController
-	dbController             *DBController
+	pkiController             *PKIController
+	dbController              *DBController
 	bootstrapController       *BootstrapController
 	enrollmentTokenController *EnrollmentTokenController
 	userController            *UserController

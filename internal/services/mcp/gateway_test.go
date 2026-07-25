@@ -1222,19 +1222,23 @@ func TestGatewayService_NewGatewayService(t *testing.T) {
 		require.NotNil(t, g.fieldPathRegistry)
 	})
 
-	t.Run("handles field path registry initialization error gracefully", func(t *testing.T) {
+	t.Run("returns error when field path registry factory fails", func(t *testing.T) {
 		t.Parallel()
+		factoryErr := errors.New("simulated registry initialization failure")
 		deps := Dependencies{
 			Logger:          slog.Default(),
 			Responder:       response.NewWriter(slog.Default()),
 			MaxPayloadBytes: 10 * 1024 * 1024,
+			FieldPathRegistryFactory: func(*slog.Logger) (*FieldPathRegistry, error) {
+				return nil, factoryErr
+			},
 		}
 
 		g, err := NewGatewayService(deps)
-		require.NoError(t, err)
-
-		// Should not panic even if registry init fails
-		require.NotNil(t, g)
+		require.Error(t, err)
+		require.Nil(t, g)
+		require.Contains(t, err.Error(), "gateway: initialize field path registry")
+		require.ErrorIs(t, err, factoryErr)
 	})
 }
 

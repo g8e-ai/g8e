@@ -56,6 +56,51 @@ func setupTestDBController(t *testing.T) (*DBController, *Stores) {
 	return dbController, infra.Stores
 }
 
+func TestNewDBController_AllDepsProvidedNoNilFields(t *testing.T) {
+	infra := setupTestInfrastructure(t, false)
+
+	controller := newDBController(DBControllerDeps{
+		Cfg:         infra.Cfg,
+		Logger:      infra.Logger,
+		DocStore:    infra.Stores.DocStore,
+		KVStore:     infra.Stores.KVStore,
+		SSEStore:    infra.Stores.SSEStore,
+		BlobStore:   infra.Stores.BlobStore,
+		AuditStore:  infra.Stores.AuditStore,
+		SignerStore: infra.Stores.SignerStore,
+		Auth:        infra.Auth,
+		Pubsub:      infra.Pubsub,
+		UserSvc:     infra.UserSvc,
+		Responder:   infra.Responder,
+	})
+
+	assert.NotNil(t, controller.cfg)
+	assert.NotNil(t, controller.logger)
+	assert.NotNil(t, controller.docStore)
+	assert.NotNil(t, controller.kvStore)
+	assert.NotNil(t, controller.sseStore)
+	assert.NotNil(t, controller.blobStore)
+	assert.NotNil(t, controller.auditStore)
+	assert.NotNil(t, controller.signerStore)
+	assert.NotNil(t, controller.auth)
+	assert.NotNil(t, controller.pubsub)
+	assert.NotNil(t, controller.userSvc)
+	assert.NotNil(t, controller.responder)
+
+	assert.Equal(t, infra.Cfg, controller.cfg)
+	assert.Equal(t, infra.Logger, controller.logger)
+	assert.Equal(t, infra.Stores.DocStore, controller.docStore)
+	assert.Equal(t, infra.Stores.KVStore, controller.kvStore)
+	assert.Equal(t, infra.Stores.SSEStore, controller.sseStore)
+	assert.Equal(t, infra.Stores.BlobStore, controller.blobStore)
+	assert.Equal(t, infra.Stores.AuditStore, controller.auditStore)
+	assert.Equal(t, infra.Stores.SignerStore, controller.signerStore)
+	assert.Equal(t, infra.Auth, controller.auth)
+	assert.Equal(t, infra.Pubsub, controller.pubsub)
+	assert.Equal(t, infra.UserSvc, controller.userSvc)
+	assert.Equal(t, infra.Responder, controller.responder)
+}
+
 func TestDBControllerHandleDB(t *testing.T) {
 	dbController, stores := setupTestDBController(t)
 
