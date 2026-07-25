@@ -123,13 +123,13 @@ func setupTestPasskeyService(t *testing.T) (*PasskeyHandler, *UserService, stora
 	})
 	require.NoError(t, err)
 
+	orchestrator := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, nil, nil, logger)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
-		Service:        passkey,
-		WebSessionSvc:  webSessionSvc,
-		Responder:      resp,
-		MaxPayload:     cfg.Gateway.MaxPayloadBytes,
-		MCPSvc:         mcpGateway,
-		SuspendedStore: suspendedTxService,
+		Service:       passkey,
+		WebSessionSvc: webSessionSvc,
+		Responder:     resp,
+		MaxPayload:    cfg.Gateway.MaxPayloadBytes,
+		Orchestrator:  orchestrator,
 	})
 	return passkeyHandler, userSvc, suspendedTxService
 }

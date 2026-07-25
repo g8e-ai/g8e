@@ -242,16 +242,14 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		return nil, fmt.Errorf("gateway: failed to initialize MCP gateway: %w", err)
 	}
 
+	passkeyOrchestrator := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, pubsub, logger)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
-		Service:        passkey,
-		WebSessionSvc:  webSessionSvc,
-		Responder:      res,
-		MaxPayload:     cfg.Gateway.MaxPayloadBytes,
-		MCPSvc:         mcpGateway,
-		SuspendedStore: suspendedTxService,
-		SSEStore:       stores.SSEStore,
-		Pubsub:         pubsub,
-		CrossOrigin:    len(cfg.Gateway.AllowedOrigins) > 0,
+		Service:       passkey,
+		WebSessionSvc: webSessionSvc,
+		Responder:     res,
+		MaxPayload:    cfg.Gateway.MaxPayloadBytes,
+		Orchestrator:  passkeyOrchestrator,
+		CrossOrigin:   len(cfg.Gateway.AllowedOrigins) > 0,
 	})
 
 	ls := &GatewayModeService{
