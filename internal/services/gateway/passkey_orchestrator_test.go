@@ -29,10 +29,10 @@ import (
 )
 
 type stubSuspendedTransactionStore struct {
-	txs    []*models.SuspendedTransaction
-	getTx  *models.SuspendedTransaction
-	found  bool
-	getErr error
+	txs     []*models.SuspendedTransaction
+	getTx   *models.SuspendedTransaction
+	found   bool
+	getErr  error
 	listErr error
 }
 
