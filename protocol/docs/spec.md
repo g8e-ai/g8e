@@ -4,8 +4,8 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-07-24
-Version: v1.6.2
+Last Updated: 2026-07-25
+Version: v1.6.3
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -437,7 +437,7 @@ The codebase maintains comprehensive test coverage across all layers:
 
 - **Governance Layer**: Unit tests for L1 Doctrine (`l1_doctrine_test.go`), L2 Consensus (`l4_warden_consensus_test.go`), L3 Notary (`l3_notary_test.go`, `l3_notary_integration_test.go`), L4 Warden (`l4_warden_test.go`), and L5 Actuator (`l5_actuator_test.go`, `l5_actuator_integration_test.go`)
 - **Storage Layer**: Extensive test suites for SQLAuditStore (in `storagetest/`), GitLedgerService (`ledger_test.go`, `ledger_git_test.go`), ExecutionVaultService (`execution_vault_test.go`), and supporting stores (replay, token, suspended transaction)
-- **Gateway Layer**: Comprehensive tests for envelope construction (`governance_envelope_test.go`, `governance_envelope_quality_test.go`), authentication (`gateway_auth_test.go`, `auth_controller_test.go`), and session management
+- **Gateway Layer**: Comprehensive tests for envelope construction (`governance_envelope_test.go`, `governance_envelope_quality_test.go`), authentication (`gateway_auth_test.go`, `bootstrap_controller_test.go`, `enrollment_token_controller_test.go`, `session_controller_test.go`, `user_controller_test.go`), and session management
 - **MCP/A2A Layer**: Integration tests for MCP gateway translation and native tools
 - **E2E Tests**: Docker-based end-to-end tests supporting both root and demo environments via `G8E_TEST_ENV` environment variable
 
