@@ -121,10 +121,11 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.PasskeyService [SHARED]
 │   ├── gateway.WebSessionService (for session creation on browser flows)
 │   ├── response.Writer (for HTTP responses)
-│   ├── gateway.MCPServiceProvider (via PasskeyHandlerDeps constructor)
-│   ├── storage.SuspendedTransactionStore (via PasskeyHandlerDeps constructor)
-│   ├── gateway.SSEEventService (via PasskeyHandlerDeps constructor)
-│   └── gateway.GatewayWebSocketHandler (via PasskeyHandlerDeps constructor)
+│   └── gateway.PasskeyOrchestrator (business orchestration: MCP, suspended tx, SSE, pubsub)
+│       ├── gateway.MCPServiceProvider
+│       ├── storage.SuspendedTransactionStore
+│       ├── gateway.SSEEventService
+│       └── gateway.GatewayWebSocketHandler
 ├── gateway.UserService
 │   └── gateway.DocumentStoreService (from Stores [SHARED])
 ├── gateway.CLISessionService
@@ -142,10 +143,11 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.WebSessionService
 │   ├── gateway.RegistrationService
 │   ├── gateway.PasskeyHandler (includes approval handlers via passkey_service_approvals.go)
-│   │   ├── gateway.MCPServiceProvider (via PasskeyHandlerDeps constructor)
-│   │   ├── storage.SuspendedTransactionStore (via PasskeyHandlerDeps constructor)
-│   │   ├── gateway.SSEEventService (via PasskeyHandlerDeps constructor)
-│   │   └── gateway.GatewayWebSocketHandler (via PasskeyHandlerDeps constructor)
+│   │   └── gateway.PasskeyOrchestrator (business orchestration via PasskeyHandlerDeps constructor)
+│   │       ├── gateway.MCPServiceProvider
+│   │       ├── storage.SuspendedTransactionStore
+│   │       ├── gateway.SSEEventService
+│   │       └── gateway.GatewayWebSocketHandler
 │   ├── gateway.UserService
 │   ├── gateway.AppEnrollmentService
 │   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
@@ -311,13 +313,15 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 ### PasskeyService/PasskeyHandler Domain-HTTP Split
 - **`passkey_service.go`**: `PasskeyService` reduced to domain-only fields (`userStore`, `sessionStore`, `webauthn`, `logger`, `rpID`, `rpName`). `NewPasskeyService` signature simplified to `(db, logger, cfg)`. Retains domain logic: `VerifyL3Proof`, `GenerateRegistrationChallenge`, `VerifyRegistration`, `GenerateAuthenticationChallenge`, `VerifyAuthentication`, `GenerateApprovalChallenge`, `addCredential`, `listCredentials`, `revokeCredential`, `getUser`. `VerifyL3Proof` stays on `PasskeyService` (L3 binding to transaction hash per architectural guardrails).
 - **`passkey_service_http.go`**: All passkey HTTP handlers now live on `*PasskeyHandler` as 4 factory methods (`RegisterChallenge`, `RegisterVerify`, `AuthenticateChallenge`, `AuthenticateVerify`) accepting a typed `passkeyHandlerConfig`, plus 3 direct handlers (`ListCredentials`, `RevokeCredential`, `CLIStatus`). All 7 methods have Swagger annotations (`@Summary`/`@Router`/`@Success`/`@Failure`).
-- **`passkey_service_approvals.go`**: 6 approval functions (`handleApprovalAction` dispatcher, `handleApprovalChallenge`, `handleApprovalVerify`, `handleCLIApprovalStatus`, `handleApprovalPage`, `handleListSuspendedTransactions`) now live on `*PasskeyHandler`. All dependencies (`mcpSvc`, `suspendedStore`, `sseStore`, `pubsub`) are passed via the `PasskeyHandlerDeps` constructor — no post-construction setters remain.
-- **`PasskeyHandler`** struct embeds `*PasskeyService` and adds HTTP concerns (`webSessionSvc`, `responder`, `maxPayload`, `mcpSvc`, `suspendedStore`, `sseStore`, `pubsub`). `NewPasskeyHandler(deps PasskeyHandlerDeps)` constructor wires all dependencies at construction time.
+- **`passkey_service_approvals.go`**: 6 approval functions (`handleApprovalAction` dispatcher, `handleApprovalChallenge`, `handleApprovalVerify`, `handleCLIApprovalStatus`, `handleApprovalPage`, `handleListSuspendedTransactions`) now live on `*PasskeyHandler`. All business dependencies (`mcpSvc`, `suspendedStore`, `sseStore`, `pubsub`) are encapsulated in `PasskeyOrchestrator` and accessed via `h.orchestrator.*` — no post-construction setters remain.
+- **`PasskeyOrchestrator`** (`passkey_orchestrator.go`): Encapsulates cross-cutting business concerns of the passkey approval flow — MCP service provision, suspended transaction management, SSE event publishing, and WebSocket broadcasting. Methods: `GetSuspendedTransaction`, `ResumeWithL3Proof`, `ListSuspendedTransactions`, `EmitApprovalCompletedSSE`, `EmitPasskeyRegisteredSSE`. SSE emission methods no-op when `sseStore` or `pubsub` is nil.
+- **`PasskeyHandler`** struct embeds `*PasskeyService` and adds HTTP concerns (`webSessionSvc`, `responder`, `maxPayload`, `crossOrigin`) plus a single `orchestrator *PasskeyOrchestrator` field. `NewPasskeyHandler(deps PasskeyHandlerDeps)` constructor wires all dependencies at construction time.
 - **`gateway_service.go`**: `passkey` field → `*PasskeyHandler`, both constructors updated, `GetGovernanceDeps` returns `*pubsub.GovernanceDeps` (consolidating all governance dependencies including `L3Notary` which wraps `ls.passkey.PasskeyService` via `NewGatewayL3Notary`).
 - **`gateway_http.go`**: `HTTPHandlerDeps.Passkey` and `HTTPHandler.passkey` → `*PasskeyHandler`. `GetPasskeyService()` renamed to `GetPasskeyHandler()`.
 - **`gateway.auth_controller.go`**: `AuthController.passkey` field and `newAuthController` param → `*PasskeyHandler`. (Historical note: `AuthController` has since been split into 4 sub-controllers — see HTTP Controller Decomposition below.)
 - **`passkey_service_approvals_test.go`**: Tests all handlers on `*PasskeyHandler` with mocked dependencies.
 - **`passkey_service_http_test.go`**: Tests for the 7 passkey HTTP handlers on `*PasskeyHandler`.
+- **`passkey_orchestrator_test.go`**: Unit tests for `PasskeyOrchestrator` — delegation tests for `GetSuspendedTransaction`, `ResumeWithL3Proof`, `ListSuspendedTransactions`, and no-op guard tests for `EmitApprovalCompletedSSE` and `EmitPasskeyRegisteredSSE`.
 - **`passkey_service_test.go`**: Tests for `PasskeyService` domain logic, including `VerifyL3Proof` WebAuthn assertion verification.
 - **`internal/models/auth.go`**: `PasskeyCredential.Validate()` method performs on-disk schema validation before persistence in `addCredential`.
 

@@ -184,12 +184,11 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	mcpGateway.SetRuntimeDeps(mcp.RuntimeDependencies{EnvProc: mockEnvProc})
 
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
-		Service:        passkey,
-		WebSessionSvc:  webSessionSvc,
-		Responder:      resp,
-		MaxPayload:     cfg.Gateway.MaxPayloadBytes,
-		MCPSvc:         mcpGateway,
-		SuspendedStore: suspendedTxService,
+		Service:       passkey,
+		WebSessionSvc: webSessionSvc,
+		Responder:     resp,
+		MaxPayload:    cfg.Gateway.MaxPayloadBytes,
+		Orchestrator:  NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, pubsub, logger),
 	})
 
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
@@ -336,12 +335,11 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 	mcpGateway.SetRuntimeDeps(mcp.RuntimeDependencies{EnvProc: mockEnvProc})
 
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
-		Service:        passkey,
-		WebSessionSvc:  webSessionSvc,
-		Responder:      resp,
-		MaxPayload:     cfg.Gateway.MaxPayloadBytes,
-		MCPSvc:         mcpGateway,
-		SuspendedStore: suspendedTxService,
+		Service:       passkey,
+		WebSessionSvc: webSessionSvc,
+		Responder:     resp,
+		MaxPayload:    cfg.Gateway.MaxPayloadBytes,
+		Orchestrator:  NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, pubsub, logger),
 	})
 
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
@@ -503,12 +501,11 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	mcpGateway.SetRuntimeDeps(mcp.RuntimeDependencies{EnvProc: mockEnvProc})
 
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
-		Service:        passkey,
-		WebSessionSvc:  webSessionSvc,
-		Responder:      resp,
-		MaxPayload:     cfg.Gateway.MaxPayloadBytes,
-		MCPSvc:         mcpGateway,
-		SuspendedStore: suspendedTxService,
+		Service:       passkey,
+		WebSessionSvc: webSessionSvc,
+		Responder:     resp,
+		MaxPayload:    cfg.Gateway.MaxPayloadBytes,
+		Orchestrator:  NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, pubsub, logger),
 	})
 
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
