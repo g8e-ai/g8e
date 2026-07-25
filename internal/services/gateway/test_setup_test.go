@@ -138,13 +138,13 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	require.NoError(t, err)
 	t.Cleanup(func() { suspendedTxService.Close() })
 
+	passkeyOrchestrator := NewPasskeyOrchestrator(nil, suspendedTxService, nil, pubsub, logger)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
-		Service:        passkey,
-		WebSessionSvc:  webSessionSvc,
-		Responder:      resp,
-		MaxPayload:     cfg.Gateway.MaxPayloadBytes,
-		SuspendedStore: suspendedTxService,
-		Pubsub:         pubsub,
+		Service:       passkey,
+		WebSessionSvc: webSessionSvc,
+		Responder:     resp,
+		MaxPayload:    cfg.Gateway.MaxPayloadBytes,
+		Orchestrator:  passkeyOrchestrator,
 	})
 
 	return &TestInfrastructure{

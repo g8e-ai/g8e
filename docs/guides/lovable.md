@@ -14,18 +14,18 @@ Version: v1.5.9
 
 [Lovable](https://lovable.dev) is an AI-powered frontend development platform that generates React + TypeScript + TailwindCSS applications from natural-language prompts. This guide provides detailed instructions for building a g8e Governance Console UI with Lovable, connecting it to a g8e Gateway backend via Cloudflare Tunnels.
 
-This guide covers Lovable-specific configuration, the AI agent prompt, and component architecture. For general GUI enrollment commands, API reference, WebAuthn flow requirements, SSE streaming, and TypeScript types, see [GUI Frontend Enrollment](./gui_enrollment.md).
+This guide covers Lovable-specific configuration, the AI agent prompt, and component architecture. For the comprehensive guide on building a g8e-compatible frontend (enrollment commands, API reference, WebAuthn flow requirements, SSE streaming, TypeScript types, UI/UX guidelines), see [Build a g8e-Compatible Frontend](./build_frontend.md).
 
 ### Steps at a Glance
 
 1. **[Configure the Cloudflare Tunnel](./cloudflare_tunnel.md)** - Expose the local g8e Gateway to the internet via `console.g8e.ai`
-2. **[Configure the Gateway](./gui_enrollment.md#gateway-side-configuration)** - Set CORS origins, passkey RP ID/name/origins (see [GUI Frontend Enrollment](./gui_enrollment.md))
-3. **[Enroll the Frontend](./gui_enrollment.md#gui-enrollment-commands)** - Run `g8e gui enroll` to validate CORS and generate a TypeScript config snippet
-4. **[Review the API Reference](./gui_enrollment.md#api-reference)** - Understand the public and authenticated endpoints (see [GUI Frontend Enrollment](./gui_enrollment.md))
-5. **[Define TypeScript Types](./gui_enrollment.md#typescript-types)** - Mirror the g8e gateway's data models (see [GUI Frontend Enrollment](./gui_enrollment.md))
+2. **[Configure the Gateway](./build_frontend.md#gateway-side-configuration)** - Set CORS origins, passkey RP ID/name/origins (see [Build a g8e-Compatible Frontend](./build_frontend.md))
+3. **[Enroll the Frontend](./build_frontend.md#frontend-enrollment-commands)** - Run `g8e gui enroll` to validate CORS and generate a TypeScript config snippet
+4. **[Review the API Reference](./build_frontend.md#api-reference)** - Understand the public and authenticated endpoints (see [Build a g8e-Compatible Frontend](./build_frontend.md))
+5. **[Define TypeScript Types](./build_frontend.md#typescript-types)** - Mirror the g8e gateway's data models (see [Build a g8e-Compatible Frontend](./build_frontend.md))
 6. **[Build Pages and Components](#pages-and-components)** - AuthContext, Login, Dashboard, ApprovalFlow, URL hash handling
-7. **[Define WebAuthn Flow Requirements](./gui_enrollment.md#webauthn-flow-requirements)** - Registration, authentication, and approval ceremonies (see [GUI Frontend Enrollment](./gui_enrollment.md))
-8. **[Define SSE Requirements](./gui_enrollment.md#sse-live-audit-stream)** - Live event streaming with auto-reconnect and polling fallback (see [GUI Frontend Enrollment](./gui_enrollment.md))
+7. **[Define WebAuthn Flow Requirements](./build_frontend.md#webauthn-flow-requirements)** - Registration, authentication, and approval ceremonies (see [Build a g8e-Compatible Frontend](./build_frontend.md))
+8. **[Define SSE Requirements](./build_frontend.md#sse-live-audit-stream)** - Live event streaming with auto-reconnect and polling fallback (see [Build a g8e-Compatible Frontend](./build_frontend.md))
 9. **[Apply UI/UX Guidelines](#uiux-guidelines)** - Dark theme, monospace hashes, toast notifications, responsive layout
 10. **[Handle Errors](#error-handling)** - 401 redirects, `needs_setup`, enrollment token errors, WebAuthn availability
 11. **[Verify the Integration](#verification-checklist)** - CORS headers, preflight, passkey flows, cookie attributes, SSE, approvals
@@ -53,7 +53,7 @@ A Cloudflare Tunnel securely exposes the local g8e Gateway to the internet so th
 
 ## 2. Gateway-Side Configuration
 
-For general gateway-side configuration (CORS, passkey RP flags, environment variables), see [GUI Frontend Enrollment: Gateway-Side Configuration](./gui_enrollment.md#gateway-side-configuration).
+For general gateway-side configuration (CORS, passkey RP flags, environment variables), see [Build a g8e-Compatible Frontend: Gateway-Side Configuration](./build_frontend.md#gateway-side-configuration).
 
 ### Lovable-Specific Configuration
 
@@ -75,7 +75,7 @@ Use `lovable.app` as the `--passkey-rp-id` so passkeys work across Lovable subdo
 
 ## 3. Frontend Enrollment
 
-For the full `g8e gui` command reference (enroll, show, verify, remove), see [GUI Frontend Enrollment: GUI Enrollment Commands](./gui_enrollment.md#gui-enrollment-commands).
+For the full `g8e gui` command reference (enroll, show, verify, remove), see [Build a g8e-Compatible Frontend: Frontend Enrollment Commands](./build_frontend.md#frontend-enrollment-commands).
 
 ### Enroll the Lovable App Origin
 
@@ -107,7 +107,7 @@ After the Lovable AI agent generates the app, verify:
 
 ## See Also
 
-- [GUI Frontend Enrollment](./gui_enrollment.md) - General-purpose GUI enrollment guide (commands, API reference, WebAuthn flows, SSE, TypeScript types)
+- [Build a g8e-Compatible Frontend](./build_frontend.md) - Comprehensive guide for building a g8e-compatible UI (enrollment commands, API reference, WebAuthn flows, SSE, TypeScript types, UI/UX guidelines)
 - [Cloudflare Tunnel Integration](./cloudflare_tunnel.md) - Setting up the tunnel between Cloudflare and the g8e Gateway
 - [Connect Apps to Gateway](./connect_apps_to_gateway.md) - General application connectivity patterns
 - [Architecture: Auth](../architecture/auth.md) - WebAuthn passkey authentication architecture

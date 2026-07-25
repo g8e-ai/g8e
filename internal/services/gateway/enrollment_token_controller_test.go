@@ -35,7 +35,7 @@ import (
 
 func TestHandleEnrollmentTokenGenerate(t *testing.T) {
 	t.Run("Success - returns 201 with token when context has user_id and cli_session_id", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
+		c, _ := setupTestEnrollmentTokenController(t)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/enrollment-token/generate", nil)
 		ctx := context.WithValue(req.Context(), constants.ContextKeyUserID, "user-gen-1")
@@ -52,7 +52,7 @@ func TestHandleEnrollmentTokenGenerate(t *testing.T) {
 	})
 
 	t.Run("Failure - 401 when context has no user_id or cli_session_id", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
+		c, _ := setupTestEnrollmentTokenController(t)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/enrollment-token/generate", nil)
 		rr := httptest.NewRecorder()
@@ -63,7 +63,7 @@ func TestHandleEnrollmentTokenGenerate(t *testing.T) {
 	})
 
 	t.Run("Failure - method not allowed", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
+		c, _ := setupTestEnrollmentTokenController(t)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/enrollment-token/generate", nil)
 		rr := httptest.NewRecorder()
@@ -76,7 +76,7 @@ func TestHandleEnrollmentTokenGenerate(t *testing.T) {
 
 func TestHandleEnrollmentTokenValidate(t *testing.T) {
 	t.Run("Success - returns 200 with user_id and cli_session_id for valid token", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
+		c, _ := setupTestEnrollmentTokenController(t)
 
 		token, err := c.enrollmentTokenSvc.GenerateToken("user-val-1", "cli-val-1")
 		require.NoError(t, err)
@@ -95,7 +95,7 @@ func TestHandleEnrollmentTokenValidate(t *testing.T) {
 	})
 
 	t.Run("Failure - 410 Gone for expired token", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
+		c, _ := setupTestEnrollmentTokenController(t)
 
 		token, err := c.enrollmentTokenSvc.GenerateToken("user-exp-1", "cli-exp-1")
 		require.NoError(t, err)
@@ -124,7 +124,7 @@ func TestHandleEnrollmentTokenValidate(t *testing.T) {
 	})
 
 	t.Run("Failure - 409 Conflict for consumed token", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
+		c, _ := setupTestEnrollmentTokenController(t)
 
 		token, err := c.enrollmentTokenSvc.GenerateToken("user-con-1", "cli-con-1")
 		require.NoError(t, err)
@@ -142,7 +142,7 @@ func TestHandleEnrollmentTokenValidate(t *testing.T) {
 	})
 
 	t.Run("Failure - 401 for unknown token", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
+		c, _ := setupTestEnrollmentTokenController(t)
 
 		body, _ := json.Marshal(map[string]string{"token": "nonexistenttoken1234567890abcdef"})
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/enrollment-token/validate", bytes.NewReader(body))
@@ -154,7 +154,7 @@ func TestHandleEnrollmentTokenValidate(t *testing.T) {
 	})
 
 	t.Run("Failure - 400 for empty token field", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
+		c, _ := setupTestEnrollmentTokenController(t)
 
 		body, _ := json.Marshal(map[string]string{"token": ""})
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/enrollment-token/validate", bytes.NewReader(body))
@@ -166,7 +166,7 @@ func TestHandleEnrollmentTokenValidate(t *testing.T) {
 	})
 
 	t.Run("Failure - 400 for invalid JSON", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
+		c, _ := setupTestEnrollmentTokenController(t)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/enrollment-token/validate", strings.NewReader("{invalid}"))
 		rr := httptest.NewRecorder()
@@ -177,7 +177,7 @@ func TestHandleEnrollmentTokenValidate(t *testing.T) {
 	})
 
 	t.Run("Failure - method not allowed", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
+		c, _ := setupTestEnrollmentTokenController(t)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/enrollment-token/validate", nil)
 		rr := httptest.NewRecorder()
@@ -187,8 +187,8 @@ func TestHandleEnrollmentTokenValidate(t *testing.T) {
 		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 	})
 
-	t.Run("Failure - oversized body rejected by MaxBytesReader", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
+	t.Run("Failure - oversized body rejected by readRequestBody", func(t *testing.T) {
+		c, _ := setupTestEnrollmentTokenController(t)
 		c.cfg.Gateway.MaxPayloadBytes = 100
 
 		largeBody := strings.Repeat("a", 200)

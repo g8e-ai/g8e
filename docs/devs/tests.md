@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-07-24
+Last Updated: 2026-07-25
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -17,7 +17,7 @@ g8e tests run directly on the host using real infrastructure. If it does not wor
 - **Use contract tests** — Enforce alignment between the Operator and `protocol/` constants/models with typed protobuf assertions.
 - **Let `NewGatewayFixture` handle cleanup** — `NewGatewayFixture` registers teardown internally via `t.Cleanup`. Callers do not need to defer or register any cleanup.
 - **Hold temp credential files for the whole test** — Register their removal with `t.Cleanup`, not `defer`, in any setup helper.
-- **Use path constants** — ALL filepath strings in test code must be defined as constants in `internal/constants/paths.go`. Use `constants.Paths.Infra.*` for runtime state paths. The only exception is `TestPaths` for isolated test environments, where the base directory must still come from a constant. Use `constants.PermFileReadOnly` and other `constants.Perm*` constants for file permission assertions in tests.
+- **Use path constants** — ALL filepath strings in test code must be defined as constants in `internal/constants/paths.go`. Use `paths.Infra.*` (from `internal/paths`) for runtime state paths. The only exception is `TestPaths` for isolated test environments, where the base directory must still come from a constant. Use `constants.PermFileReadOnly` and other `constants.Perm*` constants for file permission assertions in tests.
 - **Use `fileSvc.FileExists` instead of `os.IsNotExist`** — Check file existence via `fileSvc.FileExists(ctx, relPath)` or `errors.Is(err, constants.ErrNotFound)` instead of `os.IsNotExist`. The `RuntimeFileService` wraps `os.*` calls and returns typed `constants.Err*` errors.
 - **`testutil.TempDir` returns absolute paths** — `testutil.TempDir(t)` returns an absolute path to a temporary directory. Use it as the `baseDir` for `fs.NewRuntimeFileService` and `paths.InitWithBase`. Do not join it with `constants.RuntimeDirname` manually; the file service handles that.
 - **Do not set `DataDir`/`CredentialsDir` in test configs** — Test configs must use `RuntimeDir` and `fileSvc.Resolve(constants.*)` instead of `DataDir`/`CredentialsDir` fields. These fields have been removed from config structs. Pass `fileSvc` to services that need file I/O.

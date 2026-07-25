@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-07-19
-Version: v1.5.9
+Last Updated: 2026-07-25
+Version: v1.6.3
 
 ---
 
@@ -70,7 +70,7 @@ If you only need the g8e wire protocol — constants, models, enums, or protobuf
 As of v1.5.0, the protocol is part of the root Go module. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.5.8
+go get github.com/g8e-ai/g8e@v1.6.3
 ```
 
 Import the protocol packages in your Go code:
@@ -95,7 +95,7 @@ pip install g8e
 Pinned to a specific version:
 
 ```bash
-pip install g8e==1.5.8
+pip install g8e==1.6.3
 ```
 
 The package provides:
@@ -341,7 +341,7 @@ The CLI displays configurations for `g8e.local` (mTLS), IP Address (mTLS), and S
 
 ## Industry Demos
 
-The `demos/` directory contains Docker Compose environments for eight demo environments: **Healthcare** (HIPAA/PHI), **Finance** (trading controls), **Government** (CUI/CMMC), **Secure Data** (governed data migration with two-operator chain-of-custody), **DoW** (Department of War tactical edge with SIGINT, EO/IR, and PNT fusion sensors), **Swarm** (drone swarm with 20 autonomous operators), **DHS** (persistent sovereign capability with coalition data-plane governance, cross-domain release control, and cryptographically receipted destruction), and **Frontend** (third-party frontend enrollment with CORS, passkey, and SSE protection). Each demo is hermetically sealed with its own networks, volumes, and doctrine rules.
+The `demos/` directory contains Docker Compose environments for nine demo environments: **Healthcare** (HIPAA/PHI), **Finance** (trading controls), **Government** (CUI/CMMC), **Secure Data** (governed data migration with two-operator chain-of-custody), **DoW** (Department of War tactical edge with SIGINT, EO/IR, and PNT fusion sensors), **Swarm** (drone swarm with 20 autonomous operators), **DHS** (persistent sovereign capability with coalition data-plane governance, cross-domain release control, and cryptographically receipted destruction), **FedRAMP** (sovereign cloud governance with CR-26 audit integrity, access control, and cross-domain protection), and **Frontend** (third-party frontend enrollment with CORS, passkey, and SSE protection). Each demo is hermetically sealed with its own networks, volumes, and doctrine rules.
 
 ### What the demos use Docker for
 
@@ -353,7 +353,7 @@ Each demo spins up a full isolated stack via Docker Compose:
 - **Target system**, mock EHR/trading/classified-doc API on `net_secure`
 - **Observability**, log aggregator and audit viewer on `net_mgmt`
 
-All g8e services (gateway, operator, agent runtime) use `demos/Dockerfile` with `build: context: ..`, which copies a pre-built binary from `demos/bin/g8e` into the image. Run `make build` first to compile the binary and copy it to `demos/bin/g8e`. Auxiliary services (target systems, sensors, bad actors, observability) use Alpine, Python, Nginx, or other base images. The secure-data demo deploys two gateway-operator pairs (source and destination domains) on separate subnets. The DoW demo deploys three sensor agent containers (SIGINT, EO/IR, PNT fusion) with SWaP resource limits on all g8e containers. The swarm demo deploys a single gateway with 20 operator containers. The DHS demo deploys a real `agent-coalition` container running `demos scenarios run`, a real `datasvc` Python HTTP actuator on `net_secure`, and display-only source connectors modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries.
+All g8e services (gateway, operator, agent runtime) use `demos/Dockerfile` with `build: context: ..`, which copies a pre-built binary from `demos/bin/g8e` into the image. Run `make build` first to compile the binary and copy it to `demos/bin/g8e`. Auxiliary services (target systems, sensors, bad actors, observability) use Alpine, Python, Nginx, or other base images. The secure-data demo deploys two gateway-operator pairs (source and destination domains) on separate subnets. The DoW demo deploys three sensor agent containers (SIGINT, EO/IR, PNT fusion) with SWaP resource limits on all g8e containers. The swarm demo deploys a single gateway with 20 operator containers. The DHS demo deploys a real `agent-coalition` container running `demos scenarios run`, a real `datasvc` Python HTTP actuator on `net_secure`, and display-only source connectors modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries. The FedRAMP demo deploys a real `agent-runtime` container running `demos scenarios run`, a real `cloudsvc` Python HTTP actuator on `net_secure`, a `bad-actor` on `net_untrusted`, and an `observability` container on `net_mgmt`.
 
 All demos use the `/api/v1/health` endpoint for gateway health checks.
 
@@ -430,6 +430,11 @@ docker compose down -v
 | dhs | 3 | Resilient disconnected operations / continuity of coverage |
 | dhs | 4 | Governed predictive cueing (quorum vs veto) |
 | dhs | 5 | Sovereign destruction + tamper-proof audit |
+| fedramp | 1 | Governed cloud resource provisioning |
+| fedramp | 2 | Unauthorized audit trail destruction blocked |
+| fedramp | 3 | Resource destruction requires authorizing official |
+| fedramp | 4 | Governed configuration revert |
+| fedramp | 5 | Gateway audit vault destruction blocked |
 | swarm | 1 | Authorized recon mission (governed drone deployment) |
 | swarm | 2 | Weapons safety doctrine block |
 | swarm | 3 | Navigation boundary violation block |
@@ -449,6 +454,7 @@ Each demo uses distinct host ports to allow simultaneous deployment. The fronten
 | swarm | 8085 | 8448 | 5005 |
 | dow | 8086 | 8449 | - |
 | dhs | 8087 | 8450 | - |
+| fedramp | 8088 | 8451 | - |
 | frontend | 8083 | 8446 | 3003 |
 
 When enrolling the CLI against a demo gateway, use the HTTP and HTTPS ports from the table above:

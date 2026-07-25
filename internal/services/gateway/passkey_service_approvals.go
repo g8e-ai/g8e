@@ -73,7 +73,7 @@ func (h *PasskeyHandler) handleApprovalChallenge(w http.ResponseWriter, r *http.
 		return
 	}
 
-	suspendedTx, ok, err := h.mcpSvc.GetSuspendedTransaction(r.Context(), txHash)
+	suspendedTx, ok, err := h.orchestrator.GetSuspendedTransaction(r.Context(), txHash)
 	if err != nil {
 		h.logger.Error("Failed to get suspended transaction", "error", err, "txHash", txHash)
 		h.responder.Error(w, http.StatusInternalServerError, "failed to get transaction")
@@ -116,7 +116,7 @@ func (h *PasskeyHandler) handleApprovalVerify(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	suspendedTx, ok, err := h.mcpSvc.GetSuspendedTransaction(r.Context(), txHash)
+	suspendedTx, ok, err := h.orchestrator.GetSuspendedTransaction(r.Context(), txHash)
 	if err != nil {
 		h.logger.Error("Failed to get suspended transaction", "error", err, "txHash", txHash)
 		h.responder.Error(w, http.StatusInternalServerError, "failed to get transaction")
@@ -151,7 +151,7 @@ func (h *PasskeyHandler) handleApprovalVerify(w http.ResponseWriter, r *http.Req
 		CredentialId:      req.ID,
 	}
 
-	receipt, err := h.mcpSvc.ResumeWithL3Proof(r.Context(), txHash, userID, proof)
+	receipt, err := h.orchestrator.ResumeWithL3Proof(r.Context(), txHash, userID, proof)
 	if err != nil {
 		if receipt != nil {
 			h.responder.JSON(w, http.StatusForbidden, receipt)
@@ -165,50 +165,9 @@ func (h *PasskeyHandler) handleApprovalVerify(w http.ResponseWriter, r *http.Req
 	if sseUserID == "" {
 		sseUserID = suspendedTx.UserID
 	}
-	h.emitApprovalCompletedSSE(sseUserID, txHash)
+	h.orchestrator.EmitApprovalCompletedSSE(sseUserID, txHash)
 
 	h.responder.JSON(w, http.StatusOK, receipt)
-}
-
-// emitApprovalCompletedSSE publishes an approval.completed SSE event scoped to
-// the original submitting user so any waiting CLI client (stdio proxy or
-// approve command) receives real-time notification without polling.
-func (h *PasskeyHandler) emitApprovalCompletedSSE(userID, txHash string) {
-	if h.sseStore == nil || h.pubsub == nil || userID == "" {
-		return
-	}
-
-	eventPayload, err := json.Marshal(models.ApprovalCompletedEvent{
-		Type:   constants.SSEEventTypeApprovalCompleted,
-		UserID: userID,
-		TxHash: txHash,
-	})
-	if err != nil {
-		h.logger.Error("approval: failed to marshal SSE event", "error", err)
-		return
-	}
-
-	envelope := models.SSEPushPayload{
-		UserID: userID,
-		Event:  eventPayload,
-	}
-	envelopeJSON, err := json.Marshal(envelope)
-	if err != nil {
-		h.logger.Error("approval: failed to marshal SSE envelope", "error", err)
-		return
-	}
-
-	if err := h.sseStore.SSEEventsAppend(
-		SSERoute{UserID: userID},
-		constants.SSEEventTypeApprovalCompleted,
-		string(envelopeJSON),
-		"g8eg",
-	); err != nil {
-		h.logger.Error("approval: failed to append SSE event", "error", err)
-		return
-	}
-
-	h.pubsub.Publish("sse:user:"+userID, envelopeJSON)
 }
 
 // handleCLIApprovalStatus is an mTLS-authenticated endpoint that returns the current
@@ -232,7 +191,7 @@ func (h *PasskeyHandler) handleCLIApprovalStatus(w http.ResponseWriter, r *http.
 		return
 	}
 
-	suspendedTx, found, err := h.mcpSvc.GetSuspendedTransaction(r.Context(), txHash)
+	suspendedTx, found, err := h.orchestrator.GetSuspendedTransaction(r.Context(), txHash)
 	if err != nil {
 		h.logger.Error("Failed to get suspended transaction", "error", err, "txHash", txHash)
 		h.responder.Error(w, http.StatusInternalServerError, "failed to get transaction")
@@ -309,7 +268,7 @@ func (h *PasskeyHandler) listSuspendedTransactions(w http.ResponseWriter, r *htt
 		return
 	}
 
-	transactions, err := h.suspendedStore.ListSuspendedTransactions(r.Context(), userID)
+	transactions, err := h.orchestrator.ListSuspendedTransactions(r.Context(), userID)
 	if err != nil {
 		h.logger.Error("Failed to list suspended transactions", "error", err, "userID", userID)
 		h.responder.Error(w, http.StatusInternalServerError, "failed to list suspended transactions")

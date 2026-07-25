@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Operator
 
-Last Updated: 2026-07-24
-Version: v1.6.2
+Last Updated: 2026-07-25
+Version: v1.6.3
 
 ---
 
@@ -21,7 +21,7 @@ The reference implementation is a single Go codebase that compiles into the g8e 
 The g8e binary uses a single cobra command tree. Gateway and Operator modes are invoked via subcommands.
 
 #### Gateway Mode (PDP)
-A Gateway enforces governance postures across all connected Operators. Start a gateway worker with `gw start` (background) or `gw start --follow` (foreground), specifying a posture via `--posture`:
+A Gateway enforces governance postures across all connected Operators. Start a gateway worker with `gw start` (background) or `gw start --follow` (foreground), specifying a posture via `--posture`. Use `gw start --interactive` to launch the onboarding wizard before starting:
 - `--posture doctrine`, Enforces L1 hard gates; audits L2/L3.
 - `--posture consensus`, Enforces L1/L2; audits L3. Requires `--tribunal-id` and `--tribunal-url` to connect to an enrolled Tribunal service for L2 deliberation.
 - `--posture notary`, Enforces L1/L2/L3 strictly.
@@ -139,32 +139,19 @@ Custom operator implementations need the g8e Protocol Library for protobuf schem
 The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.6.2
+go get github.com/g8e-ai/g8e@v1.6.3
 ```
 
-Import the protobuf types and SPIFFE workload identity helpers:
+The Go module provides protobuf types for governance envelopes, operator service definitions, and SPIFFE workload identity helpers for mTLS identity binding. Import the common and operator protocol packages for envelope construction and verification, and the root protocol package for SPIFFE URI SAN generation and validation.
 
-```go
-import (
-    commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-    operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
-    "github.com/g8e-ai/g8e/protocol"
-)
-```
-
-The Go package provides:
-- **`protocol/proto/g8e/common/v1`**: `GovernanceEnvelope`, `GovernanceMetadata`, `L1Metadata`, `L2Metadata` (with `L2Vote`), `L3Metadata` (with `L3Proof`), `Component` enum, the core types for envelope construction and verification
-- **`protocol/proto/g8e/operator/v1`**: `OperatorService` gRPC service definition, `CommandRequested`, `FileEditRequested`, `ActionReceipt`, `CommandResult`, and all typed payload/result messages for L5 Actuator execution
-- **`protocol`**: `WorkloadIdentity` for SPIFFE URI SAN generation and validation. Operators use `OperatorSPIFFEID("org_id", "op_id", "session_id")` to generate `spiffe://g8e.local/operator/<org_id>/<op_id>/<session_id>` and `MatchesOperator` to validate identities on mTLS handshakes
-
-See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference, and `protocol/examples/` for complete Go example programs including `governance_envelope/main.go` (envelope construction) and `workload_identity/main.go` (SPIFFE identity generation).
+See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference, and `protocol/examples/` for complete Go example programs covering governance envelope construction and SPIFFE workload identity generation.
 
 ### Python Package
 
 For operator-side tooling, testing, or Python-based actuator services that need to consume protocol constants:
 
 ```bash
-pip install g8e==1.6.2
+pip install g8e==1.6.3
 ```
 
 The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.

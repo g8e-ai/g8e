@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -65,8 +64,7 @@ func (c *PKIController) gatewayHTTPPort() string {
 }
 
 func (c *PKIController) readBody(r *http.Request) ([]byte, error) {
-	r.Body = http.MaxBytesReader(nil, r.Body, c.cfg.Gateway.MaxPayloadBytes)
-	return io.ReadAll(r.Body)
+	return readRequestBody(r, c.cfg.Gateway.MaxPayloadBytes)
 }
 
 // @Summary		Get CA bundle

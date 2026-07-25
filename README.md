@@ -2,7 +2,7 @@
 
 # g8e
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Python Tests](https://img.shields.io/badge/Python%20Tests-151%20passed-3776AB.svg)](protocol/python/tests/) [![Conformance](https://img.shields.io/badge/Conformance-330%20tests-3776AB.svg)](protocol/conformance/) [![Secrets](https://img.shields.io/badge/secrets-gitleaks-006600.svg)](https://github.com/gitleaks/gitleaks) [![Licenses](https://img.shields.io/badge/licenses-go--licenses-006600.svg)](https://github.com/google/go-licenses) [![Signed](https://img.shields.io/badge/binaries-cosign%20signed-676BFF.svg)](https://github.com/sigstore/cosign) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](protocol/docs/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](protocol/docs/spec.md)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Python Tests](https://img.shields.io/badge/Python%20Tests-151%20passed-3776AB.svg)](protocol/python/tests/) [![Conformance](https://img.shields.io/badge/Conformance-420%20tests-3776AB.svg)](protocol/conformance/) [![Secrets](https://img.shields.io/badge/secrets-gitleaks-006600.svg)](https://github.com/gitleaks/gitleaks) [![Licenses](https://img.shields.io/badge/licenses-go--licenses-006600.svg)](https://github.com/google/go-licenses) [![Signed](https://img.shields.io/badge/binaries-cosign%20signed-676BFF.svg)](https://github.com/sigstore/cosign) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](protocol/docs/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](protocol/docs/spec.md)
 
 </div>
 
@@ -56,9 +56,9 @@ High-risk mutations require a WebAuthn/FIDO2 passkey assertion computed over the
 
 The platform operates as two modes of the same static binary:
 
-- **Governance Gateway (`g8e gw`)**: Serves as the Policy Decision Point. The Gateway is an Operator with additional gateway services: it runs an in-process Operator that executes L1-L5 locally for operations on the gateway host, while also serving as the platform's PKI authority, persistence layer, and pub/sub broker. It admits signed `GovernanceEnvelope` transactions, manages the platform PKI (mTLS, SPIFFE workload identities), and enforces freshness and replay defense. The gateway relays envelopes to operators and does not possess privileged bypass or execution authority. It does not initiate connections to operators. The gateway can run in the cloud or on-premises. See [Gateway Architecture](docs/architecture/gateway.md).
+- **Governance Gateway (`g8e gw`)**: Serves as the Policy Decision Point (PDP). The Gateway owns policy decision layers L1-L3 (Doctrine, Consensus, Notary) and serves as the platform's PKI authority, persistence layer, and pub/sub broker. An in-process Operator substrate (PEP) handles L4-L5 (Warden, Actuator) locally for operations targeting the gateway host. The Gateway admits signed `GovernanceEnvelope` transactions, manages the platform PKI (mTLS, SPIFFE workload identities), and enforces freshness and replay defense. The gateway relays envelopes to operators and does not possess privileged bypass or execution authority. It does not initiate connections to operators. The gateway can run in the cloud or on-premises. See [Gateway Architecture](docs/architecture/gateway.md).
 
-- **Governed Operator (`g8e operator`)**: Serves as the Policy Execution Point. It initiates outbound-only mTLS connections to the gateway and does not listen on any ports. It re-verifies every proof locally against its internal state and is the only component authorized to mutate the host. Each remote Governed Operator runs L1-L5 locally for operations on its own host. The operator runs at the site of the data owner. See [Operator Architecture](docs/architecture/operator.md).
+- **Governed Operator (`g8e operator`)**: Serves as the Policy Execution Point (PEP). It initiates outbound-only mTLS connections to the gateway and does not listen on any ports. It handles L4-L5 (Warden, Actuator) locally, re-verifying L1-L3 proofs from the Gateway against its internal state, and is the only component authorized to mutate the host. The operator runs at the site of the data owner. See [Operator Architecture](docs/architecture/operator.md).
 
 g8e is actor-agnostic and governs actions rather than actors. AI agents, human users, CI/CD pipelines, and scheduled tasks submit actions through the same admission API. Any component that produces a conformant `GovernanceEnvelope` is treated as a principal. See [Connecting Applications](docs/guides/connect_apps_to_gateway.md) for integration examples.
 
@@ -69,19 +69,31 @@ graph TD
         C2["Agentic ensemble<br/>(A2A / tool calls)"]
     end
 
-    GW["Governance Gateway<br/>(Policy Decision Point)<br/>admits signed envelopes · owns PKI"]
+    subgraph GW_Box ["Governance Gateway (PDP) — owns L1-L3"]
+        GW["Policy Decision Point<br/>L1 Doctrine · L2 Consensus · L3 Notary<br/>admits signed envelopes · owns PKI"]
+        subgraph GW_PEP ["In-Process Operator (PEP)"]
+            GW_L4["L4 Warden"]
+            GW_L5["L5 Actuator"]
+            GW_L4 --> GW_L5
+        end
+        L3["L3 Notary"] --> GW_L4
+    end
 
     subgraph Fleet ["Sovereign hosts, platform-agnostic"]
-        O1["Governed Operator<br/>(Policy Execution Point)<br/>outbound-only · no listening ports"]
+        subgraph O1_Box ["Governed Operator (PEP) — owns L4-L5"]
+            O1_L4["L4 Warden<br/>re-verify L1-L3 proofs"]
+            O1_L5["L5 Actuator<br/>execution + signed receipt"]
+            O1_L4 --> O1_L5
+        end
         D1[("Raw data + audit<br/>stay on host")]
         K1["Vault keys<br/>owned by data owner"]
-        O1 --- D1
-        O1 --- K1
+        O1_L5 --- D1
+        O1_L5 --- K1
     end
 
     C1 -. "HTTP/mTLS<br/>universal endpoint" .-> GW
     C2 --> GW
-    O1 -. "outbound-only mTLS" .-> GW
+    O1_L4 -. "outbound-only mTLS<br/>envelope w/ L1-L3 proofs" .-> GW
 ```
 
 ## System Architecture
@@ -92,22 +104,18 @@ g8e integrates action and context planes into a single architectural model.
 flowchart LR
     Client["AI client / BYO agent / native app"]
     Ingress["Protocol translator or native envelope producer"]
-    Gateway["g8e Governance Gateway"]
-    Verify["L1 / L2 / L3 / state / replay verification"]
-    Operator["g8e Governed Operator"]
-    Warden["Warden execution boundary"]
+    Gateway["g8e Governance Gateway (PDP)<br/>L1 Doctrine · L2 Consensus · L3 Notary"]
+    Operator["g8e Governed Operator (PEP)<br/>L4 Warden · L5 Actuator"]
     Vault["Local audit vault and ledger"]
     Target["Host OS / file system / downstream MCP or A2A server"]
 
     Client --> Ingress
     Ingress --> Gateway
-    Gateway --> Verify
-    Verify --> Operator
-    Operator --> Warden
-    Warden --> Vault
-    Warden --> Target
-    Target --> Warden
-    Warden --> Vault
+    Gateway -- "envelope w/ L1-L3 proofs" --> Operator
+    Operator --> Vault
+    Operator --> Target
+    Target --> Operator
+    Operator --> Vault
 ```
 
 ### Action Plane
@@ -147,11 +155,11 @@ The admission pipeline consists of five layers with independent failure domains:
   <img src="docs/diagrams/g8e-diagram.png" alt="g8e Admission Pipeline with agentic ensemble" width="720" />
 </p>
 
-1. **L1 Doctrine**: Deterministic static analysis. Enforces rules against forbidden patterns and MITRE ATT&CK indicators. Active for every action. See [Gateway Postures](docs/guides/build_gateway.md#gateway-mode-flags).
-2. **L2 Consensus**: Multi-agent deliberation. An enrolled Tribunal service evaluates the envelope and produces signed votes over the canonical SHA-256 transaction hash. The gateway delegates L2 deliberation to the Tribunal and never self-signs. See [Consensus Layer](protocol/docs/spec.md#l2-consensus).
-3. **L3 Notary**: Hardware-bound human authorization. Utilizes WebAuthn/FIDO2 passkey assertions computed over the transaction hash. See [Authentication](docs/architecture/auth.md).
-4. **L4 Warden**: Fail-closed verification authority. Re-verifies all proofs against local state, signatures, freshness, and the state Merkle root. See [Warden Layer](protocol/docs/spec.md#l4-warden).
-5. **L5 Actuator**: Single dispatch path. Handles tool invocation, rehydrates scrubbed tokens on-host, and enforces data sovereignty at the execution boundary. See [Actuator Layer](protocol/docs/spec.md#l5-actuator).
+1. **L1 Doctrine** — Gateway (PDP): Deterministic static analysis. Enforces rules against forbidden patterns and MITRE ATT&CK indicators. Active for every action. See [Gateway Postures](docs/guides/build_gateway.md#gateway-mode-flags).
+2. **L2 Consensus** — Gateway (PDP): Multi-agent deliberation. An enrolled Tribunal service evaluates the envelope and produces signed votes over the canonical SHA-256 transaction hash. The gateway delegates L2 deliberation to the Tribunal and never self-signs. See [Consensus Layer](protocol/docs/spec.md#l2-consensus).
+3. **L3 Notary** — Gateway (PDP): Hardware-bound human authorization. Utilizes WebAuthn/FIDO2 passkey assertions computed over the transaction hash. See [Authentication](docs/architecture/auth.md).
+4. **L4 Warden** — Operator (PEP): Fail-closed verification authority. Re-verifies all proofs against local state, signatures, freshness, and the state Merkle root. See [Warden Layer](protocol/docs/spec.md#l4-warden).
+5. **L5 Actuator** — Operator (PEP): Single dispatch path. Handles tool invocation, rehydrates scrubbed tokens on-host, and enforces data sovereignty at the execution boundary. See [Actuator Layer](protocol/docs/spec.md#l5-actuator).
 
 ## Data Sovereignty
 
@@ -212,7 +220,7 @@ If you only need the g8e wire protocol for your own client or service, consume t
 **Go module** (requires Go 1.26+):
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.5.8
+go get github.com/g8e-ai/g8e@v1.6.3
 ```
 
 **Python package** (requires Python 3.10+):
@@ -258,7 +266,7 @@ We welcome contributions of all kinds — bug reports, feature ideas, documentat
 - [Docker Gateway](docs/guides/docker_gateway.md)
 - [Cloudflare Tunnel Integration](docs/guides/cloudflare_tunnel.md)
 - [Lovable Frontend Integration](docs/guides/lovable.md)
-- [GUI Enrollment](docs/guides/gui_enrollment.md)
+- [Build a g8e-Compatible Frontend](docs/guides/build_frontend.md)
 - [Live Swarm Demo](demos/live-swarm/README.md)
 
 #### Architecture
@@ -270,6 +278,8 @@ We welcome contributions of all kinds — bug reports, feature ideas, documentat
 - [Network Model](docs/architecture/network.md)
 - [Server-Sent Events](docs/architecture/sse.md)
 - [Governance](docs/architecture/governance.md)
+- [Tribunal](docs/architecture/tribunal.md)
+- [AI Agents](docs/architecture/agents.md)
 - [Protocol Library](docs/architecture/protocol.md)
 - [Scripts](docs/architecture/scripts.md)
 

@@ -9,8 +9,8 @@ Version: v1.6.2
 
 The g8e Protocol platform is implemented as a single static binary that operates in two modes:
 
-1.  **Governance Gateway** (Policy Decision Point / PDP): The binary run in Gateway mode (`--posture doctrine`, `--posture consensus`, or `--posture notary`). The Gateway is an Operator with additional gateway services: it runs an in-process Operator that executes L1-L5 locally for operations on the gateway host itself, while also serving as the platform's central persistence layer, pub/sub broker, root CA, and policy decision point. The Gateway is governed by a multi-signature Tribunal (K-of-N Ed25519 votes), not Byzantine consensus.
-2.  **Governed Operator** (Policy Execution Point / PEP): The same binary run in Standard Mode (`operator start`). It runs on target hosts as the sovereign execution boundary and MCP server, executing L1-L5 locally for operations on its own host.
+1.  **Governance Gateway** (Policy Decision Point / PDP): The binary run in Gateway mode (`--posture doctrine`, `--posture consensus`, or `--posture notary`). The Gateway owns the policy decision layers (L1 Doctrine, L2 Consensus, L3 Notary) and serves as the platform's central persistence layer, pub/sub broker, root CA, and governance envelope entry point. The Gateway is governed by a multi-signature Tribunal (K-of-N Ed25519 votes), not Byzantine consensus. An in-process Operator substrate (PEP) runs L4 Warden and L5 Actuator locally for operations targeting the gateway host itself.
+2.  **Governed Operator** (Policy Execution Point / PEP): The same binary run in Standard Mode (`operator start`). It runs on target hosts as the sovereign execution boundary and MCP server, handling L4 Warden (pre-dispatch verification) and L5 Actuator (execution and signed receipt production) for operations on its own host.
 
 ---
 
@@ -36,28 +36,31 @@ The g8e Protocol platform is implemented as a single static binary that operates
 
 The g8e platform is built on the g8e Protocol. Conforming gateway and Operator implementations make that protocol live.
 
-- **Governance Gateway** (PDP): The binary run in **Gateway mode** (`--posture doctrine`, `--posture consensus`, or `--posture notary`). It acts as the platform's backbone: protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority. The Gateway host also runs an in-process Operator that enforces L1-L5 locally for operations targeting the gateway host itself.
-- **Governed Operator** (PEP): The binary run in **Standard Mode** (`operator start`). It acts as the sovereign tool execution boundary on a managed host, executing actions only after they carry a valid, signed gateway lease. Operators automatically serve as MCP servers, exposing tool capabilities through the gateway's unified MCP endpoint. Each remote Governed Operator runs L1-L5 locally for operations on its own host.
+- **Governance Gateway** (PDP): The binary run in **Gateway mode** (`--posture doctrine`, `--posture consensus`, or `--posture notary`). It acts as the platform's backbone: protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority. The Gateway owns layers L1-L3 (Doctrine, Consensus, Notary) as policy decisions. An in-process Operator substrate (PEP) handles L4-L5 (Warden, Actuator) locally for operations targeting the gateway host itself.
+- **Governed Operator** (PEP): The binary run in **Standard Mode** (`operator start`). It acts as the sovereign tool execution boundary on a managed host, executing actions only after they carry a valid, signed gateway lease. Operators automatically serve as MCP servers, exposing tool capabilities through the gateway's unified MCP endpoint. Each remote Governed Operator handles L4-L5 (Warden, Actuator) locally for operations on its own host, re-verifying L1-L3 proofs from the Gateway before execution.
 
 ```mermaid
 flowchart TD
     subgraph Hub ["Governance Gateway (PDP)"]
         direction TB
-        subgraph GW_Op ["In-Process Operator"]
-            subgraph Layers ["5-Layer Governance (L1-L5)"]
-                L1["L1 Doctrine"]
-                L2["L2 Consensus"]
-                L3["L3 Notary"]
-                L4["L4 Warden"]
-                L5["L5 Actuator"]
-                
-                L1 --> L2 --> L3 --> L4 --> L5
-            end
+        subgraph PDP_Layers ["Policy Decision Layers (L1-L3)"]
+            direction TB
+            L1["L1 Doctrine"]
+            L2["L2 Consensus"]
+            L3["L3 Notary"]
+            L1 --> L2 --> L3
+        end
+        subgraph GW_PEP ["In-Process Operator Substrate (PEP)"]
+            direction TB
+            L4["L4 Warden"]
+            L5["L5 Actuator"]
+            L4 --> L5
         end
         db[("SQLite / KV")]
         ps[["Pub/Sub Broker"]]
         ca["Root CA / PKI"]
-        
+
+        L3 --> L4
         L5 --- db
         L5 --- ps
         L5 --- ca
@@ -70,24 +73,21 @@ flowchart TD
     ensemble -- "mTLS JSON" --> L1
 
     subgraph Host_A ["Managed Host A"]
-        subgraph Remote_Op ["Remote Governed Operator"]
-            subgraph Remote_Layers ["5-Layer Governance (L1-L5)"]
-                RL1["L1 Doctrine"]
-                RL2["L2 Consensus"]
-                RL3["L3 Notary"]
-                RL4["L4 Warden"]
-                RL5["L5 Actuator"]
-                
-                RL1 --> RL2 --> RL3 --> RL4 --> RL5
-            end
+        subgraph Remote_Op ["Remote Governed Operator (PEP)"]
+            direction TB
+            RL4["L4 Warden"]
+            RL5["L5 Actuator"]
+            RL4 --> RL5
         end
         g8eoA["Governed Operator (PEP)"] --- LFAA_A["LFAA Ledger & Vault"]
     end
 
-    g8eoA -- "mTLS WSS (JSON)" --> ps
+    ps -- "mTLS WSS (JSON)<br/>envelope w/ L1-L3 proofs" --> RL4
 ```
 
-Both the Gateway's in-process Operator and each remote Governed Operator run the full L1-L5 verification pipeline locally. The Gateway's in-process Operator handles operations targeting the gateway host itself; remote Governed Operators handle operations targeting their own hosts.
+The Gateway (PDP) owns L1-L3 (Doctrine, Consensus, Notary) as policy decision layers. The in-process Operator substrate (PEP) handles L4-L5 (Warden, Actuator) for operations targeting the gateway host. Remote Governed Operators (PEP) receive envelopes with L1-L3 proofs attached and run L4-L5 locally, re-verifying all proofs against their own state before execution.
+
+For a detailed view of the Gateway service stack and its relationship to the Operator substrate, see the [Gateway Service Stack Diagram](../diagrams/graph-gateway-services.md).
 
 ---
 
@@ -324,31 +324,31 @@ The bootstrap health endpoint on the HTTP port is a lighter check that verifies 
 
 ## 5-Layer Verification Sequence
 
-Every transaction submitted to `POST /api/v1/governance/envelopes` must pass through the following layers sequentially. These layers run on the Gateway's in-process Operator for operations targeting the gateway host. Remote Governed Operators run the same L1-L5 pipeline locally for operations on their own hosts (see [Operator Architecture](./operator.md)).
+Every transaction submitted to `POST /api/v1/governance/envelopes` must pass through five layers sequentially. The Gateway (PDP) owns layers L1-L3 as policy decisions. The Operator substrate (PEP) — whether in-process on the Gateway host or remote on a managed host — owns layers L4-L5 as enforcement and execution. Remote Governed Operators re-verify L1-L3 proofs from the Gateway before running L4-L5 locally (see [Operator Architecture](./operator.md)).
 
-### L1 Doctrine (Technical Bedrock)
+### L1 Doctrine (Technical Bedrock) — Gateway (PDP)
 Enforces forbidden patterns (such as `sudo` or `rm -rf /`), blacklists, and whitelists. It also performs MITRE threat detection on incoming payloads.
 
-### L2 Consensus (Tribunal Deliberation)
+### L2 Consensus (Tribunal Deliberation) — Gateway (PDP)
 The gateway delegates L2 deliberation to an enrolled Tribunal service rather than self-signing votes. The Tribunal evaluates the transaction and produces `L2Vote` entries (Ed25519 signatures over the transaction hash) from its member agents. Under `consensus` and `notary` postures, the gateway calls the Tribunal's `Deliberate` endpoint (via in-process deliberation) and attaches the returned L2 votes to the envelope. The L4 Warden then verifies the quorum of valid signatures against the `TribunalPolicy` stored in the tribunal store.
 
-### L3 Notary (Human Authorization)
+### L3 Notary (Human Authorization) — Gateway (PDP)
 The gateway notary enforces human-in-the-loop authorization using a layered model: passkey authorization is required for all proofs, and CLI mTLS session verification is applied as an additional transport-auth layer when `mtls_cert_fingerprint` is present.
 - **Web Sessions**: Use WebAuthn passkey proofs (FIDO2).
 - **CLI Sessions**: Use WebAuthn passkey proofs with additional mTLS certificate fingerprint verification. The CLI session verifier checks user active status, session ownership, fingerprint match (constant-time compare), session active and expiry, and certificate revocation.
 - **Operator Sessions**: Use mTLS certificate fingerprints only (passkey auth is not available for operators).
 - **JWT Sessions**: Use JWT tokens validated at the gateway with JIT user provisioning.
 
-### L4 Warden (Pre-Dispatch Gating)
-Enforces final pre-execution verification gates:
+### L4 Warden (Pre-Dispatch Gating) — Operator (PEP)
+Runs on the Operator substrate (in-process for gateway-host operations, remote for managed-host operations). Enforces final pre-execution verification gates:
 - **Transaction Hash**: The `envelope.id` must match the deterministic transaction hash computed from its content.
 - **Expiry**: The `expires_at` timestamp must be in the future.
 - **Nonce/Replay**: The `nonce` must not have been used previously (sliding-window protection) via the replay store.
 - **State Root**: The `state_merkle_root` (if provided) must match the current state root of the gateway.
 - **Signer Trust**: Verifies L2 Consensus / L3 Notary signatures against trusted keys in the signer store.
 
-### L5 Actuator (Execution and Receipt)
-Performs isolated boundary tool dispatch (via MCP/A2A) and signed receipt production:
+### L5 Actuator (Execution and Receipt) — Operator (PEP)
+Runs on the Operator substrate. Performs isolated boundary tool dispatch (via MCP/A2A) and signed receipt production:
 - **Execution**: Dispatches the verified payload to the downstream execution handler (such as an MCP server).
 - **Audit**: Persists a `console_audit` record and a signed `ActionReceipt`.
 - **Receipt**: Generates a deterministic, signed receipt containing the result and state transitions.

@@ -30,7 +30,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
-	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/uuid"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -298,30 +297,25 @@ func NewPasskeyService(docStore *DocumentStoreService, logger *slog.Logger, cfg 
 
 // PasskeyHandler handles HTTP endpoints for passkey registration, authentication,
 // credential management, and OOB approval flows. It wraps a PasskeyService for
-// domain logic and adds HTTP-specific concerns (web sessions, responder, payload limits).
+// domain logic and delegates business orchestration (MCP, suspended transactions,
+// SSE, WebSocket) to PasskeyOrchestrator. HTTP-layer concerns only.
 type PasskeyHandler struct {
 	*PasskeyService
-	webSessionSvc  *WebSessionService
-	responder      *response.Writer
-	maxPayload     int64
-	mcpSvc         MCPServiceProvider
-	suspendedStore storage.SuspendedTransactionStore
-	sseStore       *SSEEventService
-	pubsub         *GatewayWebSocketHandler
-	crossOrigin    bool
+	webSessionSvc *WebSessionService
+	responder     *response.Writer
+	maxPayload    int64
+	orchestrator  *PasskeyOrchestrator
+	crossOrigin   bool
 }
 
 // PasskeyHandlerDeps groups all dependencies for NewPasskeyHandler.
 type PasskeyHandlerDeps struct {
-	Service        *PasskeyService
-	WebSessionSvc  *WebSessionService
-	Responder      *response.Writer
-	MaxPayload     int64
-	MCPSvc         MCPServiceProvider
-	SuspendedStore storage.SuspendedTransactionStore
-	SSEStore       *SSEEventService
-	Pubsub         *GatewayWebSocketHandler
-	CrossOrigin    bool
+	Service       *PasskeyService
+	WebSessionSvc *WebSessionService
+	Responder     *response.Writer
+	MaxPayload    int64
+	Orchestrator  *PasskeyOrchestrator
+	CrossOrigin   bool
 }
 
 // NewPasskeyHandler creates a new PasskeyHandler with all dependencies wired.
@@ -331,10 +325,7 @@ func NewPasskeyHandler(deps PasskeyHandlerDeps) *PasskeyHandler {
 		webSessionSvc:  deps.WebSessionSvc,
 		responder:      deps.Responder,
 		maxPayload:     deps.MaxPayload,
-		mcpSvc:         deps.MCPSvc,
-		suspendedStore: deps.SuspendedStore,
-		sseStore:       deps.SSEStore,
-		pubsub:         deps.Pubsub,
+		orchestrator:   deps.Orchestrator,
 		crossOrigin:    deps.CrossOrigin,
 	}
 }

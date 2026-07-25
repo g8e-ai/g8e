@@ -70,8 +70,7 @@ type GatewayModeService struct {
 	cliSessionSvc      *CLISessionService
 	operatorSessionSvc *OperatorSessionService
 	webSessionSvc      *WebSessionService
-	suspendedTxService storage.SuspendedTransactionStore
-	suspendedTxCloser  *storage.SuspendedTransactionService
+	suspendedTxService *storage.SuspendedTransactionService
 	mcpGateway         *mcp.GatewayService
 	tribunal           *tribunal.TribunalService
 	responder          *response.Writer
@@ -233,6 +232,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		Responder:        res,
 		SuspendedStore:   suspendedTxService,
 		ScrubbingService: scrubbingService,
+		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
 		A2ADownstreamURL: cfg.Gateway.A2ADownstreamURL,
@@ -242,16 +242,14 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		return nil, fmt.Errorf("gateway: failed to initialize MCP gateway: %w", err)
 	}
 
+	passkeyOrchestrator := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, pubsub, logger)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
-		Service:        passkey,
-		WebSessionSvc:  webSessionSvc,
-		Responder:      res,
-		MaxPayload:     cfg.Gateway.MaxPayloadBytes,
-		MCPSvc:         mcpGateway,
-		SuspendedStore: suspendedTxService,
-		SSEStore:       stores.SSEStore,
-		Pubsub:         pubsub,
-		CrossOrigin:    len(cfg.Gateway.AllowedOrigins) > 0,
+		Service:       passkey,
+		WebSessionSvc: webSessionSvc,
+		Responder:     res,
+		MaxPayload:    cfg.Gateway.MaxPayloadBytes,
+		Orchestrator:  passkeyOrchestrator,
+		CrossOrigin:   len(cfg.Gateway.AllowedOrigins) > 0,
 	})
 
 	ls := &GatewayModeService{
@@ -270,7 +268,6 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		operatorSessionSvc: operatorSessionSvc,
 		webSessionSvc:      webSessionSvc,
 		suspendedTxService: suspendedTxService,
-		suspendedTxCloser:  suspendedTxService,
 		extraIPs:           extraIPs,
 		mcpGateway:         mcpGateway,
 		responder:          res,
@@ -731,8 +728,8 @@ func (ls *GatewayModeService) Stop(ctx context.Context) error {
 		// suspended transaction service are opened during build() and
 		// must be closed to avoid leaking file handles (especially on
 		// Windows where open files cannot be deleted from TempDir).
-		if ls.suspendedTxCloser != nil {
-			if err := ls.suspendedTxCloser.Close(); err != nil {
+		if ls.suspendedTxService != nil {
+			if err := ls.suspendedTxService.Close(); err != nil {
 				ls.logger.Error("Suspended transaction service close error", "state", string(constants.ConnectionStateError), "error", err)
 			}
 		}
@@ -766,8 +763,8 @@ func (ls *GatewayModeService) Stop(ctx context.Context) error {
 	ls.pubsub.Close()
 
 	// Close suspended transaction service database
-	if ls.suspendedTxCloser != nil {
-		if err := ls.suspendedTxCloser.Close(); err != nil {
+	if ls.suspendedTxService != nil {
+		if err := ls.suspendedTxService.Close(); err != nil {
 			ls.logger.Error("Suspended transaction service close error", "state", string(constants.ConnectionStateError), "error", err)
 		}
 	}
@@ -794,10 +791,10 @@ func (ls *GatewayModeService) runEnrollmentTokenCleanup(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if ls.handler == nil || ls.handler.authController == nil || ls.handler.authController.enrollmentTokenSvc == nil {
+			if ls.handler == nil || ls.handler.enrollmentTokenController == nil || ls.handler.enrollmentTokenController.enrollmentTokenSvc == nil {
 				continue
 			}
-			if err := ls.handler.authController.enrollmentTokenSvc.CleanupExpiredTokens(); err != nil {
+			if err := ls.handler.enrollmentTokenController.enrollmentTokenSvc.CleanupExpiredTokens(); err != nil {
 				ls.logger.Warn("Enrollment token cleanup error", "error", err)
 			}
 		}
