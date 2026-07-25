@@ -70,8 +70,7 @@ type GatewayModeService struct {
 	cliSessionSvc      *CLISessionService
 	operatorSessionSvc *OperatorSessionService
 	webSessionSvc      *WebSessionService
-	suspendedTxService storage.SuspendedTransactionStore
-	suspendedTxCloser  *storage.SuspendedTransactionService
+	suspendedTxService *storage.SuspendedTransactionService
 	mcpGateway         *mcp.GatewayService
 	tribunal           *tribunal.TribunalService
 	responder          *response.Writer
@@ -233,6 +232,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		Responder:        res,
 		SuspendedStore:   suspendedTxService,
 		ScrubbingService: scrubbingService,
+		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
 		A2ADownstreamURL: cfg.Gateway.A2ADownstreamURL,
@@ -270,7 +270,6 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		operatorSessionSvc: operatorSessionSvc,
 		webSessionSvc:      webSessionSvc,
 		suspendedTxService: suspendedTxService,
-		suspendedTxCloser:  suspendedTxService,
 		extraIPs:           extraIPs,
 		mcpGateway:         mcpGateway,
 		responder:          res,
@@ -731,8 +730,8 @@ func (ls *GatewayModeService) Stop(ctx context.Context) error {
 		// suspended transaction service are opened during build() and
 		// must be closed to avoid leaking file handles (especially on
 		// Windows where open files cannot be deleted from TempDir).
-		if ls.suspendedTxCloser != nil {
-			if err := ls.suspendedTxCloser.Close(); err != nil {
+		if ls.suspendedTxService != nil {
+			if err := ls.suspendedTxService.Close(); err != nil {
 				ls.logger.Error("Suspended transaction service close error", "state", string(constants.ConnectionStateError), "error", err)
 			}
 		}
@@ -766,8 +765,8 @@ func (ls *GatewayModeService) Stop(ctx context.Context) error {
 	ls.pubsub.Close()
 
 	// Close suspended transaction service database
-	if ls.suspendedTxCloser != nil {
-		if err := ls.suspendedTxCloser.Close(); err != nil {
+	if ls.suspendedTxService != nil {
+		if err := ls.suspendedTxService.Close(); err != nil {
 			ls.logger.Error("Suspended transaction service close error", "state", string(constants.ConnectionStateError), "error", err)
 		}
 	}

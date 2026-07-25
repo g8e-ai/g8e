@@ -38,7 +38,20 @@ func setupTestDBController(t *testing.T) (*DBController, *Stores) {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
 
-	dbController := newDBController(infra.Cfg, infra.Logger, infra.Stores.DocStore, infra.Stores.KVStore, infra.Stores.SSEStore, infra.Stores.BlobStore, infra.Stores.AuditStore, infra.Stores.SignerStore, infra.Auth, infra.Pubsub, infra.UserSvc, infra.Responder)
+	dbController := newDBController(DBControllerDeps{
+		Cfg:         infra.Cfg,
+		Logger:      infra.Logger,
+		DocStore:    infra.Stores.DocStore,
+		KVStore:     infra.Stores.KVStore,
+		SSEStore:    infra.Stores.SSEStore,
+		BlobStore:   infra.Stores.BlobStore,
+		AuditStore:  infra.Stores.AuditStore,
+		SignerStore: infra.Stores.SignerStore,
+		Auth:        infra.Auth,
+		Pubsub:      infra.Pubsub,
+		UserSvc:     infra.UserSvc,
+		Responder:   infra.Responder,
+	})
 
 	return dbController, infra.Stores
 }

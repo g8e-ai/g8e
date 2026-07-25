@@ -508,6 +508,7 @@ func TestHandleReadField(t *testing.T) {
 	g := &GatewayService{
 		logger:            logger,
 		fieldPathRegistry: fieldPathRegistry,
+		threatScanner:     governance.NewL1Doctrine(),
 	}
 	g.SetRuntimeDeps(RuntimeDependencies{
 		DBService:        dbService,

@@ -34,6 +34,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -171,6 +172,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 		Responder:        resp,
 		SuspendedStore:   suspendedTxService,
 		ScrubbingService: nil,
+		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
 	})
@@ -322,6 +324,7 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 		Responder:        resp,
 		SuspendedStore:   suspendedTxService,
 		ScrubbingService: nil,
+		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
 	})
@@ -488,6 +491,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 		Responder:        resp,
 		SuspendedStore:   suspendedTxService,
 		ScrubbingService: nil,
+		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
 	})

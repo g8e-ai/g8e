@@ -41,6 +41,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/protocol"
 )
@@ -194,6 +195,7 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config, *TestInfr
 		Responder:        infra.Responder,
 		SuspendedStore:   infra.SuspendedStore,
 		ScrubbingService: nil,
+		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(infra.Cfg.Gateway.Posture),
 	})
@@ -229,6 +231,7 @@ func setupTestGatewayService(t *testing.T) (*GatewayModeService, *config.Config)
 		Responder:        infra.Responder,
 		SuspendedStore:   infra.SuspendedStore,
 		ScrubbingService: nil,
+		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(infra.Cfg.Gateway.Posture),
 	})
@@ -999,6 +1002,7 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 			Responder:        infra.Responder,
 			SuspendedStore:   infra.SuspendedStore,
 			ScrubbingService: nil,
+			ThreatScanner:    governance.NewL1Doctrine(),
 			MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 			Posture:          string(infra.Cfg.Gateway.Posture),
 		})
@@ -1057,6 +1061,7 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 			Responder:        infra.Responder,
 			SuspendedStore:   infra.SuspendedStore,
 			ScrubbingService: nil,
+			ThreatScanner:    governance.NewL1Doctrine(),
 			MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 			Posture:          string(infra.Cfg.Gateway.Posture),
 		})
@@ -1115,6 +1120,7 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 			Responder:        infra.Responder,
 			SuspendedStore:   infra.SuspendedStore,
 			ScrubbingService: nil,
+			ThreatScanner:    governance.NewL1Doctrine(),
 			MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 			Posture:          string(infra.Cfg.Gateway.Posture),
 		})
@@ -1178,6 +1184,7 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 			Responder:        infra.Responder,
 			SuspendedStore:   infra.SuspendedStore,
 			ScrubbingService: nil,
+			ThreatScanner:    governance.NewL1Doctrine(),
 			MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 			Posture:          string(infra.Cfg.Gateway.Posture),
 		})
@@ -1244,6 +1251,7 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 			Responder:        infra.Responder,
 			SuspendedStore:   infra.SuspendedStore,
 			ScrubbingService: nil,
+			ThreatScanner:    governance.NewL1Doctrine(),
 			MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 			Posture:          string(infra.Cfg.Gateway.Posture),
 		})

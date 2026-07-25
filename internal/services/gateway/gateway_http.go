@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
@@ -99,7 +100,20 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 
 	// Initialize controllers
 	h.pkiController = newPKIController(deps.Cfg, deps.Logger, deps.PKI, deps.AppEnrollment, deps.Reg, deps.Responder)
-	h.dbController = newDBController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.KVStore, deps.Stores.SSEStore, deps.Stores.BlobStore, deps.Stores.AuditStore, deps.Stores.SignerStore, deps.Auth, deps.Pubsub, deps.UserSvc, deps.Responder)
+	h.dbController = newDBController(DBControllerDeps{
+		Cfg:         deps.Cfg,
+		Logger:      deps.Logger,
+		DocStore:    deps.Stores.DocStore,
+		KVStore:     deps.Stores.KVStore,
+		SSEStore:    deps.Stores.SSEStore,
+		BlobStore:   deps.Stores.BlobStore,
+		AuditStore:  deps.Stores.AuditStore,
+		SignerStore: deps.Stores.SignerStore,
+		Auth:        deps.Auth,
+		Pubsub:      deps.Pubsub,
+		UserSvc:     deps.UserSvc,
+		Responder:   deps.Responder,
+	})
 
 	// Initialize actuator key reader for device enrollment
 	actuatorKeyReader := &fileActuatorKeyReader{path: paths.Infra.ActuatorPubJSONPath}
@@ -139,8 +153,15 @@ func (h *HTTPHandler) readBody(r *http.Request) ([]byte, error) {
 }
 
 func readRequestBody(r *http.Request, maxPayloadBytes int64) ([]byte, error) {
-	r.Body = http.MaxBytesReader(nil, r.Body, maxPayloadBytes)
-	return io.ReadAll(r.Body)
+	limited := io.LimitReader(r.Body, maxPayloadBytes+1)
+	data, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxPayloadBytes {
+		return nil, fmt.Errorf("gateway: %w (limit %d bytes)", constants.ErrPayloadExceedsLimit, maxPayloadBytes)
+	}
+	return data, nil
 }
 
 func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
