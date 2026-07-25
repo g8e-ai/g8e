@@ -304,7 +304,10 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Initialize ScrubbingService for data scrubbing (scrubbing/rehydration)
 	scrubbingConfig := scrubbing.DefaultConfig()
-	scrubbingService := scrubbing.NewScrubbingService(scrubbingConfig, vs.logger, vs.tokenStore)
+	scrubbingService, err := scrubbing.NewScrubbingService(ctx, scrubbingConfig, vs.logger, vs.tokenStore)
+	if err != nil {
+		return fmt.Errorf("g8eo: failed to initialize scrubbing service: %w", err)
+	}
 
 	// OperatorPubSubService Construction
 	psConfig := pubsub.CommandServiceConfig{

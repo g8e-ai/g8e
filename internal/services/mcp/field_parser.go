@@ -15,19 +15,11 @@ package mcp
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
-)
 
-var (
-	ErrInvalidCollection  = errors.New("FIELD_PATH_INVALID_COLLECTION: collection not in schema registry")
-	ErrInvalidFieldPath   = errors.New("FIELD_PATH_INVALID: field path not in allowlist")
-	ErrForbiddenFieldPath = errors.New("FIELD_PATH_FORBIDDEN: field path in denylist")
-	ErrInvalidPathSyntax  = errors.New("FIELD_PATH_SYNTAX: invalid dot-notation syntax")
-	ErrEmptyFieldPath     = errors.New("FIELD_PATH_EMPTY: field path cannot be empty")
-	ErrEmptyCollection    = errors.New("FIELD_PATH_EMPTY_COLLECTION: collection cannot be empty")
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // FieldPathRegistry holds the schema registry for allowed field paths per collection
@@ -60,29 +52,29 @@ func NewFieldPathRegistry(logger *slog.Logger) (*FieldPathRegistry, error) {
 // ValidateFieldPath checks if a field path is allowed for a given collection
 func (r *FieldPathRegistry) ValidateFieldPath(collection string, fieldPath string) error {
 	if collection == "" {
-		return ErrEmptyCollection
+		return constants.ErrFieldPathEmptyCollection
 	}
 
 	if fieldPath == "" {
-		return ErrEmptyFieldPath
+		return constants.ErrFieldPathEmpty
 	}
 
 	// Check if collection exists in registry
 	collectionPaths, exists := r.registry[collection]
 	if !exists {
-		return ErrInvalidCollection
+		return constants.ErrFieldPathInvalidCollection
 	}
 
 	// Parse the field path into components
 	components := strings.Split(fieldPath, ".")
 	if len(components) == 0 {
-		return ErrInvalidPathSyntax
+		return constants.ErrFieldPathSyntax
 	}
 
 	// Check each component for forbidden patterns
 	for _, component := range components {
 		if component == "" {
-			return ErrInvalidPathSyntax
+			return constants.ErrFieldPathSyntax
 		}
 	}
 
@@ -90,11 +82,11 @@ func (r *FieldPathRegistry) ValidateFieldPath(collection string, fieldPath strin
 	for _, forbidden := range collectionPaths.ForbiddenPaths {
 		for _, component := range components {
 			if component == forbidden {
-				return ErrForbiddenFieldPath
+				return constants.ErrFieldPathForbidden
 			}
 		}
 		if strings.HasPrefix(fieldPath, forbidden+".") || fieldPath == forbidden {
-			return ErrForbiddenFieldPath
+			return constants.ErrFieldPathForbidden
 		}
 	}
 
@@ -108,7 +100,7 @@ func (r *FieldPathRegistry) ValidateFieldPath(collection string, fieldPath strin
 	}
 
 	if !allowed {
-		return ErrInvalidFieldPath
+		return constants.ErrFieldPathInvalid
 	}
 
 	return nil
@@ -117,17 +109,17 @@ func (r *FieldPathRegistry) ValidateFieldPath(collection string, fieldPath strin
 // ParseFieldPath extracts a field value from a JSON document using dot notation
 func ParseFieldPath(document json.RawMessage, fieldPath string) (FieldValue, error) {
 	if document == nil {
-		return FieldValue{}, errors.New("document is nil")
+		return FieldValue{}, constants.ErrFieldPathDocumentNil
 	}
 
 	if fieldPath == "" {
-		return FieldValue{}, ErrEmptyFieldPath
+		return FieldValue{}, constants.ErrFieldPathEmpty
 	}
 
 	// Parse the document into a generic map
 	var docMap map[string]interface{}
 	if err := json.Unmarshal(document, &docMap); err != nil {
-		return FieldValue{}, fmt.Errorf("failed to parse document JSON: %w", err)
+		return FieldValue{}, fmt.Errorf("field_parser: parse document JSON: %w", err)
 	}
 
 	// Navigate the path
@@ -140,10 +132,10 @@ func ParseFieldPath(document json.RawMessage, fieldPath string) (FieldValue, err
 			var ok bool
 			current, ok = v[component]
 			if !ok {
-				return FieldValue{}, fmt.Errorf("field path component '%s' not found", component)
+				return FieldValue{}, fmt.Errorf("field_parser: %w: %q", constants.ErrFieldPathComponentNotFound, component)
 			}
 		default:
-			return FieldValue{}, fmt.Errorf("cannot access field '%s' on non-object type", component)
+			return FieldValue{}, fmt.Errorf("field_parser: %w: %q", constants.ErrFieldPathNotObject, component)
 		}
 	}
 

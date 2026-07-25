@@ -220,7 +220,10 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 
 	// --- Scrubbing and MCP gateway ---
 	scrubbingConfig := scrubbing.DefaultConfig()
-	scrubbingService := scrubbing.NewScrubbingService(scrubbingConfig, logger, nil)
+	scrubbingService, err := scrubbing.NewScrubbingService(context.Background(), scrubbingConfig, logger, nil)
+	if err != nil {
+		return nil, fmt.Errorf("gateway: failed to initialize scrubbing service: %w", err)
+	}
 
 	publicBaseURL := cfg.Gateway.PublicBaseURL
 	if publicBaseURL == "" {

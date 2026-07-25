@@ -14,6 +14,7 @@
 package scrubbing
 
 import (
+	"context"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -32,7 +33,7 @@ func TestScrubSlice(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	input := []interface{}{
 		"password=secret123",
@@ -52,7 +53,7 @@ func TestScrubSlice(t *testing.T) {
 func TestScrubSlice_Empty(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	service := NewScrubbingService(nil, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), nil, logger, nil)
 	result := service.scrubSlice([]interface{}{})
 	assert.Empty(t, result)
 }
@@ -60,7 +61,7 @@ func TestScrubSlice_Empty(t *testing.T) {
 func TestTokenKeymapHash_Empty(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	service := NewScrubbingService(nil, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), nil, logger, nil)
 	hash := service.TokenKeymapHash()
 	assert.Equal(t, "", hash)
 }
@@ -69,15 +70,15 @@ func TestTokenKeymapHash_WithTokens(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
-	service.GetTokenForValue("secret123")
-	service.GetTokenForValue("sk-abc123")
+	service.GetTokenForValue(context.Background(), "secret123")
+	service.GetTokenForValue(context.Background(), "sk-abc123")
 
 	hash1 := service.TokenKeymapHash()
 	assert.NotEmpty(t, hash1)
 
-	service.GetTokenForValue("xyz789")
+	service.GetTokenForValue(context.Background(), "xyz789")
 	hash2 := service.TokenKeymapHash()
 	assert.NotEmpty(t, hash2)
 	assert.NotEqual(t, hash1, hash2)
@@ -88,11 +89,11 @@ func TestTokenKeymapHash_Deterministic(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
 
-	service1 := NewScrubbingService(config, logger, nil)
-	service2 := NewScrubbingService(config, logger, nil)
+	service1 := mustNewScrubbingService(t, context.Background(), config, logger, nil)
+	service2 := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
-	service1.GetTokenForValue("secret123")
-	service2.GetTokenForValue("secret123")
+	service1.GetTokenForValue(context.Background(), "secret123")
+	service2.GetTokenForValue(context.Background(), "secret123")
 
 	assert.Equal(t, service1.TokenKeymapHash(), service2.TokenKeymapHash())
 }
@@ -100,7 +101,7 @@ func TestTokenKeymapHash_Deterministic(t *testing.T) {
 func TestCategorizeWarning_AllCategories(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	service := NewScrubbingService(nil, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), nil, logger, nil)
 
 	tests := []struct {
 		input    string
@@ -130,7 +131,7 @@ func TestExtractKey_ColonSeparator(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	key := service.extractKey("API_KEY: abc123")
 	assert.NotEmpty(t, key)
@@ -141,7 +142,7 @@ func TestExtractKey_EqualsSeparator(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	key := service.extractKey("api_key=secret_value")
 	assert.NotEmpty(t, key)
@@ -151,7 +152,7 @@ func TestExtractKey_EqualsSeparator(t *testing.T) {
 func TestExtractKey_NoSeparator(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	service := NewScrubbingService(nil, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), nil, logger, nil)
 
 	key := service.extractKey("no separator here")
 	assert.Equal(t, "[KEY]", key)
@@ -160,7 +161,7 @@ func TestExtractKey_NoSeparator(t *testing.T) {
 func TestDetermineStatus_SignalCodes(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	service := NewScrubbingService(nil, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), nil, logger, nil)
 
 	tests := []struct {
 		exitCode int
@@ -189,14 +190,14 @@ func TestDetermineStatus_SignalCodes(t *testing.T) {
 func TestRehydrateText_Empty(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	service := NewScrubbingService(nil, logger, nil)
-	assert.Equal(t, "", service.RehydrateText(""))
+	service := mustNewScrubbingService(t, context.Background(), nil, logger, nil)
+	assert.Equal(t, "", service.RehydrateText(context.Background(), ""))
 }
 
 func TestRehydrateText_NoTokens(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	service := NewScrubbingService(nil, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), nil, logger, nil)
 	input := "no tokens here"
-	assert.Equal(t, input, service.RehydrateText(input))
+	assert.Equal(t, input, service.RehydrateText(context.Background(), input))
 }

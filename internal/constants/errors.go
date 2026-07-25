@@ -893,6 +893,13 @@ var (
 	ErrTxL1ValidationFailed          = errors.New("TX_DOCTRINE_L1_FAILED: typed payload violates Doctrine (L1Doctrine) forbidden patterns")
 	ErrTxInFlight                    = errors.New("TX_IN_FLIGHT: transaction with same nonce already in-flight")
 	ErrTxProviderMisconfigured       = errors.New("PROVIDER_MISCONFIGURED: state root is empty")
+	ErrTxCanonicalizeFailed          = errors.New("TX_CANONICALIZE_FAILED: unsupported type in intent_data canonicalization")
+
+	// MCP container status errors
+	ErrMCPContainerNameRequired = errors.New("container_name required")
+
+	// MCP service status errors
+	ErrMCPServiceNameRequired = errors.New("service_name required")
 
 	// Kubernetes MCP tool errors
 	ErrMCPK8sCommandFailed        = errors.New("kubectl command failed")
@@ -1002,4 +1009,36 @@ var (
 
 	// Browser errors
 	ErrBrowserURLEmpty = errors.New("browser URL cannot be empty")
+
+	// Field path parser errors
+	ErrFieldPathInvalidCollection  = errors.New("FIELD_PATH_INVALID_COLLECTION: collection not in schema registry")
+	ErrFieldPathInvalid            = errors.New("FIELD_PATH_INVALID: field path not in allowlist")
+	ErrFieldPathForbidden          = errors.New("FIELD_PATH_FORBIDDEN: field path in denylist")
+	ErrFieldPathSyntax             = errors.New("FIELD_PATH_SYNTAX: invalid dot-notation syntax")
+	ErrFieldPathEmpty              = errors.New("FIELD_PATH_EMPTY: field path cannot be empty")
+	ErrFieldPathEmptyCollection    = errors.New("FIELD_PATH_EMPTY_COLLECTION: collection cannot be empty")
+	ErrFieldPathDocumentNil        = errors.New("document is nil")
+	ErrFieldPathComponentNotFound  = errors.New("field path component not found")
+	ErrFieldPathNotObject          = errors.New("cannot access field on non-object type")
+
+	// Lattice adapter errors
+	ErrLatticeConfigMissing            = errors.New("lattice config is required")
+	ErrLatticeEndpointRequired         = errors.New("lattice endpoint required")
+	ErrLatticeClientIDRequired         = errors.New("lattice client_id required")
+	ErrLatticeClientSecretRequired     = errors.New("lattice client_secret required")
+	ErrLatticeTokenAcquireFailed       = errors.New("lattice: failed to acquire token")
+	ErrLatticeTokenRefreshFailed       = errors.New("lattice: failed to refresh token")
+	ErrLatticeTokenExpired             = errors.New("lattice: token expired and refresh failed")
+	ErrLatticeEntityIDRequired         = errors.New("lattice: entity_id required")
+	ErrLatticeEntityIDPersistFailed    = errors.New("lattice: failed to persist entity_id")
+	ErrLatticeEntityIDReadFailed       = errors.New("lattice: failed to read entity_id")
+	ErrLatticeDialFailed               = errors.New("lattice: gRPC dial failed")
+	ErrLatticePresencePublishFailed    = errors.New("lattice: failed to publish entity presence")
+	ErrLatticeStreamClosed             = errors.New("lattice: task stream closed")
+	ErrLatticeStreamReconnectFailed    = errors.New("lattice: task stream reconnect failed")
+	ErrLatticeStatusReportFailed       = errors.New("lattice: failed to report task status")
+	ErrLatticeHeartbeatIntervalInvalid = errors.New("lattice: heartbeat interval must be > 0 and < 4 minutes")
+	ErrLatticePostureFloorViolated     = errors.New("lattice: active posture below configured floor")
+	ErrLatticeNotInitialized           = errors.New("lattice: adapter not initialized")
+	ErrLatticeAlreadyRunning           = errors.New("lattice: adapter already running")
 )

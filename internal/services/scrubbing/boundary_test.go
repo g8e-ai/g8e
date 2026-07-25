@@ -17,16 +17,25 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/storage/storagetest"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func mustNewScrubbingService(t *testing.T, ctx context.Context, config *Config, logger *slog.Logger, tokenStore storage.TokenStore) *ScrubbingService {
+	t.Helper()
+	service, err := NewScrubbingService(ctx, config, logger, tokenStore)
+	require.NoError(t, err)
+	return service
+}
 
 func TestDefaultConfig(t *testing.T) {
 	t.Parallel()
@@ -46,7 +55,7 @@ func TestNewScrubbingService(t *testing.T) {
 
 	t.Run("with nil config uses defaults", func(t *testing.T) {
 		t.Parallel()
-		service := NewScrubbingService(nil, logger, nil)
+		service := mustNewScrubbingService(t, context.Background(), nil, logger, nil)
 		require.NotNil(t, service)
 		assert.True(t, service.config.StrictMode)
 		assert.NotEmpty(t, service.scrubbers)
@@ -58,7 +67,7 @@ func TestNewScrubbingService(t *testing.T) {
 			StrictMode:      false,
 			MaxOutputLength: 1024,
 		}
-		service := NewScrubbingService(config, logger, nil)
+		service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 		require.NotNil(t, service)
 		assert.False(t, service.config.StrictMode)
 		assert.Equal(t, 1024, service.config.MaxOutputLength)
@@ -66,7 +75,7 @@ func TestNewScrubbingService(t *testing.T) {
 
 	t.Run("initializes scrubbers", func(t *testing.T) {
 		t.Parallel()
-		service := NewScrubbingService(nil, logger, nil)
+		service := mustNewScrubbingService(t, context.Background(), nil, logger, nil)
 		assert.Greater(t, len(service.scrubbers), 10, "should have many scrubbers")
 	})
 }
@@ -75,7 +84,7 @@ func TestScrubbingService_ScrubText_IPv4_Preserved(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	// IPs are preserved (not scrubbed) - the AI needs them for troubleshooting
 	tests := []struct {
@@ -98,7 +107,7 @@ func TestScrubbingService_ScrubText_Email(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	tests := []struct {
 		input    string
@@ -119,7 +128,7 @@ func TestScrubbingService_ScrubText_UUID_Preserved(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	// UUIDs are preserved (not scrubbed) - the AI needs them for log/resource correlation
 	tests := []struct {
@@ -140,7 +149,7 @@ func TestScrubbingService_ScrubText_FilePaths_Preserved(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	// File paths are preserved (not scrubbed) - the AI needs them for troubleshooting
 	tests := []struct {
@@ -162,7 +171,7 @@ func TestScrubbingService_ScrubText_Credentials(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	tests := []struct {
 		input       string
@@ -184,7 +193,7 @@ func TestScrubbingService_ScrubText_PII(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	tests := []struct {
 		name     string
@@ -209,7 +218,7 @@ func TestScrubbingService_ScrubText_AWSResources_Preserved(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	// AWS ARNs and account IDs are preserved (not scrubbed) - the AI needs them for cloud troubleshooting
 	tests := []struct {
@@ -231,7 +240,7 @@ func TestScrubbingService_ScrubText_ConnectionStrings(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	tests := []struct {
 		input    string
@@ -254,7 +263,7 @@ func TestScrubbingService_ScrubText_PrivateKeys(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	input := `-----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEA0Z3VS5JJcds3xfn/ygWyF8PbnGy...
@@ -269,7 +278,7 @@ func TestScrubbingService_ScrubText_Disabled(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	result := service.ScrubText("Sensitive data: 192.168.1.1")
 	assert.Equal(t, "[OUTPUT_SUPPRESSED]", result)
@@ -278,7 +287,7 @@ func TestScrubbingService_ScrubText_Disabled(t *testing.T) {
 func TestScrubbingService_DetermineStatus(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	service := NewScrubbingService(nil, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), nil, logger, nil)
 
 	tests := []struct {
 		exitCode int
@@ -304,7 +313,7 @@ func TestScrubbingService_DetermineStatus(t *testing.T) {
 func TestScrubbingService_CategorizeError(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	service := NewScrubbingService(nil, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), nil, logger, nil)
 
 	tests := []struct {
 		stderr   string
@@ -336,7 +345,7 @@ func TestScrubbingService_CategorizeError(t *testing.T) {
 func TestScrubbingService_ScrubCommandResult(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	service := NewScrubbingService(nil, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), nil, logger, nil)
 
 	t.Run("successful command", func(t *testing.T) {
 		t.Parallel()
@@ -398,7 +407,7 @@ func TestScrubbingService_ScrubCommandResult(t *testing.T) {
 func TestScrubbingService_ExtractStructureHints(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	service := NewScrubbingService(nil, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), nil, logger, nil)
 
 	t.Run("JSON object", func(t *testing.T) {
 		t.Parallel()
@@ -448,7 +457,7 @@ func TestScrubbingService_ExtractStructureHints(t *testing.T) {
 func TestScrubbingService_ExtractSafeMetrics(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	service := NewScrubbingService(nil, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), nil, logger, nil)
 
 	t.Run("row counts", func(t *testing.T) {
 		t.Parallel()
@@ -469,7 +478,7 @@ func TestScrubbingService_ExtractSafeMetrics(t *testing.T) {
 func TestScrubbingService_ValidateNoLeakage(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	service := NewScrubbingService(nil, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), nil, logger, nil)
 
 	t.Run("clean text passes", func(t *testing.T) {
 		t.Parallel()
@@ -521,7 +530,7 @@ func TestScrubbingService_ScrubMap(t *testing.T) {
 	t.Run("preserves IPs and scrubs emails in non-strict mode", func(t *testing.T) {
 		t.Parallel()
 		config := &Config{Enabled: true, StrictMode: false}
-		service := NewScrubbingService(config, logger, nil)
+		service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 		data := map[string]interface{}{
 			"ip":    "192.168.1.1",
@@ -538,7 +547,7 @@ func TestScrubbingService_ScrubMap(t *testing.T) {
 	t.Run("preserves IPs in nested maps in non-strict mode", func(t *testing.T) {
 		t.Parallel()
 		config := &Config{Enabled: true, StrictMode: false}
-		service := NewScrubbingService(config, logger, nil)
+		service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 		data := map[string]interface{}{
 			"server": map[string]interface{}{
@@ -555,7 +564,7 @@ func TestScrubbingService_ScrubMap(t *testing.T) {
 
 	t.Run("scrubs sensitive keys in strict mode", func(t *testing.T) {
 		t.Parallel()
-		service := NewScrubbingService(nil, logger, nil)
+		service := mustNewScrubbingService(t, context.Background(), nil, logger, nil)
 
 		data := map[string]interface{}{
 			"password": "secret123",
@@ -571,7 +580,7 @@ func TestScrubbingService_ScrubText_G8EAPIKey(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	t.Run("standalone key output", func(t *testing.T) {
 		t.Parallel()
@@ -601,7 +610,7 @@ func TestScrubbingService_ScrubText_CloudCredentials(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	t.Run("AWS Access Key ID", func(t *testing.T) {
 		t.Parallel()
@@ -639,7 +648,7 @@ func TestScrubbingService_ScrubText_JWT(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	input := "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
 	result := service.ScrubText(input)
@@ -656,26 +665,26 @@ func TestScrubbingService_TokenPersistence(t *testing.T) {
 		StrictMode:         false,
 		RequirePersistence: true,
 	}
-	service := NewScrubbingService(config, logger, tokenStore)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, tokenStore)
 
 	sensitiveValue := "my-secret-api-key-12345"
-	token := service.GetTokenForValue(sensitiveValue)
+	token := service.GetTokenForValue(context.Background(), sensitiveValue)
 	assert.NotEmpty(t, token)
 	assert.Contains(t, token, "{{UEI_")
 
 	// Verify token is in memory
-	rehydrated := service.RehydrateText(token)
+	rehydrated := service.RehydrateText(context.Background(), token)
 	assert.Equal(t, sensitiveValue, rehydrated)
 
 	// Verify token is persisted in the store
-	key := fmt.Sprintf("uei_token_%s", token)
+	key := fmt.Sprintf("%s%s", constants.ScrubbingTokenKeyPrefix, token)
 	storedValue, err := tokenStore.KVGet(context.Background(), key)
 	require.NoError(t, err)
 	assert.Equal(t, sensitiveValue, storedValue)
 
 	// A fresh ScrubbingService backed by the same store must rehydrate from persistence.
-	service2 := NewScrubbingService(config, logger, tokenStore)
-	rehydrated2 := service2.RehydrateText(token)
+	service2 := mustNewScrubbingService(t, context.Background(), config, logger, tokenStore)
+	rehydrated2 := service2.RehydrateText(context.Background(), token)
 	assert.Equal(t, sensitiveValue, rehydrated2, "Should rehydrate from persisted storage")
 }
 
@@ -688,11 +697,11 @@ func TestScrubbingService_TokenPersistence_FailClosed(t *testing.T) {
 		StrictMode:         false,
 		RequirePersistence: true,
 	}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	// Should fail closed - return empty token
 	sensitiveValue := "my-secret-api-key-12345"
-	token := service.GetTokenForValue(sensitiveValue)
+	token := service.GetTokenForValue(context.Background(), sensitiveValue)
 	assert.Empty(t, token, "Should return empty token when persistence required but unavailable")
 }
 
@@ -705,10 +714,10 @@ func TestScrubbingService_TokenPersistence_TTL(t *testing.T) {
 		StrictMode:         false,
 		RequirePersistence: true,
 	}
-	service := NewScrubbingService(config, logger, tokenStore)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, tokenStore)
 
 	sensitiveValue := "my-secret-api-key-12345"
-	token := service.GetTokenForValue(sensitiveValue)
+	token := service.GetTokenForValue(context.Background(), sensitiveValue)
 	assert.NotEmpty(t, token)
 
 	// Write an additional key with a 1s TTL to verify expiry behaviour.
@@ -726,7 +735,7 @@ func TestScrubbingService_ScrubText_ServiceTokens(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	t.Run("GitHub Token", func(t *testing.T) {
 		t.Parallel()
@@ -804,7 +813,7 @@ func TestScrubbingService_ScrubText_IBAN(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	tests := []struct {
 		name  string
@@ -829,7 +838,7 @@ func TestScrubbingService_ScrubText_BearerToken(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	tests := []string{
 		"Authorization: Bearer abc123def456",
@@ -847,7 +856,7 @@ func TestScrubbingService_ScrubText_OAuthSecret(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	tests := []string{
 		"client_secret=abcdefghijklmnopqrstuvwx",
@@ -868,14 +877,14 @@ func TestScrubbingService_IsEnabled(t *testing.T) {
 	t.Run("enabled config", func(t *testing.T) {
 		t.Parallel()
 		config := &Config{Enabled: true}
-		service := NewScrubbingService(config, logger, nil)
+		service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 		assert.True(t, service.IsEnabled())
 	})
 
 	t.Run("disabled config", func(t *testing.T) {
 		t.Parallel()
 		config := &Config{Enabled: false}
-		service := NewScrubbingService(config, logger, nil)
+		service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 		assert.False(t, service.IsEnabled())
 	})
 }
@@ -890,7 +899,7 @@ func TestScrubbingService_CustomScrubPatterns(t *testing.T) {
 			"internal_id": `INT-\d{6}`,
 		},
 	}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	result := service.ScrubText("Processing INT-123456")
 	assert.Equal(t, "Processing [INTERNAL_ID]", result)
@@ -900,7 +909,7 @@ func TestScrubbingService_StrictModeDataRows(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: true}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	t.Run("tabular data preserves structure but scrubs sensitive values", func(t *testing.T) {
 		t.Parallel()
@@ -945,25 +954,25 @@ func TestScrubbingService_RehydrateText(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	t.Run("empty input returns empty", func(t *testing.T) {
 		t.Parallel()
-		result := service.RehydrateText("")
+		result := service.RehydrateText(context.Background(), "")
 		assert.Empty(t, result)
 	})
 
 	t.Run("no tokens returns original", func(t *testing.T) {
 		t.Parallel()
 		input := "This is normal text"
-		result := service.RehydrateText(input)
+		result := service.RehydrateText(context.Background(), input)
 		assert.Equal(t, input, result)
 	})
 
 	t.Run("rehydrates known token", func(t *testing.T) {
 		t.Parallel()
-		token := service.GetTokenForValue("secret-value")
-		result := service.RehydrateText("Command with " + token)
+		token := service.GetTokenForValue(context.Background(), "secret-value")
+		result := service.RehydrateText(context.Background(), "Command with " + token)
 		assert.Equal(t, "Command with secret-value", result)
 	})
 }
@@ -972,29 +981,29 @@ func TestScrubbingService_RehydratePayload(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	t.Run("empty payload returns empty", func(t *testing.T) {
 		t.Parallel()
-		result, err := service.RehydratePayload([]byte{})
+		result, err := service.RehydratePayload(context.Background(), []byte{})
 		require.NoError(t, err)
 		assert.Empty(t, result)
 	})
 
 	t.Run("non-JSON payload uses text rehydration", func(t *testing.T) {
 		t.Parallel()
-		token := service.GetTokenForValue("secret")
+		token := service.GetTokenForValue(context.Background(), "secret")
 		payload := []byte("Text with " + token)
-		result, err := service.RehydratePayload(payload)
+		result, err := service.RehydratePayload(context.Background(), payload)
 		require.NoError(t, err)
 		assert.Equal(t, "Text with secret", string(result))
 	})
 
 	t.Run("JSON payload rehydrates recursively", func(t *testing.T) {
 		t.Parallel()
-		token := service.GetTokenForValue("secret")
+		token := service.GetTokenForValue(context.Background(), "secret")
 		payload := []byte(`{"key": "value ` + token + `", "nested": {"data": "` + token + `"}}`)
-		result, err := service.RehydratePayload(payload)
+		result, err := service.RehydratePayload(context.Background(), payload)
 		require.NoError(t, err)
 		// Parse the result to verify rehydration
 		var parsed map[string]interface{}
@@ -1010,26 +1019,26 @@ func TestScrubbingService_GetTokenForValue(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	t.Run("empty value returns empty", func(t *testing.T) {
 		t.Parallel()
-		token := service.GetTokenForValue("")
+		token := service.GetTokenForValue(context.Background(), "")
 		assert.Empty(t, token)
 	})
 
 	t.Run("same value returns same token", func(t *testing.T) {
 		t.Parallel()
 		value := "my-secret"
-		token1 := service.GetTokenForValue(value)
-		token2 := service.GetTokenForValue(value)
+		token1 := service.GetTokenForValue(context.Background(), value)
+		token2 := service.GetTokenForValue(context.Background(), value)
 		assert.Equal(t, token1, token2)
 	})
 
 	t.Run("different values return different tokens", func(t *testing.T) {
 		t.Parallel()
-		token1 := service.GetTokenForValue("secret1")
-		token2 := service.GetTokenForValue("secret2")
+		token1 := service.GetTokenForValue(context.Background(), "secret1")
+		token2 := service.GetTokenForValue(context.Background(), "secret2")
 		assert.NotEqual(t, token1, token2)
 	})
 }
@@ -1038,11 +1047,11 @@ func TestScrubbingService_ClearTokens(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &Config{Enabled: true, StrictMode: false}
-	service := NewScrubbingService(config, logger, nil)
+	service := mustNewScrubbingService(t, context.Background(), config, logger, nil)
 
 	// Add some tokens
-	service.GetTokenForValue("secret1")
-	service.GetTokenForValue("secret2")
+	service.GetTokenForValue(context.Background(), "secret1")
+	service.GetTokenForValue(context.Background(), "secret2")
 	assert.NotEmpty(t, service.tokenMap)
 
 	// Clear tokens

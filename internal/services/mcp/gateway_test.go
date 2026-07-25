@@ -2054,7 +2054,8 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 func TestGatewayService_DispatchToDownstream_Scrubbing(t *testing.T) {
 	t.Parallel()
 
-	scrubSvc := scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), slog.Default(), nil)
+	scrubSvc, err := scrubbing.NewScrubbingService(context.Background(), scrubbing.DefaultConfig(), slog.Default(), nil)
+	require.NoError(t, err)
 
 	t.Run("SSN in downstream response is scrubbed", func(t *testing.T) {
 		t.Parallel()

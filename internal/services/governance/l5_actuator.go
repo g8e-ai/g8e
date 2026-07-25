@@ -156,7 +156,7 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 		if rehydratable, ok := cmdMsg.(Rehydratable); ok {
 			p := rehydratable.GetPayload()
 			if len(p) > 0 {
-				rehydrated, rehydrateErr := w.Scrubbing.RehydratePayload(p)
+				rehydrated, rehydrateErr := w.Scrubbing.RehydratePayload(ctx, p)
 				if rehydrateErr == nil {
 					rehydratable.SetPayload(rehydrated)
 				} else {

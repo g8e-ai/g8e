@@ -338,7 +338,8 @@ func TestPublishObservedStateEvidence(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
 		auditStore := &mockAuditStore{}
-		scrubbingSvc := scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil)
+		scrubbingSvc, err := scrubbing.NewScrubbingService(context.Background(), scrubbing.DefaultConfig(), logger, nil)
+		require.NoError(t, err)
 
 		msg := &PubSubCommandMessage{
 			ID:                "msg-1",

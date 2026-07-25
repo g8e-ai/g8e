@@ -90,6 +90,8 @@ const (
 	PathEtcOSRelease                                          = "/etc/os-release"
 	PathEtcTimezone                                           = "/etc/timezone"
 	PathEtcLocaltime                                          = "/etc/localtime"
+	PathSysClassDMIIDProductUUID                              = "/sys/class/dmi/id/product_uuid"
+	PathSysClassDMIIDSysVendor                                = "/sys/class/dmi/id/sys_vendor"
 	PathRoot                                                  = "/"
 	PathLibraryPreferencesSystemConfigurationPreferencesPlist = "/Library/Preferences/SystemConfiguration/preferences.plist"
 
@@ -433,6 +435,11 @@ const (
 // Tribunal bootstrap config filename for declarative tribunal seeding.
 const (
 	TribunalBootstrapConfigFilename = "tribunal-bootstrap.json"
+)
+
+// Lattice adapter filename for persisted entity ID.
+const (
+	LatticeEntityIDFilename = "lattice_entity_id"
 )
 
 // Operational limits for filesystem, grep, and execution operations.

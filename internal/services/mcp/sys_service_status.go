@@ -18,6 +18,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // SysServiceStatusTool checks systemd service status.
@@ -53,11 +55,11 @@ func (t *SysServiceStatusTool) InputSchema() *InputSchema {
 func (t *SysServiceStatusTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
 	var req SysServiceStatusRequest
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("sys_service_status: unmarshal arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("sys_service_status: unmarshal arguments: %w: %w", constants.ErrMCPUnmarshalArguments, err)
 	}
 
 	if req.ServiceName == "" {
-		return CallToolResult{}, fmt.Errorf("sys_service_status: service_name required")
+		return CallToolResult{}, constants.ErrMCPServiceNameRequired
 	}
 
 	if ctx.Err() != nil {
@@ -76,7 +78,7 @@ func (t *SysServiceStatusTool) Execute(ctx context.Context, args json.RawMessage
 
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("sys_service_status: marshal result: %w", err)
+		return CallToolResult{}, fmt.Errorf("sys_service_status: marshal result: %w: %w", constants.ErrMCPMarshalResult, err)
 	}
 
 	return CallToolResult{
@@ -96,7 +98,7 @@ func getServiceStatus(ctx context.Context, serviceName string, executor commandE
 
 	// serviceName is passed as a separate argument to executor.CombinedOutput to satisfy CodeQL command-injection rule.
 	// This prevents shell injection by avoiding shell interpretation.
-	output, err := executor.CombinedOutput("systemctl", "show", serviceName, "--no-pager")
+	output, err := executor.CombinedOutput(ctx, "systemctl", "show", serviceName, "--no-pager")
 	if err != nil {
 		return SysServiceStatusResult{
 			ServiceName: serviceName,

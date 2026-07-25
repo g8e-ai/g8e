@@ -24,7 +24,6 @@ import (
 	govpkg "github.com/g8e-ai/g8e/internal/governance"
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/governance"
-	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -72,7 +71,7 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 		ResultsService:     nil, // ResultsPublisher is optional for L3 verification test
 		ActuatorSigningKey: privKey,
 		ActuatorKeyID:      "test-key",
-		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
+		Scrubbing:          mustNewScrubbingSvc(t, logger),
 	}, GovernanceDeps{
 		L3Notary:             rejectingL3,
 		ReplayStore:          replayStore,
@@ -197,7 +196,7 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 		ResultsService:     nil, // ResultsPublisher is optional for L3 verification test
 		ActuatorSigningKey: privKey,
 		ActuatorKeyID:      "test-key",
-		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
+		Scrubbing:          mustNewScrubbingSvc(t, logger),
 	}, GovernanceDeps{
 		L3Notary:             acceptingL3,
 		ReplayStore:          replayStore,
@@ -323,7 +322,7 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 		ResultsService:     nil, // ResultsPublisher is optional for L3 verification test
 		ActuatorSigningKey: privKey,
 		ActuatorKeyID:      "test-key",
-		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
+		Scrubbing:          mustNewScrubbingSvc(t, logger),
 	}, GovernanceDeps{
 		L3Notary:             nil, // Explicitly nil to test fail-closed
 		ReplayStore:          replayStore,

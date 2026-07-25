@@ -118,9 +118,9 @@ type ToolsListResult struct {
 
 // Tool represents a single MCP tool descriptor.
 type Tool struct {
-	Name        string      `json:"name"`
-	Description string      `json:"description"`
-	InputSchema interface{} `json:"inputSchema"`
+	Name        string            `json:"name"`
+	Description string            `json:"description"`
+	InputSchema *mcp.InputSchema  `json:"inputSchema"`
 }
 
 // CallToolRequest is the params object for tools/call.
@@ -213,7 +213,7 @@ func handleToolsList(encoder *json.Encoder, id interface{}, nativeToolHandler *m
 		tools = append(tools, Tool{
 			Name:        nt.Name(),
 			Description: nt.Description(),
-			InputSchema: nt.InputSchema().ToMap(),
+			InputSchema: nt.InputSchema(),
 		})
 	}
 	response := JSONRPCResponse{
