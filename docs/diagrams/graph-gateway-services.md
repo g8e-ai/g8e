@@ -6,22 +6,41 @@ See [graph-system-50k.md](./graph-system-50k.md) for how this layer relates to t
 
 ```mermaid
 graph TD
-    subgraph GatewayServices ["Gateway Service Stack (PDP)"]
+    subgraph GatewayServices ["Gateway Service Stack (PDP) — owns L1-L3"]
         direction TB
 
-        subgraph Edge ["Protocol Surfaces"]
+        subgraph Edge ["1 — Protocol Surfaces"]
+            direction LR
             HTTP["HTTP :8080<br/>Bootstrap & PKI discovery only"]
             HTTPS["HTTPS :8443<br/>mTLS — API, MCP, console, governance"]
         end
 
-        subgraph Core ["Core Services"]
+        subgraph Core ["2 — Core Services"]
+            direction LR
             PKI["Root CA / PKI<br/>CSR enrollment · SPIFFE URI SANs"]
             Auth["Auth Middleware<br/>mTLS · WebAuthn passkey · JWT/JWKS"]
             Reg["Registration Service<br/>Operator slots · enrollment · binding"]
             Passkey["Passkey Handler<br/>WebAuthn registration & auth"]
         end
 
-        subgraph Data ["Persistence Layer"]
+        subgraph AppLayer ["3 — Application Layer"]
+            direction LR
+            subgraph MCP ["MCP / A2A Gateway"]
+                MCPEndpoint["Unified MCP Endpoint<br/>JSON-RPC dispatch · tools/list · tools/call"]
+                A2A["A2A Endpoint<br/>Agent-to-agent communication"]
+            end
+            subgraph Governance ["Governance Surface (L1-L3)"]
+                EnvelopeRx["Envelope Reception<br/>POST /api/v1/governance/envelopes"]
+                Tribunal["Tribunal Service<br/>L1 Doctrine · L2 Consensus · L3 Notary"]
+            end
+        end
+
+        subgraph Broker ["4 — Pub/Sub Broker"]
+            WSSHandler["WebSocket Handler<br/>Fan-out · cmd channels · heartbeats"]
+        end
+
+        subgraph Data ["5 — Persistence Layer"]
+            direction LR
             DocStore["Document Store<br/>JSON CRUD · Collection/ID"]
             KVStore["KV Store<br/>TTL-aware ephemeral state"]
             BlobStore["Blob Store<br/>Binary attachments"]
@@ -29,49 +48,39 @@ graph TD
             StateRoot["State Root Service<br/>Bound vs Observed Merkle roots"]
         end
 
-        subgraph Broker ["Pub/Sub Broker"]
-            WSSHandler["WebSocket Handler<br/>Fan-out · cmd channels · heartbeats"]
-        end
-
-        subgraph MCP ["MCP / A2A Gateway"]
-            MCPEndpoint["Unified MCP Endpoint<br/>JSON-RPC dispatch · tools/list · tools/call"]
-            A2A["A2A Endpoint<br/>Agent-to-agent communication"]
-        end
-
-        subgraph Governance ["Governance Surface"]
-            EnvelopeRx["Envelope Reception<br/>POST /api/v1/governance/envelopes"]
-            Tribunal["Tribunal Service<br/>L2 Consensus deliberation (consensus/notary)"]
-        end
-
         HTTP --> PKI
         HTTPS --> Auth
         Auth --> Reg
         Auth --> Passkey
         Reg --> DocStore
+
         EnvelopeRx --> Tribunal
+        Tribunal --> StateRoot
+
         MCPEndpoint --> WSSHandler
         A2A --> WSSHandler
         WSSHandler --> DocStore
         WSSHandler --> StateRoot
+
         AuditDB --> StateRoot
     end
 
-    subgraph OperatorSubstrate ["Operator Substrate (PEP)"]
+    subgraph OperatorSubstrate ["Operator Substrate (PEP) — owns L4-L5"]
         direction TB
-        Loopback["Loopback Pub/Sub<br/>(in-process dispatch)"]
+        LoopbackBridge["Loopback Pub/Sub<br/>(in-process dispatch)"]
         Warden["L4 Warden<br/>Pre-dispatch verification"]
         Actuator["L5 Actuator<br/>Execution + signed receipt"]
-        Loopback --> Warden --> Actuator
+        LoopbackBridge --> Warden --> Actuator
     end
 
-    EnvelopeRx -- "ProcessEnvelope<br/>(synchronous)" --> Loopback
-    WSSHandler -- "loopback publish" --> Loopback
+    EnvelopeRx -- "ProcessEnvelope<br/>(synchronous)" --> LoopbackBridge
+    WSSHandler -- "loopback publish" --> LoopbackBridge
     Actuator -- "ActionReceipt" --> AuditDB
 ```
 
 ## Service Stack Composition
 
-The Gateway service stack (`GatewayModeService` in `internal/services/gateway/gateway_service.go`) is constructed by `RunGateway` (`internal/cli/serve/gateway.go`) and layered on top of the in-process `OperatorPubSubService`. The Gateway owns all inbound surfaces; the Operator substrate handles verification and execution.
+The Gateway service stack (`GatewayModeService` in `internal/services/gateway/gateway_service.go`) is constructed by `RunGateway` (`internal/cli/serve/gateway.go`) and layered on top of the in-process `OperatorPubSubService`. The Gateway (PDP) owns layers L1-L3 (Doctrine, Consensus, Notary) as policy decisions and all inbound surfaces. The Operator substrate (PEP) owns layers L4-L5 (Warden, Actuator) for verification and execution.
 
 ### Protocol Surfaces
 

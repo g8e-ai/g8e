@@ -308,7 +308,7 @@ Any file in the output that carries a version/date header should have that heade
 | 17 | `docs/guides/connect_operator_to_gateway.md` | |
 | 18 | `docs/guides/docker_gateway.md` | |
 | 19 | `docs/guides/getting_started.md` | |
-| 20 | `docs/guides/gui_enrollment.md` | |
+| 20 | `docs/guides/build_frontend.md` | |
 | 21 | `docs/guides/lovable.md` | |
 
 

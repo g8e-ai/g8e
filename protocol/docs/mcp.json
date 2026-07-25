@@ -12,7 +12,7 @@
       "properties": {
         "tool_name": {
           "type": "string",
-          "description": "The MCP tool name (e.g., 'fs_read', 'drop_table'). Forbidden patterns here block verification at L1 before any signature or state check."
+          "description": "The MCP tool name (e.g., 'fs_read', 'drop_table'). Forbidden patterns here block the interlock sequence at L1 before any signature or state check."
         },
         "arguments_json": {
           "type": "string",
@@ -45,7 +45,7 @@
       "properties": {
         "uri": {
           "type": "string",
-          "description": "The resource URI to read (e.g., 'file:///path/to/file', 'memory://var')."
+          "description": "The resource URI to read (e.g., 'file:///path/to/file', 'memory://var'). Forbidden patterns here block the interlock sequence at L1 before any signature or state check."
         },
         "execution_id": {
           "type": "string",
@@ -91,7 +91,7 @@
       "properties": {
         "skill_name": {
           "type": "string",
-          "description": "The target agent skill or capability name. Forbidden patterns here block verification at L1 before any signature or state check."
+          "description": "The target agent skill or capability name. Forbidden patterns here block the interlock sequence at L1 before any signature or state check."
         },
         "payload_json": {
           "type": "string",

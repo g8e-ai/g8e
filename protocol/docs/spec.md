@@ -210,7 +210,7 @@ The protocol defines canonical event types in `../../protocol/constants/events.j
 - `AiLLMChatIterationTextChunkReceived`, `AiLLMChatIterationTextCompleted`, `AiLLMChatIterationTextReceived`, `AiLLMChatIterationTextTruncated`
 - `AiLLMChatIterationThinkingStarted`, `AiLLMChatIterationThinkingUpdate`, `AiLLMChatIterationThinkingEnd`
 - `AiLLMChatIterationCitationsReceived`
-- `AiLLMChatIterationThinkingStopped`
+- `AiLlmChatIterationThinkingStopped`
 - `AiLLMChatFilterEvent`, `AiLLMChatMessageDeadLettered`, `AiLLMChatMessageProcessingFailed`, `AiLLMChatMessageReplayed`, `AiLLMChatMessageSent`
 - `AiLLMChatStopHide`, `AiLLMChatStopShow`, `AiLLMChatSubmitted`
 - `AiLLMConfigFailed`, `AiLLMConfigReceived`, `AiLLMConfigRequested`
@@ -276,6 +276,8 @@ The protocol defines canonical event types in `../../protocol/constants/events.j
 ### Other Events
 - `OperatorEvalAnswerRequested`
 - `OperatorFieldReadRequested`, `OperatorFieldReadAccessGranted`, `OperatorFieldReadAccessDenied`
+- `OperatorIntentRequested`, `OperatorIntentGranted`, `OperatorIntentDenied`, `OperatorIntentRevoked`, `OperatorIntentRevokeRequested`
+- `OperatorIntentApprovalRequested`, `OperatorIntentApprovalGranted`, `OperatorIntentApprovalRejected`
 - `OperatorLogsFetchRequested`, `OperatorLogsFetchReceived`, `OperatorLogsFetchCompleted`, `OperatorLogsFetchFailed`
 - `OperatorHistoryFetchRequested`, `OperatorHistoryFetchReceived`, `OperatorHistoryFetchCompleted`, `OperatorHistoryFetchFailed`
 - `OperatorPanelListUpdated`
@@ -385,8 +387,8 @@ CLI flags:
 - `--data-dir <dir>`: Data directory for SQLite database (default: `.g8e/data` in working directory)
 - `--pki-dir <dir>`: Directory for TLS certificates (default: `.g8e/pki`)
 - `--secrets-dir <dir>`: Directory for platform secrets (default: `.g8e/secrets`)
-- `--vault-dir <dir>`: Directory for vault data (default: `.g8e/secrets/vault`)
-- `--vault-key <path>`: Path to vault private key (default: auto-generated in vault dir)
+- `--vault-dir <dir>`: Directory for vault data (default: `.g8e/vault`)
+- `--vault-key <path>`: Path to vault private key (default: `.g8e/vault/key`)
 - `--http-port <port>`: HTTP port for bootstrap and MCP routes (flag default: 0, auto-resolved from `constants.Ports`; effective default: 8080)
 - `--https-port <port>`: HTTPS port for mTLS API and public surface (flag default: 0, auto-resolved from `constants.Ports`; effective default: 8443)
 - `--passkey-rp-id <id>`: RP ID for passkey operations (default: localhost)
@@ -516,7 +518,7 @@ All tests follow a Tier 1 philosophy where possible (no external network/DB requ
       "violations": []
     },
     "l2": {
-      "tribunalId": "tribunal-prod-abc123",
+      "consensusSetId": "tribunal-prod-abc123",
       "votes": [
         {
           "signerKeyId": "agent-ensemble-1",
@@ -585,7 +587,7 @@ The `payload` field contains base64-encoded protobuf bytes of `McpCallRequested`
       "violations": []
     },
     "l2": {
-      "tribunalId": "tribunal-prod-def456",
+      "consensusSetId": "tribunal-prod-def456",
       "votes": [
         {
           "signerKeyId": "agent-ensemble-1",
@@ -636,7 +638,7 @@ This example shows a non-mutation read under doctrine posture. L3 is not require
       "violations": []
     },
     "l2": {
-      "tribunalId": "tribunal-prod-efg789",
+      "consensusSetId": "tribunal-prod-efg789",
       "votes": [
         {
           "signerKeyId": "agent-ensemble-1",

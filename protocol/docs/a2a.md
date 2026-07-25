@@ -4,8 +4,8 @@ title: A2A Protocol
 
 # A2A Protocol
 
-Last Updated: 2026-07-19
-Version: v1.5.9
+Last Updated: 2026-07-25
+Version: v1.6.3
 
 The g8e Operator supports Agent-to-Agent (A2A) protocol integration. A2A agents submit HTTP/JSON skill invocation requests to the g8e Gateway, which encapsulates them in a governance envelope, executes the 5-layer verification sequence (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator), and dispatches verified payloads to a configured downstream A2A server.
 
@@ -92,7 +92,7 @@ A2A calls are also dispatched through the unified MCP endpoint at `/mcp` (`Handl
 
 ### Skill Discovery
 
-Skill discovery is not currently implemented. The A2A downstream URL is configured via `internal/config/config.go` (`Gateway.A2ADownstreamURL`) and passed to the gateway service through the `GatewayServiceDeps.A2ADownstreamURL` field in `NewGatewayService`, but no discovery endpoint exists. Skills must be known a priori or discovered through out-of-band mechanisms.
+Skill discovery is not currently implemented. The A2A downstream URL is configured via `internal/config/config.go` (`GatewayConfig.A2ADownstreamURL`) and passed to the gateway service through the `Dependencies.A2ADownstreamURL` field in `NewGatewayService`, but no discovery endpoint exists. Skills must be known a priori or discovered through out-of-band mechanisms.
 
 ### BYO Clients
 
@@ -194,13 +194,15 @@ The platform uses a consolidated 2-port gateway:
 
 ### CLI Configuration
 
-The g8e platform uses CLI flags for production configuration. See [g8e Protocol](./spec.md) for the full environment variable list. Configuration is performed via CLI flags:
+The g8e platform uses CLI flags for production configuration. See [g8e Protocol](./spec.md) for the full environment variable list. A2A-relevant flags:
 
+- `--a2a-downstream-url <url>`: URL of a downstream A2A server to proxy execution to (default: none).
+- `--public-base-url <url>`: Public base URL for L3 approval links (e.g., `https://demo.g8e.ai`). Used in `A2ASuspensionResponse` approval URLs.
+- `--http-port <port>`: HTTP port for bootstrap, MCP, and A2A routes (flag default: 0, auto-resolved from `constants.Ports`; effective default: 8080).
+- `--https-port <port>`: HTTPS port for mTLS API and public surface (flag default: 0, auto-resolved from `constants.Ports`; effective default: 8443).
 - `--data-dir <dir>`: Data directory for SQLite database (default: `.g8e/data`).
 - `--pki-dir <dir>`: Directory for TLS certificates (default: `.g8e/pki`).
 - `--secrets-dir <dir>`: Directory for platform secrets (default: `.g8e/secrets`).
-- `--http-port <port>`: HTTP port for bootstrap, MCP, and A2A routes (flag default: 0, auto-resolved from `constants.Ports`; effective default: 8080).
-- `--https-port <port>`: HTTPS port for mTLS API and public surface (flag default: 0, auto-resolved from `constants.Ports`; effective default: 8443).
 
 ### Circuit Breaker
 
@@ -250,7 +252,7 @@ Sessions are cryptographically bound to their authentication mechanism.
 | API path constant | `internal/constants/api_paths.go` |
 | Error codes | `internal/constants/rpc_errors.go` |
 | Receipt summary limit | `internal/constants/pubsub.go` (`ReceiptSummaryMaxBytes`) |
-| Gateway configuration | `internal/config/config.go` (`Gateway.A2ADownstreamURL`) |
+| Gateway configuration | `internal/config/config.go` (`GatewayConfig.A2ADownstreamURL`) |
 | Event type registry | `protocol/constants/events.json` |
 | Proto schema | `protocol/proto/g8e/operator/v1/operator.proto` |
 
