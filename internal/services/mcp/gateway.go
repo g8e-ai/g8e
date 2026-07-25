@@ -98,7 +98,7 @@ type GatewayService struct {
 	responder         *response.Writer
 	suspendedStore    storage.SuspendedTransactionStore
 	fieldPathRegistry *FieldPathRegistry
-	auditStore        *storage.SQLAuditStore
+	auditStore        AuditEventRecorder
 	nativeToolHandler *NativeToolHandler
 	scrubbingService  *scrubbing.ScrubbingService
 	threatScanner     ThreatScanner
@@ -148,6 +148,18 @@ type ThreatScanner interface {
 	AnalyzeCommand(input string) []governance.ThreatSignal
 }
 
+// AuditEventRecorder records audit events. Implemented by storage.SQLAuditStore
+// in production and by noopAuditEventRecorder when no audit store is configured.
+type AuditEventRecorder interface {
+	RecordEvent(event *storage.Event) (int64, error)
+}
+
+// noopAuditEventRecorder is a no-op implementation of AuditEventRecorder.
+// It is used when no audit store is wired, eliminating nil checks at call sites.
+type noopAuditEventRecorder struct{}
+
+func (noopAuditEventRecorder) RecordEvent(*storage.Event) (int64, error) { return 0, nil }
+
 // Dependencies groups all construction-phase dependencies for NewGatewayService.
 // These fields are immutable after construction.
 type Dependencies struct {
@@ -160,6 +172,10 @@ type Dependencies struct {
 	Posture          string // Gateway posture: doctrine, consensus, or notary
 	A2ADownstreamURL string // A2A downstream server URL (construction-phase)
 	PublicBaseURL    string // Public base URL for approval links (construction-phase)
+
+	// AuditStore records audit events for suspended transactions and downstream
+	// MCP calls. When nil, a no-op recorder is used (events are silently dropped).
+	AuditStore AuditEventRecorder
 
 	// FieldPathRegistryFactory overrides the default NewFieldPathRegistry constructor.
 	// When nil, NewFieldPathRegistry is used. This allows tests to inject a failing
@@ -206,11 +222,17 @@ func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 		return nil, fmt.Errorf("gateway: %w", constants.ErrInternal)
 	}
 
+	auditStore := deps.AuditStore
+	if auditStore == nil {
+		auditStore = noopAuditEventRecorder{}
+	}
+
 	g := &GatewayService{
 		logger:            deps.Logger,
 		responder:         deps.Responder,
 		suspendedStore:    deps.SuspendedStore,
 		fieldPathRegistry: fieldPathRegistry,
+		auditStore:        auditStore,
 		nativeToolHandler: nativeToolHandler,
 		scrubbingService:  deps.ScrubbingService,
 		threatScanner:     deps.ThreatScanner,
@@ -245,7 +267,7 @@ func (g *GatewayService) runMaintenanceSweep(ctx context.Context) error {
 			operatorSessionID = tx.UserID
 		}
 
-		if g.auditStore != nil && operatorSessionID != "" {
+		if operatorSessionID != "" {
 			event := &storage.Event{
 				OperatorSessionID: operatorSessionID,
 				Timestamp:         time.Now().UTC(),
@@ -986,7 +1008,7 @@ func (g *GatewayService) StoreSuspendedTransaction(ctx context.Context, txHash s
 		operatorSessionID = userID
 	}
 
-	if g.auditStore != nil && operatorSessionID != "" {
+	if operatorSessionID != "" {
 		event := &storage.Event{
 			OperatorSessionID: operatorSessionID,
 			Timestamp:         time.Now().UTC(),
@@ -1211,18 +1233,16 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 	}
 
 	// Audit downstream MCP call execution
-	if g.auditStore != nil {
-		event := &storage.Event{
-			OperatorSessionID: operatorSessionID,
-			Timestamp:         time.Now().UTC(),
-			Type:              constants.Event.Operator.Audit.McpCall,
-			ContentText:       toolName,
-			CommandRaw:        string(toolArgs),
-			CommandStdout:     resultSummary,
-		}
-		if _, err := g.auditStore.RecordEvent(event); err != nil {
-			g.logger.Warn("Failed to record downstream MCP call event in audit store", "error", err, "tool", toolName)
-		}
+	event := &storage.Event{
+		OperatorSessionID: operatorSessionID,
+		Timestamp:         time.Now().UTC(),
+		Type:              constants.Event.Operator.Audit.McpCall,
+		ContentText:       toolName,
+		CommandRaw:        string(toolArgs),
+		CommandStdout:     resultSummary,
+	}
+	if _, err := g.auditStore.RecordEvent(event); err != nil {
+		g.logger.Warn("Failed to record downstream MCP call event in audit store", "error", err, "tool", toolName)
 	}
 
 	return resultSummary, nil

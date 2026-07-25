@@ -237,6 +237,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		Posture:          string(cfg.Gateway.Posture),
 		A2ADownstreamURL: cfg.Gateway.A2ADownstreamURL,
 		PublicBaseURL:    publicBaseURL,
+		AuditStore:       stores.AuditStore,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("gateway: failed to initialize MCP gateway: %w", err)
@@ -582,7 +583,7 @@ func (ls *GatewayModeService) IsGovernanceReady() bool {
 func (ls *GatewayModeService) GetGovernanceDeps() *pubsub.GovernanceDeps {
 	// Create unified L3 notary that handles both CLI (mTLS) and passkey (WebAuthn) proofs
 	cliVerifier := NewCLISessionVerifier(ls.stores.DocStore, ls.pki, ls.logger, ls.userSvc, ls.cliSessionSvc)
-	l3Notary := governance.NewGatewayL3Notary(ls.suspendedTxService, cliVerifier, ls.passkey.PasskeyService, ls.logger)
+	l3Notary := governance.NewGatewayL3Notary(cliVerifier, ls.passkey.PasskeyService, ls.logger)
 
 	return &pubsub.GovernanceDeps{
 		ReplayStore:          ls.stores.ReplayStore,

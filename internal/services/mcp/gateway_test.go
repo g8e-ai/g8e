@@ -1242,6 +1242,55 @@ func TestGatewayService_NewGatewayService(t *testing.T) {
 	})
 }
 
+func TestGatewayService_AuditStore_DefaultIsNoOp(t *testing.T) {
+	t.Parallel()
+	deps := Dependencies{
+		Logger:          slog.Default(),
+		Responder:       response.NewWriter(slog.Default()),
+		SuspendedStore:  &fakeSuspendedStore{},
+		MaxPayloadBytes: 10 * 1024 * 1024,
+	}
+
+	g, err := NewGatewayService(deps)
+	require.NoError(t, err)
+
+	_, err = g.auditStore.RecordEvent(&storage.Event{
+		OperatorSessionID: "test-session",
+		Type:              "test",
+	})
+	require.NoError(t, err, "noopAuditEventRecorder should never error")
+}
+
+func TestGatewayService_AuditStore_InjectedRecorderReceivesEvents(t *testing.T) {
+	t.Parallel()
+	recorder := &recordingAuditEventRecorder{}
+	g := newTestGatewayService(t, withAuditStore(recorder))
+
+	g.StoreSuspendedTransaction(
+		context.Background(),
+		"hash-audit-test",
+		[]byte(`{"id":"123"}`),
+		"test-tool",
+		json.RawMessage(`{"arg":"val"}`),
+		"user-1",
+		"op-session-audit",
+		"cert-fp",
+	)
+
+	require.Len(t, recorder.events, 1)
+	require.Equal(t, "op-session-audit", recorder.events[0].OperatorSessionID)
+	require.Equal(t, constants.Event.Operator.Notary.ApprovalRequested, recorder.events[0].Type)
+}
+
+type recordingAuditEventRecorder struct {
+	events []*storage.Event
+}
+
+func (r *recordingAuditEventRecorder) RecordEvent(event *storage.Event) (int64, error) {
+	r.events = append(r.events, event)
+	return int64(len(r.events)), nil
+}
+
 func TestGatewayService_HandleReadField(t *testing.T) {
 	t.Parallel()
 
@@ -1690,7 +1739,7 @@ func withSuspendedStore(store storage.SuspendedTransactionStore) testGatewayOpti
 }
 
 // withAuditStore sets a custom audit store for the test GatewayService
-func withAuditStore(auditStore *storage.SQLAuditStore) testGatewayOption {
+func withAuditStore(auditStore AuditEventRecorder) testGatewayOption {
 	return func(g *GatewayService) {
 		g.auditStore = auditStore
 	}
@@ -1790,6 +1839,7 @@ func newTestGatewayService(t *testing.T, opts ...testGatewayOption) *GatewayServ
 		logger:           slog.Default(),
 		responder:        response.NewWriter(slog.Default()),
 		suspendedStore:   &fakeSuspendedStore{},
+		auditStore:       noopAuditEventRecorder{},
 		threatScanner:    governance.NewL1Doctrine(),
 		publicBaseURL:    network.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
 		maxFailures:      5,

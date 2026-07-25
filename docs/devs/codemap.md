@@ -233,7 +233,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── scrubbing.ScrubbingService
 │   ├── mcp.FieldPathRegistry
 │   ├── mcp.NativeToolHandler
-│   ├── storage.SQLAuditStore (field exists but not wired in production; nil — only set in tests via withAuditStore)
+│   ├── mcp.AuditEventRecorder (interface; storage.SQLAuditStore in production via Stores.AuditStore, noopAuditEventRecorder when not wired)
 │   ├── RuntimeDependencies (atomic.Pointer, set once via SetRuntimeDeps before first request):
 │   │   ├── mcp.SessionValidator (set by in-process OperatorPubSubService in gateway mode)
 │   │   ├── mcp.AuditLogger (pubsubAuditLogger, set by in-process OperatorPubSubService in gateway mode)
@@ -268,6 +268,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - **`Stores.DB`** provides the raw `sqliteutil.DB` connection for consumers needing direct DB access (e.g., `NewTribunalStoreService`, `NewStateRootService`). Accessible via the `DB` field on `Stores` (returned by `OpenCanonicalDBService`), eliminating the need to go through `CanonicalDBService.GetDB()`.
 - **`storage.SuspendedTransactionService`** is the L3 approval workflow store used consistently in both gateway and outbound modes (implements `storage.SuspendedTransactionStore`).
 - **`mcp.NewGatewayService`** fails fast on construction errors: `FieldPathRegistry` initialization errors are returned (not silently logged), making governance system initialization failures fatal. The `Dependencies.FieldPathRegistryFactory` field allows tests to inject a failing factory.
+- **`mcp.AuditEventRecorder`** interface on `GatewayService` replaces a nil-in-production `*storage.SQLAuditStore` field. `NewGatewayService` defaults to `noopAuditEventRecorder` when `Dependencies.AuditStore` is nil. Production wires `stores.AuditStore` (`*storage.SQLAuditStore`) via `Dependencies.AuditStore`. This eliminates all nil guards at call sites — the field is always non-nil.
 - **`storage.ExecutionVaultService`** is the execution log and file diff storage for outbound mode.
 - **`gateway.EncryptedKVAdapter`** implements `storage.TokenStore` and provides Sentinel token persistence for outbound mode. It wraps `gateway.KVStoreService` (from Stores) and encrypts values at rest via `vault.Vault`.
 - **`storage.SQLAuditStore`** is held in `Stores` as the `AuditStore` field and provides the SQL-based audit storage foundation for both gateway and outbound modes. In outbound mode, the standalone instance has been removed; `g8eo.go` reuses `Stores.AuditStore` for all audit writes (L5Actuator, HistoryHandler, session management), eliminating a redundant connection pool and pruner on the same `g8e.db` file.
@@ -282,7 +283,11 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 ### Governance Stack (L1-L5)
 - **L1**: `governance.L1Doctrine` (technical bedrock validation, threat detection, forbidden pattern matching)
 - **L2**: `tribunal.TribunalService` (Tribunal-based deliberation producing L2 votes via Ed25519 signatures; gateway delegates deliberation via `LocalDeliberator`). The `L2ConsensusPolicyStore` interface in `governance.L4Warden` loads consensus policy for quorum verification.
-- **L3**: `governance.L3Notary` (gateway mode uses `governance.gatewayNotary` via `governance.NewGatewayL3Notary`, combining WebAuthn passkey proofs via `PasskeyService` and mTLS CLI proofs via `cliSessionVerifier`; outbound mode uses `governance.outboundNotary` via `governance.NewOutboundL3Notary` for CLI-based approval via suspended transactions; gateway CLI mode uses `governance.cliNotary` via `governance.NewCLIL3Notary` for CLI session verification + suspended transaction checks)
+- **L3**: `governance.L3Notary` — composable notary design with three implementations sharing primitives:
+  - `governance.gatewayNotary` (via `governance.NewGatewayL3Notary`) — passkey authorization (`L3Notary` delegate) + optional CLI mTLS session verification (`CLISessionVerifier`). Does NOT access suspended transactions.
+  - `governance.outboundNotary` (via `governance.NewOutboundL3Notary`) — suspended transaction lookup + Ed25519 signature verification (shared via `verifyOutboundProof`).
+  - `governance.cliNotary` (via `governance.NewCLIL3Notary`) — CLI session verification (`CLISessionVerifier`) + suspended transaction lookup + signature verification (shared via `verifyOutboundProof`).
+  - **Composable primitives**: `CLISessionVerifier` interface (shared by `gatewayNotary` and `cliNotary`); `verifyOutboundProof` shared function (suspended tx + signature logic shared by `outboundNotary` and `cliNotary`).
 - **L4**: `governance.L4Warden` (pre-dispatch verification gating, validating signatures, replay prevention, expiry, nonces, and state Merkle root)
 - **L5**: `governance.L5Actuator` (isolated boundary tool dispatch via MCP/A2A, signed receipt production, audit logging). Does NOT re-verify L2/L3 proofs; trusts `VerifiedTransaction` from L4Warden. The L4→L5 separation is the defense-in-depth boundary: L4 verifies, L5 executes and records.
 
@@ -305,7 +310,7 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - `gateway.EncryptedKVAdapter` implements: `storage.TokenStore` (outbound mode).
 - `storage.SuspendedTransactionService` implements: `storage.SuspendedTransactionStore` (used in both gateway and outbound modes).
 - `governance.FilesystemSignerStore` implements: `governance.SignerStore` (used in outbound mode).
-- `governance.gatewayNotary` implements: `governance.L3Notary` (gateway mode via `NewGatewayL3Notary` with both `cliSessionVerifier` and `PasskeyService` as delegates).
+- `governance.gatewayNotary` implements: `governance.L3Notary` (gateway mode via `NewGatewayL3Notary(cliVerifier, passkeyVerifier, logger)` with `CLISessionVerifier` and `L3Notary` passkey delegate; no suspended store dependency).
 - `governance.outboundNotary` implements: `governance.L3Notary` (outbound mode via `NewOutboundL3Notary` for suspended transaction + signature verification only).
 - `governance.cliNotary` implements: `governance.L3Notary` (gateway CLI mode via `NewCLIL3Notary` for CLI session verification + suspended transaction checks).
 - `gateway.cliSessionVerifier` implements: `governance.CLISessionVerifier` (used in gateway mode for mTLS CLI session verification within the L3 notary).
@@ -360,6 +365,8 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - **`gateway.SSEController`** (`sse_controller.go`): SSE event push, poll, and stream endpoints. Includes `authorizeSSERoute` for dual-auth (mTLS or web session) authorization. Heartbeat interval defaults to 30s via `newSSEController`.
 - **`gateway.HealthController`** (`health_controller.go`): Health check, bootstrap health, state endpoint, and landing page. Previously in `gateway_http_health.go` (deleted).
 - **`gateway.GovernanceController`** (`governance_controller.go`): Governance envelope submission, tribunal deliberation, `SetTribunal`/`SetEnvelopeProcessor` late-bound dependency setters. Uses `atomic.Pointer` for tribunal and `atomic.Value` (via `envProcHolder`) for envelope processor, following the thread-safety pattern in `docs/devs/devs.md`.
+
+  **Boot-order constraint (why deferred init is necessary):** `TribunalService` depends on gateway stores (tribunal store, signer store, consensus policy store) that are created during `OpenCanonicalDBService`, which happens as part of `GatewayModeService` construction. `GovernanceController` is created during `NewHTTPHandler`, which is also part of `GatewayModeService` construction. The `TribunalService` is then constructed after the gateway service is fully initialized, using stores from the already-opened database. This creates a genuine circular dependency: Tribunal needs gateway stores → gateway needs HTTPHandler → HTTPHandler needs GovernanceController → GovernanceController needs Tribunal. Reordering the boot sequence to construct TribunalService first is not possible because TribunalService requires stores that don't exist until the gateway service opens its database. The `atomic.Pointer` pattern with 503 guards is the correct solution — the controller starts in a partially-constructed state and is completed via `SetTribunal` / `SetEnvelopeProcessor` later in the boot sequence. Both handlers check the atomic pointer at request time and return 503 if the dependency is not yet wired, eliminating any nil-dereference risk.
 
 ### JWT Authentication
 - **`gateway.JWKSProvider`** (`jwks.go`): Optional external IdP JWT validation via JWKS endpoint. When configured, MCP/A2A routes accept JWT auth in addition to mTLS.

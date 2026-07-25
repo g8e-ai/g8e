@@ -99,7 +99,7 @@ func NewCLIL3Notary(suspendedStore storage.SuspendedTransactionStore, cliVerifie
 // NewGatewayL3Notary creates a unified L3 notary that requires passkey authorization
 // for all proofs (browser and CLI). CLI callers additionally present mTLS fields for
 // transport-layer authentication.
-func NewGatewayL3Notary(suspendedStore storage.SuspendedTransactionStore, cliVerifier CLISessionVerifier, passkeyVerifier L3Notary, logger *slog.Logger) L3Notary {
+func NewGatewayL3Notary(cliVerifier CLISessionVerifier, passkeyVerifier L3Notary, logger *slog.Logger) L3Notary {
 	return &gatewayNotary{
 		cliVerifier:     cliVerifier,
 		passkeyVerifier: passkeyVerifier,

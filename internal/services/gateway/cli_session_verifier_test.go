@@ -404,7 +404,7 @@ func TestGatewayL3Notary_DelegatesToCLI(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 	cliVerifier := NewCLISessionVerifier(stores.DocStore, nil, logger, userSvc, cliSessionSvc)
-	notary := governance.NewGatewayL3Notary(nil, cliVerifier, nil, logger)
+	notary := governance.NewGatewayL3Notary(cliVerifier, nil, logger)
 
 	// Create an active user
 	userID := "active-user"
@@ -444,7 +444,7 @@ func TestGatewayL3Notary_DelegatesToCLI(t *testing.T) {
 func TestGatewayL3Notary_DelegatesToPasskey(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	passkeyL3, user := newPasskeyServiceForTest(t)
-	notary := governance.NewGatewayL3Notary(nil, nil, passkeyL3, logger)
+	notary := governance.NewGatewayL3Notary(nil, passkeyL3, logger)
 
 	// Use the user already created by newPasskeyServiceForTest
 	userID := user.ID
