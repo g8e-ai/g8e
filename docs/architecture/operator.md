@@ -7,12 +7,12 @@ title: g8e Operator
 Last Updated: 2026-07-24
 Version: v1.6.2
 
-The **Governed Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
+The **Governed Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions with L1-L3 proofs attached from the Gateway (PDP), re-verifies those proofs locally, then enforces L4 Warden and L5 Actuator gates, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
 The reference implementation of a g8e-compliant Policy Execution Point (PEP) is the g8e binary file. The same binary operates in two modes:
 
-- **Governance Gateway (PDP)**: The binary run in Gateway mode. The Gateway is an Operator with additional gateway services (persistence, pub/sub broker, PKI, policy decision point). The Gateway host runs an in-process Operator that executes L1-L5 locally for operations on the gateway host itself.
-- **Governed Operator (PEP)**: The binary run in Standard Mode (`operator start`). It acts as the Policy Execution Point (PEP) and MCP server, enforcing local verification before host mutation. Each remote Governed Operator runs L1-L5 locally for operations on its own host.
+- **Governance Gateway (PDP)**: The binary run in Gateway mode. The Gateway owns policy decision layers L1-L3 (Doctrine, Consensus, Notary) and provides gateway services (persistence, pub/sub broker, PKI, policy decision point). The Gateway host runs an in-process Operator substrate (PEP) that handles L4-L5 (Warden, Actuator) locally for operations targeting the gateway host itself.
+- **Governed Operator (PEP)**: The binary run in Standard Mode (`operator start`). It acts as the Policy Execution Point (PEP) and MCP server, handling L4 Warden (pre-dispatch verification) and L5 Actuator (execution and signed receipt production) for operations on its own host. The Operator re-verifies L1-L3 proofs attached to the envelope by the Gateway before executing.
 
 This document focuses on the **Governed Operator** (PEP) role.
 
@@ -28,26 +28,26 @@ The Operator is the only component capable of mutating the host. It executes rem
 
 ## 2. 5-Layer Verification Sequence
 
-When a command targets an Operator, it progresses through a strict, fail-closed pipeline consisting of five distinct layers of verification and execution:
+When a command targets an Operator, the Gateway (PDP) first processes L1-L3 (Doctrine, Consensus, Notary) and attaches the resulting proofs to the `GovernanceEnvelope`. The Operator (PEP) then runs L4-L5 locally, re-verifying all L1-L3 proofs against its own state before executing. The full pipeline is fail-closed at every layer:
 
-### L1: Doctrine (Technical Bedrock)
-The **L1Doctrine** layer provides foundational hard gates. It blocks malicious strings at the schema level and executes real-time MITRE ATT&CK heuristics to detect threats like reverse shells, privilege escalation, and destructive disk operations. L1 is the first line of defense and cannot be bypassed.
+### L1: Doctrine (Technical Bedrock) — Gateway (PDP)
+The **L1Doctrine** layer runs on the Gateway as a policy decision. It provides foundational hard gates, blocking malicious strings at the schema level and executing real-time MITRE ATT&CK heuristics to detect threats like reverse shells, privilege escalation, and destructive disk operations. L1 is the first line of defense and cannot be bypassed. The Operator re-verifies L1 results from the attached envelope proofs.
 
-### L2: Consensus
-The **L2Consensus** layer verifies the intent of the request via a multi-signature quorum. It validates Ed25519 signatures from independent reasoning agents (the **Tribunal**) against the Operator's locally trusted signer store. This ensures that no single upstream agent can unilaterally mutate the host. See [Tribunal](./tribunal.md) for tribunal configuration and setup.
+### L2: Consensus — Gateway (PDP)
+The **L2Consensus** layer runs on the Gateway as a policy decision. The Tribunal evaluates the transaction and produces Ed25519 signed votes. The Operator re-verifies these L2 signatures against its locally trusted signer store, ensuring that no single upstream agent can unilaterally mutate the host. See [Tribunal](./tribunal.md) for tribunal configuration and setup.
 
-### L3: Notary (Authorization)
-The **L3Notary** layer enforces human-in-the-loop authorization. In gateway mode, passkey (WebAuthn) authorization is required for all sessions. CLI callers additionally undergo mTLS session verification including certificate fingerprint matching, session validity, and revocation checks. In operator (outbound) mode, the Notary validates suspended transaction approval, mTLS certificate fingerprint matching, and Ed25519 signatures over the transaction hash. Passkey authentication is not available in outbound mode. Mutations are blocked until a valid L3 proof is presented. Non-mutation actions (as classified by the action type's intrinsic mutation property) do not require L3 proof. L3 approval notifications use Server-Sent Events (SSE) for real-time delivery: the Gateway emits an `approval.completed` event scoped to the submitting user when a passkey approval is verified, and CLI clients subscribe to the SSE stream rather than polling. See [SSE Streaming](./sse.md) for the full SSE architecture.
+### L3: Notary (Authorization) — Gateway (PDP)
+The **L3Notary** layer runs on the Gateway as a policy decision. It enforces human-in-the-loop authorization. In gateway mode, passkey (WebAuthn) authorization is required for all sessions. CLI callers additionally undergo mTLS session verification including certificate fingerprint matching, session validity, and revocation checks. In operator (outbound) mode, the Notary validates suspended transaction approval, mTLS certificate fingerprint matching, and Ed25519 signatures over the transaction hash. Passkey authentication is not available in outbound mode. Mutations are blocked until a valid L3 proof is presented. Non-mutation actions (as classified by the action type's intrinsic mutation property) do not require L3 proof. L3 approval notifications use Server-Sent Events (SSE) for real-time delivery: the Gateway emits an `approval.completed` event scoped to the submitting user when a passkey approval is verified, and CLI clients subscribe to the SSE stream rather than polling. See [SSE Streaming](./sse.md) for the full SSE architecture.
 
-### L4: Warden (Pre-dispatch Gate)
-The **L4Warden** is the final verification gate before execution. It enforces:
+### L4: Warden (Pre-dispatch Gate) — Operator (PEP)
+The **L4Warden** runs on the Operator substrate as the final verification gate before execution. It enforces:
 1. **Integrity**: Validates that the transaction ID, transaction hash, and computed hash of the canonical fields all match.
 2. **Freshness**: Enforces `expires_at` and checks for replay attacks via a local replay protection store.
 3. **State Binding**: Validates that the state Merkle root matches the host's current ledger root.
 4. **Quorum**: Confirms that L1, L2, and L3 proofs meet the current **Governance Posture** (`doctrine`, `consensus`, or `notary`).
 
-### L5: Actuator (Execution Boundary)
-The **L5Actuator** is the singular execution boundary permitted to mutate host state. It dispatches verified payloads to internal handlers (shell, file edit, etc.) and uses a **dual-receipt model** with **JIT capability minting**:
+### L5: Actuator (Execution Boundary) — Operator (PEP)
+The **L5Actuator** runs on the Operator substrate as the singular execution boundary permitted to mutate host state. It dispatches verified payloads to internal handlers (shell, file edit, etc.) and uses a **dual-receipt model** with **JIT capability minting**:
 1. **Pre-execution**: Signs an execution receipt with status EXECUTING and commits it to the local audit vault.
 2. **Rehydration**: Restores sensitive data (PII, credentials) that was scrubbed upstream by the **Sovereign Execution Boundary**, using local tokens.
 3. **JIT Capability Minting**: Mints a scoped, single-action, self-dissolving capability token bound to the transaction hash and action type, enforcing zero standing privileges. The capability is injected into the execution context for downstream handlers.
@@ -262,6 +262,7 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 
 - [g8e Protocol](../../protocol/docs/spec.md) for protocol definitions and wire formats
 - [g8e Gateway](./gateway.md) for PDP architecture and communication patterns
+- [Gateway Service Stack Diagram](../diagrams/graph-gateway-services.md) for the detailed Gateway service stack and Operator substrate relationship
 - [Network Architecture](./network.md) for SPIFFE ID formats, PKI hierarchy, mTLS enforcement, and port topology
 - [Governance](./governance.md) for posture configuration and tribunal setup
 - [Auth Architecture](./auth.md) for enrollment, passkey, and session management details

@@ -49,26 +49,41 @@ type DBController struct {
 	responder   *response.Writer
 }
 
-func newDBController(cfg *config.Config, logger *slog.Logger, docStore *DocumentStoreService, kvStore *KVStoreService, sseStore *SSEEventService, blobStore *BlobStoreService, auditStore *storage.SQLAuditStore, signerStore *SignerStoreService, auth *AuthService, pubsub *GatewayWebSocketHandler, userSvc *UserService, responder *response.Writer) *DBController {
+// DBControllerDeps groups all dependencies for DBController to reduce constructor bloat.
+type DBControllerDeps struct {
+	Cfg         *config.Config
+	Logger      *slog.Logger
+	DocStore    *DocumentStoreService
+	KVStore     *KVStoreService
+	SSEStore    *SSEEventService
+	BlobStore   *BlobStoreService
+	AuditStore  *storage.SQLAuditStore
+	SignerStore *SignerStoreService
+	Auth        *AuthService
+	Pubsub      *GatewayWebSocketHandler
+	UserSvc     *UserService
+	Responder   *response.Writer
+}
+
+func newDBController(d DBControllerDeps) *DBController {
 	return &DBController{
-		cfg:         cfg,
-		logger:      logger,
-		docStore:    docStore,
-		kvStore:     kvStore,
-		sseStore:    sseStore,
-		blobStore:   blobStore,
-		auditStore:  auditStore,
-		signerStore: signerStore,
-		auth:        auth,
-		pubsub:      pubsub,
-		userSvc:     userSvc,
-		responder:   responder,
+		cfg:         d.Cfg,
+		logger:      d.Logger,
+		docStore:    d.DocStore,
+		kvStore:     d.KVStore,
+		sseStore:    d.SSEStore,
+		blobStore:   d.BlobStore,
+		auditStore:  d.AuditStore,
+		signerStore: d.SignerStore,
+		auth:        d.Auth,
+		pubsub:      d.Pubsub,
+		userSvc:     d.UserSvc,
+		responder:   d.Responder,
 	}
 }
 
 func (c *DBController) readBody(r *http.Request) ([]byte, error) {
-	r.Body = http.MaxBytesReader(nil, r.Body, c.cfg.Gateway.MaxPayloadBytes)
-	return io.ReadAll(r.Body)
+	return readRequestBody(r, c.cfg.Gateway.MaxPayloadBytes)
 }
 
 func (c *DBController) handleDataSettings(w http.ResponseWriter, r *http.Request) {

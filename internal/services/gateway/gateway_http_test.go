@@ -41,6 +41,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/protocol"
 )
@@ -194,6 +195,7 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config, *TestInfr
 		Responder:        infra.Responder,
 		SuspendedStore:   infra.SuspendedStore,
 		ScrubbingService: nil,
+		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(infra.Cfg.Gateway.Posture),
 	})
@@ -229,6 +231,7 @@ func setupTestGatewayService(t *testing.T) (*GatewayModeService, *config.Config)
 		Responder:        infra.Responder,
 		SuspendedStore:   infra.SuspendedStore,
 		ScrubbingService: nil,
+		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(infra.Cfg.Gateway.Posture),
 	})
@@ -521,17 +524,18 @@ func TestNewHTTPHandler(t *testing.T) {
 	assert.NotNil(t, h.pubsub)
 	assert.NotNil(t, h.auth)
 	assert.NotNil(t, h.pkiController.pki)
-	assert.NotNil(t, h.authController.cliSessionSvc)
-	assert.NotNil(t, h.authController.operatorSessionSvc)
-	assert.NotNil(t, h.authController.webSessionSvc)
-	assert.NotNil(t, h.authController.reg)
+	assert.NotNil(t, h.bootstrapController.cliSessionSvc)
+	assert.NotNil(t, h.bootstrapController.operatorSessionSvc)
 	assert.NotNil(t, h.passkey)
 	assert.NotNil(t, h.adminController.userSvc)
 	assert.NotNil(t, h.responder)
 	assert.NotNil(t, h.mcp)
 	assert.NotNil(t, h.pkiController)
 	assert.NotNil(t, h.dbController)
-	assert.NotNil(t, h.authController)
+	assert.NotNil(t, h.bootstrapController)
+	assert.NotNil(t, h.enrollmentTokenController)
+	assert.NotNil(t, h.userController)
+	assert.NotNil(t, h.sessionController)
 	assert.NotNil(t, h.adminController)
 	assert.NotNil(t, h.operatorController)
 	assert.Equal(t, cfg, h.cfg)
@@ -999,6 +1003,7 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 			Responder:        infra.Responder,
 			SuspendedStore:   infra.SuspendedStore,
 			ScrubbingService: nil,
+			ThreatScanner:    governance.NewL1Doctrine(),
 			MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 			Posture:          string(infra.Cfg.Gateway.Posture),
 		})
@@ -1057,6 +1062,7 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 			Responder:        infra.Responder,
 			SuspendedStore:   infra.SuspendedStore,
 			ScrubbingService: nil,
+			ThreatScanner:    governance.NewL1Doctrine(),
 			MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 			Posture:          string(infra.Cfg.Gateway.Posture),
 		})
@@ -1115,6 +1121,7 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 			Responder:        infra.Responder,
 			SuspendedStore:   infra.SuspendedStore,
 			ScrubbingService: nil,
+			ThreatScanner:    governance.NewL1Doctrine(),
 			MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 			Posture:          string(infra.Cfg.Gateway.Posture),
 		})
@@ -1178,6 +1185,7 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 			Responder:        infra.Responder,
 			SuspendedStore:   infra.SuspendedStore,
 			ScrubbingService: nil,
+			ThreatScanner:    governance.NewL1Doctrine(),
 			MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 			Posture:          string(infra.Cfg.Gateway.Posture),
 		})
@@ -1244,6 +1252,7 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 			Responder:        infra.Responder,
 			SuspendedStore:   infra.SuspendedStore,
 			ScrubbingService: nil,
+			ThreatScanner:    governance.NewL1Doctrine(),
 			MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 			Posture:          string(infra.Cfg.Gateway.Posture),
 		})

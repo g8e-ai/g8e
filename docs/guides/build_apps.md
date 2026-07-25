@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-07-24
-Version: v1.6.2
+Last Updated: 2026-07-25
+Version: v1.6.3
 
 ---
 
@@ -102,7 +102,7 @@ Applications constructing `GovernanceEnvelope` transactions or parsing `ActionRe
 The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.6.2
+go get github.com/g8e-ai/g8e@v1.6.3
 ```
 
 The Go package provides protobuf message types for governance envelopes, governance metadata (L1, L2, L3), and all typed payload messages for first-class operations. It also provides SPIFFE workload identity helpers for URI SAN generation and validation.
@@ -114,7 +114,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 Install from PyPI:
 
 ```bash
-pip install g8e==1.6.2
+pip install g8e==1.6.3
 ```
 
 The package provides:
@@ -398,7 +398,9 @@ Refer to the protocol examples for sample envelope construction code. The design
 
 This section documents the architecture, persona system, prompt design, memory model, and
 consensus cascade of a g8e-compliant agentic ensemble. It is the canonical reference for
-anyone building an AI reasoning layer on top of the g8e protocol surface.
+anyone building an AI reasoning layer on top of the g8e protocol surface. For the
+architecture-level overview of the ensemble topology, intent-to-execution pipeline, and
+hash-chained ledger context model, see [AI Agents in a g8e-Compatible Agentic Ensemble](../architecture/agents.md).
 
 g8e itself ships a protocol-level Tribunal that performs deterministic L2 consensus
 voting with Ed25519 signatures. That service is the

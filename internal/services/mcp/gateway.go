@@ -101,6 +101,7 @@ type GatewayService struct {
 	auditStore        *storage.SQLAuditStore
 	nativeToolHandler *NativeToolHandler
 	scrubbingService  *scrubbing.ScrubbingService
+	threatScanner     ThreatScanner
 	posture           string // Gateway posture: doctrine, consensus, or notary
 	a2aDownstreamURL  string // construction-phase (immutable after NewGatewayService)
 	publicBaseURL     string // construction-phase (immutable after NewGatewayService)
@@ -141,6 +142,12 @@ type AuditLogger interface {
 	LogFieldRead(operatorSessionID, collection, documentID, fieldPath string, value FieldValue) error
 }
 
+// ThreatScanner scans input strings for security threats using L1 doctrine patterns.
+// Implemented by governance.L1Doctrine.
+type ThreatScanner interface {
+	AnalyzeCommand(input string) []governance.ThreatSignal
+}
+
 // Dependencies groups all construction-phase dependencies for NewGatewayService.
 // These fields are immutable after construction.
 type Dependencies struct {
@@ -148,10 +155,16 @@ type Dependencies struct {
 	Responder        *response.Writer
 	SuspendedStore   storage.SuspendedTransactionStore
 	ScrubbingService *scrubbing.ScrubbingService
+	ThreatScanner    ThreatScanner
 	MaxPayloadBytes  int64
 	Posture          string // Gateway posture: doctrine, consensus, or notary
 	A2ADownstreamURL string // A2A downstream server URL (construction-phase)
 	PublicBaseURL    string // Public base URL for approval links (construction-phase)
+
+	// FieldPathRegistryFactory overrides the default NewFieldPathRegistry constructor.
+	// When nil, NewFieldPathRegistry is used. This allows tests to inject a failing
+	// factory to verify error handling in NewGatewayService.
+	FieldPathRegistryFactory func(*slog.Logger) (*FieldPathRegistry, error)
 }
 
 // RuntimeDependencies bundles all runtime-phase dependencies that are set once
@@ -179,10 +192,13 @@ func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 		return nil, fmt.Errorf("gateway: invalid posture '%s': must be one of doctrine, consensus, or notary: %w", deps.Posture, constants.ErrGatewayInvalidPosture)
 	}
 
-	fieldPathRegistry, err := NewFieldPathRegistry(deps.Logger)
+	registryFactory := deps.FieldPathRegistryFactory
+	if registryFactory == nil {
+		registryFactory = NewFieldPathRegistry
+	}
+	fieldPathRegistry, err := registryFactory(deps.Logger)
 	if err != nil {
-		deps.Logger.Error("Failed to initialize field path registry", "error", err)
-		// Continue without field path registry - read_field will be disabled
+		return nil, fmt.Errorf("gateway: initialize field path registry: %w", err)
 	}
 
 	nativeToolHandler, err := NewNativeToolHandler(deps.Logger)
@@ -197,6 +213,7 @@ func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 		fieldPathRegistry: fieldPathRegistry,
 		nativeToolHandler: nativeToolHandler,
 		scrubbingService:  deps.ScrubbingService,
+		threatScanner:     deps.ThreatScanner,
 		posture:           deps.Posture,
 		a2aDownstreamURL:  deps.A2ADownstreamURL,
 		publicBaseURL:     deps.PublicBaseURL,
@@ -587,33 +604,24 @@ func (g *GatewayService) handleReadField(ctx context.Context, arguments json.Raw
 	}, nil
 }
 
-// scanForForbiddenPatterns checks if a FieldValue contains forbidden patterns (L1 hard gates)
+// scanForForbiddenPatterns checks if a FieldValue contains security threats
+// using the L1 doctrine threat detection system. Delegates to the ThreatScanner
+// (governance.L1Doctrine) which uses regex-based word-boundary matching instead
+// of the former hardcoded substring patterns.
 func (g *GatewayService) scanForForbiddenPatterns(value FieldValue) error {
 	if value.Null {
 		return nil
 	}
 
-	valueStr := value.String()
-
-	// Forbidden patterns from L1 hard gates with context describing the threat category
-	forbiddenPatterns := []struct {
-		pattern string
-		context string
-	}{
-		{"sudo", "privilege escalation"},
-		{"su ", "privilege escalation"},
-		{"rm -rf /", "destructive file operation"},
-		{"://", "external URL (potential exfiltration)"},
-		{"password", "credential leak"},
-		{"api_key", "credential leak"},
-		{"secret", "credential leak"},
-		{"token", "credential leak"},
-		{"private_key", "credential leak"},
+	if g.threatScanner == nil {
+		return nil
 	}
 
-	for _, fp := range forbiddenPatterns {
-		if strings.Contains(strings.ToLower(valueStr), fp.pattern) {
-			return fmt.Errorf("gateway: L1 hard gate: forbidden pattern detected (%s): %s: %w", fp.context, fp.pattern, constants.ErrGatewayForbiddenPattern)
+	valueStr := value.String()
+	signals := g.threatScanner.AnalyzeCommand(valueStr)
+	for _, sig := range signals {
+		if sig.BlockRecommended {
+			return fmt.Errorf("gateway: L1 hard gate: threat detected (%s): %s: %w", sig.Category, sig.Indicator, constants.ErrGatewayForbiddenPattern)
 		}
 	}
 

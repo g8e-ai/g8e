@@ -917,45 +917,38 @@ func TestGatewayService_ScanForForbiddenPatterns(t *testing.T) {
 
 	strVal := func(s string) FieldValue { return FieldValue{Str: &s} }
 
-	t.Run("detects sudo with context", func(t *testing.T) {
+	t.Run("detects destructive rm rf root", func(t *testing.T) {
 		t.Parallel()
 		err := g.scanForForbiddenPatterns(strVal("sudo rm -rf /"))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "L1 hard gate")
-		require.Contains(t, err.Error(), "sudo")
-		require.Contains(t, err.Error(), "privilege escalation")
+		require.Contains(t, err.Error(), "data_destruction")
+		require.Contains(t, err.Error(), "destroy_rm_rf_root")
 	})
 
-	t.Run("detects password with context", func(t *testing.T) {
+	t.Run("detects password credential leak", func(t *testing.T) {
 		t.Parallel()
 		err := g.scanForForbiddenPatterns(strVal("password=secret123"))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "L1 hard gate")
-		require.Contains(t, err.Error(), "password")
-		require.Contains(t, err.Error(), "credential leak")
+		require.Contains(t, err.Error(), "credential_access")
+		require.Contains(t, err.Error(), "cred_leak_password_assignment")
 	})
 
-	t.Run("detects api_key with context", func(t *testing.T) {
+	t.Run("detects api_key credential leak", func(t *testing.T) {
 		t.Parallel()
 		err := g.scanForForbiddenPatterns(strVal("api_key=sk-12345"))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "L1 hard gate")
-		require.Contains(t, err.Error(), "api_key")
-		require.Contains(t, err.Error(), "credential leak")
+		require.Contains(t, err.Error(), "credential_access")
+		require.Contains(t, err.Error(), "cred_leak_api_key_assignment")
 	})
 
 	t.Run("detects destructive file operation", func(t *testing.T) {
 		t.Parallel()
 		err := g.scanForForbiddenPatterns(strVal("rm -rf /"))
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "destructive file operation")
-	})
-
-	t.Run("detects external URL pattern", func(t *testing.T) {
-		t.Parallel()
-		err := g.scanForForbiddenPatterns(strVal("visit https://example.com"))
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "external URL")
+		require.Contains(t, err.Error(), "data_destruction")
 	})
 
 	t.Run("allows safe values", func(t *testing.T) {
@@ -968,6 +961,32 @@ func TestGatewayService_ScanForForbiddenPatterns(t *testing.T) {
 		t.Parallel()
 		err := g.scanForForbiddenPatterns(FieldValue{Null: true})
 		require.NoError(t, err)
+	})
+
+	t.Run("pseudo-random does not match sudo", func(t *testing.T) {
+		t.Parallel()
+		err := g.scanForForbiddenPatterns(strVal("pseudo-random value"))
+		require.NoError(t, err)
+	})
+
+	t.Run("token field name does not trigger false positive", func(t *testing.T) {
+		t.Parallel()
+		err := g.scanForForbiddenPatterns(strVal("csrf_token column in database"))
+		require.NoError(t, err)
+	})
+
+	t.Run("URL in data does not trigger false positive", func(t *testing.T) {
+		t.Parallel()
+		err := g.scanForForbiddenPatterns(strVal("visit https://example.com"))
+		require.NoError(t, err)
+	})
+
+	t.Run("private key block detected", func(t *testing.T) {
+		t.Parallel()
+		err := g.scanForForbiddenPatterns(strVal("-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA..."))
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "credential_access")
+		require.Contains(t, err.Error(), "cred_leak_private_key_block")
 	})
 }
 
@@ -1203,19 +1222,23 @@ func TestGatewayService_NewGatewayService(t *testing.T) {
 		require.NotNil(t, g.fieldPathRegistry)
 	})
 
-	t.Run("handles field path registry initialization error gracefully", func(t *testing.T) {
+	t.Run("returns error when field path registry factory fails", func(t *testing.T) {
 		t.Parallel()
+		factoryErr := errors.New("simulated registry initialization failure")
 		deps := Dependencies{
 			Logger:          slog.Default(),
 			Responder:       response.NewWriter(slog.Default()),
 			MaxPayloadBytes: 10 * 1024 * 1024,
+			FieldPathRegistryFactory: func(*slog.Logger) (*FieldPathRegistry, error) {
+				return nil, factoryErr
+			},
 		}
 
 		g, err := NewGatewayService(deps)
-		require.NoError(t, err)
-
-		// Should not panic even if registry init fails
-		require.NotNil(t, g)
+		require.Error(t, err)
+		require.Nil(t, g)
+		require.Contains(t, err.Error(), "gateway: initialize field path registry")
+		require.ErrorIs(t, err, factoryErr)
 	})
 }
 
@@ -1767,6 +1790,7 @@ func newTestGatewayService(t *testing.T, opts ...testGatewayOption) *GatewayServ
 		logger:           slog.Default(),
 		responder:        response.NewWriter(slog.Default()),
 		suspendedStore:   &fakeSuspendedStore{},
+		threatScanner:    governance.NewL1Doctrine(),
 		publicBaseURL:    network.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
 		maxFailures:      5,
 		cooldownDuration: 1 * time.Minute,

@@ -14,7 +14,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -112,19 +111,17 @@ func main() {
 	envelope.TransactionHash = txHash
 
 	// Convert envelope to protojson (canonical wire format)
-	marshaler := protojson.MarshalOptions{UseProtoNames: false}
-	envelopeJSON, err := marshaler.Marshal(envelope)
+	envelopeJSON, err := (protojson.MarshalOptions{Multiline: false}).Marshal(envelope)
 	if err != nil {
 		log.Fatalf("Failed to marshal envelope to JSON: %v", err)
 	}
 
 	fmt.Println("Governance Envelope (protojson):")
-	var prettyJSON map[string]interface{}
-	if err := json.Unmarshal(envelopeJSON, &prettyJSON); err != nil {
-		log.Fatalf("Failed to unmarshal for pretty print: %v", err)
+	pretty, err := (protojson.MarshalOptions{Multiline: true, Indent: "  "}).Marshal(envelope)
+	if err != nil {
+		log.Fatalf("Failed to marshal envelope for pretty print: %v", err)
 	}
-	formatted, _ := json.MarshalIndent(prettyJSON, "", "  ")
-	fmt.Println(string(formatted))
+	fmt.Println(string(pretty))
 
 	// Parse back from JSON
 	parsedEnvelope := &commonv1.GovernanceEnvelope{}

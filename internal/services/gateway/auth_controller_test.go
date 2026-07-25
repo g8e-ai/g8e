@@ -18,7 +18,6 @@ package gateway
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -29,103 +28,60 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
-// mockActuatorKeyReader is a test implementation of actuatorKeyReader.
-type mockActuatorKeyReader struct {
-	keyID     string
-	publicKey string
-	err       error
-}
-
-func (m *mockActuatorKeyReader) ReadActuatorPublicKey() (keyID, publicKey string, err error) {
-	return m.keyID, m.publicKey, m.err
-}
-
-func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
+func setupTestBootstrapController(t *testing.T) (*BootstrapController, *config.Config) {
 	t.Helper()
-	cfg := testutil.NewTestConfig(t)
-	logger := testutil.NewTestLogger()
-
-	dbDir := testutil.TempDir(t)
-	fileSvc := newTestFileSvc(t)
-	ks := newTestKeystore(t, fileSvc, logger)
-	db, stores, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, "", ks, fileSvc)
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-
-	sm := db.GetSecretManager()
-
-	pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
-	err = pki.InitializePKI(nil)
-	require.NoError(t, err)
-
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
-	resp := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, resp, fileSvc.Resolve(constants.SecretsDirname), nil, "", "", "")
-	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-	operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
-	webSessionSvc := NewWebSessionService(stores.DocStore, logger)
-	reg := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
-	passkey, _ := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
-
-	// Initialize suspended transaction service for tests
-	suspendedTxConfig := &storage.SuspendedTransactionConfig{
-		DBPath:               filepath.Join(dbDir, constants.SuspendedTxFilename),
-		MaxDBSizeMB:          256,
-		RetentionDays:        7,
-		PruneIntervalMinutes: 30,
-	}
-	suspendedTxService, err := storage.NewSuspendedTransactionService(suspendedTxConfig, logger)
-	if err != nil {
-		t.Fatalf("failed to create suspended transaction service: %v", err)
-	}
-	t.Cleanup(func() { suspendedTxService.Close() })
-
-	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:           logger,
-		Responder:        resp,
-		SuspendedStore:   suspendedTxService,
-		ScrubbingService: nil,
-		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
-		Posture:          string(cfg.Gateway.Posture),
-	})
-	if err != nil {
-		t.Fatalf("failed to create MCP gateway: %v", err)
-	}
-
-	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
-		Service:        passkey,
-		WebSessionSvc:  webSessionSvc,
-		Responder:      resp,
-		MaxPayload:     cfg.Gateway.MaxPayloadBytes,
-		MCPSvc:         mcpGateway,
-		SuspendedStore: suspendedTxService,
-	})
-
-	enrollmentTokenSvc := NewEnrollmentTokenService(stores.DocStore, logger)
-	authController := newAuthController(AuthControllerDeps{
-		Cfg:                cfg,
-		Logger:             logger,
-		DocStore:           stores.DocStore,
-		Auth:               auth,
-		Passkey:            passkeyHandler,
-		UserSvc:            userSvc,
-		Reg:                reg,
-		PKI:                pki,
-		WebSessionSvc:      webSessionSvc,
-		CLISessionSvc:      cliSessionSvc,
-		OperatorSessionSvc: operatorSessionSvc,
-		EnrollmentTokenSvc: enrollmentTokenSvc,
-		Responder:          resp,
+	infra := setupTestInfrastructure(t, false)
+	return newBootstrapController(BootstrapControllerDeps{
+		Cfg:                infra.Cfg,
+		Logger:             infra.Logger,
+		DocStore:           infra.Stores.DocStore,
+		UserSvc:            infra.UserSvc,
+		PKI:                infra.PKI,
+		CLISessionSvc:      infra.CLISessionSvc,
+		OperatorSessionSvc: infra.OperatorSessionSvc,
+		Responder:          infra.Responder,
 		ActuatorKeyReader:  nil,
-		CrossOrigin:        false,
-	})
-	return authController, cfg
+	}), infra.Cfg
+}
+
+func setupTestEnrollmentTokenController(t *testing.T) (*EnrollmentTokenController, *config.Config) {
+	t.Helper()
+	infra := setupTestInfrastructure(t, false)
+	enrollmentTokenSvc := NewEnrollmentTokenService(infra.Stores.DocStore, infra.Logger)
+	return newEnrollmentTokenController(EnrollmentTokenControllerDeps{
+		Cfg:                infra.Cfg,
+		Logger:             infra.Logger,
+		EnrollmentTokenSvc: enrollmentTokenSvc,
+		Responder:          infra.Responder,
+	}), infra.Cfg
+}
+
+func setupTestUserController(t *testing.T) (*UserController, *config.Config) {
+	t.Helper()
+	infra := setupTestInfrastructure(t, false)
+	return newUserController(UserControllerDeps{
+		Cfg:       infra.Cfg,
+		Logger:    infra.Logger,
+		UserSvc:   infra.UserSvc,
+		Responder: infra.Responder,
+	}), infra.Cfg
+}
+
+func setupTestSessionController(t *testing.T) (*SessionController, *config.Config) {
+	t.Helper()
+	infra := setupTestInfrastructure(t, false)
+	return newSessionController(SessionControllerDeps{
+		Logger:      infra.Logger,
+		DocStore:    infra.Stores.DocStore,
+		Responder:   infra.Responder,
+		CrossOrigin: false,
+	}), infra.Cfg
 }
 
 // setupTestPasskeyService creates a PasskeyHandler with approval dependencies for testing.
@@ -161,18 +117,19 @@ func setupTestPasskeyService(t *testing.T) (*PasskeyHandler, *UserService, stora
 		Responder:        resp,
 		SuspendedStore:   suspendedTxService,
 		ScrubbingService: nil,
+		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
 	})
 	require.NoError(t, err)
 
+	orchestrator := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, nil, nil, logger)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
-		Service:        passkey,
-		WebSessionSvc:  webSessionSvc,
-		Responder:      resp,
-		MaxPayload:     cfg.Gateway.MaxPayloadBytes,
-		MCPSvc:         mcpGateway,
-		SuspendedStore: suspendedTxService,
+		Service:       passkey,
+		WebSessionSvc: webSessionSvc,
+		Responder:     resp,
+		MaxPayload:    cfg.Gateway.MaxPayloadBytes,
+		Orchestrator:  orchestrator,
 	})
 	return passkeyHandler, userSvc, suspendedTxService
 }
@@ -204,87 +161,30 @@ func testMissingUserID(t *testing.T, handler http.HandlerFunc, method, url strin
 	assert.Contains(t, rr.Body.String(), "user_id required")
 }
 
-func TestAuthControllerReadBody(t *testing.T) {
+func TestReadRequestBody(t *testing.T) {
 	t.Run("Success - reads valid JSON body", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
 		body := `{"test":"data"}`
 		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(body))
-		rr := httptest.NewRecorder()
 
-		data, err := c.readBody(rr, req)
+		data, err := readRequestBody(req, 1024)
 		require.NoError(t, err)
 		assert.Equal(t, []byte(body), data)
 	})
 
 	t.Run("Success - reads empty body", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
 		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(""))
-		rr := httptest.NewRecorder()
 
-		data, err := c.readBody(rr, req)
+		data, err := readRequestBody(req, 1024)
 		require.NoError(t, err)
 		assert.Equal(t, []byte{}, data)
 	})
 
 	t.Run("Failure - body exceeds max payload bytes", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
-		// Set a small max payload for testing
-		c.cfg.Gateway.MaxPayloadBytes = 100
 		largeBody := strings.Repeat("a", 200)
 		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(largeBody))
-		rr := httptest.NewRecorder()
 
-		_, err := c.readBody(rr, req)
+		_, err := readRequestBody(req, 100)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "http: request body too large")
-	})
-}
-
-func TestFileActuatorKeyReader(t *testing.T) {
-	t.Run("Success - reads valid actuator key file", func(t *testing.T) {
-		// Create a temporary file with valid actuator key data
-		tmpDir := testutil.TempDir(t)
-		keyFile := filepath.Join(tmpDir, constants.ActuatorPubJSONFilename)
-		keyData := `{"key_id":"test-key-id","public_key":"test-public-key"}`
-		require.NoError(t, os.WriteFile(keyFile, []byte(keyData), 0644))
-
-		reader := &fileActuatorKeyReader{path: keyFile}
-		keyID, publicKey, err := reader.ReadActuatorPublicKey()
-
-		require.NoError(t, err)
-		assert.Equal(t, "test-key-id", keyID)
-		assert.Equal(t, "test-public-key", publicKey)
-	})
-
-	t.Run("Failure - file does not exist", func(t *testing.T) {
-		reader := &fileActuatorKeyReader{path: "/nonexistent/path/" + constants.ActuatorPubJSONFilename}
-		_, _, err := reader.ReadActuatorPublicKey()
-
-		assert.Error(t, err)
-		assert.True(t, os.IsNotExist(err))
-	})
-
-	t.Run("Failure - invalid JSON in file", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		keyFile := filepath.Join(tmpDir, constants.ActuatorPubJSONFilename)
-		require.NoError(t, os.WriteFile(keyFile, []byte("{invalid json"), 0644))
-
-		reader := &fileActuatorKeyReader{path: keyFile}
-		_, _, err := reader.ReadActuatorPublicKey()
-
-		assert.Error(t, err)
-	})
-
-	t.Run("Success - missing required fields returns empty values", func(t *testing.T) {
-		tmpDir := testutil.TempDir(t)
-		keyFile := filepath.Join(tmpDir, constants.ActuatorPubJSONFilename)
-		require.NoError(t, os.WriteFile(keyFile, []byte(`{"key_id":"test-id"}`), 0644))
-
-		reader := &fileActuatorKeyReader{path: keyFile}
-		keyID, publicKey, err := reader.ReadActuatorPublicKey()
-
-		require.NoError(t, err)
-		assert.Equal(t, "test-id", keyID)
-		assert.Empty(t, publicKey) // Missing field returns empty string
+		assert.Contains(t, err.Error(), "payload exceeds maximum size limit")
 	})
 }

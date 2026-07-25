@@ -15,22 +15,92 @@ package gateway
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/uuid"
 )
 
-func (c *AuthController) handleLocalBootstrapWithURL(w http.ResponseWriter, r *http.Request) {
+// actuatorKeyReader reads the actuator public key from storage.
+type actuatorKeyReader interface {
+	ReadActuatorPublicKey() (keyID, publicKey string, err error)
+}
+
+// fileActuatorKeyReader reads the actuator public key from a file.
+type fileActuatorKeyReader struct {
+	path string
+}
+
+func (r *fileActuatorKeyReader) ReadActuatorPublicKey() (keyID, publicKey string, err error) {
+	data, err := os.ReadFile(r.path)
+	if err != nil {
+		return "", "", err
+	}
+	var ap struct {
+		KeyID     string `json:"key_id"`
+		PublicKey string `json:"public_key"`
+	}
+	if err := json.Unmarshal(data, &ap); err != nil {
+		return "", "", err
+	}
+	return ap.KeyID, ap.PublicKey, nil
+}
+
+// BootstrapControllerDeps groups all dependencies for BootstrapController.
+type BootstrapControllerDeps struct {
+	Cfg                *config.Config
+	Logger             *slog.Logger
+	DocStore           *DocumentStoreService
+	UserSvc            *UserService
+	PKI                *PKIAuthority
+	CLISessionSvc      *CLISessionService
+	OperatorSessionSvc *OperatorSessionService
+	Responder          *response.Writer
+	ActuatorKeyReader  actuatorKeyReader
+}
+
+// BootstrapController handles system bootstrap, CLI enrollment, device enrollment,
+// and bootstrap status endpoints.
+type BootstrapController struct {
+	cfg                *config.Config
+	logger             *slog.Logger
+	docStore           *DocumentStoreService
+	userSvc            *UserService
+	pki                *PKIAuthority
+	cliSessionSvc      *CLISessionService
+	operatorSessionSvc *OperatorSessionService
+	responder          *response.Writer
+	actuatorKeyReader  actuatorKeyReader
+}
+
+func newBootstrapController(deps BootstrapControllerDeps) *BootstrapController {
+	return &BootstrapController{
+		cfg:                deps.Cfg,
+		logger:             deps.Logger,
+		docStore:           deps.DocStore,
+		userSvc:            deps.UserSvc,
+		pki:                deps.PKI,
+		cliSessionSvc:      deps.CLISessionSvc,
+		operatorSessionSvc: deps.OperatorSessionSvc,
+		responder:          deps.Responder,
+		actuatorKeyReader:  deps.ActuatorKeyReader,
+	}
+}
+
+func (c *BootstrapController) handleLocalBootstrapWithURL(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	body, err := c.readBody(w, r)
+	body, err := readRequestBody(r, c.cfg.Gateway.MaxPayloadBytes)
 	if err != nil {
 		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return
@@ -240,13 +310,13 @@ func (c *AuthController) handleLocalBootstrapWithURL(w http.ResponseWriter, r *h
 // handleCLIEnrollment issues a CLI certificate for an already-bootstrapped system.
 // This endpoint is strictly for CLI credential recovery when local credentials are
 // missing; it does NOT create or rotate operator state.
-func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Request) {
+func (c *BootstrapController) handleCLIEnrollment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	body, err := c.readBody(w, r)
+	body, err := readRequestBody(r, c.cfg.Gateway.MaxPayloadBytes)
 	if err != nil {
 		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return
@@ -398,13 +468,13 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.Request) {
+func (c *BootstrapController) handleDeviceEnrollment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	body, err := c.readBody(w, r)
+	body, err := readRequestBody(r, c.cfg.Gateway.MaxPayloadBytes)
 	if err != nil {
 		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return
@@ -601,7 +671,7 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 	c.responder.JSON(w, http.StatusCreated, response)
 }
 
-func (c *AuthController) handleBootstrapStatus(w http.ResponseWriter, r *http.Request) {
+func (c *BootstrapController) handleBootstrapStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -616,89 +686,5 @@ func (c *AuthController) handleBootstrapStatus(w http.ResponseWriter, r *http.Re
 
 	c.responder.JSON(w, http.StatusOK, models.BootstrapStatusResponse{
 		Bootstrapped: hasUsers,
-	})
-}
-
-// handleEnrollmentTokenGenerate generates a one-time enrollment token for secure passkey registration.
-// This endpoint requires mTLS authentication with a valid CLI session.
-func (c *AuthController) handleEnrollmentTokenGenerate(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	// Extract user_id and cli_session_id stamped by the mTLS CLI-session middleware
-	userIDStr, userOK := r.Context().Value(constants.ContextKeyUserID).(string)
-	cliSessionIDStr, cliOK := r.Context().Value(constants.ContextKeyCLISessionID).(string)
-
-	if !userOK || !cliOK || userIDStr == "" || cliSessionIDStr == "" {
-		c.logger.Warn("Enrollment token generation requested without mTLS CLI session context")
-		c.responder.Error(w, http.StatusUnauthorized, "mTLS authentication required")
-		return
-	}
-
-	// Generate the enrollment token
-	token, err := c.enrollmentTokenSvc.GenerateToken(userIDStr, cliSessionIDStr)
-	if err != nil {
-		c.logger.Error("Failed to generate enrollment token", "error", err, "user_id", userIDStr)
-		c.responder.Error(w, http.StatusInternalServerError, "failed to generate enrollment token")
-		return
-	}
-
-	c.responder.JSON(w, http.StatusCreated, map[string]string{
-		"token": token.Token,
-	})
-}
-
-// handleEnrollmentTokenValidate validates a one-time enrollment token and returns the associated
-// user_id and cli_session_id. This endpoint is public (no mTLS required) since the token itself
-// provides the authentication context for the browser-based passkey registration flow.
-func (c *AuthController) handleEnrollmentTokenValidate(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	body, err := c.readBody(w, r)
-	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
-		return
-	}
-
-	var req struct {
-		Token string `json:"token"`
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
-		return
-	}
-
-	if req.Token == "" {
-		c.responder.Error(w, http.StatusBadRequest, "token is required")
-		return
-	}
-
-	// Validate and consume the token
-	enrollmentToken, err := c.enrollmentTokenSvc.ValidateAndConsumeToken(req.Token)
-	if err != nil {
-		tokenPrefix := req.Token
-		if len(tokenPrefix) > 8 {
-			tokenPrefix = tokenPrefix[:8]
-		}
-		c.logger.Warn("Enrollment token validation failed", "error", err, "token_prefix", tokenPrefix)
-		switch err {
-		case constants.ErrEnrollmentTokenExpired:
-			c.responder.Error(w, http.StatusGone, "enrollment token has expired")
-		case constants.ErrEnrollmentTokenConsumed:
-			c.responder.Error(w, http.StatusConflict, "enrollment token has already been used")
-		default:
-			c.responder.Error(w, http.StatusUnauthorized, "invalid enrollment token")
-		}
-		return
-	}
-
-	c.responder.JSON(w, http.StatusOK, map[string]string{
-		"user_id":        enrollmentToken.UserID,
-		"cli_session_id": enrollmentToken.CLISessionID,
 	})
 }

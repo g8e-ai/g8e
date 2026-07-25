@@ -29,6 +29,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
@@ -450,6 +451,47 @@ func TestGatewayModeService_StopWhenNotRunning(t *testing.T) {
 	// Stop when not running should return nil
 	err = ls.Stop(context.Background())
 	assert.NoError(t, err)
+}
+
+func TestGatewayModeService_SuspendedTxServiceSingleField(t *testing.T) {
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+
+	dbDir := testutil.TempDir(t)
+	pkiDir := testutil.TempDir(t)
+	fileSvc := newTestFileSvc(t)
+	cfg.Gateway.PKIDir = pkiDir
+	cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
+	cfg.Gateway.DataDir = dbDir
+	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
+
+	db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	pubsub := NewGatewayWebSocketHandler(logger)
+	t.Cleanup(func() { pubsub.Close() })
+
+	ls, err := newGatewayModeServiceForTest(cfg, fileSvc, logger, db, stores, pubsub)
+	require.NoError(t, err)
+
+	t.Run("suspendedTxService is non-nil after construction", func(t *testing.T) {
+		assert.NotNil(t, ls.suspendedTxService)
+	})
+
+	t.Run("suspendedTxService satisfies SuspendedTransactionStore interface", func(t *testing.T) {
+		var _ storage.SuspendedTransactionStore = ls.suspendedTxService
+	})
+
+	t.Run("Stop when not running closes suspendedTxService without error", func(t *testing.T) {
+		err := ls.Stop(context.Background())
+		assert.NoError(t, err)
+	})
+
+	t.Run("Stop when not running is idempotent for suspendedTxService", func(t *testing.T) {
+		err := ls.Stop(context.Background())
+		assert.NoError(t, err)
+	})
 }
 
 func TestDetectBasicNonLoopbackIPv4Addresses(t *testing.T) {

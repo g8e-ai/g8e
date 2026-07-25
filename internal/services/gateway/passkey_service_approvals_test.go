@@ -433,19 +433,19 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 		sseStore := NewSSEEventService(stores.DB, logger)
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
+		orchestrator := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
 		handler := NewPasskeyHandler(PasskeyHandlerDeps{
 			Service:       svc,
 			WebSessionSvc: webSessionSvc,
 			Responder:     resp,
 			MaxPayload:    10 * 1024 * 1024,
-			SSEStore:      sseStore,
-			Pubsub:        pubsub,
+			Orchestrator:  orchestrator,
 		})
 
 		const userID = "u-approval-sse-1"
 		const txHash = "tx-approval-sse-1"
 
-		handler.emitApprovalCompletedSSE(userID, txHash)
+		handler.orchestrator.EmitApprovalCompletedSSE(userID, txHash)
 
 		route := SSERoute{UserID: userID}
 		events, err := sseStore.SSEEventsListSince(route, 0, 10)
@@ -483,7 +483,9 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 		const userID = "u-approval-no-sse-1"
 		const txHash = "tx-approval-no-sse-1"
 
-		handler.emitApprovalCompletedSSE(userID, txHash)
+		if handler.orchestrator != nil {
+			handler.orchestrator.EmitApprovalCompletedSSE(userID, txHash)
+		}
 
 		sseStore := NewSSEEventService(stores.DB, logger)
 		route := SSERoute{UserID: userID}
@@ -502,16 +504,16 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 		sseStore := NewSSEEventService(stores.DB, logger)
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
+		orchestrator := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
 		handler := NewPasskeyHandler(PasskeyHandlerDeps{
 			Service:       svc,
 			WebSessionSvc: webSessionSvc,
 			Responder:     resp,
 			MaxPayload:    10 * 1024 * 1024,
-			SSEStore:      sseStore,
-			Pubsub:        pubsub,
+			Orchestrator:  orchestrator,
 		})
 
-		handler.emitApprovalCompletedSSE("", "tx-empty-user")
+		handler.orchestrator.EmitApprovalCompletedSSE("", "tx-empty-user")
 
 		events, err := sseStore.SSEEventsListSince(SSERoute{UserID: ""}, 0, 10)
 		require.Error(t, err)
@@ -545,14 +547,13 @@ func TestHandleApprovalVerify_SSE_EmittedToApproverWhenSuspendedTxUserIDEmpty(t 
 		receipt: &operatorv1.ActionReceipt{TransactionHash: txHash, Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED},
 	}
 
+	orchestrator := NewPasskeyOrchestrator(mockMCP, nil, sseStore, pubsub, logger)
 	handler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:       svc,
 		WebSessionSvc: webSessionSvc,
 		Responder:     resp,
 		MaxPayload:    10 * 1024 * 1024,
-		MCPSvc:        mockMCP,
-		SSEStore:      sseStore,
-		Pubsub:        pubsub,
+		Orchestrator:  orchestrator,
 	})
 
 	body := `{"id":"cred-1","rawId":"cred-1","clientDataJSON":"{}","authenticatorData":"{}","signature":"sig"}`

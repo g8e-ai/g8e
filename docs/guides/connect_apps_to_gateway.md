@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-07-19
-Version: v1.5.9
+Last Updated: 2026-07-25
+Version: v1.6.3
 
 ---
 
@@ -26,7 +26,25 @@ Start the g8e Gateway to initialize the platform runtime:
 ./g8e gw start
 ```
 
-This creates the `.g8e` directory structure:
+For foreground execution (Ctrl+C stops the gateway):
+
+```bash
+./g8e gw start --follow
+```
+
+For interactive onboarding (launches a setup wizard):
+
+```bash
+./g8e gw start --interactive
+```
+
+Alternatively, run the setup wizard separately before starting:
+
+```bash
+./g8e gw setup
+```
+
+Starting the gateway creates the `.g8e` directory structure:
 - `.g8e/pki/` - PKI hierarchy (CA, certificates, keys)
 - `.g8e/data/` - SQLite database for g8e Gateway persistence
 - `.g8e/secrets/` - Platform secrets (session encryption keys, bootstrap digest)
@@ -343,7 +361,7 @@ Applications connecting to the g8e Gateway can use the g8e Protocol Library to c
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.5.1
+go get github.com/g8e-ai/g8e@v1.6.3
 ```
 
 The Go module provides protobuf types for envelope construction and receipt parsing, SPIFFE workload identity helpers, and JSON constant registries.
@@ -351,7 +369,7 @@ The Go module provides protobuf types for envelope construction and receipt pars
 ### Python Package
 
 ```bash
-pip install g8e==1.5.1
+pip install g8e==1.6.3
 ```
 
 The Python package provides event type constants, request context models, and HTTP header constants for gateway communication. Requires Python 3.10+.
@@ -384,8 +402,9 @@ This:
 1. Generates a CSR (Certificate Signing Request)
 2. Receives a signed client certificate with SPIFFE URI SAN
 3. Stores it in `.g8e/pki/client.crt`
+4. Opens a browser to register a WebAuthn/FIDO2 passkey for web session authentication
 
-CLI sessions use the mTLS certificate fingerprint as L3 proof.
+CLI sessions use the mTLS certificate fingerprint as L3 proof. The passkey enables browser-based authentication for console and approval flows.
 
 ### Browser Authentication (WebAuthn)
 

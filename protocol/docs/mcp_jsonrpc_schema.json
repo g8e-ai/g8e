@@ -59,7 +59,7 @@
       "type": "object"
     },
     "InitializeResult": {
-      "description": "The server's response to an initialize request. The gateway echoes the client's requested protocolVersion, or defaults to 2025-06-18. Server info is name='g8e-gateway', version='1.0'. Note: serverInfo.version is the MCP server implementation version (mcpServerVersion constant), intentionally separate from the g8e platform version (currently v1.5.0).",
+      "description": "The server's response to an initialize request. The gateway echoes the client's requested protocolVersion, or defaults to 2025-06-18. Server info is name='g8e-gateway', version='1.0'. Note: serverInfo.version is the MCP server implementation version (mcpServerVersion constant), intentionally separate from the g8e platform version (currently v1.6.3).",
       "properties": {
         "protocolVersion": {
           "type": "string",
@@ -266,7 +266,7 @@
       "type": "object"
     },
     "ReadResourceResult": {
-      "description": "The result of a resources/read request. The contents array contains a single TextContent with the resource summary. mimeType is omitted when not applicable.",
+      "description": "The result of a resources/read request. The contents array contains a single TextContent with the resource summary. When the operator returns a non-completed status, the text is prefixed with 'Error: '. mimeType is omitted when not applicable.",
       "properties": {
         "contents": {
           "type": "array",
@@ -361,11 +361,11 @@
       "type": "object"
     },
     "JSONRPCError": {
-      "description": "A JSON-RPC 2.0 error object. Standard JSON-RPC error codes (-32700, -32600, -32601, -32603) are used for protocol-level errors. g8e-specific error codes (-32000 to -32101) are used for governance verification failures.",
+      "description": "A JSON-RPC 2.0 error object. Standard JSON-RPC error codes (-32700, -32600, -32601, -32603) are used for protocol-level errors. g8e-specific error codes occupy the -32000 to -32101 range: -32000 to -32008 for governance verification failures, and -32100 to -32101 for resource and state errors.",
       "properties": {
         "code": {
           "type": "integer",
-          "description": "JSON-RPC error code. Standard codes: -32700 (parse error), -32600 (invalid request), -32601 (method not found), -32603 (internal error). g8e governance codes: -32000 (invalid envelope), -32001 (hash mismatch), -32002 (expired), -32003 (replay), -32004 (state root mismatch), -32005 (L1 validation failed), -32006 (L2 signature invalid), -32007 (L3 proof invalid), -32008 (payload decode failed), -32100 (resource not found), -32101 (gateway not ready)."
+          "description": "JSON-RPC error code. Standard codes: -32700 (parse error), -32600 (invalid request), -32601 (method not found), -32603 (internal error). g8e governance codes: -32000 (invalid envelope), -32001 (hash mismatch), -32002 (expired), -32003 (replay), -32004 (state root mismatch), -32005 (L1 validation failed), -32006 (L2 signature invalid), -32007 (L3 proof invalid), -32008 (payload decode failed). Resource and state codes: -32100 (resource not found), -32101 (gateway not ready). Note: the gateway currently returns -32603 when not ready; -32101 is reserved for future use."
         },
         "message": { "type": "string" },
         "data": {
@@ -453,7 +453,7 @@
       "properties": {
         "id": { "type": "string", "description": "The transaction hash." },
         "result": {
-          "description": "The action receipt from the operator (protobuf type). Contains transaction_id, status, and result_summary fields.",
+          "description": "The action receipt from the operator (protobuf type). Contains transaction_id, transaction_hash, status, result_summary, state_root_before, state_root_after, executed_at_unix_ms, signer_key_id, signature, l2_status, and l3_status fields.",
           "type": "object"
         }
       },

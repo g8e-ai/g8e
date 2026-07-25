@@ -479,7 +479,7 @@ For SSE connections from browser clients, construct `EventSource` with
 `withCredentials: true`. Without authenticated session cookies, the SSE
 endpoints return 401. Verify the `web_session_id` is valid via
 `GET /api/v1/auth/sessions/me`. See
-[GUI Enrollment](../guides/gui_enrollment.md) for the full browser
+[Build a g8e-Compatible Frontend](../guides/build_frontend.md) for the full browser
 integration flow.
 
 ## WebAuthn passkey RP ID mismatch

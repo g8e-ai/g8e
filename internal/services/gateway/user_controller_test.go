@@ -31,17 +31,17 @@ import (
 
 func TestHandleUsers(t *testing.T) {
 	t.Run("Failure - method not allowed", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
+		c, _ := setupTestUserController(t)
 		testMethodNotAllowed(t, c.handleUsers, http.MethodGet, "/api/v1/users")
 	})
 
 	t.Run("Failure - invalid JSON", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
+		c, _ := setupTestUserController(t)
 		testInvalidJSON(t, c.handleUsers, http.MethodPost, "/api/v1/users")
 	})
 
 	t.Run("Success - creates user", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
+		c, _ := setupTestUserController(t)
 		body := map[string]string{
 			"name": "Test User",
 		}
@@ -61,36 +61,9 @@ func TestHandleUsers(t *testing.T) {
 	})
 }
 
-func TestHandlePublicAuthLogout(t *testing.T) {
-	t.Run("Success - clears cookie", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
-		req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: "test-session"})
-		rr := httptest.NewRecorder()
-
-		c.handlePublicAuthLogout(rr, req)
-
-		assert.Equal(t, http.StatusOK, rr.Code)
-		cookies := rr.Result().Cookies()
-		assert.Len(t, cookies, 1)
-		assert.Equal(t, constants.WebSessionCookieName, cookies[0].Name)
-		assert.Equal(t, -1, cookies[0].MaxAge)
-	})
-
-	t.Run("Success - no cookie present", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
-		rr := httptest.NewRecorder()
-
-		c.handlePublicAuthLogout(rr, req)
-
-		assert.Equal(t, http.StatusOK, rr.Code)
-	})
-}
-
 func TestHandleUserMe(t *testing.T) {
 	t.Run("Failure - missing user_id in context", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
+		c, _ := setupTestUserController(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
 		rr := httptest.NewRecorder()
 
@@ -101,7 +74,7 @@ func TestHandleUserMe(t *testing.T) {
 	})
 
 	t.Run("Success - returns user data", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
+		c, _ := setupTestUserController(t)
 		user, err := c.userSvc.CreateUser()
 		require.NoError(t, err)
 
@@ -120,7 +93,7 @@ func TestHandleUserMe(t *testing.T) {
 	})
 
 	t.Run("Failure - user not found", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
+		c, _ := setupTestUserController(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
 		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "nonexistent-user"))
 		rr := httptest.NewRecorder()
@@ -129,59 +102,5 @@ func TestHandleUserMe(t *testing.T) {
 
 		assert.Equal(t, http.StatusNotFound, rr.Code)
 		assert.Contains(t, rr.Body.String(), "user not found")
-	})
-}
-
-func TestHandleWebSession(t *testing.T) {
-	t.Run("Failure - missing user_id in context", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/websession", nil)
-		rr := httptest.NewRecorder()
-
-		c.handleWebSession(rr, req)
-
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.Contains(t, rr.Body.String(), constants.ErrNotAuthenticated.Error())
-	})
-
-	t.Run("Success - returns session data with cookie", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
-		user, err := c.userSvc.CreateUser()
-		require.NoError(t, err)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/websession", nil)
-		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
-		req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: "test-session-id"})
-		rr := httptest.NewRecorder()
-
-		c.handleWebSession(rr, req)
-
-		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]interface{}
-		err = json.Unmarshal(rr.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		assert.True(t, resp["success"].(bool))
-		assert.Equal(t, user.ID, resp["user_id"])
-		assert.Equal(t, "test-session-id", resp["web_session_id"])
-	})
-
-	t.Run("Success - returns session data without cookie", func(t *testing.T) {
-		c, _ := setupTestAuthController(t)
-		user, err := c.userSvc.CreateUser()
-		require.NoError(t, err)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/websession", nil)
-		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
-		rr := httptest.NewRecorder()
-
-		c.handleWebSession(rr, req)
-
-		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]interface{}
-		err = json.Unmarshal(rr.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		assert.True(t, resp["success"].(bool))
-		assert.Equal(t, user.ID, resp["user_id"])
-		assert.Empty(t, resp["web_session_id"])
 	})
 }

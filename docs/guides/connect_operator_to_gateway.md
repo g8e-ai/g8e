@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-07-19
-Version: v1.5.9
+Last Updated: 2026-07-25
+Version: v1.6.3
 
 ---
 
@@ -179,7 +179,7 @@ curl -X POST https://localhost:8443/mcp \
 ```bash
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_shell_command","arguments":{"command":"ls -la"}}}
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_shell_command","arguments":{"command":"ls -la"}}}'
 ```
 
 **List supported agents:**
@@ -229,7 +229,7 @@ Operators and CLI clients connecting to the g8e Gateway can use the g8e Protocol
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.5.8
+go get github.com/g8e-ai/g8e@v1.6.3
 ```
 
 The module provides protobuf types for governance envelopes, operator messages, and common protocol structures. It also includes SPIFFE workload identity helpers for generating operator, CLI, and gateway identities used in mTLS enrollment.
@@ -241,7 +241,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For operator-side tooling or Python-based services:
 
 ```bash
-pip install g8e==1.5.8
+pip install g8e==1.6.3
 ```
 
 Provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.

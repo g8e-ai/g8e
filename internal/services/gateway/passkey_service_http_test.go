@@ -511,19 +511,19 @@ func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
 		sseStore := NewSSEEventService(stores.DB, logger)
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
+		orchestrator := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
 		handler := NewPasskeyHandler(PasskeyHandlerDeps{
 			Service:       svc,
 			WebSessionSvc: webSessionSvc,
 			Responder:     resp,
 			MaxPayload:    10 * 1024 * 1024,
-			SSEStore:      sseStore,
-			Pubsub:        pubsub,
+			Orchestrator:  orchestrator,
 		})
 
 		const cliSessionID = "cli-sse-test-1"
 		const userID = "u-sse-test-1"
 
-		handler.emitPasskeyRegisteredSSE(userID, cliSessionID)
+		handler.orchestrator.EmitPasskeyRegisteredSSE(userID, cliSessionID)
 
 		route := SSERoute{CLISessionID: cliSessionID}
 		events, err := sseStore.SSEEventsListSince(route, 0, 10)
@@ -551,7 +551,9 @@ func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
 		const cliSessionID = "cli-no-sse-1"
 		const userID = "u-no-sse-1"
 
-		handler.emitPasskeyRegisteredSSE(userID, cliSessionID)
+		if handler.orchestrator != nil {
+			handler.orchestrator.EmitPasskeyRegisteredSSE(userID, cliSessionID)
+		}
 
 		sseStore := NewSSEEventService(stores.DB, logger)
 		route := SSERoute{CLISessionID: cliSessionID}

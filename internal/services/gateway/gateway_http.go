@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
@@ -61,14 +62,17 @@ type HTTPHandler struct {
 	responder *response.Writer
 	mcp       *mcp.GatewayService
 	// Controllers for domain-specific endpoints
-	pkiController        *PKIController
-	dbController         *DBController
-	authController       *AuthController
-	adminController      *AdminController
-	operatorController   *OperatorController
-	sseController        *SSEController
-	healthController     *HealthController
-	governanceController *GovernanceController
+	pkiController             *PKIController
+	dbController              *DBController
+	bootstrapController       *BootstrapController
+	enrollmentTokenController *EnrollmentTokenController
+	userController            *UserController
+	sessionController         *SessionController
+	adminController           *AdminController
+	operatorController        *OperatorController
+	sseController             *SSEController
+	healthController          *HealthController
+	governanceController      *GovernanceController
 
 	// Main router cached at construction to avoid rebuilding on every request
 	router http.Handler
@@ -99,27 +103,51 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 
 	// Initialize controllers
 	h.pkiController = newPKIController(deps.Cfg, deps.Logger, deps.PKI, deps.AppEnrollment, deps.Reg, deps.Responder)
-	h.dbController = newDBController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.KVStore, deps.Stores.SSEStore, deps.Stores.BlobStore, deps.Stores.AuditStore, deps.Stores.SignerStore, deps.Auth, deps.Pubsub, deps.UserSvc, deps.Responder)
+	h.dbController = newDBController(DBControllerDeps{
+		Cfg:         deps.Cfg,
+		Logger:      deps.Logger,
+		DocStore:    deps.Stores.DocStore,
+		KVStore:     deps.Stores.KVStore,
+		SSEStore:    deps.Stores.SSEStore,
+		BlobStore:   deps.Stores.BlobStore,
+		AuditStore:  deps.Stores.AuditStore,
+		SignerStore: deps.Stores.SignerStore,
+		Auth:        deps.Auth,
+		Pubsub:      deps.Pubsub,
+		UserSvc:     deps.UserSvc,
+		Responder:   deps.Responder,
+	})
 
-	// Initialize actuator key reader for device enrollment
-	actuatorKeyReader := &fileActuatorKeyReader{path: paths.Infra.ActuatorPubJSONPath}
+	// Initialize auth sub-controllers
 	enrollmentTokenSvc := NewEnrollmentTokenService(deps.Stores.DocStore, deps.Logger)
-	h.authController = newAuthController(AuthControllerDeps{
+	h.bootstrapController = newBootstrapController(BootstrapControllerDeps{
 		Cfg:                deps.Cfg,
 		Logger:             deps.Logger,
 		DocStore:           deps.Stores.DocStore,
-		Auth:               deps.Auth,
-		Passkey:            deps.Passkey,
 		UserSvc:            deps.UserSvc,
-		Reg:                deps.Reg,
 		PKI:                deps.PKI,
-		WebSessionSvc:      deps.WebSessionSvc,
 		CLISessionSvc:      deps.CLISessionSvc,
 		OperatorSessionSvc: deps.OperatorSessionSvc,
+		Responder:          deps.Responder,
+		ActuatorKeyReader:  &fileActuatorKeyReader{path: paths.Infra.ActuatorPubJSONPath},
+	})
+	h.enrollmentTokenController = newEnrollmentTokenController(EnrollmentTokenControllerDeps{
+		Cfg:                deps.Cfg,
+		Logger:             deps.Logger,
 		EnrollmentTokenSvc: enrollmentTokenSvc,
 		Responder:          deps.Responder,
-		ActuatorKeyReader:  actuatorKeyReader,
-		CrossOrigin:        len(deps.Cfg.Gateway.AllowedOrigins) > 0,
+	})
+	h.userController = newUserController(UserControllerDeps{
+		Cfg:       deps.Cfg,
+		Logger:    deps.Logger,
+		UserSvc:   deps.UserSvc,
+		Responder: deps.Responder,
+	})
+	h.sessionController = newSessionController(SessionControllerDeps{
+		Logger:      deps.Logger,
+		DocStore:    deps.Stores.DocStore,
+		Responder:   deps.Responder,
+		CrossOrigin: len(deps.Cfg.Gateway.AllowedOrigins) > 0,
 	})
 	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.SignerStore, deps.Stores.TribunalStore, deps.UserSvc, deps.Responder)
 	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)
@@ -139,8 +167,15 @@ func (h *HTTPHandler) readBody(r *http.Request) ([]byte, error) {
 }
 
 func readRequestBody(r *http.Request, maxPayloadBytes int64) ([]byte, error) {
-	r.Body = http.MaxBytesReader(nil, r.Body, maxPayloadBytes)
-	return io.ReadAll(r.Body)
+	limited := io.LimitReader(r.Body, maxPayloadBytes+1)
+	data, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxPayloadBytes {
+		return nil, fmt.Errorf("gateway: %w (limit %d bytes)", constants.ErrPayloadExceedsLimit, maxPayloadBytes)
+	}
+	return data, nil
 }
 
 func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

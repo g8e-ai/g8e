@@ -125,6 +125,7 @@ The `models/` directory contains JSON Schema files that define the structure for
 - `case.json`, `chat_message.json`, `cli_session.json`, `console_audit.json`, `conversation.json`, `conversation_message.json`
 - `enrollment_token.json`, `execution_result.json`, `file_edit.json`, `fs_grep.json`, `fs_list.json`
 - `errors.py`: Python enums for error categories (`ErrorCategory`), severities (`ErrorSeverity`), command categories (`CommandCategory`), and error codes (`ErrorCode`)
+- `governance.json`
 - `heartbeat.json`, `investigation.json`, `local_os_user.json`, `login_audit.json`, `memory.json`
 - `operator_document.json`, `operator_session.json`, `operator_usage.json`, `organization.json`
 - `passkey_challenge.json`, `passkey_credential.json`, `persona.json`, `platform_settings.json`
@@ -144,7 +145,7 @@ The Python package is in `python/` and installs as `g8e`. The import namespace i
   - `g8e.models.base`: `G8eBaseModel` base class with `UTCDatetime`, `Field`, `ConfigDict`, `ValidationError`, `field_validator`, `model_validator`
   - `g8e.models.context`: `RequestContext`, `BoundOperator`
   - `g8e.models.events`: SSE event wire models (`SessionEventWire`, `BackgroundEventWire`, `AiProcessingStoppedPayload`, `AIToolLifecyclePayload`, `ChatCitationsReadyPayload`, `ChatErrorPayload`, `ChatProcessingStartedPayload`, `ChatResponseChunkPayload`, `ChatResponseCompletePayload`, `ChatRetryPayload`, `ChatThinkingPayload`, `ChatTurnCompletePayload`, `TriageClarificationQuestionsPayload`)
-  - `g8e.models.governance`: `GovernanceEnvelope`, `GovernanceMetadata`, `GovernanceL1`, `GovernanceL2`, `GovernanceL2Vote`, `GovernanceL3`, `compute_transaction_hash`
+  - `g8e.models.governance`: `GovernanceEnvelope`, `GovernanceMetadata`, `GovernanceL1`, `GovernanceL2`, `GovernanceL2Vote`, `GovernanceL3`, `GovernanceL3Proof`, `compute_transaction_hash`
   - `g8e.models.internal_api`: `ChatMessageRequest`, `ChatStartedResponse`, `ResourceCreationRequest`, `LLMOverrides`
   - `g8e.models.settings`: `PlatformSettings`, `G8eeUserSettings`, `LLMSettings`, `SearchSettings`, `EvalJudgeSettings`, `CommandValidationSettings`, `BatchExecutionSettings`
 
@@ -170,6 +171,8 @@ The `conformance/` directory contains cross-language tests that validate protoco
 
 - `test_constants.py`: Validates JSON structural integrity, `_go_const` and `_python_const` field presence, value uniqueness, event namespace conventions, and Python-JSON parity
 - `test_models.py`: Validates model schema integrity, `PlatformSettings` field parity, `RequestContext` validation, serialization round-trip, and canonical serialization
+- `test_hash_parity.py`: Validates cross-language transaction hash parity using shared test vectors from `hash_vectors.json`
+- `hash_vectors.json`: Shared test vectors for SHA-256 transaction hash parity between Python `compute_transaction_hash` and Go `GenerateMessageID`
 
 Run with `python -m pytest protocol/conformance/ -v` from the repository root. See [Conformance Tests](conformance/README.md) for details.
 

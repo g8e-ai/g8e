@@ -5,8 +5,8 @@ parent: Architecture
 
 # AI Agents in a g8e-Compatible Agentic Ensemble
 
-Last Updated: 2026-07-24
-Version: v1.6.2
+Last Updated: 2026-07-25
+Version: v1.6.3
 
 ## Overview
 
@@ -188,3 +188,4 @@ See the [doctrine registry](../../protocol/constants/doctrine/doctrine_registry.
 - [Encryption](./encryption.md): Vault architecture, PII scrubbing, and rehydration at the execution boundary.
 - [Network Architecture](./network.md): Outbound-only mTLS, pub/sub channels, and PKI.
 - [About g8e](../core/about.md): Platform overview and architectural differentiators.
+- [Build Apps](../guides/build_apps.md): Detailed guide for building g8e-compatible applications, including the full agentic system design with persona catalog, prompt architecture, and consensus cascade.

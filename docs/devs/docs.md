@@ -24,7 +24,7 @@ Documentation must be useful for humans to understand how to authenticate, autho
 - Document data structures and field definitions
 - Include protocol constants and error handling
 
-**General principle:** If a document is in `docs/architecture/`, `docs/guides/`, or `docs/core/`, it should be human-readable and practical. If it's in `protocol/docs/` or `docs/devs/`, implementation details are acceptable.
+**General principle:** If a document is in `docs/architecture/`, `docs/guides/`, `docs/core/`, or `docs/reference/`, it should be human-readable and practical. If it's in `protocol/docs/` or `docs/devs/`, implementation details are acceptable.
 
 ## Always
 
@@ -45,11 +45,11 @@ Documentation must be useful for humans to understand how to authenticate, autho
 - Place protocol specs in `protocol/docs/`. Place platform guides in `docs/`.
 - Cross-reference between domains with relative paths: `../../protocol/docs/spec.md`.
 - Document the five-layer interlock sequence when covering security or execution pipelines:
-  - **L1 Doctrine**: Hard gates, code pattern matching, threat analysis.
+  - **L1 Doctrine**: Hard gates, forbidden pattern matching, MITRE threat detection.
   - **L2 Consensus**: Multi-agent consensus signature verification (Ed25519).
   - **L3 Notary**: Human-in-the-loop authorization (WebAuthn or signed CLI proofs).
   - **L4 Warden**: Pre-dispatch verification (signatures, replay prevention, expiry, nonces, Merkle root).
-  - **L5 Actuator**: Isolated tool dispatch (MCP/A2A) and signed receipt production.
+  - **L5 Actuator**: Isolated tool dispatch (MCP/A2A), JIT capability minting, and signed receipt production.
 - Remove deprecated, obsolete, or legacy references during updates.
 - Reflect only the live repository state.
 - Document `RuntimeFileService` (`internal/services/fs`) as the canonical `.g8e/` file I/O abstraction in developer-facing docs. Reference `fileSvc.ReadFile`/`fileSvc.Stat` for test verification patterns. Document `errors.Is(err, constants.ErrNotFound)` as the replacement for `os.IsNotExist` in test assertions.

@@ -34,6 +34,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -171,6 +172,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 		Responder:        resp,
 		SuspendedStore:   suspendedTxService,
 		ScrubbingService: nil,
+		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
 	})
@@ -182,12 +184,11 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	mcpGateway.SetRuntimeDeps(mcp.RuntimeDependencies{EnvProc: mockEnvProc})
 
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
-		Service:        passkey,
-		WebSessionSvc:  webSessionSvc,
-		Responder:      resp,
-		MaxPayload:     cfg.Gateway.MaxPayloadBytes,
-		MCPSvc:         mcpGateway,
-		SuspendedStore: suspendedTxService,
+		Service:       passkey,
+		WebSessionSvc: webSessionSvc,
+		Responder:     resp,
+		MaxPayload:    cfg.Gateway.MaxPayloadBytes,
+		Orchestrator:  NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, pubsub, logger),
 	})
 
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
@@ -322,6 +323,7 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 		Responder:        resp,
 		SuspendedStore:   suspendedTxService,
 		ScrubbingService: nil,
+		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
 	})
@@ -333,12 +335,11 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 	mcpGateway.SetRuntimeDeps(mcp.RuntimeDependencies{EnvProc: mockEnvProc})
 
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
-		Service:        passkey,
-		WebSessionSvc:  webSessionSvc,
-		Responder:      resp,
-		MaxPayload:     cfg.Gateway.MaxPayloadBytes,
-		MCPSvc:         mcpGateway,
-		SuspendedStore: suspendedTxService,
+		Service:       passkey,
+		WebSessionSvc: webSessionSvc,
+		Responder:     resp,
+		MaxPayload:    cfg.Gateway.MaxPayloadBytes,
+		Orchestrator:  NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, pubsub, logger),
 	})
 
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
@@ -488,6 +489,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 		Responder:        resp,
 		SuspendedStore:   suspendedTxService,
 		ScrubbingService: nil,
+		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
 	})
@@ -499,12 +501,11 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	mcpGateway.SetRuntimeDeps(mcp.RuntimeDependencies{EnvProc: mockEnvProc})
 
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
-		Service:        passkey,
-		WebSessionSvc:  webSessionSvc,
-		Responder:      resp,
-		MaxPayload:     cfg.Gateway.MaxPayloadBytes,
-		MCPSvc:         mcpGateway,
-		SuspendedStore: suspendedTxService,
+		Service:       passkey,
+		WebSessionSvc: webSessionSvc,
+		Responder:     resp,
+		MaxPayload:    cfg.Gateway.MaxPayloadBytes,
+		Orchestrator:  NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, pubsub, logger),
 	})
 
 	h, err := newHTTPHandler(HTTPHandlerDependencies{

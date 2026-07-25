@@ -4,8 +4,8 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-07-24
-Version: v1.6.2
+Last Updated: 2026-07-25
+Version: v1.6.3
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -210,7 +210,7 @@ The protocol defines canonical event types in `../../protocol/constants/events.j
 - `AiLLMChatIterationTextChunkReceived`, `AiLLMChatIterationTextCompleted`, `AiLLMChatIterationTextReceived`, `AiLLMChatIterationTextTruncated`
 - `AiLLMChatIterationThinkingStarted`, `AiLLMChatIterationThinkingUpdate`, `AiLLMChatIterationThinkingEnd`
 - `AiLLMChatIterationCitationsReceived`
-- `AiLLMChatIterationThinkingStopped`
+- `AiLlmChatIterationThinkingStopped`
 - `AiLLMChatFilterEvent`, `AiLLMChatMessageDeadLettered`, `AiLLMChatMessageProcessingFailed`, `AiLLMChatMessageReplayed`, `AiLLMChatMessageSent`
 - `AiLLMChatStopHide`, `AiLLMChatStopShow`, `AiLLMChatSubmitted`
 - `AiLLMConfigFailed`, `AiLLMConfigReceived`, `AiLLMConfigRequested`
@@ -276,6 +276,8 @@ The protocol defines canonical event types in `../../protocol/constants/events.j
 ### Other Events
 - `OperatorEvalAnswerRequested`
 - `OperatorFieldReadRequested`, `OperatorFieldReadAccessGranted`, `OperatorFieldReadAccessDenied`
+- `OperatorIntentRequested`, `OperatorIntentGranted`, `OperatorIntentDenied`, `OperatorIntentRevoked`, `OperatorIntentRevokeRequested`
+- `OperatorIntentApprovalRequested`, `OperatorIntentApprovalGranted`, `OperatorIntentApprovalRejected`
 - `OperatorLogsFetchRequested`, `OperatorLogsFetchReceived`, `OperatorLogsFetchCompleted`, `OperatorLogsFetchFailed`
 - `OperatorHistoryFetchRequested`, `OperatorHistoryFetchReceived`, `OperatorHistoryFetchCompleted`, `OperatorHistoryFetchFailed`
 - `OperatorPanelListUpdated`
@@ -385,8 +387,8 @@ CLI flags:
 - `--data-dir <dir>`: Data directory for SQLite database (default: `.g8e/data` in working directory)
 - `--pki-dir <dir>`: Directory for TLS certificates (default: `.g8e/pki`)
 - `--secrets-dir <dir>`: Directory for platform secrets (default: `.g8e/secrets`)
-- `--vault-dir <dir>`: Directory for vault data (default: `.g8e/secrets/vault`)
-- `--vault-key <path>`: Path to vault private key (default: auto-generated in vault dir)
+- `--vault-dir <dir>`: Directory for vault data (default: `.g8e/vault`)
+- `--vault-key <path>`: Path to vault private key (default: `.g8e/vault/key`)
 - `--http-port <port>`: HTTP port for bootstrap and MCP routes (flag default: 0, auto-resolved from `constants.Ports`; effective default: 8080)
 - `--https-port <port>`: HTTPS port for mTLS API and public surface (flag default: 0, auto-resolved from `constants.Ports`; effective default: 8443)
 - `--passkey-rp-id <id>`: RP ID for passkey operations (default: localhost)
@@ -437,7 +439,7 @@ The codebase maintains comprehensive test coverage across all layers:
 
 - **Governance Layer**: Unit tests for L1 Doctrine (`l1_doctrine_test.go`), L2 Consensus (`l4_warden_consensus_test.go`), L3 Notary (`l3_notary_test.go`, `l3_notary_integration_test.go`), L4 Warden (`l4_warden_test.go`), and L5 Actuator (`l5_actuator_test.go`, `l5_actuator_integration_test.go`)
 - **Storage Layer**: Extensive test suites for SQLAuditStore (in `storagetest/`), GitLedgerService (`ledger_test.go`, `ledger_git_test.go`), ExecutionVaultService (`execution_vault_test.go`), and supporting stores (replay, token, suspended transaction)
-- **Gateway Layer**: Comprehensive tests for envelope construction (`governance_envelope_test.go`, `governance_envelope_quality_test.go`), authentication (`gateway_auth_test.go`, `auth_controller_test.go`), and session management
+- **Gateway Layer**: Comprehensive tests for envelope construction (`governance_envelope_test.go`, `governance_envelope_quality_test.go`), authentication (`gateway_auth_test.go`, `bootstrap_controller_test.go`, `enrollment_token_controller_test.go`, `session_controller_test.go`, `user_controller_test.go`), and session management
 - **MCP/A2A Layer**: Integration tests for MCP gateway translation and native tools
 - **E2E Tests**: Docker-based end-to-end tests supporting both root and demo environments via `G8E_TEST_ENV` environment variable
 
@@ -516,7 +518,7 @@ All tests follow a Tier 1 philosophy where possible (no external network/DB requ
       "violations": []
     },
     "l2": {
-      "tribunalId": "tribunal-prod-abc123",
+      "consensusSetId": "tribunal-prod-abc123",
       "votes": [
         {
           "signerKeyId": "agent-ensemble-1",
@@ -585,7 +587,7 @@ The `payload` field contains base64-encoded protobuf bytes of `McpCallRequested`
       "violations": []
     },
     "l2": {
-      "tribunalId": "tribunal-prod-def456",
+      "consensusSetId": "tribunal-prod-def456",
       "votes": [
         {
           "signerKeyId": "agent-ensemble-1",
@@ -636,7 +638,7 @@ This example shows a non-mutation read under doctrine posture. L3 is not require
       "violations": []
     },
     "l2": {
-      "tribunalId": "tribunal-prod-efg789",
+      "consensusSetId": "tribunal-prod-efg789",
       "votes": [
         {
           "signerKeyId": "agent-ensemble-1",

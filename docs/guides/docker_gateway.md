@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
-Last Updated: 2026-07-19
-Version: v1.5.9
+Last Updated: 2026-07-25
+Version: v1.6.3
 
 This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
 
@@ -76,12 +76,13 @@ G8E_HTTP_PORT=3000 G8E_HTTPS_PORT=3443 G8E_PREFIX=myg8e docker compose up -d
 Functional demo environments are located in the `demos/` directory. These configurations demonstrate multi-network isolation and specialized doctrine enforcement:
 
 - **Healthcare**: FHIR R4 compliance and PHI protection.
-- **Government**: Public sector data residency and access control.
+- **Government**: CUI protection and CMMC compliance enforcement.
 - **Finance**: High-integrity ledger and audit requirements.
 - **Secure Data**: Governed data migration with a two-operator pipeline and chain-of-custody receipts.
 - **Department of War (DoW)**: Tactical edge operations with SWaP-constrained sensors, BFT spoofing defense, and autonomous SIGINT-to-EO/IR cross-cueing.
 - **Swarm**: Drone swarm simulation with 20 autonomous operators, battlefield intelligence, and doctrine-based weapons control.
 - **DHS**: Persistent sovereign capability for coalition data handling with USPER PII minimization, cross-domain release control, and consensus posture.
+- **FedRAMP**: Sovereign cloud governance with audit integrity, access control, cross-domain protection, and human-in-the-loop resource destruction approval.
 - **Frontend**: Third-party frontend application enrollment with WebAuthn passkey authentication, CORS, and SSE live event streaming.
 
 To run a demo:
@@ -161,7 +162,7 @@ The image includes:
 The protocol constants are bundled from the `protocol/` directory. The Python package (`g8e`) is not included in the Docker image by default. If you need Python protocol access inside a container, install it separately:
 
 ```bash
-pip install g8e==1.5.8
+pip install g8e==1.6.3
 ```
 
 Or set `G8E_PROTOCOL_DIR=/protocol` to point the Python package at the bundled constants. See the [Protocol Library documentation](../architecture/protocol.md) for details.

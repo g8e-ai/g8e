@@ -27,7 +27,7 @@ import (
 )
 
 // cliSessionVerifier implements governance.CLISessionVerifier using gateway-specific
-// services (UserService, CLISessionService, PKIAuthority, CanonicalDBService).
+// services (UserService, CLISessionService, PKIAuthority, DocumentStoreService).
 type cliSessionVerifier struct {
 	db            *DocumentStoreService
 	pki           *PKIAuthority

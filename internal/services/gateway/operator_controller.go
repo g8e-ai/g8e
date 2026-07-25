@@ -15,7 +15,6 @@ package gateway
 
 import (
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
 
@@ -45,8 +44,7 @@ func newOperatorController(cfg *config.Config, logger *slog.Logger, reg *Registr
 }
 
 func (c *OperatorController) readBody(r *http.Request) ([]byte, error) {
-	r.Body = http.MaxBytesReader(nil, r.Body, c.cfg.Gateway.MaxPayloadBytes)
-	return io.ReadAll(r.Body)
+	return readRequestBody(r, c.cfg.Gateway.MaxPayloadBytes)
 }
 
 // GET /api/v1/operators
