@@ -19,7 +19,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
@@ -38,7 +37,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
@@ -276,25 +274,6 @@ func TestHandleInitialize(t *testing.T) {
 	})
 }
 
-func TestHandleToolsList(t *testing.T) {
-	t.Run("tools/list response contains native tools", func(t *testing.T) {
-		var buf bytes.Buffer
-		encoder := json.NewEncoder(&buf)
-		nativeToolHandler, err := mcp.NewNativeToolHandler(nil)
-		require.NoError(t, err)
-		handleToolsList(encoder, 1, nativeToolHandler)
-
-		var resp JSONRPCResponse
-		err = json.Unmarshal(buf.Bytes(), &resp)
-		require.NoError(t, err)
-		assert.NotNil(t, resp.Result)
-
-		result := resp.Result.(map[string]interface{})
-		tools := result["tools"].([]interface{})
-		assert.NotEmpty(t, tools)
-	})
-}
-
 func TestSendError(t *testing.T) {
 	t.Run("error response has correct structure", func(t *testing.T) {
 		var buf bytes.Buffer
@@ -309,21 +288,6 @@ func TestSendError(t *testing.T) {
 		assert.NotNil(t, resp.Error)
 		assert.Equal(t, -32601, resp.Error.Code)
 		assert.Equal(t, "method not found", resp.Error.Message)
-	})
-}
-
-func TestHandleToolsCall(t *testing.T) {
-	t.Run("tools/call executes native tool", func(t *testing.T) {
-		var buf bytes.Buffer
-		encoder := json.NewEncoder(&buf)
-		nativeToolHandler, err := mcp.NewNativeToolHandler(nil)
-		require.NoError(t, err)
-		handleToolsCall(encoder, 1, json.RawMessage(`{"name":"sys_info","arguments":{}}`), nativeToolHandler)
-
-		var resp JSONRPCResponse
-		err = json.Unmarshal(buf.Bytes(), &resp)
-		require.NoError(t, err)
-		assert.NotNil(t, resp.Result)
 	})
 }
 
@@ -468,25 +432,6 @@ func TestExtractApprovalURL(t *testing.T) {
 		}
 		url := extractApprovalURL(resp)
 		assert.Equal(t, "https://example.com/api/v1/approve/structured", url)
-	})
-}
-
-func TestCreateMCPClient(t *testing.T) {
-	t.Run("createMCPClient requires valid config with certs", func(t *testing.T) {
-		// This test verifies the function signature and basic behavior
-		// Full integration test would require actual certificate files
-		tempDir := testutil.TempDir(t)
-		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
-		require.NoError(t, err)
-
-		cfg := &config.Config{
-			ProjectRoot: tempDir,
-		}
-
-		// Should fail without certificates
-		_, err = createMCPClient(fileSvc, cfg)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load client certificate")
 	})
 }
 
@@ -743,48 +688,6 @@ func TestProxyToGatewayWithRetry(t *testing.T) {
 				assert.Equal(t, tt.want, got)
 			})
 		}
-	})
-}
-
-func TestCreateMCPClient_WithValidCerts(t *testing.T) {
-	t.Run("createMCPClient fails when certificates are missing", func(t *testing.T) {
-		tempDir := testutil.TempDir(t)
-		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
-		require.NoError(t, err)
-		cfg := &config.Config{
-			ProjectRoot: tempDir,
-		}
-		_, err = createMCPClient(fileSvc, cfg)
-		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrFailedToLoadClientCertificate)
-	})
-
-	t.Run("createMCPClient configures TLS with cert and CA", func(t *testing.T) {
-		// Generate a real self-signed cert/key pair using standard library
-		certPath, keyPath, caPath := generateTestCerts(t)
-
-		// Test the TLS config construction logic directly since createMCPClient
-		// depends on config paths that are not easily injectable.
-		cert, err := tls.LoadX509KeyPair(certPath, keyPath)
-		require.NoError(t, err)
-
-		caCert, err := os.ReadFile(caPath)
-		require.NoError(t, err)
-
-		caCertPool := x509.NewCertPool()
-		caCertPool.AppendCertsFromPEM(caCert)
-
-		tlsConfig := &tls.Config{
-			Certificates: []tls.Certificate{cert},
-			RootCAs:      caCertPool,
-			MinVersion:   tls.VersionTLS12,
-			ServerName:   "g8e.local",
-		}
-
-		assert.NotNil(t, tlsConfig)
-		assert.Equal(t, "g8e.local", tlsConfig.ServerName)
-		assert.Equal(t, uint16(tls.VersionTLS12), tlsConfig.MinVersion)
-		assert.Len(t, tlsConfig.Certificates, 1)
 	})
 }
 

@@ -14,7 +14,6 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -89,25 +88,6 @@ type Config struct {
 	Paths       *PathsConfig
 }
 
-// expandPath expands ~ to the user home directory and environment variables in a path.
-func expandPath(path string) (string, error) {
-	if path == "" {
-		return "", nil
-	}
-	path = os.ExpandEnv(path)
-	if !strings.HasPrefix(path, "~") {
-		return path, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("config: expandPath: %w", err)
-	}
-	if path == "~" {
-		return home, nil
-	}
-	return filepath.Join(home, path[2:]), nil
-}
-
 // Load initializes CLI configuration from the current working directory.
 // All paths are resolved using constants.InitPathsWithBase.
 func Load(projectRoot string) (*Config, error) {
@@ -146,80 +126,6 @@ func Load(projectRoot string) (*Config, error) {
 		SecretsDir:  paths.Infra.SecretsDir,
 		Paths:       &pathsCfg,
 	}, nil
-}
-
-// LoadWithPaths loads config with custom paths configuration for testing.
-// This allows hermetic test environments without relying on disk paths.
-// Production code should use Load() instead.
-func LoadWithPaths(projectRoot string, pathsData []byte) (*Config, error) {
-	if projectRoot == "" {
-		var err error
-		projectRoot, err = os.Getwd()
-		if err != nil {
-			return nil, fmt.Errorf("cli config: failed to get working directory: %w", err)
-		}
-	}
-
-	runtimeDir := pathutil.SafeJoin(projectRoot, constants.RuntimeDirname)
-	pkiDir := pathutil.SafeJoin(projectRoot, constants.DefaultPKIDir)
-	secretsDir := pathutil.SafeJoin(projectRoot, constants.DefaultSecretsDir)
-
-	var paths PathsConfig
-	if err := json.Unmarshal(pathsData, &paths); err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToParsePaths, err)
-	}
-
-	resolveInfraPaths(&paths, projectRoot)
-
-	return &Config{
-		ProjectRoot: projectRoot,
-		RuntimeDir:  runtimeDir,
-		PKIDir:      pkiDir,
-		SecretsDir:  secretsDir,
-		Paths:       &paths,
-	}, nil
-}
-
-// resolveInfraPaths resolves all relative paths in the infra section relative to projectRoot.
-// This is test-only helper for LoadWithPaths.
-// Uses pathutil.SafeJoin to handle cross-platform path joining correctly.
-func resolveInfraPaths(paths *PathsConfig, projectRoot string) {
-	if paths.Infra.AppCertDir != "" && !filepath.IsAbs(paths.Infra.AppCertDir) {
-		paths.Infra.AppCertDir = pathutil.SafeJoin(projectRoot, paths.Infra.AppCertDir)
-	}
-	if paths.Infra.CACertPath != "" && !filepath.IsAbs(paths.Infra.CACertPath) {
-		paths.Infra.CACertPath = pathutil.SafeJoin(projectRoot, paths.Infra.CACertPath)
-	}
-	if paths.Infra.DBPath != "" && !filepath.IsAbs(paths.Infra.DBPath) {
-		paths.Infra.DBPath = pathutil.SafeJoin(projectRoot, paths.Infra.DBPath)
-	}
-	if paths.Infra.DocsDir != "" && !filepath.IsAbs(paths.Infra.DocsDir) {
-		paths.Infra.DocsDir = pathutil.SafeJoin(projectRoot, paths.Infra.DocsDir)
-	}
-	if paths.Infra.PKIDir != "" && !filepath.IsAbs(paths.Infra.PKIDir) {
-		paths.Infra.PKIDir = pathutil.SafeJoin(projectRoot, paths.Infra.PKIDir)
-	}
-	if paths.Infra.ProtocolConstantsDir != "" && !filepath.IsAbs(paths.Infra.ProtocolConstantsDir) {
-		paths.Infra.ProtocolConstantsDir = pathutil.SafeJoin(projectRoot, paths.Infra.ProtocolConstantsDir)
-	}
-	if paths.Infra.ProtocolDir != "" && !filepath.IsAbs(paths.Infra.ProtocolDir) {
-		paths.Infra.ProtocolDir = pathutil.SafeJoin(projectRoot, paths.Infra.ProtocolDir)
-	}
-	if paths.Infra.ProtocolModelsDir != "" && !filepath.IsAbs(paths.Infra.ProtocolModelsDir) {
-		paths.Infra.ProtocolModelsDir = pathutil.SafeJoin(projectRoot, paths.Infra.ProtocolModelsDir)
-	}
-	if paths.Infra.SecretsDir != "" && !filepath.IsAbs(paths.Infra.SecretsDir) {
-		paths.Infra.SecretsDir = pathutil.SafeJoin(projectRoot, paths.Infra.SecretsDir)
-	}
-	if paths.Infra.SSHConfigPath != "" && !filepath.IsAbs(paths.Infra.SSHConfigPath) {
-		paths.Infra.SSHConfigPath = pathutil.SafeJoin(projectRoot, paths.Infra.SSHConfigPath)
-	}
-	if paths.Infra.VaultDir != "" && !filepath.IsAbs(paths.Infra.VaultDir) {
-		paths.Infra.VaultDir = pathutil.SafeJoin(projectRoot, paths.Infra.VaultDir)
-	}
-	if paths.Infra.VaultKeyPath != "" && !filepath.IsAbs(paths.Infra.VaultKeyPath) {
-		paths.Infra.VaultKeyPath = pathutil.SafeJoin(projectRoot, paths.Infra.VaultKeyPath)
-	}
 }
 
 // DefaultTrustBundleRelPath returns the trust bundle path relative to the
@@ -337,25 +243,6 @@ func SetHTTPEndpointOverride(endpoint string) {
 // SetHTTPSEndpointOverride sets only the HTTPS/mTLS override.
 func SetHTTPSEndpointOverride(endpoint string) {
 	httpsEndpointOverride = endpoint
-}
-
-// SetEndpointOverrideWithPort sets HTTPS override to host:port and HTTP
-// override to host (without port, so HTTP uses default port).
-// If the host already contains a port, it is stripped before applying.
-func SetEndpointOverrideWithPort(host string, port int) {
-	if strings.Contains(host, "://") {
-		// Full URL provided — use as-is for both
-		httpEndpointOverride = host
-		httpsEndpointOverride = host
-		return
-	}
-	if _, _, err := net.SplitHostPort(host); err == nil {
-		// Host already has a port — strip it
-		h, _, _ := net.SplitHostPort(host)
-		host = h
-	}
-	httpEndpointOverride = host
-	httpsEndpointOverride = fmt.Sprintf("%s:%d", host, port)
 }
 
 // OperatorPublicURL returns the HTTPS URL for mTLS API and public surface.

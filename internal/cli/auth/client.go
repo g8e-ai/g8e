@@ -171,63 +171,6 @@ func GenerateCSR(commonName string) (csrPEM string, privKey *ecdsa.PrivateKey, e
 	return string(csrPEMBytes), privKey, nil
 }
 
-// NewSecureHTTPClient creates an HTTP client bound to the Operator's CA trust bundle.
-// This ensures the CLI can validate the Operator's TLS certificate during CSR-based enrollment.
-func NewSecureHTTPClient(fileSvc fs.RuntimeFileService, cfg *config.Config) (*http.Client, error) {
-	caPEM, err := ReadTrustBundle(fileSvc, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
-	}
-	if len(caPEM) == 0 {
-		return nil, constants.ErrGatewayURLRequired
-	}
-
-	caPool := x509.NewCertPool()
-	if !caPool.AppendCertsFromPEM(caPEM) {
-		return nil, constants.ErrCAParseFailed
-	}
-
-	tlsConfig := &tls.Config{
-		RootCAs: caPool,
-		// Require TLS 1.3 for secure communication
-		MinVersion: tls.VersionTLS13,
-	}
-
-	transport := &http.Transport{
-		TLSClientConfig: tlsConfig,
-	}
-
-	return &http.Client{Transport: transport, Timeout: httpTimeout}, nil
-}
-
-// FetchRootCAFingerprint fetches the root CA fingerprint from the gateway.
-// This is used for OOB pinning verification during bootstrap.
-// If baseURL is empty, it uses cfg.OperatorDiscoveryURL().
-func FetchRootCAFingerprint(cfg *config.Config, baseURL string) (string, error) {
-	discoveryURL := cfg.OperatorDiscoveryURL()
-	if baseURL != "" {
-		discoveryURL = baseURL
-	}
-	fingerprintURL := fmt.Sprintf("%s%s", discoveryURL, constants.APIPaths.WellKnownPKIFingerprint)
-	client := &http.Client{Timeout: httpTimeout}
-	resp, err := client.Get(fingerprintURL)
-	if err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return "", fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
-	}
-
-	var fpResp models.PKIFingerprintResponse
-	if err := json.NewDecoder(resp.Body).Decode(&fpResp); err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
-	}
-
-	return fpResp.RootCA, nil
-}
-
 // VerifyCAFingerprint verifies that a PEM-encoded CA bundle matches the expected fingerprint.
 // The fingerprint should be a hex-encoded SHA-256 hash (64 characters).
 func VerifyCAFingerprint(caPEM []byte, expectedFingerprint string) error {

@@ -32,7 +32,7 @@ func setupSSEEventServiceTest(t *testing.T) *SSEEventService {
 	require.NoError(t, err)
 
 	// Initialize only the SSE events table schema
-	_, err = db.Exec(GatewaySchema())
+	_, err = db.Exec(gatewaySchema)
 	require.NoError(t, err)
 
 	t.Cleanup(func() { db.Close() })

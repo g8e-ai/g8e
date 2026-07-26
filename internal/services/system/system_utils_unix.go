@@ -203,19 +203,6 @@ func GetCurrentUser() string {
 	return currentUser.Username
 }
 
-func GetLocalIP(ipResolver string) string {
-	if ipResolver == "" {
-		ipResolver = "8.8.8.8:80"
-	}
-	conn, err := net.Dial(string(constants.NetworkProtocolUDP), ipResolver)
-	if err != nil {
-		return "127.0.0.1"
-	}
-	defer conn.Close()
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
-	return localAddr.IP.String()
-}
-
 func GetNetworkInterfaces() []string {
 	interfaces, err := net.Interfaces()
 	if err != nil {

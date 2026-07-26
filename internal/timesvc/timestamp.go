@@ -45,11 +45,6 @@ func NowTimestamp() string {
 	return FormatTimestamp(time.Now())
 }
 
-// NowUTC returns the current time in UTC. Use this for all internal *time.Time fields.
-func NowUTC() time.Time {
-	return time.Now().UTC()
-}
-
 // ParseTimestamp parses an RFC3339Nano timestamp string into a UTC time.Time.
 // Returns an error if the string is empty or unrecognized. Fallbacks are not allowed.
 func ParseTimestamp(s string) (time.Time, error) {

@@ -65,13 +65,6 @@ func NewNativeToolHandler(logger *slog.Logger) (*NativeToolHandler, error) {
 	}, nil
 }
 
-// NewNativeToolHandlerWithRegistry creates a new native tool handler with a custom registry.
-func NewNativeToolHandlerWithRegistry(registry *ToolRegistry) *NativeToolHandler {
-	return &NativeToolHandler{
-		registry: registry,
-	}
-}
-
 // HandleTool executes a native tool by name and returns the result.
 func (h *NativeToolHandler) HandleTool(ctx context.Context, toolName string, arguments json.RawMessage) (CallToolResult, error) {
 	if h.logger != nil {

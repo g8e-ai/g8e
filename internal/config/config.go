@@ -20,7 +20,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/adapters/lattice"
+	latticeconfig "github.com/g8e-ai/g8e/internal/adapters/lattice/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 )
@@ -79,7 +79,7 @@ type LoadOptions struct {
 	HeartbeatInterval time.Duration // --heartbeat-interval: overrides the 30s default when non-zero
 
 	// Lattice adapter (nil when disabled)
-	Lattice *lattice.LatticeConfig
+	Lattice *latticeconfig.LatticeConfig
 }
 
 // GatewayConfig holds configuration for gateway mode.
@@ -210,7 +210,7 @@ type Config struct {
 	Gateway GatewayConfig
 
 	// Lattice adapter configuration (nil when disabled)
-	Lattice *lattice.LatticeConfig
+	Lattice *latticeconfig.LatticeConfig
 }
 
 // FindProjectRoot returns the current working directory.
@@ -290,27 +290,6 @@ func isPortAvailable(port int) bool {
 	}
 	_ = ln.Close()
 	return true
-}
-
-// ValidateL2PostureStartup checks the startup validation rules for postures
-// that require L2 signatures (consensus and notary). If posture is neither,
-// it returns nil (no validation needed). For consensus/notary posture, the
-// tribunalID must be non-empty and the quorum must be >= 1.
-//
-// This is a pure function extracted from the gateway startup path so it
-// can be tested without os.Exit. The gateway startup calls this after
-// loading the tribunal policy from the database to validate the quorum.
-func ValidateL2PostureStartup(posture string, tribunalID string, quorum int) error {
-	if posture != string(PostureConsensus) && posture != string(PostureNotary) {
-		return nil
-	}
-	if tribunalID == "" {
-		return constants.ErrConfigTribunalIDRequired
-	}
-	if quorum < 1 {
-		return constants.ErrConfigTribunalQuorumLow
-	}
-	return nil
 }
 
 // validateAndResolveGatewayPorts validates and resolves gateway port configuration.

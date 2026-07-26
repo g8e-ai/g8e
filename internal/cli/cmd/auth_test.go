@@ -134,8 +134,7 @@ func setupTestConfig(t *testing.T, tmpDir string) (fs.RuntimeFileService, *confi
 	require.NoError(t, err)
 	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 
-	pathsJSON := minimalPathsJSON(t)
-	cfg, err := config.LoadWithPaths(tmpDir, []byte(pathsJSON))
+	cfg, err := config.Load(tmpDir)
 	require.NoError(t, err)
 
 	require.Equal(t, cfg.RuntimeDir, fileSvc.Resolve(""))

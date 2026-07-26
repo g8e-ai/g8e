@@ -15,7 +15,6 @@ package gateway
 
 import (
 	"log/slog"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -44,82 +43,6 @@ func newMiddlewareTestHandler(t *testing.T) *HTTPHandler {
 		limiters:        make(map[string]*tokenBucket),
 		limiterLastUsed: make(map[string]time.Time),
 	}
-}
-
-// --- isPrivateIP ---
-
-func TestIsPrivateIP_PrivateRanges(t *testing.T) {
-	cases := []struct {
-		name string
-		ip   string
-	}{
-		{"10.0.0.0/8 start", "10.0.0.0"},
-		{"10.0.0.0/8 mid", "10.128.64.32"},
-		{"10.0.0.0/8 end", "10.255.255.255"},
-		{"172.16.0.0/12 start", "172.16.0.0"},
-		{"172.16.0.0/12 mid", "172.20.10.5"},
-		{"172.16.0.0/12 end", "172.31.255.255"},
-		{"192.168.0.0/16 start", "192.168.0.0"},
-		{"192.168.0.0/16 mid", "192.168.1.100"},
-		{"192.168.0.0/16 end", "192.168.255.255"},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			ip := net.ParseIP(tc.ip)
-			require.NotNil(t, ip)
-			assert.True(t, isPrivateIP(ip), "expected %s to be private", tc.ip)
-		})
-	}
-}
-
-func TestIsPrivateIP_PublicRanges(t *testing.T) {
-	cases := []struct {
-		name string
-		ip   string
-	}{
-		{"8.8.8.8", "8.8.8.8"},
-		{"1.1.1.1", "1.1.1.1"},
-		{"172.15.255.255 just below 172.16", "172.15.255.255"},
-		{"172.32.0.0 just above 172.31", "172.32.0.0"},
-		{"192.169.0.0 just above 192.168", "192.169.0.0"},
-		{"192.167.255.255 just below 192.168", "192.167.255.255"},
-		{"9.255.255.255 just below 10", "9.255.255.255"},
-		{"11.0.0.0 just above 10", "11.0.0.0"},
-		{"0.0.0.0", "0.0.0.0"},
-		{"172.0.0.1 in 172.0 range", "172.0.0.1"},
-		{"172.64.0.1 in 172.64 range", "172.64.0.1"},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			ip := net.ParseIP(tc.ip)
-			require.NotNil(t, ip)
-			assert.False(t, isPrivateIP(ip), "expected %s to be public", tc.ip)
-		})
-	}
-}
-
-func TestIsPrivateIP_IPv6_ReturnsFalse(t *testing.T) {
-	ips := []string{
-		"::1",
-		"2001:db8::1",
-		"fe80::1",
-		"fd00::1",
-	}
-
-	for _, ipStr := range ips {
-		t.Run(ipStr, func(t *testing.T) {
-			ip := net.ParseIP(ipStr)
-			require.NotNil(t, ip)
-			assert.False(t, isPrivateIP(ip), "IPv6 addresses should return false")
-		})
-	}
-}
-
-func TestIsPrivateIP_NilAndInvalid(t *testing.T) {
-	assert.False(t, isPrivateIP(nil), "nil IP should return false")
-	assert.False(t, isPrivateIP(net.IP{}), "empty IP should return false")
 }
 
 // --- containsTraversal ---

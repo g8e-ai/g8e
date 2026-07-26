@@ -14,7 +14,6 @@
 package mcp
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -104,42 +103,6 @@ func (r *FieldPathRegistry) ValidateFieldPath(collection string, fieldPath strin
 	}
 
 	return nil
-}
-
-// ParseFieldPath extracts a field value from a JSON document using dot notation
-func ParseFieldPath(document json.RawMessage, fieldPath string) (FieldValue, error) {
-	if document == nil {
-		return FieldValue{}, constants.ErrFieldPathDocumentNil
-	}
-
-	if fieldPath == "" {
-		return FieldValue{}, constants.ErrFieldPathEmpty
-	}
-
-	// Parse the document into a generic map
-	var docMap map[string]interface{}
-	if err := json.Unmarshal(document, &docMap); err != nil {
-		return FieldValue{}, fmt.Errorf("field_parser: parse document JSON: %w", err)
-	}
-
-	// Navigate the path
-	components := strings.Split(fieldPath, ".")
-	var current interface{} = docMap
-
-	for _, component := range components {
-		switch v := current.(type) {
-		case map[string]interface{}:
-			var ok bool
-			current, ok = v[component]
-			if !ok {
-				return FieldValue{}, fmt.Errorf("field_parser: %w: %q", constants.ErrFieldPathComponentNotFound, component)
-			}
-		default:
-			return FieldValue{}, fmt.Errorf("field_parser: %w: %q", constants.ErrFieldPathNotObject, component)
-		}
-	}
-
-	return convertToFieldValue(current), nil
 }
 
 // ConvertToFieldValue converts an interface{} value (e.g., from JSON unmarshal

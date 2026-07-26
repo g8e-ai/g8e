@@ -12,7 +12,7 @@ import (
 
 // newCmdTestEnv returns a pre-aligned (fileSvc, cfg) pair for hermetic cmd tests.
 // The fileSvc is rooted at tmpDir, and cfg.RuntimeDir == fileSvc.Resolve("")
-// because setupTestConfig uses config.LoadWithPaths(tmpDir, ...) which sets
+// because setupTestConfig uses config.Load(tmpDir) which sets
 // RuntimeDir = pathutil.SafeJoin(tmpDir, constants.RuntimeDirname), and
 // fileSvc.Resolve("") == pathutil.SafeJoin(tmpDir, constants.RuntimeDirname).
 func newCmdTestEnv(t *testing.T) (fs.RuntimeFileService, *config.Config) {

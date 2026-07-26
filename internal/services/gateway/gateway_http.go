@@ -162,10 +162,6 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	return h, nil
 }
 
-func (h *HTTPHandler) readBody(r *http.Request) ([]byte, error) {
-	return readRequestBody(r, h.cfg.Gateway.MaxPayloadBytes)
-}
-
 func readRequestBody(r *http.Request, maxPayloadBytes int64) ([]byte, error) {
 	limited := io.LimitReader(r.Body, maxPayloadBytes+1)
 	data, err := io.ReadAll(limited)

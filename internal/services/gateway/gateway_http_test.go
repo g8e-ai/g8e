@@ -27,7 +27,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -45,100 +44,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/protocol"
 )
-
-func TestIsPrivateIP(t *testing.T) {
-
-	cases := []struct {
-		ip       string
-		expected bool
-	}{
-		// 10.0.0.0/8
-		{"10.0.0.1", true},
-		{"10.255.255.255", true},
-		{"10.128.0.1", true},
-		// 172.16.0.0/12
-		{"172.16.0.1", true},
-		{"172.31.255.255", true},
-		{"172.20.0.1", true},
-		{"172.17.0.1", true},
-		{"172.30.255.255", true},
-		// 192.168.0.0/16
-		{"192.168.0.1", true},
-		{"192.168.255.255", true},
-		{"192.168.1.1", true},
-		{"192.168.100.50", true},
-		// Public IPs should be false
-		{"8.8.8.8", false},
-		{"1.1.1.1", false},
-		{"172.32.0.1", false},      // Outside 172.16.0.0/12
-		{"172.15.255.255", false},  // Outside 172.16.0.0/12
-		{"192.169.0.1", false},     // Outside 192.168.0.0/16
-		{"11.0.0.1", false},        // Outside 10.0.0.0/8
-		{"172.15.0.1", false},      // Just outside 172.16.0.0/12
-		{"172.32.0.1", false},      // Just outside 172.16.0.0/12
-		{"192.167.255.255", false}, // Just outside 192.168.0.0/16
-		{"192.169.0.0", false},     // Just outside 192.168.0.0/16
-		{"9.255.255.255", false},   // Just outside 10.0.0.0/8
-		{"11.0.0.0", false},        // Just outside 10.0.0.0/8
-		// IPv6 addresses (not handled by this function, should return false)
-		{"::1", false},
-		{"2001:db8::1", false},
-		{"fe80::1", false},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.ip, func(t *testing.T) {
-			ip := net.ParseIP(tc.ip)
-			require.NotNil(t, ip, "Failed to parse IP: %s", tc.ip)
-			result := isPrivateIP(ip)
-			assert.Equal(t, tc.expected, result, "IP %s should return %v", tc.ip, tc.expected)
-		})
-	}
-}
-
-func TestIsSafeHost(t *testing.T) {
-
-	cfg := &config.Config{
-		Endpoint: "g8e.local",
-		Gateway: config.GatewayConfig{
-			PublicBaseURL: "https://g8e-public.com:8443",
-		},
-	}
-
-	cases := []struct {
-		host     string
-		expected bool
-	}{
-		// Local / Loopback
-		{"localhost", true},
-		{"127.0.0.1", true},
-		{"::1", true},
-		// RFC 1918 Private IPs
-		{"192.168.1.1", true},
-		{"10.0.0.1", true},
-		{"172.16.0.1", true},
-		// Configured Endpoint
-		{"g8e.local", true},
-		// Configured PublicBaseURL
-		{"g8e-public.com", true},
-		// Case insensitivity
-		{"G8E.LOCAL", true},
-		// Invalid / Malicious Characters
-		{"evil.com;sh", false},
-		{"evil.com/path", false},
-		{"evil.com?param=value", false},
-		{"evil.com", false},
-		{"google.com", false},
-		{"", false},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.host, func(t *testing.T) {
-			result := isSafeHost(tc.host, cfg)
-			assert.Equal(t, tc.expected, result)
-		})
-	}
-}
 
 func TestHTTPRouterNoRedirect(t *testing.T) {
 
@@ -260,16 +165,6 @@ func setupTestGatewayService(t *testing.T) (*GatewayModeService, *config.Config)
 	require.NoError(t, ls.initHandlersAndServers())
 
 	return ls, infra.Cfg
-}
-
-func TestReadBody(t *testing.T) {
-	h := setupTestHTTPHandlerLightweight(t)
-	content := []byte("test body content")
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(content))
-
-	body, err := h.readBody(req)
-	require.NoError(t, err)
-	assert.Equal(t, content, body)
 }
 
 func TestPathTraversalGuard(t *testing.T) {

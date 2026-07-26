@@ -15,52 +15,10 @@ package gateway
 
 import (
 	"crypto/x509"
-	"fmt"
-	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/protocol"
 )
-
-// VerifyCLICertificate verifies that a CLI certificate is valid for the given CLI session.
-// This is used during request authentication to validate the mTLS certificate.
-func VerifyCLICertificate(pki *PKIAuthority, cert *x509.Certificate, cliSessionID, userID string) error {
-	if cert == nil {
-		return constants.ErrCLIL3CertNil
-	}
-
-	// Check certificate expiry
-	now := time.Now()
-	if now.After(cert.NotAfter) {
-		return constants.ErrCLIL3CertExpired
-	}
-	if now.Before(cert.NotBefore) {
-		return constants.ErrCLIL3CertNotYetValid
-	}
-
-	// Verify SPIFFE URI SAN matches the expected CLI session
-	wid := protocol.NewWorkloadIdentity()
-	match := false
-	for _, uri := range cert.URIs {
-		if wid.MatchesCLI(uri.String(), userID, cliSessionID) {
-			match = true
-			break
-		}
-	}
-	if !match {
-		return constants.ErrCLIL3SPIFFESANMismatch
-	}
-
-	// Verify certificate validity via PKI authority (fail-closed)
-	if pki == nil {
-		return constants.ErrCLIL3PKINotConfigured
-	}
-	if err := pki.VerifyCertificate(cert); err != nil {
-		return fmt.Errorf("%s: %w", constants.ErrCLIL3CertVerificationFailed, err)
-	}
-
-	return nil
-}
 
 // ExtractUserIDFromCert extracts the user ID from a certificate's SPIFFE URI SAN.
 func ExtractUserIDFromCert(cert *x509.Certificate) (string, error) {

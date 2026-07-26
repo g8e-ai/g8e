@@ -71,22 +71,13 @@ func TestNewNativeToolHandler(t *testing.T) {
 	})
 }
 
-func TestNewNativeToolHandlerWithRegistry(t *testing.T) {
-	t.Parallel()
-
-	registry := NewToolRegistry()
-	handler := NewNativeToolHandlerWithRegistry(registry)
-	require.NotNil(t, handler)
-	require.Equal(t, registry, handler.registry)
-}
-
 func TestNativeToolHandler_HandleTool_Unit(t *testing.T) {
 	t.Parallel()
 
 	t.Run("unknown tool returns error", func(t *testing.T) {
 		t.Parallel()
 		registry := NewToolRegistry()
-		handler := NewNativeToolHandlerWithRegistry(registry)
+		handler := &NativeToolHandler{registry: registry}
 
 		_, err := handler.HandleTool(context.Background(), "unknown_tool", nil)
 		require.Error(t, err)
@@ -107,7 +98,7 @@ func TestNativeToolHandler_HandleTool_Unit(t *testing.T) {
 		}
 		require.NoError(t, registry.Register(mockTool))
 
-		handler := NewNativeToolHandlerWithRegistry(registry)
+		handler := &NativeToolHandler{registry: registry}
 		result, err := handler.HandleTool(context.Background(), "test_tool", nil)
 		require.NoError(t, err)
 		require.False(t, result.IsError)
@@ -127,7 +118,7 @@ func TestNativeToolHandler_HandleTool_Unit(t *testing.T) {
 		}
 		require.NoError(t, registry.Register(mockTool))
 
-		handler := NewNativeToolHandlerWithRegistry(registry)
+		handler := &NativeToolHandler{registry: registry}
 		_, err := handler.HandleTool(context.Background(), "fail_tool", nil)
 		require.Error(t, err)
 		require.Equal(t, "execution failed", err.Error())
@@ -167,7 +158,7 @@ func TestNativeToolHandler_ListTools_Unit(t *testing.T) {
 	}
 	require.NoError(t, registry.Register(mockTool))
 
-	handler := NewNativeToolHandlerWithRegistry(registry)
+	handler := &NativeToolHandler{registry: registry}
 	tools := handler.ListTools()
 	require.Len(t, tools, 1)
 	require.Equal(t, "tool1", tools[0].Name())
@@ -190,7 +181,7 @@ func TestNativeToolHandler_HandleTool_Integration(t *testing.T) {
 
 	t.Run("custom registry", func(t *testing.T) {
 		customRegistry := NewToolRegistry()
-		customHandler := NewNativeToolHandlerWithRegistry(customRegistry)
+		customHandler := &NativeToolHandler{registry: customRegistry}
 		require.NotNil(t, customHandler, "expected non-nil handler with custom registry")
 		require.Equal(t, customRegistry, customHandler.registry, "expected handler to use provided registry")
 	})

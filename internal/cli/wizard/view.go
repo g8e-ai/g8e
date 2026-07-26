@@ -247,10 +247,3 @@ func orNone(s string) string {
 	}
 	return s
 }
-
-func yesNo(b bool) string {
-	if b {
-		return "Yes"
-	}
-	return "No"
-}

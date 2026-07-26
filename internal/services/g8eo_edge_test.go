@@ -68,22 +68,6 @@ func TestPrintOperatorStartupBanner(t *testing.T) {
 	})
 }
 
-func TestG8eoService_SetPubSubClient(t *testing.T) {
-	t.Parallel()
-	cfg := testutil.NewTestConfig(t)
-	logger := testutil.NewTestLogger()
-
-	service, err := NewG8eoService(cfg, logger, newTestTLSConfig(t))
-	require.NoError(t, err)
-
-	service.SetPubSubClient(nil)
-
-	service.mu.RLock()
-	client := service.pubSubClient
-	service.mu.RUnlock()
-	assert.Nil(t, client)
-}
-
 func TestNewG8eoService_NilTLSConfig(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)

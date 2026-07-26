@@ -612,21 +612,3 @@ func TestValidateRouting_A2AEnabled_ValidURL_NoError(t *testing.T) {
 	m.a2aDownstreamInput.SetValue("http://a2a:3001")
 	assert.Empty(t, m.validateRouting())
 }
-
-// --- postureNameFromChoice ---
-
-func TestPostureNameFromChoice_Doctrine(t *testing.T) {
-	assert.Equal(t, "doctrine", postureNameFromChoice(0))
-}
-
-func TestPostureNameFromChoice_Consensus(t *testing.T) {
-	assert.Equal(t, "consensus", postureNameFromChoice(1))
-}
-
-func TestPostureNameFromChoice_Notary(t *testing.T) {
-	assert.Equal(t, "notary", postureNameFromChoice(2))
-}
-
-func TestPostureNameFromChoice_OutOfRangeDefaultsToDoctrine(t *testing.T) {
-	assert.Equal(t, "doctrine", postureNameFromChoice(99))
-}

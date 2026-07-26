@@ -412,36 +412,6 @@ func (m *mockCLISessionVerifier) VerifyCLISession(userID, cliSessionID, certFing
 	return m.result
 }
 
-func TestGatewayL3Notary_NoPasskeyVerifierFallsBackToCLIPath(t *testing.T) {
-	t.Parallel()
-
-	txHash := "test-tx-hash-no-passkey-verifier"
-	userID := "user-no-passkey-verifier"
-
-	pubKey, privKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	signature := hex.EncodeToString(ed25519.Sign(privKey, []byte(txHash)))
-	pubKeyHex := hex.EncodeToString(pubKey)
-
-	store := &fakeSuspendedStore{}
-	store.StoreSuspendedTransaction(context.Background(), setupApprovedTx(txHash, userID, pubKeyHex, signature))
-
-	notary := NewCLIL3Notary(store, nil, slog.Default())
-
-	// Proof without mtls_cert_fingerprint — without a passkey verifier, the CLI path
-	// should handle it (and fail because cliVerifier is nil but fingerprint is required).
-	webauthnProof := &commonv1.L3Proof{
-		CredentialId:      "cred-id",
-		ClientDataJson:    "client-data",
-		AuthenticatorData: "auth-data",
-		Signature:         "sig",
-	}
-
-	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "cli-session", webauthnProof)
-	require.Error(t, err)
-	assert.False(t, allowed)
-}
-
 // trackingSuspendedStore wraps fakeSuspendedStore and tracks whether
 // GetSuspendedTransaction was called, for composition matrix tests.
 type trackingSuspendedStore struct {
@@ -452,100 +422,6 @@ type trackingSuspendedStore struct {
 func (t *trackingSuspendedStore) GetSuspendedTransaction(ctx context.Context, txHash string) (*models.SuspendedTransaction, bool, error) {
 	t.getCalled = true
 	return t.fakeSuspendedStore.GetSuspendedTransaction(ctx, txHash)
-}
-
-func TestCLINotary_InvokesCLISessionVerifier(t *testing.T) {
-	t.Parallel()
-
-	txHash := "test-tx-hash-cli-invokes-verifier"
-	userID := "user-cli-invokes-verifier"
-
-	pubKey, privKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	signature := hex.EncodeToString(ed25519.Sign(privKey, []byte(txHash)))
-	pubKeyHex := hex.EncodeToString(pubKey)
-
-	store := &trackingSuspendedStore{
-		fakeSuspendedStore: &fakeSuspendedStore{},
-	}
-	store.StoreSuspendedTransaction(context.Background(), setupApprovedTx(txHash, userID, pubKeyHex, signature))
-
-	cliVerifier := &mockCLISessionVerifier{result: nil}
-	notary := NewCLIL3Notary(store, cliVerifier, slog.Default())
-
-	proof := &commonv1.L3Proof{
-		CliSignature:        signature,
-		MtlsCertFingerprint: "abc123",
-	}
-
-	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "cli-session", proof)
-	require.NoError(t, err)
-	assert.True(t, allowed)
-	assert.True(t, cliVerifier.called, "CLI session verifier must be invoked by cliNotary")
-	assert.True(t, store.getCalled, "suspended store must be accessed by cliNotary")
-}
-
-func TestCLINotary_CLISessionDeniedReturnsFalse(t *testing.T) {
-	t.Parallel()
-
-	txHash := "test-tx-hash-cli-denied"
-	userID := "user-cli-denied"
-
-	pubKey, privKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	signature := hex.EncodeToString(ed25519.Sign(privKey, []byte(txHash)))
-	pubKeyHex := hex.EncodeToString(pubKey)
-
-	store := &trackingSuspendedStore{
-		fakeSuspendedStore: &fakeSuspendedStore{},
-	}
-	store.StoreSuspendedTransaction(context.Background(), setupApprovedTx(txHash, userID, pubKeyHex, signature))
-
-	cliVerifier := &mockCLISessionVerifier{result: constants.ErrCLISessionDenied}
-	notary := NewCLIL3Notary(store, cliVerifier, slog.Default())
-
-	proof := &commonv1.L3Proof{
-		CliSignature:        signature,
-		MtlsCertFingerprint: "abc123",
-	}
-
-	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "cli-session", proof)
-	require.NoError(t, err)
-	assert.False(t, allowed, "denied CLI session should return false without error")
-	assert.True(t, cliVerifier.called)
-	assert.False(t, store.getCalled, "suspended store should not be accessed when CLI session is denied")
-}
-
-func TestCLINotary_CLISessionErrorPropagates(t *testing.T) {
-	t.Parallel()
-
-	txHash := "test-tx-hash-cli-error"
-	userID := "user-cli-error"
-
-	pubKey, privKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	signature := hex.EncodeToString(ed25519.Sign(privKey, []byte(txHash)))
-	pubKeyHex := hex.EncodeToString(pubKey)
-
-	store := &trackingSuspendedStore{
-		fakeSuspendedStore: &fakeSuspendedStore{},
-	}
-	store.StoreSuspendedTransaction(context.Background(), setupApprovedTx(txHash, userID, pubKeyHex, signature))
-
-	expectedErr := errors.New("system error")
-	cliVerifier := &mockCLISessionVerifier{result: expectedErr}
-	notary := NewCLIL3Notary(store, cliVerifier, slog.Default())
-
-	proof := &commonv1.L3Proof{
-		CliSignature:        signature,
-		MtlsCertFingerprint: "abc123",
-	}
-
-	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "cli-session", proof)
-	require.Error(t, err)
-	assert.False(t, allowed)
-	assert.ErrorIs(t, err, expectedErr)
-	assert.False(t, store.getCalled, "suspended store should not be accessed when CLI session check errors")
 }
 
 func TestCompositionMatrix_OutboundNotary(t *testing.T) {

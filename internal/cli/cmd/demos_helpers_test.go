@@ -15,7 +15,6 @@ package cmd
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -44,76 +43,6 @@ func TestToDockerPath_WindowsConvertsBackslashes(t *testing.T) {
 		t.Skip("Skipping Windows test on non-Windows platform")
 	}
 	assert.Equal(t, "C:/foo/bar", toDockerPath("C:\\foo\\bar"))
-}
-
-func TestReadDoctrineRule_ValidFileReturnsRule(t *testing.T) {
-	tmp := testutil.TempDir(t)
-	doctrineDir := filepath.Join(tmp, constants.DemosDoctrineDir)
-	require.NoError(t, os.MkdirAll(doctrineDir, 0o755))
-
-	rule := DoctrineRule{
-		ID:          "test-rule-1",
-		Name:        "Test Rule",
-		Description: "A test doctrine rule",
-		Category:    "security",
-		Severity:    "high",
-		Pattern:     "sudo",
-		Confidence:  0.95,
-		Enabled:     true,
-	}
-	docFile := DoctrineFile{
-		Source:      "test",
-		Version:     "1.0",
-		LastUpdated: "2026-01-01",
-		License:     "Apache-2.0",
-		Doctrines:   []DoctrineRule{rule},
-	}
-	data, err := json.Marshal(docFile)
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(doctrineDir, "test.json"), data, 0o644))
-
-	got, err := readDoctrineRule(tmp, "test.json", "test-rule-1")
-	require.NoError(t, err)
-	assert.Equal(t, "test-rule-1", got.ID)
-	assert.Equal(t, "Test Rule", got.Name)
-	assert.Equal(t, "security", got.Category)
-	assert.InDelta(t, 0.95, got.Confidence, 0.001)
-	assert.True(t, got.Enabled)
-}
-
-func TestReadDoctrineRule_MissingFileReturnsPathNotFound(t *testing.T) {
-	tmp := testutil.TempDir(t)
-	_, err := readDoctrineRule(tmp, "nonexistent.json", "rule-1")
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrPathNotFound))
-}
-
-func TestReadDoctrineRule_InvalidJSONReturnsInvalidJSONBody(t *testing.T) {
-	tmp := testutil.TempDir(t)
-	doctrineDir := filepath.Join(tmp, constants.DemosDoctrineDir)
-	require.NoError(t, os.MkdirAll(doctrineDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(doctrineDir, "bad.json"), []byte("{invalid json"), 0o644))
-
-	_, err := readDoctrineRule(tmp, "bad.json", "rule-1")
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrInvalidJSONBody))
-}
-
-func TestReadDoctrineRule_RuleIDNotFoundReturnsNotFound(t *testing.T) {
-	tmp := testutil.TempDir(t)
-	doctrineDir := filepath.Join(tmp, constants.DemosDoctrineDir)
-	require.NoError(t, os.MkdirAll(doctrineDir, 0o755))
-
-	docFile := DoctrineFile{
-		Doctrines: []DoctrineRule{{ID: "exists"}},
-	}
-	data, err := json.Marshal(docFile)
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(doctrineDir, "test.json"), data, 0o644))
-
-	_, err = readDoctrineRule(tmp, "test.json", "nonexistent")
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrNotFound))
 }
 
 func TestTitleCase_CapitalizesEachWord(t *testing.T) {

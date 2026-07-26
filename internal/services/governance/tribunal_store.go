@@ -38,26 +38,3 @@ type L2ConsensusPolicy struct {
 type L2ConsensusPolicyStore interface {
 	GetConsensusPolicy(id string) (*L2ConsensusPolicy, error)
 }
-
-// TribunalStoreAdapter wraps a TribunalStore and adapts it to satisfy
-// L2ConsensusPolicyStore. This allows any TribunalStore implementation to
-// be used where an L2ConsensusPolicyStore is required.
-type TribunalStoreAdapter struct {
-	Inner TribunalStore
-}
-
-func (a *TribunalStoreAdapter) GetConsensusPolicy(id string) (*L2ConsensusPolicy, error) {
-	policy, err := a.Inner.GetTribunal(id)
-	if err != nil {
-		return nil, err
-	}
-	if policy == nil {
-		return nil, nil
-	}
-	return &L2ConsensusPolicy{
-		MemberKeyIDs:    policy.MemberAppIDs,
-		Quorum:          policy.Quorum,
-		RequireDistinct: policy.RequireDistinct,
-		Enabled:         policy.Enabled,
-	}, nil
-}
