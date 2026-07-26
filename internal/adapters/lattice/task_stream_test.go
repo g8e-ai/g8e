@@ -30,9 +30,9 @@ import (
 func makeTask(taskID, specURL string) *taskmanagerv1.Task {
 	task := &taskmanagerv1.Task{
 		Version: &taskmanagerv1.TaskVersion{
-			TaskId:          taskID,
+			TaskId:            taskID,
 			DefinitionVersion: 1,
-			StatusVersion:   1,
+			StatusVersion:     1,
 		},
 	}
 	if specURL != "" {

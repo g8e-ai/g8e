@@ -29,8 +29,8 @@ import (
 
 // mockEntityManagerAPIClient is a stub EntityManagerAPIClient for unit tests.
 type mockEntityManagerAPIClient struct {
-	publishEntityResp *entitymanagerv1.PublishEntityResponse
-	publishEntityErr  error
+	publishEntityResp  *entitymanagerv1.PublishEntityResponse
+	publishEntityErr   error
 	publishEntityCalls int
 }
 
@@ -121,9 +121,9 @@ func (m *mockTaskManagerAPIClient) StreamTasks(ctx context.Context, in *taskmana
 
 // mockStream is a stub ServerStreamingClient for testing stream behavior.
 type mockStream struct {
-	msgs   []*taskmanagerv1.ListenAsAgentResponse
-	errs   []error
-	idx   int
+	msgs []*taskmanagerv1.ListenAsAgentResponse
+	errs []error
+	idx  int
 }
 
 func (s *mockStream) Recv() (*taskmanagerv1.ListenAsAgentResponse, error) {
@@ -139,17 +139,17 @@ func (s *mockStream) Recv() (*taskmanagerv1.ListenAsAgentResponse, error) {
 	return nil, context.Canceled
 }
 
-func (s *mockStream) Header() (metadata.MD, error)             { return nil, nil }
-func (s *mockStream) Trailer() metadata.MD                     { return nil }
-func (s *mockStream) CloseSend() error                         { return nil }
-func (s *mockStream) Context() context.Context                 { return context.Background() }
-func (s *mockStream) SendMsg(any) error                        { return nil }
-func (s *mockStream) RecvMsg(any) error                        { return nil }
+func (s *mockStream) Header() (metadata.MD, error) { return nil, nil }
+func (s *mockStream) Trailer() metadata.MD         { return nil }
+func (s *mockStream) CloseSend() error             { return nil }
+func (s *mockStream) Context() context.Context     { return context.Background() }
+func (s *mockStream) SendMsg(any) error            { return nil }
+func (s *mockStream) RecvMsg(any) error            { return nil }
 
 // mockHeartbeatRegistrar is a stub HeartbeatRegistrar for unit tests.
 type mockHeartbeatRegistrar struct {
-	sinks    map[int64]func(ctx context.Context)
-	nextID   int64
+	sinks        map[int64]func(ctx context.Context)
+	nextID       int64
 	registered   int
 	unregistered int
 }
@@ -196,21 +196,27 @@ func (m *mockFileSvc) WriteFile(ctx context.Context, relPath string, data []byte
 
 func (m *mockFileSvc) Resolve(relPath string) string { return "/tmp/" + relPath }
 
-func (m *mockFileSvc) MkdirAll(ctx context.Context, relPath string, mode os.FileMode) error { return nil }
-func (m *mockFileSvc) CreateRuntimeTree(ctx context.Context) error                          { return nil }
-func (m *mockFileSvc) FileExists(ctx context.Context, relPath string) (bool, error)         { return false, nil }
-func (m *mockFileSvc) Stat(ctx context.Context, relPath string) (os.FileInfo, error)        { return nil, nil }
-func (m *mockFileSvc) Remove(ctx context.Context, relPath string) error                     { return nil }
-func (m *mockFileSvc) RemoveAll(ctx context.Context, relPath string) error                  { return nil }
-func (m *mockFileSvc) ReadDir(ctx context.Context, relPath string) ([]os.DirEntry, error)   { return nil, nil }
-func (m *mockFileSvc) Rename(ctx context.Context, oldPath, newPath string) error            { return nil }
+func (m *mockFileSvc) MkdirAll(ctx context.Context, relPath string, mode os.FileMode) error {
+	return nil
+}
+func (m *mockFileSvc) CreateRuntimeTree(ctx context.Context) error { return nil }
+func (m *mockFileSvc) FileExists(ctx context.Context, relPath string) (bool, error) {
+	return false, nil
+}
+func (m *mockFileSvc) Stat(ctx context.Context, relPath string) (os.FileInfo, error) { return nil, nil }
+func (m *mockFileSvc) Remove(ctx context.Context, relPath string) error              { return nil }
+func (m *mockFileSvc) RemoveAll(ctx context.Context, relPath string) error           { return nil }
+func (m *mockFileSvc) ReadDir(ctx context.Context, relPath string) ([]os.DirEntry, error) {
+	return nil, nil
+}
+func (m *mockFileSvc) Rename(ctx context.Context, oldPath, newPath string) error { return nil }
 func (m *mockFileSvc) EnforceDirPermissions(ctx context.Context, relPath string, mode os.FileMode) error {
 	return nil
 }
 func (m *mockFileSvc) EnforceFilePermissions(ctx context.Context, relPath string, mode os.FileMode) error {
 	return nil
 }
-func (m *mockFileSvc) Rel(absPath string) (string, error)   { return absPath, nil }
+func (m *mockFileSvc) Rel(absPath string) (string, error)        { return absPath, nil }
 func (m *mockFileSvc) RelFromAbs(absPath string) (string, error) { return absPath, nil }
 
 // newTestAdapter creates an Adapter with mock gRPC clients and file service,
