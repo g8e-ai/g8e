@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 
 	entitymanagerv1 "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1"
@@ -119,24 +120,28 @@ func (a *Adapter) SetPostureProvider(provider PostureProvider) {
 // stream subscription goroutine.
 func (a *Adapter) Start(ctx context.Context) error {
 	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	if a.running {
+		a.mu.Unlock()
 		return constants.ErrLatticeAlreadyRunning
 	}
-
 	if a.taskHandler == nil || a.postureProvider == nil {
+		a.mu.Unlock()
 		return constants.ErrLatticeNotInitialized
 	}
+	a.mu.Unlock()
 
 	entityID, err := a.loadOrCreateEntityID(ctx)
 	if err != nil {
 		return err
 	}
-	a.entityID = entityID
 
 	adapterCtx, cancel := context.WithCancel(ctx)
+
+	a.mu.Lock()
+	a.entityID = entityID
 	a.cancel = cancel
+	a.running = true
+	a.mu.Unlock()
 
 	if err := a.PublishPresence(adapterCtx); err != nil {
 		a.logger.Warn("Lattice: initial presence publish failed",
@@ -162,7 +167,6 @@ func (a *Adapter) Start(ctx context.Context) error {
 		a.subscribeToTasks(adapterCtx)
 	}()
 
-	a.running = true
 	a.logger.Info("Lattice adapter started",
 		"endpoint", a.config.Endpoint,
 		"entity_id", a.entityID)
@@ -239,7 +243,7 @@ func (a *Adapter) dialLattice() (*grpc.ClientConn, entitymanagerv1.EntityManager
 func (a *Adapter) loadOrCreateEntityID(ctx context.Context) (string, error) {
 	data, err := a.fileSvc.ReadFile(ctx, constants.LatticeEntityIDFilename)
 	if err == nil {
-		id := string(data)
+		id := strings.TrimSpace(string(data))
 		if id != "" {
 			return id, nil
 		}

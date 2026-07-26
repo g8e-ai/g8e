@@ -23,11 +23,16 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// presenceExpiryDuration is the soft-state TTL for entity presence in
+// Lattice's COP. The heartbeat interval must be shorter than this to
+// guarantee republish within the expiry window.
+const presenceExpiryDuration = 5 * time.Minute
+
 // PublishPresence publishes or updates the g8e entity in Lattice's COP.
 // Uses retryWithBackoff for transient failures. Returns
 // ErrLatticePresencePublishFailed on persistent failure.
 func (a *Adapter) PublishPresence(ctx context.Context) error {
-	expiry := time.Now().Add(5 * time.Minute)
+	expiry := time.Now().Add(presenceExpiryDuration)
 
 	entity := &entitymanagerv1.Entity{
 		EntityId:   a.entityID,

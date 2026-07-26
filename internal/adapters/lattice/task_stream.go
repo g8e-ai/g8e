@@ -15,7 +15,9 @@ package lattice
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"time"
 
 	taskmanagerv1 "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/taskmanager/v1"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -25,6 +27,7 @@ import (
 // task assignments. On stream close, it reconnects with backoff.
 // On receiving a task, it dispatches to the registered task handler.
 func (a *Adapter) subscribeToTasks(ctx context.Context) {
+	var backoff time.Duration
 	for {
 		if ctx.Err() != nil {
 			return
@@ -44,8 +47,19 @@ func (a *Adapter) subscribeToTasks(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
+			if backoff == 0 {
+				backoff = time.Second
+			} else if backoff < 30*time.Second {
+				backoff *= 2
+			}
+			select {
+			case <-time.After(backoff):
+			case <-ctx.Done():
+				return
+			}
 			continue
 		}
+		backoff = 0
 
 		a.processStream(ctx, stream)
 
@@ -94,7 +108,10 @@ func (a *Adapter) processStream(ctx context.Context, stream taskmanagerv1.TaskMa
 				"task_id", taskID,
 				"active_posture", a.postureProvider(),
 				"floor", a.config.PostureFloor)
-			_ = a.reportTaskStatus(ctx, taskID, "rejected: posture floor violated")
+			_ = a.reportTaskStatus(ctx, task.GetVersion(),
+				taskmanagerv1.Status_STATUS_DONE_NOT_OK,
+				taskmanagerv1.ErrorCode_ERROR_CODE_REJECTED,
+				"posture floor violated")
 			continue
 		}
 
@@ -105,7 +122,10 @@ func (a *Adapter) processStream(ctx context.Context, stream taskmanagerv1.TaskMa
 				a.logger.Error("Lattice: task handler failed",
 					"task_id", taskID,
 					"error", err)
-				_ = a.reportTaskStatus(ctx, taskID, "failed")
+				_ = a.reportTaskStatus(ctx, task.GetVersion(),
+					taskmanagerv1.Status_STATUS_DONE_NOT_OK,
+					taskmanagerv1.ErrorCode_ERROR_CODE_FAILED,
+					err.Error())
 			}
 		}()
 	}
@@ -120,7 +140,7 @@ func (a *Adapter) isTaskAccepted(task *taskmanagerv1.Task) bool {
 
 	spec := task.GetSpecification()
 	if spec == nil {
-		return len(a.config.TaskCatalog) == 0
+		return false
 	}
 	taskSpecURL := spec.GetTypeUrl()
 	for _, catalogURL := range a.config.TaskCatalog {
@@ -160,11 +180,33 @@ func postureRank(p string) int {
 	}
 }
 
-// reportTaskStatus sends a task status update back to Lattice.
-func (a *Adapter) reportTaskStatus(ctx context.Context, taskID string, statusMsg string) error {
-	a.logger.Info("Lattice: reporting task status",
-		"task_id", taskID,
-		"status", statusMsg,
+// reportTaskStatus sends a task status update to the Lattice TaskManager via
+// the UpdateStatus RPC. The version field provides optimistic concurrency
+// control — the caller must pass the task's current version.
+func (a *Adapter) reportTaskStatus(ctx context.Context, version *taskmanagerv1.TaskVersion, status taskmanagerv1.Status, errCode taskmanagerv1.ErrorCode, errMsg string) error {
+	req := &taskmanagerv1.UpdateStatusRequest{
+		StatusUpdate: &taskmanagerv1.StatusUpdate{
+			Version: version,
+			Status: &taskmanagerv1.TaskStatus{
+				Status: status,
+				TaskError: &taskmanagerv1.TaskError{
+					Code:    errCode,
+					Message: errMsg,
+				},
+			},
+		},
+	}
+
+	if _, err := a.taskMgr.UpdateStatus(ctx, req); err != nil {
+		a.logger.Error("Lattice: failed to report task status",
+			"task_id", version.GetTaskId(),
+			"error", err)
+		return fmt.Errorf("%w: %w", constants.ErrLatticeStatusReportFailed, err)
+	}
+
+	a.logger.Info("Lattice: reported task status",
+		"task_id", version.GetTaskId(),
+		"status", status.String(),
 		slog.String("entity_id", a.entityID))
 	return nil
 }
