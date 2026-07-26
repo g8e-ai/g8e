@@ -433,9 +433,8 @@ func TestBootstrap_SessionRepoIdempotent(t *testing.T) {
 
 // TestBootstrap_MutationWorksImmediatelyAfterConstruction verifies that a
 // full write-mirror cycle works immediately after construction without any
-// prior "warm-up" mutations. This simulates the dow-cross-cue scenario where
-// the operator starts, performs HTTP-only actions, and then later needs to
-// write a file.
+// prior "warm-up" mutations. This simulates a scenario where the operator
+// starts, performs HTTP-only actions, and then later needs to write a file.
 func TestBootstrap_MutationWorksImmediatelyAfterConstruction(t *testing.T) {
 	t.Parallel()
 	svc, tempDir := setupBootstrapLedger(t)

@@ -617,23 +617,10 @@ func printDemoEndpoints(cmd *cobra.Command, org string) {
 		cmd.Println("  Gateway HTTPS: https://localhost:8445")
 		cmd.Println("  Console:       https://localhost:8445/console/")
 		cmd.Println("  Demo UI:       http://localhost:3002")
-	case constants.DemosOrgSecureData:
-		cmd.Println("  Gateway HTTP:  http://localhost:8083")
-		cmd.Println("  Gateway HTTPS: https://localhost:8446")
-		cmd.Println("  Console:       https://localhost:8446/console/")
-		cmd.Println("  Demo UI:       http://localhost:3003")
-	case constants.DemosOrgDoW:
-		cmd.Println("  Gateway HTTP:  http://localhost:8086")
-		cmd.Println("  Gateway HTTPS: https://localhost:8449")
-		cmd.Println("  Console:       https://localhost:8449/console/")
 	case constants.DemosOrgDHS:
 		cmd.Println("  Gateway HTTP:  http://localhost:8087")
 		cmd.Println("  Gateway HTTPS: https://localhost:8450")
 		cmd.Println("  Console:       https://localhost:8450/console/")
-	case constants.DemosOrgSwarm:
-		cmd.Println("  Gateway HTTP:  http://localhost:8085")
-		cmd.Println("  Gateway HTTPS: https://localhost:8448")
-		cmd.Println("  Console:       https://localhost:8448/console/")
 	case constants.DemosOrgFedRAMP:
 		cmd.Println("  Gateway HTTP:  http://localhost:8088")
 		cmd.Println("  Gateway HTTPS: https://localhost:8451")
@@ -659,59 +646,37 @@ func printDemoEndpoints(cmd *cobra.Command, org string) {
 	}
 }
 
+// demoHTTPPorts maps each demo org to its Docker-published HTTP port.
+var demoHTTPPorts = map[string]string{
+	constants.DemosOrgHealthcare: "8081",
+	constants.DemosOrgGov:        "8080",
+	constants.DemosOrgFinance:    "8082",
+	constants.DemosOrgDHS:        "8087",
+	constants.DemosOrgFedRAMP:    "8088",
+	constants.DemosOrgFrontend:   "8083",
+}
+
+// demoHTTPSPorts maps each demo org to its Docker-published HTTPS port.
+var demoHTTPSPorts = map[string]string{
+	constants.DemosOrgHealthcare: "8444",
+	constants.DemosOrgGov:        "8443",
+	constants.DemosOrgFinance:    "8445",
+	constants.DemosOrgDHS:        "8450",
+	constants.DemosOrgFedRAMP:    "8451",
+	constants.DemosOrgFrontend:   "8446",
+}
+
 // demoHTTPPort returns the Docker-published HTTP port for the given demo org.
 // Returns empty string for unknown orgs.
 func demoHTTPPort(org string) string {
-	switch org {
-	case constants.DemosOrgHealthcare:
-		return "8081"
-	case constants.DemosOrgGov:
-		return "8080"
-	case constants.DemosOrgFinance:
-		return "8082"
-	case constants.DemosOrgSecureData:
-		return "8083"
-	case constants.DemosOrgDoW:
-		return "8086"
-	case constants.DemosOrgDHS:
-		return "8087"
-	case constants.DemosOrgSwarm:
-		return "8085"
-	case constants.DemosOrgFedRAMP:
-		return "8088"
-	case constants.DemosOrgFrontend:
-		return "8083"
-	default:
-		return ""
-	}
+	return demoHTTPPorts[org]
 }
 
 // demoHTTPSPort returns the Docker-published HTTPS port for the given demo org.
 // This is the port used for mTLS API calls including `g8e auth enroll`.
 // Returns empty string for unknown orgs.
 func demoHTTPSPort(org string) string {
-	switch org {
-	case constants.DemosOrgHealthcare:
-		return "8444"
-	case constants.DemosOrgGov:
-		return "8443"
-	case constants.DemosOrgFinance:
-		return "8445"
-	case constants.DemosOrgSecureData:
-		return "8446"
-	case constants.DemosOrgDoW:
-		return "8449"
-	case constants.DemosOrgDHS:
-		return "8450"
-	case constants.DemosOrgSwarm:
-		return "8448"
-	case constants.DemosOrgFedRAMP:
-		return "8451"
-	case constants.DemosOrgFrontend:
-		return "8446"
-	default:
-		return ""
-	}
+	return demoHTTPSPorts[org]
 }
 
 // switchDemoPosture restarts the gateway container with the specified posture.
@@ -724,7 +689,7 @@ func switchDemoPosture(demoDir, posture, httpPort string) error {
 		return fmt.Errorf("stop gateway: %w", err)
 	}
 
-	cmd := exec.Command("docker", "compose", "-f", composePath, "up", "-d", "--no-deps", "gateway")
+	cmd := exec.Command("docker", "compose", "-f", composePath, "up", "-d", "--force-recreate", "--no-deps", "gateway")
 	cmd.Env = append(os.Environ(), "G8E_GATEWAY_POSTURE="+posture)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("restart gateway with posture %s: %w", posture, err)
@@ -1156,10 +1121,7 @@ var scenarioCounts = map[string]int{
 	constants.DemosOrgHealthcare: 4,
 	constants.DemosOrgGov:        1,
 	constants.DemosOrgFinance:    1,
-	constants.DemosOrgSecureData: 3,
-	constants.DemosOrgDoW:        3,
 	constants.DemosOrgDHS:        5,
-	constants.DemosOrgSwarm:      3,
 	constants.DemosOrgFedRAMP:    5,
 	constants.DemosOrgFrontend:   1,
 }
@@ -1182,24 +1144,12 @@ Available scenarios:
     1 - CUI Exfiltration Attempt Blocked
   finance: 1
     1 - Unauthorized Trade Blocked
-  secure-data: 1-3
-    1 - Governed Migration with Chain-of-Custody Receipts
-    2 - Connector Bypass Attempt Blocked
-    3 - Cross-Tenant Leak Doctrine Triggered
-  dow: 1-3
-    1 - Autonomous SIGINT-to-EO/IR Cross-Cueing (Challenge 5)
-    2 - BFT Spoofing Defense (Challenge 8)
-    3 - Disconnected Operations (Challenge 6)
   dhs: 1-5
     1 - Sovereign Multi-Source Ingest (chain-of-custody) (LOE 1)
     2 - Cross-Domain Release requires Notary authority (LOE 1 & 2)
     3 - Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
     4 - Governed Predictive Cueing (quorum vs veto) (LOE 3 & 4)
     5 - Sovereign Destruction + tamper-proof audit (LOE 2)
-  swarm: 1-3
-    1 - Authorized Recon Mission (Governed Drone Deployment)
-    2 - Weapons Safety Doctrine Block
-    3 - Navigation Boundary Violation Block
   fedramp: 1-5
     1 - Governed Cloud Resource Provisioning
     2 - Unauthorized Audit Trail Destruction Blocked (CR-26)
@@ -1382,14 +1332,8 @@ func runScenarioWithResult(org, demoDir, scenario string) (scenarioResult, error
 		return runGovScenario(demoDir, scenario)
 	case constants.DemosOrgFinance:
 		return runFinanceScenario(demoDir, scenario)
-	case constants.DemosOrgSecureData:
-		return runSecureDataScenario(demoDir, scenario)
-	case constants.DemosOrgDoW:
-		return runDoWScenario(demoDir, scenario)
 	case constants.DemosOrgDHS:
 		return runDHSScenario(demoDir, scenario)
-	case constants.DemosOrgSwarm:
-		return runSwarmScenario(demoDir, scenario)
 	case constants.DemosOrgFedRAMP:
 		return runFedRAMPScenario(demoDir, scenario)
 	case constants.DemosOrgFrontend:

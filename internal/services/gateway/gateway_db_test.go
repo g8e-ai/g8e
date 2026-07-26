@@ -62,7 +62,7 @@ func TestCanonicalDBService_GetDB(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, _, err := OpenCanonicalDBService(dataDir, filepath.Join(dataDir, constants.VaultDirname), logger, "", ks, fileSvc)
+	db, _, err := OpenCanonicalDBService(dataDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -75,7 +75,7 @@ func TestCanonicalDBService_Wait(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, _, err := OpenCanonicalDBService(dataDir, filepath.Join(dataDir, constants.VaultDirname), logger, "", ks, fileSvc)
+	db, _, err := OpenCanonicalDBService(dataDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 
 	// Close the database to stop background workers
@@ -91,7 +91,7 @@ func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, stores, err := OpenCanonicalDBService(dataDir, filepath.Join(dataDir, constants.VaultDirname), logger, "", ks, fileSvc)
+	db, stores, err := OpenCanonicalDBService(dataDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -119,7 +119,7 @@ func newTestDB(t *testing.T) (*CanonicalDBService, *Stores) {
 	fileSvc := newTestFileSvc(t)
 	logger := testutil.NewTestLogger()
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, stores, err := OpenCanonicalDBService(dir, filepath.Join(dir, "vault"), logger, "", ks, fileSvc)
+	db, stores, err := OpenCanonicalDBService(dir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	return db, stores
@@ -286,14 +286,14 @@ func TestSchemaIdempotent(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 	ks1 := newTestKeystore(t, fileSvc, logger)
-	db1, stores1, err := OpenCanonicalDBService(dir, filepath.Join(dir, "vault"), logger, "", ks1, fileSvc)
+	db1, stores1, err := OpenCanonicalDBService(dir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks1, fileSvc)
 	require.NoError(t, err)
 	require.NoError(t, stores1.DocStore.DocSet("test", "1", mustDocJSON(t, map[string]string{"val": "first"})))
 	db1.Close()
 
 	// Re-open same database - schema init should not fail or lose data
 	ks2 := newTestKeystore(t, fileSvc, logger)
-	db2, stores2, err := OpenCanonicalDBService(dir, filepath.Join(dir, "vault"), logger, "", ks2, fileSvc)
+	db2, stores2, err := OpenCanonicalDBService(dir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks2, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db2.Close() })
 
@@ -314,7 +314,7 @@ func TestCreateDataDir(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, _, err := OpenCanonicalDBService(dir, filepath.Join(dir, "vault"), logger, "", ks, fileSvc)
+	db, _, err := OpenCanonicalDBService(dir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

@@ -24,6 +24,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"log/slog"
 	"math/big"
 	"net/http"
@@ -225,7 +226,7 @@ func TestToolsListResult(t *testing.T) {
 				{
 					Name:        "test_tool",
 					Description: "A test tool",
-					InputSchema: map[string]interface{}{"type": "object"},
+					InputSchema: &mcp.InputSchema{Type: "object"},
 				},
 			},
 		}
@@ -239,12 +240,12 @@ func TestTool(t *testing.T) {
 		tool := Tool{
 			Name:        "execute_bash",
 			Description: "Execute a bash command",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"command": map[string]interface{}{
-						"type":        "string",
-						"description": "The command to execute",
+			InputSchema: &mcp.InputSchema{
+				Type: "object",
+				Properties: map[string]*mcp.PropertySchema{
+					"command": {
+						Type:        "string",
+						Description: "The command to execute",
 					},
 				},
 			},
@@ -811,13 +812,13 @@ func generateTestCerts(t *testing.T) (certPath, keyPath, caPath string) {
 	keyPath = filepath.Join(tempDir, constants.TestKeyFilename)
 
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	require.NoError(t, os.WriteFile(certPath, certPEM, 0644))
+	require.NoError(t, os.WriteFile(certPath, certPEM, constants.PermFilePublic))
 
 	keyDER, err := x509.MarshalECPrivateKey(key)
 	require.NoError(t, err)
 
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
-	require.NoError(t, os.WriteFile(keyPath, keyPEM, 0644))
+	require.NoError(t, os.WriteFile(keyPath, keyPEM, constants.PermFilePublic))
 
 	return certPath, keyPath, certPath
 }
@@ -959,18 +960,14 @@ func TestPrintMCPConfigStdio(t *testing.T) {
 func TestPrintMCPConfigLocal(t *testing.T) {
 	t.Run("generates local config with /etc/hosts entry", func(t *testing.T) {
 		tempDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+		require.NoError(t, err)
+		require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 
-		cfgDir := filepath.Join(tempDir, constants.RuntimeDirname, constants.PkiDirname, constants.PkiSubdirClient)
-		require.NoError(t, os.MkdirAll(cfgDir, 0755))
-
-		certPath := filepath.Join(cfgDir, constants.TestCertFilename)
-		keyPath := filepath.Join(cfgDir, constants.TestKeyFilename)
-		caPath := filepath.Join(tempDir, constants.RuntimeDirname, constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
-		require.NoError(t, os.MkdirAll(filepath.Dir(caPath), 0755))
-
-		require.NoError(t, os.WriteFile(certPath, []byte("cert"), 0644))
-		require.NoError(t, os.WriteFile(keyPath, []byte("key"), 0644))
-		require.NoError(t, os.WriteFile(caPath, []byte("ca"), 0644))
+		clientDir := filepath.Join(constants.PkiDirname, constants.PkiSubdirClient)
+		require.NoError(t, fileSvc.WriteFile(context.Background(), filepath.Join(clientDir, constants.TestCertFilename), []byte("cert"), constants.PermFilePublic))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), filepath.Join(clientDir, constants.TestKeyFilename), []byte("key"), constants.PermFilePublic))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle), []byte("ca"), constants.PermFilePublic))
 
 		t.Setenv("G8E_PROJECT_ROOT", tempDir)
 
@@ -978,7 +975,7 @@ func TestPrintMCPConfigLocal(t *testing.T) {
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 
-		err := printMCPConfigLocal(cmd)
+		err = printMCPConfigLocal(cmd)
 		if err != nil {
 			assert.ErrorIs(t, err, constants.ErrConfigLoadFailed)
 		}
@@ -988,18 +985,14 @@ func TestPrintMCPConfigLocal(t *testing.T) {
 func TestPrintMCPConfigIP(t *testing.T) {
 	t.Run("generates IP-based config", func(t *testing.T) {
 		tempDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+		require.NoError(t, err)
+		require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 
-		cfgDir := filepath.Join(tempDir, constants.RuntimeDirname, constants.PkiDirname, constants.PkiSubdirClient)
-		require.NoError(t, os.MkdirAll(cfgDir, 0755))
-
-		certPath := filepath.Join(cfgDir, constants.TestCertFilename)
-		keyPath := filepath.Join(cfgDir, constants.TestKeyFilename)
-		caPath := filepath.Join(tempDir, constants.RuntimeDirname, constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
-		require.NoError(t, os.MkdirAll(filepath.Dir(caPath), 0755))
-
-		require.NoError(t, os.WriteFile(certPath, []byte("cert"), 0644))
-		require.NoError(t, os.WriteFile(keyPath, []byte("key"), 0644))
-		require.NoError(t, os.WriteFile(caPath, []byte("ca"), 0644))
+		clientDir := filepath.Join(constants.PkiDirname, constants.PkiSubdirClient)
+		require.NoError(t, fileSvc.WriteFile(context.Background(), filepath.Join(clientDir, constants.TestCertFilename), []byte("cert"), constants.PermFilePublic))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), filepath.Join(clientDir, constants.TestKeyFilename), []byte("key"), constants.PermFilePublic))
+		require.NoError(t, fileSvc.WriteFile(context.Background(), filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle), []byte("ca"), constants.PermFilePublic))
 
 		t.Setenv("G8E_PROJECT_ROOT", tempDir)
 
@@ -1007,7 +1000,7 @@ func TestPrintMCPConfigIP(t *testing.T) {
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 
-		err := printMCPConfigIP(cmd)
+		err = printMCPConfigIP(cmd)
 		if err != nil {
 			assert.ErrorIs(t, err, constants.ErrConfigLoadFailed)
 		}
@@ -1267,7 +1260,7 @@ func TestWriteAgentConfig(t *testing.T) {
 		cleanup()
 
 		_, err = os.Stat(configPath)
-		assert.True(t, os.IsNotExist(err))
+		assert.True(t, errors.Is(err, os.ErrNotExist))
 	})
 }
 

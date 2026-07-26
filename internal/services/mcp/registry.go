@@ -36,35 +36,6 @@ type InputSchema struct {
 	Required   []string                   `json:"required"`
 }
 
-// ToMap converts InputSchema to map[string]interface{} for JSON serialization.
-// This is required for MCP protocol compatibility with the JSON Schema specification.
-func (s *InputSchema) ToMap() map[string]interface{} {
-	if s == nil {
-		return nil
-	}
-	result := map[string]interface{}{
-		"type": s.Type,
-	}
-	if s.Properties != nil {
-		props := make(map[string]interface{})
-		for k, v := range s.Properties {
-			propMap := map[string]interface{}{
-				"type":        v.Type,
-				"description": v.Description,
-			}
-			if v.Enum != nil {
-				propMap["enum"] = v.Enum
-			}
-			props[k] = propMap
-		}
-		result["properties"] = props
-	}
-	if s.Required != nil {
-		result["required"] = s.Required
-	}
-	return result
-}
-
 // NativeTool defines the interface that all native tools must implement.
 type NativeTool interface {
 	// Name returns the unique identifier for this tool.

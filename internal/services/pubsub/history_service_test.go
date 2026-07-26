@@ -79,7 +79,8 @@ func TestHistoryService_SetScrubbingService(t *testing.T) {
 		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
-		scrubbingSvc := scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil)
+		scrubbingSvc, err := scrubbing.NewScrubbingService(context.Background(), scrubbing.DefaultConfig(), logger, nil)
+		require.NoError(t, err)
 		svc.SetScrubbingService(scrubbingSvc)
 
 		assert.NotNil(t, svc.scrubbing)

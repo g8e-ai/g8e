@@ -134,14 +134,11 @@ func TestInitWithBase(t *testing.T) {
 		{"DemosHealthcareDir", Infra.DemosHealthcareDir, pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgHealthcare)},
 		{"DemosFinanceDir", Infra.DemosFinanceDir, pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgFinance)},
 		{"DemosGovDir", Infra.DemosGovDir, pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgGov)},
-		{"DemosSecureDataDir", Infra.DemosSecureDataDir, pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgSecureData)},
 		{"DemosHealthcareTargetDataDir", Infra.DemosHealthcareTargetDataDir, pathutil.SafeJoin(Infra.DemosHealthcareDir, constants.DemosTargetDataDir)},
 		{"DemosHealthcareDoctrineDir", Infra.DemosHealthcareDoctrineDir, pathutil.SafeJoin(Infra.DemosHealthcareDir, constants.DemosDoctrineDir)},
 		{"DemosHealthcarePARequestsPath", Infra.DemosHealthcarePARequestsPath, pathutil.SafeJoin(Infra.DemosHealthcareTargetDataDir, constants.DemosPARequestsFile)},
 		{"DemosHealthcareComposePath", Infra.DemosHealthcareComposePath, pathutil.SafeJoin(Infra.DemosHealthcareDir, constants.DemosComposeFile)},
 		{"DemosHealthcareDoctrineHIPAAPath", Infra.DemosHealthcareDoctrineHIPAAPath, pathutil.SafeJoin(Infra.DemosHealthcareDoctrineDir, constants.DemosHIPAADoctrineFile)},
-		{"DemosSecureDataDoctrineDir", Infra.DemosSecureDataDoctrineDir, pathutil.SafeJoin(Infra.DemosSecureDataDir, constants.DemosDoctrineDir)},
-		{"DemosSecureDataDoctrinePath", Infra.DemosSecureDataDoctrinePath, pathutil.SafeJoin(Infra.DemosSecureDataDoctrineDir, constants.DemosSecureDataDoctrineFile)},
 	}
 
 	for _, tc := range tests {
@@ -631,14 +628,11 @@ func TestInfraDefaults_BeforeInit(t *testing.T) {
 		DemosHealthcareDir               string
 		DemosFinanceDir                  string
 		DemosGovDir                      string
-		DemosSecureDataDir               string
 		DemosHealthcareTargetDataDir     string
 		DemosHealthcareDoctrineDir       string
 		DemosHealthcarePARequestsPath    string
 		DemosHealthcareComposePath       string
 		DemosHealthcareDoctrineHIPAAPath string
-		DemosSecureDataDoctrineDir       string
-		DemosSecureDataDoctrinePath      string
 	}{}
 
 	// After resetting, all fields should be empty.

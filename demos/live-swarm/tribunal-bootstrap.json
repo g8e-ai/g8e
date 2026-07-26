@@ -1,6 +1,0 @@
-{
-  "tribunal_id": "live-demo-tribunal",
-  "member_app_ids": ["live-demo-ensemble"],
-  "quorum": 1,
-  "seed_hex": "REPLACE_WITH_openssl_rand_hex_32_OUTPUT"
-}

@@ -720,14 +720,13 @@ func (rs *OperatorPubSubService) HeartbeatService() *HeartbeatService {
 
 // ExecuteVerifiedTransaction implements governance.ExecutionHandler.
 // This is called by Actuator to execute verified transactions, making Actuator the execution boundary.
-func (rs *OperatorPubSubService) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
+func (rs *OperatorPubSubService) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
 	handler, ok := rs.handlers[eventType]
 	if !ok {
 		rs.logger.Error("No handler registered for event type", "event_type", string(eventType))
 		return "", fmt.Errorf("no handler for event type %s: %w", string(eventType), constants.ErrTxUnknownActionType)
 	}
 
-	// Type assert to *PubSubCommandMessage
 	pubsubMsg, ok := cmdMsg.(*PubSubCommandMessage)
 	if !ok {
 		rs.logger.Error("Invalid cmdMsg type", "expected", "*PubSubCommandMessage", "got", fmt.Sprintf("%T", cmdMsg))

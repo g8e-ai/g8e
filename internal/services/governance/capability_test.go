@@ -202,7 +202,7 @@ func TestL5Actuator_MintsAndDissolvesCapability(t *testing.T) {
 
 	var capturedCap *Capability
 	handler := actuator.ExecutionHandler.(*mockExecutionHandler)
-	handler.ExecuteVerifiedTransactionFunc = func(ctx context.Context, _ constants.EventType, _ interface{}) (string, error) {
+	handler.ExecuteVerifiedTransactionFunc = func(ctx context.Context, _ constants.EventType, _ CommandMessage) (string, error) {
 		capturedCap = CapabilityFromContext(ctx)
 		return "ok", nil
 	}
@@ -242,7 +242,7 @@ func TestL5Actuator_CapabilityDissolvedOnHandlerError(t *testing.T) {
 	var capturedCap *Capability
 	handler := actuator.ExecutionHandler.(*mockExecutionHandler)
 	handler.err = nil // set below via func
-	handler.ExecuteVerifiedTransactionFunc = func(ctx context.Context, _ constants.EventType, _ interface{}) (string, error) {
+	handler.ExecuteVerifiedTransactionFunc = func(ctx context.Context, _ constants.EventType, _ CommandMessage) (string, error) {
 		capturedCap = CapabilityFromContext(ctx)
 		return "", errors.New("simulated execution failure")
 	}

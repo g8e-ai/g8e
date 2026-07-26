@@ -228,7 +228,8 @@ func TestHandleFsReadRequest_ScrubbingRedactsSecrets(t *testing.T) {
 	fileEditSvc := execution.NewFileEditService(cfg, logger)
 	svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
 
-	scrubbingSvc := scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil)
+	scrubbingSvc, err := scrubbing.NewScrubbingService(context.Background(), scrubbing.DefaultConfig(), logger, nil)
+	require.NoError(t, err)
 	svc.SetScrubbingService(scrubbingSvc)
 
 	req := &operatorv1.FsReadRequested{Path: testFile}

@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"google.golang.org/grpc/credentials"
 )
 
@@ -79,7 +80,7 @@ func (a *ClientCredentialsAuth) acquireToken(ctx context.Context) (*authToken, e
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.Endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrLatticeTokenAcquireFailed, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrLatticeTokenAcquireFailed, err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
@@ -89,13 +90,13 @@ func (a *ClientCredentialsAuth) acquireToken(ctx context.Context) (*authToken, e
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrLatticeTokenAcquireFailed, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrLatticeTokenAcquireFailed, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("%w: status %d: %s", ErrLatticeTokenAcquireFailed, resp.StatusCode, string(body))
+		return nil, fmt.Errorf("%w: status %d: %s", constants.ErrLatticeTokenAcquireFailed, resp.StatusCode, string(body))
 	}
 
 	var tokenResp struct {
@@ -103,11 +104,11 @@ func (a *ClientCredentialsAuth) acquireToken(ctx context.Context) (*authToken, e
 		ExpiresIn   int    `json:"expires_in"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrLatticeTokenAcquireFailed, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrLatticeTokenAcquireFailed, err)
 	}
 
 	if tokenResp.AccessToken == "" {
-		return nil, fmt.Errorf("%w: empty access_token in response", ErrLatticeTokenAcquireFailed)
+		return nil, fmt.Errorf("%w: empty access_token in response", constants.ErrLatticeTokenAcquireFailed)
 	}
 
 	expiry := time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)

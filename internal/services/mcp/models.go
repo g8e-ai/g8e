@@ -770,3 +770,73 @@ type SysServiceStatusResult struct {
 	ExecStart   string `json:"exec_start"`
 	Error       string `json:"error,omitempty"`
 }
+
+// CloudMetadataRequest is the params for the "cloud_metadata" tool.
+type CloudMetadataRequest struct {
+	Operation string `json:"operation"`
+}
+
+// CloudMetadataDetectResult is the result for the "cloud_metadata" detect operation.
+type CloudMetadataDetectResult struct {
+	Provider string `json:"provider"`
+}
+
+// CloudMetadataInstanceResult is the result for the "cloud_metadata" instance operation.
+type CloudMetadataInstanceResult struct {
+	Provider   string `json:"provider"`
+	InstanceID string `json:"instance_id,omitempty"`
+	Name       string `json:"name,omitempty"`
+	VMSize     string `json:"vm_size,omitempty"`
+	Location   string `json:"location,omitempty"`
+	Error      string `json:"error,omitempty"`
+}
+
+// CloudMetadataRegionResult is the result for the "cloud_metadata" region operation.
+type CloudMetadataRegionResult struct {
+	Provider string `json:"provider"`
+	Region   string `json:"region"`
+	Error    string `json:"error,omitempty"`
+}
+
+// CloudMetadataAvailabilityZoneResult is the result for the "cloud_metadata" availability_zone operation.
+type CloudMetadataAvailabilityZoneResult struct {
+	Provider         string `json:"provider"`
+	AvailabilityZone string `json:"availability_zone"`
+	Error            string `json:"error,omitempty"`
+}
+
+// CloudMetadataInstanceTypeResult is the result for the "cloud_metadata" instance_type operation.
+type CloudMetadataInstanceTypeResult struct {
+	Provider     string `json:"provider"`
+	InstanceType string `json:"instance_type"`
+	Error        string `json:"error,omitempty"`
+}
+
+// CloudMetadataAllResult is the result for the "cloud_metadata" all operation.
+type CloudMetadataAllResult struct {
+	Provider         string                              `json:"provider"`
+	Instance         CloudMetadataInstanceResult         `json:"instance"`
+	Region           CloudMetadataRegionResult           `json:"region"`
+	AvailabilityZone CloudMetadataAvailabilityZoneResult `json:"availability_zone"`
+	InstanceType     CloudMetadataInstanceTypeResult     `json:"instance_type"`
+}
+
+// CloudMetadataErrorResponse is the error response for the "cloud_metadata" tool.
+type CloudMetadataErrorResponse struct {
+	Operation string `json:"operation,omitempty"`
+	Provider  string `json:"provider,omitempty"`
+	Error     string `json:"error,omitempty"`
+	Message   string `json:"message,omitempty"`
+}
+
+// AzureComputeMetadata represents the compute section of Azure instance metadata.
+type AzureComputeMetadata struct {
+	VMSize              string `json:"vmSize,omitempty"`
+	Location            string `json:"location,omitempty"`
+	PlatformFaultDomain string `json:"platformFaultDomain,omitempty"`
+}
+
+// AzureInstanceMetadata represents the Azure instance metadata service response.
+type AzureInstanceMetadata struct {
+	Compute AzureComputeMetadata `json:"compute"`
+}

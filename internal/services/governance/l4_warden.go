@@ -23,11 +23,12 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/internal/constants"
 	govtypes "github.com/g8e-ai/g8e/internal/governance"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
-	"google.golang.org/protobuf/proto"
 )
 
 // VerifiedTransaction represents a fully verified transaction ready for execution.
@@ -152,7 +153,7 @@ func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *govtypes.Gover
 			"nonce", envelope.Nonce,
 			string(constants.ConnectionStateError), err)
 		tv.releaseInFlight(envelope.Nonce)
-		return nil, fmt.Errorf("nonce reservation failed: %w", err)
+		return nil, fmt.Errorf("l4 warden: reserve nonce: %w", err)
 	}
 	if replayed {
 		tv.logger.Error("Transaction rejected: REPLAY_DETECTED", "nonce", envelope.Nonce)
@@ -171,19 +172,19 @@ func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *govtypes.Gover
 			"action_type", envelope.ActionType,
 			string(constants.ConnectionStateError), err)
 		// Release nonce reservation on stateless validation failure
-		_ = tv.replayStore.ReleaseNonce(envelope.Nonce)
+		tv.releaseNonceReservation(envelope.Nonce)
 		return nil, err
 	}
 
 	// 3. Stateful Validation (excluding nonce, which is already reserved)
-	_, err = tv.verifyStateful(envelope)
+	err = tv.verifyStateful(envelope)
 	if err != nil {
 		tv.logger.Error("Transaction rejected: STATEFUL_VALIDATION_FAILED",
 			"nonce", envelope.Nonce,
 			"tx_id", envelope.Id,
 			string(constants.ConnectionStateError), err)
 		// Release nonce reservation on stateful validation failure
-		_ = tv.replayStore.ReleaseNonce(envelope.Nonce)
+		tv.releaseNonceReservation(envelope.Nonce)
 		return nil, err
 	}
 
@@ -196,7 +197,7 @@ func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *govtypes.Gover
 			"posture", tv.posture.Name(),
 			string(constants.ConnectionStateError), err)
 		// Release nonce reservation on posture validation failure
-		_ = tv.replayStore.ReleaseNonce(envelope.Nonce)
+		tv.releaseNonceReservation(envelope.Nonce)
 		return nil, err
 	}
 
@@ -229,6 +230,14 @@ func (tv *L4Warden) trackInFlight(nonce string) error {
 
 func (tv *L4Warden) releaseInFlight(nonce string) {
 	tv.inFlight.Delete(nonce)
+}
+
+func (tv *L4Warden) releaseNonceReservation(nonce string) {
+	if err := tv.replayStore.ReleaseNonce(nonce); err != nil {
+		tv.logger.Warn("Failed to release nonce reservation",
+			"nonce", nonce,
+			string(constants.ConnectionStateError), err)
+	}
 }
 
 // isMutation returns true if the action type modifies system state.
@@ -273,7 +282,7 @@ func (tv *L4Warden) verifyStateless(envelope *govtypes.GovernanceEnvelope) (prot
 
 	computedHash, err := tv.computeTransactionHash(envelope)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to compute transaction hash: %w", err)
+		return nil, "", fmt.Errorf("l4 warden: compute transaction hash: %w", err)
 	}
 
 	if envelope.TransactionHash == "" {
@@ -298,34 +307,34 @@ func (tv *L4Warden) verifyStateless(envelope *govtypes.GovernanceEnvelope) (prot
 }
 
 // verifyStateful checks state root. Nonce and expiry are checked earlier in VerifyEnvelope.
-func (tv *L4Warden) verifyStateful(envelope *govtypes.GovernanceEnvelope) (time.Time, error) {
+func (tv *L4Warden) verifyStateful(envelope *govtypes.GovernanceEnvelope) error {
 	if envelope.StateMerkleRoot == "" {
-		return time.Time{}, constants.ErrTxStateRootRequired
+		return constants.ErrTxStateRootRequired
 	}
 
 	if tv.stateRootProvider == nil {
 		tv.logger.Error("State root verification required but provider not configured")
-		return time.Time{}, constants.ErrTxStateRootMissing
+		return constants.ErrTxStateRootMissing
 	}
 
 	currentRoot, err := tv.stateRootProvider.GetCurrentStateRoot()
 	if err != nil {
 		tv.logger.Error("Failed to get current state root", string(constants.ConnectionStateError), err)
-		return time.Time{}, fmt.Errorf("failed to get current state root: %w", err)
+		return fmt.Errorf("l4 warden: get current state root: %w", err)
 	}
 
 	if currentRoot == "" {
-		return time.Time{}, constants.ErrTxStateRootMissing
+		return constants.ErrTxStateRootMissing
 	}
 
 	if currentRoot != envelope.StateMerkleRoot {
 		tv.logger.Error("State root mismatch",
 			"envelope_root", envelope.StateMerkleRoot,
 			"current_root", currentRoot)
-		return time.Time{}, constants.ErrTxStateRootMismatch
+		return constants.ErrTxStateRootMismatch
 	}
 
-	return time.Time{}, nil
+	return nil
 }
 
 // verifyPosture performs governance posture-aware checks for L2 and L3.

@@ -64,7 +64,7 @@ func BenchmarkCacheExpiry(b *testing.B) {
 	auth := &AuthService{}
 	user := &models.User{ID: "test-user-id"}
 	// Manually set an expired entry
-	auth.userCache.Store(user.ID, &cacheEntry{
+	auth.userCache.Store(user.ID, &cacheEntry[*models.User]{
 		value:     user,
 		expiresAt: time.Now().Add(-1 * time.Hour),
 	})

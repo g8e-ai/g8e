@@ -104,7 +104,7 @@ func newPubsubFixture(t *testing.T) *pubsubFixture {
 
 	// Set up a mock actuator for tests that require execution
 	mockHandler := &mockExecutionHandler{
-		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
+		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
 			return "test-receipt-id", nil
 		},
 	}

@@ -14,6 +14,7 @@
 package governance
 
 import (
+	"errors"
 	"testing"
 
 	"time"
@@ -21,6 +22,7 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
@@ -212,7 +214,10 @@ func TestGovernanceEnvelope_GenerateMessageID_DeterministicCanonicalization(t *t
 func TestGovernanceEnvelope_GenerateMessageID_NilEnvelope(t *testing.T) {
 	_, err := GenerateMessageID(nil)
 	if err == nil {
-		t.Error("GenerateMessageID should return error for nil envelope")
+		t.Fatal("GenerateMessageID should return error for nil envelope")
+	}
+	if !errors.Is(err, constants.ErrTxInvalidEnvelope) {
+		t.Errorf("GenerateMessageID should return ErrTxInvalidEnvelope for nil envelope, got: %v", err)
 	}
 }
 

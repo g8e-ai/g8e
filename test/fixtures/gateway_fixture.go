@@ -202,6 +202,8 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		DataDir:           dataDir,
 		PKIDir:            pkiDir,
 		SecretsDir:        secretsDir,
+		VaultDir:          testPaths.VaultDir,
+		VaultKeyPath:      testPaths.VaultKeyPath,
 		PasskeyRpID:       "localhost",
 		PasskeyRpName:     "g8e",
 		AllowTestPortZero: opts.AllowTestPortZero,
@@ -249,6 +251,9 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	mcpGateway := ls.GetHTTPHandler().GetMCPGateway()
 	require.NotNil(t, mcpGateway)
 
+	scrubbingSvc, err := scrubbing.NewScrubbingService(context.Background(), scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil)
+	require.NoError(t, err)
+
 	cmdSvc, err := pubsub.NewGatewayOperatorPubSubService(pubsub.GatewayCommandServiceConfig{
 		CommandServiceConfig: pubsub.CommandServiceConfig{
 			Config:             cfg,
@@ -256,7 +261,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 			Execution:          execSvc,
 			FileEdit:           fileEditSvc,
 			PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetGatewayWebSocketHandler()),
-			Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil),
+			Scrubbing:          scrubbingSvc,
 			ActuatorSigningKey: ActuatorPriv,
 			ActuatorKeyID:      ActuatorKeyID,
 		},

@@ -35,7 +35,7 @@ func TestHeartbeatService_RegisterSink_FiresOnSendAutomatic(t *testing.T) {
 	svc.SetContext(context.Background())
 
 	mockHandler := &mockExecutionHandler{
-		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
+		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
 			return "test-receipt-id", nil
 		},
 	}
@@ -67,7 +67,7 @@ func TestHeartbeatService_RegisterSink_MultipleSinksFireInRegistrationOrder(t *t
 	svc.SetContext(context.Background())
 
 	mockHandler := &mockExecutionHandler{
-		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
+		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
 			return "test-receipt-id", nil
 		},
 	}
@@ -109,7 +109,7 @@ func TestHeartbeatService_SendAutomatic_NoPanicWhenSinkListIsEmpty(t *testing.T)
 	svc.SetContext(context.Background())
 
 	mockHandler := &mockExecutionHandler{
-		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
+		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
 			return "test-receipt-id", nil
 		},
 	}
@@ -135,7 +135,7 @@ func TestHeartbeatService_RegisterSink_PanickingSinkDoesNotCrashHeartbeatCycle(t
 	svc.SetContext(context.Background())
 
 	mockHandler := &mockExecutionHandler{
-		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
+		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
 			return "test-receipt-id", nil
 		},
 	}
@@ -170,7 +170,7 @@ func TestHeartbeatService_UnregisterSink_RemovesSink(t *testing.T) {
 	svc.SetContext(context.Background())
 
 	mockHandler := &mockExecutionHandler{
-		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
+		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
 			return "test-receipt-id", nil
 		},
 	}
@@ -205,7 +205,7 @@ func TestHeartbeatService_UnregisterSink_NonexistentIDIsNoOp(t *testing.T) {
 	svc.SetContext(context.Background())
 
 	mockHandler := &mockExecutionHandler{
-		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
+		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
 			return "test-receipt-id", nil
 		},
 	}

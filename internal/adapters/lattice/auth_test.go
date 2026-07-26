@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -186,7 +187,7 @@ func TestAcquireToken_ReturnsErrLatticeTokenAcquireFailedOnNon200(t *testing.T) 
 	auth := NewClientCredentialsAuth("bad-id", "bad-secret", "", srv.URL+"/oauth/token")
 	_, err := auth.GetRequestMetadata(context.Background())
 	require.Error(t, err)
-	assert.ErrorIs(t, err, ErrLatticeTokenAcquireFailed)
+	assert.ErrorIs(t, err, constants.ErrLatticeTokenAcquireFailed)
 }
 
 func TestAcquireToken_SendsFormEncodedClientCredentials(t *testing.T) {
@@ -222,7 +223,7 @@ func TestAcquireToken_ReturnsErrLatticeTokenAcquireFailedOnEmptyAccessToken(t *t
 	auth := NewClientCredentialsAuth("id", "secret", "", srv.URL+"/oauth/token")
 	_, err := auth.GetRequestMetadata(context.Background())
 	require.Error(t, err)
-	assert.ErrorIs(t, err, ErrLatticeTokenAcquireFailed)
+	assert.ErrorIs(t, err, constants.ErrLatticeTokenAcquireFailed)
 }
 
 func TestNewClientCredentialsAuth_SetsHttpClientTimeout(t *testing.T) {

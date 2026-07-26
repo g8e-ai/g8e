@@ -127,6 +127,14 @@ var APIPaths = struct {
 	// Deploy scripts
 	DeployScriptLinux   string `json:"deploy_script_linux"`
 	DeployScriptWindows string `json:"deploy_script_windows"`
+	// Console SPA
+	ConsolePrefix string `json:"console_prefix"`
+	// WebSocket prefix
+	WSPrefix string `json:"ws_prefix"`
+	// User routes
+	UsersPrefix string `json:"users_prefix"`
+	// Auth session routes
+	AuthSessionsPrefix string `json:"auth_sessions_prefix"`
 	// Health
 	Health string `json:"health"`
 	// State
@@ -251,6 +259,14 @@ var APIPaths = struct {
 	// Deploy scripts
 	DeployScriptLinux:   "/" + DeployScriptFilenameLinux,
 	DeployScriptWindows: "/" + DeployScriptFilenameWindows,
+	// Console SPA
+	ConsolePrefix: "/console/",
+	// WebSocket prefix
+	WSPrefix: "/ws/",
+	// User routes
+	UsersPrefix: "/api/v1/users/",
+	// Auth session routes
+	AuthSessionsPrefix: "/api/v1/auth/sessions/",
 	// Health
 	Health: "/api/v1/health",
 	// State

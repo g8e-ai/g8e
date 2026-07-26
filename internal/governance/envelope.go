@@ -21,6 +21,9 @@ import (
 	"sort"
 	"strings"
 
+	"google.golang.org/protobuf/types/known/structpb"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/timesvc"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
@@ -41,7 +44,7 @@ type GovernanceEnvelope = commonv1.GovernanceEnvelope
 // - Result hashed with SHA-256
 func GenerateMessageID(env *GovernanceEnvelope) (string, error) {
 	if env == nil {
-		return "", fmt.Errorf("envelope is nil")
+		return "", constants.ErrTxInvalidEnvelope
 	}
 
 	// Build canonical string representation in proto field order
@@ -86,10 +89,9 @@ func GenerateMessageID(env *GovernanceEnvelope) (string, error) {
 
 	// 7. intent_data (struct) - canonicalized recursively
 	if env.IntentData != nil {
-		intentMap := env.IntentData.AsMap()
-		intentStr, err := canonicalizeMap(intentMap)
+		intentStr, err := canonicalizeStruct(env.IntentData)
 		if err != nil {
-			return "", fmt.Errorf("canonicalize intent_data: %w", err)
+			return "", fmt.Errorf("envelope: canonicalize intent_data: %w", err)
 		}
 		canonical.WriteString(intentStr)
 		canonical.WriteByte('|')
@@ -121,17 +123,16 @@ func GenerateMessageID(env *GovernanceEnvelope) (string, error) {
 	return hex.EncodeToString(hash[:]), nil
 }
 
-// canonicalizeMap recursively converts a map to a deterministic string representation.
-// Keys are sorted alphabetically. Values are serialized based on type.
-// Returns an error if any value is of an unsupported type.
-func canonicalizeMap(m map[string]interface{}) (string, error) {
-	if len(m) == 0 {
+// canonicalizeStruct recursively converts a structpb.Struct to a deterministic
+// string representation. Keys are sorted alphabetically. Values are serialized
+// based on type. Returns an error if any value is of an unsupported type.
+func canonicalizeStruct(s *structpb.Struct) (string, error) {
+	if s == nil || len(s.Fields) == 0 {
 		return "", nil
 	}
 
-	// Sort keys for deterministic ordering
-	keys := make([]string, 0, len(m))
-	for k := range m {
+	keys := make([]string, 0, len(s.Fields))
+	for k := range s.Fields {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
@@ -140,9 +141,9 @@ func canonicalizeMap(m map[string]interface{}) (string, error) {
 	for i, k := range keys {
 		canonical.WriteString(k)
 		canonical.WriteByte('=')
-		valStr, err := canonicalizeValue(m[k])
+		valStr, err := canonicalizeValue(s.Fields[k])
 		if err != nil {
-			return "", fmt.Errorf("key %q: %w", k, err)
+			return "", fmt.Errorf("envelope: canonicalize key %q: %w", k, err)
 		}
 		canonical.WriteString(valStr)
 		if i < len(keys)-1 {
@@ -152,25 +153,27 @@ func canonicalizeMap(m map[string]interface{}) (string, error) {
 	return canonical.String(), nil
 }
 
-// canonicalizeValue converts a value to its canonical string representation.
+// canonicalizeValue converts a structpb.Value to its canonical string representation.
 // Returns an error for types outside the explicit switch cases to ensure
 // cross-language hash parity — unknown types would produce different output
 // in Go vs Python.
-func canonicalizeValue(v interface{}) (string, error) {
-	switch val := v.(type) {
-	case string:
-		return val, nil
-	case int, int8, int16, int32, int64:
-		return fmt.Sprintf("%d", val), nil
-	case uint, uint8, uint16, uint32, uint64:
-		return fmt.Sprintf("%d", val), nil
-	case float32, float64:
-		return fmt.Sprintf("%f", val), nil
-	case bool:
-		return fmt.Sprintf("%t", val), nil
-	case []interface{}:
-		var parts []string
-		for _, item := range val {
+func canonicalizeValue(v *structpb.Value) (string, error) {
+	if v == nil || v.Kind == nil {
+		return "", nil
+	}
+	switch kind := v.Kind.(type) {
+	case *structpb.Value_StringValue:
+		return kind.StringValue, nil
+	case *structpb.Value_NumberValue:
+		return fmt.Sprintf("%f", kind.NumberValue), nil
+	case *structpb.Value_BoolValue:
+		return fmt.Sprintf("%t", kind.BoolValue), nil
+	case *structpb.Value_StructValue:
+		return canonicalizeStruct(kind.StructValue)
+	case *structpb.Value_ListValue:
+		values := kind.ListValue.GetValues()
+		parts := make([]string, 0, len(values))
+		for _, item := range values {
 			part, err := canonicalizeValue(item)
 			if err != nil {
 				return "", err
@@ -178,11 +181,9 @@ func canonicalizeValue(v interface{}) (string, error) {
 			parts = append(parts, part)
 		}
 		return "[" + strings.Join(parts, ",") + "]", nil
-	case map[string]interface{}:
-		return canonicalizeMap(val)
-	case nil:
+	case *structpb.Value_NullValue:
 		return "", nil
 	default:
-		return "", fmt.Errorf("unsupported type %T in intent_data canonicalization", v)
+		return "", fmt.Errorf("envelope: canonicalize: %w: type %T", constants.ErrTxCanonicalizeFailed, v.Kind)
 	}
 }

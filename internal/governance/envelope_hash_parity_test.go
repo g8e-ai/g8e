@@ -82,13 +82,24 @@ func TestHashParity_VectorFile(t *testing.T) {
 	}
 }
 
-func TestHashParity_UnknownTypeReturnsError(t *testing.T) {
-	// canonicalizeValue should reject unsupported types rather than silently
-	// falling back to JSON, which would produce mismatched hashes across
-	// Go and Python.
-	_, err := canonicalizeValue(complex128(1 + 2i))
-	if err == nil {
-		t.Error("expected error for unsupported type complex128, got nil")
+func TestHashParity_NilValueReturnsEmpty(t *testing.T) {
+	// With the typed structpb API, all valid Value kinds are handled by the
+	// switch. A nil Value or nil Kind returns empty string without error.
+	result, err := canonicalizeValue(nil)
+	if err != nil {
+		t.Errorf("expected no error for nil Value, got: %v", err)
+	}
+	if result != "" {
+		t.Errorf("expected empty string for nil Value, got: %q", result)
+	}
+
+	v := &structpb.Value{}
+	result, err = canonicalizeValue(v)
+	if err != nil {
+		t.Errorf("expected no error for nil Kind, got: %v", err)
+	}
+	if result != "" {
+		t.Errorf("expected empty string for nil Kind, got: %q", result)
 	}
 }
 

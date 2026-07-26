@@ -23,10 +23,10 @@ import (
 type mockExecutionHandler struct {
 	executed                       bool
 	err                            error
-	ExecuteVerifiedTransactionFunc func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error)
+	ExecuteVerifiedTransactionFunc func(ctx context.Context, eventType constants.EventType, cmdMsg CommandMessage) (string, error)
 }
 
-func (m *mockExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
+func (m *mockExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg CommandMessage) (string, error) {
 	m.executed = true
 	if m.ExecuteVerifiedTransactionFunc != nil {
 		return m.ExecuteVerifiedTransactionFunc(ctx, eventType, cmdMsg)

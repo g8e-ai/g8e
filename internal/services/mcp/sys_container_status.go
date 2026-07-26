@@ -18,20 +18,51 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// commandExecutor defines the interface for executing commands.
-// This allows for dependency injection in tests.
 type commandExecutor interface {
-	CombinedOutput(name string, args ...string) ([]byte, error)
+	CombinedOutput(ctx context.Context, name string, args ...string) ([]byte, error)
 }
 
-// realCommandExecutor wraps os/exec.Command for production use.
 type realCommandExecutor struct{}
 
-func (r *realCommandExecutor) CombinedOutput(name string, args ...string) ([]byte, error) {
-	cmd := exec.Command(name, args...)
+func (r *realCommandExecutor) CombinedOutput(ctx context.Context, name string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
 	return cmd.CombinedOutput()
+}
+
+type containerStatusResult struct {
+	ContainerName string `json:"container_name"`
+	Status        string `json:"status"`
+	Running       bool   `json:"running"`
+	Paused        bool   `json:"paused"`
+	Restarting    bool   `json:"restarting"`
+	PID           int64  `json:"pid"`
+	StartedAt     string `json:"started_at"`
+	FinishedAt    string `json:"finished_at"`
+	ExitCode      int64  `json:"exit_code"`
+	Image         string `json:"image"`
+	Created       string `json:"created"`
+	Error         string `json:"error,omitempty"`
+}
+
+type containerInspectData struct {
+	State   containerInspectState `json:"State"`
+	Image   string                `json:"Image"`
+	Created string                `json:"Created"`
+}
+
+type containerInspectState struct {
+	Status     string `json:"Status"`
+	Running    bool   `json:"Running"`
+	Paused     bool   `json:"Paused"`
+	Restarting bool   `json:"Restarting"`
+	Pid        int64  `json:"Pid"`
+	StartedAt  string `json:"StartedAt"`
+	FinishedAt string `json:"FinishedAt"`
+	ExitCode   int64  `json:"ExitCode"`
 }
 
 // SysContainerStatusTool checks container health status (podman).
@@ -69,27 +100,26 @@ func (t *SysContainerStatusTool) Execute(ctx context.Context, args json.RawMessa
 		ContainerName string `json:"container_name"`
 	}
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("sys_container_status: unmarshal arguments: %w: %w", constants.ErrMCPUnmarshalArguments, err)
 	}
 
 	if req.ContainerName == "" {
-		return CallToolResult{}, fmt.Errorf("container_name required")
+		return CallToolResult{}, constants.ErrMCPContainerNameRequired
 	}
 
-	// Use real executor if none provided (for production use)
 	executor := t.executor
 	if executor == nil {
 		executor = &realCommandExecutor{}
 	}
 
-	result, err := getContainerStatus(req.ContainerName, executor)
+	result, err := getContainerStatus(ctx, req.ContainerName, executor)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to get container status: %w", err)
+		return CallToolResult{}, fmt.Errorf("sys_container_status: get container status: %w", err)
 	}
 
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+		return CallToolResult{}, fmt.Errorf("sys_container_status: marshal result: %w: %w", constants.ErrMCPMarshalResult, err)
 	}
 
 	return CallToolResult{
@@ -102,89 +132,55 @@ func (t *SysContainerStatusTool) Execute(ctx context.Context, args json.RawMessa
 	}, nil
 }
 
-func getContainerStatus(containerName string, executor commandExecutor) (map[string]interface{}, error) {
-	// containerName is passed as a separate argument to executor.CombinedOutput to satisfy CodeQL command-injection rule.
-	// This prevents shell injection by avoiding shell interpretation.
-	output, err := executor.CombinedOutput("podman", "inspect", containerName)
+func getContainerStatus(ctx context.Context, containerName string, executor commandExecutor) (containerStatusResult, error) {
+	if ctx.Err() != nil {
+		return containerStatusResult{}, ctx.Err()
+	}
+
+	output, err := executor.CombinedOutput(ctx, "podman", "inspect", containerName)
 	if err != nil {
-		return map[string]interface{}{
-			"container_name": containerName,
-			"error":          string(output),
+		return containerStatusResult{
+			ContainerName: containerName,
+			Error:         string(output),
 		}, nil
 	}
 
-	var inspectData []map[string]interface{}
+	var inspectData []containerInspectData
 	if err := json.Unmarshal(output, &inspectData); err != nil {
-		return map[string]interface{}{
-			"container_name": containerName,
-			"error":          fmt.Sprintf("failed to parse inspect output: %v", err),
+		return containerStatusResult{
+			ContainerName: containerName,
+			Error:         fmt.Sprintf("failed to parse inspect output: %v", err),
 		}, nil
 	}
 
 	if len(inspectData) == 0 {
-		return map[string]interface{}{
-			"container_name": containerName,
-			"error":          "container not found",
+		return containerStatusResult{
+			ContainerName: containerName,
+			Error:         "container not found",
 		}, nil
 	}
 
 	container := inspectData[0]
-	state := getNestedMap(container, "State")
+	state := container.State
 
-	result := map[string]interface{}{
-		"container_name": containerName,
-		"status":         getString(state, "Status"),
-		"running":        getBool(state, "Running"),
-		"paused":         getBool(state, "Paused"),
-		"restarting":     getBool(state, "Restarting"),
-		"pid":            getInt(state, "Pid"),
-		"started_at":     getString(state, "StartedAt"),
-		"finished_at":    getString(state, "FinishedAt"),
-		"exit_code":      getInt(state, "ExitCode"),
-		"image":          getString(container, "Image"),
-		"created":        getString(container, "Created"),
-	}
-
-	return result, nil
+	return containerStatusResult{
+		ContainerName: containerName,
+		Status:        orUnknown(state.Status),
+		Running:       state.Running,
+		Paused:        state.Paused,
+		Restarting:    state.Restarting,
+		PID:           state.Pid,
+		StartedAt:     orUnknown(state.StartedAt),
+		FinishedAt:    orUnknown(state.FinishedAt),
+		ExitCode:      state.ExitCode,
+		Image:         orUnknown(container.Image),
+		Created:       orUnknown(container.Created),
+	}, nil
 }
 
-func getNestedMap(m map[string]interface{}, key string) map[string]interface{} {
-	if val, ok := m[key]; ok {
-		if nested, ok := val.(map[string]interface{}); ok {
-			return nested
-		}
+func orUnknown(s string) string {
+	if s == "" {
+		return "unknown"
 	}
-	return make(map[string]interface{})
-}
-
-func getString(m map[string]interface{}, key string) string {
-	if val, ok := m[key]; ok {
-		if str, ok := val.(string); ok {
-			return str
-		}
-	}
-	return "unknown"
-}
-
-func getBool(m map[string]interface{}, key string) bool {
-	if val, ok := m[key]; ok {
-		if b, ok := val.(bool); ok {
-			return b
-		}
-	}
-	return false
-}
-
-func getInt(m map[string]interface{}, key string) int64 {
-	if val, ok := m[key]; ok {
-		switch v := val.(type) {
-		case float64:
-			return int64(v)
-		case int:
-			return int64(v)
-		case int64:
-			return v
-		}
-	}
-	return 0
+	return s
 }

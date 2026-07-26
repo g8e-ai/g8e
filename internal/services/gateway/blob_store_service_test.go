@@ -16,11 +16,9 @@
 package gateway
 
 import (
-	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,9 +29,8 @@ func setupBlobStoreTest(t *testing.T) (*BlobStoreService, *CanonicalDBService) {
 	logger := testutil.NewTestLogger()
 	fileSvc := newTestFileSvc(t)
 	dbDir := testutil.TempDir(t)
-	vaultDir := filepath.Join(dbDir, constants.VaultDirname)
 
-	db, stores, err := openTestDB(t, dbDir, vaultDir, fileSvc, logger)
+	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

@@ -41,11 +41,12 @@ const (
 // signature from the registered consensus key over "<hash>|<decision>", plus
 // one AgentID per voter — exactly what L4Warden.verifyL2Signature checks.
 type Ensemble struct {
-	KeyID      string
-	TribunalID string
-	priv       ed25519.PrivateKey
-	pub        ed25519.PublicKey
-	agents     []string
+	KeyID        string
+	TribunalID   string
+	MemberKeyIDs []string // when set, Vote produces one vote per member key ID
+	priv         ed25519.PrivateKey
+	pub          ed25519.PublicKey
+	agents       []string
 }
 
 // NewEnsemble mints a fresh consensus key and n agent identities.
@@ -96,15 +97,29 @@ func (e *Ensemble) AgentCount() int { return len(e.agents) }
 func (e *Ensemble) Vote(txHash string, decision bool) *commonv1.L2Metadata {
 	basis := fmt.Sprintf("%s|%v", txHash, decision) // matches l2_consensus.SignDecision
 	sig := ed25519.Sign(e.priv, []byte(basis))
+	sigHex := hex.EncodeToString(sig)
+
+	var votes []*commonv1.L2Vote
+	if len(e.MemberKeyIDs) > 0 {
+		votes = make([]*commonv1.L2Vote, 0, len(e.MemberKeyIDs))
+		for _, keyID := range e.MemberKeyIDs {
+			votes = append(votes, &commonv1.L2Vote{
+				SignerKeyId:        keyID,
+				ConsensusSignature: sigHex,
+				Decision:           decision,
+			})
+		}
+	} else {
+		votes = []*commonv1.L2Vote{{
+			SignerKeyId:        e.KeyID,
+			ConsensusSignature: sigHex,
+			Decision:           decision,
+		}}
+	}
+
 	return &commonv1.L2Metadata{
 		ConsensusSetId: e.TribunalID,
-		Votes: []*commonv1.L2Vote{
-			{
-				SignerKeyId:        e.KeyID,
-				ConsensusSignature: hex.EncodeToString(sig),
-				Decision:           decision,
-			},
-		},
+		Votes:          votes,
 	}
 }
 

@@ -1,5 +1,5 @@
 # g8e Gateway Configuration for Healthcare Demo
-posture: consensus
+posture: doctrine
 http_port: 8080
 https_port: 8443
 data_dir: /root/.g8e/data

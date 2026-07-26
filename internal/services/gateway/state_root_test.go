@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -27,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
@@ -197,7 +197,7 @@ func BenchmarkStateRootCalculation(b *testing.B) {
 	require.NoError(b, err)
 	require.NoError(b, fileSvc.CreateRuntimeTree(context.Background()))
 	ks := newTestKeystore(b, fileSvc, testutil.NewTestLogger())
-	db, stores, err := OpenCanonicalDBService(dir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), "", ks, fileSvc)
+	db, stores, err := OpenCanonicalDBService(dir, fileSvc.Resolve(constants.VaultDirname), testutil.NewTestLogger(), "", ks, fileSvc)
 	require.NoError(b, err)
 	defer db.Close()
 
@@ -225,7 +225,7 @@ func BenchmarkStateRootLargeDataset(b *testing.B) {
 	require.NoError(b, err)
 	require.NoError(b, fileSvc.CreateRuntimeTree(context.Background()))
 	ks := newTestKeystore(b, fileSvc, testutil.NewTestLogger())
-	db, stores, err := OpenCanonicalDBService(dir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), "", ks, fileSvc)
+	db, stores, err := OpenCanonicalDBService(dir, fileSvc.Resolve(constants.VaultDirname), testutil.NewTestLogger(), "", ks, fileSvc)
 	require.NoError(b, err)
 	defer db.Close()
 

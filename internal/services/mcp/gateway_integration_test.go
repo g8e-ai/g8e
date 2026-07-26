@@ -643,9 +643,9 @@ func TestNativeToolSingleAudit(t *testing.T) {
 		logger:            slog.Default(),
 		fieldPathRegistry: registry,
 		nativeToolHandler: nativeHandler,
-		// auditStore left nil - if double-audit code existed, this would cause a nil pointer panic
-		maxPayloadBytes: 10 * 1024 * 1024,
-		posture:         "doctrine",
+		auditStore:        noopAuditEventRecorder{},
+		maxPayloadBytes:   10 * 1024 * 1024,
+		posture:           "doctrine",
 	}
 	g.SetRuntimeDeps(RuntimeDependencies{
 		EnvProc: processor,
@@ -666,5 +666,5 @@ func TestNativeToolSingleAudit(t *testing.T) {
 	require.Nil(t, resp.Error)
 
 	// If the double-audit block still existed in DispatchToDownstream,
-	// this would panic with nil pointer dereference on g.auditStore
+	// this would produce a duplicate audit event via the no-op recorder
 }

@@ -103,14 +103,11 @@ var Infra struct {
 	DemosHealthcareDir               string
 	DemosFinanceDir                  string
 	DemosGovDir                      string
-	DemosSecureDataDir               string
 	DemosHealthcareTargetDataDir     string
 	DemosHealthcareDoctrineDir       string
 	DemosHealthcarePARequestsPath    string
 	DemosHealthcareComposePath       string
 	DemosHealthcareDoctrineHIPAAPath string
-	DemosSecureDataDoctrineDir       string
-	DemosSecureDataDoctrinePath      string
 } = struct {
 	DbPath                      string
 	PkiDir                      string
@@ -177,14 +174,11 @@ var Infra struct {
 	DemosHealthcareDir               string
 	DemosFinanceDir                  string
 	DemosGovDir                      string
-	DemosSecureDataDir               string
 	DemosHealthcareTargetDataDir     string
 	DemosHealthcareDoctrineDir       string
 	DemosHealthcarePARequestsPath    string
 	DemosHealthcareComposePath       string
 	DemosHealthcareDoctrineHIPAAPath string
-	DemosSecureDataDoctrineDir       string
-	DemosSecureDataDoctrinePath      string
 }{
 	DbPath:                  constants.RuntimeDirname + "/" + constants.DataDirname + "/" + constants.DbFilename,
 	PkiDir:                  constants.RuntimeDirname + "/" + constants.PkiDirname,
@@ -245,14 +239,11 @@ var Infra struct {
 	DemosHealthcareDir:               constants.DemosDirname + "/" + constants.DemosOrgHealthcare,
 	DemosFinanceDir:                  constants.DemosDirname + "/" + constants.DemosOrgFinance,
 	DemosGovDir:                      constants.DemosDirname + "/" + constants.DemosOrgGov,
-	DemosSecureDataDir:               constants.DemosDirname + "/" + constants.DemosOrgSecureData,
 	DemosHealthcareTargetDataDir:     constants.DemosDirname + "/" + constants.DemosOrgHealthcare + "/" + constants.DemosTargetDataDir,
 	DemosHealthcareDoctrineDir:       constants.DemosDirname + "/" + constants.DemosOrgHealthcare + "/" + constants.DemosDoctrineDir,
 	DemosHealthcarePARequestsPath:    constants.DemosDirname + "/" + constants.DemosOrgHealthcare + "/" + constants.DemosTargetDataDir + "/" + constants.DemosPARequestsFile,
 	DemosHealthcareComposePath:       constants.DemosDirname + "/" + constants.DemosOrgHealthcare + "/" + constants.DemosComposeFile,
 	DemosHealthcareDoctrineHIPAAPath: constants.DemosDirname + "/" + constants.DemosOrgHealthcare + "/" + constants.DemosDoctrineDir + "/" + constants.DemosHIPAADoctrineFile,
-	DemosSecureDataDoctrineDir:       constants.DemosDirname + "/" + constants.DemosOrgSecureData + "/" + constants.DemosDoctrineDir,
-	DemosSecureDataDoctrinePath:      constants.DemosDirname + "/" + constants.DemosOrgSecureData + "/" + constants.DemosDoctrineDir + "/" + constants.DemosSecureDataDoctrineFile,
 }
 
 // Mutable path vars that are derived from the base directory at init time.
@@ -351,14 +342,11 @@ func InitWithBase(baseDir string) error {
 	Infra.DemosHealthcareDir = pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgHealthcare)
 	Infra.DemosFinanceDir = pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgFinance)
 	Infra.DemosGovDir = pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgGov)
-	Infra.DemosSecureDataDir = pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgSecureData)
 	Infra.DemosHealthcareTargetDataDir = pathutil.SafeJoin(Infra.DemosHealthcareDir, constants.DemosTargetDataDir)
 	Infra.DemosHealthcareDoctrineDir = pathutil.SafeJoin(Infra.DemosHealthcareDir, constants.DemosDoctrineDir)
 	Infra.DemosHealthcarePARequestsPath = pathutil.SafeJoin(Infra.DemosHealthcareTargetDataDir, constants.DemosPARequestsFile)
 	Infra.DemosHealthcareComposePath = pathutil.SafeJoin(Infra.DemosHealthcareDir, constants.DemosComposeFile)
 	Infra.DemosHealthcareDoctrineHIPAAPath = pathutil.SafeJoin(Infra.DemosHealthcareDoctrineDir, constants.DemosHIPAADoctrineFile)
-	Infra.DemosSecureDataDoctrineDir = pathutil.SafeJoin(Infra.DemosSecureDataDir, constants.DemosDoctrineDir)
-	Infra.DemosSecureDataDoctrinePath = pathutil.SafeJoin(Infra.DemosSecureDataDoctrineDir, constants.DemosSecureDataDoctrineFile)
 
 	GatewayIDPath = pathutil.SafeJoin(Infra.DataDir, constants.GatewayIDFilename)
 	NetworkIdentityPath = pathutil.SafeJoin(Infra.PkiDir, constants.NetworkIdentityFilename)

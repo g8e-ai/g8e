@@ -43,6 +43,17 @@ func getProjectRoot() string {
 	return cwd
 }
 
+// expectedDemoFiles lists all demo scenario Go files that must exist and use
+// harnessRun or runTwoLayerScenario. Extracted as a package-level var to avoid
+// drift across multiple test functions.
+var expectedDemoFiles = []string{
+	"demo_gov.go",
+	"demo_finance.go",
+	"demo_healthcare.go",
+	"demo_dhs.go",
+	"demo_fedramp.go",
+}
+
 func TestDemos(t *testing.T) {
 	t.Run("demos command has correct use and description", func(t *testing.T) {
 		cmd := demosCmd()
@@ -213,10 +224,9 @@ func TestDemosRunCmd(t *testing.T) {
 		assert.Contains(t, cmd.Long, "FHIR PA Request")
 		assert.Contains(t, cmd.Long, "CUI Exfiltration")
 		assert.Contains(t, cmd.Long, "Unauthorized Trade")
-		assert.Contains(t, cmd.Long, "Governed Migration")
-		assert.Contains(t, cmd.Long, "SIGINT-to-EO/IR")
-		assert.Contains(t, cmd.Long, "BFT Spoofing")
-		assert.Contains(t, cmd.Long, "Disconnected Operations")
+		assert.Contains(t, cmd.Long, "Sovereign Multi-Source Ingest")
+		assert.Contains(t, cmd.Long, "Governed Cloud Resource Provisioning")
+		assert.Contains(t, cmd.Long, "Third-Party Frontend Enrollment")
 	})
 }
 
@@ -225,20 +235,55 @@ func TestScenarioCounts(t *testing.T) {
 		assert.Equal(t, 4, scenarioCounts["healthcare"])
 		assert.Equal(t, 1, scenarioCounts["gov"])
 		assert.Equal(t, 1, scenarioCounts["finance"])
-		assert.Equal(t, 3, scenarioCounts["secure-data"])
-		assert.Equal(t, 3, scenarioCounts["dow"])
 		assert.Equal(t, 5, scenarioCounts["dhs"])
-		assert.Equal(t, 3, scenarioCounts["swarm"])
 		assert.Equal(t, 5, scenarioCounts["fedramp"])
+		assert.Equal(t, 1, scenarioCounts["frontend"])
 	})
 
 	t.Run("scenario counts map has expected entries", func(t *testing.T) {
-		expectedOrgs := []string{"healthcare", "gov", "finance", "secure-data", "dow", "dhs", "swarm", "fedramp"}
+		expectedOrgs := []string{"healthcare", "gov", "finance", "dhs", "fedramp", "frontend"}
 		for _, org := range expectedOrgs {
 			_, exists := scenarioCounts[org]
 			assert.True(t, exists, "scenarioCounts should have entry for %s", org)
 		}
 	})
+
+	t.Run("scenario counts map does not contain removed demos", func(t *testing.T) {
+		removedOrgs := []string{"secure-data", "dow", "swarm"}
+		for _, org := range removedOrgs {
+			_, exists := scenarioCounts[org]
+			assert.False(t, exists, "scenarioCounts should NOT have entry for removed demo %s", org)
+		}
+	})
+
+	t.Run("scenario counts map keys exactly match remaining 6 demo orgs", func(t *testing.T) {
+		expectedOrgs := map[string]bool{
+			"healthcare": true,
+			"gov":        true,
+			"finance":    true,
+			"dhs":        true,
+			"fedramp":    true,
+			"frontend":   true,
+		}
+		assert.Equal(t, len(expectedOrgs), len(scenarioCounts),
+			"scenarioCounts should have exactly %d entries", len(expectedOrgs))
+		for org := range expectedOrgs {
+			_, exists := scenarioCounts[org]
+			assert.True(t, exists, "scenarioCounts should have entry for %s", org)
+		}
+		for org := range scenarioCounts {
+			assert.True(t, expectedOrgs[org], "scenarioCounts should not have unexpected entry for %s", org)
+		}
+	})
+}
+
+func TestDemosRunCmdLongDescriptionExcludesRemovedDemos(t *testing.T) {
+	cmd := demosRunCmd()
+	removedDemos := []string{"dow", "swarm", "secure-data"}
+	for _, demo := range removedDemos {
+		assert.NotContains(t, cmd.Long, demo,
+			"demosRunCmd Long description should not contain removed demo %q", demo)
+	}
 }
 
 func TestPrintDemoEndpoints(t *testing.T) {
@@ -292,37 +337,6 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "g8e auth enroll -e localhost:8082 --port 8445")
 	})
 
-	t.Run("prints secure-data endpoints", func(t *testing.T) {
-		var buf bytes.Buffer
-		cmd := &cobra.Command{}
-		cmd.SetOut(&buf)
-
-		printDemoEndpoints(cmd, "secure-data")
-
-		output := buf.String()
-		assert.Contains(t, output, "Available endpoints:")
-		assert.Contains(t, output, "http://localhost:8083")
-		assert.Contains(t, output, "https://localhost:8446")
-		assert.Contains(t, output, "http://localhost:3003")
-		assert.Contains(t, output, "https://localhost:8446/console/")
-		assert.Contains(t, output, "g8e auth enroll -e localhost:8083 --port 8446")
-	})
-
-	t.Run("prints dow endpoints", func(t *testing.T) {
-		var buf bytes.Buffer
-		cmd := &cobra.Command{}
-		cmd.SetOut(&buf)
-
-		printDemoEndpoints(cmd, "dow")
-
-		output := buf.String()
-		assert.Contains(t, output, "Available endpoints:")
-		assert.Contains(t, output, "http://localhost:8086")
-		assert.Contains(t, output, "https://localhost:8449")
-		assert.Contains(t, output, "https://localhost:8449/console/")
-		assert.Contains(t, output, "g8e auth enroll -e localhost:8086 --port 8449")
-	})
-
 	t.Run("prints dhs endpoints", func(t *testing.T) {
 		var buf bytes.Buffer
 		cmd := &cobra.Command{}
@@ -336,21 +350,6 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "https://localhost:8450")
 		assert.Contains(t, output, "https://localhost:8450/console/")
 		assert.Contains(t, output, "g8e auth enroll -e localhost:8087 --port 8450")
-	})
-
-	t.Run("prints swarm endpoints", func(t *testing.T) {
-		var buf bytes.Buffer
-		cmd := &cobra.Command{}
-		cmd.SetOut(&buf)
-
-		printDemoEndpoints(cmd, "swarm")
-
-		output := buf.String()
-		assert.Contains(t, output, "Available endpoints:")
-		assert.Contains(t, output, "http://localhost:8085")
-		assert.Contains(t, output, "https://localhost:8448")
-		assert.Contains(t, output, "https://localhost:8448/console/")
-		assert.Contains(t, output, "g8e auth enroll -e localhost:8085 --port 8448")
 	})
 
 	t.Run("prints fedramp endpoints", func(t *testing.T) {
@@ -411,32 +410,11 @@ func TestRunScenario(t *testing.T) {
 		assert.Contains(t, err.Error(), "valid: 1")
 	})
 
-	t.Run("returns error with valid range for invalid secure-data scenario number", func(t *testing.T) {
-		_, err := runSecureDataScenario("/tmp", "99")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid scenario number for secure-data")
-		assert.Contains(t, err.Error(), "valid: 1-3")
-	})
-
-	t.Run("returns error with valid range for invalid dow scenario number", func(t *testing.T) {
-		_, err := runDoWScenario("/tmp", "99")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid scenario number for dow")
-		assert.Contains(t, err.Error(), "valid: 1-3")
-	})
-
 	t.Run("returns error with valid range for invalid dhs scenario number", func(t *testing.T) {
 		_, err := runDHSScenario("/tmp", "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for dhs")
 		assert.Contains(t, err.Error(), "valid: 1-5")
-	})
-
-	t.Run("returns error with valid range for invalid swarm scenario number", func(t *testing.T) {
-		_, err := runSwarmScenario("/tmp", "99")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid scenario number for swarm")
-		assert.Contains(t, err.Error(), "valid: 1-3")
 	})
 
 	t.Run("returns error with valid range for invalid fedramp scenario number", func(t *testing.T) {
@@ -460,20 +438,8 @@ func TestRunScenario(t *testing.T) {
 		assert.NotNil(t, runFinanceScenario)
 	})
 
-	t.Run("secure-data scenario functions exist", func(t *testing.T) {
-		assert.NotNil(t, runSecureDataScenario)
-	})
-
-	t.Run("dow scenario functions exist", func(t *testing.T) {
-		assert.NotNil(t, runDoWScenario)
-	})
-
 	t.Run("dhs scenario functions exist", func(t *testing.T) {
 		assert.NotNil(t, runDHSScenario)
-	})
-
-	t.Run("swarm scenario functions exist", func(t *testing.T) {
-		assert.NotNil(t, runSwarmScenario)
 	})
 
 	t.Run("fedramp scenario functions exist", func(t *testing.T) {
@@ -505,24 +471,6 @@ func TestRunAllScenarios(t *testing.T) {
 		count, ok := scenarioCounts["finance"]
 		assert.True(t, ok)
 		assert.Equal(t, 1, count)
-	})
-
-	t.Run("secure-data has 3 scenarios", func(t *testing.T) {
-		count, ok := scenarioCounts["secure-data"]
-		assert.True(t, ok)
-		assert.Equal(t, 3, count)
-	})
-
-	t.Run("dow has 3 scenarios", func(t *testing.T) {
-		count, ok := scenarioCounts["dow"]
-		assert.True(t, ok)
-		assert.Equal(t, 3, count)
-	})
-
-	t.Run("swarm has 3 scenarios", func(t *testing.T) {
-		count, ok := scenarioCounts["swarm"]
-		assert.True(t, ok)
-		assert.Equal(t, 3, count)
 	})
 
 	t.Run("dhs has 5 scenarios", func(t *testing.T) {
@@ -627,26 +575,6 @@ func TestFinanceScenarioDescriptions(t *testing.T) {
 	})
 }
 
-func TestSecureDataScenarioDescriptions(t *testing.T) {
-	t.Run("scenario descriptions are documented in run command", func(t *testing.T) {
-		cmd := demosRunCmd()
-		assert.Contains(t, cmd.Long, "secure-data: 1-3")
-		assert.Contains(t, cmd.Long, "Governed Migration with Chain-of-Custody Receipts")
-		assert.Contains(t, cmd.Long, "Connector Bypass Attempt Blocked")
-		assert.Contains(t, cmd.Long, "Cross-Tenant Leak Doctrine Triggered")
-	})
-}
-
-func TestDoWScenarioDescriptions(t *testing.T) {
-	t.Run("scenario descriptions are documented in run command", func(t *testing.T) {
-		cmd := demosRunCmd()
-		assert.Contains(t, cmd.Long, "dow: 1-3")
-		assert.Contains(t, cmd.Long, "Autonomous SIGINT-to-EO/IR Cross-Cueing")
-		assert.Contains(t, cmd.Long, "BFT Spoofing Defense")
-		assert.Contains(t, cmd.Long, "Disconnected Operations")
-	})
-}
-
 func TestCheckDockerAvailable(t *testing.T) {
 	t.Run("checkDockerAvailable function exists", func(t *testing.T) {
 		assert.NotNil(t, checkDockerAvailable)
@@ -732,12 +660,12 @@ func TestHarnessRun(t *testing.T) {
 	})
 
 	t.Run("run mode builds docker compose run --rm command", func(t *testing.T) {
-		cfg := defaultHarnessConfig("agent-sigint")
+		cfg := defaultHarnessConfig("agent-runtime")
 		cfg.UseRun = true
-		cmd := harnessRun("dow-cross-cue", cfg)
+		cmd := harnessRun("dhs-ingest", cfg)
 		assert.Equal(t, "run", cmd[2])
 		assert.Equal(t, "--rm", cmd[3])
-		assert.Contains(t, cmd, "dow-cross-cue")
+		assert.Contains(t, cmd, "dhs-ingest")
 	})
 
 	t.Run("includes consensus seed and tribunal id when set", func(t *testing.T) {
@@ -773,18 +701,7 @@ func TestHarnessRun(t *testing.T) {
 }
 
 func TestDemoScenarioFilesCallHarnessRun(t *testing.T) {
-	demoFiles := []string{
-		"demo_gov.go",
-		"demo_finance.go",
-		"demo_healthcare.go",
-		"demo_secure_data.go",
-		"demo_dow.go",
-		"demo_dhs.go",
-		"demo_swarm.go",
-		"demo_fedramp.go",
-	}
-
-	for _, file := range demoFiles {
+	for _, file := range expectedDemoFiles {
 		t.Run(file+" uses harnessRun or runTwoLayerScenario", func(t *testing.T) {
 			t.Parallel()
 			path := filepath.Join(".", file)
@@ -798,18 +715,7 @@ func TestDemoScenarioFilesCallHarnessRun(t *testing.T) {
 }
 
 func TestNoGatewayBypassInDemoFiles(t *testing.T) {
-	demoFiles := []string{
-		"demo_gov.go",
-		"demo_finance.go",
-		"demo_healthcare.go",
-		"demo_secure_data.go",
-		"demo_dow.go",
-		"demo_dhs.go",
-		"demo_swarm.go",
-		"demo_fedramp.go",
-	}
-
-	for _, file := range demoFiles {
+	for _, file := range expectedDemoFiles {
 		t.Run(file+" has no curl POST bypass", func(t *testing.T) {
 			t.Parallel()
 			path := filepath.Join(".", file)
@@ -825,18 +731,7 @@ func TestNoGatewayBypassInDemoFiles(t *testing.T) {
 }
 
 func TestNoSqliteBackdoorInScenarioFiles(t *testing.T) {
-	scenarioFiles := []string{
-		"demo_gov.go",
-		"demo_finance.go",
-		"demo_healthcare.go",
-		"demo_secure_data.go",
-		"demo_dow.go",
-		"demo_dhs.go",
-		"demo_swarm.go",
-		"demo_fedramp.go",
-	}
-
-	for _, file := range scenarioFiles {
+	for _, file := range expectedDemoFiles {
 		t.Run(file+" has no sqlite3 backdoor", func(t *testing.T) {
 			t.Parallel()
 			path := filepath.Join(".", file)
@@ -852,18 +747,7 @@ func TestNoSqliteBackdoorInScenarioFiles(t *testing.T) {
 }
 
 func TestNoCopyPasteInScenarioFiles(t *testing.T) {
-	scenarioFiles := []string{
-		"demo_gov.go",
-		"demo_finance.go",
-		"demo_healthcare.go",
-		"demo_secure_data.go",
-		"demo_dow.go",
-		"demo_dhs.go",
-		"demo_swarm.go",
-		"demo_fedramp.go",
-	}
-
-	for _, file := range scenarioFiles {
+	for _, file := range expectedDemoFiles {
 		t.Run(file+" has no copy-paste instructions", func(t *testing.T) {
 			t.Parallel()
 			path := filepath.Join(".", file)

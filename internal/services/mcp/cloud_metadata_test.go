@@ -206,7 +206,7 @@ func TestCloudMetadataTool_Execute_InvalidOperation(t *testing.T) {
 func TestCloudMetadataTool_Execute_DefaultOperation(t *testing.T) {
 	origDetect := detectCloudProviderFunc
 	t.Cleanup(func() { detectCloudProviderFunc = origDetect })
-	detectCloudProviderFunc = func() string { return "unknown" }
+	detectCloudProviderFunc = func(ctx context.Context) string { return "unknown" }
 
 	tool := &CloudMetadataTool{}
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{}`))
@@ -222,7 +222,7 @@ func TestCloudMetadataTool_Execute_DefaultOperation(t *testing.T) {
 func TestCloudMetadataTool_Execute_DetectAWS(t *testing.T) {
 	origDetect := detectCloudProviderFunc
 	t.Cleanup(func() { detectCloudProviderFunc = origDetect })
-	detectCloudProviderFunc = func() string { return "aws" }
+	detectCloudProviderFunc = func(ctx context.Context) string { return "aws" }
 
 	tool := &CloudMetadataTool{}
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{"operation":"detect"}`))
@@ -241,8 +241,8 @@ func TestCloudMetadataTool_Execute_AWSInstance(t *testing.T) {
 		detectCloudProviderFunc = origDetect
 		httpGetFunc = origGet
 	})
-	detectCloudProviderFunc = func() string { return "aws" }
-	httpGetFunc = func(url string, headers map[string]string) (string, error) {
+	detectCloudProviderFunc = func(ctx context.Context) string { return "aws" }
+	httpGetFunc = func(ctx context.Context, url string, headers map[string]string) (string, error) {
 		return "i-1234567890abcdef0", nil
 	}
 
@@ -263,8 +263,8 @@ func TestCloudMetadataTool_Execute_AWSRegion(t *testing.T) {
 		detectCloudProviderFunc = origDetect
 		httpGetFunc = origGet
 	})
-	detectCloudProviderFunc = func() string { return "aws" }
-	httpGetFunc = func(url string, headers map[string]string) (string, error) {
+	detectCloudProviderFunc = func(ctx context.Context) string { return "aws" }
+	httpGetFunc = func(ctx context.Context, url string, headers map[string]string) (string, error) {
 		if strings.Contains(url, "placement/region") {
 			return "us-west-2", nil
 		}
@@ -288,8 +288,8 @@ func TestCloudMetadataTool_Execute_AWSRegionFallbackToAZ(t *testing.T) {
 		detectCloudProviderFunc = origDetect
 		httpGetFunc = origGet
 	})
-	detectCloudProviderFunc = func() string { return "aws" }
-	httpGetFunc = func(url string, headers map[string]string) (string, error) {
+	detectCloudProviderFunc = func(ctx context.Context) string { return "aws" }
+	httpGetFunc = func(ctx context.Context, url string, headers map[string]string) (string, error) {
 		if strings.Contains(url, "placement/region") {
 			return "", fmt.Errorf("not available")
 		}
@@ -315,8 +315,8 @@ func TestCloudMetadataTool_Execute_AWSAvailabilityZone(t *testing.T) {
 		detectCloudProviderFunc = origDetect
 		httpGetFunc = origGet
 	})
-	detectCloudProviderFunc = func() string { return "aws" }
-	httpGetFunc = func(url string, headers map[string]string) (string, error) {
+	detectCloudProviderFunc = func(ctx context.Context) string { return "aws" }
+	httpGetFunc = func(ctx context.Context, url string, headers map[string]string) (string, error) {
 		return "us-west-2a", nil
 	}
 
@@ -337,8 +337,8 @@ func TestCloudMetadataTool_Execute_AWSInstanceType(t *testing.T) {
 		detectCloudProviderFunc = origDetect
 		httpGetFunc = origGet
 	})
-	detectCloudProviderFunc = func() string { return "aws" }
-	httpGetFunc = func(url string, headers map[string]string) (string, error) {
+	detectCloudProviderFunc = func(ctx context.Context) string { return "aws" }
+	httpGetFunc = func(ctx context.Context, url string, headers map[string]string) (string, error) {
 		return "t3.medium", nil
 	}
 
@@ -359,8 +359,8 @@ func TestCloudMetadataTool_Execute_GCPInstance(t *testing.T) {
 		detectCloudProviderFunc = origDetect
 		httpGetFunc = origGet
 	})
-	detectCloudProviderFunc = func() string { return "gcp" }
-	httpGetFunc = func(url string, headers map[string]string) (string, error) {
+	detectCloudProviderFunc = func(ctx context.Context) string { return "gcp" }
+	httpGetFunc = func(ctx context.Context, url string, headers map[string]string) (string, error) {
 		if strings.Contains(url, "/id") {
 			return "1234567890", nil
 		}
@@ -388,8 +388,8 @@ func TestCloudMetadataTool_Execute_GCPRegion(t *testing.T) {
 		detectCloudProviderFunc = origDetect
 		httpGetFunc = origGet
 	})
-	detectCloudProviderFunc = func() string { return "gcp" }
-	httpGetFunc = func(url string, headers map[string]string) (string, error) {
+	detectCloudProviderFunc = func(ctx context.Context) string { return "gcp" }
+	httpGetFunc = func(ctx context.Context, url string, headers map[string]string) (string, error) {
 		return "projects/123/regions/us-central1", nil
 	}
 
@@ -410,8 +410,8 @@ func TestCloudMetadataTool_Execute_GCPAvailabilityZone(t *testing.T) {
 		detectCloudProviderFunc = origDetect
 		httpGetFunc = origGet
 	})
-	detectCloudProviderFunc = func() string { return "gcp" }
-	httpGetFunc = func(url string, headers map[string]string) (string, error) {
+	detectCloudProviderFunc = func(ctx context.Context) string { return "gcp" }
+	httpGetFunc = func(ctx context.Context, url string, headers map[string]string) (string, error) {
 		return "projects/123/zones/us-central1-a", nil
 	}
 
@@ -432,8 +432,8 @@ func TestCloudMetadataTool_Execute_GCPInstanceType(t *testing.T) {
 		detectCloudProviderFunc = origDetect
 		httpGetFunc = origGet
 	})
-	detectCloudProviderFunc = func() string { return "gcp" }
-	httpGetFunc = func(url string, headers map[string]string) (string, error) {
+	detectCloudProviderFunc = func(ctx context.Context) string { return "gcp" }
+	httpGetFunc = func(ctx context.Context, url string, headers map[string]string) (string, error) {
 		return "projects/123/machineTypes/e2-medium", nil
 	}
 
@@ -454,8 +454,8 @@ func TestCloudMetadataTool_Execute_AzureInstance(t *testing.T) {
 		detectCloudProviderFunc = origDetect
 		httpGetFunc = origGet
 	})
-	detectCloudProviderFunc = func() string { return "azure" }
-	httpGetFunc = func(url string, headers map[string]string) (string, error) {
+	detectCloudProviderFunc = func(ctx context.Context) string { return "azure" }
+	httpGetFunc = func(ctx context.Context, url string, headers map[string]string) (string, error) {
 		return `{"compute":{"vmSize":"Standard_D2s_v3","location":"eastus","platformFaultDomain":"1"}}`, nil
 	}
 
@@ -475,8 +475,8 @@ func TestCloudMetadataTool_Execute_AzureRegion(t *testing.T) {
 		detectCloudProviderFunc = origDetect
 		httpGetFunc = origGet
 	})
-	detectCloudProviderFunc = func() string { return "azure" }
-	httpGetFunc = func(url string, headers map[string]string) (string, error) {
+	detectCloudProviderFunc = func(ctx context.Context) string { return "azure" }
+	httpGetFunc = func(ctx context.Context, url string, headers map[string]string) (string, error) {
 		return `{"compute":{"location":"westus2"}}`, nil
 	}
 
@@ -497,8 +497,8 @@ func TestCloudMetadataTool_Execute_AzureRegionMissingCompute(t *testing.T) {
 		detectCloudProviderFunc = origDetect
 		httpGetFunc = origGet
 	})
-	detectCloudProviderFunc = func() string { return "azure" }
-	httpGetFunc = func(url string, headers map[string]string) (string, error) {
+	detectCloudProviderFunc = func(ctx context.Context) string { return "azure" }
+	httpGetFunc = func(ctx context.Context, url string, headers map[string]string) (string, error) {
 		return `{"network":{}}`, nil
 	}
 
@@ -519,8 +519,8 @@ func TestCloudMetadataTool_Execute_AzureAvailabilityZone(t *testing.T) {
 		detectCloudProviderFunc = origDetect
 		httpGetFunc = origGet
 	})
-	detectCloudProviderFunc = func() string { return "azure" }
-	httpGetFunc = func(url string, headers map[string]string) (string, error) {
+	detectCloudProviderFunc = func(ctx context.Context) string { return "azure" }
+	httpGetFunc = func(ctx context.Context, url string, headers map[string]string) (string, error) {
 		return `{"compute":{"platformFaultDomain":"2"}}`, nil
 	}
 
@@ -541,8 +541,8 @@ func TestCloudMetadataTool_Execute_AzureInstanceType(t *testing.T) {
 		detectCloudProviderFunc = origDetect
 		httpGetFunc = origGet
 	})
-	detectCloudProviderFunc = func() string { return "azure" }
-	httpGetFunc = func(url string, headers map[string]string) (string, error) {
+	detectCloudProviderFunc = func(ctx context.Context) string { return "azure" }
+	httpGetFunc = func(ctx context.Context, url string, headers map[string]string) (string, error) {
 		return `{"compute":{"vmSize":"Standard_D4s_v3"}}`, nil
 	}
 
@@ -563,8 +563,8 @@ func TestCloudMetadataTool_Execute_AzureInstanceTypeError(t *testing.T) {
 		detectCloudProviderFunc = origDetect
 		httpGetFunc = origGet
 	})
-	detectCloudProviderFunc = func() string { return "azure" }
-	httpGetFunc = func(url string, headers map[string]string) (string, error) {
+	detectCloudProviderFunc = func(ctx context.Context) string { return "azure" }
+	httpGetFunc = func(ctx context.Context, url string, headers map[string]string) (string, error) {
 		return "", fmt.Errorf("connection refused")
 	}
 
@@ -585,8 +585,8 @@ func TestCloudMetadataTool_Execute_AllAWS(t *testing.T) {
 		detectCloudProviderFunc = origDetect
 		httpGetFunc = origGet
 	})
-	detectCloudProviderFunc = func() string { return "aws" }
-	httpGetFunc = func(url string, headers map[string]string) (string, error) {
+	detectCloudProviderFunc = func(ctx context.Context) string { return "aws" }
+	httpGetFunc = func(ctx context.Context, url string, headers map[string]string) (string, error) {
 		switch {
 		case strings.Contains(url, "instance-id"):
 			return "i-abc123", nil
@@ -625,8 +625,8 @@ func TestCloudMetadataTool_Execute_UnsupportedProvider(t *testing.T) {
 		detectCloudProviderFunc = origDetect
 		httpGetFunc = origGet
 	})
-	detectCloudProviderFunc = func() string { return "digitalocean" }
-	httpGetFunc = func(url string, headers map[string]string) (string, error) {
+	detectCloudProviderFunc = func(ctx context.Context) string { return "digitalocean" }
+	httpGetFunc = func(ctx context.Context, url string, headers map[string]string) (string, error) {
 		return "", fmt.Errorf("should not be called")
 	}
 
@@ -643,7 +643,7 @@ func TestCloudMetadataTool_Execute_UnsupportedProvider(t *testing.T) {
 func TestGetInstanceMetadata_UnsupportedProvider(t *testing.T) {
 	t.Parallel()
 
-	_, err := getInstanceMetadata("digitalocean")
+	_, err := getInstanceMetadata(context.Background(), "digitalocean")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrMCPValidateCloudMetadataUnsupportedProvider)
 }
@@ -651,7 +651,7 @@ func TestGetInstanceMetadata_UnsupportedProvider(t *testing.T) {
 func TestGetRegion_UnsupportedProvider(t *testing.T) {
 	t.Parallel()
 
-	_, err := getRegion("digitalocean")
+	_, err := getRegion(context.Background(), "digitalocean")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrMCPValidateCloudMetadataUnsupportedProvider)
 }
@@ -659,7 +659,7 @@ func TestGetRegion_UnsupportedProvider(t *testing.T) {
 func TestGetAvailabilityZone_UnsupportedProvider(t *testing.T) {
 	t.Parallel()
 
-	_, err := getAvailabilityZone("digitalocean")
+	_, err := getAvailabilityZone(context.Background(), "digitalocean")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrMCPValidateCloudMetadataUnsupportedProvider)
 }
@@ -667,7 +667,7 @@ func TestGetAvailabilityZone_UnsupportedProvider(t *testing.T) {
 func TestGetInstanceType_UnsupportedProvider(t *testing.T) {
 	t.Parallel()
 
-	_, err := getInstanceType("digitalocean")
+	_, err := getInstanceType(context.Background(), "digitalocean")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrMCPValidateCloudMetadataUnsupportedProvider)
 }

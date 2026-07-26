@@ -14,15 +14,11 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
 )
 
 // defaultDHSHarnessConfig returns the config matching the DHS compose topology.
@@ -122,17 +118,17 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		result.number = "2"
 		result.name = "Cross-Domain Release requires Notary authority"
 		result.status = "PASS"
-		result.metrics = "Notary posture // L3 suspend → human passkey approval → L5 actuator records RELEASE"
+		result.metrics = "Notary posture // L3 mock principal authorization → L5 actuator records RELEASE"
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintln("  Scenario 2 — Cross-Domain Release requires Notary authority (LOE 1 & 2)")
 		demoPrintln(strings.Repeat("─", 60))
 		demoPrintln()
 		demoPrintln("  PROVES: A cross-domain release is submitted with L2 consensus")
-		demoPrintln("          only. Under notary posture the Gateway suspends the")
-		demoPrintln("          transaction pending an out-of-band L3 human approval")
-		demoPrintln("          via WebAuthn passkey. The release executes only after")
-		demoPrintln("          a real human authorizes the exact transaction hash.")
+		demoPrintln("          and a mock L3 principal signature. Under notary posture")
+		demoPrintln("          the Gateway verifies the L3 proof before allowing the")
+		demoPrintln("          release to execute. In production, L3 requires a real")
+		demoPrintln("          WebAuthn passkey ceremony; demos use mock L3 mode.")
 		demoPrintln()
 
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 2 started: Cross-Domain Release requires Notary authority")
@@ -152,19 +148,20 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 			hasErrors = true
 		}
 
-		// Step 3: Submit dhs-release via agent (L2-only → suspend)
+		// Step 3: Submit dhs-release via agent (L2 + mock L3 principal signature)
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-release", "doctrine check")
-		demoPrintln("  ── Step 3: Submit dhs-release via agent (L2-only → suspend) ──")
+		demoPrintln("  ── Step 3: Submit dhs-release via agent (L2 + mock L3) ────────")
 		demoPrintln("  Connector requests cross-domain release of TRK-MIL-0007.")
-		demoPrintln("  Under notary posture, the gateway suspends pending human L3 approval:")
+		demoPrintln("  Under notary posture, the gateway requires L3 authorization.")
+		demoPrintln("  The harness attaches a mock principal Ed25519 signature as L3 proof:")
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-release", "doctrine admitted")
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "dhs-release", "consensus quorum")
 		demoEmitter.Ledger(tui.LevelInfo, "L1 doctrine admitted envelope for dhs-release")
 		notaryCfg := hcfg
 		notaryCfg.Posture = "notary"
-		notaryCfg.L3Mode = "suspend"
-		if err := demoStep(demoDir, "dhs-release via agent (notary suspend)",
+		notaryCfg.L3Mode = "mock"
+		if err := demoStep(demoDir, "dhs-release via agent (notary mock L3)",
 			false,
 			harnessRun("dhs-release", notaryCfg)...,
 		); err != nil {
@@ -174,60 +171,12 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		}
 
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "dhs-release", "quorum met (3/5)")
-		demoEmitter.Pipeline(tui.StageL3, tui.StatusWaiting, "dhs-release", "FIDO2 touch required")
-		demoEmitter.Ledger(tui.LevelWarn, "L3 notary: transaction suspended pending human WebAuthn approval")
+		demoEmitter.Pipeline(tui.StageL3, tui.StatusPassed, "dhs-release", "mock L3 proof verified")
+		demoEmitter.Ledger(tui.LevelInfo, "L3 notary: mock principal signature verified (demo mode)")
 
-		// Step 4: Query the gateway's pending approvals API (mTLS) for the suspended tx hash
-		demoPrintln("  ── Step 4: Query gateway for suspended transaction hash ──────────")
-		demoPrintln("  Using GET /api/v1/approvals/pending (mTLS-authenticated):")
-		demoPrintln()
-		txHashBytes, err := exec.Command("docker", "compose", "exec", "-T", "gateway",
-			"curl", "-sf",
-			"--cert", constants.ContainerOperatorCert,
-			"--key", constants.ContainerOperatorKey,
-			"--cacert", constants.ContainerCABundle,
-			"https://localhost:8443/api/v1/approvals/pending").Output()
-		if err != nil {
-			fmt.Printf("  [WARNING] Could not query pending approvals API: %v\n", err)
-			hasErrors = true
-		} else {
-			txHash := extractFirstTxHash(string(txHashBytes))
-			if txHash == "" {
-				fmt.Println("  [WARNING] No pending suspended transaction found via API")
-				hasErrors = true
-			} else {
-				fmt.Printf("  Suspended transaction hash: %s\n", txHash)
-				fmt.Println()
-
-				// Step 5: Prompt user for passkey enrollment + approval
-				demoPrintln("  ── Step 5: Human passkey approval (WebAuthn) ────────────────────")
-				demoPrintln("  A browser window will open for passkey enrollment/approval.")
-				demoPrintln("  If you have no passkey registered, the console will guide you")
-				demoPrintln("  through enrollment first, then the approval ceremony.")
-				demoPrintln()
-				demoPrintf("  Console URL: http://localhost:8087/console/\n")
-				demoPrintln()
-
-				// Run g8e approve <txHash> — this opens the browser and polls
-				approveCmd := exec.Command("g8e", "approve", txHash)
-				approveCmd.Stdout = os.Stdout
-				approveCmd.Stderr = os.Stderr
-				approveCmd.Stdin = os.Stdin
-				if err := approveCmd.Run(); err != nil {
-					fmt.Printf("  [WARNING] g8e approve did not complete: %v\n", err)
-					hasErrors = true
-				} else {
-					fmt.Println("  Transaction approved via WebAuthn passkey!")
-					fmt.Println()
-					demoEmitter.Pipeline(tui.StageL3, tui.StatusPassed, "dhs-release", "WebAuthn approved")
-					demoEmitter.Ledger(tui.LevelInfo, "L3 notary: human WebAuthn passkey authorization received")
-				}
-			}
-		}
-
-		// Step 6: Verify the RELEASE was executed by the L5 actuator
+		// Step 4: Verify the RELEASE was executed by the L5 actuator
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusActive, "dhs-release", "actuator executing")
-		if !demoScenarioStep(demoDir, "Step 6: Verify the Sovereign Data Service recorded the RELEASE",
+		if !demoScenarioStep(demoDir, "Step 4: Verify the Sovereign Data Service recorded the RELEASE",
 			[]string{"docker", "compose", "exec", "-T", "datasvc",
 				"python", constants.ContainerVerifyOpsPy, "RELEASE"}) {
 			hasErrors = true
@@ -236,8 +185,8 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "dhs-release", "RELEASE recorded")
 		demoEmitter.Ledger(tui.LevelInfo, "L5 actuator recorded RELEASE — signed receipt in hash-chained ledger")
 
-		// Step 7: Restore gateway to consensus posture
-		demoPrintln("  ── Step 7: Restore gateway to consensus posture ─────────────────")
+		// Step 5: Restore gateway to consensus posture
+		demoPrintln("  ── Step 5: Restore gateway to consensus posture ─────────────────")
 		if err := switchDHSPosture(demoDir, "consensus"); err != nil {
 			fmt.Printf("  [WARNING] Failed to restore consensus posture: %v\n", err)
 		}
@@ -249,11 +198,11 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 			fmt.Println("  [FAIL] Scenario 2 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 2 FAILED — one or more steps failed")
 		} else {
-			fmt.Println("  [PASS] Scenario 2 — Cross-domain release governed by human passkey approval.")
+			fmt.Println("  [PASS] Scenario 2 — Cross-domain release governed by L3 notary authorization.")
 			fmt.Println("         L1 doctrine admitted; L2 consensus quorum met;")
-			fmt.Println("         L3 notary required real human WebAuthn authorization.")
-			fmt.Println("         L5 actuator recorded the RELEASE after approval.")
-			demoEmitter.Ledger(tui.LevelInfo, "Scenario 2 PASSED — Cross-domain release governed by human passkey approval")
+			fmt.Println("         L3 notary verified mock principal signature (demo mode).")
+			fmt.Println("         L5 actuator recorded the RELEASE after authorization.")
+			demoEmitter.Ledger(tui.LevelInfo, "Scenario 2 PASSED — Cross-domain release governed by L3 notary authorization")
 		}
 
 	case "3":
@@ -525,17 +474,4 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		return scenarioResult{}, fmt.Errorf("invalid scenario number for dhs: %q (valid: 1-5)", scenario)
 	}
 	return result, nil
-}
-
-// extractFirstTxHash parses the JSON response from GET /api/v1/approvals/pending
-// and returns the first transaction_hash, or "" if none found.
-func extractFirstTxHash(jsonBody string) string {
-	var resp models.SuspendedTransactionsResponse
-	if err := json.Unmarshal([]byte(jsonBody), &resp); err != nil {
-		return ""
-	}
-	if len(resp.Transactions) == 0 {
-		return ""
-	}
-	return resp.Transactions[0].TransactionHash
 }

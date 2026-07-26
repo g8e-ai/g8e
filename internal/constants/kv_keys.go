@@ -24,6 +24,10 @@ const (
 // with cache/doc invalidation entries written by the document store triggers.
 const SentinelKeyPrefix = "g8e:sentinel:"
 
+// ScrubbingTokenKeyPrefix is the key prefix for UEI token persistence in the KV store.
+// Combined with a token (e.g. "{{UEI_1}}") to form the full key passed to TokenStore.
+const ScrubbingTokenKeyPrefix = "uei_token_"
+
 const (
 	KVKeyCacheDoc                     = "g8e:cache:doc:{collection}:{id}"
 	KVKeyCacheQuery                   = "g8e:cache:query:{collection}:{hash}"

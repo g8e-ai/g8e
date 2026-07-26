@@ -64,7 +64,9 @@ func TestNeedsGovKit(t *testing.T) {
 		all := scenarios.Registry()
 		var doctrineOnly []scenarios.Scenario
 		for _, s := range all {
-			if s.RequiresPosture == scenarios.Doctrine && !strings.HasPrefix(s.Name, scenarios.DhsScenarioPrefix) {
+			if s.RequiresPosture == scenarios.Doctrine &&
+				!strings.HasPrefix(s.Name, scenarios.DhsScenarioPrefix) &&
+				!strings.HasPrefix(s.Name, scenarios.FedRAMPScenarioPrefix) {
 				doctrineOnly = append(doctrineOnly, s)
 			}
 		}

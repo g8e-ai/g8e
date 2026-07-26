@@ -91,13 +91,10 @@ COVERAGE_EXCLUDE_PKGS := $(TEST_EXCLUDE_PKGS) $(COVERAGE_ONLY_EXCLUDE_PKGS)
 # Files excluded from coverage only (belong to otherwise-tested packages).
 EXCLUDE_FILES := \
 	internal/cli/cmd/demos.go \
-	internal/cli/cmd/demo_dow.go \
 	internal/cli/cmd/demo_dhs.go \
 	internal/cli/cmd/demo_finance.go \
 	internal/cli/cmd/demo_gov.go \
 	internal/cli/cmd/demo_healthcare.go \
-	internal/cli/cmd/demo_secure_data.go \
-	internal/cli/cmd/demo_swarm.go \
 	internal/cli/cmd/mcp_backup.go
 
 # Grep chains derived from the lists above — do not edit directly.
@@ -177,6 +174,9 @@ help:
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean         Remove all build artifacts and runtime state"
+	@echo ""
+	@echo "Demos:"
+	@echo "  demo-verify         Build and run all 6 demo environments (requires Docker)"
 	@echo ""
 	@echo "Python Protocol:"
 	@echo "  python-build  Copy constants and build the Python protocol package"
@@ -501,6 +501,37 @@ test-airgap:
 	@! grep -rn 'pip install\|import requests' demos/ --include='*.py' || { echo "ERROR: found pip install or requests import in demo Python files"; exit 1; }
 	@echo "Air-gap verification PASSED."
 
+# =============================================================================
+# DEMO VERIFICATION
+# =============================================================================
+# Requires Docker. Builds the binary, then runs all 6 demo environments.
+# Each demo is torn down (with volumes) before the next starts to avoid
+# port conflicts and stale PKI state.
+DEMO_ORGS := healthcare gov finance dhs fedramp frontend
+
+.PHONY: demo-verify
+demo-verify: build
+	@echo "=== demo-verify: running all $(words $(DEMO_ORGS)) demos ==="
+	@for org in $(DEMO_ORGS); do \
+		echo ""; \
+		echo "========================================================"; \
+		echo "  Demo: $$org"; \
+		echo "========================================================"; \
+		./g8e demos stop $$org 2>/dev/null || true; \
+		docker compose -f demos/$$org/compose.yml down -v --remove-orphans 2>/dev/null || true; \
+		if ! ./g8e demos run $$org; then \
+			echo "FAIL: demo $$org did not pass all scenarios"; \
+			exit 1; \
+		fi; \
+		./g8e demos stop $$org 2>/dev/null || true; \
+		docker compose -f demos/$$org/compose.yml down -v --remove-orphans 2>/dev/null || true; \
+		echo "PASS: demo $$org completed successfully"; \
+	done
+	@echo ""; \
+	echo "========================================================"; \
+	echo "  All $(words $(DEMO_ORGS)) demos PASSED"; \
+	echo "========================================================"
+
 # Coverage tests
 .PHONY: test-coverage
 test-coverage:
@@ -551,11 +582,11 @@ swagger-generate:
 	@echo "Generating Swagger/OpenAPI documentation..."
 	@if command -v swag &> /dev/null || [ -f "$$(go env GOPATH)/bin/swag" ]; then \
 		SWAG_CMD=$$(command -v swag 2>/dev/null || echo "$$(go env GOPATH)/bin/swag"); \
-		$$SWAG_CMD init --dir cmd/g8e,internal/services/gateway,internal/models,internal/constants --output internal/services/gateway/docs --outputTypes json,yaml --parseInternal --parseDependency; \
+		$$SWAG_CMD init --dir cmd/g8e,internal/services/gateway,internal/models,internal/constants --output internal/services/gateway/docs --outputTypes json,yaml --parseInternal --parseDependencyLevel 1 --packagePrefix github.com/g8e-ai/g8e,github.com/go-webauthn,encoding/json 2>/dev/null; \
 	else \
 		echo "swag not found, installing via go install..."; \
 		go install github.com/swaggo/swag/cmd/swag@latest; \
-		$$(go env GOPATH)/bin/swag init --dir cmd/g8e,internal/services/gateway,internal/models,internal/constants --output internal/services/gateway/docs --outputTypes json,yaml --parseInternal --parseDependency; \
+		$$(go env GOPATH)/bin/swag init --dir cmd/g8e,internal/services/gateway,internal/models,internal/constants --output internal/services/gateway/docs --outputTypes json,yaml --parseInternal --parseDependencyLevel 1 --packagePrefix github.com/g8e-ai/g8e,github.com/go-webauthn,encoding/json 2>/dev/null; \
 	fi
 	@echo "Swagger documentation generated successfully."
 

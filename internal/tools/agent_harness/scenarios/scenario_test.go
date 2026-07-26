@@ -571,7 +571,7 @@ func TestRegistryScenarioOrder(t *testing.T) {
 	assert.Contains(t, scenarios[0].Name, "mcp", "First scenario should be MCP")
 
 	lastName := scenarios[len(scenarios)-1].Name
-	validLastPrefixes := []string{"consensus", "envelope", "notary", "tribunal", "delegation", "dow", "dhs", "gov", "finance", "secure", "migration", "swarm", "fedramp"}
+	validLastPrefixes := []string{"consensus", "envelope", "notary", "tribunal", "delegation", "dhs", "gov", "finance", "fedramp"}
 	found := false
 	for _, p := range validLastPrefixes {
 		if strings.Contains(lastName, p) {
@@ -579,7 +579,19 @@ func TestRegistryScenarioOrder(t *testing.T) {
 			break
 		}
 	}
-	assert.True(t, found, "Last scenario should be governance, dow, or dhs, got %q", lastName)
+	assert.True(t, found, "Last scenario should be governance or dhs, got %q", lastName)
+}
+
+func TestRegistryNoRemovedDemoScenarios(t *testing.T) {
+	scenarios := Registry()
+	removedPrefixes := []string{"dow-", "swarm-", "secure-data-"}
+
+	for _, sc := range scenarios {
+		for _, prefix := range removedPrefixes {
+			assert.NotContains(t, sc.Name, prefix,
+				"Registry should not contain scenario %q with removed-demo prefix %q", sc.Name, prefix)
+		}
+	}
 }
 
 func TestRegistryUniqueNames(t *testing.T) {
@@ -594,7 +606,7 @@ func TestRegistryUniqueNames(t *testing.T) {
 
 func TestRegistryCount(t *testing.T) {
 	scenarios := Registry()
-	expectedCount := len(mcpScenarios()) + len(a2aScenarios()) + len(governanceScenarios()) + len(dowScenarios()) + len(dhsScenarios()) + len(govFinanceScenarios()) + len(secureDataScenarios()) + len(swarmScenarios()) + len(fedrampScenarios())
+	expectedCount := len(mcpScenarios()) + len(a2aScenarios()) + len(governanceScenarios()) + len(dhsScenarios()) + len(govFinanceScenarios()) + len(fedrampScenarios())
 
 	assert.Equal(t, expectedCount, len(scenarios), "Registry should have correct scenario count")
 }
