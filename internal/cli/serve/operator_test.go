@@ -40,6 +40,12 @@ func TestServeOperatorOptions_ZeroValue(t *testing.T) {
 	assert.False(t, opts.ExecutionVault)
 	assert.False(t, opts.NoGit)
 	assert.Equal(t, time.Duration(0), opts.HeartbeatInterval)
+	assert.Equal(t, "", opts.LatticeEndpoint)
+	assert.Equal(t, "", opts.LatticeClientID)
+	assert.Equal(t, "", opts.LatticeClientSecret)
+	assert.Equal(t, "", opts.LatticeSandboxesToken)
+	assert.Equal(t, "", opts.LatticeEntityName)
+	assert.Equal(t, "", opts.LatticePostureFloor)
 }
 
 func TestServeOperatorOptions_FullAssignment(t *testing.T) {
@@ -56,6 +62,12 @@ func TestServeOperatorOptions_FullAssignment(t *testing.T) {
 		ExecutionVault:    true,
 		NoGit:             true,
 		HeartbeatInterval: 30 * time.Second,
+		LatticeEndpoint:       "lattice.example.com:443",
+		LatticeClientID:       "client-id",
+		LatticeClientSecret:   "secret",
+		LatticeSandboxesToken: "sandbox-token",
+		LatticeEntityName:     "g8e-op-1",
+		LatticePostureFloor:   "notary",
 	}
 
 	assert.Equal(t, "debug", opts.LogLevel)
@@ -70,6 +82,12 @@ func TestServeOperatorOptions_FullAssignment(t *testing.T) {
 	assert.True(t, opts.ExecutionVault)
 	assert.True(t, opts.NoGit)
 	assert.Equal(t, 30*time.Second, opts.HeartbeatInterval)
+	assert.Equal(t, "lattice.example.com:443", opts.LatticeEndpoint)
+	assert.Equal(t, "client-id", opts.LatticeClientID)
+	assert.Equal(t, "secret", opts.LatticeClientSecret)
+	assert.Equal(t, "sandbox-token", opts.LatticeSandboxesToken)
+	assert.Equal(t, "g8e-op-1", opts.LatticeEntityName)
+	assert.Equal(t, "notary", opts.LatticePostureFloor)
 }
 
 func TestServeOperatorOptions_Equality(t *testing.T) {
@@ -314,6 +332,12 @@ func TestServeOperatorOptions_Equality_DifferInEachField(t *testing.T) {
 		{"ExecutionVault", func(o *ServeOperatorOptions) { o.ExecutionVault = false }},
 		{"NoGit", func(o *ServeOperatorOptions) { o.NoGit = false }},
 		{"HeartbeatInterval", func(o *ServeOperatorOptions) { o.HeartbeatInterval = 60 * time.Second }},
+		{"LatticeEndpoint", func(o *ServeOperatorOptions) { o.LatticeEndpoint = "other" }},
+		{"LatticeClientID", func(o *ServeOperatorOptions) { o.LatticeClientID = "other" }},
+		{"LatticeClientSecret", func(o *ServeOperatorOptions) { o.LatticeClientSecret = "other" }},
+		{"LatticeSandboxesToken", func(o *ServeOperatorOptions) { o.LatticeSandboxesToken = "other" }},
+		{"LatticeEntityName", func(o *ServeOperatorOptions) { o.LatticeEntityName = "other" }},
+		{"LatticePostureFloor", func(o *ServeOperatorOptions) { o.LatticePostureFloor = "other" }},
 	}
 
 	for _, f := range fields {
@@ -342,7 +366,7 @@ func TestServeOperatorOptions_Equality_AllFieldsEqual(t *testing.T) {
 		HeartbeatInterval: 45 * time.Second,
 	}
 	b := a
-	require.True(t, a == b, "structs with all 12 fields identical should be equal")
+	require.True(t, a == b, "structs with all fields identical should be equal")
 }
 
 // ---------------------------------------------------------------------------
@@ -498,4 +522,100 @@ func TestBuildOperatorLoadOptions_EnvVarsUnset(t *testing.T) {
 	assert.Equal(t, "", loadOpts.Lang)
 	assert.Equal(t, "", loadOpts.Term)
 	assert.Equal(t, "", loadOpts.TZ)
+}
+
+func TestBuildOperatorLoadOptions_LatticeNilWhenEndpointEmpty(t *testing.T) {
+	opts := ServeOperatorOptions{}
+	loadOpts := buildOperatorLoadOptions(opts, constants.DefaultEndpoint, "/work")
+	assert.Nil(t, loadOpts.Lattice)
+}
+
+func TestBuildOperatorLoadOptions_LatticeFieldsPropagated(t *testing.T) {
+	opts := ServeOperatorOptions{
+		LatticeEndpoint:       "lattice.example.com:443",
+		LatticeClientID:       "client-id",
+		LatticeClientSecret:   "secret",
+		LatticeSandboxesToken: "sandbox-token",
+		LatticeEntityName:     "g8e-op-1",
+		LatticePostureFloor:   "notary",
+	}
+
+	loadOpts := buildOperatorLoadOptions(opts, constants.DefaultEndpoint, "/work")
+
+	require.NotNil(t, loadOpts.Lattice)
+	assert.True(t, loadOpts.Lattice.Enabled)
+	assert.Equal(t, "lattice.example.com:443", loadOpts.Lattice.Endpoint)
+	assert.Equal(t, "client-id", loadOpts.Lattice.ClientID)
+	assert.Equal(t, "secret", loadOpts.Lattice.ClientSecret)
+	assert.Equal(t, "sandbox-token", loadOpts.Lattice.SandboxesToken)
+	assert.Equal(t, "g8e-op-1", loadOpts.Lattice.Entity.Name)
+	assert.Equal(t, "g8e-operator", loadOpts.Lattice.Entity.PlatformType)
+	assert.Equal(t, "notary", loadOpts.Lattice.PostureFloor)
+}
+
+func TestBuildOperatorLoadOptions_LatticeEnvVarFallback(t *testing.T) {
+	t.Setenv(string(constants.EnvVar.LatticeEndpoint), "env-lattice:443")
+	t.Setenv(string(constants.EnvVar.LatticeClientID), "env-client-id")
+	t.Setenv(string(constants.EnvVar.LatticeClientSecret), "env-secret")
+	t.Setenv(string(constants.EnvVar.LatticeSandboxesToken), "env-sandbox-token")
+	t.Setenv(string(constants.EnvVar.LatticeEntityName), "env-entity")
+	t.Setenv(string(constants.EnvVar.LatticePostureFloor), "doctrine")
+
+	opts := ServeOperatorOptions{}
+	loadOpts := buildOperatorLoadOptions(opts, constants.DefaultEndpoint, "/work")
+
+	require.NotNil(t, loadOpts.Lattice)
+	assert.True(t, loadOpts.Lattice.Enabled)
+	assert.Equal(t, "env-lattice:443", loadOpts.Lattice.Endpoint)
+	assert.Equal(t, "env-client-id", loadOpts.Lattice.ClientID)
+	assert.Equal(t, "env-secret", loadOpts.Lattice.ClientSecret)
+	assert.Equal(t, "env-sandbox-token", loadOpts.Lattice.SandboxesToken)
+	assert.Equal(t, "env-entity", loadOpts.Lattice.Entity.Name)
+	assert.Equal(t, "g8e-operator", loadOpts.Lattice.Entity.PlatformType)
+	assert.Equal(t, "doctrine", loadOpts.Lattice.PostureFloor)
+}
+
+func TestBuildOperatorLoadOptions_LatticeFlagOverridesEnvVar(t *testing.T) {
+	t.Setenv(string(constants.EnvVar.LatticeEndpoint), "env-lattice:443")
+	t.Setenv(string(constants.EnvVar.LatticeClientID), "env-client-id")
+
+	opts := ServeOperatorOptions{
+		LatticeEndpoint: "flag-lattice:443",
+		LatticeClientID: "flag-client-id",
+	}
+	loadOpts := buildOperatorLoadOptions(opts, constants.DefaultEndpoint, "/work")
+
+	require.NotNil(t, loadOpts.Lattice)
+	assert.Equal(t, "flag-lattice:443", loadOpts.Lattice.Endpoint)
+	assert.Equal(t, "flag-client-id", loadOpts.Lattice.ClientID)
+}
+
+func TestBuildOperatorLoadOptions_LatticeDefaultPostureFloor(t *testing.T) {
+	opts := ServeOperatorOptions{
+		LatticeEndpoint: "lattice.example.com:443",
+	}
+	loadOpts := buildOperatorLoadOptions(opts, constants.DefaultEndpoint, "/work")
+
+	require.NotNil(t, loadOpts.Lattice)
+	assert.Equal(t, "", loadOpts.Lattice.PostureFloor,
+		"PostureFloor should be empty when not set; Validate() defaults it to consensus")
+}
+
+func TestResolveLatticeOpt(t *testing.T) {
+	t.Run("flag value takes precedence", func(t *testing.T) {
+		t.Setenv(string(constants.EnvVar.LatticeEndpoint), "env-value")
+		result := resolveLatticeOpt("flag-value", constants.EnvVar.LatticeEndpoint)
+		assert.Equal(t, "flag-value", result)
+	})
+
+	t.Run("env var fallback when flag empty", func(t *testing.T) {
+		t.Setenv(string(constants.EnvVar.LatticeEndpoint), "env-value")
+		result := resolveLatticeOpt("", constants.EnvVar.LatticeEndpoint)
+		assert.Equal(t, "env-value", result)
+	})
+
+	t.Run("empty when both flag and env unset", func(t *testing.T) {
+		result := resolveLatticeOpt("", constants.EnvVar.LatticeEndpoint)
+		assert.Equal(t, "", result)
+	})
 }

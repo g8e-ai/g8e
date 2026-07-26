@@ -48,12 +48,6 @@ import (
 //go:embed db/schema.sql
 var gatewaySchema string
 
-// GatewaySchema returns the embedded gateway schema SQL.
-// This is exported for use in integration tests that need to set up a test database.
-func GatewaySchema() string {
-	return gatewaySchema
-}
-
 // Stores holds the extracted single-responsibility store services.
 // It is returned by OpenCanonicalDBService and passed to consumers that
 // need specific stores. CanonicalDBService retains a private reference for
@@ -334,11 +328,6 @@ func (s *CanonicalDBService) initSchema(fileSvc fs.RuntimeFileService, ks *keyst
 	return nil
 }
 
-// GetDB returns the underlying SQLite database connection.
-func (s *CanonicalDBService) GetDB() *sqliteutil.DB {
-	return s.db
-}
-
 // GetSecretManager returns the SecretManager initialized during schema init.
 func (s *CanonicalDBService) GetSecretManager() *SecretManager {
 	return s.sm
@@ -384,9 +373,4 @@ func (s *CanonicalDBService) Close() error {
 		return err
 	}
 	return nil
-}
-
-// Wait blocks until all background workers have finished.
-func (s *CanonicalDBService) Wait() {
-	s.wg.Wait()
 }

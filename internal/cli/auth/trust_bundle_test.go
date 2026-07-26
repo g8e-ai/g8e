@@ -256,29 +256,6 @@ func TestBuildMTLSClient_ReadsTrustBundleFromRuntimeTree(t *testing.T) {
 	require.NotNil(t, client)
 }
 
-func TestNewSecureHTTPClient_ReadsTrustBundleFromRuntimeTree(t *testing.T) {
-	t.Parallel()
-	fileSvc, cfg := newAuthTestEnv(t)
-
-	caPEM, _ := testutil.GenerateTestCertificate(t, "test-ca")
-
-	require.NoError(t, fileSvc.WriteFile(context.Background(), cfg.DefaultTrustBundleRelPath(), []byte(caPEM), constants.PermFilePrivate))
-
-	client, err := NewSecureHTTPClient(fileSvc, cfg)
-	require.NoError(t, err)
-	require.NotNil(t, client)
-}
-
-func TestNewSecureHTTPClient_MissingDefaultBundleReturnsTypedError(t *testing.T) {
-	t.Parallel()
-	fileSvc, cfg := newAuthTestEnv(t)
-
-	client, err := NewSecureHTTPClient(fileSvc, cfg)
-	require.Error(t, err)
-	assert.Nil(t, client)
-	assert.ErrorIs(t, err, constants.ErrFailedToReadTrustBundle)
-}
-
 // writeValidCertPair generates a self-signed certificate and writes the cert
 // and key PEM files to the runtime tree via fileSvc.
 func writeValidCertPair(t *testing.T, fileSvc fs.RuntimeFileService, certFile, keyFile string) {

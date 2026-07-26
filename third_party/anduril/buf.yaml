@@ -1,0 +1,7 @@
+version: v2
+modules:
+  - path: .
+    name: buf.build/g8e/anduril-lattice
+lint:
+  use:
+    - STANDARD

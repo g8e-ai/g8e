@@ -85,22 +85,3 @@ func (h *HTTPHandler) containsTraversal(path string) bool {
 	}
 	return false
 }
-
-// isPrivateIP reports whether an IP address is in a private network range.
-func isPrivateIP(ip net.IP) bool {
-	if ip4 := ip.To4(); ip4 != nil {
-		// 10.0.0.0/8
-		if ip4[0] == 10 {
-			return true
-		}
-		// 172.16.0.0/12
-		if ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31 {
-			return true
-		}
-		// 192.168.0.0/16
-		if ip4[0] == 192 && ip4[1] == 168 {
-			return true
-		}
-	}
-	return false
-}

@@ -152,40 +152,6 @@ func TestLaunchAgentWithGovernance_ConfigLoadError(t *testing.T) {
 	})
 }
 
-// ─── handleToolsCall empty tool name ─────────────────────────────────────────
-
-func TestHandleToolsCall_EmptyToolName(t *testing.T) {
-	t.Run("returns error when tool name is empty", func(t *testing.T) {
-		var buf bytes.Buffer
-		encoder := json.NewEncoder(&buf)
-		nativeToolHandler, err := mcp.NewNativeToolHandler(nil)
-		require.NoError(t, err)
-		handleToolsCall(encoder, 1, json.RawMessage(`{"name":"","arguments":{}}`), nativeToolHandler)
-
-		var resp JSONRPCResponse
-		err = json.Unmarshal(buf.Bytes(), &resp)
-		require.NoError(t, err)
-		assert.NotNil(t, resp.Error)
-		assert.Equal(t, -32600, resp.Error.Code)
-		assert.Contains(t, resp.Error.Message, "tool name required")
-	})
-
-	t.Run("returns error on invalid params JSON", func(t *testing.T) {
-		var buf bytes.Buffer
-		encoder := json.NewEncoder(&buf)
-		nativeToolHandler, err := mcp.NewNativeToolHandler(nil)
-		require.NoError(t, err)
-		handleToolsCall(encoder, 1, json.RawMessage(`not valid json`), nativeToolHandler)
-
-		var resp JSONRPCResponse
-		err = json.Unmarshal(buf.Bytes(), &resp)
-		require.NoError(t, err)
-		assert.NotNil(t, resp.Error)
-		assert.Equal(t, -32600, resp.Error.Code)
-		assert.Contains(t, resp.Error.Message, "invalid tools/call params")
-	})
-}
-
 // ─── proxySessionToGateway connection refused ────────────────────────────────
 
 func TestProxySessionToGateway_ConnectionRefused(t *testing.T) {

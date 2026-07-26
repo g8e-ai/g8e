@@ -69,18 +69,6 @@ func NewSecretManager(db *sqliteutil.DB, fileSvc fs.RuntimeFileService, logger *
 	}, nil
 }
 
-// NewSecretManagerWithKeystore creates a SecretManager using a pre-initialized keystore.
-// For standalone test use with a raw sqliteutil.DB; tests that use OpenCanonicalDBService
-// should call db.GetSecretManager() instead.
-func NewSecretManagerWithKeystore(db *sqliteutil.DB, fileSvc fs.RuntimeFileService, logger *slog.Logger, ks *keystore.Keystore) (*SecretManager, error) {
-	return &SecretManager{
-		db:       db,
-		logger:   logger,
-		fileSvc:  fileSvc,
-		keystore: ks,
-	}, nil
-}
-
 // GetKeystore returns the underlying Keystore instance.
 func (m *SecretManager) GetKeystore() *keystore.Keystore {
 	return m.keystore

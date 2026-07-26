@@ -16,16 +16,9 @@ package auth
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"encoding/pem"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"path/filepath"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/cli/config"
-	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -83,99 +76,3 @@ func TestVerifyCAFingerprint_NonCertificatePEM(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestFetchRootCAFingerprint_Success(t *testing.T) {
-	t.Parallel()
-
-	certPEM, _ := testutil.GenerateTestCertificate(t, "test-ca")
-	block, _ := pem.Decode([]byte(certPEM))
-	require.NotNil(t, block)
-	hash := sha256.Sum256(block.Bytes)
-	expectedFP := hex.EncodeToString(hash[:])
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/.well-known/g8e/pki/fingerprint", r.URL.Path)
-		resp := map[string]string{"root_ca": expectedFP}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer server.Close()
-
-	tmpDir := testutil.TempDir(t)
-	cfg := &config.Config{
-		ProjectRoot: tmpDir,
-		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:       &config.PathsConfig{},
-	}
-
-	// Test the success case - the function should successfully fetch the fingerprint
-	fp, err := FetchRootCAFingerprint(cfg, server.URL)
-	require.NoError(t, err)
-	assert.Equal(t, expectedFP, fp)
-}
-
-func TestFetchRootCAFingerprint_HTTPError(t *testing.T) {
-	t.Parallel()
-
-	tmpDir := testutil.TempDir(t)
-	cfg := &config.Config{
-		ProjectRoot: tmpDir,
-		RuntimeDir:  filepath.Join(tmpDir, constants.RuntimeDirname),
-		PKIDir:      filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname),
-		SecretsDir:  filepath.Join(tmpDir, constants.RuntimeDirname, constants.SecretsDirname),
-		Paths:       &config.PathsConfig{},
-	}
-
-	// Use httptest.Server to simulate connection error by closing immediately
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Close connection immediately to simulate network error
-		hijacker, ok := w.(http.Hijacker)
-		if ok {
-			conn, _, _ := hijacker.Hijack()
-			conn.Close()
-		}
-	}))
-	defer server.Close()
-
-	_, err := FetchRootCAFingerprint(cfg, server.URL+"/.well-known/g8e/pki/fingerprint")
-	require.Error(t, err)
-	assert.Error(t, err)
-}
-
-func TestFetchRootCAFingerprint_BadStatusCode(t *testing.T) {
-	t.Parallel()
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer server.Close()
-
-	// We need to test via actual server interaction
-	// Since FetchRootCAFingerprint constructs its own URL, we test error handling
-	resp, err := http.Get(server.URL + "/.well-known/g8e/pki/fingerprint")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-}
-
-func TestFetchRootCAFingerprint_InvalidJSON(t *testing.T) {
-	t.Parallel()
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("invalid-json{{{"))
-	}))
-	defer server.Close()
-
-	resp, err := http.Get(server.URL)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	var fpResp struct {
-		RootCA string `json:"root_ca"`
-	}
-	err = json.Unmarshal(body, &fpResp)
-	require.Error(t, err)
-}

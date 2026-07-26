@@ -32,7 +32,3 @@ func ImportCertificateToWindowsStore(certPEM string) error {
 	return constants.ErrWindowsCertStoreImport
 }
 
-// TrustRootCAInWindowsStore is a stub for non-Windows platforms.
-func TrustRootCAInWindowsStore(caBundlePEM string) error {
-	return constants.ErrWindowsCertStoreTrust
-}

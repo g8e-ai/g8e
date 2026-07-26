@@ -83,7 +83,7 @@ func (hs *HeartbeatService) SetContext(ctx context.Context) {
 // HeartbeatSink is a callback invoked after each automatic heartbeat cycle.
 // External components (e.g. the Lattice adapter) register sinks to piggyback
 // periodic work on the heartbeat scheduler.
-type HeartbeatSink func(ctx context.Context)
+type HeartbeatSink = func(ctx context.Context)
 
 // sinkEntry pairs a sink function with its registration ID.
 type sinkEntry struct {

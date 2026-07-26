@@ -20,7 +20,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // Run starts the Tactical Governance TUI. It blocks until the user presses
@@ -57,36 +56,3 @@ func Run(ctx context.Context, opts Options) error {
 	return nil
 }
 
-// EmitPipeline sends a PipelineMsg to the program from outside the bubbletea
-// loop. Used by demo scenario code to drive TUI state.
-func EmitPipeline(p *tea.Program, stage PipelineStage, status PipelineStatus, txID, detail string) {
-	p.Send(PipelineMsg{
-		Stage:  stage,
-		Status: status,
-		TxID:   txID,
-		Detail: detail,
-	})
-}
-
-// EmitLedger sends a LedgerMsg to the program from outside the bubbletea loop.
-func EmitLedger(p *tea.Program, level LedgerLevel, message string) {
-	p.Send(LedgerMsg{
-		Level:   level,
-		Message: message,
-		Time:    timeNow(),
-	})
-}
-
-// EmitConsensus sends a ConsensusMsg to the program from outside the bubbletea
-// loop.
-func EmitConsensus(p *tea.Program, member constants.TribunalMember, decision, signed bool, quorum, total int, result ConsensusResult, hash string) {
-	p.Send(ConsensusMsg{
-		Member:   member,
-		Decision: decision,
-		Signed:   signed,
-		Quorum:   quorum,
-		Total:    total,
-		Result:   result,
-		Hash:     hash,
-	})
-}

@@ -37,8 +37,3 @@ func TestImportCertificateToWindowsStore_NonWindowsReturnsErrWindowsCertStoreImp
 	assert.ErrorIs(t, err, constants.ErrWindowsCertStoreImport)
 }
 
-func TestTrustRootCAInWindowsStore_NonWindowsReturnsErrWindowsCertStoreTrust(t *testing.T) {
-	err := TrustRootCAInWindowsStore("dummy")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrWindowsCertStoreTrust)
-}

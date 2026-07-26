@@ -16,6 +16,7 @@ package gateway
 import (
 	"database/sql"
 	"errors"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -23,6 +24,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// newReplayStoreServiceWithDB creates a ReplayStoreService with a mock DB
+// for unit testing.
+func newReplayStoreServiceWithDB(db replayStoreDB, logger *slog.Logger) *ReplayStoreService {
+	return &ReplayStoreService{
+		db:     db,
+		logger: logger,
+	}
+}
 
 // mockReplayStoreDB is a mock implementation of replayStoreDB for unit testing.
 type mockReplayStoreDB struct {

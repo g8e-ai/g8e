@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/adapters/lattice"
+	taskmanagerv1 "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/taskmanager/v1"
 	"github.com/g8e-ai/g8e/internal/certs"
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -65,6 +67,8 @@ type G8eoService struct {
 
 	// P0 Transaction Gate infrastructure
 	replayStore governance.ReplayStore
+
+	latticeAdapter *lattice.Adapter
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -344,6 +348,38 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		return fmt.Errorf("%w: %w", constants.ErrServiceUnavailable, err)
 	}
 
+	if vs.config.Lattice != nil && vs.config.Lattice.Enabled {
+		if err := vs.config.Lattice.Validate(); err != nil {
+			return fmt.Errorf("lattice: config validation: %w", err)
+		}
+		if err := lattice.ValidateHeartbeatInterval(vs.config.HeartbeatInterval); err != nil {
+			return fmt.Errorf("lattice: heartbeat interval: %w", err)
+		}
+
+		tlsCfg, err := vs.tlsConfig.GetTLSConfig()
+		if err != nil {
+			return fmt.Errorf("lattice: tls config: %w", err)
+		}
+		adapter, err := lattice.NewAdapter(vs.config.Lattice, vs.fileSvc, tlsCfg, vs.logger)
+		if err != nil {
+			return fmt.Errorf("lattice: dial: %w", err)
+		}
+
+		adapter.SetHeartbeatService(vs.pubSubCommands.HeartbeatService())
+		adapter.SetTaskHandler(vs.latticeTaskHandler)
+		adapter.SetPostureProvider(func() string {
+			return string(vs.config.Posture)
+		})
+
+		if err := adapter.Start(vs.ctx); err != nil {
+			return fmt.Errorf("lattice: start: %w", err)
+		}
+		vs.latticeAdapter = adapter
+		vs.logger.Info("Lattice adapter started",
+			"endpoint", vs.config.Lattice.Endpoint,
+			"entity", vs.config.Lattice.Entity.Name)
+	}
+
 	vs.running = true
 
 	// Handle external shutdown requests (remote shutdown or SSL failure)
@@ -398,6 +434,13 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 		}
 		if err := vs.pubSubCommands.Stop(); err != nil {
 			vs.logger.Error("g8eo: failed to stop pubsub command service", "error", err)
+		}
+	}
+
+	// Stop Lattice adapter (after pubsub stops receiving new tasks)
+	if vs.latticeAdapter != nil {
+		if err := vs.latticeAdapter.Stop(ctx); err != nil {
+			vs.logger.Error("g8eo: failed to stop Lattice adapter", "error", err)
 		}
 	}
 
@@ -473,4 +516,9 @@ func printOperatorStartupBanner(cfg *config.Config, logger *slog.Logger) {
 		"fs.write", "GRANTED: Requires L1 Signature",
 		"net.fetch", "DENIED: Air-gap mode active")
 	logger.Info("[g8eo] Edge node operational. Awaiting cryptographically signed agentic intents...")
+}
+
+func (vs *G8eoService) latticeTaskHandler(ctx context.Context, task *taskmanagerv1.Task) error {
+	vs.logger.Info("Lattice task received", "task_id", task.GetVersion().GetTaskId())
+	return nil
 }
