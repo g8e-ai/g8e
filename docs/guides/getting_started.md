@@ -6,7 +6,7 @@ parent: Guides
 # Getting Started
 
 Last Updated: 2026-07-25
-Version: v1.6.3
+Version: v1.6.4
 
 ---
 

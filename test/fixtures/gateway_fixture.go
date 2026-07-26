@@ -202,6 +202,8 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		DataDir:           dataDir,
 		PKIDir:            pkiDir,
 		SecretsDir:        secretsDir,
+		VaultDir:          testPaths.VaultDir,
+		VaultKeyPath:      testPaths.VaultKeyPath,
 		PasskeyRpID:       "localhost",
 		PasskeyRpName:     "g8e",
 		AllowTestPortZero: opts.AllowTestPortZero,
