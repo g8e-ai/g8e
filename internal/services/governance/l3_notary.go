@@ -38,14 +38,10 @@ type L3Notary interface {
 	VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error)
 }
 
-// ErrCLISessionDenied signals that the CLI session was denied (e.g., revoked certificate)
-// rather than encountering a system error. VerifyL3Proof translates this into (false, nil).
-var ErrCLISessionDenied = errors.New("CLI session denied")
-
 // CLISessionVerifier performs CLI session-specific verification including user active
 // status, session validity, and certificate revocation. Returns nil if verification passes.
-// Returns ErrCLISessionDenied for denials (revoked certs, inactive sessions) and other
-// errors for system failures.
+// Returns constants.ErrCLISessionDenied for denials (revoked certs, inactive sessions) and
+// other errors for system failures.
 type CLISessionVerifier interface {
 	VerifyCLISession(userID, cliSessionID, certFingerprint string) error
 }
@@ -156,7 +152,7 @@ func (v *gatewayNotary) VerifyL3Proof(ctx context.Context, userID, transactionHa
 	// Layer 2: CLI mTLS session authentication (additional check for CLI callers)
 	if proof.MtlsCertFingerprint != "" && v.cliVerifier != nil {
 		if err := v.cliVerifier.VerifyCLISession(userID, cliSessionID, proof.MtlsCertFingerprint); err != nil {
-			if errors.Is(err, ErrCLISessionDenied) {
+			if errors.Is(err, constants.ErrCLISessionDenied) {
 				return false, nil
 			}
 			return false, err
@@ -216,7 +212,7 @@ func verifyOutboundProof(
 			return false, fmt.Errorf("%w: %w", constants.ErrCLIL3InvalidFingerprintFormat, err)
 		}
 		if err := cliVerifier.VerifyCLISession(userID, cliSessionID, proof.MtlsCertFingerprint); err != nil {
-			if errors.Is(err, ErrCLISessionDenied) {
+			if errors.Is(err, constants.ErrCLISessionDenied) {
 				return false, nil
 			}
 			return false, err
@@ -251,7 +247,7 @@ func verifyOutboundProof(
 
 	// Verify approval has not expired (30 minute approval window)
 	if tx.ApprovedAt != nil {
-		approvalExpiry := tx.ApprovedAt.Add(30 * time.Minute)
+		approvalExpiry := tx.ApprovedAt.Add(constants.L3ApprovalWindow)
 		if time.Now().UTC().After(approvalExpiry) {
 			logger.Warn("CLI L3 verification failed: approval expired", "transaction_hash", transactionHash, "approved_at", tx.ApprovedAt)
 			return false, constants.ErrCLIL3ApprovalExpired

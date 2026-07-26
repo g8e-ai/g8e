@@ -662,6 +662,7 @@ var (
 	ErrCLIL3TransactionNotApproved        = errors.New("suspended transaction is not approved")
 	ErrCLIL3ApprovalExpired               = errors.New("CLI L3 approval has expired")
 	ErrCLIL3UserServiceNotConfigured      = errors.New("user service not configured for CLI L3 verification")
+	ErrCLISessionDenied                   = errors.New("CLI session denied")
 	ErrPasskeyProofRequired               = errors.New("passkey proof required for L3 authorization")
 
 	// File edit service errors
@@ -1011,15 +1012,15 @@ var (
 	ErrBrowserURLEmpty = errors.New("browser URL cannot be empty")
 
 	// Field path parser errors
-	ErrFieldPathInvalidCollection  = errors.New("FIELD_PATH_INVALID_COLLECTION: collection not in schema registry")
-	ErrFieldPathInvalid            = errors.New("FIELD_PATH_INVALID: field path not in allowlist")
-	ErrFieldPathForbidden          = errors.New("FIELD_PATH_FORBIDDEN: field path in denylist")
-	ErrFieldPathSyntax             = errors.New("FIELD_PATH_SYNTAX: invalid dot-notation syntax")
-	ErrFieldPathEmpty              = errors.New("FIELD_PATH_EMPTY: field path cannot be empty")
-	ErrFieldPathEmptyCollection    = errors.New("FIELD_PATH_EMPTY_COLLECTION: collection cannot be empty")
-	ErrFieldPathDocumentNil        = errors.New("document is nil")
-	ErrFieldPathComponentNotFound  = errors.New("field path component not found")
-	ErrFieldPathNotObject          = errors.New("cannot access field on non-object type")
+	ErrFieldPathInvalidCollection = errors.New("FIELD_PATH_INVALID_COLLECTION: collection not in schema registry")
+	ErrFieldPathInvalid           = errors.New("FIELD_PATH_INVALID: field path not in allowlist")
+	ErrFieldPathForbidden         = errors.New("FIELD_PATH_FORBIDDEN: field path in denylist")
+	ErrFieldPathSyntax            = errors.New("FIELD_PATH_SYNTAX: invalid dot-notation syntax")
+	ErrFieldPathEmpty             = errors.New("FIELD_PATH_EMPTY: field path cannot be empty")
+	ErrFieldPathEmptyCollection   = errors.New("FIELD_PATH_EMPTY_COLLECTION: collection cannot be empty")
+	ErrFieldPathDocumentNil       = errors.New("document is nil")
+	ErrFieldPathComponentNotFound = errors.New("field path component not found")
+	ErrFieldPathNotObject         = errors.New("cannot access field on non-object type")
 
 	// Lattice adapter errors
 	ErrLatticeConfigMissing            = errors.New("lattice config is required")

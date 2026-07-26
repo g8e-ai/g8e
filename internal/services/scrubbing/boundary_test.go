@@ -972,7 +972,7 @@ func TestScrubbingService_RehydrateText(t *testing.T) {
 	t.Run("rehydrates known token", func(t *testing.T) {
 		t.Parallel()
 		token := service.GetTokenForValue(context.Background(), "secret-value")
-		result := service.RehydrateText(context.Background(), "Command with " + token)
+		result := service.RehydrateText(context.Background(), "Command with "+token)
 		assert.Equal(t, "Command with secret-value", result)
 	})
 }

@@ -344,7 +344,7 @@ func TestGatewayL3Notary_DualLayerCLISessionDeniedReturnsFalse(t *testing.T) {
 	t.Parallel()
 
 	passkeyMock := &mockL3Notary{result: true}
-	cliVerifier := &mockCLISessionVerifier{result: ErrCLISessionDenied}
+	cliVerifier := &mockCLISessionVerifier{result: constants.ErrCLISessionDenied}
 	notary := NewGatewayL3Notary(cliVerifier, passkeyMock, slog.Default())
 
 	dualProof := &commonv1.L3Proof{
@@ -501,7 +501,7 @@ func TestCLINotary_CLISessionDeniedReturnsFalse(t *testing.T) {
 	}
 	store.StoreSuspendedTransaction(context.Background(), setupApprovedTx(txHash, userID, pubKeyHex, signature))
 
-	cliVerifier := &mockCLISessionVerifier{result: ErrCLISessionDenied}
+	cliVerifier := &mockCLISessionVerifier{result: constants.ErrCLISessionDenied}
 	notary := NewCLIL3Notary(store, cliVerifier, slog.Default())
 
 	proof := &commonv1.L3Proof{

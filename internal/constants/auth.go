@@ -215,6 +215,12 @@ const (
 	AppTypeTribunalMember = "tribunal-member"
 )
 
+// L3 notary constants
+const (
+	// L3ApprovalWindow is the maximum time between approval and L3 verification.
+	L3ApprovalWindow = 30 * time.Minute
+)
+
 // Certificate renewal constants
 const (
 	// AppCertMinValidity is the minimum remaining validity an app certificate must

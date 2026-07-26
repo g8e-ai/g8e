@@ -50,7 +50,7 @@ func NewCLISessionVerifier(docStore *DocumentStoreService, pki *PKIAuthority, lo
 
 // VerifyCLISession performs CLI session-specific verification: user active status,
 // session ownership/fingerprint/active/expiry, and certificate revocation.
-// Returns governance.ErrCLISessionDenied for denials (revoked certs) and other
+// Returns constants.ErrCLISessionDenied for denials (revoked certs) and other
 // errors for system failures.
 func (v *cliSessionVerifier) VerifyCLISession(userID, cliSessionID, certFingerprint string) error {
 	if err := v.verifyUserActive(userID); err != nil {
@@ -153,7 +153,7 @@ func (v *cliSessionVerifier) verifyCLISession(userID, cliSessionID, certFingerpr
 }
 
 // verifyCertNotRevoked checks that the session's certificate has not been revoked
-// via the PKI authority. Returns governance.ErrCLISessionDenied if the certificate is revoked.
+// via the PKI authority. Returns constants.ErrCLISessionDenied if the certificate is revoked.
 func (v *cliSessionVerifier) verifyCertNotRevoked(userID, cliSessionID string, session *models.CLISession) error {
 	if v.pki == nil {
 		return constants.ErrCLIL3PKINotConfigured
@@ -166,7 +166,7 @@ func (v *cliSessionVerifier) verifyCertNotRevoked(userID, cliSessionID string, s
 		}
 		if revoked {
 			v.logger.Warn("CLI L3 verification failed: certificate is revoked", "user_id", userID, "cli_session_id", cliSessionID, "cert_serial", session.CertSerial)
-			return governance.ErrCLISessionDenied
+			return constants.ErrCLISessionDenied
 		}
 	}
 	return nil

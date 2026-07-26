@@ -19,11 +19,12 @@ import (
 	"regexp"
 	"strings"
 
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+
 	"github.com/g8e-ai/g8e/internal/constants"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // L1Doctrine provides L1 (Technical Bedrock) validation.
@@ -75,7 +76,11 @@ func (v *L1Doctrine) ValidatePayload(msg proto.Message) []string {
 				continue
 			}
 			matched, err := regexp.MatchString(p, strVal)
-			if err == nil && matched {
+			if err != nil {
+				violations = append(violations, fmt.Sprintf("field %s has invalid forbidden pattern %s: %v", fd.Name(), p, err))
+				continue
+			}
+			if matched {
 				violations = append(violations, fmt.Sprintf("field %s violates pattern %s", fd.Name(), p))
 			}
 		}
@@ -1077,7 +1082,7 @@ func (v *L1Doctrine) AnalyzeMCPArguments(argumentsJSON string) ([]ThreatSignal, 
 	// Parse the JSON arguments using json.RawMessage to avoid untyped maps
 	var raw json.RawMessage
 	if err := json.Unmarshal([]byte(argumentsJSON), &raw); err != nil {
-		return nil, fmt.Errorf("%w: %v", constants.ErrMCPUnmarshalArguments, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrMCPUnmarshalArguments, err)
 	}
 
 	// Recursively analyze all string values in the arguments with depth limit

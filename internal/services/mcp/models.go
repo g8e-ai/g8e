@@ -814,11 +814,11 @@ type CloudMetadataInstanceTypeResult struct {
 
 // CloudMetadataAllResult is the result for the "cloud_metadata" all operation.
 type CloudMetadataAllResult struct {
-	Provider         string                            `json:"provider"`
-	Instance         CloudMetadataInstanceResult        `json:"instance"`
-	Region           CloudMetadataRegionResult          `json:"region"`
+	Provider         string                              `json:"provider"`
+	Instance         CloudMetadataInstanceResult         `json:"instance"`
+	Region           CloudMetadataRegionResult           `json:"region"`
 	AvailabilityZone CloudMetadataAvailabilityZoneResult `json:"availability_zone"`
-	InstanceType     CloudMetadataInstanceTypeResult    `json:"instance_type"`
+	InstanceType     CloudMetadataInstanceTypeResult     `json:"instance_type"`
 }
 
 // CloudMetadataErrorResponse is the error response for the "cloud_metadata" tool.

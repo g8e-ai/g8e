@@ -118,9 +118,9 @@ type ToolsListResult struct {
 
 // Tool represents a single MCP tool descriptor.
 type Tool struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	InputSchema *mcp.InputSchema  `json:"inputSchema"`
+	Name        string           `json:"name"`
+	Description string           `json:"description"`
+	InputSchema *mcp.InputSchema `json:"inputSchema"`
 }
 
 // CallToolRequest is the params object for tools/call.
