@@ -144,7 +144,7 @@ func setupAuthService(t *testing.T) (*AuthService, *CanonicalDBService) {
 
 	responderSvc := response.NewWriter(logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, nil, personaSvc, responderSvc, fileSvc.Resolve(constants.SecretsDirname), nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, nil, personaSvc, responderSvc, nil, "", "", "")
 	return auth, db
 }
 

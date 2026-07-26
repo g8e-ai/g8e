@@ -119,7 +119,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	resp := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, resp, nil, "", "", "")
 	// Wire up auth service to user service for cache invalidation
 	userSvc.SetAuthService(auth)
 	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
