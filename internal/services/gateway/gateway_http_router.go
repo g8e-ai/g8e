@@ -49,7 +49,8 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.Handle(constants.APIPaths.DataBlobs, http.HandlerFunc(h.dbController.handleBlob))
 
 	// Console SPA (public, no auth required)
-	mux.Handle("/console/", http.StripPrefix("/console", console.Handler()))
+	consoleHandler := console.Handler()
+	mux.Handle(constants.APIPaths.ConsolePrefix, http.StripPrefix(strings.TrimSuffix(constants.APIPaths.ConsolePrefix, "/"), consoleHandler))
 
 	// Landing page and health
 	mux.HandleFunc(constants.APIPaths.Landing, h.healthController.handleLandingPage)

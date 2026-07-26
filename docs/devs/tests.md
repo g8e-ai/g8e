@@ -165,9 +165,9 @@ make test-docker
 
 The demo scenarios tool (`g8e demos scenarios run`) impersonates arbitrary AI tools against a **REAL** g8e Gateway and Operator. The only fiction is the client identity — the Gateway and Operator are real infrastructure.
 
-**37 scenarios total**: 7 MCP + 3 A2A + 6 governance + 2 DoW + 6 DHS + 2 gov/finance + 3 secure-data + 3 swarm + 5 FedRAMP.
+**26 scenarios total**: 7 MCP + 3 A2A + 6 governance + 6 DHS + 2 gov/finance + 5 FedRAMP.
 
-The interactive demo runner (`g8e demos run <org> [scenario]`) provides 26 platform demos across 9 environments: healthcare (4), gov (1), finance (1), secure-data (3), dow (3), dhs (5), swarm (3), fedramp (5), frontend (1). These drive the real Gateway and Operator with interactive passkey authentication and posture switching.
+The interactive demo runner (`g8e demos run <org> [scenario]`) provides 17 platform demos across 6 environments: healthcare (4), gov (1), finance (1), dhs (5), fedramp (5), frontend (1). These drive the real Gateway and Operator with interactive passkey authentication and posture switching.
 
 **Testing postures**:
 - **Doctrine** — L1 enforced, L2/L3 audited

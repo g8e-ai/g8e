@@ -90,6 +90,8 @@ const (
 	PathEtcOSRelease                                          = "/etc/os-release"
 	PathEtcTimezone                                           = "/etc/timezone"
 	PathEtcLocaltime                                          = "/etc/localtime"
+	PathSysClassDMIIDProductUUID                              = "/sys/class/dmi/id/product_uuid"
+	PathSysClassDMIIDSysVendor                                = "/sys/class/dmi/id/sys_vendor"
 	PathRoot                                                  = "/"
 	PathLibraryPreferencesSystemConfigurationPreferencesPlist = "/Library/Preferences/SystemConfiguration/preferences.plist"
 
@@ -228,29 +230,23 @@ const (
 
 // Demos constants for organization names, doctrine files, and compose config.
 const (
-	DemosDirname                = "demos"
-	DemosComposeFile            = "compose.yml"
-	DemosBinDirname             = "bin"
-	DemosBinaryName             = "g8e"
-	DemosTargetDataDir          = "target-data"
-	DemosDoctrineDir            = "doctrine"
-	DemosPARequestsFile         = "pa_requests.json"
-	DemosHIPAADoctrineFile      = "phi_hipaa_doctrine.json"
-	DemosSecureDataDoctrineFile = "secure_data_transfer_doctrine.json"
-	DemosDoWDoctrineFile        = "dow_tactical_doctrine.json"
-	DemosDHSDoctrineFile        = "dhs_sovereign_doctrine.json"
-	DemosSwarmDoctrineFile      = "drone_operations_doctrine.json"
-	DemosFedRAMPDoctrineFile    = "fedramp_doctrine.json"
-	DemosImagesManifestFile     = "images.json"
-	DemosOrgHealthcare          = "healthcare"
-	DemosOrgFinance             = "finance"
-	DemosOrgGov                 = "gov"
-	DemosOrgSecureData          = "secure-data"
-	DemosOrgDoW                 = "dow"
-	DemosOrgDHS                 = "dhs"
-	DemosOrgSwarm               = "swarm"
-	DemosOrgFedRAMP             = "fedramp"
-	DemosOrgFrontend            = "frontend"
+	DemosDirname             = "demos"
+	DemosComposeFile         = "compose.yml"
+	DemosBinDirname          = "bin"
+	DemosBinaryName          = "g8e"
+	DemosTargetDataDir       = "target-data"
+	DemosDoctrineDir         = "doctrine"
+	DemosPARequestsFile      = "pa_requests.json"
+	DemosHIPAADoctrineFile   = "phi_hipaa_doctrine.json"
+	DemosDHSDoctrineFile     = "dhs_sovereign_doctrine.json"
+	DemosFedRAMPDoctrineFile = "fedramp_doctrine.json"
+	DemosImagesManifestFile  = "images.json"
+	DemosOrgHealthcare       = "healthcare"
+	DemosOrgFinance          = "finance"
+	DemosOrgGov              = "gov"
+	DemosOrgDHS              = "dhs"
+	DemosOrgFedRAMP          = "fedramp"
+	DemosOrgFrontend         = "frontend"
 )
 
 // Container paths for Docker exec commands in demo environments.
@@ -439,6 +435,11 @@ const (
 // Tribunal bootstrap config filename for declarative tribunal seeding.
 const (
 	TribunalBootstrapConfigFilename = "tribunal-bootstrap.json"
+)
+
+// Lattice adapter filename for persisted entity ID.
+const (
+	LatticeEntityIDFilename = "lattice_entity_id"
 )
 
 // Operational limits for filesystem, grep, and execution operations.

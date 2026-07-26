@@ -82,9 +82,10 @@ func newTestKeystore(tb testing.TB, fileSvc fs.RuntimeFileService, logger *slog.
 // openTestDB wraps OpenCanonicalDBService for tests, creating a keystore
 // with an in-memory keyring so callers don't need to manage a keystore.
 // Vault auto-initializes on first open; the keystore is for secret operations.
-func openTestDB(t *testing.T, dataDir, vaultDir string, fileSvc fs.RuntimeFileService, logger *slog.Logger) (*CanonicalDBService, *Stores, error) {
+func openTestDB(t *testing.T, dataDir string, fileSvc fs.RuntimeFileService, logger *slog.Logger) (*CanonicalDBService, *Stores, error) {
 	t.Helper()
 	ks := newTestKeystore(t, fileSvc, logger)
+	vaultDir := fileSvc.Resolve(constants.VaultDirname)
 	return OpenCanonicalDBService(dataDir, vaultDir, logger, "", ks, fileSvc)
 }
 
@@ -102,7 +103,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 
 	ks := newTestKeystore(t, fileSvc, logger)
 
-	db, stores, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, "", ks, fileSvc)
+	db, stores, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -118,7 +119,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	resp := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, resp, secretsDir, nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, resp, nil, "", "", "")
 	// Wire up auth service to user service for cache invalidation
 	userSvc.SetAuthService(auth)
 	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)

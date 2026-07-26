@@ -21,6 +21,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func TestNewFieldPathRegistry(t *testing.T) {
@@ -73,49 +75,49 @@ func TestValidateFieldPath_AllowedPaths(t *testing.T) {
 			name:       "empty collection",
 			collection: "",
 			fieldPath:  "status",
-			wantErr:    ErrEmptyCollection,
+			wantErr:    constants.ErrFieldPathEmptyCollection,
 		},
 		{
 			name:       "empty field path",
 			collection: "investigations",
 			fieldPath:  "",
-			wantErr:    ErrEmptyFieldPath,
+			wantErr:    constants.ErrFieldPathEmpty,
 		},
 		{
 			name:       "invalid collection",
 			collection: "unknown_collection",
 			fieldPath:  "status",
-			wantErr:    ErrInvalidCollection,
+			wantErr:    constants.ErrFieldPathInvalidCollection,
 		},
 		{
 			name:       "forbidden field - credentials",
 			collection: "investigations",
 			fieldPath:  "credentials",
-			wantErr:    ErrForbiddenFieldPath,
+			wantErr:    constants.ErrFieldPathForbidden,
 		},
 		{
 			name:       "forbidden field - api_keys",
 			collection: "memories",
 			fieldPath:  "api_keys",
-			wantErr:    ErrForbiddenFieldPath,
+			wantErr:    constants.ErrFieldPathForbidden,
 		},
 		{
 			name:       "forbidden nested field",
 			collection: "investigations",
 			fieldPath:  "metadata.credentials.password",
-			wantErr:    ErrForbiddenFieldPath,
+			wantErr:    constants.ErrFieldPathForbidden,
 		},
 		{
 			name:       "field not in allowlist",
 			collection: "investigations",
 			fieldPath:  "unknown_field",
-			wantErr:    ErrInvalidFieldPath,
+			wantErr:    constants.ErrFieldPathInvalid,
 		},
 		{
 			name:       "invalid path syntax - empty component",
 			collection: "investigations",
 			fieldPath:  "suspect_ip_addresses.",
-			wantErr:    ErrInvalidPathSyntax,
+			wantErr:    constants.ErrFieldPathSyntax,
 		},
 	}
 

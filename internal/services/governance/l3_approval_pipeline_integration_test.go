@@ -103,7 +103,7 @@ func TestL3ApprovalPipeline_CLI_Browser_Passkey(t *testing.T) {
 	// CLI session verifier (mock) validates mTLS transport — Layer 2
 	passkeyVerifier := &mockL3Notary{result: true}
 	cliVerifier := &mockCLISessionVerifier{result: nil}
-	notary := NewGatewayL3Notary(store, cliVerifier, passkeyVerifier, logger)
+	notary := NewGatewayL3Notary(cliVerifier, passkeyVerifier, logger)
 
 	l3Proof := &commonv1.L3Proof{
 		CredentialId:        "base64-credential-id",
@@ -168,7 +168,7 @@ func TestL3ApprovalPipeline_CLI_Browser_PasskeyDenied(t *testing.T) {
 	// Passkey verifier denies the assertion
 	passkeyVerifier := &mockL3Notary{result: false}
 	cliVerifier := &mockCLISessionVerifier{result: nil}
-	notary := NewGatewayL3Notary(store, cliVerifier, passkeyVerifier, logger)
+	notary := NewGatewayL3Notary(cliVerifier, passkeyVerifier, logger)
 
 	l3Proof := &commonv1.L3Proof{
 		CredentialId:        "base64-credential-id",
@@ -229,7 +229,7 @@ func TestL3ApprovalPipeline_BrowserOnly_NoMTLS(t *testing.T) {
 	// Browser-only proof: no mTLS fingerprint, so CLI verifier should not be called
 	passkeyVerifier := &mockL3Notary{result: true}
 	cliVerifier := &mockCLISessionVerifier{result: nil}
-	notary := NewGatewayL3Notary(store, cliVerifier, passkeyVerifier, logger)
+	notary := NewGatewayL3Notary(cliVerifier, passkeyVerifier, logger)
 
 	l3Proof := &commonv1.L3Proof{
 		CredentialId:      "browser-credential-id",

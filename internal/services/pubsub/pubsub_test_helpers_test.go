@@ -14,9 +14,13 @@
 package pubsub
 
 import (
+	"context"
 	"encoding/json"
+	"log/slog"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -38,4 +42,12 @@ func mustMarshalProto(t *testing.T, msg proto.Message) []byte {
 		t.Fatalf("failed to marshal proto: %v", err)
 	}
 	return data
+}
+
+// mustNewScrubbingSvc creates a scrubbing service for tests, fatally failing on error.
+func mustNewScrubbingSvc(t *testing.T, logger *slog.Logger) *scrubbing.ScrubbingService {
+	t.Helper()
+	svc, err := scrubbing.NewScrubbingService(context.Background(), scrubbing.DefaultConfig(), logger, nil)
+	require.NoError(t, err)
+	return svc
 }

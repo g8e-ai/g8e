@@ -1,7 +1,7 @@
 # Governance
 
-Last Updated: 2026-07-24
-Version: v1.6.2
+Last Updated: 2026-07-25
+Version: v1.6.4
 
 ## Overview
 
@@ -291,13 +291,18 @@ If any stage fails, the nonce reservation is released and the transaction is rej
 
 **L3 Notary implementations** (see [L3 Notary Verification Detail](#l3-notary-verification-detail) for full details):
 
+The three notary implementations share composable primitives:
+
+- **`CLISessionVerifier`** interface — shared by `gatewayNotary` and `cliNotary` for CLI mTLS session verification (user active status, session ownership, certificate fingerprint match, session expiry, certificate revocation via PKI authority).
+- **`verifyOutboundProof`** shared function — suspended transaction lookup + Ed25519 signature verification + approval expiry check, shared by `outboundNotary` and `cliNotary`.
+
 - **Passkey Service**: Gateway mode for web sessions. Verifies WebAuthn assertions using the transaction hash as the challenge. Validates credential ID, client data JSON, authenticator data, and signature against registered passkey credentials.
 
 - **Outbound L3 Notary**: Outbound mode for operator-side approval. Verifies that a transaction exists in the suspended transaction store, is marked as approved, has a valid CLI signature over the transaction hash, and has not exceeded the 30-minute approval window. No CLI session or certificate revocation checks are performed in this mode.
 
 - **CLI L3 Notary**: Gateway mode for CLI sessions. Extends outbound mode with CLI session verification that checks user active status, session ownership, certificate fingerprint match, session expiry, and certificate revocation via the PKI authority.
 
-- **Gateway L3 Notary**: Unified gateway mode that requires passkey authorization for all proofs. The gateway notary always requires a credential ID and delegates to the passkey verifier first. If the proof includes an mTLS certificate fingerprint (CLI caller), CLI mTLS session verification runs as an additional transport-auth layer. This is the notary used in gateway-mode deployments.
+- **Gateway L3 Notary**: Unified gateway mode that requires passkey authorization for all proofs. The gateway notary always requires a credential ID and delegates to the passkey verifier first. If the proof includes an mTLS certificate fingerprint (CLI caller), CLI mTLS session verification runs as an additional transport-auth layer. This is the notary used in gateway-mode deployments. Does not access suspended transactions — that responsibility belongs to the passkey verifier delegate.
 
 **Posture behavior**:
 - **doctrine/consensus**: L3 results are recorded for audit but do not gate execution.

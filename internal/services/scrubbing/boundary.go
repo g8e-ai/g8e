@@ -31,6 +31,9 @@ import (
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 )
 
+// tokenPattern matches {{UEI_N}} placeholders in rehydration.
+var tokenPattern = regexp.MustCompile(`\{\{UEI_\d+\}\}`)
+
 // Config holds configuration for the Sovereign Execution Boundary
 type Config struct {
 	// Enabled controls whether scrubbing is active
@@ -142,8 +145,9 @@ type ScrubbingService struct {
 	tokenStore storage.TokenStore
 }
 
-// NewScrubbingService creates a new data scrubbing service
-func NewScrubbingService(config *Config, logger *slog.Logger, tokenStore storage.TokenStore) *ScrubbingService {
+// NewScrubbingService creates a new data scrubbing service.
+// Returns an error if persisted token loading fails.
+func NewScrubbingService(ctx context.Context, config *Config, logger *slog.Logger, tokenStore storage.TokenStore) (*ScrubbingService, error) {
 	if config == nil {
 		config = DefaultConfig()
 	}
@@ -156,21 +160,23 @@ func NewScrubbingService(config *Config, logger *slog.Logger, tokenStore storage
 		tokenStore: tokenStore,
 	}
 
-	s.initializeScrubbers()
+	s.initializeScrubbers(ctx)
 
 	// Load persisted tokens if storage is available
 	if s.tokenStore != nil {
-		s.loadPersistedTokens()
+		if err := s.loadPersistedTokens(ctx); err != nil {
+			return nil, err
+		}
 	}
 
-	return s
+	return s, nil
 }
 
 // initializeScrubbers sets up all the pattern-based scrubbers
 // IMPORTANT: Order matters! More specific patterns must come before generic ones.
 // The scrubbers are applied sequentially, so a generic pattern matching first
 // will prevent the specific pattern from ever seeing the text.
-func (s *ScrubbingService) initializeScrubbers() {
+func (s *ScrubbingService) initializeScrubbers(ctx context.Context) {
 	s.scrubbers = []Scrubber{
 		// g8e Operator API Key - g8e_{suffix}_{64 hex chars}
 		&RegexScrubber{
@@ -341,8 +347,8 @@ func (s *ScrubbingService) initializeScrubbers() {
 	}
 
 	for name, pattern := range s.config.CustomScrubPatterns {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		compiled, err := compileRegexWithTimeout(ctx, pattern)
+		compileCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		compiled, err := compileRegexWithTimeout(compileCtx, pattern)
 		cancel()
 		if err != nil {
 			s.logger.Warn("scrubbing: failed to compile custom pattern", "name", name, "error", err)
@@ -379,7 +385,7 @@ func compileRegexWithTimeout(ctx context.Context, pattern string) (*regexp.Regex
 	case res := <-resultChan:
 		return res.re, res.err
 	case <-ctx.Done():
-		return nil, fmt.Errorf("scrubbing: %w: %w", constants.ErrScrubbingRegexTimeout, ctx.Err())
+		return nil, fmt.Errorf("scrubbing: compile regex: %w: %w", constants.ErrScrubbingRegexTimeout, ctx.Err())
 	}
 }
 
@@ -867,7 +873,7 @@ func countLines(text string) int {
 // RehydrateText replaces placeholders like {{UEI_N}} with their original values.
 // This is used right before dispatch to restore sensitive data that was hidden from the cloud.
 // Falls back to TokenStore if token is not in memory (for persistence across restarts).
-func (s *ScrubbingService) RehydrateText(input string) string {
+func (s *ScrubbingService) RehydrateText(ctx context.Context, input string) string {
 	if input == "" {
 		return input
 	}
@@ -888,7 +894,6 @@ func (s *ScrubbingService) RehydrateText(input string) string {
 	// If TokenStore is available, check for any remaining tokens not in memory
 	if s.tokenStore != nil {
 		// Find all {{UEI_N}} patterns in the result
-		tokenPattern := regexp.MustCompile(`\{\{UEI_\d+\}\}`)
 		matches := tokenPattern.FindAllString(result, -1)
 
 		// Check which tokens are already in memory
@@ -908,16 +913,18 @@ func (s *ScrubbingService) RehydrateText(input string) string {
 			}
 
 			// Try to load from TokenStore
-			key := fmt.Sprintf("uei_token_%s", token)
-			value, err := s.tokenStore.KVGet(context.Background(), key)
-			if err == nil {
-				// Add to in-memory cache for future use (requires write lock)
-				s.tokenMu.Lock()
-				s.tokenMap[token] = value
-				s.reverseMap[value] = token
-				s.tokenMu.Unlock()
-				result = strings.ReplaceAll(result, token, value)
+			key := constants.ScrubbingTokenKeyPrefix + token
+			value, err := s.tokenStore.KVGet(ctx, key)
+			if err != nil {
+				s.logger.Warn("scrubbing: failed to load token from store", "token", token, "error", err)
+				continue
 			}
+			// Add to in-memory cache for future use (requires write lock)
+			s.tokenMu.Lock()
+			s.tokenMap[token] = value
+			s.reverseMap[value] = token
+			s.tokenMu.Unlock()
+			result = strings.ReplaceAll(result, token, value)
 		}
 	}
 
@@ -925,7 +932,7 @@ func (s *ScrubbingService) RehydrateText(input string) string {
 }
 
 // RehydratePayload recursively rehydrates all string values in a JSON payload.
-func (s *ScrubbingService) RehydratePayload(payload []byte) ([]byte, error) {
+func (s *ScrubbingService) RehydratePayload(ctx context.Context, payload []byte) ([]byte, error) {
 	if len(payload) == 0 {
 		return payload, nil
 	}
@@ -934,27 +941,27 @@ func (s *ScrubbingService) RehydratePayload(payload []byte) ([]byte, error) {
 	var data interface{}
 	if err := json.Unmarshal(payload, &data); err != nil {
 		// Not JSON, try text rehydration
-		return []byte(s.RehydrateText(string(payload))), nil
+		return []byte(s.RehydrateText(ctx, string(payload))), nil
 	}
 
-	rehydrated := s.rehydrateValueRecursive(data)
+	rehydrated := s.rehydrateValueRecursive(ctx, data)
 	return json.Marshal(rehydrated)
 }
 
-func (s *ScrubbingService) rehydrateValueRecursive(val interface{}) interface{} {
+func (s *ScrubbingService) rehydrateValueRecursive(ctx context.Context, val interface{}) interface{} {
 	switch v := val.(type) {
 	case string:
-		return s.RehydrateText(v)
+		return s.RehydrateText(ctx, v)
 	case map[string]interface{}:
 		newMap := make(map[string]interface{}, len(v))
 		for k, v2 := range v {
-			newMap[k] = s.rehydrateValueRecursive(v2)
+			newMap[k] = s.rehydrateValueRecursive(ctx, v2)
 		}
 		return newMap
 	case []interface{}:
 		newSlice := make([]interface{}, len(v))
 		for i, v2 := range v {
-			newSlice[i] = s.rehydrateValueRecursive(v2)
+			newSlice[i] = s.rehydrateValueRecursive(ctx, v2)
 		}
 		return newSlice
 	default:
@@ -964,14 +971,14 @@ func (s *ScrubbingService) rehydrateValueRecursive(val interface{}) interface{} 
 
 // GetTokenForValue registers a sensitive value and returns a unique token for it.
 // Fails closed if persistence is required but unavailable.
-func (s *ScrubbingService) GetTokenForValue(value string) string {
+func (s *ScrubbingService) GetTokenForValue(ctx context.Context, value string) string {
 	if value == "" {
 		return ""
 	}
 
 	// Fail-closed: if persistence is required but unavailable, reject the operation
 	if s.config.RequirePersistence && s.tokenStore == nil {
-		s.logger.Error("scrubbing: token persistence required but TokenStore unavailable - failing closed to prevent data loss")
+		s.logger.Error("scrubbing: token persistence required but TokenStore unavailable - failing closed to prevent data loss", "error", constants.ErrScrubbingTokenStoreUnavailable)
 		return ""
 	}
 
@@ -990,9 +997,9 @@ func (s *ScrubbingService) GetTokenForValue(value string) string {
 	// Persist to storage if available (24 hour TTL)
 	if s.tokenStore != nil {
 		const tokenTTLSeconds = 24 * 60 * 60
-		key := fmt.Sprintf("uei_token_%s", token)
-		if err := s.tokenStore.KVSet(context.Background(), key, value, tokenTTLSeconds); err != nil {
-			s.logger.Error("scrubbing: failed to persist token", "token", token, "error", err)
+		key := constants.ScrubbingTokenKeyPrefix + token
+		if err := s.tokenStore.KVSet(ctx, key, value, tokenTTLSeconds); err != nil {
+			s.logger.Error("scrubbing: failed to persist token", "token", token, "error", fmt.Errorf("%w: %w", constants.ErrScrubbingTokenPersist, err))
 			// Rollback the in-memory token since persistence failed
 			delete(s.tokenMap, token)
 			delete(s.reverseMap, value)
@@ -1009,17 +1016,18 @@ func (s *ScrubbingService) IsEnabled() bool {
 	return s.config.Enabled
 }
 
-// loadPersistedTokens loads tokens from TokenStore on startup
-func (s *ScrubbingService) loadPersistedTokens() {
+// loadPersistedTokens loads tokens from TokenStore on startup.
+// Returns an error if the scan fails. Individual token parse failures are logged
+// and skipped, but the scan-level error is fatal.
+func (s *ScrubbingService) loadPersistedTokens(ctx context.Context) error {
 	if s.tokenStore == nil {
 		s.logger.Warn("TokenStore not available for token persistence")
-		return
+		return nil
 	}
 
-	tokens, err := s.tokenStore.KVScanPrefix(context.Background(), "uei_token_")
+	tokens, err := s.tokenStore.KVScanPrefix(ctx, constants.ScrubbingTokenKeyPrefix)
 	if err != nil {
-		s.logger.Error("scrubbing: failed to load persisted tokens", "error", err)
-		return
+		return fmt.Errorf("scrubbing: load persisted tokens: %w: %w", constants.ErrScrubbingTokenLoad, err)
 	}
 
 	s.tokenMu.Lock()
@@ -1029,9 +1037,9 @@ func (s *ScrubbingService) loadPersistedTokens() {
 	maxSequence := 0
 	for key, value := range tokens {
 		// Extract token from key format: uei_token_{{UEI_N}}
-		token := strings.TrimPrefix(key, "uei_token_")
+		token := strings.TrimPrefix(key, constants.ScrubbingTokenKeyPrefix)
 		if token == key {
-			s.logger.Warn("scrubbing: invalid token key format", "key", key)
+			s.logger.Warn("scrubbing: invalid token key format", "key", key, "error", constants.ErrScrubbingTokenKeyFormat)
 			continue
 		}
 
@@ -1039,7 +1047,7 @@ func (s *ScrubbingService) loadPersistedTokens() {
 		var seq int
 		_, err := fmt.Sscanf(token, "{{UEI_%d}}", &seq)
 		if err != nil {
-			s.logger.Warn("scrubbing: failed to parse token sequence", "token", token, "error", err)
+			s.logger.Warn("scrubbing: failed to parse token sequence", "token", token, "error", fmt.Errorf("%w: %w", constants.ErrScrubbingTokenSequence, err))
 			continue
 		}
 
@@ -1054,6 +1062,7 @@ func (s *ScrubbingService) loadPersistedTokens() {
 
 	s.tokenSequence = maxSequence
 	s.logger.Info("Loaded persisted tokens from TokenStore", "count", loadedCount, "next_sequence", s.tokenSequence+1)
+	return nil
 }
 
 // ClearTokens clears all in-memory tokens (useful for testing or security events)

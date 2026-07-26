@@ -37,13 +37,13 @@ import (
 // ExecutionHandler is the interface for executing verified transactions.
 // This avoids import cycles between governance and pubsub packages.
 type ExecutionHandler interface {
-	ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error)
+	ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg CommandMessage) (string, error)
 }
 
-// Rehydratable is implemented by payload messages that support sovereignty
-// rehydration. The ScrubbingService rehydrates the payload bytes in place
-// before execution dispatch.
-type Rehydratable interface {
+// CommandMessage is the typed command message passed through the L5 execution
+// boundary. It supports sovereignty-preserving payload rehydration via
+// GetPayload/SetPayload. Implemented by pubsub.PubSubCommandMessage.
+type CommandMessage interface {
 	GetPayload() []byte
 	SetPayload([]byte)
 }
@@ -77,7 +77,7 @@ type L5Actuator struct {
 // signs and persists an ActionReceipt, and returns it.
 //
 // Fail-closed: if receipt signing or initial audit logging fails, the handler is NOT executed.
-func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg interface{}) (*operatorv1.ActionReceipt, error) {
+func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg CommandMessage) (*operatorv1.ActionReceipt, error) {
 	w.wg.Add(1)
 	defer w.wg.Done()
 
@@ -88,6 +88,52 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 		return nil, constants.ErrL5ActuatorSigningKeyMissing
 	}
 
+	eventType := constants.MapActionTypeToEventType(vt.ActionType)
+
+	w.Logger.Info("L5Actuator preparing to execute transaction",
+		"message_id", vt.Envelope.Id,
+		"action_type", vt.ActionType,
+		"event_type", eventType)
+
+	receipt := w.buildInitialReceipt(vt)
+
+	if err := w.signAndLogReceipt(vt, receipt); err != nil {
+		return nil, err
+	}
+
+	if err := w.rehydratePayload(ctx, vt, cmdMsg); err != nil {
+		return nil, err
+	}
+
+	cap, err := MintCapability(vt, w.SigningKey, w.KeyID)
+	if err != nil {
+		w.Logger.Error("Fail-closed: Failed to mint execution capability", string(constants.ConnectionStateError), err, "message_id", vt.Envelope.Id)
+		return nil, fmt.Errorf("%w: %w", constants.ErrL5ActuatorCapabilityMint, err)
+	}
+	w.Logger.Info("Minted JIT capability",
+		"message_id", vt.Envelope.Id,
+		"action_type", vt.ActionType,
+		"target_resource", vt.Envelope.TargetResource,
+		"expires_at", cap.ExpiresAt.UTC().Format(time.RFC3339))
+
+	execCtx := ContextWithCapability(ctx, cap)
+
+	summary, execErr := w.ExecutionHandler.ExecuteVerifiedTransaction(execCtx, eventType, cmdMsg)
+
+	cap.Dissolve()
+	w.Logger.Info("Dissolved JIT capability", "message_id", vt.Envelope.Id, "action_type", vt.ActionType)
+
+	w.finalizeReceipt(receipt, summary, execErr)
+
+	if err := w.signAndLogFinalReceipt(vt, receipt); err != nil {
+		return receipt, err
+	}
+
+	return receipt, execErr
+}
+
+// buildInitialReceipt constructs the EXECUTING-status receipt with state root and L2/L3 status.
+func (w *L5Actuator) buildInitialReceipt(vt *VerifiedTransaction) *operatorv1.ActionReceipt {
 	stateBefore := ""
 	if w.StateRootProvider != nil {
 		var err error
@@ -97,15 +143,6 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 		}
 	}
 
-	// Map action type to event type for handler lookup
-	eventType := constants.MapActionTypeToEventType(vt.ActionType)
-
-	w.Logger.Info("L5Actuator preparing to execute transaction",
-		"message_id", vt.Envelope.Id,
-		"action_type", vt.ActionType,
-		"event_type", eventType)
-
-	// Determine L2 status based on posture and verification result
 	l2Status := operatorv1.L2Status_L2_STATUS_NOT_REQUIRED
 	if vt.Posture != nil && vt.Posture.RequiresL2Signature() {
 		if vt.L2Valid {
@@ -115,7 +152,6 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 		}
 	}
 
-	// Determine L3 status based on posture and verification result
 	l3Status := operatorv1.L3Status_L3_STATUS_NOT_REQUIRED
 	if vt.Posture != nil && vt.Posture.RequiresL3Proof() {
 		if vt.L3Valid {
@@ -125,7 +161,7 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 		}
 	}
 
-	receipt := &operatorv1.ActionReceipt{
+	return &operatorv1.ActionReceipt{
 		TransactionId:    vt.Envelope.Id,
 		TransactionHash:  vt.Envelope.TransactionHash,
 		Status:           operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
@@ -136,68 +172,51 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 		L2Status:         l2Status,
 		L3Status:         l3Status,
 	}
+}
 
-	// 2. Sign the initial receipt (intent to execute)
-	sig, signErr := w.signReceipt(receipt)
-	if signErr != nil {
-		w.Logger.Error("Fail-closed: Failed to sign initial action receipt", string(constants.ConnectionStateError), signErr, "message_id", vt.Envelope.Id)
-		return nil, fmt.Errorf("%w: %w", constants.ErrL5ActuatorSignReceipt, signErr)
+// signAndLogReceipt signs the initial receipt and logs it. Fail-closed: returns error if either step fails.
+func (w *L5Actuator) signAndLogReceipt(vt *VerifiedTransaction, receipt *operatorv1.ActionReceipt) error {
+	sig, err := w.signReceipt(receipt)
+	if err != nil {
+		w.Logger.Error("Fail-closed: Failed to sign initial action receipt", string(constants.ConnectionStateError), err, "message_id", vt.Envelope.Id)
+		return fmt.Errorf("%w: %w", constants.ErrL5ActuatorSignReceipt, err)
 	}
 	receipt.Signature = sig
 
-	// 3. Log intent to execute (Audit before execution)
 	if err := w.LogReceipt(vt.Envelope, receipt); err != nil {
 		w.Logger.Error("Fail-closed: Failed to log initial action receipt", string(constants.ConnectionStateError), err, "message_id", vt.Envelope.Id)
-		return nil, fmt.Errorf("%w: %w", constants.ErrL5ActuatorLogReceipt, err)
+		return fmt.Errorf("%w: %w", constants.ErrL5ActuatorLogReceipt, err)
 	}
+	return nil
+}
 
-	// 3.5. Rehydrate payload if Scrubbing is available
-	if w.Scrubbing != nil && cmdMsg != nil {
-		if rehydratable, ok := cmdMsg.(Rehydratable); ok {
-			p := rehydratable.GetPayload()
-			if len(p) > 0 {
-				rehydrated, rehydrateErr := w.Scrubbing.RehydratePayload(p)
-				if rehydrateErr == nil {
-					rehydratable.SetPayload(rehydrated)
-				} else {
-					w.Logger.Warn("Failed to rehydrate payload", string(constants.ConnectionStateError), rehydrateErr, "message_id", vt.Envelope.Id)
-				}
-			}
-		}
+// rehydratePayload rehydrates the command message payload in place. Fail-closed: returns error on rehydration failure.
+func (w *L5Actuator) rehydratePayload(ctx context.Context, vt *VerifiedTransaction, cmdMsg CommandMessage) error {
+	if w.Scrubbing == nil || cmdMsg == nil {
+		return nil
 	}
-
-	// 3.6. Mint JIT capability (zero standing privileges)
-	// The capability is scoped to this single action, bound to the transaction hash,
-	// and dissolved immediately after execution — success or failure.
-	cap, capErr := MintCapability(vt, w.SigningKey, w.KeyID)
-	if capErr != nil {
-		w.Logger.Error("Fail-closed: Failed to mint execution capability", string(constants.ConnectionStateError), capErr, "message_id", vt.Envelope.Id)
-		return nil, fmt.Errorf("%w: %w", constants.ErrL5ActuatorCapabilityMint, capErr)
+	p := cmdMsg.GetPayload()
+	if len(p) == 0 {
+		return nil
 	}
-	w.Logger.Info("Minted JIT capability",
-		"message_id", vt.Envelope.Id,
-		"action_type", vt.ActionType,
-		"target_resource", vt.Envelope.TargetResource,
-		"expires_at", cap.ExpiresAt.UTC().Format(time.RFC3339))
+	rehydrated, err := w.Scrubbing.RehydratePayload(ctx, p)
+	if err != nil {
+		w.Logger.Error("Fail-closed: Failed to rehydrate payload", string(constants.ConnectionStateError), err, "message_id", vt.Envelope.Id)
+		return fmt.Errorf("%w: %w", constants.ErrL5ActuatorRehydrate, err)
+	}
+	cmdMsg.SetPayload(rehydrated)
+	return nil
+}
 
-	// Inject capability into context for downstream handlers
-	execCtx := ContextWithCapability(ctx, cap)
-
-	// 4. Execute through the handler
-	summary, err := w.ExecutionHandler.ExecuteVerifiedTransaction(execCtx, eventType, cmdMsg)
-
-	// 4.5. Dissolve capability immediately after execution (zero standing privileges)
-	cap.Dissolve()
-	w.Logger.Info("Dissolved JIT capability", "message_id", vt.Envelope.Id, "action_type", vt.ActionType)
-
-	// 5. Update receipt with final result
+// finalizeReceipt updates the receipt with execution result, state root after, and timestamp.
+func (w *L5Actuator) finalizeReceipt(receipt *operatorv1.ActionReceipt, summary string, execErr error) {
 	status := operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 	if summary == "" {
 		summary = "completed"
 	}
-	if err != nil {
+	if execErr != nil {
 		status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
-		summary = fmt.Sprintf("failed: %v", err)
+		summary = fmt.Errorf("failed: %w", execErr).Error()
 	}
 
 	stateAfter := ""
@@ -213,25 +232,22 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 	receipt.ResultSummary = summary
 	receipt.StateRootAfter = stateAfter
 	receipt.ExecutedAtUnixMs = time.Now().UnixMilli()
+}
 
-	// 6. Sign the final receipt
-	finalSig, signErr := w.signReceipt(receipt)
-	if signErr != nil {
-		w.Logger.Error("Failed to sign final action receipt - returning EXECUTING receipt as evidence", string(constants.ConnectionStateError), signErr, "message_id", vt.Envelope.Id)
-		// Return the EXECUTING receipt with signature from step 2 as evidence
-		// The mutation already executed, so we must preserve evidence of execution attempt
-		return receipt, fmt.Errorf("%w: %w", constants.ErrL5ActuatorSignReceipt, signErr)
+// signAndLogFinalReceipt signs and logs the final receipt. Best-effort: returns error but receipt is still returned by caller.
+func (w *L5Actuator) signAndLogFinalReceipt(vt *VerifiedTransaction, receipt *operatorv1.ActionReceipt) error {
+	finalSig, err := w.signReceipt(receipt)
+	if err != nil {
+		w.Logger.Error("Failed to sign final action receipt - returning EXECUTING receipt as evidence", string(constants.ConnectionStateError), err, "message_id", vt.Envelope.Id)
+		return fmt.Errorf("%w: %w", constants.ErrL5ActuatorSignReceipt, err)
 	}
 	receipt.Signature = finalSig
 
-	// 7. Log final result (best-effort - mutation already executed)
 	if logErr := w.LogReceipt(vt.Envelope, receipt); logErr != nil {
 		w.Logger.Error("Failed to log final action receipt - mutation already executed", string(constants.ConnectionStateError), logErr, "message_id", vt.Envelope.Id)
-		// Return receipt anyway - mutation already happened, evidence must be preserved
-		return receipt, fmt.Errorf("%w: %w", constants.ErrL5ActuatorLogReceipt, logErr)
+		return fmt.Errorf("%w: %w", constants.ErrL5ActuatorLogReceipt, logErr)
 	}
-
-	return receipt, err
+	return nil
 }
 
 // canonicalReceipt is the typed representation for ActionReceipt canonicalization.
@@ -331,7 +347,7 @@ func (w *L5Actuator) logReceiptDocument(env *govtypes.GovernanceEnvelope, r *ope
 		if w.Logger != nil {
 			w.Logger.Error("Failed to record action receipt document", string(constants.ConnectionStateError), err, "message_id", r.TransactionId)
 		}
-		return err
+		return fmt.Errorf("%w: %w", constants.ErrL5ActuatorDocStore, err)
 	}
 	return nil
 }

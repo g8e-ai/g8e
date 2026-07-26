@@ -44,18 +44,17 @@ type G8eoService struct {
 	logger  *slog.Logger
 	fileSvc fs.RuntimeFileService
 
-	bootstrap         *auth.BootstrapService
-	secretManager     *gateway.SecretManager
-	execution         *execution.ExecutionService
-	fileEdit          *execution.FileEditService
-	pubSubCommands    *pubsub.OperatorPubSubService
-	pubSubResults     *pubsub.PubSubResultsService
-	executionVault    *storage.ExecutionVaultService
-	tokenStore        storage.TokenStore
-	suspendedTxStore  storage.SuspendedTransactionStore
-	suspendedTxCloser *storage.SuspendedTransactionService
-	gatewayDB         *gateway.CanonicalDBService
-	gatewayStores     *gateway.Stores
+	bootstrap        *auth.BootstrapService
+	secretManager    *gateway.SecretManager
+	execution        *execution.ExecutionService
+	fileEdit         *execution.FileEditService
+	pubSubCommands   *pubsub.OperatorPubSubService
+	pubSubResults    *pubsub.PubSubResultsService
+	executionVault   *storage.ExecutionVaultService
+	tokenStore       storage.TokenStore
+	suspendedTxStore *storage.SuspendedTransactionService
+	gatewayDB        *gateway.CanonicalDBService
+	gatewayStores    *gateway.Stores
 
 	pubSubClient pubsub.PubSubClient
 	tlsConfig    *certs.TLSConfig
@@ -200,11 +199,10 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	// Initialize SuspendedTransactionService for L3 approval workflow
 	suspendedTxConfig := storage.DefaultSuspendedTransactionConfig()
 	suspendedTxConfig.DBPath = paths.Infra.SuspendedTransactionsDBPath
-	vs.suspendedTxCloser, err = storage.NewSuspendedTransactionService(suspendedTxConfig, vs.logger)
+	vs.suspendedTxStore, err = storage.NewSuspendedTransactionService(suspendedTxConfig, vs.logger)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
-	vs.suspendedTxStore = vs.suspendedTxCloser
 	vs.logger.Info("Suspended transaction store initialized")
 
 	vs.logger.Info("Initializing Local-First Audit Architecture (LFAA)...")
@@ -306,7 +304,10 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Initialize ScrubbingService for data scrubbing (scrubbing/rehydration)
 	scrubbingConfig := scrubbing.DefaultConfig()
-	scrubbingService := scrubbing.NewScrubbingService(scrubbingConfig, vs.logger, vs.tokenStore)
+	scrubbingService, err := scrubbing.NewScrubbingService(ctx, scrubbingConfig, vs.logger, vs.tokenStore)
+	if err != nil {
+		return fmt.Errorf("g8eo: failed to initialize scrubbing service: %w", err)
+	}
 
 	// OperatorPubSubService Construction
 	psConfig := pubsub.CommandServiceConfig{
@@ -427,8 +428,8 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 		}
 	}
 
-	if vs.suspendedTxCloser != nil {
-		if err := vs.suspendedTxCloser.Close(); err != nil {
+	if vs.suspendedTxStore != nil {
+		if err := vs.suspendedTxStore.Close(); err != nil {
 			vs.logger.Error("g8eo: failed to close suspended transaction store", "error", err)
 		}
 	}

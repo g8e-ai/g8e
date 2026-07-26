@@ -239,6 +239,11 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		logger.Warn("Gateway AuditStore not available - ActionReceipts will not be stored in audit store")
 	}
 
+	scrubbingSvc, err := scrubbing.NewScrubbingService(ctx, scrubbing.DefaultConfig(), logger, nil)
+	if err != nil {
+		return fmt.Errorf("gateway: failed to initialize scrubbing service: %w", err)
+	}
+
 	psConfig := pubsub.GatewayCommandServiceConfig{
 		CommandServiceConfig: pubsub.CommandServiceConfig{
 			Config:             gatewayCfg,
@@ -251,7 +256,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 			AuditStore:         auditStore,
 			Ledger:             nil, // P1: Ledger in gateway mode
 			HistoryHandler:     nil, // P1: History in gateway mode
-			Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
+			Scrubbing:          scrubbingSvc,
 			ActuatorSigningKey: actuatorPriv,
 			ActuatorKeyID:      actuatorKeyID,
 		},

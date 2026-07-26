@@ -38,14 +38,10 @@ type L3Notary interface {
 	VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error)
 }
 
-// ErrCLISessionDenied signals that the CLI session was denied (e.g., revoked certificate)
-// rather than encountering a system error. VerifyL3Proof translates this into (false, nil).
-var ErrCLISessionDenied = errors.New("CLI session denied")
-
 // CLISessionVerifier performs CLI session-specific verification including user active
 // status, session validity, and certificate revocation. Returns nil if verification passes.
-// Returns ErrCLISessionDenied for denials (revoked certs, inactive sessions) and other
-// errors for system failures.
+// Returns constants.ErrCLISessionDenied for denials (revoked certs, inactive sessions) and
+// other errors for system failures.
 type CLISessionVerifier interface {
 	VerifyCLISession(userID, cliSessionID, certFingerprint string) error
 }
@@ -99,12 +95,39 @@ func NewCLIL3Notary(suspendedStore storage.SuspendedTransactionStore, cliVerifie
 // NewGatewayL3Notary creates a unified L3 notary that requires passkey authorization
 // for all proofs (browser and CLI). CLI callers additionally present mTLS fields for
 // transport-layer authentication.
-func NewGatewayL3Notary(suspendedStore storage.SuspendedTransactionStore, cliVerifier CLISessionVerifier, passkeyVerifier L3Notary, logger *slog.Logger) L3Notary {
+func NewGatewayL3Notary(cliVerifier CLISessionVerifier, passkeyVerifier L3Notary, logger *slog.Logger) L3Notary {
 	return &gatewayNotary{
 		cliVerifier:     cliVerifier,
 		passkeyVerifier: passkeyVerifier,
 		logger:          logger,
 	}
+}
+
+// demoL3Notary provides L3 verification for demo environments where WebAuthn
+// passkey enrollment is not available (e.g., headless Docker containers).
+// It accepts any non-nil proof, allowing the harness mock L3 mode (principal
+// Ed25519 signature) to satisfy notary posture without a browser.
+// This must NEVER be used in production — it is gated by the G8E_L3_MOCK env var.
+type demoL3Notary struct {
+	logger *slog.Logger
+}
+
+// NewDemoL3Notary creates an L3 notary that auto-approves any non-nil proof.
+// For demo/test environments only — never use in production.
+func NewDemoL3Notary(logger *slog.Logger) L3Notary {
+	return &demoL3Notary{logger: logger}
+}
+
+func (d *demoL3Notary) VerifyL3Proof(_ context.Context, userID, transactionHash, _ string, proof *commonv1.L3Proof) (bool, error) {
+	if proof == nil {
+		return false, constants.ErrGatewayL3ProofRequired
+	}
+	hashPrefix := transactionHash
+	if len(hashPrefix) > 8 {
+		hashPrefix = hashPrefix[:8]
+	}
+	d.logger.Info("L3 demo mode: auto-approving proof", "user_id", userID, "transaction_hash", hashPrefix)
+	return true, nil
 }
 
 // VerifyL3Proof verifies an L3 proof in gateway mode.
@@ -129,7 +152,7 @@ func (v *gatewayNotary) VerifyL3Proof(ctx context.Context, userID, transactionHa
 	// Layer 2: CLI mTLS session authentication (additional check for CLI callers)
 	if proof.MtlsCertFingerprint != "" && v.cliVerifier != nil {
 		if err := v.cliVerifier.VerifyCLISession(userID, cliSessionID, proof.MtlsCertFingerprint); err != nil {
-			if errors.Is(err, ErrCLISessionDenied) {
+			if errors.Is(err, constants.ErrCLISessionDenied) {
 				return false, nil
 			}
 			return false, err
@@ -189,7 +212,7 @@ func verifyOutboundProof(
 			return false, fmt.Errorf("%w: %w", constants.ErrCLIL3InvalidFingerprintFormat, err)
 		}
 		if err := cliVerifier.VerifyCLISession(userID, cliSessionID, proof.MtlsCertFingerprint); err != nil {
-			if errors.Is(err, ErrCLISessionDenied) {
+			if errors.Is(err, constants.ErrCLISessionDenied) {
 				return false, nil
 			}
 			return false, err
@@ -224,7 +247,7 @@ func verifyOutboundProof(
 
 	// Verify approval has not expired (30 minute approval window)
 	if tx.ApprovedAt != nil {
-		approvalExpiry := tx.ApprovedAt.Add(30 * time.Minute)
+		approvalExpiry := tx.ApprovedAt.Add(constants.L3ApprovalWindow)
 		if time.Now().UTC().After(approvalExpiry) {
 			logger.Warn("CLI L3 verification failed: approval expired", "transaction_hash", transactionHash, "approved_at", tx.ApprovedAt)
 			return false, constants.ErrCLIL3ApprovalExpired

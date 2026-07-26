@@ -15,6 +15,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -218,7 +219,8 @@ func selectAgentHarnessScenarios(phase string, names []string) []scenarios.Scena
 
 func needsGovKit(ss []scenarios.Scenario) bool {
 	for _, s := range ss {
-		if s.RequiresPosture == scenarios.Consensus || s.RequiresPosture == scenarios.Notary || strings.HasPrefix(s.Name, scenarios.DhsScenarioPrefix) {
+		if s.RequiresPosture == scenarios.Consensus || s.RequiresPosture == scenarios.Notary ||
+			strings.HasPrefix(s.Name, scenarios.DhsScenarioPrefix) || strings.HasPrefix(s.Name, scenarios.FedRAMPScenarioPrefix) {
 			return true
 		}
 	}
@@ -250,6 +252,23 @@ func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Confi
 	if cfg.TribunalID != "" {
 		ens.TribunalID = cfg.TribunalID
 	}
+
+	// If the consensus seed is a file path, try to load tribunal member app IDs
+	// from a sibling tribunal-bootstrap.json so the ensemble votes with the
+	// correct member key IDs (multi-member quorum support).
+	if cfg.ConsensusSeed != "" {
+		seedDir := filepath.Dir(cfg.ConsensusSeed)
+		bootstrapPath := filepath.Join(seedDir, "tribunal-bootstrap.json")
+		if data, readErr := os.ReadFile(bootstrapPath); readErr == nil {
+			var boot struct {
+				MemberAppIDs []string `json:"member_app_ids"`
+			}
+			if json.Unmarshal(data, &boot) == nil && len(boot.MemberAppIDs) > 0 {
+				ens.MemberKeyIDs = boot.MemberAppIDs
+			}
+		}
+	}
+
 	prin, err := clientpkg.NewPrincipal(cfg.PrincipalKeyID)
 	if err != nil {
 		return fmt.Errorf("setup gov kit: principal: %w", err)
@@ -266,15 +285,19 @@ func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Confi
 		OperatorID: opID, OperatorSessionID: opSessionID,
 	})
 
-	var errs []string
-	if err := client.RegisterSigner(ctx, ens.KeyID, ens.PubHex(), "consensus"); err != nil {
-		errs = append(errs, "consensus: "+err.Error())
+	if len(ens.MemberKeyIDs) > 0 {
+		for _, appID := range ens.MemberKeyIDs {
+			if err := client.RegisterSigner(ctx, appID, ens.PubHex(), "consensus"); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: consensus signer registration %s: %v (non-fatal under doctrine)\n", appID, err)
+			}
+		}
+	} else {
+		if err := client.RegisterSigner(ctx, ens.KeyID, ens.PubHex(), "consensus"); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: consensus signer registration: %v (non-fatal under doctrine)\n", err)
+		}
 	}
 	if err := client.RegisterSigner(ctx, prin.KeyID, prin.PubHex(), "principal"); err != nil {
-		errs = append(errs, "principal: "+err.Error())
-	}
-	if len(errs) > 0 {
-		return fmt.Errorf("signer registration (non-fatal under doctrine): %s", strings.Join(errs, "; "))
+		fmt.Fprintf(os.Stderr, "warning: principal signer registration: %v (non-fatal under doctrine)\n", err)
 	}
 	return nil
 }

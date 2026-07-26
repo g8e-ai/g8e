@@ -31,7 +31,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	pubsubtest "github.com/g8e-ai/g8e/internal/services/pubsub/pubsubtest"
-	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	storagetest "github.com/g8e-ai/g8e/internal/services/storage/storagetest"
 	vault "github.com/g8e-ai/g8e/internal/services/vault"
@@ -405,9 +404,9 @@ func TestOperatorPubSubService_SinglePathEnforcement(t *testing.T) {
 func TestOperatorPubSubService_ExecuteVerifiedTransaction(t *testing.T) {
 	f := newPubsubFixture(t)
 
-	t.Run("rejects invalid cmdMsg type", func(t *testing.T) {
+	t.Run("rejects nil cmdMsg", func(t *testing.T) {
 		t.Parallel()
-		_, err := f.Svc.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Command.Requested, "invalid type")
+		_, err := f.Svc.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Command.Requested, nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid cmdMsg type")
 	})
@@ -837,7 +836,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 			require.NoError(t, err)
 			defer auditStore.Close()
 
-			scrubbingSvc := scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil)
+			scrubbingSvc := mustNewScrubbingSvc(t, logger)
 
 			// Create a session for this test
 			sessionID := "session-fslist-" + hex.EncodeToString([]byte{1, 2, 3, 4})
@@ -907,7 +906,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 			require.NoError(t, err)
 			defer auditStore.Close()
 
-			scrubbingSvc := scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil)
+			scrubbingSvc := mustNewScrubbingSvc(t, logger)
 
 			// Create a session for this test
 			sessionID := "session-port-" + hex.EncodeToString([]byte{5, 6, 7, 8})
@@ -976,7 +975,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 			require.NoError(t, err)
 			defer auditStore.Close()
 
-			scrubbingSvc := scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil)
+			scrubbingSvc := mustNewScrubbingSvc(t, logger)
 
 			// Create a session for this test
 			sessionID := "session-error-" + hex.EncodeToString([]byte{9, 10, 11, 12})
@@ -1008,7 +1007,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 		// Create a mock audit store that fails
 		mockAuditStore := &failingAuditStore{}
 
-		scrubbingSvc := scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil)
+		scrubbingSvc := mustNewScrubbingSvc(t, logger)
 
 		msg := &PubSubCommandMessage{
 			ID:                "msg-nonfatal",
@@ -1069,7 +1068,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 		defer auditStore.Close()
 
 		// Use default scrubbing config which has built-in patterns for common secrets
-		scrubbingSvc := scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil)
+		scrubbingSvc := mustNewScrubbingSvc(t, logger)
 
 		cfg := testutil.NewTestConfig(t)
 		client := pubsubtest.NewMockOperatorPubSubClient()

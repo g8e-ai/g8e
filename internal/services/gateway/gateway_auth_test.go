@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -43,7 +42,7 @@ func TestAuthService_ValidateOperatorSession_MissingSessionID(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	_, err := auth.ValidateOperatorSession("")
 	require.Error(t, err)
@@ -55,7 +54,7 @@ func TestAuthService_ValidateOperatorSession_SessionNotFound(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	_, err := auth.ValidateOperatorSession("nonexistent-session")
 	require.Error(t, err)
@@ -67,7 +66,7 @@ func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an Operator session with terminated status
 	operatorSessionID := "terminated-session"
@@ -93,7 +92,7 @@ func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an active user
 	userID := "user-456"
@@ -130,7 +129,7 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an inactive user
 	userID := "inactive-user"
@@ -352,7 +351,7 @@ func TestAuthService_Middleware_DualAuthDispatch(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	t.Run("dual auth falls back to web session when no mTLS cert", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -379,7 +378,7 @@ func TestAuthIntegrity_AppPolicyDenyByDefault(t *testing.T) {
 
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
-	db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
+	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -398,7 +397,7 @@ func TestAuthService_Middleware_PublicBypass(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -423,7 +422,7 @@ func TestAuthService_Middleware_HealthBypassConsolidated(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -459,7 +458,7 @@ func TestAuthService_Middleware_MTLSRequired(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -483,7 +482,7 @@ func TestAuthService_WebSessionAuth_MissingCookie(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -507,7 +506,7 @@ func TestAuthService_WebSessionAuth_InvalidSession(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -531,7 +530,7 @@ func TestAuthService_WebSessionAuth_EmptyCookieValue(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -555,7 +554,7 @@ func TestAuthService_WebSessionAuth_SessionExpired(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an expired web session
 	webSessionID := "expired-web-session"
@@ -591,7 +590,7 @@ func TestAuthService_WebSessionAuth_UserInactive(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an inactive user
 	userID := "inactive-web-user"
@@ -637,7 +636,7 @@ func TestAuthService_WebSessionAuth_Success(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an active user
 	userID := "active-web-user"
@@ -687,12 +686,12 @@ func TestAuthService_HasJWKS(t *testing.T) {
 	res := response.NewWriter(logger)
 
 	// Without JWKS
-	authWithout := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	authWithout := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 	assert.False(t, authWithout.HasJWKS())
 
 	// With JWKS (mock)
 	jwks := &JWKSProvider{}
-	authWith := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", jwks, "", "", "")
+	authWith := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, jwks, "", "", "")
 	assert.True(t, authWith.HasJWKS())
 }
 
@@ -702,7 +701,7 @@ func TestAuthService_JWTAuthMiddleware_NotConfigured(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -726,7 +725,7 @@ func TestAuthService_JWTAuthMiddleware_MissingBearer(t *testing.T) {
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
 	jwks := &JWKSProvider{}
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", jwks, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, jwks, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -750,7 +749,7 @@ func TestAuthService_JWTAuthMiddleware_InvalidBearerFormat(t *testing.T) {
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
 	jwks := &JWKSProvider{}
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", jwks, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, jwks, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -775,7 +774,7 @@ func TestAuthService_JWTAuthMiddleware_EmptyToken(t *testing.T) {
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
 	jwks := &JWKSProvider{}
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", jwks, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, jwks, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -799,7 +798,7 @@ func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an active user
 	userID := "user-123"
@@ -840,7 +839,7 @@ func TestAuthService_HandleOperatorAuth_InvalidSession(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Test with invalid session
 	_, err := auth.ValidateOperatorSession("invalid-session")
@@ -853,7 +852,7 @@ func TestAuthService_HandleOperatorAuth_TerminatedOperator(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create a terminated Operator session
 	operatorSessionID := "terminated-session"
@@ -977,7 +976,7 @@ func TestAuthService_HandleAppAuth_NoAppPolicy(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 
@@ -996,7 +995,7 @@ func TestAuthService_HandleAppAuth_PolicyNotFound(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 
@@ -1012,7 +1011,7 @@ func TestAuthService_EnforceAppPolicy_RateLimit(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create a policy with rate limit
 	policy := &models.AppPolicy{
@@ -1040,7 +1039,7 @@ func TestAuthService_EnforceAppPolicy_PayloadSize(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create a policy with max payload size
 	policy := &models.AppPolicy{
@@ -1093,7 +1092,7 @@ func TestAuthService_CliCertBoundToOperator_SessionMismatch(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create a CLI session with different Operator session
 	cliSessionID := "cli-session-mismatch"
@@ -1123,7 +1122,7 @@ func TestAuthService_CliCertBoundToOperator_SessionExpired(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an expired CLI session
 	cliSessionID := "cli-session-expired"
@@ -1155,7 +1154,7 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an active user
 	userID := "user-op-auth"
@@ -1237,7 +1236,7 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an active user
 	userID := "user-cli-auth"
@@ -1318,7 +1317,7 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an app policy
 	operatorID := "test-operator"

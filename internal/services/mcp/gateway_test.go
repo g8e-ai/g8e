@@ -1242,6 +1242,55 @@ func TestGatewayService_NewGatewayService(t *testing.T) {
 	})
 }
 
+func TestGatewayService_AuditStore_DefaultIsNoOp(t *testing.T) {
+	t.Parallel()
+	deps := Dependencies{
+		Logger:          slog.Default(),
+		Responder:       response.NewWriter(slog.Default()),
+		SuspendedStore:  &fakeSuspendedStore{},
+		MaxPayloadBytes: 10 * 1024 * 1024,
+	}
+
+	g, err := NewGatewayService(deps)
+	require.NoError(t, err)
+
+	_, err = g.auditStore.RecordEvent(&storage.Event{
+		OperatorSessionID: "test-session",
+		Type:              "test",
+	})
+	require.NoError(t, err, "noopAuditEventRecorder should never error")
+}
+
+func TestGatewayService_AuditStore_InjectedRecorderReceivesEvents(t *testing.T) {
+	t.Parallel()
+	recorder := &recordingAuditEventRecorder{}
+	g := newTestGatewayService(t, withAuditStore(recorder))
+
+	g.StoreSuspendedTransaction(
+		context.Background(),
+		"hash-audit-test",
+		[]byte(`{"id":"123"}`),
+		"test-tool",
+		json.RawMessage(`{"arg":"val"}`),
+		"user-1",
+		"op-session-audit",
+		"cert-fp",
+	)
+
+	require.Len(t, recorder.events, 1)
+	require.Equal(t, "op-session-audit", recorder.events[0].OperatorSessionID)
+	require.Equal(t, constants.Event.Operator.Notary.ApprovalRequested, recorder.events[0].Type)
+}
+
+type recordingAuditEventRecorder struct {
+	events []*storage.Event
+}
+
+func (r *recordingAuditEventRecorder) RecordEvent(event *storage.Event) (int64, error) {
+	r.events = append(r.events, event)
+	return int64(len(r.events)), nil
+}
+
 func TestGatewayService_HandleReadField(t *testing.T) {
 	t.Parallel()
 
@@ -1690,7 +1739,7 @@ func withSuspendedStore(store storage.SuspendedTransactionStore) testGatewayOpti
 }
 
 // withAuditStore sets a custom audit store for the test GatewayService
-func withAuditStore(auditStore *storage.SQLAuditStore) testGatewayOption {
+func withAuditStore(auditStore AuditEventRecorder) testGatewayOption {
 	return func(g *GatewayService) {
 		g.auditStore = auditStore
 	}
@@ -1790,6 +1839,7 @@ func newTestGatewayService(t *testing.T, opts ...testGatewayOption) *GatewayServ
 		logger:           slog.Default(),
 		responder:        response.NewWriter(slog.Default()),
 		suspendedStore:   &fakeSuspendedStore{},
+		auditStore:       noopAuditEventRecorder{},
 		threatScanner:    governance.NewL1Doctrine(),
 		publicBaseURL:    network.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
 		maxFailures:      5,
@@ -1964,12 +2014,48 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 		require.Contains(t, err.Error(), "MCP error")
 	})
 
+	t.Run("downstream request has proper MCP tools/call envelope", func(t *testing.T) {
+		t.Parallel()
+		var capturedBody []byte
+		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedBody, _ = io.ReadAll(r.Body)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"ok"}]}}`))
+		}))
+		defer downstream.Close()
+
+		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
+
+		_, err := g.DispatchToDownstream(context.Background(), "my-tool", json.RawMessage(`{"key":"value"}`), "test-session-id")
+		require.NoError(t, err)
+
+		var req response.JSONRPCRequest
+		require.NoError(t, json.Unmarshal(capturedBody, &req), "downstream request should be valid JSON-RPC")
+		assert.Equal(t, "2.0", req.JSONRPC)
+		assert.Equal(t, "tools/call", req.Method)
+
+		var params map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(req.Params, &params), "params should be a JSON object")
+		assert.Contains(t, params, "name", "params must contain 'name' field")
+		assert.Contains(t, params, "arguments", "params must contain 'arguments' field")
+
+		var name string
+		require.NoError(t, json.Unmarshal(params["name"], &name))
+		assert.Equal(t, "my-tool", name, "params.name should match the requested tool name")
+
+		var arguments json.RawMessage
+		require.NoError(t, json.Unmarshal(params["arguments"], &arguments))
+		assert.JSONEq(t, `{"key":"value"}`, string(arguments), "params.arguments should contain the original tool args")
+	})
+
 }
 
 func TestGatewayService_DispatchToDownstream_Scrubbing(t *testing.T) {
 	t.Parallel()
 
-	scrubSvc := scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), slog.Default(), nil)
+	scrubSvc, err := scrubbing.NewScrubbingService(context.Background(), scrubbing.DefaultConfig(), slog.Default(), nil)
+	require.NoError(t, err)
 
 	t.Run("SSN in downstream response is scrubbed", func(t *testing.T) {
 		t.Parallel()

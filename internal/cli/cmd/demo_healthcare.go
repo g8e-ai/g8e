@@ -54,7 +54,7 @@ func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln()
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.PublicURL = "http://g8e.local:8081"
-		if err := demoStep(demoDir, "fhir request", true,
+		if err := demoStep(demoDir, "fhir request", false,
 			harnessRun("healthcare-success", hcfg)...,
 		); err != nil {
 			fmt.Println("  (healthcare-success harness scenario failed)")

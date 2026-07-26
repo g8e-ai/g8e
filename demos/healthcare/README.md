@@ -114,14 +114,14 @@ This demo uses offset ports to allow simultaneous operation with other demos:
 **Networks:** `net_perimeter` (10.21.0.10), `net_internal` (10.22.0.10)  
 **Ports:** `8081` (HTTP), `8444` (HTTPS)
 
-The security enforcement plane. All inbound requests pass through the gateway's doctrine engine before reaching any PA service. Loaded with `phi_hipaa_doctrine.json` containing 11 detection rules. Runs in consensus posture — decisions require quorum approval from enrolled operators. Configuration is applied via command-line flags in `compose.yml` rather than the reference `config/gateway.yml` file.
+The security enforcement plane. All inbound requests pass through the gateway's doctrine engine before reaching any PA service. Loaded with `phi_hipaa_doctrine.json` containing 11 detection rules. Runs in doctrine posture — L1 doctrine rules are enforced on every request. Configuration is applied via command-line flags in `compose.yml` rather than the reference `config/gateway.yml` file.
 
 ### g8e Operator — `healthcare-operator`
 
 **Compose service:** `operator`  
 **Networks:** `net_internal` (10.22.0.20), `net_secure` (10.23.0.20)
 
-The trust anchor on `net_secure`. Enrolls with the gateway over mTLS, receives an identity certificate, and provides the consensus vote for governed requests. The operator's certificate file at `/root/.g8e/pki/operator.crt` serves as the health check signal for dependent services. Configuration is applied via command-line flags in `compose.yml` rather than the reference `config/operator.yml` file.
+The trust anchor on `net_secure`. Enrolls with the gateway over mTLS, receives an identity certificate, and provides the operator session for governed requests. The operator's certificate file at `/root/.g8e/pki/operator.crt` serves as the health check signal for dependent services. Configuration is applied via command-line flags in `compose.yml` rather than the reference `config/operator.yml` file.
 
 ### PA Submission Service — `healthcare-pa-api`
 
@@ -494,11 +494,11 @@ docker compose logs -f pa-processing-worker
 
 ## Architecture Notes
 
-### Gateway Posture: Consensus
+### Gateway Posture: Doctrine
 
-The gateway runs in `--posture consensus` mode with `--mcp-downstream-url http://healthcare-pa-api:8000`, meaning:
+The gateway runs in `--posture doctrine` mode with `--mcp-downstream-url http://healthcare-pa-api:8000`, meaning:
 - L1 Doctrine validation is **enforced** (fail-closed)
-- L2 Consensus signatures are **enforced** (fail-closed, quorum ≥ 2)
+- L2 Consensus signatures are **not required**
 - L3 Notary proofs are audited but not required
 
 ### Data Sovereignty

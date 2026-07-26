@@ -233,7 +233,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── scrubbing.ScrubbingService
 │   ├── mcp.FieldPathRegistry
 │   ├── mcp.NativeToolHandler
-│   ├── storage.SQLAuditStore (field exists but not wired in production; nil — only set in tests via withAuditStore)
+│   ├── mcp.AuditEventRecorder (interface; storage.SQLAuditStore in production via Stores.AuditStore, noopAuditEventRecorder when not wired)
 │   ├── RuntimeDependencies (atomic.Pointer, set once via SetRuntimeDeps before first request):
 │   │   ├── mcp.SessionValidator (set by in-process OperatorPubSubService in gateway mode)
 │   │   ├── mcp.AuditLogger (pubsubAuditLogger, set by in-process OperatorPubSubService in gateway mode)
@@ -266,8 +266,10 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - **`gateway.SSEEventService`** provides Server-Sent Events fan-out for gateway mode. Callers access it directly via the `SSEStore` field on `Stores` (returned by `OpenCanonicalDBService`) - no delegation wrappers.
 - **`gateway.BlobStoreService`** provides binary persistence for attachments and certificate material for gateway mode. Callers access it directly via the `BlobStore` field on `Stores` (returned by `OpenCanonicalDBService`) - no delegation wrappers.
 - **`Stores.DB`** provides the raw `sqliteutil.DB` connection for consumers needing direct DB access (e.g., `NewTribunalStoreService`, `NewStateRootService`). Accessible via the `DB` field on `Stores` (returned by `OpenCanonicalDBService`), eliminating the need to go through `CanonicalDBService.GetDB()`.
-- **`storage.SuspendedTransactionService`** is the L3 approval workflow store used consistently in both gateway and outbound modes (implements `storage.SuspendedTransactionStore`).
+- **`gateway.Stores`** is a read-only aggregation struct returned by `OpenCanonicalDBService`. It bundles 11 store services for transport convenience. Consumers decompose it at the call site — controllers receive individual stores via `Deps` structs (e.g., `DBControllerDeps`, `BootstrapControllerDeps`), not the whole `Stores` struct. The trade-off: `GatewayModeService` and `G8eoService` retain the full `Stores` as a field, giving them access to all 11 stores even if they only use 2-4. This is acceptable because (1) the struct is read-only, (2) Go's type system prevents accessing the wrong store, and (3) splitting into themed groups would add types without reducing actual coupling since controllers already get individual stores via DI.
+- **`storage.SuspendedTransactionService`** is the L3 approval workflow store used consistently in both gateway and outbound modes (implements `storage.SuspendedTransactionStore`). In both `GatewayModeService` and `G8eoService`, a single `suspendedTxStore` field (typed as `*storage.SuspendedTransactionService`) serves both store operations and `Close()` — no separate closer field.
 - **`mcp.NewGatewayService`** fails fast on construction errors: `FieldPathRegistry` initialization errors are returned (not silently logged), making governance system initialization failures fatal. The `Dependencies.FieldPathRegistryFactory` field allows tests to inject a failing factory.
+- **`mcp.AuditEventRecorder`** interface on `GatewayService` replaces a nil-in-production `*storage.SQLAuditStore` field. `NewGatewayService` defaults to `noopAuditEventRecorder` when `Dependencies.AuditStore` is nil. Production wires `stores.AuditStore` (`*storage.SQLAuditStore`) via `Dependencies.AuditStore`. This eliminates all nil guards at call sites — the field is always non-nil.
 - **`storage.ExecutionVaultService`** is the execution log and file diff storage for outbound mode.
 - **`gateway.EncryptedKVAdapter`** implements `storage.TokenStore` and provides Sentinel token persistence for outbound mode. It wraps `gateway.KVStoreService` (from Stores) and encrypts values at rest via `vault.Vault`.
 - **`storage.SQLAuditStore`** is held in `Stores` as the `AuditStore` field and provides the SQL-based audit storage foundation for both gateway and outbound modes. In outbound mode, the standalone instance has been removed; `g8eo.go` reuses `Stores.AuditStore` for all audit writes (L5Actuator, HistoryHandler, session management), eliminating a redundant connection pool and pruner on the same `g8e.db` file.
@@ -282,7 +284,11 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 ### Governance Stack (L1-L5)
 - **L1**: `governance.L1Doctrine` (technical bedrock validation, threat detection, forbidden pattern matching)
 - **L2**: `tribunal.TribunalService` (Tribunal-based deliberation producing L2 votes via Ed25519 signatures; gateway delegates deliberation via `LocalDeliberator`). The `L2ConsensusPolicyStore` interface in `governance.L4Warden` loads consensus policy for quorum verification.
-- **L3**: `governance.L3Notary` (gateway mode uses `governance.gatewayNotary` via `governance.NewGatewayL3Notary`, combining WebAuthn passkey proofs via `PasskeyService` and mTLS CLI proofs via `cliSessionVerifier`; outbound mode uses `governance.outboundNotary` via `governance.NewOutboundL3Notary` for CLI-based approval via suspended transactions; gateway CLI mode uses `governance.cliNotary` via `governance.NewCLIL3Notary` for CLI session verification + suspended transaction checks)
+- **L3**: `governance.L3Notary` — composable notary design with three implementations sharing primitives:
+  - `governance.gatewayNotary` (via `governance.NewGatewayL3Notary`) — passkey authorization (`L3Notary` delegate) + optional CLI mTLS session verification (`CLISessionVerifier`). Does NOT access suspended transactions.
+  - `governance.outboundNotary` (via `governance.NewOutboundL3Notary`) — suspended transaction lookup + Ed25519 signature verification (shared via `verifyOutboundProof`).
+  - `governance.cliNotary` (via `governance.NewCLIL3Notary`) — CLI session verification (`CLISessionVerifier`) + suspended transaction lookup + signature verification (shared via `verifyOutboundProof`).
+  - **Composable primitives**: `CLISessionVerifier` interface (shared by `gatewayNotary` and `cliNotary`); `verifyOutboundProof` shared function (suspended tx + signature logic shared by `outboundNotary` and `cliNotary`).
 - **L4**: `governance.L4Warden` (pre-dispatch verification gating, validating signatures, replay prevention, expiry, nonces, and state Merkle root)
 - **L5**: `governance.L5Actuator` (isolated boundary tool dispatch via MCP/A2A, signed receipt production, audit logging). Does NOT re-verify L2/L3 proofs; trusts `VerifiedTransaction` from L4Warden. The L4→L5 separation is the defense-in-depth boundary: L4 verifies, L5 executes and records.
 
@@ -305,7 +311,7 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - `gateway.EncryptedKVAdapter` implements: `storage.TokenStore` (outbound mode).
 - `storage.SuspendedTransactionService` implements: `storage.SuspendedTransactionStore` (used in both gateway and outbound modes).
 - `governance.FilesystemSignerStore` implements: `governance.SignerStore` (used in outbound mode).
-- `governance.gatewayNotary` implements: `governance.L3Notary` (gateway mode via `NewGatewayL3Notary` with both `cliSessionVerifier` and `PasskeyService` as delegates).
+- `governance.gatewayNotary` implements: `governance.L3Notary` (gateway mode via `NewGatewayL3Notary(cliVerifier, passkeyVerifier, logger)` with `CLISessionVerifier` and `L3Notary` passkey delegate; no suspended store dependency).
 - `governance.outboundNotary` implements: `governance.L3Notary` (outbound mode via `NewOutboundL3Notary` for suspended transaction + signature verification only).
 - `governance.cliNotary` implements: `governance.L3Notary` (gateway CLI mode via `NewCLIL3Notary` for CLI session verification + suspended transaction checks).
 - `gateway.cliSessionVerifier` implements: `governance.CLISessionVerifier` (used in gateway mode for mTLS CLI session verification within the L3 notary).
@@ -360,6 +366,8 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - **`gateway.SSEController`** (`sse_controller.go`): SSE event push, poll, and stream endpoints. Includes `authorizeSSERoute` for dual-auth (mTLS or web session) authorization. Heartbeat interval defaults to 30s via `newSSEController`.
 - **`gateway.HealthController`** (`health_controller.go`): Health check, bootstrap health, state endpoint, and landing page. Previously in `gateway_http_health.go` (deleted).
 - **`gateway.GovernanceController`** (`governance_controller.go`): Governance envelope submission, tribunal deliberation, `SetTribunal`/`SetEnvelopeProcessor` late-bound dependency setters. Uses `atomic.Pointer` for tribunal and `atomic.Value` (via `envProcHolder`) for envelope processor, following the thread-safety pattern in `docs/devs/devs.md`.
+
+  **Boot-order constraint (why deferred init is necessary):** `TribunalService` depends on gateway stores (tribunal store, signer store, consensus policy store) that are created during `OpenCanonicalDBService`, which happens as part of `GatewayModeService` construction. `GovernanceController` is created during `NewHTTPHandler`, which is also part of `GatewayModeService` construction. The `TribunalService` is then constructed after the gateway service is fully initialized, using stores from the already-opened database. This creates a genuine circular dependency: Tribunal needs gateway stores → gateway needs HTTPHandler → HTTPHandler needs GovernanceController → GovernanceController needs Tribunal. Reordering the boot sequence to construct TribunalService first is not possible because TribunalService requires stores that don't exist until the gateway service opens its database. The `atomic.Pointer` pattern with 503 guards is the correct solution — the controller starts in a partially-constructed state and is completed via `SetTribunal` / `SetEnvelopeProcessor` later in the boot sequence. Both handlers check the atomic pointer at request time and return 503 if the dependency is not yet wired, eliminating any nil-dereference risk.
 
 ### JWT Authentication
 - **`gateway.JWKSProvider`** (`jwks.go`): Optional external IdP JWT validation via JWKS endpoint. When configured, MCP/A2A routes accept JWT auth in addition to mTLS.
@@ -494,7 +502,8 @@ The following packages are test-only and are not part of the production dependen
 **`internal/services/pubsub/publisherstest/`** - Test-only ResultsPublisher recording fake
 - `TestResultsPublisher` - In-memory recording fake implementing `pubsub.ResultsPublisher`
 - Records all published results by method; `SetError` for injecting failures; `Results()` and `Heartbeats()` accessors
-- Separate from `pubsubtest` to avoid import cycle (`pubsubtest` is imported by `pubsub` test files, so it cannot itself import `pubsub`)
+- Separate from `pubsubtest` to avoid import cycle: all `pubsub` test files use `package pubsub` (internal tests), so they cannot import a package that itself imports `pubsub`. `publisherstest` imports `pubsub` for `PubSubCommandMessage` (used in `ResultsPublisher` interface methods), which `pubsubtest` cannot do
+- Split accepted as deliberate trade-off: `publisherstest` has zero external consumers (only referenced within its own test file), and extracting `PubSubCommandMessage` into a shared types package would require updating 251 references across 23 files for minimal benefit
 
 **`internal/services/governance/governancetest/`** - Test-only governance store fixtures
 - `SimpleTribunalStore`, `SimpleAppPolicyStore`, `SimpleStateRootProvider` - In-memory implementations of governance store interfaces for unit tests
@@ -566,18 +575,12 @@ The following packages are test-only and are not part of the production dependen
 - `config/config.go` - Harness configuration: auth material (client cert/key/CA bundle), gateway URL, posture selection
 - `scenarios/governance.go` - Governance scenarios: consensus, notary, delegation, veto, OOB approval. Contains `receiptFailed` helper that parses `ActionReceipt` JSON body for `EXECUTION_STATUS_FAILED` status.
 - `scenarios/governance_test.go` - Governance scenario tests, including `TestReceiptFailed` table-driven test covering FAILED, COMPLETED, UNSPECIFIED, CANCELLED, non-receipt JSON, empty body, nil body, and malformed JSON.
-- `scenarios/dow_cross_cue.go` - DoW scenarios: `dow-cross-cue` (real slew envelope) and `dow-bft-veto` (veto envelope)
-- `scenarios/dow_cross_cue_test.go` - DoW scenario tests
 - `scenarios/dhs_sovereign.go` - DHS sovereign operations scenarios: multi-step governance workflow with L2 consensus
 - `scenarios/dhs_sovereign_test.go` - DHS sovereign scenario tests
 - `scenarios/mcp_a2a.go` - MCP and A2A protocol scenarios: plain MCP, mTLS MCP, A2A JSON, A2A mTLS, A2A protobuf
 - `scenarios/mcp_a2a_test.go` - MCP/A2A protocol scenario tests
 - `scenarios/gov_finance.go` - Gov/finance doctrine scenarios: `gov-cui-exfil-block` and `finance-unauthorized-trade`
 - `scenarios/gov_finance_test.go` - Gov/finance scenario tests
-- `scenarios/secure_data.go` - Secure-data scenarios: `secure-data-migration` (consensus), `secure-data-bypass-attempt` (doctrine), `secure-data-cross-tenant` (doctrine)
-- `scenarios/secure_data_test.go` - Secure-data scenario tests
-- `scenarios/swarm.go` - Swarm scenarios: `swarm-recon-mission` (consensus: governed drone deployment), `swarm-weapon-release-block` (doctrine: weapon release blocked), `swarm-restricted-airspace-block` (doctrine: restricted airspace blocked)
-- `scenarios/swarm_test.go` - Swarm scenario tests
 - `scenarios/fedramp_governance.go` - FedRAMP sovereign cloud governance scenarios: `fedramp-provision` (consensus: governed cloud resource provisioning), `fedramp-deny` (doctrine: audit trail destruction blocked by L1), `fedramp-escalate` (notary: resource destruction gated on authorizing official approval), `fedramp-revert` (consensus: governed configuration revert), `fedramp-evidence-block` (doctrine: audit vault wipe rejected by L1)
 - `scenarios/fedramp_governance_test.go` - FedRAMP scenario tests
 - `scenarios/shell_command.go` - Shared `shellCommandArgs` helper using `json.Marshal` with typed `shellCommandJSON` struct, replacing ad-hoc `fmt.Sprintf` JSON construction across scenario files.
@@ -586,14 +589,6 @@ The following packages are test-only and are not part of the production dependen
 - `scenarios/fs_list_test.go` - Tests for `fsListArgs`: valid JSON construction, special character escaping.
 - `scenarios/scenario.go` - Scenario registry, `Execute`, `Posture` types
 - `scenarios/scenario_test.go` - Scenario registry and execution tests
-
-**`demos/dow/`** - Department of War tactical edge demo
-- `gimbal.py` - Mock gimbal HTTP server on `net_secure` (records slew commands to `/var/gimbal/slews.jsonl`)
-- `slew.sh` - Demo artifact mounted at `/usr/local/bin/slew` in operator container; wraps gimbal HTTP call
-- `inspect_pnt.py` - Demo artifact for PNT inspection in `agent-pnt-fusion` container
-- `inspect_rf.py` - Demo artifact for RF spectrum inspection in `agent-eoir` container
-- `verify_slews.py` - Demo artifact for verifying gimbal slew results
-- `dow_simulator.py` - Display-only sensor narration for `agent-eoir` and `agent-pnt-fusion`
 
 **`demos/dhs/`** - DHS sovereign data operations demo
 - `datasvc.py` - Mock data service HTTP server for sovereign data access
@@ -610,33 +605,21 @@ The following packages are test-only and are not part of the production dependen
 - `setup_metabase.py` - Metabase initialization and dashboard setup
 - `init.sql` - Database schema initialization for healthcare data
 
-**`demos/swarm/`** - Drone swarm tactical demo
-- `drone_simulator.py` - Mock drone telemetry and command simulation
-
 **`demos/frontend/`** - Third-party frontend enrollment demo
 - `app/` - Frontend application source
 - `compose.yml` - Docker Compose configuration for frontend demo environment
-
-**`demos/live-swarm/`** - Live drone swarm demo with tribunal bootstrap
-- `drone_cmd.py` - Drone command interface
-- `tribunal-bootstrap.json` - Tribunal bootstrap configuration
 
 **`demos/finance/`** - Financial data governance demo
 
 **`demos/gov/`** - Government operations demo
 
-**`demos/secure-data/`** - Secure data handling demo
-
 **CLI Demo Scenario Files** (`internal/cli/cmd/`):
-- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, pull, export, import, images, scenarios). Contains `harnessConfig` struct, `defaultHarnessConfig`, `defaultGovernedHarnessConfig` (wraps `defaultHarnessConfig` with `ConsensusSeed` and `TribunalID` overrides), `harnessRun` helper for building docker compose exec/run commands for demo scenarios, `switchDemoPosture` (shared posture switch helper), and `runTwoLayerScenario` reusable orchestrator. `demoVerbose` flag (set by `-v`/`--verbose`), `demoStep` suppresses output when non-verbose, `demoPrintln`/`demoPrintf` (verbose-aware print helpers), `scenarioCounts` map (healthcare: 4, gov: 1, finance: 1, secure-data: 3, dow: 3, dhs: 5, swarm: 3, fedramp: 5, frontend: 1), `printDemoEndpoints` (prints available endpoints per org).
+- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, pull, export, import, images, scenarios). Contains `harnessConfig` struct, `defaultHarnessConfig`, `defaultGovernedHarnessConfig` (wraps `defaultHarnessConfig` with `ConsensusSeed` and `TribunalID` overrides), `harnessRun` helper for building docker compose exec/run commands for demo scenarios, `switchDemoPosture` (shared posture switch helper), and `runTwoLayerScenario` reusable orchestrator. `demoVerbose` flag (set by `-v`/`--verbose`), `demoStep` suppresses output when non-verbose, `demoPrintln`/`demoPrintf` (verbose-aware print helpers), `scenarioCounts` map (healthcare: 4, gov: 1, finance: 1, dhs: 5, fedramp: 5, frontend: 1), `printDemoEndpoints` (prints available endpoints per org).
 - `demo_gov.go` - Gov demo scenario (uses `runTwoLayerScenario` with `harnessRun`)
 - `demo_finance.go` - Finance demo scenario (uses `runTwoLayerScenario` with `harnessRun`)
 - `demo_healthcare.go` - Healthcare demo scenarios (4 scenarios, each calls `harnessRun`)
-- `demo_secure_data.go` - Secure-data demo scenarios (3 scenarios, each calls `harnessRun`)
-- `demo_dow.go` - DoW demo scenarios (3 scenarios, each calls `harnessRun`)
 - `demo_dhs.go` - DHS demo scenarios (5 scenarios, each calls `dhsHarnessRun` → `harnessRun`). Contains `dhsHarnessConfig`, `dhsHarnessRun`, `dhsScenarioStep`, `extractFirstTxHash`, `switchDHSPosture` helpers.
 - `demo_fedramp.go` - FedRAMP demo scenarios (5 scenarios, each calls `harnessRun`). Contains `defaultFedRAMPHarnessConfig`, `fedrampHarnessRun`, `switchFedRAMPPosture` helpers (delegates to shared `switchDemoPosture`).
-- `demo_swarm.go` - Swarm demo scenarios (3 scenarios, each calls `harnessRun`): authorized recon mission, weapons safety doctrine block, navigation boundary violation block.
 - `demo_frontend.go` - Frontend demo scenario (1 scenario: third-party frontend enrollment via `runFrontendScenario`).
 - `scenarios_run.go` - `demos scenarios run` subcommand and `runAgentHarness` execution logic. Contains flag definitions, `applyAgentHarnessFlags`, `selectAgentHarnessScenarios`, `needsGovKit`, `setupGovKit`, `printAgentHarnessSummary`, `failedScenariosError` helper (collects failed scenario names and returns formatted error when any `Result.OK` is false).
 - `scenarios_run_test.go` - Tests for `failedScenariosError` helper: all-OK (nil), all-failed (error with all names), mixed (error with only failed names), empty results (nil), single failed (error).

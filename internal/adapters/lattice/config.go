@@ -16,6 +16,8 @@ package lattice
 import (
 	"fmt"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // LatticeConfig holds configuration for the Lattice gRPC adapter.
@@ -42,19 +44,19 @@ type EntityConfig struct {
 // Validate checks that all required fields are present and valid.
 func (c *LatticeConfig) Validate() error {
 	if c == nil {
-		return ErrLatticeConfigMissing
+		return constants.ErrLatticeConfigMissing
 	}
 	if c.Endpoint == "" {
-		return ErrLatticeEndpointRequired
+		return constants.ErrLatticeEndpointRequired
 	}
 	if c.ClientID == "" {
-		return ErrLatticeClientIDRequired
+		return constants.ErrLatticeClientIDRequired
 	}
 	if c.ClientSecret == "" {
-		return ErrLatticeClientSecretRequired
+		return constants.ErrLatticeClientSecretRequired
 	}
 	if c.Entity.Name == "" {
-		return fmt.Errorf("%w: entity.name required", ErrLatticeConfigMissing)
+		return fmt.Errorf("%w: entity.name required", constants.ErrLatticeConfigMissing)
 	}
 	if c.PostureFloor == "" {
 		c.PostureFloor = "consensus"
@@ -68,7 +70,7 @@ func (c *LatticeConfig) Validate() error {
 // the 5-minute window with margin for retry backoff.
 func ValidateHeartbeatInterval(interval time.Duration) error {
 	if interval <= 0 || interval >= 4*time.Minute {
-		return ErrLatticeHeartbeatIntervalInvalid
+		return constants.ErrLatticeHeartbeatIntervalInvalid
 	}
 	return nil
 }

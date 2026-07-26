@@ -169,7 +169,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	jwtRoleClaim := cfg.Gateway.JWTRoleClaim
 	jwtIssuer := cfg.Gateway.JWTIssuer
 	jwtAudience := cfg.Gateway.JWTAudience
-	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, jwksProvider, jwtRoleClaim, jwtIssuer, jwtAudience)
+	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, res, jwksProvider, jwtRoleClaim, jwtIssuer, jwtAudience)
 	userSvc.SetAuthService(auth)
 
 	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
@@ -220,7 +220,10 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 
 	// --- Scrubbing and MCP gateway ---
 	scrubbingConfig := scrubbing.DefaultConfig()
-	scrubbingService := scrubbing.NewScrubbingService(scrubbingConfig, logger, nil)
+	scrubbingService, err := scrubbing.NewScrubbingService(context.Background(), scrubbingConfig, logger, nil)
+	if err != nil {
+		return nil, fmt.Errorf("gateway: failed to initialize scrubbing service: %w", err)
+	}
 
 	publicBaseURL := cfg.Gateway.PublicBaseURL
 	if publicBaseURL == "" {
@@ -237,6 +240,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		Posture:          string(cfg.Gateway.Posture),
 		A2ADownstreamURL: cfg.Gateway.A2ADownstreamURL,
 		PublicBaseURL:    publicBaseURL,
+		AuditStore:       stores.AuditStore,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("gateway: failed to initialize MCP gateway: %w", err)
@@ -580,9 +584,15 @@ func (ls *GatewayModeService) IsGovernanceReady() bool {
 // This enables the in-process OperatorPubSubService to perform fail-closed verification.
 // The L3 notary handles both WebAuthn (web sessions) and mTLS (CLI sessions).
 func (ls *GatewayModeService) GetGovernanceDeps() *pubsub.GovernanceDeps {
-	// Create unified L3 notary that handles both CLI (mTLS) and passkey (WebAuthn) proofs
 	cliVerifier := NewCLISessionVerifier(ls.stores.DocStore, ls.pki, ls.logger, ls.userSvc, ls.cliSessionSvc)
-	l3Notary := governance.NewGatewayL3Notary(ls.suspendedTxService, cliVerifier, ls.passkey.PasskeyService, ls.logger)
+
+	var l3Notary governance.L3Notary
+	if os.Getenv("G8E_L3_MOCK") == "true" {
+		ls.logger.Warn("L3 mock mode enabled — auto-approving all L3 proofs (demo/test only, never use in production)")
+		l3Notary = governance.NewDemoL3Notary(ls.logger)
+	} else {
+		l3Notary = governance.NewGatewayL3Notary(cliVerifier, ls.passkey.PasskeyService, ls.logger)
+	}
 
 	return &pubsub.GovernanceDeps{
 		ReplayStore:          ls.stores.ReplayStore,

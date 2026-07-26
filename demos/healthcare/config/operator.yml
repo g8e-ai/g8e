@@ -2,7 +2,7 @@
 operator_endpoint: gateway
 http_port: 8080
 https_port: 8443
-posture: consensus
+posture: doctrine
 work_dir: /root/.g8e
 pki_dir: /root/.g8e/pki
 secrets_dir: /root/.g8e/secrets

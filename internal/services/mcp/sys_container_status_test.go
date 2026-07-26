@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 type mockCommandExecutor struct {
@@ -27,8 +29,7 @@ type mockCommandExecutor struct {
 	err    error
 }
 
-func (m *mockCommandExecutor) CombinedOutput(name string, args ...string) ([]byte, error) {
-	// Return output even on error, matching real exec.Command behavior
+func (m *mockCommandExecutor) CombinedOutput(ctx context.Context, name string, args ...string) ([]byte, error) {
 	return m.output, m.err
 }
 
@@ -63,7 +64,7 @@ func TestSysContainerStatusTool_Execute_InvalidJSON(t *testing.T) {
 
 	_, err := tool.Execute(ctx, json.RawMessage(`{invalid json}`))
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid arguments")
+	require.ErrorIs(t, err, constants.ErrMCPUnmarshalArguments)
 }
 
 func TestSysContainerStatusTool_Execute_EmptyContainerName(t *testing.T) {
@@ -73,7 +74,7 @@ func TestSysContainerStatusTool_Execute_EmptyContainerName(t *testing.T) {
 	args := json.RawMessage(`{"container_name": ""}`)
 	_, err := tool.Execute(ctx, args)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "container_name required")
+	require.ErrorIs(t, err, constants.ErrMCPContainerNameRequired)
 }
 
 func TestSysContainerStatusTool_Execute_MissingContainerName(t *testing.T) {
@@ -83,7 +84,7 @@ func TestSysContainerStatusTool_Execute_MissingContainerName(t *testing.T) {
 	args := json.RawMessage(`{}`)
 	_, err := tool.Execute(ctx, args)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "container_name required")
+	require.ErrorIs(t, err, constants.ErrMCPContainerNameRequired)
 }
 
 func TestSysContainerStatusTool_Execute_PodmanCommandFailure(t *testing.T) {
@@ -387,159 +388,10 @@ func TestSysContainerStatusTool_Execute_NilExecutor(t *testing.T) {
 	t.Skip("Skipping nil executor test as podman is not available in test environment")
 }
 
-func TestGetNestedMap_ExistingKey(t *testing.T) {
-	m := map[string]interface{}{
-		"State": map[string]interface{}{
-			"Status": "running",
-		},
-	}
-
-	result := getNestedMap(m, "State")
-	require.Equal(t, "running", result["Status"])
+func TestOrUnknown_EmptyString(t *testing.T) {
+	require.Equal(t, "unknown", orUnknown(""))
 }
 
-func TestGetNestedMap_NonExistentKey(t *testing.T) {
-	m := map[string]interface{}{
-		"Other": "value",
-	}
-
-	result := getNestedMap(m, "State")
-	require.NotNil(t, result)
-	require.Empty(t, result)
-}
-
-func TestGetNestedMap_NonMapValue(t *testing.T) {
-	m := map[string]interface{}{
-		"State": "not a map",
-	}
-
-	result := getNestedMap(m, "State")
-	require.NotNil(t, result)
-	require.Empty(t, result)
-}
-
-func TestGetString_ExistingString(t *testing.T) {
-	m := map[string]interface{}{
-		"key": "value",
-	}
-
-	result := getString(m, "key")
-	require.Equal(t, "value", result)
-}
-
-func TestGetString_NonExistentKey(t *testing.T) {
-	m := map[string]interface{}{
-		"other": "value",
-	}
-
-	result := getString(m, "key")
-	require.Equal(t, "unknown", result)
-}
-
-func TestGetString_NonStringValue(t *testing.T) {
-	m := map[string]interface{}{
-		"key": 123,
-	}
-
-	result := getString(m, "key")
-	require.Equal(t, "unknown", result)
-}
-
-func TestGetBool_True(t *testing.T) {
-	m := map[string]interface{}{
-		"key": true,
-	}
-
-	result := getBool(m, "key")
-	require.True(t, result)
-}
-
-func TestGetBool_False(t *testing.T) {
-	m := map[string]interface{}{
-		"key": false,
-	}
-
-	result := getBool(m, "key")
-	require.False(t, result)
-}
-
-func TestGetBool_NonExistentKey(t *testing.T) {
-	m := map[string]interface{}{
-		"other": true,
-	}
-
-	result := getBool(m, "key")
-	require.False(t, result)
-}
-
-func TestGetBool_NonBoolValue(t *testing.T) {
-	m := map[string]interface{}{
-		"key": "true",
-	}
-
-	result := getBool(m, "key")
-	require.False(t, result)
-}
-
-func TestGetInt_Float64(t *testing.T) {
-	m := map[string]interface{}{
-		"key": float64(12345),
-	}
-
-	result := getInt(m, "key")
-	require.Equal(t, int64(12345), result)
-}
-
-func TestGetInt_Int(t *testing.T) {
-	m := map[string]interface{}{
-		"key": 12345,
-	}
-
-	result := getInt(m, "key")
-	require.Equal(t, int64(12345), result)
-}
-
-func TestGetInt_Int64(t *testing.T) {
-	m := map[string]interface{}{
-		"key": int64(12345),
-	}
-
-	result := getInt(m, "key")
-	require.Equal(t, int64(12345), result)
-}
-
-func TestGetInt_NonExistentKey(t *testing.T) {
-	m := map[string]interface{}{
-		"other": 12345,
-	}
-
-	result := getInt(m, "key")
-	require.Equal(t, int64(0), result)
-}
-
-func TestGetInt_NonNumericValue(t *testing.T) {
-	m := map[string]interface{}{
-		"key": "12345",
-	}
-
-	result := getInt(m, "key")
-	require.Equal(t, int64(0), result)
-}
-
-func TestGetInt_NegativeValue(t *testing.T) {
-	m := map[string]interface{}{
-		"key": float64(-12345),
-	}
-
-	result := getInt(m, "key")
-	require.Equal(t, int64(-12345), result)
-}
-
-func TestGetInt_LargeValue(t *testing.T) {
-	m := map[string]interface{}{
-		"key": int64(9223372036854775807), // Max int64
-	}
-
-	result := getInt(m, "key")
-	require.Equal(t, int64(9223372036854775807), result)
+func TestOrUnknown_NonEmptyString(t *testing.T) {
+	require.Equal(t, "running", orUnknown("running"))
 }

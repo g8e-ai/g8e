@@ -63,7 +63,7 @@ func TestHandleReauth_MalformedJSON(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	personaSvc := NewPersonaService(stores.DocStore, logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 	reg := &RegistrationService{}
 	cfg := &config.Config{Gateway: config.GatewayConfig{MaxPayloadBytes: 1024}}
 	controller := newOperatorController(cfg, logger, reg, auth, res)

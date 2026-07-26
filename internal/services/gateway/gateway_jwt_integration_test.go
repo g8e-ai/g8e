@@ -132,7 +132,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, stores, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, "", ks, fileSvc)
+	db, stores, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -157,7 +157,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	}
 
 	resp := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, resp, fileSvc.Resolve(constants.SecretsDirname), NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
+	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, resp, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 
 	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 	operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
@@ -283,7 +283,7 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, stores, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, "", ks, fileSvc)
+	db, stores, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -308,7 +308,7 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 	}
 
 	resp := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, resp, fileSvc.Resolve(constants.SecretsDirname), NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
+	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, resp, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 
 	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 	operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
@@ -449,7 +449,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, stores, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, "", ks, fileSvc)
+	db, stores, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -474,7 +474,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	}
 
 	resp := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, resp, fileSvc.Resolve(constants.SecretsDirname), NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
+	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, resp, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 
 	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 	operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
@@ -613,7 +613,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, stores, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, "", ks, fileSvc)
+	db, stores, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -635,7 +635,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 	}
 
 	resp := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, resp, fileSvc.Resolve(constants.SecretsDirname), NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, cfg.Gateway.JWTIssuer, cfg.Gateway.JWTAudience)
+	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, resp, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, cfg.Gateway.JWTIssuer, cfg.Gateway.JWTAudience)
 
 	t.Run("Token with wrong aud is rejected", func(t *testing.T) {
 		claims := map[string]interface{}{
@@ -702,7 +702,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 	})
 
 	t.Run("Token without iss/aud/nbf is accepted when not configured", func(t *testing.T) {
-		authNoValidation := NewAuthService(stores.DocStore, pki, testutil.NewTestLogger(), userSvc, personaSvc, resp, fileSvc.Resolve(constants.SecretsDirname), NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
+		authNoValidation := NewAuthService(stores.DocStore, pki, testutil.NewTestLogger(), userSvc, personaSvc, resp, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 
 		claims := map[string]interface{}{
 			"sub": "user-123",

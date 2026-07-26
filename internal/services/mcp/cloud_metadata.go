@@ -34,6 +34,21 @@ var (
 	httpGetFunc             = httpGetWithTimeout
 )
 
+func marshalCloudMetadataResult(result interface{}) (CallToolResult, error) {
+	resultJSON, err := json.Marshal(result)
+	if err != nil {
+		return CallToolResult{}, fmt.Errorf("cloud_metadata: marshal result: %w: %w", constants.ErrMCPMarshalResult, err)
+	}
+	return CallToolResult{
+		Content: []TextContent{
+			{
+				Type: "text",
+				Text: string(resultJSON),
+			},
+		},
+	}, nil
+}
+
 // Name returns the tool identifier.
 func (t *CloudMetadataTool) Name() string {
 	return "cloud_metadata"
@@ -60,11 +75,9 @@ func (t *CloudMetadataTool) InputSchema() *InputSchema {
 
 // Execute implements the tool logic.
 func (t *CloudMetadataTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		Operation string `json:"operation"`
-	}
+	var req CloudMetadataRequest
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("%w: %v", constants.ErrMCPUnmarshalArguments, err)
+		return CallToolResult{}, fmt.Errorf("cloud_metadata: unmarshal arguments: %w: %w", constants.ErrMCPUnmarshalArguments, err)
 	}
 
 	if req.Operation == "" {
@@ -72,85 +85,63 @@ func (t *CloudMetadataTool) Execute(ctx context.Context, args json.RawMessage) (
 	}
 
 	if err := validateCloudMetadataOperation(req.Operation); err != nil {
-		result := map[string]interface{}{
-			"operation": req.Operation,
-			"error":     err.Error(),
-		}
-		resultJSON, _ := json.Marshal(result)
-		return CallToolResult{
-			Content: []TextContent{{Type: "text", Text: string(resultJSON)}},
-		}, nil
+		return marshalCloudMetadataResult(CloudMetadataErrorResponse{
+			Operation: req.Operation,
+			Error:     err.Error(),
+		})
 	}
 
-	provider := detectCloudProviderFunc()
+	provider := detectCloudProviderFunc(ctx)
 	if provider == "unknown" {
-		result := map[string]interface{}{
-			"operation": req.Operation,
-			"provider":  "unknown",
-			"message":   "Not running on a detected cloud provider or metadata service unavailable",
-		}
-		resultJSON, _ := json.Marshal(result)
-		return CallToolResult{
-			Content: []TextContent{{Type: "text", Text: string(resultJSON)}},
-		}, nil
+		return marshalCloudMetadataResult(CloudMetadataErrorResponse{
+			Operation: req.Operation,
+			Provider:  "unknown",
+			Message:   "Not running on a detected cloud provider or metadata service unavailable",
+		})
 	}
 
-	var result map[string]interface{}
+	var marshalTarget interface{}
 	var err error
 
 	switch req.Operation {
 	case "detect":
-		result = map[string]interface{}{
-			"provider": provider,
-		}
+		marshalTarget = CloudMetadataDetectResult{Provider: provider}
 	case "instance":
-		result, err = getInstanceMetadata(provider)
+		marshalTarget, err = getInstanceMetadata(ctx, provider)
 	case "region":
-		result, err = getRegion(provider)
+		marshalTarget, err = getRegion(ctx, provider)
 	case "availability_zone":
-		result, err = getAvailabilityZone(provider)
+		marshalTarget, err = getAvailabilityZone(ctx, provider)
 	case "instance_type":
-		result, err = getInstanceType(provider)
+		marshalTarget, err = getInstanceType(ctx, provider)
 	case "all":
-		result, err = getAllMetadata(provider)
+		marshalTarget, err = getAllMetadata(ctx, provider)
 	default:
-		return CallToolResult{}, fmt.Errorf("%w: %s", constants.ErrMCPValidateCloudMetadataInvalidOperation, req.Operation)
+		return CallToolResult{}, fmt.Errorf("cloud_metadata: invalid operation: %w: %s", constants.ErrMCPValidateCloudMetadataInvalidOperation, req.Operation)
 	}
 
 	if err != nil {
-		result = map[string]interface{}{
-			"operation": req.Operation,
-			"provider":  provider,
-			"error":     err.Error(),
+		marshalTarget = CloudMetadataErrorResponse{
+			Operation: req.Operation,
+			Provider:  provider,
+			Error:     err.Error(),
 		}
 	}
 
-	resultJSON, marshalErr := json.Marshal(result)
-	if marshalErr != nil {
-		return CallToolResult{}, fmt.Errorf("%w: %v", constants.ErrMCPMarshalResult, marshalErr)
-	}
-
-	return CallToolResult{
-		Content: []TextContent{
-			{
-				Type: "text",
-				Text: string(resultJSON),
-			},
-		},
-	}, nil
+	return marshalCloudMetadataResult(marshalTarget)
 }
 
-func detectCloudProvider() string {
-	if _, err := os.Stat("/sys/class/dmi/id/product_uuid"); err == nil {
-		if data, err := os.ReadFile("/sys/class/dmi/id/product_uuid"); err == nil {
+func detectCloudProvider(ctx context.Context) string {
+	if _, err := os.Stat(constants.PathSysClassDMIIDProductUUID); err == nil {
+		if data, err := os.ReadFile(constants.PathSysClassDMIIDProductUUID); err == nil {
 			if strings.Contains(string(data), "ec2") {
 				return "aws"
 			}
 		}
 	}
 
-	if _, err := os.Stat("/sys/class/dmi/id/sys_vendor"); err == nil {
-		if data, err := os.ReadFile("/sys/class/dmi/id/sys_vendor"); err == nil {
+	if _, err := os.Stat(constants.PathSysClassDMIIDSysVendor); err == nil {
+		if data, err := os.ReadFile(constants.PathSysClassDMIIDSysVendor); err == nil {
 			content := strings.ToLower(string(data))
 			if strings.Contains(content, "amazon") {
 				return "aws"
@@ -166,32 +157,38 @@ func detectCloudProvider() string {
 
 	client := &http.Client{Timeout: 2 * time.Second}
 
-	resp, err := client.Get("http://169.254.169.254/latest/meta-data/")
+	awsReq, err := http.NewRequestWithContext(ctx, "GET", "http://169.254.169.254/latest/meta-data/", nil)
 	if err == nil {
-		resp.Body.Close()
-		return "aws"
+		if resp, err := client.Do(awsReq); err == nil {
+			resp.Body.Close()
+			return "aws"
+		}
 	}
 
-	resp, err = client.Get("http://169.254.169.254/metadata/instance?api-version=2021-02-01")
+	azureReq, err := http.NewRequestWithContext(ctx, "GET", "http://169.254.169.254/metadata/instance?api-version=2021-02-01", nil)
 	if err == nil {
-		resp.Body.Close()
-		return "azure"
+		if resp, err := client.Do(azureReq); err == nil {
+			resp.Body.Close()
+			return "azure"
+		}
 	}
 
-	resp, err = client.Get("http://metadata.google.internal/computeMetadata/v1/")
+	gcpReq, err := http.NewRequestWithContext(ctx, "GET", "http://metadata.google.internal/computeMetadata/v1/", nil)
 	if err == nil {
-		resp.Body.Close()
-		return "gcp"
+		if resp, err := client.Do(gcpReq); err == nil {
+			resp.Body.Close()
+			return "gcp"
+		}
 	}
 
 	return "unknown"
 }
 
-func httpGetWithTimeout(url string, headers map[string]string) (string, error) {
+func httpGetWithTimeout(ctx context.Context, url string, headers map[string]string) (string, error) {
 	client := &http.Client{Timeout: 5 * time.Second}
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 	}
 
 	for key, value := range headers {
@@ -200,7 +197,7 @@ func httpGetWithTimeout(url string, headers map[string]string) (string, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}
 	defer resp.Body.Close()
 
@@ -210,113 +207,112 @@ func httpGetWithTimeout(url string, headers map[string]string) (string, error) {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
 	}
 
 	return string(body), nil
 }
 
-func getInstanceMetadata(provider string) (map[string]interface{}, error) {
+func getInstanceMetadata(ctx context.Context, provider string) (CloudMetadataInstanceResult, error) {
 	switch provider {
 	case "aws":
-		return getAWSInstanceMetadata()
+		return getAWSInstanceMetadata(ctx)
 	case "azure":
-		return getAzureInstanceMetadata()
+		return getAzureInstanceMetadata(ctx)
 	case "gcp":
-		return getGCPInstanceMetadata()
+		return getGCPInstanceMetadata(ctx)
 	default:
-		return nil, fmt.Errorf("%w: %s", constants.ErrMCPValidateCloudMetadataUnsupportedProvider, provider)
+		return CloudMetadataInstanceResult{}, fmt.Errorf("%w: %s", constants.ErrMCPValidateCloudMetadataUnsupportedProvider, provider)
 	}
 }
 
-func getAWSInstanceMetadata() (map[string]interface{}, error) {
-	instanceID, err := httpGetFunc("http://169.254.169.254/latest/meta-data/instance-id", nil)
+func getAWSInstanceMetadata(ctx context.Context) (CloudMetadataInstanceResult, error) {
+	instanceID, err := httpGetFunc(ctx, "http://169.254.169.254/latest/meta-data/instance-id", nil)
 	if err != nil {
 		instanceID = "unknown"
 	}
 
-	return map[string]interface{}{
-		"provider":    "aws",
-		"instance_id": instanceID,
+	return CloudMetadataInstanceResult{
+		Provider:   "aws",
+		InstanceID: instanceID,
 	}, nil
 }
 
-func getAzureInstanceMetadata() (map[string]interface{}, error) {
+func getAzureInstanceMetadata(ctx context.Context) (CloudMetadataInstanceResult, error) {
 	headers := map[string]string{"Metadata": "true"}
-	data, err := httpGetFunc("http://169.254.169.254/metadata/instance?api-version=2021-02-01", headers)
+	data, err := httpGetFunc(ctx, "http://169.254.169.254/metadata/instance?api-version=2021-02-01", headers)
 	if err != nil {
-		return nil, err
+		return CloudMetadataInstanceResult{}, err
 	}
 
-	var metadata map[string]interface{}
-	if err := json.Unmarshal([]byte(data), &metadata); err != nil {
-		return nil, err
+	var azureMeta AzureInstanceMetadata
+	if err := json.Unmarshal([]byte(data), &azureMeta); err != nil {
+		return CloudMetadataInstanceResult{}, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
 
-	metadata["provider"] = "azure"
-	return metadata, nil
+	return CloudMetadataInstanceResult{
+		Provider: "azure",
+		VMSize:   azureMeta.Compute.VMSize,
+		Location: azureMeta.Compute.Location,
+	}, nil
 }
 
-func getGCPInstanceMetadata() (map[string]interface{}, error) {
+func getGCPInstanceMetadata(ctx context.Context) (CloudMetadataInstanceResult, error) {
 	headers := map[string]string{"Metadata-Flavor": "Google"}
-	instanceID, err := httpGetFunc("http://metadata.google.internal/computeMetadata/v1/id", headers)
+	instanceID, err := httpGetFunc(ctx, "http://metadata.google.internal/computeMetadata/v1/id", headers)
 	if err != nil {
 		instanceID = "unknown"
 	}
 
-	name, err := httpGetFunc("http://metadata.google.internal/computeMetadata/v1/instance/name", headers)
+	name, err := httpGetFunc(ctx, "http://metadata.google.internal/computeMetadata/v1/instance/name", headers)
 	if err != nil {
 		name = "unknown"
 	}
 
-	return map[string]interface{}{
-		"provider":    "gcp",
-		"instance_id": instanceID,
-		"name":        name,
+	return CloudMetadataInstanceResult{
+		Provider:   "gcp",
+		InstanceID: instanceID,
+		Name:       name,
 	}, nil
 }
 
-func getRegion(provider string) (map[string]interface{}, error) {
+func getRegion(ctx context.Context, provider string) (CloudMetadataRegionResult, error) {
 	switch provider {
 	case "aws":
-		region, err := httpGetFunc("http://169.254.169.254/latest/meta-data/placement/region", nil)
+		region, err := httpGetFunc(ctx, "http://169.254.169.254/latest/meta-data/placement/region", nil)
 		if err != nil {
-			az, err2 := httpGetFunc("http://169.254.169.254/latest/meta-data/placement/availability-zone", nil)
+			az, err2 := httpGetFunc(ctx, "http://169.254.169.254/latest/meta-data/placement/availability-zone", nil)
 			if err2 == nil && len(az) > 1 {
 				region = az[:len(az)-1]
 			} else {
 				region = "unknown"
 			}
 		}
-		return map[string]interface{}{
-			"provider": "aws",
-			"region":   region,
+		return CloudMetadataRegionResult{
+			Provider: "aws",
+			Region:   region,
 		}, nil
 	case "azure":
 		headers := map[string]string{"Metadata": "true"}
-		data, err := httpGetFunc("http://169.254.169.254/metadata/instance?api-version=2021-02-01", headers)
+		data, err := httpGetFunc(ctx, "http://169.254.169.254/metadata/instance?api-version=2021-02-01", headers)
 		if err != nil {
-			return nil, err
+			return CloudMetadataRegionResult{}, err
 		}
-		var metadata map[string]interface{}
-		if err := json.Unmarshal([]byte(data), &metadata); err != nil {
-			return nil, err
+		var azureMeta AzureInstanceMetadata
+		if err := json.Unmarshal([]byte(data), &azureMeta); err != nil {
+			return CloudMetadataRegionResult{}, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 		}
-		if compute, ok := metadata["compute"].(map[string]interface{}); ok {
-			if location, ok := compute["location"].(string); ok {
-				return map[string]interface{}{
-					"provider": "azure",
-					"region":   location,
-				}, nil
-			}
+		region := azureMeta.Compute.Location
+		if region == "" {
+			region = "unknown"
 		}
-		return map[string]interface{}{
-			"provider": "azure",
-			"region":   "unknown",
+		return CloudMetadataRegionResult{
+			Provider: "azure",
+			Region:   region,
 		}, nil
 	case "gcp":
 		headers := map[string]string{"Metadata-Flavor": "Google"}
-		region, err := httpGetFunc("http://metadata.google.internal/computeMetadata/v1/instance/region", headers)
+		region, err := httpGetFunc(ctx, "http://metadata.google.internal/computeMetadata/v1/instance/region", headers)
 		if err != nil {
 			region = "unknown"
 		}
@@ -324,51 +320,47 @@ func getRegion(provider string) (map[string]interface{}, error) {
 		if len(parts) > 0 {
 			region = parts[len(parts)-1]
 		}
-		return map[string]interface{}{
-			"provider": "gcp",
-			"region":   region,
+		return CloudMetadataRegionResult{
+			Provider: "gcp",
+			Region:   region,
 		}, nil
 	default:
-		return nil, fmt.Errorf("%w: %s", constants.ErrMCPValidateCloudMetadataUnsupportedProvider, provider)
+		return CloudMetadataRegionResult{}, fmt.Errorf("%w: %s", constants.ErrMCPValidateCloudMetadataUnsupportedProvider, provider)
 	}
 }
 
-func getAvailabilityZone(provider string) (map[string]interface{}, error) {
+func getAvailabilityZone(ctx context.Context, provider string) (CloudMetadataAvailabilityZoneResult, error) {
 	switch provider {
 	case "aws":
-		az, err := httpGetFunc("http://169.254.169.254/latest/meta-data/placement/availability-zone", nil)
+		az, err := httpGetFunc(ctx, "http://169.254.169.254/latest/meta-data/placement/availability-zone", nil)
 		if err != nil {
 			az = "unknown"
 		}
-		return map[string]interface{}{
-			"provider":          "aws",
-			"availability_zone": az,
+		return CloudMetadataAvailabilityZoneResult{
+			Provider:         "aws",
+			AvailabilityZone: az,
 		}, nil
 	case "azure":
 		headers := map[string]string{"Metadata": "true"}
-		data, err := httpGetFunc("http://169.254.169.254/metadata/instance?api-version=2021-02-01", headers)
+		data, err := httpGetFunc(ctx, "http://169.254.169.254/metadata/instance?api-version=2021-02-01", headers)
 		if err != nil {
-			return nil, err
+			return CloudMetadataAvailabilityZoneResult{}, err
 		}
-		var metadata map[string]interface{}
-		if err := json.Unmarshal([]byte(data), &metadata); err != nil {
-			return nil, err
+		var azureMeta AzureInstanceMetadata
+		if err := json.Unmarshal([]byte(data), &azureMeta); err != nil {
+			return CloudMetadataAvailabilityZoneResult{}, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 		}
-		if compute, ok := metadata["compute"].(map[string]interface{}); ok {
-			if faultDomain, ok := compute["platformFaultDomain"].(string); ok {
-				return map[string]interface{}{
-					"provider":          "azure",
-					"availability_zone": faultDomain,
-				}, nil
-			}
+		az := azureMeta.Compute.PlatformFaultDomain
+		if az == "" {
+			az = "unknown"
 		}
-		return map[string]interface{}{
-			"provider":          "azure",
-			"availability_zone": "unknown",
+		return CloudMetadataAvailabilityZoneResult{
+			Provider:         "azure",
+			AvailabilityZone: az,
 		}, nil
 	case "gcp":
 		headers := map[string]string{"Metadata-Flavor": "Google"}
-		zone, err := httpGetFunc("http://metadata.google.internal/computeMetadata/v1/instance/zone", headers)
+		zone, err := httpGetFunc(ctx, "http://metadata.google.internal/computeMetadata/v1/instance/zone", headers)
 		if err != nil {
 			zone = "unknown"
 		}
@@ -376,51 +368,47 @@ func getAvailabilityZone(provider string) (map[string]interface{}, error) {
 		if len(parts) > 0 {
 			zone = parts[len(parts)-1]
 		}
-		return map[string]interface{}{
-			"provider":          "gcp",
-			"availability_zone": zone,
+		return CloudMetadataAvailabilityZoneResult{
+			Provider:         "gcp",
+			AvailabilityZone: zone,
 		}, nil
 	default:
-		return nil, fmt.Errorf("%w: %s", constants.ErrMCPValidateCloudMetadataUnsupportedProvider, provider)
+		return CloudMetadataAvailabilityZoneResult{}, fmt.Errorf("%w: %s", constants.ErrMCPValidateCloudMetadataUnsupportedProvider, provider)
 	}
 }
 
-func getInstanceType(provider string) (map[string]interface{}, error) {
+func getInstanceType(ctx context.Context, provider string) (CloudMetadataInstanceTypeResult, error) {
 	switch provider {
 	case "aws":
-		instanceType, err := httpGetFunc("http://169.254.169.254/latest/meta-data/instance-type", nil)
+		instanceType, err := httpGetFunc(ctx, "http://169.254.169.254/latest/meta-data/instance-type", nil)
 		if err != nil {
 			instanceType = "unknown"
 		}
-		return map[string]interface{}{
-			"provider":      "aws",
-			"instance_type": instanceType,
+		return CloudMetadataInstanceTypeResult{
+			Provider:     "aws",
+			InstanceType: instanceType,
 		}, nil
 	case "azure":
 		headers := map[string]string{"Metadata": "true"}
-		data, err := httpGetFunc("http://169.254.169.254/metadata/instance?api-version=2021-02-01", headers)
+		data, err := httpGetFunc(ctx, "http://169.254.169.254/metadata/instance?api-version=2021-02-01", headers)
 		if err != nil {
-			return nil, err
+			return CloudMetadataInstanceTypeResult{}, err
 		}
-		var metadata map[string]interface{}
-		if err := json.Unmarshal([]byte(data), &metadata); err != nil {
-			return nil, err
+		var azureMeta AzureInstanceMetadata
+		if err := json.Unmarshal([]byte(data), &azureMeta); err != nil {
+			return CloudMetadataInstanceTypeResult{}, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 		}
-		if compute, ok := metadata["compute"].(map[string]interface{}); ok {
-			if vmSize, ok := compute["vmSize"].(string); ok {
-				return map[string]interface{}{
-					"provider":      "azure",
-					"instance_type": vmSize,
-				}, nil
-			}
+		vmSize := azureMeta.Compute.VMSize
+		if vmSize == "" {
+			vmSize = "unknown"
 		}
-		return map[string]interface{}{
-			"provider":      "azure",
-			"instance_type": "unknown",
+		return CloudMetadataInstanceTypeResult{
+			Provider:     "azure",
+			InstanceType: vmSize,
 		}, nil
 	case "gcp":
 		headers := map[string]string{"Metadata-Flavor": "Google"}
-		machineType, err := httpGetFunc("http://metadata.google.internal/computeMetadata/v1/instance/machine-type", headers)
+		machineType, err := httpGetFunc(ctx, "http://metadata.google.internal/computeMetadata/v1/instance/machine-type", headers)
 		if err != nil {
 			machineType = "unknown"
 		}
@@ -428,41 +416,41 @@ func getInstanceType(provider string) (map[string]interface{}, error) {
 		if len(parts) > 0 {
 			machineType = parts[len(parts)-1]
 		}
-		return map[string]interface{}{
-			"provider":      "gcp",
-			"instance_type": machineType,
+		return CloudMetadataInstanceTypeResult{
+			Provider:     "gcp",
+			InstanceType: machineType,
 		}, nil
 	default:
-		return nil, fmt.Errorf("%w: %s", constants.ErrMCPValidateCloudMetadataUnsupportedProvider, provider)
+		return CloudMetadataInstanceTypeResult{}, fmt.Errorf("%w: %s", constants.ErrMCPValidateCloudMetadataUnsupportedProvider, provider)
 	}
 }
 
-func getAllMetadata(provider string) (map[string]interface{}, error) {
-	instance, err := getInstanceMetadata(provider)
+func getAllMetadata(ctx context.Context, provider string) (CloudMetadataAllResult, error) {
+	instance, err := getInstanceMetadata(ctx, provider)
 	if err != nil {
-		instance = map[string]interface{}{"error": err.Error()}
+		instance = CloudMetadataInstanceResult{Error: err.Error()}
 	}
 
-	region, err := getRegion(provider)
+	region, err := getRegion(ctx, provider)
 	if err != nil {
-		region = map[string]interface{}{"error": err.Error()}
+		region = CloudMetadataRegionResult{Error: err.Error()}
 	}
 
-	az, err := getAvailabilityZone(provider)
+	az, err := getAvailabilityZone(ctx, provider)
 	if err != nil {
-		az = map[string]interface{}{"error": err.Error()}
+		az = CloudMetadataAvailabilityZoneResult{Error: err.Error()}
 	}
 
-	instanceType, err := getInstanceType(provider)
+	instanceType, err := getInstanceType(ctx, provider)
 	if err != nil {
-		instanceType = map[string]interface{}{"error": err.Error()}
+		instanceType = CloudMetadataInstanceTypeResult{Error: err.Error()}
 	}
 
-	return map[string]interface{}{
-		"provider":          provider,
-		"instance":          instance,
-		"region":            region,
-		"availability_zone": az,
-		"instance_type":     instanceType,
+	return CloudMetadataAllResult{
+		Provider:         provider,
+		Instance:         instance,
+		Region:           region,
+		AvailabilityZone: az,
+		InstanceType:     instanceType,
 	}, nil
 }
