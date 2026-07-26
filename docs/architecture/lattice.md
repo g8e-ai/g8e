@@ -6,7 +6,7 @@ parent: Architecture
 # Lattice Adapter
 
 Last Updated: 2026-07-26
-Version: v1.6.x
+Version: v1.6.5
 
 The Lattice adapter integrates the g8e Operator with Anduril's Lattice Common Operating Picture (COP). It publishes the Operator as a live entity in Lattice, subscribes to task assignments, and reports execution status back. The adapter communicates with Lattice over gRPC using TLS and OAuth2 client credentials authentication.
 
