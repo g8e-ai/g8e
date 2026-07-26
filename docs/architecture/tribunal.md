@@ -36,7 +36,7 @@ Tribunal policies are persisted in the SQLite document store under the `tribunal
 - **`ListTribunals()`**: Returns all stored policies.
 - **`DeleteTribunal(id)`**: Removes a policy.
 
-The `TribunalStore` interface (`internal/services/governance/tribunal_store.go:19`) is the Tribunal-specific read interface. The L4 Warden now depends on the generic `L2ConsensusPolicyStore` interface, which `TribunalStoreService` satisfies via `GetConsensusPolicy` (adapting `TribunalPolicy` → `L2ConsensusPolicy`). External `TribunalStore` implementations can be adapted via `TribunalStoreAdapter`:
+The `TribunalStore` interface (`internal/services/governance/tribunal_store.go:19`) is the Tribunal-specific read interface. The L4 Warden depends on the generic `L2ConsensusPolicyStore` interface, which `TribunalStoreService` satisfies directly via `GetConsensusPolicy` (adapting `TribunalPolicy` → `L2ConsensusPolicy`):
 
 ```go
 type TribunalStore interface {
