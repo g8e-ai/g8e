@@ -404,9 +404,9 @@ func TestOperatorPubSubService_SinglePathEnforcement(t *testing.T) {
 func TestOperatorPubSubService_ExecuteVerifiedTransaction(t *testing.T) {
 	f := newPubsubFixture(t)
 
-	t.Run("rejects invalid cmdMsg type", func(t *testing.T) {
+	t.Run("rejects nil cmdMsg", func(t *testing.T) {
 		t.Parallel()
-		_, err := f.Svc.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Command.Requested, "invalid type")
+		_, err := f.Svc.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.Command.Requested, nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid cmdMsg type")
 	})

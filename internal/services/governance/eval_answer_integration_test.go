@@ -124,7 +124,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 		Logger:            slog.Default(),
 		StateRootProvider: testutil.NewMockStateRootProvider("test-state-root-v1"),
 		ExecutionHandler: &mockExecutionHandler{
-			ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
+			ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg CommandMessage) (string, error) {
 				return payload.Answer, nil
 			},
 		},

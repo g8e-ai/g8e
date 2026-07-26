@@ -305,8 +305,8 @@ type chaosExecutionHandler struct {
 	mutationCount atomic.Int64
 }
 
-func (c *chaosExecutionHandler) ExecuteVerifiedTransaction(_ context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
-	msg, ok := cmdMsg.(pubsub.PubSubCommandMessage)
+func (c *chaosExecutionHandler) ExecuteVerifiedTransaction(_ context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
+	msg, ok := cmdMsg.(*pubsub.PubSubCommandMessage)
 	if !ok {
 		return "", nil
 	}
@@ -721,7 +721,7 @@ func fireOne(
 
 	// Execute through the handler
 	eventType := constants.MapActionTypeToEventType(constants.ActionType(env.ActionType))
-	_, err := actuator.ExecutionHandler.ExecuteVerifiedTransaction(context.Background(), eventType, cmdMsg)
+	_, err := actuator.ExecutionHandler.ExecuteVerifiedTransaction(context.Background(), eventType, &cmdMsg)
 
 	if err != nil {
 		logger.Warn("execution error", "id", id, "error", err)

@@ -35,10 +35,10 @@ import (
 type mockExecutionHandler struct {
 	executed                       atomic.Bool
 	err                            error
-	ExecuteVerifiedTransactionFunc func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error)
+	ExecuteVerifiedTransactionFunc func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error)
 }
 
-func (m *mockExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
+func (m *mockExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
 	m.executed.Store(true)
 	if m.ExecuteVerifiedTransactionFunc != nil {
 		return m.ExecuteVerifiedTransactionFunc(ctx, eventType, cmdMsg)
@@ -481,7 +481,7 @@ func TestHeartbeatService_SendAutomatic(t *testing.T) {
 		// Create a mock execution handler that tracks execution
 		actuatorCalled := false
 		mockHandler := &mockExecutionHandler{
-			ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
+			ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
 				actuatorCalled = true
 				return "test-receipt-id", nil
 			},

@@ -169,7 +169,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	jwtRoleClaim := cfg.Gateway.JWTRoleClaim
 	jwtIssuer := cfg.Gateway.JWTIssuer
 	jwtAudience := cfg.Gateway.JWTAudience
-	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, jwksProvider, jwtRoleClaim, jwtIssuer, jwtAudience)
+	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, res, jwksProvider, jwtRoleClaim, jwtIssuer, jwtAudience)
 	userSvc.SetAuthService(auth)
 
 	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)

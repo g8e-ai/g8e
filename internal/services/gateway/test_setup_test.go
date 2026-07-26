@@ -85,6 +85,7 @@ func newTestKeystore(tb testing.TB, fileSvc fs.RuntimeFileService, logger *slog.
 func openTestDB(t *testing.T, dataDir, vaultDir string, fileSvc fs.RuntimeFileService, logger *slog.Logger) (*CanonicalDBService, *Stores, error) {
 	t.Helper()
 	ks := newTestKeystore(t, fileSvc, logger)
+	vaultDir = fileSvc.Resolve(constants.VaultDirname)
 	return OpenCanonicalDBService(dataDir, vaultDir, logger, "", ks, fileSvc)
 }
 
@@ -102,7 +103,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 
 	ks := newTestKeystore(t, fileSvc, logger)
 
-	db, stores, err := OpenCanonicalDBService(dbDir, filepath.Join(dbDir, constants.VaultDirname), logger, "", ks, fileSvc)
+	db, stores, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

@@ -28,7 +28,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -135,9 +134,14 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	// ready without requiring a separate initialization step — same pattern as
 	// SQLite creating the database file on first open.
 	if !vault.VaultHeaderExists(vaultDir) {
-		if err := os.MkdirAll(vaultDir, constants.PermDirPrivate); err != nil {
+		relVaultDir, err := fileSvc.Rel(vaultDir)
+		if err != nil {
 			db.Close()
-			return nil, nil, fmt.Errorf("gateway: create vault dir: %w", err)
+			return nil, nil, fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
+		}
+		if err := fileSvc.MkdirAll(context.Background(), relVaultDir, constants.PermDirPrivate); err != nil {
+			db.Close()
+			return nil, nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
 
 		initKey := make([]byte, vault.KeySize)
@@ -160,7 +164,13 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 		}
 
 		keyData := []byte(hex.EncodeToString(initKey) + "\n")
-		if err := os.WriteFile(vaultKeyPath, keyData, constants.PermFilePrivate); err != nil {
+		relVaultKeyPath, err := fileSvc.Rel(vaultKeyPath)
+		if err != nil {
+			db.Close()
+			vault.SecureZero(initKey)
+			return nil, nil, fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
+		}
+		if err := fileSvc.WriteFile(context.Background(), relVaultKeyPath, keyData, constants.PermFilePrivate); err != nil {
 			db.Close()
 			vault.SecureZero(initKey)
 			return nil, nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyWriteFailed, err)
@@ -198,7 +208,7 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	auditStore, err := storage.NewSQLAuditStore(auditStoreConfig, logger, fileSvc)
 	if err != nil {
 		db.Close()
-		return nil, nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
+		return nil, nil, fmt.Errorf("%w: %w", constants.ErrGatewayDBAuditStoreInit, err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -229,13 +239,13 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 
 	if err := svc.initSchema(fileSvc, ks); err != nil {
 		db.Close()
-		return nil, nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
+		return nil, nil, fmt.Errorf("%w: %w", constants.ErrGatewayDBSchemaInit, err)
 	}
 
 	// Initialize state root if missing
 	if err := svc.initStateRoot(); err != nil {
 		db.Close()
-		return nil, nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
+		return nil, nil, fmt.Errorf("%w: %w", constants.ErrGatewayDBStateRootInit, err)
 	}
 
 	// Start background maintenance

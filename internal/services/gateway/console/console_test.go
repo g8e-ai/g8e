@@ -19,41 +19,44 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestHandler_ServesHTML(t *testing.T) {
-	handler := Handler()
+func TestHandler_ServesStaticContent(t *testing.T) {
+	handler, err := Handler()
+	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rr := httptest.NewRecorder()
+	tests := []struct {
+		name       string
+		path       string
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name:       "root path serves index HTML",
+			path:       "/",
+			wantStatus: http.StatusOK,
+			wantBody:   "<title>g8e Console</title>",
+		},
+		{
+			name:       "nonexistent file returns 404",
+			path:       "/nonexistent.html",
+			wantStatus: http.StatusNotFound,
+		},
+	}
 
-	handler.ServeHTTP(rr, req)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			rr := httptest.NewRecorder()
 
-	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.Contains(t, rr.Header().Get("Content-Type"), "text/html")
-	assert.Contains(t, rr.Body.String(), "<title>g8e Console</title>")
-}
+			handler.ServeHTTP(rr, req)
 
-func TestHandler_DefaultServesIndex(t *testing.T) {
-	handler := Handler()
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rr := httptest.NewRecorder()
-
-	handler.ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.Contains(t, rr.Header().Get("Content-Type"), "text/html")
-	assert.Contains(t, rr.Body.String(), "<title>g8e Console</title>")
-}
-
-func TestHandler_NotFound(t *testing.T) {
-	handler := Handler()
-
-	req := httptest.NewRequest(http.MethodGet, "/nonexistent.html", nil)
-	rr := httptest.NewRecorder()
-
-	handler.ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusNotFound, rr.Code)
+			assert.Equal(t, tt.wantStatus, rr.Code)
+			if tt.wantBody != "" {
+				assert.Contains(t, rr.Header().Get("Content-Type"), "text/html")
+				assert.Contains(t, rr.Body.String(), tt.wantBody)
+			}
+		})
+	}
 }

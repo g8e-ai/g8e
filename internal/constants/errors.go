@@ -774,6 +774,8 @@ var (
 	ErrL5ActuatorAuditStore             = errors.New("audit store error")
 	ErrL5ActuatorCapabilityMint         = errors.New("L5Actuator: failed to mint execution capability")
 	ErrL5ActuatorCapabilityDissolve     = errors.New("L5Actuator: failed to dissolve execution capability")
+	ErrL5ActuatorRehydrate              = errors.New("L5Actuator: failed to rehydrate payload")
+	ErrL5ActuatorDocStore               = errors.New("L5Actuator: document store error")
 	ErrPKICSRSignatureCheck             = errors.New("pki: CSR signature check failed")
 	ErrPKIInvalidCurve                  = errors.New("pki: CSR public key must use P-256 curve")
 	ErrPKIGenerateSerial                = errors.New("pki: failed to generate serial")
@@ -1042,4 +1044,12 @@ var (
 	ErrLatticePostureFloorViolated     = errors.New("lattice: active posture below configured floor")
 	ErrLatticeNotInitialized           = errors.New("lattice: adapter not initialized")
 	ErrLatticeAlreadyRunning           = errors.New("lattice: adapter already running")
+
+	// Gateway database initialization errors
+	ErrGatewayDBAuditStoreInit = errors.New("gateway database audit store initialization failed")
+	ErrGatewayDBSchemaInit     = errors.New("gateway database schema initialization failed")
+	ErrGatewayDBStateRootInit  = errors.New("gateway database state root initialization failed")
+
+	// Console SPA errors
+	ErrConsoleStaticFS = errors.New("console: failed to sub static FS")
 )

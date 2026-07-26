@@ -227,3 +227,13 @@ const (
 	// have to be considered valid for reuse without re-enrollment.
 	AppCertMinValidity = 7 * 24 * time.Hour
 )
+
+// Auth scheme and default identity constants.
+const (
+	// BearerScheme is the HTTP authorization scheme prefix for bearer tokens.
+	BearerScheme = "Bearer "
+	// DefaultTenantID is the fallback tenant ID when none is specified.
+	DefaultTenantID = "default"
+	// DefaultBindingPersona is the fallback persona when role mapping fails.
+	DefaultBindingPersona = "default"
+)

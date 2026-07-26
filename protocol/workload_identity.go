@@ -110,6 +110,20 @@ func (w *WorkloadIdentity) MatchesApp(spiffeID, operatorID string) bool {
 	return spiffeID == w.AppSPIFFEID(operatorID)
 }
 
+// IsAppSAN reports whether the SPIFFE ID is an app workload identity
+// (spiffe://<trust_domain>/app/...).
+func (w *WorkloadIdentity) IsAppSAN(spiffeID string) bool {
+	prefix := fmt.Sprintf("spiffe://%s/app/", TrustDomain)
+	return strings.HasPrefix(spiffeID, prefix)
+}
+
+// IsUserSAN reports whether the SPIFFE ID is a user workload identity
+// (spiffe://<trust_domain>/user/...).
+func (w *WorkloadIdentity) IsUserSAN(spiffeID string) bool {
+	prefix := fmt.Sprintf("spiffe://%s/user/", TrustDomain)
+	return strings.HasPrefix(spiffeID, prefix)
+}
+
 // MatchesHub checks if a SPIFFE ID matches the hub identity.
 func (w *WorkloadIdentity) MatchesHub(spiffeID string) bool {
 	return spiffeID == w.HubSPIFFEID()

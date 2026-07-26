@@ -1211,8 +1211,8 @@ func TestChaosExecutionHandler(t *testing.T) {
 		stateRoot: &dynamicStateRoot{root: "test-root"},
 	}
 
-	t.Run("non-PubSubCommandMessage returns empty", func(t *testing.T) {
-		result, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.FsList.Requested, "not a command message")
+	t.Run("nil cmdMsg returns empty", func(t *testing.T) {
+		result, err := handler.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.FsList.Requested, nil)
 		if err != nil {
 			t.Errorf("ExecuteVerifiedTransaction() error = %v", err)
 		}
@@ -1233,7 +1233,7 @@ func TestChaosExecutionHandler(t *testing.T) {
 			ExecutionId: "exec-123",
 		})
 
-		cmdMsg := pubsub.PubSubCommandMessage{
+		cmdMsg := &pubsub.PubSubCommandMessage{
 			ID:                "test-id",
 			EventType:         constants.Event.Operator.FileEdit.Requested,
 			OperatorSessionID: "session-123",
@@ -1256,7 +1256,7 @@ func TestChaosExecutionHandler(t *testing.T) {
 			ExecutionId: "exec-123",
 		})
 
-		cmdMsg := pubsub.PubSubCommandMessage{
+		cmdMsg := &pubsub.PubSubCommandMessage{
 			ID:                "test-id",
 			EventType:         constants.Event.Operator.FsList.Requested,
 			OperatorSessionID: "session-123",
@@ -1292,7 +1292,7 @@ func TestChaosExecutionHandler(t *testing.T) {
 			stateRoot: &dynamicStateRoot{root: "test-root"},
 		}
 
-		cmdMsg := pubsub.PubSubCommandMessage{
+		cmdMsg := &pubsub.PubSubCommandMessage{
 			ID:                "test-id",
 			EventType:         constants.Event.Operator.FileEdit.Requested,
 			OperatorSessionID: "session-123",

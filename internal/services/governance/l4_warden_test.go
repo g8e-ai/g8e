@@ -17,20 +17,20 @@ import (
 	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
-	"path/filepath"
 	"testing"
 	"time"
 
-	govtypes "github.com/g8e-ai/g8e/internal/governance"
-	"github.com/g8e-ai/g8e/internal/models"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	govtypes "github.com/g8e-ai/g8e/internal/governance"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/governance/governancetest"
 	"github.com/g8e-ai/g8e/internal/testutil"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvider StateRootProvider, l3Notary L3Notary, posture string) (*L4Warden, ed25519.PrivateKey) {
@@ -64,19 +64,18 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 
 func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 	t.Helper()
-	tmpDir := testutil.TempDir(t)
 	var msg proto.Message
 	switch actionType {
 	case constants.ActionTypeExecuteBash:
 		msg = &operatorv1.CommandRequested{Command: "uptime", ExecutionId: "exec-1", Justification: "test"}
 	case constants.ActionTypeFileEdit:
-		msg = &operatorv1.FileEditRequested{FilePath: filepath.Join(tmpDir, "test"), Content: "test", ExecutionId: "exec-1"}
+		msg = &operatorv1.FileEditRequested{FilePath: constants.TestPathShortData, Content: "test", ExecutionId: "exec-1"}
 	case constants.ActionTypeFsList:
-		msg = &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-1"}
+		msg = &operatorv1.FsListRequested{Path: constants.PathCurrentDir, ExecutionId: "exec-1"}
 	case constants.ActionTypeFsRead:
-		msg = &operatorv1.FsReadRequested{Path: filepath.Join(tmpDir, "test"), ExecutionId: "exec-1"}
+		msg = &operatorv1.FsReadRequested{Path: constants.TestPathShortData, ExecutionId: "exec-1"}
 	case constants.ActionTypeFsGrep:
-		msg = &operatorv1.FsGrepRequested{Path: ".", Pattern: "test", ExecutionId: "exec-1"}
+		msg = &operatorv1.FsGrepRequested{Path: constants.PathCurrentDir, Pattern: "test", ExecutionId: "exec-1"}
 	case constants.ActionTypePortCheck:
 		msg = &operatorv1.CheckPortRequested{Port: 8080, ExecutionId: "exec-1"}
 	case constants.ActionTypeFetchLogs:
@@ -84,11 +83,11 @@ func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 	case constants.ActionTypeFetchHistory:
 		msg = &operatorv1.FetchHistoryRequested{ExecutionId: "exec-1"}
 	case constants.ActionTypeFetchFileHistory:
-		msg = &operatorv1.FetchFileHistoryRequested{FilePath: filepath.Join(tmpDir, "test"), ExecutionId: "exec-1"}
+		msg = &operatorv1.FetchFileHistoryRequested{FilePath: constants.TestPathShortData, ExecutionId: "exec-1"}
 	case constants.ActionTypeRestoreFile:
-		msg = &operatorv1.RestoreFileRequested{FilePath: filepath.Join(tmpDir, "test"), ExecutionId: "exec-1"}
+		msg = &operatorv1.RestoreFileRequested{FilePath: constants.TestPathShortData, ExecutionId: "exec-1"}
 	case constants.ActionTypeFetchFileDiff:
-		msg = &operatorv1.FetchFileDiffRequested{FilePath: filepath.Join(tmpDir, "test"), ExecutionId: "exec-1"}
+		msg = &operatorv1.FetchFileDiffRequested{FilePath: constants.TestPathShortData, ExecutionId: "exec-1"}
 	case constants.ActionTypeShutdown:
 		msg = &operatorv1.ShutdownRequested{Reason: "test"}
 	case constants.ActionTypeHeartbeat:
@@ -202,12 +201,9 @@ func rehash(t *testing.T, env *govtypes.GovernanceEnvelope) {
 // strings cause a panic at startup rather than silently defaulting.
 func TestNewGovernancePosture_PanicsOnInvalidPosture(t *testing.T) {
 	t.Parallel()
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("expected panic for invalid posture, but did not panic")
-		}
-	}()
-	NewGovernancePosture("invalid-posture")
+	assert.Panics(t, func() {
+		NewGovernancePosture("invalid-posture")
+	})
 }
 
 // TestNewGovernancePosture_AcceptsValidPostures verifies that all valid posture
@@ -219,12 +215,8 @@ func TestNewGovernancePosture_AcceptsValidPostures(t *testing.T) {
 		t.Run(posture, func(t *testing.T) {
 			t.Parallel()
 			p := NewGovernancePosture(posture)
-			if p == nil {
-				t.Errorf("expected non-nil posture for %s", posture)
-			}
-			if p.Name() != posture {
-				t.Errorf("expected posture name %s, got %s", posture, p.Name())
-			}
+			assert.NotNil(t, p)
+			assert.Equal(t, posture, p.Name())
 		})
 	}
 }
@@ -254,7 +246,7 @@ func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStor
 		l3Notary,
 		nil, // doctrine defaults to L1Doctrine
 		constants.AllActionTypes,
-		"notary",
+		constants.PostureNotary,
 		nil, // Clock defaults to RealClock
 	), privKey
 }
