@@ -18,7 +18,6 @@ package gateway
 import (
 	"encoding/json"
 	"net/http/httptest"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -40,7 +39,7 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 
 	fileSvc := newTestFileSvc(t)
 	dbDir := testutil.TempDir(t)
-	db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, constants.VaultDirname), fileSvc, logger)
+	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -105,7 +104,7 @@ func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
 
 	fileSvc := newTestFileSvc(t)
 	dbDir := testutil.TempDir(t)
-	db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, constants.VaultDirname), fileSvc, logger)
+	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -138,7 +137,7 @@ func setupAuthService(t *testing.T) (*AuthService, *CanonicalDBService) {
 	logger := testutil.NewTestLogger()
 	fileSvc := newTestFileSvc(t)
 	dbDir := testutil.TempDir(t)
-	db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, constants.VaultDirname), fileSvc, logger)
+	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

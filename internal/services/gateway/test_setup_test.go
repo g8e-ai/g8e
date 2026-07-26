@@ -82,10 +82,10 @@ func newTestKeystore(tb testing.TB, fileSvc fs.RuntimeFileService, logger *slog.
 // openTestDB wraps OpenCanonicalDBService for tests, creating a keystore
 // with an in-memory keyring so callers don't need to manage a keystore.
 // Vault auto-initializes on first open; the keystore is for secret operations.
-func openTestDB(t *testing.T, dataDir, vaultDir string, fileSvc fs.RuntimeFileService, logger *slog.Logger) (*CanonicalDBService, *Stores, error) {
+func openTestDB(t *testing.T, dataDir string, fileSvc fs.RuntimeFileService, logger *slog.Logger) (*CanonicalDBService, *Stores, error) {
 	t.Helper()
 	ks := newTestKeystore(t, fileSvc, logger)
-	vaultDir = fileSvc.Resolve(constants.VaultDirname)
+	vaultDir := fileSvc.Resolve(constants.VaultDirname)
 	return OpenCanonicalDBService(dataDir, vaultDir, logger, "", ks, fileSvc)
 }
 

@@ -1328,7 +1328,7 @@ func TestChaosExecutionHandler(t *testing.T) {
 			Timestamp:         time.Now(),
 		}
 
-		result, err := handlerNilState.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.FsList.Requested, cmdMsg)
+		result, err := handlerNilState.ExecuteVerifiedTransaction(context.Background(), constants.Event.Operator.FsList.Requested, &cmdMsg)
 		if err != nil {
 			t.Errorf("ExecuteVerifiedTransaction() error = %v", err)
 		}

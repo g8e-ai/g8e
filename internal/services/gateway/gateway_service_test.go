@@ -18,7 +18,6 @@ package gateway
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -45,7 +44,7 @@ func TestNewGatewayModeService(t *testing.T) {
 	cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
 
 	t.Run("Default configuration with self-signed certs", func(t *testing.T) {
-		db, stores, err := openTestDB(t, cfg.Gateway.DataDir, filepath.Join(cfg.Gateway.DataDir, "vault"), fileSvc, logger)
+		db, stores, err := openTestDB(t, cfg.Gateway.DataDir, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -75,7 +74,7 @@ func TestGatewayModeService_StateManagement(t *testing.T) {
 	fileSvc := newTestFileSvc(t)
 	cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
 
-	db, stores, err := openTestDB(t, cfg.Gateway.DataDir, filepath.Join(cfg.Gateway.DataDir, "vault"), fileSvc, logger)
+	db, stores, err := openTestDB(t, cfg.Gateway.DataDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -130,7 +129,7 @@ func TestNewGatewayModeServiceForTest(t *testing.T) {
 	dbDir := testutil.TempDir(t)
 	pkiDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
-	db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
+	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -158,7 +157,7 @@ func TestGatewayModeService_Getters(t *testing.T) {
 	dbDir := testutil.TempDir(t)
 	pkiDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
-	db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
+	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -212,7 +211,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		dbDir := testutil.TempDir(t)
 		pkiDir := testutil.TempDir(t)
 		fileSvc := newTestFileSvc(t)
-		db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
+		db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -239,7 +238,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		dbDir := testutil.TempDir(t)
 		pkiDir := testutil.TempDir(t)
 		fileSvc := newTestFileSvc(t)
-		db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
+		db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -266,7 +265,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		dbDir := testutil.TempDir(t)
 		pkiDir := testutil.TempDir(t)
 		fileSvc := newTestFileSvc(t)
-		db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
+		db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -293,7 +292,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		dbDir := testutil.TempDir(t)
 		pkiDir := testutil.TempDir(t)
 		fileSvc := newTestFileSvc(t)
-		db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
+		db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -332,7 +331,7 @@ func TestGatewayModeService_GetGovernanceDeps(t *testing.T) {
 	dbDir := testutil.TempDir(t)
 	pkiDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
-	db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
+	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -370,7 +369,7 @@ func TestGatewayModeService_GetGovernanceDeps_L3MockWiring(t *testing.T) {
 		dbDir := testutil.TempDir(t)
 		pkiDir := testutil.TempDir(t)
 		fileSvc := newTestFileSvc(t)
-		db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
+		db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -405,7 +404,7 @@ func TestGatewayModeService_GetGovernanceDeps_L3MockWiring(t *testing.T) {
 		dbDir := testutil.TempDir(t)
 		pkiDir := testutil.TempDir(t)
 		fileSvc := newTestFileSvc(t)
-		db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
+		db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -439,7 +438,7 @@ func TestGatewayModeService_StartStop(t *testing.T) {
 	dbDir := testutil.TempDir(t)
 	pkiDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
-	db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
+	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -505,7 +504,7 @@ func TestGatewayModeService_StopWhenNotRunning(t *testing.T) {
 	dbDir := testutil.TempDir(t)
 	pkiDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
-	db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
+	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -537,7 +536,7 @@ func TestGatewayModeService_SuspendedTxServiceSingleField(t *testing.T) {
 	cfg.Gateway.DataDir = dbDir
 	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
-	db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
+	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -581,7 +580,7 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 	dbDir := testutil.TempDir(t)
 	pkiDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
-	db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
+	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -657,7 +656,7 @@ func TestGatewayModeService_RenewServiceCertWithIdentity(t *testing.T) {
 	dbDir := testutil.TempDir(t)
 	pkiDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
-	db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
+	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -688,7 +687,7 @@ func TestGatewayModeService_RunServiceCertRenewalLoop(t *testing.T) {
 	dbDir := testutil.TempDir(t)
 	pkiDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
-	db, stores, err := openTestDB(t, dbDir, filepath.Join(dbDir, "vault"), fileSvc, logger)
+	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
