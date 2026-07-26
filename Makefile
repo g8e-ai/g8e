@@ -582,11 +582,11 @@ swagger-generate:
 	@echo "Generating Swagger/OpenAPI documentation..."
 	@if command -v swag &> /dev/null || [ -f "$$(go env GOPATH)/bin/swag" ]; then \
 		SWAG_CMD=$$(command -v swag 2>/dev/null || echo "$$(go env GOPATH)/bin/swag"); \
-		set -o pipefail && $$SWAG_CMD init --dir cmd/g8e,internal/services/gateway,internal/models,internal/constants --output internal/services/gateway/docs --outputTypes json,yaml --parseInternal --parseDependencyLevel 1 --packagePrefix github.com/g8e-ai/g8e,github.com/go-webauthn,encoding/json 2>&1 | grep -v '^go/build:'; \
+		$$SWAG_CMD init --dir cmd/g8e,internal/services/gateway,internal/models,internal/constants --output internal/services/gateway/docs --outputTypes json,yaml --parseInternal --parseDependencyLevel 1 --packagePrefix github.com/g8e-ai/g8e,github.com/go-webauthn,encoding/json 2>/dev/null; \
 	else \
 		echo "swag not found, installing via go install..."; \
 		go install github.com/swaggo/swag/cmd/swag@latest; \
-		set -o pipefail && $$(go env GOPATH)/bin/swag init --dir cmd/g8e,internal/services/gateway,internal/models,internal/constants --output internal/services/gateway/docs --outputTypes json,yaml --parseInternal --parseDependencyLevel 1 --packagePrefix github.com/g8e-ai/g8e,github.com/go-webauthn,encoding/json 2>&1 | grep -v '^go/build:'; \
+		$$(go env GOPATH)/bin/swag init --dir cmd/g8e,internal/services/gateway,internal/models,internal/constants --output internal/services/gateway/docs --outputTypes json,yaml --parseInternal --parseDependencyLevel 1 --packagePrefix github.com/g8e-ai/g8e,github.com/go-webauthn,encoding/json 2>/dev/null; \
 	fi
 	@echo "Swagger documentation generated successfully."
 
