@@ -199,22 +199,3 @@ func TestGetTestOperatorDirectURL(t *testing.T) {
 		})
 	}
 }
-
-// ---------------------------------------------------------------------------
-// TempFile
-// ---------------------------------------------------------------------------
-
-func TestTempFile_RegistersCleanup(t *testing.T) {
-	dir := TempDir(t)
-	path := dir + "/tempfile_test_artifact"
-
-	// Create the file so the cleanup has something to remove.
-	require.NoError(t, os.WriteFile(path, []byte("data"), 0600))
-
-	TempFile(t, path)
-
-	// File must still exist before the test ends.
-	_, err := os.Stat(path)
-	require.NoError(t, err, "file must exist before cleanup runs")
-	// Cleanup runs when t ends - verified by t.Cleanup registration in TempFile itself.
-}

@@ -513,12 +513,6 @@ The following packages are test-only and are not part of the production dependen
 - Used by pubsub service tests and g8eo lifecycle/integration tests
 - Follows the same pattern as `storagetest`, which keeps mock infrastructure out of production code
 
-**`internal/services/pubsub/publisherstest/`** - Test-only ResultsPublisher recording fake
-- `TestResultsPublisher` - In-memory recording fake implementing `pubsub.ResultsPublisher`
-- Records all published results by method; `SetError` for injecting failures; `Results()` and `Heartbeats()` accessors
-- Separate from `pubsubtest` to avoid import cycle: all `pubsub` test files use `package pubsub` (internal tests), so they cannot import a package that itself imports `pubsub`. `publisherstest` imports `pubsub` for `PubSubCommandMessage` (used in `ResultsPublisher` interface methods), which `pubsubtest` cannot do
-- Split accepted as deliberate trade-off: `publisherstest` has zero external consumers (only referenced within its own test file), and extracting `PubSubCommandMessage` into a shared types package would require updating 251 references across 23 files for minimal benefit
-
 **`internal/services/governance/governancetest/`** - Test-only governance store fixtures
 - `SimpleTribunalStore`, `SimpleAppPolicyStore`, `SimpleStateRootProvider` - In-memory implementations of governance store interfaces for unit tests
 - Used by governance, pubsub, and chaos tests
@@ -529,7 +523,7 @@ The following packages are test-only and are not part of the production dependen
 - Drives `TransactionVerifier` + `Actuator` stack directly in-process, bypassing network/TLS
 - Uses `storagetest.TestSQLAuditStore` and should not be used in production code paths
 
-**Key distinction**: Test infrastructure is separated from production code to avoid import cycles. The `storagetest`, `pubsubtest`, `publisherstest`, `governancetest`, and `chaos` packages provide test implementations that should never be used in production code paths.
+**Key distinction**: Test infrastructure is separated from production code to avoid import cycles. The `storagetest`, `pubsubtest`, `governancetest`, and `chaos` packages provide test implementations that should never be used in production code paths.
 
 **`test/fixtures/gateway_fixture.go`** - In-process gateway test fixture (build tag: `integration`)
 - `GatewayFixture` spins up a real `GatewayModeService` with `httptest.Server`, mTLS PKI, tribunal enrollment, and in-process `OperatorPubSubService` wired with full governance dependencies

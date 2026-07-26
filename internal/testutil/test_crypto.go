@@ -55,6 +55,31 @@ func GenerateTestCSR(t *testing.T, commonName string) string {
 	return string(csrPEM)
 }
 
+// GenerateTestCSRP256 generates a test CSR for the given common name using ECDSA P-256.
+// This matches the actual CLI behavior for CSR generation (see internal/cli/auth/client.go).
+func GenerateTestCSRP256(t *testing.T, commonName string) string {
+	t.Helper()
+
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	template := x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName: commonName,
+		},
+	}
+
+	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &template, privateKey)
+	require.NoError(t, err)
+
+	csrPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE REQUEST",
+		Bytes: csrBytes,
+	})
+
+	return string(csrPEM)
+}
+
 // GenerateTestCA generates a minimal valid self-signed CA certificate and returns
 // the certificate PEM. The certificate has IsCA=true and the required key usages
 // so it can be used as a RootCAs trust anchor in TLS configs.

@@ -147,4 +147,3 @@ func GetTestOperatorDirectURL() string {
 	// g8e uses ZERO environment variables - use default URL
 	return "wss://" + constants.DefaultEndpoint + ":443"
 }
-
