@@ -78,6 +78,7 @@ jobs:
         uses: softprops/action-gh-release@v3.0.2
         with:
           tag_name: ${{ steps.parse_version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           name: g8e v${{ steps.parse_version.outputs.version }}
           body_path: docs/release_notes/v${{ steps.parse_version.outputs.version_major_minor }}.x/v${{ steps.parse_version.outputs.version }}.md
           draft: false
