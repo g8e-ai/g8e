@@ -22,7 +22,9 @@ import (
 	taskmanagerv1 "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/taskmanager/v1"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 // mockEntityManagerAPIClient is a stub EntityManagerAPIClient for unit tests.
@@ -102,6 +104,9 @@ func (m *mockTaskManagerAPIClient) CancelTask(ctx context.Context, in *taskmanag
 func (m *mockTaskManagerAPIClient) ListenAsAgent(ctx context.Context, in *taskmanagerv1.ListenAsAgentRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[taskmanagerv1.ListenAsAgentResponse], error) {
 	if m.listenAsAgentErr != nil {
 		return nil, m.listenAsAgentErr
+	}
+	if m.listenAsAgentStream == nil {
+		return nil, status.Error(codes.Unavailable, "no mock stream configured")
 	}
 	return m.listenAsAgentStream, nil
 }

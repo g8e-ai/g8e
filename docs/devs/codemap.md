@@ -475,6 +475,21 @@ Interface methods:
 
 Construction: `fs.NewRuntimeFileService(baseDir, logger)` creates a service scoped to `.g8e/` under `baseDir`.
 
+## Lattice Adapter
+
+**`internal/adapters/lattice/`** - Anduril Lattice COP gRPC adapter
+
+- `client.go` - `Adapter` struct, `NewAdapter`, `Start`/`Stop` lifecycle, entity ID persistence, heartbeat sink registration. Uses `HeartbeatRegistrar` interface to break import cycle with `pubsub` package.
+- `config/config.go` - `LatticeConfig` and `EntityConfig` structs, `Validate()`, `ValidateHeartbeatInterval()`. Extracted to sub-package to break import cycle (`config` → `lattice` → `fs`).
+- `config.go` - Type aliases re-exporting `LatticeConfig`/`EntityConfig` from the `config` sub-package for backward compatibility.
+- `auth.go` - `ClientCredentialsAuth` implementing `credentials.PerRPCCredentials`, OAuth2 client credentials flow with proactive token refresh and `ForceRefresh()` for `Unauthenticated` recovery.
+- `retry.go` - `retryWithBackoff` with exponential backoff and jitter, `isRetryable` gRPC code classifier, `DefaultRetryOpts`.
+- `interceptor.go` - `unaryRetryInterceptor` wraps unary RPCs with retry and token refresh on `Unauthenticated`.
+- `presence.go` - `PublishPresence` constructs and publishes entity to Lattice EntityManager.
+- `task_stream.go` - `subscribeToTasks` streaming RPC, `processStream` message handling, `isTaskAccepted` catalog filtering, `checkPostureFloor` governance gate, `reportTaskStatus` status reporting via `UpdateStatus` RPC.
+- `gen/` - 46 generated `.pb.go` and `_grpc.pb.go` files from `third_party/anduril/` protos (EntityManager v1, TaskManager v1, tasks v2, ontology v1, api v1).
+- `errors.go` - Package declaration only; all error sentinels live in `internal/constants/errors.go`.
+
 Test helpers (per-package, build-tagged `integration` or test-only):
 - `newTestFileSvc(t)` in `internal/services/gateway/test_setup_test.go` - Temp-backed fileSvc with full runtime tree for gateway tests
 - `newTestFileSvc(t, baseDir)` in `internal/services/storage/storage_test_helpers_test.go` - Storage test fileSvc, returns fileSvc and data dir

@@ -41,7 +41,7 @@ func unaryRetryInterceptor(rpcCreds *ClientCredentialsAuth) grpc.UnaryClientInte
 			if ok && st.Code() == codes.Unauthenticated && !refreshed {
 				rpcCreds.ForceRefresh()
 				refreshed = true
-				return err
+				return status.Error(codes.Unavailable, "token refreshed, retrying")
 			}
 
 			refreshed = false

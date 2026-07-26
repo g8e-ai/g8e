@@ -101,7 +101,7 @@ func TestCheckPostureFloor_TableDriven(t *testing.T) {
 		{"doctrine active, doctrine floor -> accepted", "doctrine", "doctrine", false},
 		{"notary active, notary floor -> accepted", "notary", "notary", false},
 		{"consensus active, notary floor -> rejected", "consensus", "notary", true},
-		{"empty active, empty floor -> defaults to consensus vs consensus -> accepted", "", "", false},
+		{"empty active, empty floor -> defaults to consensus floor, doctrine active -> rejected (fail-closed)", "", "", true},
 		{"unknown active, consensus floor -> rejected (fail-closed)", "unknown", "consensus", true},
 	}
 

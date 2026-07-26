@@ -20,7 +20,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/adapters/lattice"
+	latticeconfig "github.com/g8e-ai/g8e/internal/adapters/lattice/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 )
@@ -79,7 +79,7 @@ type LoadOptions struct {
 	HeartbeatInterval time.Duration // --heartbeat-interval: overrides the 30s default when non-zero
 
 	// Lattice adapter (nil when disabled)
-	Lattice *lattice.LatticeConfig
+	Lattice *latticeconfig.LatticeConfig
 }
 
 // GatewayConfig holds configuration for gateway mode.
@@ -210,7 +210,7 @@ type Config struct {
 	Gateway GatewayConfig
 
 	// Lattice adapter configuration (nil when disabled)
-	Lattice *lattice.LatticeConfig
+	Lattice *latticeconfig.LatticeConfig
 }
 
 // FindProjectRoot returns the current working directory.
