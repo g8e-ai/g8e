@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/json"
 	"encoding/pem"
 	"log/slog"
 	"math/big"
@@ -39,7 +38,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
@@ -114,34 +112,9 @@ func setupTestConfig(t *testing.T) (*config.Config, fs.RuntimeFileService, strin
 	require.NoError(t, err)
 	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 
-	protocolDir := filepath.Join(projectRoot, "protocol")
-	constantsDir := filepath.Join(protocolDir, "constants")
-	require.NoError(t, os.MkdirAll(constantsDir, constants.PermDirStandard))
-
-	pathsData := map[string]any{
-		"host": "localhost",
-		"infra": map[string]any{
-			"app_cert_dir":           filepath.Join(tempDir, "app", "certs"),
-			"ca_cert_path":           paths.Infra.CaCertPath,
-			"db_path":                filepath.Join(tempDir, "db"),
-			"docs_dir":               filepath.Join(tempDir, "docs"),
-			"pki_dir":                paths.Infra.PkiDir,
-			"protocol_constants_dir": "protocol/constants",
-			"protocol_dir":           "protocol",
-			"protocol_models_dir":    "protocol/models",
-			"secrets_dir":            paths.Infra.SecretsDir,
-			"ssh_config_path":        filepath.Join(tempDir, "ssh", "config"),
-		},
-	}
-	pathsBytes, err := json.Marshal(pathsData)
-	require.NoError(t, err)
-	pathsJSON := string(pathsBytes)
-	pathsPath := filepath.Join(constantsDir, "paths.json")
-	require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), constants.PermFilePublic))
-
 	caCertPEM := generateTestCA(t)
 
-	cfg, err := config.LoadWithPaths(projectRoot, []byte(pathsJSON))
+	cfg, err := config.Load(projectRoot)
 	require.NoError(t, err)
 
 	require.NoError(t, fileSvc.WriteFile(context.Background(), cfg.DefaultTrustBundleRelPath(), caCertPEM, constants.PermFilePublic))

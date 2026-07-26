@@ -86,35 +86,16 @@ type GatewayModeService struct {
 	ready   bool
 }
 
-// gatewayServiceBuilder constructs a GatewayModeService from configuration,
-// with optional pre-built components for test environments.
+// gatewayServiceBuilder constructs a GatewayModeService from configuration.
 type gatewayServiceBuilder struct {
 	cfg     *config.Config
 	logger  *slog.Logger
 	fileSvc fs.RuntimeFileService
-
-	// Pre-built components (test only). When nil, build() constructs them.
-	preBuiltDB     *CanonicalDBService
-	preBuiltStores *Stores
-	preBuiltPubsub *GatewayWebSocketHandler
 }
 
 // newGatewayServiceBuilder creates a builder for production use.
 func newGatewayServiceBuilder(cfg *config.Config, fileSvc fs.RuntimeFileService, logger *slog.Logger) *gatewayServiceBuilder {
 	return &gatewayServiceBuilder{cfg: cfg, logger: logger, fileSvc: fileSvc}
-}
-
-// withPreBuiltDB sets a pre-built CanonicalDBService and Stores (test only).
-func (b *gatewayServiceBuilder) withPreBuiltDB(db *CanonicalDBService, stores *Stores) *gatewayServiceBuilder {
-	b.preBuiltDB = db
-	b.preBuiltStores = stores
-	return b
-}
-
-// withPreBuiltPubsub sets a pre-built GatewayWebSocketHandler (test only).
-func (b *gatewayServiceBuilder) withPreBuiltPubsub(pubsub *GatewayWebSocketHandler) *gatewayServiceBuilder {
-	b.preBuiltPubsub = pubsub
-	return b
 }
 
 // build assembles the GatewayModeService from the builder's configuration.
@@ -123,20 +104,12 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	logger := b.logger
 
 	// --- DB and pubsub ---
-	db := b.preBuiltDB
-	stores := b.preBuiltStores
-	if db == nil {
-		var err error
-		db, stores, err = OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.VaultDir, logger, cfg.Gateway.VaultKeyPath, nil, b.fileSvc)
-		if err != nil {
-			return nil, fmt.Errorf("gateway: failed to initialize database: %w", err)
-		}
+	db, stores, err := OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.VaultDir, logger, cfg.Gateway.VaultKeyPath, nil, b.fileSvc)
+	if err != nil {
+		return nil, fmt.Errorf("gateway: failed to initialize database: %w", err)
 	}
 
-	pubsub := b.preBuiltPubsub
-	if pubsub == nil {
-		pubsub = NewGatewayWebSocketHandler(logger)
-	}
+	pubsub := NewGatewayWebSocketHandler(logger)
 
 	// --- Secret manager ---
 	sm := db.GetSecretManager()
@@ -377,15 +350,6 @@ func detectBasicNonLoopbackIPv4Addresses() []net.IP {
 	return extraIPs
 }
 
-// newGatewayModeServiceForTest assembles a GatewayModeService from pre-built components.
-// Used in tests where the DB and pub/sub broker are constructed independently.
-func newGatewayModeServiceForTest(cfg *config.Config, fileSvc fs.RuntimeFileService, logger *slog.Logger, db *CanonicalDBService, stores *Stores, pubsub *GatewayWebSocketHandler) (*GatewayModeService, error) {
-	return newGatewayServiceBuilder(cfg, fileSvc, logger).
-		withPreBuiltDB(db, stores).
-		withPreBuiltPubsub(pubsub).
-		build()
-}
-
 func (ls *GatewayModeService) initHandlersAndServers() error {
 	cfg := ls.cfg
 	logger := ls.logger
@@ -482,11 +446,6 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 	return nil
 }
 
-// GetDB returns the underlying database service.
-func (ls *GatewayModeService) GetDB() *CanonicalDBService {
-	return ls.db
-}
-
 // GetStores returns the extracted store services for direct injection.
 func (ls *GatewayModeService) GetStores() *Stores {
 	return ls.stores
@@ -497,14 +456,31 @@ func (ls *GatewayModeService) GetSecretManager() (*SecretManager, error) {
 	return ls.db.GetSecretManager(), nil
 }
 
-// GetPKIAuthority returns the underlying PKI authority.
-func (ls *GatewayModeService) GetPKIAuthority() *PKIAuthority {
-	return ls.pki
-}
-
 // GetHTTPHandler returns the HTTP handler.
 func (ls *GatewayModeService) GetHTTPHandler() *HTTPHandler {
 	return ls.handler
+}
+
+// GetHTTPPort returns the actual HTTP port the server is listening on.
+// After Start(), this reflects the dynamically assigned port when configured as 0.
+func (ls *GatewayModeService) GetHTTPPort() int {
+	if ls.server == nil {
+		return 0
+	}
+	_, portStr, _ := net.SplitHostPort(ls.server.Addr)
+	port, _ := strconv.Atoi(portStr)
+	return port
+}
+
+// GetHTTPSPort returns the actual HTTPS port the server is listening on.
+// After Start(), this reflects the dynamically assigned port when configured as 0.
+func (ls *GatewayModeService) GetHTTPSPort() int {
+	if ls.publicServer == nil {
+		return 0
+	}
+	_, portStr, _ := net.SplitHostPort(ls.publicServer.Addr)
+	port, _ := strconv.Atoi(portStr)
+	return port
 }
 
 // SetTribunal sets the Tribunal service for L2 consensus deliberation.
@@ -516,48 +492,6 @@ func (ls *GatewayModeService) SetTribunal(ts *tribunal.TribunalService) {
 	if ls.handler != nil {
 		ls.handler.SetTribunal(ts)
 	}
-}
-
-// GetHTTPSPort returns the actual bound HTTPS port (useful when AllowTestPortZero is true).
-func (ls *GatewayModeService) GetHTTPSPort() int {
-	ls.mu.Lock()
-	defer ls.mu.Unlock()
-	if !ls.running || ls.publicServer == nil {
-		return 0
-	}
-	_, port, err := net.SplitHostPort(ls.publicServer.Addr)
-	if err != nil {
-		return 0
-	}
-	p, err := strconv.Atoi(port)
-	if err != nil {
-		return 0
-	}
-	return p
-}
-
-// GetHTTPPort returns the actual bound HTTP port (useful when AllowTestPortZero is true).
-func (ls *GatewayModeService) GetHTTPPort() int {
-	ls.mu.Lock()
-	defer ls.mu.Unlock()
-	if !ls.running || ls.server == nil {
-		return 0
-	}
-	_, port, err := net.SplitHostPort(ls.server.Addr)
-	if err != nil {
-		return 0
-	}
-	p, err := strconv.Atoi(port)
-	if err != nil {
-		return 0
-	}
-	return p
-}
-
-func (ls *GatewayModeService) IsRunning() bool {
-	ls.mu.Lock()
-	defer ls.mu.Unlock()
-	return ls.running
 }
 
 func (ls *GatewayModeService) IsReady() bool {

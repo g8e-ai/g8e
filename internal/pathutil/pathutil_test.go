@@ -142,117 +142,12 @@ func TestResolveDBPath(t *testing.T) {
 	}
 }
 
-func TestIsWindowsAbsPath(t *testing.T) {
-	tests := []struct {
-		name     string
-		path     string
-		expected bool
-	}{
-		{"drive letter C:", "C:\\temp", true},
-		{"drive letter D:", "D:/data", true},
-		{"lowercase drive", "c:\\temp", true},
-		{"UNC path backslash", "\\\\server\\share", true},
-		{"UNC path forward", "//server/share", true},
-		{"relative path", "temp\\data", false},
-		{"unix absolute", "/tmp/data", false},
-		{"empty path", "", false},
-		{"single char", "C", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := IsWindowsAbsPath(tt.path)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestNormalizePath(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Run("windows normalization", func(t *testing.T) {
-			tests := []struct {
-				input    string
-				expected string
-			}{
-				{"C:/temp/data", "C:\\temp\\data"},
-				{"C:\\temp\\data", "C:\\temp\\data"},
-				{"C:/temp//data", "C:\\temp\\data"},
-				{"", ""},
-			}
-
-			for _, tt := range tests {
-				result := NormalizePath(tt.input)
-				assert.Equal(t, tt.expected, result)
-			}
-		})
-	} else {
-		t.Run("unix normalization", func(t *testing.T) {
-			tests := []struct {
-				input    string
-				expected string
-			}{
-				{"/tmp/data", "/tmp/data"},
-				{"/tmp//data", "/tmp/data"},
-				{"", ""},
-			}
-
-			for _, tt := range tests {
-				result := NormalizePath(tt.input)
-				assert.Equal(t, tt.expected, result)
-			}
-		})
-	}
-}
-
-func TestEnsureTrailingSeparator(t *testing.T) {
-	sep := string(filepath.Separator)
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{"without separator", "/tmp/data", "/tmp/data" + sep},
-		{"with separator", "/tmp/data" + sep, "/tmp/data" + sep},
-		{"empty", "", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := EnsureTrailingSeparator(tt.input)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestRemoveTrailingSeparator(t *testing.T) {
-	sep := string(filepath.Separator)
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{"with separator", "/tmp/data" + sep, "/tmp/data"},
-		{"without separator", "/tmp/data", "/tmp/data"},
-		{"empty", "", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := RemoveTrailingSeparator(tt.input)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestToSlashFromSlash(t *testing.T) {
+func TestToSlash(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Run("windows conversions", func(t *testing.T) {
 			path := "C:\\temp\\data"
 			slashed := ToSlash(path)
 			assert.Equal(t, "C:/temp/data", slashed)
-
-			backslashed := FromSlash(slashed)
-			assert.Equal(t, path, backslashed)
 		})
 	}
 }

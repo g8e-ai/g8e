@@ -206,51 +206,6 @@ func handleInitialize(encoder *json.Encoder, id interface{}) {
 	}
 }
 
-func handleToolsList(encoder *json.Encoder, id interface{}, nativeToolHandler *mcp.NativeToolHandler) {
-	nativeTools := nativeToolHandler.ListTools()
-	tools := make([]Tool, 0, len(nativeTools))
-	for _, nt := range nativeTools {
-		tools = append(tools, Tool{
-			Name:        nt.Name(),
-			Description: nt.Description(),
-			InputSchema: nt.InputSchema(),
-		})
-	}
-	response := JSONRPCResponse{
-		JSONRPC: "2.0",
-		ID:      id,
-		Result:  ToolsListResult{Tools: tools},
-	}
-	if err := encoder.Encode(response); err != nil {
-		slog.Error("Failed to encode tools/list response", "error", err)
-	}
-}
-
-func handleToolsCall(encoder *json.Encoder, id interface{}, params json.RawMessage, nativeToolHandler *mcp.NativeToolHandler) {
-	var callParams CallToolRequest
-	if err := json.Unmarshal(params, &callParams); err != nil {
-		sendError(encoder, id, -32600, fmt.Sprintf("invalid tools/call params: %v", err))
-		return
-	}
-	if callParams.Name == "" {
-		sendError(encoder, id, -32600, "tool name required")
-		return
-	}
-	result, err := nativeToolHandler.HandleTool(context.Background(), callParams.Name, callParams.Arguments)
-	if err != nil {
-		sendError(encoder, id, -32603, fmt.Sprintf("tool execution failed: %v", err))
-		return
-	}
-	response := JSONRPCResponse{
-		JSONRPC: "2.0",
-		ID:      id,
-		Result:  result,
-	}
-	if err := encoder.Encode(response); err != nil {
-		slog.Error("Failed to encode tools/call response", "error", err)
-	}
-}
-
 func sendError(encoder *json.Encoder, id interface{}, code int, message string) {
 	response := JSONRPCResponse{
 		JSONRPC: "2.0",
@@ -558,38 +513,6 @@ func extractTxHashFromApprovalURL(approvalURL string) string {
 		path = path[:idx]
 	}
 	return path
-}
-
-// ─── createMCPClient: kept for tests and external callers ───────────────────
-
-// createMCPClient builds a plain mTLS HTTP client from config paths.
-// Most callers should use buildGatewayConn instead, which also loads the
-// delegated credential required for mTLS gateway authentication.
-func createMCPClient(fileSvc fs.RuntimeFileService, cfg *config.Config) (*http.Client, error) {
-	cert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
-	}
-
-	caCert, err := auth.ReadTrustBundle(fileSvc, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
-	}
-
-	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(caCert)
-
-	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		RootCAs:      caCertPool,
-		MinVersion:   tls.VersionTLS13,
-		ServerName:   constants.GatewayInternalHostname,
-	}
-
-	return &http.Client{
-		Transport: &http.Transport{TLSClientConfig: tlsConfig},
-		Timeout:   30 * time.Second,
-	}, nil
 }
 
 // proxyToGateway is a low-level helper used by the L1-only governance proxy

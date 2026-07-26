@@ -31,7 +31,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/pathutil"
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/scenarios"
 )
 
@@ -95,51 +94,6 @@ func (e *DemoEmitter) Consensus(member constants.TribunalMember, decision, signe
 		return
 	}
 	e.program.Send(tui.ConsensusMsg{Member: member, Decision: decision, Signed: signed, Quorum: quorum, Total: total, Result: result, Hash: hash})
-}
-
-// DoctrineRule represents a single doctrine rule from the JSON file
-type DoctrineRule struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	Category    string  `json:"category"`
-	Severity    string  `json:"severity"`
-	Pattern     string  `json:"pattern"`
-	MitreAttack string  `json:"mitre_attack"`
-	MitreTactic string  `json:"mitre_tactic"`
-	Confidence  float64 `json:"confidence"`
-	Enabled     bool    `json:"enabled"`
-}
-
-// DoctrineFile represents the structure of a doctrine JSON file
-type DoctrineFile struct {
-	Source      string         `json:"source"`
-	Version     string         `json:"version"`
-	LastUpdated string         `json:"last_updated"`
-	License     string         `json:"license"`
-	Doctrines   []DoctrineRule `json:"doctrines"`
-}
-
-// readDoctrineRule reads a doctrine file and returns a specific rule by ID
-func readDoctrineRule(demoDir, doctrineFile, ruleID string) (*DoctrineRule, error) {
-	doctrinePath := pathutil.SafeJoin(demoDir, constants.DemosDoctrineDir, doctrineFile)
-	data, err := os.ReadFile(doctrinePath)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
-	}
-
-	var docFile DoctrineFile
-	if err := json.Unmarshal(data, &docFile); err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrInvalidJSONBody, err)
-	}
-
-	for _, rule := range docFile.Doctrines {
-		if rule.ID == ruleID {
-			return &rule, nil
-		}
-	}
-
-	return nil, fmt.Errorf("%w: doctrine rule %q", constants.ErrNotFound, ruleID)
 }
 
 // toDockerPath converts a filepath to a Docker-compatible path format.

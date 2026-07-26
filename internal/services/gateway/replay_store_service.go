@@ -58,15 +58,6 @@ func NewReplayStoreService(db *sqliteutil.DB, logger *slog.Logger) *ReplayStoreS
 	}
 }
 
-// newReplayStoreServiceWithDB creates a new replay store service with a custom DB implementation.
-// This is used for dependency injection in unit tests.
-func newReplayStoreServiceWithDB(db replayStoreDB, logger *slog.Logger) *ReplayStoreService {
-	return &ReplayStoreService{
-		db:     db,
-		logger: logger,
-	}
-}
-
 // ReserveNonce atomically reserves a nonce for early replay protection.
 // Returns true if the nonce was already reserved/used (replay detected).
 // If not used, it reserves the nonce and returns false.

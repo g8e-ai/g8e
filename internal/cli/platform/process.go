@@ -484,26 +484,6 @@ func (pm *ProcessManager) GetLogPath() string {
 	return pm.fileSvc.Resolve(filepath.Join(constants.LogDirname, constants.OperatorLogFilename))
 }
 
-func (pm *ProcessManager) Reset() error {
-	if err := pm.StopOperator(); err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrProcessStopFailed, err)
-	}
-
-	if err := pm.fileSvc.RemoveAll(context.Background(), constants.DataDirname); err != nil {
-		return fmt.Errorf("%w: data directory: %w", constants.ErrPathValidation, err)
-	}
-
-	if err := pm.fileSvc.RemoveAll(context.Background(), constants.SecretsDirname); err != nil {
-		return fmt.Errorf("%w: secrets directory: %w", constants.ErrPathValidation, err)
-	}
-
-	if err := pm.CreateDirectories(); err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrDirCreateFailed, err)
-	}
-
-	return nil
-}
-
 func (pm *ProcessManager) Clean() error {
 	if err := pm.StopOperator(); err != nil {
 		return fmt.Errorf("%w: %v", constants.ErrProcessStopFailed, err)

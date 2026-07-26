@@ -454,62 +454,6 @@ func TestGetOperatorNodeBinary(t *testing.T) {
 	}
 }
 
-func TestReset(t *testing.T) {
-	tmpDir := testutil.TempDir(t)
-	fileSvc := newPlatformTestFileSvc(t, tmpDir)
-	pm, err := NewProcessManager(fileSvc)
-	if err != nil {
-		t.Fatalf("NewProcessManager failed: %v", err)
-	}
-
-	if err := pm.CreateDirectories(); err != nil {
-		t.Fatalf("ensureDirectories failed: %v", err)
-	}
-
-	// Create some test data in dataDir
-	testFile := fileSvc.Resolve(filepath.Join(constants.DataDirname, "test.txt"))
-	if err := os.WriteFile(testFile, []byte("test"), constants.PermFilePrivate); err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
-
-	// Create some test data in secretsDir
-	secretFile := fileSvc.Resolve(filepath.Join(constants.SecretsDirname, "secret.txt"))
-	if err := os.WriteFile(secretFile, []byte("secret"), constants.PermFilePrivate); err != nil {
-		t.Fatalf("failed to create secret file: %v", err)
-	}
-
-	// Run reset
-	if err := pm.Reset(); err != nil {
-		t.Fatalf("Reset failed: %v", err)
-	}
-
-	// Verify dataDir was wiped
-	dataExists, err := fileSvc.FileExists(context.Background(), filepath.Join(constants.DataDirname, "test.txt"))
-	if err != nil {
-		t.Fatalf("FileExists failed: %v", err)
-	}
-	if dataExists {
-		t.Error("dataDir should be wiped")
-	}
-
-	// Verify secretsDir was wiped
-	secretsExist, err := fileSvc.FileExists(context.Background(), filepath.Join(constants.SecretsDirname, "secret.txt"))
-	if err != nil {
-		t.Fatalf("FileExists failed: %v", err)
-	}
-	if secretsExist {
-		t.Error("secretsDir should be wiped")
-	}
-
-	// Verify directories were recreated
-	dirs := []string{fileSvc.Resolve(constants.DataDirname), fileSvc.Resolve(constants.SecretsDirname)}
-	for _, dir := range dirs {
-		if _, err := os.Stat(dir); err != nil {
-			t.Errorf("directory %s should be recreated: %v", dir, err)
-		}
-	}
-}
-
 func TestClean(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newPlatformTestFileSvc(t, tmpDir)

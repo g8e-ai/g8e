@@ -21,7 +21,6 @@ import (
 )
 
 // SimpleTribunalStore implements governance.TribunalStore using a static map.
-// Wrap with governance.TribunalStoreAdapter to satisfy L2ConsensusPolicyStore.
 type SimpleTribunalStore struct {
 	Tribunals map[string]*models.TribunalPolicy
 }

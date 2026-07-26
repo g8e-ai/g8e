@@ -147,15 +147,3 @@ func GetTestOperatorDirectURL() string {
 	// g8e uses ZERO environment variables - use default URL
 	return "wss://" + constants.DefaultEndpoint + ":443"
 }
-
-// TempFile registers a t.Cleanup to remove path when the test ends.
-// Use this whenever a test needs a file outside of TempDir(t) (e.g. /tmp).
-// The file is NOT created by this function - only the cleanup is registered.
-func TempFile(t *testing.T, path string) {
-	t.Helper()
-	t.Cleanup(func() {
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			t.Logf("TempFile cleanup: failed to remove %s: %v", path, err)
-		}
-	})
-}

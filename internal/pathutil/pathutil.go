@@ -15,8 +15,6 @@ package pathutil
 
 import (
 	"path/filepath"
-	"runtime"
-	"strings"
 )
 
 // SafeJoin safely joins path elements, handling the case where the second
@@ -60,77 +58,11 @@ func ResolveDBPath(dataDir, dbPath string) string {
 	return SafeJoin(dataDir, dbPath)
 }
 
-// NormalizePath normalizes a path for the current OS.
-// On Windows, it converts forward slashes to backslashes.
-// On Unix, it converts backslashes to forward slashes.
-// It also cleans the path to remove redundant separators.
-func NormalizePath(path string) string {
-	if path == "" {
-		return path
-	}
-
-	// Clean the path first
-	path = filepath.Clean(path)
-
-	// On Windows, ensure backslashes
-	if runtime.GOOS == "windows" {
-		path = filepath.FromSlash(path)
-	}
-
-	return path
-}
-
-// IsWindowsAbsPath checks if a path is an absolute Windows path.
-// This includes paths starting with drive letters (C:, D:, etc.)
-// or UNC paths (\\server\share).
-func IsWindowsAbsPath(path string) bool {
-	if len(path) < 2 {
-		return false
-	}
-
-	// Check for drive letter (C:, D:, etc.)
-	if path[1] == ':' && ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) {
-		return true
-	}
-
-	// Check for UNC path (\\server\share or //server/share)
-	if (path[0] == '\\' && path[1] == '\\') || (path[0] == '/' && path[1] == '/') {
-		return true
-	}
-
-	return false
-}
-
 // ToSlash converts path separators to forward slashes.
 // This is useful for logging and display purposes where
 // forward slashes are more universally readable.
 func ToSlash(path string) string {
 	return filepath.ToSlash(path)
-}
-
-// FromSlash converts forward slashes to OS-specific separators.
-// This is useful when reading paths from configuration files
-// that use forward slashes.
-func FromSlash(path string) string {
-	return filepath.FromSlash(path)
-}
-
-// EnsureTrailingSeparator ensures the path ends with a separator.
-// This is useful for directory paths that need to be clearly
-// distinguished from file paths.
-func EnsureTrailingSeparator(path string) string {
-	if path == "" {
-		return path
-	}
-	if !strings.HasSuffix(path, string(filepath.Separator)) {
-		return path + string(filepath.Separator)
-	}
-	return path
-}
-
-// RemoveTrailingSeparator removes any trailing separator from the path.
-func RemoveTrailingSeparator(path string) string {
-	return strings.TrimSuffix(path, string(filepath.Separator))
 }
 
 // Made with Bob

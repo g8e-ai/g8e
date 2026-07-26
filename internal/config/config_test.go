@@ -417,35 +417,3 @@ func TestBuildPubSubURL(t *testing.T) {
 		})
 	}
 }
-
-func TestValidateL2PostureStartup(t *testing.T) {
-	tests := []struct {
-		name       string
-		posture    string
-		tribunalID string
-		quorum     int
-		wantErr    bool
-		errIs      error
-	}{
-		{"doctrine — no validation", "doctrine", "", 0, false, nil},
-		{"consensus with tribunal and quorum", "consensus", "trib-1", 3, false, nil},
-		{"consensus without tribunal id", "consensus", "", 3, true, constants.ErrConfigTribunalIDRequired},
-		{"consensus with quorum 1 is valid", "consensus", "trib-1", 1, false, nil},
-		{"consensus with quorum 0", "consensus", "trib-1", 0, true, constants.ErrConfigTribunalQuorumLow},
-		{"notary with tribunal and quorum", "notary", "trib-1", 1, false, nil},
-		{"notary without tribunal id", "notary", "", 1, true, constants.ErrConfigTribunalIDRequired},
-		{"notary with quorum 0", "notary", "trib-1", 0, true, constants.ErrConfigTribunalQuorumLow},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateL2PostureStartup(tt.posture, tt.tribunalID, tt.quorum)
-			if tt.wantErr {
-				require.Error(t, err)
-				assert.ErrorIs(t, err, tt.errIs)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}

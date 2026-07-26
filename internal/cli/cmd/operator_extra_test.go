@@ -75,6 +75,8 @@ func TestOperatorStartCmdFlags(t *testing.T) {
 		expectedFlags := []string{
 			"endpoint", "key", "cert", "trust-bundle", "working-dir",
 			"cloud", "provider", "execution-vault", "no-git", "log", "heartbeat-interval",
+			"lattice-endpoint", "lattice-client-id", "lattice-client-secret",
+			"lattice-sandboxes-token", "lattice-entity-name", "lattice-posture-floor",
 		}
 		for _, flagName := range expectedFlags {
 			flag := cmd.Flags().Lookup(flagName)

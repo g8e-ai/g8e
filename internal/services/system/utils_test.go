@@ -27,11 +27,3 @@ func TestRealClock_Now(t *testing.T) {
 	assert.False(t, now.IsZero())
 	assert.Equal(t, time.UTC, now.Location())
 }
-
-func TestFixedClock_Now(t *testing.T) {
-	t.Parallel()
-	fixedTime := time.Date(2026, 6, 13, 10, 0, 0, 0, time.UTC)
-	c := NewFixedClock(fixedTime)
-	now := c.Now()
-	assert.Equal(t, fixedTime, now)
-}

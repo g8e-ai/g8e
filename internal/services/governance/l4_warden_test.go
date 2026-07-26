@@ -44,7 +44,7 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 		replayStore,
 		stateRootProvider,
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key": pubKey}},
-		&TribunalStoreAdapter{Inner: &governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{
+		&tribunalStoreTestAdapter{Inner: &governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{
 			"test-tribunal": {
 				ID:              "test-tribunal",
 				MemberAppIDs:    []string{"test-key"},
@@ -233,7 +233,7 @@ func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStor
 		replayStore,
 		stateRootProvider,
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"spiffe://g8e.local/app/test-app-id": pubKey}},
-		&TribunalStoreAdapter{Inner: &governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{
+		&tribunalStoreTestAdapter{Inner: &governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{
 			"test-tribunal": {
 				ID:              "test-tribunal",
 				MemberAppIDs:    []string{"spiffe://g8e.local/app/test-app-id"},

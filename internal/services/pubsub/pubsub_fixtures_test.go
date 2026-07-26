@@ -45,12 +45,35 @@ func signL2Vote(privKey ed25519.PrivateKey, keyID, hash string, decision bool) *
 	}
 }
 
+// pubsubTestTribunalStoreAdapter wraps a governancetest.SimpleTribunalStore and
+// adapts it to satisfy governance.L2ConsensusPolicyStore for pubsub test code.
+// This is the test-only replacement for the removed production TribunalStoreAdapter.
+type pubsubTestTribunalStoreAdapter struct {
+	Inner *governancetest.SimpleTribunalStore
+}
+
+func (a *pubsubTestTribunalStoreAdapter) GetConsensusPolicy(id string) (*governance.L2ConsensusPolicy, error) {
+	policy, err := a.Inner.GetTribunal(id)
+	if err != nil {
+		return nil, err
+	}
+	if policy == nil {
+		return nil, nil
+	}
+	return &governance.L2ConsensusPolicy{
+		MemberKeyIDs:    policy.MemberAppIDs,
+		Quorum:          policy.Quorum,
+		RequireDistinct: policy.RequireDistinct,
+		Enabled:         policy.Enabled,
+	}, nil
+}
+
 // testTribunalStore returns an L2ConsensusPolicyStore with a single 1-of-1
 // "test-tribunal" policy whose sole member is "test-key". This mirrors the
 // single trusted signer registered by the pubsub test fixtures so L4 quorum
 // verification can pass.
 func testTribunalStore() governance.L2ConsensusPolicyStore {
-	return &governance.TribunalStoreAdapter{Inner: &governancetest.SimpleTribunalStore{
+	return &pubsubTestTribunalStoreAdapter{Inner: &governancetest.SimpleTribunalStore{
 		Tribunals: map[string]*models.TribunalPolicy{
 			"test-tribunal": {
 				ID:              "test-tribunal",

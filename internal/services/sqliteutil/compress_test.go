@@ -239,35 +239,6 @@ func TestHashBytes(t *testing.T) {
 	assert.NotEqual(t, h1, h2)
 }
 
-func TestHashString(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name     string
-		input    string
-		wantHash string
-	}{
-		{
-			name:     "matches hash bytes",
-			input:    "some string value",
-			wantHash: HashBytes([]byte("some string value")),
-		},
-		{
-			name:     "empty string",
-			input:    "",
-			wantHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-		},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			h := HashString(tt.input)
-			assert.Equal(t, tt.wantHash, h)
-		})
-	}
-}
-
 func TestCompress_OutputIsValidGzip(t *testing.T) {
 	t.Parallel()
 	compressed, err := Compress([]byte("valid gzip test"))

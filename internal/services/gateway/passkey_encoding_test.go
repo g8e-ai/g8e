@@ -14,59 +14,10 @@
 package gateway
 
 import (
-	"crypto/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
-
-func TestEncodeDecodeCredIDRoundTrip(t *testing.T) {
-
-	sizes := []int{0, 1, 16, 32, 64, 128, 256, 1023, 1024}
-	for _, size := range sizes {
-		size := size
-		t.Run("size_"+itoa(size), func(t *testing.T) {
-			original := make([]byte, size)
-			if size > 0 {
-				_, err := rand.Read(original)
-				require.NoError(t, err)
-			}
-
-			encoded := encodeCredID(original)
-			decoded, err := decodeCredID(encoded)
-			require.NoError(t, err)
-			assert.Equal(t, original, decoded)
-		})
-	}
-}
-
-func TestDecodeCredIDInvalid(t *testing.T) {
-
-	tests := []struct {
-		name    string
-		input   string
-		wantErr bool
-	}{
-		{"empty string", "", false},
-		{"valid base64url", "AQIDBA", false},
-		{"contains padding", "AQIDBA==", true},
-		{"contains invalid char", "!!!invalid!!!", true},
-		{"contains space", "A QIDBA", true},
-	}
-
-	for _, tc := range tests {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			_, err := decodeCredID(tc.input)
-			if tc.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
 
 func TestEncodeCredIDMatchesRawURLEncoding(t *testing.T) {
 
@@ -74,26 +25,4 @@ func TestEncodeCredIDMatchesRawURLEncoding(t *testing.T) {
 	encoded := encodeCredID(input)
 	expected := "AQIDBAX-_w"
 	assert.Equal(t, expected, encoded)
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var buf [20]byte
-	pos := len(buf)
-	negative := n < 0
-	if negative {
-		n = -n
-	}
-	for n > 0 {
-		pos--
-		buf[pos] = byte('0' + n%10)
-		n /= 10
-	}
-	if negative {
-		pos--
-		buf[pos] = '-'
-	}
-	return string(buf[pos:])
 }

@@ -808,35 +808,6 @@ func TestIsUniqueConstraintError_Tier1_CaseSensitive(t *testing.T) {
 	assert.False(t, IsUniqueConstraintError(lowercaseErr), "should be case-sensitive")
 }
 
-func TestIsDuplicateColumnError_Tier1_NilError(t *testing.T) {
-	t.Parallel()
-	assert.False(t, IsDuplicateColumnError(nil))
-}
-
-func TestIsDuplicateColumnError_Tier1_ErrDuplicateColumn(t *testing.T) {
-	t.Parallel()
-	err := constants.ErrDuplicateColumn
-	assert.True(t, IsDuplicateColumnError(err))
-}
-
-func TestIsDuplicateColumnError_Tier1_ContainsDuplicateColumnName(t *testing.T) {
-	t.Parallel()
-	customErr := fmt.Errorf("duplicate column name: test_column")
-	assert.True(t, IsDuplicateColumnError(customErr))
-}
-
-func TestIsDuplicateColumnError_Tier1_GenericError(t *testing.T) {
-	t.Parallel()
-	err := assert.AnError
-	assert.False(t, IsDuplicateColumnError(err))
-}
-
-func TestIsDuplicateColumnError_Tier1_CaseSensitive(t *testing.T) {
-	t.Parallel()
-	lowercaseErr := fmt.Errorf("duplicate column name: column")
-	assert.True(t, IsDuplicateColumnError(lowercaseErr))
-}
-
 func TestIsBusyError_Tier1_NilError(t *testing.T) {
 	t.Parallel()
 	assert.False(t, isBusyError(nil))

@@ -26,6 +26,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/adapters/lattice"
 	"github.com/g8e-ai/g8e/internal/certs"
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -48,6 +49,13 @@ type ServeOperatorOptions struct {
 	ExecutionVault    bool
 	NoGit             bool
 	HeartbeatInterval time.Duration
+
+	LatticeEndpoint       string
+	LatticeClientID       string
+	LatticeClientSecret   string
+	LatticeSandboxesToken string
+	LatticeEntityName     string
+	LatticePostureFloor   string
 }
 
 // resolveOperatorEndpoint returns the trimmed endpoint if non-empty, otherwise the default endpoint.
@@ -126,9 +134,35 @@ func loadClientCertPair(certPath, keyPath string) (tls.Certificate, []byte, erro
 	return cert, certPEM, nil
 }
 
+// resolveLatticeOpt returns the flag value if set, otherwise falls back to the
+// corresponding environment variable.
+func resolveLatticeOpt(flagVal string, envKey constants.EnvVarKey) string {
+	if flagVal != "" {
+		return flagVal
+	}
+	return os.Getenv(string(envKey))
+}
+
 // buildOperatorLoadOptions creates config.LoadOptions from ServeOperatorOptions and
 // resolved runtime parameters.
 func buildOperatorLoadOptions(opts ServeOperatorOptions, operatorEndpoint, effectiveWorkDir string) config.LoadOptions {
+	latticeEndpoint := resolveLatticeOpt(opts.LatticeEndpoint, constants.EnvVar.LatticeEndpoint)
+	var latticeCfg *lattice.LatticeConfig
+	if latticeEndpoint != "" {
+		latticeCfg = &lattice.LatticeConfig{
+			Enabled:        true,
+			Endpoint:       latticeEndpoint,
+			ClientID:       resolveLatticeOpt(opts.LatticeClientID, constants.EnvVar.LatticeClientID),
+			ClientSecret:   resolveLatticeOpt(opts.LatticeClientSecret, constants.EnvVar.LatticeClientSecret),
+			SandboxesToken: resolveLatticeOpt(opts.LatticeSandboxesToken, constants.EnvVar.LatticeSandboxesToken),
+			Entity: lattice.EntityConfig{
+				Name:         resolveLatticeOpt(opts.LatticeEntityName, constants.EnvVar.LatticeEntityName),
+				PlatformType: "g8e-operator",
+			},
+			PostureFloor: resolveLatticeOpt(opts.LatticePostureFloor, constants.EnvVar.LatticePostureFloor),
+		}
+	}
+
 	return config.LoadOptions{
 		OperatorEndpoint:      operatorEndpoint,
 		HTTPPort:              0,
@@ -147,6 +181,8 @@ func buildOperatorLoadOptions(opts ServeOperatorOptions, operatorEndpoint, effec
 		Term:                  os.Getenv(string(constants.EnvVar.Term)),
 		TZ:                    os.Getenv(string(constants.EnvVar.TZ)),
 		Posture:               "",
+
+		Lattice: latticeCfg,
 	}
 }
 

@@ -228,60 +228,9 @@ func ReadRootCA(t *testing.T, pkiDir string) []byte {
 	return ReadCACert(t, paths.RootCA, "root")
 }
 
-// ReadHubCA reads the hub CA certificate from the PKI directory.
-func ReadHubCA(t *testing.T, pkiDir string) []byte {
-	t.Helper()
-	paths := GetPKICertPaths(pkiDir)
-	return ReadCACert(t, paths.HubCA, "hub")
-}
-
 // ReadOperatorCA reads the Operator CA certificate from the PKI directory.
 func ReadOperatorCA(t *testing.T, pkiDir string) []byte {
 	t.Helper()
 	paths := GetPKICertPaths(pkiDir)
 	return ReadCACert(t, paths.OperatorCA, "operator")
-}
-
-// ReadBootstrapCA reads the bootstrap CA certificate from the PKI directory.
-func ReadBootstrapCA(t *testing.T, pkiDir string) []byte {
-	t.Helper()
-	paths := GetPKICertPaths(pkiDir)
-	return ReadCACert(t, paths.BootstrapCA, "bootstrap")
-}
-
-// ReadTrustBundle reads the root trust bundle from the PKI directory.
-func ReadTrustBundle(t *testing.T, pkiDir string) []byte {
-	t.Helper()
-	paths := GetPKICertPaths(pkiDir)
-	return ReadCACert(t, paths.TrustBundle, "root trust bundle")
-}
-
-// ReadHubBundle reads the hub trust bundle from the PKI directory.
-func ReadHubBundle(t *testing.T, pkiDir string) []byte {
-	t.Helper()
-	paths := GetPKICertPaths(pkiDir)
-	return ReadCACert(t, paths.HubBundle, "hub trust bundle")
-}
-
-// RequirePKIInitialized checks that the PKI directory structure exists and contains
-// expected certificates.
-func RequirePKIInitialized(t *testing.T, pkiDir string) {
-	t.Helper()
-
-	paths := GetPKICertPaths(pkiDir)
-
-	dirs := []string{
-		filepath.Join(pkiDir, constants.PkiSubdirRoot),
-		filepath.Join(pkiDir, constants.PkiSubdirAuthorities),
-		filepath.Join(pkiDir, constants.PkiSubdirTrust),
-	}
-
-	for _, dir := range dirs {
-		info, err := os.Stat(dir)
-		require.NoError(t, err, "PKI directory %s does not exist", dir)
-		require.True(t, info.IsDir(), "PKI path %s is not a directory", dir)
-	}
-
-	_, err := os.Stat(paths.RootCA)
-	require.NoError(t, err, "Root CA certificate does not exist at %s. PKI may not be initialized.", paths.RootCA)
 }

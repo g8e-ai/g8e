@@ -50,41 +50,6 @@ func mustDocJSON(t *testing.T, v interface{}) json.RawMessage {
 	return json.RawMessage(b)
 }
 
-func TestGatewaySchema(t *testing.T) {
-	schema := GatewaySchema()
-	assert.NotEmpty(t, schema, "GatewaySchema should return non-empty schema")
-	assert.Contains(t, schema, "CREATE TABLE", "Schema should contain CREATE TABLE statements")
-}
-
-func TestCanonicalDBService_GetDB(t *testing.T) {
-	dataDir := testutil.TempDir(t)
-	fileSvc := newTestFileSvc(t)
-	logger := testutil.NewTestLogger()
-
-	ks := newTestKeystore(t, fileSvc, logger)
-	db, _, err := OpenCanonicalDBService(dataDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-
-	assert.NotNil(t, db.GetDB(), "GetDB should return non-nil database")
-}
-
-func TestCanonicalDBService_Wait(t *testing.T) {
-	dataDir := testutil.TempDir(t)
-	fileSvc := newTestFileSvc(t)
-	logger := testutil.NewTestLogger()
-
-	ks := newTestKeystore(t, fileSvc, logger)
-	db, _, err := OpenCanonicalDBService(dataDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
-	require.NoError(t, err)
-
-	// Close the database to stop background workers
-	db.Close()
-
-	// Wait should complete successfully after Close
-	db.Wait()
-}
-
 func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
 	dataDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)

@@ -267,13 +267,3 @@ func TestOrNone_EmptyReturnsNone(t *testing.T) {
 func TestOrNone_NonEmptyReturnsValue(t *testing.T) {
 	assert.Equal(t, "https://example.com", orNone("https://example.com"))
 }
-
-// --- yesNo ---
-
-func TestYesNo_TrueReturnsYes(t *testing.T) {
-	assert.Equal(t, "Yes", yesNo(true))
-}
-
-func TestYesNo_FalseReturnsNo(t *testing.T) {
-	assert.Equal(t, "No", yesNo(false))
-}

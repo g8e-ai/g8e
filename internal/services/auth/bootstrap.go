@@ -22,7 +22,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/certs"
@@ -339,13 +338,4 @@ func (bs *BootstrapService) rebuildTransportWithOperatorCert(certPEM, keyPEM str
 	bs.httpClient = httpclient.NewWithTLS(operatorTLSConfig)
 
 	return nil
-}
-
-// SanitizeURL removes credentials from a URL for safe logging
-func SanitizeURL(rawURL string) string {
-	parsed, err := url.Parse(rawURL)
-	if err != nil {
-		return "invalid-url"
-	}
-	return parsed.Host
 }

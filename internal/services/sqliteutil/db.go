@@ -266,17 +266,6 @@ func IsUniqueConstraintError(err error) bool {
 	return contains(err.Error(), "UNIQUE constraint failed")
 }
 
-// IsDuplicateColumnError checks if an error indicates a column already exists.
-func IsDuplicateColumnError(err error) bool {
-	if err == nil {
-		return false
-	}
-	if errors.Is(err, constants.ErrDuplicateColumn) {
-		return true
-	}
-	return contains(err.Error(), "duplicate column name")
-}
-
 // backoff implements exponential backoff with jitter to avoid thundering herd.
 // Delay = baseDelay * 2^attempt + random jitter (0-25% of delay)
 func (db *DB) backoff(attempt int) {

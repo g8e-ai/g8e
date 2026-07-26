@@ -64,30 +64,10 @@ type outboundNotary struct {
 	logger         *slog.Logger
 }
 
-// cliNotary provides L3 verification for gateway CLI mode. It performs CLI
-// session verification (user active, session validity, cert revocation) before
-// the shared suspended transaction and signature verification.
-type cliNotary struct {
-	suspendedStore storage.SuspendedTransactionStore
-	cliVerifier    CLISessionVerifier
-	logger         *slog.Logger
-}
-
 // NewOutboundL3Notary creates a new L3 notary for outbound mode (no CLI session verification).
 func NewOutboundL3Notary(suspendedStore storage.SuspendedTransactionStore, logger *slog.Logger) L3Notary {
 	return &outboundNotary{
 		suspendedStore: suspendedStore,
-		logger:         logger,
-	}
-}
-
-// NewCLIL3Notary creates a new L3 notary with CLI session verification for gateway mode.
-// The cliVerifier performs user active, CLI session, and certificate revocation checks
-// before the shared suspended transaction and signature verification.
-func NewCLIL3Notary(suspendedStore storage.SuspendedTransactionStore, cliVerifier CLISessionVerifier, logger *slog.Logger) L3Notary {
-	return &cliNotary{
-		suspendedStore: suspendedStore,
-		cliVerifier:    cliVerifier,
 		logger:         logger,
 	}
 }
@@ -167,14 +147,9 @@ func (v *outboundNotary) VerifyL3Proof(ctx context.Context, userID, transactionH
 	return verifyOutboundProof(ctx, v.suspendedStore, nil, v.logger, userID, transactionHash, cliSessionID, proof)
 }
 
-// VerifyL3Proof verifies an L3 proof in CLI mode (CLI session check + suspended transaction + signature).
-func (v *cliNotary) VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
-	return verifyOutboundProof(ctx, v.suspendedStore, v.cliVerifier, v.logger, userID, transactionHash, cliSessionID, proof)
-}
-
-// verifyOutboundProof performs the shared outbound verification logic used by both
-// outboundNotary and cliNotary. If cliVerifier is non-nil, CLI session checks are
-// performed before the suspended transaction and signature verification.
+// verifyOutboundProof performs the shared outbound verification logic used by
+// outboundNotary. If cliVerifier is non-nil, CLI session checks are performed
+// before the suspended transaction and signature verification.
 //
 // 1. The transaction exists in the suspended store and is marked as approved
 // 2. The proof contains a valid Ed25519 signature over the transaction hash

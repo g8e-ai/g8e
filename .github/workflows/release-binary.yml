@@ -81,7 +81,7 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: g8e v${{ steps.parse_version.outputs.version }}
           body_path: docs/release_notes/v${{ steps.parse_version.outputs.version_major_minor }}.x/v${{ steps.parse_version.outputs.version }}.md
-          draft: false
+          draft: true
           prerelease: false
           files: |
             bin/g8e-linux-amd64
@@ -104,6 +104,12 @@ jobs:
             bin/g8e-windows-arm64.exe
             bin/g8e-windows-arm64.exe.sig
             bin/checksums-sha256.txt
+
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release edit "${{ steps.parse_version.outputs.tag }}" --draft=false
 
   verify-install:
     name: Verify Go Install (${{ matrix.os }})

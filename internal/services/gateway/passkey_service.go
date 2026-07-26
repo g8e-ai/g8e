@@ -97,11 +97,6 @@ func encodeCredID(id []byte) string {
 	return base64.RawURLEncoding.EncodeToString(id)
 }
 
-// decodeCredID decodes a base64 URL-encoded credential ID back to raw bytes.
-func decodeCredID(s string) ([]byte, error) {
-	return base64.RawURLEncoding.DecodeString(s)
-}
-
 // encodeChallenge encodes arbitrary challenge bytes (e.g. transaction hashes) as
 // base64 URL. Semantically distinct from encodeCredID but uses the same encoding.
 func encodeChallenge(challenge []byte) string {

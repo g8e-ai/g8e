@@ -39,7 +39,7 @@ func setupEncryptedKVTest(t *testing.T) (*KVStoreService, *vault.Vault) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	_, err = db.Exec(GatewaySchema())
+	_, err = db.Exec(gatewaySchema)
 	require.NoError(t, err)
 
 	kv := NewKVStoreService(db, logger)

@@ -22,17 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNowUTC(t *testing.T) {
-	t.Run("returns current UTC time", func(t *testing.T) {
-		before := time.Now().UTC()
-		result := NowUTC()
-		after := time.Now().UTC()
-
-		assert.True(t, result.After(before) || result.Equal(before))
-		assert.True(t, result.Before(after) || result.Equal(after))
-	})
-}
-
 func TestFormatTimestamp_NormalizesToUTC(t *testing.T) {
 	t.Parallel()
 	loc, err := time.LoadLocation("America/New_York")

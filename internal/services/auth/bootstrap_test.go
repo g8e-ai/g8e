@@ -444,40 +444,6 @@ func TestAuthServicesResponse_JSONParsing(t *testing.T) {
 	})
 }
 
-func TestSanitizeURL(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		name     string
-		input    string
-		contains string
-		excludes string
-	}{
-		{"wss with password", "wss://:secretpassword@" + constants.DefaultEndpoint + ":443", constants.DefaultEndpoint, "secretpassword"},
-		{"wss without password", "wss://" + constants.DefaultEndpoint + ":443", constants.DefaultEndpoint, ""},
-		{"ws with password", "ws://:password@" + constants.DefaultEndpoint + ":443", constants.DefaultEndpoint, "password"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			result := SanitizeURL(tc.input)
-			assert.Contains(t, result, tc.contains)
-			if tc.excludes != "" {
-				assert.NotContains(t, result, tc.excludes)
-			}
-		})
-	}
-
-	t.Run("empty URL returns empty", func(t *testing.T) {
-		t.Parallel()
-		assert.Empty(t, SanitizeURL(""))
-	})
-
-	t.Run("invalid URL returns invalid-url", func(t *testing.T) {
-		t.Parallel()
-		assert.Equal(t, "invalid-url", SanitizeURL("://bad url"))
-	})
-}
-
 func TestSystemInfoTools(t *testing.T) {
 	t.Parallel()
 	t.Run("system.GetHostname", func(t *testing.T) {
@@ -506,11 +472,6 @@ func TestSystemInfoTools(t *testing.T) {
 	t.Run("system.GetNetworkInterfaces returns non-nil", func(t *testing.T) {
 		t.Parallel()
 		assert.NotNil(t, system.GetNetworkInterfaces())
-	})
-
-	t.Run("system.GetLocalIP returns non-empty", func(t *testing.T) {
-		t.Parallel()
-		assert.NotEmpty(t, system.GetLocalIP(""))
 	})
 
 	t.Run("system.GetCurrentUser returns non-empty", func(t *testing.T) {

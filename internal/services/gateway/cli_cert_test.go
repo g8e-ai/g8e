@@ -19,7 +19,6 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"errors"
 	"math/big"
 	"net/url"
 	"testing"
@@ -60,127 +59,6 @@ func makeTestCLICert(t *testing.T, notBefore, notAfter time.Time, spiffeURIs []s
 	cert, err := x509.ParseCertificate(certDER)
 	require.NoError(t, err)
 	return cert
-}
-
-func TestVerifyCLICertificate_NilCert(t *testing.T) {
-	err := VerifyCLICertificate(&PKIAuthority{}, nil, "session-123", "user-456")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrCLIL3CertNil)
-}
-
-func TestVerifyCLICertificate_ExpiredCert(t *testing.T) {
-	cert := makeTestCLICert(t,
-		time.Now().Add(-48*time.Hour),
-		time.Now().Add(-24*time.Hour),
-		[]string{"spiffe://g8e.local/cli/user-456/session-123"},
-	)
-
-	err := VerifyCLICertificate(&PKIAuthority{}, cert, "session-123", "user-456")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrCLIL3CertExpired)
-}
-
-func TestVerifyCLICertificate_NotYetValidCert(t *testing.T) {
-	cert := makeTestCLICert(t,
-		time.Now().Add(24*time.Hour),
-		time.Now().Add(48*time.Hour),
-		[]string{"spiffe://g8e.local/cli/user-456/session-123"},
-	)
-
-	err := VerifyCLICertificate(&PKIAuthority{}, cert, "session-123", "user-456")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrCLIL3CertNotYetValid)
-}
-
-func TestVerifyCLICertificate_SPIFFESANMismatch(t *testing.T) {
-	cert := makeTestCLICert(t,
-		time.Now().Add(-1*time.Minute),
-		time.Now().Add(24*time.Hour),
-		[]string{"spiffe://g8e.local/cli/wrong-user/wrong-session"},
-	)
-
-	err := VerifyCLICertificate(&PKIAuthority{}, cert, "session-123", "user-456")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrCLIL3SPIFFESANMismatch)
-}
-
-func TestVerifyCLICertificate_NoURIsInCert(t *testing.T) {
-	cert := makeTestCLICert(t,
-		time.Now().Add(-1*time.Minute),
-		time.Now().Add(24*time.Hour),
-		nil,
-	)
-
-	err := VerifyCLICertificate(&PKIAuthority{}, cert, "session-123", "user-456")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrCLIL3SPIFFESANMismatch)
-}
-
-func TestVerifyCLICertificate_MultipleURIsOneMatching(t *testing.T) {
-	cert := makeTestCLICert(t,
-		time.Now().Add(-1*time.Minute),
-		time.Now().Add(24*time.Hour),
-		[]string{
-			"spiffe://g8e.local/operator/org-1/op-1/sess-1",
-			"spiffe://g8e.local/cli/user-456/session-123",
-		},
-	)
-
-	// PKI is nil so we expect ErrCLIL3PKINotConfigured, which proves the SPIFFE match succeeded.
-	err := VerifyCLICertificate(nil, cert, "session-123", "user-456")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrCLIL3PKINotConfigured)
-}
-
-func TestVerifyCLICertificate_NilPKI(t *testing.T) {
-	cert := makeTestCLICert(t,
-		time.Now().Add(-1*time.Minute),
-		time.Now().Add(24*time.Hour),
-		[]string{"spiffe://g8e.local/cli/user-456/session-123"},
-	)
-
-	err := VerifyCLICertificate(nil, cert, "session-123", "user-456")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrCLIL3PKINotConfigured)
-}
-
-func TestVerifyCLICertificate_PKIVerifyFails(t *testing.T) {
-	cert := makeTestCLICert(t,
-		time.Now().Add(-1*time.Minute),
-		time.Now().Add(24*time.Hour),
-		[]string{"spiffe://g8e.local/cli/user-456/session-123"},
-	)
-
-	// PKIAuthority with nil db causes VerifyCertificate to fail with ErrPKIDatabaseNotAvailable.
-	pki := &PKIAuthority{}
-	err := VerifyCLICertificate(pki, cert, "session-123", "user-456")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), constants.ErrCLIL3CertVerificationFailed.Error())
-	assert.ErrorIs(t, err, constants.ErrPKIDatabaseNotAvailable)
-}
-
-func TestVerifyCLICertificate_UserIDMismatch(t *testing.T) {
-	cert := makeTestCLICert(t,
-		time.Now().Add(-1*time.Minute),
-		time.Now().Add(24*time.Hour),
-		[]string{"spiffe://g8e.local/cli/user-456/session-123"},
-	)
-
-	err := VerifyCLICertificate(&PKIAuthority{}, cert, "session-123", "different-user")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrCLIL3SPIFFESANMismatch)
-}
-
-func TestVerifyCLICertificate_SessionIDMismatch(t *testing.T) {
-	cert := makeTestCLICert(t,
-		time.Now().Add(-1*time.Minute),
-		time.Now().Add(24*time.Hour),
-		[]string{"spiffe://g8e.local/cli/user-456/session-123"},
-	)
-
-	err := VerifyCLICertificate(&PKIAuthority{}, cert, "different-session", "user-456")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrCLIL3SPIFFESANMismatch)
 }
 
 func TestExtractUserIDFromCert_NilCert(t *testing.T) {
@@ -258,21 +136,4 @@ func TestExtractUserIDFromCert_MultipleNonCLIURIs(t *testing.T) {
 	require.Error(t, err)
 	assert.Empty(t, userID)
 	assert.ErrorIs(t, err, constants.ErrCLIL3NoUserIDInCert)
-}
-
-// TestVerifyCLICertificate_ErrorWrapping ensures the PKI verification failure
-// wraps the underlying error so callers can unwrap it.
-func TestVerifyCLICertificate_ErrorWrapping(t *testing.T) {
-	cert := makeTestCLICert(t,
-		time.Now().Add(-1*time.Minute),
-		time.Now().Add(24*time.Hour),
-		[]string{"spiffe://g8e.local/cli/user-456/session-123"},
-	)
-
-	pki := &PKIAuthority{}
-	err := VerifyCLICertificate(pki, cert, "session-123", "user-456")
-	require.Error(t, err)
-
-	inner := errors.Unwrap(err)
-	require.Error(t, inner, "wrapped error should contain an inner error")
 }

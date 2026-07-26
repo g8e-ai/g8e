@@ -273,3 +273,4 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 - [Storage Architecture](./storage.md) for audit vault and ledger internals
 - [Tribunal](./tribunal.md) for tribunal configuration and consensus setup
 - [Encryption](./encryption.md) for encryption at rest details
+- [Lattice Adapter](./lattice.md) for Anduril Lattice COP integration

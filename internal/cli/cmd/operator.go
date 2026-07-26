@@ -118,6 +118,12 @@ func operatorStartCmd() *cobra.Command {
 	var noGit bool
 	var logLevel string
 	var heartbeatInterval int
+	var latticeEndpoint string
+	var latticeClientID string
+	var latticeClientSecret string
+	var latticeSandboxesToken string
+	var latticeEntityName string
+	var latticePostureFloor string
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -156,6 +162,12 @@ func operatorStartCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&noGit, "no-git", "G", false, "Disable Git integration")
 	cmd.Flags().StringVarP(&logLevel, "log", "l", "info", "Log level: info, error, debug")
 	cmd.Flags().IntVar(&heartbeatInterval, "heartbeat-interval", 30, "Heartbeat interval in seconds")
+	cmd.Flags().StringVar(&latticeEndpoint, "lattice-endpoint", "", "Lattice gRPC endpoint URL")
+	cmd.Flags().StringVar(&latticeClientID, "lattice-client-id", "", "OAuth2 client ID")
+	cmd.Flags().StringVar(&latticeClientSecret, "lattice-client-secret", "", "OAuth2 client secret")
+	cmd.Flags().StringVar(&latticeSandboxesToken, "lattice-sandboxes-token", "", "Sandbox authorization token")
+	cmd.Flags().StringVar(&latticeEntityName, "lattice-entity-name", "", "Entity display name")
+	cmd.Flags().StringVar(&latticePostureFloor, "lattice-posture-floor", "consensus", "Minimum governance posture")
 
 	return cmd
 }

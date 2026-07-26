@@ -51,7 +51,7 @@ func newTestSuspendedStore(t *testing.T) storage.SuspendedTransactionStore {
 	return sts
 }
 
-func TestCLIL3Notary_VerifyL3Proof_RejectsMissingInputs(t *testing.T) {
+func TestGatewayL3Notary_CLIVerifier_RejectsInactiveUser(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
@@ -61,79 +61,8 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsMissingInputs(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 	cliVerifier := NewCLISessionVerifier(stores.DocStore, nil, logger, userSvc, cliSessionSvc)
-	notary := governance.NewCLIL3Notary(nil, cliVerifier, logger)
-
-	tests := []struct {
-		name            string
-		userID          string
-		transactionHash string
-		proof           *commonv1.L3Proof
-		wantErr         string
-	}{
-		{
-			name:            "missing user_id",
-			userID:          "",
-			transactionHash: "tx-hash",
-			proof:           &commonv1.L3Proof{MtlsCertFingerprint: "abc123", CliSignature: "sig"},
-			wantErr:         "user_id is required",
-		},
-		{
-			name:            "missing transaction_hash",
-			userID:          "user-1",
-			transactionHash: "",
-			proof:           &commonv1.L3Proof{MtlsCertFingerprint: "abc123", CliSignature: "sig"},
-			wantErr:         "transaction_hash is required",
-		},
-		{
-			name:            "missing proof",
-			userID:          "user-1",
-			transactionHash: "tx-hash",
-			proof:           nil,
-			wantErr:         "L3 proof is required",
-		},
-		{
-			name:            "missing mtls_cert_fingerprint",
-			userID:          "user-1",
-			transactionHash: "tx-hash",
-			proof:           &commonv1.L3Proof{CliSignature: "sig"},
-			wantErr:         "mtls_cert_fingerprint is required",
-		},
-		{
-			name:            "missing cli_signature",
-			userID:          "user-1",
-			transactionHash: "tx-hash",
-			proof:           &commonv1.L3Proof{MtlsCertFingerprint: "abc123"},
-			wantErr:         "cli_signature required",
-		},
-		{
-			name:            "invalid fingerprint format",
-			userID:          "user-1",
-			transactionHash: "tx-hash",
-			proof:           &commonv1.L3Proof{MtlsCertFingerprint: "not-hex!", CliSignature: "sig"},
-			wantErr:         "invalid mtls_cert_fingerprint format",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			ok, err := notary.VerifyL3Proof(context.Background(), tc.userID, tc.transactionHash, "", tc.proof)
-			require.Error(t, err)
-			require.False(t, ok)
-		})
-	}
-}
-
-func TestCLIL3Notary_VerifyL3Proof_RejectsInactiveUser(t *testing.T) {
-	logger := testutil.NewTestLogger()
-	dbDir := testutil.TempDir(t)
-	fileSvc := newTestFileSvc(t)
-	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-	userSvc := NewUserService(stores.DocStore, logger)
-	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-	cliVerifier := NewCLISessionVerifier(stores.DocStore, nil, logger, userSvc, cliSessionSvc)
-	notary := governance.NewCLIL3Notary(nil, cliVerifier, logger)
+	mockPasskey := testutil.NewConfigurableMockL3Notary(true)
+	notary := governance.NewGatewayL3Notary(cliVerifier, mockPasskey, logger)
 
 	// Create a disabled user
 	userID := "disabled-user"
@@ -146,64 +75,26 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsInactiveUser(t *testing.T) {
 
 	validFingerprint := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	txHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	ok, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "", &commonv1.L3Proof{MtlsCertFingerprint: validFingerprint, CliSignature: "sig"})
+	ok, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "some-session", &commonv1.L3Proof{
+		CredentialId:        "mock-credential",
+		MtlsCertFingerprint: validFingerprint,
+		CliSignature:        "sig",
+	})
 	require.Error(t, err)
 	require.False(t, ok)
 }
 
-func TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser(t *testing.T) {
+func TestOutboundL3Notary_VerifyL3Proof_AcceptsValidSignature(t *testing.T) {
 	logger := testutil.NewTestLogger()
-	dbDir := testutil.TempDir(t)
-	fileSvc := newTestFileSvc(t)
-	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-
-	// Create PKI (required for fail-closed revocation check)
-	sm := newTestSecretManager(t, db.db, fileSvc)
-	pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
-	err = pki.InitializePKI(nil)
-	require.NoError(t, err)
-
-	userSvc := NewUserService(stores.DocStore, logger)
-	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 	suspendedStore := newTestSuspendedStore(t)
-	cliVerifier := NewCLISessionVerifier(stores.DocStore, pki, logger, userSvc, cliSessionSvc)
-	notary := governance.NewCLIL3Notary(suspendedStore, cliVerifier, logger)
-
-	// Create an active user
-	userID := "active-user"
-	user := &models.User{
-		ID:     userID,
-		Status: constants.UserStatusActive,
-	}
-	userBytes, _ := json.Marshal(user)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Generate Ed25519 key pair for signing
 	pubKey, privKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 
+	userID := "active-user"
 	validFingerprint := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	txHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-
-	// Create a CLI session with a known fingerprint (no cert serial to avoid revocation lookup)
-	cliSessionID := "cli-session-123"
-	cliSession := models.CLISession{
-		ID:                cliSessionID,
-		UserID:            userID,
-		OperatorSessionID: "operator-session-123",
-		CertFingerprint:   validFingerprint,
-		CreatedAt:         time.Now().UTC(),
-		ExpiresAt:         time.Now().UTC().Add(24 * time.Hour),
-		AbsoluteExpiresAt: time.Now().UTC().Add(24 * time.Hour),
-		IdleExpiresAt:     time.Now().UTC().Add(24 * time.Hour),
-		SessionType:       string(constants.SessionTypeCLI),
-		IsActive:          true,
-		LoginMethod:       "csr",
-	}
-	cliSessionBytes, _ := json.Marshal(cliSession)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes))
 
 	// Store an approved suspended transaction with the public key
 	sig := ed25519.Sign(privKey, []byte(txHash))
@@ -222,7 +113,8 @@ func TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser(t *testing.T) {
 	err = suspendedStore.StoreSuspendedTransaction(context.Background(), suspendedTx)
 	require.NoError(t, err)
 
-	ok, err := notary.VerifyL3Proof(context.Background(), userID, txHash, cliSessionID, &commonv1.L3Proof{
+	notary := governance.NewOutboundL3Notary(suspendedStore, logger)
+	ok, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "", &commonv1.L3Proof{
 		MtlsCertFingerprint: validFingerprint,
 		CliSignature:        hex.EncodeToString(sig),
 	})
@@ -230,32 +122,9 @@ func TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser(t *testing.T) {
 	require.True(t, ok)
 }
 
-func TestCLIL3Notary_VerifyL3Proof_RejectsInvalidSignature(t *testing.T) {
+func TestOutboundL3Notary_VerifyL3Proof_RejectsInvalidSignature(t *testing.T) {
 	logger := testutil.NewTestLogger()
-	dbDir := testutil.TempDir(t)
-	fileSvc := newTestFileSvc(t)
-	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-
-	sm := newTestSecretManager(t, db.db, fileSvc)
-	pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
-	err = pki.InitializePKI(nil)
-	require.NoError(t, err)
-
-	userSvc := NewUserService(stores.DocStore, logger)
-	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 	suspendedStore := newTestSuspendedStore(t)
-	cliVerifier := NewCLISessionVerifier(stores.DocStore, pki, logger, userSvc, cliSessionSvc)
-	notary := governance.NewCLIL3Notary(suspendedStore, cliVerifier, logger)
-
-	userID := "active-user"
-	user := &models.User{
-		ID:     userID,
-		Status: constants.UserStatusActive,
-	}
-	userBytes, _ := json.Marshal(user)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Generate two key pairs: one for storing, one for signing (mismatch)
 	storePubKey, _, err := ed25519.GenerateKey(rand.Reader)
@@ -263,25 +132,9 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsInvalidSignature(t *testing.T) {
 	_, signPrivKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 
+	userID := "active-user"
 	validFingerprint := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	txHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-
-	cliSessionID := "cli-session-sig"
-	cliSession := models.CLISession{
-		ID:                cliSessionID,
-		UserID:            userID,
-		OperatorSessionID: "operator-session-123",
-		CertFingerprint:   validFingerprint,
-		CreatedAt:         time.Now().UTC(),
-		ExpiresAt:         time.Now().UTC().Add(24 * time.Hour),
-		AbsoluteExpiresAt: time.Now().UTC().Add(24 * time.Hour),
-		IdleExpiresAt:     time.Now().UTC().Add(24 * time.Hour),
-		SessionType:       string(constants.SessionTypeCLI),
-		IsActive:          true,
-		LoginMethod:       "csr",
-	}
-	cliSessionBytes, _ := json.Marshal(cliSession)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes))
 
 	// Store approved transaction with a DIFFERENT public key than the signer
 	badSig := ed25519.Sign(signPrivKey, []byte(txHash))
@@ -300,8 +153,8 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsInvalidSignature(t *testing.T) {
 	err = suspendedStore.StoreSuspendedTransaction(context.Background(), suspendedTx)
 	require.NoError(t, err)
 
-	// Signature was made with a different key → ed25519.Verify should fail
-	ok, err := notary.VerifyL3Proof(context.Background(), userID, txHash, cliSessionID, &commonv1.L3Proof{
+	notary := governance.NewOutboundL3Notary(suspendedStore, logger)
+	ok, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "", &commonv1.L3Proof{
 		MtlsCertFingerprint: validFingerprint,
 		CliSignature:        hex.EncodeToString(badSig),
 	})
@@ -309,7 +162,7 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsInvalidSignature(t *testing.T) {
 	require.False(t, ok)
 }
 
-func TestCLIL3Notary_VerifyL3Proof_RejectsUnknownFingerprint(t *testing.T) {
+func TestGatewayL3Notary_CLIVerifier_RejectsUnknownFingerprint(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
@@ -319,7 +172,8 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsUnknownFingerprint(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 	cliVerifier := NewCLISessionVerifier(stores.DocStore, nil, logger, userSvc, cliSessionSvc)
-	notary := governance.NewCLIL3Notary(nil, cliVerifier, logger)
+	mockPasskey := testutil.NewConfigurableMockL3Notary(true)
+	notary := governance.NewGatewayL3Notary(cliVerifier, mockPasskey, logger)
 
 	// Create an active user
 	userID := "active-user"
@@ -333,12 +187,16 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsUnknownFingerprint(t *testing.T) {
 	// No CLI session created - verification should fail
 	unknownFingerprint := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	txHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	ok, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "non-existent-session", &commonv1.L3Proof{MtlsCertFingerprint: unknownFingerprint, CliSignature: "sig"})
+	ok, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "non-existent-session", &commonv1.L3Proof{
+		CredentialId:        "mock-credential",
+		MtlsCertFingerprint: unknownFingerprint,
+		CliSignature:        "sig",
+	})
 	require.Error(t, err)
 	require.False(t, ok)
 }
 
-func TestCLIL3Notary_VerifyL3Proof_RejectsRevokedCertificate(t *testing.T) {
+func TestGatewayL3Notary_CLIVerifier_RejectsRevokedCertificate(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
@@ -354,7 +212,8 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsRevokedCertificate(t *testing.T) {
 	userSvc := NewUserService(stores.DocStore, logger)
 	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 	cliVerifier := NewCLISessionVerifier(stores.DocStore, pki, logger, userSvc, cliSessionSvc)
-	notary := governance.NewCLIL3Notary(nil, cliVerifier, logger)
+	mockPasskey := testutil.NewConfigurableMockL3Notary(true)
+	notary := governance.NewGatewayL3Notary(cliVerifier, mockPasskey, logger)
 
 	userID := "user-123"
 	user := &models.User{
@@ -389,7 +248,11 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsRevokedCertificate(t *testing.T) {
 
 	validFingerprint := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	txHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	ok, err := notary.VerifyL3Proof(context.Background(), userID, txHash, cliSessionID, &commonv1.L3Proof{MtlsCertFingerprint: validFingerprint, CliSignature: "sig"})
+	ok, err := notary.VerifyL3Proof(context.Background(), userID, txHash, cliSessionID, &commonv1.L3Proof{
+		CredentialId:        "mock-credential",
+		MtlsCertFingerprint: validFingerprint,
+		CliSignature:        "sig",
+	})
 	require.NoError(t, err)
 	require.False(t, ok)
 }

@@ -49,7 +49,7 @@ func newSecretManagerTestDB(t *testing.T) *sqliteutil.DB {
 	db, err := sqliteutil.OpenDB(cfg, testutil.NewTestLogger())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
-	_, err = db.Exec(GatewaySchema())
+	_, err = db.Exec(gatewaySchema)
 	require.NoError(t, err)
 	return db
 }
@@ -62,8 +62,12 @@ func newTestSecretManager(t *testing.T, db *sqliteutil.DB, fileSvc fs.RuntimeFil
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnforcePermissions())
-	sm, err := NewSecretManagerWithKeystore(db, fileSvc, testutil.NewTestLogger(), ks)
-	require.NoError(t, err)
+	sm := &SecretManager{
+		db:       db,
+		logger:   testutil.NewTestLogger(),
+		fileSvc:  fileSvc,
+		keystore: ks,
+	}
 	return sm
 }
 

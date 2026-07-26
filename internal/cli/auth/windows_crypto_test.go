@@ -21,8 +21,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func TestGenerateWindowsCSR(t *testing.T) {
@@ -44,14 +42,4 @@ func TestGenerateWindowsCSR(t *testing.T) {
 			assert.Contains(t, csr, "CERTIFICATE REQUEST")
 		})
 	}
-}
-
-func TestTrustRootCAInWindowsStore_InvalidPEM(t *testing.T) {
-	err := TrustRootCAInWindowsStore("not a valid PEM")
-	assert.ErrorIs(t, err, constants.ErrPEMDecodeFailed)
-}
-
-func TestTrustRootCAInWindowsStore_EmptyInput(t *testing.T) {
-	err := TrustRootCAInWindowsStore("")
-	assert.ErrorIs(t, err, constants.ErrPEMDecodeFailed)
 }

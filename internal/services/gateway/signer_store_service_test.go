@@ -37,7 +37,7 @@ func setupSignerStore(t *testing.T) *SignerStoreService {
 	t.Cleanup(func() { db.Close() })
 
 	// Initialize schema
-	_, err = db.Exec(GatewaySchema())
+	_, err = db.Exec(gatewaySchema)
 	require.NoError(t, err)
 
 	return NewSignerStoreService(db, logger, NewDocumentStoreService(db, logger))

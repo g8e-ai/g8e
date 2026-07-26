@@ -133,12 +133,6 @@ func (fes *FileEditService) ExecuteFileEdit(ctx context.Context, request *models
 	return result, nil
 }
 
-// validateFilePath ensures the file path is safe and valid (wrapper for centralized security logic)
-func (fes *FileEditService) validateFilePath(filePath string) error {
-	_, err := security.ValidatePath(filePath, fes.config.WorkDir)
-	return err
-}
-
 // executeRead reads a file or file section
 func (fes *FileEditService) executeRead(ctx context.Context, request *models.FileEditRequest, result *models.FileEditResult) error {
 	fes.logger.Info("Reading file", "file_path", request.FilePath)

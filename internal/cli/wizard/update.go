@@ -400,15 +400,3 @@ func (m Model) validateRouting() string {
 	}
 	return ""
 }
-
-// postureNameFromChoice converts a posture choice index to its string name.
-func postureNameFromChoice(choice int) string {
-	switch choice {
-	case 1:
-		return "consensus"
-	case 2:
-		return "notary"
-	default:
-		return "doctrine"
-	}
-}

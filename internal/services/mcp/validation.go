@@ -40,23 +40,6 @@ var (
 	privateAllowlist   []*net.IPNet
 )
 
-// SetPrivateIPAllowlist configures the set of permitted private CIDRs.
-// Pass nil or an empty slice to reset to the default (no private IPs allowed).
-func SetPrivateIPAllowlist(cidrs []string) error {
-	parsed := make([]*net.IPNet, 0, len(cidrs))
-	for _, c := range cidrs {
-		_, ipNet, err := net.ParseCIDR(c)
-		if err != nil {
-			return fmt.Errorf("mcp: invalid allowlist CIDR %q: %w", c, err)
-		}
-		parsed = append(parsed, ipNet)
-	}
-	privateAllowlistMu.Lock()
-	privateAllowlist = parsed
-	privateAllowlistMu.Unlock()
-	return nil
-}
-
 // isIPAllowed checks whether the given IP falls within the private IP allowlist.
 func isIPAllowed(ip net.IP) bool {
 	privateAllowlistMu.RLock()

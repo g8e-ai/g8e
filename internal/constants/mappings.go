@@ -13,10 +13,6 @@
 
 package constants
 
-import (
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
-)
-
 // eventToAction is the single source of truth for the EventType <-> ActionType
 // relationship. The reverse map (actionToEvent) is derived from this in init().
 // Add new pairs here only — never touch actionToEvent directly.
@@ -47,14 +43,6 @@ func init() {
 	for e, a := range eventToAction {
 		actionToEvent[a] = e
 	}
-}
-
-// MapEventTypeToActionType maps protobuf event types to GovernanceEnvelope action types.
-func MapEventTypeToActionType(eventType EventType) ActionType {
-	if a, ok := eventToAction[eventType]; ok {
-		return a
-	}
-	return ActionType(eventType)
 }
 
 // MapActionTypeToEventType maps GovernanceEnvelope action types back to protobuf event types.
@@ -102,24 +90,4 @@ func MapEventTypeToResultActionType(eventType EventType) ActionType {
 		return a
 	}
 	return actionResult(ActionType(eventType))
-}
-
-// ProtoToExecutionStatus maps protobuf ExecutionStatus enum to internal ExecutionStatus constants.
-func ProtoToExecutionStatus(status operatorv1.ExecutionStatus) ExecutionStatus {
-	switch status {
-	case operatorv1.ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED:
-		return ExecutionStatusPending
-	case operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING:
-		return ExecutionStatusExecuting
-	case operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED:
-		return ExecutionStatusCompleted
-	case operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED:
-		return ExecutionStatusFailed
-	case operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT:
-		return ExecutionStatusTimeout
-	case operatorv1.ExecutionStatus_EXECUTION_STATUS_CANCELLED:
-		return ExecutionStatusCancelled
-	default:
-		return ExecutionStatusPending
-	}
 }
