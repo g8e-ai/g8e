@@ -31,4 +31,3 @@ func GenerateWindowsCSR(commonName string, useTPM bool) (string, *ecdsa.PrivateK
 func ImportCertificateToWindowsStore(certPEM string) error {
 	return constants.ErrWindowsCertStoreImport
 }
-

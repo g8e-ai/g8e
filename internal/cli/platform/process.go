@@ -484,7 +484,6 @@ func (pm *ProcessManager) GetLogPath() string {
 	return pm.fileSvc.Resolve(filepath.Join(constants.LogDirname, constants.OperatorLogFilename))
 }
 
-
 func (pm *ProcessManager) Clean() error {
 	if err := pm.StopOperator(); err != nil {
 		return fmt.Errorf("%w: %v", constants.ErrProcessStopFailed, err)

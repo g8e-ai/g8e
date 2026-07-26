@@ -19,7 +19,6 @@ import (
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
-
 )
 
 // Run starts the Tactical Governance TUI. It blocks until the user presses
@@ -55,4 +54,3 @@ func Run(ctx context.Context, opts Options) error {
 	}
 	return nil
 }
-

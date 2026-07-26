@@ -36,4 +36,3 @@ func TestImportCertificateToWindowsStore_NonWindowsReturnsErrWindowsCertStoreImp
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrWindowsCertStoreImport)
 }
-

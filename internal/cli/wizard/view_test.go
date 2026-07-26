@@ -267,4 +267,3 @@ func TestOrNone_EmptyReturnsNone(t *testing.T) {
 func TestOrNone_NonEmptyReturnsValue(t *testing.T) {
 	assert.Equal(t, "https://example.com", orNone("https://example.com"))
 }
-

@@ -75,4 +75,3 @@ func TestVerifyCAFingerprint_NonCertificatePEM(t *testing.T) {
 	require.Error(t, err)
 	assert.Error(t, err)
 }
-

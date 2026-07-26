@@ -122,4 +122,3 @@ func ImportCertificateToWindowsStore(certPEM string) error {
 
 	return nil
 }
-

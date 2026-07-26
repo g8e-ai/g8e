@@ -612,4 +612,3 @@ func TestValidateRouting_A2AEnabled_ValidURL_NoError(t *testing.T) {
 	m.a2aDownstreamInput.SetValue("http://a2a:3001")
 	assert.Empty(t, m.validateRouting())
 }
-

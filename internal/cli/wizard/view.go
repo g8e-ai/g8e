@@ -247,4 +247,3 @@ func orNone(s string) string {
 	}
 	return s
 }
-

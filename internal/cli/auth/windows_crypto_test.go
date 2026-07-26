@@ -43,4 +43,3 @@ func TestGenerateWindowsCSR(t *testing.T) {
 		})
 	}
 }
-
