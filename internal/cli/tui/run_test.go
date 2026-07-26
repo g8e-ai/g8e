@@ -22,8 +22,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 )
 
 // newTestProgram builds a headless bubbletea program (no renderer, no real

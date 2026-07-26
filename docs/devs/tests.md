@@ -93,7 +93,7 @@ Helpers: `failingFileSvcFactory(err)` returns a factory that always errors. `pan
 
 ## CLI Command Test Helpers
 
-- **`newCmdTestEnv(t)`** — Returns `(fs.RuntimeFileService, *config.Config)` with a temp-rooted `fileSvc` and aligned `cfg`. Uses `setupTestConfig` internally, which calls `fileSvc.CreateRuntimeTree`, `config.LoadWithPaths`, and writes a dummy trust bundle via `fileSvc.WriteFile`.
+- **`newCmdTestEnv(t)`** — Returns `(fs.RuntimeFileService, *config.Config)` with a temp-rooted `fileSvc` and aligned `cfg`. Uses `setupTestConfig` internally, which calls `fileSvc.CreateRuntimeTree`, `config.Load`, and writes a dummy trust bundle via `fileSvc.WriteFile`.
 - **`fileSvcFactoryFor(fileSvc)`** — Returns a `fileSvcFactory` closure that always returns the given `fileSvc`. Used to inject a hermetic `fileSvc` into `*WithConfig` functions.
 - **`configLoaderFor(cfg)`** — Returns a config loader closure that always returns the given `cfg`.
 - **`mustRel(t, fileSvc, absPath)`** — Converts an absolute `.g8e/` path to a relative path, failing the test on error.
