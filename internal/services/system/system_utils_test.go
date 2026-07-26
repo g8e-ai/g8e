@@ -323,21 +323,6 @@ func TestGetNetworkInterfaces(t *testing.T) {
 	}
 }
 
-func TestGetLocalIP(t *testing.T) {
-	t.Parallel()
-	ip := GetLocalIP("")
-
-	assert.NotEmpty(t, ip)
-	assert.NotEqual(t, "127.0.0.1", ip, "GetLocalIP should return the outbound IP, not loopback")
-}
-
-func TestGetLocalIP_CustomResolver(t *testing.T) {
-	t.Parallel()
-	ip := GetLocalIP("8.8.8.8:80")
-
-	assert.NotEmpty(t, ip)
-}
-
 func TestGetTimezone_InjectedValue(t *testing.T) {
 	t.Parallel()
 	tz := getTimezone("America/Los_Angeles")

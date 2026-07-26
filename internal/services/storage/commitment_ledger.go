@@ -59,32 +59,6 @@ func NewCommitmentLedger(db *sqliteutil.DB, logger *slog.Logger) *CommitmentLedg
 	}
 }
 
-// GetLatestCommitmentJSON retrieves the most recent commitment as raw JSON.
-// Returns (nil, nil) when the ledger is empty (genesis state).
-func (cl *CommitmentLedger) GetLatestCommitmentJSON() ([]byte, error) {
-	if cl == nil || cl.db == nil {
-		return nil, fmt.Errorf("commitment ledger not initialized")
-	}
-
-	query := `
-	SELECT attestation_json
-	FROM commitment_ledger
-	ORDER BY committed_at_unix_ms DESC
-	LIMIT 1
-	`
-
-	var attestationJSON string
-	err := cl.db.QueryRowWithRetry(query).Scan(&attestationJSON)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to query latest commitment: %w", err)
-	}
-
-	return []byte(attestationJSON), nil
-}
-
 // ListCommitments retrieves all commitments ordered by committed_at_unix_ms ASC (chain order).
 func (cl *CommitmentLedger) ListCommitments() ([]*CommitmentRow, error) {
 	if cl == nil || cl.db == nil {

@@ -99,28 +99,12 @@ func NewG8eoService(cfg *config.Config, logger *slog.Logger, tlsConfig *certs.TL
 	return service, nil
 }
 
-// SetPubSubClient injects a custom PubSub client for testing.
-func (vs *G8eoService) SetPubSubClient(client pubsub.PubSubClient) {
-	vs.mu.Lock()
-	defer vs.mu.Unlock()
-	vs.pubSubClient = client
-}
-
 // SetFileService injects a RuntimeFileService for file I/O within the .g8e/ directory.
 // Must be called before Start().
 func (vs *G8eoService) SetFileService(fileSvc fs.RuntimeFileService) {
 	vs.mu.Lock()
 	defer vs.mu.Unlock()
 	vs.fileSvc = fileSvc
-}
-
-// SetKeystore injects a pre-initialized keystore for dependency injection.
-// When set, the gateway DB uses this keystore instead of the OS keychain.
-// Must be called before Start().
-func (vs *G8eoService) SetKeystore(ks *keystore.Keystore) {
-	vs.mu.Lock()
-	defer vs.mu.Unlock()
-	vs.keystore = ks
 }
 
 func (vs *G8eoService) Start(ctx context.Context) error {

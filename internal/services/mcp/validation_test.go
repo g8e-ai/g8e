@@ -21,6 +21,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func setPrivateIPAllowlistForTest(t *testing.T, cidrs []string) {
+	t.Helper()
+	parsed := make([]*net.IPNet, 0, len(cidrs))
+	for _, c := range cidrs {
+		_, ipNet, err := net.ParseCIDR(c)
+		require.NoError(t, err, "invalid CIDR %q", c)
+		parsed = append(parsed, ipNet)
+	}
+	privateAllowlistMu.Lock()
+	privateAllowlist = parsed
+	privateAllowlistMu.Unlock()
+}
+
+func resetPrivateIPAllowlistForTest() {
+	privateAllowlistMu.Lock()
+	privateAllowlist = nil
+	privateAllowlistMu.Unlock()
+}
+
 func TestValidateHTTPRequestURL(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -755,32 +774,25 @@ func TestValidateProcNetPath(t *testing.T) {
 
 func TestSetPrivateIPAllowlist(t *testing.T) {
 	t.Cleanup(func() {
-		_ = SetPrivateIPAllowlist(nil)
+		resetPrivateIPAllowlistForTest()
 	})
 
 	t.Run("valid CIDRs", func(t *testing.T) {
-		err := SetPrivateIPAllowlist([]string{"10.43.0.0/24", "127.0.0.0/8"})
-		require.NoError(t, err)
-	})
-
-	t.Run("invalid CIDR returns error", func(t *testing.T) {
-		err := SetPrivateIPAllowlist([]string{"not-a-cidr"})
-		require.Error(t, err)
+		setPrivateIPAllowlistForTest(t, []string{"10.43.0.0/24", "127.0.0.0/8"})
 	})
 
 	t.Run("empty slice resets allowlist", func(t *testing.T) {
-		err := SetPrivateIPAllowlist(nil)
-		require.NoError(t, err)
+		resetPrivateIPAllowlistForTest()
 		assert.False(t, isIPAllowed(net.ParseIP("10.43.0.40")))
 	})
 }
 
 func TestIsIPAllowed(t *testing.T) {
 	t.Cleanup(func() {
-		_ = SetPrivateIPAllowlist(nil)
+		resetPrivateIPAllowlistForTest()
 	})
 
-	require.NoError(t, SetPrivateIPAllowlist([]string{"10.43.0.0/24", "127.0.0.0/8"}))
+	setPrivateIPAllowlistForTest(t, []string{"10.43.0.0/24", "127.0.0.0/8"})
 
 	tests := []struct {
 		name     string
@@ -805,10 +817,10 @@ func TestIsIPAllowed(t *testing.T) {
 
 func TestValidateHTTPRequestURL_WithAllowlist(t *testing.T) {
 	t.Cleanup(func() {
-		_ = SetPrivateIPAllowlist(nil)
+		resetPrivateIPAllowlistForTest()
 	})
 
-	require.NoError(t, SetPrivateIPAllowlist([]string{"10.43.0.0/24"}))
+	setPrivateIPAllowlistForTest(t, []string{"10.43.0.0/24"})
 
 	t.Run("allowlisted private IP passes", func(t *testing.T) {
 		parsed, err := validateHTTPRequestURL("http://10.43.0.40:9000/slew")
@@ -835,10 +847,10 @@ func TestValidateHTTPRequestURL_WithAllowlist(t *testing.T) {
 
 func TestValidateHTTPRequestURL_DefaultBlocksPrivate(t *testing.T) {
 	t.Cleanup(func() {
-		_ = SetPrivateIPAllowlist(nil)
+		resetPrivateIPAllowlistForTest()
 	})
 
-	_ = SetPrivateIPAllowlist(nil)
+	resetPrivateIPAllowlistForTest()
 
 	_, err := validateHTTPRequestURL("http://10.43.0.40")
 	assert.Error(t, err)

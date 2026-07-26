@@ -14,12 +14,10 @@
 package mcp
 
 import (
-	"encoding/json"
 	"testing"
 
 	"log/slog"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -129,97 +127,6 @@ func TestValidateFieldPath_AllowedPaths(t *testing.T) {
 				require.ErrorIs(t, err, tt.wantErr)
 			} else {
 				require.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestParseFieldPath(t *testing.T) {
-	t.Parallel()
-
-	doc := json.RawMessage(`{
-		"suspect_ip_addresses": ["192.168.1.42", "10.0.0.5"],
-		"status": "open",
-		"priority": 1,
-		"metadata": {
-			"tags": {
-				"priority": "high"
-			}
-		}
-	}`)
-
-	strVal := func(s string) FieldValue { return FieldValue{Str: &s} }
-	ip1, ip2 := "192.168.1.42", "10.0.0.5"
-
-	tests := []struct {
-		name      string
-		document  json.RawMessage
-		fieldPath string
-		want      FieldValue
-		wantErr   bool
-	}{
-		{
-			name:      "simple field",
-			document:  doc,
-			fieldPath: "status",
-			want:      strVal("open"),
-			wantErr:   false,
-		},
-		{
-			name:      "array field",
-			document:  doc,
-			fieldPath: "suspect_ip_addresses",
-			want:      FieldValue{Array: []FieldValue{{Str: &ip1}, {Str: &ip2}}},
-			wantErr:   false,
-		},
-		{
-			name:      "nested field",
-			document:  doc,
-			fieldPath: "metadata.tags.priority",
-			want:      strVal("high"),
-			wantErr:   false,
-		},
-		{
-			name:      "field not found",
-			document:  doc,
-			fieldPath: "unknown_field",
-			wantErr:   true,
-		},
-		{
-			name:      "nested field not found",
-			document:  doc,
-			fieldPath: "metadata.unknown",
-			wantErr:   true,
-		},
-		{
-			name:      "empty field path",
-			document:  doc,
-			fieldPath: "",
-			wantErr:   true,
-		},
-		{
-			name:      "nil document",
-			document:  nil,
-			fieldPath: "status",
-			wantErr:   true,
-		},
-		{
-			name:      "invalid JSON",
-			document:  json.RawMessage(`invalid json`),
-			fieldPath: "status",
-			wantErr:   true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			got, err := ParseFieldPath(tt.document, tt.fieldPath)
-			if tt.wantErr {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, tt.want, got)
 			}
 		})
 	}

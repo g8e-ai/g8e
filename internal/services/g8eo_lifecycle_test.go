@@ -98,14 +98,18 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	service.bootstrap.SetHTTPClient(server.Client())
 
 	// Inject test keystore (bypasses OS keychain for cross-platform CI)
-	service.SetKeystore(ks)
+	service.mu.Lock()
+	service.keystore = ks
+	service.mu.Unlock()
 
 	// Inject file service (required before Start)
 	service.SetFileService(fileSvc)
 
 	// Inject Mock PubSub Client
 	mockPubSub := pubsubtest.NewMockOperatorPubSubClient()
-	service.SetPubSubClient(mockPubSub)
+	service.mu.Lock()
+	service.pubSubClient = mockPubSub
+	service.mu.Unlock()
 
 	// 4. Start the service
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

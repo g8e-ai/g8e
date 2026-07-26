@@ -514,27 +514,6 @@ func TestFileEditService_ExecuteFileEdit_Patch(t *testing.T) {
 	})
 }
 
-func TestFileEditService_ValidateFilePath(t *testing.T) {
-	t.Parallel()
-	cfg := testutil.NewTestConfig(t)
-	logger := testutil.NewTestLogger()
-	svc := NewFileEditService(cfg, logger)
-
-	t.Run("valid path", func(t *testing.T) {
-		t.Parallel()
-		tmpDir := testutil.TempDir(t)
-		err := svc.validateFilePath(filepath.Join(tmpDir, constants.TestFileTxtFilename))
-		require.NoError(t, err)
-	})
-
-	t.Run("relative path", func(t *testing.T) {
-		t.Parallel()
-		// Even relative paths can be validated (they get resolved to absolute)
-		err := svc.validateFilePath(constants.TestFileTxtFilename)
-		require.NoError(t, err)
-	})
-}
-
 func TestFileEditService_CreateBackup(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)

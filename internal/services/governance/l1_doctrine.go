@@ -1155,4 +1155,3 @@ func (v *L1Doctrine) analyzeJSONRecursive(raw json.RawMessage, path string, sign
 	// Numbers, booleans, and null are ignored - they don't contain string threats
 	return nil
 }
-

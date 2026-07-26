@@ -84,73 +84,6 @@ func TestCommitmentLedger_NewCommitmentLedger(t *testing.T) {
 	assert.NotNil(t, db)
 }
 
-func TestCommitmentLedger_GetLatestCommitmentJSON_NilLedger(t *testing.T) {
-	t.Parallel()
-
-	var cl *CommitmentLedger
-
-	json, err := cl.GetLatestCommitmentJSON()
-	require.Error(t, err)
-	assert.Nil(t, json)
-	assert.Contains(t, err.Error(), "not initialized")
-}
-
-func TestCommitmentLedger_GetLatestCommitmentJSON_NilDB(t *testing.T) {
-	t.Parallel()
-
-	cl := &CommitmentLedger{db: nil, logger: testutil.NewTestLogger()}
-
-	json, err := cl.GetLatestCommitmentJSON()
-	require.Error(t, err)
-	assert.Nil(t, json)
-	assert.Contains(t, err.Error(), "not initialized")
-}
-
-func TestCommitmentLedger_GetLatestCommitmentJSON_EmptyLedger(t *testing.T) {
-	t.Parallel()
-
-	cl, _ := setupTestCommitmentLedger(t)
-
-	json, err := cl.GetLatestCommitmentJSON()
-	require.NoError(t, err)
-	assert.Nil(t, json) // Empty ledger returns (nil, nil)
-}
-
-func TestCommitmentLedger_GetLatestCommitmentJSON_Success(t *testing.T) {
-	t.Parallel()
-
-	cl, _ := setupTestCommitmentLedger(t)
-
-	// First, append a commitment
-	attestation := []byte(`{
-		"transaction_id": "tx123",
-		"transaction_hash": "thash123",
-		"state_root_at_commit": "sr123",
-		"l2_signature_digest": "l2sig123",
-		"Actuator_intent_signature_digest": "act123",
-		"human_signature_digest": "hsig123",
-		"action_type": "write",
-		"target_resource": "/etc/nginx.conf",
-		"committed_at_unix_ms": 1234567890,
-		"auditor_key_id": "auditor123",
-		"signature": "sig123"
-	}`)
-
-	err := cl.AppendCommitmentJSON(attestation, "", "hash123")
-	require.NoError(t, err)
-
-	// Now retrieve it
-	retrievedJSON, err := cl.GetLatestCommitmentJSON()
-	require.NoError(t, err)
-	assert.NotNil(t, retrievedJSON)
-
-	// Verify the JSON content
-	var result map[string]interface{}
-	err = json.Unmarshal(retrievedJSON, &result)
-	require.NoError(t, err)
-	assert.Equal(t, "tx123", result["transaction_id"])
-}
-
 func TestCommitmentLedger_AppendCommitmentJSON_NilLedger(t *testing.T) {
 	t.Parallel()
 
@@ -233,10 +166,11 @@ func TestCommitmentLedger_AppendCommitmentJSON_ValidJSON(t *testing.T) {
 	err := cl.AppendCommitmentJSON(validJSON, "", "hash123")
 	require.NoError(t, err)
 
-	// Verify it was stored
-	retrievedJSON, err := cl.GetLatestCommitmentJSON()
+	// Verify it was stored via ListCommitments
+	rows, err := cl.ListCommitments()
 	require.NoError(t, err)
-	assert.NotNil(t, retrievedJSON)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "tx123", rows[0].TransactionID)
 }
 
 func TestCommitmentLedger_AppendCommitmentJSON_ChainIntegrity(t *testing.T) {
@@ -456,14 +390,8 @@ func TestCommitmentLedger_NilReceiverSafety(t *testing.T) {
 	// Test that methods handle nil receiver gracefully
 	var cl *CommitmentLedger
 
-	// GetLatestCommitmentJSON
-	json, err := cl.GetLatestCommitmentJSON()
-	require.Error(t, err)
-	assert.Nil(t, json)
-	assert.Contains(t, err.Error(), "not initialized")
-
 	// AppendCommitmentJSON
-	err = cl.AppendCommitmentJSON([]byte(`{}`), "prior", "hash")
+	err := cl.AppendCommitmentJSON([]byte(`{}`), "prior", "hash")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not initialized")
 }
@@ -496,10 +424,7 @@ func TestCommitmentLedger_ErrorMessages(t *testing.T) {
 	// Test that error messages are descriptive
 	var cl *CommitmentLedger
 
-	_, err := cl.GetLatestCommitmentJSON()
-	assert.Contains(t, err.Error(), "commitment ledger not initialized")
-
-	err = cl.AppendCommitmentJSON([]byte{}, "prior", "hash")
+	err := cl.AppendCommitmentJSON([]byte{}, "prior", "hash")
 	assert.Contains(t, err.Error(), "commitment ledger not initialized")
 
 	cl = &CommitmentLedger{db: nil, logger: testutil.NewTestLogger()}
@@ -575,13 +500,9 @@ func TestCommitmentLedger_MultipleCommitments(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// Verify the latest commitment is the last one
-	retrievedJSON, err := cl.GetLatestCommitmentJSON()
+	// Verify the latest commitment is the last one via ListCommitments
+	rows, err := cl.ListCommitments()
 	require.NoError(t, err)
-	assert.NotNil(t, retrievedJSON)
-
-	var result map[string]interface{}
-	err = json.Unmarshal(retrievedJSON, &result)
-	require.NoError(t, err)
-	assert.Equal(t, "tx-4", result["transaction_id"])
+	require.Len(t, rows, 5)
+	assert.Equal(t, "tx-4", rows[4].TransactionID)
 }
