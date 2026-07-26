@@ -292,27 +292,6 @@ func isPortAvailable(port int) bool {
 	return true
 }
 
-// ValidateL2PostureStartup checks the startup validation rules for postures
-// that require L2 signatures (consensus and notary). If posture is neither,
-// it returns nil (no validation needed). For consensus/notary posture, the
-// tribunalID must be non-empty and the quorum must be >= 1.
-//
-// This is a pure function extracted from the gateway startup path so it
-// can be tested without os.Exit. The gateway startup calls this after
-// loading the tribunal policy from the database to validate the quorum.
-func ValidateL2PostureStartup(posture string, tribunalID string, quorum int) error {
-	if posture != string(PostureConsensus) && posture != string(PostureNotary) {
-		return nil
-	}
-	if tribunalID == "" {
-		return constants.ErrConfigTribunalIDRequired
-	}
-	if quorum < 1 {
-		return constants.ErrConfigTribunalQuorumLow
-	}
-	return nil
-}
-
 // validateAndResolveGatewayPorts validates and resolves gateway port configuration.
 // It handles:
 // - Port zero validation (rejects explicit zero in production unless all ports are zero)
