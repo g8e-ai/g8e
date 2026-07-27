@@ -9,7 +9,7 @@ Version: v1.6.2
 
 The g8e Protocol platform is implemented as a single static binary that operates in two modes:
 
-1.  **Governance Gateway** (Policy Decision Point / PDP): The binary run in Gateway mode (`--posture doctrine`, `--posture consensus`, or `--posture notary`). The Gateway owns the policy decision layers (L1 Doctrine, L2 Consensus, L3 Notary) and serves as the platform's central persistence layer, pub/sub broker, root CA, and governance envelope entry point. The Gateway is governed by a multi-signature Tribunal (K-of-N Ed25519 votes), not Byzantine consensus. An in-process Operator substrate (PEP) runs L4 Warden and L5 Actuator locally for operations targeting the gateway host itself.
+1.  **Governance Gateway** (Policy Decision Point / PDP): The binary run in Gateway mode (`--posture doctrine`, `--posture consensus`, or `--posture notary`). The Gateway owns the policy decision layers (L1 Doctrine, L2 Consensus, L3 Notary) and serves as the platform's central persistence layer, pub/sub broker, root CA, and governance envelope entry point. The Gateway is governed by a multi-signature Consensus (K-of-N Ed25519 votes), not Byzantine consensus. An in-process Operator substrate (PEP) runs L4 Warden and L5 Actuator locally for operations targeting the gateway host itself.
 2.  **Governed Operator** (Policy Execution Point / PEP): The same binary run in Standard Mode (`operator start`). It runs on target hosts as the sovereign execution boundary and MCP server, handling L4 Warden (pre-dispatch verification) and L5 Actuator (execution and signed receipt production) for operations on its own host.
 
 ---
@@ -18,7 +18,7 @@ The g8e Protocol platform is implemented as a single static binary that operates
 
 - **5-Layer Governance Bedrock**: Every transaction must pass through five mandatory, fail-closed layers sequentially:
     - **L1 Doctrine**: Technical Bedrock (Hard Gates) code pattern matching and threat analysis.
-    - **L2 Consensus**: Tribunal-based deliberation producing L2 votes (Ed25519 signatures) over the transaction hash. The gateway delegates L2 deliberation to an enrolled Tribunal rather than self-signing.
+    - **L2 Consensus**: Consensus-based deliberation producing L2 votes (Ed25519 signatures) over the transaction hash. The gateway delegates L2 deliberation to an enrolled Consensus rather than self-signing.
     - **L3 Notary**: Human-in-the-loop authorization (utilizing WebAuthn passkey proofs with optional CLI mTLS session verification).
     - **L4 Warden**: Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root).
     - **L5 Actuator**: Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production.
@@ -132,7 +132,7 @@ The `--doctrine-dir` flag (env: `G8E_DOCTRINE_DIR`) specifies a directory of JSO
 
 ## HTTP Router Architecture
 
-The gateway builds two distinct HTTP routers, one per protocol surface. The router layer is a thin shell holding middleware infrastructure (rate limiting, CORS, path traversal guard) and delegating all domain logic to dedicated controllers for PKI, data, auth, admin, operator, SSE, health, and governance. Late-bound dependencies (tribunal service, envelope processor) are wired into the governance controller after initial construction, allowing the router to be built once at startup without rebuilds.
+The gateway builds two distinct HTTP routers, one per protocol surface. The router layer is a thin shell holding middleware infrastructure (rate limiting, CORS, path traversal guard) and delegating all domain logic to dedicated controllers for PKI, data, auth, admin, operator, SSE, health, and governance. Late-bound dependencies (consensus service, envelope processor) are wired into the governance controller after initial construction, allowing the router to be built once at startup without rebuilds.
 
 ### Bootstrap HTTP Router
 
@@ -152,7 +152,7 @@ The public HTTPS router registers the following route categories:
 
 **JIT Passkey Routes (JWT-authenticated)**: When JWKS is configured, `/api/v1/auth/passkeys/jit-register/challenge` and `/api/v1/auth/passkeys/jit-register/verify` allow OIDC/JIT users with zero credentials to register their first passkey. These routes are wrapped with JWT auth middleware.
 
-**mTLS-Only Routes**: Data settings, blob store, operator management (list, terminate, bind, unbind, target, reauth), governance signers, app policies, app revocation, tribunal management (list, delete), tribunal deliberate, governance envelopes (rate-limited), audit receipts, events, export, summary, and report, SSE push, database, KV store, pub/sub publish and stream, PKI management (apps enrollment, apps delegated, certificates revoke, revocation bundle), user management, passkey CLI status, and enrollment token generation.
+**mTLS-Only Routes**: Data settings, blob store, operator management (list, terminate, bind, unbind, target, reauth), governance signers, app policies, app revocation, consensus management (list, delete), consensus deliberate, governance envelopes (rate-limited), audit receipts, events, export, summary, and report, SSE push, database, KV store, pub/sub publish and stream, PKI management (apps enrollment, apps delegated, certificates revoke, revocation bundle), user management, passkey CLI status, and enrollment token generation.
 
 **WebSession-Protected Routes**: Browser-facing routes under `/api/v1/users/`, `/api/v1/auth/sessions/`, `/api/v1/approvals`, `/api/v1/auth/passkeys` are classified as `RouteAuthWebSession` in the RouteAuthRegistry, requiring a valid web session cookie. These include user profile (`/api/v1/users/me`), web session info (`/api/v1/auth/sessions/me`), OOB approval actions and listing, and passkey credential listing and revocation.
 
@@ -331,8 +331,8 @@ Every transaction submitted to `POST /api/v1/governance/envelopes` must pass thr
 ### L1 Doctrine (Technical Bedrock) — Gateway (PDP)
 Enforces forbidden patterns (such as `sudo` or `rm -rf /`), blacklists, and whitelists. It also performs MITRE threat detection on incoming payloads.
 
-### L2 Consensus (Tribunal Deliberation) — Gateway (PDP)
-The gateway delegates L2 deliberation to an enrolled Tribunal service rather than self-signing votes. The Tribunal evaluates the transaction and produces `L2Vote` entries (Ed25519 signatures over the transaction hash) from its member agents. Under `consensus` and `notary` postures, the gateway calls the Tribunal's `Deliberate` endpoint (via in-process deliberation) and attaches the returned L2 votes to the envelope. The L4 Warden then verifies the quorum of valid signatures against the `TribunalPolicy` stored in the tribunal store.
+### L2 Consensus (Consensus Deliberation) — Gateway (PDP)
+The gateway delegates L2 deliberation to an enrolled Consensus service rather than self-signing votes. The Consensus evaluates the transaction and produces `L2Vote` entries (Ed25519 signatures over the transaction hash) from its member agents. Under `consensus` and `notary` postures, the gateway calls the Consensus's `Deliberate` endpoint (via in-process deliberation) and attaches the returned L2 votes to the envelope. The L4 Warden then verifies the quorum of valid signatures against the `ConsensusPolicy` stored in the consensus store.
 
 ### L3 Notary (Human Authorization) — Gateway (PDP)
 The gateway notary enforces human-in-the-loop authorization using a layered model: passkey authorization is required for all proofs, and CLI mTLS session verification is applied as an additional transport-auth layer when `mtls_cert_fingerprint` is present.

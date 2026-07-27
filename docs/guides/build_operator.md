@@ -23,13 +23,13 @@ The g8e binary uses a single cobra command tree. Gateway and Operator modes are 
 #### Gateway Mode (PDP)
 A Gateway enforces governance postures across all connected Operators. Start a gateway worker with `gw start` (background) or `gw start --follow` (foreground), specifying a posture via `--posture`. Use `gw start --interactive` to launch the onboarding wizard before starting:
 - `--posture doctrine`, Enforces L1 hard gates; audits L2/L3.
-- `--posture consensus`, Enforces L1/L2; audits L3. Requires `--tribunal-id` and `--tribunal-url` to connect to an enrolled Tribunal service for L2 deliberation.
+- `--posture consensus`, Enforces L1/L2; audits L3. Requires `--consensus-id` and `--consensus-url` to connect to an enrolled Consensus service for L2 deliberation.
 - `--posture notary`, Enforces L1/L2/L3 strictly.
 
 Additional Gateway mode flags for consensus posture:
-- `--tribunal-id <id>`, ID of the TribunalPolicy for L2 consensus.
-- `--tribunal-url <url>`, URL of the Tribunal service for L2 deliberation.
-- `--tribunal-bootstrap <path>`, Path to a JSON file that seeds a TribunalPolicy and trusted signers at startup.
+- `--consensus-id <id>`, ID of the ConsensusPolicy for L2 consensus.
+- `--consensus-url <url>`, URL of the Consensus service for L2 deliberation.
+- `--consensus-bootstrap <path>`, Path to a JSON file that seeds a ConsensusPolicy and trusted signers at startup.
 
 #### Operator Mode (PEP)
 An Operator executes tools on a host and connects back to a Gateway. Start an operator worker with `operator start`:
@@ -181,7 +181,7 @@ The Operator must implement a singular verification gate that enforces:
 - **Freshness**: Validate `expires_at` is not passed and `nonce` is not in the replay store.
 - **State Binding**: Verify `state_merkle_root` matches the host's current local ledger root.
 - **L1Doctrine (Hard Gates)**: Enforce technical bedrock threat detection rules, forbidden patterns, and MITRE ATT&CK heuristics on the typed payload.
-- **L2Consensus**: Verify Tribunal deliberation votes (Ed25519 signatures) against a locally trusted signer store and the active TribunalPolicy. Under `consensus` posture, the gateway delegates L2 deliberation to an enrolled Tribunal service rather than self-signing.
+- **L2Consensus**: Verify Consensus deliberation votes (Ed25519 signatures) against a locally trusted signer store and the active ConsensusPolicy. Under `consensus` posture, the gateway delegates L2 deliberation to an enrolled Consensus service rather than self-signing.
 - **L3Notary**: Validate authorization proofs (mTLS certificate fingerprints for CLI sessions, WebAuthn proofs for web sessions).
 - **L4Warden**: Pre-dispatch verification of all preceding proofs and state roots.
 
@@ -267,7 +267,7 @@ The GovernanceEnvelope schema is defined in the protocol protobuf files. Your im
 1. **Use the canonical protojson wire format** for all client-facing interactions.
 2. **Implement the typed payload validation** defined in the protocol schemas.
 3. **Support the canonical request payload mappings** for all first-class event types.
-4. **Handle L2 votes** from Tribunal deliberation, verifying the quorum of Ed25519 signatures against the TribunalPolicy.
+4. **Handle L2 votes** from Consensus deliberation, verifying the quorum of Ed25519 signatures against the ConsensusPolicy.
 
 Refer to the protocol schema definitions in the protocol protobuf files for the canonical schema definitions.
 

@@ -31,7 +31,7 @@ graph TD
             end
             subgraph Governance ["Governance Surface (L1-L3)"]
                 EnvelopeRx["Envelope Reception<br/>POST /api/v1/governance/envelopes"]
-                Tribunal["Tribunal Service<br/>L1 Doctrine · L2 Consensus · L3 Notary"]
+                Consensus["Consensus Service<br/>L1 Doctrine · L2 Consensus · L3 Notary"]
             end
         end
 
@@ -54,8 +54,8 @@ graph TD
         Auth --> Passkey
         Reg --> DocStore
 
-        EnvelopeRx --> Tribunal
-        Tribunal --> StateRoot
+        EnvelopeRx --> Consensus
+        Consensus --> StateRoot
 
         MCPEndpoint --> WSSHandler
         A2A --> WSSHandler
@@ -116,7 +116,7 @@ The WebSocket handler (`GatewayWebSocketHandler`) provides high-performance fan-
 ### Governance Surface
 
 - **Envelope Reception**: `POST /api/v1/governance/envelopes` is the only customer-facing mutation entry point. Envelopes are processed synchronously via `ProcessEnvelope` on the in-process Operator substrate.
-- **Tribunal Service**: Constructed in-process for `consensus` and `notary` postures. Handles L2 deliberation via the `Deliberate` endpoint, producing Ed25519 signed votes.
+- **Consensus Service**: Constructed in-process for `consensus` and `notary` postures. Handles L2 deliberation via the `Deliberate` endpoint, producing Ed25519 signed votes.
 
 ## Relationship to Operator Substrate
 
@@ -124,6 +124,6 @@ The Gateway does not perform verification or execution itself. It delegates to t
 
 1. **Loopback Pub/Sub**: `NewInProcessPubSubClient` creates a loopback client that dispatches directly to the gateway's WebSocket handler, bypassing the network entirely.
 2. **`ProcessEnvelope`**: The envelope processor (`SetEnvelopeProcessor`) wires the command service as the synchronous fail-closed mutation gate. BYO clients POST envelopes and receive signed `ActionReceipt` as HTTP 200 JSON.
-3. **Governance Deps**: The Gateway's stores (ReplayStore, StateRootProvider, SignerStore, AppPolicyStore, TribunalStore, L3Notary) are injected into the Operator substrate via `GetGovernanceDeps()`.
+3. **Governance Deps**: The Gateway's stores (ReplayStore, StateRootProvider, SignerStore, AppPolicyStore, ConsensusStore, L3Notary) are injected into the Operator substrate via `GetGovernanceDeps()`.
 
 See [graph-operator-pipeline-l1-l5.md](./graph-operator-pipeline-l1-l5.md) for the L1–L5 verification and execution sequence that runs beneath this service stack.

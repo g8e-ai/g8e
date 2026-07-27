@@ -292,7 +292,7 @@ The `protocol/constants/` directory contains JSON files that serve as the author
 
 ### JSON Model Schemas
 
-The `protocol/models/` directory contains JSON Schema files that define the structure for protocol data structures, including: `account_lock.json`, `app_policy.json`, `bound_session.json`, `case.json`, `cli_session.json`, `conversation.json`, `operator_session.json`, `organization.json`, `passkey_challenge.json`, `persona.json`, `platform_settings.json`, `reputation_commitment.json`, `security_constraints.json`, `task.json`, `tribunal.json`, `user.json`, `web_session.json`, and more. The directory also contains `errors.py`, which defines Python error code and category enums.
+The `protocol/models/` directory contains JSON Schema files that define the structure for protocol data structures, including: `account_lock.json`, `app_policy.json`, `bound_session.json`, `case.json`, `cli_session.json`, `conversation.json`, `operator_session.json`, `organization.json`, `passkey_challenge.json`, `persona.json`, `platform_settings.json`, `reputation_commitment.json`, `security_constraints.json`, `task.json`, `consensus.json`, `user.json`, `web_session.json`, and more. The directory also contains `errors.py`, which defines Python error code and category enums.
 
 Per-agent-role model schemas are in `models/agents/` (`primary.json`, `assistant.json`, `lite.json`, `triage.json`, `title_generator.json`, `agent_harness.json`).
 

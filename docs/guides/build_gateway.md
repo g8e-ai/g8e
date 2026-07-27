@@ -133,9 +133,9 @@ To start the gateway, use the CLI gateway command:
 - `--rate-limit-burst <burst>` - Gateway rate limit burst size (default: 0)
 - `--log <level>` - Log level: info, error, debug (default: info)
 - `--cert-mode <mode>` - Certificate mode: full (all hostnames/IPs), localhost (only localhost)
-- `--tribunal-id <id>` - ID of the TribunalPolicy for L2 consensus (required for consensus posture)
-- `--tribunal-url <url>` - URL of the Tribunal service for L2 deliberation (e.g., https://localhost:8443/tribunal/v1/deliberate)
-- `--tribunal-bootstrap <path>` - Path to a JSON file that seeds a TribunalPolicy and trusted signers at startup
+- `--consensus-id <id>` - ID of the ConsensusPolicy for L2 consensus (required for consensus posture)
+- `--consensus-url <url>` - URL of the Consensus service for L2 deliberation (e.g., https://localhost:8443/consensus/v1/deliberate)
+- `--consensus-bootstrap <path>` - Path to a JSON file that seeds a ConsensusPolicy and trusted signers at startup
 - `--mcp-downstream-url <url>` - URL of a downstream MCP server to proxy discovery and execution to (default: none)
 - `--a2a-downstream-url <url>` - URL of a downstream A2A server to proxy execution to (default: none)
 - `--public-base-url <url>` - Public base URL for approval links and host validation behind reverse proxies or Cloudflare Tunnels (e.g., `https://demo.g8e.ai`)
@@ -381,7 +381,7 @@ Destructively remove all gateway state including databases, secrets, logs, and P
 
 ### Gateway Setup
 
-Run the interactive setup wizard to configure gateway settings such as posture, tribunal, passkey, CORS, and certificate options:
+Run the interactive setup wizard to configure gateway settings such as posture, consensus, passkey, CORS, and certificate options:
 
 ```bash
 ./g8e gw setup

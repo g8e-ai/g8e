@@ -25,7 +25,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   │   ├── governance.StateRootProvider (gateway.StateRootService via Stores) [SHARED]
 │   │   ├── governance.SignerStore (governance.FilesystemSignerStore)
 │   │   ├── governance.AppPolicyStore (gateway.AppPolicyStoreService via Stores) [SHARED]
-│   │   ├── governance.L2ConsensusPolicyStore (via GovernanceDeps.ConsensusPolicyStore; nil in outbound mode, gateway.TribunalStoreService in gateway mode)
+│   │   ├── governance.L2ConsensusPolicyStore (via GovernanceDeps.ConsensusPolicyStore; nil in outbound mode, gateway.ConsensusStoreService in gateway mode)
 │   │   ├── governance.L1Doctrine (from GovernanceDeps.Doctrine in gateway mode; created internally by L4Warden when doctrine param is nil in outbound mode)
 │   │   └── governance.L3Notary (governance.outboundNotary implementation)
 │   │       └── storage.SuspendedTransactionService
@@ -67,7 +67,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
         ├── gateway.DocumentStoreService
         ├── gateway.AppPolicyStoreService
         ├── gateway.SignerStoreService
-        ├── gateway.TribunalStoreService
+        ├── gateway.ConsensusStoreService
         ├── gateway.StateRootService
         ├── gateway.ReplayStoreService
         ├── gateway.KVStoreService
@@ -84,7 +84,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │       ├── gateway.DocumentStoreService
 │       ├── gateway.AppPolicyStoreService
 │       ├── gateway.SignerStoreService
-│       ├── gateway.TribunalStoreService
+│       ├── gateway.ConsensusStoreService
 │       ├── gateway.StateRootService
 │       ├── gateway.ReplayStoreService
 │       ├── gateway.KVStoreService
@@ -154,8 +154,8 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   └── gateway.PKIAuthority
 │   ├── gateway/console (Console SPA embed filesystem)
 │   ├── mcp.GatewayService [SHARED]
-│   ├── gateway.GovernanceController (governance envelope submission, tribunal deliberation)
-│   │   ├── tribunal.TribunalService (atomic.Pointer, set by boot sequence via SetTribunal — no router rebuild)
+│   ├── gateway.GovernanceController (governance envelope submission, consensus deliberation)
+│   │   ├── consensus.ConsensusService (atomic.Pointer, set by boot sequence via SetConsensus — no router rebuild)
 │   │   ├── governance.EnvelopeProcessor (atomic.Value via envProcHolder, set by boot sequence via SetEnvelopeProcessor)
 │   │   └── response.Writer
 │   ├── gateway.PKIController (PKI enrollment, CSR signing, trust scripts, deploy scripts)
@@ -191,10 +191,10 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.SessionController (logout, web session)
 │   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   │   ├── response.Writer
-│   ├── gateway.AdminController (app policies, tribunals, app revocation)
+│   ├── gateway.AdminController (app policies, consensuss, app revocation)
 │   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   │   ├── gateway.SignerStoreService (from Stores [SHARED])
-│   │   ├── gateway.TribunalStoreService (from Stores [SHARED])
+│   │   ├── gateway.ConsensusStoreService (from Stores [SHARED])
 │   │   ├── gateway.UserService [SHARED]
 │   │   └── response.Writer
 │   ├── gateway.SSEController (SSE push, events, stream)
@@ -223,9 +223,9 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   └── gateway.CLISessionService
 │   └── gateway.PasskeyService (as governance.L3Notary for WebAuthn proofs, domain logic only)
 │       └── gateway.DocumentStoreService (from Stores [SHARED])
-├── tribunal.TribunalService
+├── consensus.ConsensusService
 │   ├── governance.L1Doctrine
-│   ├── tribunal.ConsensusMember (one or more enrolled members with Ed25519 keys)
+│   ├── consensus.ConsensusMember (one or more enrolled members with Ed25519 keys)
 │   └── response.Writer
 ├── mcp.GatewayService [SHARED]
 │   ├── response.Writer
@@ -242,7 +242,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   ├── Ed25519 signing key/keyID (set by in-process OperatorPubSubService in gateway mode)
 │   │   ├── downstreamURL (MCP egress, set by in-process OperatorPubSubService in gateway mode)
 │   │   └── DBService (mcp.FieldReader, gateway.DocumentStoreService) [SHARED] (set by in-process OperatorPubSubService in gateway mode; not applicable in outbound mode)
-│   ├── tribunal.L2ConsensusDeliberator (atomic.Value, tribunal.LocalDeliberator in gateway mode, not applicable in outbound mode)
+│   ├── consensus.L2ConsensusDeliberator (atomic.Value, consensus.LocalDeliberator in gateway mode, not applicable in outbound mode)
 │   ├── a2aDownstreamURL (construction-phase, immutable after NewGatewayService)
 │   └── publicBaseURL (construction-phase, immutable after NewGatewayService)
 └── response.Writer
@@ -265,7 +265,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - **`gateway.KVStoreService`** provides TTL-aware ephemeral state with GLOB pattern scanning for gateway mode. Callers access it directly via the `KVStore` field on `Stores` (returned by `OpenCanonicalDBService`) - no delegation wrappers.
 - **`gateway.SSEEventService`** provides Server-Sent Events fan-out for gateway mode. Callers access it directly via the `SSEStore` field on `Stores` (returned by `OpenCanonicalDBService`) - no delegation wrappers.
 - **`gateway.BlobStoreService`** provides binary persistence for attachments and certificate material for gateway mode. Callers access it directly via the `BlobStore` field on `Stores` (returned by `OpenCanonicalDBService`) - no delegation wrappers.
-- **`Stores.DB`** provides the raw `sqliteutil.DB` connection for consumers needing direct DB access (e.g., `NewTribunalStoreService`, `NewStateRootService`). Accessible via the `DB` field on `Stores` (returned by `OpenCanonicalDBService`).
+- **`Stores.DB`** provides the raw `sqliteutil.DB` connection for consumers needing direct DB access (e.g., `NewConsensusStoreService`, `NewStateRootService`). Accessible via the `DB` field on `Stores` (returned by `OpenCanonicalDBService`).
 - **`gateway.Stores`** is a read-only aggregation struct returned by `OpenCanonicalDBService`. It bundles 11 store services for transport convenience. Consumers decompose it at the call site — controllers receive individual stores via `Deps` structs (e.g., `DBControllerDeps`, `BootstrapControllerDeps`), not the whole `Stores` struct. The trade-off: `GatewayModeService` and `G8eoService` retain the full `Stores` as a field, giving them access to all 11 stores even if they only use 2-4. This is acceptable because (1) the struct is read-only, (2) Go's type system prevents accessing the wrong store, and (3) splitting into themed groups would add types without reducing actual coupling since controllers already get individual stores via DI.
 - **`storage.SuspendedTransactionService`** is the L3 approval workflow store used consistently in both gateway and outbound modes (implements `storage.SuspendedTransactionStore`). In both `GatewayModeService` and `G8eoService`, a single `suspendedTxStore` field (typed as `*storage.SuspendedTransactionService`) serves both store operations and `Close()` — no separate closer field.
 - **`mcp.NewGatewayService`** fails fast on construction errors: `FieldPathRegistry` initialization errors are returned (not silently logged), making governance system initialization failures fatal. The `Dependencies.FieldPathRegistryFactory` field allows tests to inject a failing factory.
@@ -283,7 +283,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 
 ### Governance Stack (L1-L5)
 - **L1**: `governance.L1Doctrine` (technical bedrock validation, threat detection, forbidden pattern matching). Constructed via `NewL1DoctrineFromDir(doctrineDir)` which loads `*.json` doctrine files from the given directory and appends them to hardcoded MITRE detectors. Empty dir falls back to `NewL1Doctrine()` (backward compatible). The doctrine instance is shared between the MCP Gateway ThreatScanner and L4Warden via `GatewayModeService.doctrine` → `GovernanceDeps.Doctrine` → `NewL4Warden()`.
-- **L2**: `tribunal.TribunalService` (Tribunal-based deliberation producing L2 votes via Ed25519 signatures; gateway delegates deliberation via `LocalDeliberator`). The `L2ConsensusPolicyStore` interface in `governance.L4Warden` loads consensus policy for quorum verification.
+- **L2**: `consensus.ConsensusService` (Consensus-based deliberation producing L2 votes via Ed25519 signatures; gateway delegates deliberation via `LocalDeliberator`). The `L2ConsensusPolicyStore` interface in `governance.L4Warden` loads consensus policy for quorum verification.
 - **L3**: `governance.L3Notary` — composable notary design with two production implementations sharing primitives:
   - `governance.gatewayNotary` (via `governance.NewGatewayL3Notary`) — passkey authorization (`L3Notary` delegate) + optional CLI mTLS session verification (`CLISessionVerifier`). Does NOT access suspended transactions.
   - `governance.outboundNotary` (via `governance.NewOutboundL3Notary`) — suspended transaction lookup + Ed25519 signature verification (shared via `verifyOutboundProof`).
@@ -297,12 +297,12 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - `replay_store.go` — `ReplayStore` interface
 - `state_root_provider.go` — `StateRootProvider` interface
 - `signer_store.go` — `SignerStore` interface + `SimpleSignerStore` (production fail-closed fallback) + `FilesystemSignerStore` (outbound impl)
-- `tribunal_store.go` — `TribunalStore` interface, `L2ConsensusPolicyStore` interface
+- `l2_consensus.go` — `ConsensusStore` interface, `L2ConsensusPolicyStore` interface
 - `app_policy_store.go` — `AppPolicyStore` interface
 - `transaction_audit_store.go` — `TransactionAuditStore` interface
 
 - `gateway.SignerStoreService` implements: `governance.SignerStore` (gateway mode dedicated implementation).
-- `gateway.TribunalStoreService` implements: `governance.TribunalStore` and `governance.L2ConsensusPolicyStore` (gateway mode dedicated implementation, provides TribunalPolicy lookup for L4 Warden quorum verification).
+- `gateway.ConsensusStoreService` implements: `governance.ConsensusStore` and `governance.L2ConsensusPolicyStore` (gateway mode dedicated implementation, provides ConsensusPolicy lookup for L4 Warden quorum verification).
 - `gateway.AppPolicyStoreService` implements: `governance.AppPolicyStore` (gateway mode dedicated implementation).
 - `gateway.ReplayStoreService` implements: `governance.ReplayStore` (gateway mode dedicated implementation).
 - `gateway.StateRootService` implements: `governance.StateRootProvider` (gateway mode dedicated implementation).
@@ -336,7 +336,7 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - `gateway.GatewayWebSocketHandler` is the in-process pub/sub broker for gateway mode.
 - `gateway.PKIAuthority` manages PKI hierarchy and certificate lifecycle for gateway mode.
 - `network.Detector` detects host IP addresses and DNS names to configure TLS certificate identities dynamically during boot and renewal.
-- `governance_envelope.go` is a thin delegation shim: `SetEnvelopeProcessor` on `GatewayModeService` delegates to `GovernanceController.SetEnvelopeProcessor`. The synchronous envelope-processing endpoint at `/api/v1/governance/envelopes` and all governance logic (`verifyEnvelopeIdentityBinding`, `isAppComponent`, `classifyEnvelopeError`, `handleGovernanceEnvelope`) live on `GovernanceController` in `governance_controller.go`. `GovernanceController.envProc` uses `atomic.Value` (via `envProcHolder` wrapper) for the envelope processor; `GovernanceController.tribunal` uses `atomic.Pointer[tribunal.TribunalService]`. Both follow the thread-safety pattern in `docs/devs/devs.md` §"Thread Safety for Late-Bound Dependencies": routes are always registered, handlers check `.Load()` for nil and fail-closed with 503.
+- `governance_envelope.go` is a thin delegation shim: `SetEnvelopeProcessor` on `GatewayModeService` delegates to `GovernanceController.SetEnvelopeProcessor`. The synchronous envelope-processing endpoint at `/api/v1/governance/envelopes` and all governance logic (`verifyEnvelopeIdentityBinding`, `isAppComponent`, `classifyEnvelopeError`, `handleGovernanceEnvelope`) live on `GovernanceController` in `governance_controller.go`. `GovernanceController.envProc` uses `atomic.Value` (via `envProcHolder` wrapper) for the envelope processor; `GovernanceController.consensus` uses `atomic.Pointer[consensus.ConsensusService]`. Both follow the thread-safety pattern in `docs/devs/devs.md` §"Thread Safety for Late-Bound Dependencies": routes are always registered, handlers check `.Load()` for nil and fail-closed with 503.
 - `gateway_db.go` embeds the SQLite schema from `db/schema.sql` (via `gatewaySchema` unexported var) for database initialization. `gateway_certs.go` defines certificate validity periods and common names for all g8e CAs (root, intermediate, serving, leaf, peer).
 - `gateway_pubsub.go` defines `GatewayWebSocketHandler` for WebSocket-based publish/subscribe channels, including subscriber management and in-process handlers for governance command processing and SSE streaming.
 
@@ -359,13 +359,13 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - **`gateway.EnrollmentTokenController`** (`enrollment_token_controller.go`): Enrollment token generation (mTLS-protected) and validation (public). 4 dependencies (cfg, logger, enrollmentTokenSvc, responder).
 - **`gateway.UserController`** (`user_controller.go`): User creation (mTLS-protected), user me (web session). 4 dependencies (cfg, logger, userSvc, responder).
 - **`gateway.SessionController`** (`session_controller.go`): Logout (clear cookie + delete web session), web session info. 4 dependencies (logger, docStore, responder, crossOrigin).
-- **`gateway.AdminController`** (`admin_controller.go`): App policy management by signer, app revocation, tribunal CRUD.
+- **`gateway.AdminController`** (`admin_controller.go`): App policy management by signer, app revocation, consensus CRUD.
 - **`gateway.OperatorController`** (`operator_controller.go`): Operator list, terminate, bind/unbind operators, set target context, reauth.
 - **`gateway.SSEController`** (`sse_controller.go`): SSE event push, poll, and stream endpoints. Includes `authorizeSSERoute` for dual-auth (mTLS or web session) authorization. Heartbeat interval defaults to 30s via `newSSEController`.
 - **`gateway.HealthController`** (`health_controller.go`): Health check, bootstrap health, state endpoint, and landing page. Previously in `gateway_http_health.go` (deleted).
-- **`gateway.GovernanceController`** (`governance_controller.go`): Governance envelope submission, tribunal deliberation, `SetTribunal`/`SetEnvelopeProcessor` late-bound dependency setters. Uses `atomic.Pointer` for tribunal and `atomic.Value` (via `envProcHolder`) for envelope processor, following the thread-safety pattern in `docs/devs/devs.md`.
+- **`gateway.GovernanceController`** (`governance_controller.go`): Governance envelope submission, consensus deliberation, `SetConsensus`/`SetEnvelopeProcessor` late-bound dependency setters. Uses `atomic.Pointer` for consensus and `atomic.Value` (via `envProcHolder`) for envelope processor, following the thread-safety pattern in `docs/devs/devs.md`.
 
-  **Boot-order constraint (why deferred init is necessary):** `TribunalService` depends on gateway stores (tribunal store, signer store, consensus policy store) that are created during `OpenCanonicalDBService`, which happens as part of `GatewayModeService` construction. `GovernanceController` is created during `NewHTTPHandler`, which is also part of `GatewayModeService` construction. The `TribunalService` is then constructed after the gateway service is fully initialized, using stores from the already-opened database. This creates a genuine circular dependency: Tribunal needs gateway stores → gateway needs HTTPHandler → HTTPHandler needs GovernanceController → GovernanceController needs Tribunal. Reordering the boot sequence to construct TribunalService first is not possible because TribunalService requires stores that don't exist until the gateway service opens its database. The `atomic.Pointer` pattern with 503 guards is the correct solution — the controller starts in a partially-constructed state and is completed via `SetTribunal` / `SetEnvelopeProcessor` later in the boot sequence. Both handlers check the atomic pointer at request time and return 503 if the dependency is not yet wired, eliminating any nil-dereference risk.
+  **Boot-order constraint (why deferred init is necessary):** `ConsensusService` depends on gateway stores (consensus store, signer store, consensus policy store) that are created during `OpenCanonicalDBService`, which happens as part of `GatewayModeService` construction. `GovernanceController` is created during `NewHTTPHandler`, which is also part of `GatewayModeService` construction. The `ConsensusService` is then constructed after the gateway service is fully initialized, using stores from the already-opened database. This creates a genuine circular dependency: Consensus needs gateway stores → gateway needs HTTPHandler → HTTPHandler needs GovernanceController → GovernanceController needs Consensus. Reordering the boot sequence to construct ConsensusService first is not possible because ConsensusService requires stores that don't exist until the gateway service opens its database. The `atomic.Pointer` pattern with 503 guards is the correct solution — the controller starts in a partially-constructed state and is completed via `SetConsensus` / `SetEnvelopeProcessor` later in the boot sequence. Both handlers check the atomic pointer at request time and return 503 if the dependency is not yet wired, eliminating any nil-dereference risk.
 
 ### JWT Authentication
 - **`gateway.JWKSProvider`** (`jwks.go`): Optional external IdP JWT validation via JWKS endpoint. When configured, MCP/A2A routes accept JWT auth in addition to mTLS.
@@ -430,7 +430,7 @@ The reporting system operates as a self-contained, offline verification utility 
 
 - **`internal/cli/serve/cert.go`**: PKI enrollment and certificate lifecycle: `PerformAutomaticEnrollment` (initial enrollment via CSR + trust bundle fetch, returns `(sessionID, err)` instead of calling `os.Setenv` internally), `RenewOperatorCertificate` (re-enrollment for expiring certs, decomposed into 5 testable units: `checkCertExpiry`, `fetchAndSaveTrustBundle`, `buildMTLSClient`, `submitRenewal`, `saveRenewedCerts`), `RunClientCertRenewalLoop` (periodic renewal check). `CertPaths` struct decouples path configuration from `paths.Infra`. HTTP client uses 15s timeout via `http.Client` + `http.NewRequestWithContext`. Error wrapping standardized with `ErrEmptyTrustBundle`, `ErrCAParseFailed`, `ErrMissingRequiredField`.
 - **`internal/cli/serve/operator.go`**: Operator boot sequence: `RunOperator` orchestrates config loading, trust bundle setup, enrollment, and signal handling. Extracted helpers: `resolveKeyPath`, `resolveCertPath`, `loadClientCertPair`, `buildOperatorLoadOptions`.
-- **`internal/cli/serve/gateway.go`**: Gateway boot sequence: `RunGateway` orchestrates config loading, `GatewayModeService` construction, in-process execution service initialization, tribunal bootstrap (policy seeding via `bootstrapTribunalPolicy`, key loading via `BootstrapTribunal` with `FileKeyProvider`), in-process `OperatorPubSubService` construction via `NewGatewayOperatorPubSubService` with `GatewayCommandServiceConfig` (embedding base `CommandServiceConfig` plus `MCPGateway` and `GovDeps *GovernanceDeps`), `SetEnvelopeProcessor` wiring, `SetTribunal` and `SetL2ConsensusDeliberator` wiring under consensus posture, and graceful shutdown with 30-second timeout. `ExportActuatorPublicKey` writes the actuator public key to the PKI directory for receipt verification by external harnesses.
+- **`internal/cli/serve/gateway.go`**: Gateway boot sequence: `RunGateway` orchestrates config loading, `GatewayModeService` construction, in-process execution service initialization, consensus bootstrap (policy seeding via `bootstrapConsensusPolicy`, key loading via `BootstrapConsensus` with `FileKeyProvider`), in-process `OperatorPubSubService` construction via `NewGatewayOperatorPubSubService` with `GatewayCommandServiceConfig` (embedding base `CommandServiceConfig` plus `MCPGateway` and `GovDeps *GovernanceDeps`), `SetEnvelopeProcessor` wiring, `SetConsensus` and `SetL2ConsensusDeliberator` wiring under consensus posture, and graceful shutdown with 30-second timeout. `ExportActuatorPublicKey` writes the actuator public key to the PKI directory for receipt verification by external harnesses.
 - **`internal/cli/serve/logger.go`**: Logger configuration: `ConfigureLogger` and `ConfigureLoggerWithOutput` produce `slog.Logger` instances with operator-friendly formatting and configurable log levels.
 - **`internal/cli/serve/version.go`**: `VersionInfo` struct holds build-time metadata (version, build ID, build time, platform) set via ldflags.
 - **`internal/cli/cmd/gateway.go`**: Gateway CLI command tree. `gatewayStartCmd` launches the gateway as a background process via `pm.StartOperator` (`ProcessManager.StartOperator`), resolving configuration from CLI flags and environment variables. With `--follow` flag, runs in foreground by calling `serve.RunGateway` directly. With `--interactive`/`-i` flag, launches the onboarding wizard (`internal/cli/wizard`) before startup; the wizard result is merged into resolved flags via `applyWizardConfig`. `gatewaySettingsCmd`, `gatewayResetCmd`, and `gatewayCleanCmd` manage gateway state over mTLS.
@@ -447,7 +447,7 @@ The reporting system operates as a self-contained, offline verification utility 
 
 ## CLI Wizard Package
 
-- **`internal/cli/wizard/`**: Interactive onboarding wizard for `g8e gw start --interactive`/`-i`. Bubble Tea TUI with 4-step flow: Network & Identity → Security & Governance Posture → Agent Tooling & Routing → Review & Confirm. Uses `charmbracelet/bubbles` `textinput` for URL/string fields and arrow-key navigation for choices/toggles. Produces a focused `Config` (wizard-owned fields only); the `cmd` package owns conversion and merging via `wizardConfigFromFlags`/`applyWizardConfig`. Files: `model.go` (state struct, `NewModel`, `result()`), `update.go` (message routing, per-step key handling), `view.go` (lipgloss rendering per step), `steps.go` (step enum, ordering), `validate.go` (URL, origin, tribunal, passkey validators), `styles.go` (color palette matching `tui/styles.go`), `run.go` (`Run` entry point, `Config`/`Options`/`Result` types), `messages.go` (custom message types).
+- **`internal/cli/wizard/`**: Interactive onboarding wizard for `g8e gw start --interactive`/`-i`. Bubble Tea TUI with 4-step flow: Network & Identity → Security & Governance Posture → Agent Tooling & Routing → Review & Confirm. Uses `charmbracelet/bubbles` `textinput` for URL/string fields and arrow-key navigation for choices/toggles. Produces a focused `Config` (wizard-owned fields only); the `cmd` package owns conversion and merging via `wizardConfigFromFlags`/`applyWizardConfig`. Files: `model.go` (state struct, `NewModel`, `result()`), `update.go` (message routing, per-step key handling), `view.go` (lipgloss rendering per step), `steps.go` (step enum, ordering), `validate.go` (URL, origin, consensus, passkey validators), `styles.go` (color palette matching `tui/styles.go`), `run.go` (`Run` entry point, `Config`/`Options`/`Result` types), `messages.go` (custom message types).
 
 ## Runtime File Service
 
@@ -513,7 +513,7 @@ The following packages are test-only and are not part of the production dependen
 - Follows the same pattern as `storagetest`, which keeps mock infrastructure out of production code
 
 **`internal/services/governance/governancetest/`** - Test-only governance store fixtures
-- `SimpleTribunalStore`, `SimpleAppPolicyStore`, `SimpleStateRootProvider` - In-memory implementations of governance store interfaces for unit tests
+- `SimpleConsensusStore`, `SimpleAppPolicyStore`, `SimpleStateRootProvider` - In-memory implementations of governance store interfaces for unit tests
 - Used by governance, pubsub, and chaos tests
 - `SimpleSignerStore` remains in `governance/signer_store.go` (not here) because `pubsub_commands.go` uses it as a production fail-closed fallback
 
@@ -525,7 +525,7 @@ The following packages are test-only and are not part of the production dependen
 **Key distinction**: Test infrastructure is separated from production code to avoid import cycles. The `storagetest`, `pubsubtest`, `governancetest`, and `chaos` packages provide test implementations that should never be used in production code paths.
 
 **`test/fixtures/gateway_fixture.go`** - In-process gateway test fixture (build tag: `integration`)
-- `GatewayFixture` spins up a real `GatewayModeService` with `httptest.Server`, mTLS PKI, tribunal enrollment, and in-process `OperatorPubSubService` wired with full governance dependencies
+- `GatewayFixture` spins up a real `GatewayModeService` with `httptest.Server`, mTLS PKI, consensus enrollment, and in-process `OperatorPubSubService` wired with full governance dependencies
 - Used by integration tests for MCP flow, A2A flow, L2 consensus, governance envelope verification, OOB suspension/approval, and downstream integration
 
 **`test/e2e/harness.go`** - Docker-based E2E test fixture (build tag: `e2e`)

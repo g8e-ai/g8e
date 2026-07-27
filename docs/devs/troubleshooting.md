@@ -98,7 +98,7 @@ Common causes:
 - The Go toolchain is missing or below the version expected by the current Developer Guidelines (Go 1.26.5).
 - Runtime PKI or secrets were created by an older incompatible checkout.
 - Port collision prevention: the gateway fails startup if multiple logical surfaces are assigned to the same port, ensuring no downgrade of the mTLS execution boundary. The HTTP surface (8080) serves plain HTTP for bootstrap and PKI discovery only; the HTTPS surface (8443) handles all API, MCP, console, and management routes. See [Network Architecture](../architecture/network.md) for port topology details.
-- Governance posture validation: when starting in `consensus` or `notary` posture, the gateway validates tribunal prerequisites at startup before any services start. If the tribunal ID is empty, the tribunal policy does not exist in the database, or quorum is less than 1, the gateway exits with an error. See [Governance](../architecture/governance.md) for posture startup validation details.
+- Governance posture validation: when starting in `consensus` or `notary` posture, the gateway validates consensus prerequisites at startup before any services start. If the consensus ID is empty, the consensus policy does not exist in the database, or quorum is less than 1, the gateway exits with an error. See [Governance](../architecture/governance.md) for posture startup validation details.
 
 Stop the managed process before retrying. Use `gw restart` as a shortcut, or
 stop and start manually:
@@ -285,33 +285,33 @@ The gateway posture is set at startup via `--posture <doctrine|consensus|notary>
 and cannot be changed at runtime. Each posture has different startup
 requirements:
 
-- **Doctrine** (default): No tribunal prerequisites. L2 and L3 are audited
+- **Doctrine** (default): No consensus prerequisites. L2 and L3 are audited
   but not enforced.
-- **Consensus**: Requires a tribunal policy to exist in the database with
-  quorum >= 1. The Tribunal service is bootstrapped in-process.
+- **Consensus**: Requires a consensus policy to exist in the database with
+  quorum >= 1. The Consensus service is bootstrapped in-process.
 - **Notary**: Same as consensus, plus L3 notary must be configured for
   mutation actions to succeed.
 
 If the gateway fails to start in `consensus` or `notary` posture, check:
 
-- The tribunal ID is non-empty.
-- The tribunal policy exists in the database and is enabled.
+- The consensus ID is non-empty.
+- The consensus policy exists in the database and is enabled.
 - Quorum is >= 1 (valid for single-member ensembles).
 - For `notary` posture, the L3 notary is available. Without it, mutations
   fail closed.
 
-For declarative tribunal seeding, use the `--tribunal-bootstrap` flag with
-a JSON config file containing `tribunal_id`, `member_app_ids`, `quorum`,
-and optional `seed_hex`. This is idempotent: if the tribunal already
+For declarative consensus seeding, use the `--consensus-bootstrap` flag with
+a JSON config file containing `consensus_id`, `member_app_ids`, `quorum`,
+and optional `seed_hex`. This is idempotent: if the consensus already
 exists, the bootstrap is skipped.
 
-Tribunal members whose keys cannot be resolved during bootstrap are
+Consensus members whose keys cannot be resolved during bootstrap are
 included without a private key and a warning is logged. They can
 participate in policy but cannot sign votes. If all members lack keys,
 L2 deliberation produces no votes and quorum fails.
 
 See [Governance](../architecture/governance.md) for posture definitions
-and tribunal bootstrap details.
+and consensus bootstrap details.
 
 ### Governance envelope rate limiting
 

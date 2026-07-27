@@ -486,7 +486,7 @@ NIST SP 800-63B-4 (July 2025) supersedes SP 800-63B (2020) and defines technical
 |---------|-----------|---------|----------------|
 | **Certificate Authority** | ECDSA P-256 | PKI hierarchy | `internal/services/gateway/pki_controller.go` |
 | **Workload Identity** | SPIFFE URI SAN | Identity binding | `protocol/workload_identity.go` |
-| **Transaction Signatures** | Ed25519 | L2 Consensus, L5 Actuator | `internal/services/tribunal/service.go`, `internal/services/governance/l4_warden.go` |
+| **Transaction Signatures** | Ed25519 | L2 Consensus, L5 Actuator | `internal/services/consensus/service.go`, `internal/services/governance/l4_warden.go` |
 | **Hash Functions** | SHA-256 | Transaction hash, state roots | `protocol/proto/g8e/operator/v1/operator.proto` |
 | **Transport Security** | TLS 1.3 | mTLS for all communication | `docs/architecture/auth.md` |
 | **Human Authentication** | WebAuthn/FIDO2 | L3 Notary | `internal/services/governance/l3_notary.go` |
@@ -549,7 +549,7 @@ NIST SP 800-63B-4 (July 2025) supersedes SP 800-63B (2020) and defines technical
 - **MCP tool interception verification** (`--verify` flag) ensuring agent tool-disabling configurations are correctly applied before agent launch
 - **MCP gateway output scrubbing** preventing sensitive data leakage in downstream MCP audit logs
 - **Agent support consolidation** to 4 supported agents (Claude Code, Codex, Goose, Gemini CLI) reducing attack surface
-- **Governance interface extraction** separating verification concerns (replay store, signer store, tribunal store, app policy store, state root provider) into dedicated files
+- **Governance interface extraction** separating verification concerns (replay store, signer store, consensus store, app policy store, state root provider) into dedicated files
 - **Protocol wire-format documentation** for EventType, AgentMode, and SessionEventWire ensuring consumer compatibility
 
 ### Planned Enhancements
@@ -594,7 +594,7 @@ NIST SP 800-63B-4 (July 2025) supersedes SP 800-63B (2020) and defines technical
 | **Audit Store** | `internal/services/storage/audit_store.go` | Audit logging, encryption, retention |
 | **Sovereign Execution Boundary** | `internal/services/scrubbing/boundary.go` | PII scrubbing, data sovereignty |
 | **L1 Doctrine** | `internal/services/governance/l1_doctrine.go` | Threat detection, input validation |
-| **L2 Consensus** | `internal/services/tribunal/service.go` | L2 deliberation and Ed25519 consensus signing |
+| **L2 Consensus** | `internal/services/consensus/service.go` | L2 deliberation and Ed25519 consensus signing |
 | **L3 Notary** | `internal/services/governance/l3_notary.go` | Two-layer human authorization (passkey plus mTLS transport) |
 | **L4 Warden** | `internal/services/governance/l4_warden.go` | Pre-dispatch verification |
 | **L5 Actuator** | `internal/services/governance/l5_actuator.go` | Execution boundary, signed receipts |
@@ -643,7 +643,7 @@ For specific compliance questions or audit support, contact:
 |---------|------|--------|---------|
 | 1.0 | 2026-06-02 | Lateralus Labs | Initial compliance alignment report |
 | 1.1 | 2026-06-12 | Lateralus Labs | Corrected Sovereign Execution Boundary evidence path (`internal/services/scrubbing/boundary.go`); updated platform version to v1.1.1 |
-| 1.1.9 | 2026-06-23 | Lateralus Labs | Updated platform version to v1.1.9; replaced L2 Consensus references with Tribunal system (`internal/services/tribunal/service.go`); corrected DoD Zero Trust Reference Architecture naming; removed auto-approval references (removed in v1.1.9); corrected default posture configuration; fixed evidence repository paths to repository-relative format |
+| 1.1.9 | 2026-06-23 | Lateralus Labs | Updated platform version to v1.1.9; replaced L2 Consensus references with Consensus system (`internal/services/consensus/service.go`); corrected DoD Zero Trust Reference Architecture naming; removed auto-approval references (removed in v1.1.9); corrected default posture configuration; fixed evidence repository paths to repository-relative format |
 | 1.3.1 | 2026-06-28 | Lateralus Labs | Updated platform version to v1.3.1; updated L3 Notary description to reflect two-layer model (passkey authorization plus mTLS transport); added PrivilegedRouteRegistry and JIT capability minting evidence; added g8e Console SPA to current strengths; corrected `.github/SECURITY.md` references to repository-relative paths; added governance architecture documentation to evidence repository; added reporting verification and L3 approval pipeline test evidence |
 | 1.3.5 | 2026-07-02 | Lateralus Labs | Updated platform version to v1.3.5; clarified zero runtime dependencies (statically linked binary, `CGO_ENABLED=0`); removed OpenSSL and Git from runtime dependency lists |
 | 1.3.6 | 2026-07-03 | Lateralus Labs | Updated platform version to v1.3.6; added missing v1.3.5 document control entry |
@@ -658,7 +658,7 @@ For specific compliance questions or audit support, contact:
 ## Appendix A: Glossary
 
 - **L1-L5:** 5-layer verification sequence (Doctrine, Consensus, Notary, Warden, Actuator)
-- **Tribunal:** Enrolled agentic service responsible for L2 consensus deliberation and Ed25519 vote signing
+- **Consensus:** Enrolled agentic service responsible for L2 consensus deliberation and Ed25519 vote signing
 - **mTLS:** Mutual Transport Layer Security
 - **SPIFFE:** Secure Production Identity Framework For Everyone
 - **SAN:** Subject Alternative Name

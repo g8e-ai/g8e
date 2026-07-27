@@ -34,7 +34,7 @@ When a command targets an Operator, the Gateway (PDP) first processes L1-L3 (Doc
 The **L1Doctrine** layer runs on the Gateway as a policy decision. It provides foundational hard gates, blocking malicious strings at the schema level and executing real-time MITRE ATT&CK heuristics to detect threats like reverse shells, privilege escalation, and destructive disk operations. L1 is the first line of defense and cannot be bypassed. The Operator re-verifies L1 results from the attached envelope proofs.
 
 ### L2: Consensus — Gateway (PDP)
-The **L2Consensus** layer runs on the Gateway as a policy decision. The Tribunal evaluates the transaction and produces Ed25519 signed votes. The Operator re-verifies these L2 signatures against its locally trusted signer store, ensuring that no single upstream agent can unilaterally mutate the host. See [Tribunal](./tribunal.md) for tribunal configuration and setup.
+The **L2Consensus** layer runs on the Gateway as a policy decision. The Consensus evaluates the transaction and produces Ed25519 signed votes. The Operator re-verifies these L2 signatures against its locally trusted signer store, ensuring that no single upstream agent can unilaterally mutate the host. See [Consensus](./consensus.md) for consensus configuration and setup.
 
 ### L3: Notary (Authorization) — Gateway (PDP)
 The **L3Notary** layer runs on the Gateway as a policy decision. It enforces human-in-the-loop authorization. In gateway mode, passkey (WebAuthn) authorization is required for all sessions. CLI callers additionally undergo mTLS session verification including certificate fingerprint matching, session validity, and revocation checks. In operator (outbound) mode, the Notary validates suspended transaction approval, mTLS certificate fingerprint matching, and Ed25519 signatures over the transaction hash. Passkey authentication is not available in outbound mode. Mutations are blocked until a valid L3 proof is presented. Non-mutation actions (as classified by the action type's intrinsic mutation property) do not require L3 proof. L3 approval notifications use Server-Sent Events (SSE) for real-time delivery: the Gateway emits an `approval.completed` event scoped to the submitting user when a passkey approval is verified, and CLI clients subscribe to the SSE stream rather than polling. See [SSE Streaming](./sse.md) for the full SSE architecture.
@@ -264,13 +264,13 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 - [g8e Gateway](./gateway.md) for PDP architecture and communication patterns
 - [Gateway Service Stack Diagram](../diagrams/graph-gateway-services.md) for the detailed Gateway service stack and Operator substrate relationship
 - [Network Architecture](./network.md) for SPIFFE ID formats, PKI hierarchy, mTLS enforcement, and port topology
-- [Governance](./governance.md) for posture configuration and tribunal setup
+- [Governance](./governance.md) for posture configuration and consensus setup
 - [Auth Architecture](./auth.md) for enrollment, passkey, and session management details
 - [Getting Started](../guides/getting_started.md) for initial setup and usage examples
 - [Connect Operator to Gateway](../guides/connect_operator_to_gateway.md) for remote operator enrollment
 - [SSE Streaming](./sse.md) for real-time event delivery architecture
 - [Scripts](./scripts.md) for bootstrap and deploy script reference
 - [Storage Architecture](./storage.md) for audit vault and ledger internals
-- [Tribunal](./tribunal.md) for tribunal configuration and consensus setup
+- [Consensus](./consensus.md) for consensus configuration and consensus setup
 - [Encryption](./encryption.md) for encryption at rest details
 - [Lattice Adapter](./lattice.md) for Anduril Lattice COP integration

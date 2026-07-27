@@ -19,7 +19,7 @@ graph TD
             Persistence["Persistence<br/>SQLite Doc/KV/Blob · Audit · State Root"]
             Broker["Pub/Sub Broker<br/>WebSocket fan-out · cmd channels"]
             MCP["MCP / A2A Gateway<br/>Unified JSON-RPC endpoint"]
-            Gov["Governance Surface<br/>Envelope reception · Tribunal"]
+            Gov["Governance Surface<br/>Envelope reception · Consensus"]
         end
 
         subgraph OpSubstrate ["Operator Substrate (PEP)"]
