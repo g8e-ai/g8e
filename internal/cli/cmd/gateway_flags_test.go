@@ -153,7 +153,7 @@ func TestAddGatewayFlags_RegistersAllFlags(t *testing.T) {
 	assert.NotNil(t, corsFlag)
 }
 
-func TestResolveGatewayFlags_TribunalEnvOverrides(t *testing.T) {
+func TestResolveGatewayFlags_ConsensusEnvOverrides(t *testing.T) {
 	envVars := map[string]string{
 		"G8E_CONSENSUS_ID":        "env-trib-id",
 		"G8E_CONSENSUS_URL":       "https://env:8443/consensus",
@@ -182,7 +182,7 @@ func TestResolveGatewayFlags_TribunalEnvOverrides(t *testing.T) {
 	assert.Equal(t, "/env/consensus.json", result.ConsensusBootstrap)
 }
 
-func TestResolveGatewayFlags_TribunalCLITakesPrecedence(t *testing.T) {
+func TestResolveGatewayFlags_ConsensusCLITakesPrecedence(t *testing.T) {
 	envVars := map[string]string{
 		"G8E_CONSENSUS_ID":        "env-trib-id",
 		"G8E_CONSENSUS_URL":       "https://env:8443/consensus",

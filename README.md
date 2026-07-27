@@ -156,7 +156,7 @@ The admission pipeline consists of five layers with independent failure domains:
 </p>
 
 1. **L1 Doctrine** — Gateway (PDP): Deterministic static analysis. Enforces rules against forbidden patterns and MITRE ATT&CK indicators. Active for every action. See [Gateway Postures](docs/guides/build_gateway.md#gateway-mode-flags).
-2. **L2 Consensus** — Gateway (PDP): Multi-agent deliberation. An enrolled Tribunal service evaluates the envelope and produces signed votes over the canonical SHA-256 transaction hash. The gateway delegates L2 deliberation to the Tribunal and never self-signs. See [Consensus Layer](protocol/docs/spec.md#l2-consensus).
+2. **L2 Consensus** — Gateway (PDP): Multi-agent deliberation. An enrolled Consensus service evaluates the envelope and produces signed votes over the canonical SHA-256 transaction hash. The gateway delegates L2 deliberation to the Consensus service and never self-signs. See [Consensus Layer](protocol/docs/spec.md#l2-consensus).
 3. **L3 Notary** — Gateway (PDP): Hardware-bound human authorization. Utilizes WebAuthn/FIDO2 passkey assertions computed over the transaction hash. See [Authentication](docs/architecture/auth.md).
 4. **L4 Warden** — Operator (PEP): Fail-closed verification authority. Re-verifies all proofs against local state, signatures, freshness, and the state Merkle root. See [Warden Layer](protocol/docs/spec.md#l4-warden).
 5. **L5 Actuator** — Operator (PEP): Single dispatch path. Handles tool invocation, rehydrates scrubbed tokens on-host, and enforces data sovereignty at the execution boundary. See [Actuator Layer](protocol/docs/spec.md#l5-actuator).
@@ -277,7 +277,7 @@ We welcome contributions of all kinds — bug reports, feature ideas, documentat
 - [Network Model](docs/architecture/network.md)
 - [Server-Sent Events](docs/architecture/sse.md)
 - [Governance](docs/architecture/governance.md)
-- [Tribunal](docs/architecture/tribunal.md)
+- [Consensus](docs/architecture/consensus.md)
 - [AI Agents](docs/architecture/agents.md)
 - [Protocol Library](docs/architecture/protocol.md)
 - [Scripts](docs/architecture/scripts.md)

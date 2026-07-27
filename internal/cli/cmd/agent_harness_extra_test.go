@@ -153,10 +153,10 @@ func TestSelectAgentHarnessScenarios_Consensus(t *testing.T) {
 func TestApplyAgentHarnessFlags_ConsensusSeedAndConsensusID(t *testing.T) {
 	t.Run("populates ConsensusSeed and ConsensusID when flags are set", func(t *testing.T) {
 		originalSeed := harnessConsensusSeed
-		originalTribunal := harnessConsensusID
+		originalConsensusID := harnessConsensusID
 		defer func() {
 			harnessConsensusSeed = originalSeed
-			harnessConsensusID = originalTribunal
+			harnessConsensusID = originalConsensusID
 		}()
 
 		harnessConsensusSeed = "/etc/g8e/ensemble-seed.hex"
@@ -171,10 +171,10 @@ func TestApplyAgentHarnessFlags_ConsensusSeedAndConsensusID(t *testing.T) {
 
 	t.Run("leaves ConsensusSeed and ConsensusID empty when flags are unset", func(t *testing.T) {
 		originalSeed := harnessConsensusSeed
-		originalTribunal := harnessConsensusID
+		originalConsensusID := harnessConsensusID
 		defer func() {
 			harnessConsensusSeed = originalSeed
-			harnessConsensusID = originalTribunal
+			harnessConsensusID = originalConsensusID
 		}()
 
 		harnessConsensusSeed = ""

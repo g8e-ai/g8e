@@ -70,7 +70,7 @@ func demosScenariosRunCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&harnessVerbose, "verbose", false, "echo each request/response")
 	cmd.Flags().StringVar(&harnessPhase, "phase", "all", "doctrine|consensus|notary|all")
 	cmd.Flags().StringVar(&harnessConsensusSeed, "consensus-seed", "", "hex-encoded Ed25519 seed for deterministic ensemble key (or path to seed file)")
-	cmd.Flags().StringVar(&harnessConsensusID, "consensus-id", "", "TribunalPolicy ID for L2 consensus (defaults to test-consensus)")
+	cmd.Flags().StringVar(&harnessConsensusID, "consensus-id", "", "ConsensusPolicy ID for L2 consensus (defaults to test-consensus)")
 
 	return cmd
 }
