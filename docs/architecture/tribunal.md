@@ -105,7 +105,7 @@ Tribunals can also be created at runtime via the admin REST API (`internal/servi
 Each tribunal member has its own Ed25519 private key, stored on disk as a hex-encoded seed. The `FileKeyProvider` (`internal/services/tribunal/factory.go:89`) loads keys using the naming convention:
 
 ```
-{secrets_dir}/tribunal_member_{tribunalID}_{memberAppID}.key
+{secrets_dir}/tribunal_member_{ConsensusID}_{memberAppID}.key
 ```
 
 The `SaveMemberKey` function (`internal/services/tribunal/factory.go:134`) writes keys with `0600` permissions to a `0700` secrets directory.
@@ -130,8 +130,8 @@ The `TribunalService` (`internal/services/tribunal/service.go:38`) is the enroll
 
 ```
 TribunalService
-├── tribunalID: string          // TribunalPolicy.ID
-├── members: []TribunalMember   // Each has AppID + Ed25519 PrivateKey
+├── ConsensusID: string          // TribunalPolicy.ID
+├── members: []ConsensusMember   // Each has AppID + Ed25519 PrivateKey
 ├── doctrine: *L1Doctrine       // Deterministic evaluation engine
 ├── logger: *slog.Logger
 └── responder: *response.Writer
@@ -139,12 +139,12 @@ TribunalService
 
 The shared factory `NewTribunalFromPolicy` (`internal/services/tribunal/factory.go:54`) constructs a `TribunalService` from a `TribunalPolicy` and a `KeyProvider`. It resolves each member's private key via the provider and builds the member list. This factory is used by both production bootstrap (`BootstrapTribunal` in `internal/cli/serve/gateway.go`) and test fixtures (`SetupTribunal` in `test/fixtures/gateway_fixture.go`).
 
-### TribunalMember
+### ConsensusMember
 
 Each member (`internal/services/tribunal/member.go:29`) is an enrolled agentic app with its own Ed25519 signing key:
 
 ```go
-type TribunalMember struct {
+type ConsensusMember struct {
     AppID      string
     PrivateKey ed25519.PrivateKey
 }
@@ -195,7 +195,7 @@ The `Deliberate` method (`internal/services/tribunal/service.go:78`) performs th
    - **Safety evaluation**: runs MITRE checks via `L1Doctrine.AnalyzeCommand`. If any signal has `BlockRecommended=true`, the payload is deemed unsafe (`isSafe=false`). If doctrine is nil, the payload is **fail-closed** (not safe).
    - **Vote signing**: signs the string `"<transaction_hash>|<decision>"` with the member's Ed25519 private key (`internal/services/tribunal/member.go:81`). The signature is hex-encoded.
 
-4. **L2 metadata population**: sets `env.Governance.L2.TribunalId` to the tribunal's ID and `env.Governance.L2.Votes` to the collected vote list.
+4. **L2 metadata population**: sets `env.Governance.L2.ConsensusID` to the tribunal's ID and `env.Governance.L2.Votes` to the collected vote list.
 
 5. **Return**: the envelope with L2 metadata populated, ready for submission to the gateway's L4 Warden.
 
@@ -269,7 +269,7 @@ When a `GovernanceEnvelope` arrives at the gateway, the L4 Warden's `verifyL2Pos
 
 2. **Store checks**: verifies `signerStore` and `consensusPolicyStore` are configured. Under enforced postures, missing stores are fail-closed.
 
-3. **Consensus policy lookup**: loads the consensus policy by `L2.TribunalId`. Under enforced postures, a missing or disabled policy is rejected with `ErrTxL2ConsensusNotConfigured`.
+3. **Consensus policy lookup**: loads the consensus policy by `L2.ConsensusID`. Under enforced postures, a missing or disabled policy is rejected with `ErrTxL2ConsensusNotConfigured`.
 
 4. **Member validation**: votes from `SignerKeyId` values not in the policy's `MemberAppIDs` are silently excluded from the quorum count.
 
@@ -353,7 +353,7 @@ Similarly, the MCP gateway uses `atomic.Value` for the `L2ConsensusDeliberator` 
    │           ├── For each member with PrivateKey:
    │           │   ├── Evaluate safety via L1Doctrine (MITRE checks)
    │           │   └── Sign "<hash>|<decision>" with Ed25519
-   │           ├── Set L2.TribunalId + L2.Votes
+   │           ├── Set L2.ConsensusID + L2.Votes
    │           └── Return envelope with L2 metadata
    │
    └── Return (hash, envelopeBytes)
@@ -363,7 +363,7 @@ Similarly, the MCP gateway uses `atomic.Value` for the `L2ConsensusDeliberator` 
    ├── Stateless: hash, action type, payload, L1 doctrine
    ├── Stateful: nonce, expiry, state root
    └── Posture: verifyL2Posture()
-       ├── Load TribunalPolicy by L2.TribunalId
+       ├── Load TribunalPolicy by L2.ConsensusID
        ├── Validate members, check duplicates
        ├── Verify each vote's Ed25519 signature
        ├── Count affirmative votes
@@ -394,7 +394,7 @@ Similarly, the MCP gateway uses `atomic.Value` for the `L2ConsensusDeliberator` 
 | Component | File |
 |---|---|
 | TribunalService | `internal/services/tribunal/service.go` |
-| TribunalMember, safety eval, signing | `internal/services/tribunal/member.go` |
+| ConsensusMember, safety eval, signing | `internal/services/tribunal/member.go` |
 | Factory, KeyProvider, FileKeyProvider | `internal/services/tribunal/factory.go` |
 | TribunalStoreService (CRUD) | `internal/services/gateway/tribunal_store_service.go` |
 | TribunalStore interface | `internal/services/governance/tribunal_store.go` |

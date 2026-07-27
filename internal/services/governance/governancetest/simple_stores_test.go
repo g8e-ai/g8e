@@ -63,33 +63,33 @@ func TestSimpleStateRootProvider_ValidRoot(t *testing.T) {
 	assert.Equal(t, "abc123", root)
 }
 
-func TestSimpleTribunalStore_NilMap(t *testing.T) {
+func TestSimpleConsensusStore_NilMap(t *testing.T) {
 	t.Parallel()
-	s := &SimpleTribunalStore{}
-	tribunal, err := s.GetTribunal("trib1")
+	s := &SimpleConsensusStore{}
+	consensus, err := s.GetConsensus("trib1")
 	require.NoError(t, err)
-	assert.Nil(t, tribunal)
+	assert.Nil(t, consensus)
 }
 
-func TestSimpleTribunalStore_NotFound(t *testing.T) {
+func TestSimpleConsensusStore_NotFound(t *testing.T) {
 	t.Parallel()
-	s := &SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{}}
-	tribunal, err := s.GetTribunal("nonexistent")
+	s := &SimpleConsensusStore{Consensus: map[string]*models.ConsensusPolicy{}}
+	consensus, err := s.GetConsensus("nonexistent")
 	require.NoError(t, err)
-	assert.Nil(t, tribunal)
+	assert.Nil(t, consensus)
 }
 
-func TestSimpleTribunalStore_Found(t *testing.T) {
+func TestSimpleConsensusStore_Found(t *testing.T) {
 	t.Parallel()
-	expected := &models.TribunalPolicy{
+	expected := &models.ConsensusPolicy{
 		ID:              "trib1",
 		MemberAppIDs:    []string{"member-a", "member-b"},
 		Quorum:          2,
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	s := &SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{"trib1": expected}}
-	tribunal, err := s.GetTribunal("trib1")
+	s := &SimpleConsensusStore{Consensus: map[string]*models.ConsensusPolicy{"trib1": expected}}
+	consensus, err := s.GetConsensus("trib1")
 	require.NoError(t, err)
-	assert.Equal(t, expected, tribunal)
+	assert.Equal(t, expected, consensus)
 }

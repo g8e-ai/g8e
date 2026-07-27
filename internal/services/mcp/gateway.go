@@ -77,7 +77,7 @@ func approvalPausedMessage(approvalURL string) string {
 // L2ConsensusDeliberator sends an envelope to an L2 consensus service for deliberation.
 // The consensus service collects signed votes from its members and returns the envelope
 // with L2 metadata populated. This interface is implemented by an HTTP client that calls
-// the consensus service's /tribunal/v1/deliberate endpoint, or by an in-process adapter.
+// the consensus service's /consensus/v1/deliberate endpoint, or by an in-process adapter.
 type L2ConsensusDeliberator interface {
 	Deliberate(ctx context.Context, envelopeBytes []byte) ([]byte, error)
 }
@@ -112,7 +112,7 @@ type GatewayService struct {
 	// runtimeReady() or getRuntimeDeps() before accessing these fields.
 	runtimeDeps atomic.Pointer[RuntimeDependencies]
 
-	// l2ConsensusDeliberator is late-bound (set after tribunal bootstrap).
+	// l2ConsensusDeliberator is late-bound (set after consensus bootstrap).
 	// Stores an L2ConsensusDeliberator interface value via atomic.Value.
 	l2ConsensusDeliberator atomic.Value
 
@@ -330,7 +330,7 @@ func (g *GatewayService) getRuntimeDeps() *RuntimeDependencies {
 }
 
 // SetL2ConsensusDeliberator sets the L2 consensus deliberation client for L2 consensus votes.
-// This is wired under consensus and notary postures when a Tribunal is configured.
+// This is wired under consensus and notary postures when a Consensus is configured.
 // Thread-safe via atomic.Value.
 func (g *GatewayService) SetL2ConsensusDeliberator(d L2ConsensusDeliberator) {
 	g.l2ConsensusDeliberator.Store(d)
@@ -821,8 +821,8 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 	}
 
 	// Under any posture that requires L2 signatures (consensus and notary),
-	// send the envelope to the Tribunal for L2 deliberation before dispatch.
-	// The Tribunal collects signed votes from its members and returns the
+	// send the envelope to the Consensus for L2 deliberation before dispatch.
+	// The Consensus collects signed votes from its members and returns the
 	// envelope with L2 metadata populated. If the deliberator is not configured,
 	// the envelope proceeds without L2 votes and will fail-closed at L4 verification.
 	if (g.posture == "consensus" || g.posture == "notary") && g.getL2ConsensusDeliberator() != nil {

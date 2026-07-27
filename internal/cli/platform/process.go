@@ -230,14 +230,14 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 	if opts.CertIdentityMode != "" {
 		args = append(args, "--cert-mode", opts.CertIdentityMode)
 	}
-	if opts.TribunalID != "" {
-		args = append(args, "--tribunal-id", opts.TribunalID)
+	if opts.ConsensusID != "" {
+		args = append(args, "--consensus-id", opts.ConsensusID)
 	}
-	if opts.TribunalURL != "" {
-		args = append(args, "--tribunal-url", opts.TribunalURL)
+	if opts.ConsensusURL != "" {
+		args = append(args, "--consensus-url", opts.ConsensusURL)
 	}
-	if opts.TribunalBootstrap != "" {
-		args = append(args, "--tribunal-bootstrap", opts.TribunalBootstrap)
+	if opts.ConsensusBootstrap != "" {
+		args = append(args, "--consensus-bootstrap", opts.ConsensusBootstrap)
 	}
 	if opts.MCPDownstreamURL != "" {
 		args = append(args, "--mcp-downstream-url", opts.MCPDownstreamURL)

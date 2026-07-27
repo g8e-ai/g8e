@@ -18,9 +18,9 @@ type EnvVarKey string
 
 // EnvVar groups all environment variable name constants consumed by g8eo.
 var EnvVar = struct {
-	TribunalID            EnvVarKey
-	TribunalURL           EnvVarKey
-	TribunalBootstrap     EnvVarKey
+	ConsensusID           EnvVarKey
+	ConsensusURL          EnvVarKey
+	ConsensusBootstrap    EnvVarKey
 	VaultDir              EnvVarKey
 	VaultKey              EnvVarKey
 	OperatorSessionID     EnvVarKey
@@ -40,9 +40,9 @@ var EnvVar = struct {
 	LatticeEntityName     EnvVarKey
 	LatticePostureFloor   EnvVarKey
 }{
-	TribunalID:            EnvVarKey("G8E_TRIBUNAL_ID"),
-	TribunalURL:           EnvVarKey("G8E_TRIBUNAL_URL"),
-	TribunalBootstrap:     EnvVarKey("G8E_TRIBUNAL_BOOTSTRAP"),
+	ConsensusID:           EnvVarKey("G8E_CONSENSUS_ID"),
+	ConsensusURL:          EnvVarKey("G8E_CONSENSUS_URL"),
+	ConsensusBootstrap:    EnvVarKey("G8E_CONSENSUS_BOOTSTRAP"),
 	VaultDir:              EnvVarKey("G8E_VAULT_DIR"),
 	VaultKey:              EnvVarKey("G8E_VAULT_KEY"),
 	OperatorSessionID:     EnvVarKey("G8E_OPERATOR_SESSION_ID"),

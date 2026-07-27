@@ -24,8 +24,8 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/services/consensus"
 	"github.com/g8e-ai/g8e/internal/services/governance"
-	"github.com/g8e-ai/g8e/internal/services/tribunal"
 	"github.com/g8e-ai/g8e/protocol"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -38,40 +38,40 @@ type envProcHolder struct {
 	proc governance.EnvelopeProcessor
 }
 
-// GovernanceController handles governance envelope submission and tribunal
+// GovernanceController handles governance envelope submission and consensus
 // deliberation endpoints. Both depend on late-bound dependencies (envelope
-// processor and tribunal service) that are wired after construction via
+// processor and consensus service) that are wired after construction via
 // atomic pointers, following the thread-safety pattern in devs.md.
 type GovernanceController struct {
 	cfg       *config.Config
 	logger    *slog.Logger
 	responder *response.Writer
-	tribunal  atomic.Pointer[tribunal.TribunalService]
+	consensus atomic.Pointer[consensus.ConsensusService]
 	envProc   atomic.Value // stores *envProcHolder
 }
 
 // newGovernanceController creates a GovernanceController with the given
-// dependencies. If initialTribunal is non-nil, it is stored immediately;
-// otherwise it can be set later via SetTribunal.
-func newGovernanceController(cfg *config.Config, logger *slog.Logger, responder *response.Writer, initialTribunal *tribunal.TribunalService) *GovernanceController {
+// dependencies. If initialConsensus is non-nil, it is stored immediately;
+// otherwise it can be set later via SetConsensus.
+func newGovernanceController(cfg *config.Config, logger *slog.Logger, responder *response.Writer, initialConsensus *consensus.ConsensusService) *GovernanceController {
 	c := &GovernanceController{
 		cfg:       cfg,
 		logger:    logger,
 		responder: responder,
 	}
-	if initialTribunal != nil {
-		c.tribunal.Store(initialTribunal)
+	if initialConsensus != nil {
+		c.consensus.Store(initialConsensus)
 	}
 	return c
 }
 
-// SetTribunal sets the Tribunal service for L2 consensus deliberation.
-// Called by the boot sequence after the TribunalService is constructed.
+// SetConsensus sets the Consensus service for L2 consensus deliberation.
+// Called by the boot sequence after the ConsensusService is constructed.
 // Thread-safe via atomic.Pointer — no router rebuild needed because the
-// tribunal deliberate route is always registered and the handler checks
+// consensus deliberate route is always registered and the handler checks
 // the atomic pointer at request time.
-func (c *GovernanceController) SetTribunal(ts *tribunal.TribunalService) {
-	c.tribunal.Store(ts)
+func (c *GovernanceController) SetConsensus(ts *consensus.ConsensusService) {
+	c.consensus.Store(ts)
 }
 
 // SetEnvelopeProcessor wires the synchronous envelope-processing pipeline
@@ -82,13 +82,13 @@ func (c *GovernanceController) SetEnvelopeProcessor(p governance.EnvelopeProcess
 	c.envProc.Store(&envProcHolder{proc: p})
 }
 
-// handleTribunalDeliberate is the always-registered HTTP handler for the
-// tribunal deliberate endpoint. It loads the atomic pointer and delegates
-// to the TribunalService if wired, or returns 503 if not yet configured.
-func (c *GovernanceController) handleTribunalDeliberate(w http.ResponseWriter, r *http.Request) {
-	ts := c.tribunal.Load()
+// handleConsensusDeliberate is the always-registered HTTP handler for the
+// consensus deliberate endpoint. It loads the atomic pointer and delegates
+// to the ConsensusService if wired, or returns 503 if not yet configured.
+func (c *GovernanceController) handleConsensusDeliberate(w http.ResponseWriter, r *http.Request) {
+	ts := c.consensus.Load()
 	if ts == nil {
-		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrTribunalNotConfigured.Error())
+		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrConsensusNotConfigured.Error())
 		return
 	}
 	(*ts).HandleDeliberate(w, r)

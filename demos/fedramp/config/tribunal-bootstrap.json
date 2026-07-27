@@ -1,5 +1,5 @@
 {
-  "tribunal_id": "fedramp-tribunal",
+  "consensus_id": "fedramp-consensus",
   "member_app_ids": ["fedramp-csp-auditor", "fedramp-3pao", "fedramp-jab"],
   "quorum": 2,
   "seed_hex": "a1200ca127d87aa6f6f986e64e1941fdd1d5a8bfd1de995cd4cd89f333c03030"

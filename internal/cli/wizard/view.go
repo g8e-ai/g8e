@@ -143,11 +143,11 @@ func (m Model) viewPosture() string {
 	b.WriteString("\n\n")
 
 	if m.postureChoice == 1 || m.postureChoice == 2 {
-		b.WriteString(m.tribunalIDInput.View())
+		b.WriteString(m.consensusIDInput.View())
 		b.WriteString("\n\n")
-		b.WriteString(m.tribunalBootstrapInput.View())
+		b.WriteString(m.consensusBootstrapInput.View())
 		b.WriteString("\n\n")
-		b.WriteString(m.tribunalURLInput.View())
+		b.WriteString(m.consensusURLInput.View())
 		b.WriteString("\n\n")
 	}
 
@@ -205,9 +205,9 @@ func (m Model) viewReview() string {
 		{"Network Exposure", certModeLabel(cfg.CertIdentityMode)},
 		{"CORS Origins", joinOrNone(cfg.AllowedOrigins)},
 		{"Posture", cfg.Posture},
-		{"Tribunal ID", orNone(cfg.TribunalID)},
-		{"Tribunal URL", orNone(cfg.TribunalURL)},
-		{"Tribunal Bootstrap", orNone(cfg.TribunalBootstrap)},
+		{"Consensus ID", orNone(cfg.ConsensusID)},
+		{"Consensus URL", orNone(cfg.ConsensusURL)},
+		{"Consensus Bootstrap", orNone(cfg.ConsensusBootstrap)},
 		{"Passkey RP ID", cfg.PasskeyRpID},
 		{"Passkey RP Name", cfg.PasskeyRpName},
 		{"Passkey RP Origins", joinOrNone(cfg.PasskeyRpOrigins)},

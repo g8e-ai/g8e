@@ -68,95 +68,95 @@ func TestValidatePublicBaseURL_RejectsUnsupportedScheme(t *testing.T) {
 	assert.Error(t, validatePublicBaseURL("ftp://demo.g8e.ai"))
 }
 
-// --- validateTribunalURL ---
+// --- validateConsensusURL ---
 
-func TestValidateTribunalURL_EmptyIsOptional(t *testing.T) {
-	assert.NoError(t, validateTribunalURL(""))
+func TestValidateConsensusURL_EmptyIsOptional(t *testing.T) {
+	assert.NoError(t, validateConsensusURL(""))
 }
 
-func TestValidateTribunalURL_ValidHTTPS(t *testing.T) {
-	assert.NoError(t, validateTribunalURL("https://tribunal.g8e.ai"))
+func TestValidateConsensusURL_ValidHTTPS(t *testing.T) {
+	assert.NoError(t, validateConsensusURL("https://consensus.g8e.ai"))
 }
 
-func TestValidateTribunalURL_RejectsHTTP(t *testing.T) {
-	assert.Error(t, validateTribunalURL("http://tribunal.g8e.ai"))
+func TestValidateConsensusURL_RejectsHTTP(t *testing.T) {
+	assert.Error(t, validateConsensusURL("http://consensus.g8e.ai"))
 }
 
-func TestValidateTribunalURL_RejectsFragment(t *testing.T) {
-	assert.Error(t, validateTribunalURL("https://tribunal.g8e.ai#frag"))
+func TestValidateConsensusURL_RejectsFragment(t *testing.T) {
+	assert.Error(t, validateConsensusURL("https://consensus.g8e.ai#frag"))
 }
 
-func TestValidateTribunalURL_RejectsUserInfo(t *testing.T) {
-	assert.Error(t, validateTribunalURL("https://user@tribunal.g8e.ai"))
+func TestValidateConsensusURL_RejectsUserInfo(t *testing.T) {
+	assert.Error(t, validateConsensusURL("https://user@consensus.g8e.ai"))
 }
 
-func TestValidateTribunalURL_RejectsUnsupportedScheme(t *testing.T) {
-	assert.Error(t, validateTribunalURL("ftp://tribunal.g8e.ai"))
+func TestValidateConsensusURL_RejectsUnsupportedScheme(t *testing.T) {
+	assert.Error(t, validateConsensusURL("ftp://consensus.g8e.ai"))
 }
 
-// --- validateTribunalID ---
+// --- validateConsensusID ---
 
-func TestValidateTribunalID_EmptyRejected(t *testing.T) {
-	assert.Error(t, validateTribunalID(""))
+func TestValidateConsensusID_EmptyRejected(t *testing.T) {
+	assert.Error(t, validateConsensusID(""))
 }
 
-func TestValidateTribunalID_ValidAlphaNumeric(t *testing.T) {
-	assert.NoError(t, validateTribunalID("trib-prod-01"))
+func TestValidateConsensusID_ValidAlphaNumeric(t *testing.T) {
+	assert.NoError(t, validateConsensusID("trib-prod-01"))
 }
 
-func TestValidateTribunalID_ValidUnderscore(t *testing.T) {
-	assert.NoError(t, validateTribunalID("trib_prod_01"))
+func TestValidateConsensusID_ValidUnderscore(t *testing.T) {
+	assert.NoError(t, validateConsensusID("trib_prod_01"))
 }
 
-func TestValidateTribunalID_RejectsSpecialChars(t *testing.T) {
-	assert.Error(t, validateTribunalID("trib!prod"))
+func TestValidateConsensusID_RejectsSpecialChars(t *testing.T) {
+	assert.Error(t, validateConsensusID("trib!prod"))
 }
 
-func TestValidateTribunalID_RejectsSpaces(t *testing.T) {
-	assert.Error(t, validateTribunalID("trib prod"))
+func TestValidateConsensusID_RejectsSpaces(t *testing.T) {
+	assert.Error(t, validateConsensusID("trib prod"))
 }
 
-func TestValidateTribunalID_RejectsDots(t *testing.T) {
-	assert.Error(t, validateTribunalID("trib.prod"))
+func TestValidateConsensusID_RejectsDots(t *testing.T) {
+	assert.Error(t, validateConsensusID("trib.prod"))
 }
 
-// --- validateTribunalBootstrap ---
+// --- validateConsensusBootstrap ---
 
-func TestValidateTribunalBootstrap_MatchingID(t *testing.T) {
+func TestValidateConsensusBootstrap_MatchingID(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bootstrap.json")
-	require.NoError(t, os.WriteFile(path, []byte(`{"tribunal_id":"trib-001","members":[]}`), 0644))
-	assert.NoError(t, validateTribunalBootstrap(path, "trib-001"))
+	require.NoError(t, os.WriteFile(path, []byte(`{"consensus_id":"trib-001","members":[]}`), 0644))
+	assert.NoError(t, validateConsensusBootstrap(path, "trib-001"))
 }
 
-func TestValidateTribunalBootstrap_MismatchedID(t *testing.T) {
+func TestValidateConsensusBootstrap_MismatchedID(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bootstrap.json")
-	require.NoError(t, os.WriteFile(path, []byte(`{"tribunal_id":"trib-001","members":[]}`), 0644))
-	assert.Error(t, validateTribunalBootstrap(path, "trib-999"))
+	require.NoError(t, os.WriteFile(path, []byte(`{"consensus_id":"trib-001","members":[]}`), 0644))
+	assert.Error(t, validateConsensusBootstrap(path, "trib-999"))
 }
 
-func TestValidateTribunalBootstrap_NotJSON(t *testing.T) {
+func TestValidateConsensusBootstrap_NotJSON(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bootstrap.json")
 	require.NoError(t, os.WriteFile(path, []byte("not json"), 0644))
-	assert.Error(t, validateTribunalBootstrap(path, "trib-001"))
+	assert.Error(t, validateConsensusBootstrap(path, "trib-001"))
 }
 
-func TestValidateTribunalBootstrap_MissingFile(t *testing.T) {
-	assert.Error(t, validateTribunalBootstrap("/nonexistent/path.json", "trib-001"))
+func TestValidateConsensusBootstrap_MissingFile(t *testing.T) {
+	assert.Error(t, validateConsensusBootstrap("/nonexistent/path.json", "trib-001"))
 }
 
-func TestValidateTribunalBootstrap_Directory(t *testing.T) {
+func TestValidateConsensusBootstrap_Directory(t *testing.T) {
 	dir := t.TempDir()
-	assert.Error(t, validateTribunalBootstrap(dir, "trib-001"))
+	assert.Error(t, validateConsensusBootstrap(dir, "trib-001"))
 }
 
-func TestValidateTribunalBootstrap_MissingTribunalIDField(t *testing.T) {
+func TestValidateConsensusBootstrap_MissingConsensusIDField(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bootstrap.json")
 	require.NoError(t, os.WriteFile(path, []byte(`{"members":[]}`), 0644))
-	assert.Error(t, validateTribunalBootstrap(path, "trib-001"))
+	assert.Error(t, validateConsensusBootstrap(path, "trib-001"))
 }
 
 // --- validatePasskeyRP ---

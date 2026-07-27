@@ -115,7 +115,7 @@ func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *govpkg
 	env.TransactionHash = hash
 	env.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
-			ConsensusSetId: "test-tribunal",
+			ConsensusSetId: "test-consensus",
 			Votes: []*commonv1.L2Vote{
 				{
 					SignerKeyId:        "missing-key",
@@ -281,7 +281,7 @@ func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 					Nonce:           "nonce-" + tc.name,
 					Governance: &commonv1.GovernanceMetadata{
 						L2: &commonv1.L2Metadata{
-							ConsensusSetId: "test-tribunal",
+							ConsensusSetId: "test-consensus",
 							Votes: []*commonv1.L2Vote{
 								{
 									SignerKeyId: "test-key",
@@ -343,7 +343,7 @@ func TestOperatorPubSubService_CancellationReceipt(t *testing.T) {
 			Nonce:           "nonce-cancel",
 			Governance: &commonv1.GovernanceMetadata{
 				L2: &commonv1.L2Metadata{
-					ConsensusSetId: "test-tribunal",
+					ConsensusSetId: "test-consensus",
 					Votes: []*commonv1.L2Vote{
 						{
 							SignerKeyId: "test-key",
@@ -689,7 +689,7 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 			Nonce:           "nonce-sync",
 			Governance: &commonv1.GovernanceMetadata{
 				L2: &commonv1.L2Metadata{
-					ConsensusSetId: "test-tribunal",
+					ConsensusSetId: "test-consensus",
 					Votes: []*commonv1.L2Vote{
 						{
 							SignerKeyId: "test-key",

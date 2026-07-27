@@ -89,7 +89,7 @@ func (e *DemoEmitter) Ledger(level tui.LedgerLevel, message string) {
 }
 
 // Consensus emits an L2 consensus update to the TUI.
-func (e *DemoEmitter) Consensus(member constants.TribunalMember, decision, signed bool, quorum, total int, result tui.ConsensusResult, hash string) {
+func (e *DemoEmitter) Consensus(member constants.ConsensusMember, decision, signed bool, quorum, total int, result tui.ConsensusResult, hash string) {
 	if e == nil || e.program == nil {
 		return
 	}
@@ -1401,7 +1401,7 @@ type harnessConfig struct {
 	L3Mode        string
 	Posture       string
 	ConsensusSeed string
-	TribunalID    string
+	ConsensusID   string
 	UseRun        bool // true for `docker compose run --rm`, false for `exec`
 }
 
@@ -1422,13 +1422,13 @@ func defaultHarnessConfig(container string) harnessConfig {
 }
 
 // defaultGovernedHarnessConfig returns a harness config for demos that use
-// consensus seed and tribunal-based governance (DHS, FedRAMP, etc.).
+// consensus seed and consensus-based governance (DHS, FedRAMP, etc.).
 // It wraps defaultHarnessConfig with the shared ConsensusSeed and a
-// demo-specific TribunalID.
-func defaultGovernedHarnessConfig(container, tribunalID string) harnessConfig {
+// demo-specific ConsensusID.
+func defaultGovernedHarnessConfig(container, ConsensusID string) harnessConfig {
 	cfg := defaultHarnessConfig(container)
 	cfg.ConsensusSeed = constants.ContainerEnsembleSeed
-	cfg.TribunalID = tribunalID
+	cfg.ConsensusID = ConsensusID
 	return cfg
 }
 
@@ -1458,8 +1458,8 @@ func harnessRun(scenario string, cfg harnessConfig) []string {
 	if cfg.ConsensusSeed != "" {
 		cmd = append(cmd, "--consensus-seed", cfg.ConsensusSeed)
 	}
-	if cfg.TribunalID != "" {
-		cmd = append(cmd, "--tribunal-id", cfg.TribunalID)
+	if cfg.ConsensusID != "" {
+		cmd = append(cmd, "--consensus-id", cfg.ConsensusID)
 	}
 	cmd = append(cmd, scenario)
 	return cmd

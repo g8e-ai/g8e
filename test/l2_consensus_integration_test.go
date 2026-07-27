@@ -22,12 +22,12 @@ pipeline through the in-process GatewayFixture. These integration tests prove:
 1. Idempotent client enrollment (re-enroll same identity succeeds)
 2. Malformed CSR rejection at the enrollment endpoint
 3. Delegated app enrollment via CLI mTLS credentials
-4. Tribunal quorum reached (2-of-3 members vote affirmatively)
-5. Tribunal quorum not reached (fewer votes than quorum threshold)
+4. Consensus quorum reached (2-of-3 members vote affirmatively)
+5. Consensus quorum not reached (fewer votes than quorum threshold)
 6. MITRE veto (L1 doctrine detects malicious command, member votes false)
 7. Full L1–L5 walkthrough with receipt verification
 
-All tests use real GatewayFixture infrastructure — no mocks for PKI, tribunal,
+All tests use real GatewayFixture infrastructure — no mocks for PKI, consensus,
 or database. The only fiction is the client identity (generated test CSRs).
 */
 
@@ -102,7 +102,7 @@ func generateTestCSR(t *testing.T, commonName string) (string, []byte) {
 // client identity twice (same user + fingerprint) succeeds without error.
 func TestL2Consensus_IdempotentEnrollment(t *testing.T) {
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName:          "tribunal-idempotent",
+		TestName:          "consensus-idempotent",
 		Posture:           config.PostureConsensus,
 		AllowTestPortZero: true,
 	})
@@ -125,7 +125,7 @@ func TestL2Consensus_IdempotentEnrollment(t *testing.T) {
 // rejects a malformed CSR with an appropriate error.
 func TestL2Consensus_MalformedCSR(t *testing.T) {
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName:          "tribunal-malformed-csr",
+		TestName:          "consensus-malformed-csr",
 		Posture:           config.PostureConsensus,
 		AllowTestPortZero: true,
 	})
@@ -159,7 +159,7 @@ func TestL2Consensus_MalformedCSR(t *testing.T) {
 // can mint a delegated app credential via /api/v1/pki/apps/delegated.
 func TestL2Consensus_DelegatedAppEnrollment(t *testing.T) {
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName:          "tribunal-delegated",
+		TestName:          "consensus-delegated",
 		Posture:           config.PostureConsensus,
 		AllowTestPortZero: true,
 	})
@@ -202,19 +202,19 @@ func TestL2Consensus_DelegatedAppEnrollment(t *testing.T) {
 	require.Contains(t, appID, "spiffe://", "app_id should be a SPIFFE URI")
 }
 
-// TestL2Consensus_QuorumReached verifies that when a tribunal has
+// TestL2Consensus_QuorumReached verifies that when a consensus has
 // sufficient voting members (2-of-3), an MCP tools/call succeeds with
 // L2 consensus votes present.
 func TestL2Consensus_QuorumReached(t *testing.T) {
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName:          "tribunal-quorum-reached",
+		TestName:          "consensus-quorum-reached",
 		Posture:           config.PostureConsensus,
 		AllowTestPortZero: true,
 	})
 
-	// Override the default 1-member tribunal with a 3-member tribunal at quorum 2.
+	// Override the default 1-member consensus with a 3-member consensus at quorum 2.
 	// All 3 members hold private keys, so all 3 can vote — quorum is met.
-	fixtures.SetupTribunal(t, f, "quorum-tribunal", 3, 2, 3)
+	fixtures.SetupConsensus(t, f, "quorum-consensus", 3, 2, 3)
 
 	identity := fixtures.EnrollClientIdentity(t, f, "quorum-user", "test-org", "fp-quorum", "test-host")
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
@@ -246,14 +246,14 @@ func TestL2Consensus_QuorumReached(t *testing.T) {
 // vote than the quorum threshold, the governance gate rejects the transaction.
 func TestL2Consensus_QuorumNotReached(t *testing.T) {
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName:          "tribunal-quorum-not-reached",
+		TestName:          "consensus-quorum-not-reached",
 		Posture:           config.PostureConsensus,
 		AllowTestPortZero: true,
 	})
 
 	// 3 members in policy, quorum 2, but only 1 service member has a private key.
 	// Only 1 vote will be produced — below quorum threshold of 2.
-	fixtures.SetupTribunal(t, f, "no-quorum-tribunal", 3, 2, 1)
+	fixtures.SetupConsensus(t, f, "no-quorum-consensus", 3, 2, 1)
 
 	identity := fixtures.EnrollClientIdentity(t, f, "no-quorum-user", "test-org", "fp-no-quorum", "test-host")
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
@@ -275,23 +275,23 @@ func TestL2Consensus_QuorumNotReached(t *testing.T) {
 }
 
 // TestL2Consensus_VetoByMITRE verifies that when a malicious command
-// is submitted, the L1 doctrine detects it and the tribunal member votes
+// is submitted, the L1 doctrine detects it and the consensus member votes
 // false (veto), causing the transaction to be rejected.
 func TestL2Consensus_VetoByMITRE(t *testing.T) {
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName:          "tribunal-veto",
+		TestName:          "consensus-veto",
 		Posture:           config.PostureConsensus,
 		AllowTestPortZero: true,
 	})
 
-	// Use a single-member tribunal (quorum 1) so a single false vote blocks.
-	fixtures.SetupTribunal(t, f, "veto-tribunal", 1, 1, 1)
+	// Use a single-member consensus (quorum 1) so a single false vote blocks.
+	fixtures.SetupConsensus(t, f, "veto-consensus", 1, 1, 1)
 
 	identity := fixtures.EnrollClientIdentity(t, f, "veto-user", "test-org", "fp-veto", "test-host")
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
 
 	// Submit a command that should trigger MITRE detection (destructive command).
-	// The L1 doctrine should flag "rm -rf /" as malicious and the tribunal member
+	// The L1 doctrine should flag "rm -rf /" as malicious and the consensus member
 	// votes false, causing L2 quorum to fail (0 affirmative votes < quorum 1).
 	resp := doToolsCall(t, apiClient, f.Service.GetHTTPSPort(), identity.OperatorSessionID, "execute_command", map[string]string{"command": "rm -rf /"})
 	defer resp.Body.Close()
@@ -300,7 +300,7 @@ func TestL2Consensus_VetoByMITRE(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
 
 	// The transaction should be rejected — either at L1 (doctrine blocks)
-	// or at L2 (tribunal votes false, quorum not met).
+	// or at L2 (consensus votes false, quorum not met).
 	errObj, hasErr := result["error"]
 	require.True(t, hasErr, "expected error for MITRE veto, got: %v", result)
 
@@ -314,12 +314,12 @@ func TestL2Consensus_VetoByMITRE(t *testing.T) {
 // pipeline, and verifies the receipt is recorded in the audit store.
 func TestL2Consensus_L1ToL5Walkthrough(t *testing.T) {
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName:          "tribunal-l1-l5",
+		TestName:          "consensus-l1-l5",
 		Posture:           config.PostureConsensus,
 		AllowTestPortZero: true,
 	})
 
-	// The fixture auto-wires a 1-member tribunal for consensus posture.
+	// The fixture auto-wires a 1-member consensus for consensus posture.
 	identity := fixtures.EnrollClientIdentity(t, f, "walkthrough-user", "test-org", "fp-walkthrough", "test-host")
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
 

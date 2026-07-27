@@ -668,15 +668,15 @@ func TestHarnessRun(t *testing.T) {
 		assert.Contains(t, cmd, "dhs-ingest")
 	})
 
-	t.Run("includes consensus seed and tribunal id when set", func(t *testing.T) {
+	t.Run("includes consensus seed and consensus id when set", func(t *testing.T) {
 		cfg := defaultHarnessConfig("agent-runtime")
 		cfg.ConsensusSeed = "deadbeef"
-		cfg.TribunalID = "test-tribunal"
+		cfg.ConsensusID = "test-consensus"
 		cmd := harnessRun("dhs-cue", cfg)
 		assert.Contains(t, cmd, "--consensus-seed")
 		assert.Contains(t, cmd, "deadbeef")
-		assert.Contains(t, cmd, "--tribunal-id")
-		assert.Contains(t, cmd, "test-tribunal")
+		assert.Contains(t, cmd, "--consensus-id")
+		assert.Contains(t, cmd, "test-consensus")
 	})
 
 	t.Run("omits ensemble and l3-mode when zero/empty", func(t *testing.T) {

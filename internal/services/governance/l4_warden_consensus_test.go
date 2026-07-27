@@ -204,21 +204,21 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		"member-1": pub1,
 	}
 
-	enabledTribunal2of2 := &models.TribunalPolicy{
+	enabledConsensus2of2 := &models.ConsensusPolicy{
 		ID:              "trib-1",
 		MemberAppIDs:    []string{"member-1", "member-2"},
 		Quorum:          2,
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	enabledTribunal1of2 := &models.TribunalPolicy{
+	enabledConsensus1of2 := &models.ConsensusPolicy{
 		ID:              "trib-2",
 		MemberAppIDs:    []string{"member-1", "member-2"},
 		Quorum:          1,
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	disabledTribunal := &models.TribunalPolicy{
+	disabledConsensus := &models.ConsensusPolicy{
 		ID:              "trib-disabled",
 		MemberAppIDs:    []string{"member-1", "member-2"},
 		Quorum:          2,
@@ -228,7 +228,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 
 	payload := typedPayload(t, constants.ActionTypeFsList)
 
-	buildEnv := func(nonceTag, tribunalID string, votes []*commonv1.L2Vote) *govtypes.GovernanceEnvelope {
+	buildEnv := func(nonceTag, consensusID string, votes []*commonv1.L2Vote) *govtypes.GovernanceEnvelope {
 		nonceSuffix := hex.EncodeToString(payload)
 		if len(nonceSuffix) > 8 {
 			nonceSuffix = nonceSuffix[:8]
@@ -254,20 +254,20 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		env.TransactionHash = hash
 		env.Governance = &commonv1.GovernanceMetadata{
 			L2: &commonv1.L2Metadata{
-				ConsensusSetId: tribunalID,
+				ConsensusSetId: consensusID,
 				Votes:          votes,
 			},
 		}
 		return env
 	}
 
-	makeVerifier := func(signers map[string]ed25519.PublicKey, tribunals map[string]*models.TribunalPolicy) *L4Warden {
+	makeVerifier := func(signers map[string]ed25519.PublicKey, consensus map[string]*models.ConsensusPolicy) *L4Warden {
 		return NewL4Warden(
 			testutil.NewTestLogger(),
 			testutil.NewStatefulMockReplayStore(),
 			testutil.NewMockStateRootProvider("root-1"),
 			&SimpleSignerStore{Signers: signers},
-			&tribunalStoreTestAdapter{Inner: &governancetest.SimpleTribunalStore{Tribunals: tribunals}},
+			&consensusStoreTestAdapter{Inner: &governancetest.SimpleConsensusStore{Consensus: consensus}},
 			nil,
 			testutil.NewConfigurableMockL3Notary(true),
 			nil,
@@ -286,7 +286,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 	}{
 		{
 			name:     "2-of-2 quorum pass",
-			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
+			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"trib-1": enabledConsensus2of2}),
 			env: func() *govtypes.GovernanceEnvelope {
 				env := buildEnv("2of2pass", "trib-1", nil)
 				hash := env.TransactionHash
@@ -301,7 +301,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		},
 		{
 			name:     "1 valid of quorum-2 fails",
-			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
+			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"trib-1": enabledConsensus2of2}),
 			env: func() *govtypes.GovernanceEnvelope {
 				env := buildEnv("1of2fail", "trib-1", nil)
 				hash := env.TransactionHash
@@ -315,7 +315,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		},
 		{
 			name:     "duplicate signer with require_distinct",
-			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
+			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"trib-1": enabledConsensus2of2}),
 			env: func() *govtypes.GovernanceEnvelope {
 				env := buildEnv("dupsign", "trib-1", nil)
 				hash := env.TransactionHash
@@ -330,7 +330,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		},
 		{
 			name:     "false vote does not count toward quorum",
-			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
+			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"trib-1": enabledConsensus2of2}),
 			env: func() *govtypes.GovernanceEnvelope {
 				env := buildEnv("falsevote", "trib-1", nil)
 				hash := env.TransactionHash
@@ -345,7 +345,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		},
 		{
 			name:     "unknown signer ignored, quorum-1 passes",
-			verifier: makeVerifier(partialSigners, map[string]*models.TribunalPolicy{"trib-2": enabledTribunal1of2}),
+			verifier: makeVerifier(partialSigners, map[string]*models.ConsensusPolicy{"trib-2": enabledConsensus1of2}),
 			env: func() *govtypes.GovernanceEnvelope {
 				env := buildEnv("unknownsigner", "trib-2", nil)
 				hash := env.TransactionHash
@@ -360,14 +360,14 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		},
 		{
 			name:     "empty votes under consensus posture",
-			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
+			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"trib-1": enabledConsensus2of2}),
 			env:      buildEnv("emptyvotes", "trib-1", []*commonv1.L2Vote{}),
 			wantErr:  ErrL2SignatureMissing,
 			wantL2:   false,
 		},
 		{
-			name:     "disabled tribunal policy",
-			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-disabled": disabledTribunal}),
+			name:     "disabled consensus policy",
+			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"trib-disabled": disabledConsensus}),
 			env: func() *govtypes.GovernanceEnvelope {
 				env := buildEnv("disabledtrib", "trib-disabled", nil)
 				hash := env.TransactionHash
@@ -381,8 +381,8 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 			wantL2:  false,
 		},
 		{
-			name:     "unknown tribunal ID",
-			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
+			name:     "unknown consensus ID",
+			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"trib-1": enabledConsensus2of2}),
 			env: func() *govtypes.GovernanceEnvelope {
 				env := buildEnv("unknowntrib", "nonexistent-trib", nil)
 				hash := env.TransactionHash

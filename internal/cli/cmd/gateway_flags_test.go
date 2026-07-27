@@ -26,28 +26,28 @@ import (
 
 func TestGatewayFlagsToServeConfig_AllFieldsTransferred(t *testing.T) {
 	flags := GatewayFlags{
-		Posture:           "consensus",
-		HTTPPort:          8080,
-		HTTPSPort:         8443,
-		DataDir:           "/data",
-		PKIDir:            "/pki",
-		SecretsDir:        "/secrets",
-		VaultDir:          "/vault",
-		VaultKeyPath:      "/vault/key",
-		PasskeyRpID:       "example.com",
-		PasskeyRpName:     "Example",
-		PasskeyRpOrigins:  []string{"https://example.com"},
-		RateLimitRPS:      100.0,
-		RateLimitBurst:    50,
-		LogLevel:          "debug",
-		CertIdentityMode:  "full",
-		TribunalID:        "trib-1",
-		TribunalURL:       "https://localhost:8443/tribunal/v1/deliberate",
-		TribunalBootstrap: "/etc/g8e/tribunal.json",
-		MCPDownstreamURL:  "https://downstream/mcp",
-		A2ADownstreamURL:  "https://downstream/a2a",
-		PublicBaseURL:     "https://demo.example.com",
-		AllowedOrigins:    []string{"https://lovable.dev"},
+		Posture:            "consensus",
+		HTTPPort:           8080,
+		HTTPSPort:          8443,
+		DataDir:            "/data",
+		PKIDir:             "/pki",
+		SecretsDir:         "/secrets",
+		VaultDir:           "/vault",
+		VaultKeyPath:       "/vault/key",
+		PasskeyRpID:        "example.com",
+		PasskeyRpName:      "Example",
+		PasskeyRpOrigins:   []string{"https://example.com"},
+		RateLimitRPS:       100.0,
+		RateLimitBurst:     50,
+		LogLevel:           "debug",
+		CertIdentityMode:   "full",
+		ConsensusID:        "trib-1",
+		ConsensusURL:       "https://localhost:8443/consensus/v1/deliberate",
+		ConsensusBootstrap: "/etc/g8e/consensus.json",
+		MCPDownstreamURL:   "https://downstream/mcp",
+		A2ADownstreamURL:   "https://downstream/a2a",
+		PublicBaseURL:      "https://demo.example.com",
+		AllowedOrigins:     []string{"https://lovable.dev"},
 	}
 
 	cfg := gatewayFlagsToServeConfig(flags)
@@ -67,9 +67,9 @@ func TestGatewayFlagsToServeConfig_AllFieldsTransferred(t *testing.T) {
 	assert.Equal(t, 50, cfg.RateLimitBurst)
 	assert.Equal(t, "debug", cfg.LogLevel)
 	assert.Equal(t, "full", cfg.CertIdentityMode)
-	assert.Equal(t, "trib-1", cfg.TribunalID)
-	assert.Equal(t, "https://localhost:8443/tribunal/v1/deliberate", cfg.TribunalURL)
-	assert.Equal(t, "/etc/g8e/tribunal.json", cfg.TribunalBootstrap)
+	assert.Equal(t, "trib-1", cfg.ConsensusID)
+	assert.Equal(t, "https://localhost:8443/consensus/v1/deliberate", cfg.ConsensusURL)
+	assert.Equal(t, "/etc/g8e/consensus.json", cfg.ConsensusBootstrap)
 	assert.Equal(t, "https://downstream/mcp", cfg.MCPDownstreamURL)
 	assert.Equal(t, "https://downstream/a2a", cfg.A2ADownstreamURL)
 	assert.Equal(t, "https://demo.example.com", cfg.PublicBaseURL)
@@ -96,9 +96,9 @@ func TestGatewayFlagsToServeConfig_EmptyFlags(t *testing.T) {
 	assert.Equal(t, 0, cfg.RateLimitBurst)
 	assert.Empty(t, cfg.LogLevel)
 	assert.Empty(t, cfg.CertIdentityMode)
-	assert.Empty(t, cfg.TribunalID)
-	assert.Empty(t, cfg.TribunalURL)
-	assert.Empty(t, cfg.TribunalBootstrap)
+	assert.Empty(t, cfg.ConsensusID)
+	assert.Empty(t, cfg.ConsensusURL)
+	assert.Empty(t, cfg.ConsensusBootstrap)
 	assert.Empty(t, cfg.MCPDownstreamURL)
 	assert.Empty(t, cfg.A2ADownstreamURL)
 	assert.Empty(t, cfg.PublicBaseURL)
@@ -128,9 +128,9 @@ func TestAddGatewayFlags_RegistersAllFlags(t *testing.T) {
 		{"rate-limit-burst", "0"},
 		{"log", "info"},
 		{"cert-mode", ""},
-		{"tribunal-id", ""},
-		{"tribunal-url", ""},
-		{"tribunal-bootstrap", ""},
+		{"consensus-id", ""},
+		{"consensus-url", ""},
+		{"consensus-bootstrap", ""},
 		{"mcp-downstream-url", ""},
 		{"a2a-downstream-url", ""},
 		{"public-base-url", ""},
@@ -151,9 +151,9 @@ func TestAddGatewayFlags_RegistersAllFlags(t *testing.T) {
 
 func TestResolveGatewayFlags_TribunalEnvOverrides(t *testing.T) {
 	envVars := map[string]string{
-		"G8E_TRIBUNAL_ID":        "env-trib-id",
-		"G8E_TRIBUNAL_URL":       "https://env:8443/tribunal",
-		"G8E_TRIBUNAL_BOOTSTRAP": "/env/tribunal.json",
+		"G8E_CONSENSUS_ID":        "env-trib-id",
+		"G8E_CONSENSUS_URL":       "https://env:8443/consensus",
+		"G8E_CONSENSUS_BOOTSTRAP": "/env/consensus.json",
 	}
 
 	originalValues := make(map[string]string)
@@ -173,16 +173,16 @@ func TestResolveGatewayFlags_TribunalEnvOverrides(t *testing.T) {
 
 	result := resolveGatewayFlags(GatewayFlags{})
 
-	assert.Equal(t, "env-trib-id", result.TribunalID)
-	assert.Equal(t, "https://env:8443/tribunal", result.TribunalURL)
-	assert.Equal(t, "/env/tribunal.json", result.TribunalBootstrap)
+	assert.Equal(t, "env-trib-id", result.ConsensusID)
+	assert.Equal(t, "https://env:8443/consensus", result.ConsensusURL)
+	assert.Equal(t, "/env/consensus.json", result.ConsensusBootstrap)
 }
 
 func TestResolveGatewayFlags_TribunalCLITakesPrecedence(t *testing.T) {
 	envVars := map[string]string{
-		"G8E_TRIBUNAL_ID":        "env-trib-id",
-		"G8E_TRIBUNAL_URL":       "https://env:8443/tribunal",
-		"G8E_TRIBUNAL_BOOTSTRAP": "/env/tribunal.json",
+		"G8E_CONSENSUS_ID":        "env-trib-id",
+		"G8E_CONSENSUS_URL":       "https://env:8443/consensus",
+		"G8E_CONSENSUS_BOOTSTRAP": "/env/consensus.json",
 	}
 
 	originalValues := make(map[string]string)
@@ -201,20 +201,20 @@ func TestResolveGatewayFlags_TribunalCLITakesPrecedence(t *testing.T) {
 	})
 
 	result := resolveGatewayFlags(GatewayFlags{
-		TribunalID:        "cli-trib-id",
-		TribunalURL:       "https://cli:8443/tribunal",
-		TribunalBootstrap: "/cli/tribunal.json",
+		ConsensusID:        "cli-trib-id",
+		ConsensusURL:       "https://cli:8443/consensus",
+		ConsensusBootstrap: "/cli/consensus.json",
 	})
 
-	assert.Equal(t, "cli-trib-id", result.TribunalID)
-	assert.Equal(t, "https://cli:8443/tribunal", result.TribunalURL)
-	assert.Equal(t, "/cli/tribunal.json", result.TribunalBootstrap)
+	assert.Equal(t, "cli-trib-id", result.ConsensusID)
+	assert.Equal(t, "https://cli:8443/consensus", result.ConsensusURL)
+	assert.Equal(t, "/cli/consensus.json", result.ConsensusBootstrap)
 }
 
 func TestResolveGatewayFlags_NoOverridesWhenEnvUnset(t *testing.T) {
 	envKeys := []string{
 		"G8E_VAULT_DIR", "G8E_VAULT_KEY",
-		"G8E_TRIBUNAL_ID", "G8E_TRIBUNAL_URL", "G8E_TRIBUNAL_BOOTSTRAP",
+		"G8E_CONSENSUS_ID", "G8E_CONSENSUS_URL", "G8E_CONSENSUS_BOOTSTRAP",
 	}
 	originalValues := make(map[string]string)
 	for _, key := range envKeys {
@@ -230,16 +230,16 @@ func TestResolveGatewayFlags_NoOverridesWhenEnvUnset(t *testing.T) {
 	})
 
 	result := resolveGatewayFlags(GatewayFlags{
-		VaultDir:          "/cli/vault",
-		VaultKeyPath:      "/cli/key",
-		TribunalID:        "cli-id",
-		TribunalURL:       "https://cli/tribunal",
-		TribunalBootstrap: "/cli/bootstrap.json",
+		VaultDir:           "/cli/vault",
+		VaultKeyPath:       "/cli/key",
+		ConsensusID:        "cli-id",
+		ConsensusURL:       "https://cli/consensus",
+		ConsensusBootstrap: "/cli/bootstrap.json",
 	})
 
 	assert.Equal(t, "/cli/vault", result.VaultDir)
 	assert.Equal(t, "/cli/key", result.VaultKeyPath)
-	assert.Equal(t, "cli-id", result.TribunalID)
-	assert.Equal(t, "https://cli/tribunal", result.TribunalURL)
-	assert.Equal(t, "/cli/bootstrap.json", result.TribunalBootstrap)
+	assert.Equal(t, "cli-id", result.ConsensusID)
+	assert.Equal(t, "https://cli/consensus", result.ConsensusURL)
+	assert.Equal(t, "/cli/bootstrap.json", result.ConsensusBootstrap)
 }

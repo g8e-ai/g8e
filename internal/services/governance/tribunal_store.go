@@ -15,15 +15,15 @@ package governance
 
 import "github.com/g8e-ai/g8e/internal/models"
 
-// TribunalStore defines the interface for loading TribunalPolicy by ID.
-// This is the Tribunal-specific store; the L4 Warden depends on the generic
+// ConsensusStore defines the interface for loading ConsensusPolicy by ID.
+// This is the Consensus-specific store; the L4 Warden depends on the generic
 // L2ConsensusPolicyStore interface instead.
-type TribunalStore interface {
-	GetTribunal(id string) (*models.TribunalPolicy, error)
+type ConsensusStore interface {
+	GetConsensus(id string) (*models.ConsensusPolicy, error)
 }
 
 // L2ConsensusPolicy is the generic consensus policy consumed by the L4 Warden.
-// It is not tied to any specific consensus implementation (e.g., Tribunal).
+// It is not tied to any specific consensus implementation (e.g., Consensus).
 type L2ConsensusPolicy struct {
 	MemberKeyIDs    []string
 	Quorum          int
@@ -33,7 +33,7 @@ type L2ConsensusPolicy struct {
 
 // L2ConsensusPolicyStore defines the generic interface for loading an L2
 // consensus policy by ID. The L4 Warden depends on this interface rather than
-// TribunalStore, allowing alternative consensus implementations to be plugged
+// ConsensusStore, allowing alternative consensus implementations to be plugged
 // in without modifying the warden.
 type L2ConsensusPolicyStore interface {
 	GetConsensusPolicy(id string) (*L2ConsensusPolicy, error)

@@ -150,40 +150,40 @@ func TestSelectAgentHarnessScenarios_Consensus(t *testing.T) {
 	})
 }
 
-func TestApplyAgentHarnessFlags_ConsensusSeedAndTribunalID(t *testing.T) {
-	t.Run("populates ConsensusSeed and TribunalID when flags are set", func(t *testing.T) {
+func TestApplyAgentHarnessFlags_ConsensusSeedAndConsensusID(t *testing.T) {
+	t.Run("populates ConsensusSeed and ConsensusID when flags are set", func(t *testing.T) {
 		originalSeed := harnessConsensusSeed
-		originalTribunal := harnessTribunalID
+		originalTribunal := harnessConsensusID
 		defer func() {
 			harnessConsensusSeed = originalSeed
-			harnessTribunalID = originalTribunal
+			harnessConsensusID = originalTribunal
 		}()
 
 		harnessConsensusSeed = "/etc/g8e/ensemble-seed.hex"
-		harnessTribunalID = "dhs-tribunal"
+		harnessConsensusID = "dhs-consensus"
 
 		cfg := config.Default()
 		applyAgentHarnessFlags(&cfg)
 
 		assert.Equal(t, "/etc/g8e/ensemble-seed.hex", cfg.ConsensusSeed)
-		assert.Equal(t, "dhs-tribunal", cfg.TribunalID)
+		assert.Equal(t, "dhs-consensus", cfg.ConsensusID)
 	})
 
-	t.Run("leaves ConsensusSeed and TribunalID empty when flags are unset", func(t *testing.T) {
+	t.Run("leaves ConsensusSeed and ConsensusID empty when flags are unset", func(t *testing.T) {
 		originalSeed := harnessConsensusSeed
-		originalTribunal := harnessTribunalID
+		originalTribunal := harnessConsensusID
 		defer func() {
 			harnessConsensusSeed = originalSeed
-			harnessTribunalID = originalTribunal
+			harnessConsensusID = originalTribunal
 		}()
 
 		harnessConsensusSeed = ""
-		harnessTribunalID = ""
+		harnessConsensusID = ""
 
 		cfg := config.Default()
 		applyAgentHarnessFlags(&cfg)
 
 		assert.Empty(t, cfg.ConsensusSeed)
-		assert.Empty(t, cfg.TribunalID)
+		assert.Empty(t, cfg.ConsensusID)
 	})
 }

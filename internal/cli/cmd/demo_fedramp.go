@@ -23,7 +23,7 @@ import (
 
 // defaultFedRAMPHarnessConfig returns the config matching the FedRAMP compose topology.
 func defaultFedRAMPHarnessConfig() harnessConfig {
-	return defaultGovernedHarnessConfig("agent-runtime", "fedramp-tribunal")
+	return defaultGovernedHarnessConfig("agent-runtime", "fedramp-consensus")
 }
 
 func switchFedRAMPPosture(demoDir, posture string) error {
@@ -290,9 +290,9 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "fedramp-revert", "doctrine admitted")
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "fedramp-revert", "consensus deliberation")
-		demoEmitter.Consensus(constants.TribunalMemberAxiom, true, true, 3, 5, tui.ConsensusPending, "")
-		demoEmitter.Consensus(constants.TribunalMemberConcord, true, true, 3, 5, tui.ConsensusPending, "")
-		demoEmitter.Consensus(constants.TribunalMemberVariance, true, true, 3, 5, tui.ConsensusPending, "")
+		demoEmitter.Consensus(constants.ConsensusMemberAxiom, true, true, 3, 5, tui.ConsensusPending, "")
+		demoEmitter.Consensus(constants.ConsensusMemberConcord, true, true, 3, 5, tui.ConsensusPending, "")
+		demoEmitter.Consensus(constants.ConsensusMemberVariance, true, true, 3, 5, tui.ConsensusPending, "")
 		if err := demoStep(demoDir, "fedramp-revert via agent",
 			false,
 			harnessRun("fedramp-revert", hcfg)...,
@@ -304,7 +304,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "fedramp-revert", "quorum met (3/5)")
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusActive, "fedramp-revert", "actuator executing")
-		demoEmitter.Consensus(constants.TribunalMemberAxiom, true, true, 3, 5, tui.ConsensusReached, "revert-hash-001")
+		demoEmitter.Consensus(constants.ConsensusMemberAxiom, true, true, 3, 5, tui.ConsensusReached, "revert-hash-001")
 		demoEmitter.Ledger(tui.LevelInfo, "L2 consensus quorum met (3/5) — revert admitted")
 
 		if !demoScenarioStep(demoDir, "Step 3: Verify the Sovereign Cloud Service recorded the REVERT",

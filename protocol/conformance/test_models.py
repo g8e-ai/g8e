@@ -111,7 +111,7 @@ class TestModelSchemaIntegrity:
         "task.json",
         "terminal_output.json",
         "tool_results.json",
-        "tribunal.json",
+        "consensus.json",
         "trusted_signer.json",
         "user.json",
         "user_settings.json",
@@ -630,7 +630,7 @@ class TestGovernanceL2Conformance:
         from g8e.models import GovernanceL2, GovernanceL2Vote
 
         l2 = GovernanceL2(
-            consensus_set_id="tribunal-1",
+            consensus_set_id="consensus-1",
             votes=[
                 GovernanceL2Vote(
                     signer_key_id="signer-1",
@@ -646,7 +646,7 @@ class TestGovernanceL2Conformance:
         )
         data = l2.model_dump(mode="json")
         restored = GovernanceL2.model_validate(data)
-        assert restored.consensus_set_id == "tribunal-1"
+        assert restored.consensus_set_id == "consensus-1"
         assert len(restored.votes) == 2
         assert restored.votes[0].signer_key_id == "signer-1"
         assert restored.votes[0].decision is True

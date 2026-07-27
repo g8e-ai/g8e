@@ -20,20 +20,20 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 )
 
-// SimpleTribunalStore implements governance.TribunalStore using a static map.
-type SimpleTribunalStore struct {
-	Tribunals map[string]*models.TribunalPolicy
+// SimpleConsensusStore implements governance.ConsensusStore using a static map.
+type SimpleConsensusStore struct {
+	Consensus map[string]*models.ConsensusPolicy
 }
 
-func (s *SimpleTribunalStore) GetTribunal(id string) (*models.TribunalPolicy, error) {
-	if s.Tribunals == nil {
+func (s *SimpleConsensusStore) GetConsensus(id string) (*models.ConsensusPolicy, error) {
+	if s.Consensus == nil {
 		return nil, nil
 	}
-	tribunal, ok := s.Tribunals[id]
+	consensus, ok := s.Consensus[id]
 	if !ok {
 		return nil, nil
 	}
-	return tribunal, nil
+	return consensus, nil
 }
 
 // SimpleAppPolicyStore implements governance.AppPolicyStore using a static map.

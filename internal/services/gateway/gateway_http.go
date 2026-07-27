@@ -25,9 +25,9 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/services/consensus"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
-	"github.com/g8e-ai/g8e/internal/services/tribunal"
 )
 
 // HTTPHandlerDependencies groups all dependencies for HTTPHandler to reduce constructor bloat.
@@ -47,7 +47,7 @@ type HTTPHandlerDependencies struct {
 	Responder          *response.Writer
 	MCPGateway         *mcp.GatewayService
 	AppEnrollment      *AppEnrollmentService
-	Tribunal           *tribunal.TribunalService
+	Consensus          *consensus.ConsensusService
 	IsReady            func() bool
 	IsGovernanceReady  func() bool
 }
@@ -149,12 +149,12 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 		Responder:   deps.Responder,
 		CrossOrigin: len(deps.Cfg.Gateway.AllowedOrigins) > 0,
 	})
-	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.SignerStore, deps.Stores.TribunalStore, deps.UserSvc, deps.Responder)
+	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.SignerStore, deps.Stores.ConsensusStore, deps.UserSvc, deps.Responder)
 	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)
 
 	h.sseController = newSSEController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.KVStore, deps.Stores.SSEStore, deps.Pubsub, deps.Auth, deps.Responder, 0)
 	h.healthController = newHealthController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.StateRootSvc, deps.Responder, deps.IsReady, deps.IsGovernanceReady)
-	h.governanceController = newGovernanceController(deps.Cfg, deps.Logger, deps.Responder, deps.Tribunal)
+	h.governanceController = newGovernanceController(deps.Cfg, deps.Logger, deps.Responder, deps.Consensus)
 
 	// Build router once to avoid per-request overhead
 	h.router = h.buildPublicRouter()
@@ -182,13 +182,13 @@ func (h *HTTPHandler) GetMCPGateway() *mcp.GatewayService {
 	return h.mcp
 }
 
-// SetTribunal sets the Tribunal service for L2 consensus deliberation.
-// Called by the boot sequence after the TribunalService is constructed.
+// SetConsensus sets the Consensus service for L2 consensus deliberation.
+// Called by the boot sequence after the ConsensusService is constructed.
 // Thread-safe via atomic.Pointer on GovernanceController — no router rebuild
-// needed because the tribunal deliberate route is always registered and the
+// needed because the consensus deliberate route is always registered and the
 // handler checks the atomic pointer at request time.
-func (h *HTTPHandler) SetTribunal(ts *tribunal.TribunalService) {
-	h.governanceController.SetTribunal(ts)
+func (h *HTTPHandler) SetConsensus(ts *consensus.ConsensusService) {
+	h.governanceController.SetConsensus(ts)
 }
 
 func (h *HTTPHandler) GetPasskeyHandler() *PasskeyHandler {

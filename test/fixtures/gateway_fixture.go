@@ -47,6 +47,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/services/consensus"
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/gateway"
@@ -55,7 +56,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/network"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
-	"github.com/g8e-ai/g8e/internal/services/tribunal"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
@@ -283,16 +283,16 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	// NewGatewayOperatorPubSubService (mcpGateway was passed in through
 	// GatewayCommandServiceConfig.MCPGateway above), so no extra wiring is needed.
 
-	// Auto-wire a Tribunal for postures that require L2 signatures (consensus, notary).
+	// Auto-wire a Consensus for postures that require L2 signatures (consensus, notary).
 	// Without L2 votes, the Warden rejects at L2 before L3 is ever checked.
 	if posture == config.PostureConsensus || posture == config.PostureNotary {
-		SetupTribunal(t, &GatewayFixture{
+		SetupConsensus(t, &GatewayFixture{
 			Config:        cfg,
 			Service:       ls,
 			MCPGateway:    mcpGateway,
 			ActuatorPriv:  ActuatorPriv,
 			ActuatorKeyID: ActuatorKeyID,
-		}, "test-tribunal", 1, 1, 1)
+		}, "test-consensus", 1, 1, 1)
 	}
 
 	// Seed platform_settings required for health check
@@ -635,18 +635,18 @@ func (rt *cliSessionRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 	return rt.base.RoundTrip(clone)
 }
 
-// TribunalSetup holds the result of wiring a real TribunalService into a gateway fixture.
-type TribunalSetup struct {
-	TribunalID string
-	Members    []tribunal.TribunalMember
-	Service    *tribunal.TribunalService
+// ConsensusSetup holds the result of wiring a real ConsensusService into a gateway fixture.
+type ConsensusSetup struct {
+	ConsensusID string
+	Members     []consensus.ConsensusMember
+	Service     *consensus.ConsensusService
 }
 
-// SetupTribunal wires a real TribunalService into the gateway fixture for consensus
+// SetupConsensus wires a real ConsensusService into the gateway fixture for consensus
 // posture integration tests. It generates nMembers Ed25519 key pairs, registers each
-// member's public key as a TrustedSigner, creates a TribunalPolicy in the TribunalStore,
-// constructs a TribunalService via the shared tribunal.NewTribunalFromPolicy factory,
-// and wires it into both the gateway service (SetTribunal) and the MCP gateway
+// member's public key as a TrustedSigner, creates a ConsensusPolicy in the ConsensusStore,
+// constructs a ConsensusService via the shared consensus.NewConsensusFromPolicy factory,
+// and wires it into both the gateway service (SetConsensus) and the MCP gateway
 // (SetL2ConsensusDeliberator).
 //
 // If nServiceMembers < nMembers, only the first nServiceMembers are given private keys
@@ -654,17 +654,17 @@ type TribunalSetup struct {
 // to nil via the KeyProvider, and Deliberate skips nil-key members). This lets tests
 // simulate quorum-not-reached by producing fewer votes than the quorum threshold requires.
 //
-// This uses the same tribunal.NewTribunalFromPolicy factory as production BootstrapTribunal
+// This uses the same consensus.NewConsensusFromPolicy factory as production ConsensusBootstrap
 // in internal/cli/serve/gateway.go, eliminating the duplication identified in CS-12.
-func SetupTribunal(t *testing.T, f *GatewayFixture, tribunalID string, nMembers, quorum, nServiceMembers int) *TribunalSetup {
+func SetupConsensus(t *testing.T, f *GatewayFixture, consensusID string, nMembers, quorum, nServiceMembers int) *ConsensusSetup {
 	t.Helper()
 
 	memberAppIDs := make([]string, nMembers)
 	memberKeys := make(map[string]ed25519.PrivateKey, nServiceMembers)
-	signingMembers := make([]tribunal.TribunalMember, 0, nServiceMembers)
+	signingMembers := make([]consensus.ConsensusMember, 0, nServiceMembers)
 
 	for i := 0; i < nMembers; i++ {
-		appID := fmt.Sprintf("%s-member-%d", tribunalID, i)
+		appID := fmt.Sprintf("%s-member-%d", consensusID, i)
 		memberAppIDs[i] = appID
 
 		pub, priv, err := ed25519.GenerateKey(nil)
@@ -680,24 +680,24 @@ func SetupTribunal(t *testing.T, f *GatewayFixture, tribunalID string, nMembers,
 
 		if i < nServiceMembers {
 			memberKeys[appID] = priv
-			signingMembers = append(signingMembers, tribunal.TribunalMember{
+			signingMembers = append(signingMembers, consensus.ConsensusMember{
 				AppID:      appID,
 				PrivateKey: priv,
 			})
 		}
 	}
 
-	policy := models.TribunalPolicy{
-		ID:              tribunalID,
+	policy := models.ConsensusPolicy{
+		ID:              consensusID,
 		MemberAppIDs:    memberAppIDs,
 		Quorum:          quorum,
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	err := f.Service.GetStores().TribunalStore.AddTribunal(policy)
+	err := f.Service.GetStores().ConsensusStore.AddConsensus(policy)
 	require.NoError(t, err)
 
-	keyProvider := tribunal.KeyProviderFunc(func(appID string) (ed25519.PrivateKey, error) {
+	keyProvider := consensus.KeyProviderFunc(func(appID string) (ed25519.PrivateKey, error) {
 		if key, ok := memberKeys[appID]; ok {
 			return key, nil
 		}
@@ -706,15 +706,15 @@ func SetupTribunal(t *testing.T, f *GatewayFixture, tribunalID string, nMembers,
 
 	doctrine := govsvc.NewL1Doctrine()
 	responder := response.NewWriter(testutil.NewTestLogger())
-	tribunalSvc, err := tribunal.NewTribunalFromPolicy(&policy, keyProvider, doctrine, testutil.NewTestLogger(), responder)
+	consensusSvc, err := consensus.NewConsensusFromPolicy(&policy, keyProvider, doctrine, testutil.NewTestLogger(), responder)
 	require.NoError(t, err)
 
-	f.Service.SetTribunal(tribunalSvc)
-	f.MCPGateway.SetL2ConsensusDeliberator(tribunal.NewLocalDeliberator(tribunalSvc))
+	f.Service.SetConsensus(consensusSvc)
+	f.MCPGateway.SetL2ConsensusDeliberator(consensus.NewLocalDeliberator(consensusSvc))
 
-	return &TribunalSetup{
-		TribunalID: tribunalID,
-		Members:    signingMembers,
-		Service:    tribunalSvc,
+	return &ConsensusSetup{
+		ConsensusID: consensusID,
+		Members:     signingMembers,
+		Service:     consensusSvc,
 	}
 }

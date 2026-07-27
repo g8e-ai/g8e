@@ -27,7 +27,7 @@ const (
 	defaultTerminalHeight = 30
 	leftPaneWidthRatio    = 2 // numerator; left pane = width * leftPaneWidthRatio / leftPaneWidthDivisor
 	leftPaneWidthDivisor  = 5
-	reservedBottomLines   = 7 // tribunal pane + status bar
+	reservedBottomLines   = 7 // consensus pane + status bar
 	minTopHeight          = 10
 	ledgerReservedLines   = 4 // header + border padding
 	hashDisplayLen        = 8
@@ -63,12 +63,12 @@ func (m Model) View() string {
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
 
 	// Bottom section: L2 consensus
-	tribunalPane := m.renderTribunal(width)
+	consensusPane := m.renderConsensus(width)
 
 	// Status bar
 	statusBar := m.renderStatusBar(width)
 
-	return lipgloss.JoinVertical(lipgloss.Left, topRow, tribunalPane, statusBar)
+	return lipgloss.JoinVertical(lipgloss.Left, topRow, consensusPane, statusBar)
 }
 
 // renderPipeline renders the left pane: the L1-L5 execution pipeline.
@@ -159,25 +159,25 @@ func (m Model) renderLedger(width, height int) string {
 	return borderLedger.Width(width).Height(height).Render(content)
 }
 
-// renderTribunal renders the bottom pane: the L2 Consensus status.
-func (m Model) renderTribunal(width int) string {
-	header := tribunalHeaderStyle.Render(
+// renderConsensus renders the bottom pane: the L2 Consensus status.
+func (m Model) renderConsensus(width int) string {
+	header := consensusHeaderStyle.Render(
 		fmt.Sprintf("L2 CONSENSUS (k-of-n: %d/%d required)", m.quorum, m.total),
 	)
 
 	var memberBlocks []string
-	for _, member := range m.tribunal {
+	for _, member := range m.consensus {
 		icon := voteIcon(member)
 		name := strings.ToUpper(string(member.name))
 
 		var styled string
 		switch {
 		case !member.signed:
-			styled = tribunalPendingStyle.Render(fmt.Sprintf("%s %s", icon, name))
+			styled = consensusPendingStyle.Render(fmt.Sprintf("%s %s", icon, name))
 		case member.decision:
-			styled = tribunalApproveStyle.Render(fmt.Sprintf("%s %s", icon, name))
+			styled = consensusApproveStyle.Render(fmt.Sprintf("%s %s", icon, name))
 		default:
-			styled = tribunalVetoStyle.Render(fmt.Sprintf("%s %s", icon, name))
+			styled = consensusVetoStyle.Render(fmt.Sprintf("%s %s", icon, name))
 		}
 		memberBlocks = append(memberBlocks, styled)
 	}
@@ -187,22 +187,22 @@ func (m Model) renderTribunal(width int) string {
 	var statusLine string
 	switch m.result {
 	case ConsensusReached:
-		statusLine = tribunalApproveStatusStyle.Render(
+		statusLine = consensusApproveStatusStyle.Render(
 			fmt.Sprintf("STATUS: %s. HASH: %s", m.result, shortHash(m.consensusHash)),
 		)
 	case ConsensusRejected:
-		statusLine = tribunalRejectStyle.Render(
+		statusLine = consensusRejectStyle.Render(
 			fmt.Sprintf("STATUS: %s. HASH: %s", m.result, shortHash(m.consensusHash)),
 		)
 	default:
 		affirmative := m.countAffirmative()
-		statusLine = tribunalStatusStyle.Render(
+		statusLine = consensusStatusStyle.Render(
 			fmt.Sprintf("STATUS: %s (%d/%d signed). %s", m.result, affirmative, m.total, "AWAITING VOTES..."),
 		)
 	}
 
 	content := header + "\n\n" + membersLine + "\n\n" + statusLine
-	return borderTribunal.Width(width).Render(content)
+	return borderConsensus.Width(width).Render(content)
 }
 
 // renderStatusBar renders the bottom status bar with version, node, network, and connection info.
@@ -237,10 +237,10 @@ func (m Model) renderStatusBar(width int) string {
 	return statusBarStyle.Render(left + strings.Repeat(" ", gap) + right)
 }
 
-// countAffirmative returns the number of tribunal members who voted yes.
+// countAffirmative returns the number of consensus members who voted yes.
 func (m Model) countAffirmative() int {
 	count := 0
-	for _, member := range m.tribunal {
+	for _, member := range m.consensus {
 		if member.signed && member.decision {
 			count++
 		}

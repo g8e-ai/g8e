@@ -27,18 +27,18 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 )
 
-// TribunalStoreService provides TribunalPolicy CRUD operations.
-type TribunalStoreService struct {
+// ConsensusStoreService provides ConsensusPolicy CRUD operations.
+type ConsensusStoreService struct {
 	db        *sqliteutil.DB
 	logger    *slog.Logger
 	docSvc    *DocumentStoreService
 	signerSvc *SignerStoreService
 }
 
-// NewTribunalStoreService creates a new tribunal store service.
+// NewConsensusStoreService creates a new consensus store service.
 // docSvc is the shared DocumentStoreService instance from CanonicalDBService.
-func NewTribunalStoreService(db *sqliteutil.DB, logger *slog.Logger, docSvc *DocumentStoreService, signerSvc *SignerStoreService) *TribunalStoreService {
-	return &TribunalStoreService{
+func NewConsensusStoreService(db *sqliteutil.DB, logger *slog.Logger, docSvc *DocumentStoreService, signerSvc *SignerStoreService) *ConsensusStoreService {
+	return &ConsensusStoreService{
 		db:        db,
 		logger:    logger,
 		docSvc:    docSvc,
@@ -46,11 +46,11 @@ func NewTribunalStoreService(db *sqliteutil.DB, logger *slog.Logger, docSvc *Doc
 	}
 }
 
-// GetTribunal retrieves a TribunalPolicy by ID from the database.
-func (s *TribunalStoreService) GetTribunal(id string) (*models.TribunalPolicy, error) {
-	doc, err := s.docSvc.DocGet(marshaler.CollectionName(constants.CollectionTribunals), id)
+// GetConsensus retrieves a ConsensusPolicy by ID from the database.
+func (s *ConsensusStoreService) GetConsensus(id string) (*models.ConsensusPolicy, error) {
+	doc, err := s.docSvc.DocGet(marshaler.CollectionName(constants.CollectionConsensus), id)
 	if err != nil {
-		return nil, fmt.Errorf("tribunal store: get: %w", err)
+		return nil, fmt.Errorf("consensus store: get: %w", err)
 	}
 	if doc == nil {
 		return nil, nil
@@ -61,7 +61,7 @@ func (s *TribunalStoreService) GetTribunal(id string) (*models.TribunalPolicy, e
 		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
-	var policy models.TribunalPolicy
+	var policy models.ConsensusPolicy
 	if err := json.Unmarshal(data, &policy); err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreUnmarshalData, err)
 	}
@@ -71,10 +71,10 @@ func (s *TribunalStoreService) GetTribunal(id string) (*models.TribunalPolicy, e
 }
 
 // GetConsensusPolicy implements governance.L2ConsensusPolicyStore by loading
-// the TribunalPolicy via GetTribunal and adapting it to the generic
+// the ConsensusPolicy via GetConsensus and adapting it to the generic
 // L2ConsensusPolicy struct.
-func (s *TribunalStoreService) GetConsensusPolicy(id string) (*governance.L2ConsensusPolicy, error) {
-	policy, err := s.GetTribunal(id)
+func (s *ConsensusStoreService) GetConsensusPolicy(id string) (*governance.L2ConsensusPolicy, error) {
+	policy, err := s.GetConsensus(id)
 	if err != nil {
 		return nil, err
 	}
@@ -89,23 +89,23 @@ func (s *TribunalStoreService) GetConsensusPolicy(id string) (*governance.L2Cons
 	}, nil
 }
 
-// AddTribunal adds or updates a TribunalPolicy in the database.
+// AddConsensus adds or updates a ConsensusPolicy in the database.
 // Validation at write time, fail-closed:
-// - Tribunal ID is non-empty and contains only alphanumeric, hyphens, underscores
+// - Consensus ID is non-empty and contains only alphanumeric, hyphens, underscores
 // - Quorum >= 1
 // - Quorum <= len(MemberAppIDs)
 // - Every MemberAppID resolves to an enabled TrustedSigner
 // - No duplicate member IDs
-// - New tribunals must be created with Enabled=true (updates may disable)
-func (s *TribunalStoreService) AddTribunal(policy models.TribunalPolicy) error {
+// - New consensus must be created with Enabled=true (updates may disable)
+func (s *ConsensusStoreService) AddConsensus(policy models.ConsensusPolicy) error {
 	if policy.ID == "" {
-		return fmt.Errorf("%w: tribunal ID", constants.ErrMissingRequiredField)
+		return fmt.Errorf("%w: consensus ID", constants.ErrMissingRequiredField)
 	}
-	if !isValidTribunalID(policy.ID) {
-		return fmt.Errorf("%w: %s", constants.ErrTribunalInvalidID, policy.ID)
+	if !isValidConsensusID(policy.ID) {
+		return fmt.Errorf("%w: %s", constants.ErrConsensusInvalidID, policy.ID)
 	}
 	if len(policy.MemberAppIDs) == 0 {
-		return fmt.Errorf("%w: tribunal member_app_ids", constants.ErrMissingRequiredField)
+		return fmt.Errorf("%w: consensus member_app_ids", constants.ErrMissingRequiredField)
 	}
 	if policy.Quorum < 1 {
 		return fmt.Errorf("%w: quorum must be >= 1", constants.ErrConstraintViolation)
@@ -137,21 +137,21 @@ func (s *TribunalStoreService) AddTribunal(policy models.TribunalPolicy) error {
 		}
 	}
 
-	// Existence check: prevent silent overwrite of existing tribunals.
-	// - New tribunals must be created with Enabled=true.
-	// - Existing tribunals may only be updated via Enabled=false (disable path).
-	// - Overwriting an existing tribunal with Enabled=true is rejected.
-	existing, err := s.GetTribunal(policy.ID)
+	// Existence check: prevent silent overwrite of existing consensus.
+	// - New consensus must be created with Enabled=true.
+	// - Existing consensus may only be updated via Enabled=false (disable path).
+	// - Overwriting an existing consensus with Enabled=true is rejected.
+	existing, err := s.GetConsensus(policy.ID)
 	if err != nil {
-		return fmt.Errorf("%w: failed to check existing tribunal: %w", constants.ErrConstraintViolation, err)
+		return fmt.Errorf("%w: failed to check existing consensus: %w", constants.ErrConstraintViolation, err)
 	}
 	if existing != nil {
 		if policy.Enabled {
-			return fmt.Errorf("%w: tribunal %s", constants.ErrAlreadyExists, policy.ID)
+			return fmt.Errorf("%w: consensus %s", constants.ErrAlreadyExists, policy.ID)
 		}
 	} else {
 		if !policy.Enabled {
-			return constants.ErrTribunalMustBeEnabled
+			return constants.ErrConsensusMustBeEnabled
 		}
 	}
 
@@ -165,26 +165,26 @@ func (s *TribunalStoreService) AddTribunal(policy models.TribunalPolicy) error {
 		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
-	return s.docSvc.DocSet(marshaler.CollectionName(constants.CollectionTribunals), policy.ID, data)
+	return s.docSvc.DocSet(marshaler.CollectionName(constants.CollectionConsensus), policy.ID, data)
 }
 
-// ListTribunals returns all TribunalPolicies in the database.
-func (s *TribunalStoreService) ListTribunals() ([]models.TribunalPolicy, error) {
-	docs, err := s.docSvc.DocQuery(marshaler.CollectionName(constants.CollectionTribunals), nil, "id", 0)
+// ListConsensus returns all ConsensusPolicies in the database.
+func (s *ConsensusStoreService) ListConsensus() ([]models.ConsensusPolicy, error) {
+	docs, err := s.docSvc.DocQuery(marshaler.CollectionName(constants.CollectionConsensus), nil, "id", 0)
 	if err != nil {
-		return nil, fmt.Errorf("tribunal store: list: %w", err)
+		return nil, fmt.Errorf("consensus store: list: %w", err)
 	}
 
-	results := make([]models.TribunalPolicy, 0, len(docs))
+	results := make([]models.ConsensusPolicy, 0, len(docs))
 	for _, doc := range docs {
 		data, err := json.Marshal(doc.Data)
 		if err != nil {
-			s.logger.Warn("failed to marshal tribunal document", "error", err)
+			s.logger.Warn("failed to marshal consensus document", "error", err)
 			continue
 		}
-		var policy models.TribunalPolicy
+		var policy models.ConsensusPolicy
 		if err := json.Unmarshal(data, &policy); err != nil {
-			s.logger.Warn("failed to unmarshal tribunal document", "error", err)
+			s.logger.Warn("failed to unmarshal consensus document", "error", err)
 			continue
 		}
 		// id is not in the data map usually, so we set it from doc.ID
@@ -194,14 +194,14 @@ func (s *TribunalStoreService) ListTribunals() ([]models.TribunalPolicy, error) 
 	return results, nil
 }
 
-// DeleteTribunal removes a TribunalPolicy from the database.
-func (s *TribunalStoreService) DeleteTribunal(id string) (bool, error) {
-	return s.docSvc.DocDelete(marshaler.CollectionName(constants.CollectionTribunals), id)
+// DeleteConsensus removes a ConsensusPolicy from the database.
+func (s *ConsensusStoreService) DeleteConsensus(id string) (bool, error) {
+	return s.docSvc.DocDelete(marshaler.CollectionName(constants.CollectionConsensus), id)
 }
 
-// isValidTribunalID validates that a tribunal ID contains only allowed characters.
+// isValidConsensusID validates that a consensus ID contains only allowed characters.
 // Allowed: letters, digits, hyphens, and underscores. Must be non-empty.
-func isValidTribunalID(id string) bool {
+func isValidConsensusID(id string) bool {
 	if id == "" {
 		return false
 	}

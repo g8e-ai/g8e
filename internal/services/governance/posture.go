@@ -39,7 +39,7 @@ type GovernancePosture interface {
 	// Description returns a human-readable summary of what is enforced.
 	Description() string
 
-	// RequiresL2Signature returns true when Tribunal L2 signatures must be valid.
+	// RequiresL2Signature returns true when Consensus L2 signatures must be valid.
 	RequiresL2Signature() bool
 
 	// RequiresL3Proof returns true when L3Notary proofs are required for mutations.

@@ -56,7 +56,7 @@ func TestGovernanceFlow(t *testing.T) {
 	env.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{
-			ConsensusSetId: "test-tribunal",
+			ConsensusSetId: "test-consensus",
 			Votes: []*commonv1.L2Vote{
 				{
 					SignerKeyId:        nodeID,
@@ -161,7 +161,7 @@ func TestGovernanceFailClosed(t *testing.T) {
 		}
 	})
 
-	t.Run("NilTribunalStore_ConsensusFailClosed", func(t *testing.T) {
+	t.Run("NilConsensusStore_ConsensusFailClosed", func(t *testing.T) {
 		warden := makeWarden(testutil.NewStatefulMockReplayStore(), &governancetest.SimpleStateRootProvider{Root: "root-1"}, nil, NewL1Doctrine(), "consensus")
 		env := buildValidEnvelope(t)
 		_, err := warden.VerifyEnvelope(context.Background(), env)

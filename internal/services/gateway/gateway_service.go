@@ -39,6 +39,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/services/consensus"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
@@ -46,7 +47,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
-	"github.com/g8e-ai/g8e/internal/services/tribunal"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
@@ -72,7 +72,7 @@ type GatewayModeService struct {
 	webSessionSvc      *WebSessionService
 	suspendedTxService *storage.SuspendedTransactionService
 	mcpGateway         *mcp.GatewayService
-	tribunal           *tribunal.TribunalService
+	consensus          *consensus.ConsensusService
 	responder          *response.Writer
 	server             *http.Server
 	publicServer       *http.Server
@@ -382,7 +382,7 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 		Responder:          ls.responder,
 		MCPGateway:         ls.mcpGateway,
 		AppEnrollment:      appEnrollment,
-		Tribunal:           ls.tribunal,
+		Consensus:          ls.consensus,
 		IsReady:            ls.IsReady,
 		IsGovernanceReady:  ls.IsGovernanceReady,
 	})
@@ -483,14 +483,14 @@ func (ls *GatewayModeService) GetHTTPSPort() int {
 	return port
 }
 
-// SetTribunal sets the Tribunal service for L2 consensus deliberation.
-// This is called by the boot sequence after the TribunalService is constructed.
-// The Tribunal is registered on the mTLS mux and the HTTP deliberator is wired
+// SetConsensus sets the Consensus service for L2 consensus deliberation.
+// This is called by the boot sequence after the ConsensusService is constructed.
+// The Consensus is registered on the mTLS mux and the HTTP deliberator is wired
 // into the MCP gateway for consensus and notary postures.
-func (ls *GatewayModeService) SetTribunal(ts *tribunal.TribunalService) {
-	ls.tribunal = ts
+func (ls *GatewayModeService) SetConsensus(ts *consensus.ConsensusService) {
+	ls.consensus = ts
 	if ls.handler != nil {
-		ls.handler.SetTribunal(ts)
+		ls.handler.SetConsensus(ts)
 	}
 }
 
@@ -535,7 +535,7 @@ func (ls *GatewayModeService) GetGovernanceDeps() *pubsub.GovernanceDeps {
 		L3Notary:             l3Notary,
 		SignerStore:          ls.stores.SignerStore,
 		AppPolicyStore:       ls.stores.AppPolicyStore,
-		ConsensusPolicyStore: ls.stores.TribunalStore,
+		ConsensusPolicyStore: ls.stores.ConsensusStore,
 		FieldReader:          ls.stores.DocStore,
 	}
 }

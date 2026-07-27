@@ -123,9 +123,9 @@ type GatewayConfig struct {
 	CertMode            string // "full" for all hostnames/IPs, "localhost" for minimal
 	NetworkIdentityFile string // Path to JSON file containing pre-detected network identity
 
-	// Tribunal configuration for consensus posture
-	TribunalID  string // ID of the TribunalPolicy to use for L2 deliberation (required for --consensus)
-	TribunalURL string // URL of the Tribunal service for L2 deliberation (e.g. https://localhost:8443/tribunal/v1/deliberate)
+	// Consensus configuration for consensus posture
+	ConsensusID  string // ID of the ConsensusPolicy to use for L2 deliberation (required for --consensus)
+	ConsensusURL string // URL of the Consensus service for L2 deliberation (e.g. https://localhost:8443/consensus/v1/deliberate)
 
 	// CORS allowed origins for cross-origin browser access (e.g. https://lovable.dev)
 	AllowedOrigins []string
@@ -249,8 +249,8 @@ type GatewayOptions struct {
 	CertMode            string
 	NetworkIdentityFile string
 
-	TribunalID  string
-	TribunalURL string
+	ConsensusID  string
+	ConsensusURL string
 
 	AllowedOrigins []string
 
@@ -449,9 +449,9 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			CertMode:            opts.CertMode,
 			NetworkIdentityFile: opts.NetworkIdentityFile,
 
-			// Tribunal configuration
-			TribunalID:  opts.TribunalID,
-			TribunalURL: opts.TribunalURL,
+			// Consensus configuration
+			ConsensusID:  opts.ConsensusID,
+			ConsensusURL: opts.ConsensusURL,
 
 			AllowedOrigins: opts.AllowedOrigins,
 

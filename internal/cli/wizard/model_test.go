@@ -80,25 +80,25 @@ func TestNewModel_CorsOriginEmptyWhenNoInitialConfig(t *testing.T) {
 	assert.Empty(t, m.corsOriginInput.Value())
 }
 
-func TestNewModel_TribunalIDPreFilled(t *testing.T) {
+func TestNewModel_ConsensusIDPreFilled(t *testing.T) {
 	m := NewModel(Options{
-		InitialConfig: Config{TribunalID: "trib-prod-01"},
+		InitialConfig: Config{ConsensusID: "trib-prod-01"},
 	})
-	assert.Equal(t, "trib-prod-01", m.tribunalIDInput.Value())
+	assert.Equal(t, "trib-prod-01", m.consensusIDInput.Value())
 }
 
-func TestNewModel_TribunalURLPreFilled(t *testing.T) {
+func TestNewModel_ConsensusURLPreFilled(t *testing.T) {
 	m := NewModel(Options{
-		InitialConfig: Config{TribunalURL: "https://tribunal.g8e.ai"},
+		InitialConfig: Config{ConsensusURL: "https://consensus.g8e.ai"},
 	})
-	assert.Equal(t, "https://tribunal.g8e.ai", m.tribunalURLInput.Value())
+	assert.Equal(t, "https://consensus.g8e.ai", m.consensusURLInput.Value())
 }
 
-func TestNewModel_TribunalBootstrapPreFilled(t *testing.T) {
+func TestNewModel_ConsensusBootstrapPreFilled(t *testing.T) {
 	m := NewModel(Options{
-		InitialConfig: Config{TribunalBootstrap: "/etc/g8e/bootstrap.json"},
+		InitialConfig: Config{ConsensusBootstrap: "/etc/g8e/bootstrap.json"},
 	})
-	assert.Equal(t, "/etc/g8e/bootstrap.json", m.tribunalBootstrapInput.Value())
+	assert.Equal(t, "/etc/g8e/bootstrap.json", m.consensusBootstrapInput.Value())
 }
 
 func TestNewModel_PasskeyRpIDPreFilled(t *testing.T) {
@@ -216,18 +216,18 @@ func TestInit_ReturnsBlink(t *testing.T) {
 func TestResult_AllFieldsPopulated(t *testing.T) {
 	m := NewModel(Options{
 		InitialConfig: Config{
-			PublicBaseURL:     "https://demo.g8e.ai",
-			CertIdentityMode:  "full",
-			AllowedOrigins:    []string{"https://console.g8e.ai"},
-			Posture:           "consensus",
-			TribunalID:        "trib-prod-01",
-			TribunalURL:       "https://tribunal.g8e.ai",
-			TribunalBootstrap: "/etc/g8e/bootstrap.json",
-			PasskeyRpID:       "demo.g8e.ai",
-			PasskeyRpName:     "g8e",
-			PasskeyRpOrigins:  []string{"https://demo.g8e.ai"},
-			MCPDownstreamURL:  "http://mcp:3000",
-			A2ADownstreamURL:  "http://a2a:3001",
+			PublicBaseURL:      "https://demo.g8e.ai",
+			CertIdentityMode:   "full",
+			AllowedOrigins:     []string{"https://console.g8e.ai"},
+			Posture:            "consensus",
+			ConsensusID:        "trib-prod-01",
+			ConsensusURL:       "https://consensus.g8e.ai",
+			ConsensusBootstrap: "/etc/g8e/bootstrap.json",
+			PasskeyRpID:        "demo.g8e.ai",
+			PasskeyRpName:      "g8e",
+			PasskeyRpOrigins:   []string{"https://demo.g8e.ai"},
+			MCPDownstreamURL:   "http://mcp:3000",
+			A2ADownstreamURL:   "http://a2a:3001",
 		},
 	})
 
@@ -238,9 +238,9 @@ func TestResult_AllFieldsPopulated(t *testing.T) {
 	assert.Equal(t, "full", cfg.CertIdentityMode)
 	assert.Equal(t, []string{"https://console.g8e.ai"}, cfg.AllowedOrigins)
 	assert.Equal(t, "consensus", cfg.Posture)
-	assert.Equal(t, "trib-prod-01", cfg.TribunalID)
-	assert.Equal(t, "https://tribunal.g8e.ai", cfg.TribunalURL)
-	assert.Equal(t, "/etc/g8e/bootstrap.json", cfg.TribunalBootstrap)
+	assert.Equal(t, "trib-prod-01", cfg.ConsensusID)
+	assert.Equal(t, "https://consensus.g8e.ai", cfg.ConsensusURL)
+	assert.Equal(t, "/etc/g8e/bootstrap.json", cfg.ConsensusBootstrap)
 	assert.Equal(t, "demo.g8e.ai", cfg.PasskeyRpID)
 	assert.Equal(t, "g8e", cfg.PasskeyRpName)
 	assert.Equal(t, "http://mcp:3000", cfg.MCPDownstreamURL)
@@ -326,33 +326,33 @@ func TestResult_CancelReturnsCancelTrue(t *testing.T) {
 	assert.True(t, result.Cancel)
 }
 
-// --- result(): conditional tribunal ---
+// --- result(): conditional consensus ---
 
-func TestResult_ConditionalTribunal_DoctrineKeepsValuesFromInputs(t *testing.T) {
+func TestResult_ConditionalConsensus_DoctrineKeepsValuesFromInputs(t *testing.T) {
 	m := NewModel(Options{
 		InitialConfig: Config{
-			Posture:     "doctrine",
-			TribunalID:  "stale-id",
-			TribunalURL: "https://stale.example.com",
+			Posture:      "doctrine",
+			ConsensusID:  "stale-id",
+			ConsensusURL: "https://stale.example.com",
 		},
 	})
 	result := m.result()
 	assert.Equal(t, "doctrine", result.Config.Posture)
-	assert.Equal(t, "stale-id", result.Config.TribunalID)
+	assert.Equal(t, "stale-id", result.Config.ConsensusID)
 }
 
-func TestResult_ConditionalTribunal_ConsensusPreservesValues(t *testing.T) {
+func TestResult_ConditionalConsensus_ConsensusPreservesValues(t *testing.T) {
 	m := NewModel(Options{
 		InitialConfig: Config{
-			Posture:     "consensus",
-			TribunalID:  "trib-prod-01",
-			TribunalURL: "https://tribunal.g8e.ai",
+			Posture:      "consensus",
+			ConsensusID:  "trib-prod-01",
+			ConsensusURL: "https://consensus.g8e.ai",
 		},
 	})
 	result := m.result()
 	assert.Equal(t, "consensus", result.Config.Posture)
-	assert.Equal(t, "trib-prod-01", result.Config.TribunalID)
-	assert.Equal(t, "https://tribunal.g8e.ai", result.Config.TribunalURL)
+	assert.Equal(t, "trib-prod-01", result.Config.ConsensusID)
+	assert.Equal(t, "https://consensus.g8e.ai", result.Config.ConsensusURL)
 }
 
 // --- newTextInput ---

@@ -38,9 +38,9 @@ var (
 			BorderForeground(colorBorder).
 			Padding(0, 1)
 
-	borderPipeline = baseBorder.Border(lipgloss.RoundedBorder())
-	borderLedger   = baseBorder.Border(lipgloss.RoundedBorder())
-	borderTribunal = baseBorder.Border(lipgloss.RoundedBorder(), false, true, true, true)
+	borderPipeline  = baseBorder.Border(lipgloss.RoundedBorder())
+	borderLedger    = baseBorder.Border(lipgloss.RoundedBorder())
+	borderConsensus = baseBorder.Border(lipgloss.RoundedBorder(), false, true, true, true)
 )
 
 // Text styles.
@@ -55,7 +55,7 @@ var (
 				Foreground(colorHeader).
 				MarginBottom(0)
 
-	tribunalHeaderStyle = lipgloss.NewStyle().
+	consensusHeaderStyle = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(colorHeader)
 
@@ -90,25 +90,25 @@ var (
 			Foreground(colorCritical).
 			Bold(true)
 
-	tribunalApproveStyle = lipgloss.NewStyle().
+	consensusApproveStyle = lipgloss.NewStyle().
 				Foreground(colorApprove).
 				Bold(true)
 
-	tribunalVetoStyle = lipgloss.NewStyle().
+	consensusVetoStyle = lipgloss.NewStyle().
 				Foreground(colorVeto).
 				Bold(true)
 
-	tribunalPendingStyle = lipgloss.NewStyle().
+	consensusPendingStyle = lipgloss.NewStyle().
 				Foreground(colorPending)
 
-	tribunalStatusStyle = lipgloss.NewStyle().
+	consensusStatusStyle = lipgloss.NewStyle().
 				Foreground(colorNormal)
 
-	tribunalRejectStyle = lipgloss.NewStyle().
+	consensusRejectStyle = lipgloss.NewStyle().
 				Foreground(colorCritical).
 				Bold(true)
 
-	tribunalApproveStatusStyle = lipgloss.NewStyle().
+	consensusApproveStatusStyle = lipgloss.NewStyle().
 					Foreground(colorPassed).
 					Bold(true)
 
@@ -132,8 +132,8 @@ func statusIcon(s PipelineStatus) string {
 	}
 }
 
-// voteIcon returns the display icon for a tribunal member vote.
-func voteIcon(m tribunalMemberState) string {
+// voteIcon returns the display icon for a consensus member vote.
+func voteIcon(m consensusMemberState) string {
 	if !m.signed {
 		return "[...]"
 	}

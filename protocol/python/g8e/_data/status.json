@@ -2628,63 +2628,63 @@
         "value": "info"
       }
     },
-    "tribunal_member": {
+    "consensus_member": {
       "axiom": {
-        "_go_const": "TribunalMemberAxiom",
+        "_go_const": "ConsensusMemberAxiom",
         "_python_const": "AXIOM",
         "value": "axiom"
       },
       "concord": {
-        "_go_const": "TribunalMemberConcord",
+        "_go_const": "ConsensusMemberConcord",
         "_python_const": "CONCORD",
         "value": "concord"
       },
       "variance": {
-        "_go_const": "TribunalMemberVariance",
+        "_go_const": "ConsensusMemberVariance",
         "_python_const": "VARIANCE",
         "value": "variance"
       },
       "pragma": {
-        "_go_const": "TribunalMemberPragma",
+        "_go_const": "ConsensusMemberPragma",
         "_python_const": "PRAGMA",
         "value": "pragma"
       },
       "nemesis": {
-        "_go_const": "TribunalMemberNemesis",
+        "_go_const": "ConsensusMemberNemesis",
         "_python_const": "NEMESIS",
         "value": "nemesis"
       }
     },
-    "tribunal_audit_mode": {
+    "consensus_audit_mode": {
       "unanimous": {
-        "_go_const": "TribunalAuditModeUnanimous",
+        "_go_const": "ConsensusAuditModeUnanimous",
         "_python_const": "UNANIMOUS",
         "value": "unanimous"
       },
       "majority": {
-        "_go_const": "TribunalAuditModeMajority",
+        "_go_const": "ConsensusAuditModeMajority",
         "_python_const": "MAJORITY",
         "value": "majority"
       },
       "tied": {
-        "_go_const": "TribunalAuditModeTied",
+        "_go_const": "ConsensusAuditModeTied",
         "_python_const": "TIED",
         "value": "tied"
       }
     },
-    "tribunal_audit_status": {
+    "consensus_audit_status": {
       "ok": {
-        "_go_const": "TribunalAuditStatusOk",
+        "_go_const": "ConsensusAuditStatusOk",
         "_python_const": "OK",
         "value": "ok"
       },
       "revised": {
-        "_go_const": "TribunalAuditStatusRevised",
+        "_go_const": "ConsensusAuditStatusRevised",
         "_python_const": "REVISED",
         "value": "revised"
       },
       "swap": {
-        "_go_const": "TribunalAuditStatusSwap",
+        "_go_const": "ConsensusAuditStatusSwap",
         "_python_const": "SWAP",
         "value": "swap"
       }

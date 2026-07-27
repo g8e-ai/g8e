@@ -81,7 +81,7 @@ func TestL4Warden_ConsensusPolicyStoreError_FailClosed(t *testing.T) {
 
 // TestL4Warden_L2SplitVote_QuorumNotMet verifies that a split vote (some members
 // approve, some veto) does not meet quorum when the affirmative count is below
-// the quorum threshold. This simulates the real-world scenario where tribunal
+// the quorum threshold. This simulates the real-world scenario where consensus
 // members disagree on safety.
 func TestL4Warden_L2SplitVote_QuorumNotMet(t *testing.T) {
 	t.Parallel()
@@ -103,7 +103,7 @@ func TestL4Warden_L2SplitVote_QuorumNotMet(t *testing.T) {
 		"member-2": pub2,
 		"member-3": pub3,
 	}
-	tribunal3of3 := &models.TribunalPolicy{
+	consensus3of3 := &models.ConsensusPolicy{
 		ID:              "split-trib",
 		MemberAppIDs:    []string{"member-1", "member-2", "member-3"},
 		Quorum:          3,
@@ -116,7 +116,7 @@ func TestL4Warden_L2SplitVote_QuorumNotMet(t *testing.T) {
 		testutil.NewStatefulMockReplayStore(),
 		testutil.NewMockStateRootProvider("root-1"),
 		&SimpleSignerStore{Signers: signers},
-		&tribunalStoreTestAdapter{Inner: &governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{"split-trib": tribunal3of3}}},
+		&consensusStoreTestAdapter{Inner: &governancetest.SimpleConsensusStore{Consensus: map[string]*models.ConsensusPolicy{"split-trib": consensus3of3}}},
 		nil,
 		testutil.NewConfigurableMockL3Notary(true),
 		NewL1Doctrine(),
@@ -185,7 +185,7 @@ func TestL4Warden_L2VoteOrderingIndependence(t *testing.T) {
 		"member-1": pub1,
 		"member-2": pub2,
 	}
-	tribunal2of2 := &models.TribunalPolicy{
+	consensus2of2 := &models.ConsensusPolicy{
 		ID:              "order-trib",
 		MemberAppIDs:    []string{"member-1", "member-2"},
 		Quorum:          2,
@@ -199,7 +199,7 @@ func TestL4Warden_L2VoteOrderingIndependence(t *testing.T) {
 			testutil.NewStatefulMockReplayStore(),
 			testutil.NewMockStateRootProvider("root-1"),
 			&SimpleSignerStore{Signers: signers},
-			&tribunalStoreTestAdapter{Inner: &governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{"order-trib": tribunal2of2}}},
+			&consensusStoreTestAdapter{Inner: &governancetest.SimpleConsensusStore{Consensus: map[string]*models.ConsensusPolicy{"order-trib": consensus2of2}}},
 			nil,
 			testutil.NewConfigurableMockL3Notary(true),
 			NewL1Doctrine(),

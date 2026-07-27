@@ -105,14 +105,14 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.Handle(constants.APIPaths.GovernanceSignersByID, http.HandlerFunc(h.dbController.handleGovernanceSignerByID))
 	mux.Handle(constants.APIPaths.AdminAppPoliciesBySigner, http.HandlerFunc(h.adminController.handleAppPolicySigner))
 	mux.HandleFunc(constants.APIPaths.AdminAppsRevoke, h.adminController.handleRevokeApp)
-	mux.HandleFunc(constants.APIPaths.AdminTribunals, h.adminController.handleTribunals)
-	mux.Handle(constants.APIPaths.AdminTribunalsByID, http.HandlerFunc(h.adminController.handleDeleteTribunal))
+	mux.HandleFunc(constants.APIPaths.AdminConsensus, h.adminController.handleConsensus)
+	mux.Handle(constants.APIPaths.AdminConsensusByID, http.HandlerFunc(h.adminController.handleDeleteConsensus))
 
-	// Tribunal deliberate endpoint (mTLS-guarded, enrolled principal).
+	// Consensus deliberate endpoint (mTLS-guarded, enrolled principal).
 	// Always registered — the handler checks the atomic pointer and returns
-	// 503 if tribunal is not yet wired, eliminating the need for a router
-	// rebuild when SetTribunal is called later in the boot sequence.
-	mux.HandleFunc(constants.APIPaths.TribunalDeliberate, h.governanceController.handleTribunalDeliberate)
+	// 503 if consensus is not yet wired, eliminating the need for a router
+	// rebuild when SetConsensus is called later in the boot sequence.
+	mux.HandleFunc(constants.APIPaths.ConsensusDeliberate, h.governanceController.handleConsensusDeliberate)
 
 	// Rate-limited governance envelope
 	govEnvMux := http.NewServeMux()

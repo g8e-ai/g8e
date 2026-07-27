@@ -176,7 +176,7 @@ Internal enumeration constants, each defined as a typed string:
 - `AuthMethod`: `AuthMethodKvPubSub`, `AuthMethodSession`, `AuthMethodProxy`, `AuthMethodOperatorSession`, `AuthMethodTest`
 - `WorkflowType`: `WorkflowTypeG8eBound`, `WorkflowTypeG8eCloudBound`, `WorkflowTypeG8eNotBound`, `WorkflowTypeTriage`, `WorkflowTypeInvestigation`
 - `AITaskId`: `AITaskIDAgentContinue`, `AITaskIDChat`, `AITaskIDCommand`, `AITaskIDDirectCommand`, `AITaskIDFetchFileDiff`, `AITaskIDFetchFileHistory`, `AITaskIDFetchHistory`, `AITaskIDFetchLogs`, `AITaskIDFileEdit`, `AITaskIDFsList`, `AITaskIDFsRead`, `AITaskIDIntentGrant`, `AITaskIDIntentRevoke`, `AITaskIDPortCheck`, `AITaskIDRecursiveGrep`, `AITaskIDRestoreFile`, plus additional task ID aliases (`AITaskId*` casing) for chat, case, memory, command, command execution, direct command, intent grant, intent revoke, file edit, file operation, fs list, recursive grep, port check, agent continue, and investigation query
-- `TribunalMember`: `TribunalMemberAxiom`, `TribunalMemberConcord`, `TribunalMemberVariance`, `TribunalMemberPragma`, `TribunalMemberNemesis`
+- `ConsensusMember`: `ConsensusMemberAxiom`, `ConsensusMemberConcord`, `ConsensusMemberVariance`, `ConsensusMemberPragma`, `ConsensusMemberNemesis`
 - `TribunalAuditMode`: `TribunalAuditModeUnanimous`, `TribunalAuditModeMajority`, `TribunalAuditModeTied`
 - `TribunalAuditStatus`: `TribunalAuditStatusOk`, `TribunalAuditStatusRevised`, `TribunalAuditStatusSwap`
 - `AuditorReason`: `AuditorReasonOk`, `AuditorReasonRevised`, `AuditorReasonRevisedFromDissent`, `AuditorReasonSwappedToDissenter`, `AuditorReasonWhitelistViolation`, `AuditorReasonNoValidRevision`, `AuditorReasonAuditorError`, `AuditorReasonEmptyResponse`
@@ -212,7 +212,7 @@ Additional constants in `auth.go`:
 - Context keys (typed `ContextKey`): `ContextKeyUserID`, `ContextKeyAppID`, `ContextKeyTenantID`, `ContextKeyBindingPersona`, `ContextKeyOperatorID`, `ContextKeyOperatorSessionID`, `ContextKeyCapability`, `ContextKeyWebSessionID`, `ContextKeyCLISessionID`
 - Auth error reasons (typed `AuthErrorReason`): `AuthErrorReasonTTLExceeded`, `AuthErrorReasonRetiredByRealLogin`, `AuthErrorReasonIdentityDisabled`, `AuthErrorReasonInvalidSession`, `AuthErrorReasonSessionExpired`, `AuthErrorReasonCertificateRevoked`, `AuthErrorReasonIdentityMismatch`, `AuthErrorReasonAppPolicyNotFound`, `AuthErrorReasonRateLimitExceeded`, `AuthErrorReasonPayloadTooLarge`, `AuthErrorReasonCollectionNotAllowed`, `AuthErrorReasonJWTInvalid`, `AuthErrorReasonJWTMissingSubject`
 - Session TTL: `WebSessionTTL` (24 hours), `WebSessionCookieName` (`g8e_web_session_cookie`)
-- App enrollment types: `AppTypeMCPClient`, `AppTypeA2AGateway`, `AppTypeCustom`, `AppTypeTribunalMember`
+- App enrollment types: `AppTypeMCPClient`, `AppTypeA2AGateway`, `AppTypeCustom`, `AppTypeConsensusMember`
 - Certificate renewal: `AppCertMinValidity` (7 days)
 
 ### Action Types (`action_types.go`)
@@ -232,7 +232,7 @@ Filesystem paths for Operator data, certificates, ledger, system paths, and conf
 - Windows paths: `PathWindowsSystemRoot`, `PathWindowsHostsFile`, `PathWindowsRegistryCryptography`, `PathWindowsRegistryMachineGuid`, Git Bash paths (`PathWindowsGitBinBash`, `PathWindowsGitUsrBinBash`, `PathWindowsGitBinSh`, `PathWindowsMsys64Bash`, `PathWindowsCygwin64Bash`), and Windows temp cert constants (`WindowsTempCertImportPrefix`, `WindowsTempCATrustPrefix`, `WindowsTempCertFilename`)
 - PKI filesystem constants: directory names (`PkiDirname`, `PkiSubdirRoot`, `PkiSubdirAuthorities`, `PkiSubdirIssued`, `PkiSubdirTrust`, `PkiSubdirRevocation`, `PkiSubdirBinaries`, `PkiSubdirClient`, `PkiSubdirHub`, `PkiSubdirGatewayPeer`, `PkiSubdirApps`, `PkiSubdirTrustedSigners`), file extensions (`FileExtCert`, `FileExtKey`, `FileExtPEM`, `FileExtJSON`), CA and bundle filenames (`PkiFileRootCA`, `PkiFileRootCAKey`, `PkiFileHubCA`, `PkiFileOperatorCA`, `PkiFileGatewayPeerCA`, `PkiFileGatewayBundle`, `PkiFileRootBundle`, `PkiFileOperatorBundle`, `PkiFileTrustDomainJSON`, `PkiFileWardenPub`, `PkiFileBootstrapCA`, `PkiFileBootstrapBundle`), operator credentials (`PkiFileOperatorCert`, `PkiFileOperatorKey`, `PkiFileOperatorChain`), gateway credentials (`PkiFileGatewayCert`, `PkiFileGatewayKey`, `PkiFileGatewayChain`), peer certificates (`PeerCertFilename`, `PeerKeyFilename`, `PeerChainFilename`, `PeerSubdir`), and CLI credentials (`CliCertFilename`, `CliKeyFilename`, `CredentialsFilename`)
 - Database filenames: `DbFilename` (`g8e.db`), `VaultKeyFilename`, `VaultNewKeyFilename`, `VaultHeaderFilename`, `SuspendedTxFilename`, `ReceiptsFilename`, `ReceiptsExportFilename`, `ReplayStoreDBFilename`, `ExecutionVaultDBFilename`, `LocalStateDBFilename`, `AuditVaultDBFilename`, `MasterKeyFilename`, `PublicKeySuffix`
-- Secrets filenames: `SecretsFileSessionEncryptionKey`, `SecretsFileBootstrapDigest`, `SecretsFileActuatorSigningKey`, `SecretsFileActuatorKeyID`, `SecretsFileAuditorHMACKey`, `SecretsFileNotarySigningKey`, `SecretsFileOperatorPrivateKey`, `SecretsFileCLIPrivateKey`, `SecretsFileSessionToken`, `SecretsFileTribunalMemberKeyPrefix`
+- Secrets filenames: `SecretsFileSessionEncryptionKey`, `SecretsFileBootstrapDigest`, `SecretsFileActuatorSigningKey`, `SecretsFileActuatorKeyID`, `SecretsFileAuditorHMACKey`, `SecretsFileNotarySigningKey`, `SecretsFileOperatorPrivateKey`, `SecretsFileCLIPrivateKey`, `SecretsFileSessionToken`, `SecretsFileConsensusMemberKeyPrefix`
 - Demos: `DemosDirname`, `DemosComposeFile`, `DemosBinDirname`, `DemosBinaryName`, `DemosTargetDataDir`, `DemosDoctrineDir`, `DemosPARequestsFile`, `DemosHIPAADoctrineFile`, `DemosDHSDoctrineFile`, `DemosFedRAMPDoctrineFile`, `DemosImagesManifestFile`, `DemosOrgHealthcare`, `DemosOrgFinance`, `DemosOrgGov`, `DemosOrgDHS`, `DemosOrgFedRAMP`, `DemosOrgFrontend`
 - Container paths: Docker exec paths for demo environments (`ContainerRootG8E`, `ContainerPKIDir`, `ContainerOperatorCert`, `ContainerOperatorKey`, `ContainerCABundle`, `ContainerDataDir`, `ContainerAuditVaultDB`, `ContainerExecutionVaultDB`, `ContainerLedgerFilesDir`, `ContainerDoctrineDir`, `ContainerEnsembleSeed`, and verification script paths)
 - Local binary names: `LocalBinaryName` (`./g8e`), `LocalBinaryNameWindows` (`./g8e.exe`), `BinaryImageName`, `BinaryImageNameWindows`
@@ -284,7 +284,7 @@ Platform error variables defined as `error` values using `errors.New()`. The fil
 
 Typed environment variable names, typed as `EnvVarKey` and grouped in a struct `EnvVar`:
 
-- `TribunalID` (`G8E_TRIBUNAL_ID`), `TribunalURL` (`G8E_TRIBUNAL_URL`), `TribunalBootstrap` (`G8E_TRIBUNAL_BOOTSTRAP`)
+- `ConsensusID` (`G8E_TRIBUNAL_ID`), `TribunalURL` (`G8E_TRIBUNAL_URL`), `TribunalBootstrap` (`G8E_TRIBUNAL_BOOTSTRAP`)
 - `VaultDir` (`G8E_VAULT_DIR`), `VaultKey` (`G8E_VAULT_KEY`)
 - `OperatorSessionID` (`G8E_OPERATOR_SESSION_ID`)
 - `PasskeyRpID` (`G8E_PASSKEY_RP_ID`), `PasskeyRpName` (`G8E_PASSKEY_RP_NAME`), `PasskeyRpOrigins` (`G8E_PASSKEY_RP_ORIGINS`)

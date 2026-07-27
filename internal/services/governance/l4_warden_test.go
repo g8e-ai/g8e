@@ -44,9 +44,9 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 		replayStore,
 		stateRootProvider,
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key": pubKey}},
-		&tribunalStoreTestAdapter{Inner: &governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{
-			"test-tribunal": {
-				ID:              "test-tribunal",
+		&consensusStoreTestAdapter{Inner: &governancetest.SimpleConsensusStore{Consensus: map[string]*models.ConsensusPolicy{
+			"test-consensus": {
+				ID:              "test-consensus",
 				MemberAppIDs:    []string{"test-key"},
 				Quorum:          1,
 				RequireDistinct: true,
@@ -169,7 +169,7 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 	// L2 signs the hash (machine consensus before human notary)
 	env.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
-			ConsensusSetId: "test-tribunal",
+			ConsensusSetId: "test-consensus",
 			Votes: []*commonv1.L2Vote{
 				signL2Vote(privKey, "test-key", hash, true),
 			},
@@ -233,9 +233,9 @@ func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStor
 		replayStore,
 		stateRootProvider,
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"spiffe://g8e.local/app/test-app-id": pubKey}},
-		&tribunalStoreTestAdapter{Inner: &governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{
-			"test-tribunal": {
-				ID:              "test-tribunal",
+		&consensusStoreTestAdapter{Inner: &governancetest.SimpleConsensusStore{Consensus: map[string]*models.ConsensusPolicy{
+			"test-consensus": {
+				ID:              "test-consensus",
 				MemberAppIDs:    []string{"spiffe://g8e.local/app/test-app-id"},
 				Quorum:          1,
 				RequireDistinct: true,

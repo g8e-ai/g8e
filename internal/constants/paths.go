@@ -216,16 +216,16 @@ const (
 
 // Secrets filenames for bootstrap and runtime secret material.
 const (
-	SecretsFileSessionEncryptionKey    = "session_encryption_key"
-	SecretsFileBootstrapDigest         = "bootstrap_digest.json"
-	SecretsFileActuatorSigningKey      = "actuator_signing_key"
-	SecretsFileActuatorKeyID           = "actuator_key_id"
-	SecretsFileAuditorHMACKey          = "auditor_hmac_key"
-	SecretsFileNotarySigningKey        = "notary_signing_key"
-	SecretsFileOperatorPrivateKey      = "operator_private_key"
-	SecretsFileCLIPrivateKey           = "cli_private_key"
-	SecretsFileSessionToken            = "session_token"
-	SecretsFileTribunalMemberKeyPrefix = "tribunal_member_"
+	SecretsFileSessionEncryptionKey     = "session_encryption_key"
+	SecretsFileBootstrapDigest          = "bootstrap_digest.json"
+	SecretsFileActuatorSigningKey       = "actuator_signing_key"
+	SecretsFileActuatorKeyID            = "actuator_key_id"
+	SecretsFileAuditorHMACKey           = "auditor_hmac_key"
+	SecretsFileNotarySigningKey         = "notary_signing_key"
+	SecretsFileOperatorPrivateKey       = "operator_private_key"
+	SecretsFileCLIPrivateKey            = "cli_private_key"
+	SecretsFileSessionToken             = "session_token"
+	SecretsFileConsensusMemberKeyPrefix = "consensus_member_"
 )
 
 // Demos constants for organization names, doctrine files, and compose config.
@@ -415,26 +415,26 @@ const (
 	// replacing system TEMP to keep all test artifacts under the project root.
 	TestTempDirname = ".g8e-test-tmp"
 
-	// Test path constants for gateway config and tribunal bootstrap tests
-	TestPathVarLibDataDir       = "/var/lib/g8e/data"
-	TestPathVarLibPKIDir        = "/var/lib/g8e/pki"
-	TestPathVarLibSecretsDir    = "/var/lib/g8e/secrets"
-	TestPathVarLibVaultDir      = "/var/lib/g8e/vault"
-	TestPathVarLibVaultKey      = "/var/lib/g8e/vault/key"
-	TestPathEtcNetworkIdentity  = "/etc/g8e/network-identity.json"
-	TestPathShortData           = "/data"
-	TestPathShortPKI            = "/pki"
-	TestPathShortSecrets        = "/secrets"
-	TestPathShortVault          = "/vault"
-	TestPathShortVaultKey       = "/vault/key"
-	TestPathIdentityFile        = "/path/to/identity.json"
-	TestPathIdentityFileShort   = "/path/identity.json"
-	TestPathNonexistentTribunal = "/nonexistent/path/tribunal.json"
+	// Test path constants for gateway config and consensus bootstrap tests
+	TestPathVarLibDataDir        = "/var/lib/g8e/data"
+	TestPathVarLibPKIDir         = "/var/lib/g8e/pki"
+	TestPathVarLibSecretsDir     = "/var/lib/g8e/secrets"
+	TestPathVarLibVaultDir       = "/var/lib/g8e/vault"
+	TestPathVarLibVaultKey       = "/var/lib/g8e/vault/key"
+	TestPathEtcNetworkIdentity   = "/etc/g8e/network-identity.json"
+	TestPathShortData            = "/data"
+	TestPathShortPKI             = "/pki"
+	TestPathShortSecrets         = "/secrets"
+	TestPathShortVault           = "/vault"
+	TestPathShortVaultKey        = "/vault/key"
+	TestPathIdentityFile         = "/path/to/identity.json"
+	TestPathIdentityFileShort    = "/path/identity.json"
+	TestPathNonexistentConsensus = "/nonexistent/path/consensus.json"
 )
 
-// Tribunal bootstrap config filename for declarative tribunal seeding.
+// Consensus bootstrap config filename for declarative consensus seeding.
 const (
-	TribunalBootstrapConfigFilename = "tribunal-bootstrap.json"
+	ConsensusBootstrapConfigFilename = "consensus-bootstrap.json"
 )
 
 // Lattice adapter filename for persisted entity ID.

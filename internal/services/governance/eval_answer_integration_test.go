@@ -48,7 +48,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 		testutil.NewStatefulMockReplayStore(),
 		testutil.NewMockStateRootProvider("test-state-root-v1"),
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key-id": pubKey}},
-		nil, // TribunalStore not used in tests
+		nil, // ConsensusStore not used in tests
 		nil, // AppPolicyStore not used in tests
 		nil, // L3 verifier not needed for EVAL_ANSWER (non-mutation)
 		nil, // doctrine defaults to L1Doctrine
@@ -92,7 +92,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 	// Add L2 governance signature
 	envelope.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
-			ConsensusSetId: "test-tribunal",
+			ConsensusSetId: "test-consensus",
 			Votes: []*commonv1.L2Vote{
 				{
 					SignerKeyId:        "test-key-id",

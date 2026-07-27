@@ -57,7 +57,7 @@ type Stores struct {
 	DocStore       *DocumentStoreService
 	AppPolicyStore *AppPolicyStoreService
 	SignerStore    *SignerStoreService
-	TribunalStore  *TribunalStoreService
+	ConsensusStore *ConsensusStoreService
 	StateRootSvc   *StateRootService
 	ReplayStore    *ReplayStoreService
 	KVStore        *KVStoreService
@@ -228,7 +228,7 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	}
 	stores.AppPolicyStore = NewAppPolicyStoreService(db, logger, stores.DocStore)
 	stores.SignerStore = NewSignerStoreService(db, logger, stores.DocStore)
-	stores.TribunalStore = NewTribunalStoreService(db, logger, stores.DocStore, stores.SignerStore)
+	stores.ConsensusStore = NewConsensusStoreService(db, logger, stores.DocStore, stores.SignerStore)
 	svc.stores = stores
 
 	if err := svc.initSchema(fileSvc, ks); err != nil {
