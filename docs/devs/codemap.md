@@ -296,7 +296,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 Governance store interfaces are defined in dedicated files under `internal/services/governance/`:
 - `replay_store.go` — `ReplayStore` interface
 - `state_root_provider.go` — `StateRootProvider` interface
-- `signer_store.go` — `SignerStore` interface + `SimpleSignerStore` (production fail-closed fallback) + `FilesystemSignerStore` (outbound impl)
+- `signer_store.go` — `SignerStore` interface + `FailClosedSignerStore` (production fail-closed fallback) + `FilesystemSignerStore` (outbound impl)
 - `l2_consensus.go` — `ConsensusStore` interface, `L2ConsensusPolicyStore` interface
 - `app_policy_store.go` — `AppPolicyStore` interface
 - `transaction_audit_store.go` — `TransactionAuditStore` interface
@@ -515,7 +515,7 @@ The following packages are test-only and are not part of the production dependen
 **`internal/services/governance/governancetest/`** - Test-only governance store fixtures
 - `SimpleConsensusStore`, `SimpleAppPolicyStore`, `SimpleStateRootProvider` - In-memory implementations of governance store interfaces for unit tests
 - Used by governance, pubsub, and chaos tests
-- `SimpleSignerStore` remains in `governance/signer_store.go` (not here) because `pubsub_commands.go` uses it as a production fail-closed fallback
+- `FailClosedSignerStore` remains in `governance/signer_store.go` (not here) because `pubsub_commands.go` uses it as a production fail-closed fallback
 
 **`internal/tools/chaos/`** - Test-only chaos testing for governance stack
 - Generates a realistic distribution of governance events (70% good actor, 20% prompt injection, 10% MitM) against the local audit stack

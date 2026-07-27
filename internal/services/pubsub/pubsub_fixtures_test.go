@@ -101,7 +101,7 @@ func newPubsubFixture(t *testing.T) *pubsubFixture {
 	db := pubsubtest.NewMockOperatorPubSubClient()
 
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
-	signerStore := &governance.SimpleSignerStore{
+	signerStore := &governance.FailClosedSignerStore{
 		Signers: map[string]ed25519.PublicKey{
 			"test-key": pub,
 		},

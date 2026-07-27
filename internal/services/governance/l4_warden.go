@@ -84,11 +84,6 @@ func NewL4Warden(
 		clock = &system.RealClock{}
 	}
 
-	// Default to protobuf doctrine validator if not provided
-	if doctrine == nil {
-		doctrine = NewL1Doctrine()
-	}
-
 	return &L4Warden{
 		logger:               logger,
 		replayStore:          replayStore,
@@ -248,6 +243,11 @@ func (tv *L4Warden) isMutation(actionType constants.ActionType) bool {
 
 // verifyStateless performs basic structural, hash, and L1 Doctrine checks.
 func (tv *L4Warden) verifyStateless(envelope *govtypes.GovernanceEnvelope) (proto.Message, string, error) {
+	if tv.doctrine == nil {
+		tv.logger.Error("L1Doctrine not configured")
+		return nil, "", constants.ErrTxDoctrineMissing
+	}
+
 	if envelope.Id == "" {
 		return nil, "", constants.ErrTxTransactionIDMissing
 	}

@@ -894,6 +894,7 @@ var (
 	ErrTxPayloadMissing               = errors.New("TX_PAYLOAD_MISSING: typed protobuf payload required")
 	ErrTxPayloadActionMismatch        = errors.New("TX_PAYLOAD_ACTION_MISMATCH: action type does not match typed payload")
 	ErrTxL1ValidationFailed           = errors.New("TX_DOCTRINE_L1_FAILED: typed payload violates Doctrine (L1Doctrine) forbidden patterns")
+	ErrTxDoctrineMissing              = errors.New("TX_DOCTRINE_MISSING: L1Doctrine required but not configured")
 	ErrTxInFlight                     = errors.New("TX_IN_FLIGHT: transaction with same nonce already in-flight")
 	ErrTxProviderMisconfigured        = errors.New("PROVIDER_MISCONFIGURED: state root is empty")
 	ErrTxCanonicalizeFailed           = errors.New("TX_CANONICALIZE_FAILED: unsupported type in intent_data canonicalization")

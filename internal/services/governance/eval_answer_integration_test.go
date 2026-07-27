@@ -47,11 +47,11 @@ func TestEvalAnswerVerification(t *testing.T) {
 		nil,
 		testutil.NewStatefulMockReplayStore(),
 		testutil.NewMockStateRootProvider("test-state-root-v1"),
-		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key-id": pubKey}},
+		&FailClosedSignerStore{Signers: map[string]ed25519.PublicKey{"test-key-id": pubKey}},
 		nil, // ConsensusStore not used in tests
 		nil, // AppPolicyStore not used in tests
 		nil, // L3 verifier not needed for EVAL_ANSWER (non-mutation)
-		nil, // doctrine defaults to L1Doctrine
+		NewL1Doctrine(),
 		[]constants.ActionType{constants.ActionTypeEvalAnswer},
 		"doctrine",
 		nil, // Clock defaults to RealClock

@@ -111,7 +111,7 @@ func TestGovernanceFailClosed(t *testing.T) {
 			testutil.NewTestLogger(),
 			replayStore,
 			stateRootProvider,
-			&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{}},
+			&FailClosedSignerStore{Signers: map[string]ed25519.PublicKey{}},
 			consensusPolicyStore,
 			nil, // AppPolicyStore
 			nil, // L3Notary
@@ -149,15 +149,12 @@ func TestGovernanceFailClosed(t *testing.T) {
 		}
 	})
 
-	t.Run("NilDoctrine_DefaultsToValid", func(t *testing.T) {
+	t.Run("NilDoctrine_FailClosed", func(t *testing.T) {
 		warden := makeWarden(testutil.NewStatefulMockReplayStore(), &governancetest.SimpleStateRootProvider{Root: "root-1"}, nil, nil, "doctrine")
 		env := buildValidEnvelope(t)
-		verified, err := warden.VerifyEnvelope(context.Background(), env)
-		if err != nil {
-			t.Fatalf("expected nil doctrine to default to NewL1Doctrine and pass, got %v", err)
-		}
-		if verified == nil {
-			t.Fatal("expected non-nil verified transaction")
+		_, err := warden.VerifyEnvelope(context.Background(), env)
+		if !errors.Is(err, ErrDoctrineMissing) {
+			t.Fatalf("expected ErrDoctrineMissing, got %v", err)
 		}
 	})
 

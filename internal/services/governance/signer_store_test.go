@@ -28,27 +28,27 @@ import (
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
-func TestSimpleSignerStore_NilMap(t *testing.T) {
+func TestFailClosedSignerStore_NilMap(t *testing.T) {
 	t.Parallel()
-	s := &SimpleSignerStore{}
+	s := &FailClosedSignerStore{}
 	pubKey, err := s.GetTrustedSigner("key1")
 	require.NoError(t, err)
 	assert.Nil(t, pubKey)
 }
 
-func TestSimpleSignerStore_NotFound(t *testing.T) {
+func TestFailClosedSignerStore_NotFound(t *testing.T) {
 	t.Parallel()
-	s := &SimpleSignerStore{Signers: map[string]ed25519.PublicKey{}}
+	s := &FailClosedSignerStore{Signers: map[string]ed25519.PublicKey{}}
 	pubKey, err := s.GetTrustedSigner("nonexistent")
 	require.NoError(t, err)
 	assert.Nil(t, pubKey)
 }
 
-func TestSimpleSignerStore_Found(t *testing.T) {
+func TestFailClosedSignerStore_Found(t *testing.T) {
 	t.Parallel()
 	pub, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	s := &SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"key1": pub}}
+	s := &FailClosedSignerStore{Signers: map[string]ed25519.PublicKey{"key1": pub}}
 	result, err := s.GetTrustedSigner("key1")
 	require.NoError(t, err)
 	assert.Equal(t, pub, result)
@@ -181,7 +181,7 @@ func TestL4Warden_Posture_And_Doctrine(t *testing.T) {
 		logger,
 		nil,
 		&governancetest.SimpleStateRootProvider{Root: "root"},
-		&SimpleSignerStore{},
+		&FailClosedSignerStore{},
 		&consensusStoreTestAdapter{Inner: &governancetest.SimpleConsensusStore{}},
 		&governancetest.SimpleAppPolicyStore{},
 		nil,

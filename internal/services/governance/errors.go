@@ -33,6 +33,7 @@ var (
 	ErrStateRootRequired          = constants.ErrTxStateRootRequired
 	ErrStateRootMismatch          = constants.ErrTxStateRootMismatch
 	ErrL1ValidationFailed         = constants.ErrTxL1ValidationFailed
+	ErrDoctrineMissing            = constants.ErrTxDoctrineMissing
 	ErrL2SignatureMissing         = constants.ErrTxL2SignatureMissing
 	ErrL2SignatureInvalid         = constants.ErrTxL2SignatureInvalid
 	ErrL2ConsensusNotConfigured   = constants.ErrTxL2ConsensusNotConfigured

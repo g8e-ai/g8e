@@ -43,7 +43,7 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 		testutil.NewTestLogger(),
 		replayStore,
 		stateRootProvider,
-		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key": pubKey}},
+		&FailClosedSignerStore{Signers: map[string]ed25519.PublicKey{"test-key": pubKey}},
 		&consensusStoreTestAdapter{Inner: &governancetest.SimpleConsensusStore{Consensus: map[string]*models.ConsensusPolicy{
 			"test-consensus": {
 				ID:              "test-consensus",
@@ -55,7 +55,7 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 		}}},
 		nil, // AppPolicyStore not used in tests
 		l3Notary,
-		nil,                      // doctrine defaults to L1Doctrine
+		NewL1Doctrine(),          // doctrine required
 		constants.AllActionTypes, // Use SSOT for action types
 		posture,
 		nil, // Clock defaults to RealClock
@@ -232,7 +232,7 @@ func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStor
 		testutil.NewTestLogger(),
 		replayStore,
 		stateRootProvider,
-		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"spiffe://g8e.local/app/test-app-id": pubKey}},
+		&FailClosedSignerStore{Signers: map[string]ed25519.PublicKey{"spiffe://g8e.local/app/test-app-id": pubKey}},
 		&consensusStoreTestAdapter{Inner: &governancetest.SimpleConsensusStore{Consensus: map[string]*models.ConsensusPolicy{
 			"test-consensus": {
 				ID:              "test-consensus",
@@ -244,7 +244,7 @@ func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStor
 		}}},
 		appPolicyStore,
 		l3Notary,
-		nil, // doctrine defaults to L1Doctrine
+		NewL1Doctrine(),
 		constants.AllActionTypes,
 		constants.PostureNotary,
 		nil, // Clock defaults to RealClock

@@ -201,7 +201,7 @@ func NewOperatorPubSubService(c CommandServiceConfig, govDeps GovernanceDeps) (*
 	if rs.signerStore == nil {
 		// Provide a fallback empty signer store instead of loading from filesystem.
 		// This ensures outbound mode fails closed if no signer store is provided.
-		rs.signerStore = &governance.SimpleSignerStore{Signers: make(map[string]ed25519.PublicKey)}
+		rs.signerStore = &governance.FailClosedSignerStore{Signers: make(map[string]ed25519.PublicKey)}
 		c.Logger.Warn("No SignerStore provided; signed transactions will be rejected")
 	}
 
@@ -297,6 +297,13 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, go
 	if posture == "" {
 		posture = "notary" // Default to notary for outbound mode since L3Notary is nil
 	}
+	// Default to NewL1Doctrine if not provided (outbound mode may not configure doctrine)
+	doctrine := govDeps.Doctrine
+	if doctrine == nil {
+		doctrine = governance.NewL1Doctrine()
+		c.Logger.Warn("No L1Doctrine provided; using default doctrine")
+	}
+
 	rs.l4warden = governance.NewL4Warden(
 		c.Logger,
 		govDeps.ReplayStore,
@@ -305,7 +312,7 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, go
 		govDeps.ConsensusPolicyStore,
 		govDeps.AppPolicyStore,
 		govDeps.L3Notary,
-		govDeps.Doctrine, // nil defaults to NewL1Doctrine() in NewL4Warden
+		doctrine,
 		knownActionTypes,
 		posture,
 		nil, // Clock defaults to RealClock

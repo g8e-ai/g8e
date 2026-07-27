@@ -53,7 +53,7 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to generate signer: %v", err)
 	}
-	signerStore := &governance.SimpleSignerStore{
+	signerStore := &governance.FailClosedSignerStore{
 		Signers: map[string]ed25519.PublicKey{"test-key": pubKey},
 	}
 
@@ -178,7 +178,7 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to generate signer: %v", err)
 	}
-	signerStore := &governance.SimpleSignerStore{
+	signerStore := &governance.FailClosedSignerStore{
 		Signers: map[string]ed25519.PublicKey{"test-key": pubKey},
 	}
 
@@ -304,7 +304,7 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to generate signer: %v", err)
 	}
-	signerStore := &governance.SimpleSignerStore{
+	signerStore := &governance.FailClosedSignerStore{
 		Signers: map[string]ed25519.PublicKey{"test-key": pubKey},
 	}
 

@@ -176,7 +176,7 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
 			L3Notary:          &testutil.MockL3Notary{},
-			SignerStore:       &governance.SimpleSignerStore{Signers: map[string]ed25519.PublicKey{}},
+			SignerStore:       &governance.FailClosedSignerStore{Signers: map[string]ed25519.PublicKey{}},
 		})
 		require.NoError(t, err)
 		svc.SetActuator(nil)
