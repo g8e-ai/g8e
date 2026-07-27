@@ -85,6 +85,14 @@ type GatewayFixtureOptions struct {
 	A2ADownstreamURL  string // A2A downstream; if empty, reuses MCP downstream server
 	AllowTestPortZero bool
 	PublicBaseURL     string // Public base URL for approval links; defaults to localhost:HTTPS_port
+
+	// Consensus configuration for consensus/notary postures. When zero-valued,
+	// defaults to a single-member consensus (nMembers=1, quorum=1, nServiceMembers=1)
+	// with consensusID "test-consensus".
+	ConsensusID           string
+	ConsensusNMembers     int
+	ConsensusQuorum       int
+	ConsensusNServiceMembers int
 }
 
 // repoTestResultsDir returns <repo>/test-results, computed from this source
@@ -254,6 +262,41 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	scrubbingSvc, err := scrubbing.NewScrubbingService(context.Background(), scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil)
 	require.NoError(t, err)
 
+	// Auto-wire a Consensus for postures that require L2 signatures (consensus, notary).
+	// Without L2 votes, the Warden rejects at L2 before L3 is ever checked.
+	// This must happen before NewGatewayOperatorPubSubService so the deliberator
+	// can be passed through GatewayCommandServiceConfig.L2ConsensusDeliberator
+	// into the MCP gateway's RuntimeDependencies.
+	var consensusSvc *consensus.ConsensusService
+	var l2Deliberator *consensus.LocalDeliberator
+	if posture == config.PostureConsensus || posture == config.PostureNotary {
+		consensusID := opts.ConsensusID
+		if consensusID == "" {
+			consensusID = "test-consensus"
+		}
+		nMembers := opts.ConsensusNMembers
+		if nMembers == 0 {
+			nMembers = 1
+		}
+		quorum := opts.ConsensusQuorum
+		if quorum == 0 {
+			quorum = 1
+		}
+		nServiceMembers := opts.ConsensusNServiceMembers
+		if nServiceMembers == 0 {
+			nServiceMembers = 1
+		}
+		cs := SetupConsensus(t, &GatewayFixture{
+			Config:        cfg,
+			Service:       ls,
+			MCPGateway:    mcpGateway,
+			ActuatorPriv:  ActuatorPriv,
+			ActuatorKeyID: ActuatorKeyID,
+		}, consensusID, nMembers, quorum, nServiceMembers)
+		consensusSvc = cs.Service
+		l2Deliberator = cs.Deliberator
+	}
+
 	cmdSvc, err := pubsub.NewGatewayOperatorPubSubService(pubsub.GatewayCommandServiceConfig{
 		CommandServiceConfig: pubsub.CommandServiceConfig{
 			Config:             cfg,
@@ -274,27 +317,14 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 			L3Notary:             RejectingL3Notary{},
 			FieldReader:          govDeps.FieldReader,
 		},
-		MCPGateway: mcpGateway,
+		MCPGateway:             mcpGateway,
+		L2ConsensusDeliberator: l2Deliberator,
 	})
 	require.NoError(t, err)
 
 	// The MCP gateway's runtime governance dependencies are wired by
 	// NewGatewayOperatorPubSubService (mcpGateway was passed in through
 	// GatewayCommandServiceConfig.MCPGateway above), so no extra wiring is needed.
-
-	// Auto-wire a Consensus for postures that require L2 signatures (consensus, notary).
-	// Without L2 votes, the Warden rejects at L2 before L3 is ever checked.
-	var consensusSvc *consensus.ConsensusService
-	if posture == config.PostureConsensus || posture == config.PostureNotary {
-		cs := SetupConsensus(t, &GatewayFixture{
-			Config:        cfg,
-			Service:       ls,
-			MCPGateway:    mcpGateway,
-			ActuatorPriv:  ActuatorPriv,
-			ActuatorKeyID: ActuatorKeyID,
-		}, "test-consensus", 1, 1, 1)
-		consensusSvc = cs.Service
-	}
 
 	// Phase 2: create HTTP handler and servers with all deps injected.
 	require.NoError(t, ls.InitHTTPHandler(consensusSvc, cmdSvc))
@@ -644,13 +674,16 @@ type ConsensusSetup struct {
 	ConsensusID string
 	Members     []consensus.ConsensusMember
 	Service     *consensus.ConsensusService
+	Deliberator *consensus.LocalDeliberator
 }
 
 // SetupConsensus wires a real ConsensusService into the gateway fixture for consensus
 // posture integration tests. It generates nMembers Ed25519 key pairs, registers each
 // member's public key as a TrustedSigner, creates a ConsensusPolicy in the ConsensusStore,
 // constructs a ConsensusService via the shared consensus.NewConsensusFromPolicy factory,
-// and wires it into the MCP gateway (SetL2ConsensusDeliberator). The returned
+// and returns a LocalDeliberator via ConsensusSetup.Deliberator. The caller
+// passes the deliberator through GatewayCommandServiceConfig.L2ConsensusDeliberator
+// so it is wired into the MCP gateway's RuntimeDependencies. The returned
 // ConsensusSetup.Service is passed to InitHTTPHandler by the caller.
 //
 // If nServiceMembers < nMembers, only the first nServiceMembers are given private keys
@@ -713,11 +746,12 @@ func SetupConsensus(t *testing.T, f *GatewayFixture, consensusID string, nMember
 	consensusSvc, err := consensus.NewConsensusFromPolicy(&policy, keyProvider, doctrine, testutil.NewTestLogger(), responder)
 	require.NoError(t, err)
 
-	f.MCPGateway.SetL2ConsensusDeliberator(consensus.NewLocalDeliberator(consensusSvc))
+	deliberator := consensus.NewLocalDeliberator(consensusSvc)
 
 	return &ConsensusSetup{
 		ConsensusID: consensusID,
 		Members:     signingMembers,
 		Service:     consensusSvc,
+		Deliberator: deliberator,
 	}
 }

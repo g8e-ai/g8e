@@ -246,6 +246,21 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		return fmt.Errorf("gateway: failed to initialize scrubbing service: %w", err)
 	}
 
+	// Bootstrap Consensus service for L2-requiring postures before constructing
+	// the pubsub command service, so the L2ConsensusDeliberator can be passed
+	// through GatewayCommandServiceConfig into the MCP gateway's RuntimeDependencies.
+	// Under doctrine posture, the Consensus is not constructed.
+	var consensusSvc *consensus.ConsensusService
+	var l2Deliberator *consensus.LocalDeliberator
+	if (cfg.Posture == config.PostureConsensus || cfg.Posture == config.PostureNotary) && cfg.ConsensusID != "" {
+		consensusSvc, err = ConsensusBootstrap(svc, cfg.ConsensusID, actuatorPriv, actuatorKeyID, cfg.SecretsDir, logger)
+		if err != nil {
+			return fmt.Errorf("gateway: bootstrap consensus service: %w", err)
+		}
+		l2Deliberator = consensus.NewLocalDeliberator(consensusSvc)
+		logger.Info("Consensus service bootstrapped", "consensus_id", cfg.ConsensusID)
+	}
+
 	psConfig := pubsub.GatewayCommandServiceConfig{
 		CommandServiceConfig: pubsub.CommandServiceConfig{
 			Config:             gatewayCfg,
@@ -262,8 +277,9 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 			ActuatorSigningKey: actuatorPriv,
 			ActuatorKeyID:      actuatorKeyID,
 		},
-		GovDeps:    govDeps,
-		MCPGateway: mcpSvc,
+		GovDeps:              govDeps,
+		MCPGateway:           mcpSvc,
+		L2ConsensusDeliberator: l2Deliberator,
 	}
 
 	cmdSvc, err := pubsub.NewGatewayOperatorPubSubService(psConfig)
@@ -272,24 +288,9 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	}
 
 	// The MCP gateway's runtime governance dependencies (gateway processor,
-	// signing identity, audit logger, etc.) are wired by
-	// NewGatewayOperatorPubSubService, which received mcpSvc through
-	// psConfig.MCPGateway. No additional gateway wiring is needed here.
-
-	// Bootstrap Consensus service for L2-requiring postures (Phase 5.2):
-	// Construct the ConsensusService in-process and wire it both as the mTLS
-	// HTTP handler (for remote deliberation calls) and as the local deliberator
-	// (for in-process envelope processing). Under doctrine posture, the
-	// Consensus is not constructed.
-	var consensusSvc *consensus.ConsensusService
-	if (cfg.Posture == config.PostureConsensus || cfg.Posture == config.PostureNotary) && cfg.ConsensusID != "" {
-		consensusSvc, err = ConsensusBootstrap(svc, cfg.ConsensusID, actuatorPriv, actuatorKeyID, cfg.SecretsDir, logger)
-		if err != nil {
-			return fmt.Errorf("gateway: bootstrap consensus service: %w", err)
-		}
-		mcpSvc.SetL2ConsensusDeliberator(consensus.NewLocalDeliberator(consensusSvc))
-		logger.Info("Consensus service bootstrapped", "consensus_id", cfg.ConsensusID)
-	}
+	// signing identity, audit logger, L2 consensus deliberator, etc.) are wired
+	// by NewGatewayOperatorPubSubService, which received mcpSvc and l2Deliberator
+	// through GatewayCommandServiceConfig. No additional gateway wiring is needed.
 
 	// Phase 2: create HTTP handler and servers with all dependencies injected.
 	// This ensures consensus and envelope processor are wired before any

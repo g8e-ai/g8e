@@ -1348,6 +1348,7 @@ func TestCommandServiceConfig_NoGatewayFields(t *testing.T) {
 	var gw GatewayCommandServiceConfig
 	_ = gw.MCPGateway
 	_ = gw.GovDeps
+	_ = gw.L2ConsensusDeliberator
 
 	// GatewayCommandServiceConfig embeds CommandServiceConfig, so all base
 	// fields are accessible.

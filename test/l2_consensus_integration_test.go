@@ -206,15 +206,17 @@ func TestL2Consensus_DelegatedAppEnrollment(t *testing.T) {
 // sufficient voting members (2-of-3), an MCP tools/call succeeds with
 // L2 consensus votes present.
 func TestL2Consensus_QuorumReached(t *testing.T) {
+	// 3-member consensus at quorum 2. All 3 members hold private keys, so all 3
+	// can vote — quorum is met.
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName:          "consensus-quorum-reached",
-		Posture:           config.PostureConsensus,
-		AllowTestPortZero: true,
+		TestName:              "consensus-quorum-reached",
+		Posture:               config.PostureConsensus,
+		AllowTestPortZero:     true,
+		ConsensusID:           "quorum-consensus",
+		ConsensusNMembers:     3,
+		ConsensusQuorum:       2,
+		ConsensusNServiceMembers: 3,
 	})
-
-	// Override the default 1-member consensus with a 3-member consensus at quorum 2.
-	// All 3 members hold private keys, so all 3 can vote — quorum is met.
-	fixtures.SetupConsensus(t, f, "quorum-consensus", 3, 2, 3)
 
 	identity := fixtures.EnrollClientIdentity(t, f, "quorum-user", "test-org", "fp-quorum", "test-host")
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
@@ -245,15 +247,17 @@ func TestL2Consensus_QuorumReached(t *testing.T) {
 // TestL2Consensus_QuorumNotReached verifies that when fewer members
 // vote than the quorum threshold, the governance gate rejects the transaction.
 func TestL2Consensus_QuorumNotReached(t *testing.T) {
-	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName:          "consensus-quorum-not-reached",
-		Posture:           config.PostureConsensus,
-		AllowTestPortZero: true,
-	})
-
 	// 3 members in policy, quorum 2, but only 1 service member has a private key.
 	// Only 1 vote will be produced — below quorum threshold of 2.
-	fixtures.SetupConsensus(t, f, "no-quorum-consensus", 3, 2, 1)
+	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
+		TestName:              "consensus-quorum-not-reached",
+		Posture:               config.PostureConsensus,
+		AllowTestPortZero:     true,
+		ConsensusID:           "no-quorum-consensus",
+		ConsensusNMembers:     3,
+		ConsensusQuorum:       2,
+		ConsensusNServiceMembers: 1,
+	})
 
 	identity := fixtures.EnrollClientIdentity(t, f, "no-quorum-user", "test-org", "fp-no-quorum", "test-host")
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
@@ -278,14 +282,13 @@ func TestL2Consensus_QuorumNotReached(t *testing.T) {
 // is submitted, the L1 doctrine detects it and the consensus member votes
 // false (veto), causing the transaction to be rejected.
 func TestL2Consensus_VetoByMITRE(t *testing.T) {
+	// Single-member consensus (quorum 1) so a single false vote blocks.
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
 		TestName:          "consensus-veto",
 		Posture:           config.PostureConsensus,
 		AllowTestPortZero: true,
+		ConsensusID:       "veto-consensus",
 	})
-
-	// Use a single-member consensus (quorum 1) so a single false vote blocks.
-	fixtures.SetupConsensus(t, f, "veto-consensus", 1, 1, 1)
 
 	identity := fixtures.EnrollClientIdentity(t, f, "veto-user", "test-org", "fp-veto", "test-host")
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)

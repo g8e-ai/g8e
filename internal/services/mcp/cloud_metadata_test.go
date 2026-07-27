@@ -2,8 +2,11 @@ package mcp
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -147,16 +150,42 @@ func TestConvertToFieldValue_NestedNullInArray(t *testing.T) {
 	assert.Equal(t, "a", *v.Array[1].Str)
 }
 
-func TestSetL2ConsensusDeliberator(t *testing.T) {
+func TestRuntimeDeps_L2ConsensusDeliberator(t *testing.T) {
 	t.Parallel()
 
-	g := &GatewayService{}
-	assert.Nil(t, g.getL2ConsensusDeliberator())
+	t.Run("nil deliberator by default", func(t *testing.T) {
+		t.Parallel()
+		g := &GatewayService{logger: slog.Default()}
+		_, privKey, _ := ed25519.GenerateKey(rand.Reader)
+		g.SetRuntimeDeps(RuntimeDependencies{
+			EnvProc:           &fakeEnvelopeProcessor{},
+			StateRootProvider: &fakeStateRootProvider{root: "test"},
+			SigningKey:        privKey,
+			KeyID:             "key-1",
+			DownstreamURL:     "http://downstream",
+		})
+		deps := g.getRuntimeDeps()
+		require.NotNil(t, deps)
+		assert.Nil(t, deps.L2ConsensusDeliberator)
+	})
 
-	mock := &mockL2ConsensusDeliberator{}
-	g.SetL2ConsensusDeliberator(mock)
-	assert.NotNil(t, g.getL2ConsensusDeliberator())
-	assert.Same(t, mock, g.getL2ConsensusDeliberator())
+	t.Run("deliberator accessible via RuntimeDependencies", func(t *testing.T) {
+		t.Parallel()
+		g := &GatewayService{logger: slog.Default()}
+		_, privKey, _ := ed25519.GenerateKey(rand.Reader)
+		mock := &mockL2ConsensusDeliberator{}
+		g.SetRuntimeDeps(RuntimeDependencies{
+			EnvProc:                &fakeEnvelopeProcessor{},
+			StateRootProvider:      &fakeStateRootProvider{root: "test"},
+			SigningKey:             privKey,
+			KeyID:                  "key-1",
+			DownstreamURL:          "http://downstream",
+			L2ConsensusDeliberator: mock,
+		})
+		deps := g.getRuntimeDeps()
+		require.NotNil(t, deps)
+		assert.Same(t, mock, deps.L2ConsensusDeliberator)
+	})
 }
 
 type mockL2ConsensusDeliberator struct{}

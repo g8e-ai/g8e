@@ -1604,12 +1604,14 @@ func TestGatewayService_SetRuntimeDeps(t *testing.T) {
 		t.Parallel()
 		g := &GatewayService{logger: slog.Default()}
 		_, privKey, _ := ed25519.GenerateKey(rand.Reader)
+		mock := &mockL2ConsensusDeliberator{}
 		g.SetRuntimeDeps(RuntimeDependencies{
-			EnvProc:           &fakeEnvelopeProcessor{},
-			StateRootProvider: &fakeStateRootProvider{root: "test"},
-			SigningKey:        privKey,
-			KeyID:             "key-1",
-			DownstreamURL:     "http://downstream",
+			EnvProc:                &fakeEnvelopeProcessor{},
+			StateRootProvider:      &fakeStateRootProvider{root: "test"},
+			SigningKey:             privKey,
+			KeyID:                  "key-1",
+			DownstreamURL:          "http://downstream",
+			L2ConsensusDeliberator: mock,
 		})
 		require.True(t, g.runtimeReady(), "runtimeReady should be true after SetRuntimeDeps")
 		deps := g.getRuntimeDeps()
@@ -1619,6 +1621,7 @@ func TestGatewayService_SetRuntimeDeps(t *testing.T) {
 		require.NotNil(t, deps.SigningKey)
 		require.Equal(t, "key-1", deps.KeyID)
 		require.Equal(t, "http://downstream", deps.DownstreamURL)
+		assert.Same(t, mock, deps.L2ConsensusDeliberator)
 	})
 
 	t.Run("dispatchMCP returns not-ready error before SetRuntimeDeps", func(t *testing.T) {

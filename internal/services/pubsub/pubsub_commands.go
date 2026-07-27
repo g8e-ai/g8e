@@ -137,8 +137,9 @@ type CommandServiceConfig struct {
 // are shared between gateway construction and the pubsub command service.
 type GatewayCommandServiceConfig struct {
 	CommandServiceConfig
-	GovDeps    *GovernanceDeps
-	MCPGateway *mcp.GatewayService
+	GovDeps              *GovernanceDeps
+	MCPGateway           *mcp.GatewayService
+	L2ConsensusDeliberator mcp.L2ConsensusDeliberator
 }
 
 // NewOperatorPubSubService creates the dispatcher and all first-class sub-services using the provided config.
@@ -258,14 +259,15 @@ func NewGatewayOperatorPubSubService(c GatewayCommandServiceConfig) (*OperatorPu
 		}
 
 		rs.mcpGateway.SetRuntimeDeps(mcp.RuntimeDependencies{
-			EnvProc:           rs,
-			StateRootProvider: c.GovDeps.StateRootProvider,
-			SigningKey:        c.ActuatorSigningKey,
-			KeyID:             c.ActuatorKeyID,
-			DownstreamURL:     c.Config.Gateway.MCPDownstreamURL,
-			DBService:         fieldReader,
-			SessionValidator:  rs,
-			AuditLogger:       auditLogger,
+			EnvProc:              rs,
+			StateRootProvider:    c.GovDeps.StateRootProvider,
+			SigningKey:           c.ActuatorSigningKey,
+			KeyID:                c.ActuatorKeyID,
+			DownstreamURL:        c.Config.Gateway.MCPDownstreamURL,
+			DBService:            fieldReader,
+			SessionValidator:     rs,
+			AuditLogger:          auditLogger,
+			L2ConsensusDeliberator: c.L2ConsensusDeliberator,
 		})
 	}
 
