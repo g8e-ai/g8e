@@ -1121,7 +1121,7 @@ func TestDeriveSeedPublicKey_MatchesKnownSeed(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// bootstrapConsensusPolicy error-path tests (Tier 2 — file I/O)
+// consensusPolicyBootstrap error-path tests (Tier 2 — file I/O)
 // ---------------------------------------------------------------------------
 
 func TestBootstrapConsensusPolicy_NilServiceReturnsError(t *testing.T) {
@@ -1137,16 +1137,16 @@ func TestBootstrapConsensusPolicy_NilServiceReturnsError(t *testing.T) {
 	}`), 0600)
 	require.NoError(t, err)
 
-	err = bootstrapConsensusPolicy(nil, configPath, constants.TestPathShortSecrets, logger)
+	err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil),
-		"bootstrapConsensusPolicy with nil service should return ErrGatewayServiceNil")
+		"consensusPolicyBootstrap with nil service should return ErrGatewayServiceNil")
 }
 
 func TestBootstrapConsensusPolicy_MissingFile(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	err := bootstrapConsensusPolicy(nil, constants.TestPathNonexistentConsensus, constants.TestPathShortSecrets, logger)
+	err := consensusPolicyBootstrap(nil, constants.TestPathNonexistentConsensus, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapReadConfig))
 }
@@ -1159,7 +1159,7 @@ func TestBootstrapConsensusPolicy_MalformedJSON(t *testing.T) {
 	err := os.WriteFile(configPath, []byte(`{not valid json}`), 0600)
 	require.NoError(t, err)
 
-	err = bootstrapConsensusPolicy(nil, configPath, constants.TestPathShortSecrets, logger)
+	err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapParseConfig))
 }
@@ -1192,7 +1192,7 @@ func TestBootstrapConsensusPolicy_InvalidConfig(t *testing.T) {
 			err := os.WriteFile(configPath, []byte(tt.config), 0600)
 			require.NoError(t, err)
 
-			err = bootstrapConsensusPolicy(nil, configPath, constants.TestPathShortSecrets, logger)
+			err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
 			require.Error(t, err)
 			assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapMissingFields))
 		})

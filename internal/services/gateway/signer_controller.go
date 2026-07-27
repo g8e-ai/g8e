@@ -75,7 +75,7 @@ func (c *SignerController) handleGovernanceSigners(w http.ResponseWriter, r *htt
 	case http.MethodPost:
 		body, err := c.readBody(r)
 		if err != nil {
-			c.responder.Error(w, http.StatusBadRequest, constants.ErrDBControllerBodyReadFailed.Error())
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrSignerControllerBodyReadFailed.Error())
 			return
 		}
 		var signer models.TrustedSigner
@@ -101,7 +101,7 @@ func (c *SignerController) handleGovernanceSigners(w http.ResponseWriter, r *htt
 func (c *SignerController) handleGovernanceSignerByID(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, constants.APIPaths.GovernanceSignersPrefix)
 	if id == "" || strings.Contains(id, "/") {
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrDBControllerInvalidSignerID.Error())
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrSignerControllerInvalidSignerID.Error())
 		return
 	}
 

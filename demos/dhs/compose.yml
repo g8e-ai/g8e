@@ -74,7 +74,7 @@ services:
       - gateway_state:/root/.g8e
       - ./doctrine:/etc/g8e/doctrine:ro
       - ./dataop.sh:/usr/local/bin/dataop:ro
-      - ./config/tribunal-bootstrap.json:/etc/g8e/consensus-bootstrap.json:ro
+      - ./config/consensus-bootstrap.json:/etc/g8e/consensus-bootstrap.json:ro
     ports:
       - "8087:8080"
       - "8450:8443"

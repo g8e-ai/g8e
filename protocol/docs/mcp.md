@@ -4,8 +4,8 @@ title: MCP Protocol
 
 # MCP Protocol
 
-Last Updated: 2026-07-25
-Version: v1.6.3
+Last Updated: 2026-07-27
+Version: v1.6.6
 
 The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer governance verification sequence (L1Doctrine/L2Consensus/L3Notary/L4Warden/L5Actuator), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
@@ -306,10 +306,10 @@ Validation failures are rejected before envelope construction, ensuring maliciou
 
 ### L2 Consensus
 
-- **Ed25519 signatures**: Tribunal member agents sign envelopes with their private keys
+- **Ed25519 signatures**: Consensus member agents sign envelopes with their private keys
 - **Signer verification**: Gateway verifies signatures against trusted signers in SQLite store
-- **Tribunal deliberation**: Under `consensus` posture, the gateway delegates L2 deliberation to an enrolled Tribunal service, which produces L2 votes (Ed25519 signatures over the transaction hash). The gateway does not self-sign L2 votes.
-- **Quorum verification**: L4 Warden verifies the quorum of valid L2 votes against the TribunalPolicy
+- **Consensus deliberation**: Under `consensus` posture, the gateway delegates L2 deliberation to an enrolled Consensus service, which produces L2 votes (Ed25519 signatures over the transaction hash). The gateway does not self-sign L2 votes.
+- **Quorum verification**: L4 Warden verifies the quorum of valid L2 votes against the ConsensusPolicy
 
 ### L3 Notary (Authorization)
 

@@ -322,7 +322,7 @@ func TestDeriveSeedPublicKey_PublicKeyIs64HexChars(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// bootstrapConsensusPolicy — additional error-path tests (Tier 1 — file I/O)
+// consensusPolicyBootstrap — additional error-path tests (Tier 1 — file I/O)
 // ---------------------------------------------------------------------------
 
 func TestBootstrapConsensusPolicy_PathIsDirectory(t *testing.T) {
@@ -330,7 +330,7 @@ func TestBootstrapConsensusPolicy_PathIsDirectory(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	// Pass the directory itself as the config path — os.ReadFile should fail
-	err := bootstrapConsensusPolicy(nil, tmpDir, constants.TestPathShortSecrets, logger)
+	err := consensusPolicyBootstrap(nil, tmpDir, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapReadConfig),
 		"reading a directory should produce ErrConsensusBootstrapReadConfig")
@@ -343,7 +343,7 @@ func TestBootstrapConsensusPolicy_EmptyFile(t *testing.T) {
 	configPath := filepath.Join(tmpDir, constants.ConsensusBootstrapConfigFilename)
 	require.NoError(t, os.WriteFile(configPath, []byte{}, 0600))
 
-	err := bootstrapConsensusPolicy(nil, configPath, constants.TestPathShortSecrets, logger)
+	err := consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	// Empty file produces a JSON parse error (unexpected end of JSON input)
 	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapParseConfig))
@@ -364,7 +364,7 @@ func TestBootstrapConsensusPolicy_ValidConfigNilServiceOnlyChecksServiceAfterPar
 
 	// With nil service, the file is read and parsed successfully, then
 	// svc == nil check triggers ErrGatewayServiceNil (not a DB error).
-	err = bootstrapConsensusPolicy(nil, configPath, constants.TestPathShortSecrets, logger)
+	err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil))
 }
@@ -384,7 +384,7 @@ func TestBootstrapConsensusPolicy_NilServiceWithInvalidSeedHex(t *testing.T) {
 
 	// Even with nil service, the nil check happens after parse but before
 	// seed derivation. So we should get ErrGatewayServiceNil, not a seed error.
-	err = bootstrapConsensusPolicy(nil, configPath, constants.TestPathShortSecrets, logger)
+	err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil),
 		"nil service check occurs before seed derivation")

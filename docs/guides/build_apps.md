@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-07-25
-Version: v1.6.3
+Last Updated: 2026-07-27
+Version: v1.6.6
 
 ---
 
@@ -402,7 +402,7 @@ anyone building an AI reasoning layer on top of the g8e protocol surface. For th
 architecture-level overview of the ensemble topology, intent-to-execution pipeline, and
 hash-chained ledger context model, see [AI Agents in a g8e-Compatible Agentic Ensemble](../architecture/agents.md).
 
-g8e itself ships a protocol-level Tribunal that performs deterministic L2 consensus
+g8e itself ships a protocol-level Consensus that performs deterministic L2 consensus
 voting with Ed25519 signatures. That service is the
 **cryptographic backbone**: it does not reason. The design documented here is the
 **reasoning layer** that sits above it: a multi-persona, multi-stage agentic system that
@@ -419,7 +419,7 @@ one concrete realization of it.
 2. [The Agentic Lifecycle](#the-agentic-lifecycle)
 3. [Persona Catalog](#persona-catalog)
 4. [Prompt Architecture](#prompt-architecture)
-5. [The Tribunal: Byzantine Command Generation](#the-tribunal-byzantine-command-generation)
+5. [The Consensus: Byzantine Command Generation](#the-consensus-byzantine-command-generation)
 6. [Memory Model](#memory-model)
 7. [Risk Analysis: The Warden Cascade](#risk-analysis-the-warden-cascade)
 8. [Reputation System](#reputation-system)
@@ -436,10 +436,10 @@ role: it is a BYO client that happens to be sophisticated.
 #### Core Principles
 
 - **Intent-Driven Execution**: Reasoning agents never write shell commands directly. They
-  articulate natural-language intent to a Tribunal that translates it.
+  articulate natural-language intent to a Consensus that translates it.
 - **Ensemble Consensus**: No single model has mutation authority. Commands are produced
   by an independent multi-member panel with unique technical lenses.
-- **Information Isolation**: Tribunal members are blind to each other's candidates. The
+- **Information Isolation**: Consensus members are blind to each other's candidates. The
   Auditor receives anonymized candidates to prevent source bias.
 - **Fail-Closed Verification**: Any missing signature, stale state root, or L1 violation
   results in immediate rejection.
@@ -454,7 +454,7 @@ The client (browser, CLI, or agent) connects over TLS 1.3 or mTLS to the Mandato
 Gateway, which contains the Governance Gateway (g8eg) and Governed Operator (g8eo). The
 Gateway provides the Policy Decision Point, PKI, SQLite, and Pub/Sub. The Operator provides
 the Policy Enforcement Point, Actuator, and git ledger. The optional reference app layer
-sits above the Gateway as an L2 consensus producer, running the Triage, Sage/Dash, Tribunal,
+sits above the Gateway as an L2 consensus producer, running the Triage, Sage/Dash, Consensus,
 Warden, and Auditor pipeline to produce signed governance envelopes.
 
 ---
@@ -508,7 +508,7 @@ The selected reasoning agent (Sage or Dash) runs the core agentic loop:
 - **Provider Turn**: Communicate with the configured LLM provider.
 - **Tool Dispatch**: If the LLM requests a tool, route it. Universal tools (web search,
   investigation context) run locally. Gated tools (command execution, file operations)
-  route through the **Tribunal**.
+  route through the **Consensus**.
 - **Iteration**: Continue until the LLM provides a final text response or hits the
   max-tool-turns limit.
 
@@ -527,7 +527,7 @@ If the reasoning agent encounters ambiguity, it must use the Interrogation Proto
 
 Every host-mutating tool call flows through an ordered cascade. Each stage is independently
 configurable across providers/models so a single compromised model cannot drive a mutation
-end-to-end. See [The Tribunal](#the-tribunal-byzantine-command-generation) and
+end-to-end. See [The Consensus](#the-consensus-byzantine-command-generation) and
 [Warden](#risk-analysis-the-warden-cascade) sections for details.
 
 #### 5. Streaming & Delivery
@@ -574,17 +574,17 @@ Every persona is defined with these fields:
 | Agent | ID | Role | Tier | Purpose |
 |-------|----|------|------|---------|
 | **Triage** | `triage` | classifier | lite | First read of the room: classifies complexity, intent, posture. Security-sensitive requests are always complex. |
-| **Sage** | `sage` | reasoner | primary | Senior reasoning authority. Plans investigations, articulates intent to the Tribunal, interprets results. Never writes shell syntax. |
+| **Sage** | `sage` | reasoner | primary | Senior reasoning authority. Plans investigations, articulates intent to the Consensus, interprets results. Never writes shell syntax. |
 | **Dash** | `dash` | responder | assistant | Fast-path agent for simple turns. Direct answers, surgical tool calls. Escalates to Sage when multi-step reasoning is needed. |
 
 #### Consensus Layer
 
 | Agent | ID | Role | Tier | Purpose |
 |-------|----|------|------|---------|
-| **Tribunal** | `tribunal` | arbitrator | lite | Five-member collective that converts intent into commands through Byzantine consensus. |
-| **Auditor** | `auditor` | auditor | primary | Final quality gate. Verifies Tribunal output against Sage's intent. Verdicts: `ok`, `revised:<command>`, `swap:<cluster_id>`. |
+| **Consensus** | `consensus` | arbitrator | lite | Five-member collective that converts intent into commands through Byzantine consensus. |
+| **Auditor** | `auditor` | auditor | primary | Final quality gate. Verifies Consensus output against Sage's intent. Verdicts: `ok`, `revised:<command>`, `swap:<cluster_id>`. |
 
-#### Tribunal Members
+#### Consensus Members
 
 | Member | ID | Lens | Focus |
 |--------|----|------|-------|
@@ -714,9 +714,9 @@ Three modes adapt the agent's capabilities based on Operator binding state:
 - **operator_not_bound**: No hands on user systems. Expert assistant with web search.
   Must acknowledge bind-state limitation before any execution-style request.
 
-#### Tribunal Prompt Templates
+#### Consensus Prompt Templates
 
-Tribunal prompts are template files with placeholder variables. The template includes
+Consensus prompts are template files with placeholder variables. The template includes
 XML-tagged sections for constraints, system context, operator context, guidelines, and the
 request itself. Each member receives the same template with its lens-specific instructions.
 The response must contain only the command string.
@@ -727,9 +727,9 @@ CONSENSUS" for Nemesis).
 
 ---
 
-### The Tribunal: Byzantine Command Generation
+### The Consensus: Byzantine Command Generation
 
-The Tribunal is the core consensus mechanism. It converts Sage's natural-language intent
+The Consensus is the core consensus mechanism. It converts Sage's natural-language intent
 into an executable shell command through a five-member ensemble with Byzantine fault
 tolerance.
 
@@ -775,7 +775,7 @@ lens-specific Round 2 instructions:
 - **Nemesis**: Attack if the emerging consensus has a real flaw; abstain if it's clean.
   Never attack on style alone.
 
-If R2 also fails, `TribunalConsensusFailedError` is raised back to Sage so it can
+If R2 also fails, `ConsensusFailedError` is raised back to Sage so it can
 re-articulate intent.
 
 #### Stage 4: Warden Risk Analysis (before Auditor)
@@ -810,7 +810,7 @@ blacklist, and whitelist before it can leave the ensemble.
 #### Stage 7: L2/L3 Envelope Wrap
 
 The verified command is packaged as a typed `CommandRequested` payload inside a
-`GovernanceEnvelope`, signed by the L2 Tribunal key.
+`GovernanceEnvelope`, signed by the L2 Consensus key.
 
 #### Stage 8: Approval Pipeline
 
@@ -885,7 +885,7 @@ projection** for the current turn.
 
 ### Risk Analysis: The Warden Cascade
 
-The Warden coordinates pre-execution risk classification. It runs **after** the Tribunal
+The Warden coordinates pre-execution risk classification. It runs **after** the Consensus
 selects a winner but **before** the Auditor commits.
 
 #### Sub-Agents
@@ -914,7 +914,7 @@ selects a winner but **before** the Auditor commits.
 
 ### Reputation System
 
-After every Tribunal invocation, the reputation service updates agent scores based on the
+After every Consensus invocation, the reputation service updates agent scores based on the
 Auditor's verdict and the ranked vote results.
 
 #### Scoring
@@ -922,7 +922,7 @@ Auditor's verdict and the ranked vote results.
 - **Exponential Moving Average (EMA)**: prioritizes recent behavior over historical.
 - **Nemesis reputation**: Slashed when it raises a false flag or abstains on a real flaw.
   Earned when it sneaks a flaw past the Auditor (confirming the system has blind spots).
-- **Tribunal members**: Earned for consensus with the winning candidate; lost for dissent
+- **Consensus members**: Earned for consensus with the winning candidate; lost for dissent
   that the Auditor overturns.
 
 #### Merkle Commitments
@@ -978,7 +978,7 @@ Context is **stage-specific**; each agent receives only what it needs:
 |-------|------|-------------|
 | Triage | Current message, prior history, attachment metadata, settings | Commands, operator state |
 | Dash / Sage | Modular system prompt, scrubbed history, operator metadata, triage context, investigation context, learned context, tool declarations | Raw host vault, other agents' internal state |
-| Tribunal members | Sage's intent, guidelines, operator context, command constraints | Each other's candidates, full chat history |
+| Consensus members | Sage's intent, guidelines, operator context, command constraints | Each other's candidates, full chat history |
 | Warden sub-agents | Candidate command + narrow risk context | Broad investigation reasoning |
 | Auditor | Request, operator context, anonymized clusters, reputation state | Full chat history, candidate sources |
 | Codex | Current memory state + latest 20 messages | Real-time tool results, operator state |
@@ -996,20 +996,20 @@ The agentic system maps to g8e's protocol surface as follows:
 | Tool discovery | MCP `tools/list` | Gateway MCP handler |
 | Tool execution (read-only) | MCP `tools/call` | Gateway → Operator Actuator |
 | Command execution (mutating) | `GovernanceEnvelope` with `CommandRequested` payload | Gateway admission gauntlet |
-| L2 consensus signing | Ed25519 signature over `transaction_hash` and decision | Tribunal key → Gateway L2 verifier |
+| L2 consensus signing | Ed25519 signature over `transaction_hash` and decision | Consensus key → Gateway L2 verifier |
 | L3 authorization | WebAuthn passkey assertion or signed CLI proof | Gateway L3 approver |
 | Result delivery | Pub/Sub result envelope | Operator → Gateway → Ensemble |
 | Audit trail | Signed receipts + LFAA events | Operator Audit Vault |
 
-#### g8e's Built-in Tribunal vs. Agentic Tribunal
+#### g8e's Built-in Consensus vs. Agentic Consensus
 
-g8e ships a **protocol-level Tribunal** that performs deterministic L2 consensus voting
+g8e ships a **protocol-level Consensus** that performs deterministic L2 consensus voting
 with Ed25519 signatures and doctrine-based safety evaluation. This is the cryptographic
 backbone; it signs and verifies but does not reason.
 
-The **agentic Tribunal** documented in this guide is the reasoning layer above it: it
+The **agentic Consensus** documented in this guide is the reasoning layer above it: it
 generates commands through LLM-based ensemble consensus, classifies risk, and produces the
-signed envelopes that g8e's protocol-level Tribunal and Gateway validate.
+signed envelopes that g8e's protocol-level Consensus and Gateway validate.
 
 #### Five-Layer Governance Interlock
 
@@ -1017,14 +1017,14 @@ When a signed envelope reaches the Gateway, it passes through a five-layer inter
 sequence before any tool dispatch occurs. Each layer is independent and fail-closed.
 
 - **L1 Doctrine**: Hard gates, code pattern matching, and MITRE-based threat analysis. Checks command strings, MCP arguments, A2A payloads, and file edit content for forbidden patterns.
-- **L2 Consensus**: Multi-agent consensus signature verification using Ed25519. Verifies each vote signature against the transaction hash and decision, and enforces quorum policy from the configured tribunal.
+- **L2 Consensus**: Multi-agent consensus signature verification using Ed25519. Verifies each vote signature against the transaction hash and decision, and enforces quorum policy from the configured consensus.
 - **L3 Notary**: Human-in-the-loop authorization via WebAuthn passkey assertion or signed CLI proof. Mutations require L3 proof; the Gateway suspends execution and returns an approval URL when L3 is missing.
 - **L4 Warden**: Pre-dispatch verification combining stateless validation (hash integrity, payload decoding, L1 doctrine), stateful validation (expiry, nonce replay prevention, state root binding), and posture-aware L2/L3 checks. Returns a verified transaction only if all gates pass.
 - **L5 Actuator**: Isolated tool dispatch and signed receipt production. Mints a JIT capability scoped to the transaction, dispatches through the execution handler, signs a receipt with its Ed25519 key, and records it in the audit store. Receipt signing is fail-closed: if the initial receipt cannot be signed or logged, execution does not proceed.
 
 #### Demo Scenarios (Test Tool)
 
-g8e also ships **demo scenarios** (`g8e demos scenarios run`), a test tool that exercises the protocol surface with simple agent personas. It tests MCP, A2A, governance envelopes, tribunal quorum/veto, and notary OOB flows against a real Gateway and Operator. The demo scenarios tool is not a reasoning system; it validates protocol mechanics. The agentic system documented here is what you build on top of the protocol to add intelligence.
+g8e also ships **demo scenarios** (`g8e demos scenarios run`), a test tool that exercises the protocol surface with simple agent personas. It tests MCP, A2A, governance envelopes, consensus quorum/veto, and notary OOB flows against a real Gateway and Operator. The demo scenarios tool is not a reasoning system; it validates protocol mechanics. The agentic system documented here is what you build on top of the protocol to add intelligence.
 
 #### Building Your Own
 
@@ -1039,11 +1039,11 @@ To build a g8e-compliant agentic system in any language:
 2. **Assemble modular prompts**: Follow the 13-section assembly order with XML
    scaffolding. Keep static sections first for prefix caching.
 3. **Implement the ReAct loop**: Provider turn, tool dispatch, iteration. Route gated
-   tools through your Tribunal.
-4. **Implement the Tribunal cascade**: 5-member generation, voting, round 2, warden,
+   tools through your Consensus.
+4. **Implement the Consensus cascade**: 5-member generation, voting, round 2, warden,
    auditor, L1 re-validation, envelope wrap.
 5. **Sign envelopes**: Use Ed25519 to sign the `transaction_hash` and decision with your L2
-   Tribunal key. Register the public key as a trusted signer with the Gateway.
+   Consensus key. Register the public key as a trusted signer with the Gateway.
 6. **Submit over mTLS**: Send the signed `GovernanceEnvelope` to the Gateway's admission
    endpoint. The Gateway and Operator independently re-verify everything.
 7. **Handle results**: Receive pub/sub result envelopes, scrub output, feed back into the

@@ -33,7 +33,7 @@ demos/
 │   └── README.md               # Finance-specific documentation
 ├── dhs/                        # DHS persistent sovereign capability demo
 │   ├── compose.yml
-│   ├── config/                 # Gateway/operator config, tribunal-bootstrap.json, ensemble-seed.hex
+│   ├── config/                 # Gateway/operator config, consensus-bootstrap.json, ensemble-seed.hex
 │   ├── doctrine/               # Sovereign data-handling L1 rules (USPER PII, cross-domain release, destruction)
 │   ├── target-data/            # Mock multi-source coalition feeds + sovereign manifest
 │   ├── dataop.sh               # Wrapper script bridging operator execution to datasvc
@@ -42,7 +42,7 @@ demos/
 │   └── README.md               # DHS-specific documentation and LOE mapping
 ├── fedramp/                    # FedRAMP sovereign cloud governance demo
 │   ├── compose.yml
-│   ├── config/                 # Gateway/operator config, tribunal-bootstrap.json, ensemble-seed.hex
+│   ├── config/                 # Gateway/operator config, consensus-bootstrap.json, ensemble-seed.hex
 │   ├── doctrine/               # FedRAMP L1 rules (CR-26 audit integrity, AC-2 access control, SC-8 cross-domain)
 │   ├── target-data/            # Cloud resources and KSI control categories
 │   ├── cloudop.sh              # Wrapper script bridging operator execution to cloudsvc

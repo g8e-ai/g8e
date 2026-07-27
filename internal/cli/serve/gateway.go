@@ -168,7 +168,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	// key is also saved to disk so the in-process LocalDeliberator can sign L2
 	// votes via the FileKeyProvider during ConsensusBootstrap.
 	if cfg.ConsensusBootstrap != "" {
-		if err := bootstrapConsensusPolicy(svc, cfg.ConsensusBootstrap, cfg.SecretsDir, logger); err != nil {
+		if err := consensusPolicyBootstrap(svc, cfg.ConsensusBootstrap, cfg.SecretsDir, logger); err != nil {
 			return fmt.Errorf("gateway: consensus bootstrap: %w", err)
 		}
 	}
@@ -406,7 +406,7 @@ func deriveSeedPublicKey(seedHex string) (string, error) {
 	return hex.EncodeToString(pub), nil
 }
 
-// bootstrapConsensusPolicy seeds trusted signers and a ConsensusPolicy from a
+// consensusPolicyBootstrap seeds trusted signers and a ConsensusPolicy from a
 // JSON config file. The file format is:
 //
 //	{
@@ -423,7 +423,7 @@ func deriveSeedPublicKey(seedHex string) (string, error) {
 // omitted, a fresh key pair is generated and saved the same way. The
 // ConsensusPolicy is then created in the database. This is idempotent: if the
 // consensus already exists, the bootstrap is skipped.
-func bootstrapConsensusPolicy(svc *gateway.GatewayModeService, bootstrapPath string, secretsDir string, logger *slog.Logger) error {
+func consensusPolicyBootstrap(svc *gateway.GatewayModeService, bootstrapPath string, secretsDir string, logger *slog.Logger) error {
 	data, err := os.ReadFile(bootstrapPath)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrConsensusBootstrapReadConfig, err)

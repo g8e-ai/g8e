@@ -18,7 +18,7 @@ Canonical collection names for the operator embedded SQLite database, typed as `
 - `CollectionPasskeyChallenges`, `CollectionPersonas`, `CollectionAgentActivityMetadata`
 - `CollectionReputationState`, `CollectionReputationCommitments`, `CollectionStakeResolutions`
 - `CollectionRevokedCertificates`, `CollectionTrustedSigners`, `CollectionAppPolicies`
-- `CollectionTribunals`, `CollectionEnrollmentTokens`
+- `CollectionConsensus`, `CollectionEnrollmentTokens`
 
 ### Event Types (`events.go`)
 
@@ -64,8 +64,8 @@ Typed event identifiers for the pub/sub system, typed as `EventType`. The file d
 - Platform External Service: configured
 - Platform Telemetry: health reported, performance recorded, error logged, audit logged
 - Platform Console Log: entry received, connected confirmed
-- AI Tribunal Session: started, completed, disabled, generation failed, model not configured, provider unavailable, system error, auditor failed, warden blocked
-- AI Tribunal Voting: pass completed, consensus reached/not reached/failed, round started/completed, round 2 started/consensus reached/consensus failed, dissent recorded, audit started/completed
+- AI Consensus Session: started, completed, disabled, generation failed, model not configured, provider unavailable, system error, auditor failed, warden blocked
+- AI Consensus Voting: pass completed, consensus reached/not reached/failed, round started/completed, round 2 started/consensus reached/consensus failed, dissent recorded, audit started/completed
 - App Memory: `EventAppMemoryCreated`, `EventAppMemoryUpdated`
 - App Case/Investigation Deletion: `EventAppCaseDeleted`, `EventAppInvestigationDeleted`
 - AI LLM Chat Thinking Stopped: `EventAiLLMChatIterationThinkingStopped`
@@ -93,8 +93,8 @@ HTTP route paths for the Gateway REST API, defined as a struct `APIPaths` with J
 - User: `Users`, `UsersMe`
 - Auth: `AuthLogout`, `AuthBootstrap`, `AuthBootstrapStatus`, `AuthCLIEnroll`, `AuthDeviceEnroll`, `AuthPasskeys`, `AuthPasskeysByID`, `AuthPasskeysJITRegisterChallenge`, `AuthPasskeysJITRegisterVerify`, `AuthPasskeysJITPrefix`, `AuthPasskeysPrefix`, `AuthPasskeysCLIStatus`, `AuthPasskeysConsoleRegisterChallenge`, `AuthPasskeysConsoleRegisterVerify`, `AuthPasskeysConsoleAuthenticateChallenge`, `AuthPasskeysConsoleAuthenticateVerify`, `AuthPasskeysConsolePrefix`, `AuthSessionsMe`, `AuthEnrollmentTokenGenerate`, `AuthEnrollmentTokenValidate`
 - Approval: `Approvals`, `ApprovalsByID`, `ApprovalsPrefix`, `ApprovePage`, `ApprovePagePrefix`, `ApprovalsCLIStatus`, `ApprovalsCLIList`
-- Admin: `AdminAppPoliciesBySigner`, `AdminAppsRevoke`, `AdminAppPoliciesPrefix`, `AdminTribunals`, `AdminTribunalsByID`, `AdminTribunalsPrefix`
-- Tribunal: `TribunalDeliberate` (`/tribunal/v1/deliberate`)
+- Admin: `AdminAppPoliciesBySigner`, `AdminAppsRevoke`, `AdminAppPoliciesPrefix`, `AdminConsensus`, `AdminConsensusByID`, `AdminConsensusPrefix`
+- Consensus: `ConsensusDeliberate` (`/consensus/v1/deliberate`)
 - Well-known: `WellKnownPKICABundle`, `WellKnownPKIFingerprint`, `WellKnownBinPrefix`, `WellKnownPKIPrefix`, `WellKnownTrustWindows`
 - Trust scripts: `WebCertLinux` (`/web-cert.sh`), `WebCertWindows` (`/web-cert.ps1`)
 - Deploy scripts: `DeployScriptLinux` (`/g8e-deploy.sh`), `DeployScriptWindows` (`/g8e-deploy.ps1`)
@@ -177,8 +177,8 @@ Internal enumeration constants, each defined as a typed string:
 - `WorkflowType`: `WorkflowTypeG8eBound`, `WorkflowTypeG8eCloudBound`, `WorkflowTypeG8eNotBound`, `WorkflowTypeTriage`, `WorkflowTypeInvestigation`
 - `AITaskId`: `AITaskIDAgentContinue`, `AITaskIDChat`, `AITaskIDCommand`, `AITaskIDDirectCommand`, `AITaskIDFetchFileDiff`, `AITaskIDFetchFileHistory`, `AITaskIDFetchHistory`, `AITaskIDFetchLogs`, `AITaskIDFileEdit`, `AITaskIDFsList`, `AITaskIDFsRead`, `AITaskIDIntentGrant`, `AITaskIDIntentRevoke`, `AITaskIDPortCheck`, `AITaskIDRecursiveGrep`, `AITaskIDRestoreFile`, plus additional task ID aliases (`AITaskId*` casing) for chat, case, memory, command, command execution, direct command, intent grant, intent revoke, file edit, file operation, fs list, recursive grep, port check, agent continue, and investigation query
 - `ConsensusMember`: `ConsensusMemberAxiom`, `ConsensusMemberConcord`, `ConsensusMemberVariance`, `ConsensusMemberPragma`, `ConsensusMemberNemesis`
-- `TribunalAuditMode`: `TribunalAuditModeUnanimous`, `TribunalAuditModeMajority`, `TribunalAuditModeTied`
-- `TribunalAuditStatus`: `TribunalAuditStatusOk`, `TribunalAuditStatusRevised`, `TribunalAuditStatusSwap`
+- `ConsensusAuditMode`: `ConsensusAuditModeUnanimous`, `ConsensusAuditModeMajority`, `ConsensusAuditModeTied`
+- `ConsensusAuditStatus`: `ConsensusAuditStatusOk`, `ConsensusAuditStatusRevised`, `ConsensusAuditStatusSwap`
 - `AuditorReason`: `AuditorReasonOk`, `AuditorReasonRevised`, `AuditorReasonRevisedFromDissent`, `AuditorReasonSwappedToDissenter`, `AuditorReasonWhitelistViolation`, `AuditorReasonNoValidRevision`, `AuditorReasonAuditorError`, `AuditorReasonEmptyResponse`
 - `TieBreakReason`: `TieBreakReasonShortest`, `TieBreakReasonExcludedNemesis`
 - `ReasoningAgent`: `ReasoningAgentSage`, `ReasoningAgentDash`
@@ -249,7 +249,7 @@ Filesystem paths for Operator data, certificates, ledger, system paths, and conf
 - Execution limits: `ExecutionMaxStreamSize` (10 MB), `ExecutionMaxLines` (50), `ExecutionPreviewLength` (300), `FileEditMaxSize` (50 MB)
 - Reporting: `ReportsDirname` and CSV output filenames for receipts, sessions, events, file mutations, executions, file diffs, commitments, ledger commits, ledger merkle root, replay nonces, suspended transactions, verification summary, and manifest
 - CLI default paths: `DefaultVaultDirDesc`, `DefaultVaultKeyDesc`, `DefaultOperatorKeyDesc`, `DefaultClientKeyDesc`, `DefaultOperatorCertDesc`, `DefaultClientCertDesc`, `DefaultDataDir`, `DefaultPKIDir`, `DefaultSecretsDir`
-- Tribunal bootstrap: `TribunalBootstrapConfigFilename` (`tribunal-bootstrap.json`)
+- Consensus bootstrap: `ConsensusBootstrapConfigFilename` (`consensus-bootstrap.json`)
 - API path constants: `APIPathAuthDeviceEnroll`, `APIPathPKIDevicesEnroll`, `WellKnownPKICABundle`
 - File suffixes: `TmpFileSuffix`, `BackupFileSuffixPattern`, `SQLiteWALSuffix`, `SQLiteSHMSuffix`
 - Environment path: `EnvPathDefault`, `PathParentDir`
@@ -284,7 +284,7 @@ Platform error variables defined as `error` values using `errors.New()`. The fil
 
 Typed environment variable names, typed as `EnvVarKey` and grouped in a struct `EnvVar`:
 
-- `ConsensusID` (`G8E_TRIBUNAL_ID`), `TribunalURL` (`G8E_TRIBUNAL_URL`), `TribunalBootstrap` (`G8E_TRIBUNAL_BOOTSTRAP`)
+- `ConsensusID` (`G8E_CONSENSUS_ID`), `ConsensusURL` (`G8E_CONSENSUS_URL`), `ConsensusBootstrap` (`G8E_CONSENSUS_BOOTSTRAP`), `DoctrineDir` (`G8E_DOCTRINE_DIR`)
 - `VaultDir` (`G8E_VAULT_DIR`), `VaultKey` (`G8E_VAULT_KEY`)
 - `OperatorSessionID` (`G8E_OPERATOR_SESSION_ID`)
 - `PasskeyRpID` (`G8E_PASSKEY_RP_ID`), `PasskeyRpName` (`G8E_PASSKEY_RP_NAME`), `PasskeyRpOrigins` (`G8E_PASSKEY_RP_ORIGINS`)

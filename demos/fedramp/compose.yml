@@ -10,7 +10,7 @@ services:
     volumes:
       - fedramp-gateway-state:/root/.g8e
       - ./doctrine:/etc/g8e/doctrine:ro
-      - ./config/tribunal-bootstrap.json:/etc/g8e/consensus-bootstrap.json:ro
+      - ./config/consensus-bootstrap.json:/etc/g8e/consensus-bootstrap.json:ro
       - ./cloudop.sh:/usr/local/bin/cloudop:ro
     ports:
       - "8088:8080"

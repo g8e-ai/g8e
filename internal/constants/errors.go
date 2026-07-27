@@ -702,10 +702,13 @@ var (
 	ErrDBControllerChannelRequired     = errors.New("channel required")
 	ErrDBControllerPatternRequired     = errors.New("pattern required")
 	ErrDBControllerTTLRequired         = errors.New("ttl required and must be > 0")
-	ErrDBControllerInvalidSignerID     = errors.New("invalid signer id")
 	ErrDBControllerInvalidTTL          = errors.New("X-Blob-TTL must be a non-negative integer")
 	ErrDBControllerBlobTooLarge        = errors.New("blob exceeds maximum size")
 	ErrDBControllerBodyEmpty           = errors.New("body must not be empty")
+
+	// Signer controller errors
+	ErrSignerControllerBodyReadFailed  = errors.New("failed to read body")
+	ErrSignerControllerInvalidSignerID = errors.New("invalid signer id")
 
 	// Authorization errors
 	ErrUnauthorizedNoIdentity       = errors.New("unauthorized: no identity present")
