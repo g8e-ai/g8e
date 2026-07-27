@@ -69,6 +69,7 @@ type GatewayConfig struct {
 	A2ADownstreamURL    string
 	PublicBaseURL       string
 	AllowedOrigins      []string
+	DoctrineDir         string
 }
 
 // RunGateway starts the Operator in gateway mode - the platform's central
@@ -147,6 +148,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		AllowedOrigins:      cfg.AllowedOrigins,
 		ConsensusID:         cfg.ConsensusID,
 		ConsensusURL:        cfg.ConsensusURL,
+		DoctrineDir:         cfg.DoctrineDir,
 		AllowTestPortZero:   false,
 	})
 	if err != nil {

@@ -104,6 +104,7 @@ type GovernanceDeps struct {
 	AppPolicyStore       governance.AppPolicyStore
 	ConsensusPolicyStore governance.L2ConsensusPolicyStore
 	FieldReader          mcp.FieldReader
+	Doctrine             *governance.L1Doctrine
 }
 
 // CommandServiceConfig holds non-governance dependencies for
@@ -304,7 +305,7 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, go
 		govDeps.ConsensusPolicyStore,
 		govDeps.AppPolicyStore,
 		govDeps.L3Notary,
-		nil, // DoctrineValidator defaults to L1Doctrine
+		govDeps.Doctrine, // nil defaults to NewL1Doctrine() in NewL4Warden
 		knownActionTypes,
 		posture,
 		nil, // Clock defaults to RealClock

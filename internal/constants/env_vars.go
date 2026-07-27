@@ -29,6 +29,7 @@ var EnvVar = struct {
 	PasskeyRpOrigins      EnvVarKey
 	PublicBaseURL         EnvVarKey
 	AllowedOrigins        EnvVarKey
+	DoctrineDir           EnvVarKey
 	Shell                 EnvVarKey
 	Lang                  EnvVarKey
 	Term                  EnvVarKey
@@ -51,6 +52,7 @@ var EnvVar = struct {
 	PasskeyRpOrigins:      EnvVarKey("G8E_PASSKEY_RP_ORIGINS"),
 	PublicBaseURL:         EnvVarKey("G8E_PUBLIC_BASE_URL"),
 	AllowedOrigins:        EnvVarKey("G8E_ALLOWED_ORIGINS"),
+	DoctrineDir:           EnvVarKey("G8E_DOCTRINE_DIR"),
 	Shell:                 EnvVarKey("SHELL"),
 	Lang:                  EnvVarKey("LANG"),
 	Term:                  EnvVarKey("TERM"),

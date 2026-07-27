@@ -59,6 +59,7 @@ func TestGatewayStartCmdFlags(t *testing.T) {
 			"rate-limit-rps", "rate-limit-burst",
 			"log", "cert-mode", "consensus-id", "consensus-url",
 			"mcp-downstream-url", "a2a-downstream-url", "follow",
+		"doctrine-dir",
 		}
 		for _, flagName := range expectedFlags {
 			flag := cmd.Flags().Lookup(flagName)

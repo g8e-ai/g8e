@@ -56,6 +56,7 @@ services:
       retries: 5
       start_period: 30s
     command: ["gw", "start", "-f",
+      "--doctrine-dir", "/etc/g8e/doctrine",
       "--passkey-rp-origin", "http://localhost:8083",
       "--passkey-rp-origin", "https://localhost:8446",
       "--passkey-rp-origin", "http://localhost:3003",

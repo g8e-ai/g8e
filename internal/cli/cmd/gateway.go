@@ -73,6 +73,7 @@ type GatewayFlags struct {
 	A2ADownstreamURL   string
 	PublicBaseURL      string
 	AllowedOrigins     []string
+	DoctrineDir        string
 }
 
 // addGatewayFlags registers all shared gateway flags on the given cobra command,
@@ -100,6 +101,7 @@ func addGatewayFlags(cmd *cobra.Command, f *GatewayFlags) {
 	cmd.Flags().StringVar(&f.A2ADownstreamURL, "a2a-downstream-url", "", "URL of a downstream A2A server to proxy execution to (default: none)")
 	cmd.Flags().StringVar(&f.PublicBaseURL, "public-base-url", "", "Public base URL for approval links and host validation (e.g., https://demo.g8e.ai)")
 	cmd.Flags().StringArrayVar(&f.AllowedOrigins, "cors-origin", nil, "Allowed CORS origin for cross-origin browser access (repeatable, e.g. https://lovable.dev)")
+	cmd.Flags().StringVar(&f.DoctrineDir, "doctrine-dir", "", "Directory containing doctrine JSON files for L1 threat detection (default: hardcoded MITRE patterns only)")
 }
 
 // resolveGatewayFlags applies environment variable overrides for vault and
@@ -139,6 +141,9 @@ func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
 			f.AllowedOrigins = strings.Split(v, ",")
 		}
 	}
+	if f.DoctrineDir == "" {
+		f.DoctrineDir = os.Getenv(string(constants.EnvVar.DoctrineDir))
+	}
 	return f
 }
 
@@ -169,6 +174,7 @@ func gatewayFlagsToServeConfig(f GatewayFlags) serve.GatewayConfig {
 		A2ADownstreamURL:   f.A2ADownstreamURL,
 		PublicBaseURL:      f.PublicBaseURL,
 		AllowedOrigins:     f.AllowedOrigins,
+		DoctrineDir:        f.DoctrineDir,
 	}
 }
 

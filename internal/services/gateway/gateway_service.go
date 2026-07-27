@@ -58,6 +58,7 @@ type GatewayModeService struct {
 	cfg     *config.Config
 	logger  *slog.Logger
 	fileSvc fs.RuntimeFileService
+	doctrine *governance.L1Doctrine
 
 	db                 *CanonicalDBService
 	stores             *Stores
@@ -203,12 +204,17 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		publicBaseURL = network.LocalhostHTTPSURL(cfg.Gateway.HTTPSPort)
 	}
 
+	doctrine, err := governance.NewL1DoctrineFromDir(cfg.Gateway.DoctrineDir)
+	if err != nil {
+		return nil, fmt.Errorf("gateway: load doctrine: %w", err)
+	}
+
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:           logger,
 		Responder:        res,
 		SuspendedStore:   suspendedTxService,
 		ScrubbingService: scrubbingService,
-		ThreatScanner:    governance.NewL1Doctrine(),
+		ThreatScanner:    doctrine,
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
 		A2ADownstreamURL: cfg.Gateway.A2ADownstreamURL,
@@ -233,6 +239,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		cfg:                cfg,
 		logger:             logger,
 		fileSvc:            b.fileSvc,
+		doctrine:           doctrine,
 		db:                 db,
 		stores:             stores,
 		pubsub:             pubsub,
@@ -537,6 +544,7 @@ func (ls *GatewayModeService) GetGovernanceDeps() *pubsub.GovernanceDeps {
 		AppPolicyStore:       ls.stores.AppPolicyStore,
 		ConsensusPolicyStore: ls.stores.ConsensusStore,
 		FieldReader:          ls.stores.DocStore,
+		Doctrine:             ls.doctrine,
 	}
 }
 

@@ -134,6 +134,7 @@ func TestAddGatewayFlags_RegistersAllFlags(t *testing.T) {
 		{"mcp-downstream-url", ""},
 		{"a2a-downstream-url", ""},
 		{"public-base-url", ""},
+		{"doctrine-dir", ""},
 	}
 
 	for _, ef := range expectedFlags {
