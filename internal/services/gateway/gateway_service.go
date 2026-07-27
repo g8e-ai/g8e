@@ -55,9 +55,9 @@ import (
 // In this mode, the Operator does NOT execute commands or initiate outbound
 // connections. It strictly serves inbound requests from platform components.
 type GatewayModeService struct {
-	cfg     *config.Config
-	logger  *slog.Logger
-	fileSvc fs.RuntimeFileService
+	cfg      *config.Config
+	logger   *slog.Logger
+	fileSvc  fs.RuntimeFileService
 	doctrine *governance.L1Doctrine
 
 	db                 *CanonicalDBService

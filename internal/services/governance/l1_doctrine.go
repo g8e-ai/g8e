@@ -49,9 +49,9 @@ func NewL1Doctrine() *L1Doctrine {
 
 // doctrineFile represents the JSON schema of a doctrine file.
 type doctrineFile struct {
-	Source     string         `json:"source"`
-	Version    string         `json:"version"`
-	Doctrines  []doctrineEntry `json:"doctrines"`
+	Source    string          `json:"source"`
+	Version   string          `json:"version"`
+	Doctrines []doctrineEntry `json:"doctrines"`
 }
 
 // doctrineEntry represents a single doctrine rule in a doctrine JSON file.

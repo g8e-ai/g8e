@@ -267,6 +267,9 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 	if opts.RateLimitBurst > 0 {
 		args = append(args, "--rate-limit-burst", strconv.Itoa(opts.RateLimitBurst))
 	}
+	if opts.DoctrineDir != "" {
+		args = append(args, "--doctrine-dir", opts.DoctrineDir)
+	}
 
 	return args, nil
 }

@@ -57,6 +57,17 @@ class FHIRHandler(BaseHTTPRequestHandler):
                                         },
                                         "required": ["resourceType", "status", "use"]
                                     }
+                                },
+                                {
+                                    "name": "query_pa_status",
+                                    "description": "Query the status of a Prior Authorization request, including SLA breach and OHA reporting fields",
+                                    "inputSchema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "request_id": {"type": "string"}
+                                        },
+                                        "required": ["request_id"]
+                                    }
                                 }
                             ]
                         }
@@ -80,6 +91,36 @@ class FHIRHandler(BaseHTTPRequestHandler):
                                     {
                                         "type": "text",
                                         "text": "PA-2026-0045: ClaimResponse received and queued via governed MCP endpoint."
+                                    }
+                                ]
+                            }
+                        }
+                        self.send_response(200)
+                        self.send_header('Content-Type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(json.dumps(response).encode('utf-8'))
+                        return
+                    elif params.get('name') == 'query_pa_status':
+                        args = params.get('arguments', {})
+                        request_id = args.get('request_id', 'unknown')
+                        print(f"Received Governed PA Status Query via MCP: {request_id}")
+                        status_response = {
+                            "request_id": request_id,
+                            "status": "pending",
+                            "days_elapsed": 10,
+                            "sla_alert": True,
+                            "reportable_to_oha": True,
+                            "sla_threshold_days": 7,
+                            "alert_threshold_days": 5
+                        }
+                        response = {
+                            "jsonrpc": "2.0",
+                            "id": rpc_data.get('id'),
+                            "result": {
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": json.dumps(status_response)
                                     }
                                 ]
                             }

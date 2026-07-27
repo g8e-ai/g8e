@@ -75,6 +75,7 @@ func TestGatewayModeService_GetGovernanceDeps(t *testing.T) {
 	assert.NotNil(t, deps.AppPolicyStore)
 	assert.NotNil(t, deps.FieldReader)
 	assert.Equal(t, ls.stores.DocStore, deps.FieldReader)
+	assert.NotNil(t, deps.Doctrine, "GovernanceDeps.Doctrine should be populated by GetGovernanceDeps")
 }
 
 func TestGatewayModeService_GetGovernanceDeps_L3MockWiring(t *testing.T) {

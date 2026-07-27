@@ -26,7 +26,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   │   ├── governance.SignerStore (governance.FilesystemSignerStore)
 │   │   ├── governance.AppPolicyStore (gateway.AppPolicyStoreService via Stores) [SHARED]
 │   │   ├── governance.L2ConsensusPolicyStore (via GovernanceDeps.ConsensusPolicyStore; nil in outbound mode, gateway.TribunalStoreService in gateway mode)
-│   │   ├── governance.L1Doctrine (created internally by L4Warden when doctrine param is nil)
+│   │   ├── governance.L1Doctrine (from GovernanceDeps.Doctrine in gateway mode; created internally by L4Warden when doctrine param is nil in outbound mode)
 │   │   └── governance.L3Notary (governance.outboundNotary implementation)
 │   │       └── storage.SuspendedTransactionService
 │   ├── governance.L5Actuator
@@ -282,7 +282,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - `gateway.SecretManager` depends on `gateway.CanonicalDBService` for keystore access.
 
 ### Governance Stack (L1-L5)
-- **L1**: `governance.L1Doctrine` (technical bedrock validation, threat detection, forbidden pattern matching)
+- **L1**: `governance.L1Doctrine` (technical bedrock validation, threat detection, forbidden pattern matching). Constructed via `NewL1DoctrineFromDir(doctrineDir)` which loads `*.json` doctrine files from the given directory and appends them to hardcoded MITRE detectors. Empty dir falls back to `NewL1Doctrine()` (backward compatible). The doctrine instance is shared between the MCP Gateway ThreatScanner and L4Warden via `GatewayModeService.doctrine` → `GovernanceDeps.Doctrine` → `NewL4Warden()`.
 - **L2**: `tribunal.TribunalService` (Tribunal-based deliberation producing L2 votes via Ed25519 signatures; gateway delegates deliberation via `LocalDeliberator`). The `L2ConsensusPolicyStore` interface in `governance.L4Warden` loads consensus policy for quorum verification.
 - **L3**: `governance.L3Notary` — composable notary design with two production implementations sharing primitives:
   - `governance.gatewayNotary` (via `governance.NewGatewayL3Notary`) — passkey authorization (`L3Notary` delegate) + optional CLI mTLS session verification (`CLISessionVerifier`). Does NOT access suspended transactions.

@@ -122,6 +122,8 @@ The Governance Gateway exposes two logical protocol surfaces. To maintain the mT
 
 Vault and rate-limit settings flow from CLI flags through the gateway configuration loader. Vault paths default to platform infrastructure directories when not explicitly specified. Rate limiting is disabled when the requests-per-second value is zero.
 
+The `--doctrine-dir` flag (env: `G8E_DOCTRINE_DIR`) specifies a directory of JSON doctrine files loaded at startup via `NewL1DoctrineFromDir()`. File-loaded threat detectors are appended after hardcoded MITRE patterns. The loaded doctrine instance is shared between the MCP Gateway ThreatScanner (field-value scanning) and L4Warden (payload validation via `GovernanceDeps.Doctrine`). Defaults to empty (hardcoded patterns only) for backward compatibility.
+
 ### Onboarding Wizard
 
 `g8e gw start --interactive` (or `-i`) launches an interactive TUI wizard before gateway startup. The `g8e gw setup` command launches the same wizard without starting the gateway, producing a resolved configuration for inspection. The wizard guides users through four steps: Network & Identity, Security & Governance Posture, Agent Tooling & Routing, and Review & Confirm. The wizard produces a focused configuration containing only wizard-owned fields; the gateway startup process merges the result into resolved CLI flags, preserving non-wizard flags (ports, directories, log level, rate limits). Cancellation returns without starting the gateway. The wizard is explicit opt-in only; existing flags and automation continue to work unchanged.

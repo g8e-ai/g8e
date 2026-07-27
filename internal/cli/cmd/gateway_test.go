@@ -241,6 +241,7 @@ func TestReExecArgsMatchStartCmdFlags(t *testing.T) {
 			A2ADownstreamURL:   "https://downstream.example.com/a2a",
 			PublicBaseURL:      "https://demo.g8e.ai",
 			AllowedOrigins:     []string{"https://lovable.dev"},
+			DoctrineDir:        "/etc/g8e/doctrine",
 		},
 	}
 

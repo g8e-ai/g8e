@@ -28,7 +28,7 @@ make build          # Build the g8e Operator binary
 
 | Command | Purpose |
 |---|---|
-| `./g8e gw start` | Start the Gateway |
+| `./g8e gw start` | Start the Gateway (`--doctrine-dir` loads JSON doctrine files for L1 threat detection) |
 | `./g8e gw status` | Gateway health and status |
 | `./g8e auth enroll` | Authenticate the local CLI |
 | `./g8e test` | Run test suites |
@@ -167,9 +167,9 @@ Several services have dependencies that cannot be passed to the constructor beca
 
 Go constants in `internal/constants/` are SSOT. JSON files in `protocol/constants/` are reference documentation and external protocol definitions.
 
-**Doctrines:** Stored in `protocol/constants/doctrine/` as canonical JSON, validated by `make validate-doctrines`. L1Doctrine uses protobuf field options and hardcoded threat detectors at runtime; the JSON files are reference schemas.
+**Doctrines:** Stored in `protocol/constants/doctrine/` as canonical JSON, validated by `make validate-doctrines`. L1Doctrine uses protobuf field options and hardcoded threat detectors at runtime; the JSON files are reference schemas. At gateway startup, `--doctrine-dir` (env: `G8E_DOCTRINE_DIR`) loads additional `*.json` doctrine files via `NewL1DoctrineFromDir()`, appending file-loaded detectors after hardcoded MITRE patterns. The loaded doctrine instance is shared between the MCP Gateway ThreatScanner and L4Warden.
 
-Adding doctrines: update JSON → `make validate-doctrines` → restart Operator.
+Adding doctrines: update JSON → `make validate-doctrines` → restart Operator. For runtime doctrine loading, place JSON files in the doctrine directory and pass `--doctrine-dir`.
 
 See [Constants Reference](../../protocol/docs/constants.md) and [Protocol Spec](../../protocol/docs/spec.md).
 

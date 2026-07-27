@@ -48,6 +48,7 @@ func TestGatewayFlagsToServeConfig_AllFieldsTransferred(t *testing.T) {
 		A2ADownstreamURL:   "https://downstream/a2a",
 		PublicBaseURL:      "https://demo.example.com",
 		AllowedOrigins:     []string{"https://lovable.dev"},
+		DoctrineDir:        "/etc/g8e/doctrine",
 	}
 
 	cfg := gatewayFlagsToServeConfig(flags)
@@ -74,6 +75,7 @@ func TestGatewayFlagsToServeConfig_AllFieldsTransferred(t *testing.T) {
 	assert.Equal(t, "https://downstream/a2a", cfg.A2ADownstreamURL)
 	assert.Equal(t, "https://demo.example.com", cfg.PublicBaseURL)
 	assert.Equal(t, []string{"https://lovable.dev"}, cfg.AllowedOrigins)
+	assert.Equal(t, "/etc/g8e/doctrine", cfg.DoctrineDir)
 }
 
 func TestGatewayFlagsToServeConfig_EmptyFlags(t *testing.T) {
@@ -103,6 +105,7 @@ func TestGatewayFlagsToServeConfig_EmptyFlags(t *testing.T) {
 	assert.Empty(t, cfg.A2ADownstreamURL)
 	assert.Empty(t, cfg.PublicBaseURL)
 	assert.Nil(t, cfg.AllowedOrigins)
+	assert.Empty(t, cfg.DoctrineDir)
 }
 
 func TestAddGatewayFlags_RegistersAllFlags(t *testing.T) {
@@ -243,4 +246,20 @@ func TestResolveGatewayFlags_NoOverridesWhenEnvUnset(t *testing.T) {
 	assert.Equal(t, "cli-id", result.ConsensusID)
 	assert.Equal(t, "https://cli/consensus", result.ConsensusURL)
 	assert.Equal(t, "/cli/bootstrap.json", result.ConsensusBootstrap)
+}
+
+func TestResolveGatewayFlags_DoctrineDirEnvOverride(t *testing.T) {
+	t.Setenv("G8E_DOCTRINE_DIR", "/env/doctrine")
+
+	result := resolveGatewayFlags(GatewayFlags{})
+
+	assert.Equal(t, "/env/doctrine", result.DoctrineDir)
+}
+
+func TestResolveGatewayFlags_DoctrineDirCLITakesPrecedence(t *testing.T) {
+	t.Setenv("G8E_DOCTRINE_DIR", "/env/doctrine")
+
+	result := resolveGatewayFlags(GatewayFlags{DoctrineDir: "/cli/doctrine"})
+
+	assert.Equal(t, "/cli/doctrine", result.DoctrineDir)
 }
