@@ -1341,7 +1341,6 @@ func TestCommandServiceConfig_NoGatewayFields(t *testing.T) {
 	_ = gd.TransactionAudit
 	_ = gd.L3Notary
 	_ = gd.SignerStore
-	_ = gd.AppPolicyStore
 	_ = gd.ConsensusPolicyStore
 	_ = gd.FieldReader
 

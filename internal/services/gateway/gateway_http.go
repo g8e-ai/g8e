@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/consensus"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
+	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 )
 
@@ -48,6 +49,7 @@ type HTTPHandlerDependencies struct {
 	MCPGateway         *mcp.GatewayService
 	AppEnrollment      *AppEnrollmentService
 	Consensus          *consensus.ConsensusService
+	EnvProc            governance.EnvelopeProcessor
 	IsReady            func() bool
 	IsGovernanceReady  func() bool
 }
@@ -154,7 +156,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 
 	h.sseController = newSSEController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.KVStore, deps.Stores.SSEStore, deps.Pubsub, deps.Auth, deps.Responder, 0)
 	h.healthController = newHealthController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.StateRootSvc, deps.Responder, deps.IsReady, deps.IsGovernanceReady)
-	h.governanceController = newGovernanceController(deps.Cfg, deps.Logger, deps.Responder, deps.Consensus)
+	h.governanceController = newGovernanceController(deps.Cfg, deps.Logger, deps.Responder, deps.Consensus, deps.EnvProc)
 
 	// Build router once to avoid per-request overhead
 	h.router = h.buildPublicRouter()
@@ -180,15 +182,6 @@ func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (h *HTTPHandler) GetMCPGateway() *mcp.GatewayService {
 	return h.mcp
-}
-
-// SetConsensus sets the Consensus service for L2 consensus deliberation.
-// Called by the boot sequence after the ConsensusService is constructed.
-// Thread-safe via atomic.Pointer on GovernanceController — no router rebuild
-// needed because the consensus deliberate route is always registered and the
-// handler checks the atomic pointer at request time.
-func (h *HTTPHandler) SetConsensus(ts *consensus.ConsensusService) {
-	h.governanceController.SetConsensus(ts)
 }
 
 func (h *HTTPHandler) GetPasskeyHandler() *PasskeyHandler {

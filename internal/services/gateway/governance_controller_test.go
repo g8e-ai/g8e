@@ -29,15 +29,14 @@ import (
 
 // newTestGovernanceController creates a GovernanceController with minimal
 // dependencies for unit-testing the 503 guard logic. No consensus or envelope
-// processor is wired — the controller is in the partially-constructed state
-// that exists during the boot sequence before SetConsensus / SetEnvelopeProcessor
-// are called.
+// processor is wired — simulates a posture where these features are not
+// configured.
 func newTestGovernanceController(t *testing.T) *GovernanceController {
 	t.Helper()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	responder := response.NewWriter(logger)
-	return newGovernanceController(cfg, logger, responder, nil)
+	return newGovernanceController(cfg, logger, responder, nil, nil)
 }
 
 func TestConsensusDeliberate_NotConfigured_Returns503(t *testing.T) {
@@ -64,7 +63,7 @@ func TestGovernanceEnvelope_NotConfigured_Returns503_Unit(t *testing.T) {
 	require.Contains(t, w.Body.String(), constants.ErrEnvelopeProcessorNotInit.Error())
 }
 
-func TestGovernanceController_NoPanicDuringPartialConstruction(t *testing.T) {
+func TestGovernanceController_NoPanicWhenNotConfigured(t *testing.T) {
 	c := newTestGovernanceController(t)
 
 	const goroutines = 50

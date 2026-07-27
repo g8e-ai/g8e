@@ -20,7 +20,10 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 )
 
-// SimpleConsensusStore implements governance.ConsensusStore using a static map.
+// SimpleConsensusStore provides in-memory ConsensusPolicy lookup for tests.
+// It is adapted to governance.L2ConsensusPolicyStore via consensusStoreTestAdapter
+// in governance test code (the adapter lives in the governance package to avoid
+// an import cycle).
 type SimpleConsensusStore struct {
 	Consensus map[string]*models.ConsensusPolicy
 }

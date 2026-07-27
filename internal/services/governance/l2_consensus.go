@@ -20,15 +20,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	govtypes "github.com/g8e-ai/g8e/internal/governance"
-	"github.com/g8e-ai/g8e/internal/models"
 )
-
-// ConsensusStore defines the interface for loading ConsensusPolicy by ID.
-// This is the Consensus-specific store; the L4 Warden depends on the generic
-// L2ConsensusPolicyStore interface instead.
-type ConsensusStore interface {
-	GetConsensus(id string) (*models.ConsensusPolicy, error)
-}
 
 // L2ConsensusPolicy is the generic consensus policy consumed by the L4 Warden.
 // It is not tied to any specific consensus implementation (e.g., Consensus).

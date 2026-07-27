@@ -73,7 +73,6 @@ type GatewayModeService struct {
 	webSessionSvc      *WebSessionService
 	suspendedTxService *storage.SuspendedTransactionService
 	mcpGateway         *mcp.GatewayService
-	consensus          *consensus.ConsensusService
 	responder          *response.Writer
 	server             *http.Server
 	publicServer       *http.Server
@@ -261,10 +260,6 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		responder:          res,
 	}
 
-	if err := ls.initHandlersAndServers(); err != nil {
-		return nil, fmt.Errorf("gateway: failed to initialize handlers and servers: %w", err)
-	}
-
 	return ls, nil
 }
 
@@ -361,7 +356,13 @@ func detectBasicNonLoopbackIPv4Addresses() []net.IP {
 	return extraIPs
 }
 
-func (ls *GatewayModeService) initHandlersAndServers() error {
+// InitHTTPHandler creates the HTTP handler and servers with all dependencies
+// injected. This is the second phase of construction — call after wiring
+// late-bound dependencies (consensus service, envelope processor) that require
+// the base service to exist first. consensusSvc may be nil if the gateway
+// posture does not require L2 consensus. envProc may be nil if envelope
+// submission is not enabled.
+func (ls *GatewayModeService) InitHTTPHandler(consensusSvc *consensus.ConsensusService, envProc governance.EnvelopeProcessor) error {
 	cfg := ls.cfg
 	logger := ls.logger
 	pubsub := ls.pubsub
@@ -393,7 +394,8 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 		Responder:          ls.responder,
 		MCPGateway:         ls.mcpGateway,
 		AppEnrollment:      appEnrollment,
-		Consensus:          ls.consensus,
+		Consensus:          consensusSvc,
+		EnvProc:            envProc,
 		IsReady:            ls.IsReady,
 		IsGovernanceReady:  ls.IsGovernanceReady,
 	})
@@ -467,9 +469,20 @@ func (ls *GatewayModeService) GetSecretManager() (*SecretManager, error) {
 	return ls.db.GetSecretManager(), nil
 }
 
-// GetHTTPHandler returns the HTTP handler.
+// GetHTTPHandler returns the HTTP handler. Returns nil if InitHTTPHandler
+// has not been called yet.
 func (ls *GatewayModeService) GetHTTPHandler() *HTTPHandler {
 	return ls.handler
+}
+
+// GetMCPGateway returns the MCP gateway service.
+func (ls *GatewayModeService) GetMCPGateway() *mcp.GatewayService {
+	return ls.mcpGateway
+}
+
+// GetGatewayWebSocketHandler returns the pub/sub websocket handler.
+func (ls *GatewayModeService) GetGatewayWebSocketHandler() *GatewayWebSocketHandler {
+	return ls.pubsub
 }
 
 // GetHTTPPort returns the actual HTTP port the server is listening on.
@@ -492,17 +505,6 @@ func (ls *GatewayModeService) GetHTTPSPort() int {
 	_, portStr, _ := net.SplitHostPort(ls.publicServer.Addr)
 	port, _ := strconv.Atoi(portStr)
 	return port
-}
-
-// SetConsensus sets the Consensus service for L2 consensus deliberation.
-// This is called by the boot sequence after the ConsensusService is constructed.
-// The Consensus is registered on the mTLS mux and the HTTP deliberator is wired
-// into the MCP gateway for consensus and notary postures.
-func (ls *GatewayModeService) SetConsensus(ts *consensus.ConsensusService) {
-	ls.consensus = ts
-	if ls.handler != nil {
-		ls.handler.SetConsensus(ts)
-	}
 }
 
 func (ls *GatewayModeService) IsReady() bool {

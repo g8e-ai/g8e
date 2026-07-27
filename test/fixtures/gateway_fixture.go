@@ -248,7 +248,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	})
 	require.NoError(t, err)
 
-	mcpGateway := ls.GetHTTPHandler().GetMCPGateway()
+	mcpGateway := ls.GetMCPGateway()
 	require.NotNil(t, mcpGateway)
 
 	scrubbingSvc, err := scrubbing.NewScrubbingService(context.Background(), scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil)
@@ -260,7 +260,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 			Logger:             testutil.NewTestLogger(),
 			Execution:          execSvc,
 			FileEdit:           fileEditSvc,
-			PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetGatewayWebSocketHandler()),
+			PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetGatewayWebSocketHandler()),
 			Scrubbing:          scrubbingSvc,
 			ActuatorSigningKey: ActuatorPriv,
 			ActuatorKeyID:      ActuatorKeyID,
@@ -277,7 +277,6 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		MCPGateway: mcpGateway,
 	})
 	require.NoError(t, err)
-	ls.SetEnvelopeProcessor(cmdSvc)
 
 	// The MCP gateway's runtime governance dependencies are wired by
 	// NewGatewayOperatorPubSubService (mcpGateway was passed in through
@@ -285,15 +284,20 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 
 	// Auto-wire a Consensus for postures that require L2 signatures (consensus, notary).
 	// Without L2 votes, the Warden rejects at L2 before L3 is ever checked.
+	var consensusSvc *consensus.ConsensusService
 	if posture == config.PostureConsensus || posture == config.PostureNotary {
-		SetupConsensus(t, &GatewayFixture{
+		cs := SetupConsensus(t, &GatewayFixture{
 			Config:        cfg,
 			Service:       ls,
 			MCPGateway:    mcpGateway,
 			ActuatorPriv:  ActuatorPriv,
 			ActuatorKeyID: ActuatorKeyID,
 		}, "test-consensus", 1, 1, 1)
+		consensusSvc = cs.Service
 	}
+
+	// Phase 2: create HTTP handler and servers with all deps injected.
+	require.NoError(t, ls.InitHTTPHandler(consensusSvc, cmdSvc))
 
 	// Seed platform_settings required for health check
 	err = ls.GetStores().DocStore.DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
@@ -646,8 +650,8 @@ type ConsensusSetup struct {
 // posture integration tests. It generates nMembers Ed25519 key pairs, registers each
 // member's public key as a TrustedSigner, creates a ConsensusPolicy in the ConsensusStore,
 // constructs a ConsensusService via the shared consensus.NewConsensusFromPolicy factory,
-// and wires it into both the gateway service (SetConsensus) and the MCP gateway
-// (SetL2ConsensusDeliberator).
+// and wires it into the MCP gateway (SetL2ConsensusDeliberator). The returned
+// ConsensusSetup.Service is passed to InitHTTPHandler by the caller.
 //
 // If nServiceMembers < nMembers, only the first nServiceMembers are given private keys
 // — the remaining policy members exist in the store but cannot vote (their keys resolve
@@ -709,7 +713,6 @@ func SetupConsensus(t *testing.T, f *GatewayFixture, consensusID string, nMember
 	consensusSvc, err := consensus.NewConsensusFromPolicy(&policy, keyProvider, doctrine, testutil.NewTestLogger(), responder)
 	require.NoError(t, err)
 
-	f.Service.SetConsensus(consensusSvc)
 	f.MCPGateway.SetL2ConsensusDeliberator(consensus.NewLocalDeliberator(consensusSvc))
 
 	return &ConsensusSetup{

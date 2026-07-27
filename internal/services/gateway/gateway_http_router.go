@@ -109,9 +109,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.Handle(constants.APIPaths.AdminConsensusByID, http.HandlerFunc(h.adminController.handleDeleteConsensus))
 
 	// Consensus deliberate endpoint (mTLS-guarded, enrolled principal).
-	// Always registered — the handler checks the atomic pointer and returns
-	// 503 if consensus is not yet wired, eliminating the need for a router
-	// rebuild when SetConsensus is called later in the boot sequence.
+	// Returns 503 if consensus is not configured for the current posture.
 	mux.HandleFunc(constants.APIPaths.ConsensusDeliberate, h.governanceController.handleConsensusDeliberate)
 
 	// Rate-limited governance envelope

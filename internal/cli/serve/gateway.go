@@ -225,11 +225,11 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	}
 
 	// Loopback Pub/Sub for in-process command dispatch
-	loopbackClient := pubsub.NewInProcessPubSubClient(svc.GetHTTPHandler().GetGatewayWebSocketHandler())
+	loopbackClient := pubsub.NewInProcessPubSubClient(svc.GetGatewayWebSocketHandler())
 
 	// Resolve the MCP gateway up-front so the pubsub command service can
 	// reach it for Actuator egress dispatch on verified MCP_CALL transactions.
-	mcpSvc := svc.GetHTTPHandler().GetMCPGateway()
+	mcpSvc := svc.GetMCPGateway()
 
 	// Get the GatewayDBService's AuditStore for full audit storage
 	// This ensures ActionReceipts are persisted in the receipts table
@@ -271,11 +271,6 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		return fmt.Errorf("gateway: initialize command service: %w", err)
 	}
 
-	// Wire the synchronous fail-closed mutation gate into the gateway HTTP
-	// surface. Once set, BYO clients can POST GovernanceEnvelope envelopes to
-	// /api/v1/governance/envelopes and receive a signed ActionReceipt.
-	svc.SetEnvelopeProcessor(cmdSvc)
-
 	// The MCP gateway's runtime governance dependencies (gateway processor,
 	// signing identity, audit logger, etc.) are wired by
 	// NewGatewayOperatorPubSubService, which received mcpSvc through
@@ -286,14 +281,21 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	// HTTP handler (for remote deliberation calls) and as the local deliberator
 	// (for in-process envelope processing). Under doctrine posture, the
 	// Consensus is not constructed.
+	var consensusSvc *consensus.ConsensusService
 	if (cfg.Posture == config.PostureConsensus || cfg.Posture == config.PostureNotary) && cfg.ConsensusID != "" {
-		consensusSvc, err := ConsensusBootstrap(svc, cfg.ConsensusID, actuatorPriv, actuatorKeyID, cfg.SecretsDir, logger)
+		consensusSvc, err = ConsensusBootstrap(svc, cfg.ConsensusID, actuatorPriv, actuatorKeyID, cfg.SecretsDir, logger)
 		if err != nil {
 			return fmt.Errorf("gateway: bootstrap consensus service: %w", err)
 		}
-		svc.SetConsensus(consensusSvc)
 		mcpSvc.SetL2ConsensusDeliberator(consensus.NewLocalDeliberator(consensusSvc))
 		logger.Info("Consensus service bootstrapped", "consensus_id", cfg.ConsensusID)
+	}
+
+	// Phase 2: create HTTP handler and servers with all dependencies injected.
+	// This ensures consensus and envelope processor are wired before any
+	// request can be served, eliminating the need for 503 fail-closed guards.
+	if err := svc.InitHTTPHandler(consensusSvc, cmdSvc); err != nil {
+		return fmt.Errorf("gateway: initialize HTTP handler: %w", err)
 	}
 
 	var wg sync.WaitGroup
