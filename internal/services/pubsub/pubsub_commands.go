@@ -92,9 +92,9 @@ type OperatorPubSubService struct {
 // GovernanceDeps holds the governance dependencies required for transaction
 // verification in both outbound and gateway modes. These interfaces are
 // implemented by CanonicalDBService (ReplayStore, StateRootProvider,
-// TransactionAuditStore) and the governance L3Notary. FieldReader is
-// gateway-only (nil in outbound mode) and backs the MCP gateway's read_field
-// operation.
+// TransactionAuditStore) and the governance L3Notary. In outbound mode,
+// ConsensusPolicyStore and FieldReader are wired with no-op implementations
+// (NoopConsensusPolicyStore, NoopFieldReader) to eliminate nil fields.
 type GovernanceDeps struct {
 	ReplayStore          governance.ReplayStore
 	StateRootProvider    governance.StateRootProvider
@@ -137,8 +137,8 @@ type CommandServiceConfig struct {
 // are shared between gateway construction and the pubsub command service.
 type GatewayCommandServiceConfig struct {
 	CommandServiceConfig
-	GovDeps              *GovernanceDeps
-	MCPGateway           *mcp.GatewayService
+	GovDeps                *GovernanceDeps
+	MCPGateway             *mcp.GatewayService
 	L2ConsensusDeliberator mcp.L2ConsensusDeliberator
 }
 
@@ -215,6 +215,14 @@ func NewOperatorPubSubService(c CommandServiceConfig, govDeps GovernanceDeps) (*
 	// L3Notary is optional for outbound mode (platform verifies L3)
 	// Mutations requiring L3 will fail-closed at TransactionVerifier if L3Notary is nil
 
+	// Provide no-op defaults for optional governance deps to eliminate nil fields
+	if govDeps.ConsensusPolicyStore == nil {
+		govDeps.ConsensusPolicyStore = &governance.NoopConsensusPolicyStore{}
+	}
+	if govDeps.FieldReader == nil {
+		govDeps.FieldReader = &mcp.NoopFieldReader{}
+	}
+
 	// Initialize governance services after trusted signers are loaded
 	rs.initializeGovernance(c, govDeps)
 
@@ -253,20 +261,17 @@ func NewGatewayOperatorPubSubService(c GatewayCommandServiceConfig) (*OperatorPu
 			auditLogger = &pubsubAuditLogger{store: c.AuditStore, logger: c.Logger}
 		}
 
-		var fieldReader mcp.FieldReader
-		if c.GovDeps.FieldReader != nil {
-			fieldReader = c.GovDeps.FieldReader
-		}
+		fieldReader := c.GovDeps.FieldReader
 
 		rs.mcpGateway.SetRuntimeDeps(mcp.RuntimeDependencies{
-			EnvProc:              rs,
-			StateRootProvider:    c.GovDeps.StateRootProvider,
-			SigningKey:           c.ActuatorSigningKey,
-			KeyID:                c.ActuatorKeyID,
-			DownstreamURL:        c.Config.Gateway.MCPDownstreamURL,
-			DBService:            fieldReader,
-			SessionValidator:     rs,
-			AuditLogger:          auditLogger,
+			EnvProc:                rs,
+			StateRootProvider:      c.GovDeps.StateRootProvider,
+			SigningKey:             c.ActuatorSigningKey,
+			KeyID:                  c.ActuatorKeyID,
+			DownstreamURL:          c.Config.Gateway.MCPDownstreamURL,
+			DBService:              fieldReader,
+			SessionValidator:       rs,
+			AuditLogger:            auditLogger,
 			L2ConsensusDeliberator: c.L2ConsensusDeliberator,
 		})
 	}

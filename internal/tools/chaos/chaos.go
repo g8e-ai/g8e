@@ -517,7 +517,7 @@ func Run(cfg Config) error {
 		replayStore,
 		stateRootProvider,
 		&governance.FailClosedSignerStore{Signers: trustedSigners},
-		nil, // ConsensusStore not used in chaos tester
+		&governance.NoopConsensusPolicyStore{}, // consensus not used in chaos tester
 		l3Notary,
 		doctrine,
 		knownActionTypes,

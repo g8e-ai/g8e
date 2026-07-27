@@ -208,7 +208,7 @@ func TestAuthMiddleware(t *testing.T) {
 	}
 	settingsBytes, err := json.Marshal(settings)
 	require.NoError(t, err)
-	err = h.dbController.docStore.DocSet("settings", "platform_settings", settingsBytes)
+	err = h.dataController.docStore.DocSet("settings", "platform_settings", settingsBytes)
 	require.NoError(t, err)
 
 	handler := h.auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -246,7 +246,7 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 	}))
 
 	t.Run("Uninitialized token - deny unauthenticated access", func(t *testing.T) {
-		h.dbController.docStore.DocDelete("settings", "platform_settings")
+		h.dataController.docStore.DocDelete("settings", "platform_settings")
 
 		paths := []string{
 			"/db/settings/platform_settings",
@@ -273,7 +273,7 @@ func TestHandleHealth(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 
 	t.Run("Returns 503 when platform_settings not found", func(t *testing.T) {
-		h.dbController.docStore.DocDelete("settings", "platform_settings")
+		h.dataController.docStore.DocDelete("settings", "platform_settings")
 		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 		rr := httptest.NewRecorder()
 
@@ -292,7 +292,7 @@ func TestHandleHealth(t *testing.T) {
 		}
 		settingsBytes, err := json.Marshal(settings)
 		require.NoError(t, err)
-		err = h.dbController.docStore.DocSet("settings", "platform_settings", settingsBytes)
+		err = h.dataController.docStore.DocSet("settings", "platform_settings", settingsBytes)
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
@@ -320,7 +320,7 @@ func TestHandleHealth_StateRootFailure(t *testing.T) {
 	}
 	settingsBytes, err := json.Marshal(settings)
 	require.NoError(t, err)
-	err = h.dbController.docStore.DocSet("settings", "platform_settings", settingsBytes)
+	err = h.dataController.docStore.DocSet("settings", "platform_settings", settingsBytes)
 	require.NoError(t, err)
 
 	// Force state root calculation to fail by dropping a table it queries
@@ -413,9 +413,9 @@ func TestNewHTTPHandler(t *testing.T) {
 	assert.NotNil(t, h)
 	assert.NotNil(t, h.cfg)
 	assert.NotNil(t, h.logger)
-	assert.NotNil(t, h.dbController.docStore)
-	assert.NotNil(t, h.dbController.kvStore)
-	assert.NotNil(t, h.dbController.sseStore)
+	assert.NotNil(t, h.dataController.docStore)
+	assert.NotNil(t, h.dataController.kvStore)
+	assert.NotNil(t, h.dataController.sseStore)
 	assert.NotNil(t, h.pubsub)
 	assert.NotNil(t, h.auth)
 	assert.NotNil(t, h.pkiController.pki)
@@ -426,7 +426,7 @@ func TestNewHTTPHandler(t *testing.T) {
 	assert.NotNil(t, h.responder)
 	assert.NotNil(t, h.mcp)
 	assert.NotNil(t, h.pkiController)
-	assert.NotNil(t, h.dbController)
+	assert.NotNil(t, h.dataController)
 	assert.NotNil(t, h.bootstrapController)
 	assert.NotNil(t, h.enrollmentTokenController)
 	assert.NotNil(t, h.userController)
@@ -547,7 +547,7 @@ func TestCLICertBoundToOperator(t *testing.T) {
 		ExpiresAt:         time.Now().Add(24 * time.Hour),
 	}
 	b, _ := json.Marshal(cliSess)
-	require.NoError(t, h.dbController.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b))
+	require.NoError(t, h.dataController.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b))
 
 	wid := protocol.NewWorkloadIdentity()
 	cliURI, err := wid.CLISPIFFEURL(userID, cliSessionID)
@@ -587,7 +587,7 @@ func TestCLICertBoundToOperator(t *testing.T) {
 			ExpiresAt:         time.Now().Add(-1 * time.Hour),
 		}
 		eb, _ := json.Marshal(expired)
-		require.NoError(t, h.dbController.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), "cli-expired", eb))
+		require.NoError(t, h.dataController.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), "cli-expired", eb))
 		expiredURI, err := wid.CLISPIFFEURL(userID, "cli-expired")
 		require.NoError(t, err)
 		bound, err := h.auth.cliCertBoundToOperator(
@@ -853,7 +853,7 @@ func TestHTTPHandler_handleInternalSSEStream_CLIMTLSAuth(t *testing.T) {
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 	}
 	b, _ := json.Marshal(cliSess)
-	require.NoError(t, h.dbController.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b))
+	require.NoError(t, h.dataController.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b))
 
 	t.Run("CLI mTLS auth with matching user ID passes auth", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)

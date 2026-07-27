@@ -65,7 +65,9 @@ type HTTPHandler struct {
 	mcp       *mcp.GatewayService
 	// Controllers for domain-specific endpoints
 	pkiController             *PKIController
-	dbController              *DBController
+	auditController           *AuditController
+	dataController            *DataController
+	signerController          *SignerController
 	bootstrapController       *BootstrapController
 	enrollmentTokenController *EnrollmentTokenController
 	userController            *UserController
@@ -105,18 +107,27 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 
 	// Initialize controllers
 	h.pkiController = newPKIController(deps.Cfg, deps.Logger, deps.PKI, deps.AppEnrollment, deps.Reg, deps.Responder)
-	h.dbController = newDBController(DBControllerDeps{
+	h.auditController = newAuditController(AuditControllerDeps{
+		Cfg:        deps.Cfg,
+		Logger:     deps.Logger,
+		AuditStore: deps.Stores.AuditStore,
+		Responder:  deps.Responder,
+	})
+	h.dataController = newDataController(DataControllerDeps{
+		Cfg:       deps.Cfg,
+		Logger:    deps.Logger,
+		DocStore:  deps.Stores.DocStore,
+		KVStore:   deps.Stores.KVStore,
+		SSEStore:  deps.Stores.SSEStore,
+		BlobStore: deps.Stores.BlobStore,
+		Pubsub:    deps.Pubsub,
+		Responder: deps.Responder,
+	})
+	h.signerController = newSignerController(SignerControllerDeps{
 		Cfg:         deps.Cfg,
 		Logger:      deps.Logger,
 		DocStore:    deps.Stores.DocStore,
-		KVStore:     deps.Stores.KVStore,
-		SSEStore:    deps.Stores.SSEStore,
-		BlobStore:   deps.Stores.BlobStore,
-		AuditStore:  deps.Stores.AuditStore,
 		SignerStore: deps.Stores.SignerStore,
-		Auth:        deps.Auth,
-		Pubsub:      deps.Pubsub,
-		UserSvc:     deps.UserSvc,
 		Responder:   deps.Responder,
 	})
 

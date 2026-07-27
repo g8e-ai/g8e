@@ -39,6 +39,15 @@ type L2ConsensusPolicyStore interface {
 	GetConsensusPolicy(id string) (*L2ConsensusPolicy, error)
 }
 
+// NoopConsensusPolicyStore is a no-op implementation of L2ConsensusPolicyStore.
+// It returns nil (no policy found) with no error, eliminating nil checks at
+// call sites. Used in outbound mode where consensus is not configured.
+type NoopConsensusPolicyStore struct{}
+
+func (NoopConsensusPolicyStore) GetConsensusPolicy(string) (*L2ConsensusPolicy, error) {
+	return nil, nil
+}
+
 // verifyL2Posture verifies L2 (machine consensus) votes against the consensus
 // policy. Returns true if L2 consensus was achieved, false if no L2 votes were
 // present (and not required by posture). Returns an error if L2 is required by
@@ -58,14 +67,6 @@ func (tv *L4Warden) verifyL2Posture(envelope *govtypes.GovernanceEnvelope, compu
 		if tv.posture.RequiresL2Signature() {
 			tv.logger.Error("Signer store not configured but required by posture", "posture", tv.posture.Name())
 			return false, constants.ErrTxL2SignerStoreNotConfigured
-		}
-		return false, nil
-	}
-
-	if tv.consensusPolicyStore == nil {
-		if tv.posture.RequiresL2Signature() {
-			tv.logger.Error("L2 consensus policy store not configured but required by posture", "posture", tv.posture.Name())
-			return false, constants.ErrTxL2ConsensusNotConfigured
 		}
 		return false, nil
 	}

@@ -365,4 +365,3 @@ func TestVerifyEnvelopeIdentityBinding_NoIdentityFields_ReturnsNil(t *testing.T)
 	err := verifyEnvelopeIdentityBinding(req, envelope)
 	require.NoError(t, err, "envelope without identity fields should pass through to processor")
 }
-

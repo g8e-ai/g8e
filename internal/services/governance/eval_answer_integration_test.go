@@ -48,8 +48,8 @@ func TestEvalAnswerVerification(t *testing.T) {
 		testutil.NewStatefulMockReplayStore(),
 		testutil.NewMockStateRootProvider("test-state-root-v1"),
 		&FailClosedSignerStore{Signers: map[string]ed25519.PublicKey{"test-key-id": pubKey}},
-		nil, // consensus policy store not used in tests
-		nil, // L3 verifier not needed for EVAL_ANSWER (non-mutation)
+		&NoopConsensusPolicyStore{}, // consensus policy store not used in tests
+		nil,                         // L3 verifier not needed for EVAL_ANSWER (non-mutation)
 		NewL1Doctrine(),
 		[]constants.ActionType{constants.ActionTypeEvalAnswer},
 		"doctrine",

@@ -128,6 +128,15 @@ type FieldReader interface {
 	GetField(collection, id, fieldPath string) (FieldValue, error)
 }
 
+// NoopFieldReader is a no-op implementation of FieldReader.
+// It returns an empty FieldValue with no error, eliminating nil checks at
+// call sites. Used in outbound mode where no MCP gateway is configured.
+type NoopFieldReader struct{}
+
+func (NoopFieldReader) GetField(string, string, string) (FieldValue, error) {
+	return FieldValue{}, nil
+}
+
 // SessionValidator validates Operator sessions for L3 authorization
 type SessionValidator interface {
 	ValidateSession(operatorSessionID string) (bool, error)
@@ -183,14 +192,14 @@ type Dependencies struct {
 // before the first request, via SetRuntimeDeps. This replaces the individual
 // SetDependencies/SetDBService/SetSessionValidator/SetAuditLogger setters.
 type RuntimeDependencies struct {
-	EnvProc              governance.EnvelopeProcessor
-	StateRootProvider    StateRootProvider
-	SigningKey           ed25519.PrivateKey
-	KeyID                string
-	DownstreamURL        string
-	DBService            FieldReader
-	SessionValidator     SessionValidator
-	AuditLogger          AuditLogger
+	EnvProc                governance.EnvelopeProcessor
+	StateRootProvider      StateRootProvider
+	SigningKey             ed25519.PrivateKey
+	KeyID                  string
+	DownstreamURL          string
+	DBService              FieldReader
+	SessionValidator       SessionValidator
+	AuditLogger            AuditLogger
 	L2ConsensusDeliberator L2ConsensusDeliberator
 }
 

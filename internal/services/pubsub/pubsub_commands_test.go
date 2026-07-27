@@ -1355,3 +1355,25 @@ func TestCommandServiceConfig_NoGatewayFields(t *testing.T) {
 	_ = gw.Config
 	_ = gw.Logger
 }
+
+// TestNewOperatorPubSubService_NilOptionalGovDeps_DefaultsToNoop verifies that
+// nil ConsensusPolicyStore and FieldReader in GovernanceDeps are replaced with
+// no-op implementations during construction, eliminating nil fields.
+func TestNewOperatorPubSubService_NilOptionalGovDeps_DefaultsToNoop(t *testing.T) {
+	t.Parallel()
+	cfg := testutil.NewTestConfig(t)
+	svc, err := NewOperatorPubSubService(CommandServiceConfig{
+		Config:       cfg,
+		Logger:       testutil.NewTestLogger(),
+		PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
+	}, GovernanceDeps{
+		ReplayStore:       &testutil.MockReplayStore{},
+		StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+		TransactionAudit:  &testutil.MockTransactionAudit{},
+		L3Notary:          &testutil.MockL3Notary{},
+		// ConsensusPolicyStore and FieldReader intentionally left nil
+	})
+	require.NoError(t, err)
+	require.NotNil(t, svc)
+	assert.NotNil(t, svc.l4warden, "l4warden must be initialized with no-op consensus policy store")
+}
