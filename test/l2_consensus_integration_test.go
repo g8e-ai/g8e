@@ -209,12 +209,12 @@ func TestL2Consensus_QuorumReached(t *testing.T) {
 	// 3-member consensus at quorum 2. All 3 members hold private keys, so all 3
 	// can vote — quorum is met.
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName:              "consensus-quorum-reached",
-		Posture:               config.PostureConsensus,
-		AllowTestPortZero:     true,
-		ConsensusID:           "quorum-consensus",
-		ConsensusNMembers:     3,
-		ConsensusQuorum:       2,
+		TestName:                 "consensus-quorum-reached",
+		Posture:                  config.PostureConsensus,
+		AllowTestPortZero:        true,
+		ConsensusID:              "quorum-consensus",
+		ConsensusNMembers:        3,
+		ConsensusQuorum:          2,
 		ConsensusNServiceMembers: 3,
 	})
 
@@ -250,12 +250,12 @@ func TestL2Consensus_QuorumNotReached(t *testing.T) {
 	// 3 members in policy, quorum 2, but only 1 service member has a private key.
 	// Only 1 vote will be produced — below quorum threshold of 2.
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName:              "consensus-quorum-not-reached",
-		Posture:               config.PostureConsensus,
-		AllowTestPortZero:     true,
-		ConsensusID:           "no-quorum-consensus",
-		ConsensusNMembers:     3,
-		ConsensusQuorum:       2,
+		TestName:                 "consensus-quorum-not-reached",
+		Posture:                  config.PostureConsensus,
+		AllowTestPortZero:        true,
+		ConsensusID:              "no-quorum-consensus",
+		ConsensusNMembers:        3,
+		ConsensusQuorum:          2,
 		ConsensusNServiceMembers: 1,
 	})
 

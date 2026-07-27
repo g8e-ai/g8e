@@ -89,9 +89,9 @@ type GatewayFixtureOptions struct {
 	// Consensus configuration for consensus/notary postures. When zero-valued,
 	// defaults to a single-member consensus (nMembers=1, quorum=1, nServiceMembers=1)
 	// with consensusID "test-consensus".
-	ConsensusID           string
-	ConsensusNMembers     int
-	ConsensusQuorum       int
+	ConsensusID              string
+	ConsensusNMembers        int
+	ConsensusQuorum          int
 	ConsensusNServiceMembers int
 }
 

@@ -277,8 +277,8 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 			ActuatorSigningKey: actuatorPriv,
 			ActuatorKeyID:      actuatorKeyID,
 		},
-		GovDeps:              govDeps,
-		MCPGateway:           mcpSvc,
+		GovDeps:                govDeps,
+		MCPGateway:             mcpSvc,
 		L2ConsensusDeliberator: l2Deliberator,
 	}
 
