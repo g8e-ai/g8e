@@ -205,21 +205,21 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 	}
 
 	enabledConsensus2of2 := &models.ConsensusPolicy{
-		ID:              "trib-1",
+		ID:              "consensus-1",
 		MemberAppIDs:    []string{"member-1", "member-2"},
 		Quorum:          2,
 		RequireDistinct: true,
 		Enabled:         true,
 	}
 	enabledConsensus1of2 := &models.ConsensusPolicy{
-		ID:              "trib-2",
+		ID:              "consensus-2",
 		MemberAppIDs:    []string{"member-1", "member-2"},
 		Quorum:          1,
 		RequireDistinct: true,
 		Enabled:         true,
 	}
 	disabledConsensus := &models.ConsensusPolicy{
-		ID:              "trib-disabled",
+		ID:              "consensus-disabled",
 		MemberAppIDs:    []string{"member-1", "member-2"},
 		Quorum:          2,
 		RequireDistinct: true,
@@ -268,7 +268,6 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 			testutil.NewMockStateRootProvider("root-1"),
 			&FailClosedSignerStore{Signers: signers},
 			&consensusStoreTestAdapter{Inner: &governancetest.SimpleConsensusStore{Consensus: consensus}},
-			nil,
 			testutil.NewConfigurableMockL3Notary(true),
 			NewL1Doctrine(),
 			constants.AllActionTypes,
@@ -286,9 +285,9 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 	}{
 		{
 			name:     "2-of-2 quorum pass",
-			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"trib-1": enabledConsensus2of2}),
+			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"consensus-1": enabledConsensus2of2}),
 			env: func() *govtypes.GovernanceEnvelope {
-				env := buildEnv("2of2pass", "trib-1", nil)
+				env := buildEnv("2of2pass", "consensus-1", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{
 					signL2Vote(priv1, "member-1", hash, true),
@@ -301,9 +300,9 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		},
 		{
 			name:     "1 valid of quorum-2 fails",
-			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"trib-1": enabledConsensus2of2}),
+			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"consensus-1": enabledConsensus2of2}),
 			env: func() *govtypes.GovernanceEnvelope {
-				env := buildEnv("1of2fail", "trib-1", nil)
+				env := buildEnv("1of2fail", "consensus-1", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{
 					signL2Vote(priv1, "member-1", hash, true),
@@ -315,9 +314,9 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		},
 		{
 			name:     "duplicate signer with require_distinct",
-			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"trib-1": enabledConsensus2of2}),
+			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"consensus-1": enabledConsensus2of2}),
 			env: func() *govtypes.GovernanceEnvelope {
-				env := buildEnv("dupsign", "trib-1", nil)
+				env := buildEnv("dupsign", "consensus-1", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{
 					signL2Vote(priv1, "member-1", hash, true),
@@ -330,9 +329,9 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		},
 		{
 			name:     "false vote does not count toward quorum",
-			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"trib-1": enabledConsensus2of2}),
+			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"consensus-1": enabledConsensus2of2}),
 			env: func() *govtypes.GovernanceEnvelope {
-				env := buildEnv("falsevote", "trib-1", nil)
+				env := buildEnv("falsevote", "consensus-1", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{
 					signL2Vote(priv1, "member-1", hash, true),
@@ -345,9 +344,9 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		},
 		{
 			name:     "unknown signer ignored, quorum-1 passes",
-			verifier: makeVerifier(partialSigners, map[string]*models.ConsensusPolicy{"trib-2": enabledConsensus1of2}),
+			verifier: makeVerifier(partialSigners, map[string]*models.ConsensusPolicy{"consensus-2": enabledConsensus1of2}),
 			env: func() *govtypes.GovernanceEnvelope {
-				env := buildEnv("unknownsigner", "trib-2", nil)
+				env := buildEnv("unknownsigner", "consensus-2", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{
 					signL2Vote(priv1, "member-1", hash, true),
@@ -360,16 +359,16 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		},
 		{
 			name:     "empty votes under consensus posture",
-			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"trib-1": enabledConsensus2of2}),
-			env:      buildEnv("emptyvotes", "trib-1", []*commonv1.L2Vote{}),
+			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"consensus-1": enabledConsensus2of2}),
+			env:      buildEnv("emptyvotes", "consensus-1", []*commonv1.L2Vote{}),
 			wantErr:  ErrL2SignatureMissing,
 			wantL2:   false,
 		},
 		{
 			name:     "disabled consensus policy",
-			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"trib-disabled": disabledConsensus}),
+			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"consensus-disabled": disabledConsensus}),
 			env: func() *govtypes.GovernanceEnvelope {
-				env := buildEnv("disabledtrib", "trib-disabled", nil)
+				env := buildEnv("disabled-consensus", "consensus-disabled", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{
 					signL2Vote(priv1, "member-1", hash, true),
@@ -382,9 +381,9 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		},
 		{
 			name:     "unknown consensus ID",
-			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"trib-1": enabledConsensus2of2}),
+			verifier: makeVerifier(allSigners, map[string]*models.ConsensusPolicy{"consensus-1": enabledConsensus2of2}),
 			env: func() *govtypes.GovernanceEnvelope {
-				env := buildEnv("unknowntrib", "nonexistent-trib", nil)
+				env := buildEnv("unknown-consensus", "nonexistent-consensus", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{
 					signL2Vote(priv1, "member-1", hash, true),

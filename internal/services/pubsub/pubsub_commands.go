@@ -101,7 +101,6 @@ type GovernanceDeps struct {
 	TransactionAudit     governance.TransactionAuditStore
 	L3Notary             governance.L3Notary
 	SignerStore          governance.SignerStore
-	AppPolicyStore       governance.AppPolicyStore
 	ConsensusPolicyStore governance.L2ConsensusPolicyStore
 	FieldReader          mcp.FieldReader
 	Doctrine             *governance.L1Doctrine
@@ -310,7 +309,6 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, go
 		govDeps.StateRootProvider,
 		rs.signerStore,
 		govDeps.ConsensusPolicyStore,
-		govDeps.AppPolicyStore,
 		govDeps.L3Notary,
 		doctrine,
 		knownActionTypes,

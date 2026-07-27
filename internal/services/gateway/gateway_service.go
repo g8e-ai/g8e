@@ -100,6 +100,10 @@ func newGatewayServiceBuilder(cfg *config.Config, fileSvc fs.RuntimeFileService,
 }
 
 // build assembles the GatewayModeService from the builder's configuration.
+// SecretManager lifecycle: sm is obtained from CanonicalDBService via
+// GetSecretManager() and passed to PKIAuthority, but is not retained on
+// GatewayModeService. CanonicalDBService owns the SecretManager lifecycle
+// (initialized in initSchema, closed in CanonicalDBService.Close).
 func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	cfg := b.cfg
 	logger := b.logger
@@ -541,7 +545,6 @@ func (ls *GatewayModeService) GetGovernanceDeps() *pubsub.GovernanceDeps {
 		TransactionAudit:     ls.stores.DocStore,
 		L3Notary:             l3Notary,
 		SignerStore:          ls.stores.SignerStore,
-		AppPolicyStore:       ls.stores.AppPolicyStore,
 		ConsensusPolicyStore: ls.stores.ConsensusStore,
 		FieldReader:          ls.stores.DocStore,
 		Doctrine:             ls.doctrine,

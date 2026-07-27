@@ -183,7 +183,6 @@ func TestL4Warden_Posture_And_Doctrine(t *testing.T) {
 		&governancetest.SimpleStateRootProvider{Root: "root"},
 		&FailClosedSignerStore{},
 		&consensusStoreTestAdapter{Inner: &governancetest.SimpleConsensusStore{}},
-		&governancetest.SimpleAppPolicyStore{},
 		nil,
 		NewL1Doctrine(),
 		[]constants.ActionType{constants.ActionTypeFileEdit},

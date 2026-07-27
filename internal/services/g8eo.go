@@ -319,7 +319,6 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		StateRootProvider: stateRootProvider,
 		TransactionAudit:  transactionAudit,
 		SignerStore:       signerStore,
-		AppPolicyStore:    vs.gatewayStores.AppPolicyStore,
 		L3Notary:          cliL3Notary,
 	}
 

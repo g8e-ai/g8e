@@ -53,7 +53,6 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 				Enabled:         true,
 			},
 		}}},
-		nil, // AppPolicyStore not used in tests
 		l3Notary,
 		NewL1Doctrine(),          // doctrine required
 		constants.AllActionTypes, // Use SSOT for action types
@@ -221,8 +220,8 @@ func TestNewGovernancePosture_AcceptsValidPostures(t *testing.T) {
 	}
 }
 
-// createVerifierWithAppPolicyStore creates a L4Warden with a custom AppPolicyStore.
-func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStore, replayStore ReplayStore, stateRootProvider StateRootProvider, l3Notary L3Notary) (*L4Warden, ed25519.PrivateKey) {
+// createVerifierWithAppPolicyStore creates a L4Warden with a custom signer key ID.
+func createVerifierWithAppPolicyStore(t *testing.T, replayStore ReplayStore, stateRootProvider StateRootProvider, l3Notary L3Notary) (*L4Warden, ed25519.PrivateKey) {
 	t.Helper()
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
@@ -242,7 +241,6 @@ func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStor
 				Enabled:         true,
 			},
 		}}},
-		appPolicyStore,
 		l3Notary,
 		NewL1Doctrine(),
 		constants.AllActionTypes,

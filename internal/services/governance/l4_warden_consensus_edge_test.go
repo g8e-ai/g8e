@@ -56,7 +56,6 @@ func TestL4Warden_ConsensusPolicyStoreError_FailClosed(t *testing.T) {
 		testutil.NewMockStateRootProvider("root-1"),
 		&FailClosedSignerStore{Signers: map[string]ed25519.PublicKey{"member-1": pub}},
 		&errorConsensusPolicyStore{},
-		nil,
 		testutil.NewConfigurableMockL3Notary(true),
 		NewL1Doctrine(),
 		constants.AllActionTypes,
@@ -104,7 +103,7 @@ func TestL4Warden_L2SplitVote_QuorumNotMet(t *testing.T) {
 		"member-3": pub3,
 	}
 	consensus3of3 := &models.ConsensusPolicy{
-		ID:              "split-trib",
+		ID:              "split-consensus",
 		MemberAppIDs:    []string{"member-1", "member-2", "member-3"},
 		Quorum:          3,
 		RequireDistinct: true,
@@ -116,8 +115,7 @@ func TestL4Warden_L2SplitVote_QuorumNotMet(t *testing.T) {
 		testutil.NewStatefulMockReplayStore(),
 		testutil.NewMockStateRootProvider("root-1"),
 		&FailClosedSignerStore{Signers: signers},
-		&consensusStoreTestAdapter{Inner: &governancetest.SimpleConsensusStore{Consensus: map[string]*models.ConsensusPolicy{"split-trib": consensus3of3}}},
-		nil,
+		&consensusStoreTestAdapter{Inner: &governancetest.SimpleConsensusStore{Consensus: map[string]*models.ConsensusPolicy{"split-consensus": consensus3of3}}},
 		testutil.NewConfigurableMockL3Notary(true),
 		NewL1Doctrine(),
 		constants.AllActionTypes,
@@ -152,7 +150,7 @@ func TestL4Warden_L2SplitVote_QuorumNotMet(t *testing.T) {
 	env.TransactionHash = hash
 	env.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
-			ConsensusSetId: "split-trib",
+			ConsensusSetId: "split-consensus",
 			Votes: []*commonv1.L2Vote{
 				signL2Vote(priv1, "member-1", hash, true),
 				signL2Vote(priv2, "member-2", hash, false),
@@ -186,7 +184,7 @@ func TestL4Warden_L2VoteOrderingIndependence(t *testing.T) {
 		"member-2": pub2,
 	}
 	consensus2of2 := &models.ConsensusPolicy{
-		ID:              "order-trib",
+		ID:              "order-consensus",
 		MemberAppIDs:    []string{"member-1", "member-2"},
 		Quorum:          2,
 		RequireDistinct: true,
@@ -199,8 +197,7 @@ func TestL4Warden_L2VoteOrderingIndependence(t *testing.T) {
 			testutil.NewStatefulMockReplayStore(),
 			testutil.NewMockStateRootProvider("root-1"),
 			&FailClosedSignerStore{Signers: signers},
-			&consensusStoreTestAdapter{Inner: &governancetest.SimpleConsensusStore{Consensus: map[string]*models.ConsensusPolicy{"order-trib": consensus2of2}}},
-			nil,
+			&consensusStoreTestAdapter{Inner: &governancetest.SimpleConsensusStore{Consensus: map[string]*models.ConsensusPolicy{"order-consensus": consensus2of2}}},
 			testutil.NewConfigurableMockL3Notary(true),
 			NewL1Doctrine(),
 			constants.AllActionTypes,
@@ -236,7 +233,7 @@ func TestL4Warden_L2VoteOrderingIndependence(t *testing.T) {
 		env.TransactionHash = hash
 		env.Governance = &commonv1.GovernanceMetadata{
 			L2: &commonv1.L2Metadata{
-				ConsensusSetId: "order-trib",
+				ConsensusSetId: "order-consensus",
 				Votes:          voteOrder,
 			},
 		}

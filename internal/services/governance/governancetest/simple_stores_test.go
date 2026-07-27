@@ -66,7 +66,7 @@ func TestSimpleStateRootProvider_ValidRoot(t *testing.T) {
 func TestSimpleConsensusStore_NilMap(t *testing.T) {
 	t.Parallel()
 	s := &SimpleConsensusStore{}
-	consensus, err := s.GetConsensus("trib1")
+	consensus, err := s.GetConsensus("consensus1")
 	require.NoError(t, err)
 	assert.Nil(t, consensus)
 }
@@ -82,14 +82,14 @@ func TestSimpleConsensusStore_NotFound(t *testing.T) {
 func TestSimpleConsensusStore_Found(t *testing.T) {
 	t.Parallel()
 	expected := &models.ConsensusPolicy{
-		ID:              "trib1",
+		ID:              "consensus1",
 		MemberAppIDs:    []string{"member-a", "member-b"},
 		Quorum:          2,
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	s := &SimpleConsensusStore{Consensus: map[string]*models.ConsensusPolicy{"trib1": expected}}
-	consensus, err := s.GetConsensus("trib1")
+	s := &SimpleConsensusStore{Consensus: map[string]*models.ConsensusPolicy{"consensus1": expected}}
+	consensus, err := s.GetConsensus("consensus1")
 	require.NoError(t, err)
 	assert.Equal(t, expected, consensus)
 }

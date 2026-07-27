@@ -113,7 +113,6 @@ func TestGovernanceFailClosed(t *testing.T) {
 			stateRootProvider,
 			&FailClosedSignerStore{Signers: map[string]ed25519.PublicKey{}},
 			consensusPolicyStore,
-			nil, // AppPolicyStore
 			nil, // L3Notary
 			doctrine,
 			constants.AllActionTypes,

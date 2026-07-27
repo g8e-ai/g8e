@@ -518,7 +518,6 @@ func Run(cfg Config) error {
 		stateRootProvider,
 		&governance.FailClosedSignerStore{Signers: trustedSigners},
 		nil, // ConsensusStore not used in chaos tester
-		nil, // AppPolicyStore not used in chaos tester
 		l3Notary,
 		doctrine,
 		knownActionTypes,

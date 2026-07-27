@@ -50,7 +50,6 @@ type L4Warden struct {
 	stateRootProvider    StateRootProvider
 	signerStore          SignerStore
 	consensusPolicyStore L2ConsensusPolicyStore
-	appPolicyStore       AppPolicyStore
 	l3Notary             L3Notary
 	doctrine             *L1Doctrine
 	knownActionTypes     map[constants.ActionType]struct{}
@@ -67,7 +66,6 @@ func NewL4Warden(
 	stateRootProvider StateRootProvider,
 	signerStore SignerStore,
 	consensusPolicyStore L2ConsensusPolicyStore,
-	appPolicyStore AppPolicyStore,
 	l3Notary L3Notary,
 	doctrine *L1Doctrine,
 	knownActionTypes []constants.ActionType,
@@ -90,7 +88,6 @@ func NewL4Warden(
 		stateRootProvider:    stateRootProvider,
 		signerStore:          signerStore,
 		consensusPolicyStore: consensusPolicyStore,
-		appPolicyStore:       appPolicyStore,
 		l3Notary:             l3Notary,
 		doctrine:             doctrine,
 		knownActionTypes:     knownActions,
