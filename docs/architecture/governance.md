@@ -1,7 +1,7 @@
 # Governance
 
-Last Updated: 2026-07-26
-Version: v1.6.5
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 ## Overview
 
@@ -14,7 +14,7 @@ The posture is set at startup via `--posture <doctrine|consensus|notary>` and ca
 
 A third check point exists at startup:
 
-3. **Gateway startup**: logs advisory warnings for consensus and notary postures if consensus prerequisites are not yet configured. The gateway boots regardless; L2 enforcement happens at transaction time via L4Warden.
+3. **Gateway startup**: logs advisory warnings for consensus and notary postures if consensus prerequisites are not yet configured. The gateway boots regardless; L2 enforcement happens at transaction time via L4 Warden.
 
 ### GovernanceEnvelope
 
@@ -70,10 +70,10 @@ The canonical transaction container is the **GovernanceEnvelope**, a protobuf me
 **Startup validation**: The gateway logs advisory warnings at startup for consensus and notary postures if the consensus is not yet configured:
 - If the consensus ID is empty, a warning is logged.
 - If the consensus policy does not exist or is disabled, a warning is logged.
-- L2 enforcement happens at transaction time via L4Warden; L2-gated transactions are rejected until a consensus is properly enrolled.
+- L2 enforcement happens at transaction time via L4 Warden; L2-gated transactions are rejected until a consensus is properly enrolled.
 - If the consensus ID is set and the policy exists and is enabled, the Consensus service is bootstrapped in-process and wired as both the mTLS HTTP handler and the local deliberator.
 
-**Consensus bootstrap**: The Consensus service is constructed from the consensus policy stored in the database. For single-member consensuss, the gateway's actuator Ed25519 key is reused as the member signing key. For multi-member consensuss, member keys are loaded from disk. Members whose keys cannot be resolved are included without a private key; they can participate in policy but cannot sign votes, and a warning is logged.
+**Consensus bootstrap**: The Consensus service is constructed from the consensus policy stored in the database. For single-member consensuses, the gateway's actuator Ed25519 key is reused as the member signing key. For multi-member consensuses, member keys are loaded from disk. Members whose keys cannot be resolved are included without a private key; they can participate in policy but cannot sign votes, and a warning is logged.
 
 **Declarative consensus seeding** (`--consensus-bootstrap`): When the `--consensus-bootstrap` flag is set to a JSON config file path, the gateway seeds trusted signers and a consensus policy at startup, before consensus validation runs. The config file contains `consensus_id`, `member_app_ids`, `quorum`, and optional `seed_hex` (a hex-encoded Ed25519 seed). If `seed_hex` is provided, the corresponding public key is derived and registered as a trusted signer for each member. If omitted, a fresh key pair is generated. This is idempotent: if the consensus already exists, the bootstrap is skipped. This enables deterministic demo deployments where the gateway and agent harness share the same Ed25519 seed.
 
@@ -105,9 +105,9 @@ The canonical transaction container is the **GovernanceEnvelope**, a protobuf me
 
 Non-mutation actions (e.g., `FS_READ`, `FS_LIST`, `FETCH_LOGS`, `HEARTBEAT`) do not require L3 proof even under notary posture.
 
-**Startup validation**: Same as consensus posture; advisory warnings if consensus is not configured. L2 enforcement happens at transaction time via L4Warden. If the consensus ID is set and the policy exists and is enabled, the Consensus service is bootstrapped in-process.
+**Startup validation**: Same as consensus posture; advisory warnings if consensus is not configured. L2 enforcement happens at transaction time via L4 Warden. If the consensus ID is set and the policy exists and is enabled, the Consensus service is bootstrapped in-process.
 
-**Consensus bootstrap**: Same as consensus posture. The Consensus service is constructed and wired as both the mTLS HTTP handler and the local deliberator. The in-process local deliberator signs L2 votes with the gateway's actuator key for single-member consensuss.
+**Consensus bootstrap**: Same as consensus posture. The Consensus service is constructed and wired as both the mTLS HTTP handler and the local deliberator. The in-process local deliberator signs L2 votes with the gateway's actuator key for single-member consensuses.
 
 **Default for outbound mode**: Notary is the default posture for outbound (operator) mode. This ensures that operators running in outbound mode require full L1/L2/L3 enforcement by default. Since the L3 notary is nil in outbound mode, mutations fail-closed unless an L3 notary is explicitly configured.
 
@@ -142,7 +142,7 @@ Non-mutation actions (e.g., `FS_READ`, `FS_LIST`, `FETCH_LOGS`, `HEARTBEAT`) do 
 **Enforced** = fail-closed gate; transaction is rejected if the check fails.
 **Audited** = result is verified if present and recorded in the receipt, but does not gate execution.
 **Recorded** = L2/L3 status is reflected in the action receipt as enum values.
-**Advisory** = a warning is logged at startup but the gateway boots regardless; enforcement happens at transaction time via L4Warden.
+**Advisory** = a warning is logged at startup but the gateway boots regardless; enforcement happens at transaction time via L4 Warden.
 
 ### Posture Enforcement Matrix
 
@@ -179,7 +179,7 @@ The **Producer** (g8e-compatible agentic ensemble, BYO agent, or MCP client) rec
    - Metadata about the request (timestamp, principal identity, nonce, state root)
    - Cryptographic proofs for verification
 
-2. **L2 Consensus (gateway-mediated)**: Under `consensus` and `notary` postures, the gateway's `processGatewayTransaction` automatically sends the envelope to the Consensus for L2 deliberation before dispatch. Each consensus member independently evaluates the payload using the L1 Doctrine and signs an Ed25519 vote over `<transaction_hash>|<decision>`. For single-binary deployments, the local deliberator calls the Consensus Service in-process without an HTTP round-trip. Under `doctrine` posture, L2 votes are not required (audited only) and the Consensus is not constructed in-process.
+2. **L2 Consensus (gateway-mediated)**: Under `consensus` and `notary` postures, the gateway automatically sends the envelope to the Consensus for L2 deliberation before dispatch. Each consensus member independently evaluates the payload using the L1 Doctrine and signs an Ed25519 vote over `<transaction_hash>|<decision>`. For single-binary deployments, the local deliberator calls the Consensus Service in-process without an HTTP round-trip. Under `doctrine` posture, L2 votes are not required (audited only) and the Consensus is not constructed in-process.
 
 3. **L3 Notary proof**: The envelope may include an L3 proof (WebAuthn assertion or mTLS certificate fingerprint) if the producer can generate one. However, standard AI clients (Claude Code, Codex, Goose, Gemini CLI) typically cannot generate an L3 Notary human signature. In this case, the gateway suspends the transaction, sends an OOB WebAuthn challenge URL to the client, the human approves via browser, and the gateway attaches the resulting proof to the envelope before resuming the L4/L5 flow (see [OOB Suspension](#out-of-band-oob-suspension--webauthn-approval-flow) in [Gateway Architecture](./gateway.md)).
 
@@ -291,16 +291,16 @@ If any stage fails, the nonce reservation is released and the transaction is rej
 
 **L3 Notary implementations** (see [L3 Notary Verification Detail](#l3-notary-verification-detail) for full details):
 
-The two notary implementations share composable primitives:
+The notary implementations share composable verification primitives:
 
-- **`CLISessionVerifier`** interface — used by `gatewayNotary` for CLI mTLS session verification (user active status, session ownership, certificate fingerprint match, session expiry, certificate revocation via PKI authority).
-- **`verifyOutboundProof`** shared function — suspended transaction lookup + Ed25519 signature verification + approval expiry check, used by `outboundNotary`.
+- **CLI Session Verification**: Verifies active user status, session ownership, certificate fingerprint matching, session expiry, and certificate revocation via the PKI authority.
+- **Outbound Proof Verification**: Performs suspended transaction lookup, Ed25519 signature verification over the transaction hash, and approval window expiration checks.
 
 - **Passkey Service**: Gateway mode for web sessions. Verifies WebAuthn assertions using the transaction hash as the challenge. Validates credential ID, client data JSON, authenticator data, and signature against registered passkey credentials.
 
 - **Outbound L3 Notary**: Outbound mode for operator-side approval. Verifies that a transaction exists in the suspended transaction store, is marked as approved, has a valid CLI signature over the transaction hash, and has not exceeded the 30-minute approval window. No CLI session or certificate revocation checks are performed in this mode.
 
-- **Gateway L3 Notary**: Unified gateway mode that requires passkey authorization for all proofs. The gateway notary always requires a credential ID and delegates to the passkey verifier first. If the proof includes an mTLS certificate fingerprint (CLI caller), CLI mTLS session verification runs as an additional transport-auth layer. This is the notary used in gateway-mode deployments. Does not access suspended transactions — that responsibility belongs to the passkey verifier delegate.
+- **Gateway L3 Notary**: Unified gateway mode that requires passkey authorization for all proofs. The gateway notary always requires a credential ID and delegates to the passkey verifier first. If the proof includes an mTLS certificate fingerprint (CLI caller), CLI mTLS session verification runs as an additional transport-auth layer. This is the notary used in gateway-mode deployments. It does not access suspended transactions; that responsibility belongs to the passkey verifier delegate.
 
 **Posture behavior**:
 - **doctrine/consensus**: L3 results are recorded for audit but do not gate execution.
@@ -407,7 +407,7 @@ The consensus policy defines a named consensus body with the following propertie
 - **Member App IDs**: List of member application IDs. Each must correspond to an enabled trusted signer. No duplicates.
 - **Quorum**: Minimum number of affirmative distinct signatures required. Must be >= 1 and <= member count.
 - **Require Distinct**: If true, duplicate signer key IDs in a vote set are rejected.
-- **Enabled**: Whether the consensus is active. New consensuss must be created as enabled.
+- **Enabled**: Whether the consensus is active. New consensuses must be created as enabled.
 
 ### Consensus Members
 
@@ -416,7 +416,7 @@ Each consensus member represents a single member identity:
 - **App ID**: The member's enrolled application ID, used to look up the member's trusted public key.
 - **Private Key**: The member's Ed25519 private key, used to sign consensus votes. Members without a private key (key resolution failed during bootstrap) are included in the member list for policy purposes but cannot sign votes; their votes are skipped during deliberation.
 
-Members never share the gateway identity key. Even in single-member consensuss, the member is a distinct principal; the actuator's Ed25519 key is reused as the member signing key, but the member App ID remains separate from the gateway's actuator key ID.
+Members never share the gateway identity key. Even in single-member consensuses, the member is a distinct principal; the actuator's Ed25519 key is reused as the member signing key, but the member App ID remains separate from the gateway's actuator key ID.
 
 ### Consensus Service
 
@@ -448,7 +448,7 @@ The key provider interface resolves Ed25519 private keys for consensus members b
 
 **Bootstrap key resolution**: During consensus bootstrap, a composite key provider is constructed:
 1. **File-based lookup**: First attempts to load the member key from disk.
-2. **Actuator fallback**: If the file lookup fails and the member App ID matches the actuator's key ID, the actuator's Ed25519 private key is used (for single-member consensuss).
+2. **Actuator fallback**: If the file lookup fails and the member App ID matches the actuator's key ID, the actuator's Ed25519 private key is used (for single-member consensuses).
 3. **Failure**: If neither source resolves, the member is included without a private key and a warning is logged.
 
 ### Consensus Factory
@@ -477,7 +477,7 @@ The consensus store service provides CRUD operations for consensus policy record
 - Member list: non-empty, no empty strings, no duplicate member IDs.
 - Quorum: >= 1 and <= member count.
 - Trusted signer verification: every member App ID must resolve to an enabled trusted signer.
-- New consensuss must be created as enabled. Existing consensuss may only be disabled.
+- New consensuses must be created as enabled. Existing consensuses may only be disabled.
 
 ### Admin API Endpoints
 
@@ -497,7 +497,7 @@ The local deliberator is an in-process adapter that calls the Consensus Service 
 
 ### Consensus Bootstrap at Gateway Startup
 
-When the gateway starts in consensus or notary posture with a non-empty consensus ID, the Consensus service is constructed and wired at startup. If the consensus ID is empty, an advisory warning is logged and the gateway boots without an in-process Consensus; L2-gated transactions will be rejected by L4Warden until a consensus is enrolled. Under doctrine posture, the Consensus is not constructed in-process; L2 votes must be obtained from an external Consensus service when required.
+When the gateway starts in consensus or notary posture with a non-empty consensus ID, the Consensus service is constructed and wired at startup. If the consensus ID is empty, an advisory warning is logged and the gateway boots without an in-process Consensus; L2-gated transactions will be rejected by L4 Warden until a consensus is enrolled. Under doctrine posture, the Consensus is not constructed in-process; L2 votes must be obtained from an external Consensus service when required.
 
 1. **Load policy**: Retrieves the consensus policy from the database. If missing, bootstrap fails with an error.
 2. **Construct key provider**: Creates a file-based key provider for the configured secrets directory, then wraps it with the actuator key fallback logic.

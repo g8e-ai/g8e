@@ -4,8 +4,8 @@ title: SSE Streaming
 
 # SSE Streaming
 
-Last Updated: 2026-07-24
-Version: v1.6.2
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 The Governance Gateway provides a Server-Sent Events (SSE) streaming infrastructure that enables real-time event delivery from app workloads to browser and CLI clients. g8e-compatible agentic ensembles publish typed events, including audit events, for downstream consumption. The gateway also produces SSE events internally for platform workflows such as passkey registration and L3 transaction approval.
 
@@ -16,8 +16,8 @@ The Governance Gateway provides a Server-Sent Events (SSE) streaming infrastruct
 The SSE system provides three endpoints:
 
 - **`POST /api/v1/sse/push`**: App workloads push events. Requires mTLS with app workload identity.
-- **`GET /api/v1/sse/events`**: Poll for historical events. Supports dual auth: mTLS for CLI/operator, web session cookie for browser.
-- **`GET /api/v1/sse/stream`**: Real-time SSE stream with live event delivery. Supports dual auth: mTLS for CLI/operator, web session cookie for browser. All clients (CLI, browser, dashboard) use this single endpoint.
+- **`GET /api/v1/sse/events`**: Poll for historical events. Supports dual auth: mTLS for CLI or operator, web session cookie for browser.
+- **`GET /api/v1/sse/stream`**: Real-time SSE stream with live event delivery. Supports dual auth: mTLS for CLI or operator, web session cookie for browser. All clients use this single endpoint.
 
 Events are routed by one of three identifiers:
 - `web_session_id`: Web UI session events
@@ -69,31 +69,31 @@ flowchart TD
 
 **Authentication**: mTLS with app workload identity. The caller certificate must have a SPIFFE URI SAN with an `/app/` prefix. Gateway and Operator identities are blocked from pushing.
 
-**Request**: The body must include exactly one routing identifier (`web_session_id`, `cli_session_id`, or `user_id`) and an `event` object containing a `type` string and arbitrary `data`.
+**Request**: The body must include exactly one routing identifier (`web_session_id`, `cli_session_id`, or `user_id`) and an `event` object containing a `type` string and payload data.
 
-**Response**: Returns a success boolean and delivered count.
+**Response**: Returns a success status and delivered count.
 
-**Authorization**: The app identity must be associated with the target session or user. Ownership is verified against bound Operator sessions. If ownership verification fails, the event is still persisted but the handler returns 403.
+**Authorization**: The app identity must be associated with the target session or user. Ownership is verified against bound Operator sessions. If ownership verification fails, the event is persisted but the handler returns a 403 Forbidden status.
 
-**Pub/Sub**: On success, the full request body is published to the appropriate channel for real-time fan-out.
+**Pub/Sub**: On success, the event payload is published to the target channel for real-time fan-out.
 
 ### Internal SSE Producers
 
-The gateway produces SSE events directly, bypassing the push endpoint. These events use `g8eg` as the producer ID for attribution. Two internal event types exist:
+The gateway produces SSE events directly, bypassing the push endpoint. These events use `g8eg` as the producer identifier for attribution. Two internal event types exist:
 
 - **`approval.completed`**: Emitted when a user completes the WebAuthn approval ceremony for an L3 transaction. Scoped to `user_id` so any waiting CLI client receives real-time notification without polling.
 - **`passkey.registered`**: Emitted when a new passkey is enrolled. Scoped to `cli_session_id` so the waiting CLI client receives real-time notification.
 
 ### GET /api/v1/sse/events
 
-**Authentication**: Dual auth. If a client certificate is present, mTLS auth is used. Otherwise, the `g8e_web_session_cookie` cookie is validated.
+**Authentication**: Dual auth. If a client certificate is present, mTLS authentication is used. Otherwise, the web session cookie is validated.
 
 **Query Parameters**:
 - `web_session_id`, `cli_session_id`, or `user_id`: Filter by routing target (exactly one required)
 - `since_id`: Return events with ID greater than this value (default: 0)
 - `limit`: Maximum events to return (default: 200, max: 1000)
 
-**Response**: Returns an ordered list of events (ascending by ID) with count. Unset routing fields are omitted from each event in the response.
+**Response**: Returns an ordered list of events ascending by ID with count. Unset routing fields are omitted from each event in the response.
 
 **Authorization**: The authenticated identity must own the requested routing target. For mTLS auth, Operator session ownership or CLI user ownership is verified. For cookie auth, the web session ID, CLI session user, or user ID must match the authenticated identity.
 
@@ -107,13 +107,13 @@ The gateway produces SSE events directly, bypassing the push endpoint. These eve
 
 **Response**: A standard SSE stream (`text/event-stream`). The stream sets `Cache-Control: no-cache`, `Connection: keep-alive`, and `X-Accel-Buffering: no` headers.
 
-**Replay**: If `since_id` is greater than 0, historical events are replayed from the event store (up to 1000 rows) before live streaming begins. Each replayed event includes an `id:` field. If `since_id` is 0 or absent, the stream starts with only real-time events.
+**Replay**: If `since_id` is greater than 0, historical events are replayed from the event store up to 1000 rows before live streaming begins. Each replayed event includes an `id:` field. If `since_id` is 0 or absent, the stream starts with only real-time events.
 
-**Live events**: Real-time events from Pub/Sub are emitted without an `id:` field. The `event:` field carries the event type and the `data:` field carries the full push payload.
+**Live events**: Real-time events from pub/sub are emitted without an `id:` field. The `event:` field carries the event type and the `data:` field carries the full push payload.
 
 **Heartbeat**: The stream sends a heartbeat comment every 30 seconds to keep the connection alive.
 
-**Back-pressure**: The stream uses a buffered channel of 100 entries. If the buffer is full, incoming events are dropped with a warning log.
+**Back-pressure**: The stream uses a buffered event channel. If the buffer fills, incoming events are dropped with a warning log.
 
 ---
 
@@ -121,12 +121,12 @@ The gateway produces SSE events directly, bypassing the push endpoint. These eve
 
 The SSE system is generic and supports any event type. The protocol catalog defines audit event types (AI actions, command execution, MCP calls, user actions) and platform SSE lifecycle event types (connection established, opened, closed, failed, error, keepalive sent).
 
-Two gateway-produced event types are not in the protocol catalog:
+Two gateway-produced event types are managed internally:
 
 - `approval.completed`: L3 transaction approval completed, scoped to `user_id`
 - `passkey.registered`: Passkey enrollment completed, scoped to `cli_session_id`
 
-See the [Protocol Event Catalog](../../protocol/constants/events.json) for the complete event type listing.
+See the [Constants Reference](../../protocol/docs/constants.md) for the complete event type listing.
 
 ---
 
@@ -136,14 +136,14 @@ See the [Protocol Event Catalog](../../protocol/constants/events.json) for the c
 
 Only app workloads with valid mTLS certificates can push events. The certificate must have a SPIFFE URI SAN with an `/app/` prefix. Gateway and Operator identities are blocked from pushing. Producer identity is recorded for attribution.
 
-The app identity must be associated with the target session or user. The event is appended to the store before the ownership check; if ownership fails, the handler returns 403 but the row remains persisted. The gateway also produces events internally (approval, passkey) by writing directly to the event store and Pub/Sub broker.
+The app identity must be associated with the target session or user. The event is appended to the store before the ownership check; if ownership fails, the handler returns 403 but the row remains persisted. The gateway also produces events internally (approval, passkey) by writing directly to the event store and pub/sub broker.
 
 ### Consumer Authorization
 
-SSE consumer endpoints support dual auth: mTLS with an Operator session, or web session cookie for browser access. When both are present, mTLS takes precedence.
+SSE consumer endpoints support dual auth: mTLS with an Operator session or CLI user, or web session cookie for browser access. When both are present, mTLS takes precedence.
 
 Authorization is enforced per routing target:
-- **mTLS path**: For `web_session_id`, the Operator session must own the web session. For `cli_session_id`, the Operator session must own the CLI session, or the CLI user must match. For `user_id`, the Operator must belong to the user.
+- **mTLS path**: For `web_session_id`, the Operator session must own the web session. For `cli_session_id`, the Operator session must own the CLI session, or the CLI user must match. For `user_id`, the Operator or CLI user must belong to the user.
 - **Cookie path**: For `web_session_id`, the session must match. For `cli_session_id`, the CLI session user must match. For `user_id`, the user must match.
 
 Multi-tenant isolation is enforced at the query level.
@@ -215,4 +215,4 @@ Three CLI consumers use this client:
 ## See Also
 - [Gateway Architecture](./gateway.md): Overall gateway design.
 - [Network Architecture](./network.md): mTLS and PKI details.
-- [Protocol Event Catalog](../../protocol/constants/events.json): Complete event type listing.
+- [Constants Reference](../../protocol/docs/constants.md): Platform constant system details.

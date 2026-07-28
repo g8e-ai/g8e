@@ -1,39 +1,49 @@
 # Encryption Architecture
 
-Last Updated: 2026-07-24
-Version: v1.6.2
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 ## Overview
 
-g8e uses mandatory encryption for all sensitive data at rest and mutual TLS for all network communication. The encryption system is built around a vault that provides AES-256-GCM primitives, a key hierarchy for managing encryption keys, a keystore that reuses the vault's crypto primitives for OS keyring-backed secret storage, and a full PKI hierarchy for certificate-based mTLS authentication.
+g8e enforces mandatory encryption for all sensitive data at rest and mutual TLS (mTLS) for all network communication. The encryption system consists of a vault providing AES-256-GCM primitives, a key hierarchy for key management, a platform keystore backed by OS keyrings for secret storage, and a Public Key Infrastructure (PKI) hierarchy for certificate-based mTLS authentication.
 
 See [Authentication & Authorization](./auth.md) for identity enrollment and session management, and [Storage Architecture](./storage.md) for service-specific encryption behavior.
 
 ## Design Principles
 
-- **Fail-closed**: Encryption is mandatory. Services fail to initialize without a vault.
-- **Zero-knowledge**: The DEK is never persisted to disk; only its wrapped form is stored.
-- **Key rotation**: Support for re-keying without data loss.
-- **Auditability**: Encryption state is recorded in audit records, and vault lifecycle operations are logged.
-- **Mutual authentication**: All HTTPS connections require client certificates verified against the platform CA chain.
+- **Fail-closed**: Encryption is mandatory. Platform services fail to initialize without an unlocked vault.
+- **Zero-knowledge**: The Data Encryption Key (DEK) is never persisted to disk in plaintext; only its wrapped form is stored.
+- **Key rotation**: Support for re-keying vault data without data loss.
+- **Auditability**: Encryption state is recorded in audit logs, and vault lifecycle operations produce verifiable audit entries.
+- **Mutual authentication**: All network connections require client certificates verified against the platform CA chain.
+
+## Governance Pipeline Interlock
+
+The platform enforces a five-layer interlock sequence to guarantee that no action executes without full policy, consensus, notary, warden, and actuator verification:
+
+- **L1 Doctrine**: Hard gates, forbidden pattern matching, and MITRE threat detection.
+- **L2 Consensus**: Multi-agent consensus signature verification using Ed25519 key pairs.
+- **L3 Notary**: Human-in-the-loop authorization via WebAuthn passkeys or signed CLI proofs.
+- **L4 Warden**: Pre-dispatch verification including signatures, replay prevention, expiration, nonces, and Merkle root integrity.
+- **L5 Actuator**: Isolated tool execution, JIT capability minting, and signed receipt production using the Actuator Ed25519 signing key.
 
 ## Key Hierarchy
 
 The vault uses a three-tier key hierarchy:
 
-1. **Private Key**: A 32-byte hex-encoded value, user-provided or auto-generated. Used to unlock the vault.
-2. **Key Encryption Key (KEK)**: Derived from the private key via HKDF-SHA256. Used to wrap and unwrap the DEK.
+1. **Private Key**: A 32-byte hex-encoded value, user-provided or auto-generated, used to unlock the vault.
+2. **Key Encryption Key (KEK)**: Derived from the private key via HKDF-SHA256. Used to wrap and unwrap the Data Encryption Key.
 3. **Data Encryption Key (DEK)**: A per-vault random key, wrapped with AES Key Wrap (RFC 3394). Used for per-record AES-256-GCM encryption with unique 12-byte nonces.
 
 ## Encrypted Data
 
 All storage services require an unlocked vault at initialization. The following data is encrypted at rest:
 
-- **Audit store**: Audit record content, command stdout, and command stderr fields.
+- **Audit store**: Event content, command stdout, and command stderr fields.
 - **Execution vault**: Compressed stdout, compressed stderr, and compressed file diffs from command executions.
 - **Ledger**: File content stored in the git-backed ledger with `.enc` suffix.
-- **KV store adapter**: Sentinel UEI token values in the canonical KV store.
-- **Keystore**: Session encryption keys, session tokens, ED25519 signing keys (actuator, notary, operator, CLI), CA private keys, service certificate private keys, API keys for external services, and auditor HMAC keys, stored via OS keyring with file-based fallback.
+- **Key-value store**: Sentinel token values in the canonical key-value store.
+- **Platform Keystore**: Session encryption keys, session tokens, Ed25519 signing keys (actuator, notary, operator, CLI), CA private keys, service certificate private keys, external API keys, and auditor HMAC keys.
 
 ## Vault Lifecycle
 
@@ -156,19 +166,19 @@ The vault directory defaults to `.g8e/vault` and the vault key defaults to `.g8e
 - Private keys are 32-byte hex-encoded values.
 - Key fingerprints are computed using SHA-256 with a domain-separation pepper for identification purposes.
 - Keys can be imported or exported for backup via `g8e vault export` and `g8e vault import`.
-- Re-keying rotates the DEK wrapper without data loss (only the DEK wrapper changes).
+- Re-keying rotates the DEK wrapper without data loss because only the DEK wrapper changes.
 - Vault reset destroys all data irrecoverably.
 
 ### Fail-Closed Behavior
 
-- Services fail to initialize without a vault.
+- Platform services fail to initialize without an unlocked vault.
 - Encryption operations fail if the vault is locked.
-- No silent fallback to plaintext storage.
+- No silent fallback to plaintext storage occurs.
 - Errors are logged and propagated to callers.
 
 ## Platform Keystore
 
-The keystore manages platform secrets using a master encryption key stored in the OS-native credential store. Secrets are encrypted with AES-256-GCM and stored as JSON files with embedded nonces. The keystore also provides in-memory encryption and decryption for runtime values (such as SQLite-stored secrets) using base64-encoded ciphertext.
+The keystore manages platform secrets using a master encryption key stored in the OS-native credential store. Secrets are encrypted with AES-256-GCM and stored as JSON structures with embedded nonces. The keystore also provides in-memory encryption and decryption for runtime values stored in the database.
 
 ### OS Keyring Support
 
@@ -178,7 +188,7 @@ The keystore uses the OS-native credential store when available, with a file-bas
 - **macOS**: Keychain.
 - **Windows**: File-based storage.
 
-The file-based fallback stores the master key as a base64-encoded file with restrictive permissions. Atomic writes are performed via temp file rename. All keystore file I/O within `.g8e/` uses restrictive file permissions.
+The file-based fallback stores the master key as a base64-encoded file with restrictive permissions. Atomic writes are performed via temporary file rename operations. All keystore file I/O within `.g8e/` enforces restrictive file permissions.
 
 ### Encrypted Secrets
 
@@ -215,13 +225,13 @@ CA private keys are stored encrypted in the keystore. CA certificates are writte
 | Gateway peer cert | Gateway Peer Intermediate CA | 90 days |
 | Delegated app credential | Operator Intermediate CA | 1 hour |
 
-All certificates use ECDSA P-256 keys. CSRs with non-P-256 keys are rejected.
+All certificates use ECDSA P-256 keys. Certificate Signing Requests (CSRs) with non-P-256 keys are rejected.
 
 ### mTLS Enforcement
 
 The HTTPS server uses TLS 1.3 as the minimum version and accepts client certificates when presented, with application-layer middleware enforcing mTLS on all non-public routes. Client certificates are verified against a CA pool containing the Root CA and Operator Intermediate CA. The HTTP server accepts client certificates when presented but does not require them, enabling bootstrap and enrollment flows on plain HTTP.
 
-Route-level mTLS enforcement is handled by the authentication middleware, which classifies routes by auth mode (none, mTLS, web session, or dual). See [Authentication & Authorization](./auth.md) for details.
+Route-level mTLS enforcement is handled by authentication middleware, which classifies routes by auth mode. See [Authentication & Authorization](./auth.md) for details.
 
 ### SPIFFE Workload Identity
 
@@ -252,9 +262,9 @@ The gateway signs Certificate Signing Requests (CSRs) for operator, CLI, app, an
 
 ### App Enrollment
 
-External apps can enroll via the PKI API to receive mTLS identity certificates. Enrollment is identity-only by default: apps receive certificates but no consensus power. L2 signer capability requires explicit admin registration.
+External apps can enroll via the PKI API to receive mTLS identity certificates. Enrollment is identity-only by default, giving apps certificates without consensus power. L2 signer capability requires explicit admin registration.
 
-Delegated credentials are short-lived (1 hour) certificates that bind both an app identity and a requesting user identity via dual SPIFFE URI SANs. These enable user-scoped app operations without sharing long-term credentials.
+Delegated credentials are short-lived certificates valid for 1 hour that bind both an app identity and a requesting user identity via dual SPIFFE URI SANs. These enable user-scoped app operations without sharing long-term credentials.
 
 ### Certificate Revocation
 
@@ -287,7 +297,7 @@ To rotate vault keys:
 
 ### Encryption Standards
 
-- AES-256-GCM (NIST-approved) for all data encryption.
+- AES-256-GCM for all data encryption.
 - HKDF-SHA256 for Key Encryption Key derivation.
 - AES Key Wrap (RFC 3394) for DEK wrapping.
 - SHA-256 for key fingerprinting with domain-separation pepper.
@@ -313,7 +323,7 @@ To rotate vault keys:
 
 ### Vault Locked
 
-If services fail with "vault is locked":
+If services fail with a locked vault error:
 
 ```bash
 # Check vault status
@@ -328,7 +338,7 @@ g8e gw restart
 
 ### Invalid Key
 
-If vault unlock fails with invalid key:
+If vault unlock fails with an invalid key error:
 
 - Verify key path is correct.
 - Ensure key file exists and is readable.
@@ -337,7 +347,7 @@ If vault unlock fails with invalid key:
 
 ### Vault Not Initialized
 
-If services fail with "vault not initialized":
+If services fail with an uninitialized vault error:
 
 ```bash
 # Initialize vault
@@ -355,19 +365,12 @@ g8e gw restart
 If mTLS connections fail with certificate errors:
 
 - Gateway serving certificates auto-renew within 30 days of expiry.
-- Operator and CLI leaf certificates expire after 7 days. Re-enroll with `g8e auth enroll`.
-- Check certificate validity with `openssl x509 -in <cert.pem> -dates`.
+- Operator and CLI leaf certificates expire after 7 days and require re-enrollment via `g8e auth enroll`.
+- Check certificate validity using standard certificate tools.
 
 ## Receipt Signature Verification
 
-### Current State
+The gateway signs action receipts with its Actuator Ed25519 private key. The actuator public key is exported to the PKI directory during gateway boot in both PEM and JSON formats with its key ID, enabling offline verification by external harnesses.
 
-The Gateway signs `ActionReceipt`s with its Actuator Ed25519 private key. The actuator public key is exported to the PKI directory during gateway boot in both PEM and JSON formats (with key ID), enabling offline verification by external harnesses.
+Consumers that need to cryptographically verify receipt authenticity must obtain the public key out-of-band by reading the exported files from the gateway PKI directory. Consumers can implement Ed25519 signature verification using standard cryptographic libraries with the exported public key.
 
-### Known Limitation
-
-No mechanism exists for distributing the Gateway's public key to Engine instances via an attested channel. Consumers that need to cryptographically verify receipt authenticity must obtain the public key out-of-band by reading the exported files from the gateway PKI directory. A full attested bootstrap flow, where the public key is distributed via PKI certificate embedding during enrollment, is planned for a future release.
-
-### Verification Utility
-
-The g8e Python package does not currently expose a receipt verification utility. Consumers can implement Ed25519 verification using `nacl.signing.VerifyKey` with the exported public key.

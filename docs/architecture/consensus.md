@@ -1,7 +1,7 @@
 # Consensus
 
-Last Updated: 2026-07-26
-Version: v1.6.5
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 ## Overview
 
@@ -11,51 +11,34 @@ The Consensus operates as a **fail-closed gate** under the `consensus` and `nota
 
 ---
 
-## ConsensusPolicy: Definition and Storage
+## ConsensusPolicy
 
-### Data Model
+A ConsensusPolicy defines a named consensus body with the following properties:
 
-The `ConsensusPolicy` struct (`internal/models/auth.go:521`) defines a named consensus body:
+- **ID**: Consensus name or identifier (alphanumeric, hyphens, underscores only)
+- **MemberAppIDs**: List of member app IDs; each must resolve to an enabled TrustedSigner
+- **Quorum**: Minimum number of affirmative distinct signatures required (K of N)
+- **RequireDistinct**: If true, duplicate signer key IDs in a vote set are rejected
+- **Enabled**: Whether this consensus is active
 
-| Field | Type | Description |
-|---|---|---|
-| `ID` | `string` | Consensus name/identifier (alphanumeric, hyphens, underscores only) |
-| `MemberAppIDs` | `[]string` | List of member app IDs; each must resolve to an enabled `TrustedSigner` |
-| `Quorum` | `int` | Minimum number of affirmative distinct signatures required (K of N) |
-| `RequireDistinct` | `bool` | If true, duplicate signer key IDs in a vote set are rejected |
-| `Enabled` | `bool` | Whether this consensus is active |
-| `CreatedAt` | `time.Time` | Creation timestamp (auto-set) |
-| `UpdatedAt` | `time.Time` | Last update timestamp (auto-set) |
+### Storage
 
-### Storage Layer
+Consensus policies are persisted in the gateway's SQLite document store under the `consensus` collection. The consensus store service provides CRUD operations: retrieve by ID (returns nil if not found), create or update (with fail-closed validation), list all policies, and delete by ID.
 
-Consensus policies are persisted in the SQLite document store under the `consensus` collection (`internal/constants/collections.go:46`). The `ConsensusStoreService` (`internal/services/gateway/consensus_store_service.go`) provides CRUD operations:
+The L4 Warden depends on a generic `L2ConsensusPolicyStore` interface rather than any consensus-specific type, allowing alternative consensus implementations to be plugged in without modifying the warden. The consensus store service satisfies this interface by adapting ConsensusPolicy to the generic L2ConsensusPolicy struct.
 
-- **`GetConsensus(id)`**: Retrieves a policy by ID; returns `nil, nil` if not found.
-- **`AddConsensus(policy)`**: Creates or updates a policy with fail-closed validation.
-- **`ListConsensuss()`**: Returns all stored policies.
-- **`DeleteConsensus(id)`**: Removes a policy.
+### Validation
 
-The `ConsensusStore` interface (`internal/services/governance/l2_consensus.go:19`) is the Consensus-specific read interface. The L4 Warden depends on the generic `L2ConsensusPolicyStore` interface, which `ConsensusStoreService` satisfies directly via `GetConsensusPolicy` (adapting `ConsensusPolicy` → `L2ConsensusPolicy`):
-
-```go
-type ConsensusStore interface {
-    GetConsensus(id string) (*models.ConsensusPolicy, error)
-}
-```
-
-### AddConsensus Validation
-
-All validation is fail-closed at write time (`internal/services/gateway/consensus_store_service.go:80`):
+All validation is fail-closed at write time:
 
 - **Consensus ID**: non-empty, alphanumeric + hyphens + underscores only
 - **Member list**: non-empty, no empty strings, no duplicates
-- **Quorum**: `>= 1` and `<= len(MemberAppIDs)`
-- **Trusted signer check**: every `MemberAppID` must resolve to an enabled `TrustedSigner` in the `SignerStoreService`
+- **Quorum**: at least 1 and at most the member count
+- **Trusted signer check**: every member app ID must resolve to an enabled TrustedSigner in the signer store
 - **Existence check**:
-  - New consensuss must be created with `Enabled=true` (rejects `Enabled=false` for non-existent IDs)
-  - Existing consensuss may only be updated via `Enabled=false` (disable path)
-  - Overwriting an existing consensus with `Enabled=true` is rejected as a duplicate
+  - New policies must be created with `enabled=true` (rejects `enabled=false` for non-existent IDs)
+  - Existing policies may only be updated via `enabled=false` (disable path)
+  - Overwriting an existing policy with `enabled=true` is rejected as a duplicate
 
 ---
 
@@ -63,7 +46,7 @@ All validation is fail-closed at write time (`internal/services/gateway/consensu
 
 ### Declarative Bootstrap (File-Based)
 
-Consensuss can be seeded at gateway startup via the `--consensus-bootstrap <path>` flag (or `G8E_CONSENSUS_BOOTSTRAP` env var). The config file is a JSON document:
+Consensus policies can be seeded at gateway startup via the `--consensus-bootstrap` flag (or `G8E_CONSENSUS_BOOTSTRAP` env var). The config file is a JSON document:
 
 ```json
 {
@@ -83,74 +66,40 @@ Consensuss can be seeded at gateway startup via the `--consensus-bootstrap <path
 
 #### Bootstrap Process
 
-The `bootstrapConsensusPolicy` function (`internal/cli/serve/gateway.go:416`) executes the following steps:
+The bootstrap function executes the following steps:
 
-1. **Read and parse** the JSON config file (`consensus-bootstrap.json`)
+1. **Read and parse** the JSON config file
 2. **Idempotency check**: if the consensus already exists, skip bootstrap
 3. **Key derivation**: if `seed_hex` is provided, derive the Ed25519 key pair from the seed; otherwise generate a fresh key pair
-4. **Trusted signer registration**: for each `member_app_id`, register the derived public key as a `TrustedSigner` (single-key ensemble pattern for demos)
-5. **Member key persistence**: save each member's private key to disk via `consensus.SaveMemberKey` so the in-process `LocalDeliberator` can sign L2 votes via `FileKeyProvider`
-6. **ConsensusPolicy creation**: insert the policy into the `ConsensusStore` with `Enabled=true` and `RequireDistinct=true`
+4. **Trusted signer registration**: for each member app ID, register the derived public key as a TrustedSigner (single-key ensemble pattern for demos)
+5. **Member key persistence**: save each member's private key to disk so the in-process LocalDeliberator can sign L2 votes via FileKeyProvider
+6. **ConsensusPolicy creation**: insert the policy into the consensus store with `enabled=true` and `require_distinct=true`
 
 ### Admin API (Runtime Enrollment)
 
-Consensuss can also be created at runtime via the admin REST API (`internal/services/gateway/admin_controller.go:203`):
+Consensus policies can also be created at runtime via the admin REST API (requires bootstrap user authentication):
 
-- **`POST /api/v1/admin/consensus`**: Create a new consensus policy. Requires a bootstrap user (admin-only). Accepts a `ConsensusPolicy` JSON body. Returns `201 Created` or `400 Bad Request` on validation failure.
-- **`GET /api/v1/admin/consensus`**: List all consensus policies. Requires a bootstrap user. Returns `200 OK` with a JSON array.
-- **`DELETE /api/v1/admin/consensus/{id}`**: Delete a consensus policy. Requires a bootstrap user. Returns `200 OK` or `404 Not Found`.
+- **`POST /api/v1/admin/consensus`**: Create a new consensus policy. Returns `201 Created` or `400 Bad Request` on validation failure.
+- **`GET /api/v1/admin/consensus`**: List all consensus policies. Returns `200 OK` with a JSON array.
+- **`DELETE /api/v1/admin/consensus/{id}`**: Delete a consensus policy. Returns `200 OK` or `404 Not Found`.
 
 ### Member Key Management
 
-Each consensus member has its own Ed25519 private key, stored on disk as a hex-encoded seed. The `FileKeyProvider` (`internal/services/consensus/factory.go:89`) loads keys using the naming convention:
+Each consensus member has its own Ed25519 private key, stored on disk as a hex-encoded seed. The FileKeyProvider loads keys using a naming convention within the secrets directory. Keys are written with restricted file permissions to a private secrets directory.
 
-```
-{secrets_dir}/consensus_member_{ConsensusID}_{memberAppID}.key
-```
+The KeyProvider interface abstracts key resolution: implementations may load keys from disk, use an in-process actuator key, or source them from any secure backing store.
 
-The `SaveMemberKey` function (`internal/services/consensus/factory.go:134`) writes keys with `0600` permissions to a `0700` secrets directory.
-
-The `KeyProvider` interface (`internal/services/consensus/factory.go:34`) abstracts key resolution:
-
-```go
-type KeyProvider interface {
-    GetMemberKey(appID string) (ed25519.PrivateKey, error)
-}
-```
-
-In production bootstrap (`BootstrapConsensus`), the key provider tries `FileKeyProvider` first, then falls back to the gateway's actuator signing key if the member's AppID matches the actuator's key ID. Members whose keys cannot be resolved are included in the policy without a private key; they can participate in policy but cannot sign votes, and a warning is logged.
+In production bootstrap, the key provider tries FileKeyProvider first, then falls back to the gateway's actuator signing key if the member's AppID matches the actuator's key ID. Members whose keys cannot be resolved are included in the policy without a private key; they can participate in policy but cannot sign votes, and a warning is logged.
 
 ---
 
 ## Consensus Service
 
-### Construction
+The ConsensusService is the enrolled agentic application that deliberates on governance envelopes and produces L2 consensus votes. It holds a consensus ID, a list of consensus members (each with an AppID and Ed25519 private key), a reference to the L1 Doctrine for deterministic evaluation, a logger, and a response writer.
 
-The `ConsensusService` (`internal/services/consensus/service.go:38`) is the enrolled agentic application that deliberates on governance envelopes and produces L2 consensus votes.
+Each member is an enrolled agentic app with its own Ed25519 signing key. The member's public key is registered as a TrustedSigner (keyID = AppID). Members never share the gateway identity key; even in single-binary deployments, each member has a distinct key.
 
-```
-ConsensusService
-├── ConsensusID: string          // ConsensusPolicy.ID
-├── members: []ConsensusMember   // Each has AppID + Ed25519 PrivateKey
-├── doctrine: *L1Doctrine       // Deterministic evaluation engine
-├── logger: *slog.Logger
-└── responder: *response.Writer
-```
-
-The shared factory `NewConsensusFromPolicy` (`internal/services/consensus/factory.go:54`) constructs a `ConsensusService` from a `ConsensusPolicy` and a `KeyProvider`. It resolves each member's private key via the provider and builds the member list. This factory is used by both production bootstrap (`BootstrapConsensus` in `internal/cli/serve/gateway.go`) and test fixtures (`SetupConsensus` in `test/fixtures/gateway_fixture.go`).
-
-### ConsensusMember
-
-Each member (`internal/services/consensus/member.go:29`) is an enrolled agentic app with its own Ed25519 signing key:
-
-```go
-type ConsensusMember struct {
-    AppID      string
-    PrivateKey ed25519.PrivateKey
-}
-```
-
-The member's public key is registered as a `TrustedSigner` (keyID = AppID). Members never share the gateway identity key; even in single-binary deployments, each member has a distinct key.
+The shared factory `NewConsensusFromPolicy` constructs a ConsensusService from a ConsensusPolicy and a KeyProvider. It resolves each member's private key via the provider and builds the member list. This factory is used by both production bootstrap and test fixtures, ensuring production and test code paths exercise the same construction logic.
 
 ---
 
@@ -183,77 +132,52 @@ Client/Gateway
 └──────────────────────────────────┘
 ```
 
-### Deliberate Method
+### Deliberation Process
 
-The `Deliberate` method (`internal/services/consensus/service.go:78`) performs the following:
+The Deliberate method performs the following:
 
-1. **Hash verification**: recomputes the envelope's message ID via `governance.GenerateMessageID` and compares it to `env.Id`. If they don't match, returns `ErrConsensusHashMismatch` (fail-closed).
+1. **Hash verification**: recomputes the envelope's message ID via `GenerateMessageID` and compares it to the envelope's ID. If they don't match, returns `ErrConsensusHashMismatch` (fail-closed).
 
-2. **Command data extraction**: extracts command data and intent from the envelope's `IntentData` (if present) or `Payload` (`internal/services/consensus/member.go:60`).
+2. **Command data extraction**: extracts command data and intent from the envelope's `IntentData` (if present) or `Payload`.
 
-3. **Per-member evaluation**: for each member with a non-nil `PrivateKey`:
-   - **Safety evaluation**: runs MITRE checks via `L1Doctrine.AnalyzeCommand`. If any signal has `BlockRecommended=true`, the payload is deemed unsafe (`isSafe=false`). If doctrine is nil, the payload is **fail-closed** (not safe).
-   - **Vote signing**: signs the string `"<transaction_hash>|<decision>"` with the member's Ed25519 private key (`internal/services/consensus/member.go:81`). The signature is hex-encoded.
+3. **Per-member evaluation**: for each member with a non-nil private key:
+   - **Safety evaluation**: runs MITRE checks via L1Doctrine. If any signal has `BlockRecommended=true`, the payload is deemed unsafe. If doctrine is nil, the payload is **fail-closed** (not safe).
+   - **Vote signing**: signs the string `"<transaction_hash>|<decision>"` with the member's Ed25519 private key. The signature is hex-encoded.
 
-4. **L2 metadata population**: sets `env.Governance.L2.ConsensusID` to the consensus's ID and `env.Governance.L2.Votes` to the collected vote list.
+4. **No-signing-members check**: if no members have private keys, returns `ErrConsensusNoSigningMembers` (fail-closed).
 
-5. **Return**: the envelope with L2 metadata populated, ready for submission to the gateway's L4 Warden.
+5. **L2 metadata population**: sets the consensus ID and vote list on the envelope's L2 metadata. Also initializes L1 and L3 metadata if the governance block is nil.
 
-### L2Vote Proto Structure
+6. **Return**: a DeliberateResult containing the envelope with L2 metadata populated, ready for submission to the gateway's L4 Warden.
 
-Defined in `protocol/proto/g8e/common/v1/common.proto:48`:
+### L2Vote Protocol Structure
 
-```protobuf
-message L2Vote {
-  string signer_key_id       = 1; // member appID == TrustedSigner.ID
-  string consensus_signature = 2; // ed25519 over "<transaction_hash>|<decision>"
-  bool   decision            = 3; // member's safe (true) / unsafe (false) vote
-}
+The protocol defines two messages for L2 governance:
 
-message L2Metadata {
-  string consensus_set_id = 1; // ID of the consensus set that produced this vote set
-  repeated L2Vote votes   = 2; // independent member votes
-}
-```
+- **L2Vote**: contains the signer key ID (member AppID, matching a TrustedSigner), the consensus signature (Ed25519 over the transaction hash and decision), and the decision (safe or unsafe).
+- **L2Metadata**: contains the consensus set ID and the list of independent member votes.
 
 ### Delivery Mechanisms
 
 #### 1. LocalDeliberator (In-Process, Single-Binary Deployment)
 
-The `LocalDeliberator` (`internal/services/consensus/service.go:179`) is an in-process adapter that satisfies the `mcp.L2ConsensusDeliberator` interface by calling `ConsensusService.Deliberate` directly, without an HTTP round-trip:
-
-```go
-func (d *LocalDeliberator) Deliberate(_ context.Context, envelopeBytes []byte) ([]byte, error)
-```
-
-It unmarshals the envelope bytes, runs deliberation, and returns the marshaled envelope with L2 votes populated. This is the default mode for single-binary gateway deployments.
+The LocalDeliberator is an in-process adapter that satisfies the `L2ConsensusDeliberator` interface by calling `ConsensusService.Deliberate` directly, without an HTTP round-trip. It unmarshals the envelope bytes, runs deliberation, and returns the marshaled envelope with L2 votes populated. This is the default mode for single-binary gateway deployments.
 
 #### 2. HTTP Endpoint (Remote Deliberation)
 
 The Consensus also exposes an mTLS-guarded HTTP endpoint for remote deliberation calls:
 
-- **Route**: `POST /consensus/v1/deliberate` (`internal/constants/api_paths.go:241`)
-- **Handler**: `ConsensusService.HandleDeliberate` (`internal/services/consensus/service.go:131`)
-- **Wire format**: canonical protojson `GovernanceEnvelope` (1 MiB max body)
+- **Route**: `POST /consensus/v1/deliberate`
+- **Wire format**: canonical protojson GovernanceEnvelope (1 MiB max body)
 - **Response**: the envelope with L2 votes populated, as protojson
 
-The route is **always registered** on the mTLS mux. The handler loads the `ConsensusService` via an atomic pointer; if the consensus is not yet wired, it returns `503 Service Unavailable` (`internal/services/gateway/governance_controller.go:88`).
+The route is always registered on the mTLS mux. The handler checks whether the consensus service is configured; if not, it returns `503 Service Unavailable`.
 
 #### 3. MCP Gateway Integration
 
-Under `consensus` and `notary` postures, the MCP gateway's `processGatewayTransaction` (`internal/services/mcp/gateway.go:731`) automatically sends the envelope to the Consensus for L2 deliberation before dispatch:
+Under `consensus` and `notary` postures, the MCP gateway's `processGatewayTransaction` automatically sends the envelope to the Consensus for L2 deliberation before dispatch. If the deliberator is not configured, the envelope proceeds without L2 votes and will fail-closed at L4 verification under consensus/notary postures.
 
-```go
-if (g.posture == "consensus" || g.posture == "notary") && g.getL2ConsensusDeliberator() != nil {
-    deliberatedBytes, err := g.getL2ConsensusDeliberator().Deliberate(ctx, envelopeBytes)
-    // ...
-    envelopeBytes = deliberatedBytes
-}
-```
-
-If the deliberator is not configured, the envelope proceeds without L2 votes and will fail-closed at L4 verification under consensus/notary postures.
-
-The `L2ConsensusDeliberator` interface (`internal/services/mcp/gateway.go:81`) is wired via `SetL2ConsensusDeliberator` after consensus bootstrap, using `atomic.Value` for thread-safe late binding.
+The `L2ConsensusDeliberator` interface is wired into the MCP gateway through `RuntimeDependencies`, which are set atomically before the first request via `SetRuntimeDeps`. This bundles all runtime-phase dependencies into a single atomic assignment, enabling thread-safe initialization without individual atomic fields.
 
 ---
 
@@ -261,32 +185,27 @@ The `L2ConsensusDeliberator` interface (`internal/services/mcp/gateway.go:81`) i
 
 ### Verification Flow
 
-When a `GovernanceEnvelope` arrives at the gateway, the L4 Warden's `verifyL2Posture` (`internal/services/governance/l4_warden.go:351`) validates the L2 votes:
+When a GovernanceEnvelope arrives at the gateway, the L4 Warden's `verifyL2Posture` validates the L2 votes:
 
-1. **Vote presence**: if `envelope.Governance.L2` is nil or has zero votes:
+1. **Vote presence**: if L2 metadata is nil or has zero votes:
    - Under `consensus`/`notary` posture: reject with `ErrTxL2SignatureMissing`
    - Under `doctrine` posture: return `false, nil` (audited, not enforced)
 
-2. **Store checks**: verifies `signerStore` and `consensusPolicyStore` are configured. Under enforced postures, missing stores are fail-closed.
+2. **Store checks**: verifies the signer store and consensus policy store are configured. Under enforced postures, missing stores are fail-closed.
 
-3. **Consensus policy lookup**: loads the consensus policy by `L2.ConsensusID`. Under enforced postures, a missing or disabled policy is rejected with `ErrTxL2ConsensusNotConfigured`.
+3. **Consensus policy lookup**: loads the consensus policy by consensus set ID. Under enforced postures, a missing or disabled policy is rejected with `ErrTxL2ConsensusNotConfigured`.
 
-4. **Member validation**: votes from `SignerKeyId` values not in the policy's `MemberAppIDs` are silently excluded from the quorum count.
+4. **Member validation**: votes from signer key IDs not in the policy's member list are silently excluded from the quorum count.
 
-5. **Duplicate signer detection**: if `RequireDistinct=true`, duplicate `SignerKeyId` values in the vote set are rejected with `ErrTxL2DuplicateSigner`.
+5. **Duplicate signer detection**: if `RequireDistinct=true`, duplicate signer key IDs in the vote set are rejected with `ErrTxL2DuplicateSigner`.
 
-6. **Signature verification**: for each vote, the Ed25519 signature over `"<transaction_hash>|<decision>"` is verified against the trusted public key loaded from `SignerStore.GetTrustedSigner`. Invalid signatures are excluded from the quorum count (not rejected; the vote simply doesn't count).
+6. **Signature verification**: for each vote, the Ed25519 signature over `"<transaction_hash>|<decision>"` is verified against the trusted public key loaded from the signer store. Invalid signatures are excluded from the quorum count (not rejected; the vote simply doesn't count).
 
-7. **Quorum check**: the count of affirmative votes from valid, distinct members must meet or exceed `policy.Quorum`. Under enforced postures, failure returns `ErrTxL2QuorumNotMet`.
+7. **Quorum check**: the count of affirmative votes from valid, distinct members must meet or exceed the policy's quorum. Under enforced postures, failure returns `ErrTxL2QuorumNotMet`.
 
 ### Signature Format
 
-The L2 signature payload is the string `"<transaction_hash>|<decision>"` where `decision` is the Go `%v` format of a `bool` (`true` or `false`). The signature is Ed25519, hex-encoded. Verification (`internal/services/governance/l4_warden.go:548`):
-
-```go
-payload := fmt.Sprintf("%s|%v", messageID, decision)
-return ed25519.Verify(pubKey, []byte(payload), sigBytes)
-```
+The L2 signature payload is the string `"<transaction_hash>|<decision>"` where `decision` is the Go `%v` format of a `bool` (`true` or `false`). The signature is Ed25519, hex-encoded. Verification rejects empty or `UNSIGNED` signature strings before attempting decode.
 
 ### Posture-Dependent Enforcement
 
@@ -307,9 +226,9 @@ Under `doctrine` posture, all L2 checks return `false, nil` when stores/policies
 
 ## Gateway Bootstrap Sequence
 
-The full consensus bootstrap sequence in `internal/cli/serve/gateway.go`:
+The full consensus bootstrap sequence:
 
-1. **`--consensus-bootstrap` flag**: if set, `bootstrapConsensusPolicy` seeds trusted signers and the `ConsensusPolicy` from the JSON config file before L2 posture validation runs.
+1. **`--consensus-bootstrap` flag**: if set, the bootstrap function seeds trusted signers and the ConsensusPolicy from the JSON config file before L2 posture validation runs.
 
 2. **L2 posture advisory check**: for `consensus`/`notary` postures, logs warnings if:
    - `--consensus-id` is empty
@@ -317,20 +236,21 @@ The full consensus bootstrap sequence in `internal/cli/serve/gateway.go`:
    - If the policy exists and is enabled, logs the consensus ID, member count, and quorum
 
 3. **Consensus service bootstrap**: for `consensus`/`notary` postures with a non-empty `--consensus-id`:
-   - `BootstrapConsensus` loads the `ConsensusPolicy` from the database
-   - Constructs a `FileKeyProvider` for disk-based member keys
-   - Creates a composite `KeyProvider` that tries file keys first, then falls back to the actuator key
-   - Builds the `ConsensusService` via `NewConsensusFromPolicy`
-   - Wires it into the gateway via `svc.SetConsensus(consensusSvc)`
-   - Wires the `LocalDeliberator` into the MCP gateway via `mcpSvc.SetL2ConsensusDeliberator`
+   - `ConsensusBootstrap` loads the ConsensusPolicy from the database
+   - Constructs a FileKeyProvider for disk-based member keys
+   - Creates a composite KeyProvider that tries file keys first, then falls back to the actuator key
+   - Builds the ConsensusService via `NewConsensusFromPolicy`
+   - Creates a LocalDeliberator from the ConsensusService
+   - Wires the LocalDeliberator into the MCP gateway through RuntimeDependencies (via `SetRuntimeDeps`, called by `NewGatewayOperatorPubSubService`)
+   - Wires the ConsensusService into the GovernanceController at construction time via `InitHTTPHandler`
 
 4. **Under `doctrine` posture**: the Consensus is not constructed.
 
-### Thread-Safe Late Binding
+### Construction-Time Injection
 
-The `GovernanceController` uses `atomic.Pointer[consensus.ConsensusService]` for the consensus reference (`internal/services/gateway/governance_controller.go:49`). The consensus deliberate route is always registered on the mTLS mux; no router rebuild is needed when `SetConsensus` is called later in the boot sequence. The handler checks the atomic pointer at request time and returns `503` if not yet wired.
+The GovernanceController receives the ConsensusService at construction time. If consensus is not configured for the current posture, the controller is constructed with a nil consensus, and the deliberate endpoint returns `503 Service Unavailable`. No atomic late binding or router rebuilds are needed.
 
-Similarly, the MCP gateway uses `atomic.Value` for the `L2ConsensusDeliberator` (`internal/services/mcp/gateway.go:116`), enabling thread-safe late binding after consensus bootstrap.
+The MCP gateway receives the `L2ConsensusDeliberator` through `RuntimeDependencies`, which are set atomically via `SetRuntimeDeps` before the first request. This bundles all runtime-phase dependencies (envelope processor, signing identity, audit logger, L2 deliberator, and others) into a single atomic pointer assignment.
 
 ---
 
@@ -380,35 +300,10 @@ Similarly, the MCP gateway uses `atomic.Value` for the `L2ConsensusDeliberator` 
 
 ## Key Design Decisions
 
-- **Fail-closed by default**: if doctrine is nil, the payload is NOT safe. If consensus stores are missing under enforced postures, transactions are rejected.
+- **Fail-closed by default**: if doctrine is nil, the payload is not safe. If consensus stores are missing under enforced postures, transactions are rejected. If no members have signing keys, deliberation fails.
 - **No key sharing**: each consensus member has its own Ed25519 key, distinct from the gateway identity key, even in single-binary deployments.
 - **Protocol ordering**: L2 (machine consensus) signs the transaction hash before L3 (human notary) is asked. The human is never bothered until all machine-checkable layers pass. L3 proof is intentionally excluded from the transaction hash to avoid circular dependencies.
-- **Idempotent bootstrap**: if the consensus already exists, `bootstrapConsensusPolicy` skips creation, enabling safe re-starts.
-- **Atomic late binding**: the consensus service and deliberator are wired after gateway construction via atomic pointers, eliminating router rebuilds.
+- **Idempotent bootstrap**: if the consensus already exists, the bootstrap function skips creation, enabling safe restarts.
+- **Construction-time injection**: the ConsensusService is wired into the GovernanceController at construction time, and the L2ConsensusDeliberator is wired into the MCP gateway through RuntimeDependencies. This eliminates the need for individual atomic late binding or router rebuilds.
 - **Shared factory**: `NewConsensusFromPolicy` is used by both production bootstrap and test fixtures, ensuring production and test code paths exercise the same construction logic.
-
----
-
-## File Reference
-
-| Component | File |
-|---|---|
-| ConsensusService | `internal/services/consensus/service.go` |
-| ConsensusMember, safety eval, signing | `internal/services/consensus/member.go` |
-| Factory, KeyProvider, FileKeyProvider | `internal/services/consensus/factory.go` |
-| ConsensusStoreService (CRUD) | `internal/services/gateway/consensus_store_service.go` |
-| ConsensusStore interface | `internal/services/governance/l2_consensus.go` |
-| ConsensusPolicy model | `internal/models/auth.go:521` |
-| L4 Warden L2 verification | `internal/services/governance/l4_warden.go:351` |
-| GovernancePosture (doctrine/consensus/notary) | `internal/services/governance/posture.go` |
-| GovernanceController (HTTP handlers) | `internal/services/gateway/governance_controller.go` |
-| Admin API (consensus CRUD) | `internal/services/gateway/admin_controller.go:203` |
-| Bootstrap (CLI serve) | `internal/cli/serve/gateway.go:416` |
-| MCP Gateway deliberation | `internal/services/mcp/gateway.go:731` |
-| L2Vote / L2Metadata proto | `protocol/proto/g8e/common/v1/common.proto:48` |
-| GovernanceEnvelope hash | `internal/governance/envelope.go:42` |
-| Test fixture (SetupConsensus) | `test/fixtures/gateway_fixture.go:654` |
-| Error sentinels | `internal/constants/errors.go:872` |
-| API paths | `internal/constants/api_paths.go:237` |
-| Collections | `internal/constants/collections.go:46` |
-| Env vars | `internal/constants/env_vars.go:37` |
+- **Generic policy interface**: the L4 Warden depends on `L2ConsensusPolicyStore`, not on any consensus-specific type, allowing alternative consensus implementations without warden modifications.

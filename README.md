@@ -2,7 +2,7 @@
 
 # g8e
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Python Tests](https://img.shields.io/badge/Python%20Tests-151%20passed-3776AB.svg)](protocol/python/tests/) [![Conformance](https://img.shields.io/badge/Conformance-420%20tests-3776AB.svg)](protocol/conformance/) [![Secrets](https://img.shields.io/badge/secrets-gitleaks-006600.svg)](https://github.com/gitleaks/gitleaks) [![Licenses](https://img.shields.io/badge/licenses-go--licenses-006600.svg)](https://github.com/google/go-licenses) [![Signed](https://img.shields.io/badge/binaries-cosign%20signed-676BFF.svg)](https://github.com/sigstore/cosign) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](protocol/docs/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](protocol/docs/spec.md)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Python Tests](https://img.shields.io/badge/Python%20Tests-151%20passed-3776AB.svg)](protocol/python/tests/) [![Conformance](https://img.shields.io/badge/Conformance-420%20tests-3776AB.svg)](protocol/conformance/) [![Secrets](https://img.shields.io/badge/secrets-gitleaks-006600.svg)](https://github.com/gitleaks/gitleaks) [![Licenses](https://img.shields.io/badge/licenses-go--licenses-006600.svg)](https://github.com/google/go-licenses) [![Signed](https://img.shields.io/badge/binaries-cosign%20signed-676BFF.svg)](https://github.com/sigstore/cosign) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](docs/core/about.md) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](protocol/docs/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](protocol/docs/spec.md)
 
 </div>
 
@@ -69,7 +69,7 @@ graph TD
         C2["Agentic ensemble<br/>(A2A / tool calls)"]
     end
 
-    subgraph GW_Box ["Governance Gateway (PDP) — owns L1-L3"]
+    subgraph GW_Box ["Governance Gateway (PDP) - owns L1-L3"]
         GW["Policy Decision Point<br/>L1 Doctrine · L2 Consensus · L3 Notary<br/>admits signed envelopes · owns PKI"]
         subgraph GW_PEP ["In-Process Operator (PEP)"]
             GW_L4["L4 Warden"]
@@ -80,7 +80,7 @@ graph TD
     end
 
     subgraph Fleet ["Sovereign hosts, platform-agnostic"]
-        subgraph O1_Box ["Governed Operator (PEP) — owns L4-L5"]
+        subgraph O1_Box ["Governed Operator (PEP) - owns L4-L5"]
             O1_L4["L4 Warden<br/>re-verify L1-L3 proofs"]
             O1_L5["L5 Actuator<br/>execution + signed receipt"]
             O1_L4 --> O1_L5
@@ -155,11 +155,11 @@ The admission pipeline consists of five layers with independent failure domains:
   <img src="docs/diagrams/g8e-diagram.png" alt="g8e Admission Pipeline with agentic ensemble" width="720" />
 </p>
 
-1. **L1 Doctrine** — Gateway (PDP): Deterministic static analysis. Enforces rules against forbidden patterns and MITRE ATT&CK indicators. Active for every action. See [Gateway Postures](docs/guides/build_gateway.md#gateway-mode-flags).
-2. **L2 Consensus** — Gateway (PDP): Multi-agent deliberation. An enrolled Consensus service evaluates the envelope and produces signed votes over the canonical SHA-256 transaction hash. The gateway delegates L2 deliberation to the Consensus service and never self-signs. See [Consensus Layer](protocol/docs/spec.md#l2-consensus).
-3. **L3 Notary** — Gateway (PDP): Hardware-bound human authorization. Utilizes WebAuthn/FIDO2 passkey assertions computed over the transaction hash. See [Authentication](docs/architecture/auth.md).
-4. **L4 Warden** — Operator (PEP): Fail-closed verification authority. Re-verifies all proofs against local state, signatures, freshness, and the state Merkle root. See [Warden Layer](protocol/docs/spec.md#l4-warden).
-5. **L5 Actuator** — Operator (PEP): Single dispatch path. Handles tool invocation, rehydrates scrubbed tokens on-host, and enforces data sovereignty at the execution boundary. See [Actuator Layer](protocol/docs/spec.md#l5-actuator).
+1. **L1 Doctrine** - Gateway (PDP): Deterministic static analysis. Enforces hard gates, forbidden pattern matching, and MITRE threat detection. Active for every action. See [Gateway Postures](docs/guides/build_gateway.md#gateway-mode-flags).
+2. **L2 Consensus** - Gateway (PDP): Multi-agent deliberation. An enrolled Consensus service evaluates the envelope and produces signed votes over the canonical SHA-256 transaction hash. The gateway delegates L2 deliberation to the Consensus service and never self-signs. See [Consensus Layer](protocol/docs/spec.md#l2-consensus).
+3. **L3 Notary** - Gateway (PDP): Hardware-bound human authorization. Utilizes WebAuthn/FIDO2 passkey assertions computed over the transaction hash. See [Authentication](docs/architecture/auth.md).
+4. **L4 Warden** - Operator (PEP): Fail-closed verification authority. Re-verifies all proofs against local state, signatures, freshness, nonces, and the state Merkle root. See [Warden Layer](protocol/docs/spec.md#l4-warden-pre-dispatch-verification).
+5. **L5 Actuator** - Operator (PEP): Single dispatch path. Handles isolated tool invocation (MCP/A2A), mints JIT capabilities, rehydrates scrubbed tokens on-host, and produces signed receipts at the execution boundary. See [Actuator Layer](protocol/docs/spec.md#l5-actuator-executing-side-effects).
 
 ## Data Sovereignty
 
@@ -249,7 +249,7 @@ The g8e platform is designed for environments requiring zero trust architecture 
 
 ## Contributing
 
-We welcome contributions of all kinds — bug reports, feature ideas, documentation improvements, protocol conformance tests, and code changes. Whether you're fixing a typo or adding a new admission layer, we'd love your help making g8e better. See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for guidelines on getting started.
+We welcome contributions of all kinds, including bug reports, feature ideas, documentation improvements, protocol conformance tests, and code changes. Whether you're fixing a typo or adding a new admission layer, we'd love your help making g8e better. See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for guidelines on getting started.
 
 ## Documentation
 
@@ -261,6 +261,7 @@ We welcome contributions of all kinds — bug reports, feature ideas, documentat
 - [Build Operator](docs/guides/build_operator.md)
 - [Build Applications](docs/guides/build_apps.md)
 - [Connect Applications to Gateway](docs/guides/connect_apps_to_gateway.md)
+- [Connect Frontend to Gateway](docs/guides/connect_frontend_to_gateway.md)
 - [Connect Operator to Gateway](docs/guides/connect_operator_to_gateway.md)
 - [Air Gap Deployment](docs/guides/air_gap.md)
 - [Docker Gateway](docs/guides/docker_gateway.md)
@@ -279,8 +280,16 @@ We welcome contributions of all kinds — bug reports, feature ideas, documentat
 - [Governance](docs/architecture/governance.md)
 - [Consensus](docs/architecture/consensus.md)
 - [AI Agents](docs/architecture/agents.md)
+- [Lattice Adapter](docs/architecture/lattice.md)
 - [Protocol Library](docs/architecture/protocol.md)
 - [Scripts](docs/architecture/scripts.md)
+
+#### Developer Guides
+- [Developer Guide](docs/devs/devs.md)
+- [Codebase Map](docs/devs/codemap.md)
+- [Testing Guide](docs/devs/tests.md)
+- [Troubleshooting](docs/devs/troubleshooting.md)
+- [Release Process](docs/devs/release_process.md)
 
 #### Reference
 - [Compliance Alignment](docs/reference/compliance-alignment.md)

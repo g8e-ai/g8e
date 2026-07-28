@@ -1,7 +1,7 @@
 # Network Architecture
 
-Last Updated: 2026-07-24
-Version: v1.6.2
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
 
@@ -13,7 +13,7 @@ The g8e platform uses a zero-trust networking model where all communication is a
 
 The use of `g8e.local` and the underlying network architecture are driven by several key goals:
 1. **Canonical stability**: `g8e.local` remains the stable trust domain and default hostname across all installations.
-2. **Frictionless bootstrap**: Users never configure DNS or host-specific addressing unless they choose to; the CLI falls back to direct IP automatically.
+2. **Automated bootstrap**: Users do not configure DNS or host-specific addressing unless they choose to; the CLI falls back to direct IP automatically.
 3. **Security**: mTLS identity binding and SPIFFE URI SAN validation are preserved regardless of whether clients connect via `g8e.local` or direct IP.
 
 ---
@@ -63,13 +63,13 @@ Each system component receives a SPIFFE ID, embedded as a Uniform Resource Ident
 
 ## 3. mTLS Enforcement
 
-The Governance Gateway enforces TLS 1.3 for all L7 communication.
+The Governance Gateway enforces TLS 1.3 for all L7 communication. Network transport provides identity assurance for the platform's five-layer interlock pipeline: L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, and L5 Actuator.
 
 ### Application-Layer mTLS Enforcement
 
-- The gateway accepts and verifies client certificates using `tls.VerifyClientCertIfGiven` at the TLS layer. This allows browser-based clients (such as the g8e Console) to connect without certificates.
-- For all non-public routes, the application-layer middleware acts as a strict, fail-closed gate, requiring a verified client certificate.
-- Revocation is checked against a database-backed revoked certificates store.
+- The gateway requests and verifies client certificates when present during the TLS handshake, allowing browser-based clients (such as the g8e Console) to connect without certificates.
+- For all non-public routes, application-layer middleware acts as a strict, fail-closed gate requiring a verified client certificate.
+- Certificate revocation is checked against a database-backed revoked certificates store.
 - Middleware verifies that the SPIFFE ID in the client certificate matches the specific session identifier (such as `operator_session_id` or `cli_session_id`) inside the `GovernanceEnvelope`.
 
 ### Identity Binding
@@ -82,7 +82,7 @@ All peer connections enforce mTLS with SPIFFE URI SAN validation. Certificates u
 
 ### CSR-Based Enrollment
 
-**The mental model:** CSR-based enrollment is cryptographic identity proof. Instead of sharing a secret (like an API key), a client generates its own key pair and asks the Gateway to sign a certificate attesting "this public key belongs to this identity." The Gateway acts as a Certificate Authority (CA). The act of starting the Gateway is itself the Platform Owner's authorization; there are no standing invite codes, pre-shared keys, or manual approval steps. The client then proves its identity on every subsequent call by signing with its private key (via mTLS). No shared secrets, no API keys to leak.
+CSR-based enrollment provides cryptographic identity proof. Instead of sharing a secret such as an API key, a client generates its own key pair and submits a Certificate Signing Request (CSR) to the gateway. The Governance Gateway acts as the Certificate Authority (CA) that signs the certificate, attesting to the client identity. Starting the gateway represents platform authorization, requiring no pre-shared keys or manual approval steps. The client authenticates every subsequent call using mTLS signed with its private key.
 
 Clients enroll in the platform using a Certificate Signing Request (CSR) bootstrap flow:
 
@@ -100,24 +100,18 @@ Since the Governance Gateway acts as a self-signed CA, clients must explicitly t
 | **Linux/macOS** | `/web-cert.sh` | Downloads CA and installs to system store via `update-ca-certificates`. |
 | **Windows** | `/web-cert.ps1` | Downloads CA and installs to Root store via `Import-Certificate`. |
 
-**Browser Restart**: After running any trust script, users **must restart all open browsers**. Browsers often cache certificate trust state, and WebAuthn registration will fail if the browser does not yet recognize the new platform CA.
+After running any trust script, users must restart all open browsers. Browsers cache certificate trust state, and WebAuthn registration fails if the browser does not recognize the platform CA.
 
 ### CLI Endpoint Override Flags
 
-When the gateway's HTTP and HTTPS ports are mapped to different host ports, as in Docker demos where the container's internal ports (8080/8443) are exposed on different host ports (e.g., 8085/8448), the CLI provides two flags to independently override each phase's endpoint:
+When the gateway's HTTP and HTTPS ports are mapped to different host ports, such as in Docker environments where container ports 8080 and 8443 are exposed on host ports 8085 and 8448, the CLI provides flags to independently override each endpoint:
 
 | Flag | Purpose | Default |
 |---|---|---|
 | `--endpoint` (`-e`) | HTTP discovery endpoint (host or host:port) | `g8e.local` (or IP fallback) |
 | `--port` | HTTPS/mTLS port (overrides default 8443) | `8443` |
 
-When both flags are used together, the CLI maintains independent overrides for each phase: `--endpoint` controls the HTTP discovery/bootstrap URL, and `--port` controls the HTTPS/mTLS URL. This is essential for Docker demo environments where HTTP and HTTPS are mapped to different host ports.
-
-**Example (Docker demo with split ports):**
-```
-g8e auth enroll -e localhost:8085 --port 8448
-```
-This sets the HTTP discovery endpoint to `localhost:8085` and the HTTPS/mTLS endpoint to `localhost:8448`.
+When both flags are used together, `--endpoint` controls the HTTP discovery URL and `--port` controls the HTTPS/mTLS port. For example, running `g8e auth enroll -e localhost:8085 --port 8448` directs HTTP discovery to port 8085 and HTTPS mTLS operations to port 8448.
 
 ### No-DNS / Direct IP Configuration
 
@@ -125,14 +119,14 @@ The platform supports setup without requiring `/etc/hosts` changes or DNS config
 
 ### Windows Certificate Store Enrollment
 
-On Windows, `g8e auth enroll` auto-detects the platform and uses the Windows Certificate Store for CLI session enrollment. This is a CLI session enrollment (mTLS cert-based), distinct from the browser-based WebAuthn passkey flow (cookie-based web session).
+On Windows, `g8e auth enroll` auto-detects the platform and uses the Windows Certificate Store for CLI session enrollment. This certificate-based CLI enrollment is distinct from the browser-based WebAuthn passkey flow.
 
 1. **CLI Enrollment**: Run `g8e auth enroll [--tpm]` to generate an ECDSA P-256 keypair in the Windows Certificate Store.
 2. **CSR Signing**: The CLI submits a CSR to the Governance Gateway and receives a signed certificate with SPIFFE URI SAN.
 3. **Certificate Import**: The signed certificate is imported to `Cert:\CurrentUser\My` in the Windows Certificate Store for Windows Hello native API access.
 4. **Session Binding**: The Governance Gateway extracts the SPIFFE URI SAN from the client certificate and creates a `cli_session_id` bound to the user identity.
 
-**TPM-Backed Keys**: The `--tpm` flag (Windows-only) utilizes the Microsoft Platform Crypto Provider KSP to generate keys in hardware. Currently, the implementation uses a software-backed key with TPM annotation as the full CNG API integration is pending.
+**TPM-Backed Keys**: The `--tpm` flag (Windows-only) utilizes the Microsoft Platform Crypto Provider KSP to generate keys in hardware. Currently, the implementation uses a software-backed key with TPM annotation as full CNG API integration is pending.
 
 ---
 
@@ -150,14 +144,12 @@ Default ports:
 ### Port Constraints
 
 - **HTTP Surface** (`8080`): Serves plain HTTP for health checks, state endpoint, trust scripts (`/web-cert.sh`, `/web-cert.ps1`), CA bundle and fingerprint discovery, enrollment endpoints, deploy scripts, and node binary distribution. Unregistered paths return 404; there is no redirect to HTTPS.
-- **HTTPS Surface** (`8443`): Uses `tls.VerifyClientCertIfGiven`, overriding the stricter `tls.RequireAndVerifyClientCert` default. Operates with application-layer mTLS validation. All governed execution endpoints and operator routes require a verified SPIFFE identity via client certificate, while public routes (the Console SPA, static assets, CA bundle, CRL, and WebAuthn browser endpoints) are accessible directly. When JWKS is configured, MCP and A2A endpoints accept JWT authentication as an alternative to mTLS for BYO clients.
+- **HTTPS Surface** (`8443`): Accepts optional client certificates at the transport layer, allowing public access to browser-based assets while requiring application-layer mTLS verification for all governed execution routes. All governed execution endpoints and operator routes require a verified SPIFFE identity via client certificate, while public routes (the Console SPA, static assets, CA bundle, CRL, and WebAuthn browser endpoints) are accessible directly. When JWKS is configured, MCP and A2A endpoints accept JWT authentication as an alternative to mTLS for BYO clients.
 - **Collision Prevention**: The gateway fails startup if multiple logical surfaces are assigned to the same port, ensuring no downgrade of the mTLS execution boundary.
 
-### Docker Port Mapping & CLI Split Endpoints
+### Docker Port Mapping and CLI Split Endpoints
 
-In Docker demo environments, the gateway's internal HTTP (8080) and HTTPS (8443) ports are typically mapped to different host ports (e.g., 8085→8080, 8448→8443). Since enrollment uses both ports, HTTP for discovery/bootstrap and HTTPS for mTLS API operations, a single endpoint override cannot address both correctly.
-
-The CLI solves this with split endpoint overrides (see [CLI Endpoint Override Flags](#cli-endpoint-override-flags) above). The `--endpoint` flag targets the HTTP discovery port and the `--port` flag targets the HTTPS/mTLS port, allowing the CLI to reach both surfaces through their mapped host ports independently.
+In Docker demo environments, the gateway's internal HTTP (8080) and HTTPS (8443) ports are typically mapped to different host ports (such as 8085 for HTTP and 8448 for HTTPS). Because enrollment requires HTTP discovery and HTTPS mTLS calls, the CLI uses split endpoint overrides (`--endpoint` for HTTP discovery and `--port` for HTTPS mTLS) to reach both surfaces through their respective host ports.
 
 ---
 
@@ -201,11 +193,11 @@ The gateway provides a WebSocket fan-out via `/api/v1/pubsub/stream`, authentica
 
 ### Server-Sent Events (SSE)
 
-The gateway provides real-time event streaming from app workloads to browser and CLI clients via three endpoints: `POST /api/v1/sse/push` (app workload producers), `GET /api/v1/sse/events` (polling), and `GET /api/v1/sse/stream` (live SSE stream). Events are routed by `web_session_id`, `cli_session_id`, or `user_id`. See [SSE Streaming](./sse.md) for full details.
+The gateway provides real-time event streaming from app workloads to browser and CLI clients via three endpoints: `POST /api/v1/sse/push` (app workload producers), `GET /api/v1/sse/events` (polling), and `GET /api/v1/sse/stream` (live SSE stream). Events are routed by `web_session_id`, `cli_session_id`, or `user_id`. See [SSE Streaming](./sse.md) for details.
 
 ### Agent Integration
 
-The platform provides zero-config ingress for agentic CLI coding tools through:
+The platform provides zero-configuration ingress for agentic CLI coding tools through:
 - **MCP stdio proxy**: Bridges stdio MCP transport to the gateway mTLS HTTPS endpoint, handling L3 approval SSE notifications and browser opening.
 - **A2A protocol**: Agent-to-Agent execution via `/api/v1/a2a/call`, supporting JWT authentication when JWKS is configured for BYO client integration.
 
@@ -215,9 +207,9 @@ The platform provides zero-config ingress for agentic CLI coding tools through:
 
 The gateway detects the machine's network identity (IPs, hostnames, and aliases) at startup. This detection includes:
 - **Network Interface IPs**: IPv4 addresses from all non-loopback interfaces.
-- **Hostnames**: From `/etc/hostname` and system calls.
+- **Hostnames**: From system configuration and system calls.
 - **Hosts File Aliases**: Local aliases pointing to the machine's IPs.
-- **mDNS names**: *.local names via Avahi or Bonjour.
+- **mDNS names**: Local `.local` names via mDNS services.
 - **DNS PTR records**: Reverse DNS lookups.
 - **SSH known_hosts**: Hostnames pointing to this machine.
 - **Windows Identity**: NetBIOS and AD FQDN names.

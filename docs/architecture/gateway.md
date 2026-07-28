@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-07-24
-Version: v1.6.2
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 The g8e Protocol platform is implemented as a single static binary that operates in two modes:
 
@@ -105,7 +105,7 @@ By passing `--posture doctrine`, `--posture consensus`, or `--posture notary`, t
     - **Document Store**: JSON document CRUD on a Collection/ID pattern via `/api/v1/data/*`.
     - **KV Store**: TTL-aware ephemeral state with `GLOB` pattern scanning via `/api/v1/kv/*`.
     - **Blob Store**: Binary persistence for attachments and certificate material via `/api/v1/blobs/*`.
-    - **Pub/Sub Broker**: High-performance WebSocket fan-out via `/api/v1/pubsub/stream`. Mutation channels (`cmd:*`) are governed.
+    - **Pub/Sub Broker**: WebSocket fan-out via `/api/v1/pubsub/stream`. Mutation channels (`cmd:*`) are governed.
     - **Root CA / PKI**: Issues mTLS certificates via CSR-based enrollment with SPIFFE URI SAN identity.
     - **Audit Authority**: Append-only encrypted log of every event and signed `ActionReceipt`.
     - **Unified MCP Endpoint**: Single-URL JSON-RPC dispatch contract for MCP protocol communication.
@@ -122,7 +122,7 @@ The Governance Gateway exposes two logical protocol surfaces. To maintain the mT
 
 Vault and rate-limit settings flow from CLI flags through the gateway configuration loader. Vault paths default to platform infrastructure directories when not explicitly specified. Rate limiting is disabled when the requests-per-second value is zero.
 
-The `--doctrine-dir` flag (env: `G8E_DOCTRINE_DIR`) specifies a directory of JSON doctrine files loaded at startup via `NewL1DoctrineFromDir()`. File-loaded threat detectors are appended after hardcoded MITRE patterns. The loaded doctrine instance is shared between the MCP Gateway ThreatScanner (field-value scanning) and L4Warden (payload validation via `GovernanceDeps.Doctrine`). Defaults to empty (hardcoded patterns only) for backward compatibility.
+The `--doctrine-dir` flag (env: `G8E_DOCTRINE_DIR`) specifies a directory of JSON doctrine files loaded at startup. File-loaded threat detectors are appended after hardcoded MITRE patterns. The loaded doctrine instance is shared between the MCP Gateway threat scanner (field-value scanning) and L4 Warden (payload validation). Defaults to empty (hardcoded patterns only) for backward compatibility.
 
 ### Onboarding Wizard
 
@@ -132,7 +132,7 @@ The `--doctrine-dir` flag (env: `G8E_DOCTRINE_DIR`) specifies a directory of JSO
 
 ## HTTP Router Architecture
 
-The gateway builds two distinct HTTP routers, one per protocol surface. The router layer is a thin shell holding middleware infrastructure (rate limiting, CORS, path traversal guard) and delegating all domain logic to dedicated controllers for PKI, data, auth, admin, operator, SSE, health, and governance. Late-bound dependencies (consensus service, envelope processor) are wired into the governance controller after initial construction, allowing the router to be built once at startup without rebuilds.
+The gateway builds two distinct HTTP routers, one per protocol surface. The router layer holds middleware infrastructure (rate limiting, CORS, path traversal guard) and delegates all domain logic to dedicated controllers for PKI, data, auth, admin, operator, SSE, health, and governance. Late-bound dependencies (consensus service, envelope processor) are wired into the governance controller after initial construction, allowing the router to be built once at startup without rebuilds.
 
 ### Bootstrap HTTP Router
 
@@ -140,7 +140,7 @@ Served on the HTTP port (8080), this router handles only bootstrap and PKI disco
 
 ### Public HTTPS Router
 
-Served on the HTTPS port (8443), this router handles all API, MCP, passkey, console, and management routes. It is wrapped with CORS, path traversal guard, and auth middleware at the outermost layer. The CORS middleware applies CORS headers based on configured `AllowedOrigins`, handling OPTIONS preflight requests and reflecting allowed origins. The RouteAuthRegistry classifies every route by its auth requirement.
+Served on the HTTPS port (8443), this router handles all API, MCP, passkey, console, and management routes. It is wrapped with CORS, path traversal guard, and auth middleware at the outermost layer. The CORS middleware applies CORS headers based on configured `AllowedOrigins`, handling OPTIONS preflight requests and reflecting allowed origins. Every route is classified by its authentication requirements.
 
 The public HTTPS router registers the following route categories:
 
@@ -154,27 +154,27 @@ The public HTTPS router registers the following route categories:
 
 **mTLS-Only Routes**: Data settings, blob store, operator management (list, terminate, bind, unbind, target, reauth), governance signers, app policies, app revocation, consensus management (list, delete), consensus deliberate, governance envelopes (rate-limited), audit receipts, events, export, summary, and report, SSE push, database, KV store, pub/sub publish and stream, PKI management (apps enrollment, apps delegated, certificates revoke, revocation bundle), user management, passkey CLI status, and enrollment token generation.
 
-**WebSession-Protected Routes**: Browser-facing routes under `/api/v1/users/`, `/api/v1/auth/sessions/`, `/api/v1/approvals`, `/api/v1/auth/passkeys` are classified as `RouteAuthWebSession` in the RouteAuthRegistry, requiring a valid web session cookie. These include user profile (`/api/v1/users/me`), web session info (`/api/v1/auth/sessions/me`), OOB approval actions and listing, and passkey credential listing and revocation.
+**WebSession-Protected Routes**: Browser-facing routes under `/api/v1/users/`, `/api/v1/auth/sessions/`, `/api/v1/approvals`, `/api/v1/auth/passkeys` require a valid web session cookie. These include user profile (`/api/v1/users/me`), web session info (`/api/v1/auth/sessions/me`), OOB approval actions and listing, and passkey credential listing and revocation.
 
-**Dual-Auth Routes**: SSE stream (`/api/v1/sse/stream`) and SSE events (`/api/v1/sse/events`) are classified as `RouteAuthDual`, accepting either mTLS or web session cookie authentication.
+**Dual-Auth Routes**: SSE stream (`/api/v1/sse/stream`) and SSE events (`/api/v1/sse/events`) accept either mTLS or web session cookie authentication.
 
-**CLI Approval Endpoints**: The `/api/v1/approvals/status/` and `/api/v1/approvals/pending` endpoints are registered as `RouteAuthMTLS` exact paths in the RouteAuthRegistry, taking priority over the `/api/v1/approvals` `RouteAuthWebSession` prefix. They require mTLS authentication and are used by CLI clients for post-SSE verification of approval state and listing pending suspended transactions. The `/api/v1/approve/{txHash}` page route is also classified as `RouteAuthNone` (public), redirecting to the console SPA with a URL-encoded approval hash fragment (`/console/#approve={url-encoded-txHash}`), enabling auto-trigger of the WebAuthn approval flow upon successful login.
+**CLI Approval Endpoints**: The `/api/v1/approvals/status/` and `/api/v1/approvals/pending` endpoints are exact mTLS paths, taking priority over the `/api/v1/approvals` web session prefix. They require mTLS authentication and are used by CLI clients for post-SSE verification of approval state and listing pending suspended transactions. The `/api/v1/approve/{txHash}` page route is public, redirecting to the console SPA with a URL-encoded approval hash fragment (`/console/#approve={url-encoded-txHash}`), enabling auto-trigger of the WebAuthn approval flow upon successful login.
 
-### RouteAuthRegistry
+### Route Authentication Classification
 
-The RouteAuthRegistry classifies every route by its auth requirement using a `RouteAuthMode` enum: `RouteAuthNone` (public), `RouteAuthMTLS`, `RouteAuthWebSession`, and `RouteAuthDual` (mTLS or web session). It maintains exact paths and prefix mappings. The registry checks exact matches first (highest priority), then longest prefix match. Unknown routes default to `RouteAuthMTLS` (fail-closed).
+Routes are classified by authentication mode: public (no auth), mTLS required, web session required, or dual authentication (mTLS or web session). Exact path matches take priority over prefix matches. Unregistered routes default to mTLS required to enforce fail-closed security.
 
-### PrivilegedRouteRegistry
+### Privileged Route Control
 
-The PrivilegedRouteRegistry defines routes that require operator or CLI authentication. App certificates are blocked from these routes. The registry covers governance envelope submission (`/api/v1/governance/envelopes`) and query endpoints (`/_query`). The registry performs prefix matching to determine whether a request path requires operator or CLI identity.
+Privileged routes require operator or CLI identity. Application certificates are restricted from accessing governance envelope submission (`/api/v1/governance/envelopes`) and query endpoints (`/_query`) using path prefix verification.
 
 ### Auth Middleware
 
-The auth middleware is a single unified middleware that dispatches based on the route's auth mode:
-1. **`RouteAuthNone`**: Calls the next handler directly, bypassing authentication.
-2. **`RouteAuthMTLS`**: Enforces mTLS by requiring a client certificate, verifying revocation status via the PKI controller, and dispatching identity extraction: operator session (from mTLS SPIFFE URI SAN), CLI session (via `X-G8E-CLI-Session-ID` header), or App certificate. App auth consults the PrivilegedRouteRegistry to block App certificates from governance and query endpoints.
-3. **`RouteAuthWebSession`**: Validates the web session cookie and stamps context with user and session IDs.
-4. **`RouteAuthDual`**: Tries mTLS first (if a client certificate is present), falling back to web session cookie authentication.
+The auth middleware dispatches authentication checks based on the route's classified mode:
+1. **Public**: Direct execution without authentication.
+2. **mTLS**: Requires client certificate, verifies PKI revocation status, and extracts identity (operator session, CLI session, or application certificate). Application certificates are blocked from privileged routes.
+3. **Web Session**: Validates web session cookie and injects user context.
+4. **Dual**: Prefers mTLS when client certificate is present, falling back to web session cookie.
 
 ### Console SPA
 
@@ -208,11 +208,11 @@ The endpoint also supports SSE (Server-Sent Events) via GET requests for streami
 
 ### Native Tool Registry
 
-The gateway maintains a centralized tool registry. The ToolRegistry provides thread-safe tool registration and lookup, enforcing tool name validation and input schema compliance. All native tools implement a common interface providing name, description, input schema, and execution capabilities.
+The gateway maintains a centralized tool registry. The tool registry provides thread-safe tool registration and lookup, enforcing tool name validation and input schema compliance. All native tools implement a common interface providing name, description, input schema, and execution capabilities.
 
 ### Input Validation Framework
 
-The gateway implements a comprehensive input validation system with fail-closed security principles:
+The gateway implements an input validation system with fail-closed security principles:
 - **SQL Query Validation**: Rejects empty queries, trailing semicolons to prevent statement chaining
 - **URL Validation**: Parses and validates URLs, restricting to http/https schemes, rejecting localhost and loopback addresses, and blocking private IP ranges to prevent SSRF attacks
 - **Protocol Validation**: Validates network protocol strings (tcp, udp, tcp6, udp6, raw) for socket audit operations to prevent path traversal
@@ -226,7 +226,7 @@ The gateway implements a comprehensive input validation system with fail-closed 
 
 ### Native Tool Ecosystem
 
-The gateway provides a comprehensive set of native tools covering database operations, filesystem analysis, network diagnostics, process management, and system monitoring. All tools are registered at startup via explicit registration.
+The gateway provides a set of native tools covering database operations, filesystem analysis, network diagnostics, process management, and system monitoring. All tools are registered at startup via explicit registration.
 
 **Database Tools**:
 - `db_discover_topology`: Database schema discovery
@@ -312,36 +312,36 @@ The gateway exposes two health endpoints, one per protocol surface:
 ### Main Health Check (HTTPS)
 
 The main health endpoint on the HTTPS port performs full readiness checks:
-- Service readiness via an optional `isReady` callback
+- Service readiness via an optional readiness callback
 - Platform settings document availability
 - State root calculation success
 
-The response includes `status`, `mode`, `version`, `pid` (OS process ID), `governance_ready` (whether the governance pipeline is initialized), and `state_merkle_root` (the current state root). This endpoint is classified as `RouteAuthNone` in the RouteAuthRegistry to bypass authentication middleware for monitoring purposes.
+The response includes `status`, `mode`, `version`, `pid` (OS process ID), `governance_ready` (whether the governance pipeline is initialized), and `state_merkle_root` (the current state root). This endpoint is unauthenticated to bypass authentication middleware for monitoring purposes.
 
 ### Bootstrap Health Check (HTTP)
 
-The bootstrap health endpoint on the HTTP port is a lighter check that verifies only the `isReady` callback. It skips platform settings and state root verification, making it suitable for initialization monitoring before the database is fully configured. The response includes `status`, `mode`, `version`, `pid`, and `governance_ready`.
+The bootstrap health endpoint on the HTTP port is a lighter check that verifies only the readiness callback. It skips platform settings and state root verification, making it suitable for initialization monitoring before the database is fully configured. The response includes `status`, `mode`, `version`, `pid`, and `governance_ready`.
 
 ---
 
 ## 5-Layer Verification Sequence
 
-Every transaction submitted to `POST /api/v1/governance/envelopes` must pass through five layers sequentially. The Gateway (PDP) owns layers L1-L3 as policy decisions. The Operator substrate (PEP) — whether in-process on the Gateway host or remote on a managed host — owns layers L4-L5 as enforcement and execution. Remote Governed Operators re-verify L1-L3 proofs from the Gateway before running L4-L5 locally (see [Operator Architecture](./operator.md)).
+Every transaction submitted to `POST /api/v1/governance/envelopes` must pass through five layers sequentially. The Gateway (PDP) owns layers L1-L3 as policy decisions. The Operator substrate (PEP), whether in-process on the Gateway host or remote on a managed host, owns layers L4-L5 as enforcement and execution. Remote Governed Operators re-verify L1-L3 proofs from the Gateway before running L4-L5 locally (see [Operator Architecture](./operator.md)).
 
-### L1 Doctrine (Technical Bedrock) — Gateway (PDP)
+### L1 Doctrine (Technical Bedrock) - Gateway (PDP)
 Enforces forbidden patterns (such as `sudo` or `rm -rf /`), blacklists, and whitelists. It also performs MITRE threat detection on incoming payloads.
 
-### L2 Consensus (Consensus Deliberation) — Gateway (PDP)
+### L2 Consensus (Consensus Deliberation) - Gateway (PDP)
 The gateway delegates L2 deliberation to an enrolled Consensus service rather than self-signing votes. The Consensus evaluates the transaction and produces `L2Vote` entries (Ed25519 signatures over the transaction hash) from its member agents. Under `consensus` and `notary` postures, the gateway calls the Consensus's `Deliberate` endpoint (via in-process deliberation) and attaches the returned L2 votes to the envelope. The L4 Warden then verifies the quorum of valid signatures against the `ConsensusPolicy` stored in the consensus store.
 
-### L3 Notary (Human Authorization) — Gateway (PDP)
+### L3 Notary (Human Authorization) - Gateway (PDP)
 The gateway notary enforces human-in-the-loop authorization using a layered model: passkey authorization is required for all proofs, and CLI mTLS session verification is applied as an additional transport-auth layer when `mtls_cert_fingerprint` is present.
 - **Web Sessions**: Use WebAuthn passkey proofs (FIDO2).
 - **CLI Sessions**: Use WebAuthn passkey proofs with additional mTLS certificate fingerprint verification. The CLI session verifier checks user active status, session ownership, fingerprint match (constant-time compare), session active and expiry, and certificate revocation.
 - **Operator Sessions**: Use mTLS certificate fingerprints only (passkey auth is not available for operators).
 - **JWT Sessions**: Use JWT tokens validated at the gateway with JIT user provisioning.
 
-### L4 Warden (Pre-Dispatch Gating) — Operator (PEP)
+### L4 Warden (Pre-Dispatch Gating) - Operator (PEP)
 Runs on the Operator substrate (in-process for gateway-host operations, remote for managed-host operations). Enforces final pre-execution verification gates:
 - **Transaction Hash**: The `envelope.id` must match the deterministic transaction hash computed from its content.
 - **Expiry**: The `expires_at` timestamp must be in the future.
@@ -349,7 +349,7 @@ Runs on the Operator substrate (in-process for gateway-host operations, remote f
 - **State Root**: The `state_merkle_root` (if provided) must match the current state root of the gateway.
 - **Signer Trust**: Verifies L2 Consensus / L3 Notary signatures against trusted keys in the signer store.
 
-### L5 Actuator (Execution and Receipt) — Operator (PEP)
+### L5 Actuator (Execution and Receipt) - Operator (PEP)
 Runs on the Operator substrate. Performs isolated boundary tool dispatch (via MCP/A2A) and signed receipt production:
 - **Execution**: Dispatches the verified payload to the downstream execution handler (such as an MCP server).
 - **Audit**: Persists a `console_audit` record and a signed `ActionReceipt`.
