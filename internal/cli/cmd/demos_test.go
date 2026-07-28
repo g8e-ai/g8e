@@ -975,22 +975,22 @@ func TestComposeConfig_ConsensusBootstrapMounts(t *testing.T) {
 	repoRoot := resolveRepoRoot(t)
 
 	tests := []struct {
-		name       string
+		name        string
 		composePath string
-		gatewaySvc string
-		agentSvc   string
+		gatewaySvc  string
+		agentSvc    string
 	}{
 		{
-			name:       "dhs",
+			name:        "dhs",
 			composePath: filepath.Join(repoRoot, "demos", "dhs", "compose.yml"),
-			gatewaySvc: "gateway:",
-			agentSvc:   "agent-coalition:",
+			gatewaySvc:  "gateway:",
+			agentSvc:    "agent-coalition:",
 		},
 		{
-			name:       "fedramp",
+			name:        "fedramp",
 			composePath: filepath.Join(repoRoot, "demos", "fedramp", "compose.yml"),
-			gatewaySvc: "gateway:",
-			agentSvc:   "agent-runtime:",
+			gatewaySvc:  "gateway:",
+			agentSvc:    "agent-runtime:",
 		},
 	}
 
