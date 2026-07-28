@@ -44,7 +44,7 @@ func mcpScenarios() []Scenario {
 			},
 		},
 		{
-			Name: "healthcare-success", Title: "Authorized FHIR PA Submission", Persona: clinicalAgent, RequiresPosture: Consensus,
+			Name: "healthcare-success", Title: "Authorized FHIR PA Submission", Persona: clinicalAgent, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				// Call the governed submit_pa tool
 				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "submit_pa", map[string]any{
@@ -63,7 +63,7 @@ func mcpScenarios() []Scenario {
 			},
 		},
 		{
-			Name: "healthcare-phi-blocked", Title: "PHI Exfiltration Blocked by Doctrine", Persona: clinicalAgent, RequiresPosture: Consensus,
+			Name: "healthcare-phi-blocked", Title: "PHI Exfiltration Blocked by Doctrine", Persona: clinicalAgent, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				// Attempt exfiltration that matches phi_exfil_attempt pattern
 				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "submit_pa", map[string]any{
@@ -82,7 +82,7 @@ func mcpScenarios() []Scenario {
 			},
 		},
 		{
-			Name: "healthcare-gold-card", Title: "Gold Card Auto-Approval (HB 3134 §6)", Persona: clinicalAgent, RequiresPosture: Consensus,
+			Name: "healthcare-gold-card", Title: "Gold Card Auto-Approval (HB 3134 §6)", Persona: clinicalAgent, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "submit_pa", map[string]any{
 					"resourceType":   "ClaimResponse",
@@ -105,7 +105,7 @@ func mcpScenarios() []Scenario {
 			},
 		},
 		{
-			Name: "healthcare-sla-breach", Title: "SLA Breach and OHA Reporting (2026 CCO Medicaid Rule)", Persona: clinicalAgent, RequiresPosture: Consensus,
+			Name: "healthcare-sla-breach", Title: "SLA Breach and OHA Reporting (2026 CCO Medicaid Rule)", Persona: clinicalAgent, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "query_pa_status", map[string]any{
 					"request_id": "PA-2026-0044",

@@ -452,6 +452,23 @@ When enrolling the CLI against a demo gateway, use the HTTP and HTTPS ports from
 
 For example, to enroll against the healthcare demo: `./g8e auth enroll -e localhost:8081 --port 8444`.
 
+### Verify all demos
+
+Run the one-command demo verification target to build the binary and run all 6 demos sequentially:
+
+```bash
+make demo-verify
+```
+
+This target depends on `make build`, then for each demo (healthcare, gov, finance, dhs, fedramp, frontend) it:
+
+1. Stops any running instance and cleans up volumes
+2. Runs all scenarios via `g8e demos run <org>`
+3. Stops and cleans up after the demo
+4. Reports PASS or FAIL
+
+If any demo fails, the target exits immediately with a non-zero status. All 6 demos must pass for the target to succeed.
+
 ---
 
 ## Post-Bootstrap Actions

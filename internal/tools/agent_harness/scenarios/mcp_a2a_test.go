@@ -359,6 +359,27 @@ func TestMCPScenarioRunNotNil(t *testing.T) {
 	}
 }
 
+func TestHealthcareScenarioPostureDeclarations(t *testing.T) {
+	scenarios := mcpScenarios()
+
+	healthcareNames := map[string]bool{
+		"healthcare-success":     true,
+		"healthcare-phi-blocked": true,
+		"healthcare-gold-card":   true,
+		"healthcare-sla-breach":  true,
+	}
+
+	for _, sc := range scenarios {
+		if !healthcareNames[sc.Name] {
+			continue
+		}
+		if sc.RequiresPosture != Doctrine {
+			t.Errorf("healthcare scenario %q should declare RequiresPosture=Doctrine (the demo runner never calls switchDemoPosture and the gateway boots in doctrine), got %q",
+				sc.Name, sc.RequiresPosture)
+		}
+	}
+}
+
 func TestA2AScenarioRunNotNil(t *testing.T) {
 	scenarios := a2aScenarios()
 

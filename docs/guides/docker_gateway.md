@@ -78,9 +78,6 @@ Functional demo environments are located in the `demos/` directory. These config
 - **Healthcare**: FHIR R4 compliance and PHI protection.
 - **Government**: CUI protection and CMMC compliance enforcement.
 - **Finance**: High-integrity ledger and audit requirements.
-- **Secure Data**: Governed data migration with a two-operator pipeline and chain-of-custody receipts.
-- **Department of War (DoW)**: Tactical edge operations with SWaP-constrained sensors, BFT spoofing defense, and autonomous SIGINT-to-EO/IR cross-cueing.
-- **Swarm**: Drone swarm simulation with 20 autonomous operators, battlefield intelligence, and doctrine-based weapons control.
 - **DHS**: Persistent sovereign capability for coalition data handling with USPER PII minimization, cross-domain release control, and consensus posture.
 - **FedRAMP**: Sovereign cloud governance with audit integrity, access control, cross-domain protection, and human-in-the-loop resource destruction approval.
 - **Frontend**: Third-party frontend application enrollment with WebAuthn passkey authentication, CORS, and SSE live event streaming.
@@ -93,6 +90,33 @@ docker compose up -d
 ```
 
 Each demo uses its own `compose.yml` file with isolated networks, volumes, and doctrine bind mounts. Demos use a separate `demos/Dockerfile` that copies a pre-built binary into a minimal Debian image without compilation. Run `make build` first to produce the binary. See [demos/README.md](../../demos/README.md) for the full demo environment guide.
+
+### Consensus Bootstrap Files
+
+Demos that use consensus or notary posture (DHS, FedRAMP) require two bootstrap files mounted into **both** the gateway and agent containers:
+
+- **`consensus-bootstrap.json`** — Defines `MemberKeyIDs`, the list of registered member app IDs that participate in L2 consensus voting. Without this file, `MemberKeyIDs` stays nil and the gateway's L2 consensus verifier silently ignores all votes, resulting in quorum failure (`affirmative=0`).
+- **`ensemble-seed.hex`** — The cryptographic seed for the ensemble's signing key.
+
+Both files must be mounted as read-only volumes. The compose snippet for each g8e service (gateway and agent) should include:
+
+```yaml
+volumes:
+  - ./config/consensus-bootstrap.json:/etc/g8e/consensus-bootstrap.json:ro
+  - ./config/ensemble-seed.hex:/etc/g8e/ensemble-seed.hex:ro
+```
+
+If only `ensemble-seed.hex` is mounted (omitting `consensus-bootstrap.json`), the ensemble votes with the default `KeyID` instead of the gateway's registered member app IDs. The gateway's L2 consensus verifier checks each vote's `SignerKeyId` against the consensus policy's `MemberKeyIDs` — votes from unknown signer IDs are silently ignored, resulting in 0 affirmative votes and quorum failure.
+
+### Posture Switching During Demos
+
+The DHS and FedRAMP demos dynamically switch the gateway's posture mid-scenario using the `switchDemoPosture` function. This function:
+
+1. Stops the gateway container (`docker compose stop gateway`)
+2. Recreates it with the new `G8E_GATEWAY_POSTURE` environment variable (`docker compose up -d --force-recreate --no-deps gateway`)
+3. Polls the health endpoint every 3 seconds (up to 30 attempts = 90s timeout) until the gateway is live
+
+This allows a single demo to test multiple posture modes (e.g., consensus → notary → consensus) without restarting the entire Docker Compose stack. The gateway container is recreated in-place; other services (operator, agent, actuators) remain running.
 
 ## Configuration
 

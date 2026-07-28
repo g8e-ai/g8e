@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -548,6 +549,56 @@ func TestDemoStep(t *testing.T) {
 	})
 }
 
+func TestDemoStepHTTP(t *testing.T) {
+	t.Run("demoStepHTTP function exists", func(t *testing.T) {
+		assert.NotNil(t, demoStepHTTP)
+	})
+
+	t.Run("returns error when command fails", func(t *testing.T) {
+		err := demoStepHTTP(t.TempDir(), "failing command", "200",
+			"false",
+		)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failing command")
+	})
+
+	t.Run("returns error on status code mismatch", func(t *testing.T) {
+		dir := t.TempDir()
+		// Use echo to simulate curl writing a status code to stdout
+		err := demoStepHTTP(dir, "status check", "200",
+			"echo", "404",
+		)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected HTTP 200")
+		assert.Contains(t, err.Error(), "got 404")
+	})
+
+	t.Run("passes when status code matches", func(t *testing.T) {
+		dir := t.TempDir()
+		err := demoStepHTTP(dir, "status check", "200",
+			"echo", "200",
+		)
+		assert.NoError(t, err)
+	})
+
+	t.Run("passes with 401 expected code", func(t *testing.T) {
+		dir := t.TempDir()
+		err := demoStepHTTP(dir, "SSE protection", "401",
+			"echo", "401",
+		)
+		assert.NoError(t, err)
+	})
+
+	t.Run("trims whitespace from output", func(t *testing.T) {
+		dir := t.TempDir()
+		// printf adds trailing newline; demoStepHTTP should trim it
+		err := demoStepHTTP(dir, "status check", "200",
+			"printf", "200\n",
+		)
+		assert.NoError(t, err)
+	})
+}
+
 func TestHealthcareScenarioDescriptions(t *testing.T) {
 	t.Run("scenario descriptions are documented in run command", func(t *testing.T) {
 		cmd := demosRunCmd()
@@ -901,4 +952,95 @@ func TestDemoPrintln(t *testing.T) {
 		demoPrintln("test output")
 		demoPrintf("test %s", "format")
 	})
+}
+
+// resolveRepoRoot finds the repository root using go list -m.
+func resolveRepoRoot(t *testing.T) string {
+	t.Helper()
+	cmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}")
+	output, err := cmd.Output()
+	require.NoError(t, err, "go list -m should succeed")
+	root := strings.TrimSpace(string(output))
+	require.NotEmpty(t, root, "repo root should not be empty")
+	return root
+}
+
+// TestComposeConfig_ConsensusBootstrapMounts verifies that demos using
+// consensus posture mount consensus-bootstrap.json in both the gateway and
+// agent containers. This is a regression test for a bug where the agent
+// containers mounted ensemble-seed.hex but not consensus-bootstrap.json,
+// causing L2 quorum failures (0 affirmative votes) because MemberKeyIDs
+// stayed nil.
+func TestComposeConfig_ConsensusBootstrapMounts(t *testing.T) {
+	repoRoot := resolveRepoRoot(t)
+
+	tests := []struct {
+		name       string
+		composePath string
+		gatewaySvc string
+		agentSvc   string
+	}{
+		{
+			name:       "dhs",
+			composePath: filepath.Join(repoRoot, "demos", "dhs", "compose.yml"),
+			gatewaySvc: "gateway:",
+			agentSvc:   "agent-coalition:",
+		},
+		{
+			name:       "fedramp",
+			composePath: filepath.Join(repoRoot, "demos", "fedramp", "compose.yml"),
+			gatewaySvc: "gateway:",
+			agentSvc:   "agent-runtime:",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := os.ReadFile(tt.composePath)
+			require.NoError(t, err, "compose.yml should exist at %s", tt.composePath)
+			content := string(data)
+
+			assert.Contains(t, content, "consensus-bootstrap.json",
+				"%s compose.yml must mount consensus-bootstrap.json", tt.name)
+
+			assert.Contains(t, content, "ensemble-seed.hex",
+				"%s compose.yml must mount ensemble-seed.hex", tt.name)
+
+			agentSection := extractServiceSection(content, tt.agentSvc)
+			require.NotEmpty(t, agentSection, "agent service section should be found in %s compose.yml", tt.name)
+			assert.Contains(t, agentSection, "consensus-bootstrap.json",
+				"%s agent container must mount consensus-bootstrap.json (regression: missing mount causes L2 quorum failure)", tt.name)
+			assert.Contains(t, agentSection, "ensemble-seed.hex",
+				"%s agent container must mount ensemble-seed.hex", tt.name)
+
+			gatewaySection := extractServiceSection(content, tt.gatewaySvc)
+			require.NotEmpty(t, gatewaySection, "gateway service section should be found in %s compose.yml", tt.name)
+			assert.Contains(t, gatewaySection, "consensus-bootstrap.json",
+				"%s gateway container must mount consensus-bootstrap.json", tt.name)
+		})
+	}
+}
+
+// extractServiceSection extracts the YAML block for a service definition,
+// from the service header (e.g., "agent-coalition:") to the next top-level
+// key at the same indentation level or end of file.
+func extractServiceSection(content, serviceHeader string) string {
+	idx := strings.Index(content, serviceHeader)
+	if idx < 0 {
+		return ""
+	}
+	rest := content[idx:]
+	lines := strings.Split(rest, "\n")
+	var section []string
+	for i, line := range lines {
+		if i == 0 {
+			section = append(section, line)
+			continue
+		}
+		if len(line) > 0 && line[0] != ' ' && line[0] != '\t' && line[0] != '#' && line[0] != '-' {
+			break
+		}
+		section = append(section, line)
+	}
+	return strings.Join(section, "\n")
 }

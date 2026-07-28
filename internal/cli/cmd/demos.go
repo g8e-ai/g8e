@@ -1355,6 +1355,36 @@ func demoStep(demoDir, label string, fatal bool, args ...string) error {
 	return nil
 }
 
+// demoStepHTTP runs a curl command that writes the HTTP status code to stdout
+// (via -o /dev/null -w "%{http_code}") and validates the response against the
+// expected status code. Unlike demoStep, this checks the actual HTTP response
+// status, not just the curl exit code.
+func demoStepHTTP(demoDir, label string, expectedCode string, args ...string) error {
+	if demoVerbose {
+		fmt.Printf("  $ %s\n", strings.Join(args, " "))
+	}
+	c := exec.Command(args[0], args[1:]...)
+	c.Dir = demoDir
+	var stdout strings.Builder
+	c.Stdout = &stdout
+	if demoVerbose {
+		c.Stderr = os.Stderr
+	} else {
+		c.Stderr = io.Discard
+	}
+	if err := c.Run(); err != nil {
+		return fmt.Errorf("%s failed: %w", label, err)
+	}
+	actual := strings.TrimSpace(stdout.String())
+	if demoVerbose {
+		fmt.Printf("  HTTP status: %s (expected: %s)\n\n", actual, expectedCode)
+	}
+	if actual != expectedCode {
+		return fmt.Errorf("%s: expected HTTP %s, got %s", label, expectedCode, actual)
+	}
+	return nil
+}
+
 // demoScenarioStep prints the step description, runs the command via demoStep,
 // prints pass/fail, and returns whether it succeeded. This extracts the
 // repetitive print → demoStep → error pattern from each scenario case block.
