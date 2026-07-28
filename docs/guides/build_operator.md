@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Operator
 
-Last Updated: 2026-07-25
-Version: v1.6.3
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 ---
 
@@ -44,6 +44,12 @@ An Operator executes tools on a host and connects back to a Gateway. Start an op
 - `operator start -G, --no-git`, Disable Git integration.
 - `operator start -l, --log <level>`, Log level: info, error, debug.
 - `operator start --heartbeat-interval <seconds>`, Heartbeat interval in seconds (default: 30).
+- `operator start --lattice-endpoint <url>`, Lattice gRPC endpoint URL. Enables the Lattice adapter when set.
+- `operator start --lattice-client-id <id>`, OAuth2 client ID for Lattice authentication.
+- `operator start --lattice-client-secret <secret>`, OAuth2 client secret for Lattice authentication.
+- `operator start --lattice-sandboxes-token <token>`, Sandbox authorization token for Lattice.
+- `operator start --lattice-entity-name <name>`, Entity display name registered with Lattice.
+- `operator start --lattice-posture-floor <posture>`, Minimum governance posture (default: consensus).
 
 Running the binary with no arguments launches the Tactical Governance Console (TUI). Use `gw start` or `operator start` subcommands to launch worker processes.
 
@@ -139,7 +145,7 @@ Custom operator implementations need the g8e Protocol Library for protobuf schem
 The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.6.3
+go get github.com/g8e-ai/g8e@v1.6.6
 ```
 
 The Go module provides protobuf types for governance envelopes, operator service definitions, and SPIFFE workload identity helpers for mTLS identity binding. Import the common and operator protocol packages for envelope construction and verification, and the root protocol package for SPIFFE URI SAN generation and validation.
@@ -151,7 +157,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For operator-side tooling, testing, or Python-based actuator services that need to consume protocol constants:
 
 ```bash
-pip install g8e==1.6.3
+pip install g8e==1.6.6
 ```
 
 The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.

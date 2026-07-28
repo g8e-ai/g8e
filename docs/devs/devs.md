@@ -159,7 +159,7 @@ Several services have dependencies that cannot be passed to the constructor beca
 
 **Two-phase dependency model for `mcp.GatewayService`:**
 
-- **Construction-phase** (`Dependencies` struct, immutable after `NewGatewayService`): `Logger`, `Responder`, `SuspendedStore`, `ScrubbingService`, `ThreatScanner`, `MaxPayloadBytes`, `Posture`, `A2ADownstreamURL`, `PublicBaseURL`.
+- **Construction-phase** (`Dependencies` struct, immutable after `NewGatewayService`): `Logger`, `Responder`, `SuspendedStore`, `ScrubbingService`, `ThreatScanner`, `MaxPayloadBytes`, `Posture`, `A2ADownstreamURL`, `PublicBaseURL`, `AuditStore` (defaults to no-op when nil), `FieldPathRegistryFactory` (test injection point, defaults to `NewFieldPathRegistry`).
 - **Runtime-phase** (`RuntimeDependencies` struct, set once via `SetRuntimeDeps` before first request): `EnvProc`, `StateRootProvider`, `SigningKey`, `KeyID`, `DownstreamURL`, `DBService`, `SessionValidator`, `AuditLogger`, `L2ConsensusDeliberator`. Stored via `atomic.Pointer[RuntimeDependencies]` with `runtimeReady()` gate.
 
 ## Constants & Doctrines

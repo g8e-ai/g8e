@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-07-26
+Last Updated: 2026-07-28
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -165,7 +165,7 @@ make test-docker
 
 The demo scenarios tool (`g8e demos scenarios run`) impersonates arbitrary AI tools against a **REAL** g8e Gateway and Operator. The only fiction is the client identity — the Gateway and Operator are real infrastructure.
 
-**26 scenarios total**: 7 MCP + 3 A2A + 6 governance + 6 DHS + 2 gov/finance + 5 FedRAMP.
+**29 scenarios total**: 7 MCP + 3 A2A + 6 governance + 6 DHS + 2 gov/finance + 5 FedRAMP.
 
 The interactive demo runner (`g8e demos run <org> [scenario]`) provides 17 platform demos across 6 environments: healthcare (4), gov (1), finance (1), dhs (5), fedramp (5), frontend (1). These drive the real Gateway and Operator with interactive passkey authentication and posture switching.
 
@@ -304,6 +304,7 @@ GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 - `smoke-test` — Clean-environment install verification for both Python and Go packages
 - `secret-scan` — gitleaks full-history secret scanning
 - `license-check` — go-licenses report with forbidden copyleft license detection (GPL, AGPL, LGPL, SSPL, BUSL)
+- `demo-verify` — Builds and runs all 6 demo environments via Docker Compose (gated on `ci` job)
 
 CI does **not** run Tier 3 Docker E2E tests.
 

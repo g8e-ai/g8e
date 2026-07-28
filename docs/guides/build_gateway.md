@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Gateway
 
-Last Updated: 2026-07-25
-Version: v1.6.3
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 ---
 
@@ -140,6 +140,7 @@ To start the gateway, use the CLI gateway command:
 - `--a2a-downstream-url <url>` - URL of a downstream A2A server to proxy execution to (default: none)
 - `--public-base-url <url>` - Public base URL for approval links and host validation behind reverse proxies or Cloudflare Tunnels (e.g., `https://demo.g8e.ai`)
 - `--cors-origin <origin>` - Allowed CORS origin for cross-origin browser access (repeatable, e.g., `https://lovable.dev`)
+- `--doctrine-dir <dir>` - Directory containing doctrine JSON files for L1 threat detection (default: hardcoded MITRE patterns only)
 - `-f, --follow` - Run gateway in foreground instead of background (Ctrl+C stops gateway)
 - `-i, --interactive` - Launch the interactive onboarding wizard before starting the gateway
 
@@ -154,7 +155,7 @@ Custom gateway implementations need the g8e Protocol Library for protobuf schema
 The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.6.3
+go get github.com/g8e-ai/g8e@v1.6.6
 ```
 
 Import the protobuf types and SPIFFE workload identity helpers from the Go module. The package provides governance envelope definitions, the Operator gRPC service, pub/sub message types, and workload identity helpers for SPIFFE URI SAN generation and validation across all identity types (Operator, CLI, App, User, Hub, GatewayPeer).
@@ -166,7 +167,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For gateway-side tooling, testing, or Python-based services that need to consume protocol constants:
 
 ```bash
-pip install g8e==1.6.3
+pip install g8e==1.6.6
 ```
 
 The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.

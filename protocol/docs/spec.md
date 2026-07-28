@@ -4,7 +4,7 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-07-27
+Last Updated: 2026-07-28
 Version: v1.6.6
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
@@ -138,8 +138,8 @@ The transaction lifecycle follows a strict sequence from intent to audited execu
 The `L4Warden` operates as the primary pre-dispatch validation gate, executing the following checks sequentially:
 
 1. **Freshness**: Verifies `expires_at` and durably reserves the `nonce` in the replay store to prevent concurrent double-processing.
-2. **Integrity**: Decodes the typed payload, enforces `id == transaction_hash == SHA256(canonical_fields)`, and validates the action type.
-3. **L1 Doctrine**: Scans the decoded typed payload against reflected `forbidden_patterns` and threat rules.
+2. **L1 Doctrine**: Validates the action type, decodes the typed payload, and scans it against reflected `forbidden_patterns` and threat rules.
+3. **Integrity**: Enforces `id == transaction_hash == SHA256(canonical_fields)`.
 4. **State Binding**: Validates that the `state_merkle_root` matches the local ledger root.
 5. **L2 Consensus**: Verifies Ed25519 signatures against the Operator's trusted `SignerStore` and checks quorum against the consensus policy.
 6. **L3 Notary**: Validates the WebAuthn or CLI proof, or applies explicit auto-approval policy for the action.
@@ -147,9 +147,11 @@ The `L4Warden` operates as the primary pre-dispatch validation gate, executing t
 ### Execution & Receipt Phase (L5Actuator)
 
 1. The `L5Actuator` signs an executing-state `ActionReceipt` and writes it to the fail-closed `SQLAuditStore`.
-2. The typed payload is dispatched to its execution handler (e.g., shell executor, file edit handler).
-3. The `L5Actuator` updates the receipt with the final status (`COMPLETED` or `FAILED`), the post-state root, and a fresh signature.
-4. The Operator publishes a result envelope carrying the typed result and signed receipt back to the Gateway.
+2. Sensitive tokens scrubbed by the Sovereign Execution Boundary are re-injected via payload rehydration.
+3. A JIT execution capability is minted, scoping the dispatch to the verified action type and target resource.
+4. The typed payload is dispatched to its execution handler (e.g., shell executor, file edit handler), and the capability is dissolved after dispatch.
+5. The `L5Actuator` updates the receipt with the final status (`COMPLETED` or `FAILED`), the post-state root, and a fresh signature.
+6. The Operator publishes a result envelope carrying the typed result and signed receipt back to the Gateway.
 
 ---
 
@@ -186,13 +188,14 @@ Hardware-bound proof of human presence. Human-in-the-loop authorization (utilizi
 ### L4 Warden: Pre-dispatch Verification
 The central Policy Execution Point (PEP) that validates the entire transaction proof before dispatch. Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root) is defined in `../../internal/services/governance/l4_warden.go`.
 - **Freshness & Replay**: Verifies `expires_at` and durably reserves the `nonce` in the replay store with early durable reservation to prevent concurrent double-processing.
-- **Stateless Validation**: Decodes the typed payload, verifies structural integrity, enforces `id == transaction_hash`, and validates L1 Doctrine compliance.
+- **Stateless Validation**: Validates the action type, decodes the typed payload, validates L1 Doctrine compliance, and enforces `id == transaction_hash`.
 - **State Binding**: Compares `state_merkle_root` against the host ledger.
 - **Posture-Aware Validation**: Enforces L2 (Ed25519 signature verification against `SignerStore` with ConsensusPolicy quorum) and L3 (WebAuthn or CLI proof) requirements based on governance posture (doctrine, consensus, or notary).
 
 ### L5 Actuator: Execution Boundary
 The single fail-closed execution target that dispatches the verified payload and issues signed receipts. Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production are defined in `../../internal/services/governance/l5_actuator.go`.
 - **Rehydration**: Sensitive tokens scrubbed by the Sovereign Execution Boundary are re-injected.
+- **JIT Capability Minting**: Mints a scoped execution capability bound to the verified action type and target resource, dissolved after dispatch.
 - **Native Dispatch**: Executes the typed payload (bash, file edit, tool call).
 - **Signed Action Receipts**: Issues an immutable `ActionReceipt` proof of execution and result.
 
