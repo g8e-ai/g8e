@@ -66,8 +66,8 @@ func TestAgentCmd(t *testing.T) {
 		assert.Contains(t, output, "codex")
 		assert.Contains(t, output, "gemini")
 		assert.Contains(t, output, "goose")
+		assert.Contains(t, output, "devin")
 		assert.NotContains(t, output, "cursor")
-		assert.NotContains(t, output, "devin")
 		assert.NotContains(t, output, "aider")
 		assert.NotContains(t, output, "generic")
 	})
@@ -787,8 +787,8 @@ func TestGetSupportedAgents(t *testing.T) {
 		assert.True(t, agentIDs["codex"], "should include codex")
 		assert.True(t, agentIDs["gemini"], "should include gemini")
 		assert.True(t, agentIDs["goose"], "should include goose")
+		assert.True(t, agentIDs["devin"], "should include devin")
 		assert.False(t, agentIDs["cursor"], "should not include cursor")
-		assert.False(t, agentIDs["devin"], "should not include devin")
 		assert.False(t, agentIDs["aider"], "should not include aider")
 		assert.False(t, agentIDs["generic"], "should not include generic")
 	})
@@ -1204,10 +1204,10 @@ func TestAgentLaunchArgs(t *testing.T) {
 		assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
 	})
 
-	t.Run("devin returns error", func(t *testing.T) {
-		_, err := agentLaunchArgs("devin", "/path/to/config.json", "/fake/g8e")
-		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
+	t.Run("devin returns empty args (remote agent)", func(t *testing.T) {
+		args, err := agentLaunchArgs("devin", "/path/to/config.json", "/fake/g8e")
+		require.NoError(t, err)
+		assert.Empty(t, args)
 	})
 
 	t.Run("aider returns error", func(t *testing.T) {

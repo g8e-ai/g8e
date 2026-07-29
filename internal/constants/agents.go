@@ -64,4 +64,5 @@ const (
 	AgentBinaryCodex  AgentBinary = "codex"
 	AgentBinaryGemini AgentBinary = "gemini"
 	AgentBinaryGoose  AgentBinary = "goose"
+	AgentBinaryDevin  AgentBinary = "devin"
 )

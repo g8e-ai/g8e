@@ -352,6 +352,11 @@ const (
 	AgentConfigFileGooseYAML = "config.yaml"
 )
 
+// Remote MCP server URLs for hosted AI agents.
+const (
+	DevinMCPServerURL = "https://mcp.devin.ai/mcp"
+)
+
 // API path constants for enrollment and well-known endpoints.
 const (
 	APIPathAuthDeviceEnroll = "/api/v1/auth/device/enroll"
