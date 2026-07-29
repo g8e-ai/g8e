@@ -345,16 +345,13 @@ const (
 
 // Agent config constants for AI tool config directories and filenames.
 const (
+	AgentConfigDirDevin      = ".config/devin"
 	AgentConfigDirGemini     = ".gemini"
 	AgentConfigDirGoose      = ".config/goose"
 	AgentConfigFileMCP       = "mcp.json"
+	AgentConfigFileMCPDevin  = "config.json"
 	AgentConfigFileSettings  = "settings.json"
 	AgentConfigFileGooseYAML = "config.yaml"
-)
-
-// Remote MCP server URLs for hosted AI agents.
-const (
-	DevinMCPServerURL = "https://mcp.devin.ai/mcp"
 )
 
 // API path constants for enrollment and well-known endpoints.

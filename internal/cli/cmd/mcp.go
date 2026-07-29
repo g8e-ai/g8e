@@ -775,16 +775,6 @@ func printAgentShow(cmd *cobra.Command, agentID string) error {
 		return fmt.Errorf("mcp: print stdio config: %w", err)
 	}
 
-	if isRemoteAgent(agentID) {
-		cmd.Println()
-		cmd.Println("┌─ Remote MCP (Governed Proxy) ─────────────────────────────────────────────────")
-		cmd.Println("│ Use: Remote hosted MCP servers wrapped with g8e L1 governance")
-		cmd.Println("│ Run: g8e mcp agent run devin")
-		cmd.Println("│ Auth: Set DEVIN_API_KEY environment variable")
-		cmd.Println("│ URL:  https://mcp.devin.ai/mcp")
-		cmd.Println("└─────────────────────────────────────────────────────────────────────────────")
-	}
-
 	return nil
 }
 
@@ -797,9 +787,9 @@ func getSupportedAgents() []agentInfo {
 	return []agentInfo{
 		{string(constants.AgentBinaryClaude), "Anthropic Claude Desktop / Claude Code"},
 		{string(constants.AgentBinaryCodex), "OpenAI Codex AI coding assistant"},
+		{string(constants.AgentBinaryDevin), "Devin CLI local coding agent"},
 		{string(constants.AgentBinaryGemini), "Google Gemini CLI"},
 		{string(constants.AgentBinaryGoose), "Goose AI coding assistant"},
-		{string(constants.AgentBinaryDevin), "Devin AI remote MCP server (sessions, playbooks, knowledge)"},
 	}
 }
 
@@ -837,10 +827,9 @@ LAUNCH AN AGENT (one command does everything):
                                   empty allowlist in settings.json, forcing all
                                   I/O through g8e MCP.
 
-  g8e mcp agent run devin         Wrap the Devin remote MCP server
-                                  (https://mcp.devin.ai/mcp) with g8e's L1
-                                  governance proxy. Requires DEVIN_API_KEY
-                                  environment variable for authentication.
+  g8e mcp agent run devin         Launch Devin CLI with g8e as the only MCP
+                                  server in ~/.config/devin/config.json,
+                                  forcing all I/O through g8e MCP.
 
   Extra args are forwarded to the agent:
     g8e mcp agent run claude -- -p "fix the failing tests"
@@ -904,51 +893,12 @@ type mcpDownstreamProxy interface {
 
 // httpMCPProxy forwards MCP requests to an HTTP downstream server.
 type httpMCPProxy struct {
-	url     string
-	client  *http.Client
-	headers map[string]string
+	url    string
+	client *http.Client
 }
 
 func (d *httpMCPProxy) forward(req JSONRPCRequest) (JSONRPCResponse, error) {
-	if len(d.headers) > 0 {
-		return proxyToGatewayWithHeaders(d.client, d.url, d.headers, req)
-	}
 	return proxyToGateway(d.client, d.url, req)
-}
-
-// proxyToGatewayWithHeaders forwards an MCP request to a downstream HTTP server
-// with custom headers (e.g. Authorization for authenticated remote MCP servers).
-func proxyToGatewayWithHeaders(client *http.Client, gatewayURL string, headers map[string]string, req JSONRPCRequest) (JSONRPCResponse, error) {
-	reqBody, err := json.Marshal(req)
-	if err != nil {
-		return JSONRPCResponse{}, fmt.Errorf("mcp: marshal request: %w", err)
-	}
-
-	httpReq, err := http.NewRequest(http.MethodPost, gatewayURL, strings.NewReader(string(reqBody)))
-	if err != nil {
-		return JSONRPCResponse{}, fmt.Errorf("mcp: create request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	for k, v := range headers {
-		httpReq.Header.Set(k, v)
-	}
-
-	httpResp, err := client.Do(httpReq)
-	if err != nil {
-		return JSONRPCResponse{}, fmt.Errorf("mcp: post request: %w", err)
-	}
-	defer httpResp.Body.Close()
-
-	if httpResp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(httpResp.Body)
-		return JSONRPCResponse{}, fmt.Errorf("%w: HTTP %d: %s", constants.ErrHTTPStatusError, httpResp.StatusCode, string(body))
-	}
-
-	var resp JSONRPCResponse
-	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
-		return JSONRPCResponse{}, fmt.Errorf("mcp: decode response: %w", err)
-	}
-	return resp, nil
 }
 
 func (d *httpMCPProxy) stop() {}
@@ -1096,7 +1046,7 @@ func startGatewayIfNeeded(fileSvcFactory func() (fs.RuntimeFileService, error)) 
 // agentMCPConfig represents the MCP configuration structure for agents.
 type agentMCPConfig struct {
 	MCPServers   map[string]agentMCPServer `json:"mcpServers"`
-	ExcludeTools []string                  `json:"excludeTools"`
+	ExcludeTools []string                  `json:"excludeTools,omitempty"`
 }
 
 // agentMCPServer represents a single MCP server configuration.
@@ -1176,11 +1126,6 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 				Args:    []string{"mcp", "stdio"},
 			},
 		},
-		ExcludeTools: nativeToolsToDisable,
-	}
-	configJSON, err := json.Marshal(config)
-	if err != nil {
-		return "", nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
 	}
 
 	// Get home directory: prefer os.UserHomeDir() (cross-platform), fall back to HOME env
@@ -1196,6 +1141,19 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 	agentPaths := paths.GetAgentConfigPaths(homeDir)
 
 	switch agentID {
+	case string(constants.AgentBinaryDevin):
+		// Devin CLI reads MCP config from ~/.config/devin/config.json.
+		// Uses the standard mcpServers format with command/args/env.
+		// Governance enforced by making g8e the only MCP server.
+		if err := os.MkdirAll(agentPaths.DevinConfigDir, constants.PermDirStandard); err != nil {
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
+		}
+		configJSON, err := json.Marshal(config)
+		if err != nil {
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
+		}
+		return writeConfigWithBackup(agentPaths.DevinConfigDir, agentPaths.DevinConfigPath, configJSON)
+
 	case string(constants.AgentBinaryGemini):
 		// Gemini uses settings.json for configuration.
 		// We add g8e as the MCP server and disable all built-in tools via tools.core.
@@ -1286,6 +1244,13 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 	default:
 		// For agents that use CLI flags (claude, codex), write a temp config file.
 		// The config is passed via --mcp-config and --strict-mcp-config CLI flags.
+		// ExcludeTools is set for Claude/Codex which use --disallowed-tools to
+		// enforce that all I/O goes through g8e's MCP gateway.
+		config.ExcludeTools = nativeToolsToDisable
+		configJSON, err := json.Marshal(config)
+		if err != nil {
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
+		}
 		tmpFile, err := os.CreateTemp("", "g8e-mcp-*.json")
 		if err != nil {
 			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
@@ -1480,11 +1445,12 @@ func agentLaunchArgs(agentID, mcpConfigPath, binaryPath string) ([]string, error
 		// Governance enforced by g8e being the only MCP server
 		return []string{}, nil
 	case "devin":
-		// Devin is a remote MCP server, not a local binary. Governance is enforced
-		// by g8e's L1 reverse proxy wrapping the Devin MCP endpoint.
+		// Devin CLI reads from ~/.config/devin/config.json written by WriteAgentConfig
+		// Governance enforced by g8e being the only MCP server
+		// Devin does not support CLI flags to disable native tools
 		return []string{}, nil
 	default:
-		return nil, fmt.Errorf("%w: agent %q does not support full tool interception. g8e requires agents that can disable all built-in tools so every action routes through the governance gateway. Supported agents: claude, codex, goose, gemini, devin", constants.ErrAgentNotSupported, agentID)
+		return nil, fmt.Errorf("%w: agent %q does not support full tool interception. g8e requires agents that can disable all built-in tools so every action routes through the governance gateway. Supported agents: claude, codex, goose, gemini", constants.ErrAgentNotSupported, agentID)
 	}
 }
 
@@ -1497,12 +1463,10 @@ func verifyToolInterception(agentID, configPath string, launchArgs []string) err
 		return verifyClaudeCodexInterception(configPath, launchArgs)
 	case "goose":
 		return verifyGooseInterception(configPath, launchArgs)
+	case "devin":
+		return verifyDevinInterception(configPath)
 	case "gemini":
 		return verifyGeminiInterception(configPath)
-	case "devin":
-		// Devin is a remote MCP server — no local config to verify.
-		// Governance is enforced by the g8e L1 reverse proxy.
-		return nil
 	default:
 		return fmt.Errorf("%w: agent %q", constants.ErrAgentNotSupported, agentID)
 	}
@@ -1584,10 +1548,42 @@ func verifyGooseInterception(configPath string, launchArgs []string) error {
 	return nil
 }
 
+// verifyMCPServerEntry reads a config file and verifies it contains the g8e
+// MCP server entry in the mcpServers map. agentName is used for error messages.
+func verifyMCPServerEntry(configPath, agentName string) error {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("read %s config %q: %w", agentName, configPath, err)
+	}
+
+	var cfg agentMCPConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return fmt.Errorf("parse %s config: %w", agentName, err)
+	}
+
+	if _, ok := cfg.MCPServers["g8e"]; !ok {
+		return fmt.Errorf("%s config missing g8e MCP server entry", agentName)
+	}
+
+	return nil
+}
+
+// verifyDevinInterception verifies that the Devin CLI config.json file exists
+// and contains the g8e MCP server entry. Devin CLI reads config from
+// ~/.config/devin/config.json and cannot disable native tools via CLI flags,
+// so governance is enforced by making g8e the only MCP server in the config.
+func verifyDevinInterception(configPath string) error {
+	return verifyMCPServerEntry(configPath, "devin")
+}
+
 // verifyGeminiInterception verifies that the Gemini settings.json file contains
 // tools.core set to an empty array (disabling all built-in tools) and the g8e
 // MCP server entry.
 func verifyGeminiInterception(configPath string) error {
+	if err := verifyMCPServerEntry(configPath, "gemini"); err != nil {
+		return err
+	}
+
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return fmt.Errorf("read gemini settings %q: %w", configPath, err)
@@ -1625,9 +1621,6 @@ func runMCPAgentRun(args []string, downstreamURL string, verify bool, fileSvcFac
 		firstArg := strings.ToLower(args[0])
 		for _, a := range getSupportedAgents() {
 			if strings.ToLower(a.ID) == firstArg {
-				if isRemoteAgent(a.ID) {
-					return launchRemoteAgentWithGovernance(a.ID, fileSvcFactory)
-				}
 				return launchAgentWithGovernance(a.ID, args[1:], verify, fileSvcFactory)
 			}
 		}
@@ -1635,185 +1628,6 @@ func runMCPAgentRun(args []string, downstreamURL string, verify bool, fileSvcFac
 
 	// MCP server (--url or -- command) → run as L1 governance reverse proxy.
 	return runMCPProxy(args, downstreamURL)
-}
-
-// isRemoteAgent returns true for agents that are hosted MCP servers rather than
-// local CLI binaries. Remote agents are wrapped via g8e's governance proxy
-// instead of being launched as subprocesses.
-func isRemoteAgent(agentID string) bool {
-	switch strings.ToLower(agentID) {
-	case string(constants.AgentBinaryDevin):
-		return true
-	default:
-		return false
-	}
-}
-
-// launchRemoteAgentWithGovernance starts the gateway, enrolls the remote agent
-// as an external app for audit trail attribution, then runs the L1 governance
-// reverse proxy in front of the remote MCP server.
-func launchRemoteAgentWithGovernance(agentID string, fileSvcFactory func() (fs.RuntimeFileService, error)) error {
-	if err := startGatewayIfNeeded(fileSvcFactory); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrGatewayNotReady, err)
-	}
-
-	cfg, err := loadConfig("")
-	if err != nil {
-		return fmt.Errorf("mcp: load config: %w", err)
-	}
-
-	fileSvc, err := fileSvcFactory()
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
-	}
-
-	creds, err := ensureCLIAuth(fileSvc, cfg)
-	if err != nil {
-		return err
-	}
-
-	appID, _, _, err := auth.EnrollAgentApp(fileSvc, cfg, strings.ToLower(agentID))
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
-	}
-
-	if err := ensurePasskeyRegistration(fileSvc, cfg, creds); err != nil {
-		return err
-	}
-
-	remoteURL, headers, err := remoteAgentConfig(agentID)
-	if err != nil {
-		return err
-	}
-
-	fmt.Fprintf(os.Stderr, "[g8e] Launching %s remote MCP server with L1-L5 governance via gateway (app: %s)\n", agentID, appID)
-	return runMCPProxyWithHeaders(nil, remoteURL, headers)
-}
-
-// remoteAgentConfig returns the MCP server URL and auth headers for a remote agent.
-func remoteAgentConfig(agentID string) (string, map[string]string, error) {
-	switch strings.ToLower(agentID) {
-	case string(constants.AgentBinaryDevin):
-		headers := map[string]string{}
-		if apiKey := os.Getenv("DEVIN_API_KEY"); apiKey != "" {
-			headers["Authorization"] = "Bearer " + apiKey
-		}
-		return constants.DevinMCPServerURL, headers, nil
-	default:
-		return "", nil, fmt.Errorf("%w: %q is not a remote agent", constants.ErrAgentNotSupported, agentID)
-	}
-}
-
-// runMCPProxyWithHeaders is like runMCPProxy but passes custom headers to the
-// downstream HTTP server.
-func runMCPProxyWithHeaders(args []string, downstreamURL string, headers map[string]string) error {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-
-	var ds mcpDownstreamProxy
-	if downstreamURL != "" {
-		ds = &httpMCPProxy{
-			url:     downstreamURL,
-			client:  &http.Client{Timeout: 30 * time.Second},
-			headers: headers,
-		}
-	} else {
-		proc := &subprocessMCPProxy{
-			command: args[0],
-			args:    args[1:],
-			logger:  logger,
-		}
-		if err := proc.start(); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
-		}
-		ds = proc
-	}
-	defer ds.stop()
-
-	l1 := governance.NewL1Doctrine()
-	logger.Info("g8e MCP governance proxy started")
-
-	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
-	encoder := json.NewEncoder(os.Stdout)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			continue
-		}
-
-		var req JSONRPCRequest
-		if err := json.Unmarshal([]byte(line), &req); err != nil {
-			sendError(encoder, nil, -32700, "parse error")
-			continue
-		}
-
-		if req.ID == nil && req.Method != "" {
-			continue
-		}
-
-		logger.Info("g8e intercepted", "method", req.Method, "id", req.ID)
-
-		if req.Method == "tools/call" {
-			var callParams CallToolRequest
-			if err := json.Unmarshal(req.Params, &callParams); err != nil {
-				sendError(encoder, req.ID, -32600, "invalid tools/call params")
-				continue
-			}
-
-			argsJSON := "{}"
-			if len(callParams.Arguments) > 0 {
-				argsJSON = string(callParams.Arguments)
-			}
-
-			signals, err := l1.AnalyzeMCPArguments(argsJSON)
-			if err != nil {
-				logger.Warn("L1 analysis error", "tool", callParams.Name, "error", err)
-			}
-
-			var violations []string
-			for _, sig := range signals {
-				if sig.BlockRecommended {
-					violations = append(violations, fmt.Sprintf("%s [%s, MITRE: %s]",
-						sig.Indicator, sig.Category, sig.MitreAttack))
-				}
-			}
-
-			if len(violations) > 0 {
-				logger.Warn("g8e L1 BLOCKED", "tool", callParams.Name, "violations", violations)
-				sendSuccess(encoder, req.ID, mcp.CallToolResult{
-					IsError: true,
-					Content: []mcp.TextContent{{
-						Type: "text",
-						Text: fmt.Sprintf("g8e governance blocked tool call %q:\n- %s",
-							callParams.Name, strings.Join(violations, "\n- ")),
-					}},
-				})
-				continue
-			}
-
-			logger.Info("g8e L1 approved", "tool", callParams.Name)
-		}
-
-		resp, err := ds.forward(req)
-		if err != nil {
-			if req.Method == "initialize" {
-				handleInitialize(encoder, req.ID)
-				continue
-			}
-			sendError(encoder, req.ID, -32603, fmt.Sprintf("downstream error: %v", err))
-			continue
-		}
-
-		if err := encoder.Encode(resp); err != nil {
-			logger.Warn("failed to encode response", "error", err)
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
-	}
-	return nil
 }
 
 // runMCPProxy runs an L1 governance reverse proxy in front of a downstream MCP

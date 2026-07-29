@@ -133,6 +133,35 @@ func TestPrepareAgentLaunch_Gemini_VerifyTrue(t *testing.T) {
 
 // ─── prepareAgentLaunch: verify=false skips verification ─────────────────────
 
+func TestPrepareAgentLaunch_Devin_VerifyTrue(t *testing.T) {
+	tmpHome := testutil.TempDir(t)
+	t.Setenv("HOME", tmpHome)
+	createFakeAgentBinary(t, "devin")
+
+	configPath, cleanup, launchArgs, err := prepareAgentLaunch("devin", true)
+	require.NoError(t, err)
+	defer func() {
+		if cleanup != nil {
+			cleanup()
+		}
+	}()
+
+	assert.NotEmpty(t, configPath)
+	assert.FileExists(t, configPath)
+	assert.Empty(t, launchArgs)
+
+	// Verify devin config.json was written to the fake HOME
+	devinConfig := filepath.Join(tmpHome, ".config", "devin", "config.json")
+	assert.FileExists(t, devinConfig)
+
+	// Verify g8e MCP server is in the config
+	data, err := os.ReadFile(devinConfig)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "g8e")
+}
+
+// ─── prepareAgentLaunch: verify=false skips verification ─────────────────────
+
 func TestPrepareAgentLaunch_VerifyFalse_SkipsVerification(t *testing.T) {
 	tmpHome := testutil.TempDir(t)
 	t.Setenv("HOME", tmpHome)
