@@ -38,7 +38,8 @@ Typed event identifiers for the pub/sub system, typed as `EventType`. The file d
 - Operator Filesystem Operations: list, read, and grep events, each with started, requested, received, completed, and failed variants
 - Operator File History/Diff/Restore: fetch and restore event lifecycles with started, requested, received, completed, and failed variants
 - Operator Logs/History Fetch: requested, received, completed, failed
-- Operator Network: ping and port check event lifecycles
+- Operator MCP/A2A: `EventOperatorMcpCallRequested`, `EventOperatorA2aCallRequested`
+- Operator Network: ping and port check event lifecycles, plus `EventOperatorPortCheckRequested`
 - Operator Status: `EventOperatorStatusUpdatedActive`, `EventOperatorStatusUpdatedAvailable`, `EventOperatorStatusUpdatedUnavailable`, `EventOperatorStatusUpdatedBound`, `EventOperatorStatusUpdatedOffline`, `EventOperatorStatusUpdatedStale`, `EventOperatorStatusUpdatedStopped`, `EventOperatorStatusUpdatedTerminated`
 - Operator Bootstrap: requested, received, completed, failed, config.received
 - Operator Audit: `EventOperatorAuditUserRecorded`, `EventOperatorAuditAiRecorded`, `EventOperatorAuditCommandRecorded`, `EventOperatorAuditDirectCommandRecorded`, `EventOperatorAuditDirectCommandResultRecorded`, `EventOperatorAuditMcpCallRecorded`
@@ -72,7 +73,7 @@ Typed event identifiers for the pub/sub system, typed as `EventType`. The file d
 - AI Reputation: `EventAiReputationStateUpdated`, `EventReputationStateUpdated`
 - Source: `EventSourceUserChat`, `EventSourceUserTerminal`, `EventSourceAiPrimary`, `EventSourceAiAssistant`, `EventSourceAiTriage`, `EventSourceSystem`
 
-The file also provides a hierarchical `Event` struct accessor (`Event.Operator.*`) that groups operator event constants into nested sub-structs by domain (e.g., `Event.Operator.Command.ApprovalRequested`, `Event.Operator.FileEdit.Completed`, `Event.Operator.NetworkPing.Received`). Top-level operator fields include `Bound`, `Unbound`, `ContextChanged`, `DeviceRegistered`, `PanelListUpdated`, `ShutdownAcknowledged`, `ShutdownRequested`, `SlotInitializationFailed`, `TerminalApprovalDenied`, `TerminalAuthStateChanged`, `TerminalThinkingAppend`, `TerminalThinkingComplete`, and `BootstrapConfigReceived`.
+The file also provides a hierarchical `Event` struct accessor (`Event.Operator.*`) that groups operator event constants into nested sub-structs by domain (e.g., `Event.Operator.Command.ApprovalRequested`, `Event.Operator.FileEdit.Completed`, `Event.Operator.NetworkPing.Received`). Top-level operator fields include `Bound`, `Unbound`, `ContextChanged`, `DeviceRegistered`, `Heartbeat`, `HeartbeatMissed`, `HeartbeatReceived`, `HeartbeatRequested`, `PanelListUpdated`, `ShutdownAcknowledged`, `ShutdownRequested`, `SlotInitializationFailed`, `TerminalApprovalDenied`, `TerminalAuthStateChanged`, `TerminalThinkingAppend`, `TerminalThinkingComplete`, and `BootstrapConfigReceived`. Sub-struct domains include `A2a`, `Audit`, `Bootstrap`, `Command` (with nested `StatusUpdated`), `Eval`, `FetchFileDiff`, `FetchFileHistory`, `FetchHistory`, `FetchLogs`, `FileEdit`, `FsGrep`, `FsList`, `FsRead`, `Intent`, `Mcp`, `NetworkPing`, `Notary`, `PortCheck`, `RestoreFile`, `StatusUpdated`, and `StreamApproval`.
 
 ### API Paths (`api_paths.go`)
 
@@ -289,6 +290,7 @@ Typed environment variable names, typed as `EnvVarKey` and grouped in a struct `
 - `OperatorSessionID` (`G8E_OPERATOR_SESSION_ID`)
 - `PasskeyRpID` (`G8E_PASSKEY_RP_ID`), `PasskeyRpName` (`G8E_PASSKEY_RP_NAME`), `PasskeyRpOrigins` (`G8E_PASSKEY_RP_ORIGINS`)
 - `PublicBaseURL` (`G8E_PUBLIC_BASE_URL`), `AllowedOrigins` (`G8E_ALLOWED_ORIGINS`)
+- Lattice: `LatticeEndpoint` (`LATTICE_ENDPOINT`), `LatticeClientID` (`LATTICE_CLIENT_ID`), `LatticeClientSecret` (`LATTICE_CLIENT_SECRET`), `LatticeSandboxesToken` (`SANDBOXES_TOKEN`), `LatticeEntityName` (`LATTICE_ENTITY_NAME`), `LatticePostureFloor` (`LATTICE_POSTURE_FLOOR`)
 - `Shell` (`SHELL`), `Lang` (`LANG`), `Term` (`TERM`), `TZ` (`TZ`)
 
 ### Field Paths (`field_paths.go`)
@@ -329,6 +331,7 @@ Canonical document ID constants, typed as `DocumentID`:
 Key-value store key patterns and session type constants:
 
 - Sentinel prefix: `SentinelKeyPrefix` (`g8e:sentinel:`)
+- Scrubbing token prefix: `ScrubbingTokenKeyPrefix` (`uei_token_`)
 - Cache prefix: `KVCachePrefix` (`g8e`)
 - Cache keys: `KVKeyCacheDoc`, `KVKeyCacheQuery`
 - Session keys: `KVKeySessionWeb`, `KVKeySessionOperator`, `KVKeySessionOperatorBind`, `KVKeySessionWebBind`
@@ -375,7 +378,7 @@ Platform event identifiers and binary/architecture constants:
 - Architectures: `ArchAMD64`, `ArchARM64`, `Arch386`
 - Operating systems: `OSLinux`, `OSDarwin`, `OSWindows`
 - Governance posture names: `PostureDoctrine` (`doctrine`), `PostureConsensus` (`consensus`), `PostureNotary` (`notary`)
-- Log level names: `LogLevelInfo`, `LogLevelError`, `LogLevelDebug`, `LogLevelDefault`
+- Log level names: `LogLevelInfo`, `LogLevelError`, `LogLevelDebug`, `LogLevelDefault` (alias for `LogLevelInfo`)
 
 ### Prompts (`prompts.go`)
 
@@ -416,17 +419,16 @@ Shell command execution constants:
 
 Timestamp format constants:
 
-- `FormatRFC3339`: canonical RFC3339 format string with timezone offset
-- `TimestampFormat`: RFC3339 with fixed microsecond precision (`2006-01-02T15:04:05.000000Z07:00`) for lexicographic ordering
+- `FormatRFC3339`: canonical RFC3339 format string with timezone offset (re-exported from `internal/timesvc`)
+- `TimestampFormat`: RFC3339 with fixed microsecond precision (`2006-01-02T15:04:05.000000Z07:00`) for lexicographic ordering (re-exported from `internal/timesvc` as `timesvc.Format`)
 
 ### Mappings (`mappings.go`)
 
-Functions mapping between event types, action types, and execution statuses:
+Functions mapping between event types and action types:
 
-- `MapEventTypeToActionType`: Maps `EventType` to `ActionType` using a static `eventToAction` map (e.g., `OperatorCommandRequested` to `ActionTypeExecuteBash`). Unmapped events pass through as-is.
-- `MapActionTypeToEventType`: Reverse mapping derived from `eventToAction` at init time.
+- `MapActionTypeToEventType`: Maps `ActionType` back to `EventType` using a reverse map derived from `eventToAction` at init time. Unmapped action types pass through as-is.
 - `MapEventTypeToResultActionType`: Maps completion/failure events to result action types (e.g., `EXECUTE_BASH_RESULT`, `EXECUTE_BASH_CANCELLED`) via `eventToResultAction`.
-- `ProtoToExecutionStatus`: Maps protobuf `ExecutionStatus` enum values to internal `ExecutionStatus` constants.
+- The `eventToAction` map is the single source of truth for the `EventType` to `ActionType` relationship, covering operator command, file edit, filesystem, fetch, MCP, A2A, port check, heartbeat, shutdown, eval, and investigation events.
 
 ## JSON Reference Files
 

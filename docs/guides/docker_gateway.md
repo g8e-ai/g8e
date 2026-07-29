@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
-Last Updated: 2026-07-25
-Version: v1.6.3
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
 
@@ -76,7 +76,7 @@ G8E_HTTP_PORT=3000 G8E_HTTPS_PORT=3443 G8E_PREFIX=myg8e docker compose up -d
 Functional demo environments are located in the `demos/` directory. These configurations demonstrate multi-network isolation and specialized doctrine enforcement:
 
 - **Healthcare**: FHIR R4 compliance and PHI protection.
-- **Government**: CUI protection and CMMC compliance enforcement.
+- **Gov**: CUI protection and CMMC compliance enforcement.
 - **Finance**: High-integrity ledger and audit requirements.
 - **DHS**: Persistent sovereign capability for coalition data handling with USPER PII minimization, cross-domain release control, and consensus posture.
 - **FedRAMP**: Sovereign cloud governance with audit integrity, access control, cross-domain protection, and human-in-the-loop resource destruction approval.
@@ -93,20 +93,27 @@ Each demo uses its own `compose.yml` file with isolated networks, volumes, and d
 
 ### Consensus Bootstrap Files
 
-Demos that use consensus or notary posture (DHS, FedRAMP) require two bootstrap files mounted into **both** the gateway and agent containers:
+Demos that use consensus or notary posture (DHS, FedRAMP) require two bootstrap files:
 
-- **`consensus-bootstrap.json`** — Defines `MemberKeyIDs`, the list of registered member app IDs that participate in L2 consensus voting. Without this file, `MemberKeyIDs` stays nil and the gateway's L2 consensus verifier silently ignores all votes, resulting in quorum failure (`affirmative=0`).
-- **`ensemble-seed.hex`** — The cryptographic seed for the ensemble's signing key.
+- **`consensus-bootstrap.json`**: Defines `MemberKeyIDs`, the list of registered member app IDs that participate in L2 consensus voting. Without this file, `MemberKeyIDs` stays nil and the gateway's L2 consensus verifier silently ignores all votes, resulting in quorum failure (`affirmative=0`).
+- **`ensemble-seed.hex`**: The cryptographic seed for the ensemble's signing key.
 
-Both files must be mounted as read-only volumes. The compose snippet for each g8e service (gateway and agent) should include:
+The gateway container mounts only `consensus-bootstrap.json`, which seeds the ConsensusPolicy and trusted signer registry at startup. The agent container mounts both files: `consensus-bootstrap.json` for policy context and `ensemble-seed.hex` to reconstruct the signing key for L2 votes. Both files must be mounted as read-only volumes:
 
 ```yaml
+# gateway
+volumes:
+  - ./config/consensus-bootstrap.json:/etc/g8e/consensus-bootstrap.json:ro
+```
+
+```yaml
+# agent
 volumes:
   - ./config/consensus-bootstrap.json:/etc/g8e/consensus-bootstrap.json:ro
   - ./config/ensemble-seed.hex:/etc/g8e/ensemble-seed.hex:ro
 ```
 
-If only `ensemble-seed.hex` is mounted (omitting `consensus-bootstrap.json`), the ensemble votes with the default `KeyID` instead of the gateway's registered member app IDs. The gateway's L2 consensus verifier checks each vote's `SignerKeyId` against the consensus policy's `MemberKeyIDs` — votes from unknown signer IDs are silently ignored, resulting in 0 affirmative votes and quorum failure.
+If the agent mounts `ensemble-seed.hex` without `consensus-bootstrap.json`, the ensemble votes with the default `KeyID` instead of the gateway's registered member app IDs. The gateway's L2 consensus verifier checks each vote's `SignerKeyId` against the consensus policy's `MemberKeyIDs`; votes from unknown signer IDs are silently ignored, resulting in 0 affirmative votes and quorum failure.
 
 ### Posture Switching During Demos
 
@@ -186,7 +193,7 @@ The image includes:
 The protocol constants are bundled from the `protocol/` directory. The Python package (`g8e`) is not included in the Docker image by default. If you need Python protocol access inside a container, install it separately:
 
 ```bash
-pip install g8e==1.6.3
+pip install g8e==1.6.6
 ```
 
 Or set `G8E_PROTOCOL_DIR=/protocol` to point the Python package at the bundled constants. See the [Protocol Library documentation](../architecture/protocol.md) for details.
