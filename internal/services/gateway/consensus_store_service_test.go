@@ -27,9 +27,9 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 )
 
-func TestTribunalStoreService_AddTribunal(t *testing.T) {
+func TestConsensusStoreService_AddConsensus(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	tribunalSvc := NewTribunalStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
+	consensusSvc := NewConsensusStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
 
 	// Generate test signers
 	pubKey1, _, err := ed25519.GenerateKey(nil)
@@ -73,14 +73,14 @@ func TestTribunalStoreService_AddTribunal(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		policy      models.TribunalPolicy
+		policy      models.ConsensusPolicy
 		expectError bool
 		errorMsg    string
 	}{
 		{
-			name: "valid tribunal",
-			policy: models.TribunalPolicy{
-				ID:              "test-tribunal",
+			name: "valid consensus",
+			policy: models.ConsensusPolicy{
+				ID:              "test-consensus",
 				MemberAppIDs:    []string{"member-1", "member-2"},
 				Quorum:          2,
 				RequireDistinct: true,
@@ -90,7 +90,7 @@ func TestTribunalStoreService_AddTribunal(t *testing.T) {
 		},
 		{
 			name: "empty ID",
-			policy: models.TribunalPolicy{
+			policy: models.ConsensusPolicy{
 				ID:              "",
 				MemberAppIDs:    []string{"member-1"},
 				Quorum:          1,
@@ -98,12 +98,12 @@ func TestTribunalStoreService_AddTribunal(t *testing.T) {
 				Enabled:         true,
 			},
 			expectError: true,
-			errorMsg:    "tribunal ID",
+			errorMsg:    "consensus ID",
 		},
 		{
 			name: "empty member IDs",
-			policy: models.TribunalPolicy{
-				ID:              "test-tribunal-2",
+			policy: models.ConsensusPolicy{
+				ID:              "test-consensus-2",
 				MemberAppIDs:    []string{},
 				Quorum:          1,
 				RequireDistinct: true,
@@ -114,8 +114,8 @@ func TestTribunalStoreService_AddTribunal(t *testing.T) {
 		},
 		{
 			name: "quorum less than 1",
-			policy: models.TribunalPolicy{
-				ID:              "test-tribunal-3",
+			policy: models.ConsensusPolicy{
+				ID:              "test-consensus-3",
 				MemberAppIDs:    []string{"member-1"},
 				Quorum:          0,
 				RequireDistinct: true,
@@ -126,8 +126,8 @@ func TestTribunalStoreService_AddTribunal(t *testing.T) {
 		},
 		{
 			name: "quorum exceeds member count",
-			policy: models.TribunalPolicy{
-				ID:              "test-tribunal-4",
+			policy: models.ConsensusPolicy{
+				ID:              "test-consensus-4",
 				MemberAppIDs:    []string{"member-1"},
 				Quorum:          2,
 				RequireDistinct: true,
@@ -138,8 +138,8 @@ func TestTribunalStoreService_AddTribunal(t *testing.T) {
 		},
 		{
 			name: "duplicate member IDs",
-			policy: models.TribunalPolicy{
-				ID:              "test-tribunal-5",
+			policy: models.ConsensusPolicy{
+				ID:              "test-consensus-5",
 				MemberAppIDs:    []string{"member-1", "member-1"},
 				Quorum:          2,
 				RequireDistinct: true,
@@ -150,8 +150,8 @@ func TestTribunalStoreService_AddTribunal(t *testing.T) {
 		},
 		{
 			name: "unknown member ID",
-			policy: models.TribunalPolicy{
-				ID:              "test-tribunal-6",
+			policy: models.ConsensusPolicy{
+				ID:              "test-consensus-6",
 				MemberAppIDs:    []string{"unknown-member"},
 				Quorum:          1,
 				RequireDistinct: true,
@@ -162,8 +162,8 @@ func TestTribunalStoreService_AddTribunal(t *testing.T) {
 		},
 		{
 			name: "empty string in member IDs",
-			policy: models.TribunalPolicy{
-				ID:              "test-tribunal-7",
+			policy: models.ConsensusPolicy{
+				ID:              "test-consensus-7",
 				MemberAppIDs:    []string{"member-1", ""},
 				Quorum:          2,
 				RequireDistinct: true,
@@ -173,57 +173,57 @@ func TestTribunalStoreService_AddTribunal(t *testing.T) {
 			errorMsg:    "cannot contain empty strings",
 		},
 		{
-			name: "invalid tribunal ID with special characters",
-			policy: models.TribunalPolicy{
-				ID:              "test@tribunal",
+			name: "invalid consensus ID with special characters",
+			policy: models.ConsensusPolicy{
+				ID:              "test@consensus",
 				MemberAppIDs:    []string{"member-1"},
 				Quorum:          1,
 				RequireDistinct: true,
 				Enabled:         true,
 			},
 			expectError: true,
-			errorMsg:    "TRIBUNAL_INVALID_ID",
+			errorMsg:    "CONSENSUS_INVALID_ID",
 		},
 		{
-			name: "invalid tribunal ID with spaces",
-			policy: models.TribunalPolicy{
-				ID:              "test tribunal",
+			name: "invalid consensus ID with spaces",
+			policy: models.ConsensusPolicy{
+				ID:              "test consensus",
 				MemberAppIDs:    []string{"member-1"},
 				Quorum:          1,
 				RequireDistinct: true,
 				Enabled:         true,
 			},
 			expectError: true,
-			errorMsg:    "TRIBUNAL_INVALID_ID",
+			errorMsg:    "CONSENSUS_INVALID_ID",
 		},
 		{
-			name: "invalid tribunal ID with path separator",
-			policy: models.TribunalPolicy{
-				ID:              "test/tribunal",
+			name: "invalid consensus ID with path separator",
+			policy: models.ConsensusPolicy{
+				ID:              "test/consensus",
 				MemberAppIDs:    []string{"member-1"},
 				Quorum:          1,
 				RequireDistinct: true,
 				Enabled:         true,
 			},
 			expectError: true,
-			errorMsg:    "TRIBUNAL_INVALID_ID",
+			errorMsg:    "CONSENSUS_INVALID_ID",
 		},
 		{
-			name: "disabled new tribunal rejected",
-			policy: models.TribunalPolicy{
-				ID:              "test-tribunal-disabled",
+			name: "disabled new consensus rejected",
+			policy: models.ConsensusPolicy{
+				ID:              "test-consensus-disabled",
 				MemberAppIDs:    []string{"member-1"},
 				Quorum:          1,
 				RequireDistinct: true,
 				Enabled:         false,
 			},
 			expectError: true,
-			errorMsg:    "TRIBUNAL_MUST_BE_ENABLED",
+			errorMsg:    "CONSENSUS_MUST_BE_ENABLED",
 		},
 		{
 			name: "disabled signer as member rejected",
-			policy: models.TribunalPolicy{
-				ID:              "test-tribunal-disabled-signer",
+			policy: models.ConsensusPolicy{
+				ID:              "test-consensus-disabled-signer",
 				MemberAppIDs:    []string{"disabled-member"},
 				Quorum:          1,
 				RequireDistinct: true,
@@ -236,7 +236,7 @@ func TestTribunalStoreService_AddTribunal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tribunalSvc.AddTribunal(tt.policy)
+			err := consensusSvc.AddConsensus(tt.policy)
 			if tt.expectError {
 				require.Error(t, err)
 				if tt.errorMsg != "" {
@@ -245,15 +245,15 @@ func TestTribunalStoreService_AddTribunal(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				// Cleanup
-				t.Cleanup(func() { tribunalSvc.DeleteTribunal(tt.policy.ID) })
+				t.Cleanup(func() { consensusSvc.DeleteConsensus(tt.policy.ID) })
 			}
 		})
 	}
 }
 
-func TestTribunalStoreService_GetTribunal(t *testing.T) {
+func TestConsensusStoreService_GetConsensus(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	tribunalSvc := NewTribunalStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
+	consensusSvc := NewConsensusStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
 
 	// Create a test signer
 	pubKey, _, err := ed25519.GenerateKey(nil)
@@ -268,37 +268,37 @@ func TestTribunalStoreService_GetTribunal(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("test-member") })
 
-	// Create a test tribunal
-	policy := models.TribunalPolicy{
-		ID:              "get-test-tribunal",
+	// Create a test consensus
+	policy := models.ConsensusPolicy{
+		ID:              "get-test-consensus",
 		MemberAppIDs:    []string{"test-member"},
 		Quorum:          1,
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	err = tribunalSvc.AddTribunal(policy)
+	err = consensusSvc.AddConsensus(policy)
 	require.NoError(t, err)
-	t.Cleanup(func() { tribunalSvc.DeleteTribunal("get-test-tribunal") })
+	t.Cleanup(func() { consensusSvc.DeleteConsensus("get-test-consensus") })
 
-	// Get the tribunal
-	retrieved, err := tribunalSvc.GetTribunal("get-test-tribunal")
+	// Get the consensus
+	retrieved, err := consensusSvc.GetConsensus("get-test-consensus")
 	require.NoError(t, err)
 	require.NotNil(t, retrieved)
-	assert.Equal(t, "get-test-tribunal", retrieved.ID)
+	assert.Equal(t, "get-test-consensus", retrieved.ID)
 	assert.Equal(t, []string{"test-member"}, retrieved.MemberAppIDs)
 	assert.Equal(t, 1, retrieved.Quorum)
 	assert.True(t, retrieved.RequireDistinct)
 	assert.True(t, retrieved.Enabled)
 
-	// Get non-existent tribunal
-	retrieved, err = tribunalSvc.GetTribunal("non-existent")
+	// Get non-existent consensus
+	retrieved, err = consensusSvc.GetConsensus("non-existent")
 	require.NoError(t, err)
 	assert.Nil(t, retrieved)
 }
 
-func TestTribunalStoreService_ListTribunals(t *testing.T) {
+func TestConsensusStoreService_ListConsensus(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	tribunalSvc := NewTribunalStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
+	consensusSvc := NewConsensusStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
 
 	// Create test signers
 	pubKey1, _, err := ed25519.GenerateKey(nil)
@@ -327,46 +327,46 @@ func TestTribunalStoreService_ListTribunals(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("list-member-2") })
 
-	// Create test tribunals
-	policy1 := models.TribunalPolicy{
-		ID:              "list-tribunal-1",
+	// Create test consensus
+	policy1 := models.ConsensusPolicy{
+		ID:              "list-consensus-1",
 		MemberAppIDs:    []string{"list-member-1"},
 		Quorum:          1,
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	err = tribunalSvc.AddTribunal(policy1)
+	err = consensusSvc.AddConsensus(policy1)
 	require.NoError(t, err)
-	t.Cleanup(func() { tribunalSvc.DeleteTribunal("list-tribunal-1") })
+	t.Cleanup(func() { consensusSvc.DeleteConsensus("list-consensus-1") })
 
-	policy2 := models.TribunalPolicy{
-		ID:              "list-tribunal-2",
+	policy2 := models.ConsensusPolicy{
+		ID:              "list-consensus-2",
 		MemberAppIDs:    []string{"list-member-2"},
 		Quorum:          1,
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	err = tribunalSvc.AddTribunal(policy2)
+	err = consensusSvc.AddConsensus(policy2)
 	require.NoError(t, err)
-	t.Cleanup(func() { tribunalSvc.DeleteTribunal("list-tribunal-2") })
+	t.Cleanup(func() { consensusSvc.DeleteConsensus("list-consensus-2") })
 
-	// List tribunals
-	tribunals, err := tribunalSvc.ListTribunals()
+	// List consensus
+	consensus, err := consensusSvc.ListConsensus()
 	require.NoError(t, err)
-	assert.GreaterOrEqual(t, len(tribunals), 2)
+	assert.GreaterOrEqual(t, len(consensus), 2)
 
-	// Verify our tribunals are in the list
+	// Verify our consensus are in the list
 	ids := make(map[string]bool)
-	for _, t := range tribunals {
+	for _, t := range consensus {
 		ids[t.ID] = true
 	}
-	assert.True(t, ids["list-tribunal-1"])
-	assert.True(t, ids["list-tribunal-2"])
+	assert.True(t, ids["list-consensus-1"])
+	assert.True(t, ids["list-consensus-2"])
 }
 
-func TestTribunalStoreService_DeleteTribunal(t *testing.T) {
+func TestConsensusStoreService_DeleteConsensus(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	tribunalSvc := NewTribunalStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
+	consensusSvc := NewConsensusStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
 
 	// Create a test signer
 	pubKey, _, err := ed25519.GenerateKey(nil)
@@ -381,36 +381,36 @@ func TestTribunalStoreService_DeleteTribunal(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("delete-member") })
 
-	// Create a test tribunal
-	policy := models.TribunalPolicy{
-		ID:              "delete-test-tribunal",
+	// Create a test consensus
+	policy := models.ConsensusPolicy{
+		ID:              "delete-test-consensus",
 		MemberAppIDs:    []string{"delete-member"},
 		Quorum:          1,
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	err = tribunalSvc.AddTribunal(policy)
+	err = consensusSvc.AddConsensus(policy)
 	require.NoError(t, err)
 
-	// Delete the tribunal
-	deleted, err := tribunalSvc.DeleteTribunal("delete-test-tribunal")
+	// Delete the consensus
+	deleted, err := consensusSvc.DeleteConsensus("delete-test-consensus")
 	require.NoError(t, err)
 	assert.True(t, deleted)
 
 	// Verify it's gone
-	retrieved, err := tribunalSvc.GetTribunal("delete-test-tribunal")
+	retrieved, err := consensusSvc.GetConsensus("delete-test-consensus")
 	require.NoError(t, err)
 	assert.Nil(t, retrieved)
 
-	// Delete non-existent tribunal
-	deleted, err = tribunalSvc.DeleteTribunal("non-existent")
+	// Delete non-existent consensus
+	deleted, err = consensusSvc.DeleteConsensus("non-existent")
 	require.NoError(t, err)
 	assert.False(t, deleted)
 }
 
-func TestTribunalStoreService_UpdateDisableTribunal(t *testing.T) {
+func TestConsensusStoreService_UpdateDisableConsensus(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	tribunalSvc := NewTribunalStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
+	consensusSvc := NewConsensusStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
 
 	pubKey, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -424,33 +424,33 @@ func TestTribunalStoreService_UpdateDisableTribunal(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("update-member") })
 
-	// Create enabled tribunal
-	policy := models.TribunalPolicy{
-		ID:              "update-tribunal",
+	// Create enabled consensus
+	policy := models.ConsensusPolicy{
+		ID:              "update-consensus",
 		MemberAppIDs:    []string{"update-member"},
 		Quorum:          1,
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	err = tribunalSvc.AddTribunal(policy)
+	err = consensusSvc.AddConsensus(policy)
 	require.NoError(t, err)
-	t.Cleanup(func() { tribunalSvc.DeleteTribunal("update-tribunal") })
+	t.Cleanup(func() { consensusSvc.DeleteConsensus("update-consensus") })
 
-	// Update: disable the existing tribunal (should succeed)
+	// Update: disable the existing consensus (should succeed)
 	policy.Enabled = false
-	err = tribunalSvc.AddTribunal(policy)
+	err = consensusSvc.AddConsensus(policy)
 	require.NoError(t, err)
 
 	// Verify it's stored as disabled
-	retrieved, err := tribunalSvc.GetTribunal("update-tribunal")
+	retrieved, err := consensusSvc.GetConsensus("update-consensus")
 	require.NoError(t, err)
 	require.NotNil(t, retrieved)
 	assert.False(t, retrieved.Enabled)
 }
 
-func TestTribunalStoreService_AddTribunal_AlreadyExists(t *testing.T) {
+func TestConsensusStoreService_AddConsensus_AlreadyExists(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	tribunalSvc := NewTribunalStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
+	consensusSvc := NewConsensusStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
 
 	pubKey, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -464,26 +464,26 @@ func TestTribunalStoreService_AddTribunal_AlreadyExists(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("exists-member") })
 
-	policy := models.TribunalPolicy{
-		ID:              "exists-tribunal",
+	policy := models.ConsensusPolicy{
+		ID:              "exists-consensus",
 		MemberAppIDs:    []string{"exists-member"},
 		Quorum:          1,
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	err = tribunalSvc.AddTribunal(policy)
+	err = consensusSvc.AddConsensus(policy)
 	require.NoError(t, err)
-	t.Cleanup(func() { tribunalSvc.DeleteTribunal("exists-tribunal") })
+	t.Cleanup(func() { consensusSvc.DeleteConsensus("exists-consensus") })
 
-	// Attempt to create the same tribunal again with Enabled=true
-	err = tribunalSvc.AddTribunal(policy)
+	// Attempt to create the same consensus again with Enabled=true
+	err = consensusSvc.AddConsensus(policy)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "already exists")
 }
 
-func TestTribunalStoreService_GetConsensusPolicy(t *testing.T) {
+func TestConsensusStoreService_GetConsensusPolicy(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	tribunalSvc := NewTribunalStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
+	consensusSvc := NewConsensusStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
 
 	pubKey, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -497,18 +497,18 @@ func TestTribunalStoreService_GetConsensusPolicy(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("consensus-member") })
 
-	policy := models.TribunalPolicy{
-		ID:              "consensus-test-tribunal",
+	policy := models.ConsensusPolicy{
+		ID:              "consensus-test-consensus",
 		MemberAppIDs:    []string{"consensus-member"},
 		Quorum:          1,
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	err = tribunalSvc.AddTribunal(policy)
+	err = consensusSvc.AddConsensus(policy)
 	require.NoError(t, err)
-	t.Cleanup(func() { tribunalSvc.DeleteTribunal("consensus-test-tribunal") })
+	t.Cleanup(func() { consensusSvc.DeleteConsensus("consensus-test-consensus") })
 
-	consensusPolicy, err := tribunalSvc.GetConsensusPolicy("consensus-test-tribunal")
+	consensusPolicy, err := consensusSvc.GetConsensusPolicy("consensus-test-consensus")
 	require.NoError(t, err)
 	require.NotNil(t, consensusPolicy)
 	assert.Equal(t, []string{"consensus-member"}, consensusPolicy.MemberKeyIDs)
@@ -516,12 +516,12 @@ func TestTribunalStoreService_GetConsensusPolicy(t *testing.T) {
 	assert.True(t, consensusPolicy.RequireDistinct)
 	assert.True(t, consensusPolicy.Enabled)
 
-	consensusPolicy, err = tribunalSvc.GetConsensusPolicy("non-existent")
+	consensusPolicy, err = consensusSvc.GetConsensusPolicy("non-existent")
 	require.NoError(t, err)
 	assert.Nil(t, consensusPolicy)
 }
 
-func TestIsValidTribunalID(t *testing.T) {
+func TestIsValidConsensusID(t *testing.T) {
 	tests := []struct {
 		id   string
 		want bool
@@ -531,19 +531,19 @@ func TestIsValidTribunalID(t *testing.T) {
 		{"ValidID123", true},
 		{"a", true},
 		{"", false},
-		{"test@tribunal", false},
-		{"test tribunal", false},
-		{"test/tribunal", false},
-		{"test\\tribunal", false},
-		{"test:tribunal", false},
-		{"test.tribunal", false},
-		{"test\ttribunal", false},
+		{"test@consensus", false},
+		{"test consensus", false},
+		{"test/consensus", false},
+		{"test\\consensus", false},
+		{"test:consensus", false},
+		{"test.consensus", false},
+		{"test\tconsensus", false},
 		{"日本語", true}, // unicode letters are allowed
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.id, func(t *testing.T) {
-			got := isValidTribunalID(tt.id)
+			got := isValidConsensusID(tt.id)
 			assert.Equal(t, tt.want, got)
 		})
 	}

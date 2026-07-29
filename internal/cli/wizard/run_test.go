@@ -45,8 +45,8 @@ func TestRun_HeadlessConfirm_ModelState(t *testing.T) {
 		InitialConfig: Config{
 			PublicBaseURL:    "https://demo.g8e.ai",
 			Posture:          "consensus",
-			TribunalID:       "trib-prod-01",
-			TribunalURL:      "https://tribunal.g8e.ai",
+			ConsensusID:      "trib-prod-01",
+			ConsensusURL:     "https://consensus.g8e.ai",
 			PasskeyRpID:      "demo.g8e.ai",
 			PasskeyRpName:    "g8e",
 			PasskeyRpOrigins: []string{"https://demo.g8e.ai"},
@@ -59,7 +59,7 @@ func TestRun_HeadlessConfirm_ModelState(t *testing.T) {
 	assert.False(t, result.Cancel)
 	assert.Equal(t, "https://demo.g8e.ai", result.Config.PublicBaseURL)
 	assert.Equal(t, "consensus", result.Config.Posture)
-	assert.Equal(t, "trib-prod-01", result.Config.TribunalID)
+	assert.Equal(t, "trib-prod-01", result.Config.ConsensusID)
 }
 
 // --- Run: error wrapping ---

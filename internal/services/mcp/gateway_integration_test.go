@@ -95,7 +95,7 @@ func TestMCPGatewayEndToEndIntegration(t *testing.T) {
 
 	// Verify governance metadata is present (no GatewaySigned — that concept is deleted)
 	require.NotNil(t, receivedEnvelope.Governance)
-	// L2 is empty — the gateway no longer self-signs; Tribunal deliberation is a separate step
+	// L2 is empty — the gateway no longer self-signs; Consensus deliberation is a separate step
 }
 
 // envelopeCaptureProcessor wraps an EnvelopeProcessor to capture envelopes for verification

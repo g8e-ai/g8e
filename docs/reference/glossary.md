@@ -4,8 +4,8 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 2026-07-24
-Version: v1.6.2
+Last Updated: 2026-07-29
+Version: v1.6.6
 
 Core terminology for the g8e protocol, Governance Gateway, Governed Operator, and ecosystem integration (MCP, A2A). Terms are organized alphabetically.
 
@@ -39,7 +39,7 @@ A just-in-time, single-action, self-dissolving permission derived from a verifie
 
 The embedded SQLite database used by the Governance Gateway for durable storage of users, operators, and platform data. The Governance Gateway running in gateway mode is the single source of truth: a single SQLite database in WAL mode shared by all components via the Governance Gateway's document store, KV, and pub/sub APIs. BYO agentic clients and other components are stateless with respect to persistence and access all data through the Governance Gateway's HTTP API.
 
-Collections include users, operators, organizations, operator_sessions, cli_sessions, web_sessions, bound_sessions, cases, investigations, tasks, memories, personas, app_policies, trusted_signers, tribunals, enrollment_tokens, revoked_certificates, reputation_state, reputation_commitments, stake_resolutions, agent_activity_metadata, account_locks, login_audit, auth_admin_audit, console_audit, operator_usage, passkey_challenges, settings, and others. The database includes a `state_tier` column to distinguish bound-state from observed-state entries.
+Collections include users, operators, organizations, operator_sessions, cli_sessions, web_sessions, bound_sessions, cases, investigations, tasks, memories, personas, app_policies, trusted_signers, consensus, enrollment_tokens, revoked_certificates, reputation_state, reputation_commitments, stake_resolutions, agent_activity_metadata, account_locks, login_audit, auth_admin_audit, console_audit, operator_usage, passkey_challenges, settings, and others. The database includes a `state_tier` column to distinguish bound-state from observed-state entries.
 
 ---
 
@@ -64,11 +64,11 @@ An embedded SQLite database on the Governed Operator that stores command executi
 ## Governance Envelope
 
 The canonical Protobuf container (`g8e.common.v1.GovernanceEnvelope`) for all g8e protocol mutations. It binds identity, intent, state, and governance proofs into one transaction. Fields include:
-- Identity: `id`, `timestamp`, `expires_at`, `source_component`, `operator_id`, `operator_session_id`, `web_session_id`, `cli_session_id`, `tenant_id`, `binding_persona`, `requestor_user_id`, `acting_app_id`
+- Identity: `id`, `timestamp`, `expires_at`, `source_component`, `operator_id`, `operator_session_id`, `web_session_id`, `cli_session_id`, `requestor_user_id`, `acting_app_id`
 - Intent: `event_type`, `payload` (typed protobuf bytes), `intent_data` (structured JSON), `action_type`, `target_resource`
 - State: `state_merkle_root`, `nonce`, `transaction_hash`, `protocol_version`
 - Governance: `governance` (L1/L2/L3 metadata)
-- Context: `case_id`, `investigation_id`, `task_id`, `system_fingerprint`
+- Context: `case_id`, `investigation_id`, `task_id`, `system_fingerprint`, `tenant_id`, `binding_persona`
 
 The wire format is canonical JSON (protojson) for client-facing surfaces; signing is based on the deterministic `transaction_hash` computed from normalized envelope fields.
 
@@ -125,7 +125,7 @@ L1 is foundationally active for every command and cannot be bypassed.
 
 ## L2 Consensus (L2Consensus)
 
-The second layer of g8e governance (Consensus). A multi-agent consensus system where independent agents vote on command candidates. L2 ensures every command executed is backed by a cryptographic quorum. The Tribunal service deliberates on each governance envelope and produces signed votes. In the g8e protocol, an L2 vote is an Ed25519 signature over the `transaction_hash|decision` in the `GovernanceEnvelope`. Votes are verified by the L4 Warden against the tribunal policy's quorum requirement. L2 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, notary).
+The second layer of g8e governance (Consensus). A multi-agent consensus system where independent agents vote on command candidates. L2 ensures every command executed is backed by a cryptographic quorum. The Consensus service deliberates on each governance envelope and produces signed votes. In the g8e protocol, an L2 vote is an Ed25519 signature over the `transaction_hash|decision` in the `GovernanceEnvelope`. Votes are verified by the L4 Warden against the consensus policy's quorum requirement. L2 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, notary).
 
 ---
 
@@ -134,7 +134,7 @@ The second layer of g8e governance (Consensus). A multi-agent consensus system w
 The third layer of g8e governance (Authorization), focusing on human oversight. Every state-changing mutation requires explicit human authorization. The L3 notary uses a layered authorization model with three implementations:
 - **Gateway Notary**: The unified notary for gateway mode. Layer 1 requires passkey (WebAuthn) authorization for all callers; proofs without a `credential_id` are rejected. Layer 2 performs CLI mTLS session verification (user match, session validity, certificate fingerprint match) when the proof includes an `mtls_cert_fingerprint` (CLI callers). Browser-only proofs skip Layer 2.
 - **Outbound Notary**: The notary for outbound mode. Performs suspended transaction lookup and Ed25519 signature verification over the transaction hash. The signature is verified against the `ApprovalPublicKey` stored on the suspended transaction.
-- **CLI Notary**: The notary for gateway CLI mode without a passkey verifier. Performs CLI session verification followed by suspended transaction and Ed25519 signature verification.
+- **Demo Notary**: The notary for demo environments where WebAuthn passkey enrollment is not available (e.g., headless Docker containers). Accepts any non-nil proof, allowing the harness mock L3 mode to satisfy notary posture without a browser. Gated by the `G8E_L3_MOCK` environment variable and must never be used in production.
 The CLI approval flow opens a browser to the console SPA for WebAuthn ceremony and subscribes to the gateway's SSE stream for the `approval.completed` event, then verifies the approval status via the mTLS endpoint (`/api/v1/approvals/status/{tx_hash}`). CLI credentials (mTLS) are required for L3 approval flows. The L4 Warden verifies L3 proofs before allowing execution to proceed. L3 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, notary).
 
 ---
@@ -271,9 +271,9 @@ The execution pattern where BYO AI clients generate tool calls to interact with 
 
 ---
 
-## Tribunal
+## Consensus
 
-A multi-member deliberation service that produces L2 consensus votes for governance envelopes. Each tribunal member is an enrolled principal with its own Ed25519 key. The tribunal policy defines the member set, quorum threshold, and whether distinct signatures are required. When the gateway operates under consensus or notary posture, the tribunal deliberates on each envelope and signs a vote indicating whether the action is safe. The gateway bootstraps the tribunal at startup from a policy stored in the coordination store.
+A multi-member deliberation service that produces L2 consensus votes for governance envelopes. Each consensus member is an enrolled principal with its own Ed25519 key. The consensus policy defines the member set, quorum threshold, and whether distinct signatures are required. When the gateway operates under consensus or notary posture, the consensus deliberates on each envelope and signs a vote indicating whether the action is safe. The gateway bootstraps the consensus at startup from a policy stored in the coordination store.
 
 ---
 

@@ -54,8 +54,8 @@ func TestGatewayConfig_ZeroValue(t *testing.T) {
 	assert.Equal(t, "", cfg.LogLevel)
 	assert.Equal(t, "", cfg.CertIdentityMode)
 	assert.Equal(t, "", cfg.NetworkIdentityFile)
-	assert.Equal(t, "", cfg.TribunalID)
-	assert.Equal(t, "", cfg.TribunalURL)
+	assert.Equal(t, "", cfg.ConsensusID)
+	assert.Equal(t, "", cfg.ConsensusURL)
 	assert.Equal(t, "", cfg.MCPDownstreamURL)
 	assert.Equal(t, "", cfg.A2ADownstreamURL)
 }
@@ -77,8 +77,8 @@ func TestGatewayConfig_FullAssignment(t *testing.T) {
 		LogLevel:            "info",
 		CertIdentityMode:    "full",
 		NetworkIdentityFile: constants.TestPathEtcNetworkIdentity,
-		TribunalID:          "trib-001",
-		TribunalURL:         "https://localhost:8443/tribunal/v1/deliberate",
+		ConsensusID:         "trib-001",
+		ConsensusURL:        "https://localhost:8443/consensus/v1/deliberate",
 		MCPDownstreamURL:    "http://downstream:3000/mcp",
 		A2ADownstreamURL:    "http://downstream:3001/a2a",
 	}
@@ -98,8 +98,8 @@ func TestGatewayConfig_FullAssignment(t *testing.T) {
 	assert.Equal(t, "info", cfg.LogLevel)
 	assert.Equal(t, "full", cfg.CertIdentityMode)
 	assert.Equal(t, constants.TestPathEtcNetworkIdentity, cfg.NetworkIdentityFile)
-	assert.Equal(t, "trib-001", cfg.TribunalID)
-	assert.Equal(t, "https://localhost:8443/tribunal/v1/deliberate", cfg.TribunalURL)
+	assert.Equal(t, "trib-001", cfg.ConsensusID)
+	assert.Equal(t, "https://localhost:8443/consensus/v1/deliberate", cfg.ConsensusURL)
 	assert.Equal(t, "http://downstream:3000/mcp", cfg.MCPDownstreamURL)
 	assert.Equal(t, "http://downstream:3001/a2a", cfg.A2ADownstreamURL)
 }
@@ -113,7 +113,7 @@ func TestGatewayConfig_Equality(t *testing.T) {
 		PKIDir:         constants.TestPathShortPKI,
 		SecretsDir:     constants.TestPathShortSecrets,
 		LogLevel:       "debug",
-		TribunalID:     "trib-1",
+		ConsensusID:    "trib-1",
 		RateLimitRPS:   5.0,
 		RateLimitBurst: 10,
 	}
@@ -141,7 +141,7 @@ func TestGatewayConfig_PartialAssignment(t *testing.T) {
 	assert.Equal(t, "", cfg.SecretsDir, "unassigned SecretsDir should be zero value")
 	assert.Equal(t, float64(0), cfg.RateLimitRPS, "unassigned RateLimitRPS should be zero")
 	assert.Equal(t, 0, cfg.RateLimitBurst, "unassigned RateLimitBurst should be zero")
-	assert.Equal(t, "", cfg.TribunalID, "unassigned TribunalID should be zero value")
+	assert.Equal(t, "", cfg.ConsensusID, "unassigned ConsensusID should be zero value")
 }
 
 func TestGatewayConfig_AllFieldsExported(t *testing.T) {
@@ -162,8 +162,8 @@ func TestGatewayConfig_AllFieldsExported(t *testing.T) {
 	cfg.LogLevel = "debug"
 	cfg.CertIdentityMode = "localhost"
 	cfg.NetworkIdentityFile = constants.TestPathIdentityFile
-	cfg.TribunalID = "trib-002"
-	cfg.TribunalURL = "https://tribunal.example.com"
+	cfg.ConsensusID = "trib-002"
+	cfg.ConsensusURL = "https://consensus.example.com"
 	cfg.MCPDownstreamURL = "http://mcp.example.com"
 	cfg.A2ADownstreamURL = "http://a2a.example.com"
 
@@ -182,30 +182,30 @@ func TestGatewayConfig_AllFieldsExported(t *testing.T) {
 	assert.Equal(t, "debug", cfg.LogLevel)
 	assert.Equal(t, "localhost", cfg.CertIdentityMode)
 	assert.Equal(t, constants.TestPathIdentityFile, cfg.NetworkIdentityFile)
-	assert.Equal(t, "trib-002", cfg.TribunalID)
-	assert.Equal(t, "https://tribunal.example.com", cfg.TribunalURL)
+	assert.Equal(t, "trib-002", cfg.ConsensusID)
+	assert.Equal(t, "https://consensus.example.com", cfg.ConsensusURL)
 	assert.Equal(t, "http://mcp.example.com", cfg.MCPDownstreamURL)
 	assert.Equal(t, "http://a2a.example.com", cfg.A2ADownstreamURL)
 }
 
 func TestGatewayConfig_Mutation(t *testing.T) {
 	cfg := GatewayConfig{
-		Posture:    config.PostureDoctrine,
-		HTTPPort:   8080,
-		HTTPSPort:  8443,
-		LogLevel:   "info",
-		TribunalID: "trib-original",
+		Posture:     config.PostureDoctrine,
+		HTTPPort:    8080,
+		HTTPSPort:   8443,
+		LogLevel:    "info",
+		ConsensusID: "trib-original",
 	}
 
 	cfg.Posture = config.PostureConsensus
 	cfg.HTTPPort = 9090
-	cfg.TribunalID = "trib-mutated"
+	cfg.ConsensusID = "trib-mutated"
 
 	assert.Equal(t, config.PostureConsensus, cfg.Posture)
 	assert.Equal(t, 9090, cfg.HTTPPort)
 	assert.Equal(t, 8443, cfg.HTTPSPort, "unmodified fields should retain original values")
 	assert.Equal(t, "info", cfg.LogLevel, "unmodified fields should retain original values")
-	assert.Equal(t, "trib-mutated", cfg.TribunalID)
+	assert.Equal(t, "trib-mutated", cfg.ConsensusID)
 }
 
 func TestGatewayConfig_PostureValues(t *testing.T) {
@@ -266,8 +266,8 @@ func gatewayConfigToOptions(cfg GatewayConfig) config.GatewayOptions {
 		NetworkIdentityFile: cfg.NetworkIdentityFile,
 		MCPDownstreamURL:    cfg.MCPDownstreamURL,
 		A2ADownstreamURL:    cfg.A2ADownstreamURL,
-		TribunalID:          cfg.TribunalID,
-		TribunalURL:         cfg.TribunalURL,
+		ConsensusID:         cfg.ConsensusID,
+		ConsensusURL:        cfg.ConsensusURL,
 		AllowTestPortZero:   false,
 	}
 }
@@ -288,8 +288,8 @@ func TestGatewayConfigToOptions_FullMapping(t *testing.T) {
 		RateLimitBurst:      10,
 		CertIdentityMode:    "full",
 		NetworkIdentityFile: constants.TestPathIdentityFile,
-		TribunalID:          "trib-001",
-		TribunalURL:         "https://localhost:8443/tribunal/v1/deliberate",
+		ConsensusID:         "trib-001",
+		ConsensusURL:        "https://localhost:8443/consensus/v1/deliberate",
 		MCPDownstreamURL:    "http://mcp:3000",
 		A2ADownstreamURL:    "http://a2a:3001",
 	}
@@ -312,8 +312,8 @@ func TestGatewayConfigToOptions_FullMapping(t *testing.T) {
 	assert.Equal(t, cfg.NetworkIdentityFile, opts.NetworkIdentityFile)
 	assert.Equal(t, cfg.MCPDownstreamURL, opts.MCPDownstreamURL)
 	assert.Equal(t, cfg.A2ADownstreamURL, opts.A2ADownstreamURL)
-	assert.Equal(t, cfg.TribunalID, opts.TribunalID)
-	assert.Equal(t, cfg.TribunalURL, opts.TribunalURL)
+	assert.Equal(t, cfg.ConsensusID, opts.ConsensusID)
+	assert.Equal(t, cfg.ConsensusURL, opts.ConsensusURL)
 	assert.False(t, opts.AllowTestPortZero, "AllowTestPortZero should always be false in production mapping")
 }
 
@@ -417,8 +417,8 @@ func TestGatewayConfig_FieldCount(t *testing.T) {
 		LogLevel:            "info",
 		CertIdentityMode:    "full",
 		NetworkIdentityFile: constants.TestPathIdentityFileShort,
-		TribunalID:          "trib-1",
-		TribunalURL:         "https://tribunal.example.com",
+		ConsensusID:         "trib-1",
+		ConsensusURL:        "https://consensus.example.com",
 		MCPDownstreamURL:    "http://mcp:3000",
 		A2ADownstreamURL:    "http://a2a:3001",
 	}
@@ -469,10 +469,10 @@ func TestGatewayConfig_FieldCount(t *testing.T) {
 	if cfg.NetworkIdentityFile != "" {
 		nonZero++
 	}
-	if cfg.TribunalID != "" {
+	if cfg.ConsensusID != "" {
 		nonZero++
 	}
-	if cfg.TribunalURL != "" {
+	if cfg.ConsensusURL != "" {
 		nonZero++
 	}
 	if cfg.MCPDownstreamURL != "" {
@@ -503,13 +503,13 @@ func TestGatewayConfig_DoctrinePostureScenario(t *testing.T) {
 	}
 
 	assert.Equal(t, config.PostureDoctrine, cfg.Posture)
-	assert.Equal(t, "", cfg.TribunalID, "doctrine posture does not require tribunal")
-	assert.Equal(t, "", cfg.TribunalURL, "doctrine posture does not require tribunal URL")
+	assert.Equal(t, "", cfg.ConsensusID, "doctrine posture does not require consensus")
+	assert.Equal(t, "", cfg.ConsensusURL, "doctrine posture does not require consensus URL")
 
 	opts := gatewayConfigToOptions(cfg)
 	assert.Equal(t, config.PostureDoctrine, opts.Posture)
-	assert.Equal(t, "", opts.TribunalID)
-	assert.Equal(t, "", opts.TribunalURL)
+	assert.Equal(t, "", opts.ConsensusID)
+	assert.Equal(t, "", opts.ConsensusURL)
 }
 
 func TestGatewayConfig_ConsensusPostureScenario(t *testing.T) {
@@ -523,18 +523,18 @@ func TestGatewayConfig_ConsensusPostureScenario(t *testing.T) {
 		PasskeyRpID:   "localhost",
 		PasskeyRpName: "g8e",
 		LogLevel:      "info",
-		TribunalID:    "trib-001",
-		TribunalURL:   "https://localhost:8443/tribunal/v1/deliberate",
+		ConsensusID:   "trib-001",
+		ConsensusURL:  "https://localhost:8443/consensus/v1/deliberate",
 	}
 
 	assert.Equal(t, config.PostureConsensus, cfg.Posture)
-	assert.NotEmpty(t, cfg.TribunalID, "consensus posture requires tribunal ID")
-	assert.NotEmpty(t, cfg.TribunalURL, "consensus posture requires tribunal URL")
+	assert.NotEmpty(t, cfg.ConsensusID, "consensus posture requires consensus ID")
+	assert.NotEmpty(t, cfg.ConsensusURL, "consensus posture requires consensus URL")
 
 	opts := gatewayConfigToOptions(cfg)
 	assert.Equal(t, config.PostureConsensus, opts.Posture)
-	assert.Equal(t, "trib-001", opts.TribunalID)
-	assert.Equal(t, "https://localhost:8443/tribunal/v1/deliberate", opts.TribunalURL)
+	assert.Equal(t, "trib-001", opts.ConsensusID)
+	assert.Equal(t, "https://localhost:8443/consensus/v1/deliberate", opts.ConsensusURL)
 }
 
 func TestGatewayConfig_NotaryPostureScenario(t *testing.T) {
@@ -551,22 +551,22 @@ func TestGatewayConfig_NotaryPostureScenario(t *testing.T) {
 	}
 
 	assert.Equal(t, config.PostureNotary, cfg.Posture)
-	assert.Equal(t, "", cfg.TribunalID, "notary posture requires a tribunal at startup validation, but the struct default is empty until configured")
+	assert.Equal(t, "", cfg.ConsensusID, "notary posture requires a consensus at startup validation, but the struct default is empty until configured")
 
 	opts := gatewayConfigToOptions(cfg)
 	assert.Equal(t, config.PostureNotary, opts.Posture)
 }
 
-func TestGatewayConfig_ConsensusWithoutTribunalID(t *testing.T) {
+func TestGatewayConfig_ConsensusWithoutConsensusID(t *testing.T) {
 	cfg := GatewayConfig{
-		Posture:     config.PostureConsensus,
-		TribunalURL: "https://localhost:8443/tribunal",
+		Posture:      config.PostureConsensus,
+		ConsensusURL: "https://localhost:8443/consensus",
 	}
 
-	assert.Equal(t, "", cfg.TribunalID, "tribunal ID missing but URL set is an invalid config")
+	assert.Equal(t, "", cfg.ConsensusID, "consensus ID missing but URL set is an invalid config")
 	opts := gatewayConfigToOptions(cfg)
-	assert.Equal(t, "", opts.TribunalID)
-	assert.NotEmpty(t, opts.TribunalURL)
+	assert.Equal(t, "", opts.ConsensusID)
+	assert.NotEmpty(t, opts.ConsensusURL)
 }
 
 // ---------------------------------------------------------------------------
@@ -786,25 +786,25 @@ func TestGatewayConfig_PasskeyRpOriginsWiring(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Tribunal URL variants
+// Consensus URL variants
 // ---------------------------------------------------------------------------
 
-func TestGatewayConfigToOptions_TribunalURLVariants(t *testing.T) {
+func TestGatewayConfigToOptions_ConsensusURLVariants(t *testing.T) {
 	tests := []struct {
 		name string
 		url  string
 	}{
 		{"empty", ""},
-		{"localhost", "https://localhost:8443/tribunal/v1/deliberate"},
-		{"remote", "https://tribunal.example.com:9443/tribunal/v1/deliberate"},
-		{"http (insecure)", "http://localhost:8080/tribunal/v1/deliberate"},
+		{"localhost", "https://localhost:8443/consensus/v1/deliberate"},
+		{"remote", "https://consensus.example.com:9443/consensus/v1/deliberate"},
+		{"http (insecure)", "http://localhost:8080/consensus/v1/deliberate"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := GatewayConfig{TribunalURL: tt.url}
+			cfg := GatewayConfig{ConsensusURL: tt.url}
 			opts := gatewayConfigToOptions(cfg)
-			assert.Equal(t, tt.url, opts.TribunalURL)
+			assert.Equal(t, tt.url, opts.ConsensusURL)
 		})
 	}
 }
@@ -843,31 +843,31 @@ func TestGatewayConfigToOptions_DownstreamWithPosture(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// BootstrapTribunal nil behavior (Tier 1 — no DB)
+// ConsensusBootstrap nil behavior (Tier 1 — no DB)
 // ---------------------------------------------------------------------------
 
-func TestBootstrapTribunal_NilServiceReturnsError(t *testing.T) {
+func TestConsensusBootstrap_NilServiceReturnsError(t *testing.T) {
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	_, err = BootstrapTribunal(nil, "trib-001", priv, "key-id", constants.TestPathShortSecrets, logger)
+	_, err = ConsensusBootstrap(nil, "trib-001", priv, "key-id", constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil),
-		"BootstrapTribunal with nil service should return ErrGatewayServiceNil")
+		"ConsensusBootstrap with nil service should return ErrGatewayServiceNil")
 }
 
-func TestBootstrapTribunal_EmptyTribunalID(t *testing.T) {
+func TestConsensusBootstrap_EmptyConsensusID(t *testing.T) {
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	_, err = BootstrapTribunal(nil, "", priv, "key-id", constants.TestPathShortSecrets, logger)
+	_, err = ConsensusBootstrap(nil, "", priv, "key-id", constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil),
-		"BootstrapTribunal with nil service returns error regardless of tribunal ID")
+		"ConsensusBootstrap with nil service returns error regardless of consensus ID")
 }
 
 // ---------------------------------------------------------------------------
@@ -889,8 +889,8 @@ func TestGatewayConfigToOptions_RoundTripIntegrity(t *testing.T) {
 		RateLimitBurst:      20,
 		CertIdentityMode:    "full",
 		NetworkIdentityFile: constants.TestPathIdentityFileShort,
-		TribunalID:          "trib-1",
-		TribunalURL:         "https://tribunal.example.com",
+		ConsensusID:         "trib-1",
+		ConsensusURL:        "https://consensus.example.com",
 		MCPDownstreamURL:    "http://mcp:3000",
 		A2ADownstreamURL:    "http://a2a:3001",
 	}
@@ -910,8 +910,8 @@ func TestGatewayConfigToOptions_RoundTripIntegrity(t *testing.T) {
 	assert.Equal(t, original.RateLimitBurst, opts.RateLimitBurst)
 	assert.Equal(t, original.CertIdentityMode, opts.CertMode)
 	assert.Equal(t, original.NetworkIdentityFile, opts.NetworkIdentityFile)
-	assert.Equal(t, original.TribunalID, opts.TribunalID)
-	assert.Equal(t, original.TribunalURL, opts.TribunalURL)
+	assert.Equal(t, original.ConsensusID, opts.ConsensusID)
+	assert.Equal(t, original.ConsensusURL, opts.ConsensusURL)
 	assert.Equal(t, original.MCPDownstreamURL, opts.MCPDownstreamURL)
 	assert.Equal(t, original.A2ADownstreamURL, opts.A2ADownstreamURL)
 }
@@ -942,107 +942,107 @@ func TestGatewayConfigToOptions_StandardPortsPreserved(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// parseTribunalBootstrapConfig tests (Tier 1 — no DB)
+// parseConsensusBootstrapConfig tests (Tier 1 — no DB)
 // ---------------------------------------------------------------------------
 
-func TestParseTribunalBootstrapConfig_Valid(t *testing.T) {
+func TestParseConsensusBootstrapConfig_Valid(t *testing.T) {
 	data := []byte(`{
-		"tribunal_id": "dhs-tribunal",
+		"consensus_id": "dhs-consensus",
 		"member_app_ids": ["auditor-ensemble"],
 		"quorum": 1,
 		"seed_hex": "87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77"
 	}`)
 
-	boot, err := parseTribunalBootstrapConfig(data)
+	boot, err := parseConsensusBootstrapConfig(data)
 	require.NoError(t, err)
-	assert.Equal(t, "dhs-tribunal", boot.TribunalID)
+	assert.Equal(t, "dhs-consensus", boot.ConsensusID)
 	assert.Equal(t, []string{"auditor-ensemble"}, boot.MemberAppIDs)
 	assert.Equal(t, 1, boot.Quorum)
 	assert.Equal(t, "87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77", boot.SeedHex)
 }
 
-func TestParseTribunalBootstrapConfig_ValidNoSeed(t *testing.T) {
+func TestParseConsensusBootstrapConfig_ValidNoSeed(t *testing.T) {
 	data := []byte(`{
-		"tribunal_id": "test-tribunal",
+		"consensus_id": "test-consensus",
 		"member_app_ids": ["member-a", "member-b"],
 		"quorum": 2
 	}`)
 
-	boot, err := parseTribunalBootstrapConfig(data)
+	boot, err := parseConsensusBootstrapConfig(data)
 	require.NoError(t, err)
-	assert.Equal(t, "test-tribunal", boot.TribunalID)
+	assert.Equal(t, "test-consensus", boot.ConsensusID)
 	assert.Len(t, boot.MemberAppIDs, 2)
 	assert.Equal(t, 2, boot.Quorum)
 	assert.Empty(t, boot.SeedHex)
 }
 
-func TestParseTribunalBootstrapConfig_MalformedJSON(t *testing.T) {
+func TestParseConsensusBootstrapConfig_MalformedJSON(t *testing.T) {
 	data := []byte(`{not valid json}`)
 
-	_, err := parseTribunalBootstrapConfig(data)
+	_, err := parseConsensusBootstrapConfig(data)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapParseConfig))
+	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapParseConfig))
 }
 
-func TestParseTribunalBootstrapConfig_EmptyTribunalID(t *testing.T) {
+func TestParseConsensusBootstrapConfig_EmptyConsensusID(t *testing.T) {
 	data := []byte(`{
-		"tribunal_id": "",
+		"consensus_id": "",
 		"member_app_ids": ["member-a"],
 		"quorum": 1
 	}`)
 
-	_, err := parseTribunalBootstrapConfig(data)
+	_, err := parseConsensusBootstrapConfig(data)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapMissingFields))
+	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapMissingFields))
 }
 
-func TestParseTribunalBootstrapConfig_EmptyMemberAppIDs(t *testing.T) {
+func TestParseConsensusBootstrapConfig_EmptyMemberAppIDs(t *testing.T) {
 	data := []byte(`{
-		"tribunal_id": "test-tribunal",
+		"consensus_id": "test-consensus",
 		"member_app_ids": [],
 		"quorum": 1
 	}`)
 
-	_, err := parseTribunalBootstrapConfig(data)
+	_, err := parseConsensusBootstrapConfig(data)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapMissingFields))
+	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapMissingFields))
 }
 
-func TestParseTribunalBootstrapConfig_QuorumZero(t *testing.T) {
+func TestParseConsensusBootstrapConfig_QuorumZero(t *testing.T) {
 	data := []byte(`{
-		"tribunal_id": "test-tribunal",
+		"consensus_id": "test-consensus",
 		"member_app_ids": ["member-a"],
 		"quorum": 0
 	}`)
 
-	_, err := parseTribunalBootstrapConfig(data)
+	_, err := parseConsensusBootstrapConfig(data)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapMissingFields))
+	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapMissingFields))
 }
 
-func TestParseTribunalBootstrapConfig_NegativeQuorum(t *testing.T) {
+func TestParseConsensusBootstrapConfig_NegativeQuorum(t *testing.T) {
 	data := []byte(`{
-		"tribunal_id": "test-tribunal",
+		"consensus_id": "test-consensus",
 		"member_app_ids": ["member-a"],
 		"quorum": -1
 	}`)
 
-	_, err := parseTribunalBootstrapConfig(data)
+	_, err := parseConsensusBootstrapConfig(data)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapMissingFields))
+	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapMissingFields))
 }
 
-func TestParseTribunalBootstrapConfig_MultipleMembers(t *testing.T) {
+func TestParseConsensusBootstrapConfig_MultipleMembers(t *testing.T) {
 	data := []byte(`{
-		"tribunal_id": "council",
+		"consensus_id": "council",
 		"member_app_ids": ["alpha", "beta", "gamma"],
 		"quorum": 2,
 		"seed_hex": ""
 	}`)
 
-	boot, err := parseTribunalBootstrapConfig(data)
+	boot, err := parseConsensusBootstrapConfig(data)
 	require.NoError(t, err)
-	assert.Equal(t, "council", boot.TribunalID)
+	assert.Equal(t, "council", boot.ConsensusID)
 	assert.Len(t, boot.MemberAppIDs, 3)
 	assert.Equal(t, 2, boot.Quorum)
 }
@@ -1090,7 +1090,7 @@ func TestDeriveSeedPublicKey_TrimsWhitespace(t *testing.T) {
 func TestDeriveSeedPublicKey_InvalidHex(t *testing.T) {
 	_, err := deriveSeedPublicKey("not-hex-at-all")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapDecodeSeed))
+	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapDecodeSeed))
 }
 
 func TestDeriveSeedPublicKey_WrongLength(t *testing.T) {
@@ -1121,50 +1121,50 @@ func TestDeriveSeedPublicKey_MatchesKnownSeed(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// bootstrapTribunalPolicy error-path tests (Tier 2 — file I/O)
+// consensusPolicyBootstrap error-path tests (Tier 2 — file I/O)
 // ---------------------------------------------------------------------------
 
-func TestBootstrapTribunalPolicy_NilServiceReturnsError(t *testing.T) {
+func TestBootstrapConsensusPolicy_NilServiceReturnsError(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	tmpDir := testutil.TempDir(t)
-	configPath := filepath.Join(tmpDir, constants.TribunalBootstrapConfigFilename)
+	configPath := filepath.Join(tmpDir, constants.ConsensusBootstrapConfigFilename)
 	err := os.WriteFile(configPath, []byte(`{
-		"tribunal_id": "test-tribunal",
+		"consensus_id": "test-consensus",
 		"member_app_ids": ["auditor-ensemble"],
 		"quorum": 1,
 		"seed_hex": "87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77"
 	}`), 0600)
 	require.NoError(t, err)
 
-	err = bootstrapTribunalPolicy(nil, configPath, constants.TestPathShortSecrets, logger)
+	err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil),
-		"bootstrapTribunalPolicy with nil service should return ErrGatewayServiceNil")
+		"consensusPolicyBootstrap with nil service should return ErrGatewayServiceNil")
 }
 
-func TestBootstrapTribunalPolicy_MissingFile(t *testing.T) {
+func TestBootstrapConsensusPolicy_MissingFile(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	err := bootstrapTribunalPolicy(nil, constants.TestPathNonexistentTribunal, constants.TestPathShortSecrets, logger)
+	err := consensusPolicyBootstrap(nil, constants.TestPathNonexistentConsensus, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapReadConfig))
+	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapReadConfig))
 }
 
-func TestBootstrapTribunalPolicy_MalformedJSON(t *testing.T) {
+func TestBootstrapConsensusPolicy_MalformedJSON(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	tmpDir := testutil.TempDir(t)
-	configPath := filepath.Join(tmpDir, constants.TribunalBootstrapConfigFilename)
+	configPath := filepath.Join(tmpDir, constants.ConsensusBootstrapConfigFilename)
 	err := os.WriteFile(configPath, []byte(`{not valid json}`), 0600)
 	require.NoError(t, err)
 
-	err = bootstrapTribunalPolicy(nil, configPath, constants.TestPathShortSecrets, logger)
+	err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapParseConfig))
+	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapParseConfig))
 }
 
-func TestBootstrapTribunalPolicy_InvalidConfig(t *testing.T) {
+func TestBootstrapConsensusPolicy_InvalidConfig(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	tests := []struct {
@@ -1172,29 +1172,29 @@ func TestBootstrapTribunalPolicy_InvalidConfig(t *testing.T) {
 		config string
 	}{
 		{
-			"empty tribunal_id",
-			`{"tribunal_id": "", "member_app_ids": ["a"], "quorum": 1}`,
+			"empty consensus_id",
+			`{"consensus_id": "", "member_app_ids": ["a"], "quorum": 1}`,
 		},
 		{
 			"empty member_app_ids",
-			`{"tribunal_id": "t", "member_app_ids": [], "quorum": 1}`,
+			`{"consensus_id": "t", "member_app_ids": [], "quorum": 1}`,
 		},
 		{
 			"quorum zero",
-			`{"tribunal_id": "t", "member_app_ids": ["a"], "quorum": 0}`,
+			`{"consensus_id": "t", "member_app_ids": ["a"], "quorum": 0}`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := testutil.TempDir(t)
-			configPath := filepath.Join(tmpDir, constants.TribunalBootstrapConfigFilename)
+			configPath := filepath.Join(tmpDir, constants.ConsensusBootstrapConfigFilename)
 			err := os.WriteFile(configPath, []byte(tt.config), 0600)
 			require.NoError(t, err)
 
-			err = bootstrapTribunalPolicy(nil, configPath, constants.TestPathShortSecrets, logger)
+			err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
 			require.Error(t, err)
-			assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapMissingFields))
+			assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapMissingFields))
 		})
 	}
 }

@@ -35,7 +35,7 @@ func (s PipelineStage) String() string {
 	case StageL1:
 		return "L1: Technical Bedrock"
 	case StageL2:
-		return "L2: Consensus Tribunal"
+		return "L2: Consensus Consensus"
 	case StageL3:
 		return "L3: Notary"
 	case StageL4:
@@ -97,7 +97,7 @@ func (l LedgerLevel) Tag() string {
 	}
 }
 
-// ConsensusResult represents the outcome of a tribunal deliberation.
+// ConsensusResult represents the outcome of a consensus deliberation.
 type ConsensusResult int
 
 const (
@@ -134,9 +134,9 @@ type LedgerMsg struct {
 	Time    time.Time
 }
 
-// ConsensusMsg updates the tribunal voting status.
+// ConsensusMsg updates the consensus voting status.
 type ConsensusMsg struct {
-	Member   constants.TribunalMember
+	Member   constants.ConsensusMember
 	Decision bool
 	Signed   bool
 	Quorum   int
@@ -198,9 +198,9 @@ type ledgerEntry struct {
 	time    time.Time
 }
 
-// tribunalMemberState is the per-member state in the tribunal pane.
-type tribunalMemberState struct {
-	name     constants.TribunalMember
+// consensusMemberState is the per-member state in the consensus pane.
+type consensusMemberState struct {
+	name     constants.ConsensusMember
 	decision bool
 	signed   bool
 }

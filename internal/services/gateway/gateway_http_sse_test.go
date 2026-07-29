@@ -102,7 +102,7 @@ func seedOperatorDoc(t *testing.T, h *HTTPHandler, opID, userID, operatorSession
 	}
 	opBytes, err := json.Marshal(op)
 	require.NoError(t, err)
-	err = h.dbController.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorSessionID, opBytes)
+	err = h.dataController.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorSessionID, opBytes)
 	require.NoError(t, err)
 }
 
@@ -113,7 +113,7 @@ func seedUserDoc(t *testing.T, h *HTTPHandler, userID string) {
 		"status": string(constants.UserStatusActive),
 	})
 	require.NoError(t, err)
-	err = h.dbController.docStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes)
+	err = h.dataController.docStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes)
 	require.NoError(t, err)
 }
 
@@ -127,7 +127,7 @@ func seedCLISessionDoc(t *testing.T, h *HTTPHandler, cliSessionID, userID, opera
 	}
 	cliBytes, err := json.Marshal(cliSess)
 	require.NoError(t, err)
-	err = h.dbController.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes)
+	err = h.dataController.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes)
 	require.NoError(t, err)
 }
 
@@ -136,14 +136,14 @@ func bindWebSessionToOperators(t *testing.T, h *HTTPHandler, webSessionID string
 	t.Helper()
 	raw, err := json.Marshal(operatorSessionIDs)
 	require.NoError(t, err)
-	err = h.dbController.kvStore.KVSet(sessionWebBindKey(webSessionID), string(raw), 0)
+	err = h.dataController.kvStore.KVSet(sessionWebBindKey(webSessionID), string(raw), 0)
 	require.NoError(t, err)
 }
 
 // bindOperatorToWebSession sets the KV binding from operator session to web session ID.
 func bindOperatorToWebSession(t *testing.T, h *HTTPHandler, operatorSessionID, webSessionID string) {
 	t.Helper()
-	err := h.dbController.kvStore.KVSet(sessionOperatorBindKey(operatorSessionID), webSessionID, 0)
+	err := h.dataController.kvStore.KVSet(sessionOperatorBindKey(operatorSessionID), webSessionID, 0)
 	require.NoError(t, err)
 }
 
@@ -435,7 +435,7 @@ func TestHandleInternalSSEPush_EventWithoutTypeDefaultsToUnknown(t *testing.T) {
 
 	// Verify the event was stored with type "unknown"
 	route := SSERoute{CLISessionID: cliSessionID}
-	rows, err := h.dbController.sseStore.SSEEventsListSince(route, 0, 10)
+	rows, err := h.dataController.sseStore.SSEEventsListSince(route, 0, 10)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	assert.Equal(t, string(constants.SystemHealthUnknown), rows[0].EventType)
@@ -812,7 +812,7 @@ func TestHandleInternalSSEEvents_Success(t *testing.T) {
 
 	// Push an event first
 	route := SSERoute{CLISessionID: cliSessionID}
-	err := h.dbController.sseStore.SSEEventsAppend(route, "test_event", `{"event":{"type":"test_event"}}`, "test-app")
+	err := h.dataController.sseStore.SSEEventsAppend(route, "test_event", `{"event":{"type":"test_event"}}`, "test-app")
 	require.NoError(t, err)
 
 	// Query events with operator mTLS auth
@@ -950,11 +950,11 @@ func TestHandleInternalSSEStream_LastEventIDOverridesSinceID(t *testing.T) {
 
 	// Push two events
 	route := SSERoute{CLISessionID: cliSessionID}
-	require.NoError(t, h.dbController.sseStore.SSEEventsAppend(route, "event1", `{"event":{"type":"event1"}}`, "app1"))
-	require.NoError(t, h.dbController.sseStore.SSEEventsAppend(route, "event2", `{"event":{"type":"event2"}}`, "app1"))
+	require.NoError(t, h.dataController.sseStore.SSEEventsAppend(route, "event1", `{"event":{"type":"event1"}}`, "app1"))
+	require.NoError(t, h.dataController.sseStore.SSEEventsAppend(route, "event2", `{"event":{"type":"event2"}}`, "app1"))
 
 	// Get all events to find the first event's ID
-	rows, err := h.dbController.sseStore.SSEEventsListSince(route, 0, 100)
+	rows, err := h.dataController.sseStore.SSEEventsListSince(route, 0, 100)
 	require.NoError(t, err)
 	require.Len(t, rows, 2)
 	firstID := rows[0].ID
@@ -992,11 +992,11 @@ func TestHandleInternalSSEStream_ReplaysEventsFromDB(t *testing.T) {
 
 	route := SSERoute{CLISessionID: cliSessionID}
 	// Push a dummy event first so the real event gets ID > 1
-	require.NoError(t, h.dbController.sseStore.SSEEventsAppend(route, "dummy_event", `{"event":{"type":"dummy_event"}}`, "app1"))
-	require.NoError(t, h.dbController.sseStore.SSEEventsAppend(route, "replay_event", `{"event":{"type":"replay_event"}}`, "app1"))
+	require.NoError(t, h.dataController.sseStore.SSEEventsAppend(route, "dummy_event", `{"event":{"type":"dummy_event"}}`, "app1"))
+	require.NoError(t, h.dataController.sseStore.SSEEventsAppend(route, "replay_event", `{"event":{"type":"replay_event"}}`, "app1"))
 
 	// Get all events to find IDs
-	rows, err := h.dbController.sseStore.SSEEventsListSince(route, 0, 100)
+	rows, err := h.dataController.sseStore.SSEEventsListSince(route, 0, 100)
 	require.NoError(t, err)
 	require.Len(t, rows, 2)
 	dummyID := rows[0].ID
@@ -1035,7 +1035,7 @@ func TestHandleInternalSSEStream_NoReplayWhenSinceIDZero(t *testing.T) {
 	seedCLISessionDoc(t, h, cliSessionID, userID, opSessID)
 
 	route := SSERoute{CLISessionID: cliSessionID}
-	require.NoError(t, h.dbController.sseStore.SSEEventsAppend(route, "no_replay_event", `{"event":{"type":"no_replay_event"}}`, "app1"))
+	require.NoError(t, h.dataController.sseStore.SSEEventsAppend(route, "no_replay_event", `{"event":{"type":"no_replay_event"}}`, "app1"))
 
 	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, opSessID)
 	// since_id=0 and no Last-Event-ID → no replay should occur

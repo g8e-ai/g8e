@@ -56,8 +56,8 @@ type Model struct {
 	ledger       []ledgerEntry
 	ledgerScroll int // 0 = auto-scroll to bottom; >0 = manual offset from bottom
 
-	// Tribunal state
-	tribunal      []tribunalMemberState
+	// Consensus state
+	consensus     []consensusMemberState
 	quorum        int
 	total         int
 	result        ConsensusResult
@@ -74,15 +74,15 @@ type Model struct {
 	quitting bool
 }
 
-// NewModel constructs a Model with all pipeline stages idle and tribunal
+// NewModel constructs a Model with all pipeline stages idle and consensus
 // members in pending state.
 func NewModel(opts Options) Model {
-	members := []tribunalMemberState{
-		{name: constants.TribunalMemberAxiom},
-		{name: constants.TribunalMemberConcord},
-		{name: constants.TribunalMemberVariance},
-		{name: constants.TribunalMemberPragma},
-		{name: constants.TribunalMemberNemesis},
+	members := []consensusMemberState{
+		{name: constants.ConsensusMemberAxiom},
+		{name: constants.ConsensusMemberConcord},
+		{name: constants.ConsensusMemberVariance},
+		{name: constants.ConsensusMemberPragma},
+		{name: constants.ConsensusMemberNemesis},
 	}
 
 	quorum := opts.Quorum
@@ -105,11 +105,11 @@ func NewModel(opts Options) Model {
 			{status: StatusIdle},
 			{status: StatusIdle},
 		},
-		ledger:   make([]ledgerEntry, 0, 64),
-		tribunal: members,
-		quorum:   quorum,
-		total:    total,
-		result:   ConsensusPending,
+		ledger:    make([]ledgerEntry, 0, 64),
+		consensus: members,
+		quorum:    quorum,
+		total:     total,
+		result:    ConsensusPending,
 	}
 }
 

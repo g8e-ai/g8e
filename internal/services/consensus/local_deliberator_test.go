@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package tribunal
+package consensus
 
 import (
 	"context"
@@ -37,7 +37,7 @@ func TestLocalDeliberator_HappyPath(t *testing.T) {
 
 	doctrine := govsvc.NewL1Doctrine()
 	members := makeMembers(t, 1)
-	svc := NewTribunalService("test-tribunal", members, doctrine,
+	svc := NewConsensusService("test-consensus", members, doctrine,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
 
 	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))
@@ -56,7 +56,7 @@ func TestLocalDeliberator_HappyPath(t *testing.T) {
 
 	require.NotNil(t, resultEnv.Governance)
 	require.NotNil(t, resultEnv.Governance.L2)
-	assert.Equal(t, "test-tribunal", resultEnv.Governance.L2.ConsensusSetId)
+	assert.Equal(t, "test-consensus", resultEnv.Governance.L2.ConsensusSetId)
 	assert.Len(t, resultEnv.Governance.L2.Votes, 1)
 }
 
@@ -66,7 +66,7 @@ func TestLocalDeliberator_InvalidJSON(t *testing.T) {
 	t.Parallel()
 
 	members := makeMembers(t, 1)
-	svc := NewTribunalService("test-tribunal", members, nil,
+	svc := NewConsensusService("test-consensus", members, nil,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
 
 	ld := NewLocalDeliberator(svc)
@@ -76,12 +76,12 @@ func TestLocalDeliberator_InvalidJSON(t *testing.T) {
 }
 
 // TestLocalDeliberator_HashMismatch verifies that LocalDeliberator propagates
-// the ErrTribunalHashMismatch error.
+// the ErrConsensusHashMismatch error.
 func TestLocalDeliberator_HashMismatch(t *testing.T) {
 	t.Parallel()
 
 	members := makeMembers(t, 1)
-	svc := NewTribunalService("test-tribunal", members, nil,
+	svc := NewConsensusService("test-consensus", members, nil,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
 
 	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))
@@ -92,7 +92,7 @@ func TestLocalDeliberator_HashMismatch(t *testing.T) {
 	ld := NewLocalDeliberator(svc)
 	_, err = ld.Deliberate(context.Background(), envBytes)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "TRIBUNAL_HASH_MISMATCH")
+	assert.Contains(t, err.Error(), "CONSENSUS_HASH_MISMATCH")
 }
 
 // TestLocalDeliberator_SignatureVerifiable verifies that the L2 vote
@@ -104,10 +104,10 @@ func TestLocalDeliberator_SignatureVerifiable(t *testing.T) {
 	require.NoError(t, err)
 
 	doctrine := govsvc.NewL1Doctrine()
-	members := []TribunalMember{
+	members := []ConsensusMember{
 		{AppID: "verifiable-member", PrivateKey: priv},
 	}
-	svc := NewTribunalService("test-tribunal", members, doctrine,
+	svc := NewConsensusService("test-consensus", members, doctrine,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
 
 	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))

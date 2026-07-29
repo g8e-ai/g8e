@@ -66,7 +66,7 @@ The gateway currently runs in **consensus** posture; L2 BFT consensus is enforce
 
 ### Tribunal bootstrap
 
-The gateway boots with `--posture consensus --tribunal-id dhs-tribunal --tribunal-bootstrap /etc/g8e/tribunal-bootstrap.json`. The bootstrap file seeds a `TribunalPolicy` and trusted signer from a deterministic Ed25519 seed (`ensemble-seed.hex`), shared with the `agent-coalition` container. This enables the harness to reconstruct the same private key and sign L2 votes that verify against the gateway's trusted signer registry.
+The gateway boots with `--posture consensus --consensus-id dhs-consensus --consensus-bootstrap /etc/g8e/consensus-bootstrap.json`. The bootstrap file seeds a `ConsensusPolicy` and trusted signer from a deterministic Ed25519 seed (`ensemble-seed.hex`), shared with the `agent-coalition` container. This enables the harness to reconstruct the same private key and sign L2 votes that verify against the gateway's trusted signer registry.
 
 ### Phased rollout
 

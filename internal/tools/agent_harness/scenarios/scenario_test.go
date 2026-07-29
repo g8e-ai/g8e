@@ -571,7 +571,7 @@ func TestRegistryScenarioOrder(t *testing.T) {
 	assert.Contains(t, scenarios[0].Name, "mcp", "First scenario should be MCP")
 
 	lastName := scenarios[len(scenarios)-1].Name
-	validLastPrefixes := []string{"consensus", "envelope", "notary", "tribunal", "delegation", "dhs", "gov", "finance", "fedramp"}
+	validLastPrefixes := []string{"consensus", "envelope", "notary", "consensus", "delegation", "dhs", "gov", "finance", "fedramp"}
 	found := false
 	for _, p := range validLastPrefixes {
 		if strings.Contains(lastName, p) {

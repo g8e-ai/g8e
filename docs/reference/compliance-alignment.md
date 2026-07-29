@@ -1,8 +1,8 @@
 # Compliance Alignment Report
 
-**Document Version:** 1.5.9  
-**Last Updated:** 2026-07-19  
-**Platform:** g8e v1.5.8  
+**Document Version:** 1.6.6  
+**Last Updated:** 2026-07-27  
+**Platform:** g8e v1.6.6  
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -486,7 +486,7 @@ NIST SP 800-63B-4 (July 2025) supersedes SP 800-63B (2020) and defines technical
 |---------|-----------|---------|----------------|
 | **Certificate Authority** | ECDSA P-256 | PKI hierarchy | `internal/services/gateway/pki_controller.go` |
 | **Workload Identity** | SPIFFE URI SAN | Identity binding | `protocol/workload_identity.go` |
-| **Transaction Signatures** | Ed25519 | L2 Consensus, L5 Actuator | `internal/services/tribunal/service.go`, `internal/services/governance/l4_warden.go` |
+| **Transaction Signatures** | Ed25519 | L2 Consensus, L5 Actuator | `internal/services/consensus/service.go`, `internal/services/governance/l4_warden.go` |
 | **Hash Functions** | SHA-256 | Transaction hash, state roots | `protocol/proto/g8e/operator/v1/operator.proto` |
 | **Transport Security** | TLS 1.3 | mTLS for all communication | `docs/architecture/auth.md` |
 | **Human Authentication** | WebAuthn/FIDO2 | L3 Notary | `internal/services/governance/l3_notary.go` |
@@ -543,14 +543,36 @@ NIST SP 800-63B-4 (July 2025) supersedes SP 800-63B (2020) and defines technical
 - **Go-licenses license compliance** auditing transitive dependencies for license compatibility
 - **Cross-OS CI matrix** (Ubuntu, macOS, Windows) ensuring platform parity
 - **Python protocol test suite** (151 tests) validating constant accessors, enum generation, and model serialization
-- **Python protocol conformance suite** (330 tests) enforcing parity between Go constants, Python runtime values, and canonical JSON SSOT files
+- **Python protocol conformance suite** (420 tests) enforcing parity between Go constants, Python runtime values, and canonical JSON SSOT files
 - **Interactive gateway onboarding wizard** (`g8e gw start --interactive`) guiding users through network, security, agent, and review configuration steps
 - **Anduril Lattice gRPC adapter** with OAuth2 client credentials authentication, gRPC retry with status code classification, and heartbeat interval validation
 - **MCP tool interception verification** (`--verify` flag) ensuring agent tool-disabling configurations are correctly applied before agent launch
 - **MCP gateway output scrubbing** preventing sensitive data leakage in downstream MCP audit logs
 - **Agent support consolidation** to 4 supported agents (Claude Code, Codex, Goose, Gemini CLI) reducing attack surface
-- **Governance interface extraction** separating verification concerns (replay store, signer store, tribunal store, app policy store, state root provider) into dedicated files
+- **Governance interface extraction** separating verification concerns (replay store, signer store, consensus store, app policy store, state root provider) into dedicated files
 - **Protocol wire-format documentation** for EventType, AgentMode, and SessionEventWire ensuring consumer compatibility
+- **Cross-language governance hash parity** ensuring Go and Python produce identical transaction hash digests through aligned canonicalization logic
+- **Enrollment token TOCTOU fix** with atomic conditional update preventing race condition exploitation during token consumption
+- **SSE resilience improvements** with configurable heartbeat interval, multi-line SSE data parsing fix, and pubsub reconnect backoff reset
+- **Governance JSON schema** providing canonical protocol validation for GovernanceEnvelope structures
+- **Gateway HTTP handler decomposition** into SSEController, HealthController, and GovernanceController for single-responsibility routing
+- **CanonicalDBService Stores struct extraction** enabling direct dependency injection of individual store services
+- **L2 consensus interface decoupling** with L4 Warden depending on generic `L2ConsensusPolicyStore` instead of concrete store implementation
+- **AuthController decomposition** into BootstrapController, EnrollmentTokenController, UserController, and SessionController for focused authentication workflows
+- **PasskeyOrchestrator extraction** from PasskeyHandler for centralized passkey workflow management
+- **L1 doctrine threat detector expansion** with credential leak and privilege escalation pattern detection
+- **MCP gateway ThreatScanner interface** delegating threat scanning to a dedicated interface for modular security enforcement
+- **L5 Actuator decomposition** with fail-closed payload rehydration at the execution boundary
+- **MCP gateway AuditEventRecorder interface** for structured audit event recording in downstream MCP logs
+- **Error sentinel migration** to `internal/constants` for consistent error handling across all subsystems
+- **ScrubbingService constructor fail-closed** on token load failure, preventing startup with missing scrubbing rules
+- **"Tribunal" to "Consensus" rename** across CLI flags, env vars, API paths, Go types, and documentation for naming consistency
+- **DBController split** into DataController, AuditController, and SignerController for single-responsibility data management
+- **L2 consensus logic extraction** from L4 Warden into dedicated `l2_consensus.go` for separation of concerns
+- **Configurable doctrine directory** (`--doctrine-dir` CLI flag) for external doctrine rules and custom threat patterns
+- **Gateway construction refactor** to public `InitHTTPHandler()` two-phase pattern, eliminating late-bound dependency injection
+- **Dead code removal** (107 unreachable functions removed from production and test code)
+- **FedRAMP sovereign cloud governance demo** demonstrating compliance posture for federal workloads
 
 ### Planned Enhancements
 
@@ -584,6 +606,9 @@ NIST SP 800-63B-4 (July 2025) supersedes SP 800-63B (2020) and defines technical
 | **Architecture: Operator** | `docs/architecture/operator.md` | Operator execution boundary |
 | **Architecture: Gateway** | `docs/architecture/gateway.md` | Gateway policy decision point |
 | **Architecture: Governance** | `docs/architecture/governance.md` | Governance postures and transaction process |
+| **Architecture: Encryption** | `docs/architecture/encryption.md` | Encryption architecture and certificate management |
+| **Architecture: Consensus** | `docs/architecture/consensus.md` | L2 Consensus architecture and signing |
+| **Architecture: Storage** | `docs/architecture/storage.md` | Storage and audit architecture |
 | **Position Paper** | `docs/core/position_paper.md` | Platform philosophy and security model |
 
 ### Code Evidence
@@ -594,12 +619,14 @@ NIST SP 800-63B-4 (July 2025) supersedes SP 800-63B (2020) and defines technical
 | **Audit Store** | `internal/services/storage/audit_store.go` | Audit logging, encryption, retention |
 | **Sovereign Execution Boundary** | `internal/services/scrubbing/boundary.go` | PII scrubbing, data sovereignty |
 | **L1 Doctrine** | `internal/services/governance/l1_doctrine.go` | Threat detection, input validation |
-| **L2 Consensus** | `internal/services/tribunal/service.go` | L2 deliberation and Ed25519 consensus signing |
+| **L2 Consensus** | `internal/services/consensus/service.go` | L2 deliberation and Ed25519 consensus signing |
 | **L3 Notary** | `internal/services/governance/l3_notary.go` | Two-layer human authorization (passkey plus mTLS transport) |
 | **L4 Warden** | `internal/services/governance/l4_warden.go` | Pre-dispatch verification |
 | **L5 Actuator** | `internal/services/governance/l5_actuator.go` | Execution boundary, signed receipts |
 | **JIT Capabilities** | `internal/services/governance/capability.go` | Self-dissolving execution capability minting |
 | **Privileged Route Registry** | `internal/services/gateway/gateway_auth.go` | App certificate governance envelope blocking |
+| **L2 Consensus Policy Store** | `internal/services/governance/l2_consensus.go` | L2 consensus interface and policy store decoupling |
+| **MCP Gateway ThreatScanner** | `internal/services/mcp/gateway.go` | Threat scanning delegation and audit event recording |
 | **Workload Identity** | `protocol/workload_identity.go` | SPIFFE identity specification |
 
 ### Test Evidence
@@ -643,7 +670,7 @@ For specific compliance questions or audit support, contact:
 |---------|------|--------|---------|
 | 1.0 | 2026-06-02 | Lateralus Labs | Initial compliance alignment report |
 | 1.1 | 2026-06-12 | Lateralus Labs | Corrected Sovereign Execution Boundary evidence path (`internal/services/scrubbing/boundary.go`); updated platform version to v1.1.1 |
-| 1.1.9 | 2026-06-23 | Lateralus Labs | Updated platform version to v1.1.9; replaced L2 Consensus references with Tribunal system (`internal/services/tribunal/service.go`); corrected DoD Zero Trust Reference Architecture naming; removed auto-approval references (removed in v1.1.9); corrected default posture configuration; fixed evidence repository paths to repository-relative format |
+| 1.1.9 | 2026-06-23 | Lateralus Labs | Updated platform version to v1.1.9; replaced L2 Consensus references with Consensus system (`internal/services/consensus/service.go`); corrected DoD Zero Trust Reference Architecture naming; removed auto-approval references (removed in v1.1.9); corrected default posture configuration; fixed evidence repository paths to repository-relative format |
 | 1.3.1 | 2026-06-28 | Lateralus Labs | Updated platform version to v1.3.1; updated L3 Notary description to reflect two-layer model (passkey authorization plus mTLS transport); added PrivilegedRouteRegistry and JIT capability minting evidence; added g8e Console SPA to current strengths; corrected `.github/SECURITY.md` references to repository-relative paths; added governance architecture documentation to evidence repository; added reporting verification and L3 approval pipeline test evidence |
 | 1.3.5 | 2026-07-02 | Lateralus Labs | Updated platform version to v1.3.5; clarified zero runtime dependencies (statically linked binary, `CGO_ENABLED=0`); removed OpenSSL and Git from runtime dependency lists |
 | 1.3.6 | 2026-07-03 | Lateralus Labs | Updated platform version to v1.3.6; added missing v1.3.5 document control entry |
@@ -652,13 +679,14 @@ For specific compliance questions or audit support, contact:
 | 1.5.0 | 2026-07-13 | Lateralus Labs | Updated platform version to v1.5.0; added unified Go module, Cosign/sigstore artifact signing, Gitleaks secret scanning, Go-licenses compliance, cross-OS CI matrix, Python protocol conformance suite (151 tests), Go performance benchmarks, and smoke test scripts to current strengths |
 | 1.5.1 | 2026-07-14 | Lateralus Labs | Updated platform version to v1.5.1; added NIST SP 800-63B-4 alignment section; updated NIST SP 800-53 to Rev 5.2.0 with new controls SA-15(13), SA-24, SI-02(07); updated PCI DSS to v4.0.1; added ISO 27001 Amendment 1:2024 reference; corrected ZIG pillars to match DoW seven-pillar framework; added NIST SP 800-207A reference; updated DoD to DoW naming; added RuntimeFileService to current strengths; verified all evidence paths against live codebase |
 | 1.5.8 | 2026-07-19 | Lateralus Labs | Updated platform version to v1.5.8; added interactive gateway onboarding wizard, Anduril Lattice gRPC adapter, MCP tool interception verification, MCP gateway output scrubbing, agent support consolidation, governance interface extraction, and protocol wire-format documentation to current strengths; corrected Python protocol test suite (151 tests) and conformance suite (330 tests) counts; updated test coverage to 75.9%; added receipt signature verification known limitation; verified all evidence paths against live codebase |
+| 1.6.6 | 2026-07-27 | Lateralus Labs | Updated platform version to v1.6.6; added cross-language governance hash parity, enrollment token TOCTOU fix, SSE resilience improvements, governance JSON schema, gateway HTTP handler decomposition, CanonicalDBService Stores struct extraction, L2 consensus interface decoupling, AuthController decomposition, PasskeyOrchestrator extraction, L1 doctrine threat detector expansion, MCP gateway ThreatScanner interface, L5 Actuator decomposition with fail-closed rehydration, MCP gateway AuditEventRecorder interface, error sentinel migration, ScrubbingService constructor fail-closed, "Tribunal" to "Consensus" rename, DBController split, L2 consensus logic extraction, configurable doctrine directory, gateway construction refactor to InitHTTPHandler(), dead code removal (107 functions), and FedRAMP sovereign cloud governance demo to current strengths; updated Python protocol conformance suite count from 330 to 420; added encryption, consensus, and storage architecture docs to evidence repository; added L2 Consensus Policy Store and MCP Gateway ThreatScanner to code evidence; verified all evidence paths against live codebase |
 
 ---
 
 ## Appendix A: Glossary
 
 - **L1-L5:** 5-layer verification sequence (Doctrine, Consensus, Notary, Warden, Actuator)
-- **Tribunal:** Enrolled agentic service responsible for L2 consensus deliberation and Ed25519 vote signing
+- **Consensus:** Enrolled agentic service responsible for L2 consensus deliberation and Ed25519 vote signing
 - **mTLS:** Mutual Transport Layer Security
 - **SPIFFE:** Secure Production Identity Framework For Everyone
 - **SAN:** Subject Alternative Name

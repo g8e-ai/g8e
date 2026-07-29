@@ -22,32 +22,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewTribunalEventConstants(t *testing.T) {
+func TestNewConsensusEventConstants(t *testing.T) {
 	cases := []struct {
 		goConst EventType
 		value   string
 	}{
-		{EventAiTribunalSessionStarted, "g8e.v1.ai.tribunal.session.started"},
-		{EventAiTribunalSessionCompleted, "g8e.v1.ai.tribunal.session.completed"},
-		{EventAiTribunalSessionDisabled, "g8e.v1.ai.tribunal.session.disabled"},
-		{EventAiTribunalSessionGenerationFailed, "g8e.v1.ai.tribunal.session.generation.failed"},
-		{EventAiTribunalSessionModelNotConfigured, "g8e.v1.ai.tribunal.session.model.not.configured"},
-		{EventAiTribunalSessionProviderUnavailable, "g8e.v1.ai.tribunal.session.provider.unavailable"},
-		{EventAiTribunalSessionSystemError, "g8e.v1.ai.tribunal.session.system.error"},
-		{EventAiTribunalSessionAuditorFailed, "g8e.v1.ai.tribunal.session.auditor.failed"},
-		{EventAiTribunalSessionWardenBlocked, "g8e.v1.ai.tribunal.session.warden.blocked"},
-		{EventAiTribunalVotingPassCompleted, "g8e.v1.ai.tribunal.voting.pass.completed"},
-		{EventAiTribunalVotingConsensusReached, "g8e.v1.ai.tribunal.voting.consensus.reached"},
-		{EventAiTribunalVotingConsensusNotReached, "g8e.v1.ai.tribunal.voting.consensus.not.reached"},
-		{EventAiTribunalVotingConsensusFailed, "g8e.v1.ai.tribunal.voting.consensus.failed"},
-		{EventAiTribunalVotingRoundStarted, "g8e.v1.ai.tribunal.voting.round.started"},
-		{EventAiTribunalVotingRoundCompleted, "g8e.v1.ai.tribunal.voting.round.completed"},
-		{EventAiTribunalVotingRound2Started, "g8e.v1.ai.tribunal.voting.round.2.started"},
-		{EventAiTribunalVotingRound2ConsensusReached, "g8e.v1.ai.tribunal.voting.round.2.consensus.reached"},
-		{EventAiTribunalVotingRound2ConsensusFailed, "g8e.v1.ai.tribunal.voting.round.2.consensus.failed"},
-		{EventAiTribunalVotingDissentRecorded, "g8e.v1.ai.tribunal.voting.dissent.recorded"},
-		{EventAiTribunalVotingAuditStarted, "g8e.v1.ai.tribunal.voting.audit.started"},
-		{EventAiTribunalVotingAuditCompleted, "g8e.v1.ai.tribunal.voting.audit.completed"},
+		{EventAiConsensusSessionStarted, "g8e.v1.ai.consensus.session.started"},
+		{EventAiConsensusSessionCompleted, "g8e.v1.ai.consensus.session.completed"},
+		{EventAiConsensusSessionDisabled, "g8e.v1.ai.consensus.session.disabled"},
+		{EventAiConsensusSessionGenerationFailed, "g8e.v1.ai.consensus.session.generation.failed"},
+		{EventAiConsensusSessionModelNotConfigured, "g8e.v1.ai.consensus.session.model.not.configured"},
+		{EventAiConsensusSessionProviderUnavailable, "g8e.v1.ai.consensus.session.provider.unavailable"},
+		{EventAiConsensusSessionSystemError, "g8e.v1.ai.consensus.session.system.error"},
+		{EventAiConsensusSessionAuditorFailed, "g8e.v1.ai.consensus.session.auditor.failed"},
+		{EventAiConsensusSessionWardenBlocked, "g8e.v1.ai.consensus.session.warden.blocked"},
+		{EventAiConsensusVotingPassCompleted, "g8e.v1.ai.consensus.voting.pass.completed"},
+		{EventAiConsensusVotingConsensusReached, "g8e.v1.ai.consensus.voting.consensus.reached"},
+		{EventAiConsensusVotingConsensusNotReached, "g8e.v1.ai.consensus.voting.consensus.not.reached"},
+		{EventAiConsensusVotingConsensusFailed, "g8e.v1.ai.consensus.voting.consensus.failed"},
+		{EventAiConsensusVotingRoundStarted, "g8e.v1.ai.consensus.voting.round.started"},
+		{EventAiConsensusVotingRoundCompleted, "g8e.v1.ai.consensus.voting.round.completed"},
+		{EventAiConsensusVotingRound2Started, "g8e.v1.ai.consensus.voting.round.2.started"},
+		{EventAiConsensusVotingRound2ConsensusReached, "g8e.v1.ai.consensus.voting.round.2.consensus.reached"},
+		{EventAiConsensusVotingRound2ConsensusFailed, "g8e.v1.ai.consensus.voting.round.2.consensus.failed"},
+		{EventAiConsensusVotingDissentRecorded, "g8e.v1.ai.consensus.voting.dissent.recorded"},
+		{EventAiConsensusVotingAuditStarted, "g8e.v1.ai.consensus.voting.audit.started"},
+		{EventAiConsensusVotingAuditCompleted, "g8e.v1.ai.consensus.voting.audit.completed"},
 	}
 	for _, tc := range cases {
 		assert.Equal(t, tc.value, string(tc.goConst))

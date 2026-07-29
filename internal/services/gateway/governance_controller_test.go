@@ -28,28 +28,27 @@ import (
 )
 
 // newTestGovernanceController creates a GovernanceController with minimal
-// dependencies for unit-testing the 503 guard logic. No tribunal or envelope
-// processor is wired — the controller is in the partially-constructed state
-// that exists during the boot sequence before SetTribunal / SetEnvelopeProcessor
-// are called.
+// dependencies for unit-testing the 503 guard logic. No consensus or envelope
+// processor is wired — simulates a posture where these features are not
+// configured.
 func newTestGovernanceController(t *testing.T) *GovernanceController {
 	t.Helper()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	responder := response.NewWriter(logger)
-	return newGovernanceController(cfg, logger, responder, nil)
+	return newGovernanceController(cfg, logger, responder, nil, nil)
 }
 
-func TestTribunalDeliberate_NotConfigured_Returns503(t *testing.T) {
+func TestConsensusDeliberate_NotConfigured_Returns503(t *testing.T) {
 	c := newTestGovernanceController(t)
 
-	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.TribunalDeliberate, bytes.NewReader([]byte(`{}`)))
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.ConsensusDeliberate, bytes.NewReader([]byte(`{}`)))
 	w := httptest.NewRecorder()
 
-	c.handleTribunalDeliberate(w, req)
+	c.handleConsensusDeliberate(w, req)
 
 	require.Equal(t, http.StatusServiceUnavailable, w.Code)
-	require.Contains(t, w.Body.String(), constants.ErrTribunalNotConfigured.Error())
+	require.Contains(t, w.Body.String(), constants.ErrConsensusNotConfigured.Error())
 }
 
 func TestGovernanceEnvelope_NotConfigured_Returns503_Unit(t *testing.T) {
@@ -64,7 +63,7 @@ func TestGovernanceEnvelope_NotConfigured_Returns503_Unit(t *testing.T) {
 	require.Contains(t, w.Body.String(), constants.ErrEnvelopeProcessorNotInit.Error())
 }
 
-func TestGovernanceController_NoPanicDuringPartialConstruction(t *testing.T) {
+func TestGovernanceController_NoPanicWhenNotConfigured(t *testing.T) {
 	c := newTestGovernanceController(t)
 
 	const goroutines = 50
@@ -76,9 +75,9 @@ func TestGovernanceController_NoPanicDuringPartialConstruction(t *testing.T) {
 	for i := 0; i < goroutines; i++ {
 		go func(idx int) {
 			defer wg.Done()
-			req := httptest.NewRequest(http.MethodPost, constants.APIPaths.TribunalDeliberate, bytes.NewReader([]byte(`{}`)))
+			req := httptest.NewRequest(http.MethodPost, constants.APIPaths.ConsensusDeliberate, bytes.NewReader([]byte(`{}`)))
 			w := httptest.NewRecorder()
-			c.handleTribunalDeliberate(w, req)
+			c.handleConsensusDeliberate(w, req)
 			results[idx] = w.Code
 		}(i)
 

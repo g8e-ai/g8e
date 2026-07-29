@@ -53,53 +53,53 @@ func validatePublicBaseURL(s string) error {
 	return nil
 }
 
-// validateTribunalURL validates an optional tribunal service URL.
+// validateConsensusURL validates an optional consensus service URL.
 // Must be an absolute https URL when supplied. Rejects user info and fragments.
-func validateTribunalURL(s string) error {
+func validateConsensusURL(s string) error {
 	if s == "" {
 		return nil
 	}
 	u, err := url.Parse(s)
 	if err != nil {
-		return fmt.Errorf("wizard: validate tribunal URL: %w", err)
+		return fmt.Errorf("wizard: validate consensus URL: %w", err)
 	}
 	if u.Scheme != "https" {
-		return fmt.Errorf("tribunal URL must use https scheme, got %q", u.Scheme)
+		return fmt.Errorf("consensus URL must use https scheme, got %q", u.Scheme)
 	}
 	if u.User != nil {
-		return fmt.Errorf("tribunal URL must not contain user info")
+		return fmt.Errorf("consensus URL must not contain user info")
 	}
 	if u.Fragment != "" {
-		return fmt.Errorf("tribunal URL must not contain a fragment")
+		return fmt.Errorf("consensus URL must not contain a fragment")
 	}
 	if u.Host == "" {
-		return fmt.Errorf("tribunal URL must have a host")
+		return fmt.Errorf("consensus URL must have a host")
 	}
 	return nil
 }
 
-// validateTribunalID validates a tribunal policy ID.
+// validateConsensusID validates a consensus policy ID.
 // Required for L2 postures; letters, digits, hyphens, and underscores only.
-func validateTribunalID(s string) error {
+func validateConsensusID(s string) error {
 	if s == "" {
-		return fmt.Errorf("tribunal ID is required for consensus and notary postures")
+		return fmt.Errorf("consensus ID is required for consensus and notary postures")
 	}
 	for _, r := range s {
 		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') &&
 			(r < '0' || r > '9') && r != '-' && r != '_' {
-			return fmt.Errorf("tribunal ID must contain only letters, digits, hyphens, and underscores")
+			return fmt.Errorf("consensus ID must contain only letters, digits, hyphens, and underscores")
 		}
 	}
 	return nil
 }
 
-// validateTribunalBootstrap validates a tribunal bootstrap JSON file.
-// Must be a readable regular JSON file with a tribunal_id field matching the given ID.
+// validateConsensusBootstrap validates a consensus bootstrap JSON file.
+// Must be a readable regular JSON file with a consensus_id field matching the given ID.
 //
 // This function uses os.Stat/os.ReadFile directly because the bootstrap path is
 // user-supplied and may live outside the .g8e/ runtime tree. RuntimeFileService is
 // scoped to .g8e/ paths and is not appropriate for arbitrary filesystem paths.
-func validateTribunalBootstrap(path, tribunalID string) error {
+func validateConsensusBootstrap(path, consensusID string) error {
 	info, err := os.Stat(path)
 	if err != nil {
 		return fmt.Errorf("wizard: validate bootstrap: %w", err)
@@ -112,16 +112,16 @@ func validateTribunalBootstrap(path, tribunalID string) error {
 		return fmt.Errorf("wizard: validate bootstrap: %w", err)
 	}
 	var doc struct {
-		TribunalID string `json:"tribunal_id"`
+		ConsensusID string `json:"consensus_id"`
 	}
 	if err := json.Unmarshal(data, &doc); err != nil {
 		return fmt.Errorf("wizard: validate bootstrap: not valid JSON: %w", err)
 	}
-	if doc.TribunalID == "" {
-		return fmt.Errorf("wizard: validate bootstrap: file must contain a tribunal_id field")
+	if doc.ConsensusID == "" {
+		return fmt.Errorf("wizard: validate bootstrap: file must contain a consensus_id field")
 	}
-	if doc.TribunalID != tribunalID {
-		return fmt.Errorf("wizard: validate bootstrap: tribunal_id %q does not match configured tribunal ID %q", doc.TribunalID, tribunalID)
+	if doc.ConsensusID != consensusID {
+		return fmt.Errorf("wizard: validate bootstrap: consensus_id %q does not match configured consensus ID %q", doc.ConsensusID, consensusID)
 	}
 	return nil
 }

@@ -18,7 +18,7 @@ Canonical collection names for the operator embedded SQLite database, typed as `
 - `CollectionPasskeyChallenges`, `CollectionPersonas`, `CollectionAgentActivityMetadata`
 - `CollectionReputationState`, `CollectionReputationCommitments`, `CollectionStakeResolutions`
 - `CollectionRevokedCertificates`, `CollectionTrustedSigners`, `CollectionAppPolicies`
-- `CollectionTribunals`, `CollectionEnrollmentTokens`
+- `CollectionConsensus`, `CollectionEnrollmentTokens`
 
 ### Event Types (`events.go`)
 
@@ -38,7 +38,8 @@ Typed event identifiers for the pub/sub system, typed as `EventType`. The file d
 - Operator Filesystem Operations: list, read, and grep events, each with started, requested, received, completed, and failed variants
 - Operator File History/Diff/Restore: fetch and restore event lifecycles with started, requested, received, completed, and failed variants
 - Operator Logs/History Fetch: requested, received, completed, failed
-- Operator Network: ping and port check event lifecycles
+- Operator MCP/A2A: `EventOperatorMcpCallRequested`, `EventOperatorA2aCallRequested`
+- Operator Network: ping and port check event lifecycles, plus `EventOperatorPortCheckRequested`
 - Operator Status: `EventOperatorStatusUpdatedActive`, `EventOperatorStatusUpdatedAvailable`, `EventOperatorStatusUpdatedUnavailable`, `EventOperatorStatusUpdatedBound`, `EventOperatorStatusUpdatedOffline`, `EventOperatorStatusUpdatedStale`, `EventOperatorStatusUpdatedStopped`, `EventOperatorStatusUpdatedTerminated`
 - Operator Bootstrap: requested, received, completed, failed, config.received
 - Operator Audit: `EventOperatorAuditUserRecorded`, `EventOperatorAuditAiRecorded`, `EventOperatorAuditCommandRecorded`, `EventOperatorAuditDirectCommandRecorded`, `EventOperatorAuditDirectCommandResultRecorded`, `EventOperatorAuditMcpCallRecorded`
@@ -64,15 +65,15 @@ Typed event identifiers for the pub/sub system, typed as `EventType`. The file d
 - Platform External Service: configured
 - Platform Telemetry: health reported, performance recorded, error logged, audit logged
 - Platform Console Log: entry received, connected confirmed
-- AI Tribunal Session: started, completed, disabled, generation failed, model not configured, provider unavailable, system error, auditor failed, warden blocked
-- AI Tribunal Voting: pass completed, consensus reached/not reached/failed, round started/completed, round 2 started/consensus reached/consensus failed, dissent recorded, audit started/completed
+- AI Consensus Session: started, completed, disabled, generation failed, model not configured, provider unavailable, system error, auditor failed, warden blocked
+- AI Consensus Voting: pass completed, consensus reached/not reached/failed, round started/completed, round 2 started/consensus reached/consensus failed, dissent recorded, audit started/completed
 - App Memory: `EventAppMemoryCreated`, `EventAppMemoryUpdated`
 - App Case/Investigation Deletion: `EventAppCaseDeleted`, `EventAppInvestigationDeleted`
 - AI LLM Chat Thinking Stopped: `EventAiLLMChatIterationThinkingStopped`
 - AI Reputation: `EventAiReputationStateUpdated`, `EventReputationStateUpdated`
 - Source: `EventSourceUserChat`, `EventSourceUserTerminal`, `EventSourceAiPrimary`, `EventSourceAiAssistant`, `EventSourceAiTriage`, `EventSourceSystem`
 
-The file also provides a hierarchical `Event` struct accessor (`Event.Operator.*`) that groups operator event constants into nested sub-structs by domain (e.g., `Event.Operator.Command.ApprovalRequested`, `Event.Operator.FileEdit.Completed`, `Event.Operator.NetworkPing.Received`). Top-level operator fields include `Bound`, `Unbound`, `ContextChanged`, `DeviceRegistered`, `PanelListUpdated`, `ShutdownAcknowledged`, `ShutdownRequested`, `SlotInitializationFailed`, `TerminalApprovalDenied`, `TerminalAuthStateChanged`, `TerminalThinkingAppend`, `TerminalThinkingComplete`, and `BootstrapConfigReceived`.
+The file also provides a hierarchical `Event` struct accessor (`Event.Operator.*`) that groups operator event constants into nested sub-structs by domain (e.g., `Event.Operator.Command.ApprovalRequested`, `Event.Operator.FileEdit.Completed`, `Event.Operator.NetworkPing.Received`). Top-level operator fields include `Bound`, `Unbound`, `ContextChanged`, `DeviceRegistered`, `Heartbeat`, `HeartbeatMissed`, `HeartbeatReceived`, `HeartbeatRequested`, `PanelListUpdated`, `ShutdownAcknowledged`, `ShutdownRequested`, `SlotInitializationFailed`, `TerminalApprovalDenied`, `TerminalAuthStateChanged`, `TerminalThinkingAppend`, `TerminalThinkingComplete`, and `BootstrapConfigReceived`. Sub-struct domains include `A2a`, `Audit`, `Bootstrap`, `Command` (with nested `StatusUpdated`), `Eval`, `FetchFileDiff`, `FetchFileHistory`, `FetchHistory`, `FetchLogs`, `FileEdit`, `FsGrep`, `FsList`, `FsRead`, `Intent`, `Mcp`, `NetworkPing`, `Notary`, `PortCheck`, `RestoreFile`, `StatusUpdated`, and `StreamApproval`.
 
 ### API Paths (`api_paths.go`)
 
@@ -93,8 +94,8 @@ HTTP route paths for the Gateway REST API, defined as a struct `APIPaths` with J
 - User: `Users`, `UsersMe`
 - Auth: `AuthLogout`, `AuthBootstrap`, `AuthBootstrapStatus`, `AuthCLIEnroll`, `AuthDeviceEnroll`, `AuthPasskeys`, `AuthPasskeysByID`, `AuthPasskeysJITRegisterChallenge`, `AuthPasskeysJITRegisterVerify`, `AuthPasskeysJITPrefix`, `AuthPasskeysPrefix`, `AuthPasskeysCLIStatus`, `AuthPasskeysConsoleRegisterChallenge`, `AuthPasskeysConsoleRegisterVerify`, `AuthPasskeysConsoleAuthenticateChallenge`, `AuthPasskeysConsoleAuthenticateVerify`, `AuthPasskeysConsolePrefix`, `AuthSessionsMe`, `AuthEnrollmentTokenGenerate`, `AuthEnrollmentTokenValidate`
 - Approval: `Approvals`, `ApprovalsByID`, `ApprovalsPrefix`, `ApprovePage`, `ApprovePagePrefix`, `ApprovalsCLIStatus`, `ApprovalsCLIList`
-- Admin: `AdminAppPoliciesBySigner`, `AdminAppsRevoke`, `AdminAppPoliciesPrefix`, `AdminTribunals`, `AdminTribunalsByID`, `AdminTribunalsPrefix`
-- Tribunal: `TribunalDeliberate` (`/tribunal/v1/deliberate`)
+- Admin: `AdminAppPoliciesBySigner`, `AdminAppsRevoke`, `AdminAppPoliciesPrefix`, `AdminConsensus`, `AdminConsensusByID`, `AdminConsensusPrefix`
+- Consensus: `ConsensusDeliberate` (`/consensus/v1/deliberate`)
 - Well-known: `WellKnownPKICABundle`, `WellKnownPKIFingerprint`, `WellKnownBinPrefix`, `WellKnownPKIPrefix`, `WellKnownTrustWindows`
 - Trust scripts: `WebCertLinux` (`/web-cert.sh`), `WebCertWindows` (`/web-cert.ps1`)
 - Deploy scripts: `DeployScriptLinux` (`/g8e-deploy.sh`), `DeployScriptWindows` (`/g8e-deploy.ps1`)
@@ -176,9 +177,9 @@ Internal enumeration constants, each defined as a typed string:
 - `AuthMethod`: `AuthMethodKvPubSub`, `AuthMethodSession`, `AuthMethodProxy`, `AuthMethodOperatorSession`, `AuthMethodTest`
 - `WorkflowType`: `WorkflowTypeG8eBound`, `WorkflowTypeG8eCloudBound`, `WorkflowTypeG8eNotBound`, `WorkflowTypeTriage`, `WorkflowTypeInvestigation`
 - `AITaskId`: `AITaskIDAgentContinue`, `AITaskIDChat`, `AITaskIDCommand`, `AITaskIDDirectCommand`, `AITaskIDFetchFileDiff`, `AITaskIDFetchFileHistory`, `AITaskIDFetchHistory`, `AITaskIDFetchLogs`, `AITaskIDFileEdit`, `AITaskIDFsList`, `AITaskIDFsRead`, `AITaskIDIntentGrant`, `AITaskIDIntentRevoke`, `AITaskIDPortCheck`, `AITaskIDRecursiveGrep`, `AITaskIDRestoreFile`, plus additional task ID aliases (`AITaskId*` casing) for chat, case, memory, command, command execution, direct command, intent grant, intent revoke, file edit, file operation, fs list, recursive grep, port check, agent continue, and investigation query
-- `TribunalMember`: `TribunalMemberAxiom`, `TribunalMemberConcord`, `TribunalMemberVariance`, `TribunalMemberPragma`, `TribunalMemberNemesis`
-- `TribunalAuditMode`: `TribunalAuditModeUnanimous`, `TribunalAuditModeMajority`, `TribunalAuditModeTied`
-- `TribunalAuditStatus`: `TribunalAuditStatusOk`, `TribunalAuditStatusRevised`, `TribunalAuditStatusSwap`
+- `ConsensusMember`: `ConsensusMemberAxiom`, `ConsensusMemberConcord`, `ConsensusMemberVariance`, `ConsensusMemberPragma`, `ConsensusMemberNemesis`
+- `ConsensusAuditMode`: `ConsensusAuditModeUnanimous`, `ConsensusAuditModeMajority`, `ConsensusAuditModeTied`
+- `ConsensusAuditStatus`: `ConsensusAuditStatusOk`, `ConsensusAuditStatusRevised`, `ConsensusAuditStatusSwap`
 - `AuditorReason`: `AuditorReasonOk`, `AuditorReasonRevised`, `AuditorReasonRevisedFromDissent`, `AuditorReasonSwappedToDissenter`, `AuditorReasonWhitelistViolation`, `AuditorReasonNoValidRevision`, `AuditorReasonAuditorError`, `AuditorReasonEmptyResponse`
 - `TieBreakReason`: `TieBreakReasonShortest`, `TieBreakReasonExcludedNemesis`
 - `ReasoningAgent`: `ReasoningAgentSage`, `ReasoningAgentDash`
@@ -212,7 +213,7 @@ Additional constants in `auth.go`:
 - Context keys (typed `ContextKey`): `ContextKeyUserID`, `ContextKeyAppID`, `ContextKeyTenantID`, `ContextKeyBindingPersona`, `ContextKeyOperatorID`, `ContextKeyOperatorSessionID`, `ContextKeyCapability`, `ContextKeyWebSessionID`, `ContextKeyCLISessionID`
 - Auth error reasons (typed `AuthErrorReason`): `AuthErrorReasonTTLExceeded`, `AuthErrorReasonRetiredByRealLogin`, `AuthErrorReasonIdentityDisabled`, `AuthErrorReasonInvalidSession`, `AuthErrorReasonSessionExpired`, `AuthErrorReasonCertificateRevoked`, `AuthErrorReasonIdentityMismatch`, `AuthErrorReasonAppPolicyNotFound`, `AuthErrorReasonRateLimitExceeded`, `AuthErrorReasonPayloadTooLarge`, `AuthErrorReasonCollectionNotAllowed`, `AuthErrorReasonJWTInvalid`, `AuthErrorReasonJWTMissingSubject`
 - Session TTL: `WebSessionTTL` (24 hours), `WebSessionCookieName` (`g8e_web_session_cookie`)
-- App enrollment types: `AppTypeMCPClient`, `AppTypeA2AGateway`, `AppTypeCustom`, `AppTypeTribunalMember`
+- App enrollment types: `AppTypeMCPClient`, `AppTypeA2AGateway`, `AppTypeCustom`, `AppTypeConsensusMember`
 - Certificate renewal: `AppCertMinValidity` (7 days)
 
 ### Action Types (`action_types.go`)
@@ -232,7 +233,7 @@ Filesystem paths for Operator data, certificates, ledger, system paths, and conf
 - Windows paths: `PathWindowsSystemRoot`, `PathWindowsHostsFile`, `PathWindowsRegistryCryptography`, `PathWindowsRegistryMachineGuid`, Git Bash paths (`PathWindowsGitBinBash`, `PathWindowsGitUsrBinBash`, `PathWindowsGitBinSh`, `PathWindowsMsys64Bash`, `PathWindowsCygwin64Bash`), and Windows temp cert constants (`WindowsTempCertImportPrefix`, `WindowsTempCATrustPrefix`, `WindowsTempCertFilename`)
 - PKI filesystem constants: directory names (`PkiDirname`, `PkiSubdirRoot`, `PkiSubdirAuthorities`, `PkiSubdirIssued`, `PkiSubdirTrust`, `PkiSubdirRevocation`, `PkiSubdirBinaries`, `PkiSubdirClient`, `PkiSubdirHub`, `PkiSubdirGatewayPeer`, `PkiSubdirApps`, `PkiSubdirTrustedSigners`), file extensions (`FileExtCert`, `FileExtKey`, `FileExtPEM`, `FileExtJSON`), CA and bundle filenames (`PkiFileRootCA`, `PkiFileRootCAKey`, `PkiFileHubCA`, `PkiFileOperatorCA`, `PkiFileGatewayPeerCA`, `PkiFileGatewayBundle`, `PkiFileRootBundle`, `PkiFileOperatorBundle`, `PkiFileTrustDomainJSON`, `PkiFileWardenPub`, `PkiFileBootstrapCA`, `PkiFileBootstrapBundle`), operator credentials (`PkiFileOperatorCert`, `PkiFileOperatorKey`, `PkiFileOperatorChain`), gateway credentials (`PkiFileGatewayCert`, `PkiFileGatewayKey`, `PkiFileGatewayChain`), peer certificates (`PeerCertFilename`, `PeerKeyFilename`, `PeerChainFilename`, `PeerSubdir`), and CLI credentials (`CliCertFilename`, `CliKeyFilename`, `CredentialsFilename`)
 - Database filenames: `DbFilename` (`g8e.db`), `VaultKeyFilename`, `VaultNewKeyFilename`, `VaultHeaderFilename`, `SuspendedTxFilename`, `ReceiptsFilename`, `ReceiptsExportFilename`, `ReplayStoreDBFilename`, `ExecutionVaultDBFilename`, `LocalStateDBFilename`, `AuditVaultDBFilename`, `MasterKeyFilename`, `PublicKeySuffix`
-- Secrets filenames: `SecretsFileSessionEncryptionKey`, `SecretsFileBootstrapDigest`, `SecretsFileActuatorSigningKey`, `SecretsFileActuatorKeyID`, `SecretsFileAuditorHMACKey`, `SecretsFileNotarySigningKey`, `SecretsFileOperatorPrivateKey`, `SecretsFileCLIPrivateKey`, `SecretsFileSessionToken`, `SecretsFileTribunalMemberKeyPrefix`
+- Secrets filenames: `SecretsFileSessionEncryptionKey`, `SecretsFileBootstrapDigest`, `SecretsFileActuatorSigningKey`, `SecretsFileActuatorKeyID`, `SecretsFileAuditorHMACKey`, `SecretsFileNotarySigningKey`, `SecretsFileOperatorPrivateKey`, `SecretsFileCLIPrivateKey`, `SecretsFileSessionToken`, `SecretsFileConsensusMemberKeyPrefix`
 - Demos: `DemosDirname`, `DemosComposeFile`, `DemosBinDirname`, `DemosBinaryName`, `DemosTargetDataDir`, `DemosDoctrineDir`, `DemosPARequestsFile`, `DemosHIPAADoctrineFile`, `DemosDHSDoctrineFile`, `DemosFedRAMPDoctrineFile`, `DemosImagesManifestFile`, `DemosOrgHealthcare`, `DemosOrgFinance`, `DemosOrgGov`, `DemosOrgDHS`, `DemosOrgFedRAMP`, `DemosOrgFrontend`
 - Container paths: Docker exec paths for demo environments (`ContainerRootG8E`, `ContainerPKIDir`, `ContainerOperatorCert`, `ContainerOperatorKey`, `ContainerCABundle`, `ContainerDataDir`, `ContainerAuditVaultDB`, `ContainerExecutionVaultDB`, `ContainerLedgerFilesDir`, `ContainerDoctrineDir`, `ContainerEnsembleSeed`, and verification script paths)
 - Local binary names: `LocalBinaryName` (`./g8e`), `LocalBinaryNameWindows` (`./g8e.exe`), `BinaryImageName`, `BinaryImageNameWindows`
@@ -249,7 +250,7 @@ Filesystem paths for Operator data, certificates, ledger, system paths, and conf
 - Execution limits: `ExecutionMaxStreamSize` (10 MB), `ExecutionMaxLines` (50), `ExecutionPreviewLength` (300), `FileEditMaxSize` (50 MB)
 - Reporting: `ReportsDirname` and CSV output filenames for receipts, sessions, events, file mutations, executions, file diffs, commitments, ledger commits, ledger merkle root, replay nonces, suspended transactions, verification summary, and manifest
 - CLI default paths: `DefaultVaultDirDesc`, `DefaultVaultKeyDesc`, `DefaultOperatorKeyDesc`, `DefaultClientKeyDesc`, `DefaultOperatorCertDesc`, `DefaultClientCertDesc`, `DefaultDataDir`, `DefaultPKIDir`, `DefaultSecretsDir`
-- Tribunal bootstrap: `TribunalBootstrapConfigFilename` (`tribunal-bootstrap.json`)
+- Consensus bootstrap: `ConsensusBootstrapConfigFilename` (`consensus-bootstrap.json`)
 - API path constants: `APIPathAuthDeviceEnroll`, `APIPathPKIDevicesEnroll`, `WellKnownPKICABundle`
 - File suffixes: `TmpFileSuffix`, `BackupFileSuffixPattern`, `SQLiteWALSuffix`, `SQLiteSHMSuffix`
 - Environment path: `EnvPathDefault`, `PathParentDir`
@@ -284,11 +285,12 @@ Platform error variables defined as `error` values using `errors.New()`. The fil
 
 Typed environment variable names, typed as `EnvVarKey` and grouped in a struct `EnvVar`:
 
-- `TribunalID` (`G8E_TRIBUNAL_ID`), `TribunalURL` (`G8E_TRIBUNAL_URL`), `TribunalBootstrap` (`G8E_TRIBUNAL_BOOTSTRAP`)
+- `ConsensusID` (`G8E_CONSENSUS_ID`), `ConsensusURL` (`G8E_CONSENSUS_URL`), `ConsensusBootstrap` (`G8E_CONSENSUS_BOOTSTRAP`), `DoctrineDir` (`G8E_DOCTRINE_DIR`)
 - `VaultDir` (`G8E_VAULT_DIR`), `VaultKey` (`G8E_VAULT_KEY`)
 - `OperatorSessionID` (`G8E_OPERATOR_SESSION_ID`)
 - `PasskeyRpID` (`G8E_PASSKEY_RP_ID`), `PasskeyRpName` (`G8E_PASSKEY_RP_NAME`), `PasskeyRpOrigins` (`G8E_PASSKEY_RP_ORIGINS`)
 - `PublicBaseURL` (`G8E_PUBLIC_BASE_URL`), `AllowedOrigins` (`G8E_ALLOWED_ORIGINS`)
+- Lattice: `LatticeEndpoint` (`LATTICE_ENDPOINT`), `LatticeClientID` (`LATTICE_CLIENT_ID`), `LatticeClientSecret` (`LATTICE_CLIENT_SECRET`), `LatticeSandboxesToken` (`SANDBOXES_TOKEN`), `LatticeEntityName` (`LATTICE_ENTITY_NAME`), `LatticePostureFloor` (`LATTICE_POSTURE_FLOOR`)
 - `Shell` (`SHELL`), `Lang` (`LANG`), `Term` (`TERM`), `TZ` (`TZ`)
 
 ### Field Paths (`field_paths.go`)
@@ -329,6 +331,7 @@ Canonical document ID constants, typed as `DocumentID`:
 Key-value store key patterns and session type constants:
 
 - Sentinel prefix: `SentinelKeyPrefix` (`g8e:sentinel:`)
+- Scrubbing token prefix: `ScrubbingTokenKeyPrefix` (`uei_token_`)
 - Cache prefix: `KVCachePrefix` (`g8e`)
 - Cache keys: `KVKeyCacheDoc`, `KVKeyCacheQuery`
 - Session keys: `KVKeySessionWeb`, `KVKeySessionOperator`, `KVKeySessionOperatorBind`, `KVKeySessionWebBind`
@@ -375,7 +378,7 @@ Platform event identifiers and binary/architecture constants:
 - Architectures: `ArchAMD64`, `ArchARM64`, `Arch386`
 - Operating systems: `OSLinux`, `OSDarwin`, `OSWindows`
 - Governance posture names: `PostureDoctrine` (`doctrine`), `PostureConsensus` (`consensus`), `PostureNotary` (`notary`)
-- Log level names: `LogLevelInfo`, `LogLevelError`, `LogLevelDebug`, `LogLevelDefault`
+- Log level names: `LogLevelInfo`, `LogLevelError`, `LogLevelDebug`, `LogLevelDefault` (alias for `LogLevelInfo`)
 
 ### Prompts (`prompts.go`)
 
@@ -416,17 +419,16 @@ Shell command execution constants:
 
 Timestamp format constants:
 
-- `FormatRFC3339`: canonical RFC3339 format string with timezone offset
-- `TimestampFormat`: RFC3339 with fixed microsecond precision (`2006-01-02T15:04:05.000000Z07:00`) for lexicographic ordering
+- `FormatRFC3339`: canonical RFC3339 format string with timezone offset (re-exported from `internal/timesvc`)
+- `TimestampFormat`: RFC3339 with fixed microsecond precision (`2006-01-02T15:04:05.000000Z07:00`) for lexicographic ordering (re-exported from `internal/timesvc` as `timesvc.Format`)
 
 ### Mappings (`mappings.go`)
 
-Functions mapping between event types, action types, and execution statuses:
+Functions mapping between event types and action types:
 
-- `MapEventTypeToActionType`: Maps `EventType` to `ActionType` using a static `eventToAction` map (e.g., `OperatorCommandRequested` to `ActionTypeExecuteBash`). Unmapped events pass through as-is.
-- `MapActionTypeToEventType`: Reverse mapping derived from `eventToAction` at init time.
+- `MapActionTypeToEventType`: Maps `ActionType` back to `EventType` using a reverse map derived from `eventToAction` at init time. Unmapped action types pass through as-is.
 - `MapEventTypeToResultActionType`: Maps completion/failure events to result action types (e.g., `EXECUTE_BASH_RESULT`, `EXECUTE_BASH_CANCELLED`) via `eventToResultAction`.
-- `ProtoToExecutionStatus`: Maps protobuf `ExecutionStatus` enum values to internal `ExecutionStatus` constants.
+- The `eventToAction` map is the single source of truth for the `EventType` to `ActionType` relationship, covering operator command, file edit, filesystem, fetch, MCP, A2A, port check, heartbeat, shutdown, eval, and investigation events.
 
 ## JSON Reference Files
 

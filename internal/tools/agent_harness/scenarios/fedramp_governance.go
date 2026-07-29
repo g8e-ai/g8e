@@ -149,9 +149,8 @@ func fedrampScenarios() []Scenario {
 				}
 				r.note("bound to state root %s", short(root))
 				r.note("operator requests destruction of fedramp-vm-classified-01 (FIPS-199-HIGH)")
-				r.note("L3 mode=suspend: submit L2-only; resource stays under CSP control until the authorizing official signs")
 
-				txHash, status, body, err := c.SubmitMaximal(ctx, fedrampCloudOperator, clientpkg.MaximalEnvelope{
+				m := clientpkg.MaximalEnvelope{
 					OperatorID:        kit.OperatorID,
 					OperatorSessionID: kit.OperatorSessionID,
 					ToolName:          "run_shell_command",
@@ -160,29 +159,53 @@ func fedrampScenarios() []Scenario {
 					StateRoot:         root,
 					Ensemble:          kit.Ensemble,
 					TTL:               c.Config().EnvelopeTTL,
-				})
-				if err != nil {
-					return fmt.Errorf("submit destroy envelope: %w", err)
 				}
-				r.tx(txHash)
-				r.note("destroy envelope %s submitted (status %d); awaiting authorizing official approval", short(txHash), status)
 
-				if h, ok := suspendedFromBody(body); ok {
-					txHash = h
+				switch kit.L3Mode {
+				case "mock":
+					r.note("L3 mode=mock: principal %q signs transaction_hash inline", kit.Principal.KeyID)
+					m.Principal = kit.Principal
+					txHash, status, body, err := c.SubmitMaximal(ctx, fedrampCloudOperator, m)
+					if err != nil {
+						return fmt.Errorf("submit destroy envelope: %w", err)
+					}
+					r.tx(txHash)
+					r.note("destroy envelope %s submitted with inline principal proof (status %d)", short(txHash), status)
+					if status >= 400 {
+						return fmt.Errorf("destroy envelope rejected (status %d): %s", status, string(body))
+					}
+					if summary, failed := receiptFailed(body); failed {
+						return fmt.Errorf("destroy tool execution failed: %s", summary)
+					}
+					r.note("authorizing official %q approved inline (mock L3); destruction executed", kit.Principal.KeyID)
+					return nil
+
+				default:
+					r.note("L3 mode=suspend: submit L2-only; resource stays under CSP control until the authorizing official signs")
+					txHash, status, body, err := c.SubmitMaximal(ctx, fedrampCloudOperator, m)
+					if err != nil {
+						return fmt.Errorf("submit destroy envelope: %w", err)
+					}
+					r.tx(txHash)
+					r.note("destroy envelope %s submitted (status %d); awaiting authorizing official approval", short(txHash), status)
+
+					if h, ok := suspendedFromBody(body); ok {
+						txHash = h
+					}
+					ast, approveBody, aerr := c.Approve(ctx, fedrampAuthorizingOfficial, txHash)
+					if aerr != nil {
+						return fmt.Errorf("authorizing official approve: %w", aerr)
+					}
+					if ast >= 400 {
+						return fmt.Errorf("authorizing official approval rejected (status %d)", ast)
+					}
+					if summary, failed := receiptFailed(approveBody); failed {
+						return fmt.Errorf("destroy tool execution failed: %s", summary)
+					}
+					r.note("authorizing official %q approved hash %s out-of-band (status %d)", kit.Principal.KeyID, short(txHash), ast)
+					r.note("cryptographic proof: principal Ed25519 signature over the exact transaction hash — destruction now executes")
+					return nil
 				}
-				ast, approveBody, aerr := c.Approve(ctx, fedrampAuthorizingOfficial, txHash)
-				if aerr != nil {
-					return fmt.Errorf("authorizing official approve: %w", aerr)
-				}
-				if ast >= 400 {
-					return fmt.Errorf("authorizing official approval rejected (status %d)", ast)
-				}
-				if summary, failed := receiptFailed(approveBody); failed {
-					return fmt.Errorf("destroy tool execution failed: %s", summary)
-				}
-				r.note("authorizing official %q approved hash %s out-of-band (status %d)", kit.Principal.KeyID, short(txHash), ast)
-				r.note("cryptographic proof: principal Ed25519 signature over the exact transaction hash — destruction now executes")
-				return nil
 			},
 		},
 		{

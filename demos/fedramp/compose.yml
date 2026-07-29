@@ -10,7 +10,7 @@ services:
     volumes:
       - fedramp-gateway-state:/root/.g8e
       - ./doctrine:/etc/g8e/doctrine:ro
-      - ./config/tribunal-bootstrap.json:/etc/g8e/tribunal-bootstrap.json:ro
+      - ./config/consensus-bootstrap.json:/etc/g8e/consensus-bootstrap.json:ro
       - ./cloudop.sh:/usr/local/bin/cloudop:ro
     ports:
       - "8088:8080"
@@ -33,7 +33,7 @@ services:
       - G8E_GATEWAY_POSTURE=${G8E_GATEWAY_POSTURE:-consensus}
       - G8E_L3_MOCK=true
     entrypoint: []
-    command: ["sh", "-c", "exec /g8e gw start -f --posture $${G8E_GATEWAY_POSTURE} --tribunal-id fedramp-tribunal --tribunal-bootstrap /etc/g8e/tribunal-bootstrap.json --passkey-rp-origin http://localhost:8088 --passkey-rp-origin https://localhost:8451"]
+    command: ["sh", "-c", "exec /g8e gw start -f --posture $${G8E_GATEWAY_POSTURE} --consensus-id fedramp-consensus --consensus-bootstrap /etc/g8e/consensus-bootstrap.json --doctrine-dir /etc/g8e/doctrine --passkey-rp-origin http://localhost:8088 --passkey-rp-origin https://localhost:8451"]
 
   operator:
     build:
@@ -73,6 +73,7 @@ services:
     volumes:
       - fedramp-operator-state:/root/.g8e:ro
       - ./config/ensemble-seed.hex:/etc/g8e/ensemble-seed.hex:ro
+      - ./config/consensus-bootstrap.json:/etc/g8e/consensus-bootstrap.json:ro
     networks:
       net_internal:
         ipv4_address: 10.72.0.30

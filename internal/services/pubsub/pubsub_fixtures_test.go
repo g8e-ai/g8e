@@ -45,15 +45,15 @@ func signL2Vote(privKey ed25519.PrivateKey, keyID, hash string, decision bool) *
 	}
 }
 
-// pubsubTestTribunalStoreAdapter wraps a governancetest.SimpleTribunalStore and
+// pubsubTestConsensusStoreAdapter wraps a governancetest.SimpleConsensusStore and
 // adapts it to satisfy governance.L2ConsensusPolicyStore for pubsub test code.
-// This is the test-only replacement for the removed production TribunalStoreAdapter.
-type pubsubTestTribunalStoreAdapter struct {
-	Inner *governancetest.SimpleTribunalStore
+// This is the test-only replacement for the removed production ConsensusStoreAdapter.
+type pubsubTestConsensusStoreAdapter struct {
+	Inner *governancetest.SimpleConsensusStore
 }
 
-func (a *pubsubTestTribunalStoreAdapter) GetConsensusPolicy(id string) (*governance.L2ConsensusPolicy, error) {
-	policy, err := a.Inner.GetTribunal(id)
+func (a *pubsubTestConsensusStoreAdapter) GetConsensusPolicy(id string) (*governance.L2ConsensusPolicy, error) {
+	policy, err := a.Inner.GetConsensus(id)
 	if err != nil {
 		return nil, err
 	}
@@ -68,15 +68,15 @@ func (a *pubsubTestTribunalStoreAdapter) GetConsensusPolicy(id string) (*governa
 	}, nil
 }
 
-// testTribunalStore returns an L2ConsensusPolicyStore with a single 1-of-1
-// "test-tribunal" policy whose sole member is "test-key". This mirrors the
+// testConsensusStore returns an L2ConsensusPolicyStore with a single 1-of-1
+// "test-consensus" policy whose sole member is "test-key". This mirrors the
 // single trusted signer registered by the pubsub test fixtures so L4 quorum
 // verification can pass.
-func testTribunalStore() governance.L2ConsensusPolicyStore {
-	return &pubsubTestTribunalStoreAdapter{Inner: &governancetest.SimpleTribunalStore{
-		Tribunals: map[string]*models.TribunalPolicy{
-			"test-tribunal": {
-				ID:              "test-tribunal",
+func testConsensusStore() governance.L2ConsensusPolicyStore {
+	return &pubsubTestConsensusStoreAdapter{Inner: &governancetest.SimpleConsensusStore{
+		Consensus: map[string]*models.ConsensusPolicy{
+			"test-consensus": {
+				ID:              "test-consensus",
 				MemberAppIDs:    []string{"test-key"},
 				Quorum:          1,
 				RequireDistinct: true,
@@ -101,7 +101,7 @@ func newPubsubFixture(t *testing.T) *pubsubFixture {
 	db := pubsubtest.NewMockOperatorPubSubClient()
 
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
-	signerStore := &governance.SimpleSignerStore{
+	signerStore := &governance.FailClosedSignerStore{
 		Signers: map[string]ed25519.PublicKey{
 			"test-key": pub,
 		},
@@ -119,7 +119,7 @@ func newPubsubFixture(t *testing.T) *pubsubFixture {
 		TransactionAudit:     &testutil.MockTransactionAudit{},
 		L3Notary:             &testutil.MockL3Notary{},
 		SignerStore:          signerStore,
-		ConsensusPolicyStore: testTribunalStore(),
+		ConsensusPolicyStore: testConsensusStore(),
 	})
 	if err != nil {
 		t.Fatalf("failed to create OperatorPubSubService: %v", err)

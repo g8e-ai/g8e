@@ -73,7 +73,7 @@
       "l2_valid": {
         "type": "boolean",
         "required": true,
-        "description": "Whether L2 (multi-sig tribunal) verification passed. True when L2 was required and valid; false when required and failed; false when not required."
+        "description": "Whether L2 (multi-sig consensus) verification passed. True when L2 was required and valid; false when required and failed; false when not required."
       },
       "l3_valid": {
         "type": "boolean",

@@ -34,7 +34,7 @@
       "description": "Detects and blocks privilege escalation attempts through cloud API manipulation or IAM role assumption outside governed channels",
       "category": "privilege_escalation",
       "severity": "high",
-      "pattern": "(sudo|chmod|chown|iam-role|assume-role|escalate)",
+      "pattern": "\\b(sudo|chmod|chown|iam-role|assume-role|escalate)\\b",
       "mitre_attack": "T1548",
       "mitre_tactic": "privilege-escalation",
       "confidence": 0.90,

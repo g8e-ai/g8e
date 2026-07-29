@@ -28,7 +28,7 @@ make build          # Build the g8e Operator binary
 
 | Command | Purpose |
 |---|---|
-| `./g8e gw start` | Start the Gateway |
+| `./g8e gw start` | Start the Gateway (`--doctrine-dir` loads JSON doctrine files for L1 threat detection) |
 | `./g8e gw status` | Gateway health and status |
 | `./g8e auth enroll` | Authenticate the local CLI |
 | `./g8e test` | Run test suites |
@@ -138,7 +138,7 @@ Return centralized error constants from `internal/constants/errors.go` for known
 **Test infrastructure separation:**
 - `internal/services/storage/storagetest/` - Test-only audit storage (`TestSQLAuditStore` with Git ledger, no-op `DocSet`) and `TestTokenStore` (in-memory `TokenStore` with TTL)
 - `internal/services/pubsub/pubsubtest/` - Test-only `PubSubClient` mock (`MockOperatorPubSubClient`)
-- `internal/services/governance/governancetest/` - Test-only governance store fixtures (`SimpleTribunalStore`, `SimpleAppPolicyStore`, `SimpleStateRootProvider`)
+- `internal/services/governance/governancetest/` - Test-only governance store fixtures (`SimpleConsensusStore`, `SimpleAppPolicyStore`, `SimpleStateRootProvider`)
 - `internal/tools/chaos/` - Chaos engineering infrastructure (uses `storagetest.TestSQLAuditStore`)
 - Production gateway mode wires `DocumentStoreService` as `TransactionAuditStore`
 - Production outbound mode uses `auditStoreTransactionStore` adapter in `g8eo.go`
@@ -147,8 +147,7 @@ Return centralized error constants from `internal/constants/errors.go` for known
 
 Several services have dependencies that cannot be passed to the constructor because they are created later in the boot sequence (circular or late-resolved dependency graphs). The canonical pattern for these is:
 
-- **`atomic.Pointer[T]`** for pointer-typed late-bound deps (e.g., `GovernanceController.tribunal`, `mcp.GatewayService.runtimeDeps`).
-- **`atomic.Value`** for interface-typed late-bound deps (e.g., `mcp.GatewayService.l2ConsensusDeliberator`, `GovernanceController.envProc`).
+- **`atomic.Pointer[T]`** for pointer-typed late-bound deps (e.g., `mcp.GatewayService.runtimeDeps`).
 
 **Pattern rules:**
 
@@ -160,16 +159,16 @@ Several services have dependencies that cannot be passed to the constructor beca
 
 **Two-phase dependency model for `mcp.GatewayService`:**
 
-- **Construction-phase** (`Dependencies` struct, immutable after `NewGatewayService`): `Logger`, `Responder`, `SuspendedStore`, `ScrubbingService`, `ThreatScanner`, `MaxPayloadBytes`, `Posture`, `A2ADownstreamURL`, `PublicBaseURL`.
-- **Runtime-phase** (`RuntimeDependencies` struct, set once via `SetRuntimeDeps` before first request): `EnvProc`, `StateRootProvider`, `SigningKey`, `KeyID`, `DownstreamURL`, `DBService`, `SessionValidator`, `AuditLogger`. Stored via `atomic.Pointer[RuntimeDependencies]` with `runtimeReady()` gate.
+- **Construction-phase** (`Dependencies` struct, immutable after `NewGatewayService`): `Logger`, `Responder`, `SuspendedStore`, `ScrubbingService`, `ThreatScanner`, `MaxPayloadBytes`, `Posture`, `A2ADownstreamURL`, `PublicBaseURL`, `AuditStore` (defaults to no-op when nil), `FieldPathRegistryFactory` (test injection point, defaults to `NewFieldPathRegistry`).
+- **Runtime-phase** (`RuntimeDependencies` struct, set once via `SetRuntimeDeps` before first request): `EnvProc`, `StateRootProvider`, `SigningKey`, `KeyID`, `DownstreamURL`, `DBService`, `SessionValidator`, `AuditLogger`, `L2ConsensusDeliberator`. Stored via `atomic.Pointer[RuntimeDependencies]` with `runtimeReady()` gate.
 
 ## Constants & Doctrines
 
 Go constants in `internal/constants/` are SSOT. JSON files in `protocol/constants/` are reference documentation and external protocol definitions.
 
-**Doctrines:** Stored in `protocol/constants/doctrine/` as canonical JSON, validated by `make validate-doctrines`. L1Doctrine uses protobuf field options and hardcoded threat detectors at runtime; the JSON files are reference schemas.
+**Doctrines:** Stored in `protocol/constants/doctrine/` as canonical JSON, validated by `make validate-doctrines`. L1Doctrine uses protobuf field options and hardcoded threat detectors at runtime; the JSON files are reference schemas. At gateway startup, `--doctrine-dir` (env: `G8E_DOCTRINE_DIR`) loads additional `*.json` doctrine files via `NewL1DoctrineFromDir()`, appending file-loaded detectors after hardcoded MITRE patterns. The loaded doctrine instance is shared between the MCP Gateway ThreatScanner and L4Warden.
 
-Adding doctrines: update JSON → `make validate-doctrines` → restart Operator.
+Adding doctrines: update JSON → `make validate-doctrines` → restart Operator. For runtime doctrine loading, place JSON files in the doctrine directory and pass `--doctrine-dir`.
 
 See [Constants Reference](../../protocol/docs/constants.md) and [Protocol Spec](../../protocol/docs/spec.md).
 

@@ -112,11 +112,8 @@ func dhsScenarios() []Scenario {
 				}
 				r.note("bound to state root %s", short(root))
 				r.note("connector requests cross-domain release of TRK-MIL-0007 to the Mission Partner COP")
-				r.note("L3 mode=suspend: submit L2-only; data stays under U.S. authority until the release authority signs")
 
-				// Submit L2-only under notary posture: the Gateway suspends pending
-				// an L3 principal authorization — the real out-of-band notary flow.
-				txHash, status, body, err := c.SubmitMaximal(ctx, dhsConnector, clientpkg.MaximalEnvelope{
+				m := clientpkg.MaximalEnvelope{
 					OperatorID:        kit.OperatorID,
 					OperatorSessionID: kit.OperatorSessionID,
 					ToolName:          "run_shell_command",
@@ -125,29 +122,53 @@ func dhsScenarios() []Scenario {
 					StateRoot:         root,
 					Ensemble:          kit.Ensemble,
 					TTL:               c.Config().EnvelopeTTL,
-				})
-				if err != nil {
-					return fmt.Errorf("submit release envelope: %w", err)
 				}
-				r.tx(txHash)
-				r.note("release envelope %s submitted (status %d); awaiting release-authority approval", short(txHash), status)
 
-				if h, ok := suspendedFromBody(body); ok {
-					txHash = h
+				switch kit.L3Mode {
+				case "mock":
+					r.note("L3 mode=mock: release authority %q signs transaction_hash inline", kit.Principal.KeyID)
+					m.Principal = kit.Principal
+					txHash, status, body, err := c.SubmitMaximal(ctx, dhsConnector, m)
+					if err != nil {
+						return fmt.Errorf("submit release envelope: %w", err)
+					}
+					r.tx(txHash)
+					r.note("release envelope %s submitted with inline principal proof (status %d)", short(txHash), status)
+					if status >= 400 {
+						return fmt.Errorf("release envelope rejected (status %d): %s", status, string(body))
+					}
+					if summary, failed := receiptFailed(body); failed {
+						return fmt.Errorf("release tool execution failed: %s", summary)
+					}
+					r.note("release authority %q approved inline (mock L3); release executed", kit.Principal.KeyID)
+					return nil
+
+				default:
+					r.note("L3 mode=suspend: submit L2-only; data stays under U.S. authority until the release authority signs")
+					txHash, status, body, err := c.SubmitMaximal(ctx, dhsConnector, m)
+					if err != nil {
+						return fmt.Errorf("submit release envelope: %w", err)
+					}
+					r.tx(txHash)
+					r.note("release envelope %s submitted (status %d); awaiting release-authority approval", short(txHash), status)
+
+					if h, ok := suspendedFromBody(body); ok {
+						txHash = h
+					}
+					ast, approveBody, aerr := c.Approve(ctx, dhsReleaseAuthority, txHash)
+					if aerr != nil {
+						return fmt.Errorf("release authority approve: %w", aerr)
+					}
+					if ast >= 400 {
+						return fmt.Errorf("release approval rejected (status %d)", ast)
+					}
+					if summary, failed := receiptFailed(approveBody); failed {
+						return fmt.Errorf("release tool execution failed: %s", summary)
+					}
+					r.note("release authority %q approved hash %s out-of-band (status %d)", kit.Principal.KeyID, short(txHash), ast)
+					r.note("cryptographic proof: principal Ed25519 signature over the exact transaction hash — release now executes")
+					return nil
 				}
-				ast, approveBody, aerr := c.Approve(ctx, dhsReleaseAuthority, txHash)
-				if aerr != nil {
-					return fmt.Errorf("release authority approve: %w", aerr)
-				}
-				if ast >= 400 {
-					return fmt.Errorf("release approval rejected (status %d)", ast)
-				}
-				if summary, failed := receiptFailed(approveBody); failed {
-					return fmt.Errorf("release tool execution failed: %s", summary)
-				}
-				r.note("release authority %q approved hash %s out-of-band (status %d)", kit.Principal.KeyID, short(txHash), ast)
-				r.note("cryptographic proof: principal Ed25519 signature over the exact transaction hash — release now executes")
-				return nil
 			},
 		},
 		{

@@ -46,7 +46,7 @@ var (
 	harnessVerbose       bool
 	harnessPhase         string
 	harnessConsensusSeed string
-	harnessTribunalID    string
+	harnessConsensusID   string
 )
 
 func demosScenariosRunCmd() *cobra.Command {
@@ -70,7 +70,7 @@ func demosScenariosRunCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&harnessVerbose, "verbose", false, "echo each request/response")
 	cmd.Flags().StringVar(&harnessPhase, "phase", "all", "doctrine|consensus|notary|all")
 	cmd.Flags().StringVar(&harnessConsensusSeed, "consensus-seed", "", "hex-encoded Ed25519 seed for deterministic ensemble key (or path to seed file)")
-	cmd.Flags().StringVar(&harnessTribunalID, "tribunal-id", "", "TribunalPolicy ID for L2 consensus (defaults to test-tribunal)")
+	cmd.Flags().StringVar(&harnessConsensusID, "consensus-id", "", "ConsensusPolicy ID for L2 consensus (defaults to test-consensus)")
 
 	return cmd
 }
@@ -177,8 +177,8 @@ func applyAgentHarnessFlags(cfg *config.Config) {
 	if harnessConsensusSeed != "" {
 		cfg.ConsensusSeed = harnessConsensusSeed
 	}
-	if harnessTribunalID != "" {
-		cfg.TribunalID = harnessTribunalID
+	if harnessConsensusID != "" {
+		cfg.ConsensusID = harnessConsensusID
 	}
 }
 
@@ -249,16 +249,16 @@ func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Confi
 			return fmt.Errorf("setup gov kit: ensemble: %w", err)
 		}
 	}
-	if cfg.TribunalID != "" {
-		ens.TribunalID = cfg.TribunalID
+	if cfg.ConsensusID != "" {
+		ens.ConsensusID = cfg.ConsensusID
 	}
 
-	// If the consensus seed is a file path, try to load tribunal member app IDs
-	// from a sibling tribunal-bootstrap.json so the ensemble votes with the
+	// If the consensus seed is a file path, try to load consensus member app IDs
+	// from a sibling consensus-bootstrap.json so the ensemble votes with the
 	// correct member key IDs (multi-member quorum support).
 	if cfg.ConsensusSeed != "" {
 		seedDir := filepath.Dir(cfg.ConsensusSeed)
-		bootstrapPath := filepath.Join(seedDir, "tribunal-bootstrap.json")
+		bootstrapPath := filepath.Join(seedDir, "consensus-bootstrap.json")
 		if data, readErr := os.ReadFile(bootstrapPath); readErr == nil {
 			var boot struct {
 				MemberAppIDs []string `json:"member_app_ids"`

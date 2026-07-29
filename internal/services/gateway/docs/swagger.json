@@ -560,7 +560,7 @@
                         }
                     },
                     "503": {
-                        "description": "Service Unavailable — processor not initialized",
+                        "description": "Service Unavailable — processor not configured",
                         "schema": {
                             "type": "string"
                         }

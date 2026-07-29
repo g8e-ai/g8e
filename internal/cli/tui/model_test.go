@@ -45,10 +45,10 @@ func TestNewModel(t *testing.T) {
 		assert.Equal(t, 7, m.total)
 	})
 
-	t.Run("initializes 5 tribunal members", func(t *testing.T) {
+	t.Run("initializes 5 consensus members", func(t *testing.T) {
 		m := NewModel(Options{})
-		assert.Len(t, m.tribunal, 5)
-		for _, member := range m.tribunal {
+		assert.Len(t, m.consensus, 5)
+		for _, member := range m.consensus {
 			assert.False(t, member.signed, "member %s should be unsigned", member.name)
 			assert.False(t, member.decision, "member %s should not have decision", member.name)
 		}
@@ -200,31 +200,31 @@ func TestApplyConsensusMsg(t *testing.T) {
 	t.Run("updates member vote to approve", func(t *testing.T) {
 		m := NewModel(Options{})
 		m = m.applyConsensusMsg(ConsensusMsg{
-			Member:   constants.TribunalMemberAxiom,
+			Member:   constants.ConsensusMemberAxiom,
 			Decision: true,
 			Signed:   true,
 		})
-		assert.Equal(t, constants.TribunalMemberAxiom, m.tribunal[0].name)
-		assert.True(t, m.tribunal[0].decision)
-		assert.True(t, m.tribunal[0].signed)
+		assert.Equal(t, constants.ConsensusMemberAxiom, m.consensus[0].name)
+		assert.True(t, m.consensus[0].decision)
+		assert.True(t, m.consensus[0].signed)
 	})
 
 	t.Run("updates member vote to veto", func(t *testing.T) {
 		m := NewModel(Options{})
 		m = m.applyConsensusMsg(ConsensusMsg{
-			Member:   constants.TribunalMemberPragma,
+			Member:   constants.ConsensusMemberPragma,
 			Decision: false,
 			Signed:   true,
 		})
-		assert.Equal(t, constants.TribunalMemberPragma, m.tribunal[3].name)
-		assert.False(t, m.tribunal[3].decision)
-		assert.True(t, m.tribunal[3].signed)
+		assert.Equal(t, constants.ConsensusMemberPragma, m.consensus[3].name)
+		assert.False(t, m.consensus[3].decision)
+		assert.True(t, m.consensus[3].signed)
 	})
 
 	t.Run("updates quorum and total", func(t *testing.T) {
 		m := NewModel(Options{})
 		m = m.applyConsensusMsg(ConsensusMsg{
-			Member: constants.TribunalMemberAxiom,
+			Member: constants.ConsensusMemberAxiom,
 			Quorum: 4,
 			Total:  5,
 		})
@@ -235,7 +235,7 @@ func TestApplyConsensusMsg(t *testing.T) {
 	t.Run("updates result to rejected", func(t *testing.T) {
 		m := NewModel(Options{})
 		m = m.applyConsensusMsg(ConsensusMsg{
-			Member: constants.TribunalMemberPragma,
+			Member: constants.ConsensusMemberPragma,
 			Result: ConsensusRejected,
 			Hash:   "abcdef1234567890",
 		})
@@ -247,7 +247,7 @@ func TestApplyConsensusMsg(t *testing.T) {
 		m := NewModel(Options{})
 		m.result = ConsensusReached
 		m = m.applyConsensusMsg(ConsensusMsg{
-			Member: constants.TribunalMemberAxiom,
+			Member: constants.ConsensusMemberAxiom,
 			Result: ConsensusPending,
 		})
 		assert.Equal(t, ConsensusReached, m.result)
@@ -256,11 +256,11 @@ func TestApplyConsensusMsg(t *testing.T) {
 	t.Run("ignores unknown member name", func(t *testing.T) {
 		m := NewModel(Options{})
 		m = m.applyConsensusMsg(ConsensusMsg{
-			Member:   constants.TribunalMember("unknown"),
+			Member:   constants.ConsensusMember("unknown"),
 			Decision: true,
 			Signed:   true,
 		})
-		for _, member := range m.tribunal {
+		for _, member := range m.consensus {
 			assert.False(t, member.signed, "member %s should remain unsigned", member.name)
 		}
 	})
@@ -411,9 +411,9 @@ func TestCountAffirmative(t *testing.T) {
 	m := NewModel(Options{})
 	assert.Equal(t, 0, m.countAffirmative())
 
-	m = m.applyConsensusMsg(ConsensusMsg{Member: constants.TribunalMemberAxiom, Decision: true, Signed: true})
-	m = m.applyConsensusMsg(ConsensusMsg{Member: constants.TribunalMemberConcord, Decision: true, Signed: true})
-	m = m.applyConsensusMsg(ConsensusMsg{Member: constants.TribunalMemberVariance, Decision: false, Signed: true})
+	m = m.applyConsensusMsg(ConsensusMsg{Member: constants.ConsensusMemberAxiom, Decision: true, Signed: true})
+	m = m.applyConsensusMsg(ConsensusMsg{Member: constants.ConsensusMemberConcord, Decision: true, Signed: true})
+	m = m.applyConsensusMsg(ConsensusMsg{Member: constants.ConsensusMemberVariance, Decision: false, Signed: true})
 	assert.Equal(t, 2, m.countAffirmative())
 }
 

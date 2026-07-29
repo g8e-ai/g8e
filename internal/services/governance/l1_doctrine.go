@@ -16,6 +16,9 @@ package governance
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -42,6 +45,160 @@ func NewL1Doctrine() *L1Doctrine {
 	d := &L1Doctrine{}
 	d.initializeInputThreatDetectors()
 	return d
+}
+
+// doctrineFile represents the JSON schema of a doctrine file.
+type doctrineFile struct {
+	Source    string          `json:"source"`
+	Version   string          `json:"version"`
+	Doctrines []doctrineEntry `json:"doctrines"`
+}
+
+// doctrineEntry represents a single doctrine rule in a doctrine JSON file.
+type doctrineEntry struct {
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Description string  `json:"description,omitempty"`
+	Category    string  `json:"category"`
+	Severity    string  `json:"severity"`
+	Pattern     string  `json:"pattern"`
+	MitreAttack string  `json:"mitre_attack"`
+	MitreTactic string  `json:"mitre_tactic"`
+	Confidence  float64 `json:"confidence"`
+	Enabled     bool    `json:"enabled"`
+}
+
+// NewL1DoctrineFromDir creates a doctrine validator that combines the hardcoded
+// MITRE threat detectors with file-loaded doctrine patterns from doctrineDir.
+// If doctrineDir is empty, it falls back to NewL1Doctrine() (backward compatible).
+func NewL1DoctrineFromDir(doctrineDir string) (*L1Doctrine, error) {
+	d := NewL1Doctrine()
+
+	if doctrineDir == "" {
+		return d, nil
+	}
+
+	entries, err := os.ReadDir(doctrineDir)
+	if err != nil {
+		return nil, fmt.Errorf("governance: read doctrine dir %s: %w", doctrineDir, err)
+	}
+
+	var loadedCount int
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+
+		path := filepath.Join(doctrineDir, entry.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("governance: read doctrine file %s: %w", entry.Name(), err)
+		}
+
+		var df doctrineFile
+		if err := json.Unmarshal(data, &df); err != nil {
+			return nil, fmt.Errorf("governance: parse doctrine file %s: %w", entry.Name(), err)
+		}
+
+		for _, de := range df.Doctrines {
+			if !de.Enabled {
+				continue
+			}
+
+			pattern, err := regexp.Compile(de.Pattern)
+			if err != nil {
+				return nil, fmt.Errorf("governance: compile pattern for %s in %s: %w", de.ID, entry.Name(), err)
+			}
+
+			category := parseThreatCategory(de.Category)
+			if category == ThreatCategoryCustom {
+				slog.Warn("governance: unknown doctrine category mapped to custom",
+					"source", df.Source, "id", de.ID, "category", de.Category)
+			}
+
+			severity := parseThreatSeverity(de.Severity)
+			blockRecommended := severity == ThreatSeverityCritical || severity == ThreatSeverityHigh
+
+			detector := &InputThreatDetector{
+				name:             de.ID,
+				pattern:          pattern,
+				category:         category,
+				severity:         severity,
+				confidence:       de.Confidence,
+				mitreAttack:      de.MitreAttack,
+				mitreTactic:      de.MitreTactic,
+				blockRecommended: blockRecommended,
+				source:           df.Source,
+			}
+			d.inputThreatDetectors = append(d.inputThreatDetectors, detector)
+			loadedCount++
+		}
+	}
+
+	slog.Info("governance: doctrine files loaded",
+		"dir", doctrineDir, "detectors_loaded", loadedCount)
+
+	return d, nil
+}
+
+// parseThreatCategory maps a doctrine JSON category string to a ThreatCategory.
+// Unknown categories map to ThreatCategoryCustom.
+func parseThreatCategory(s string) ThreatCategory {
+	switch s {
+	case "reverse_shell":
+		return ThreatCategoryReverseShell
+	case "privilege_escalation":
+		return ThreatCategoryPrivilegeEsc
+	case "credential_access":
+		return ThreatCategoryCredentialAccess
+	case "data_exfiltration":
+		return ThreatCategoryExfiltration
+	case "cryptominer":
+		return ThreatCategoryCryptominer
+	case "persistence":
+		return ThreatCategoryPersistence
+	case "lateral_movement":
+		return ThreatCategoryLateralMovement
+	case "defense_evasion":
+		return ThreatCategoryDefenseEvasion
+	case "reconnaissance":
+		return ThreatCategoryReconnaissance
+	case "resource_hijacking":
+		return ThreatCategoryResourceHijacking
+	case "destructive":
+		return ThreatCategoryDestructive
+	case "system_tampering":
+		return ThreatCategorySystemTampering
+	case "security_bypass":
+		return ThreatCategorySecurityBypass
+	case "malware_deployment":
+		return ThreatCategoryMalwareDeployment
+	case "data_destruction":
+		return ThreatCategoryDataDestruction
+	case "network_manipulation":
+		return ThreatCategoryNetworkManipulation
+	default:
+		return ThreatCategoryCustom
+	}
+}
+
+// parseThreatSeverity maps a doctrine JSON severity string to a ThreatSeverity.
+// Unknown severity strings default to ThreatSeverityMedium.
+func parseThreatSeverity(s string) ThreatSeverity {
+	switch ThreatSeverity(s) {
+	case ThreatSeverityCritical:
+		return ThreatSeverityCritical
+	case ThreatSeverityHigh:
+		return ThreatSeverityHigh
+	case ThreatSeverityMedium:
+		return ThreatSeverityMedium
+	case ThreatSeverityLow:
+		return ThreatSeverityLow
+	case ThreatSeverityInfo:
+		return ThreatSeverityInfo
+	default:
+		return ThreatSeverityMedium
+	}
 }
 
 // ValidatePayload checks a typed protobuf payload for forbidden pattern violations.
@@ -186,6 +343,7 @@ const (
 	ThreatCategoryMalwareDeployment   ThreatCategory = "malware_deployment"
 	ThreatCategoryDataDestruction     ThreatCategory = "data_destruction"
 	ThreatCategoryNetworkManipulation ThreatCategory = "network_manipulation"
+	ThreatCategoryCustom              ThreatCategory = "custom"
 )
 
 // ThreatSignal represents a detected threat indicator
@@ -219,6 +377,7 @@ type InputThreatDetector struct {
 	mitreTactic      string
 	recommendation   string
 	blockRecommended bool
+	source           string
 }
 
 func (d *InputThreatDetector) Name() string { return d.name }
@@ -234,6 +393,7 @@ func (d *InputThreatDetector) Detect(input string) []ThreatSignal {
 			MitreTactic:      d.mitreTactic,
 			Recommendation:   d.recommendation,
 			BlockRecommended: d.blockRecommended,
+			Source:           d.source,
 		}}
 	}
 	return nil

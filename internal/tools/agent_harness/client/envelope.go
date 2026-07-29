@@ -36,13 +36,13 @@ const (
 	ProtocolVersion = "1.0"
 )
 
-// Ensemble is Agent Harness's mock L2 consensus tribunal: N agents that each "vote"
+// Ensemble is Agent Harness's mock L2 consensus consensus: N agents that each "vote"
 // on a transaction hash. The envelope carries a single aggregate Ed25519
 // signature from the registered consensus key over "<hash>|<decision>", plus
 // one AgentID per voter — exactly what L4Warden.verifyL2Signature checks.
 type Ensemble struct {
 	KeyID        string
-	TribunalID   string
+	ConsensusID  string
 	MemberKeyIDs []string // when set, Vote produces one vote per member key ID
 	priv         ed25519.PrivateKey
 	pub          ed25519.PublicKey
@@ -59,11 +59,11 @@ func NewEnsemble(keyID string, n int) (*Ensemble, error) {
 	for i := range agents {
 		agents[i] = fmt.Sprintf("%s-agent-%d", keyID, i+1)
 	}
-	return &Ensemble{KeyID: keyID, TribunalID: "test-tribunal", priv: priv, pub: pub, agents: agents}, nil
+	return &Ensemble{KeyID: keyID, ConsensusID: "test-consensus", priv: priv, pub: pub, agents: agents}, nil
 }
 
 // NewEnsembleFromSeed constructs an Ensemble from a hex-encoded Ed25519 seed.
-// This enables deterministic key generation for demo tribunal bootstrap: the
+// This enables deterministic key generation for demo consensus bootstrap: the
 // gateway seeds the trusted signer from the same seed file, and the harness
 // reconstructs the same private key to sign L2 votes that verify against it.
 func NewEnsembleFromSeed(keyID string, n int, seedHex string) (*Ensemble, error) {
@@ -80,7 +80,7 @@ func NewEnsembleFromSeed(keyID string, n int, seedHex string) (*Ensemble, error)
 	for i := range agents {
 		agents[i] = fmt.Sprintf("%s-agent-%d", keyID, i+1)
 	}
-	return &Ensemble{KeyID: keyID, TribunalID: "test-tribunal", priv: priv, pub: pub, agents: agents}, nil
+	return &Ensemble{KeyID: keyID, ConsensusID: "test-consensus", priv: priv, pub: pub, agents: agents}, nil
 }
 
 // PubHex is the consensus public key for trusted-signer registration.
@@ -118,7 +118,7 @@ func (e *Ensemble) Vote(txHash string, decision bool) *commonv1.L2Metadata {
 	}
 
 	return &commonv1.L2Metadata{
-		ConsensusSetId: e.TribunalID,
+		ConsensusSetId: e.ConsensusID,
 		Votes:          votes,
 	}
 }

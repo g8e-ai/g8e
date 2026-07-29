@@ -34,16 +34,16 @@ func TestSSEEventService_CleanupDeletesOldEvents(t *testing.T) {
 	// Insert an old event (created in the past via direct DB manipulation).
 	// We use SSEEventsAppend which uses now, then sleep briefly, insert another,
 	// and cleanup with a max age between the two.
-	require.NoError(t, h.dbController.sseStore.SSEEventsAppend(route, "old-event", `{"msg":"old"}`, "test-producer"))
+	require.NoError(t, h.dataController.sseStore.SSEEventsAppend(route, "old-event", `{"msg":"old"}`, "test-producer"))
 
 	// Wait a tiny bit so the second event has a strictly later timestamp.
 	time.Sleep(10 * time.Millisecond)
 
-	require.NoError(t, h.dbController.sseStore.SSEEventsAppend(route, "new-event", `{"msg":"new"}`, "test-producer"))
+	require.NoError(t, h.dataController.sseStore.SSEEventsAppend(route, "new-event", `{"msg":"new"}`, "test-producer"))
 
 	// Cleanup events older than 5ms — should delete the first but keep the second.
 	// We use a small duration to separate the two events.
-	deleted, err := h.dbController.sseStore.SSEEventsCleanup(5 * time.Millisecond)
+	deleted, err := h.dataController.sseStore.SSEEventsCleanup(5 * time.Millisecond)
 	require.NoError(t, err)
 
 	// At least the old event should be deleted. Due to timestamp granularity,
@@ -51,7 +51,7 @@ func TestSSEEventService_CleanupDeletesOldEvents(t *testing.T) {
 	assert.GreaterOrEqual(t, deleted, int64(1), "at least one old event should be deleted")
 
 	// Verify the newer event still exists.
-	rows, err := h.dbController.sseStore.SSEEventsListSince(route, 0, 100)
+	rows, err := h.dataController.sseStore.SSEEventsListSince(route, 0, 100)
 	require.NoError(t, err)
 	assert.NotEmpty(t, rows, "newer events should remain after cleanup")
 	foundNew := false
@@ -72,17 +72,17 @@ func TestSSEEventService_CleanupWithZeroAgeDeletesAll(t *testing.T) {
 
 	route := SSERoute{CLISessionID: "cli-cleanup-zero"}
 
-	require.NoError(t, h.dbController.sseStore.SSEEventsAppend(route, "event-1", `{"msg":"1"}`, "test-producer"))
-	require.NoError(t, h.dbController.sseStore.SSEEventsAppend(route, "event-2", `{"msg":"2"}`, "test-producer"))
+	require.NoError(t, h.dataController.sseStore.SSEEventsAppend(route, "event-1", `{"msg":"1"}`, "test-producer"))
+	require.NoError(t, h.dataController.sseStore.SSEEventsAppend(route, "event-2", `{"msg":"2"}`, "test-producer"))
 
 	// Small sleep to ensure events are strictly in the past relative to "now".
 	time.Sleep(5 * time.Millisecond)
 
-	deleted, err := h.dbController.sseStore.SSEEventsCleanup(0)
+	deleted, err := h.dataController.sseStore.SSEEventsCleanup(0)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, deleted, int64(2), "all events should be deleted with 0 max age")
 
-	count, err := h.dbController.sseStore.SSEEventsCount()
+	count, err := h.dataController.sseStore.SSEEventsCount()
 	require.NoError(t, err)
 	// There might be events from other tests in the same DB, but our two should be gone.
 	// Just verify the count is reasonable (not growing unboundedly).
@@ -101,7 +101,7 @@ func TestSSEEventService_AppendRejectsMutuallyExclusiveRoute(t *testing.T) {
 		CLISessionID: "cli-456",
 	}
 
-	err := h.dbController.sseStore.SSEEventsAppend(route, "test-event", `{"msg":"test"}`, "test-producer")
+	err := h.dataController.sseStore.SSEEventsAppend(route, "test-event", `{"msg":"test"}`, "test-producer")
 	assert.Error(t, err, "expected error when multiple route IDs are set")
 }
 
@@ -112,6 +112,6 @@ func TestSSEEventService_AppendRejectsEmptyRoute(t *testing.T) {
 
 	route := SSERoute{}
 
-	err := h.dbController.sseStore.SSEEventsAppend(route, "test-event", `{"msg":"test"}`, "test-producer")
+	err := h.dataController.sseStore.SSEEventsAppend(route, "test-event", `{"msg":"test"}`, "test-producer")
 	assert.Error(t, err, "expected error when no route ID is set")
 }

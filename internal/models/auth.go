@@ -515,11 +515,11 @@ type Persona struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-// TribunalPolicy defines a named consensus body (Tribunal) for L2 governance.
-// A Tribunal consists of N member identities (enrolled agentic apps) and
+// ConsensusPolicy defines a named consensus body (Consensus) for L2 governance.
+// A Consensus consists of N member identities (enrolled agentic apps) and
 // requires K affirmative distinct signatures to reach quorum.
-type TribunalPolicy struct {
-	ID              string    `json:"id"`               // tribunal name/id
+type ConsensusPolicy struct {
+	ID              string    `json:"id"`               // consensus name/id
 	MemberAppIDs    []string  `json:"member_app_ids"`   // == TrustedSigner.ID per member
 	Quorum          int       `json:"quorum"`           // K affirmative distinct signers required
 	RequireDistinct bool      `json:"require_distinct"` // reject duplicate signer keys

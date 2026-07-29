@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package tribunal
+package consensus
 
 import (
 	"crypto/ed25519"
@@ -32,16 +32,16 @@ func TestFileKeyProvider_GetMemberKey_Success(t *testing.T) {
 	t.Parallel()
 
 	secretsDir := testutil.TempDir(t)
-	tribunalID := "test-tribunal"
+	consensusID := "test-consensus"
 	memberAppID := "member-1"
 
 	pub, priv, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 
-	err = SaveMemberKey(secretsDir, tribunalID, memberAppID, priv)
+	err = SaveMemberKey(secretsDir, consensusID, memberAppID, priv)
 	require.NoError(t, err)
 
-	provider := NewFileKeyProvider(secretsDir, tribunalID)
+	provider := NewFileKeyProvider(secretsDir, consensusID)
 	loadedKey, err := provider.GetMemberKey(memberAppID)
 	require.NoError(t, err)
 
@@ -53,9 +53,9 @@ func TestFileKeyProvider_GetMemberKey_NotFound(t *testing.T) {
 	t.Parallel()
 
 	secretsDir := testutil.TempDir(t)
-	tribunalID := "test-tribunal"
+	consensusID := "test-consensus"
 
-	provider := NewFileKeyProvider(secretsDir, tribunalID)
+	provider := NewFileKeyProvider(secretsDir, consensusID)
 	_, err := provider.GetMemberKey("nonexistent-member")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "key file not found")
@@ -65,15 +65,15 @@ func TestFileKeyProvider_GetMemberKey_InvalidSeedLength(t *testing.T) {
 	t.Parallel()
 
 	secretsDir := testutil.TempDir(t)
-	tribunalID := "test-tribunal"
+	consensusID := "test-consensus"
 	memberAppID := "member-bad"
 
-	filename := constants.SecretsFileTribunalMemberKeyPrefix + tribunalID + "_" + memberAppID + ".key"
+	filename := constants.SecretsFileConsensusMemberKeyPrefix + consensusID + "_" + memberAppID + ".key"
 	keyPath := filepath.Join(secretsDir, filename)
 	err := os.WriteFile(keyPath, []byte(hex.EncodeToString([]byte("too-short"))), constants.PermFilePrivate)
 	require.NoError(t, err)
 
-	provider := NewFileKeyProvider(secretsDir, tribunalID)
+	provider := NewFileKeyProvider(secretsDir, consensusID)
 	_, err = provider.GetMemberKey(memberAppID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid seed length")
@@ -83,15 +83,15 @@ func TestFileKeyProvider_GetMemberKey_InvalidHex(t *testing.T) {
 	t.Parallel()
 
 	secretsDir := testutil.TempDir(t)
-	tribunalID := "test-tribunal"
+	consensusID := "test-consensus"
 	memberAppID := "member-bad-hex"
 
-	filename := constants.SecretsFileTribunalMemberKeyPrefix + tribunalID + "_" + memberAppID + ".key"
+	filename := constants.SecretsFileConsensusMemberKeyPrefix + consensusID + "_" + memberAppID + ".key"
 	keyPath := filepath.Join(secretsDir, filename)
 	err := os.WriteFile(keyPath, []byte("not-valid-hex!!"), constants.PermFilePrivate)
 	require.NoError(t, err)
 
-	provider := NewFileKeyProvider(secretsDir, tribunalID)
+	provider := NewFileKeyProvider(secretsDir, consensusID)
 	_, err = provider.GetMemberKey(memberAppID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "decode seed")
@@ -101,16 +101,16 @@ func TestSaveMemberKey_CreatesDirectoryAndFile(t *testing.T) {
 	t.Parallel()
 
 	secretsDir := filepath.Join(testutil.TempDir(t), "nested", "secrets")
-	tribunalID := "test-tribunal"
+	consensusID := "test-consensus"
 	memberAppID := "member-1"
 
 	_, priv, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 
-	err = SaveMemberKey(secretsDir, tribunalID, memberAppID, priv)
+	err = SaveMemberKey(secretsDir, consensusID, memberAppID, priv)
 	require.NoError(t, err)
 
-	filename := constants.SecretsFileTribunalMemberKeyPrefix + tribunalID + "_" + memberAppID + ".key"
+	filename := constants.SecretsFileConsensusMemberKeyPrefix + consensusID + "_" + memberAppID + ".key"
 	keyPath := filepath.Join(secretsDir, filename)
 
 	info, err := os.Stat(keyPath)
@@ -134,7 +134,7 @@ func TestFileKeyProvider_MultipleMembers(t *testing.T) {
 	t.Parallel()
 
 	secretsDir := testutil.TempDir(t)
-	tribunalID := "multi-tribunal"
+	consensusID := "multi-consensus"
 
 	members := []string{"member-0", "member-1", "member-2"}
 	savedKeys := make(map[string]ed25519.PrivateKey)
@@ -143,12 +143,12 @@ func TestFileKeyProvider_MultipleMembers(t *testing.T) {
 		_, priv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 
-		err = SaveMemberKey(secretsDir, tribunalID, appID, priv)
+		err = SaveMemberKey(secretsDir, consensusID, appID, priv)
 		require.NoError(t, err)
 		savedKeys[appID] = priv
 	}
 
-	provider := NewFileKeyProvider(secretsDir, tribunalID)
+	provider := NewFileKeyProvider(secretsDir, consensusID)
 	for _, appID := range members {
 		loadedKey, err := provider.GetMemberKey(appID)
 		require.NoError(t, err)

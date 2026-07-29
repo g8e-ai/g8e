@@ -51,28 +51,29 @@ func getBinaryName() string {
 // It is populated by addGatewayFlags and converted to serve.GatewayConfig
 // via gatewayFlagsToServeConfig.
 type GatewayFlags struct {
-	Posture           string
-	HTTPPort          int
-	HTTPSPort         int
-	DataDir           string
-	PKIDir            string
-	SecretsDir        string
-	VaultDir          string
-	VaultKeyPath      string
-	PasskeyRpID       string
-	PasskeyRpName     string
-	PasskeyRpOrigins  []string
-	RateLimitRPS      float64
-	RateLimitBurst    int
-	LogLevel          string
-	CertIdentityMode  string
-	TribunalID        string
-	TribunalURL       string
-	TribunalBootstrap string
-	MCPDownstreamURL  string
-	A2ADownstreamURL  string
-	PublicBaseURL     string
-	AllowedOrigins    []string
+	Posture            string
+	HTTPPort           int
+	HTTPSPort          int
+	DataDir            string
+	PKIDir             string
+	SecretsDir         string
+	VaultDir           string
+	VaultKeyPath       string
+	PasskeyRpID        string
+	PasskeyRpName      string
+	PasskeyRpOrigins   []string
+	RateLimitRPS       float64
+	RateLimitBurst     int
+	LogLevel           string
+	CertIdentityMode   string
+	ConsensusID        string
+	ConsensusURL       string
+	ConsensusBootstrap string
+	MCPDownstreamURL   string
+	A2ADownstreamURL   string
+	PublicBaseURL      string
+	AllowedOrigins     []string
+	DoctrineDir        string
 }
 
 // addGatewayFlags registers all shared gateway flags on the given cobra command,
@@ -93,17 +94,18 @@ func addGatewayFlags(cmd *cobra.Command, f *GatewayFlags) {
 	cmd.Flags().IntVar(&f.RateLimitBurst, "rate-limit-burst", 0, "Gateway rate limit burst size")
 	cmd.Flags().StringVar(&f.LogLevel, "log", "info", "Log level: info, error, debug")
 	cmd.Flags().StringVar(&f.CertIdentityMode, "cert-mode", "", "Certificate mode: full (all hostnames/IPs), localhost (only localhost)")
-	cmd.Flags().StringVar(&f.TribunalID, "tribunal-id", "", "ID of the TribunalPolicy for L2 consensus (required for --consensus)")
-	cmd.Flags().StringVar(&f.TribunalURL, "tribunal-url", "", "URL of the Tribunal service for L2 deliberation (e.g. https://localhost:8443/tribunal/v1/deliberate)")
-	cmd.Flags().StringVar(&f.TribunalBootstrap, "tribunal-bootstrap", "", "Path to a JSON file that seeds a TribunalPolicy and trusted signers at startup (for deterministic demo deployments)")
+	cmd.Flags().StringVar(&f.ConsensusID, "consensus-id", "", "ID of the ConsensusPolicy for L2 consensus (required for --consensus)")
+	cmd.Flags().StringVar(&f.ConsensusURL, "consensus-url", "", "URL of the Consensus service for L2 deliberation (e.g. https://localhost:8443/consensus/v1/deliberate)")
+	cmd.Flags().StringVar(&f.ConsensusBootstrap, "consensus-bootstrap", "", "Path to a JSON file that seeds a ConsensusPolicy and trusted signers at startup (for deterministic demo deployments)")
 	cmd.Flags().StringVar(&f.MCPDownstreamURL, "mcp-downstream-url", "", "URL of a downstream MCP server to proxy discovery and execution to (default: none)")
 	cmd.Flags().StringVar(&f.A2ADownstreamURL, "a2a-downstream-url", "", "URL of a downstream A2A server to proxy execution to (default: none)")
 	cmd.Flags().StringVar(&f.PublicBaseURL, "public-base-url", "", "Public base URL for approval links and host validation (e.g., https://demo.g8e.ai)")
 	cmd.Flags().StringArrayVar(&f.AllowedOrigins, "cors-origin", nil, "Allowed CORS origin for cross-origin browser access (repeatable, e.g. https://lovable.dev)")
+	cmd.Flags().StringVar(&f.DoctrineDir, "doctrine-dir", "", "Directory containing doctrine JSON files for L1 threat detection (default: hardcoded MITRE patterns only)")
 }
 
 // resolveGatewayFlags applies environment variable overrides for vault and
-// tribunal settings when the corresponding CLI flags are not set.
+// consensus settings when the corresponding CLI flags are not set.
 func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
 	if f.VaultDir == "" {
 		f.VaultDir = os.Getenv(string(constants.EnvVar.VaultDir))
@@ -111,14 +113,14 @@ func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
 	if f.VaultKeyPath == "" {
 		f.VaultKeyPath = os.Getenv(string(constants.EnvVar.VaultKey))
 	}
-	if f.TribunalID == "" {
-		f.TribunalID = os.Getenv(string(constants.EnvVar.TribunalID))
+	if f.ConsensusID == "" {
+		f.ConsensusID = os.Getenv(string(constants.EnvVar.ConsensusID))
 	}
-	if f.TribunalURL == "" {
-		f.TribunalURL = os.Getenv(string(constants.EnvVar.TribunalURL))
+	if f.ConsensusURL == "" {
+		f.ConsensusURL = os.Getenv(string(constants.EnvVar.ConsensusURL))
 	}
-	if f.TribunalBootstrap == "" {
-		f.TribunalBootstrap = os.Getenv(string(constants.EnvVar.TribunalBootstrap))
+	if f.ConsensusBootstrap == "" {
+		f.ConsensusBootstrap = os.Getenv(string(constants.EnvVar.ConsensusBootstrap))
 	}
 	if f.PublicBaseURL == "" {
 		f.PublicBaseURL = os.Getenv(string(constants.EnvVar.PublicBaseURL))
@@ -139,6 +141,9 @@ func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
 			f.AllowedOrigins = strings.Split(v, ",")
 		}
 	}
+	if f.DoctrineDir == "" {
+		f.DoctrineDir = os.Getenv(string(constants.EnvVar.DoctrineDir))
+	}
 	return f
 }
 
@@ -147,28 +152,29 @@ func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
 // gateway config struct.
 func gatewayFlagsToServeConfig(f GatewayFlags) serve.GatewayConfig {
 	return serve.GatewayConfig{
-		Posture:           g8econfig.GatewayPosture(f.Posture),
-		HTTPPort:          f.HTTPPort,
-		HTTPSPort:         f.HTTPSPort,
-		DataDir:           f.DataDir,
-		PKIDir:            f.PKIDir,
-		SecretsDir:        f.SecretsDir,
-		VaultDir:          f.VaultDir,
-		VaultKeyPath:      f.VaultKeyPath,
-		PasskeyRpID:       f.PasskeyRpID,
-		PasskeyRpName:     f.PasskeyRpName,
-		PasskeyRpOrigins:  f.PasskeyRpOrigins,
-		RateLimitRPS:      f.RateLimitRPS,
-		RateLimitBurst:    f.RateLimitBurst,
-		LogLevel:          f.LogLevel,
-		CertIdentityMode:  f.CertIdentityMode,
-		TribunalID:        f.TribunalID,
-		TribunalURL:       f.TribunalURL,
-		TribunalBootstrap: f.TribunalBootstrap,
-		MCPDownstreamURL:  f.MCPDownstreamURL,
-		A2ADownstreamURL:  f.A2ADownstreamURL,
-		PublicBaseURL:     f.PublicBaseURL,
-		AllowedOrigins:    f.AllowedOrigins,
+		Posture:            g8econfig.GatewayPosture(f.Posture),
+		HTTPPort:           f.HTTPPort,
+		HTTPSPort:          f.HTTPSPort,
+		DataDir:            f.DataDir,
+		PKIDir:             f.PKIDir,
+		SecretsDir:         f.SecretsDir,
+		VaultDir:           f.VaultDir,
+		VaultKeyPath:       f.VaultKeyPath,
+		PasskeyRpID:        f.PasskeyRpID,
+		PasskeyRpName:      f.PasskeyRpName,
+		PasskeyRpOrigins:   f.PasskeyRpOrigins,
+		RateLimitRPS:       f.RateLimitRPS,
+		RateLimitBurst:     f.RateLimitBurst,
+		LogLevel:           f.LogLevel,
+		CertIdentityMode:   f.CertIdentityMode,
+		ConsensusID:        f.ConsensusID,
+		ConsensusURL:       f.ConsensusURL,
+		ConsensusBootstrap: f.ConsensusBootstrap,
+		MCPDownstreamURL:   f.MCPDownstreamURL,
+		A2ADownstreamURL:   f.A2ADownstreamURL,
+		PublicBaseURL:      f.PublicBaseURL,
+		AllowedOrigins:     f.AllowedOrigins,
+		DoctrineDir:        f.DoctrineDir,
 	}
 }
 
@@ -185,18 +191,18 @@ func defaultWizardRunner(opts wizard.Options) (wizard.Result, error) {
 // Only wizard-owned fields are included — the wizard never sees flags it cannot edit.
 func wizardConfigFromFlags(f GatewayFlags) wizard.Config {
 	return wizard.Config{
-		PublicBaseURL:     f.PublicBaseURL,
-		CertIdentityMode:  f.CertIdentityMode,
-		AllowedOrigins:    f.AllowedOrigins,
-		Posture:           f.Posture,
-		TribunalID:        f.TribunalID,
-		TribunalURL:       f.TribunalURL,
-		TribunalBootstrap: f.TribunalBootstrap,
-		PasskeyRpID:       f.PasskeyRpID,
-		PasskeyRpName:     f.PasskeyRpName,
-		PasskeyRpOrigins:  f.PasskeyRpOrigins,
-		MCPDownstreamURL:  f.MCPDownstreamURL,
-		A2ADownstreamURL:  f.A2ADownstreamURL,
+		PublicBaseURL:      f.PublicBaseURL,
+		CertIdentityMode:   f.CertIdentityMode,
+		AllowedOrigins:     f.AllowedOrigins,
+		Posture:            f.Posture,
+		ConsensusID:        f.ConsensusID,
+		ConsensusURL:       f.ConsensusURL,
+		ConsensusBootstrap: f.ConsensusBootstrap,
+		PasskeyRpID:        f.PasskeyRpID,
+		PasskeyRpName:      f.PasskeyRpName,
+		PasskeyRpOrigins:   f.PasskeyRpOrigins,
+		MCPDownstreamURL:   f.MCPDownstreamURL,
+		A2ADownstreamURL:   f.A2ADownstreamURL,
 	}
 }
 
@@ -208,9 +214,9 @@ func applyWizardConfig(f GatewayFlags, wc wizard.Config) GatewayFlags {
 	f.CertIdentityMode = wc.CertIdentityMode
 	f.AllowedOrigins = wc.AllowedOrigins
 	f.Posture = wc.Posture
-	f.TribunalID = wc.TribunalID
-	f.TribunalURL = wc.TribunalURL
-	f.TribunalBootstrap = wc.TribunalBootstrap
+	f.ConsensusID = wc.ConsensusID
+	f.ConsensusURL = wc.ConsensusURL
+	f.ConsensusBootstrap = wc.ConsensusBootstrap
 	f.PasskeyRpID = wc.PasskeyRpID
 	f.PasskeyRpName = wc.PasskeyRpName
 	f.PasskeyRpOrigins = wc.PasskeyRpOrigins
@@ -299,7 +305,7 @@ func gatewaySetupCmdWithConfig(runWizard wizardRunner) *cobra.Command {
 		Use:   "setup",
 		Short: "Run the interactive setup wizard",
 		Long: `Launch the interactive onboarding wizard to configure gateway settings
-such as posture, tribunal, passkey, CORS, and certificate options.
+such as posture, consensus, passkey, CORS, and certificate options.
 The wizard guides you through each setting and produces a resolved configuration.
 
 Any flags provided on the command line are used as initial values in the wizard.`,
@@ -327,8 +333,8 @@ Any flags provided on the command line are used as initial values in the wizard.
 			cmd.Printf("  Posture:            %s\n", resolved.Posture)
 			cmd.Printf("  Public Base URL:    %s\n", resolved.PublicBaseURL)
 			cmd.Printf("  Cert Identity Mode: %s\n", resolved.CertIdentityMode)
-			cmd.Printf("  Tribunal ID:        %s\n", resolved.TribunalID)
-			cmd.Printf("  Tribunal URL:       %s\n", resolved.TribunalURL)
+			cmd.Printf("  Consensus ID:       %s\n", resolved.ConsensusID)
+			cmd.Printf("  Consensus URL:      %s\n", resolved.ConsensusURL)
 			cmd.Printf("  MCP Downstream URL: %s\n", resolved.MCPDownstreamURL)
 			cmd.Printf("  A2A Downstream URL: %s\n", resolved.A2ADownstreamURL)
 			cmd.Printf("  Passkey RP ID:      %s\n", resolved.PasskeyRpID)

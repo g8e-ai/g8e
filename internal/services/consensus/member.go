@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package tribunal
+package consensus
 
 import (
 	"crypto/ed25519"
@@ -22,10 +22,10 @@ import (
 	govsvc "github.com/g8e-ai/g8e/internal/services/governance"
 )
 
-// TribunalMember represents a single member identity in the Tribunal.
+// ConsensusMember represents a single member identity in the Consensus.
 // Each member is an enrolled agentic app with its own Ed25519 signing key.
 // The member's public key is registered as a TrustedSigner (keyID = AppID).
-type TribunalMember struct {
+type ConsensusMember struct {
 	AppID      string
 	PrivateKey ed25519.PrivateKey
 }
@@ -35,13 +35,13 @@ type TribunalMember struct {
 // l2_consensus.go. The pluggable heterogeneous-reasoner backend is a
 // later extension point and is not stubbed in (devs.md: do not build
 // things that should not yet exist).
-func (s *TribunalService) evaluateSafety(doctrine *govsvc.L1Doctrine, cmdData string) bool {
+func (s *ConsensusService) evaluateSafety(doctrine *govsvc.L1Doctrine, cmdData string) bool {
 	return s.runMITREChecks(doctrine, cmdData)
 }
 
 // runMITREChecks leverages L1Doctrine to identify malicious activity patterns.
 // Fail-closed: if Doctrine is nil, the payload is NOT safe.
-func (s *TribunalService) runMITREChecks(doctrine *govsvc.L1Doctrine, data string) bool {
+func (s *ConsensusService) runMITREChecks(doctrine *govsvc.L1Doctrine, data string) bool {
 	if doctrine == nil {
 		return false
 	}
@@ -62,7 +62,7 @@ func extractCommandData(env *governance.GovernanceEnvelope) (string, error) {
 	if env.IntentData != nil && len(env.IntentData.Fields) > 0 {
 		jsonBytes, err := env.IntentData.MarshalJSON()
 		if err != nil {
-			return "", fmt.Errorf("tribunal: extract command data: %w", err)
+			return "", fmt.Errorf("consensus: extract command data: %w", err)
 		}
 		cmdData = string(jsonBytes)
 
@@ -78,7 +78,7 @@ func extractCommandData(env *governance.GovernanceEnvelope) (string, error) {
 // existing verifyL2Signature primitive in l4_warden.go.
 func signDecision(privateKey ed25519.PrivateKey, messageID string, isSafe bool) (string, error) {
 	if privateKey == nil {
-		return "", fmt.Errorf("tribunal: sign decision: private key missing")
+		return "", fmt.Errorf("consensus: sign decision: private key missing")
 	}
 	payload := fmt.Sprintf("%s|%v", messageID, isSafe)
 	sig := ed25519.Sign(privateKey, []byte(payload))

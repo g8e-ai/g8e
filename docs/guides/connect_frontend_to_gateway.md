@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect an Existing Frontend to g8e Gateway
 
-Last Updated: 2026-07-25
-Version: v1.6.3
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 ---
 
@@ -15,12 +15,6 @@ Version: v1.6.3
 This guide walks through connecting an **existing** frontend UI to the g8e Gateway. If you are building a frontend from scratch, see [Build a g8e-Compatible Frontend](./build_frontend.md) for the full reference. This guide focuses on the integration steps required to wire an already-built web application into the g8e platform: gateway configuration, enrollment, authentication wiring, SSE streaming, and approval flows.
 
 ### Architecture
-
-```
-[Existing Frontend App] → https://gateway-host:8443 → [g8e Gateway]
-      ↑                                              ↓
- credentials: 'include'                  WebAuthn + Session Cookie + SSE
-```
 
 The frontend communicates with the g8e Gateway over HTTPS. Authentication is via WebAuthn passkeys (no passwords, no API keys). The gateway issues an `HttpOnly` session cookie after successful passkey verification. All authenticated API calls must include `credentials: 'include'` so the cookie is sent cross-origin. Real-time telemetry is delivered via Server-Sent Events (SSE), not WebSockets (the WebSocket endpoint requires mTLS and is not available to browsers).
 
@@ -38,22 +32,11 @@ The frontend communicates with the g8e Gateway over HTTPS. Authentication is via
 
 The gateway must be started with CORS and passkey RP settings that match your frontend app's origin. The passkey RP ID must match the domain where WebAuthn ceremonies are performed, which is your frontend app's origin, not the gateway's domain.
 
-```bash
-./g8e gw start \
-  --passkey-rp-id example.com \
-  --passkey-rp-name "g8e Console" \
-  --passkey-rp-origin https://your-app.example.com \
-  --cors-origin https://your-app.example.com
-```
+Start the gateway with CORS and passkey RP flags matching your frontend origin:
 
-Or via environment variables:
+`g8e gw start --passkey-rp-id example.com --passkey-rp-name "g8e Console" --passkey-rp-origin https://your-app.example.com --cors-origin https://your-app.example.com`
 
-```bash
-export G8E_PASSKEY_RP_ID=example.com
-export G8E_PASSKEY_RP_NAME="g8e Console"
-export G8E_PASSKEY_RP_ORIGINS=https://your-app.example.com
-export G8E_ALLOWED_ORIGINS=https://your-app.example.com
-```
+Or via environment variables: `G8E_PASSKEY_RP_ID`, `G8E_PASSKEY_RP_NAME`, `G8E_PASSKEY_RP_ORIGINS` (comma-separated), and `G8E_ALLOWED_ORIGINS` (comma-separated).
 
 Key flags:
 
@@ -62,17 +45,17 @@ Key flags:
 - **`--cors-origin`**: Your frontend app origin. Allows cross-origin requests with credentials. Repeat for each origin (preview URLs, production URLs, custom domains).
 - **`--public-base-url`**: The public URL of the gateway (e.g., a tunnel hostname). Used for approval redirect links and host validation.
 
-Add every origin your frontend may use (preview URLs, production URLs, custom domains). The gateway reflects exact-match origins in CORS headers and sets `SameSite=None` on session cookies when `AllowedOrigins` is non-empty.
+Add every origin your frontend may use (preview URLs, production URLs, custom domains). The gateway reflects exact-match origins in CORS headers and sets `SameSite=None` on session cookies when `--cors-origin` is provided.
 
 ### How CORS Works
 
-When `AllowedOrigins` is non-empty, the gateway's CORS middleware:
+When `--cors-origin` is provided, the gateway CORS middleware:
 
 1. Checks the request `Origin` header against the allowed set (case-insensitive, trailing slashes trimmed).
 2. If matched, sets `Access-Control-Allow-Origin` to the exact origin and `Access-Control-Allow-Credentials: true`.
 3. Handles `OPTIONS` preflight requests with `204 No Content` and the appropriate headers.
 4. Adds `Vary: Origin` to all responses so caches respect per-origin differences.
-5. When `AllowedOrigins` is empty (same-origin only), the middleware is a pass-through and no CORS headers are set.
+5. When no `--cors-origin` is set (same-origin only), the middleware is a pass-through and no CORS headers are set.
 
 ### Session Cookie Behavior
 
@@ -81,7 +64,7 @@ The gateway sets a `g8e_web_session_cookie` cookie after successful passkey regi
 - **`HttpOnly`**: Always true (prevents JavaScript access).
 - **`Secure`**: Always true (requires HTTPS).
 - **`SameSite=Lax`**: Default when no cross-origin origins are configured.
-- **`SameSite=None`**: Automatically set when `AllowedOrigins` is non-empty (required for cross-origin cookie delivery).
+- **`SameSite=None`**: Automatically set when `--cors-origin` is provided (required for cross-origin cookie delivery).
 
 The cookie has a 24-hour TTL. The gateway validates the cookie on every authenticated request.
 
@@ -91,9 +74,7 @@ The cookie has a 24-hour TTL. The gateway validates the cookie on every authenti
 
 Enroll your frontend with the gateway to validate CORS and generate a configuration snippet:
 
-```bash
-g8e gui enroll --origin https://your-app.example.com
-```
+`g8e gui enroll --origin https://your-app.example.com`
 
 Optional flags:
 
@@ -113,9 +94,7 @@ This command:
 
 ### Verify Enrollment
 
-```bash
-g8e gui verify --origin https://your-app.example.com
-```
+`g8e gui verify --origin https://your-app.example.com`
 
 This prints a verification checklist covering CORS headers, passkey registration, passkey authentication, session cookie attributes, SSE stream connectivity, and authenticated API calls.
 
@@ -127,44 +106,32 @@ Take the TypeScript snippet from `g8e gui enroll` and add it to your frontend pr
 
 ### API Base URL and Fetch Wrapper
 
-Every API call must include `credentials: 'include'` so the session cookie is sent cross-origin. Create a centralized fetch wrapper:
-
-```typescript
-const API_BASE_URL = "https://gateway-host:8443";
-
-export async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  return fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-}
-```
+Every API call must include `credentials: 'include'` so the session cookie is sent cross-origin. Create a centralized fetch wrapper that appends `credentials: 'include'` and `Content-Type: application/json` to every request. The base URL is the gateway HTTPS address (e.g., `https://gateway-host:8443`).
 
 ### Key Endpoint Paths
 
-| Method | Path | Auth Required |
-|--------|------|---------------|
-| `GET` | `/api/v1/health` | No |
-| `GET` | `/api/v1/auth/bootstrap/status` | No |
-| `POST` | `/api/v1/auth/passkeys/console/register/challenge` | No |
-| `POST` | `/api/v1/auth/passkeys/console/register/verify` | No |
-| `POST` | `/api/v1/auth/passkeys/console/authenticate/challenge` | No |
-| `POST` | `/api/v1/auth/passkeys/console/authenticate/verify` | No |
-| `POST` | `/api/v1/auth/logout` | No |
-| `POST` | `/api/v1/auth/enrollment-token/validate` | No |
-| `GET` | `/api/v1/users/me` | Yes |
-| `GET` | `/api/v1/auth/sessions/me` | Yes |
-| `GET` | `/api/v1/auth/passkeys` | Yes |
-| `DELETE` | `/api/v1/auth/passkeys/{credentialId}` | Yes |
-| `GET` | `/api/v1/approvals` | Yes |
-| `GET` | `/api/v1/approvals/{txHash}/challenge` | Yes |
-| `POST` | `/api/v1/approvals/{txHash}/verify` | Yes |
-| `GET` | `/api/v1/sse/stream?web_session_id={id}` | Yes |
-| `GET` | `/api/v1/sse/events?web_session_id={id}&since_id={n}` | Yes |
+Public endpoints (no auth required):
+
+- `GET /api/v1/health` - Health check
+- `GET /api/v1/auth/bootstrap/status` - Check if any passkey is registered
+- `POST /api/v1/auth/passkeys/console/register/challenge` - Begin passkey registration
+- `POST /api/v1/auth/passkeys/console/register/verify` - Complete passkey registration
+- `POST /api/v1/auth/passkeys/console/authenticate/challenge` - Begin passkey authentication
+- `POST /api/v1/auth/passkeys/console/authenticate/verify` - Complete passkey authentication
+- `POST /api/v1/auth/logout` - Clear session cookie
+- `POST /api/v1/auth/enrollment-token/validate` - Validate a CLI-generated enrollment token
+
+Authenticated endpoints (session cookie required):
+
+- `GET /api/v1/users/me` - Get current user
+- `GET /api/v1/auth/sessions/me` - Get web session ID (needed for SSE)
+- `GET /api/v1/auth/passkeys` - List registered passkeys
+- `DELETE /api/v1/auth/passkeys/{credentialId}` - Revoke a passkey
+- `GET /api/v1/approvals` - List pending suspended transactions
+- `GET /api/v1/approvals/{txHash}/challenge` - Get WebAuthn challenge for approval
+- `POST /api/v1/approvals/{txHash}/verify` - Verify WebAuthn assertion to approve transaction
+- `GET /api/v1/sse/stream?web_session_id={id}` - SSE live event stream
+- `GET /api/v1/sse/events?web_session_id={id}&since_id={n}` - Poll SSE events
 
 The gateway also serves a full OpenAPI/Swagger specification at `/swagger/doc.json` (and browsable UI at `/swagger/`). Use this to auto-discover the full API surface and schemas.
 
@@ -176,21 +143,21 @@ Your frontend must implement WebAuthn passkey flows using the browser's `navigat
 
 ### Registration Flow (First-Time Setup)
 
-1. POST to `/api/v1/auth/passkeys/console/register/challenge` with JSON body `{ user_id, user_name, cli_session_id: "browser" }`. If no passkeys exist on the gateway, omit `user_id` to auto-create a user.
+1. POST to `/api/v1/auth/passkeys/console/register/challenge` with `user_id`, `user_name`, and `cli_session_id` set to `browser` in the JSON body. If no passkeys exist on the gateway, omit `user_id` to auto-create a user.
 2. Decode the returned `options.publicKey` challenge and user ID from base64url to ArrayBuffers.
-3. Call `navigator.credentials.create({ publicKey: decodedOptions })` to trigger the browser's passkey enrollment prompt.
+3. Call `navigator.credentials.create` with the decoded options to trigger the browser passkey enrollment prompt.
 4. Encode the credential response fields (`id`, `rawId`, `clientDataJSON`, `attestationObject`, `transports`) as base64url.
-5. POST to `/api/v1/auth/passkeys/console/register/verify` with JSON body `{ user_id, cli_session_id: "browser", attestation_response: { ...encodedFields } }`.
+5. POST to `/api/v1/auth/passkeys/console/register/verify` with `user_id`, `cli_session_id` set to `browser`, and the `attestation_response` containing the encoded fields.
 6. On success, the gateway sets a `g8e_web_session_cookie` session cookie. Transition to the authenticated state.
 
 ### Authentication Flow (Returning User)
 
-1. POST to `/api/v1/auth/passkeys/console/authenticate/challenge` with JSON body `{ user_id }`.
+1. POST to `/api/v1/auth/passkeys/console/authenticate/challenge` with `user_id` in the JSON body.
 2. If the response has `success: false` and `needs_setup: true`, no passkey is registered. Show the registration form instead.
 3. Decode the returned `options.publicKey` challenge and `allowCredentials` from base64url to ArrayBuffers.
-4. Call `navigator.credentials.get({ publicKey: decodedOptions })` to trigger the browser's passkey authentication prompt.
+4. Call `navigator.credentials.get` with the decoded options to trigger the browser passkey authentication prompt.
 5. Encode the assertion response fields (`id`, `rawId`, `clientDataJSON`, `authenticatorData`, `signature`, `userHandle`) as base64url.
-6. POST to `/api/v1/auth/passkeys/console/authenticate/verify` with JSON body `{ user_id, assertion_response: { ...encodedFields } }`.
+6. POST to `/api/v1/auth/passkeys/console/authenticate/verify` with `user_id` and the `assertion_response` containing the encoded fields.
 7. On success, the gateway sets a `g8e_web_session_cookie` session cookie. Transition to the authenticated state.
 
 ### Auth Context Initialization
@@ -206,8 +173,8 @@ On app mount, check auth state:
 When the CLI initiates a passkey enrollment from the terminal, it opens the browser with `#register=1&token=<token>`. Your frontend must:
 
 1. Read the token from the URL hash (`window.location.hash`).
-2. POST to `/api/v1/auth/enrollment-token/validate` with JSON body `{ token }`.
-3. On success, receive `{ user_id, cli_session_id }` from the gateway.
+2. POST to `/api/v1/auth/enrollment-token/validate` with the `token` in the JSON body.
+3. On success, receive `user_id` and `cli_session_id` from the gateway.
 4. Populate hidden form fields with the returned `user_id` and `cli_session_id`.
 5. Auto-trigger the passkey registration flow.
 6. Immediately clear the token from the URL via `history.replaceState`.
@@ -225,28 +192,8 @@ Handle error responses:
 
 - Connect to `GET /api/v1/sse/stream?web_session_id={id}` using `EventSource` with `withCredentials: true`.
 - The `web_session_id` comes from `GET /api/v1/auth/sessions/me` after login.
-
-```typescript
-export function connectSSE(
-  webSessionId: string,
-  onEvent: (data: string) => void,
-  onStatusChange: (status: "connected" | "connecting" | "disconnected") => void
-): EventSource {
-  const url = `${API_BASE_URL}/api/v1/sse/stream?web_session_id=${webSessionId}`;
-  const source = new EventSource(url, { withCredentials: true });
-  onStatusChange("connecting");
-
-  source.onopen = () => onStatusChange("connected");
-  source.onerror = () => {
-    onStatusChange("disconnected");
-    // Auto-reconnect after 3 seconds
-    setTimeout(() => connectSSE(webSessionId, onEvent, onStatusChange), 3000);
-  };
-  source.onmessage = (e) => onEvent(e.data);
-
-  return source;
-}
-```
+- On open, update connection status to connected. On error, update status to disconnected and auto-reconnect after 3 seconds.
+- Parse incoming messages via the `onmessage` handler.
 
 ### Event Handling
 
@@ -270,12 +217,7 @@ The gateway also exposes a WebSocket pub/sub endpoint at `/ws/pubsub`, but it re
 
 ### Pending Approvals
 
-Fetch pending suspended transactions:
-
-```typescript
-const res = await apiFetch("/api/v1/approvals");
-const approvals = await res.json();
-```
+Fetch pending suspended transactions via `GET /api/v1/approvals` with `credentials: 'include'`.
 
 Display each transaction showing: tool name, transaction hash (truncated, monospace), created date, expiry countdown.
 
@@ -285,7 +227,7 @@ When user clicks "Approve" on a transaction:
 
 1. `GET /api/v1/approvals/{txHash}/challenge` (with `credentials: 'include'`). Returns WebAuthn `PublicKeyCredentialRequestOptions`.
 2. Decode the challenge and `allowCredentials` from base64url to ArrayBuffers.
-3. Call `navigator.credentials.get({ publicKey: decodedOptions })` to trigger the browser's passkey prompt.
+3. Call `navigator.credentials.get` with the decoded options to trigger the browser passkey prompt.
 4. Encode the assertion response fields (`id`, `rawId`, `clientDataJSON`, `authenticatorData`, `signature`, `userHandle`) as base64url.
 5. `POST /api/v1/approvals/{txHash}/verify` with the encoded assertion response as the JSON body.
 6. On success, the transaction resumes execution. Refresh the approvals list.
@@ -306,18 +248,13 @@ After processing, clean the URL with `history.replaceState`.
 
 ### List Passkeys
 
-```typescript
-const res = await apiFetch("/api/v1/auth/passkeys");
-const passkeys = await res.json();
-```
+Fetch registered passkeys via `GET /api/v1/auth/passkeys` with `credentials: 'include'`.
 
 Display each passkey with credential ID (truncated, monospace), creation date, last used date.
 
 ### Revoke a Passkey
 
-```typescript
-await apiFetch(`/api/v1/auth/passkeys/${credentialId}`, { method: "DELETE" });
-```
+Send `DELETE /api/v1/auth/passkeys/{credentialId}` with `credentials: 'include'`.
 
 Use a confirmation dialog before revoking.
 
@@ -341,9 +278,7 @@ Trigger the same registration flow as Step 4 from an authenticated state.
 
 Run the verification command:
 
-```bash
-g8e gui verify --origin https://your-app.example.com
-```
+`g8e gui verify --origin https://your-app.example.com`
 
 Then manually verify in the browser:
 
@@ -369,11 +304,7 @@ Then manually verify in the browser:
 
 **Cause**: The gateway was not started with `--cors-origin` matching your frontend origin.
 
-**Fix**: Restart the gateway with the correct flag:
-
-```bash
-./g8e gw start --cors-origin https://your-app.example.com --passkey-rp-origin https://your-app.example.com
-```
+**Fix**: Restart the gateway with the correct flags: `g8e gw start --cors-origin https://your-app.example.com --passkey-rp-origin https://your-app.example.com`
 
 Then run `g8e gui enroll --origin https://your-app.example.com` to verify.
 
@@ -397,7 +328,7 @@ Then run `g8e gui enroll --origin https://your-app.example.com` to verify.
 
 **Symptom**: Authenticated API calls return 401 despite being logged in.
 
-**Cause**: `credentials: 'include'` not set on `fetch` calls, or the gateway is not configured with `AllowedOrigins`.
+**Cause**: `credentials: 'include'` not set on `fetch` calls, or the gateway is not configured with `--cors-origin`.
 
 **Fix**: Ensure every `fetch` call includes `credentials: 'include'`. Verify the gateway was started with `--cors-origin` for your frontend origin, which triggers `SameSite=None` on session cookies.
 

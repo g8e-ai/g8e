@@ -22,7 +22,7 @@
   },
 
   "l2_vote": {
-    "_description": "A single L2 consensus vote from a Tribunal member. Serialized from L2Vote (common.proto).",
+    "_description": "A single L2 consensus vote from a Consensus member. Serialized from L2Vote (common.proto).",
     "signer_key_id": {
       "type": "string",
       "required": true,

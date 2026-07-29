@@ -5,8 +5,8 @@ parent: Architecture
 
 # AI Agents in a g8e-Compatible Agentic Ensemble
 
-Last Updated: 2026-07-25
-Version: v1.6.3
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 ## Overview
 
@@ -18,7 +18,7 @@ g8e is a zero-trust execution platform that sits between the human, AI agents, a
 
 Two components define the security boundary:
 
-- **Governance Gateway (Policy Decision Point / PDP)**: The central coordinator that admits transactions, manages PKI, enforces the 5-layer governance pipeline, and brokers pub/sub channels to operators. The gateway is where doctrine is loaded, where the Tribunal deliberates, and where the L4 Warden validates every proof before dispatch. The Gateway is an Operator with additional gateway services; its in-process Operator runs L1-L5 locally for operations on the gateway host.
+- **Governance Gateway (Policy Decision Point / PDP)**: The central coordinator that admits transactions, manages PKI, enforces the 5-layer governance pipeline, and brokers pub/sub channels to operators. The gateway is where doctrine is loaded, where the Consensus deliberates, and where the L4 Warden validates every proof before dispatch. The Gateway is an Operator with additional gateway services; its in-process Operator runs L1-L5 locally for operations on the gateway host.
 - **Governed Operator (Policy Execution Point / PEP)**: A single static binary deployed on target hosts. It requires no installation, opens no inbound ports, and initiates an outbound-only mTLS tunnel to the gateway. The operator pulls work from a unique pub/sub channel, re-verifies every proof locally against its own state, and is the only component authorized to mutate the host. Everything the operator does, every command, file edit, error, output, is recorded in a local, hash-chained ledger. Each remote Governed Operator runs L1-L5 locally for operations on its own host.
 
 The ensemble communicates with the gateway over mTLS JSON. The gateway never reaches into operators; operators pull work when it is published to their channel.
@@ -41,7 +41,7 @@ Agents in the ensemble do not maintain their own state. Instead, they reason ove
 4. **The ensemble's context assembler** selects a narrowly scoped window of relevant ledger entries, filtered by session, host, role, and recency, and injects them into the **dynamic system prompt** for the next agent invocation.
 5. **The next agent receives only the context appropriate to its role**; it does not see the full ledger, only the slice that is relevant to its task and permissions.
 
-This design keeps agents **stateless**: they carry no conversation history of their own. All state lives in the ledger. All context is derived from the ledger. An agent can be replaced, restarted, or scaled horizontally without loss of continuity, because the next agent picks up the same ledger slice. The exception is Tribunal members, which maintain persistent Ed25519 signing keys on disk for vote signing (see [Tribunal](./tribunal.md)); however, these keys are cryptographic identities, not conversation state.
+This design keeps agents **stateless**: they carry no conversation history of their own. All state lives in the ledger. All context is derived from the ledger. An agent can be replaced, restarted, or scaled horizontally without loss of continuity, because the next agent picks up the same ledger slice. The exception is Consensus members, which maintain persistent Ed25519 signing keys on disk for vote signing (see [Consensus](./consensus.md)); however, these keys are cryptographic identities, not conversation state.
 
 ### Dynamic System Prompts
 
@@ -65,7 +65,7 @@ The entry point. The triage agent receives incoming events, alerts, errors, user
 
 ### 2. Lightweight Response Path
 
-For simple, well-understood issues: restarting a known service, clearing a cache, adjusting a config value. The triage agent can route these directly to the intent-to-execution pipeline with a narrowly scoped intent. The pipeline still enforces all governance layers, but the consensus tribunal may be configured with a lower quorum for low-risk, well-known actions.
+For simple, well-understood issues: restarting a known service, clearing a cache, adjusting a config value. The triage agent can route these directly to the intent-to-execution pipeline with a narrowly scoped intent. The pipeline still enforces all governance layers, but the consensus may be configured with a lower quorum for low-risk, well-known actions.
 
 ### 3. Heavier Path (Real Changes)
 
@@ -81,16 +81,16 @@ The core design principle: **the primary LLM only interprets intent; it does not
 
 The primary LLM receives the dynamic system prompt (doctrine + ledger context + role instructions) and the current task. It produces an **interpretation of intent**: what it believes should be done, on which hosts, and why. This is a description, not a command. The primary LLM also specifies the **hosts list**, the set of target systems where the action should be applied.
 
-### Step 2: Consensus Layer (Tribunal)
+### Step 2: Consensus Layer (Consensus)
 
-The primary LLM's interpretation of intent is passed to the consensus layer, the **Tribunal**, which evaluates the safety of the proposed action and produces signed votes. The Tribunal is a body of agents, each with its own Ed25519 signing key. Each juror independently:
+The primary LLM's interpretation of intent is passed to the consensus layer, the **Consensus**, which evaluates the safety of the proposed action and produces signed votes. The Consensus is a body of agents, each with its own Ed25519 signing key. Each juror independently:
 
 1. Evaluates the proposed action against L1 Doctrine (forbidden patterns, MITRE threat detection).
 2. Produces a signed vote: affirmative (safe) or negative (unsafe).
 
-The protocol is designed to support [Condorcet's Jury Theorem](https://en.wikipedia.org/wiki/Condorcet%27s_jury_theorem): if each juror has a probability greater than 0.5 of making the correct judgment, and the jurors are independent, then the probability of a correct majority judgment approaches 1 as the number of jurors increases. The protocol allows each tribunal member to use its own evaluation logic, enabling heterogeneous juries with independent reasoning. The reference implementation shipped with g8e uses a shared deterministic L1 Doctrine evaluation across all members with distinct signing keys; this provides multi-signature safety with cryptographic independence (each member signs with its own key) but not evaluation independence. Alternative tribunal implementations can provide diverse evaluation strategies per member to achieve full Condorcet independence.
+The protocol is designed to support [Condorcet's Jury Theorem](https://en.wikipedia.org/wiki/Condorcet%27s_jury_theorem): if each juror has a probability greater than 0.5 of making the correct judgment, and the jurors are independent, then the probability of a correct majority judgment approaches 1 as the number of jurors increases. The protocol allows each consensus member to use its own evaluation logic, enabling heterogeneous juries with independent reasoning. The reference implementation shipped with g8e uses a shared deterministic L1 Doctrine evaluation across all members with distinct signing keys; this provides multi-signature safety with cryptographic independence (each member signs with its own key) but not evaluation independence. Alternative consensus implementations can provide diverse evaluation strategies per member to achieve full Condorcet independence.
 
-The number of jurors is configurable per tribunal. Results vary depending on how much validating is needed for a specific task. A low-risk action may need a 1-of-1 tribunal. A high-risk production change may require a 5-of-7 tribunal. The quorum threshold is set in the `TribunalPolicy` and enforced by the L4 Warden.
+The number of jurors is configurable per consensus. Results vary depending on how much validating is needed for a specific task. A low-risk action may need a 1-of-1 consensus. A high-risk production change may require a 5-of-7 consensus. The quorum threshold is set in the `ConsensusPolicy` and enforced by the L4 Warden.
 
 ### Step 3: Consensus Failure → Reinterpret
 
@@ -98,7 +98,7 @@ The number of jurors is configurable per tribunal. Results vary depending on how
 
 ### Step 4: Consensus Reached → Hash Verification
 
-**Do not trust the consensus layer.** After consensus is reached and the Tribunal returns signed votes, the gateway verifies that the returned signatures **exactly match the hash-chained ledger**. The transaction hash in the envelope must match the recomputed hash. The state root must match the current ledger root. Every Ed25519 signature is independently verified against the trusted signer store. If any hash does not align, the system **fails closed**; the transaction is rejected.
+**Do not trust the consensus layer.** After consensus is reached and the Consensus returns signed votes, the gateway verifies that the returned signatures **exactly match the hash-chained ledger**. The transaction hash in the envelope must match the recomputed hash. The state root must match the current ledger root. Every Ed25519 signature is independently verified against the trusted signer store. If any hash does not align, the system **fails closed**; the transaction is rejected.
 
 ### Step 5: Human Approval
 
@@ -111,7 +111,7 @@ If all hashes align, the system asks the **human** to sign the interpretation of
 
 After human approval, the L4 Warden on the Gateway's in-process Operator performs final validation: all hashes are re-verified, nonce replay protection is enforced, expiry is checked, and the state Merkle root is confirmed. Only after the Warden validates does dispatch occur.
 
-The request is then published to a **unique pub/sub channel for each operator**. Critically, **only the operators in scope**, those on the hosts list that the primary LLM specified and the Tribunal validated, are included in the dispatch. No matter how many operators are currently enrolled in the platform, only the operators on the approved hosts list receive the work. This is a security boundary: the primary LLM passes the list of systems it wants to act on, and only those operators receive the dispatched work; no more.
+The request is then published to a **unique pub/sub channel for each operator**. Critically, **only the operators in scope**, those on the hosts list that the primary LLM specified and the Consensus validated, are included in the dispatch. No matter how many operators are currently enrolled in the platform, only the operators on the approved hosts list receive the work. This is a security boundary: the primary LLM passes the list of systems it wants to act on, and only those operators receive the dispatched work; no more.
 
 ### Step 7: Operator Pulls Work and Executes
 
@@ -156,8 +156,8 @@ See the [doctrine registry](../../protocol/constants/doctrine/doctrine_registry.
 
 | Boundary | What It Enforces |
 | --- | --- |
-| **Primary LLM → Tribunal** | LLM only interprets intent; Tribunal votes on safety. LLM cannot execute. |
-| **Tribunal → Hash verification** | Consensus signatures must align to the hash-chained ledger. Fail closed on mismatch. |
+| **Primary LLM → Consensus** | LLM only interprets intent; Consensus votes on safety. LLM cannot execute. |
+| **Consensus → Hash verification** | Consensus signatures must align to the hash-chained ledger. Fail closed on mismatch. |
 | **Hash verification → Human** | Human signs intent + proposed solution. Can deny and restart the loop. |
 | **Human approval → Warden** | Warden re-validates all hashes on the Gateway's in-process Operator before dispatch. |
 | **Dispatch → Operator scope** | Only operators on the approved hosts list receive work. No broadcast. |
@@ -171,8 +171,8 @@ See the [doctrine registry](../../protocol/constants/doctrine/doctrine_registry.
 - **Do not trust the LLM.** The primary model only interprets intent. Consensus failure triggers reinterpretation.
 - **Do not trust the consensus layer.** Returned signatures are verified against the hash-chained ledger. Mismatch means fail closed.
 - **Do not trust the gateway.** The operator re-derives every proof locally before execution.
-- **Agents are stateless.** All state lives in the hash-chained ledger. Context is derived from the ledger, injected into dynamic system prompts, and scoped by role. Tribunal members are an exception: they maintain persistent Ed25519 signing keys for vote signing, but carry no conversation history.
-- **Multi-signature consensus.** The Tribunal produces K-of-N Ed25519 signed votes. The protocol is designed to support Condorcet's Jury Theorem with heterogeneous jurors; the reference implementation uses deterministic L1 Doctrine evaluation with distinct signing keys, providing cryptographic independence. Alternative implementations can provide per-member evaluation logic for full independence.
+- **Agents are stateless.** All state lives in the hash-chained ledger. Context is derived from the ledger, injected into dynamic system prompts, and scoped by role. Consensus members are an exception: they maintain persistent Ed25519 signing keys for vote signing, but carry no conversation history.
+- **Multi-signature consensus.** The Consensus produces K-of-N Ed25519 signed votes. The protocol is designed to support Condorcet's Jury Theorem with heterogeneous jurors; the reference implementation uses deterministic L1 Doctrine evaluation with distinct signing keys, providing cryptographic independence. Alternative implementations can provide per-member evaluation logic for full independence.
 - **Doctrine is enforced, not suggested.** Providing doctrine to agents is a courtesy. L1 rejects forbidden actions regardless.
 - **Scope is explicit.** The primary LLM specifies the hosts list. Only those operators receive work. No broadcast, no scope creep.
 
@@ -183,7 +183,7 @@ See the [doctrine registry](../../protocol/constants/doctrine/doctrine_registry.
 - [Gateway Architecture](./gateway.md): Gateway role, pub/sub brokering, and the 5-layer pipeline.
 - [Operator Architecture](./operator.md): Operator execution boundary, native tools, and local audit.
 - [Governance](./governance.md): Five-layer verification pipeline and posture configurations.
-- [Tribunal](./tribunal.md): L2 consensus implementation, tribunal enrollment, and deliberation flow.
+- [Consensus](./consensus.md): L2 consensus implementation, consensus enrollment, and deliberation flow.
 - [Storage Architecture](./storage.md): LFAA ledger, audit store, and hash-chained commitment history.
 - [Encryption](./encryption.md): Vault architecture, PII scrubbing, and rehydration at the execution boundary.
 - [Network Architecture](./network.md): Outbound-only mTLS, pub/sub channels, and PKI.

@@ -67,13 +67,13 @@ func TestView_ContainsAllPipelineStages(t *testing.T) {
 	m.height = 40
 	out := m.View()
 	assert.Contains(t, out, "L1: Technical Bedrock")
-	assert.Contains(t, out, "L2: Consensus Tribunal")
+	assert.Contains(t, out, "L2: Consensus Consensus")
 	assert.Contains(t, out, "L3: Notary")
 	assert.Contains(t, out, "L4: Warden")
 	assert.Contains(t, out, "L5: Actuator")
 }
 
-func TestView_ContainsAllTribunalMembers(t *testing.T) {
+func TestView_ContainsAllConsensusMembers(t *testing.T) {
 	m := NewModel(Options{})
 	m.width = 120
 	m.height = 40
@@ -161,7 +161,7 @@ func TestRenderPipeline_AllFiveStagesPresent(t *testing.T) {
 	m := NewModel(Options{})
 	out := m.renderPipeline(60, 30)
 	assert.Contains(t, out, "L1: Technical Bedrock")
-	assert.Contains(t, out, "L2: Consensus Tribunal")
+	assert.Contains(t, out, "L2: Consensus Consensus")
 	assert.Contains(t, out, "L3: Notary")
 	assert.Contains(t, out, "L4: Warden")
 	assert.Contains(t, out, "L5: Actuator")
@@ -263,66 +263,66 @@ func TestRenderLedger_TruncatesToMaxLines(t *testing.T) {
 	assert.NotEmpty(t, out)
 }
 
-func TestRenderTribunal_PendingState(t *testing.T) {
+func TestRenderConsensus_PendingState(t *testing.T) {
 	m := NewModel(Options{})
-	out := m.renderTribunal(120)
+	out := m.renderConsensus(120)
 	assert.Contains(t, out, "PENDING")
 	assert.Contains(t, out, "AWAITING VOTES")
 	assert.Contains(t, out, "0/5 signed")
 }
 
-func TestRenderTribunal_ConsensusReached(t *testing.T) {
+func TestRenderConsensus_ConsensusReached(t *testing.T) {
 	m := NewModel(Options{})
 	m.result = ConsensusReached
 	m.consensusHash = "abcdef1234567890abcdef"
-	out := m.renderTribunal(120)
+	out := m.renderConsensus(120)
 	assert.Contains(t, out, "CONSENSUS REACHED")
 	assert.Contains(t, out, "abcdef12...")
 }
 
-func TestRenderTribunal_ConsensusRejected(t *testing.T) {
+func TestRenderConsensus_ConsensusRejected(t *testing.T) {
 	m := NewModel(Options{})
 	m.result = ConsensusRejected
 	m.consensusHash = "deadbeef12345678"
-	out := m.renderTribunal(120)
+	out := m.renderConsensus(120)
 	assert.Contains(t, out, "CONSENSUS REJECTED")
 }
 
-func TestRenderTribunal_MemberApproved(t *testing.T) {
+func TestRenderConsensus_MemberApproved(t *testing.T) {
 	m := NewModel(Options{})
-	m.tribunal[0].signed = true
-	m.tribunal[0].decision = true
-	out := m.renderTribunal(120)
+	m.consensus[0].signed = true
+	m.consensus[0].decision = true
+	out := m.renderConsensus(120)
 	assert.Contains(t, out, "[YES]")
 }
 
-func TestRenderTribunal_MemberVetoed(t *testing.T) {
+func TestRenderConsensus_MemberVetoed(t *testing.T) {
 	m := NewModel(Options{})
-	m.tribunal[0].signed = true
-	m.tribunal[0].decision = false
-	out := m.renderTribunal(120)
+	m.consensus[0].signed = true
+	m.consensus[0].decision = false
+	out := m.renderConsensus(120)
 	assert.Contains(t, out, "[NO ")
 }
 
-func TestRenderTribunal_MemberPending(t *testing.T) {
+func TestRenderConsensus_MemberPending(t *testing.T) {
 	m := NewModel(Options{})
-	out := m.renderTribunal(120)
+	out := m.renderConsensus(120)
 	assert.Contains(t, out, "[...]")
 }
 
-func TestRenderTribunal_QuorumDisplay(t *testing.T) {
+func TestRenderConsensus_QuorumDisplay(t *testing.T) {
 	m := NewModel(Options{Quorum: 4, Total: 7})
-	out := m.renderTribunal(120)
+	out := m.renderConsensus(120)
 	assert.Contains(t, out, "4/7 required")
 }
 
-func TestRenderTribunal_AffirmativeCountInPending(t *testing.T) {
+func TestRenderConsensus_AffirmativeCountInPending(t *testing.T) {
 	m := NewModel(Options{})
-	m.tribunal[0].signed = true
-	m.tribunal[0].decision = true
-	m.tribunal[1].signed = true
-	m.tribunal[1].decision = true
-	out := m.renderTribunal(120)
+	m.consensus[0].signed = true
+	m.consensus[0].decision = true
+	m.consensus[1].signed = true
+	m.consensus[1].decision = true
+	out := m.renderConsensus(120)
 	assert.Contains(t, out, "2/5 signed")
 }
 
@@ -428,7 +428,7 @@ func TestView_LedgerEntriesAppearInOutput(t *testing.T) {
 	assert.Contains(t, out, "PII EGRESS BLOCKED")
 }
 
-func TestView_ConsensusResultDisplayedInTribunal(t *testing.T) {
+func TestView_ConsensusResultDisplayedInConsensus(t *testing.T) {
 	m := NewModel(Options{})
 	m.width = 120
 	m.height = 40
@@ -488,9 +488,9 @@ func TestRenderLedger_MixedLevelsRendered(t *testing.T) {
 	assert.Contains(t, out, "[CRIT]")
 }
 
-func TestRenderTribunal_AllMembersRendered(t *testing.T) {
+func TestRenderConsensus_AllMembersRendered(t *testing.T) {
 	m := NewModel(Options{})
-	out := m.renderTribunal(120)
+	out := m.renderConsensus(120)
 	upper := strings.ToUpper(out)
 	assert.Contains(t, upper, "AXIOM")
 	assert.Contains(t, upper, "CONCORD")
@@ -499,14 +499,14 @@ func TestRenderTribunal_AllMembersRendered(t *testing.T) {
 	assert.Contains(t, upper, "NEMESIS")
 }
 
-func TestRenderTribunal_MixedVoteStates(t *testing.T) {
+func TestRenderConsensus_MixedVoteStates(t *testing.T) {
 	m := NewModel(Options{})
-	m.tribunal[0].signed = true
-	m.tribunal[0].decision = true
-	m.tribunal[1].signed = true
-	m.tribunal[1].decision = false
-	m.tribunal[2].signed = false
-	out := m.renderTribunal(120)
+	m.consensus[0].signed = true
+	m.consensus[0].decision = true
+	m.consensus[1].signed = true
+	m.consensus[1].decision = false
+	m.consensus[2].signed = false
+	out := m.renderConsensus(120)
 	assert.Contains(t, out, "[YES]")
 	assert.Contains(t, out, "[NO ")
 	assert.Contains(t, out, "[...]")
@@ -536,21 +536,21 @@ func TestView_FullLayoutIntegration(t *testing.T) {
 	m.pipeline[0].status = StatusPassed
 	m.pipeline[0].detail = "doctrine verified"
 	m.pipeline[1].status = StatusActive
-	m.pipeline[1].detail = "tribunal deliberating"
+	m.pipeline[1].detail = "consensus deliberating"
 	m.ledger = append(m.ledger, ledgerEntry{
 		level:   LevelWarn,
 		message: "rate limit approaching",
 		time:    fixedTime,
 	})
-	m.tribunal[0].signed = true
-	m.tribunal[0].decision = true
+	m.consensus[0].signed = true
+	m.consensus[0].decision = true
 	m.connStatus = ConnConnected
 
 	out := m.View()
 	require.NotEmpty(t, out)
 	assert.Contains(t, out, "EXECUTION PIPELINE")
 	assert.Contains(t, out, "doctrine verified")
-	assert.Contains(t, out, "tribunal deliberating")
+	assert.Contains(t, out, "consensus deliberating")
 	assert.Contains(t, out, "SOVEREIGN AUDIT LEDGER")
 	assert.Contains(t, out, "rate limit approaching")
 	assert.Contains(t, out, "L2 CONSENSUS")

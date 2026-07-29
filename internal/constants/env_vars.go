@@ -18,9 +18,9 @@ type EnvVarKey string
 
 // EnvVar groups all environment variable name constants consumed by g8eo.
 var EnvVar = struct {
-	TribunalID            EnvVarKey
-	TribunalURL           EnvVarKey
-	TribunalBootstrap     EnvVarKey
+	ConsensusID           EnvVarKey
+	ConsensusURL          EnvVarKey
+	ConsensusBootstrap    EnvVarKey
 	VaultDir              EnvVarKey
 	VaultKey              EnvVarKey
 	OperatorSessionID     EnvVarKey
@@ -29,6 +29,7 @@ var EnvVar = struct {
 	PasskeyRpOrigins      EnvVarKey
 	PublicBaseURL         EnvVarKey
 	AllowedOrigins        EnvVarKey
+	DoctrineDir           EnvVarKey
 	Shell                 EnvVarKey
 	Lang                  EnvVarKey
 	Term                  EnvVarKey
@@ -40,9 +41,9 @@ var EnvVar = struct {
 	LatticeEntityName     EnvVarKey
 	LatticePostureFloor   EnvVarKey
 }{
-	TribunalID:            EnvVarKey("G8E_TRIBUNAL_ID"),
-	TribunalURL:           EnvVarKey("G8E_TRIBUNAL_URL"),
-	TribunalBootstrap:     EnvVarKey("G8E_TRIBUNAL_BOOTSTRAP"),
+	ConsensusID:           EnvVarKey("G8E_CONSENSUS_ID"),
+	ConsensusURL:          EnvVarKey("G8E_CONSENSUS_URL"),
+	ConsensusBootstrap:    EnvVarKey("G8E_CONSENSUS_BOOTSTRAP"),
 	VaultDir:              EnvVarKey("G8E_VAULT_DIR"),
 	VaultKey:              EnvVarKey("G8E_VAULT_KEY"),
 	OperatorSessionID:     EnvVarKey("G8E_OPERATOR_SESSION_ID"),
@@ -51,6 +52,7 @@ var EnvVar = struct {
 	PasskeyRpOrigins:      EnvVarKey("G8E_PASSKEY_RP_ORIGINS"),
 	PublicBaseURL:         EnvVarKey("G8E_PUBLIC_BASE_URL"),
 	AllowedOrigins:        EnvVarKey("G8E_ALLOWED_ORIGINS"),
+	DoctrineDir:           EnvVarKey("G8E_DOCTRINE_DIR"),
 	Shell:                 EnvVarKey("SHELL"),
 	Lang:                  EnvVarKey("LANG"),
 	Term:                  EnvVarKey("TERM"),

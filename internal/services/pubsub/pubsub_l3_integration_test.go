@@ -53,7 +53,7 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to generate signer: %v", err)
 	}
-	signerStore := &governance.SimpleSignerStore{
+	signerStore := &governance.FailClosedSignerStore{
 		Signers: map[string]ed25519.PublicKey{"test-key": pubKey},
 	}
 
@@ -78,7 +78,7 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 		StateRootProvider:    stateRootProvider,
 		TransactionAudit:     &testutil.MockTransactionAudit{},
 		SignerStore:          signerStore,
-		ConsensusPolicyStore: testTribunalStore(),
+		ConsensusPolicyStore: testConsensusStore(),
 	})
 	if err != nil {
 		t.Fatalf("failed to create command service: %v", err)
@@ -122,7 +122,7 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 	envelope.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{
-			ConsensusSetId: "test-tribunal",
+			ConsensusSetId: "test-consensus",
 			Votes: []*commonv1.L2Vote{
 				signL2Vote(privKey, "test-key", txHash, true),
 			},
@@ -178,7 +178,7 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to generate signer: %v", err)
 	}
-	signerStore := &governance.SimpleSignerStore{
+	signerStore := &governance.FailClosedSignerStore{
 		Signers: map[string]ed25519.PublicKey{"test-key": pubKey},
 	}
 
@@ -203,7 +203,7 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 		StateRootProvider:    stateRootProvider,
 		TransactionAudit:     &testutil.MockTransactionAudit{},
 		SignerStore:          signerStore,
-		ConsensusPolicyStore: testTribunalStore(),
+		ConsensusPolicyStore: testConsensusStore(),
 	})
 	if err != nil {
 		t.Fatalf("failed to create command service: %v", err)
@@ -247,7 +247,7 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 	envelope.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{
-			ConsensusSetId: "test-tribunal",
+			ConsensusSetId: "test-consensus",
 			Votes: []*commonv1.L2Vote{
 				signL2Vote(privKey, "test-key", txHash, true),
 			},
@@ -304,7 +304,7 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to generate signer: %v", err)
 	}
-	signerStore := &governance.SimpleSignerStore{
+	signerStore := &governance.FailClosedSignerStore{
 		Signers: map[string]ed25519.PublicKey{"test-key": pubKey},
 	}
 
@@ -329,7 +329,7 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 		StateRootProvider:    stateRootProvider,
 		TransactionAudit:     &testutil.MockTransactionAudit{},
 		SignerStore:          signerStore,
-		ConsensusPolicyStore: testTribunalStore(),
+		ConsensusPolicyStore: testConsensusStore(),
 	})
 	if err != nil {
 		t.Fatalf("failed to create command service: %v", err)
@@ -373,7 +373,7 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 	envelope.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{
-			ConsensusSetId: "test-tribunal",
+			ConsensusSetId: "test-consensus",
 			Votes: []*commonv1.L2Vote{
 				signL2Vote(privKey, "test-key", txHash, true),
 			},

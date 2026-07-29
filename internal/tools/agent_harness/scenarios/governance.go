@@ -162,7 +162,7 @@ func governanceScenarios() []Scenario {
 			},
 		},
 		{
-			Name: "tribunal-quorum", Title: "Tribunal quorum: 2-of-3 co-sign, receipt records consensus", Persona: ensembleProducer, RequiresPosture: Consensus,
+			Name: "consensus-quorum", Title: "Consensus quorum: 2-of-3 co-sign, receipt records consensus", Persona: ensembleProducer, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil {
 					return constants.ErrHarnessGovKitNotInit
@@ -197,7 +197,7 @@ func governanceScenarios() []Scenario {
 			},
 		},
 		{
-			Name: "tribunal-veto", Title: "Tribunal veto: one member votes false, envelope is rejected", Persona: ensembleProducer, RequiresPosture: Consensus,
+			Name: "consensus-veto", Title: "Consensus veto: one member votes false, envelope is rejected", Persona: ensembleProducer, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil {
 					return constants.ErrHarnessGovKitNotInit

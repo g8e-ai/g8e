@@ -115,7 +115,7 @@ func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *govpkg
 	env.TransactionHash = hash
 	env.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
-			ConsensusSetId: "test-tribunal",
+			ConsensusSetId: "test-consensus",
 			Votes: []*commonv1.L2Vote{
 				{
 					SignerKeyId:        "missing-key",
@@ -176,7 +176,7 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
 			L3Notary:          &testutil.MockL3Notary{},
-			SignerStore:       &governance.SimpleSignerStore{Signers: map[string]ed25519.PublicKey{}},
+			SignerStore:       &governance.FailClosedSignerStore{Signers: map[string]ed25519.PublicKey{}},
 		})
 		require.NoError(t, err)
 		svc.SetActuator(nil)
@@ -281,7 +281,7 @@ func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 					Nonce:           "nonce-" + tc.name,
 					Governance: &commonv1.GovernanceMetadata{
 						L2: &commonv1.L2Metadata{
-							ConsensusSetId: "test-tribunal",
+							ConsensusSetId: "test-consensus",
 							Votes: []*commonv1.L2Vote{
 								{
 									SignerKeyId: "test-key",
@@ -343,7 +343,7 @@ func TestOperatorPubSubService_CancellationReceipt(t *testing.T) {
 			Nonce:           "nonce-cancel",
 			Governance: &commonv1.GovernanceMetadata{
 				L2: &commonv1.L2Metadata{
-					ConsensusSetId: "test-tribunal",
+					ConsensusSetId: "test-consensus",
 					Votes: []*commonv1.L2Vote{
 						{
 							SignerKeyId: "test-key",
@@ -689,7 +689,7 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 			Nonce:           "nonce-sync",
 			Governance: &commonv1.GovernanceMetadata{
 				L2: &commonv1.L2Metadata{
-					ConsensusSetId: "test-tribunal",
+					ConsensusSetId: "test-consensus",
 					Votes: []*commonv1.L2Vote{
 						{
 							SignerKeyId: "test-key",
@@ -1341,7 +1341,6 @@ func TestCommandServiceConfig_NoGatewayFields(t *testing.T) {
 	_ = gd.TransactionAudit
 	_ = gd.L3Notary
 	_ = gd.SignerStore
-	_ = gd.AppPolicyStore
 	_ = gd.ConsensusPolicyStore
 	_ = gd.FieldReader
 
@@ -1349,9 +1348,32 @@ func TestCommandServiceConfig_NoGatewayFields(t *testing.T) {
 	var gw GatewayCommandServiceConfig
 	_ = gw.MCPGateway
 	_ = gw.GovDeps
+	_ = gw.L2ConsensusDeliberator
 
 	// GatewayCommandServiceConfig embeds CommandServiceConfig, so all base
 	// fields are accessible.
 	_ = gw.Config
 	_ = gw.Logger
+}
+
+// TestNewOperatorPubSubService_NilOptionalGovDeps_DefaultsToNoop verifies that
+// nil ConsensusPolicyStore and FieldReader in GovernanceDeps are replaced with
+// no-op implementations during construction, eliminating nil fields.
+func TestNewOperatorPubSubService_NilOptionalGovDeps_DefaultsToNoop(t *testing.T) {
+	t.Parallel()
+	cfg := testutil.NewTestConfig(t)
+	svc, err := NewOperatorPubSubService(CommandServiceConfig{
+		Config:       cfg,
+		Logger:       testutil.NewTestLogger(),
+		PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
+	}, GovernanceDeps{
+		ReplayStore:       &testutil.MockReplayStore{},
+		StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+		TransactionAudit:  &testutil.MockTransactionAudit{},
+		L3Notary:          &testutil.MockL3Notary{},
+		// ConsensusPolicyStore and FieldReader intentionally left nil
+	})
+	require.NoError(t, err)
+	require.NotNil(t, svc)
+	assert.NotNil(t, svc.l4warden, "l4warden must be initialized with no-op consensus policy store")
 }

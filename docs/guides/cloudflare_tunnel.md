@@ -5,8 +5,8 @@ parent: Guides
 
 # Cloudflare Tunnel Integration
 
-Last Updated: 2026-07-25
-Version: v1.6.3
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 ---
 
@@ -190,7 +190,7 @@ curl -s https://console.g8e.ai/api/v1/health
 Expected response:
 
 ```json
-{"status":"ok","mode":"gateway","version":"v1.6.3","pid":12345,"governance_ready":true,"state_merkle_root":"..."}
+{"status":"ok","mode":"gateway","version":"v1.6.6","pid":12345,"governance_ready":true,"state_merkle_root":"..."}
 ```
 
 Open the console in a browser:

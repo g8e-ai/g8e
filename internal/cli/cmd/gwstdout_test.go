@@ -96,7 +96,7 @@ func TestPrintNextSteps_ConsensusPosture(t *testing.T) {
 	assert.Contains(t, out, "http://10.0.0.50:8080/web-cert.sh")
 
 	// No posture-specific text
-	assert.NotContains(t, out, "Configure L2 Tribunal")
+	assert.NotContains(t, out, "Configure L2 Consensus")
 	assert.NotContains(t, out, "Connect AI agents")
 	assert.NotContains(t, out, "Manage & Monitor")
 }
@@ -119,7 +119,7 @@ func TestPrintNextSteps_NotaryPosture(t *testing.T) {
 	assert.Contains(t, out, "http://172.16.0.1:8080/web-cert.sh")
 
 	// No posture-specific text
-	assert.NotContains(t, out, "Configure L2 Tribunal")
+	assert.NotContains(t, out, "Configure L2 Consensus")
 	assert.NotContains(t, out, "WebAuthn/passkey ceremony")
 	assert.NotContains(t, out, "Connect AI agents")
 	assert.NotContains(t, out, "Manage & Monitor")
@@ -244,10 +244,10 @@ func TestPrintNextSteps_PostureSpecificContentNotLeaked(t *testing.T) {
 		printNextSteps(cmd, &governance.DoctrinePosture{}, "localhost", "")
 		out := buf.String()
 
-		assert.NotContains(t, out, "Configure L2 Tribunal")
-		assert.NotContains(t, out, "Configure L2 Tribunal + L3 Notary")
+		assert.NotContains(t, out, "Configure L2 Consensus")
+		assert.NotContains(t, out, "Configure L2 Consensus + L3 Notary")
 		assert.NotContains(t, out, "WebAuthn/passkey ceremony")
-		assert.NotContains(t, out, "Tribunal quorum will be rejected")
+		assert.NotContains(t, out, "Consensus quorum will be rejected")
 	})
 
 	t.Run("consensus does not contain doctrine or notary specific text", func(t *testing.T) {
@@ -256,7 +256,7 @@ func TestPrintNextSteps_PostureSpecificContentNotLeaked(t *testing.T) {
 		out := buf.String()
 
 		assert.NotContains(t, out, "No additional setup required.")
-		assert.NotContains(t, out, "Configure L2 Tribunal + L3 Notary")
+		assert.NotContains(t, out, "Configure L2 Consensus + L3 Notary")
 		assert.NotContains(t, out, "WebAuthn/passkey ceremony")
 	})
 
@@ -266,7 +266,7 @@ func TestPrintNextSteps_PostureSpecificContentNotLeaked(t *testing.T) {
 		out := buf.String()
 
 		assert.NotContains(t, out, "No additional setup required.")
-		assert.NotContains(t, out, "Configure L2 Tribunal for consensus:")
+		assert.NotContains(t, out, "Configure L2 Consensus:")
 		assert.NotContains(t, out, "L3 notary is audited only")
 	})
 }

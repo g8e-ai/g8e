@@ -828,7 +828,7 @@ func TestNewEnsembleFromSeed(t *testing.T) {
 		assert.Equal(t, ens1.PubHex(), ens2.PubHex(), "same seed must produce same public key")
 		assert.Equal(t, "auditor-ensemble", ens1.KeyID)
 		assert.Equal(t, 3, ens1.AgentCount())
-		assert.Equal(t, "test-tribunal", ens1.TribunalID)
+		assert.Equal(t, "test-consensus", ens1.ConsensusID)
 	})
 
 	t.Run("differs from random NewEnsemble", func(t *testing.T) {
@@ -890,29 +890,29 @@ func TestSeedHex(t *testing.T) {
 	})
 }
 
-func TestEnsemble_TribunalID(t *testing.T) {
-	t.Run("defaults to test-tribunal", func(t *testing.T) {
+func TestEnsemble_ConsensusID(t *testing.T) {
+	t.Run("defaults to test-consensus", func(t *testing.T) {
 		ens, err := NewEnsemble("test-key", 2)
 		require.NoError(t, err)
-		assert.Equal(t, "test-tribunal", ens.TribunalID)
+		assert.Equal(t, "test-consensus", ens.ConsensusID)
 	})
 
-	t.Run("defaults to test-tribunal in NewEnsembleFromSeed", func(t *testing.T) {
+	t.Run("defaults to test-consensus in NewEnsembleFromSeed", func(t *testing.T) {
 		ens, err := NewEnsembleFromSeed("test-key", 2, "87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77")
 		require.NoError(t, err)
-		assert.Equal(t, "test-tribunal", ens.TribunalID)
+		assert.Equal(t, "test-consensus", ens.ConsensusID)
 	})
 
 	t.Run("is settable and used in Vote output", func(t *testing.T) {
 		ens, err := NewEnsemble("test-key", 2)
 		require.NoError(t, err)
 
-		ens.TribunalID = "dhs-tribunal"
+		ens.ConsensusID = "dhs-consensus"
 		l2 := ens.Vote("abc123", true)
 
 		require.NotEmpty(t, l2.Votes)
-		assert.Equal(t, "dhs-tribunal", l2.ConsensusSetId,
-			"Vote() must use the configured TribunalID")
+		assert.Equal(t, "dhs-consensus", l2.ConsensusSetId,
+			"Vote() must use the configured ConsensusID")
 	})
 }
 

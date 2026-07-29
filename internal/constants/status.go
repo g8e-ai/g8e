@@ -436,33 +436,33 @@ const (
 	AITaskIdInvestigationQuery AITaskId = "ai.investigation.query"
 )
 
-// TribunalMember is a typed string for tribunal member identifiers.
-type TribunalMember string
+// ConsensusMember is a typed string for consensus member identifiers.
+type ConsensusMember string
 
 const (
-	TribunalMemberAxiom    TribunalMember = "axiom"
-	TribunalMemberConcord  TribunalMember = "concord"
-	TribunalMemberVariance TribunalMember = "variance"
-	TribunalMemberPragma   TribunalMember = "pragma"
-	TribunalMemberNemesis  TribunalMember = "nemesis"
+	ConsensusMemberAxiom    ConsensusMember = "axiom"
+	ConsensusMemberConcord  ConsensusMember = "concord"
+	ConsensusMemberVariance ConsensusMember = "variance"
+	ConsensusMemberPragma   ConsensusMember = "pragma"
+	ConsensusMemberNemesis  ConsensusMember = "nemesis"
 )
 
-// TribunalAuditMode is a typed string for tribunal audit mode.
-type TribunalAuditMode string
+// ConsensusAuditMode is a typed string for consensus audit mode.
+type ConsensusAuditMode string
 
 const (
-	TribunalAuditModeUnanimous TribunalAuditMode = "unanimous"
-	TribunalAuditModeMajority  TribunalAuditMode = "majority"
-	TribunalAuditModeTied      TribunalAuditMode = "tied"
+	ConsensusAuditModeUnanimous ConsensusAuditMode = "unanimous"
+	ConsensusAuditModeMajority  ConsensusAuditMode = "majority"
+	ConsensusAuditModeTied      ConsensusAuditMode = "tied"
 )
 
-// TribunalAuditStatus is a typed string for tribunal audit status.
-type TribunalAuditStatus string
+// ConsensusAuditStatus is a typed string for consensus audit status.
+type ConsensusAuditStatus string
 
 const (
-	TribunalAuditStatusOk      TribunalAuditStatus = "ok"
-	TribunalAuditStatusRevised TribunalAuditStatus = "revised"
-	TribunalAuditStatusSwap    TribunalAuditStatus = "swap"
+	ConsensusAuditStatusOk      ConsensusAuditStatus = "ok"
+	ConsensusAuditStatusRevised ConsensusAuditStatus = "revised"
+	ConsensusAuditStatusSwap    ConsensusAuditStatus = "swap"
 )
 
 // AuditorReason is a typed string for auditor reason.

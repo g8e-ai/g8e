@@ -25,9 +25,10 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/services/consensus"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
+	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
-	"github.com/g8e-ai/g8e/internal/services/tribunal"
 )
 
 // HTTPHandlerDependencies groups all dependencies for HTTPHandler to reduce constructor bloat.
@@ -47,7 +48,8 @@ type HTTPHandlerDependencies struct {
 	Responder          *response.Writer
 	MCPGateway         *mcp.GatewayService
 	AppEnrollment      *AppEnrollmentService
-	Tribunal           *tribunal.TribunalService
+	Consensus          *consensus.ConsensusService
+	EnvProc            governance.EnvelopeProcessor
 	IsReady            func() bool
 	IsGovernanceReady  func() bool
 }
@@ -63,7 +65,9 @@ type HTTPHandler struct {
 	mcp       *mcp.GatewayService
 	// Controllers for domain-specific endpoints
 	pkiController             *PKIController
-	dbController              *DBController
+	auditController           *AuditController
+	dataController            *DataController
+	signerController          *SignerController
 	bootstrapController       *BootstrapController
 	enrollmentTokenController *EnrollmentTokenController
 	userController            *UserController
@@ -103,18 +107,27 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 
 	// Initialize controllers
 	h.pkiController = newPKIController(deps.Cfg, deps.Logger, deps.PKI, deps.AppEnrollment, deps.Reg, deps.Responder)
-	h.dbController = newDBController(DBControllerDeps{
+	h.auditController = newAuditController(AuditControllerDeps{
+		Cfg:        deps.Cfg,
+		Logger:     deps.Logger,
+		AuditStore: deps.Stores.AuditStore,
+		Responder:  deps.Responder,
+	})
+	h.dataController = newDataController(DataControllerDeps{
+		Cfg:       deps.Cfg,
+		Logger:    deps.Logger,
+		DocStore:  deps.Stores.DocStore,
+		KVStore:   deps.Stores.KVStore,
+		SSEStore:  deps.Stores.SSEStore,
+		BlobStore: deps.Stores.BlobStore,
+		Pubsub:    deps.Pubsub,
+		Responder: deps.Responder,
+	})
+	h.signerController = newSignerController(SignerControllerDeps{
 		Cfg:         deps.Cfg,
 		Logger:      deps.Logger,
 		DocStore:    deps.Stores.DocStore,
-		KVStore:     deps.Stores.KVStore,
-		SSEStore:    deps.Stores.SSEStore,
-		BlobStore:   deps.Stores.BlobStore,
-		AuditStore:  deps.Stores.AuditStore,
 		SignerStore: deps.Stores.SignerStore,
-		Auth:        deps.Auth,
-		Pubsub:      deps.Pubsub,
-		UserSvc:     deps.UserSvc,
 		Responder:   deps.Responder,
 	})
 
@@ -149,12 +162,12 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 		Responder:   deps.Responder,
 		CrossOrigin: len(deps.Cfg.Gateway.AllowedOrigins) > 0,
 	})
-	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.SignerStore, deps.Stores.TribunalStore, deps.UserSvc, deps.Responder)
+	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.SignerStore, deps.Stores.ConsensusStore, deps.UserSvc, deps.Responder)
 	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)
 
 	h.sseController = newSSEController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.KVStore, deps.Stores.SSEStore, deps.Pubsub, deps.Auth, deps.Responder, 0)
 	h.healthController = newHealthController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.StateRootSvc, deps.Responder, deps.IsReady, deps.IsGovernanceReady)
-	h.governanceController = newGovernanceController(deps.Cfg, deps.Logger, deps.Responder, deps.Tribunal)
+	h.governanceController = newGovernanceController(deps.Cfg, deps.Logger, deps.Responder, deps.Consensus, deps.EnvProc)
 
 	// Build router once to avoid per-request overhead
 	h.router = h.buildPublicRouter()
@@ -180,15 +193,6 @@ func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (h *HTTPHandler) GetMCPGateway() *mcp.GatewayService {
 	return h.mcp
-}
-
-// SetTribunal sets the Tribunal service for L2 consensus deliberation.
-// Called by the boot sequence after the TribunalService is constructed.
-// Thread-safe via atomic.Pointer on GovernanceController — no router rebuild
-// needed because the tribunal deliberate route is always registered and the
-// handler checks the atomic pointer at request time.
-func (h *HTTPHandler) SetTribunal(ts *tribunal.TribunalService) {
-	h.governanceController.SetTribunal(ts)
 }
 
 func (h *HTTPHandler) GetPasskeyHandler() *PasskeyHandler {

@@ -1,4 +1,4 @@
-package tribunal
+package consensus
 
 import (
 	"crypto/ed25519"
@@ -46,7 +46,7 @@ func TestKeyProviderFunc_GetMemberKey_Error(t *testing.T) {
 	assert.ErrorIs(t, err, expectedErr)
 }
 
-func TestNewTribunalFromPolicy_NilPolicy(t *testing.T) {
+func TestNewConsensusFromPolicy_NilPolicy(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -59,38 +59,38 @@ func TestNewTribunalFromPolicy_NilPolicy(t *testing.T) {
 		return priv, nil
 	})
 
-	svc, err := NewTribunalFromPolicy(nil, provider, nil, logger, responder)
+	svc, err := NewConsensusFromPolicy(nil, provider, nil, logger, responder)
 	require.Error(t, err)
 	assert.Nil(t, svc)
-	assert.ErrorIs(t, err, constants.ErrTribunalFactoryNilPolicy)
+	assert.ErrorIs(t, err, constants.ErrConsensusFactoryNilPolicy)
 }
 
-func TestNewTribunalFromPolicy_NilKeyProvider(t *testing.T) {
+func TestNewConsensusFromPolicy_NilKeyProvider(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	responder := response.NewWriter(logger)
 
-	policy := &models.TribunalPolicy{
-		ID:           "test-tribunal",
+	policy := &models.ConsensusPolicy{
+		ID:           "test-consensus",
 		MemberAppIDs: []string{"member-1"},
 		Quorum:       1,
 	}
 
-	svc, err := NewTribunalFromPolicy(policy, nil, nil, logger, responder)
+	svc, err := NewConsensusFromPolicy(policy, nil, nil, logger, responder)
 	require.Error(t, err)
 	assert.Nil(t, svc)
-	assert.ErrorIs(t, err, constants.ErrTribunalFactoryNilKeyProvider)
+	assert.ErrorIs(t, err, constants.ErrConsensusFactoryNilKeyProvider)
 }
 
-func TestNewTribunalFromPolicy_KeyProviderError(t *testing.T) {
+func TestNewConsensusFromPolicy_KeyProviderError(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	responder := response.NewWriter(logger)
 
-	policy := &models.TribunalPolicy{
-		ID:           "test-tribunal",
+	policy := &models.ConsensusPolicy{
+		ID:           "test-consensus",
 		MemberAppIDs: []string{"member-1", "member-2"},
 		Quorum:       1,
 	}
@@ -107,13 +107,13 @@ func TestNewTribunalFromPolicy_KeyProviderError(t *testing.T) {
 		return nil, fmt.Errorf("key not available for %s", appID)
 	})
 
-	svc, err := NewTribunalFromPolicy(policy, provider, nil, logger, responder)
+	svc, err := NewConsensusFromPolicy(policy, provider, nil, logger, responder)
 	require.NoError(t, err)
 	require.NotNil(t, svc)
 	assert.Equal(t, 2, callCount, "both members should be queried")
 }
 
-func TestNewTribunalFromPolicy_AllKeysResolved(t *testing.T) {
+func TestNewConsensusFromPolicy_AllKeysResolved(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -129,8 +129,8 @@ func TestNewTribunalFromPolicy_AllKeysResolved(t *testing.T) {
 		"member-2": priv2,
 	}
 
-	policy := &models.TribunalPolicy{
-		ID:           "test-tribunal",
+	policy := &models.ConsensusPolicy{
+		ID:           "test-consensus",
 		MemberAppIDs: []string{"member-1", "member-2"},
 		Quorum:       2,
 	}
@@ -143,10 +143,10 @@ func TestNewTribunalFromPolicy_AllKeysResolved(t *testing.T) {
 		return key, nil
 	})
 
-	svc, err := NewTribunalFromPolicy(policy, provider, nil, logger, responder)
+	svc, err := NewConsensusFromPolicy(policy, provider, nil, logger, responder)
 	require.NoError(t, err)
 	require.NotNil(t, svc)
-	assert.Equal(t, "test-tribunal", svc.tribunalID)
+	assert.Equal(t, "test-consensus", svc.consensusID)
 	assert.Len(t, svc.members, 2)
 	assert.Equal(t, "member-1", svc.members[0].AppID)
 	assert.Equal(t, priv1, svc.members[0].PrivateKey)
@@ -154,14 +154,14 @@ func TestNewTribunalFromPolicy_AllKeysResolved(t *testing.T) {
 	assert.Equal(t, priv2, svc.members[1].PrivateKey)
 }
 
-func TestNewTribunalFromPolicy_EmptyMemberList(t *testing.T) {
+func TestNewConsensusFromPolicy_EmptyMemberList(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	responder := response.NewWriter(logger)
 
-	policy := &models.TribunalPolicy{
-		ID:           "empty-tribunal",
+	policy := &models.ConsensusPolicy{
+		ID:           "empty-consensus",
 		MemberAppIDs: []string{},
 		Quorum:       0,
 	}
@@ -170,7 +170,7 @@ func TestNewTribunalFromPolicy_EmptyMemberList(t *testing.T) {
 		return nil, fmt.Errorf("should not be called")
 	})
 
-	svc, err := NewTribunalFromPolicy(policy, provider, nil, logger, responder)
+	svc, err := NewConsensusFromPolicy(policy, provider, nil, logger, responder)
 	require.NoError(t, err)
 	require.NotNil(t, svc)
 	assert.Empty(t, svc.members)

@@ -106,13 +106,13 @@ func (m Model) applyLedgerMsg(msg LedgerMsg) Model {
 	return m
 }
 
-// applyConsensusMsg updates a tribunal member's vote state and the overall
+// applyConsensusMsg updates a consensus member's vote state and the overall
 // consensus result.
 func (m Model) applyConsensusMsg(msg ConsensusMsg) Model {
-	for i, member := range m.tribunal {
+	for i, member := range m.consensus {
 		if member.name == msg.Member {
-			m.tribunal[i].decision = msg.Decision
-			m.tribunal[i].signed = msg.Signed
+			m.consensus[i].decision = msg.Decision
+			m.consensus[i].signed = msg.Signed
 			break
 		}
 	}

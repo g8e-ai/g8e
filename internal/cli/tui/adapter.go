@@ -199,7 +199,7 @@ func parseConsensusEvent(payload json.RawMessage) tea.Msg {
 	}
 
 	return ConsensusMsg{
-		Member:   constants.TribunalMember(p.Member),
+		Member:   constants.ConsensusMember(p.Member),
 		Decision: p.Decision,
 		Signed:   p.Signed,
 		Quorum:   p.Quorum,

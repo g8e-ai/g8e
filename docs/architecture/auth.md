@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-07-24
-Version: v1.6.2
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 This document explains how to authenticate and authorize actions in the g8e platform. The platform is built as a zero-trust execution environment where every action is verified before execution.
 
@@ -150,7 +150,7 @@ Every action must pass through these layers before execution:
 | Layer | Purpose | What It Checks |
 |-------|---------|----------------|
 | **L1: Doctrine** | Technical safety | Forbidden patterns, MITRE threats, critical system file protection |
-| **L2: Consensus** | Multi-agent approval | Cryptographic attestation from tribunal members |
+| **L2: Consensus** | Multi-agent approval | Cryptographic attestation from consensus members |
 | **L3: Notary** | Human authorization | Passkey or signed CLI proofs |
 | **L4: Warden** | Final verification | Replay protection, state validation, posture enforcement |
 | **L5: Actuator** | Execution | Dispatches action with audit commitment |
@@ -167,9 +167,9 @@ Violations at this layer cannot be bypassed by higher layers.
 
 ### 2.3 Layer 2: Consensus (Multi-Agent Approval)
 
-Consensus provides cryptographic attestation from multiple tribunal members:
+Consensus provides cryptographic attestation from multiple consensus members:
 
-- Each tribunal member independently evaluates the payload
+- Each consensus member independently evaluates the payload
 - Members sign their decision with their Ed25519 private key
 - The Warden verifies signatures and counts affirmative votes against a quorum threshold
 - Duplicate signers are rejected to prevent single-member vote stuffing

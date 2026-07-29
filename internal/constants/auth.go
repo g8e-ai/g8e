@@ -209,10 +209,10 @@ const (
 
 // App enrollment type constants define the valid app_type values for external app enrollment.
 const (
-	AppTypeMCPClient      = "mcp-client"
-	AppTypeA2AGateway     = "a2a-gateway"
-	AppTypeCustom         = "custom"
-	AppTypeTribunalMember = "tribunal-member"
+	AppTypeMCPClient       = "mcp-client"
+	AppTypeA2AGateway      = "a2a-gateway"
+	AppTypeCustom          = "custom"
+	AppTypeConsensusMember = "consensus-member"
 )
 
 // L3 notary constants

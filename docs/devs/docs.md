@@ -39,9 +39,9 @@ Documentation must be useful for humans to understand how to authenticate, autho
 - Summarize linked concepts in one sentence and link rather than duplicating.
 - Link only critical files (core service entry points, key interface definitions).
 - Verify behavior against the codebase before writing. Trace in this order:
-  1. Protobuf schemas (fields, types, validation).
-  2. Constants registries (endpoint paths, collection names, identifiers).
-  3. Core service implementations (business logic, error propagation, security gates).
+  1. Protobuf schemas in `protocol/proto/g8e/` (canonical message types, field options, validation) and JSON model schemas in `protocol/models/` (wire shapes, field descriptions).
+  2. Constants registries in `protocol/constants/` (endpoint paths, collection names, identifiers).
+  3. Core service implementations in `internal/services/` (business logic, error propagation, security gates).
 - Place protocol specs in `protocol/docs/`. Place platform guides in `docs/`.
 - Cross-reference between domains with relative paths: `../../protocol/docs/spec.md`.
 - Document the five-layer interlock sequence when covering security or execution pipelines:

@@ -36,7 +36,7 @@ import (
 func setupTestAdminController(t *testing.T) *AdminController {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
-	return newAdminController(infra.Cfg, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore, infra.Stores.TribunalStore, infra.UserSvc, infra.Responder)
+	return newAdminController(infra.Cfg, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore, infra.Stores.ConsensusStore, infra.UserSvc, infra.Responder)
 }
 
 func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
@@ -197,7 +197,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 	})
 }
 
-func TestAdminControllerHandleTribunals(t *testing.T) {
+func TestAdminControllerHandleConsensus(t *testing.T) {
 	adminController := setupTestAdminController(t)
 
 	// Create a bootstrap user for testing
@@ -219,13 +219,13 @@ func TestAdminControllerHandleTribunals(t *testing.T) {
 	require.NoError(t, err)
 
 	signer1 := models.TrustedSigner{
-		ID:        "tribunal-member-1",
+		ID:        "consensus-member-1",
 		PublicKey: hex.EncodeToString(pubKey1),
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
 	}
 	signer2 := models.TrustedSigner{
-		ID:        "tribunal-member-2",
+		ID:        "consensus-member-2",
 		PublicKey: hex.EncodeToString(pubKey2),
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
@@ -233,107 +233,107 @@ func TestAdminControllerHandleTribunals(t *testing.T) {
 
 	err = adminController.signerStore.AddTrustedSigner(signer1)
 	require.NoError(t, err)
-	t.Cleanup(func() { adminController.signerStore.DeleteTrustedSigner("tribunal-member-1") })
+	t.Cleanup(func() { adminController.signerStore.DeleteTrustedSigner("consensus-member-1") })
 
 	err = adminController.signerStore.AddTrustedSigner(signer2)
 	require.NoError(t, err)
-	t.Cleanup(func() { adminController.signerStore.DeleteTrustedSigner("tribunal-member-2") })
+	t.Cleanup(func() { adminController.signerStore.DeleteTrustedSigner("consensus-member-2") })
 
 	t.Run("POST - unauthorized (no user)", func(t *testing.T) {
 		ctx := context.Background()
-		body := []byte(`{"id":"test-tribunal","member_app_ids":["tribunal-member-1"],"quorum":1,"require_distinct":true,"enabled":true}`)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/tribunals", bytes.NewReader(body)).WithContext(ctx)
+		body := []byte(`{"id":"test-consensus","member_app_ids":["consensus-member-1"],"quorum":1,"require_distinct":true,"enabled":true}`)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/consensus", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
-		adminController.handleTribunals(rr, req)
+		adminController.handleConsensus(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 
 	t.Run("POST - forbidden (non-bootstrap user)", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, regularUser.ID)
-		body := []byte(`{"id":"test-tribunal","member_app_ids":["tribunal-member-1"],"quorum":1,"require_distinct":true,"enabled":true}`)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/tribunals", bytes.NewReader(body)).WithContext(ctx)
+		body := []byte(`{"id":"test-consensus","member_app_ids":["consensus-member-1"],"quorum":1,"require_distinct":true,"enabled":true}`)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/consensus", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
-		adminController.handleTribunals(rr, req)
+		adminController.handleConsensus(rr, req)
 		assert.Equal(t, http.StatusForbidden, rr.Code)
 	})
 
 	t.Run("POST - invalid JSON", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
 		body := []byte(`{invalid json}`)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/tribunals", bytes.NewReader(body)).WithContext(ctx)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/consensus", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
-		adminController.handleTribunals(rr, req)
+		adminController.handleConsensus(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("POST - validation failure (quorum > member count)", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
-		body := []byte(`{"id":"test-tribunal","member_app_ids":["tribunal-member-1"],"quorum":2,"require_distinct":true,"enabled":true}`)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/tribunals", bytes.NewReader(body)).WithContext(ctx)
+		body := []byte(`{"id":"test-consensus","member_app_ids":["consensus-member-1"],"quorum":2,"require_distinct":true,"enabled":true}`)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/consensus", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
-		adminController.handleTribunals(rr, req)
+		adminController.handleConsensus(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("POST - success", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
-		body := []byte(`{"id":"test-tribunal","member_app_ids":["tribunal-member-1","tribunal-member-2"],"quorum":2,"require_distinct":true,"enabled":true}`)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/tribunals", bytes.NewReader(body)).WithContext(ctx)
+		body := []byte(`{"id":"test-consensus","member_app_ids":["consensus-member-1","consensus-member-2"],"quorum":2,"require_distinct":true,"enabled":true}`)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/consensus", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
-		adminController.handleTribunals(rr, req)
+		adminController.handleConsensus(rr, req)
 		assert.Equal(t, http.StatusCreated, rr.Code)
 
-		// Verify the tribunal was created
-		tribunal, err := adminController.tribunalStore.GetTribunal("test-tribunal")
+		// Verify the consensus was created
+		consensus, err := adminController.consensusStore.GetConsensus("test-consensus")
 		require.NoError(t, err)
-		require.NotNil(t, tribunal)
-		assert.Equal(t, "test-tribunal", tribunal.ID)
-		assert.Equal(t, 2, tribunal.Quorum)
-		t.Cleanup(func() { adminController.tribunalStore.DeleteTribunal("test-tribunal") })
+		require.NotNil(t, consensus)
+		assert.Equal(t, "test-consensus", consensus.ID)
+		assert.Equal(t, 2, consensus.Quorum)
+		t.Cleanup(func() { adminController.consensusStore.DeleteConsensus("test-consensus") })
 	})
 
 	t.Run("GET - unauthorized (no user)", func(t *testing.T) {
 		ctx := context.Background()
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/tribunals", nil).WithContext(ctx)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/consensus", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
-		adminController.handleTribunals(rr, req)
+		adminController.handleConsensus(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 
 	t.Run("GET - forbidden (non-bootstrap user)", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, regularUser.ID)
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/tribunals", nil).WithContext(ctx)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/consensus", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
-		adminController.handleTribunals(rr, req)
+		adminController.handleConsensus(rr, req)
 		assert.Equal(t, http.StatusForbidden, rr.Code)
 	})
 
 	t.Run("GET - success", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/tribunals", nil).WithContext(ctx)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/consensus", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
-		adminController.handleTribunals(rr, req)
+		adminController.handleConsensus(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
 	})
 
 	t.Run("MethodNotAllowed - PUT", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/tribunals", nil).WithContext(ctx)
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/consensus", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
-		adminController.handleTribunals(rr, req)
+		adminController.handleConsensus(rr, req)
 		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 	})
 
 	t.Run("MethodNotAllowed - DELETE", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/tribunals", nil).WithContext(ctx)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/consensus", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
-		adminController.handleTribunals(rr, req)
+		adminController.handleConsensus(rr, req)
 		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 	})
 }
 
-func TestAdminControllerHandleDeleteTribunal(t *testing.T) {
+func TestAdminControllerHandleDeleteConsensus(t *testing.T) {
 	adminController := setupTestAdminController(t)
 
 	// Create a bootstrap user for testing
@@ -352,92 +352,92 @@ func TestAdminControllerHandleDeleteTribunal(t *testing.T) {
 	pubKey, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	signer := models.TrustedSigner{
-		ID:        "delete-tribunal-member",
+		ID:        "delete-consensus-member",
 		PublicKey: hex.EncodeToString(pubKey),
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
 	}
 	err = adminController.signerStore.AddTrustedSigner(signer)
 	require.NoError(t, err)
-	t.Cleanup(func() { adminController.signerStore.DeleteTrustedSigner("delete-tribunal-member") })
+	t.Cleanup(func() { adminController.signerStore.DeleteTrustedSigner("delete-consensus-member") })
 
-	// Create a test tribunal
-	policy := models.TribunalPolicy{
-		ID:              "delete-test-tribunal",
-		MemberAppIDs:    []string{"delete-tribunal-member"},
+	// Create a test consensus
+	policy := models.ConsensusPolicy{
+		ID:              "delete-test-consensus",
+		MemberAppIDs:    []string{"delete-consensus-member"},
 		Quorum:          1,
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	err = adminController.tribunalStore.AddTribunal(policy)
+	err = adminController.consensusStore.AddConsensus(policy)
 	require.NoError(t, err)
 
 	t.Run("DELETE - unauthorized (no user)", func(t *testing.T) {
 		ctx := context.Background()
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/tribunals/delete-test-tribunal", nil).WithContext(ctx)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/consensus/delete-test-consensus", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
-		adminController.handleDeleteTribunal(rr, req)
+		adminController.handleDeleteConsensus(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 
 	t.Run("DELETE - forbidden (non-bootstrap user)", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, regularUser.ID)
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/tribunals/delete-test-tribunal", nil).WithContext(ctx)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/consensus/delete-test-consensus", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
-		adminController.handleDeleteTribunal(rr, req)
+		adminController.handleDeleteConsensus(rr, req)
 		assert.Equal(t, http.StatusForbidden, rr.Code)
 	})
 
-	t.Run("DELETE - unauthorized + missing tribunal ID (authz precedence)", func(t *testing.T) {
+	t.Run("DELETE - unauthorized + missing consensus ID (authz precedence)", func(t *testing.T) {
 		ctx := context.Background()
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/tribunals/", nil).WithContext(ctx)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/consensus/", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
-		adminController.handleDeleteTribunal(rr, req)
+		adminController.handleDeleteConsensus(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code, "authz should take precedence over path validation")
 	})
 
-	t.Run("DELETE - missing tribunal ID", func(t *testing.T) {
+	t.Run("DELETE - missing consensus ID", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/tribunals/", nil).WithContext(ctx)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/consensus/", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
-		adminController.handleDeleteTribunal(rr, req)
+		adminController.handleDeleteConsensus(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("DELETE - success", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/tribunals/delete-test-tribunal", nil).WithContext(ctx)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/consensus/delete-test-consensus", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
-		adminController.handleDeleteTribunal(rr, req)
+		adminController.handleDeleteConsensus(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		// Verify the tribunal was deleted
-		tribunal, err := adminController.tribunalStore.GetTribunal("delete-test-tribunal")
+		// Verify the consensus was deleted
+		consensus, err := adminController.consensusStore.GetConsensus("delete-test-consensus")
 		require.NoError(t, err)
-		assert.Nil(t, tribunal)
+		assert.Nil(t, consensus)
 	})
 
-	t.Run("DELETE - non-existent tribunal", func(t *testing.T) {
+	t.Run("DELETE - non-existent consensus", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/tribunals/non-existent", nil).WithContext(ctx)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/consensus/non-existent", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
-		adminController.handleDeleteTribunal(rr, req)
+		adminController.handleDeleteConsensus(rr, req)
 		assert.Equal(t, http.StatusNotFound, rr.Code)
 	})
 
 	t.Run("MethodNotAllowed - GET", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/tribunals/delete-test-tribunal", nil).WithContext(ctx)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/consensus/delete-test-consensus", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
-		adminController.handleDeleteTribunal(rr, req)
+		adminController.handleDeleteConsensus(rr, req)
 		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 	})
 
 	t.Run("MethodNotAllowed - POST", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/tribunals/delete-test-tribunal", nil).WithContext(ctx)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/consensus/delete-test-consensus", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
-		adminController.handleDeleteTribunal(rr, req)
+		adminController.handleDeleteConsensus(rr, req)
 		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 	})
 }

@@ -56,7 +56,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["gw", "start", "-f"]
+    command: ["gw", "start", "-f", "--doctrine-dir", "/etc/g8e/doctrine"]
 
   operator:
     build:

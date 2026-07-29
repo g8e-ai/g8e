@@ -77,7 +77,7 @@ func approvalPausedMessage(approvalURL string) string {
 // L2ConsensusDeliberator sends an envelope to an L2 consensus service for deliberation.
 // The consensus service collects signed votes from its members and returns the envelope
 // with L2 metadata populated. This interface is implemented by an HTTP client that calls
-// the consensus service's /tribunal/v1/deliberate endpoint, or by an in-process adapter.
+// the consensus service's /consensus/v1/deliberate endpoint, or by an in-process adapter.
 type L2ConsensusDeliberator interface {
 	Deliberate(ctx context.Context, envelopeBytes []byte) ([]byte, error)
 }
@@ -112,10 +112,6 @@ type GatewayService struct {
 	// runtimeReady() or getRuntimeDeps() before accessing these fields.
 	runtimeDeps atomic.Pointer[RuntimeDependencies]
 
-	// l2ConsensusDeliberator is late-bound (set after tribunal bootstrap).
-	// Stores an L2ConsensusDeliberator interface value via atomic.Value.
-	l2ConsensusDeliberator atomic.Value
-
 	// Circuit breaker state
 	mu               sync.RWMutex
 	failureCount     int
@@ -130,6 +126,15 @@ type GatewayService struct {
 // document store (DocumentStoreService).
 type FieldReader interface {
 	GetField(collection, id, fieldPath string) (FieldValue, error)
+}
+
+// NoopFieldReader is a no-op implementation of FieldReader.
+// It returns an empty FieldValue with no error, eliminating nil checks at
+// call sites. Used in outbound mode where no MCP gateway is configured.
+type NoopFieldReader struct{}
+
+func (NoopFieldReader) GetField(string, string, string) (FieldValue, error) {
+	return FieldValue{}, nil
 }
 
 // SessionValidator validates Operator sessions for L3 authorization
@@ -187,14 +192,15 @@ type Dependencies struct {
 // before the first request, via SetRuntimeDeps. This replaces the individual
 // SetDependencies/SetDBService/SetSessionValidator/SetAuditLogger setters.
 type RuntimeDependencies struct {
-	EnvProc           governance.EnvelopeProcessor
-	StateRootProvider StateRootProvider
-	SigningKey        ed25519.PrivateKey
-	KeyID             string
-	DownstreamURL     string
-	DBService         FieldReader
-	SessionValidator  SessionValidator
-	AuditLogger       AuditLogger
+	EnvProc                governance.EnvelopeProcessor
+	StateRootProvider      StateRootProvider
+	SigningKey             ed25519.PrivateKey
+	KeyID                  string
+	DownstreamURL          string
+	DBService              FieldReader
+	SessionValidator       SessionValidator
+	AuditLogger            AuditLogger
+	L2ConsensusDeliberator L2ConsensusDeliberator
 }
 
 func NewGatewayService(deps Dependencies) (*GatewayService, error) {
@@ -329,31 +335,6 @@ func (g *GatewayService) getRuntimeDeps() *RuntimeDependencies {
 	return g.runtimeDeps.Load()
 }
 
-// SetL2ConsensusDeliberator sets the L2 consensus deliberation client for L2 consensus votes.
-// This is wired under consensus and notary postures when a Tribunal is configured.
-// Thread-safe via atomic.Value.
-func (g *GatewayService) SetL2ConsensusDeliberator(d L2ConsensusDeliberator) {
-	g.l2ConsensusDeliberator.Store(d)
-}
-
-// safeDownstreamURL returns the downstream URL from runtime deps, or empty string
-// if runtime deps are not yet wired. Safe to call from any context.
-func (g *GatewayService) safeDownstreamURL() string {
-	if deps := g.getRuntimeDeps(); deps != nil {
-		return deps.DownstreamURL
-	}
-	return ""
-}
-
-// getL2ConsensusDeliberator returns the L2 consensus deliberator or nil if not configured.
-func (g *GatewayService) getL2ConsensusDeliberator() L2ConsensusDeliberator {
-	v := g.l2ConsensusDeliberator.Load()
-	if v == nil {
-		return nil
-	}
-	return v.(L2ConsensusDeliberator)
-}
-
 // isNativeTool checks if a tool name is a native tool compiled into the Operator.
 func (g *GatewayService) isNativeTool(name string) bool {
 	if g.nativeToolHandler == nil {
@@ -388,7 +369,7 @@ func (g *GatewayService) recordFailure() {
 	if g.failureCount >= g.maxFailures {
 		if !g.circuitOpen {
 			if g.logger != nil {
-				g.logger.Warn("MCP downstream circuit breaker OPENED", "url", g.safeDownstreamURL(), "failures", g.failureCount)
+				g.logger.Warn("MCP downstream circuit breaker OPENED", "url", g.getRuntimeDeps().DownstreamURL, "failures", g.failureCount)
 			}
 		}
 		g.circuitOpen = true
@@ -401,7 +382,7 @@ func (g *GatewayService) recordSuccess() {
 
 	if g.circuitOpen {
 		if g.logger != nil {
-			g.logger.Info("MCP downstream circuit breaker CLOSED", "url", g.safeDownstreamURL())
+			g.logger.Info("MCP downstream circuit breaker CLOSED", "url", g.getRuntimeDeps().DownstreamURL)
 		}
 	}
 	g.failureCount = 0
@@ -415,7 +396,7 @@ func (g *GatewayService) handleA2ARequest(w http.ResponseWriter, r *http.Request
 	}
 
 	if g.isCircuitOpen() {
-		g.logger.Warn("MCP downstream circuit is open, rejecting request", "method", method, "url", g.safeDownstreamURL())
+		g.logger.Warn("MCP downstream circuit is open, rejecting request", "method", method, "url", g.getRuntimeDeps().DownstreamURL)
 		g.responder.RPCError(w, nil, -32603, "downstream MCP server is temporarily unavailable (circuit open)")
 		return
 	}
@@ -821,12 +802,12 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 	}
 
 	// Under any posture that requires L2 signatures (consensus and notary),
-	// send the envelope to the Tribunal for L2 deliberation before dispatch.
-	// The Tribunal collects signed votes from its members and returns the
+	// send the envelope to the Consensus for L2 deliberation before dispatch.
+	// The Consensus collects signed votes from its members and returns the
 	// envelope with L2 metadata populated. If the deliberator is not configured,
 	// the envelope proceeds without L2 votes and will fail-closed at L4 verification.
-	if (g.posture == "consensus" || g.posture == "notary") && g.getL2ConsensusDeliberator() != nil {
-		deliberatedBytes, err := g.getL2ConsensusDeliberator().Deliberate(ctx, envelopeBytes)
+	if (g.posture == "consensus" || g.posture == "notary") && g.getRuntimeDeps().L2ConsensusDeliberator != nil {
+		deliberatedBytes, err := g.getRuntimeDeps().L2ConsensusDeliberator.Deliberate(ctx, envelopeBytes)
 		if err != nil {
 			g.logger.Error("L2 consensus deliberation failed", "tx_hash", hash, "error", err)
 			return "", nil, fmt.Errorf("gateway: l2 consensus deliberation: %w", err)

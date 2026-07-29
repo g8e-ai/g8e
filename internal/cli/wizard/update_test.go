@@ -145,11 +145,11 @@ func TestUpdate_EnterFromRouting_MCPEnabled_InvalidURL_KeepsStep(t *testing.T) {
 	assert.NotEmpty(t, m2.(Model).validationError)
 }
 
-func TestUpdate_EnterFromPosture_Consensus_EmptyTribunalID_KeepsStep(t *testing.T) {
+func TestUpdate_EnterFromPosture_Consensus_EmptyConsensusID_KeepsStep(t *testing.T) {
 	m := NewModel(Options{})
 	m.step = StepPosture
 	m.postureChoice = 1
-	m.tribunalIDInput.SetValue("")
+	m.consensusIDInput.SetValue("")
 	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	assert.Equal(t, StepPosture, m2.(Model).step)
 	assert.NotEmpty(t, m2.(Model).validationError)
@@ -528,7 +528,7 @@ func TestValidateNetwork_WebFrontendEnabled_ValidCORS_NoError(t *testing.T) {
 
 // --- validatePosture ---
 
-func TestValidatePosture_Doctrine_NoTribunalRequired(t *testing.T) {
+func TestValidatePosture_Doctrine_NoConsensusRequired(t *testing.T) {
 	m := NewModel(Options{})
 	m.step = StepPosture
 	m.postureChoice = 0
@@ -536,20 +536,20 @@ func TestValidatePosture_Doctrine_NoTribunalRequired(t *testing.T) {
 	assert.Empty(t, m.validatePosture())
 }
 
-func TestValidatePosture_Consensus_RequiresTribunalID(t *testing.T) {
+func TestValidatePosture_Consensus_RequiresConsensusID(t *testing.T) {
 	m := NewModel(Options{})
 	m.step = StepPosture
 	m.postureChoice = 1
-	m.tribunalIDInput.SetValue("")
+	m.consensusIDInput.SetValue("")
 	m.passkeyRpNameInput.SetValue("g8e")
 	assert.NotEmpty(t, m.validatePosture())
 }
 
-func TestValidatePosture_Consensus_ValidTribunal_NoError(t *testing.T) {
+func TestValidatePosture_Consensus_ValidConsensus_NoError(t *testing.T) {
 	m := NewModel(Options{})
 	m.step = StepPosture
 	m.postureChoice = 1
-	m.tribunalIDInput.SetValue("trib-prod-01")
+	m.consensusIDInput.SetValue("trib-prod-01")
 	m.passkeyRpNameInput.SetValue("g8e")
 	assert.Empty(t, m.validatePosture())
 }

@@ -119,32 +119,32 @@ func TestAITaskIdConstants(t *testing.T) {
 	}
 }
 
-func TestTribunalMemberConstants(t *testing.T) {
+func TestConsensusMemberConstants(t *testing.T) {
 	cases := []struct {
-		goConst TribunalMember
+		goConst ConsensusMember
 		value   string
 	}{
-		{TribunalMemberAxiom, "axiom"},
-		{TribunalMemberConcord, "concord"},
-		{TribunalMemberVariance, "variance"},
-		{TribunalMemberPragma, "pragma"},
-		{TribunalMemberNemesis, "nemesis"},
+		{ConsensusMemberAxiom, "axiom"},
+		{ConsensusMemberConcord, "concord"},
+		{ConsensusMemberVariance, "variance"},
+		{ConsensusMemberPragma, "pragma"},
+		{ConsensusMemberNemesis, "nemesis"},
 	}
 	for _, tc := range cases {
 		assert.Equal(t, tc.value, string(tc.goConst))
 	}
 }
 
-func TestTribunalAuditModeConstants(t *testing.T) {
-	assert.Equal(t, "unanimous", string(TribunalAuditModeUnanimous))
-	assert.Equal(t, "majority", string(TribunalAuditModeMajority))
-	assert.Equal(t, "tied", string(TribunalAuditModeTied))
+func TestConsensusAuditModeConstants(t *testing.T) {
+	assert.Equal(t, "unanimous", string(ConsensusAuditModeUnanimous))
+	assert.Equal(t, "majority", string(ConsensusAuditModeMajority))
+	assert.Equal(t, "tied", string(ConsensusAuditModeTied))
 }
 
-func TestTribunalAuditStatusConstants(t *testing.T) {
-	assert.Equal(t, "ok", string(TribunalAuditStatusOk))
-	assert.Equal(t, "revised", string(TribunalAuditStatusRevised))
-	assert.Equal(t, "swap", string(TribunalAuditStatusSwap))
+func TestConsensusAuditStatusConstants(t *testing.T) {
+	assert.Equal(t, "ok", string(ConsensusAuditStatusOk))
+	assert.Equal(t, "revised", string(ConsensusAuditStatusRevised))
+	assert.Equal(t, "swap", string(ConsensusAuditStatusSwap))
 }
 
 func TestAuditorReasonConstants(t *testing.T) {
@@ -318,10 +318,10 @@ func TestStatusJSONComponentStatusMatches(t *testing.T) {
 	}
 }
 
-func TestStatusJSONTribunalMemberMatches(t *testing.T) {
+func TestStatusJSONConsensusMemberMatches(t *testing.T) {
 	statusJSON := loadStatusJSON(t)
-	cat, ok := statusJSON["tribunal_member"]
-	require.True(t, ok, "tribunal_member category exists")
+	cat, ok := statusJSON["consensus_member"]
+	require.True(t, ok, "consensus_member category exists")
 	expected := map[string]string{
 		"axiom":    "axiom",
 		"concord":  "concord",
@@ -331,7 +331,7 @@ func TestStatusJSONTribunalMemberMatches(t *testing.T) {
 	}
 	for key, exp := range expected {
 		entry, exists := cat[key]
-		require.True(t, exists, "tribunal_member key %s exists in JSON", key)
+		require.True(t, exists, "consensus_member key %s exists in JSON", key)
 		assert.Equal(t, exp, entry.Value)
 	}
 }

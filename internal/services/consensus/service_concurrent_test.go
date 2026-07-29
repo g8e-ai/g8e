@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package tribunal
+package consensus
 
 import (
 	"io"
@@ -25,15 +25,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestTribunalService_Deliberate_ConcurrentIdempotency verifies that
+// TestConsensusService_Deliberate_ConcurrentIdempotency verifies that
 // concurrent calls to Deliberate on the same envelope produce identical
 // results — same vote count, same decisions, same signatures. This guards
 // against race conditions in the deliberation path.
-func TestTribunalService_Deliberate_ConcurrentIdempotency(t *testing.T) {
+func TestConsensusService_Deliberate_ConcurrentIdempotency(t *testing.T) {
 	t.Parallel()
 	doctrine := govsvc.NewL1Doctrine()
 	members := makeMembers(t, 3)
-	svc := NewTribunalService("test-tribunal", members, doctrine, slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
+	svc := NewConsensusService("test-consensus", members, doctrine, slog.New(slog.NewTextHandler(io.Discard, nil)), newTestResponder())
 
 	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))
 

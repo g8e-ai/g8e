@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e-Compatible Frontend
 
-Last Updated: 2026-07-25
-Version: v1.6.3
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 ---
 
@@ -476,7 +476,7 @@ Then run `g8e gui enroll --origin https://your-app.example.com` to verify.
 
 **Cause**: Token expired (5-minute TTL), already used (one-time-use), or invalid.
 
-**Fix**: Generate a new enrollment token from the CLI (`g8e auth enroll` or `g8e passkey bootstrap`). Handle 410 (expired), 409 (already used), and 401 (invalid) with specific user-facing error messages.
+**Fix**: Generate a new enrollment token from the CLI (`g8e auth enroll`). Handle 410 (expired), 409 (already used), and 401 (invalid) with specific user-facing error messages.
 
 ---
 

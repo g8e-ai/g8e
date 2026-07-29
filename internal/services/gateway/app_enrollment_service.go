@@ -82,10 +82,10 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 
 	// Validate app type
 	validAppTypes := map[string]bool{
-		"mcp-client":      true,
-		"a2a-gateway":     true,
-		"custom":          true,
-		"tribunal-member": true,
+		"mcp-client":       true,
+		"a2a-gateway":      true,
+		"custom":           true,
+		"consensus-member": true,
 	}
 	if !validAppTypes[req.AppType] {
 		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollInvalidAppType.Error()}, nil

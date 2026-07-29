@@ -1,15 +1,15 @@
 {
   "description": "Environment variable names consumed by the g8e Operator and CLI.",
   "env_vars": {
-    "TribunalID": {
-      "_go_const": "EnvVar.TribunalID",
-      "value": "G8E_TRIBUNAL_ID",
-      "description": "Tribunal ID for governance posture (doctrine, consensus, notary)"
+    "ConsensusID": {
+      "_go_const": "EnvVar.ConsensusID",
+      "value": "G8E_CONSENSUS_ID",
+      "description": "Consensus ID for governance posture (doctrine, consensus, notary)"
     },
-    "TribunalURL": {
-      "_go_const": "EnvVar.TribunalURL",
-      "value": "G8E_TRIBUNAL_URL",
-      "description": "Tribunal URL for governance posture (doctrine, consensus, notary)"
+    "ConsensusURL": {
+      "_go_const": "EnvVar.ConsensusURL",
+      "value": "G8E_CONSENSUS_URL",
+      "description": "Consensus URL for governance posture (doctrine, consensus, notary)"
     },
     "VaultDir": {
       "_go_const": "",

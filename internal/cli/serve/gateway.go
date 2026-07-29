@@ -33,6 +33,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/services/consensus"
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	gateway "github.com/g8e-ai/g8e/internal/services/gateway"
@@ -41,7 +42,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
-	"github.com/g8e-ai/g8e/internal/services/tribunal"
 )
 
 // GatewayConfig holds configuration for starting the gateway in gateway mode.
@@ -62,13 +62,14 @@ type GatewayConfig struct {
 	LogLevel            string
 	CertIdentityMode    string
 	NetworkIdentityFile string
-	TribunalID          string
-	TribunalURL         string
-	TribunalBootstrap   string
+	ConsensusID         string
+	ConsensusURL        string
+	ConsensusBootstrap  string
 	MCPDownstreamURL    string
 	A2ADownstreamURL    string
 	PublicBaseURL       string
 	AllowedOrigins      []string
+	DoctrineDir         string
 }
 
 // RunGateway starts the Operator in gateway mode - the platform's central
@@ -145,8 +146,9 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		A2ADownstreamURL:    cfg.A2ADownstreamURL, // empty by default — no downstream proxy
 		PublicBaseURL:       cfg.PublicBaseURL,
 		AllowedOrigins:      cfg.AllowedOrigins,
-		TribunalID:          cfg.TribunalID,
-		TribunalURL:         cfg.TribunalURL,
+		ConsensusID:         cfg.ConsensusID,
+		ConsensusURL:        cfg.ConsensusURL,
+		DoctrineDir:         cfg.DoctrineDir,
 		AllowTestPortZero:   false,
 	})
 	if err != nil {
@@ -159,34 +161,34 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		return fmt.Errorf("gateway: create service: %w", err)
 	}
 
-	// Tribunal bootstrap: if --tribunal-bootstrap is set, seed the trusted
-	// signer(s) and TribunalPolicy from a JSON config file before L2 posture
+	// Consensus bootstrap: if --consensus-bootstrap is set, seed the trusted
+	// signer(s) and ConsensusPolicy from a JSON config file before L2 posture
 	// validation runs. This enables deterministic demo deployments where the
 	// gateway and harness share the same Ed25519 seed. The seed-derived private
 	// key is also saved to disk so the in-process LocalDeliberator can sign L2
-	// votes via the FileKeyProvider during BootstrapTribunal.
-	if cfg.TribunalBootstrap != "" {
-		if err := bootstrapTribunalPolicy(svc, cfg.TribunalBootstrap, cfg.SecretsDir, logger); err != nil {
-			return fmt.Errorf("gateway: tribunal bootstrap: %w", err)
+	// votes via the FileKeyProvider during ConsensusBootstrap.
+	if cfg.ConsensusBootstrap != "" {
+		if err := consensusPolicyBootstrap(svc, cfg.ConsensusBootstrap, cfg.SecretsDir, logger); err != nil {
+			return fmt.Errorf("gateway: consensus bootstrap: %w", err)
 		}
 	}
 
 	// L2 posture advisory check for consensus/notary:
-	// The gateway starts regardless of tribunal configuration — L2 enforcement
-	// happens at transaction time via L4Warden. If no tribunal is configured yet,
+	// The gateway starts regardless of consensus configuration — L2 enforcement
+	// happens at transaction time via L4Warden. If no consensus is configured yet,
 	// log a warning so the operator knows L2-gated transactions will be rejected
-	// until a tribunal policy is enrolled.
+	// until a consensus policy is enrolled.
 	if cfg.Posture == config.PostureConsensus || cfg.Posture == config.PostureNotary {
-		if cfg.TribunalID == "" {
-			logger.Warn("L2 posture requires tribunal but no --tribunal-id set; L2-gated transactions will be rejected until a tribunal is configured",
+		if cfg.ConsensusID == "" {
+			logger.Warn("L2 posture requires consensus but no --consensus-id set; L2-gated transactions will be rejected until a consensus is configured",
 				"posture", cfg.Posture)
 		} else {
-			policy, err := svc.GetStores().TribunalStore.GetTribunal(cfg.TribunalID)
+			policy, err := svc.GetStores().ConsensusStore.GetConsensus(cfg.ConsensusID)
 			if err != nil || policy == nil || !policy.Enabled {
-				logger.Warn("L2 posture requires tribunal but policy not found or disabled; L2-gated transactions will be rejected until tribunal is enrolled",
-					"posture", cfg.Posture, "tribunal_id", cfg.TribunalID)
+				logger.Warn("L2 posture requires consensus but policy not found or disabled; L2-gated transactions will be rejected until consensus is enrolled",
+					"posture", cfg.Posture, "consensus_id", cfg.ConsensusID)
 			} else {
-				logger.Info("Tribunal policy validated", "tribunal_id", cfg.TribunalID, "members", len(policy.MemberAppIDs), "quorum", policy.Quorum)
+				logger.Info("Consensus policy validated", "consensus_id", cfg.ConsensusID, "members", len(policy.MemberAppIDs), "quorum", policy.Quorum)
 			}
 		}
 	}
@@ -223,11 +225,11 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	}
 
 	// Loopback Pub/Sub for in-process command dispatch
-	loopbackClient := pubsub.NewInProcessPubSubClient(svc.GetHTTPHandler().GetGatewayWebSocketHandler())
+	loopbackClient := pubsub.NewInProcessPubSubClient(svc.GetGatewayWebSocketHandler())
 
 	// Resolve the MCP gateway up-front so the pubsub command service can
 	// reach it for Actuator egress dispatch on verified MCP_CALL transactions.
-	mcpSvc := svc.GetHTTPHandler().GetMCPGateway()
+	mcpSvc := svc.GetMCPGateway()
 
 	// Get the GatewayDBService's AuditStore for full audit storage
 	// This ensures ActionReceipts are persisted in the receipts table
@@ -242,6 +244,21 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	scrubbingSvc, err := scrubbing.NewScrubbingService(ctx, scrubbing.DefaultConfig(), logger, nil)
 	if err != nil {
 		return fmt.Errorf("gateway: failed to initialize scrubbing service: %w", err)
+	}
+
+	// Bootstrap Consensus service for L2-requiring postures before constructing
+	// the pubsub command service, so the L2ConsensusDeliberator can be passed
+	// through GatewayCommandServiceConfig into the MCP gateway's RuntimeDependencies.
+	// Under doctrine posture, the Consensus is not constructed.
+	var consensusSvc *consensus.ConsensusService
+	var l2Deliberator *consensus.LocalDeliberator
+	if (cfg.Posture == config.PostureConsensus || cfg.Posture == config.PostureNotary) && cfg.ConsensusID != "" {
+		consensusSvc, err = ConsensusBootstrap(svc, cfg.ConsensusID, actuatorPriv, actuatorKeyID, cfg.SecretsDir, logger)
+		if err != nil {
+			return fmt.Errorf("gateway: bootstrap consensus service: %w", err)
+		}
+		l2Deliberator = consensus.NewLocalDeliberator(consensusSvc)
+		logger.Info("Consensus service bootstrapped", "consensus_id", cfg.ConsensusID)
 	}
 
 	psConfig := pubsub.GatewayCommandServiceConfig{
@@ -260,8 +277,9 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 			ActuatorSigningKey: actuatorPriv,
 			ActuatorKeyID:      actuatorKeyID,
 		},
-		GovDeps:    govDeps,
-		MCPGateway: mcpSvc,
+		GovDeps:                govDeps,
+		MCPGateway:             mcpSvc,
+		L2ConsensusDeliberator: l2Deliberator,
 	}
 
 	cmdSvc, err := pubsub.NewGatewayOperatorPubSubService(psConfig)
@@ -269,29 +287,16 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		return fmt.Errorf("gateway: initialize command service: %w", err)
 	}
 
-	// Wire the synchronous fail-closed mutation gate into the gateway HTTP
-	// surface. Once set, BYO clients can POST GovernanceEnvelope envelopes to
-	// /api/v1/governance/envelopes and receive a signed ActionReceipt.
-	svc.SetEnvelopeProcessor(cmdSvc)
-
 	// The MCP gateway's runtime governance dependencies (gateway processor,
-	// signing identity, audit logger, etc.) are wired by
-	// NewGatewayOperatorPubSubService, which received mcpSvc through
-	// psConfig.MCPGateway. No additional gateway wiring is needed here.
+	// signing identity, audit logger, L2 consensus deliberator, etc.) are wired
+	// by NewGatewayOperatorPubSubService, which received mcpSvc and l2Deliberator
+	// through GatewayCommandServiceConfig. No additional gateway wiring is needed.
 
-	// Bootstrap Tribunal service for L2-requiring postures (Phase 5.2):
-	// Construct the TribunalService in-process and wire it both as the mTLS
-	// HTTP handler (for remote deliberation calls) and as the local deliberator
-	// (for in-process envelope processing). Under doctrine posture, the
-	// Tribunal is not constructed.
-	if (cfg.Posture == config.PostureConsensus || cfg.Posture == config.PostureNotary) && cfg.TribunalID != "" {
-		tribunalSvc, err := BootstrapTribunal(svc, cfg.TribunalID, actuatorPriv, actuatorKeyID, cfg.SecretsDir, logger)
-		if err != nil {
-			return fmt.Errorf("gateway: bootstrap tribunal service: %w", err)
-		}
-		svc.SetTribunal(tribunalSvc)
-		mcpSvc.SetL2ConsensusDeliberator(tribunal.NewLocalDeliberator(tribunalSvc))
-		logger.Info("Tribunal service bootstrapped", "tribunal_id", cfg.TribunalID)
+	// Phase 2: create HTTP handler and servers with all dependencies injected.
+	// This ensures consensus and envelope processor are wired before any
+	// request can be served, eliminating the need for 503 fail-closed guards.
+	if err := svc.InitHTTPHandler(consensusSvc, cmdSvc); err != nil {
+		return fmt.Errorf("gateway: initialize HTTP handler: %w", err)
 	}
 
 	var wg sync.WaitGroup
@@ -362,25 +367,25 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	}
 }
 
-// tribunalBootstrapConfig is the typed JSON config for declarative tribunal
+// consensusBootstrapConfig is the typed JSON config for declarative consensus
 // seeding at gateway startup.
-type tribunalBootstrapConfig struct {
-	TribunalID   string   `json:"tribunal_id"`
+type consensusBootstrapConfig struct {
+	ConsensusID  string   `json:"consensus_id"`
 	MemberAppIDs []string `json:"member_app_ids"`
 	Quorum       int      `json:"quorum"`
 	SeedHex      string   `json:"seed_hex"`
 }
 
-// parseTribunalBootstrapConfig parses and validates a tribunal bootstrap JSON
+// parseConsensusBootstrapConfig parses and validates a consensus bootstrap JSON
 // config. Returns an error if the JSON is malformed or required fields are
 // missing/invalid.
-func parseTribunalBootstrapConfig(data []byte) (tribunalBootstrapConfig, error) {
-	var boot tribunalBootstrapConfig
+func parseConsensusBootstrapConfig(data []byte) (consensusBootstrapConfig, error) {
+	var boot consensusBootstrapConfig
 	if err := json.Unmarshal(data, &boot); err != nil {
-		return boot, fmt.Errorf("%w: %w", constants.ErrTribunalBootstrapParseConfig, err)
+		return boot, fmt.Errorf("%w: %w", constants.ErrConsensusBootstrapParseConfig, err)
 	}
-	if boot.TribunalID == "" || len(boot.MemberAppIDs) == 0 || boot.Quorum < 1 {
-		return boot, constants.ErrTribunalBootstrapMissingFields
+	if boot.ConsensusID == "" || len(boot.MemberAppIDs) == 0 || boot.Quorum < 1 {
+		return boot, constants.ErrConsensusBootstrapMissingFields
 	}
 	return boot, nil
 }
@@ -391,21 +396,21 @@ func parseTribunalBootstrapConfig(data []byte) (tribunalBootstrapConfig, error) 
 func deriveSeedPublicKey(seedHex string) (string, error) {
 	seed, err := hex.DecodeString(strings.TrimSpace(seedHex))
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrTribunalBootstrapDecodeSeed, err)
+		return "", fmt.Errorf("%w: %w", constants.ErrConsensusBootstrapDecodeSeed, err)
 	}
 	if len(seed) != ed25519.SeedSize {
-		return "", fmt.Errorf("tribunal bootstrap: %w: got %d, expected %d", constants.ErrInvalidSeedLength, len(seed), ed25519.SeedSize)
+		return "", fmt.Errorf("consensus bootstrap: %w: got %d, expected %d", constants.ErrInvalidSeedLength, len(seed), ed25519.SeedSize)
 	}
 	priv := ed25519.NewKeyFromSeed(seed)
 	pub := priv.Public().(ed25519.PublicKey)
 	return hex.EncodeToString(pub), nil
 }
 
-// bootstrapTribunalPolicy seeds trusted signers and a TribunalPolicy from a
+// consensusPolicyBootstrap seeds trusted signers and a ConsensusPolicy from a
 // JSON config file. The file format is:
 //
 //	{
-//	  "tribunal_id": "dhs-tribunal",
+//	  "consensus_id": "dhs-consensus",
 //	  "member_app_ids": ["dhs-ensemble"],
 //	  "quorum": 1,
 //	  "seed_hex": "<hex-encoded Ed25519 seed>"  // optional
@@ -416,30 +421,30 @@ func deriveSeedPublicKey(seedHex string) (string, error) {
 // seed-derived private key is saved to secretsDir so the in-process
 // LocalDeliberator can sign L2 votes via FileKeyProvider. If seed_hex is
 // omitted, a fresh key pair is generated and saved the same way. The
-// TribunalPolicy is then created in the database. This is idempotent: if the
-// tribunal already exists, the bootstrap is skipped.
-func bootstrapTribunalPolicy(svc *gateway.GatewayModeService, bootstrapPath string, secretsDir string, logger *slog.Logger) error {
+// ConsensusPolicy is then created in the database. This is idempotent: if the
+// consensus already exists, the bootstrap is skipped.
+func consensusPolicyBootstrap(svc *gateway.GatewayModeService, bootstrapPath string, secretsDir string, logger *slog.Logger) error {
 	data, err := os.ReadFile(bootstrapPath)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrTribunalBootstrapReadConfig, err)
+		return fmt.Errorf("%w: %w", constants.ErrConsensusBootstrapReadConfig, err)
 	}
 
-	boot, err := parseTribunalBootstrapConfig(data)
+	boot, err := parseConsensusBootstrapConfig(data)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrTribunalBootstrapParseConfig, err)
+		return fmt.Errorf("%w: %w", constants.ErrConsensusBootstrapParseConfig, err)
 	}
 
 	if svc == nil {
 		return constants.ErrGatewayServiceNil
 	}
 
-	// Check if tribunal already exists (idempotent)
-	existing, err := svc.GetStores().TribunalStore.GetTribunal(boot.TribunalID)
+	// Check if consensus already exists (idempotent)
+	existing, err := svc.GetStores().ConsensusStore.GetConsensus(boot.ConsensusID)
 	if err != nil {
-		return fmt.Errorf("tribunal bootstrap: check existing: %w", err)
+		return fmt.Errorf("consensus bootstrap: check existing: %w", err)
 	}
 	if existing != nil {
-		logger.Info("Tribunal already exists, skipping bootstrap", "tribunal_id", boot.TribunalID)
+		logger.Info("Consensus already exists, skipping bootstrap", "consensus_id", boot.ConsensusID)
 		return nil
 	}
 
@@ -449,17 +454,17 @@ func bootstrapTribunalPolicy(svc *gateway.GatewayModeService, bootstrapPath stri
 	if boot.SeedHex != "" {
 		pubHex, err = deriveSeedPublicKey(boot.SeedHex)
 		if err != nil {
-			return fmt.Errorf("tribunal bootstrap: derive seed public key: %w", err)
+			return fmt.Errorf("consensus bootstrap: derive seed public key: %w", err)
 		}
 		seedBytes, err := hex.DecodeString(strings.TrimSpace(boot.SeedHex))
 		if err != nil {
-			return fmt.Errorf("tribunal bootstrap: decode seed: %w", err)
+			return fmt.Errorf("consensus bootstrap: decode seed: %w", err)
 		}
 		privKey = ed25519.NewKeyFromSeed(seedBytes)
 	} else {
 		pub, priv, err := ed25519.GenerateKey(nil)
 		if err != nil {
-			return fmt.Errorf("tribunal bootstrap: generate key: %w", err)
+			return fmt.Errorf("consensus bootstrap: generate key: %w", err)
 		}
 		pubHex = hex.EncodeToString(pub)
 		privKey = priv
@@ -476,62 +481,62 @@ func bootstrapTribunalPolicy(svc *gateway.GatewayModeService, bootstrapPath stri
 			Enabled:   true,
 		}
 		if err := svc.GetStores().SignerStore.AddTrustedSigner(signer); err != nil {
-			return fmt.Errorf("tribunal bootstrap: register signer %s: %w", appID, err)
+			return fmt.Errorf("consensus bootstrap: register signer %s: %w", appID, err)
 		}
-		if err := tribunal.SaveMemberKey(secretsDir, boot.TribunalID, appID, privKey); err != nil {
-			return fmt.Errorf("tribunal bootstrap: save member key %s: %w", appID, err)
+		if err := consensus.SaveMemberKey(secretsDir, boot.ConsensusID, appID, privKey); err != nil {
+			return fmt.Errorf("consensus bootstrap: save member key %s: %w", appID, err)
 		}
 		logger.Info("Trusted signer registered and key saved", "app_id", appID)
 	}
 
-	// Create the TribunalPolicy
-	policy := models.TribunalPolicy{
-		ID:              boot.TribunalID,
+	// Create the ConsensusPolicy
+	policy := models.ConsensusPolicy{
+		ID:              boot.ConsensusID,
 		MemberAppIDs:    boot.MemberAppIDs,
 		Quorum:          boot.Quorum,
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	if err := svc.GetStores().TribunalStore.AddTribunal(policy); err != nil {
-		return fmt.Errorf("tribunal bootstrap: create policy: %w", err)
+	if err := svc.GetStores().ConsensusStore.AddConsensus(policy); err != nil {
+		return fmt.Errorf("consensus bootstrap: create policy: %w", err)
 	}
-	logger.Info("Tribunal policy created", "tribunal_id", boot.TribunalID, "members", len(boot.MemberAppIDs), "quorum", boot.Quorum)
+	logger.Info("Consensus policy created", "consensus_id", boot.ConsensusID, "members", len(boot.MemberAppIDs), "quorum", boot.Quorum)
 	return nil
 }
 
-// BootstrapTribunal constructs a TribunalService from the TribunalPolicy stored
-// in the database. For single-member tribunals, the gateway's actuator signing
+// ConsensusBootstrap constructs a ConsensusService from the ConsensusPolicy stored
+// in the database. For single-member consensus, the gateway's actuator signing
 // key is used as the member private key (Option C from the design doc). For
-// multi-member tribunals, member keys are loaded from disk via FileKeyProvider
+// multi-member consensus, member keys are loaded from disk via FileKeyProvider
 // (CS-9), falling back to the actuator key for the matching member.
-func BootstrapTribunal(svc *gateway.GatewayModeService, tribunalID string, actuatorPriv ed25519.PrivateKey, actuatorKeyID string, secretsDir string, logger *slog.Logger) (*tribunal.TribunalService, error) {
+func ConsensusBootstrap(svc *gateway.GatewayModeService, consensusID string, actuatorPriv ed25519.PrivateKey, actuatorKeyID string, secretsDir string, logger *slog.Logger) (*consensus.ConsensusService, error) {
 	if svc == nil {
 		return nil, constants.ErrGatewayServiceNil
 	}
-	policy, err := svc.GetStores().TribunalStore.GetTribunal(tribunalID)
+	policy, err := svc.GetStores().ConsensusStore.GetConsensus(consensusID)
 	if err != nil {
-		return nil, fmt.Errorf("bootstrap tribunal: load policy: %w", err)
+		return nil, fmt.Errorf("bootstrap consensus: load policy: %w", err)
 	}
 	if policy == nil {
-		return nil, fmt.Errorf("bootstrap tribunal: %w: %s", constants.ErrTxL2ConsensusNotConfigured, tribunalID)
+		return nil, fmt.Errorf("bootstrap consensus: %w: %s", constants.ErrTxL2ConsensusNotConfigured, consensusID)
 	}
 
-	fileProvider := tribunal.NewFileKeyProvider(secretsDir, tribunalID)
+	fileProvider := consensus.NewFileKeyProvider(secretsDir, consensusID)
 
-	keyProvider := tribunal.KeyProviderFunc(func(appID string) (ed25519.PrivateKey, error) {
+	keyProvider := consensus.KeyProviderFunc(func(appID string) (ed25519.PrivateKey, error) {
 		if key, err := fileProvider.GetMemberKey(appID); err == nil {
-			logger.Info("Tribunal member key loaded from file", "member_app_id", appID)
+			logger.Info("Consensus member key loaded from file", "member_app_id", appID)
 			return key, nil
 		}
 
 		if appID == actuatorKeyID {
 			return actuatorPriv, nil
 		}
-		return nil, fmt.Errorf("bootstrap tribunal: %w: %s (no file key and not the actuator)", constants.ErrTribunalMemberKeyNotFound, appID)
+		return nil, fmt.Errorf("bootstrap consensus: %w: %s (no file key and not the actuator)", constants.ErrConsensusMemberKeyNotFound, appID)
 	})
 
 	doctrine := govsvc.NewL1Doctrine()
 	responder := response.NewWriter(logger)
 
-	return tribunal.NewTribunalFromPolicy(policy, keyProvider, doctrine, logger, responder)
+	return consensus.NewConsensusFromPolicy(policy, keyProvider, doctrine, logger, responder)
 }

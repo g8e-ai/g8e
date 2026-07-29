@@ -776,7 +776,7 @@ func callNativeToolViaEnvelope(t *testing.T, client *http.Client, operatorURL, s
 		Payload:         buildToolCallPayload(toolName, arguments),
 		Governance: &commonv1.GovernanceMetadata{
 			L2: &commonv1.L2Metadata{
-				ConsensusSetId: "test-tribunal",
+				ConsensusSetId: "test-consensus",
 				Votes: []*commonv1.L2Vote{
 					{
 						SignerKeyId:        "gateway-local-signer",

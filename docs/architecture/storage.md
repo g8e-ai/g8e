@@ -1,15 +1,17 @@
 # Storage Architecture
 
-Last Updated: 2026-07-24
-Version: v1.6.2
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 ## Overview
 
 The g8e storage layer is split into discrete services, each responsible for a specific persistence concern. Most services use SQLite as their backing store; the Ledger uses git for file version control, and the History Handler is a stateless coordinator that delegates to the Audit Store and Ledger. Mandatory [encryption at rest](./encryption.md) is enforced for sensitive data.
 
-Services that handle sensitive content require a vault. The Audit Store, Execution Vault, and Token Store fail closed when the vault is locked, returning errors rather than writing plaintext. The Ledger encrypts file copies when the vault is unlocked and fails closed for file retrieval and restoration. Services that store only public or non-sensitive data (nonces, governance envelopes, attestations) do not require encryption. The Audit Store, Token Store, and Replay Store operate on the shared gateway database (`g8e.db`) in gateway mode, managed by the CanonicalDBService. The CanonicalDBService owns the database connection, vault, and background maintenance, while domain logic is delegated to individual store services returned as a `Stores` struct. In outbound mode, the Replay Store uses a standalone SQLite database.
+Services that handle sensitive content require an unlocked vault. The Audit Store, Execution Vault, and Token Store fail closed when the vault is locked, returning errors rather than writing plaintext. The Ledger encrypts file copies when the vault is unlocked and fails closed for file retrieval and restoration. Services that store only public or non-sensitive data (nonces, governance envelopes, attestations) do not require encryption.
 
-The storage layer consists of the following services:
+In gateway mode, the Audit Store, Token Store, Replay Store, Document Store, Key-Value Store, Blob Store, and SSE Event Buffer operate on the shared gateway database (`g8e.db`), managed by the canonical database service. The canonical database service owns the database connection, vault, and background maintenance, while domain logic is delegated to individual store services. In outbound mode, the Replay Store operates as a standalone SQLite database.
+
+The storage layer consists of the following primary services:
 
 - **Audit Store**: Append-only audit logging for operator sessions, events, file mutations, and signed action receipts
 - **Ledger**: Git-backed version control for file modifications, with per-session isolation
@@ -19,6 +21,7 @@ The storage layer consists of the following services:
 - **Suspended Transaction Store**: Persistence for transactions awaiting [L3 approval](./auth.md#layer-3-notary-l3notary)
 - **Commitment Ledger**: Commitment attestations with chain integrity verification
 - **History Handler**: Unified history retrieval combining the audit store and ledger
+- **Canonical Gateway Persistence**: Document, key-value, blob, and event stream persistence in the shared database
 
 ---
 
@@ -26,7 +29,7 @@ The storage layer consists of the following services:
 
 ### Audit Store
 
-The Audit Store is the authoritative append-only record of operator sessions, events, file mutations, and signed action receipts. It tracks all system activity and provides the data backbone for audit queries and compliance reporting. The Audit Store operates on the shared gateway database (`g8e.db`) alongside the KV store, document store, and other gateway services.
+The Audit Store is the authoritative append-only record of operator sessions, events, file mutations, and signed action receipts. It tracks system activity and provides the data backbone for audit queries and compliance reporting. The Audit Store operates on the shared gateway database (`g8e.db`) alongside the KV store, document store, and other gateway services.
 
 **Capabilities:**
 
@@ -154,6 +157,17 @@ The History Handler is a thin coordinator that combines the Audit Store and Ledg
 
 ---
 
+### Canonical Gateway Persistence
+
+The canonical gateway database (`g8e.db`) provides unified storage primitives used by higher-level gateway services:
+
+- **Document Store**: Stores JSON documents keyed by collection and identifier, tracking state versions for Merkle root computation
+- **Key-Value Store**: Provides TTL-bearing key-value persistence with state tiers (`bound` or `observed`) and cache invalidation triggers
+- **Blob Store**: Manages raw binary attachments with namespace isolation, TTL, and state tier classification
+- **SSE Event Buffer**: Maintains a per-routing-target ring buffer enabling reconnection replay across web sessions, CLI sessions, and user streams
+
+---
+
 ## Runtime File I/O Abstraction
 
 All storage services that interact with the filesystem do so through a shared file I/O abstraction scoped to the `.g8e/` runtime directory. This abstraction provides atomic file writes via a temporary file and rename pattern, path resolution that confines operations within the runtime directory, and recursive permission enforcement for directories and files. The Ledger and Audit Store both rely on this abstraction for all filesystem operations, ensuring consistent path handling and preventing writes outside the runtime directory.
@@ -173,6 +187,8 @@ Behavior when the vault is locked varies by service:
 - **Replay Store**: No encryption required. Nonces contain no sensitive content.
 - **Suspended Transaction Store**: No encryption required. Governance envelopes are public audit data.
 - **Commitment Ledger**: No encryption required. Attestations are public audit data.
+
+---
 
 ## Retention and Pruning
 
@@ -201,7 +217,7 @@ Paths are normalized for platform-appropriate separators on Windows, converting 
 3. **Commitment chain integrity**: The Commitment Ledger verifies the prior commitment hash inside a transaction to prevent chain forks under concurrent writes.
 4. **Session validation**: Audit events must reference an existing session row. Foreign key constraints are enforced at the schema level.
 5. **Path traversal protection**: The Ledger strips drive letters and leading separators before constructing ledger-relative paths.
-6. **Cross-platform path safety**: The shared path utility layer prevents double-joining of absolute paths on Windows and normalizes separators across platforms. See [Cross-Platform Path Handling](#cross-platform-path-handling).
+6. **Cross-Platform path safety**: The shared path utility layer prevents double-joining of absolute paths on Windows and normalizes separators across platforms. See [Cross-Platform Path Handling](#cross-platform-path-handling).
 7. **Size limits for encrypted copies**: The Ledger enforces a 100 MB cap on encrypted file copies to prevent OOM during the full-read required by AES-GCM.
 8. **Atomic nonce reservation**: The UNIQUE constraint on the nonce column provides atomicity without application-level locking.
 9. **Runtime directory confinement**: The shared file I/O abstraction resolves all paths relative to the `.g8e/` runtime directory, preventing writes outside the intended scope.

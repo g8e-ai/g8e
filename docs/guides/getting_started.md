@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-07-25
-Version: v1.6.4
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 ---
 
@@ -70,7 +70,7 @@ If you only need the g8e wire protocol — constants, models, enums, or protobuf
 As of v1.5.0, the protocol is part of the root Go module. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.6.3
+go get github.com/g8e-ai/g8e@v1.6.6
 ```
 
 Import the protocol packages in your Go code:
@@ -95,7 +95,7 @@ pip install g8e
 Pinned to a specific version:
 
 ```bash
-pip install g8e==1.6.3
+pip install g8e==1.6.6
 ```
 
 The package provides:
@@ -451,6 +451,23 @@ When enrolling the CLI against a demo gateway, use the HTTP and HTTPS ports from
 ```
 
 For example, to enroll against the healthcare demo: `./g8e auth enroll -e localhost:8081 --port 8444`.
+
+### Verify all demos
+
+Run the one-command demo verification target to build the binary and run all 6 demos sequentially:
+
+```bash
+make demo-verify
+```
+
+This target depends on `make build`, then for each demo (healthcare, gov, finance, dhs, fedramp, frontend) it:
+
+1. Stops any running instance and cleans up volumes
+2. Runs all scenarios via `g8e demos run <org>`
+3. Stops and cleans up after the demo
+4. Reports PASS or FAIL
+
+If any demo fails, the target exits immediately with a non-zero status. All 6 demos must pass for the target to succeed.
 
 ---
 

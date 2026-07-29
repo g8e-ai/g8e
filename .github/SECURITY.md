@@ -69,7 +69,7 @@ We will not pursue legal action against researchers acting in good faith under t
 The following are structural properties of g8e, provided to help researchers understand the intended security model:
 
 - **Fail-closed by design.** Any verification failure at the L1-L4 layers (Doctrine, Consensus, Notary, Warden) drops the payload and writes an audit record. There is no fallback execution path.
-- **Sovereign Execution Boundary.** The `g8e Operator` (PEP) acts as the sovereign boundary. It refuses to mutate host reality unless a transaction carries a valid L2 signature (Tribunal consensus) and, where required, an L3 proof (Human-in-the-loop).
+- **Sovereign Execution Boundary.** The `g8e Operator` (PEP) acts as the sovereign boundary. It refuses to mutate host reality unless a transaction carries a valid L2 signature (Consensus consensus) and, where required, an L3 proof (Human-in-the-loop).
 - **No ambient execution authority.** No component holds standing permission to mutate state. Authority is granted strictly per-transaction via the `GovernanceEnvelope`, verified independently at the PEP.
 - **Local audit sovereignty.** Raw forensic material is stored locally in the `SQLAuditStore`. The Sovereign Execution Boundary scrubs all outbound data before delivery to remote clients or AI systems.
 - **Mandatory encryption at rest.** All storage services require an unlocked vault for initialization. Sensitive data (command stdout/stderr, file diffs, content) is encrypted at rest using AES-256-GCM with per-operation nonces. Encryption operations fail-closed if the vault is locked.

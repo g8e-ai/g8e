@@ -47,6 +47,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/services/consensus"
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/gateway"
@@ -55,7 +56,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/network"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
-	"github.com/g8e-ai/g8e/internal/services/tribunal"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
@@ -85,6 +85,14 @@ type GatewayFixtureOptions struct {
 	A2ADownstreamURL  string // A2A downstream; if empty, reuses MCP downstream server
 	AllowTestPortZero bool
 	PublicBaseURL     string // Public base URL for approval links; defaults to localhost:HTTPS_port
+
+	// Consensus configuration for consensus/notary postures. When zero-valued,
+	// defaults to a single-member consensus (nMembers=1, quorum=1, nServiceMembers=1)
+	// with consensusID "test-consensus".
+	ConsensusID              string
+	ConsensusNMembers        int
+	ConsensusQuorum          int
+	ConsensusNServiceMembers int
 }
 
 // repoTestResultsDir returns <repo>/test-results, computed from this source
@@ -248,11 +256,46 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	})
 	require.NoError(t, err)
 
-	mcpGateway := ls.GetHTTPHandler().GetMCPGateway()
+	mcpGateway := ls.GetMCPGateway()
 	require.NotNil(t, mcpGateway)
 
 	scrubbingSvc, err := scrubbing.NewScrubbingService(context.Background(), scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil)
 	require.NoError(t, err)
+
+	// Auto-wire a Consensus for postures that require L2 signatures (consensus, notary).
+	// Without L2 votes, the Warden rejects at L2 before L3 is ever checked.
+	// This must happen before NewGatewayOperatorPubSubService so the deliberator
+	// can be passed through GatewayCommandServiceConfig.L2ConsensusDeliberator
+	// into the MCP gateway's RuntimeDependencies.
+	var consensusSvc *consensus.ConsensusService
+	var l2Deliberator *consensus.LocalDeliberator
+	if posture == config.PostureConsensus || posture == config.PostureNotary {
+		consensusID := opts.ConsensusID
+		if consensusID == "" {
+			consensusID = "test-consensus"
+		}
+		nMembers := opts.ConsensusNMembers
+		if nMembers == 0 {
+			nMembers = 1
+		}
+		quorum := opts.ConsensusQuorum
+		if quorum == 0 {
+			quorum = 1
+		}
+		nServiceMembers := opts.ConsensusNServiceMembers
+		if nServiceMembers == 0 {
+			nServiceMembers = 1
+		}
+		cs := SetupConsensus(t, &GatewayFixture{
+			Config:        cfg,
+			Service:       ls,
+			MCPGateway:    mcpGateway,
+			ActuatorPriv:  ActuatorPriv,
+			ActuatorKeyID: ActuatorKeyID,
+		}, consensusID, nMembers, quorum, nServiceMembers)
+		consensusSvc = cs.Service
+		l2Deliberator = cs.Deliberator
+	}
 
 	cmdSvc, err := pubsub.NewGatewayOperatorPubSubService(pubsub.GatewayCommandServiceConfig{
 		CommandServiceConfig: pubsub.CommandServiceConfig{
@@ -260,7 +303,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 			Logger:             testutil.NewTestLogger(),
 			Execution:          execSvc,
 			FileEdit:           fileEditSvc,
-			PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetGatewayWebSocketHandler()),
+			PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetGatewayWebSocketHandler()),
 			Scrubbing:          scrubbingSvc,
 			ActuatorSigningKey: ActuatorPriv,
 			ActuatorKeyID:      ActuatorKeyID,
@@ -274,26 +317,17 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 			L3Notary:             RejectingL3Notary{},
 			FieldReader:          govDeps.FieldReader,
 		},
-		MCPGateway: mcpGateway,
+		MCPGateway:             mcpGateway,
+		L2ConsensusDeliberator: l2Deliberator,
 	})
 	require.NoError(t, err)
-	ls.SetEnvelopeProcessor(cmdSvc)
 
 	// The MCP gateway's runtime governance dependencies are wired by
 	// NewGatewayOperatorPubSubService (mcpGateway was passed in through
 	// GatewayCommandServiceConfig.MCPGateway above), so no extra wiring is needed.
 
-	// Auto-wire a Tribunal for postures that require L2 signatures (consensus, notary).
-	// Without L2 votes, the Warden rejects at L2 before L3 is ever checked.
-	if posture == config.PostureConsensus || posture == config.PostureNotary {
-		SetupTribunal(t, &GatewayFixture{
-			Config:        cfg,
-			Service:       ls,
-			MCPGateway:    mcpGateway,
-			ActuatorPriv:  ActuatorPriv,
-			ActuatorKeyID: ActuatorKeyID,
-		}, "test-tribunal", 1, 1, 1)
-	}
+	// Phase 2: create HTTP handler and servers with all deps injected.
+	require.NoError(t, ls.InitHTTPHandler(consensusSvc, cmdSvc))
 
 	// Seed platform_settings required for health check
 	err = ls.GetStores().DocStore.DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
@@ -635,36 +669,39 @@ func (rt *cliSessionRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 	return rt.base.RoundTrip(clone)
 }
 
-// TribunalSetup holds the result of wiring a real TribunalService into a gateway fixture.
-type TribunalSetup struct {
-	TribunalID string
-	Members    []tribunal.TribunalMember
-	Service    *tribunal.TribunalService
+// ConsensusSetup holds the result of wiring a real ConsensusService into a gateway fixture.
+type ConsensusSetup struct {
+	ConsensusID string
+	Members     []consensus.ConsensusMember
+	Service     *consensus.ConsensusService
+	Deliberator *consensus.LocalDeliberator
 }
 
-// SetupTribunal wires a real TribunalService into the gateway fixture for consensus
+// SetupConsensus wires a real ConsensusService into the gateway fixture for consensus
 // posture integration tests. It generates nMembers Ed25519 key pairs, registers each
-// member's public key as a TrustedSigner, creates a TribunalPolicy in the TribunalStore,
-// constructs a TribunalService via the shared tribunal.NewTribunalFromPolicy factory,
-// and wires it into both the gateway service (SetTribunal) and the MCP gateway
-// (SetL2ConsensusDeliberator).
+// member's public key as a TrustedSigner, creates a ConsensusPolicy in the ConsensusStore,
+// constructs a ConsensusService via the shared consensus.NewConsensusFromPolicy factory,
+// and returns a LocalDeliberator via ConsensusSetup.Deliberator. The caller
+// passes the deliberator through GatewayCommandServiceConfig.L2ConsensusDeliberator
+// so it is wired into the MCP gateway's RuntimeDependencies. The returned
+// ConsensusSetup.Service is passed to InitHTTPHandler by the caller.
 //
 // If nServiceMembers < nMembers, only the first nServiceMembers are given private keys
 // — the remaining policy members exist in the store but cannot vote (their keys resolve
 // to nil via the KeyProvider, and Deliberate skips nil-key members). This lets tests
 // simulate quorum-not-reached by producing fewer votes than the quorum threshold requires.
 //
-// This uses the same tribunal.NewTribunalFromPolicy factory as production BootstrapTribunal
+// This uses the same consensus.NewConsensusFromPolicy factory as production ConsensusBootstrap
 // in internal/cli/serve/gateway.go, eliminating the duplication identified in CS-12.
-func SetupTribunal(t *testing.T, f *GatewayFixture, tribunalID string, nMembers, quorum, nServiceMembers int) *TribunalSetup {
+func SetupConsensus(t *testing.T, f *GatewayFixture, consensusID string, nMembers, quorum, nServiceMembers int) *ConsensusSetup {
 	t.Helper()
 
 	memberAppIDs := make([]string, nMembers)
 	memberKeys := make(map[string]ed25519.PrivateKey, nServiceMembers)
-	signingMembers := make([]tribunal.TribunalMember, 0, nServiceMembers)
+	signingMembers := make([]consensus.ConsensusMember, 0, nServiceMembers)
 
 	for i := 0; i < nMembers; i++ {
-		appID := fmt.Sprintf("%s-member-%d", tribunalID, i)
+		appID := fmt.Sprintf("%s-member-%d", consensusID, i)
 		memberAppIDs[i] = appID
 
 		pub, priv, err := ed25519.GenerateKey(nil)
@@ -680,24 +717,24 @@ func SetupTribunal(t *testing.T, f *GatewayFixture, tribunalID string, nMembers,
 
 		if i < nServiceMembers {
 			memberKeys[appID] = priv
-			signingMembers = append(signingMembers, tribunal.TribunalMember{
+			signingMembers = append(signingMembers, consensus.ConsensusMember{
 				AppID:      appID,
 				PrivateKey: priv,
 			})
 		}
 	}
 
-	policy := models.TribunalPolicy{
-		ID:              tribunalID,
+	policy := models.ConsensusPolicy{
+		ID:              consensusID,
 		MemberAppIDs:    memberAppIDs,
 		Quorum:          quorum,
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	err := f.Service.GetStores().TribunalStore.AddTribunal(policy)
+	err := f.Service.GetStores().ConsensusStore.AddConsensus(policy)
 	require.NoError(t, err)
 
-	keyProvider := tribunal.KeyProviderFunc(func(appID string) (ed25519.PrivateKey, error) {
+	keyProvider := consensus.KeyProviderFunc(func(appID string) (ed25519.PrivateKey, error) {
 		if key, ok := memberKeys[appID]; ok {
 			return key, nil
 		}
@@ -706,15 +743,15 @@ func SetupTribunal(t *testing.T, f *GatewayFixture, tribunalID string, nMembers,
 
 	doctrine := govsvc.NewL1Doctrine()
 	responder := response.NewWriter(testutil.NewTestLogger())
-	tribunalSvc, err := tribunal.NewTribunalFromPolicy(&policy, keyProvider, doctrine, testutil.NewTestLogger(), responder)
+	consensusSvc, err := consensus.NewConsensusFromPolicy(&policy, keyProvider, doctrine, testutil.NewTestLogger(), responder)
 	require.NoError(t, err)
 
-	f.Service.SetTribunal(tribunalSvc)
-	f.MCPGateway.SetL2ConsensusDeliberator(tribunal.NewLocalDeliberator(tribunalSvc))
+	deliberator := consensus.NewLocalDeliberator(consensusSvc)
 
-	return &TribunalSetup{
-		TribunalID: tribunalID,
-		Members:    signingMembers,
-		Service:    tribunalSvc,
+	return &ConsensusSetup{
+		ConsensusID: consensusID,
+		Members:     signingMembers,
+		Service:     consensusSvc,
+		Deliberator: deliberator,
 	}
 }

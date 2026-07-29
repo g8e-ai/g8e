@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-07-25
-Version: v1.6.3
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 ---
 
@@ -26,7 +26,15 @@ For development or single-host deployments, start the gateway locally:
 ./g8e gw start
 ```
 
-By default, the gateway starts in background mode with doctrine posture (L1 enforced, L2/L3 audited). Use `--follow` or `-f` to run in the foreground for debugging. The gateway performs network identity detection at startup and defaults to full certificate identity mode (all hostnames/IPs). Use `--cert-mode localhost` to restrict certificates to localhost only.
+By default, the gateway starts in background mode with doctrine posture (L1 enforced, L2/L3 audited). Use `--follow` or `-f` to run in the foreground for debugging. Use `--interactive` or `-i` to launch the onboarding wizard before starting, which guides you through posture, consensus, passkey, CORS, and certificate settings. The gateway performs network identity detection at startup and defaults to full certificate identity mode (all hostnames/IPs). Use `--cert-mode localhost` to restrict certificates to localhost only.
+
+For first-time setup, run the interactive wizard separately:
+
+```bash
+./g8e gw setup
+```
+
+This launches the onboarding wizard to configure gateway settings before the first start. Any flags provided on the command line are used as initial values in the wizard.
 
 Available posture modes via `--posture`:
 - **doctrine** (default): L1 enforced, L2/L3 audited
@@ -196,6 +204,24 @@ curl -X POST http://localhost:8080/mcp \
 
 Replace `<agent>` with a supported agent (claude, codex, gemini, goose). This displays configurations side-by-side for different transport modes (g8e.local mTLS, IP Address mTLS, Stdio Transport).
 
+**Launch an agent with g8e governance:**
+
+```bash
+./g8e mcp agent run claude
+```
+
+This starts the gateway (if not already running), performs CLI auth, and launches the agent with native tools disabled so all I/O goes through g8e MCP. Every action is audited through the L1-L5 pipeline. Extra arguments after `--` are forwarded to the agent:
+
+```bash
+./g8e mcp agent run claude -- -p "fix the failing tests"
+```
+
+To wrap an external MCP server with g8e governance:
+
+```bash
+./g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /home/user
+```
+
 ### L3 Transaction Approval
 
 When the gateway is running in notary posture, certain transactions suspend at L3 (Notary) pending human approval. Approve a suspended transaction using:
@@ -229,7 +255,7 @@ Operators and CLI clients connecting to the g8e Gateway can use the g8e Protocol
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.6.3
+go get github.com/g8e-ai/g8e@v1.6.6
 ```
 
 The module provides protobuf types for governance envelopes, operator messages, and common protocol structures. It also includes SPIFFE workload identity helpers for generating operator, CLI, and gateway identities used in mTLS enrollment.
@@ -241,7 +267,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For operator-side tooling or Python-based services:
 
 ```bash
-pip install g8e==1.6.3
+pip install g8e==1.6.6
 ```
 
 Provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
@@ -258,6 +284,14 @@ View gateway logs:
 ./g8e gw logs -f
 ```
 
+### View Settings
+
+Fetch and display the current gateway platform settings:
+
+```bash
+./g8e gw settings
+```
+
 ### Restart
 
 Restart:
@@ -265,6 +299,8 @@ Restart:
 ```bash
 ./g8e gw restart
 ```
+
+The current posture is preserved across restarts. If the posture file is missing, the gateway defaults to doctrine posture.
 
 ### Stop
 
@@ -343,6 +379,20 @@ Verify PKI directory exists and contains valid certificates:
 ```bash
 ls -la .g8e/pki/
 ```
+
+If the database is corrupted, reset the gateway (preserves CA and certificates):
+
+```bash
+./g8e gw reset --force
+```
+
+For a full wipe of all runtime state including PKI, use `gw clean`:
+
+```bash
+./g8e gw clean --force
+```
+
+After `gw clean`, re-enroll with `./g8e auth enroll` to obtain new credentials.
 
 ### Certificate Errors
 
