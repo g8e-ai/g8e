@@ -244,15 +244,15 @@ func TestHarnessRun_RunMode(t *testing.T) {
 	assert.Equal(t, "run", args[9])
 }
 
-func TestHarnessRun_WithConsensusSeedAndTribunalID(t *testing.T) {
+func TestHarnessRun_WithConsensusSeedAndConsensusID(t *testing.T) {
 	cfg := defaultHarnessConfig("operator")
 	cfg.ConsensusSeed = "abc123"
-	cfg.TribunalID = "trib-001"
+	cfg.ConsensusID = "trib-001"
 	args := harnessRun("gov_cui_exfil", cfg)
 
 	assert.Contains(t, args, "--consensus-seed")
 	assert.Contains(t, args, "abc123")
-	assert.Contains(t, args, "--tribunal-id")
+	assert.Contains(t, args, "--consensus-id")
 	assert.Contains(t, args, "trib-001")
 }
 
@@ -270,7 +270,7 @@ func TestHarnessRun_WithoutEnsembleOrL3Mode(t *testing.T) {
 	assert.NotContains(t, args, "--ensemble")
 	assert.NotContains(t, args, "--l3-mode")
 	assert.NotContains(t, args, "--consensus-seed")
-	assert.NotContains(t, args, "--tribunal-id")
+	assert.NotContains(t, args, "--consensus-id")
 }
 
 func TestDefaultHarnessConfig_ReturnsExpectedDefaults(t *testing.T) {
@@ -342,7 +342,7 @@ func TestNewDemoEmitter_NilProgramIsNoOp(t *testing.T) {
 	assert.NotNil(t, e)
 	e.Pipeline(tui.StageL1, tui.StatusActive, "tx-1", "detail")
 	e.Ledger(tui.LevelInfo, "message")
-	e.Consensus(constants.TribunalMemberAxiom, true, true, 2, 3, tui.ConsensusReached, "hash-1")
+	e.Consensus(constants.ConsensusMemberAxiom, true, true, 2, 3, tui.ConsensusReached, "hash-1")
 }
 
 func TestDemoPrintln_VerboseMode(t *testing.T) {

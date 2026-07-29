@@ -15,6 +15,7 @@ package governance
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -1309,4 +1310,244 @@ func FuzzAnalyzeMCPArguments(f *testing.F) {
 			}
 		}
 	})
+}
+
+func TestNewL1DoctrineFromDir_EmptyDir_FallsBack(t *testing.T) {
+	t.Parallel()
+	d, err := NewL1DoctrineFromDir("")
+	require.NoError(t, err)
+	require.NotNil(t, d)
+
+	signals := d.AnalyzeCommand("rm -rf /")
+	assert.NotEmpty(t, signals, "hardcoded detectors should still work with empty doctrine dir")
+}
+
+func TestNewL1DoctrineFromDir_LoadsPatterns(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	docJSON := `{"source":"test_source","version":"1.0","doctrines":[
+		{"id":"test_detector","name":"Test","category":"data_exfiltration","severity":"critical","pattern":"(?i)exfiltrate.*data","mitre_attack":"T1567","mitre_tactic":"Exfiltration","confidence":0.9,"enabled":true}
+	]}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "test.json"), []byte(docJSON), 0o644))
+
+	d, err := NewL1DoctrineFromDir(dir)
+	require.NoError(t, err)
+	require.NotNil(t, d)
+
+	signals := d.AnalyzeCommand("exfiltrate sensitive data")
+	found := false
+	for _, sig := range signals {
+		if sig.Indicator == "test_detector" {
+			found = true
+			assert.Equal(t, ThreatCategoryExfiltration, sig.Category)
+			assert.Equal(t, ThreatSeverityCritical, sig.Severity)
+			assert.True(t, sig.BlockRecommended)
+			assert.Equal(t, "test_source", sig.Source)
+		}
+	}
+	assert.True(t, found, "file-loaded detector should match")
+
+	signals = d.AnalyzeCommand("rm -rf /")
+	assert.NotEmpty(t, signals, "hardcoded detectors should still work alongside file-loaded ones")
+}
+
+func TestNewL1DoctrineFromDir_InvalidJSON_ReturnsError(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "bad.json"), []byte("{invalid json"), 0o644))
+
+	_, err := NewL1DoctrineFromDir(dir)
+	assert.Error(t, err)
+}
+
+func TestNewL1DoctrineFromDir_DisabledEntriesSkipped(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	docJSON := `{"source":"test","version":"1.0","doctrines":[
+		{"id":"disabled_one","name":"Disabled","category":"data_exfiltration","severity":"critical","pattern":"(?i)should_not_match","confidence":0.9,"enabled":false},
+		{"id":"enabled_one","name":"Enabled","category":"data_exfiltration","severity":"high","pattern":"(?i)should_match","confidence":0.9,"enabled":true}
+	]}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "test.json"), []byte(docJSON), 0o644))
+
+	d, err := NewL1DoctrineFromDir(dir)
+	require.NoError(t, err)
+
+	signals := d.AnalyzeCommand("should_not_match")
+	for _, sig := range signals {
+		assert.NotEqual(t, "disabled_one", sig.Indicator, "disabled detector should not fire")
+	}
+
+	signals = d.AnalyzeCommand("should_match")
+	found := false
+	for _, sig := range signals {
+		if sig.Indicator == "enabled_one" {
+			found = true
+		}
+	}
+	assert.True(t, found, "enabled detector should fire")
+}
+
+func TestNewL1DoctrineFromDir_PHIExfilBlocked(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	docJSON := `{"source":"healthcare_phi_hipaa","version":"1.0","doctrines":[
+		{"id":"phi_exfil_attempt","name":"PHI Data Exfiltration Attempt","category":"data_exfiltration","severity":"critical","pattern":"(?i)(exfil|exfiltrate|export|download).*(phi|patient|medical)","mitre_attack":"T1567.001","mitre_tactic":"Exfiltration","confidence":0.95,"enabled":true}
+	]}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "phi.json"), []byte(docJSON), 0o644))
+
+	d, err := NewL1DoctrineFromDir(dir)
+	require.NoError(t, err)
+
+	signals := d.AnalyzeCommand("exfiltrate patient medical records")
+	found := false
+	for _, sig := range signals {
+		if sig.Indicator == "phi_exfil_attempt" {
+			found = true
+			assert.True(t, sig.BlockRecommended, "PHI exfil should be blocked")
+			assert.Equal(t, "healthcare_phi_hipaa", sig.Source)
+		}
+	}
+	assert.True(t, found, "PHI exfil pattern should match")
+}
+
+func TestNewL1DoctrineFromDir_MultipleFiles(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	doc1 := `{"source":"src_a","version":"1.0","doctrines":[
+		{"id":"detector_a","name":"A","category":"data_exfiltration","severity":"critical","pattern":"(?i)pattern_a","confidence":0.9,"enabled":true}
+	]}`
+	doc2 := `{"source":"src_b","version":"1.0","doctrines":[
+		{"id":"detector_b","name":"B","category":"access_control","severity":"high","pattern":"(?i)pattern_b","confidence":0.9,"enabled":true}
+	]}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.json"), []byte(doc1), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.json"), []byte(doc2), 0o644))
+
+	d, err := NewL1DoctrineFromDir(dir)
+	require.NoError(t, err)
+
+	signals := d.AnalyzeCommand("pattern_a")
+	foundA := false
+	for _, sig := range signals {
+		if sig.Indicator == "detector_a" {
+			foundA = true
+			assert.Equal(t, "src_a", sig.Source)
+		}
+	}
+	assert.True(t, foundA, "detector from file a should fire")
+
+	signals = d.AnalyzeCommand("pattern_b")
+	foundB := false
+	for _, sig := range signals {
+		if sig.Indicator == "detector_b" {
+			foundB = true
+			assert.Equal(t, "src_b", sig.Source)
+		}
+	}
+	assert.True(t, foundB, "detector from file b should fire")
+}
+
+func TestNewL1DoctrineFromDir_UnknownCategoryMappedToCustom(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	docJSON := `{"source":"test","version":"1.0","doctrines":[
+		{"id":"custom_cat","name":"Custom","category":"trading_limits","severity":"critical","pattern":"(?i)violates.*limit","confidence":0.9,"enabled":true}
+	]}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "test.json"), []byte(docJSON), 0o644))
+
+	d, err := NewL1DoctrineFromDir(dir)
+	require.NoError(t, err)
+
+	signals := d.AnalyzeCommand("violates trading limit")
+	found := false
+	for _, sig := range signals {
+		if sig.Indicator == "custom_cat" {
+			found = true
+			assert.Equal(t, ThreatCategoryCustom, sig.Category)
+			assert.True(t, sig.BlockRecommended)
+		}
+	}
+	assert.True(t, found, "detector with unknown category should still fire")
+}
+
+func TestL1Doctrine_FedRAMPPrivilegeEscalation_NoFalsePositiveOnResourceIDs(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	docJSON := `{"source":"FedRAMP Program Management Office","version":"1.0","doctrines":[
+		{"id":"fedramp-si4-privilege-escalation","name":"FedRAMP SI-4 Privilege Escalation via Cloud API","category":"privilege_escalation","severity":"high","pattern":"\\b(sudo|chmod|chown|iam-role|assume-role|escalate)\\b","mitre_attack":"T1548","mitre_tactic":"privilege-escalation","confidence":0.90,"enabled":true}
+	]}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "fedramp.json"), []byte(docJSON), 0o644))
+
+	d, err := NewL1DoctrineFromDir(dir)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		arguments   string
+		expectBlock bool
+	}{
+		{
+			name:        "resource_id_with_iam_role_substring_not_flagged",
+			arguments:   `{"command":"cloudop","args":["revert","10.73.0.50:9100","fedramp-iam-roles-01","CM-7-ROLLBACK"],"timeout":10}`,
+			expectBlock: false,
+		},
+		{
+			name:        "resource_id_with_escalate_substring_not_flagged",
+			arguments:   `{"command":"cloudop","args":["destroy","10.73.0.50:9100","fedramp-vm-classified-01","FIPS-199-HIGH"],"timeout":10}`,
+			expectBlock: false,
+		},
+		{
+			name:        "actual_sudo_command_flagged",
+			arguments:   `{"command":"sudo su -","args":[],"timeout":10}`,
+			expectBlock: true,
+		},
+		{
+			name:        "actual_chmod_command_flagged",
+			arguments:   `{"command":"chmod 4755 /bin/bash","args":[],"timeout":10}`,
+			expectBlock: true,
+		},
+		{
+			name:        "actual_assume_role_command_flagged",
+			arguments:   `{"command":"assume-role admin","args":[],"timeout":10}`,
+			expectBlock: true,
+		},
+		{
+			name:        "actual_escalate_command_flagged",
+			arguments:   `{"command":"escalate privileges","args":[],"timeout":10}`,
+			expectBlock: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			signals, err := d.AnalyzeMCPArguments(tt.arguments)
+			require.NoError(t, err)
+
+			foundFedRAMPBlock := false
+			for _, sig := range signals {
+				if sig.Indicator == "fedramp-si4-privilege-escalation" && sig.BlockRecommended {
+					foundFedRAMPBlock = true
+					break
+				}
+			}
+
+			if tt.expectBlock {
+				assert.True(t, foundFedRAMPBlock, "Expected fedramp-si4-privilege-escalation to block: %s", tt.arguments)
+			} else {
+				assert.False(t, foundFedRAMPBlock, "fedramp-si4-privilege-escalation should NOT block legitimate resource IDs: %s", tt.arguments)
+			}
+		})
+	}
+}
+
+func TestNewL1DoctrineFromDir_NonExistentDir_ReturnsError(t *testing.T) {
+	t.Parallel()
+	_, err := NewL1DoctrineFromDir("/nonexistent/path/that/does/not/exist")
+	assert.Error(t, err)
 }

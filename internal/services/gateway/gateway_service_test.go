@@ -53,6 +53,7 @@ func newTestGatewayService(t *testing.T, opts testGatewayOpts) *GatewayModeServi
 
 	ls, err := NewGatewayModeService(cfg, fileSvc, logger)
 	require.NoError(t, err)
+	require.NoError(t, ls.InitHTTPHandler(nil, nil))
 	t.Cleanup(func() { ls.Stop(context.Background()) })
 	return ls
 }

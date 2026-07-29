@@ -28,13 +28,13 @@ type SignerStore interface {
 	GetTrustedSigner(keyID string) (ed25519.PublicKey, error)
 }
 
-// SimpleSignerStore implements SignerStore using a static map.
+// FailClosedSignerStore implements SignerStore using a static map.
 // Used as a production fallback (empty map = fail-closed) and in tests.
-type SimpleSignerStore struct {
+type FailClosedSignerStore struct {
 	Signers map[string]ed25519.PublicKey
 }
 
-func (s *SimpleSignerStore) GetTrustedSigner(keyID string) (ed25519.PublicKey, error) {
+func (s *FailClosedSignerStore) GetTrustedSigner(keyID string) (ed25519.PublicKey, error) {
 	if s.Signers == nil {
 		return nil, nil
 	}

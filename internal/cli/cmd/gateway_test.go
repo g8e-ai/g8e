@@ -77,8 +77,8 @@ func TestResolveStartConfig(t *testing.T) {
 			RateLimitBurst:   50,
 			LogLevel:         "info",
 			CertIdentityMode: "full",
-			TribunalID:       "",
-			TribunalURL:      "",
+			ConsensusID:      "",
+			ConsensusURL:     "",
 		})
 
 		assert.Equal(t, "doctrine", cfg.Posture)
@@ -123,8 +123,8 @@ func TestResolveStartConfig(t *testing.T) {
 			RateLimitBurst:   50,
 			LogLevel:         "info",
 			CertIdentityMode: "full",
-			TribunalID:       "",
-			TribunalURL:      "",
+			ConsensusID:      "",
+			ConsensusURL:     "",
 		})
 
 		assert.Equal(t, "/env/vault", cfg.VaultDir)
@@ -156,8 +156,8 @@ func TestResolveStartConfig(t *testing.T) {
 			RateLimitBurst:   50,
 			LogLevel:         "info",
 			CertIdentityMode: "full",
-			TribunalID:       "",
-			TribunalURL:      "",
+			ConsensusID:      "",
+			ConsensusURL:     "",
 		})
 
 		assert.Equal(t, "/env/vault/key", cfg.VaultKeyPath)
@@ -189,8 +189,8 @@ func TestResolveStartConfig(t *testing.T) {
 			RateLimitBurst:   50,
 			LogLevel:         "info",
 			CertIdentityMode: "full",
-			TribunalID:       "",
-			TribunalURL:      "",
+			ConsensusID:      "",
+			ConsensusURL:     "",
 		})
 
 		assert.Equal(t, "/cli/vault", cfg.VaultDir)
@@ -219,28 +219,29 @@ func TestReExecArgsMatchStartCmdFlags(t *testing.T) {
 
 	opts := platform.OperatorStartOptions{
 		GatewayConfig: serve.GatewayConfig{
-			Posture:           g8econfig.GatewayPosture("doctrine"),
-			HTTPPort:          8080,
-			HTTPSPort:         8443,
-			DataDir:           "/data",
-			PKIDir:            "/pki",
-			SecretsDir:        "/secrets",
-			VaultDir:          "/vault",
-			VaultKeyPath:      "/vault/key",
-			PasskeyRpID:       "localhost",
-			PasskeyRpName:     "g8e",
-			PasskeyRpOrigins:  []string{"http://localhost:8087", "https://localhost:8450"},
-			RateLimitRPS:      100.0,
-			RateLimitBurst:    50,
-			LogLevel:          "info",
-			CertIdentityMode:  "full",
-			TribunalID:        "trib-1",
-			TribunalURL:       "https://localhost:8443/tribunal/v1/deliberate",
-			TribunalBootstrap: "/etc/g8e/tribunal-bootstrap.json",
-			MCPDownstreamURL:  "https://downstream.example.com/mcp",
-			A2ADownstreamURL:  "https://downstream.example.com/a2a",
-			PublicBaseURL:     "https://demo.g8e.ai",
-			AllowedOrigins:    []string{"https://lovable.dev"},
+			Posture:            g8econfig.GatewayPosture("doctrine"),
+			HTTPPort:           8080,
+			HTTPSPort:          8443,
+			DataDir:            "/data",
+			PKIDir:             "/pki",
+			SecretsDir:         "/secrets",
+			VaultDir:           "/vault",
+			VaultKeyPath:       "/vault/key",
+			PasskeyRpID:        "localhost",
+			PasskeyRpName:      "g8e",
+			PasskeyRpOrigins:   []string{"http://localhost:8087", "https://localhost:8450"},
+			RateLimitRPS:       100.0,
+			RateLimitBurst:     50,
+			LogLevel:           "info",
+			CertIdentityMode:   "full",
+			ConsensusID:        "trib-1",
+			ConsensusURL:       "https://localhost:8443/consensus/v1/deliberate",
+			ConsensusBootstrap: "/etc/g8e/consensus-bootstrap.json",
+			MCPDownstreamURL:   "https://downstream.example.com/mcp",
+			A2ADownstreamURL:   "https://downstream.example.com/a2a",
+			PublicBaseURL:      "https://demo.g8e.ai",
+			AllowedOrigins:     []string{"https://lovable.dev"},
+			DoctrineDir:        "/etc/g8e/doctrine",
 		},
 	}
 

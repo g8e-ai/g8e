@@ -4,8 +4,8 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-07-25
-Version: v1.6.3
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -84,7 +84,7 @@ The `governance` field encapsulates all three governance layers:
 
 ### L2Vote
 
-Each Tribunal member produces a signed vote over the transaction hash:
+Each Consensus member produces a signed vote over the transaction hash:
 
 | Field | Type | JSON Name | Description |
 |---|---|---|---|
@@ -138,8 +138,8 @@ The transaction lifecycle follows a strict sequence from intent to audited execu
 The `L4Warden` operates as the primary pre-dispatch validation gate, executing the following checks sequentially:
 
 1. **Freshness**: Verifies `expires_at` and durably reserves the `nonce` in the replay store to prevent concurrent double-processing.
-2. **Integrity**: Decodes the typed payload, enforces `id == transaction_hash == SHA256(canonical_fields)`, and validates the action type.
-3. **L1 Doctrine**: Scans the decoded typed payload against reflected `forbidden_patterns` and threat rules.
+2. **L1 Doctrine**: Validates the action type, decodes the typed payload, and scans it against reflected `forbidden_patterns` and threat rules.
+3. **Integrity**: Enforces `id == transaction_hash == SHA256(canonical_fields)`.
 4. **State Binding**: Validates that the `state_merkle_root` matches the local ledger root.
 5. **L2 Consensus**: Verifies Ed25519 signatures against the Operator's trusted `SignerStore` and checks quorum against the consensus policy.
 6. **L3 Notary**: Validates the WebAuthn or CLI proof, or applies explicit auto-approval policy for the action.
@@ -147,9 +147,11 @@ The `L4Warden` operates as the primary pre-dispatch validation gate, executing t
 ### Execution & Receipt Phase (L5Actuator)
 
 1. The `L5Actuator` signs an executing-state `ActionReceipt` and writes it to the fail-closed `SQLAuditStore`.
-2. The typed payload is dispatched to its execution handler (e.g., shell executor, file edit handler).
-3. The `L5Actuator` updates the receipt with the final status (`COMPLETED` or `FAILED`), the post-state root, and a fresh signature.
-4. The Operator publishes a result envelope carrying the typed result and signed receipt back to the Gateway.
+2. Sensitive tokens scrubbed by the Sovereign Execution Boundary are re-injected via payload rehydration.
+3. A JIT execution capability is minted, scoping the dispatch to the verified action type and target resource.
+4. The typed payload is dispatched to its execution handler (e.g., shell executor, file edit handler), and the capability is dissolved after dispatch.
+5. The `L5Actuator` updates the receipt with the final status (`COMPLETED` or `FAILED`), the post-state root, and a fresh signature.
+6. The Operator publishes a result envelope carrying the typed result and signed receipt back to the Gateway.
 
 ---
 
@@ -168,14 +170,14 @@ Static, deterministic checks enforced before any code executes. Validated using 
 
 L2 Consensus is a protocol concept defined by the g8e protocol (`L2Metadata`, `L2Vote`). It requires a cryptographic proof that an independent consensus set deliberated on the instruction and produced signed votes. The protocol defines the wire format generically; any implementation that produces valid `L2Metadata` with signed `L2Vote` entries can satisfy L2 Consensus.
 
-#### Reference Implementation: Tribunal
+#### Reference Implementation: Consensus
 
-The Tribunal is the reference implementation of L2 Consensus shipped with g8e. It is an enrolled body of agentic applications that independently evaluate each transaction's payload. Tribunal service logic is defined in `../../internal/services/tribunal/service.go`.
-- Each Tribunal member independently evaluates the payload and signs an `L2Vote` over `transaction_hash | decision` using Ed25519.
+The Consensus service is the reference implementation of L2 Consensus shipped with g8e. It is an enrolled body of agentic applications that independently evaluate each transaction's payload. Consensus service logic is defined in `../../internal/services/consensus/service.go`.
+- Each Consensus member independently evaluates the payload and signs an `L2Vote` over `transaction_hash | decision` using Ed25519.
 - The `L2Metadata` contains the `consensus_set_id` and a list of `L2Vote` entries (signer key ID, signature, decision).
-- The gateway never self-signs L2 votes. Under `consensus` posture, the gateway calls the Tribunal's `/tribunal/v1/deliberate` endpoint before dispatch.
-- L4 Warden verifies quorum: at least `K` affirmative distinct signatures from the TribunalPolicy's member set, checked against the `SignerStore`.
-- For single-member tribunals (degenerate case), the gateway's actuator signing key may be used as the member key. Multi-member tribunals require a separate key provisioning flow.
+- The gateway never self-signs L2 votes. Under `consensus` posture, the gateway calls the Consensus service's `/consensus/v1/deliberate` endpoint before dispatch.
+- L4 Warden verifies quorum: at least `K` affirmative distinct signatures from the ConsensusPolicy's member set, checked against the `SignerStore`.
+- For single-member consensus (degenerate case), the gateway's actuator signing key may be used as the member key. Multi-member consensus requires a separate key provisioning flow.
 
 ### L3 Notary: Human Authorization
 Hardware-bound proof of human presence. Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) is defined in `../../internal/services/governance/l3_notary.go`.
@@ -186,13 +188,14 @@ Hardware-bound proof of human presence. Human-in-the-loop authorization (utilizi
 ### L4 Warden: Pre-dispatch Verification
 The central Policy Execution Point (PEP) that validates the entire transaction proof before dispatch. Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root) is defined in `../../internal/services/governance/l4_warden.go`.
 - **Freshness & Replay**: Verifies `expires_at` and durably reserves the `nonce` in the replay store with early durable reservation to prevent concurrent double-processing.
-- **Stateless Validation**: Decodes the typed payload, verifies structural integrity, enforces `id == transaction_hash`, and validates L1 Doctrine compliance.
+- **Stateless Validation**: Validates the action type, decodes the typed payload, validates L1 Doctrine compliance, and enforces `id == transaction_hash`.
 - **State Binding**: Compares `state_merkle_root` against the host ledger.
-- **Posture-Aware Validation**: Enforces L2 (Ed25519 signature verification against `SignerStore` with TribunalPolicy quorum) and L3 (WebAuthn or CLI proof) requirements based on governance posture (doctrine, consensus, or notary).
+- **Posture-Aware Validation**: Enforces L2 (Ed25519 signature verification against `SignerStore` with ConsensusPolicy quorum) and L3 (WebAuthn or CLI proof) requirements based on governance posture (doctrine, consensus, or notary).
 
 ### L5 Actuator: Execution Boundary
 The single fail-closed execution target that dispatches the verified payload and issues signed receipts. Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production are defined in `../../internal/services/governance/l5_actuator.go`.
 - **Rehydration**: Sensitive tokens scrubbed by the Sovereign Execution Boundary are re-injected.
+- **JIT Capability Minting**: Mints a scoped execution capability bound to the verified action type and target resource, dissolved after dispatch.
 - **Native Dispatch**: Executes the typed payload (bash, file edit, tool call).
 - **Signed Action Receipts**: Issues an immutable `ActionReceipt` proof of execution and result.
 
@@ -220,8 +223,8 @@ The protocol defines canonical event types in `../../protocol/constants/events.j
 - `AiLLMToolG8eWebSearchCompleted`, `AiLLMToolG8eWebSearchFailed`, `AiLLMToolG8eWebSearchReceived`, `AiLLMToolG8eWebSearchRequested`
 - `AiReputationStateUpdated`
 - `AiTriageClarificationAnswered`, `AiTriageClarificationQuestions`, `AiTriageClarificationSkipped`, `AiTriageClarificationTimeout`
-- `AiTribunalSessionStarted`, `AiTribunalSessionCompleted`, `AiTribunalSessionDisabled`, `AiTribunalSessionGenerationFailed`, `AiTribunalSessionModelNotConfigured`, `AiTribunalSessionProviderUnavailable`, `AiTribunalSessionSystemError`, `AiTribunalSessionAuditorFailed`, `AiTribunalSessionWardenBlocked`
-- `AiTribunalVotingPassCompleted`, `AiTribunalVotingConsensusReached`, `AiTribunalVotingConsensusNotReached`, `AiTribunalVotingConsensusFailed`, `AiTribunalVotingRoundStarted`, `AiTribunalVotingRoundCompleted`, `AiTribunalVotingRound2Started`, `AiTribunalVotingRound2ConsensusReached`, `AiTribunalVotingRound2ConsensusFailed`, `AiTribunalVotingDissentRecorded`, `AiTribunalVotingAuditStarted`, `AiTribunalVotingAuditCompleted`
+- `AiConsensusSessionStarted`, `AiConsensusSessionCompleted`, `AiConsensusSessionDisabled`, `AiConsensusSessionGenerationFailed`, `AiConsensusSessionModelNotConfigured`, `AiConsensusSessionProviderUnavailable`, `AiConsensusSessionSystemError`, `AiConsensusSessionAuditorFailed`, `AiConsensusSessionWardenBlocked`
+- `AiConsensusVotingPassCompleted`, `AiConsensusVotingConsensusReached`, `AiConsensusVotingConsensusNotReached`, `AiConsensusVotingConsensusFailed`, `AiConsensusVotingRoundStarted`, `AiConsensusVotingRoundCompleted`, `AiConsensusVotingRound2Started`, `AiConsensusVotingRound2ConsensusReached`, `AiConsensusVotingRound2ConsensusFailed`, `AiConsensusVotingDissentRecorded`, `AiConsensusVotingAuditStarted`, `AiConsensusVotingAuditCompleted`
 
 ### Application Events
 - `AppCaseAssigned`, `AppCaseCleared`, `AppCaseClosed`, `AppCaseCreated`, `AppCaseCreationRequested`, `AppCaseDeleted`, `AppCaseEscalated`, `AppCaseResolved`, `AppCaseSelected`, `AppCaseSwitched`, `AppCaseUpdateRequested`, `AppCaseUpdated`
@@ -370,9 +373,10 @@ See [Network Architecture](../../docs/architecture/network.md) for detailed port
 
 The g8e platform uses CLI flags for production configuration. All paths are computed relative to project root. The following environment variables are supported:
 
-- `G8E_TRIBUNAL_ID`: ID of the TribunalPolicy for L2 consensus (required for `--consensus` posture)
-- `G8E_TRIBUNAL_URL`: URL of the Tribunal service for L2 deliberation (e.g. `https://localhost:8443/tribunal/v1/deliberate`)
-- `G8E_TRIBUNAL_BOOTSTRAP`: Path to a JSON file that seeds a TribunalPolicy and trusted signers at startup (overrides `--tribunal-bootstrap`)
+- `G8E_CONSENSUS_ID`: ID of the ConsensusPolicy for L2 consensus (required for `--consensus` posture)
+- `G8E_CONSENSUS_URL`: URL of the Consensus service for L2 deliberation (e.g. `https://localhost:8443/consensus/v1/deliberate`)
+- `G8E_CONSENSUS_BOOTSTRAP`: Path to a JSON file that seeds a ConsensusPolicy and trusted signers at startup (overrides `--consensus-bootstrap`)
+- `G8E_DOCTRINE_DIR`: Directory containing doctrine JSON files for L1 threat detection (overrides `--doctrine-dir`)
 - `G8E_VAULT_DIR`: Directory for vault data (overrides `--vault-dir`)
 - `G8E_VAULT_KEY`: Path to vault private key (overrides `--vault-key`)
 - `G8E_PASSKEY_RP_ID`: RP ID for passkey operations (overrides `--passkey-rp-id`)
@@ -397,9 +401,10 @@ CLI flags:
 - `--rate-limit-burst <n>`: Gateway rate limit burst size
 - `--log <level>`: Log level: info, error, debug (default: info)
 - `--cert-mode <mode>`: Certificate mode: full (all hostnames/IPs), localhost (only localhost)
-- `--tribunal-id <id>`: ID of the TribunalPolicy for L2 consensus (required for `--consensus` posture, env: `G8E_TRIBUNAL_ID`)
-- `--tribunal-url <url>`: URL of the Tribunal service for L2 deliberation (env: `G8E_TRIBUNAL_URL`)
-- `--tribunal-bootstrap <path>`: Path to a JSON file that seeds a TribunalPolicy and trusted signers at startup (env: `G8E_TRIBUNAL_BOOTSTRAP`)
+- `--consensus-id <id>`: ID of the ConsensusPolicy for L2 consensus (required for `--consensus` posture, env: `G8E_CONSENSUS_ID`)
+- `--consensus-url <url>`: URL of the Consensus service for L2 deliberation (env: `G8E_CONSENSUS_URL`)
+- `--consensus-bootstrap <path>`: Path to a JSON file that seeds a ConsensusPolicy and trusted signers at startup (env: `G8E_CONSENSUS_BOOTSTRAP`)
+- `--doctrine-dir <dir>`: Directory containing doctrine JSON files for L1 threat detection (default: hardcoded MITRE patterns only, env: `G8E_DOCTRINE_DIR`)
 - `--mcp-downstream-url <url>`: URL of a downstream MCP server to proxy discovery and execution to (default: none)
 - `--a2a-downstream-url <url>`: URL of a downstream A2A server to proxy execution to (default: none)
 - `--public-base-url <url>`: Public base URL for approval links and host validation (env: `G8E_PUBLIC_BASE_URL`)
@@ -457,7 +462,7 @@ All tests follow a Tier 1 philosophy where possible (no external network/DB requ
 | L3 Notary logic | `../../internal/services/governance/l3_notary.go` |
 | L4 Warden logic | `../../internal/services/governance/l4_warden.go` |
 | L5 Actuator logic | `../../internal/services/governance/l5_actuator.go` |
-| Tribunal service | `../../internal/services/tribunal/service.go` |
+| Consensus service | `../../internal/services/consensus/service.go` |
 | Audit storage | `../../internal/services/storage/audit_store.go` |
 | Git ledger storage | `../../internal/services/storage/ledger.go` |
 | Execution vault storage | `../../internal/services/storage/execution_vault.go` |
@@ -518,7 +523,7 @@ All tests follow a Tier 1 philosophy where possible (no external network/DB requ
       "violations": []
     },
     "l2": {
-      "consensusSetId": "tribunal-prod-abc123",
+      "consensusSetId": "consensus-prod-abc123",
       "votes": [
         {
           "signerKeyId": "agent-ensemble-1",
@@ -587,7 +592,7 @@ The `payload` field contains base64-encoded protobuf bytes of `McpCallRequested`
       "violations": []
     },
     "l2": {
-      "consensusSetId": "tribunal-prod-def456",
+      "consensusSetId": "consensus-prod-def456",
       "votes": [
         {
           "signerKeyId": "agent-ensemble-1",
@@ -638,7 +643,7 @@ This example shows a non-mutation read under doctrine posture. L3 is not require
       "violations": []
     },
     "l2": {
-      "consensusSetId": "tribunal-prod-efg789",
+      "consensusSetId": "consensus-prod-efg789",
       "votes": [
         {
           "signerKeyId": "agent-ensemble-1",

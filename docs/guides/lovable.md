@@ -5,8 +5,8 @@ parent: Guides
 
 # Lovable Frontend Integration
 
-Last Updated: 2026-07-19
-Version: v1.5.9
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 ---
 
@@ -14,7 +14,7 @@ Version: v1.5.9
 
 [Lovable](https://lovable.dev) is an AI-powered frontend development platform that generates React + TypeScript + TailwindCSS applications from natural-language prompts. This guide provides detailed instructions for building a g8e Governance Console UI with Lovable, connecting it to a g8e Gateway backend via Cloudflare Tunnels.
 
-This guide covers Lovable-specific configuration, the AI agent prompt, and component architecture. For the comprehensive guide on building a g8e-compatible frontend (enrollment commands, API reference, WebAuthn flow requirements, SSE streaming, TypeScript types, UI/UX guidelines), see [Build a g8e-Compatible Frontend](./build_frontend.md).
+This guide covers Lovable-specific configuration, the AI agent prompt, and component architecture. For the comprehensive guide on building a g8e-compatible frontend (enrollment commands, API reference, WebAuthn flow requirements, SSE streaming, API data types, UI/UX guidelines), see [Build a g8e-Compatible Frontend](./build_frontend.md).
 
 ### Steps at a Glance
 
@@ -22,7 +22,7 @@ This guide covers Lovable-specific configuration, the AI agent prompt, and compo
 2. **[Configure the Gateway](./build_frontend.md#gateway-side-configuration)** - Set CORS origins, passkey RP ID/name/origins (see [Build a g8e-Compatible Frontend](./build_frontend.md))
 3. **[Enroll the Frontend](./build_frontend.md#frontend-enrollment-commands)** - Run `g8e gui enroll` to validate CORS and generate a TypeScript config snippet
 4. **[Review the API Reference](./build_frontend.md#api-reference)** - Understand the public and authenticated endpoints (see [Build a g8e-Compatible Frontend](./build_frontend.md))
-5. **[Define TypeScript Types](./build_frontend.md#typescript-types)** - Mirror the g8e gateway's data models (see [Build a g8e-Compatible Frontend](./build_frontend.md))
+5. **[Review API Data Types](./build_frontend.md#api-data-types)** - Use the Swagger spec for request and response schemas (see [Build a g8e-Compatible Frontend](./build_frontend.md))
 6. **[Build Pages and Components](#pages-and-components)** - AuthContext, Login, Dashboard, ApprovalFlow, URL hash handling
 7. **[Define WebAuthn Flow Requirements](./build_frontend.md#webauthn-flow-requirements)** - Registration, authentication, and approval ceremonies (see [Build a g8e-Compatible Frontend](./build_frontend.md))
 8. **[Define SSE Requirements](./build_frontend.md#sse-live-audit-stream)** - Live event streaming with auto-reconnect and polling fallback (see [Build a g8e-Compatible Frontend](./build_frontend.md))
@@ -107,7 +107,7 @@ After the Lovable AI agent generates the app, verify:
 
 ## See Also
 
-- [Build a g8e-Compatible Frontend](./build_frontend.md) - Comprehensive guide for building a g8e-compatible UI (enrollment commands, API reference, WebAuthn flows, SSE, TypeScript types, UI/UX guidelines)
+- [Build a g8e-Compatible Frontend](./build_frontend.md) - Comprehensive guide for building a g8e-compatible UI (enrollment commands, API reference, WebAuthn flows, SSE, API data types, UI/UX guidelines)
 - [Cloudflare Tunnel Integration](./cloudflare_tunnel.md) - Setting up the tunnel between Cloudflare and the g8e Gateway
 - [Connect Apps to Gateway](./connect_apps_to_gateway.md) - General application connectivity patterns
 - [Architecture: Auth](../architecture/auth.md) - WebAuthn passkey authentication architecture
@@ -135,9 +135,7 @@ Build a **g8e Governance Console** - a React + TypeScript + TailwindCSS single-p
 
 #### API Base URL
 
-```typescript
-const API_BASE_URL = 'https://console.g8e.ai';
-```
+Set `API_BASE_URL` to `https://console.g8e.ai` (or your tunnel hostname).
 
 #### Fetch Requirements
 
@@ -145,27 +143,11 @@ const API_BASE_URL = 'https://console.g8e.ai';
 
 #### WebAuthn Library
 
-Install `@simplewebauthn/browser`:
-
-```bash
-npm install @simplewebauthn/browser
-```
+Install `@simplewebauthn/browser` via npm. This library handles base64url conversions automatically.
 
 #### Dark Theme
 
-Use a dark theme with these CSS custom properties as design tokens:
-
-```css
---bg: #0d1117;
---surface: #161b22;
---border: #30363d;
---text: #c9d1d9;
---muted: #8b949e;
---accent: #58a6ff;
---success: #3fb950;
---warning: #d29922;
---danger: #f85149;
-```
+Use a dark theme with CSS custom properties as design tokens: `--bg`, `--surface`, `--border`, `--text`, `--muted`, `--accent`, `--success`, `--warning`, `--danger`. Use GitHub-inspired dark palette values (e.g., `#0d1117` for background, `#161b22` for surface, `#30363d` for border, `#c9d1d9` for text, `#8b949e` for muted, `#58a6ff` for accent, `#3fb950` for success, `#d29922` for warning, `#f85149` for danger).
 
 ---
 
@@ -202,125 +184,21 @@ All paths are relative to `API_BASE_URL`. All authenticated routes require `cred
 | `GET` | `/api/v1/sse/stream?web_session_id={id}` | SSE stream for live audit events |
 | `GET` | `/api/v1/sse/events?web_session_id={id}&since_id={n}` | Poll SSE events |
 
+### Route Authentication
+
+Browser clients use public routes (no auth) and authenticated routes (session cookie). The SSE endpoints accept either mTLS or a session cookie. All other gateway routes require mTLS and are not accessible from browsers.
+
 ---
 
-## 5. TypeScript Types
+## 5. API Data Types
 
-```typescript
-// User
-interface User {
-  id: string;
-  passkey_credentials?: PasskeyCredential[];
-  provider?: string;
-  organization_id?: string;
-  roles?: string[];
-  status?: string;
-  is_bootstrap?: boolean;
-  local_os_user?: { domain?: string; username?: string; uid?: string };
-  webauthn_user_id?: string;
-}
-
-interface UserMeResponse {
-  success: boolean;
-  user: User;
-}
-
-// Passkey
-interface PasskeyCredential {
-  id: string; // base64-encoded byte array - convert to base64url for display
-  public_key: string; // base64-encoded COSE key
-  attestation_type: string;
-  transport?: string[];
-  authenticator: {
-    aaguid: string; // base64-encoded byte array
-    sign_count: number;
-    clone_warning: boolean;
-  };
-  created_at_unix_ms: number;
-  last_used_at_unix_ms?: number;
-}
-
-interface PasskeyCredentialsResponse {
-  success: boolean;
-  credentials: PasskeyCredential[];
-}
-
-// Session
-interface WebSessionResponse {
-  success: boolean;
-  user_id: string;
-  web_session_id: string;
-}
-
-// Health
-interface HealthResponse {
-  status: string;
-  mode: string;
-  version: string;
-  pid: number;
-  governance_ready: boolean;
-  state_merkle_root?: string;
-}
-
-// Bootstrap status
-interface BootstrapStatusResponse {
-  bootstrapped: boolean;
-}
-
-// Approvals (suspended transactions)
-interface SuspendedTxResponse {
-  transaction_hash: string;
-  created_at: string;
-  expires_at: string;
-  tool_name: string;
-  user_id: string;
-  operator_id: string;
-}
-
-interface SuspendedTransactionsResponse {
-  transactions: SuspendedTxResponse[];
-}
-
-// WebAuthn responses (from browser navigator.credentials)
-interface WebAuthnAttestationResponse {
-  id: string;
-  rawId: string;
-  clientDataJSON: string;
-  attestationObject: string;
-  transports?: string[];
-}
-
-interface WebAuthnAssertionResponse {
-  id: string;
-  rawId: string;
-  clientDataJSON: string;
-  authenticatorData: string;
-  signature: string;
-  userHandle?: string;
-}
-
-// SSE
-interface SSEEventRow {
-  id: number;
-  web_session_id?: string;
-  cli_session_id?: string;
-  user_id?: string;
-  event_type: string;
-  payload: string;
-  created_at: string;
-}
-
-interface SSEEventsResponse {
-  events: SSEEventRow[];
-  count: number;
-}
-```
+The gateway serves a full OpenAPI/Swagger specification at `/swagger/doc.json` (and browsable UI at `/swagger/`). Use this to discover request and response schemas for all endpoints, including user, passkey, session, health, bootstrap, approval, and SSE event types. The `@simplewebauthn/browser` library provides TypeScript types for WebAuthn ceremony inputs and outputs.
 
 ---
 
 ## 6. Pages and Components
 
-### 6.1 Auth Context (`src/contexts/AuthContext.tsx`)
+### 6.1 Auth Context
 
 Manage global auth state:
 
@@ -336,7 +214,7 @@ On mount:
 2. Call `GET /api/v1/users/me` (with `credentials: 'include'`) to check if already logged in
 3. If logged in, call `GET /api/v1/auth/sessions/me` to get the web session ID (needed for SSE)
 
-### 6.2 Login Page (`src/pages/Login.tsx`)
+### 6.2 Login Page
 
 Two modes based on `bootstrapped` state:
 
@@ -351,7 +229,7 @@ Two modes based on `bootstrapped` state:
 - Button: "Sign In with Passkey" → calls `authenticatePasskey()`
 - Secondary button: "Register New Passkey" → reveals registration form
 
-### 6.3 Dashboard (`src/pages/Dashboard.tsx`)
+### 6.3 Dashboard
 
 After authentication, show:
 
@@ -390,7 +268,7 @@ After authentication, show:
 - Display user ID (monospace)
 - "Sign Out" button
 
-### 6.4 Approval Flow (`src/components/ApprovalFlow.tsx`)
+### 6.4 Approval Flow
 
 When user clicks "Approve" on a transaction:
 

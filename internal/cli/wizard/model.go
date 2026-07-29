@@ -35,13 +35,13 @@ type Model struct {
 	corsOriginInput    textinput.Model
 
 	// Step 2: Posture
-	postureChoice          int // 0=doctrine, 1=consensus, 2=notary
-	tribunalURLInput       textinput.Model
-	tribunalIDInput        textinput.Model
-	tribunalBootstrapInput textinput.Model
-	passkeyRpIDInput       textinput.Model
-	passkeyRpNameInput     textinput.Model
-	passkeyRpOriginInput   textinput.Model
+	postureChoice           int // 0=doctrine, 1=consensus, 2=notary
+	consensusURLInput       textinput.Model
+	consensusIDInput        textinput.Model
+	consensusBootstrapInput textinput.Model
+	passkeyRpIDInput        textinput.Model
+	passkeyRpNameInput      textinput.Model
+	passkeyRpOriginInput    textinput.Model
 
 	// Step 3: Routing
 	routeToMCP         bool
@@ -75,14 +75,14 @@ func NewModel(opts Options) Model {
 		m.corsOriginInput.SetValue(opts.InitialConfig.AllowedOrigins[0])
 	}
 
-	m.tribunalIDInput = newTextInput("trib-prod-01", "Tribunal Policy ID", 30)
-	m.tribunalIDInput.SetValue(opts.InitialConfig.TribunalID)
+	m.consensusIDInput = newTextInput("trib-prod-01", "Consensus Policy ID", 30)
+	m.consensusIDInput.SetValue(opts.InitialConfig.ConsensusID)
 
-	m.tribunalURLInput = newTextInput("https://tribunal.g8e.ai", "Tribunal Service URL (optional)", 40)
-	m.tribunalURLInput.SetValue(opts.InitialConfig.TribunalURL)
+	m.consensusURLInput = newTextInput("https://consensus.g8e.ai", "Consensus Service URL (optional)", 40)
+	m.consensusURLInput.SetValue(opts.InitialConfig.ConsensusURL)
 
-	m.tribunalBootstrapInput = newTextInput("", "Path to bootstrap JSON file (optional)", 50)
-	m.tribunalBootstrapInput.SetValue(opts.InitialConfig.TribunalBootstrap)
+	m.consensusBootstrapInput = newTextInput("", "Path to bootstrap JSON file (optional)", 50)
+	m.consensusBootstrapInput.SetValue(opts.InitialConfig.ConsensusBootstrap)
 
 	m.passkeyRpIDInput = newTextInput("localhost", "Passkey RP ID", 30)
 	rpID := opts.InitialConfig.PasskeyRpID
@@ -171,9 +171,9 @@ func (m Model) result() Result {
 	default:
 		cfg.Posture = "doctrine"
 	}
-	cfg.TribunalID = m.tribunalIDInput.Value()
-	cfg.TribunalURL = m.tribunalURLInput.Value()
-	cfg.TribunalBootstrap = m.tribunalBootstrapInput.Value()
+	cfg.ConsensusID = m.consensusIDInput.Value()
+	cfg.ConsensusURL = m.consensusURLInput.Value()
+	cfg.ConsensusBootstrap = m.consensusBootstrapInput.Value()
 	cfg.PasskeyRpID = m.passkeyRpIDInput.Value()
 	cfg.PasskeyRpName = m.passkeyRpNameInput.Value()
 	if m.passkeyRpOriginInput.Value() != "" {

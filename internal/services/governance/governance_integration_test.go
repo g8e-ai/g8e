@@ -56,7 +56,7 @@ func TestGovernanceFlow(t *testing.T) {
 	env.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{
-			ConsensusSetId: "test-tribunal",
+			ConsensusSetId: "test-consensus",
 			Votes: []*commonv1.L2Vote{
 				{
 					SignerKeyId:        nodeID,
@@ -111,9 +111,8 @@ func TestGovernanceFailClosed(t *testing.T) {
 			testutil.NewTestLogger(),
 			replayStore,
 			stateRootProvider,
-			&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{}},
+			&FailClosedSignerStore{Signers: map[string]ed25519.PublicKey{}},
 			consensusPolicyStore,
-			nil, // AppPolicyStore
 			nil, // L3Notary
 			doctrine,
 			constants.AllActionTypes,
@@ -123,7 +122,7 @@ func TestGovernanceFailClosed(t *testing.T) {
 	}
 
 	t.Run("NilReplayStore_FailClosed", func(t *testing.T) {
-		warden := makeWarden(nil, &governancetest.SimpleStateRootProvider{Root: "root-1"}, nil, NewL1Doctrine(), "doctrine")
+		warden := makeWarden(nil, &governancetest.SimpleStateRootProvider{Root: "root-1"}, &NoopConsensusPolicyStore{}, NewL1Doctrine(), "doctrine")
 		env := buildValidEnvelope(t)
 		_, err := warden.VerifyEnvelope(context.Background(), env)
 		if !errors.Is(err, ErrReplayStoreMissing) {
@@ -132,7 +131,7 @@ func TestGovernanceFailClosed(t *testing.T) {
 	})
 
 	t.Run("NilStateRootProvider_FailClosed", func(t *testing.T) {
-		warden := makeWarden(testutil.NewStatefulMockReplayStore(), nil, nil, NewL1Doctrine(), "doctrine")
+		warden := makeWarden(testutil.NewStatefulMockReplayStore(), nil, &NoopConsensusPolicyStore{}, NewL1Doctrine(), "doctrine")
 		env := buildValidEnvelope(t)
 		_, err := warden.VerifyEnvelope(context.Background(), env)
 		if !errors.Is(err, ErrStateRootMissing) {
@@ -141,7 +140,7 @@ func TestGovernanceFailClosed(t *testing.T) {
 	})
 
 	t.Run("EmptyStateRoot_FailClosed", func(t *testing.T) {
-		warden := makeWarden(testutil.NewStatefulMockReplayStore(), &governancetest.SimpleStateRootProvider{Root: ""}, nil, NewL1Doctrine(), "doctrine")
+		warden := makeWarden(testutil.NewStatefulMockReplayStore(), &governancetest.SimpleStateRootProvider{Root: ""}, &NoopConsensusPolicyStore{}, NewL1Doctrine(), "doctrine")
 		env := buildValidEnvelope(t)
 		_, err := warden.VerifyEnvelope(context.Background(), env)
 		if !errors.Is(err, constants.ErrTxProviderMisconfigured) {
@@ -149,20 +148,17 @@ func TestGovernanceFailClosed(t *testing.T) {
 		}
 	})
 
-	t.Run("NilDoctrine_DefaultsToValid", func(t *testing.T) {
-		warden := makeWarden(testutil.NewStatefulMockReplayStore(), &governancetest.SimpleStateRootProvider{Root: "root-1"}, nil, nil, "doctrine")
+	t.Run("NilDoctrine_FailClosed", func(t *testing.T) {
+		warden := makeWarden(testutil.NewStatefulMockReplayStore(), &governancetest.SimpleStateRootProvider{Root: "root-1"}, &NoopConsensusPolicyStore{}, nil, "doctrine")
 		env := buildValidEnvelope(t)
-		verified, err := warden.VerifyEnvelope(context.Background(), env)
-		if err != nil {
-			t.Fatalf("expected nil doctrine to default to NewL1Doctrine and pass, got %v", err)
-		}
-		if verified == nil {
-			t.Fatal("expected non-nil verified transaction")
+		_, err := warden.VerifyEnvelope(context.Background(), env)
+		if !errors.Is(err, ErrDoctrineMissing) {
+			t.Fatalf("expected ErrDoctrineMissing, got %v", err)
 		}
 	})
 
-	t.Run("NilTribunalStore_ConsensusFailClosed", func(t *testing.T) {
-		warden := makeWarden(testutil.NewStatefulMockReplayStore(), &governancetest.SimpleStateRootProvider{Root: "root-1"}, nil, NewL1Doctrine(), "consensus")
+	t.Run("NoopConsensusStore_ConsensusFailClosed", func(t *testing.T) {
+		warden := makeWarden(testutil.NewStatefulMockReplayStore(), &governancetest.SimpleStateRootProvider{Root: "root-1"}, &NoopConsensusPolicyStore{}, NewL1Doctrine(), "consensus")
 		env := buildValidEnvelope(t)
 		_, err := warden.VerifyEnvelope(context.Background(), env)
 		if !errors.Is(err, ErrL2ConsensusNotConfigured) {

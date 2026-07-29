@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Operator
 
-Last Updated: 2026-07-25
-Version: v1.6.3
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 ---
 
@@ -23,13 +23,13 @@ The g8e binary uses a single cobra command tree. Gateway and Operator modes are 
 #### Gateway Mode (PDP)
 A Gateway enforces governance postures across all connected Operators. Start a gateway worker with `gw start` (background) or `gw start --follow` (foreground), specifying a posture via `--posture`. Use `gw start --interactive` to launch the onboarding wizard before starting:
 - `--posture doctrine`, Enforces L1 hard gates; audits L2/L3.
-- `--posture consensus`, Enforces L1/L2; audits L3. Requires `--tribunal-id` and `--tribunal-url` to connect to an enrolled Tribunal service for L2 deliberation.
+- `--posture consensus`, Enforces L1/L2; audits L3. Requires `--consensus-id` and `--consensus-url` to connect to an enrolled Consensus service for L2 deliberation.
 - `--posture notary`, Enforces L1/L2/L3 strictly.
 
 Additional Gateway mode flags for consensus posture:
-- `--tribunal-id <id>`, ID of the TribunalPolicy for L2 consensus.
-- `--tribunal-url <url>`, URL of the Tribunal service for L2 deliberation.
-- `--tribunal-bootstrap <path>`, Path to a JSON file that seeds a TribunalPolicy and trusted signers at startup.
+- `--consensus-id <id>`, ID of the ConsensusPolicy for L2 consensus.
+- `--consensus-url <url>`, URL of the Consensus service for L2 deliberation.
+- `--consensus-bootstrap <path>`, Path to a JSON file that seeds a ConsensusPolicy and trusted signers at startup.
 
 #### Operator Mode (PEP)
 An Operator executes tools on a host and connects back to a Gateway. Start an operator worker with `operator start`:
@@ -44,6 +44,12 @@ An Operator executes tools on a host and connects back to a Gateway. Start an op
 - `operator start -G, --no-git`, Disable Git integration.
 - `operator start -l, --log <level>`, Log level: info, error, debug.
 - `operator start --heartbeat-interval <seconds>`, Heartbeat interval in seconds (default: 30).
+- `operator start --lattice-endpoint <url>`, Lattice gRPC endpoint URL. Enables the Lattice adapter when set.
+- `operator start --lattice-client-id <id>`, OAuth2 client ID for Lattice authentication.
+- `operator start --lattice-client-secret <secret>`, OAuth2 client secret for Lattice authentication.
+- `operator start --lattice-sandboxes-token <token>`, Sandbox authorization token for Lattice.
+- `operator start --lattice-entity-name <name>`, Entity display name registered with Lattice.
+- `operator start --lattice-posture-floor <posture>`, Minimum governance posture (default: consensus).
 
 Running the binary with no arguments launches the Tactical Governance Console (TUI). Use `gw start` or `operator start` subcommands to launch worker processes.
 
@@ -139,7 +145,7 @@ Custom operator implementations need the g8e Protocol Library for protobuf schem
 The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.6.3
+go get github.com/g8e-ai/g8e@v1.6.6
 ```
 
 The Go module provides protobuf types for governance envelopes, operator service definitions, and SPIFFE workload identity helpers for mTLS identity binding. Import the common and operator protocol packages for envelope construction and verification, and the root protocol package for SPIFFE URI SAN generation and validation.
@@ -151,7 +157,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For operator-side tooling, testing, or Python-based actuator services that need to consume protocol constants:
 
 ```bash
-pip install g8e==1.6.3
+pip install g8e==1.6.6
 ```
 
 The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
@@ -181,7 +187,7 @@ The Operator must implement a singular verification gate that enforces:
 - **Freshness**: Validate `expires_at` is not passed and `nonce` is not in the replay store.
 - **State Binding**: Verify `state_merkle_root` matches the host's current local ledger root.
 - **L1Doctrine (Hard Gates)**: Enforce technical bedrock threat detection rules, forbidden patterns, and MITRE ATT&CK heuristics on the typed payload.
-- **L2Consensus**: Verify Tribunal deliberation votes (Ed25519 signatures) against a locally trusted signer store and the active TribunalPolicy. Under `consensus` posture, the gateway delegates L2 deliberation to an enrolled Tribunal service rather than self-signing.
+- **L2Consensus**: Verify Consensus deliberation votes (Ed25519 signatures) against a locally trusted signer store and the active ConsensusPolicy. Under `consensus` posture, the gateway delegates L2 deliberation to an enrolled Consensus service rather than self-signing.
 - **L3Notary**: Validate authorization proofs (mTLS certificate fingerprints for CLI sessions, WebAuthn proofs for web sessions).
 - **L4Warden**: Pre-dispatch verification of all preceding proofs and state roots.
 
@@ -267,7 +273,7 @@ The GovernanceEnvelope schema is defined in the protocol protobuf files. Your im
 1. **Use the canonical protojson wire format** for all client-facing interactions.
 2. **Implement the typed payload validation** defined in the protocol schemas.
 3. **Support the canonical request payload mappings** for all first-class event types.
-4. **Handle L2 votes** from Tribunal deliberation, verifying the quorum of Ed25519 signatures against the TribunalPolicy.
+4. **Handle L2 votes** from Consensus deliberation, verifying the quorum of Ed25519 signatures against the ConsensusPolicy.
 
 Refer to the protocol schema definitions in the protocol protobuf files for the canonical schema definitions.
 

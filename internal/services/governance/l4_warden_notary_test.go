@@ -22,8 +22,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	govtypes "github.com/g8e-ai/g8e/internal/governance"
-	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/services/governance/governancetest"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -269,16 +267,8 @@ func TestL4Warden_Notary_NonceRaceCondition(t *testing.T) {
 func TestL4Warden_Notary_AppPolicyStore_L3Required_Mutation(t *testing.T) {
 	t.Parallel()
 
-	appPolicyStore := &governancetest.SimpleAppPolicyStore{
-		Policies: map[string]*models.AppPolicy{
-			"spiffe://g8e.local/app/test-app-id": {
-				AppID: "spiffe://g8e.local/app/test-app-id",
-			},
-		},
-	}
-
 	l3Notary := testutil.NewConfigurableMockL3Notary(false)
-	verifier, privKey := createVerifierWithAppPolicyStore(t, appPolicyStore, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), l3Notary)
+	verifier, privKey := createVerifierWithAppPolicyStore(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), l3Notary)
 
 	actionType := constants.ActionTypeExecuteBash
 	payload := typedPayload(t, actionType)
@@ -298,12 +288,8 @@ func TestL4Warden_Notary_AppPolicyStore_L3Required_Mutation(t *testing.T) {
 func TestL4Warden_Notary_AppPolicyStore_NoPolicy_Fallback(t *testing.T) {
 	t.Parallel()
 
-	appPolicyStore := &governancetest.SimpleAppPolicyStore{
-		Policies: map[string]*models.AppPolicy{},
-	}
-
 	l3Notary := testutil.NewConfigurableMockL3Notary(false)
-	verifier, privKey := createVerifierWithAppPolicyStore(t, appPolicyStore, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), l3Notary)
+	verifier, privKey := createVerifierWithAppPolicyStore(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), l3Notary)
 
 	actionType := constants.ActionTypeExecuteBash
 	payload := typedPayload(t, actionType)

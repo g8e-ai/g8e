@@ -23,18 +23,18 @@ import (
 // The cmd package owns conversion to/from GatewayFlags and merging
 // according to configuration precedence.
 type Config struct {
-	PublicBaseURL     string
-	CertIdentityMode  string
-	AllowedOrigins    []string
-	Posture           string
-	TribunalID        string
-	TribunalURL       string
-	TribunalBootstrap string
-	PasskeyRpID       string
-	PasskeyRpName     string
-	PasskeyRpOrigins  []string
-	MCPDownstreamURL  string
-	A2ADownstreamURL  string
+	PublicBaseURL      string
+	CertIdentityMode   string
+	AllowedOrigins     []string
+	Posture            string
+	ConsensusID        string
+	ConsensusURL       string
+	ConsensusBootstrap string
+	PasskeyRpID        string
+	PasskeyRpName      string
+	PasskeyRpOrigins   []string
+	MCPDownstreamURL   string
+	A2ADownstreamURL   string
 }
 
 // Options configures the wizard at launch.

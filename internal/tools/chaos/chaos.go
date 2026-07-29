@@ -202,7 +202,7 @@ func signedEnvelope(
 	l2Sig := hex.EncodeToString(ed25519.Sign(privKey, []byte(hash+"|true")))
 	env.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
-			ConsensusSetId: "chaos-tribunal",
+			ConsensusSetId: "chaos-consensus",
 			Votes: []*commonv1.L2Vote{
 				{
 					SignerKeyId:        keyID,
@@ -516,9 +516,8 @@ func Run(cfg Config) error {
 		logger,
 		replayStore,
 		stateRootProvider,
-		&governance.SimpleSignerStore{Signers: trustedSigners},
-		nil, // TribunalStore not used in chaos tester
-		nil, // AppPolicyStore not used in chaos tester
+		&governance.FailClosedSignerStore{Signers: trustedSigners},
+		&governance.NoopConsensusPolicyStore{}, // consensus not used in chaos tester
 		l3Notary,
 		doctrine,
 		knownActionTypes,

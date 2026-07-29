@@ -88,33 +88,33 @@ func TestView_CertModeNoFocusIndicatorAtFocusIndexZero(t *testing.T) {
 	assert.NotContains(t, s, "▶▶", "cert mode choice should not show double indicator at focusIndex 0")
 }
 
-// --- View: conditional rendering — posture tribunal fields ---
+// --- View: conditional rendering — posture consensus fields ---
 
-func TestView_PostureDoctrine_TribunalFieldsHidden(t *testing.T) {
+func TestView_PostureDoctrine_ConsensusFieldsHidden(t *testing.T) {
 	m := NewModel(Options{})
 	m.step = StepPosture
 	m.postureChoice = 0
 	s := m.View()
-	assert.NotContains(t, s, "Tribunal Policy ID")
-	assert.NotContains(t, s, "Tribunal Service URL")
+	assert.NotContains(t, s, "Consensus Policy ID")
+	assert.NotContains(t, s, "Consensus Service URL")
 }
 
-func TestView_PostureConsensus_TribunalFieldsShown(t *testing.T) {
+func TestView_PostureConsensus_ConsensusFieldsShown(t *testing.T) {
 	m := NewModel(Options{})
 	m.step = StepPosture
 	m.postureChoice = 1
 	s := m.View()
-	assert.Contains(t, s, "Tribunal Policy ID")
-	assert.Contains(t, s, "Tribunal Service URL")
+	assert.Contains(t, s, "Consensus Policy ID")
+	assert.Contains(t, s, "Consensus Service URL")
 }
 
-func TestView_PostureNotary_TribunalFieldsShown(t *testing.T) {
+func TestView_PostureNotary_ConsensusFieldsShown(t *testing.T) {
 	m := NewModel(Options{})
 	m.step = StepPosture
 	m.postureChoice = 2
 	s := m.View()
-	assert.Contains(t, s, "Tribunal Policy ID")
-	assert.Contains(t, s, "Tribunal Service URL")
+	assert.Contains(t, s, "Consensus Policy ID")
+	assert.Contains(t, s, "Consensus Service URL")
 }
 
 // --- View: conditional rendering — web frontend / CORS ---

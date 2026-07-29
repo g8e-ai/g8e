@@ -32,24 +32,24 @@ import (
 
 // AdminController handles admin-only endpoints for app policy management.
 type AdminController struct {
-	cfg           *config.Config
-	logger        *slog.Logger
-	docStore      *DocumentStoreService
-	signerStore   *SignerStoreService
-	tribunalStore *TribunalStoreService
-	userSvc       *UserService
-	responder     *response.Writer
+	cfg            *config.Config
+	logger         *slog.Logger
+	docStore       *DocumentStoreService
+	signerStore    *SignerStoreService
+	consensusStore *ConsensusStoreService
+	userSvc        *UserService
+	responder      *response.Writer
 }
 
-func newAdminController(cfg *config.Config, logger *slog.Logger, docStore *DocumentStoreService, signerStore *SignerStoreService, tribunalStore *TribunalStoreService, userSvc *UserService, responder *response.Writer) *AdminController {
+func newAdminController(cfg *config.Config, logger *slog.Logger, docStore *DocumentStoreService, signerStore *SignerStoreService, consensusStore *ConsensusStoreService, userSvc *UserService, responder *response.Writer) *AdminController {
 	return &AdminController{
-		cfg:           cfg,
-		logger:        logger,
-		docStore:      docStore,
-		signerStore:   signerStore,
-		tribunalStore: tribunalStore,
-		userSvc:       userSvc,
-		responder:     responder,
+		cfg:            cfg,
+		logger:         logger,
+		docStore:       docStore,
+		signerStore:    signerStore,
+		consensusStore: consensusStore,
+		userSvc:        userSvc,
+		responder:      responder,
 	}
 }
 
@@ -198,9 +198,9 @@ func (c *AdminController) handleRevokeApp(w http.ResponseWriter, r *http.Request
 	c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 }
 
-// POST /api/v1/admin/tribunals
-// GET /api/v1/admin/tribunals
-func (c *AdminController) handleTribunals(w http.ResponseWriter, r *http.Request) {
+// POST /api/v1/admin/consensus
+// GET /api/v1/admin/consensus
+func (c *AdminController) handleConsensus(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok || userID == "" {
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
@@ -224,38 +224,38 @@ func (c *AdminController) handleTribunals(w http.ResponseWriter, r *http.Request
 			return
 		}
 
-		var policy models.TribunalPolicy
+		var policy models.ConsensusPolicy
 		if err := json.Unmarshal(body, &policy); err != nil {
 			c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
 			return
 		}
 
-		if err := c.tribunalStore.AddTribunal(policy); err != nil {
-			c.logger.Error("failed to add tribunal", "error", err)
+		if err := c.consensusStore.AddConsensus(policy); err != nil {
+			c.logger.Error("failed to add consensus", "error", err)
 			c.responder.Error(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
-		c.logger.Info("Tribunal created by admin", "tribunal_id", policy.ID)
+		c.logger.Info("Consensus created by admin", "consensus_id", policy.ID)
 		c.responder.JSON(w, http.StatusCreated, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	case http.MethodGet:
-		tribunals, err := c.tribunalStore.ListTribunals()
+		consensus, err := c.consensusStore.ListConsensus()
 		if err != nil {
-			c.logger.Error("failed to list tribunals", "error", err)
-			c.responder.Error(w, http.StatusInternalServerError, "failed to list tribunals")
+			c.logger.Error("failed to list consensus", "error", err)
+			c.responder.Error(w, http.StatusInternalServerError, "failed to list consensus")
 			return
 		}
 
-		c.responder.JSON(w, http.StatusOK, tribunals)
+		c.responder.JSON(w, http.StatusOK, consensus)
 
 	default:
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
 }
 
-// DELETE /api/v1/admin/tribunals/{id}
-func (c *AdminController) handleDeleteTribunal(w http.ResponseWriter, r *http.Request) {
+// DELETE /api/v1/admin/consensus/{id}
+func (c *AdminController) handleDeleteConsensus(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok || userID == "" {
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
@@ -276,23 +276,23 @@ func (c *AdminController) handleDeleteTribunal(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	tribunalID := strings.TrimPrefix(r.URL.Path, constants.APIPaths.AdminTribunalsPrefix)
-	if tribunalID == "" {
-		c.responder.Error(w, http.StatusBadRequest, "tribunal_id required")
+	consensusID := strings.TrimPrefix(r.URL.Path, constants.APIPaths.AdminConsensusPrefix)
+	if consensusID == "" {
+		c.responder.Error(w, http.StatusBadRequest, "consensus_id required")
 		return
 	}
 
-	deleted, err := c.tribunalStore.DeleteTribunal(tribunalID)
+	deleted, err := c.consensusStore.DeleteConsensus(consensusID)
 	if err != nil {
-		c.logger.Error("failed to delete tribunal", "error", err)
-		c.responder.Error(w, http.StatusInternalServerError, "failed to delete tribunal")
+		c.logger.Error("failed to delete consensus", "error", err)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to delete consensus")
 		return
 	}
 	if !deleted {
-		c.responder.Error(w, http.StatusNotFound, "tribunal not found")
+		c.responder.Error(w, http.StatusNotFound, "consensus not found")
 		return
 	}
 
-	c.logger.Info("Tribunal deleted by admin", "tribunal_id", tribunalID)
+	c.logger.Info("Consensus deleted by admin", "consensus_id", consensusID)
 	c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 }

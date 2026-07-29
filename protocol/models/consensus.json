@@ -1,17 +1,17 @@
 {
-  "_comment": "Canonical Tribunal document shape. client is the authority - it stores TribunalPolicy records that define named consensus bodies for L2 governance. A Tribunal consists of N member identities (enrolled agentic apps) and requires K affirmative distinct signatures to reach quorum. A field mismatch breaks L2 governance and multi-sig verification.",
+  "_comment": "Canonical Consensus document shape. client is the authority - it stores ConsensusPolicy records that define named consensus bodies for L2 governance. A Consensus consists of N member identities (enrolled agentic apps) and requires K affirmative distinct signatures to reach quorum. A field mismatch breaks L2 governance and multi-sig verification.",
   "_authority": "client (SQLite)",
   "_consumers": ["client internal services (L4 Warden, governance verification)", "agent (reads for governance replay)"],
-  "_collection": "tribunals",
+  "_collection": "consensus",
 
-  "tribunal": {
+  "consensus": {
     "_description": "Named consensus body for L2 governance. Consists of N member identities (enrolled agentic apps via TrustedSigner.ID) and requires K affirmative distinct signatures to reach quorum.",
 
     "core_identity": {
       "id": {
         "type": "string",
         "required": true,
-        "description": "Tribunal name/identifier. Used as the document ID."
+        "description": "Consensus name/identifier. Used as the document ID."
       }
     },
 
@@ -20,7 +20,7 @@
         "type": "array",
         "items": "string",
         "required": true,
-        "description": "Member app IDs enrolled in this tribunal. Each ID corresponds to a TrustedSigner.ID."
+        "description": "Member app IDs enrolled in this consensus. Each ID corresponds to a TrustedSigner.ID."
       },
       "quorum": {
         "type": "integer",
@@ -41,7 +41,7 @@
         "type": "boolean",
         "required": true,
         "default": true,
-        "description": "Whether this tribunal is currently enabled for governance participation."
+        "description": "Whether this consensus is currently enabled for governance participation."
       }
     },
 

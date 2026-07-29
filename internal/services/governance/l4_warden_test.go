@@ -43,19 +43,18 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 		testutil.NewTestLogger(),
 		replayStore,
 		stateRootProvider,
-		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key": pubKey}},
-		&tribunalStoreTestAdapter{Inner: &governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{
-			"test-tribunal": {
-				ID:              "test-tribunal",
+		&FailClosedSignerStore{Signers: map[string]ed25519.PublicKey{"test-key": pubKey}},
+		&consensusStoreTestAdapter{Inner: &governancetest.SimpleConsensusStore{Consensus: map[string]*models.ConsensusPolicy{
+			"test-consensus": {
+				ID:              "test-consensus",
 				MemberAppIDs:    []string{"test-key"},
 				Quorum:          1,
 				RequireDistinct: true,
 				Enabled:         true,
 			},
 		}}},
-		nil, // AppPolicyStore not used in tests
 		l3Notary,
-		nil,                      // doctrine defaults to L1Doctrine
+		NewL1Doctrine(),          // doctrine required
 		constants.AllActionTypes, // Use SSOT for action types
 		posture,
 		nil, // Clock defaults to RealClock
@@ -169,7 +168,7 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 	// L2 signs the hash (machine consensus before human notary)
 	env.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
-			ConsensusSetId: "test-tribunal",
+			ConsensusSetId: "test-consensus",
 			Votes: []*commonv1.L2Vote{
 				signL2Vote(privKey, "test-key", hash, true),
 			},
@@ -221,8 +220,8 @@ func TestNewGovernancePosture_AcceptsValidPostures(t *testing.T) {
 	}
 }
 
-// createVerifierWithAppPolicyStore creates a L4Warden with a custom AppPolicyStore.
-func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStore, replayStore ReplayStore, stateRootProvider StateRootProvider, l3Notary L3Notary) (*L4Warden, ed25519.PrivateKey) {
+// createVerifierWithAppPolicyStore creates a L4Warden with a custom signer key ID.
+func createVerifierWithAppPolicyStore(t *testing.T, replayStore ReplayStore, stateRootProvider StateRootProvider, l3Notary L3Notary) (*L4Warden, ed25519.PrivateKey) {
 	t.Helper()
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
@@ -232,19 +231,18 @@ func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStor
 		testutil.NewTestLogger(),
 		replayStore,
 		stateRootProvider,
-		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"spiffe://g8e.local/app/test-app-id": pubKey}},
-		&tribunalStoreTestAdapter{Inner: &governancetest.SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{
-			"test-tribunal": {
-				ID:              "test-tribunal",
+		&FailClosedSignerStore{Signers: map[string]ed25519.PublicKey{"spiffe://g8e.local/app/test-app-id": pubKey}},
+		&consensusStoreTestAdapter{Inner: &governancetest.SimpleConsensusStore{Consensus: map[string]*models.ConsensusPolicy{
+			"test-consensus": {
+				ID:              "test-consensus",
 				MemberAppIDs:    []string{"spiffe://g8e.local/app/test-app-id"},
 				Quorum:          1,
 				RequireDistinct: true,
 				Enabled:         true,
 			},
 		}}},
-		appPolicyStore,
 		l3Notary,
-		nil, // doctrine defaults to L1Doctrine
+		NewL1Doctrine(),
 		constants.AllActionTypes,
 		constants.PostureNotary,
 		nil, // Clock defaults to RealClock

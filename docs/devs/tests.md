@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-07-26
+Last Updated: 2026-07-28
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -26,7 +26,7 @@ g8e tests run directly on the host using real infrastructure. If it does not wor
 - **Enable race detection** — `-race` on all non-Windows platforms across all test targets.
 - **Use explicit cancellation contexts** — Goroutines require explicit cancellation contexts and clear channel ownership.
 - **Use the canonical trust bundle path** — `.g8e/pki/trust/g8eg-ca-bundle.pem`. Contains root CA, hub intermediate, Operator intermediate, and gateway peer CA.
-- **Use the shared tribunal factory** — `tribunal.NewTribunalFromPolicy` is used by both production `BootstrapTribunal` and test `SetupTribunal` to avoid duplication.
+- **Use the shared consensus factory** — `consensus.NewConsensusFromPolicy` is used by both production `BootstrapConsensus` and test `SetupConsensus` to avoid duplication.
 - **Keep `storagetest.TestSQLAuditStore` in test code only** — Production code uses `storage.SQLAuditStore` from `audit_store.go`.
 - **Use descriptive test names** — Test function names must describe the specific behavior being verified, not generic categories. Good: `TestHandleFsReadRequest_ScrubbingRedactsSecrets`, `TestHandleEvalAnswerRequestSync_TruncatesAnswerExceedingMaxBytes`. Bad: `TestCoverage`, `TestEdgeCases`, `TestGap`, `TestMisc`. Subtest names (`t.Run`) must describe the specific scenario, not just "success" or "error".
 - **Use descriptive test filenames** — Test filenames must describe their scope, not generic categories. Good: `file_ops_scrubbing_test.go`, `vault_writer_error_paths_test.go`. Bad: `edge_test.go`, `misc_test.go`, `coverage_test.go`. Do not use "coverage", "gap", or "edge" in test filenames — name the file after the behavior or component it tests.
@@ -165,7 +165,7 @@ make test-docker
 
 The demo scenarios tool (`g8e demos scenarios run`) impersonates arbitrary AI tools against a **REAL** g8e Gateway and Operator. The only fiction is the client identity — the Gateway and Operator are real infrastructure.
 
-**26 scenarios total**: 7 MCP + 3 A2A + 6 governance + 6 DHS + 2 gov/finance + 5 FedRAMP.
+**29 scenarios total**: 7 MCP + 3 A2A + 6 governance + 6 DHS + 2 gov/finance + 5 FedRAMP.
 
 The interactive demo runner (`g8e demos run <org> [scenario]`) provides 17 platform demos across 6 environments: healthcare (4), gov (1), finance (1), dhs (5), fedramp (5), frontend (1). These drive the real Gateway and Operator with interactive passkey authentication and posture switching.
 
@@ -194,7 +194,7 @@ The interactive demo runner (`g8e demos run <org> [scenario]`) provides 17 platf
 
 `GatewayFixture` writes each run's data/vault/PKI to a fresh, uniquely-named directory under `<repo>/test-results/` (via `os.MkdirTemp`). This directory is **not** deleted — results accumulate for inspection. `test-results/` is gitignored. `NewGatewayFixture` registers cleanup internally via `t.Cleanup`, which stops the gateway and releases database locks but leaves data on disk.
 
-Key fixture methods: `NewGatewayFixture`, `EnrollClientIdentity`, `CreateMTLSClient`, `CreateCLIMTLSClient`, `CreateNoCertClient`, `SetupTribunal`, `WaitForReady`. `PublicBaseURL` is set via `GatewayFixtureOptions` at construction time.
+Key fixture methods: `NewGatewayFixture`, `EnrollClientIdentity`, `CreateMTLSClient`, `CreateCLIMTLSClient`, `CreateNoCertClient`, `SetupConsensus`, `WaitForReady`. `PublicBaseURL` is set via `GatewayFixtureOptions` at construction time.
 
 ### Docker E2E Fixture (Tier 3)
 
@@ -304,6 +304,7 @@ GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 - `smoke-test` — Clean-environment install verification for both Python and Go packages
 - `secret-scan` — gitleaks full-history secret scanning
 - `license-check` — go-licenses report with forbidden copyleft license detection (GPL, AGPL, LGPL, SSPL, BUSL)
+- `demo-verify` — Builds and runs all 6 demo environments via Docker Compose (gated on `ci` job)
 
 CI does **not** run Tier 3 Docker E2E tests.
 

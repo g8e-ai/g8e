@@ -1,7 +1,7 @@
 # Governance
 
-Last Updated: 2026-07-26
-Version: v1.6.5
+Last Updated: 2026-07-28
+Version: v1.6.6
 
 ## Overview
 
@@ -14,7 +14,7 @@ The posture is set at startup via `--posture <doctrine|consensus|notary>` and ca
 
 A third check point exists at startup:
 
-3. **Gateway startup**: logs advisory warnings for consensus and notary postures if tribunal prerequisites are not yet configured. The gateway boots regardless; L2 enforcement happens at transaction time via L4Warden.
+3. **Gateway startup**: logs advisory warnings for consensus and notary postures if consensus prerequisites are not yet configured. The gateway boots regardless; L2 enforcement happens at transaction time via L4 Warden.
 
 ### GovernanceEnvelope
 
@@ -23,7 +23,7 @@ The canonical transaction container is the **GovernanceEnvelope**, a protobuf me
 - **Identity fields**: operator ID, session IDs (operator, web, CLI), requestor user ID, acting app ID
 - **Intent fields**: event type, payload (typed protobuf bytes), action type, target resource, intent data
 - **State and replay protection**: state Merkle root, nonce, transaction hash, protocol version
-- **Governance proofs**: L1 metadata, L2 metadata (tribunal votes), L3 metadata (WebAuthn or mTLS proof)
+- **Governance proofs**: L1 metadata, L2 metadata (consensus votes), L3 metadata (WebAuthn or mTLS proof)
 - **Application context**: case ID, investigation ID, task ID, system fingerprint, tenant ID, binding persona
 
 ---
@@ -60,22 +60,22 @@ The canonical transaction container is the **GovernanceEnvelope**, a protobuf me
 - **L2 Consensus signature verification**: the following checks are all fail-closed gates under consensus posture:
   - **Vote presence**: the envelope must include L2 metadata with at least one vote.
   - **Signer store configured**: the trusted signer store must be available.
-  - **Tribunal store configured**: the tribunal policy store must be available.
-  - **Tribunal policy exists and is enabled**: the tribunal policy for the L2 tribunal ID must exist and be enabled.
-  - **Member validation**: votes from signer key IDs not in the tribunal policy's member list are silently excluded from quorum count.
+  - **Consensus store configured**: the consensus policy store must be available.
+  - **Consensus policy exists and is enabled**: the consensus policy for the L2 consensus ID must exist and be enabled.
+  - **Member validation**: votes from signer key IDs not in the consensus policy's member list are silently excluded from quorum count.
   - **Duplicate signer detection**: if the policy requires distinct signers, duplicate signer key IDs are rejected.
   - **Signature verification**: each vote's Ed25519 signature over `<transaction_hash>|<decision>` is verified against the trusted public key. Invalid signatures are excluded from quorum count.
   - **Quorum check**: the number of affirmative votes from valid, distinct members must meet or exceed the policy's quorum threshold.
 
-**Startup validation**: The gateway logs advisory warnings at startup for consensus and notary postures if the tribunal is not yet configured:
-- If the tribunal ID is empty, a warning is logged.
-- If the tribunal policy does not exist or is disabled, a warning is logged.
-- L2 enforcement happens at transaction time via L4Warden; L2-gated transactions are rejected until a tribunal is properly enrolled.
-- If the tribunal ID is set and the policy exists and is enabled, the Tribunal service is bootstrapped in-process and wired as both the mTLS HTTP handler and the local deliberator.
+**Startup validation**: The gateway logs advisory warnings at startup for consensus and notary postures if the consensus is not yet configured:
+- If the consensus ID is empty, a warning is logged.
+- If the consensus policy does not exist or is disabled, a warning is logged.
+- L2 enforcement happens at transaction time via L4 Warden; L2-gated transactions are rejected until a consensus is properly enrolled.
+- If the consensus ID is set and the policy exists and is enabled, the Consensus service is bootstrapped in-process and wired as both the mTLS HTTP handler and the local deliberator.
 
-**Tribunal bootstrap**: The Tribunal service is constructed from the tribunal policy stored in the database. For single-member tribunals, the gateway's actuator Ed25519 key is reused as the member signing key. For multi-member tribunals, member keys are loaded from disk. Members whose keys cannot be resolved are included without a private key; they can participate in policy but cannot sign votes, and a warning is logged.
+**Consensus bootstrap**: The Consensus service is constructed from the consensus policy stored in the database. For single-member consensuses, the gateway's actuator Ed25519 key is reused as the member signing key. For multi-member consensuses, member keys are loaded from disk. Members whose keys cannot be resolved are included without a private key; they can participate in policy but cannot sign votes, and a warning is logged.
 
-**Declarative tribunal seeding** (`--tribunal-bootstrap`): When the `--tribunal-bootstrap` flag is set to a JSON config file path, the gateway seeds trusted signers and a tribunal policy at startup, before consensus validation runs. The config file contains `tribunal_id`, `member_app_ids`, `quorum`, and optional `seed_hex` (a hex-encoded Ed25519 seed). If `seed_hex` is provided, the corresponding public key is derived and registered as a trusted signer for each member. If omitted, a fresh key pair is generated. This is idempotent: if the tribunal already exists, the bootstrap is skipped. This enables deterministic demo deployments where the gateway and agent harness share the same Ed25519 seed.
+**Declarative consensus seeding** (`--consensus-bootstrap`): When the `--consensus-bootstrap` flag is set to a JSON config file path, the gateway seeds trusted signers and a consensus policy at startup, before consensus validation runs. The config file contains `consensus_id`, `member_app_ids`, `quorum`, and optional `seed_hex` (a hex-encoded Ed25519 seed). If `seed_hex` is provided, the corresponding public key is derived and registered as a trusted signer for each member. If omitted, a fresh key pair is generated. This is idempotent: if the consensus already exists, the bootstrap is skipped. This enables deterministic demo deployments where the gateway and agent harness share the same Ed25519 seed.
 
 **What is audited but NOT gated**:
 - **L3 Notary proofs**: same behavior as doctrine. Verified if present, recorded in receipt, but not required for mutations.
@@ -88,7 +88,7 @@ The canonical transaction container is the **GovernanceEnvelope**, a protobuf me
 
 **What is enforced (fail-closed)**:
 - Everything from doctrine posture (L1, hash, nonce, expiry, state root, action type, payload decoding).
-- Everything from consensus posture (all L2 checks: vote presence, signer store, tribunal store, tribunal policy, member validation, duplicate detection, signature verification, quorum).
+- Everything from consensus posture (all L2 checks: vote presence, signer store, consensus store, consensus policy, member validation, duplicate detection, signature verification, quorum).
 - **L3 Notary proof verification for mutations**: the following checks are fail-closed gates under notary posture, but only for mutation action types:
   - **L3 proof presence**: for mutation actions, the envelope must include L3 metadata with a non-nil proof.
   - **L3 notary configured**: the L3 notary must be available.
@@ -105,9 +105,9 @@ The canonical transaction container is the **GovernanceEnvelope**, a protobuf me
 
 Non-mutation actions (e.g., `FS_READ`, `FS_LIST`, `FETCH_LOGS`, `HEARTBEAT`) do not require L3 proof even under notary posture.
 
-**Startup validation**: Same as consensus posture; advisory warnings if tribunal is not configured. L2 enforcement happens at transaction time via L4Warden. If the tribunal ID is set and the policy exists and is enabled, the Tribunal service is bootstrapped in-process.
+**Startup validation**: Same as consensus posture; advisory warnings if consensus is not configured. L2 enforcement happens at transaction time via L4 Warden. If the consensus ID is set and the policy exists and is enabled, the Consensus service is bootstrapped in-process.
 
-**Tribunal bootstrap**: Same as consensus posture. The Tribunal service is constructed and wired as both the mTLS HTTP handler and the local deliberator. The in-process local deliberator signs L2 votes with the gateway's actuator key for single-member tribunals.
+**Consensus bootstrap**: Same as consensus posture. The Consensus service is constructed and wired as both the mTLS HTTP handler and the local deliberator. The in-process local deliberator signs L2 votes with the gateway's actuator key for single-member consensuses.
 
 **Default for outbound mode**: Notary is the default posture for outbound (operator) mode. This ensures that operators running in outbound mode require full L1/L2/L3 enforcement by default. Since the L3 notary is nil in outbound mode, mutations fail-closed unless an L3 notary is explicitly configured.
 
@@ -125,8 +125,8 @@ Non-mutation actions (e.g., `FS_READ`, `FS_LIST`, `FETCH_LOGS`, `HEARTBEAT`) do 
 | Action type validation | **Enforced** | **Enforced** | **Enforced** |
 | L2 vote presence | Audited | **Enforced** | **Enforced** |
 | L2 signer store configured | Audited | **Enforced** | **Enforced** |
-| L2 tribunal store configured | Audited | **Enforced** | **Enforced** |
-| L2 tribunal policy exists + enabled | Audited | **Enforced** | **Enforced** |
+| L2 consensus store configured | Audited | **Enforced** | **Enforced** |
+| L2 consensus policy exists + enabled | Audited | **Enforced** | **Enforced** |
 | L2 duplicate signer detection | Audited | **Enforced** | **Enforced** |
 | L2 signature verification | Audited | **Enforced** | **Enforced** |
 | L2 quorum met | Audited | **Enforced** | **Enforced** |
@@ -134,15 +134,15 @@ Non-mutation actions (e.g., `FS_READ`, `FS_LIST`, `FETCH_LOGS`, `HEARTBEAT`) do 
 | L3 notary configured (mutations only) | Audited | Audited | **Enforced** |
 | L3 proof valid (mutations only) | Audited | Audited | **Enforced** |
 | L2/L3 status in receipt | Recorded | Recorded | Recorded |
-| Startup: tribunal ID required | - | Advisory | Advisory |
+| Startup: consensus ID required | - | Advisory | Advisory |
 | Startup: quorum >= 1 | - | Advisory | Advisory |
-| Startup: tribunal policy exists + enabled | - | Advisory | Advisory |
+| Startup: consensus policy exists + enabled | - | Advisory | Advisory |
 | Invalid posture name | **Enforced** | **Enforced** | **Enforced** |
 
 **Enforced** = fail-closed gate; transaction is rejected if the check fails.
 **Audited** = result is verified if present and recorded in the receipt, but does not gate execution.
 **Recorded** = L2/L3 status is reflected in the action receipt as enum values.
-**Advisory** = a warning is logged at startup but the gateway boots regardless; enforcement happens at transaction time via L4Warden.
+**Advisory** = a warning is logged at startup but the gateway boots regardless; enforcement happens at transaction time via L4 Warden.
 
 ### Posture Enforcement Matrix
 
@@ -179,7 +179,7 @@ The **Producer** (g8e-compatible agentic ensemble, BYO agent, or MCP client) rec
    - Metadata about the request (timestamp, principal identity, nonce, state root)
    - Cryptographic proofs for verification
 
-2. **L2 Consensus (gateway-mediated)**: Under `consensus` and `notary` postures, the gateway's `processGatewayTransaction` automatically sends the envelope to the Tribunal for L2 deliberation before dispatch. Each tribunal member independently evaluates the payload using the L1 Doctrine and signs an Ed25519 vote over `<transaction_hash>|<decision>`. For single-binary deployments, the local deliberator calls the Tribunal Service in-process without an HTTP round-trip. Under `doctrine` posture, L2 votes are not required (audited only) and the Tribunal is not constructed in-process.
+2. **L2 Consensus (gateway-mediated)**: Under `consensus` and `notary` postures, the gateway automatically sends the envelope to the Consensus for L2 deliberation before dispatch. Each consensus member independently evaluates the payload using the L1 Doctrine and signs an Ed25519 vote over `<transaction_hash>|<decision>`. For single-binary deployments, the local deliberator calls the Consensus Service in-process without an HTTP round-trip. Under `doctrine` posture, L2 votes are not required (audited only) and the Consensus is not constructed in-process.
 
 3. **L3 Notary proof**: The envelope may include an L3 proof (WebAuthn assertion or mTLS certificate fingerprint) if the producer can generate one. However, standard AI clients (Claude Code, Codex, Goose, Gemini CLI) typically cannot generate an L3 Notary human signature. In this case, the gateway suspends the transaction, sends an OOB WebAuthn challenge URL to the client, the human approves via browser, and the gateway attaches the resulting proof to the envelope before resuming the L4/L5 flow (see [OOB Suspension](#out-of-band-oob-suspension--webauthn-approval-flow) in [Gateway Architecture](./gateway.md)).
 
@@ -269,10 +269,10 @@ If any stage fails, the nonce reservation is released and the transaction is rej
 
 **Purpose**: Verify that the transaction has proper L2 consensus.
 
-**Checks** (see [Tribunal](#tribunal) for full details):
+**Checks** (see [Consensus](#consensus) for full details):
 - **Vote presence**: If the posture requires L2 signatures, the envelope must include L2 metadata with at least one vote.
-- **Tribunal policy lookup**: Loads the tribunal policy by tribunal ID. The policy must exist and be enabled.
-- **Member validation**: Votes from signer key IDs not in the tribunal policy's member list are silently excluded; only member votes count toward quorum.
+- **Consensus policy lookup**: Loads the consensus policy by consensus ID. The policy must exist and be enabled.
+- **Member validation**: Votes from signer key IDs not in the consensus policy's member list are silently excluded; only member votes count toward quorum.
 - **Duplicate signer detection**: If the policy requires distinct signers, duplicate signer key IDs are rejected.
 - **Signature verification**: Each vote's Ed25519 signature over `<transaction_hash>|<decision>` is verified against the trusted public key.
 - **Quorum check**: The number of affirmative (safe) votes must meet or exceed the policy's quorum threshold.
@@ -291,16 +291,16 @@ If any stage fails, the nonce reservation is released and the transaction is rej
 
 **L3 Notary implementations** (see [L3 Notary Verification Detail](#l3-notary-verification-detail) for full details):
 
-The two notary implementations share composable primitives:
+The notary implementations share composable verification primitives:
 
-- **`CLISessionVerifier`** interface — used by `gatewayNotary` for CLI mTLS session verification (user active status, session ownership, certificate fingerprint match, session expiry, certificate revocation via PKI authority).
-- **`verifyOutboundProof`** shared function — suspended transaction lookup + Ed25519 signature verification + approval expiry check, used by `outboundNotary`.
+- **CLI Session Verification**: Verifies active user status, session ownership, certificate fingerprint matching, session expiry, and certificate revocation via the PKI authority.
+- **Outbound Proof Verification**: Performs suspended transaction lookup, Ed25519 signature verification over the transaction hash, and approval window expiration checks.
 
 - **Passkey Service**: Gateway mode for web sessions. Verifies WebAuthn assertions using the transaction hash as the challenge. Validates credential ID, client data JSON, authenticator data, and signature against registered passkey credentials.
 
 - **Outbound L3 Notary**: Outbound mode for operator-side approval. Verifies that a transaction exists in the suspended transaction store, is marked as approved, has a valid CLI signature over the transaction hash, and has not exceeded the 30-minute approval window. No CLI session or certificate revocation checks are performed in this mode.
 
-- **Gateway L3 Notary**: Unified gateway mode that requires passkey authorization for all proofs. The gateway notary always requires a credential ID and delegates to the passkey verifier first. If the proof includes an mTLS certificate fingerprint (CLI caller), CLI mTLS session verification runs as an additional transport-auth layer. This is the notary used in gateway-mode deployments. Does not access suspended transactions — that responsibility belongs to the passkey verifier delegate.
+- **Gateway L3 Notary**: Unified gateway mode that requires passkey authorization for all proofs. The gateway notary always requires a credential ID and delegates to the passkey verifier first. If the proof includes an mTLS certificate fingerprint (CLI caller), CLI mTLS session verification runs as an additional transport-auth layer. This is the notary used in gateway-mode deployments. It does not access suspended transactions; that responsibility belongs to the passkey verifier delegate.
 
 **Posture behavior**:
 - **doctrine/consensus**: L3 results are recorded for audit but do not gate execution.
@@ -395,114 +395,114 @@ The L4 Warden verifies L2 votes with identical logic regardless of posture; the 
 
 ---
 
-## Tribunal
+## Consensus
 
-The Tribunal is the **reference implementation** of L2 Consensus shipped with g8e. L2 Consensus is a protocol concept defined by the g8e protocol (`L2Metadata`, `L2Vote`); the Tribunal is one concrete implementation. Alternative implementations can be built against the same protocol interfaces. Each member is a distinct enrolled principal with its own Ed25519 key, registered as a trusted signer in the gateway's signer store.
+The Consensus is the **reference implementation** of L2 Consensus shipped with g8e. L2 Consensus is a protocol concept defined by the g8e protocol (`L2Metadata`, `L2Vote`); the Consensus is one concrete implementation. Alternative implementations can be built against the same protocol interfaces. Each member is a distinct enrolled principal with its own Ed25519 key, registered as a trusted signer in the gateway's signer store.
 
-### Tribunal Policy
+### Consensus Policy
 
-The tribunal policy defines a named consensus body with the following properties:
+The consensus policy defines a named consensus body with the following properties:
 
-- **ID**: Tribunal name/identifier. Must be non-empty, alphanumeric with hyphens and underscores only.
+- **ID**: Consensus name/identifier. Must be non-empty, alphanumeric with hyphens and underscores only.
 - **Member App IDs**: List of member application IDs. Each must correspond to an enabled trusted signer. No duplicates.
 - **Quorum**: Minimum number of affirmative distinct signatures required. Must be >= 1 and <= member count.
 - **Require Distinct**: If true, duplicate signer key IDs in a vote set are rejected.
-- **Enabled**: Whether the tribunal is active. New tribunals must be created as enabled.
+- **Enabled**: Whether the consensus is active. New consensuses must be created as enabled.
 
-### Tribunal Members
+### Consensus Members
 
-Each tribunal member represents a single member identity:
+Each consensus member represents a single member identity:
 
 - **App ID**: The member's enrolled application ID, used to look up the member's trusted public key.
 - **Private Key**: The member's Ed25519 private key, used to sign consensus votes. Members without a private key (key resolution failed during bootstrap) are included in the member list for policy purposes but cannot sign votes; their votes are skipped during deliberation.
 
-Members never share the gateway identity key. Even in single-member tribunals, the member is a distinct principal; the actuator's Ed25519 key is reused as the member signing key, but the member App ID remains separate from the gateway's actuator key ID.
+Members never share the gateway identity key. Even in single-member consensuses, the member is a distinct principal; the actuator's Ed25519 key is reused as the member signing key, but the member App ID remains separate from the gateway's actuator key ID.
 
-### Tribunal Service
+### Consensus Service
 
-The Tribunal Service is the core deliberation engine. It holds the tribunal ID, the list of members with their private keys, the shared L1 Doctrine instance for deterministic safety evaluation, and infrastructure for logging and HTTP response writing.
+The Consensus Service is the core deliberation engine. It holds the consensus ID, the list of members with their private keys, the shared L1 Doctrine instance for deterministic safety evaluation, and infrastructure for logging and HTTP response writing.
 
 #### Deliberation Flow
 
-The Tribunal Service processes a GovernanceEnvelope through all tribunal members:
+The Consensus Service processes a GovernanceEnvelope through all consensus members:
 
 1. **Hash verification**: Recomputes the transaction hash and verifies it matches the envelope ID. Mismatch causes fail-closed rejection.
 2. **Command extraction**: Extracts command data and intent from the envelope payload. If intent data is present, it is marshaled to JSON; otherwise the raw payload bytes are used.
 3. **Per-member safety evaluation**: Each member with a private key independently evaluates safety:
    - **MITRE checks**: Scans the command data for malicious patterns. If any signal has block-recommended, the payload is unsafe.
-   - **Fail-closed on nil doctrine**: If doctrine is nil, the evaluation returns unsafe. This ensures a misconfigured tribunal cannot approve transactions without doctrine validation.
+   - **Fail-closed on nil doctrine**: If doctrine is nil, the evaluation returns unsafe. This ensures a misconfigured consensus cannot approve transactions without doctrine validation.
 4. **Vote signing**: Each member signs `<transaction_hash>|<decision>` with Ed25519. The decision is a boolean (true = safe, false = unsafe).
-5. **Vote collection**: Votes are collected into the L2 metadata with the tribunal ID set to the service's tribunal ID.
+5. **Vote collection**: Votes are collected into the L2 metadata with the consensus ID set to the service's consensus ID.
 
 #### HTTP Handler
 
-The Tribunal Service exposes an mTLS-guarded HTTP handler for remote deliberation. It accepts a canonical-JSON GovernanceEnvelope (max 1 MiB body), calls the deliberation process, and returns the signed envelope with L2 metadata populated as JSON with appropriate security headers.
+The Consensus Service exposes an mTLS-guarded HTTP handler for remote deliberation. It accepts a canonical-JSON GovernanceEnvelope (max 1 MiB body), calls the deliberation process, and returns the signed envelope with L2 metadata populated as JSON with appropriate security headers.
 
 ### Key Providers
 
-The key provider interface resolves Ed25519 private keys for tribunal members by App ID. This abstraction allows keys to be sourced from disk, in-process, or any secure backing store.
+The key provider interface resolves Ed25519 private keys for consensus members by App ID. This abstraction allows keys to be sourced from disk, in-process, or any secure backing store.
 
 **File-based key provider**: Loads Ed25519 private keys from disk. Each member's key is stored as a hex-encoded Ed25519 seed in a file within the secrets directory. Key files are created with restrictive permissions.
 
 **Save member key**: Writes an Ed25519 private key seed to disk for member provisioning, creating the secrets directory if it does not exist.
 
-**Bootstrap key resolution**: During tribunal bootstrap, a composite key provider is constructed:
+**Bootstrap key resolution**: During consensus bootstrap, a composite key provider is constructed:
 1. **File-based lookup**: First attempts to load the member key from disk.
-2. **Actuator fallback**: If the file lookup fails and the member App ID matches the actuator's key ID, the actuator's Ed25519 private key is used (for single-member tribunals).
+2. **Actuator fallback**: If the file lookup fails and the member App ID matches the actuator's key ID, the actuator's Ed25519 private key is used (for single-member consensuses).
 3. **Failure**: If neither source resolves, the member is included without a private key and a warning is logged.
 
-### Tribunal Factory
+### Consensus Factory
 
-The tribunal factory constructs a Tribunal Service from a tribunal policy and a key provider. It:
+The consensus factory constructs a Consensus Service from a consensus policy and a key provider. It:
 
 1. Validates that the policy and key provider are non-nil (fail-closed).
 2. Iterates over the policy's member App IDs, resolving each member's private key via the key provider.
 3. If key resolution fails, logs a warning and includes the member without a private key.
-4. Constructs and returns a Tribunal Service with the resolved members, shared doctrine, logger, and responder.
+4. Constructs and returns a Consensus Service with the resolved members, shared doctrine, logger, and responder.
 
 This factory is used by both production bootstrap and test fixtures, eliminating code duplication.
 
-### Tribunal Store Service
+### Consensus Store Service
 
-The tribunal store service provides CRUD operations for tribunal policy records, backed by the SQLite document store.
+The consensus store service provides CRUD operations for consensus policy records, backed by the SQLite document store.
 
 **Operations**:
-- **Get**: Retrieves a tribunal policy by ID. Returns nil if not found.
-- **Add**: Creates or updates a tribunal policy with fail-closed validation.
-- **List**: Returns all tribunal policies, ordered by ID.
-- **Delete**: Removes a tribunal policy.
+- **Get**: Retrieves a consensus policy by ID. Returns nil if not found.
+- **Add**: Creates or updates a consensus policy with fail-closed validation.
+- **List**: Returns all consensus policies, ordered by ID.
+- **Delete**: Removes a consensus policy.
 
 **Add validation**: Enforces the following constraints at write time:
-- Tribunal ID: non-empty, alphanumeric with hyphens and underscores only.
+- Consensus ID: non-empty, alphanumeric with hyphens and underscores only.
 - Member list: non-empty, no empty strings, no duplicate member IDs.
 - Quorum: >= 1 and <= member count.
 - Trusted signer verification: every member App ID must resolve to an enabled trusted signer.
-- New tribunals must be created as enabled. Existing tribunals may only be disabled.
+- New consensuses must be created as enabled. Existing consensuses may only be disabled.
 
 ### Admin API Endpoints
 
-Tribunal policies are managed via admin-only REST endpoints:
+Consensus policies are managed via admin-only REST endpoints:
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/v1/admin/tribunals` | Create a new tribunal policy |
-| `GET` | `/api/v1/admin/tribunals` | List all tribunal policies |
-| `DELETE` | `/api/v1/admin/tribunals/{id}` | Delete a tribunal policy by ID |
+| `POST` | `/api/v1/admin/consensus` | Create a new consensus policy |
+| `GET` | `/api/v1/admin/consensus` | List all consensus policies |
+| `DELETE` | `/api/v1/admin/consensus/{id}` | Delete a consensus policy by ID |
 
 All endpoints require an authenticated bootstrap user (admin-only).
 
 ### Local Deliberator
 
-The local deliberator is an in-process adapter that calls the Tribunal Service directly, without an HTTP round-trip. This is used when the Tribunal runs in the same process as the gateway (single-binary deployment).
+The local deliberator is an in-process adapter that calls the Consensus Service directly, without an HTTP round-trip. This is used when the Consensus runs in the same process as the gateway (single-binary deployment).
 
-### Tribunal Bootstrap at Gateway Startup
+### Consensus Bootstrap at Gateway Startup
 
-When the gateway starts in consensus or notary posture with a non-empty tribunal ID, the Tribunal service is constructed and wired at startup. If the tribunal ID is empty, an advisory warning is logged and the gateway boots without an in-process Tribunal; L2-gated transactions will be rejected by L4Warden until a tribunal is enrolled. Under doctrine posture, the Tribunal is not constructed in-process; L2 votes must be obtained from an external Tribunal service when required.
+When the gateway starts in consensus or notary posture with a non-empty consensus ID, the Consensus service is constructed and wired at startup. If the consensus ID is empty, an advisory warning is logged and the gateway boots without an in-process Consensus; L2-gated transactions will be rejected by L4 Warden until a consensus is enrolled. Under doctrine posture, the Consensus is not constructed in-process; L2 votes must be obtained from an external Consensus service when required.
 
-1. **Load policy**: Retrieves the tribunal policy from the database. If missing, bootstrap fails with an error.
+1. **Load policy**: Retrieves the consensus policy from the database. If missing, bootstrap fails with an error.
 2. **Construct key provider**: Creates a file-based key provider for the configured secrets directory, then wraps it with the actuator key fallback logic.
-3. **Build service**: Constructs the Tribunal Service with the policy, composite key provider, shared L1 doctrine, logger, and response writer.
-4. **Wire handlers**: The resulting Tribunal Service is registered as both the mTLS HTTP handler for remote deliberation and the local deliberator for in-process calls.
+3. **Build service**: Constructs the Consensus Service with the policy, composite key provider, shared L1 doctrine, logger, and response writer.
+4. **Wire handlers**: The resulting Consensus Service is registered as both the mTLS HTTP handler for remote deliberation and the local deliberator for in-process calls.
 
 ---
 
@@ -590,7 +590,7 @@ Every verification layer fails closed: if any check fails, the transaction is re
 - Sensitive data is scrubbed/rehydrated at the execution boundary.
 
 ### Cryptographic Integrity
-- Every envelope is signed by tribunal members (L2) using Ed25519 over `<transaction_hash>|<decision>`.
+- Every envelope is signed by consensus members (L2) using Ed25519 over `<transaction_hash>|<decision>`.
 - Every receipt is signed by the L5 Actuator using Ed25519 over canonical JSON.
 - Audit entries are stored in encrypted SQLite databases with optional vault encryption.
 - File mutations in the git ledger are optionally encrypted before storage.
@@ -599,7 +599,7 @@ Every verification layer fails closed: if any check fails, the transaction is re
 
 ### Defense in Depth
 - **L1 Doctrine**: Protobuf field option validation and MITRE-based threat detection.
-- **L2 Consensus**: Multi-signature tribunal verification with quorum and distinct-signer checks.
+- **L2 Consensus**: Multi-signature consensus verification with quorum and distinct-signer checks.
 - **L3 Notary**: Human-in-the-loop authorization via WebAuthn passkey, CLI mTLS certificate, or outbound CLI approval.
 - **L4 Warden**: Replay protection, state root consistency, and posture-gated L2/L3 verification.
 - **L5 Actuator**: Fail-closed signed execution boundary with canonical receipt production and zero standing privileges via JIT capability minting.
@@ -621,7 +621,7 @@ Every verification layer fails closed: if any check fails, the transaction is re
 | **GovernancePosture** | Verification Policy | Configures which layers are enforced vs audited (doctrine, consensus, notary). |
 | **L4 Warden** | Verification Orchestrator | Five-stage verification: in-flight tracking, nonce reservation, stateless validation (L1 + hash), stateful validation (state root), posture-gated L2/L3. |
 | **L1 Doctrine** | Technical Bedrock | Forbidden pattern validation, MITRE-based threat detection. |
-| **L2 Consensus** | Tribunal Verification | Ed25519 vote signatures, quorum and distinct-signer checks, tribunal policy enforcement. |
+| **L2 Consensus** | Consensus Verification | Ed25519 vote signatures, quorum and distinct-signer checks, consensus policy enforcement. |
 | **L3 Notary** | Authorization Engine | Gateway notary (passkey-first, CLI session as additional layer), CLI notary (session verification + suspended transaction), outbound notary (operator-side approval with CLI signature). |
 | **L5 Actuator** | Execution Gateway | Fail-closed dual receipt signing with canonical JSON, JIT capability minting/dissolving, rehydration, execution dispatch. |
 | **Local Audit Vault** | Immutable Ledger | SQL audit store (encrypted SQLite) and git ledger (git-backed, two-phase commit, optional encryption). |
@@ -631,7 +631,7 @@ Every verification layer fails closed: if any check fails, the transaction is re
 ## Transaction Flow Summary
 
 1. **Principal** submits intent
-2. **Producer** creates GovernanceEnvelope with intent, metadata, and optional L3 proof. Gateway obtains L2 consensus via Tribunal during transaction processing
+2. **Producer** creates GovernanceEnvelope with intent, metadata, and optional L3 proof. Gateway obtains L2 consensus via Consensus during transaction processing
 3. **Gateway** admits envelope after mTLS, PKI, identity binding, and replay protection
 4. **Operator** fetches envelope via outbound mTLS or processes synchronously
 5. **Warden (L4)** performs five-stage verification: in-flight tracking, nonce reservation, stateless (L1 doctrine + hash), stateful (state root), and posture-gated L2/L3

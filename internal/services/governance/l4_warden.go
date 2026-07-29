@@ -15,8 +15,6 @@ package governance
 
 import (
 	"context"
-	"crypto/ed25519"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -52,7 +50,6 @@ type L4Warden struct {
 	stateRootProvider    StateRootProvider
 	signerStore          SignerStore
 	consensusPolicyStore L2ConsensusPolicyStore
-	appPolicyStore       AppPolicyStore
 	l3Notary             L3Notary
 	doctrine             *L1Doctrine
 	knownActionTypes     map[constants.ActionType]struct{}
@@ -69,7 +66,6 @@ func NewL4Warden(
 	stateRootProvider StateRootProvider,
 	signerStore SignerStore,
 	consensusPolicyStore L2ConsensusPolicyStore,
-	appPolicyStore AppPolicyStore,
 	l3Notary L3Notary,
 	doctrine *L1Doctrine,
 	knownActionTypes []constants.ActionType,
@@ -86,18 +82,12 @@ func NewL4Warden(
 		clock = &system.RealClock{}
 	}
 
-	// Default to protobuf doctrine validator if not provided
-	if doctrine == nil {
-		doctrine = NewL1Doctrine()
-	}
-
 	return &L4Warden{
 		logger:               logger,
 		replayStore:          replayStore,
 		stateRootProvider:    stateRootProvider,
 		signerStore:          signerStore,
 		consensusPolicyStore: consensusPolicyStore,
-		appPolicyStore:       appPolicyStore,
 		l3Notary:             l3Notary,
 		doctrine:             doctrine,
 		knownActionTypes:     knownActions,
@@ -250,6 +240,11 @@ func (tv *L4Warden) isMutation(actionType constants.ActionType) bool {
 
 // verifyStateless performs basic structural, hash, and L1 Doctrine checks.
 func (tv *L4Warden) verifyStateless(envelope *govtypes.GovernanceEnvelope) (proto.Message, string, error) {
+	if tv.doctrine == nil {
+		tv.logger.Error("L1Doctrine not configured")
+		return nil, "", constants.ErrTxDoctrineMissing
+	}
+
 	if envelope.Id == "" {
 		return nil, "", constants.ErrTxTransactionIDMissing
 	}
@@ -357,98 +352,6 @@ func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *govtypes.Govern
 	return l2Valid, l3Valid, nil
 }
 
-func (tv *L4Warden) verifyL2Posture(envelope *govtypes.GovernanceEnvelope, computedHash string) (bool, error) {
-	if envelope.Governance == nil || envelope.Governance.L2 == nil || len(envelope.Governance.L2.Votes) == 0 {
-		if tv.posture.RequiresL2Signature() {
-			tv.logger.Error("L2 votes missing but required by posture", "posture", tv.posture.Name())
-			return false, constants.ErrTxL2SignatureMissing
-		}
-		return false, nil
-	}
-
-	l2 := envelope.Governance.L2
-
-	if tv.signerStore == nil {
-		if tv.posture.RequiresL2Signature() {
-			tv.logger.Error("Signer store not configured but required by posture", "posture", tv.posture.Name())
-			return false, constants.ErrTxL2SignerStoreNotConfigured
-		}
-		return false, nil
-	}
-
-	if tv.consensusPolicyStore == nil {
-		if tv.posture.RequiresL2Signature() {
-			tv.logger.Error("L2 consensus policy store not configured but required by posture", "posture", tv.posture.Name())
-			return false, constants.ErrTxL2ConsensusNotConfigured
-		}
-		return false, nil
-	}
-
-	policy, err := tv.consensusPolicyStore.GetConsensusPolicy(l2.ConsensusSetId)
-	if err != nil {
-		if tv.posture.RequiresL2Signature() {
-			tv.logger.Error("Failed to load L2 consensus policy", "consensus_set_id", l2.ConsensusSetId, string(constants.ConnectionStateError), err)
-			return false, fmt.Errorf("l4 warden: verify L2 posture: %w", err)
-		}
-		return false, nil
-	}
-	if policy == nil || !policy.Enabled {
-		if tv.posture.RequiresL2Signature() {
-			tv.logger.Error("L2 consensus policy not found or disabled", "consensus_set_id", l2.ConsensusSetId)
-			return false, constants.ErrTxL2ConsensusNotConfigured
-		}
-		return false, nil
-	}
-
-	members := make(map[string]bool, len(policy.MemberKeyIDs))
-	for _, m := range policy.MemberKeyIDs {
-		members[m] = true
-	}
-
-	seen := make(map[string]bool)
-	affirmative := 0
-
-	for _, vote := range l2.Votes {
-		if !members[vote.SignerKeyId] {
-			continue
-		}
-		if seen[vote.SignerKeyId] {
-			if policy.RequireDistinct {
-				tv.logger.Error("Duplicate signer in vote set with require_distinct", "key_id", vote.SignerKeyId)
-				return false, constants.ErrTxL2DuplicateSigner
-			}
-			continue
-		}
-		pubKey, err := tv.signerStore.GetTrustedSigner(vote.SignerKeyId)
-		if err != nil {
-			tv.logger.Error("Failed to load trusted signer", "key_id", vote.SignerKeyId, string(constants.ConnectionStateError), err)
-			continue
-		}
-		if pubKey == nil {
-			tv.logger.Error("Consensus (L2) signer key not found in trusted signers", "key_id", vote.SignerKeyId)
-			continue
-		}
-		if !tv.verifyL2Signature(pubKey, vote.ConsensusSignature, computedHash, vote.Decision) {
-			tv.logger.Error("L2 signature verification failed", "key_id", vote.SignerKeyId)
-			continue
-		}
-		seen[vote.SignerKeyId] = true
-		if vote.Decision {
-			affirmative++
-		}
-	}
-
-	if affirmative < policy.Quorum {
-		if tv.posture.RequiresL2Signature() {
-			tv.logger.Error("L2 quorum not met", "affirmative", affirmative, "quorum", policy.Quorum, "posture", tv.posture.Name())
-			return false, constants.ErrTxL2QuorumNotMet
-		}
-		return false, nil
-	}
-
-	return true, nil
-}
-
 func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *govtypes.GovernanceEnvelope) (bool, error) {
 	actionType := constants.ActionType(envelope.ActionType)
 
@@ -551,19 +454,6 @@ func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payl
 // computeTransactionHash computes the canonical transaction hash.
 func (tv *L4Warden) computeTransactionHash(envelope *govtypes.GovernanceEnvelope) (string, error) {
 	return govtypes.GenerateMessageID(envelope)
-}
-
-// verifyL2Signature verifies an L2 ED25519 signature.
-func (tv *L4Warden) verifyL2Signature(pubKey ed25519.PublicKey, signature, messageID string, decision bool) bool {
-	if signature == "" || signature == "UNSIGNED" {
-		return false
-	}
-	sigBytes, err := hex.DecodeString(signature)
-	if err != nil {
-		return false
-	}
-	payload := fmt.Sprintf("%s|%v", messageID, decision)
-	return ed25519.Verify(pubKey, []byte(payload), sigBytes)
 }
 
 // Posture returns the current governance posture.

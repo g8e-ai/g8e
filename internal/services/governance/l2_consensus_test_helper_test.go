@@ -2,15 +2,15 @@ package governance
 
 import "github.com/g8e-ai/g8e/internal/services/governance/governancetest"
 
-// tribunalStoreTestAdapter wraps a governancetest.SimpleTribunalStore and adapts
+// consensusStoreTestAdapter wraps a governancetest.SimpleConsensusStore and adapts
 // it to satisfy L2ConsensusPolicyStore for test code within the governance package.
-// This is the test-only replacement for the removed production TribunalStoreAdapter.
-type tribunalStoreTestAdapter struct {
-	Inner *governancetest.SimpleTribunalStore
+// This is the test-only replacement for the removed production ConsensusStoreAdapter.
+type consensusStoreTestAdapter struct {
+	Inner *governancetest.SimpleConsensusStore
 }
 
-func (a *tribunalStoreTestAdapter) GetConsensusPolicy(id string) (*L2ConsensusPolicy, error) {
-	policy, err := a.Inner.GetTribunal(id)
+func (a *consensusStoreTestAdapter) GetConsensusPolicy(id string) (*L2ConsensusPolicy, error) {
+	policy, err := a.Inner.GetConsensus(id)
 	if err != nil {
 		return nil, err
 	}

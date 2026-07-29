@@ -43,7 +43,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
 	mux.HandleFunc(constants.APIPaths.PKICRL, h.pkiController.handlePKIRevocationBundle)
-	mux.Handle(constants.APIPaths.DataBlobs, http.HandlerFunc(h.dbController.handleBlob))
+	mux.Handle(constants.APIPaths.DataBlobs, http.HandlerFunc(h.dataController.handleBlob))
 
 	// Console SPA (public, no auth required)
 	consoleHandler := console.Handler()
@@ -94,25 +94,23 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.Handle(constants.APIPaths.AuthPasskeysConsoleAuthenticateVerify, passkeyMux)
 
 	// mTLS-only routes (merged from buildRouter)
-	mux.HandleFunc(constants.APIPaths.DataSettings, h.dbController.handleDataSettings)
+	mux.HandleFunc(constants.APIPaths.DataSettings, h.dataController.handleDataSettings)
 	mux.HandleFunc(constants.APIPaths.Operators, h.operatorController.handleListOperators)
 	mux.Handle(constants.APIPaths.OperatorsByID, http.HandlerFunc(h.operatorController.handleTerminateOperator))
 	mux.HandleFunc(constants.APIPaths.OperatorsBind, h.operatorController.handleBindOperators)
 	mux.HandleFunc(constants.APIPaths.OperatorsUnbind, h.operatorController.handleUnbindOperators)
 	mux.HandleFunc(constants.APIPaths.OperatorsTarget, h.operatorController.handleSetTargetContext)
 	mux.HandleFunc(constants.APIPaths.OperatorsReauth, h.operatorController.handleReauth)
-	mux.HandleFunc(constants.APIPaths.GovernanceSigners, h.dbController.handleGovernanceSigners)
-	mux.Handle(constants.APIPaths.GovernanceSignersByID, http.HandlerFunc(h.dbController.handleGovernanceSignerByID))
+	mux.HandleFunc(constants.APIPaths.GovernanceSigners, h.signerController.handleGovernanceSigners)
+	mux.Handle(constants.APIPaths.GovernanceSignersByID, http.HandlerFunc(h.signerController.handleGovernanceSignerByID))
 	mux.Handle(constants.APIPaths.AdminAppPoliciesBySigner, http.HandlerFunc(h.adminController.handleAppPolicySigner))
 	mux.HandleFunc(constants.APIPaths.AdminAppsRevoke, h.adminController.handleRevokeApp)
-	mux.HandleFunc(constants.APIPaths.AdminTribunals, h.adminController.handleTribunals)
-	mux.Handle(constants.APIPaths.AdminTribunalsByID, http.HandlerFunc(h.adminController.handleDeleteTribunal))
+	mux.HandleFunc(constants.APIPaths.AdminConsensus, h.adminController.handleConsensus)
+	mux.Handle(constants.APIPaths.AdminConsensusByID, http.HandlerFunc(h.adminController.handleDeleteConsensus))
 
-	// Tribunal deliberate endpoint (mTLS-guarded, enrolled principal).
-	// Always registered — the handler checks the atomic pointer and returns
-	// 503 if tribunal is not yet wired, eliminating the need for a router
-	// rebuild when SetTribunal is called later in the boot sequence.
-	mux.HandleFunc(constants.APIPaths.TribunalDeliberate, h.governanceController.handleTribunalDeliberate)
+	// Consensus deliberate endpoint (mTLS-guarded, enrolled principal).
+	// Returns 503 if consensus is not configured for the current posture.
+	mux.HandleFunc(constants.APIPaths.ConsensusDeliberate, h.governanceController.handleConsensusDeliberate)
 
 	// Rate-limited governance envelope
 	govEnvMux := http.NewServeMux()
@@ -120,18 +118,18 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	govEnvHandler := h.rateLimitMiddleware(govEnvMux)
 	mux.Handle(constants.APIPaths.GovernanceEnvelopes, govEnvHandler)
 
-	mux.HandleFunc(constants.APIPaths.AuditReceipts, h.dbController.handleAuditReceipts)
-	mux.HandleFunc(constants.APIPaths.AuditReceiptsExport, h.dbController.handleAuditReceiptsExport)
-	mux.HandleFunc(constants.APIPaths.AuditEvents, h.dbController.handleAuditEvents)
-	mux.HandleFunc(constants.APIPaths.AuditSummary, h.dbController.handleAuditSummary)
-	mux.HandleFunc(constants.APIPaths.AuditReport, h.dbController.handleAuditReport)
+	mux.HandleFunc(constants.APIPaths.AuditReceipts, h.auditController.handleAuditReceipts)
+	mux.HandleFunc(constants.APIPaths.AuditReceiptsExport, h.auditController.handleAuditReceiptsExport)
+	mux.HandleFunc(constants.APIPaths.AuditEvents, h.auditController.handleAuditEvents)
+	mux.HandleFunc(constants.APIPaths.AuditSummary, h.auditController.handleAuditSummary)
+	mux.HandleFunc(constants.APIPaths.AuditReport, h.auditController.handleAuditReport)
 
 	mux.HandleFunc(constants.APIPaths.SSEPush, h.sseController.handleInternalSSEPush)
 	mux.HandleFunc(constants.APIPaths.SSEEvents, h.sseController.handleInternalSSEEvents)
 	mux.HandleFunc(constants.APIPaths.SSEStream, h.sseController.handleInternalSSEStream)
-	mux.Handle(constants.APIPaths.DataDB, http.HandlerFunc(h.dbController.handleDataDB))
-	mux.Handle(constants.APIPaths.KV, http.HandlerFunc(h.dbController.handleKV))
-	mux.HandleFunc(constants.APIPaths.PubSubPublish, h.dbController.handlePubSubPublish)
+	mux.Handle(constants.APIPaths.DataDB, http.HandlerFunc(h.dataController.handleDataDB))
+	mux.Handle(constants.APIPaths.KV, http.HandlerFunc(h.dataController.handleKV))
+	mux.HandleFunc(constants.APIPaths.PubSubPublish, h.dataController.handlePubSubPublish)
 	mux.Handle(constants.APIPaths.PubSubStream, h.auth.Middleware(http.HandlerFunc(h.pubsub.HandleWebSocket)))
 
 	// PKI management routes (require mTLS)

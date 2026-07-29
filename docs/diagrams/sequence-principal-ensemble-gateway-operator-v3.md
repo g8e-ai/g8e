@@ -31,7 +31,7 @@ The L4 Warden (`internal/services/governance/l4_warden.go`) orchestrates all pre
 1. **Nonce, Expiry, Replay**: The nonce is durably reserved in SQLite before any expensive cryptography. Expired or replayed nonces are rejected immediately.
 2. **L1 Doctrine**: Stateless validation in `internal/services/governance/l1_doctrine.go`. Checks protobuf `forbidden_patterns` field extensions and performs MITRE-based threat detection on command, MCP, A2A, and file-edit payloads.
 3. **State Root**: Stateful validation comparing `envelope.StateMerkleRoot` against the current root from `StateRootProvider` (`internal/services/gateway/state_root_service.go`). The bound root incorporates config, governance, filesystem mutations, and the token keymap hash.
-4. **L2 Consensus**: Posture-gated Ed25519 signature verification against tribunal policy. Verifies quorum of distinct tribunal member signatures over the transaction hash.
+4. **L2 Consensus**: Posture-gated Ed25519 signature verification against consensus policy. Verifies quorum of distinct consensus member signatures over the transaction hash.
 5. **L3 Notary**: Posture-gated human-presence verification (`internal/services/governance/l3_notary.go`). Runs only after L2 passes, preserving the invariant that a human is never asked to authorize content the machines have not vetted.
 
 ## L5 Actuator Execution

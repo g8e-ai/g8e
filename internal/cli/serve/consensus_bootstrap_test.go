@@ -33,12 +33,12 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// tribunalBootstrapConfig JSON tag and round-trip tests (Tier 1 — no DB)
+// consensusBootstrapConfig JSON tag and round-trip tests (Tier 1 — no DB)
 // ---------------------------------------------------------------------------
 
-func TestTribunalBootstrapConfig_JSONTags(t *testing.T) {
-	boot := tribunalBootstrapConfig{
-		TribunalID:   "test-tribunal",
+func TestConsensusBootstrapConfig_JSONTags(t *testing.T) {
+	boot := consensusBootstrapConfig{
+		ConsensusID:  "test-consensus",
 		MemberAppIDs: []string{"alpha", "beta"},
 		Quorum:       2,
 		SeedHex:      "deadbeef",
@@ -50,15 +50,15 @@ func TestTribunalBootstrapConfig_JSONTags(t *testing.T) {
 	var raw map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(data, &raw))
 
-	assert.Contains(t, raw, "tribunal_id")
+	assert.Contains(t, raw, "consensus_id")
 	assert.Contains(t, raw, "member_app_ids")
 	assert.Contains(t, raw, "quorum")
 	assert.Contains(t, raw, "seed_hex")
 }
 
-func TestTribunalBootstrapConfig_RoundTripMarshalUnmarshal(t *testing.T) {
-	original := tribunalBootstrapConfig{
-		TribunalID:   "round-trip-tribunal",
+func TestConsensusBootstrapConfig_RoundTripMarshalUnmarshal(t *testing.T) {
+	original := consensusBootstrapConfig{
+		ConsensusID:  "round-trip-consensus",
 		MemberAppIDs: []string{"member-a", "member-b", "member-c"},
 		Quorum:       2,
 		SeedHex:      "87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77",
@@ -67,15 +67,15 @@ func TestTribunalBootstrapConfig_RoundTripMarshalUnmarshal(t *testing.T) {
 	data, err := json.Marshal(original)
 	require.NoError(t, err)
 
-	var decoded tribunalBootstrapConfig
+	var decoded consensusBootstrapConfig
 	require.NoError(t, json.Unmarshal(data, &decoded))
 
 	assert.Equal(t, original, decoded)
 }
 
-func TestTribunalBootstrapConfig_EmptySeedHex(t *testing.T) {
-	boot := tribunalBootstrapConfig{
-		TribunalID:   "no-seed-tribunal",
+func TestConsensusBootstrapConfig_EmptySeedHex(t *testing.T) {
+	boot := consensusBootstrapConfig{
+		ConsensusID:  "no-seed-consensus",
 		MemberAppIDs: []string{"solo"},
 		Quorum:       1,
 	}
@@ -92,31 +92,31 @@ func TestTribunalBootstrapConfig_EmptySeedHex(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// parseTribunalBootstrapConfig — additional edge cases (Tier 1 — no DB)
+// parseConsensusBootstrapConfig — additional edge cases (Tier 1 — no DB)
 // ---------------------------------------------------------------------------
 
-func TestParseTribunalBootstrapConfig_NullJSON(t *testing.T) {
-	_, err := parseTribunalBootstrapConfig([]byte("null"))
+func TestParseConsensusBootstrapConfig_NullJSON(t *testing.T) {
+	_, err := parseConsensusBootstrapConfig([]byte("null"))
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapMissingFields),
+	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapMissingFields),
 		"null JSON produces zero-value struct which fails validation")
 }
 
-func TestParseTribunalBootstrapConfig_EmptyJSONObject(t *testing.T) {
-	_, err := parseTribunalBootstrapConfig([]byte("{}"))
+func TestParseConsensusBootstrapConfig_EmptyJSONObject(t *testing.T) {
+	_, err := parseConsensusBootstrapConfig([]byte("{}"))
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapMissingFields))
+	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapMissingFields))
 }
 
-func TestParseTribunalBootstrapConfig_WhitespaceOnlyData(t *testing.T) {
-	_, err := parseTribunalBootstrapConfig([]byte("   \n\t  "))
+func TestParseConsensusBootstrapConfig_WhitespaceOnlyData(t *testing.T) {
+	_, err := parseConsensusBootstrapConfig([]byte("   \n\t  "))
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapParseConfig))
+	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapParseConfig))
 }
 
-func TestParseTribunalBootstrapConfig_UnknownFieldsIgnored(t *testing.T) {
+func TestParseConsensusBootstrapConfig_UnknownFieldsIgnored(t *testing.T) {
 	data := []byte(`{
-		"tribunal_id": "test-tribunal",
+		"consensus_id": "test-consensus",
 		"member_app_ids": ["member-a"],
 		"quorum": 1,
 		"seed_hex": "87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77",
@@ -124,59 +124,59 @@ func TestParseTribunalBootstrapConfig_UnknownFieldsIgnored(t *testing.T) {
 		"extra": 42
 	}`)
 
-	boot, err := parseTribunalBootstrapConfig(data)
+	boot, err := parseConsensusBootstrapConfig(data)
 	require.NoError(t, err)
-	assert.Equal(t, "test-tribunal", boot.TribunalID)
+	assert.Equal(t, "test-consensus", boot.ConsensusID)
 	assert.Equal(t, []string{"member-a"}, boot.MemberAppIDs)
 	assert.Equal(t, 1, boot.Quorum)
 }
 
-func TestParseTribunalBootstrapConfig_QuorumExceedsMemberCount(t *testing.T) {
+func TestParseConsensusBootstrapConfig_QuorumExceedsMemberCount(t *testing.T) {
 	data := []byte(`{
-		"tribunal_id": "test-tribunal",
+		"consensus_id": "test-consensus",
 		"member_app_ids": ["solo"],
 		"quorum": 5
 	}`)
 
-	boot, err := parseTribunalBootstrapConfig(data)
+	boot, err := parseConsensusBootstrapConfig(data)
 	require.NoError(t, err)
-	assert.Equal(t, 5, boot.Quorum, "parseTribunalBootstrapConfig does not validate quorum vs member count")
+	assert.Equal(t, 5, boot.Quorum, "parseConsensusBootstrapConfig does not validate quorum vs member count")
 }
 
-func TestParseTribunalBootstrapConfig_LargeQuorum(t *testing.T) {
+func TestParseConsensusBootstrapConfig_LargeQuorum(t *testing.T) {
 	data := []byte(`{
-		"tribunal_id": "test-tribunal",
+		"consensus_id": "test-consensus",
 		"member_app_ids": ["a", "b"],
 		"quorum": 999999
 	}`)
 
-	boot, err := parseTribunalBootstrapConfig(data)
+	boot, err := parseConsensusBootstrapConfig(data)
 	require.NoError(t, err)
 	assert.Equal(t, 999999, boot.Quorum)
 }
 
-func TestParseTribunalBootstrapConfig_SeedHexWithWhitespace(t *testing.T) {
+func TestParseConsensusBootstrapConfig_SeedHexWithWhitespace(t *testing.T) {
 	data := []byte(`{
-		"tribunal_id": "test-tribunal",
+		"consensus_id": "test-consensus",
 		"member_app_ids": ["member-a"],
 		"quorum": 1,
 		"seed_hex": "  87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77  "
 	}`)
 
-	boot, err := parseTribunalBootstrapConfig(data)
+	boot, err := parseConsensusBootstrapConfig(data)
 	require.NoError(t, err)
 	assert.Equal(t, "  87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77  ", boot.SeedHex,
-		"parseTribunalBootstrapConfig does not trim seed_hex; trimming happens in deriveSeedPublicKey")
+		"parseConsensusBootstrapConfig does not trim seed_hex; trimming happens in deriveSeedPublicKey")
 }
 
-func TestParseTribunalBootstrapConfig_ManyMembers(t *testing.T) {
+func TestParseConsensusBootstrapConfig_ManyMembers(t *testing.T) {
 	members := make([]string, 100)
 	for i := range members {
 		members[i] = "member-" + string(rune('a'+i%26)) + string(rune('0'+i/26))
 	}
 
-	boot := tribunalBootstrapConfig{
-		TribunalID:   "large-tribunal",
+	boot := consensusBootstrapConfig{
+		ConsensusID:  "large-consensus",
 		MemberAppIDs: members,
 		Quorum:       50,
 		SeedHex:      "",
@@ -185,22 +185,22 @@ func TestParseTribunalBootstrapConfig_ManyMembers(t *testing.T) {
 	data, err := json.Marshal(boot)
 	require.NoError(t, err)
 
-	parsed, err := parseTribunalBootstrapConfig(data)
+	parsed, err := parseConsensusBootstrapConfig(data)
 	require.NoError(t, err)
 	assert.Len(t, parsed.MemberAppIDs, 100)
 	assert.Equal(t, 50, parsed.Quorum)
 }
 
-func TestParseTribunalBootstrapConfig_DuplicateMembersAllowed(t *testing.T) {
+func TestParseConsensusBootstrapConfig_DuplicateMembersAllowed(t *testing.T) {
 	data := []byte(`{
-		"tribunal_id": "test-tribunal",
+		"consensus_id": "test-consensus",
 		"member_app_ids": ["dup", "dup", "dup"],
 		"quorum": 1
 	}`)
 
-	boot, err := parseTribunalBootstrapConfig(data)
+	boot, err := parseConsensusBootstrapConfig(data)
 	require.NoError(t, err)
-	assert.Len(t, boot.MemberAppIDs, 3, "parseTribunalBootstrapConfig does not deduplicate members")
+	assert.Len(t, boot.MemberAppIDs, 3, "parseConsensusBootstrapConfig does not deduplicate members")
 }
 
 // ---------------------------------------------------------------------------
@@ -210,7 +210,7 @@ func TestParseTribunalBootstrapConfig_DuplicateMembersAllowed(t *testing.T) {
 func TestDeriveSeedPublicKey_OddLengthHex(t *testing.T) {
 	_, err := deriveSeedPublicKey("abc")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapDecodeSeed),
+	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapDecodeSeed),
 		"odd-length hex should fail at decode step, not length check")
 }
 
@@ -322,40 +322,40 @@ func TestDeriveSeedPublicKey_PublicKeyIs64HexChars(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// bootstrapTribunalPolicy — additional error-path tests (Tier 1 — file I/O)
+// consensusPolicyBootstrap — additional error-path tests (Tier 1 — file I/O)
 // ---------------------------------------------------------------------------
 
-func TestBootstrapTribunalPolicy_PathIsDirectory(t *testing.T) {
+func TestBootstrapConsensusPolicy_PathIsDirectory(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	tmpDir := testutil.TempDir(t)
 	// Pass the directory itself as the config path — os.ReadFile should fail
-	err := bootstrapTribunalPolicy(nil, tmpDir, constants.TestPathShortSecrets, logger)
+	err := consensusPolicyBootstrap(nil, tmpDir, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapReadConfig),
-		"reading a directory should produce ErrTribunalBootstrapReadConfig")
+	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapReadConfig),
+		"reading a directory should produce ErrConsensusBootstrapReadConfig")
 }
 
-func TestBootstrapTribunalPolicy_EmptyFile(t *testing.T) {
+func TestBootstrapConsensusPolicy_EmptyFile(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	tmpDir := testutil.TempDir(t)
-	configPath := filepath.Join(tmpDir, constants.TribunalBootstrapConfigFilename)
+	configPath := filepath.Join(tmpDir, constants.ConsensusBootstrapConfigFilename)
 	require.NoError(t, os.WriteFile(configPath, []byte{}, 0600))
 
-	err := bootstrapTribunalPolicy(nil, configPath, constants.TestPathShortSecrets, logger)
+	err := consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	// Empty file produces a JSON parse error (unexpected end of JSON input)
-	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapParseConfig))
+	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapParseConfig))
 }
 
-func TestBootstrapTribunalPolicy_ValidConfigNilServiceOnlyChecksServiceAfterParse(t *testing.T) {
+func TestBootstrapConsensusPolicy_ValidConfigNilServiceOnlyChecksServiceAfterParse(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	tmpDir := testutil.TempDir(t)
-	configPath := filepath.Join(tmpDir, constants.TribunalBootstrapConfigFilename)
+	configPath := filepath.Join(tmpDir, constants.ConsensusBootstrapConfigFilename)
 	err := os.WriteFile(configPath, []byte(`{
-		"tribunal_id": "test-tribunal",
+		"consensus_id": "test-consensus",
 		"member_app_ids": ["auditor-ensemble"],
 		"quorum": 1,
 		"seed_hex": "87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77"
@@ -364,18 +364,18 @@ func TestBootstrapTribunalPolicy_ValidConfigNilServiceOnlyChecksServiceAfterPars
 
 	// With nil service, the file is read and parsed successfully, then
 	// svc == nil check triggers ErrGatewayServiceNil (not a DB error).
-	err = bootstrapTribunalPolicy(nil, configPath, constants.TestPathShortSecrets, logger)
+	err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil))
 }
 
-func TestBootstrapTribunalPolicy_NilServiceWithInvalidSeedHex(t *testing.T) {
+func TestBootstrapConsensusPolicy_NilServiceWithInvalidSeedHex(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	tmpDir := testutil.TempDir(t)
-	configPath := filepath.Join(tmpDir, constants.TribunalBootstrapConfigFilename)
+	configPath := filepath.Join(tmpDir, constants.ConsensusBootstrapConfigFilename)
 	err := os.WriteFile(configPath, []byte(`{
-		"tribunal_id": "test-tribunal",
+		"consensus_id": "test-consensus",
 		"member_app_ids": ["member-a"],
 		"quorum": 1,
 		"seed_hex": "not-valid-hex"
@@ -384,44 +384,44 @@ func TestBootstrapTribunalPolicy_NilServiceWithInvalidSeedHex(t *testing.T) {
 
 	// Even with nil service, the nil check happens after parse but before
 	// seed derivation. So we should get ErrGatewayServiceNil, not a seed error.
-	err = bootstrapTribunalPolicy(nil, configPath, constants.TestPathShortSecrets, logger)
+	err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil),
 		"nil service check occurs before seed derivation")
 }
 
 // ---------------------------------------------------------------------------
-// BootstrapTribunal — additional nil-service edge cases (Tier 1 — no DB)
+// ConsensusBootstrap — additional nil-service edge cases (Tier 1 — no DB)
 // ---------------------------------------------------------------------------
 
-func TestBootstrapTribunal_NilServiceWithNonEmptyTribunalID(t *testing.T) {
+func TestConsensusBootstrap_NilServiceWithNonEmptyConsensusID(t *testing.T) {
 	_, priv, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	_, err = BootstrapTribunal(nil, "some-tribunal-id", priv, "actuator-key-id",
+	_, err = ConsensusBootstrap(nil, "some-consensus-id", priv, "actuator-key-id",
 		constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil))
 }
 
-func TestBootstrapTribunal_NilServiceWithEmptySecretsDir(t *testing.T) {
+func TestConsensusBootstrap_NilServiceWithEmptySecretsDir(t *testing.T) {
 	_, priv, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	_, err = BootstrapTribunal(nil, "trib-001", priv, "key-id", "", logger)
+	_, err = ConsensusBootstrap(nil, "trib-001", priv, "key-id", "", logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil),
 		"nil service check happens before secretsDir is used")
 }
 
-func TestBootstrapTribunal_NilServiceWithNilPrivateKey(t *testing.T) {
+func TestConsensusBootstrap_NilServiceWithNilPrivateKey(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	_, err := BootstrapTribunal(nil, "trib-001", nil, "key-id",
+	_, err := ConsensusBootstrap(nil, "trib-001", nil, "key-id",
 		constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil),
@@ -429,37 +429,37 @@ func TestBootstrapTribunal_NilServiceWithNilPrivateKey(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// GatewayConfig — TribunalBootstrap field tests
+// GatewayConfig — ConsensusBootstrap field tests
 // ---------------------------------------------------------------------------
 
-func TestGatewayConfig_TribunalBootstrapField(t *testing.T) {
+func TestGatewayConfig_ConsensusBootstrapField(t *testing.T) {
 	t.Run("default empty", func(t *testing.T) {
 		var cfg GatewayConfig
-		assert.Equal(t, "", cfg.TribunalBootstrap)
+		assert.Equal(t, "", cfg.ConsensusBootstrap)
 	})
 
 	t.Run("set to file path", func(t *testing.T) {
 		cfg := GatewayConfig{
-			TribunalBootstrap: "/etc/g8e/tribunal-bootstrap.json",
+			ConsensusBootstrap: "/etc/g8e/consensus-bootstrap.json",
 		}
-		assert.Equal(t, "/etc/g8e/tribunal-bootstrap.json", cfg.TribunalBootstrap)
+		assert.Equal(t, "/etc/g8e/consensus-bootstrap.json", cfg.ConsensusBootstrap)
 	})
 
 	t.Run("not mapped to GatewayOptions", func(t *testing.T) {
 		cfg := GatewayConfig{
-			TribunalBootstrap: "/etc/g8e/tribunal-bootstrap.json",
+			ConsensusBootstrap: "/etc/g8e/consensus-bootstrap.json",
 		}
 		opts := gatewayConfigToOptions(cfg)
-		// TribunalBootstrap is consumed directly by RunGateway, not passed to
+		// ConsensusBootstrap is consumed directly by RunGateway, not passed to
 		// config.LoadGateway via GatewayOptions.
-		_ = opts // no TribunalBootstrap field in GatewayOptions
+		_ = opts // no ConsensusBootstrap field in GatewayOptions
 	})
 }
 
-func TestGatewayConfig_TribunalBootstrapDoesNotAffectOptions(t *testing.T) {
+func TestGatewayConfig_ConsensusBootstrapDoesNotAffectOptions(t *testing.T) {
 	cfgWithBootstrap := GatewayConfig{
-		TribunalBootstrap: "/path/to/bootstrap.json",
-		Posture:           config.PostureConsensus,
+		ConsensusBootstrap: "/path/to/bootstrap.json",
+		Posture:            config.PostureConsensus,
 	}
 	cfgWithoutBootstrap := GatewayConfig{
 		Posture: config.PostureConsensus,
@@ -468,9 +468,9 @@ func TestGatewayConfig_TribunalBootstrapDoesNotAffectOptions(t *testing.T) {
 	optsWith := gatewayConfigToOptions(cfgWithBootstrap)
 	optsWithout := gatewayConfigToOptions(cfgWithoutBootstrap)
 
-	// The only difference should be TribunalBootstrap, which is not in GatewayOptions
-	// So the options should be identical (minus the TribunalBootstrap field which doesn't exist in opts)
+	// The only difference should be ConsensusBootstrap, which is not in GatewayOptions
+	// So the options should be identical (minus the ConsensusBootstrap field which doesn't exist in opts)
 	assert.Equal(t, optsWith.Posture, optsWithout.Posture)
 	assert.Equal(t, optsWith, optsWithout,
-		"TribunalBootstrap field should not affect GatewayOptions mapping")
+		"ConsensusBootstrap field should not affect GatewayOptions mapping")
 }

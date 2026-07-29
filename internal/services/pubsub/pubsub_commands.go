@@ -92,18 +92,18 @@ type OperatorPubSubService struct {
 // GovernanceDeps holds the governance dependencies required for transaction
 // verification in both outbound and gateway modes. These interfaces are
 // implemented by CanonicalDBService (ReplayStore, StateRootProvider,
-// TransactionAuditStore) and the governance L3Notary. FieldReader is
-// gateway-only (nil in outbound mode) and backs the MCP gateway's read_field
-// operation.
+// TransactionAuditStore) and the governance L3Notary. In outbound mode,
+// ConsensusPolicyStore and FieldReader are wired with no-op implementations
+// (NoopConsensusPolicyStore, NoopFieldReader) to eliminate nil fields.
 type GovernanceDeps struct {
 	ReplayStore          governance.ReplayStore
 	StateRootProvider    governance.StateRootProvider
 	TransactionAudit     governance.TransactionAuditStore
 	L3Notary             governance.L3Notary
 	SignerStore          governance.SignerStore
-	AppPolicyStore       governance.AppPolicyStore
 	ConsensusPolicyStore governance.L2ConsensusPolicyStore
 	FieldReader          mcp.FieldReader
+	Doctrine             *governance.L1Doctrine
 }
 
 // CommandServiceConfig holds non-governance dependencies for
@@ -137,8 +137,9 @@ type CommandServiceConfig struct {
 // are shared between gateway construction and the pubsub command service.
 type GatewayCommandServiceConfig struct {
 	CommandServiceConfig
-	GovDeps    *GovernanceDeps
-	MCPGateway *mcp.GatewayService
+	GovDeps                *GovernanceDeps
+	MCPGateway             *mcp.GatewayService
+	L2ConsensusDeliberator mcp.L2ConsensusDeliberator
 }
 
 // NewOperatorPubSubService creates the dispatcher and all first-class sub-services using the provided config.
@@ -200,7 +201,7 @@ func NewOperatorPubSubService(c CommandServiceConfig, govDeps GovernanceDeps) (*
 	if rs.signerStore == nil {
 		// Provide a fallback empty signer store instead of loading from filesystem.
 		// This ensures outbound mode fails closed if no signer store is provided.
-		rs.signerStore = &governance.SimpleSignerStore{Signers: make(map[string]ed25519.PublicKey)}
+		rs.signerStore = &governance.FailClosedSignerStore{Signers: make(map[string]ed25519.PublicKey)}
 		c.Logger.Warn("No SignerStore provided; signed transactions will be rejected")
 	}
 
@@ -213,6 +214,14 @@ func NewOperatorPubSubService(c CommandServiceConfig, govDeps GovernanceDeps) (*
 	}
 	// L3Notary is optional for outbound mode (platform verifies L3)
 	// Mutations requiring L3 will fail-closed at TransactionVerifier if L3Notary is nil
+
+	// Provide no-op defaults for optional governance deps to eliminate nil fields
+	if govDeps.ConsensusPolicyStore == nil {
+		govDeps.ConsensusPolicyStore = &governance.NoopConsensusPolicyStore{}
+	}
+	if govDeps.FieldReader == nil {
+		govDeps.FieldReader = &mcp.NoopFieldReader{}
+	}
 
 	// Initialize governance services after trusted signers are loaded
 	rs.initializeGovernance(c, govDeps)
@@ -252,20 +261,18 @@ func NewGatewayOperatorPubSubService(c GatewayCommandServiceConfig) (*OperatorPu
 			auditLogger = &pubsubAuditLogger{store: c.AuditStore, logger: c.Logger}
 		}
 
-		var fieldReader mcp.FieldReader
-		if c.GovDeps.FieldReader != nil {
-			fieldReader = c.GovDeps.FieldReader
-		}
+		fieldReader := c.GovDeps.FieldReader
 
 		rs.mcpGateway.SetRuntimeDeps(mcp.RuntimeDependencies{
-			EnvProc:           rs,
-			StateRootProvider: c.GovDeps.StateRootProvider,
-			SigningKey:        c.ActuatorSigningKey,
-			KeyID:             c.ActuatorKeyID,
-			DownstreamURL:     c.Config.Gateway.MCPDownstreamURL,
-			DBService:         fieldReader,
-			SessionValidator:  rs,
-			AuditLogger:       auditLogger,
+			EnvProc:                rs,
+			StateRootProvider:      c.GovDeps.StateRootProvider,
+			SigningKey:             c.ActuatorSigningKey,
+			KeyID:                  c.ActuatorKeyID,
+			DownstreamURL:          c.Config.Gateway.MCPDownstreamURL,
+			DBService:              fieldReader,
+			SessionValidator:       rs,
+			AuditLogger:            auditLogger,
+			L2ConsensusDeliberator: c.L2ConsensusDeliberator,
 		})
 	}
 
@@ -296,15 +303,21 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, go
 	if posture == "" {
 		posture = "notary" // Default to notary for outbound mode since L3Notary is nil
 	}
+	// Default to NewL1Doctrine if not provided (outbound mode may not configure doctrine)
+	doctrine := govDeps.Doctrine
+	if doctrine == nil {
+		doctrine = governance.NewL1Doctrine()
+		c.Logger.Warn("No L1Doctrine provided; using default doctrine")
+	}
+
 	rs.l4warden = governance.NewL4Warden(
 		c.Logger,
 		govDeps.ReplayStore,
 		govDeps.StateRootProvider,
 		rs.signerStore,
 		govDeps.ConsensusPolicyStore,
-		govDeps.AppPolicyStore,
 		govDeps.L3Notary,
-		nil, // DoctrineValidator defaults to L1Doctrine
+		doctrine,
 		knownActionTypes,
 		posture,
 		nil, // Clock defaults to RealClock

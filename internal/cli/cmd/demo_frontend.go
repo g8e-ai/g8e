@@ -56,8 +56,7 @@ func runFrontendEnrollmentScenario(demoDir string) (scenarioResult, error) {
 	}
 
 	demoPrintln("  -- Step 2: CORS preflight from frontend origin ----------------")
-	if err := demoStep(demoDir, "CORS preflight",
-		false,
+	if err := demoStepHTTP(demoDir, "CORS preflight", "200",
 		"curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
 		"-X", "OPTIONS",
 		"-H", "Origin: http://localhost:3003",
@@ -66,14 +65,13 @@ func runFrontendEnrollmentScenario(demoDir string) (scenarioResult, error) {
 		"https://localhost:8446/api/v1/health",
 		"-k",
 	); err != nil {
-		fmt.Println("  (CORS preflight check failed)")
+		fmt.Printf("  (CORS preflight check failed: %s)\n", err)
 		fmt.Println()
 		hasErrors = true
 	}
 
 	demoPrintln("  -- Step 3: Passkey challenge endpoint accessible --------------")
-	if err := demoStep(demoDir, "passkey challenge endpoint",
-		false,
+	if err := demoStepHTTP(demoDir, "passkey challenge endpoint", "200",
 		"curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
 		"-X", "POST",
 		"-H", "Content-Type: application/json",
@@ -82,31 +80,29 @@ func runFrontendEnrollmentScenario(demoDir string) (scenarioResult, error) {
 		"https://localhost:8446/api/v1/auth/passkeys/console/register/challenge",
 		"-k",
 	); err != nil {
-		fmt.Println("  (passkey challenge endpoint check failed)")
+		fmt.Printf("  (passkey challenge endpoint check failed: %s)\n", err)
 		fmt.Println()
 		hasErrors = true
 	}
 
 	demoPrintln("  -- Step 4: SSE stream endpoint protected (401 without session) --")
-	if err := demoStep(demoDir, "SSE endpoint protection",
-		false,
+	if err := demoStepHTTP(demoDir, "SSE endpoint protection", "401",
 		"curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
 		"-H", "Origin: http://localhost:3003",
 		"https://localhost:8446/api/v1/sse/stream?web_session_id=invalid",
 		"-k",
 	); err != nil {
-		fmt.Println("  (SSE endpoint check failed)")
+		fmt.Printf("  (SSE endpoint check failed: %s)\n", err)
 		fmt.Println()
 		hasErrors = true
 	}
 
 	demoPrintln("  -- Step 5: Frontend app served on port 3003 -------------------")
-	if err := demoStep(demoDir, "frontend app check",
-		false,
+	if err := demoStepHTTP(demoDir, "frontend app check", "200",
 		"curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
 		"http://localhost:3003",
 	); err != nil {
-		fmt.Println("  (frontend app check failed)")
+		fmt.Printf("  (frontend app check failed: %s)\n", err)
 		fmt.Println()
 		hasErrors = true
 	}

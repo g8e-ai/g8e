@@ -238,15 +238,15 @@ func (m Model) handleTextInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// posture is a choice, not text input
 		case 1:
 			if m.postureChoice == 1 || m.postureChoice == 2 {
-				m.tribunalIDInput, cmd = m.tribunalIDInput.Update(msg)
+				m.consensusIDInput, cmd = m.consensusIDInput.Update(msg)
 			}
 		case 2:
 			if m.postureChoice == 1 || m.postureChoice == 2 {
-				m.tribunalBootstrapInput, cmd = m.tribunalBootstrapInput.Update(msg)
+				m.consensusBootstrapInput, cmd = m.consensusBootstrapInput.Update(msg)
 			}
 		case 3:
 			if m.postureChoice == 1 || m.postureChoice == 2 {
-				m.tribunalURLInput, cmd = m.tribunalURLInput.Update(msg)
+				m.consensusURLInput, cmd = m.consensusURLInput.Update(msg)
 			}
 		case 4:
 			m.passkeyRpIDInput, cmd = m.passkeyRpIDInput.Update(msg)
@@ -278,9 +278,9 @@ func (m Model) handleTextInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func blurAllInputs(m *Model) {
 	m.publicBaseURLInput.Blur()
 	m.corsOriginInput.Blur()
-	m.tribunalIDInput.Blur()
-	m.tribunalURLInput.Blur()
-	m.tribunalBootstrapInput.Blur()
+	m.consensusIDInput.Blur()
+	m.consensusURLInput.Blur()
+	m.consensusBootstrapInput.Blur()
 	m.passkeyRpIDInput.Blur()
 	m.passkeyRpNameInput.Blur()
 	m.passkeyRpOriginInput.Blur()
@@ -304,15 +304,15 @@ func focusFirstInput(m *Model) {
 		switch m.focusIndex {
 		case 1:
 			if m.postureChoice == 1 || m.postureChoice == 2 {
-				m.tribunalIDInput.Focus()
+				m.consensusIDInput.Focus()
 			}
 		case 2:
 			if m.postureChoice == 1 || m.postureChoice == 2 {
-				m.tribunalBootstrapInput.Focus()
+				m.consensusBootstrapInput.Focus()
 			}
 		case 3:
 			if m.postureChoice == 1 || m.postureChoice == 2 {
-				m.tribunalURLInput.Focus()
+				m.consensusURLInput.Focus()
 			}
 		case 4:
 			m.passkeyRpIDInput.Focus()
@@ -356,18 +356,18 @@ func (m Model) validateNetwork() string {
 
 func (m Model) validatePosture() string {
 	if m.postureChoice == 1 || m.postureChoice == 2 {
-		tribunalID := m.tribunalIDInput.Value()
-		if err := validateTribunalID(tribunalID); err != nil {
+		consensusID := m.consensusIDInput.Value()
+		if err := validateConsensusID(consensusID); err != nil {
 			return err.Error()
 		}
-		bootstrapPath := m.tribunalBootstrapInput.Value()
+		bootstrapPath := m.consensusBootstrapInput.Value()
 		if bootstrapPath != "" {
-			if err := validateTribunalBootstrap(bootstrapPath, tribunalID); err != nil {
+			if err := validateConsensusBootstrap(bootstrapPath, consensusID); err != nil {
 				return err.Error()
 			}
 		}
-		tribunalURL := m.tribunalURLInput.Value()
-		if err := validateTribunalURL(tribunalURL); err != nil {
+		consensusURL := m.consensusURLInput.Value()
+		if err := validateConsensusURL(consensusURL); err != nil {
 			return err.Error()
 		}
 	}

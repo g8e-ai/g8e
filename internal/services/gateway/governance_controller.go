@@ -19,79 +19,51 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"sync/atomic"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/services/consensus"
 	"github.com/g8e-ai/g8e/internal/services/governance"
-	"github.com/g8e-ai/g8e/internal/services/tribunal"
 	"github.com/g8e-ai/g8e/protocol"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-// envProcHolder wraps an EnvelopeProcessor so that atomic.Value can store
-// nil (atomic.Value panics on Store(nil)). The zero value (proc == nil)
-// means the processor is not wired.
-type envProcHolder struct {
-	proc governance.EnvelopeProcessor
-}
-
-// GovernanceController handles governance envelope submission and tribunal
-// deliberation endpoints. Both depend on late-bound dependencies (envelope
-// processor and tribunal service) that are wired after construction via
-// atomic pointers, following the thread-safety pattern in devs.md.
+// GovernanceController handles governance envelope submission and consensus
+// deliberation endpoints. Both consensus and envelope processor are injected
+// at construction time. A nil value means the feature is not configured for
+// the current posture (e.g. doctrine mode has no consensus service).
 type GovernanceController struct {
 	cfg       *config.Config
 	logger    *slog.Logger
 	responder *response.Writer
-	tribunal  atomic.Pointer[tribunal.TribunalService]
-	envProc   atomic.Value // stores *envProcHolder
+	consensus *consensus.ConsensusService
+	envProc   governance.EnvelopeProcessor
 }
 
-// newGovernanceController creates a GovernanceController with the given
-// dependencies. If initialTribunal is non-nil, it is stored immediately;
-// otherwise it can be set later via SetTribunal.
-func newGovernanceController(cfg *config.Config, logger *slog.Logger, responder *response.Writer, initialTribunal *tribunal.TribunalService) *GovernanceController {
-	c := &GovernanceController{
+// newGovernanceController creates a GovernanceController with all dependencies
+// injected at construction time. consensus may be nil if the gateway posture
+// does not require L2 consensus. envProc may be nil if envelope submission is
+// not enabled.
+func newGovernanceController(cfg *config.Config, logger *slog.Logger, responder *response.Writer, consensusSvc *consensus.ConsensusService, envProc governance.EnvelopeProcessor) *GovernanceController {
+	return &GovernanceController{
 		cfg:       cfg,
 		logger:    logger,
 		responder: responder,
+		consensus: consensusSvc,
+		envProc:   envProc,
 	}
-	if initialTribunal != nil {
-		c.tribunal.Store(initialTribunal)
-	}
-	return c
 }
 
-// SetTribunal sets the Tribunal service for L2 consensus deliberation.
-// Called by the boot sequence after the TribunalService is constructed.
-// Thread-safe via atomic.Pointer — no router rebuild needed because the
-// tribunal deliberate route is always registered and the handler checks
-// the atomic pointer at request time.
-func (c *GovernanceController) SetTribunal(ts *tribunal.TribunalService) {
-	c.tribunal.Store(ts)
-}
-
-// SetEnvelopeProcessor wires the synchronous envelope-processing pipeline
-// into the governance controller. It must be called after the gateway
-// service has been constructed and before BYO clients submit transactions
-// to /api/v1/governance/envelopes. Calling with nil disables the endpoint.
-func (c *GovernanceController) SetEnvelopeProcessor(p governance.EnvelopeProcessor) {
-	c.envProc.Store(&envProcHolder{proc: p})
-}
-
-// handleTribunalDeliberate is the always-registered HTTP handler for the
-// tribunal deliberate endpoint. It loads the atomic pointer and delegates
-// to the TribunalService if wired, or returns 503 if not yet configured.
-func (c *GovernanceController) handleTribunalDeliberate(w http.ResponseWriter, r *http.Request) {
-	ts := c.tribunal.Load()
-	if ts == nil {
-		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrTribunalNotConfigured.Error())
+// handleConsensusDeliberate is the HTTP handler for the consensus deliberate
+// endpoint. If consensus is not configured for the current posture, returns 503.
+func (c *GovernanceController) handleConsensusDeliberate(w http.ResponseWriter, r *http.Request) {
+	if c.consensus == nil {
+		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrConsensusNotConfigured.Error())
 		return
 	}
-	(*ts).HandleDeliberate(w, r)
+	(*c.consensus).HandleDeliberate(w, r)
 }
 
 // verifyEnvelopeIdentityBinding enforces transport-to-envelope identity binding
@@ -190,7 +162,7 @@ func isAppComponent(c commonv1.Component) bool {
 //   - 403 Forbidden: governance verification failed before execution
 //     (expired, replayed, hash mismatch, missing/invalid L2/L3, unknown
 //     action type, or transport-to-envelope identity mismatch) - no state mutated, no receipt produced.
-//   - 503 Service Unavailable: envelope processor not yet initialized.
+//   - 503 Service Unavailable: envelope processor not configured.
 //   - 405 Method Not Allowed: non-POST methods.
 //
 // @Summary		Submit governance envelope
@@ -205,23 +177,18 @@ func isAppComponent(c commonv1.Component) bool {
 // @Failure		400			{string}	string			"Bad Request — malformed envelope"
 // @Failure		403			{string}	string			"Forbidden — governance verification failed"
 // @Failure		405			{string}	string			"Method Not Allowed"
-// @Failure		503			{string}	string			"Service Unavailable — processor not initialized"
+// @Failure		503			{string}	string			"Service Unavailable — processor not configured"
 // @Router			/api/v1/governance/envelopes [post]
 func (c *GovernanceController) handleGovernanceEnvelope(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
-	v := c.envProc.Load()
-	if v == nil {
+	if c.envProc == nil {
 		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrEnvelopeProcessorNotInit.Error())
 		return
 	}
-	proc := v.(*envProcHolder).proc
-	if proc == nil {
-		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrEnvelopeProcessorNotInit.Error())
-		return
-	}
+	proc := c.envProc
 
 	body, err := readRequestBody(r, c.cfg.Gateway.MaxPayloadBytes)
 	if err != nil {

@@ -235,7 +235,7 @@ func TestGovernanceScenarios(t *testing.T) {
 	assert.Len(t, scenarios, 6, "governanceScenarios should return 6 scenarios")
 
 	// Should have expected names
-	expectedNames := []string{"consensus", "envelope-maximal", "agent-delegation", "tribunal-quorum", "tribunal-veto", "notary-oob"}
+	expectedNames := []string{"consensus", "envelope-maximal", "agent-delegation", "consensus-quorum", "consensus-veto", "notary-oob"}
 	nameSet := make(map[string]bool)
 	for _, sc := range scenarios {
 		nameSet[sc.Name] = true
@@ -262,8 +262,8 @@ func TestGovernanceScenarioNames(t *testing.T) {
 		"consensus":        true,
 		"envelope-maximal": true,
 		"agent-delegation": true,
-		"tribunal-quorum":  true,
-		"tribunal-veto":    true,
+		"consensus-quorum": true,
+		"consensus-veto":   true,
 		"notary-oob":       true,
 	}
 
@@ -279,8 +279,8 @@ func TestGovernanceScenarioTitles(t *testing.T) {
 		"consensus":        "L2 consensus envelope (mock ensemble co-sign)",
 		"envelope-maximal": "Official notary envelope: L2 consensus + principal L3 signing",
 		"agent-delegation": "CLI delegates app credential to agent (SPIFFE distinctness + receipt audit)",
-		"tribunal-quorum":  "Tribunal quorum: 2-of-3 co-sign, receipt records consensus",
-		"tribunal-veto":    "Tribunal veto: one member votes false, envelope is rejected",
+		"consensus-quorum": "Consensus quorum: 2-of-3 co-sign, receipt records consensus",
+		"consensus-veto":   "Consensus veto: one member votes false, envelope is rejected",
 		"notary-oob":       "L3 notary OOB: suspend then principal approves out-of-band",
 	}
 
@@ -301,8 +301,8 @@ func TestGovernanceScenarioPostures(t *testing.T) {
 		"consensus":        Consensus,
 		"envelope-maximal": Notary,
 		"agent-delegation": Doctrine,
-		"tribunal-quorum":  Consensus,
-		"tribunal-veto":    Consensus,
+		"consensus-quorum": Consensus,
+		"consensus-veto":   Consensus,
 		"notary-oob":       Notary,
 	}
 
@@ -324,8 +324,8 @@ func TestGovernanceScenarioPersonas(t *testing.T) {
 		"consensus":        "ensemble-producer",
 		"envelope-maximal": "ensemble-producer",
 		"agent-delegation": "cli-delegator",
-		"tribunal-quorum":  "ensemble-producer",
-		"tribunal-veto":    "ensemble-producer",
+		"consensus-quorum": "ensemble-producer",
+		"consensus-veto":   "ensemble-producer",
 		"notary-oob":       "principal",
 	}
 	for _, sc := range scenarios {

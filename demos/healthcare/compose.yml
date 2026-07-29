@@ -58,7 +58,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["gw", "start", "-f", "--mcp-downstream-url", "http://healthcare-pa-api:8000", "--passkey-rp-origin", "http://localhost:8081", "--passkey-rp-origin", "https://localhost:8444"]
+    command: ["gw", "start", "-f", "--mcp-downstream-url", "http://healthcare-pa-api:8000", "--doctrine-dir", "/etc/g8e/doctrine", "--passkey-rp-origin", "http://localhost:8081", "--passkey-rp-origin", "https://localhost:8444"]
 
   operator:
     build:

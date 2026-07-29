@@ -39,6 +39,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/services/consensus"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
@@ -46,7 +47,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
-	"github.com/g8e-ai/g8e/internal/services/tribunal"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
@@ -55,9 +55,10 @@ import (
 // In this mode, the Operator does NOT execute commands or initiate outbound
 // connections. It strictly serves inbound requests from platform components.
 type GatewayModeService struct {
-	cfg     *config.Config
-	logger  *slog.Logger
-	fileSvc fs.RuntimeFileService
+	cfg      *config.Config
+	logger   *slog.Logger
+	fileSvc  fs.RuntimeFileService
+	doctrine *governance.L1Doctrine
 
 	db                 *CanonicalDBService
 	stores             *Stores
@@ -72,7 +73,6 @@ type GatewayModeService struct {
 	webSessionSvc      *WebSessionService
 	suspendedTxService *storage.SuspendedTransactionService
 	mcpGateway         *mcp.GatewayService
-	tribunal           *tribunal.TribunalService
 	responder          *response.Writer
 	server             *http.Server
 	publicServer       *http.Server
@@ -99,6 +99,10 @@ func newGatewayServiceBuilder(cfg *config.Config, fileSvc fs.RuntimeFileService,
 }
 
 // build assembles the GatewayModeService from the builder's configuration.
+// SecretManager lifecycle: sm is obtained from CanonicalDBService via
+// GetSecretManager() and passed to PKIAuthority, but is not retained on
+// GatewayModeService. CanonicalDBService owns the SecretManager lifecycle
+// (initialized in initSchema, closed in CanonicalDBService.Close).
 func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	cfg := b.cfg
 	logger := b.logger
@@ -203,12 +207,17 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		publicBaseURL = network.LocalhostHTTPSURL(cfg.Gateway.HTTPSPort)
 	}
 
+	doctrine, err := governance.NewL1DoctrineFromDir(cfg.Gateway.DoctrineDir)
+	if err != nil {
+		return nil, fmt.Errorf("gateway: load doctrine: %w", err)
+	}
+
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:           logger,
 		Responder:        res,
 		SuspendedStore:   suspendedTxService,
 		ScrubbingService: scrubbingService,
-		ThreatScanner:    governance.NewL1Doctrine(),
+		ThreatScanner:    doctrine,
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
 		A2ADownstreamURL: cfg.Gateway.A2ADownstreamURL,
@@ -233,6 +242,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		cfg:                cfg,
 		logger:             logger,
 		fileSvc:            b.fileSvc,
+		doctrine:           doctrine,
 		db:                 db,
 		stores:             stores,
 		pubsub:             pubsub,
@@ -248,10 +258,6 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		extraIPs:           extraIPs,
 		mcpGateway:         mcpGateway,
 		responder:          res,
-	}
-
-	if err := ls.initHandlersAndServers(); err != nil {
-		return nil, fmt.Errorf("gateway: failed to initialize handlers and servers: %w", err)
 	}
 
 	return ls, nil
@@ -350,7 +356,13 @@ func detectBasicNonLoopbackIPv4Addresses() []net.IP {
 	return extraIPs
 }
 
-func (ls *GatewayModeService) initHandlersAndServers() error {
+// InitHTTPHandler creates the HTTP handler and servers with all dependencies
+// injected. This is the second phase of construction — call after wiring
+// late-bound dependencies (consensus service, envelope processor) that require
+// the base service to exist first. consensusSvc may be nil if the gateway
+// posture does not require L2 consensus. envProc may be nil if envelope
+// submission is not enabled.
+func (ls *GatewayModeService) InitHTTPHandler(consensusSvc *consensus.ConsensusService, envProc governance.EnvelopeProcessor) error {
 	cfg := ls.cfg
 	logger := ls.logger
 	pubsub := ls.pubsub
@@ -382,7 +394,8 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 		Responder:          ls.responder,
 		MCPGateway:         ls.mcpGateway,
 		AppEnrollment:      appEnrollment,
-		Tribunal:           ls.tribunal,
+		Consensus:          consensusSvc,
+		EnvProc:            envProc,
 		IsReady:            ls.IsReady,
 		IsGovernanceReady:  ls.IsGovernanceReady,
 	})
@@ -456,9 +469,20 @@ func (ls *GatewayModeService) GetSecretManager() (*SecretManager, error) {
 	return ls.db.GetSecretManager(), nil
 }
 
-// GetHTTPHandler returns the HTTP handler.
+// GetHTTPHandler returns the HTTP handler. Returns nil if InitHTTPHandler
+// has not been called yet.
 func (ls *GatewayModeService) GetHTTPHandler() *HTTPHandler {
 	return ls.handler
+}
+
+// GetMCPGateway returns the MCP gateway service.
+func (ls *GatewayModeService) GetMCPGateway() *mcp.GatewayService {
+	return ls.mcpGateway
+}
+
+// GetGatewayWebSocketHandler returns the pub/sub websocket handler.
+func (ls *GatewayModeService) GetGatewayWebSocketHandler() *GatewayWebSocketHandler {
+	return ls.pubsub
 }
 
 // GetHTTPPort returns the actual HTTP port the server is listening on.
@@ -481,17 +505,6 @@ func (ls *GatewayModeService) GetHTTPSPort() int {
 	_, portStr, _ := net.SplitHostPort(ls.publicServer.Addr)
 	port, _ := strconv.Atoi(portStr)
 	return port
-}
-
-// SetTribunal sets the Tribunal service for L2 consensus deliberation.
-// This is called by the boot sequence after the TribunalService is constructed.
-// The Tribunal is registered on the mTLS mux and the HTTP deliberator is wired
-// into the MCP gateway for consensus and notary postures.
-func (ls *GatewayModeService) SetTribunal(ts *tribunal.TribunalService) {
-	ls.tribunal = ts
-	if ls.handler != nil {
-		ls.handler.SetTribunal(ts)
-	}
 }
 
 func (ls *GatewayModeService) IsReady() bool {
@@ -534,9 +547,9 @@ func (ls *GatewayModeService) GetGovernanceDeps() *pubsub.GovernanceDeps {
 		TransactionAudit:     ls.stores.DocStore,
 		L3Notary:             l3Notary,
 		SignerStore:          ls.stores.SignerStore,
-		AppPolicyStore:       ls.stores.AppPolicyStore,
-		ConsensusPolicyStore: ls.stores.TribunalStore,
+		ConsensusPolicyStore: ls.stores.ConsensusStore,
 		FieldReader:          ls.stores.DocStore,
+		Doctrine:             ls.doctrine,
 	}
 }
 

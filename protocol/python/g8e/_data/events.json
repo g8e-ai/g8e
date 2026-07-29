@@ -1076,89 +1076,89 @@
       "_go_const": "EventSourceUserTerminal",
       "value": "g8e.v1.source.user.terminal"
     },
-    "AiTribunalSessionStarted": {
-      "_go_const": "EventAiTribunalSessionStarted",
-      "value": "g8e.v1.ai.tribunal.session.started"
+    "AiConsensusSessionStarted": {
+      "_go_const": "EventAiConsensusSessionStarted",
+      "value": "g8e.v1.ai.consensus.session.started"
     },
-    "AiTribunalSessionCompleted": {
-      "_go_const": "EventAiTribunalSessionCompleted",
-      "value": "g8e.v1.ai.tribunal.session.completed"
+    "AiConsensusSessionCompleted": {
+      "_go_const": "EventAiConsensusSessionCompleted",
+      "value": "g8e.v1.ai.consensus.session.completed"
     },
-    "AiTribunalSessionDisabled": {
-      "_go_const": "EventAiTribunalSessionDisabled",
-      "value": "g8e.v1.ai.tribunal.session.disabled"
+    "AiConsensusSessionDisabled": {
+      "_go_const": "EventAiConsensusSessionDisabled",
+      "value": "g8e.v1.ai.consensus.session.disabled"
     },
-    "AiTribunalSessionGenerationFailed": {
-      "_go_const": "EventAiTribunalSessionGenerationFailed",
-      "value": "g8e.v1.ai.tribunal.session.generation.failed"
+    "AiConsensusSessionGenerationFailed": {
+      "_go_const": "EventAiConsensusSessionGenerationFailed",
+      "value": "g8e.v1.ai.consensus.session.generation.failed"
     },
-    "AiTribunalSessionModelNotConfigured": {
-      "_go_const": "EventAiTribunalSessionModelNotConfigured",
-      "value": "g8e.v1.ai.tribunal.session.model.not.configured"
+    "AiConsensusSessionModelNotConfigured": {
+      "_go_const": "EventAiConsensusSessionModelNotConfigured",
+      "value": "g8e.v1.ai.consensus.session.model.not.configured"
     },
-    "AiTribunalSessionProviderUnavailable": {
-      "_go_const": "EventAiTribunalSessionProviderUnavailable",
-      "value": "g8e.v1.ai.tribunal.session.provider.unavailable"
+    "AiConsensusSessionProviderUnavailable": {
+      "_go_const": "EventAiConsensusSessionProviderUnavailable",
+      "value": "g8e.v1.ai.consensus.session.provider.unavailable"
     },
-    "AiTribunalSessionSystemError": {
-      "_go_const": "EventAiTribunalSessionSystemError",
-      "value": "g8e.v1.ai.tribunal.session.system.error"
+    "AiConsensusSessionSystemError": {
+      "_go_const": "EventAiConsensusSessionSystemError",
+      "value": "g8e.v1.ai.consensus.session.system.error"
     },
-    "AiTribunalSessionAuditorFailed": {
-      "_go_const": "EventAiTribunalSessionAuditorFailed",
-      "value": "g8e.v1.ai.tribunal.session.auditor.failed"
+    "AiConsensusSessionAuditorFailed": {
+      "_go_const": "EventAiConsensusSessionAuditorFailed",
+      "value": "g8e.v1.ai.consensus.session.auditor.failed"
     },
-    "AiTribunalSessionWardenBlocked": {
-      "_go_const": "EventAiTribunalSessionWardenBlocked",
-      "value": "g8e.v1.ai.tribunal.session.warden.blocked"
+    "AiConsensusSessionWardenBlocked": {
+      "_go_const": "EventAiConsensusSessionWardenBlocked",
+      "value": "g8e.v1.ai.consensus.session.warden.blocked"
     },
-    "AiTribunalVotingPassCompleted": {
-      "_go_const": "EventAiTribunalVotingPassCompleted",
-      "value": "g8e.v1.ai.tribunal.voting.pass.completed"
+    "AiConsensusVotingPassCompleted": {
+      "_go_const": "EventAiConsensusVotingPassCompleted",
+      "value": "g8e.v1.ai.consensus.voting.pass.completed"
     },
-    "AiTribunalVotingConsensusReached": {
-      "_go_const": "EventAiTribunalVotingConsensusReached",
-      "value": "g8e.v1.ai.tribunal.voting.consensus.reached"
+    "AiConsensusVotingConsensusReached": {
+      "_go_const": "EventAiConsensusVotingConsensusReached",
+      "value": "g8e.v1.ai.consensus.voting.consensus.reached"
     },
-    "AiTribunalVotingConsensusNotReached": {
-      "_go_const": "EventAiTribunalVotingConsensusNotReached",
-      "value": "g8e.v1.ai.tribunal.voting.consensus.not.reached"
+    "AiConsensusVotingConsensusNotReached": {
+      "_go_const": "EventAiConsensusVotingConsensusNotReached",
+      "value": "g8e.v1.ai.consensus.voting.consensus.not.reached"
     },
-    "AiTribunalVotingConsensusFailed": {
-      "_go_const": "EventAiTribunalVotingConsensusFailed",
-      "value": "g8e.v1.ai.tribunal.voting.consensus.failed"
+    "AiConsensusVotingConsensusFailed": {
+      "_go_const": "EventAiConsensusVotingConsensusFailed",
+      "value": "g8e.v1.ai.consensus.voting.consensus.failed"
     },
-    "AiTribunalVotingRoundStarted": {
-      "_go_const": "EventAiTribunalVotingRoundStarted",
-      "value": "g8e.v1.ai.tribunal.voting.round.started"
+    "AiConsensusVotingRoundStarted": {
+      "_go_const": "EventAiConsensusVotingRoundStarted",
+      "value": "g8e.v1.ai.consensus.voting.round.started"
     },
-    "AiTribunalVotingRoundCompleted": {
-      "_go_const": "EventAiTribunalVotingRoundCompleted",
-      "value": "g8e.v1.ai.tribunal.voting.round.completed"
+    "AiConsensusVotingRoundCompleted": {
+      "_go_const": "EventAiConsensusVotingRoundCompleted",
+      "value": "g8e.v1.ai.consensus.voting.round.completed"
     },
-    "AiTribunalVotingRound2Started": {
-      "_go_const": "EventAiTribunalVotingRound2Started",
-      "value": "g8e.v1.ai.tribunal.voting.round.2.started"
+    "AiConsensusVotingRound2Started": {
+      "_go_const": "EventAiConsensusVotingRound2Started",
+      "value": "g8e.v1.ai.consensus.voting.round.2.started"
     },
-    "AiTribunalVotingRound2ConsensusReached": {
-      "_go_const": "EventAiTribunalVotingRound2ConsensusReached",
-      "value": "g8e.v1.ai.tribunal.voting.round.2.consensus.reached"
+    "AiConsensusVotingRound2ConsensusReached": {
+      "_go_const": "EventAiConsensusVotingRound2ConsensusReached",
+      "value": "g8e.v1.ai.consensus.voting.round.2.consensus.reached"
     },
-    "AiTribunalVotingRound2ConsensusFailed": {
-      "_go_const": "EventAiTribunalVotingRound2ConsensusFailed",
-      "value": "g8e.v1.ai.tribunal.voting.round.2.consensus.failed"
+    "AiConsensusVotingRound2ConsensusFailed": {
+      "_go_const": "EventAiConsensusVotingRound2ConsensusFailed",
+      "value": "g8e.v1.ai.consensus.voting.round.2.consensus.failed"
     },
-    "AiTribunalVotingDissentRecorded": {
-      "_go_const": "EventAiTribunalVotingDissentRecorded",
-      "value": "g8e.v1.ai.tribunal.voting.dissent.recorded"
+    "AiConsensusVotingDissentRecorded": {
+      "_go_const": "EventAiConsensusVotingDissentRecorded",
+      "value": "g8e.v1.ai.consensus.voting.dissent.recorded"
     },
-    "AiTribunalVotingAuditStarted": {
-      "_go_const": "EventAiTribunalVotingAuditStarted",
-      "value": "g8e.v1.ai.tribunal.voting.audit.started"
+    "AiConsensusVotingAuditStarted": {
+      "_go_const": "EventAiConsensusVotingAuditStarted",
+      "value": "g8e.v1.ai.consensus.voting.audit.started"
     },
-    "AiTribunalVotingAuditCompleted": {
-      "_go_const": "EventAiTribunalVotingAuditCompleted",
-      "value": "g8e.v1.ai.tribunal.voting.audit.completed"
+    "AiConsensusVotingAuditCompleted": {
+      "_go_const": "EventAiConsensusVotingAuditCompleted",
+      "value": "g8e.v1.ai.consensus.voting.audit.completed"
     },
     "AiLlmChatIterationThinkingStopped": {
       "_go_const": "EventAiLLMChatIterationThinkingStopped",

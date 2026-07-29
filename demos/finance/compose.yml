@@ -56,7 +56,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["gw", "start", "-f", "--passkey-rp-origin", "http://localhost:8082", "--passkey-rp-origin", "https://localhost:8445"]
+    command: ["gw", "start", "-f", "--doctrine-dir", "/etc/g8e/doctrine", "--passkey-rp-origin", "http://localhost:8082", "--passkey-rp-origin", "https://localhost:8445"]
 
   operator:
     build:
