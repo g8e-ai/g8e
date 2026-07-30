@@ -92,6 +92,72 @@ func TestConsensusBootstrapConfig_EmptySeedHex(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// consensusBootstrapConfig member_seeds JSON tag and round-trip tests (Tier 1 — no DB)
+// ---------------------------------------------------------------------------
+
+func TestConsensusBootstrapConfig_MemberSeedsJSONTag(t *testing.T) {
+	boot := consensusBootstrapConfig{
+		ConsensusID:  "tribunal",
+		MemberAppIDs: []string{"alpha", "beta", "gamma"},
+		Quorum:       2,
+		MemberSeeds: map[string]string{
+			"alpha": "b194523218024feacafef9acf9e557f9c2e6ed71e87c8c97e5a4fc61e624ea42",
+			"beta":  "20544a8efd3f30188095dae9d42993f320fbcdcbd924f88b2c56edfdc719e357",
+			"gamma": "06946f1a26896983176f6d40b0a734136dd58b16fe502d4b5688bf7db1b97662",
+		},
+	}
+
+	data, err := json.Marshal(boot)
+	require.NoError(t, err)
+
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(data, &raw))
+
+	assert.Contains(t, raw, "member_seeds", "member_seeds key must be present when populated")
+}
+
+func TestConsensusBootstrapConfig_MemberSeedsOmitWhenEmpty(t *testing.T) {
+	boot := consensusBootstrapConfig{
+		ConsensusID:  "tribunal",
+		MemberAppIDs: []string{"alpha"},
+		Quorum:       1,
+		// MemberSeeds intentionally nil — should be omitted due to omitempty
+	}
+
+	data, err := json.Marshal(boot)
+	require.NoError(t, err)
+
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(data, &raw))
+
+	_, present := raw["member_seeds"]
+	assert.False(t, present, "member_seeds must be omitted when nil/empty due to omitempty tag")
+}
+
+func TestConsensusBootstrapConfig_MemberSeedsRoundTrip(t *testing.T) {
+	original := consensusBootstrapConfig{
+		ConsensusID:  "round-trip-tribunal",
+		MemberAppIDs: []string{"fedramp-csp-auditor", "fedramp-3pao", "fedramp-jab"},
+		Quorum:       2,
+		MemberSeeds: map[string]string{
+			"fedramp-csp-auditor": "b194523218024feacafef9acf9e557f9c2e6ed71e87c8c97e5a4fc61e624ea42",
+			"fedramp-3pao":        "20544a8efd3f30188095dae9d42993f320fbcdcbd924f88b2c56edfdc719e357",
+			"fedramp-jab":         "06946f1a26896983176f6d40b0a734136dd58b16fe502d4b5688bf7db1b97662",
+		},
+	}
+
+	data, err := json.Marshal(original)
+	require.NoError(t, err)
+
+	var decoded consensusBootstrapConfig
+	require.NoError(t, json.Unmarshal(data, &decoded))
+
+	assert.Equal(t, original, decoded)
+	assert.Len(t, decoded.MemberSeeds, 3)
+	assert.Equal(t, original.MemberSeeds["fedramp-3pao"], decoded.MemberSeeds["fedramp-3pao"])
+}
+
+// ---------------------------------------------------------------------------
 // parseConsensusBootstrapConfig — additional edge cases (Tier 1 — no DB)
 // ---------------------------------------------------------------------------
 
@@ -201,6 +267,68 @@ func TestParseConsensusBootstrapConfig_DuplicateMembersAllowed(t *testing.T) {
 	boot, err := parseConsensusBootstrapConfig(data)
 	require.NoError(t, err)
 	assert.Len(t, boot.MemberAppIDs, 3, "parseConsensusBootstrapConfig does not deduplicate members")
+}
+
+func TestParseConsensusBootstrapConfig_MemberSeedsFormat(t *testing.T) {
+	data := []byte(`{
+		"consensus_id": "tribunal",
+		"member_app_ids": ["alpha", "beta", "gamma"],
+		"quorum": 2,
+		"member_seeds": {
+			"alpha": "b194523218024feacafef9acf9e557f9c2e6ed71e87c8c97e5a4fc61e624ea42",
+			"beta":  "20544a8efd3f30188095dae9d42993f320fbcdcbd924f88b2c56edfdc719e357",
+			"gamma": "06946f1a26896983176f6d40b0a734136dd58b16fe502d4b5688bf7db1b97662"
+		}
+	}`)
+
+	boot, err := parseConsensusBootstrapConfig(data)
+	require.NoError(t, err)
+	assert.Equal(t, "tribunal", boot.ConsensusID)
+	assert.Equal(t, []string{"alpha", "beta", "gamma"}, boot.MemberAppIDs)
+	assert.Equal(t, 2, boot.Quorum)
+	assert.Empty(t, boot.SeedHex, "seed_hex should be empty when only member_seeds is provided")
+	assert.Len(t, boot.MemberSeeds, 3)
+	assert.Equal(t, "b194523218024feacafef9acf9e557f9c2e6ed71e87c8c97e5a4fc61e624ea42",
+		boot.MemberSeeds["alpha"])
+}
+
+func TestParseConsensusBootstrapConfig_MemberSeedsAndSeedHexBothPresent(t *testing.T) {
+	// parseConsensusBootstrapConfig itself does not enforce precedence between
+	// member_seeds and seed_hex — both fields populate cleanly. Precedence
+	// (member_seeds wins) is enforced in consensusPolicyBootstrap via
+	// `usePerMemberKeys := len(boot.MemberSeeds) > 0`, and is exercised at the
+	// Tier 2 bootstrap level, not here.
+	data := []byte(`{
+		"consensus_id": "tribunal",
+		"member_app_ids": ["alpha", "beta"],
+		"quorum": 1,
+		"seed_hex": "87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77",
+		"member_seeds": {
+			"alpha": "b194523218024feacafef9acf9e557f9c2e6ed71e87c8c97e5a4fc61e624ea42",
+			"beta":  "20544a8efd3f30188095dae9d42993f320fbcdcbd924f88b2c56edfdc719e357"
+		}
+	}`)
+
+	boot, err := parseConsensusBootstrapConfig(data)
+	require.NoError(t, err)
+	assert.Equal(t, "87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77", boot.SeedHex,
+		"seed_hex populates independently of member_seeds at the parse layer")
+	assert.Len(t, boot.MemberSeeds, 2, "member_seeds populates independently of seed_hex at the parse layer")
+}
+
+func TestParseConsensusBootstrapConfig_MemberSeedsEmptyMap(t *testing.T) {
+	// An empty member_seeds object should parse cleanly and behave like the
+	// single-key fallback path (usePerMemberKeys = len(MemberSeeds) > 0 == false).
+	data := []byte(`{
+		"consensus_id": "tribunal",
+		"member_app_ids": ["alpha"],
+		"quorum": 1,
+		"member_seeds": {}
+	}`)
+
+	boot, err := parseConsensusBootstrapConfig(data)
+	require.NoError(t, err)
+	assert.Empty(t, boot.MemberSeeds, "empty member_seeds map should not trigger per-member key mode")
 }
 
 // ---------------------------------------------------------------------------
@@ -388,6 +516,39 @@ func TestBootstrapConsensusPolicy_NilServiceWithInvalidSeedHex(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil),
 		"nil service check occurs before seed derivation")
+}
+
+// TestBootstrapConsensusPolicy_NilServiceWithMemberSeeds proves the
+// member_seeds JSON format parses cleanly through parseConsensusBootstrapConfig
+// before the nil-service guard fires. This is the Tier 1 proof that
+// member_seeds is a valid config format; validation that every member has a
+// seed (ErrConsensusBootstrapMissingFields) is only reachable past the
+// nil-service guard and is exercised at the Tier 2 bootstrap level with a
+// real GatewayModeService fixture.
+func TestBootstrapConsensusPolicy_NilServiceWithMemberSeeds(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	tmpDir := testutil.TempDir(t)
+	configPath := filepath.Join(tmpDir, constants.ConsensusBootstrapConfigFilename)
+	err := os.WriteFile(configPath, []byte(`{
+		"consensus_id": "tribunal",
+		"member_app_ids": ["alpha", "beta", "gamma"],
+		"quorum": 2,
+		"member_seeds": {
+			"alpha": "b194523218024feacafef9acf9e557f9c2e6ed71e87c8c97e5a4fc61e624ea42",
+			"beta":  "20544a8efd3f30188095dae9d42993f320fbcdcbd924f88b2c56edfdc719e357",
+			"gamma": "06946f1a26896983176f6d40b0a734136dd58b16fe502d4b5688bf7db1b97662"
+		}
+	}`), 0600)
+	require.NoError(t, err)
+
+	// With nil service, the file is read and parsed successfully, then
+	// svc == nil check triggers ErrGatewayServiceNil (not a parse error).
+	// This proves the member_seeds format parses cleanly.
+	err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil),
+		"member_seeds format must parse cleanly; nil service check fires after parse")
 }
 
 // ---------------------------------------------------------------------------

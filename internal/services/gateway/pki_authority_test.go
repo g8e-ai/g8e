@@ -932,19 +932,23 @@ func TestPKIAuthority_Phase5_Permissions(t *testing.T) {
 }
 
 func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
+	// Shared setup: all subtests verify PEM files produced by a single PKI
+	// initialization. Sharing one DB+PKI instance avoids redundant WAL
+	// checkpoint fsyncs on db.Close(), which can exceed the test timeout on
+	// CI runners with slow disk I/O.
+	dataDir := testutil.TempDir(t)
+	logger := testutil.NewTestLogger()
+	fileSvc := newTestFileSvc(t)
+	db, stores, err := openTestDB(t, dataDir, fileSvc, logger)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	sm := newTestSecretManager(t, db.db, fileSvc)
+
+	pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
+	err = pki.InitializePKI(nil)
+	require.NoError(t, err)
+
 	t.Run("Phase8_1: root.pem parses with 1 certificate", func(t *testing.T) {
-		dataDir := testutil.TempDir(t)
-		logger := testutil.NewTestLogger()
-		fileSvc := newTestFileSvc(t)
-		db, stores, err := openTestDB(t, dataDir, fileSvc, logger)
-		require.NoError(t, err)
-		t.Cleanup(func() { db.Close() })
-		sm := newTestSecretManager(t, db.db, fileSvc)
-
-		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
-		err = pki.InitializePKI(nil)
-		require.NoError(t, err)
-
 		// Load root.pem bundle
 		rootBundleRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileRootBundle)
 		rootPEM, err := fileSvc.ReadFile(context.Background(), rootBundleRelPath)
@@ -961,18 +965,6 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 	})
 
 	t.Run("Phase8_1: operator-bundle.pem parses with 2 certificates", func(t *testing.T) {
-		dataDir := testutil.TempDir(t)
-		logger := testutil.NewTestLogger()
-		fileSvc := newTestFileSvc(t)
-		db, stores, err := openTestDB(t, dataDir, fileSvc, logger)
-		require.NoError(t, err)
-		t.Cleanup(func() { db.Close() })
-		sm := newTestSecretManager(t, db.db, fileSvc)
-
-		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
-		err = pki.InitializePKI(nil)
-		require.NoError(t, err)
-
 		// Load operator-bundle.pem
 		operatorBundleRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileOperatorBundle)
 		operatorPEM, err := fileSvc.ReadFile(context.Background(), operatorBundleRelPath)
@@ -989,18 +981,6 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 	})
 
 	t.Run("Phase8_1: g8eg-ca-bundle.pem parses with 3 certificates", func(t *testing.T) {
-		dataDir := testutil.TempDir(t)
-		logger := testutil.NewTestLogger()
-		fileSvc := newTestFileSvc(t)
-		db, stores, err := openTestDB(t, dataDir, fileSvc, logger)
-		require.NoError(t, err)
-		t.Cleanup(func() { db.Close() })
-		sm := newTestSecretManager(t, db.db, fileSvc)
-
-		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
-		err = pki.InitializePKI(nil)
-		require.NoError(t, err)
-
 		// Load g8eg-ca-bundle.pem
 		gatewayBundleRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
 		gatewayPEM, err := fileSvc.ReadFile(context.Background(), gatewayBundleRelPath)
@@ -1017,18 +997,6 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 	})
 
 	t.Run("Phase8_1: serving certificate verifies against g8eg-ca-bundle.pem", func(t *testing.T) {
-		dataDir := testutil.TempDir(t)
-		logger := testutil.NewTestLogger()
-		fileSvc := newTestFileSvc(t)
-		db, stores, err := openTestDB(t, dataDir, fileSvc, logger)
-		require.NoError(t, err)
-		t.Cleanup(func() { db.Close() })
-		sm := newTestSecretManager(t, db.db, fileSvc)
-
-		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
-		err = pki.InitializePKI(nil)
-		require.NoError(t, err)
-
 		// Load the serving certificate
 		serviceCertRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert)
 		certPEM, err := fileSvc.ReadFile(context.Background(), serviceCertRelPath)

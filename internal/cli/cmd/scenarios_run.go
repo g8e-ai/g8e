@@ -15,7 +15,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -32,21 +31,17 @@ import (
 )
 
 var (
-	harnessConfigPath    string
-	harnessMTLSURL       string
-	harnessPublicURL     string
-	harnessCert          string
-	harnessKey           string
-	harnessCA            string
-	harnessAPIKey        string
-	harnessSessionID     string
-	harnessOutDir        string
-	harnessL3Mode        string
-	harnessEnsemble      int
-	harnessVerbose       bool
-	harnessPhase         string
-	harnessConsensusSeed string
-	harnessConsensusID   string
+	harnessConfigPath string
+	harnessMTLSURL    string
+	harnessPublicURL  string
+	harnessCert       string
+	harnessKey        string
+	harnessCA         string
+	harnessAPIKey     string
+	harnessSessionID  string
+	harnessOutDir     string
+	harnessVerbose    bool
+	harnessPhase      string
 )
 
 func demosScenariosRunCmd() *cobra.Command {
@@ -65,12 +60,8 @@ func demosScenariosRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&harnessAPIKey, "api-key", "", "operator API key for MCP/A2A surface")
 	cmd.Flags().StringVar(&harnessSessionID, "operator-session", "", "scope audit to a specific Operator session")
 	cmd.Flags().StringVar(&harnessOutDir, "out", "", "report output dir")
-	cmd.Flags().StringVar(&harnessL3Mode, "l3-mode", "", "mock|suspend")
-	cmd.Flags().IntVar(&harnessEnsemble, "ensemble", 3, "mock consensus voters")
 	cmd.Flags().BoolVar(&harnessVerbose, "verbose", false, "echo each request/response")
 	cmd.Flags().StringVar(&harnessPhase, "phase", "all", "doctrine|consensus|notary|all")
-	cmd.Flags().StringVar(&harnessConsensusSeed, "consensus-seed", "", "hex-encoded Ed25519 seed for deterministic ensemble key (or path to seed file)")
-	cmd.Flags().StringVar(&harnessConsensusID, "consensus-id", "", "ConsensusPolicy ID for L2 consensus (defaults to test-consensus)")
 
 	return cmd
 }
@@ -100,7 +91,7 @@ func runAgentHarness(cmd *cobra.Command, args []string) error {
 	}
 
 	if needsGovKit(selected) {
-		if err := setupGovKit(ctx, client, cfg); err != nil {
+		if err := setupGovKit(ctx, client, cfg, selected); err != nil {
 			return fmt.Errorf("scenarios run: gov kit setup: %w", err)
 		}
 	}
@@ -165,20 +156,8 @@ func applyAgentHarnessFlags(cfg *config.Config) {
 	if harnessOutDir != "" {
 		cfg.OutDir = harnessOutDir
 	}
-	if harnessL3Mode != "" {
-		cfg.L3Mode = harnessL3Mode
-	}
-	if harnessEnsemble != 0 {
-		cfg.EnsembleSize = harnessEnsemble
-	}
 	if harnessVerbose {
 		cfg.Verbose = harnessVerbose
-	}
-	if harnessConsensusSeed != "" {
-		cfg.ConsensusSeed = harnessConsensusSeed
-	}
-	if harnessConsensusID != "" {
-		cfg.ConsensusID = harnessConsensusID
 	}
 }
 
@@ -227,52 +206,7 @@ func needsGovKit(ss []scenarios.Scenario) bool {
 	return false
 }
 
-func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Config) error {
-	var ens *clientpkg.Ensemble
-	var err error
-	if cfg.ConsensusSeed != "" {
-		seedHex := cfg.ConsensusSeed
-		if _, statErr := os.Stat(seedHex); statErr == nil {
-			data, readErr := os.ReadFile(seedHex)
-			if readErr != nil {
-				return fmt.Errorf("read consensus seed file: %w", readErr)
-			}
-			seedHex = strings.TrimSpace(string(data))
-		}
-		ens, err = clientpkg.NewEnsembleFromSeed(cfg.ConsensusKeyID, cfg.EnsembleSize, seedHex)
-		if err != nil {
-			return fmt.Errorf("setup gov kit: ensemble from seed: %w", err)
-		}
-	} else {
-		ens, err = clientpkg.NewEnsemble(cfg.ConsensusKeyID, cfg.EnsembleSize)
-		if err != nil {
-			return fmt.Errorf("setup gov kit: ensemble: %w", err)
-		}
-	}
-	if cfg.ConsensusID != "" {
-		ens.ConsensusID = cfg.ConsensusID
-	}
-
-	// If the consensus seed is a file path, try to load consensus member app IDs
-	// from a sibling consensus-bootstrap.json so the ensemble votes with the
-	// correct member key IDs (multi-member quorum support).
-	if cfg.ConsensusSeed != "" {
-		seedDir := filepath.Dir(cfg.ConsensusSeed)
-		bootstrapPath := filepath.Join(seedDir, "consensus-bootstrap.json")
-		if data, readErr := os.ReadFile(bootstrapPath); readErr == nil {
-			var boot struct {
-				MemberAppIDs []string `json:"member_app_ids"`
-			}
-			if json.Unmarshal(data, &boot) == nil && len(boot.MemberAppIDs) > 0 {
-				ens.MemberKeyIDs = boot.MemberAppIDs
-			}
-		}
-	}
-
-	prin, err := clientpkg.NewPrincipal(cfg.PrincipalKeyID)
-	if err != nil {
-		return fmt.Errorf("setup gov kit: principal: %w", err)
-	}
+func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Config, selected []scenarios.Scenario) error {
 	opID := cfg.OperatorSessionID
 	opSessionID := ""
 	if opID == "" {
@@ -280,25 +214,12 @@ func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Confi
 	} else {
 		opSessionID = opID
 	}
-	scenarios.SetGovKit(&scenarios.GovKit{
-		Ensemble: ens, Principal: prin, L3Mode: cfg.L3Mode,
-		OperatorID: opID, OperatorSessionID: opSessionID,
-	})
 
-	if len(ens.MemberKeyIDs) > 0 {
-		for _, appID := range ens.MemberKeyIDs {
-			if err := client.RegisterSigner(ctx, appID, ens.PubHex(), "consensus"); err != nil {
-				fmt.Fprintf(os.Stderr, "warning: consensus signer registration %s: %v (non-fatal under doctrine)\n", appID, err)
-			}
-		}
-	} else {
-		if err := client.RegisterSigner(ctx, ens.KeyID, ens.PubHex(), "consensus"); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: consensus signer registration: %v (non-fatal under doctrine)\n", err)
-		}
+	gk := &scenarios.GovKit{
+		OperatorID:        opID,
+		OperatorSessionID: opSessionID,
 	}
-	if err := client.RegisterSigner(ctx, prin.KeyID, prin.PubHex(), "principal"); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: principal signer registration: %v (non-fatal under doctrine)\n", err)
-	}
+	scenarios.SetGovKit(gk)
 	return nil
 }
 

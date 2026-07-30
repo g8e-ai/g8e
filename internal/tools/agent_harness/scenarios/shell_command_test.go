@@ -41,3 +41,25 @@ func TestShellCommandArgs_SpecialCharsEscaped(t *testing.T) {
 
 	assert.Equal(t, "hello \"world\"", cmd.Args[0])
 }
+
+func TestShellCommandMap_BuildsValidMap(t *testing.T) {
+	got := shellCommandMap("cloudop", "provision", "10.73.0.50:9100", "vm-01", "MODERATE")
+
+	assert.Equal(t, "cloudop", got["command"])
+	assert.Equal(t, 10, got["timeout"])
+
+	args, ok := got["args"].([]string)
+	require.True(t, ok, "args should be []string")
+	assert.Equal(t, []string{"provision", "10.73.0.50:9100", "vm-01", "MODERATE"}, args)
+}
+
+func TestShellCommandMap_NoArgs(t *testing.T) {
+	got := shellCommandMap("ping")
+
+	assert.Equal(t, "ping", got["command"])
+	assert.Equal(t, 10, got["timeout"])
+
+	args, ok := got["args"].([]string)
+	require.True(t, ok, "args should be []string")
+	assert.Empty(t, args)
+}

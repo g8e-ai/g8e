@@ -533,13 +533,7 @@ func (ls *GatewayModeService) IsGovernanceReady() bool {
 func (ls *GatewayModeService) GetGovernanceDeps() *pubsub.GovernanceDeps {
 	cliVerifier := NewCLISessionVerifier(ls.stores.DocStore, ls.pki, ls.logger, ls.userSvc, ls.cliSessionSvc)
 
-	var l3Notary governance.L3Notary
-	if os.Getenv("G8E_L3_MOCK") == "true" {
-		ls.logger.Warn("L3 mock mode enabled — auto-approving all L3 proofs (demo/test only, never use in production)")
-		l3Notary = governance.NewDemoL3Notary(ls.logger)
-	} else {
-		l3Notary = governance.NewGatewayL3Notary(cliVerifier, ls.passkey.PasskeyService, ls.logger)
-	}
+	l3Notary := governance.NewGatewayL3Notary(cliVerifier, ls.passkey.PasskeyService, ls.logger)
 
 	return &pubsub.GovernanceDeps{
 		ReplayStore:          ls.stores.ReplayStore,

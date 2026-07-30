@@ -62,7 +62,9 @@ The gateway runs in **consensus** posture; L2 BFT consensus is enforced as a fai
 
 ### Tribunal bootstrap
 
-The gateway boots with `--posture consensus --consensus-id fedramp-consensus --consensus-bootstrap /etc/g8e/consensus-bootstrap.json`. The bootstrap file seeds a `ConsensusPolicy` and trusted signer from a deterministic Ed25519 seed (`ensemble-seed.hex`), shared with the `agent-runtime` container. This enables the harness to reconstruct the same private key and sign L2 votes that verify against the gateway's trusted signer registry.
+The gateway boots with `--posture consensus --consensus-id fedramp-consensus --consensus-bootstrap /etc/g8e/consensus-bootstrap.json`. The bootstrap file defines a 3-member tribunal with distinct per-member Ed25519 seeds (`member_seeds`), each deriving an independent key pair. The gateway registers each member's public key as a TrustedSigner; the agent-runtime container reads the same bootstrap file to reconstruct the per-member private keys and sign L2 votes independently.
+
+This makes the 2-of-3 quorum a real BFT quorum: each member signs with its own key, and a single compromised key cannot forge enough votes to meet quorum. The `RequireDistinct` flag ensures duplicate signer key IDs are rejected.
 
 ### Phased rollout
 
@@ -106,7 +108,7 @@ g8e demos clean fedramp
 
 ## Scenarios
 
-All scenarios run via `demos scenarios run`, a real g8e binary that submits genuine `GovernanceEnvelope`s over mTLS to the gateway. Under consensus posture, L1 doctrine is enforced at admission and L2 BFT consensus is enforced as a fail-closed gate. The operator executes admitted commands via `run_shell_command`, driving the `cloudsvc` actuator through the `cloudop` wrapper.
+All scenarios run via `demos scenarios run`, a real g8e binary that submits genuine `GovernanceEnvelope`s over mTLS to the gateway. Scenarios use `MCPToolsCall` (Path A): the harness calls the MCP `tools/call` endpoint, the gateway builds the `GovernanceEnvelope` internally, runs L2 consensus deliberation via `LocalDeliberator`, and suspends transactions requiring L3 notary approval. For notary scenarios, the harness waits for human browser approval via `WaitForHumanApproval`, which subscribes to the gateway's SSE stream for `approval.completed` events and prints the approval URL for the human to complete the WebAuthn passkey ceremony in their browser. The gateway performs full real WebAuthn verification — no mock L3 bypass exists. The operator executes admitted commands via `run_shell_command`, driving the `cloudsvc` actuator through the `cloudop` wrapper.
 
 ### 1: Governed Cloud Resource Provisioning (AC, CM, AU)
 **Scenario `fedramp-provision`**: A cloud operations agent submits a `GovernanceEnvelope` wrapping a `run_shell_command` that drives the Sovereign Cloud Service (L5 actuator). L1 doctrine admits the envelope; L2 consensus quorum is met and verified. The provision is executed and a signed receipt is written to the hash-chained ledger. The `cloudsvc` records a `PROVISION` operation.

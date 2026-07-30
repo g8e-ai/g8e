@@ -69,6 +69,7 @@
   "approvals_prefix": "/api/v1/approvals/",
   "approve_page": "/api/v1/approve/",
   "approve_page_prefix": "/api/v1/approve/",
+  "approvals_verify_action": "/verify",
   "approvals_cli_status": "/api/v1/approvals/status/",
   "approvals_cli_list": "/api/v1/approvals/pending",
   "admin_app_policies_by_signer": "/api/v1/admin/app-policies/",

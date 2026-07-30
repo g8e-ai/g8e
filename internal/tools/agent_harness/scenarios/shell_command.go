@@ -29,3 +29,13 @@ func shellCommandArgs(command string, args ...string) string {
 	}
 	return string(b)
 }
+
+// shellCommandMap builds the run_shell_command arguments as a map[string]any
+// for use with MCPToolsCall, which expects map args rather than a JSON string.
+func shellCommandMap(command string, args ...string) map[string]any {
+	return map[string]any{
+		"command": command,
+		"args":    args,
+		"timeout": 10,
+	}
+}

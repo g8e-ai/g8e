@@ -63,10 +63,10 @@ func TestAgentLaunchArgs_CursorReturnsError(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
 }
 
-func TestAgentLaunchArgs_DevinReturnsError(t *testing.T) {
-	_, err := agentLaunchArgs("devin", "/tmp/mcp-config.json", "/fake/g8e")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
+func TestAgentLaunchArgs_DevinReturnsEmptyArgs(t *testing.T) {
+	args, err := agentLaunchArgs("devin", "/tmp/mcp-config.json", "/fake/g8e")
+	require.NoError(t, err)
+	assert.Empty(t, args)
 }
 
 func TestAgentLaunchArgs_AiderReturnsError(t *testing.T) {
@@ -114,8 +114,8 @@ func TestGetSupportedAgents_ReturnsAllExpectedAgents(t *testing.T) {
 	assert.True(t, ids["codex"])
 	assert.True(t, ids["goose"])
 	assert.True(t, ids["gemini"])
+	assert.True(t, ids["devin"])
 	assert.False(t, ids["cursor"])
-	assert.False(t, ids["devin"])
 	assert.False(t, ids["aider"])
 	assert.False(t, ids["generic"])
 }

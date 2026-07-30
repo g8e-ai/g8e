@@ -119,6 +119,7 @@ var (
 	ErrGatewayNotReachable           = errors.New("gateway not reachable")
 	ErrFailedToLoadCredentials       = errors.New("failed to load credentials")
 	ErrFailedToLoadClientCertificate = errors.New("failed to load client certificate")
+	ErrIncompleteCredentialPair      = errors.New("certificate and key must be supplied together")
 	ErrFailedToReadTrustBundle       = errors.New("failed to read trust bundle")
 	ErrFailedToParseTrustBundle      = errors.New("failed to parse trust bundle")
 	ErrFailedToParsePaths            = errors.New("failed to parse paths.json")

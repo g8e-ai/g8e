@@ -23,7 +23,7 @@ import (
 
 // defaultFedRAMPHarnessConfig returns the config matching the FedRAMP compose topology.
 func defaultFedRAMPHarnessConfig() harnessConfig {
-	return defaultGovernedHarnessConfig("agent-runtime", "fedramp-consensus")
+	return defaultHarnessConfig("agent-runtime")
 }
 
 func switchFedRAMPPosture(demoDir, posture string) error {
@@ -173,17 +173,16 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		result.number = "3"
 		result.name = "Resource Destruction Gated on Authorizing Official Approval (L3)"
 		result.status = "PASS"
-		result.metrics = "Notary posture // L3 mock principal authorization -> L5 actuator records DESTROY"
+		result.metrics = "Notary posture // L3 human WebAuthn approval -> L5 actuator records DESTROY"
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
 		demoPrintln("  Scenario 3 — Resource Destruction Requires Authorizing Official (L3)")
 		demoPrintln(strings.Repeat("-", 60))
 		demoPrintln()
 		demoPrintln("  PROVES: A resource destruction is submitted with L2 consensus")
-		demoPrintln("          and a mock L3 principal signature. Under notary posture")
-		demoPrintln("          the Gateway verifies the L3 proof before allowing the")
-		demoPrintln("          destruction to execute. In production, L3 requires a real")
-		demoPrintln("          WebAuthn passkey ceremony; demos use mock L3 mode.")
+		demoPrintln("          and requires human WebAuthn L3 approval. Under notary posture")
+		demoPrintln("          the Gateway suspends the transaction and waits for a human")
+		demoPrintln("          to approve via browser with their passkey.")
 		demoPrintln()
 
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 3 started: Resource Destruction Requires Authorizing Official")
@@ -202,18 +201,17 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		}
 
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "fedramp-escalate", "doctrine check")
-		demoPrintln("  -- Step 3: Submit fedramp-escalate via agent (L2 + mock L3) --")
+		demoPrintln("  -- Step 3: Submit fedramp-escalate via agent (L2 + human WebAuthn L3) --")
 		demoPrintln("  Operator requests destruction of fedramp-vm-classified-01 (FIPS-199-HIGH).")
 		demoPrintln("  Under notary posture, the gateway requires L3 authorization.")
-		demoPrintln("  The harness attaches a mock principal Ed25519 signature as L3 proof:")
+		demoPrintln("  The harness will prompt you to approve in your browser with your passkey:")
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "fedramp-escalate", "doctrine admitted")
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "fedramp-escalate", "consensus quorum")
 		demoEmitter.Ledger(tui.LevelInfo, "L1 doctrine admitted envelope for fedramp-escalate")
 		notaryCfg := hcfg
 		notaryCfg.Posture = "notary"
-		notaryCfg.L3Mode = "mock"
-		if err := demoStep(demoDir, "fedramp-escalate via agent (notary mock L3)",
+		if err := demoStep(demoDir, "fedramp-escalate via agent (notary WebAuthn L3)",
 			false,
 			harnessRun("fedramp-escalate", notaryCfg)...,
 		); err != nil {
@@ -223,8 +221,8 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		}
 
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "fedramp-escalate", "quorum met (3/5)")
-		demoEmitter.Pipeline(tui.StageL3, tui.StatusPassed, "fedramp-escalate", "mock L3 proof verified")
-		demoEmitter.Ledger(tui.LevelInfo, "L3 notary: mock principal signature verified (demo mode)")
+		demoEmitter.Pipeline(tui.StageL3, tui.StatusPassed, "fedramp-escalate", "human WebAuthn L3 proof verified")
+		demoEmitter.Ledger(tui.LevelInfo, "L3 notary: human WebAuthn approval verified via browser")
 
 		// Step 4: Verify the DESTROY was executed by the L5 actuator
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusActive, "fedramp-escalate", "actuator executing")
@@ -251,7 +249,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		} else {
 			fmt.Println("  [PASS] Scenario 3 — Resource destruction governed by L3 notary authorization.")
 			fmt.Println("         L1 doctrine admitted; L2 consensus quorum met;")
-			fmt.Println("         L3 notary verified mock principal signature (demo mode).")
+			fmt.Println("         L3 notary verified human WebAuthn approval via browser.")
 			fmt.Println("         L5 actuator recorded the DESTROY after authorization.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 3 PASSED — Resource destruction governed by L3 notary authorization")
 		}

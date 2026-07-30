@@ -62,21 +62,12 @@ func TestDemosScenariosRunCmd(t *testing.T) {
 		cmd := demosScenariosRunCmd()
 		require.NotNil(t, cmd)
 
-		flags := []string{"config", "mtls-url", "public-url", "cert", "key", "ca", "api-key", "operator-session", "out", "l3-mode", "ensemble", "verbose", "phase"}
+		flags := []string{"config", "mtls-url", "public-url", "cert", "key", "ca", "api-key", "operator-session", "out", "verbose", "phase"}
 
 		for _, flagName := range flags {
 			flag := cmd.Flags().Lookup(flagName)
 			assert.NotNil(t, flag, "scenarios run should have --%s flag", flagName)
 		}
-	})
-
-	t.Run("scenarios run ensemble flag has default value", func(t *testing.T) {
-		cmd := demosScenariosRunCmd()
-		require.NotNil(t, cmd)
-
-		flag := cmd.Flags().Lookup("ensemble")
-		require.NotNil(t, flag)
-		assert.Equal(t, "3", flag.DefValue)
 	})
 
 	t.Run("scenarios run phase flag has default value", func(t *testing.T) {
@@ -153,22 +144,6 @@ func TestApplyAgentHarnessFlags(t *testing.T) {
 		applyAgentHarnessFlags(&cfg)
 		assert.Equal(t, testOutDir, cfg.OutDir)
 		harnessOutDir = ""
-	})
-
-	t.Run("applyAgentHarnessFlags sets L3 mode", func(t *testing.T) {
-		harnessL3Mode = "mock"
-		cfg := config.Default()
-		applyAgentHarnessFlags(&cfg)
-		assert.Equal(t, "mock", cfg.L3Mode)
-		harnessL3Mode = ""
-	})
-
-	t.Run("applyAgentHarnessFlags sets ensemble size", func(t *testing.T) {
-		harnessEnsemble = 5
-		cfg := config.Default()
-		applyAgentHarnessFlags(&cfg)
-		assert.Equal(t, 5, cfg.EnsembleSize)
-		harnessEnsemble = 0
 	})
 
 	t.Run("applyAgentHarnessFlags sets verbose flag", func(t *testing.T) {

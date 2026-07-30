@@ -5,8 +5,8 @@ parent: Architecture
 
 # AI Agents in a g8e-Compatible Agentic Ensemble
 
-Last Updated: 2026-07-28
-Version: v1.6.6
+Last Updated: 2026-07-30
+Version: v1.6.7
 
 ## Overview
 
@@ -175,6 +175,22 @@ See the [doctrine registry](../../protocol/constants/doctrine/doctrine_registry.
 - **Multi-signature consensus.** The Consensus produces K-of-N Ed25519 signed votes. The protocol is designed to support Condorcet's Jury Theorem with heterogeneous jurors; the reference implementation uses deterministic L1 Doctrine evaluation with distinct signing keys, providing cryptographic independence. Alternative implementations can provide per-member evaluation logic for full independence.
 - **Doctrine is enforced, not suggested.** Providing doctrine to agents is a courtesy. L1 rejects forbidden actions regardless.
 - **Scope is explicit.** The primary LLM specifies the hosts list. Only those operators receive work. No broadcast, no scope creep.
+
+---
+
+## MCP Stdio Credential Resolution
+
+When `g8e mcp stdio` is invoked directly from an IDE MCP config (Windsurf, Cursor, VS Code), credentials resolve in the following order:
+
+1. **CLI flags** (`--client-cert`/`--client-key`, `--app-cert`/`--app-key`, `--ca-bundle`, `--gateway-url`) — universally supported in IDE `args` arrays
+2. **`G8E_*` environment variables** (`G8E_CLIENT_CERT`, `G8E_CLIENT_KEY`, `G8E_CA_BUNDLE`, `G8E_GATEWAY_URL`, `G8E_APP_CERT`, `G8E_APP_KEY`) — injected by `g8e mcp agent run` into the agent subprocess
+3. **Enrolled CLI credentials on disk** — loaded from `.g8e/pki/client/` (bootstrapping enrollment if needed)
+
+Cert and key are resolved as **pairs per tier**: app flags → app env → client flags → client env → CLI disk. Supplying only one half of a pair (e.g. `--app-cert` without `--app-key`) fails closed with `ErrIncompleteCredentialPair` instead of silently mixing tiers.
+
+The `--gateway-url` flag validates scheme (`https` only) and host (non-empty) to prevent plaintext traffic bypassing mTLS identity binding.
+
+These flags are command-scoped to `mcp stdio`, not root-persistent. See [Network Architecture](./network.md) for the full flag table.
 
 ---
 

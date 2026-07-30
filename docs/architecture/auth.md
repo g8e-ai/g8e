@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-07-28
-Version: v1.6.6
+Last Updated: 2026-07-30
+Version: v1.6.7
 
 This document explains how to authenticate and authorize actions in the g8e platform. The platform is built as a zero-trust execution environment where every action is verified before execution.
 
@@ -196,6 +196,18 @@ Notary ensures explicit human authorization for sensitive actions:
 
 - **Request window**: 2 minutes to complete the passkey ceremony after the transaction is suspended. If the passkey approval is not completed within this window, the request expires and the action must be retried.
 - **Dispatch window**: 30 minutes after approval to dispatch the transaction. Transactions not dispatched within that window must be re-approved.
+
+**Human Browser Approval Flow (WaitForHumanApproval):**
+
+The demo harness and automated test scenarios use `Client.WaitForHumanApproval` (`internal/tools/agent_harness/client/client.go`) to drive the real out-of-band L3 notary flow. Instead of a software passkey, the harness now requires a human to complete a WebAuthn ceremony in their browser:
+
+1. The harness prints the approval URL (`/api/v1/approve/{txHash}`) to stderr
+2. The harness subscribes to the gateway's SSE stream (`/api/v1/sse/stream`), filtering for `approval.completed` events matching the transaction hash and user ID
+3. The human opens the approval URL in their browser and completes the WebAuthn passkey ceremony
+4. The gateway emits an `approval.completed` SSE event when the passkey is verified
+5. The harness verifies the approval status via the mTLS status endpoint (`/api/v1/approvals/status/{txHash}`) and returns the receipt body
+
+The gateway performs full real WebAuthn verification via `PasskeyService.VerifyL3Proof`. The `G8E_L3_MOCK` environment variable has been removed — the gateway always requires real WebAuthn proof. A fail-closed regression test (`TestGatewayModeService_GetGovernanceDeps_AlwaysUsesRealNotary`) verifies this property.
 
 ### 2.5 Layer 4: Warden (Final Verification)
 

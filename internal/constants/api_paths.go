@@ -99,13 +99,14 @@ var APIPaths = struct {
 	AuthEnrollmentTokenGenerate              string `json:"auth_enrollment_token_generate"`
 	AuthEnrollmentTokenValidate              string `json:"auth_enrollment_token_validate"`
 	// Approval routes
-	Approvals          string `json:"approvals"`
-	ApprovalsByID      string `json:"approvals_by_id"`
-	ApprovalsPrefix    string `json:"approvals_prefix"`
-	ApprovePage        string `json:"approve_page"`
-	ApprovePagePrefix  string `json:"approve_page_prefix"`
-	ApprovalsCLIStatus string `json:"approvals_cli_status"`
-	ApprovalsCLIList   string `json:"approvals_cli_list"`
+	Approvals             string `json:"approvals"`
+	ApprovalsByID         string `json:"approvals_by_id"`
+	ApprovalsPrefix       string `json:"approvals_prefix"`
+	ApprovePage           string `json:"approve_page"`
+	ApprovePagePrefix     string `json:"approve_page_prefix"`
+	ApprovalsVerifyAction string `json:"approvals_verify_action"`
+	ApprovalsCLIStatus    string `json:"approvals_cli_status"`
+	ApprovalsCLIList      string `json:"approvals_cli_list"`
 	// Admin routes
 	AdminAppPoliciesBySigner string `json:"admin_app_policies_by_signer"`
 	AdminAppsRevoke          string `json:"admin_apps_revoke"`
@@ -231,13 +232,14 @@ var APIPaths = struct {
 	AuthEnrollmentTokenGenerate:              "/api/v1/auth/enrollment-token/generate",
 	AuthEnrollmentTokenValidate:              "/api/v1/auth/enrollment-token/validate",
 	// Approval routes
-	Approvals:          "/api/v1/approvals",
-	ApprovalsByID:      "/api/v1/approvals/",
-	ApprovalsPrefix:    "/api/v1/approvals/",
-	ApprovePage:        "/api/v1/approve/",
-	ApprovePagePrefix:  "/api/v1/approve/",
-	ApprovalsCLIStatus: "/api/v1/approvals/status/",
-	ApprovalsCLIList:   "/api/v1/approvals/pending",
+	Approvals:             "/api/v1/approvals",
+	ApprovalsByID:         "/api/v1/approvals/",
+	ApprovalsPrefix:       "/api/v1/approvals/",
+	ApprovePage:           "/api/v1/approve/",
+	ApprovePagePrefix:     "/api/v1/approve/",
+	ApprovalsVerifyAction: "/verify",
+	ApprovalsCLIStatus:    "/api/v1/approvals/status/",
+	ApprovalsCLIList:      "/api/v1/approvals/pending",
 	// Admin routes
 	AdminAppPoliciesBySigner: "/api/v1/admin/app-policies/",
 	AdminAppsRevoke:          "/api/v1/admin/apps/revoke",

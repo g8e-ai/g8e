@@ -416,6 +416,8 @@ func TestGetAgentConfigPaths(t *testing.T) {
 		got  string
 		want string
 	}{
+		{"DevinConfigDir", got.DevinConfigDir, pathutil.SafeJoin(home, constants.AgentConfigDirDevin)},
+		{"DevinConfigPath", got.DevinConfigPath, pathutil.SafeJoin(home, constants.AgentConfigDirDevin, constants.AgentConfigFileMCPDevin)},
 		{"GeminiConfigDir", got.GeminiConfigDir, pathutil.SafeJoin(home, constants.AgentConfigDirGemini)},
 		{"GeminiConfigPath", got.GeminiConfigPath, pathutil.SafeJoin(home, constants.AgentConfigDirGemini, constants.AgentConfigFileSettings)},
 		{"GooseYAMLConfigDir", got.GooseYAMLConfigDir, pathutil.SafeJoin(home, constants.AgentConfigDirGoose)},
@@ -434,6 +436,9 @@ func TestGetAgentConfigPaths(t *testing.T) {
 func TestGetAgentConfigPaths_AllFieldsPopulated(t *testing.T) {
 	got := GetAgentConfigPaths("/home/user")
 
+	if got.DevinConfigDir == "" || got.DevinConfigPath == "" {
+		t.Error("Devin fields should be populated")
+	}
 	if got.GeminiConfigDir == "" || got.GeminiConfigPath == "" {
 		t.Error("Gemini fields should be populated")
 	}
@@ -451,6 +456,7 @@ func TestGetAgentConfigPaths_ConfigPathInsideConfigDir(t *testing.T) {
 		path string
 		name string
 	}{
+		{got.DevinConfigDir, got.DevinConfigPath, "Devin"},
 		{got.GeminiConfigDir, got.GeminiConfigPath, "Gemini"},
 		{got.GooseYAMLConfigDir, got.GooseYAMLConfigPath, "Goose"},
 	}

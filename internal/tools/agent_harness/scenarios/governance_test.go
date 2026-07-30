@@ -10,15 +10,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 func TestSetGovKit(t *testing.T) {
 	testKit := &GovKit{
-		Ensemble:   nil,
-		Principal:  nil,
-		L3Mode:     "test-mode",
 		OperatorID: "test-operator",
 	}
 
@@ -29,19 +25,10 @@ func TestSetGovKit(t *testing.T) {
 }
 
 func TestGovKitStruct(t *testing.T) {
-	ensemble := &clientpkg.Ensemble{}
-	principal := &clientpkg.Principal{}
-
 	kit := &GovKit{
-		Ensemble:   ensemble,
-		Principal:  principal,
-		L3Mode:     "mock",
 		OperatorID: "test-operator-id",
 	}
 
-	assert.Equal(t, ensemble, kit.Ensemble, "GovKit Ensemble should be set")
-	assert.Equal(t, principal, kit.Principal, "GovKit Principal should be set")
-	assert.Equal(t, "mock", kit.L3Mode, "GovKit L3Mode should be set")
 	assert.Equal(t, "test-operator-id", kit.OperatorID, "GovKit OperatorID should be set")
 }
 
@@ -57,31 +44,8 @@ func TestGovKitValidation(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "nil ensemble",
-			kit: &GovKit{
-				Ensemble:   nil,
-				Principal:  &clientpkg.Principal{},
-				L3Mode:     "mock",
-				OperatorID: "test",
-			},
-			wantErr: true,
-		},
-		{
-			name: "nil principal",
-			kit: &GovKit{
-				Ensemble:   &clientpkg.Ensemble{},
-				Principal:  nil,
-				L3Mode:     "mock",
-				OperatorID: "test",
-			},
-			wantErr: true,
-		},
-		{
 			name: "empty operator ID",
 			kit: &GovKit{
-				Ensemble:   &clientpkg.Ensemble{},
-				Principal:  &clientpkg.Principal{},
-				L3Mode:     "mock",
 				OperatorID: "",
 			},
 			wantErr: true,
@@ -89,9 +53,6 @@ func TestGovKitValidation(t *testing.T) {
 		{
 			name: "valid kit",
 			kit: &GovKit{
-				Ensemble:   &clientpkg.Ensemble{},
-				Principal:  &clientpkg.Principal{},
-				L3Mode:     "mock",
 				OperatorID: "test-operator",
 			},
 			wantErr: false,
@@ -100,7 +61,7 @@ func TestGovKitValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hasErr := tt.kit == nil || tt.kit.Ensemble == nil || tt.kit.Principal == nil || tt.kit.OperatorID == ""
+			hasErr := tt.kit == nil || tt.kit.OperatorID == ""
 			assert.Equal(t, tt.wantErr, hasErr, "GovKit validation error mismatch")
 		})
 	}
@@ -146,96 +107,13 @@ func TestShortEdgeCases(t *testing.T) {
 	}
 }
 
-func TestSuspendedFromBody(t *testing.T) {
-	// Test with a body that contains an /approve/ URL with hex hash
-	body := []byte(`{"error":{"message":"L3 approval required","data":"https://localhost:8443/approve/abc123def456"}}`)
-	hash, ok := suspendedFromBody(body)
-	assert.True(t, ok, "suspendedFromBody should find hash in body with /approve/ URL")
-	assert.Equal(t, "abc123def456", hash, "suspendedFromBody should return correct hash")
-
-	// Test with body that doesn't contain an /approve/ URL
-	body = []byte(`{"other":"data"}`)
-	_, ok = suspendedFromBody(body)
-	assert.False(t, ok, "suspendedFromBody should return false when no /approve/ URL found")
-
-	// Test with empty body
-	body = []byte{}
-	_, ok = suspendedFromBody(body)
-	assert.False(t, ok, "suspendedFromBody should return false for empty body")
-
-	// Test with nil body
-	_, ok = suspendedFromBody(nil)
-	assert.False(t, ok, "suspendedFromBody should return false for nil body")
-
-	// Test with body containing /approve/ but no hash
-	body = []byte(`{"data":"https://localhost:8443/approve/"}`)
-	_, ok = suspendedFromBody(body)
-	assert.False(t, ok, "suspendedFromBody should return false when /approve/ has no hash")
-}
-
-func TestSuspendedFromBodyEdgeCases(t *testing.T) {
-	tests := []struct {
-		name     string
-		body     []byte
-		expected string
-		found    bool
-	}{
-		{
-			name:     "valid hex hash",
-			body:     []byte(`{"data":"https://example.com/approve/abc123def456"}`),
-			expected: "abc123def456",
-			found:    true,
-		},
-		{
-			name:     "hash with uppercase",
-			body:     []byte(`{"data":"https://example.com/approve/ABC123DEF456"}`),
-			expected: "ABC123DEF456",
-			found:    true,
-		},
-		{
-			name:     "hash with mixed case",
-			body:     []byte(`{"data":"https://example.com/approve/aBc123DeF456"}`),
-			expected: "aBc123DeF456",
-			found:    true,
-		},
-		{
-			name:     "hash with numbers only",
-			body:     []byte(`{"data":"https://example.com/approve/123456789012"}`),
-			expected: "123456789012",
-			found:    true,
-		},
-		{
-			name:     "no approve URL",
-			body:     []byte(`{"data":"https://example.com/other/abc123"}`),
-			expected: "",
-			found:    false,
-		},
-		{
-			name:     "malformed URL",
-			body:     []byte(`{"data":"https://example.com/approve/"}`),
-			expected: "",
-			found:    false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			hash, ok := suspendedFromBody(tt.body)
-			assert.Equal(t, tt.found, ok, "suspendedFromBody() found mismatch")
-			if ok {
-				assert.Equal(t, tt.expected, hash, "suspendedFromBody() hash mismatch")
-			}
-		})
-	}
-}
-
 func TestGovernanceScenarios(t *testing.T) {
 	scenarios := governanceScenarios()
 
-	assert.Len(t, scenarios, 6, "governanceScenarios should return 6 scenarios")
+	assert.Len(t, scenarios, 5, "governanceScenarios should return 5 scenarios")
 
 	// Should have expected names
-	expectedNames := []string{"consensus", "envelope-maximal", "agent-delegation", "consensus-quorum", "consensus-veto", "notary-oob"}
+	expectedNames := []string{"consensus", "envelope-maximal", "agent-delegation", "consensus-quorum", "notary-oob"}
 	nameSet := make(map[string]bool)
 	for _, sc := range scenarios {
 		nameSet[sc.Name] = true
@@ -263,7 +141,6 @@ func TestGovernanceScenarioNames(t *testing.T) {
 		"envelope-maximal": true,
 		"agent-delegation": true,
 		"consensus-quorum": true,
-		"consensus-veto":   true,
 		"notary-oob":       true,
 	}
 
@@ -276,12 +153,11 @@ func TestGovernanceScenarioTitles(t *testing.T) {
 	scenarios := governanceScenarios()
 
 	expectedTitles := map[string]string{
-		"consensus":        "L2 consensus envelope (mock ensemble co-sign)",
-		"envelope-maximal": "Official notary envelope: L2 consensus + principal L3 signing",
+		"consensus":        "L2 consensus via MCP tools/call (gateway deliberation)",
+		"envelope-maximal": "Notary envelope: MCP tools/call, gateway suspends, human approves via WebAuthn",
 		"agent-delegation": "CLI delegates app credential to agent (SPIFFE distinctness + receipt audit)",
-		"consensus-quorum": "Consensus quorum: 2-of-3 co-sign, receipt records consensus",
-		"consensus-veto":   "Consensus veto: one member votes false, envelope is rejected",
-		"notary-oob":       "L3 notary OOB: suspend then principal approves out-of-band",
+		"consensus-quorum": "Consensus quorum: MCP tools/call, gateway 2-of-3 deliberation",
+		"notary-oob":       "L3 notary OOB: MCP tools/call, gateway suspends, human approves via WebAuthn",
 	}
 
 	for _, sc := range scenarios {
@@ -302,7 +178,6 @@ func TestGovernanceScenarioPostures(t *testing.T) {
 		"envelope-maximal": Notary,
 		"agent-delegation": Doctrine,
 		"consensus-quorum": Consensus,
-		"consensus-veto":   Consensus,
 		"notary-oob":       Notary,
 	}
 
@@ -325,7 +200,6 @@ func TestGovernanceScenarioPersonas(t *testing.T) {
 		"envelope-maximal": "ensemble-producer",
 		"agent-delegation": "cli-delegator",
 		"consensus-quorum": "ensemble-producer",
-		"consensus-veto":   "ensemble-producer",
 		"notary-oob":       "principal",
 	}
 	for _, sc := range scenarios {
@@ -414,47 +288,4 @@ func TestReceiptFailed(t *testing.T) {
 
 func itoa(n int) string {
 	return fmt.Sprintf("%d", n)
-}
-
-func TestGovKitL3Modes(t *testing.T) {
-	tests := []struct {
-		name   string
-		l3Mode string
-		valid  bool
-	}{
-		{
-			name:   "mock mode",
-			l3Mode: "mock",
-			valid:  true,
-		},
-		{
-			name:   "suspend mode",
-			l3Mode: "suspend",
-			valid:  true,
-		},
-		{
-			name:   "empty mode",
-			l3Mode: "",
-			valid:  false,
-		},
-		{
-			name:   "invalid mode",
-			l3Mode: "invalid",
-			valid:  false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			kit := &GovKit{
-				Ensemble:   &clientpkg.Ensemble{},
-				Principal:  &clientpkg.Principal{},
-				L3Mode:     tt.l3Mode,
-				OperatorID: "test",
-			}
-
-			isValid := kit.L3Mode == "mock" || kit.L3Mode == "suspend"
-			assert.Equal(t, tt.valid, isValid, "L3Mode validation mismatch")
-		})
-	}
 }

@@ -370,10 +370,11 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 // consensusBootstrapConfig is the typed JSON config for declarative consensus
 // seeding at gateway startup.
 type consensusBootstrapConfig struct {
-	ConsensusID  string   `json:"consensus_id"`
-	MemberAppIDs []string `json:"member_app_ids"`
-	Quorum       int      `json:"quorum"`
-	SeedHex      string   `json:"seed_hex"`
+	ConsensusID  string            `json:"consensus_id"`
+	MemberAppIDs []string          `json:"member_app_ids"`
+	Quorum       int               `json:"quorum"`
+	SeedHex      string            `json:"seed_hex"`
+	MemberSeeds  map[string]string `json:"member_seeds,omitempty"`
 }
 
 // parseConsensusBootstrapConfig parses and validates a consensus bootstrap JSON
@@ -410,17 +411,26 @@ func deriveSeedPublicKey(seedHex string) (string, error) {
 // JSON config file. The file format is:
 //
 //	{
-//	  "consensus_id": "dhs-consensus",
-//	  "member_app_ids": ["dhs-ensemble"],
-//	  "quorum": 1,
-//	  "seed_hex": "<hex-encoded Ed25519 seed>"  // optional
+//	  "consensus_id": "fedramp-consensus",
+//	  "member_app_ids": ["fedramp-csp-auditor", "fedramp-3pao", "fedramp-jab"],
+//	  "quorum": 2,
+//	  "member_seeds": {                          // optional, per-member keys
+//	    "fedramp-csp-auditor": "<hex seed>",
+//	    "fedramp-3pao": "<hex seed>",
+//	    "fedramp-jab": "<hex seed>"
+//	  },
+//	  "seed_hex": "<hex-encoded Ed25519 seed>"    // optional, single-key fallback
 //	}
 //
-// If seed_hex is provided, the corresponding Ed25519 public key is registered
-// as a trusted signer for each member_app_id (single-key ensemble), and the
-// seed-derived private key is saved to secretsDir so the in-process
-// LocalDeliberator can sign L2 votes via FileKeyProvider. If seed_hex is
-// omitted, a fresh key pair is generated and saved the same way. The
+// If member_seeds is provided, each member gets its own derived Ed25519 key
+// pair: the public key is registered as a trusted signer for that member, and
+// the private key is saved to secretsDir so the in-process LocalDeliberator
+// signs L2 votes with distinct per-member keys via FileKeyProvider. This makes
+// RequireDistinct and quorum cryptographically meaningful.
+//
+// If member_seeds is omitted but seed_hex is provided, the same key is
+// registered for every member (single-key ensemble pattern). If both are
+// omitted, a fresh key pair is generated and shared across members. The
 // ConsensusPolicy is then created in the database. This is idempotent: if the
 // consensus already exists, the bootstrap is skipped.
 func consensusPolicyBootstrap(svc *gateway.GatewayModeService, bootstrapPath string, secretsDir string, logger *slog.Logger) error {
@@ -448,11 +458,24 @@ func consensusPolicyBootstrap(svc *gateway.GatewayModeService, bootstrapPath str
 		return nil
 	}
 
-	// Derive the public key from the seed (or generate a fresh key)
-	var pubHex string
-	var privKey ed25519.PrivateKey
-	if boot.SeedHex != "" {
-		pubHex, err = deriveSeedPublicKey(boot.SeedHex)
+	// Determine the key mode: per-member seeds take precedence over the
+	// shared seed_hex fallback.
+	usePerMemberKeys := len(boot.MemberSeeds) > 0
+
+	if usePerMemberKeys {
+		// Validate that every member has a seed.
+		for _, appID := range boot.MemberAppIDs {
+			if _, ok := boot.MemberSeeds[appID]; !ok {
+				return fmt.Errorf("consensus bootstrap: %w: member %s has no seed in member_seeds", constants.ErrConsensusBootstrapMissingFields, appID)
+			}
+		}
+	}
+
+	// Derive the shared public/private key pair for the single-key fallback.
+	var sharedPubHex string
+	var sharedPrivKey ed25519.PrivateKey
+	if !usePerMemberKeys && boot.SeedHex != "" {
+		sharedPubHex, err = deriveSeedPublicKey(boot.SeedHex)
 		if err != nil {
 			return fmt.Errorf("consensus bootstrap: derive seed public key: %w", err)
 		}
@@ -460,20 +483,38 @@ func consensusPolicyBootstrap(svc *gateway.GatewayModeService, bootstrapPath str
 		if err != nil {
 			return fmt.Errorf("consensus bootstrap: decode seed: %w", err)
 		}
-		privKey = ed25519.NewKeyFromSeed(seedBytes)
-	} else {
+		sharedPrivKey = ed25519.NewKeyFromSeed(seedBytes)
+	} else if !usePerMemberKeys {
 		pub, priv, err := ed25519.GenerateKey(nil)
 		if err != nil {
 			return fmt.Errorf("consensus bootstrap: generate key: %w", err)
 		}
-		pubHex = hex.EncodeToString(pub)
-		privKey = priv
+		sharedPubHex = hex.EncodeToString(pub)
+		sharedPrivKey = priv
 	}
 
-	// Register each member as a trusted signer with the same public key
-	// (single-key ensemble pattern for demos) and save the private key to disk
+	// Register each member as a trusted signer and save the private key to disk
 	// so the in-process LocalDeliberator can sign L2 votes via FileKeyProvider.
 	for _, appID := range boot.MemberAppIDs {
+		var pubHex string
+		var privKey ed25519.PrivateKey
+
+		if usePerMemberKeys {
+			memberSeedHex := boot.MemberSeeds[appID]
+			pubHex, err = deriveSeedPublicKey(memberSeedHex)
+			if err != nil {
+				return fmt.Errorf("consensus bootstrap: derive member seed public key for %s: %w", appID, err)
+			}
+			seedBytes, decodeErr := hex.DecodeString(strings.TrimSpace(memberSeedHex))
+			if decodeErr != nil {
+				return fmt.Errorf("consensus bootstrap: decode member seed for %s: %w", appID, decodeErr)
+			}
+			privKey = ed25519.NewKeyFromSeed(seedBytes)
+		} else {
+			pubHex = sharedPubHex
+			privKey = sharedPrivKey
+		}
+
 		signer := models.TrustedSigner{
 			ID:        appID,
 			PublicKey: pubHex,

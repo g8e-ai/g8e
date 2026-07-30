@@ -7,20 +7,17 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
 )
 
 func TestDHSScenarios(t *testing.T) {
 	scenarios := dhsScenarios()
 
-	assert.Len(t, scenarios, 6, "dhsScenarios should return 6 scenarios")
+	assert.Len(t, scenarios, 5, "dhsScenarios should return 5 scenarios")
 
 	expectedNames := map[string]bool{
 		"dhs-ingest":         true,
 		"dhs-release":        true,
 		"dhs-cue":            true,
-		"dhs-cue-veto":       true,
 		"dhs-evidence-block": true,
 		"dhs-purge":          true,
 	}
@@ -42,7 +39,6 @@ func TestDHSScenarioTitles(t *testing.T) {
 		"dhs-ingest":         "DHS: governed multi-source ingest into the sovereign data plane",
 		"dhs-release":        "DHS: cross-domain release gated on out-of-band release-authority approval (L3)",
 		"dhs-cue":            "DHS: authorized interdiction cue admitted under L2 consensus quorum",
-		"dhs-cue-veto":       "DHS: interdiction cue without quorum is vetoed by L2 consensus",
 		"dhs-evidence-block": "DHS: attempt to wipe the audit trail is rejected by L1 doctrine",
 		"dhs-purge":          "DHS: governed retention destruction with cryptographic receipt",
 	}
@@ -65,12 +61,11 @@ func TestDHSScenarioPostures(t *testing.T) {
 	scenarios := dhsScenarios()
 
 	expectedPostures := map[string]Posture{
-		"dhs-ingest":         Doctrine,
+		"dhs-ingest":         Consensus,
 		"dhs-release":        Notary,
 		"dhs-cue":            Consensus,
-		"dhs-cue-veto":       Consensus,
 		"dhs-evidence-block": Doctrine,
-		"dhs-purge":          Doctrine,
+		"dhs-purge":          Consensus,
 	}
 
 	for _, sc := range scenarios {
@@ -133,7 +128,6 @@ func TestDHSScenariosInRegistry(t *testing.T) {
 		"dhs-ingest",
 		"dhs-release",
 		"dhs-cue",
-		"dhs-cue-veto",
 		"dhs-evidence-block",
 		"dhs-purge",
 	}
@@ -149,13 +143,8 @@ func TestDHSScenariosInRegistry(t *testing.T) {
 
 func TestDHSGovKitValidation(t *testing.T) {
 	kit := &GovKit{
-		Ensemble:   &clientpkg.Ensemble{},
-		Principal:  &clientpkg.Principal{},
-		L3Mode:     "mock",
 		OperatorID: "dhs-operator",
 	}
 
-	assert.NotNil(t, kit.Ensemble, "Valid GovKit should have non-nil Ensemble")
-	assert.NotNil(t, kit.Principal, "Valid GovKit should have non-nil Principal")
 	assert.NotEmpty(t, kit.OperatorID, "Valid GovKit should have non-empty OperatorID")
 }

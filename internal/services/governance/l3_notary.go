@@ -83,33 +83,6 @@ func NewGatewayL3Notary(cliVerifier CLISessionVerifier, passkeyVerifier L3Notary
 	}
 }
 
-// demoL3Notary provides L3 verification for demo environments where WebAuthn
-// passkey enrollment is not available (e.g., headless Docker containers).
-// It accepts any non-nil proof, allowing the harness mock L3 mode (principal
-// Ed25519 signature) to satisfy notary posture without a browser.
-// This must NEVER be used in production — it is gated by the G8E_L3_MOCK env var.
-type demoL3Notary struct {
-	logger *slog.Logger
-}
-
-// NewDemoL3Notary creates an L3 notary that auto-approves any non-nil proof.
-// For demo/test environments only — never use in production.
-func NewDemoL3Notary(logger *slog.Logger) L3Notary {
-	return &demoL3Notary{logger: logger}
-}
-
-func (d *demoL3Notary) VerifyL3Proof(_ context.Context, userID, transactionHash, _ string, proof *commonv1.L3Proof) (bool, error) {
-	if proof == nil {
-		return false, constants.ErrGatewayL3ProofRequired
-	}
-	hashPrefix := transactionHash
-	if len(hashPrefix) > 8 {
-		hashPrefix = hashPrefix[:8]
-	}
-	d.logger.Info("L3 demo mode: auto-approving proof", "user_id", userID, "transaction_hash", hashPrefix)
-	return true, nil
-}
-
 // VerifyL3Proof verifies an L3 proof in gateway mode.
 //
 //  1. Passkey authorization is required — proofs without a credential_id are rejected

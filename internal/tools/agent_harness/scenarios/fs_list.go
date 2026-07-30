@@ -21,3 +21,9 @@ func fsListArgs(path string) string {
 	}
 	return string(b)
 }
+
+// fsListMap builds the fs_list arguments as a map[string]any for use with
+// MCPToolsCall, which expects map args rather than a JSON string.
+func fsListMap(path string) map[string]any {
+	return map[string]any{"path": path}
+}

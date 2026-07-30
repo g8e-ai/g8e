@@ -207,7 +207,7 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 - `g8e demos run dhs 1` - Sovereign Multi-Source Ingest (chain-of-custody) (LOE 1)
 - `g8e demos run dhs 2` - Cross-Domain Release requires Notary authority (LOE 1 & 2)
 - `g8e demos run dhs 3` - Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
-- `g8e demos run dhs 4` - Governed Predictive Cueing (quorum vs veto) (LOE 3 & 4)
+- `g8e demos run dhs 4` - Governed Predictive Cueing (LOE 3 & 4)
 - `g8e demos run dhs 5` - Sovereign Destruction + tamper-proof audit (LOE 2)
 
 **FedRAMP Sovereign Cloud Governance Demo Scenarios:**

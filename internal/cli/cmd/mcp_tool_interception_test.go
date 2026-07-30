@@ -204,6 +204,69 @@ func writeTestGooseConfig(t *testing.T, dir string) string {
 	return configPath
 }
 
+// ─── verifyDevinInterception ──────────────────────────────────────────────────
+
+func TestVerifyDevinInterception_ValidConfig(t *testing.T) {
+	t.Run("passes with g8e MCP server entry", func(t *testing.T) {
+		tmpDir := testutil.TempDir(t)
+		configPath := writeTestDevinConfig(t, tmpDir)
+
+		err := verifyDevinInterception(configPath)
+		require.NoError(t, err)
+	})
+}
+
+func TestVerifyDevinInterception_MissingConfigFile(t *testing.T) {
+	t.Run("fails when config file does not exist", func(t *testing.T) {
+		missingPath := filepath.Join(testutil.TempDir(t), "nonexistent.json")
+		err := verifyDevinInterception(missingPath)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "read devin config")
+	})
+}
+
+func TestVerifyDevinInterception_MissingG8EServer(t *testing.T) {
+	t.Run("fails when config has no g8e MCP server entry", func(t *testing.T) {
+		tmpDir := testutil.TempDir(t)
+		configPath := filepath.Join(tmpDir, "config.json")
+		require.NoError(t, os.WriteFile(configPath, []byte(`{"mcpServers":{}}`), 0644))
+
+		err := verifyDevinInterception(configPath)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "missing g8e MCP server entry")
+	})
+}
+
+func TestVerifyDevinInterception_InvalidJSON(t *testing.T) {
+	t.Run("fails when config file contains invalid JSON", func(t *testing.T) {
+		tmpDir := testutil.TempDir(t)
+		configPath := filepath.Join(tmpDir, "config.json")
+		require.NoError(t, os.WriteFile(configPath, []byte(`{invalid json`), 0644))
+
+		err := verifyDevinInterception(configPath)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "parse devin config")
+	})
+}
+
+// writeTestDevinConfig writes a valid Devin config.json with g8e as the sole MCP server.
+func writeTestDevinConfig(t *testing.T, dir string) string {
+	t.Helper()
+	configPath := filepath.Join(dir, "config.json")
+	cfg := agentMCPConfig{
+		MCPServers: map[string]agentMCPServer{
+			"g8e": {
+				Command: "g8e",
+				Args:    []string{"mcp", "stdio"},
+			},
+		},
+	}
+	data, err := json.Marshal(cfg)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(configPath, data, 0644))
+	return configPath
+}
+
 // ─── verifyGeminiInterception ─────────────────────────────────────────────────
 
 func TestVerifyGeminiInterception_ValidConfig(t *testing.T) {
@@ -273,7 +336,7 @@ func TestVerifyGeminiInterception_MissingConfigFile(t *testing.T) {
 		missingPath := filepath.Join(testutil.TempDir(t), "nonexistent.json")
 		err := verifyGeminiInterception(missingPath)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "read gemini settings")
+		assert.Contains(t, err.Error(), "read gemini config")
 	})
 }
 
@@ -285,7 +348,7 @@ func TestVerifyGeminiInterception_InvalidJSON(t *testing.T) {
 
 		err := verifyGeminiInterception(configPath)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "parse gemini settings")
+		assert.Contains(t, err.Error(), "parse gemini config")
 	})
 }
 
