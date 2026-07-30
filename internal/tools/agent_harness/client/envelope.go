@@ -228,8 +228,9 @@ type MaximalEnvelope struct {
 	ArgumentsJSON     string
 	TargetResource    string
 	StateRoot         string
-	Ensemble          *Ensemble  // attach L2 when non-nil
-	Principal         *Principal // attach mock L3 when non-nil ("mock" mode)
+	Ensemble          *Ensemble          // attach L2 when non-nil
+	Principal         *Principal         // attach mock L3 when non-nil ("mock" mode)
+	Authenticator     *SoftAuthenticator // attach genuine WebAuthn L3 when non-nil ("webauthn" mode)
 	TTL               time.Duration
 }
 
@@ -308,6 +309,9 @@ func (c *Client) SubmitMaximal(ctx context.Context, p Persona, m MaximalEnvelope
 	}
 	if m.Principal != nil { // "mock" L3 mode
 		env.Governance.L3 = m.Principal.Sign(txHash)
+	}
+	if m.Authenticator != nil { // "webauthn" L3 mode
+		env.Governance.L3 = m.Authenticator.SignL3(txHash)
 	}
 
 	// 5. protojson is the canonical client-facing wire format (NOT encoding/json).

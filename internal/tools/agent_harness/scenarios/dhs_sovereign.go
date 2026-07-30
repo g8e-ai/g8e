@@ -142,6 +142,24 @@ func dhsScenarios() []Scenario {
 					r.note("release authority %q approved inline (mock L3); release executed", kit.Principal.KeyID)
 					return nil
 
+				case "webauthn":
+					r.note("L3 mode=webauthn: software passkey signs transaction_hash inline")
+					m.Authenticator = kit.Authenticator
+					txHash, status, body, err := c.SubmitMaximal(ctx, dhsConnector, m)
+					if err != nil {
+						return fmt.Errorf("submit release envelope: %w", err)
+					}
+					r.tx(txHash)
+					r.note("release envelope %s submitted with inline WebAuthn proof (status %d)", short(txHash), status)
+					if status >= 400 {
+						return fmt.Errorf("release envelope rejected (status %d): %s", status, string(body))
+					}
+					if summary, failed := receiptFailed(body); failed {
+						return fmt.Errorf("release tool execution failed: %s", summary)
+					}
+					r.note("WebAuthn L3 proof verified; release executed")
+					return nil
+
 				default:
 					r.note("L3 mode=suspend: submit L2-only; data stays under U.S. authority until the release authority signs")
 					txHash, status, body, err := c.SubmitMaximal(ctx, dhsConnector, m)

@@ -424,6 +424,11 @@ func TestGovKitL3Modes(t *testing.T) {
 			valid:  true,
 		},
 		{
+			name:   "webauthn mode",
+			l3Mode: "webauthn",
+			valid:  true,
+		},
+		{
 			name:   "suspend mode",
 			l3Mode: "suspend",
 			valid:  true,
@@ -449,7 +454,7 @@ func TestGovKitL3Modes(t *testing.T) {
 				OperatorID: "test",
 			}
 
-			isValid := kit.L3Mode == "mock" || kit.L3Mode == "suspend"
+			isValid := kit.L3Mode == "mock" || kit.L3Mode == "suspend" || kit.L3Mode == "webauthn"
 			assert.Equal(t, tt.valid, isValid, "L3Mode validation mismatch")
 		})
 	}

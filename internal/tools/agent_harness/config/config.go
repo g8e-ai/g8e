@@ -68,9 +68,18 @@ type Config struct {
 	PrincipalKeyID string `json:"principal_key_id"`
 
 	// L3Mode controls how the maximal path satisfies L3 in notary posture:
-	//   "mock"    - attach a principal Ed25519 signature as governance.l3.proof.signature
-	//   "suspend" - submit without L3, follow the real OOB approve flow as the principal
+	//   "mock"     - attach a principal Ed25519 signature as governance.l3.proof.signature
+	//   "suspend"  - submit without L3, follow the real OOB approve flow as the principal
+	//   "webauthn" - attach a genuine WebAuthn assertion (ES256) from a software passkey
 	L3Mode string `json:"l3_mode"`
+
+	// PasskeyRpID is the WebAuthn relying party ID for the software authenticator.
+	// Defaults to "localhost" when empty.
+	PasskeyRpID string `json:"passkey_rp_id"`
+
+	// PasskeyRpOrigin is the WebAuthn relying party origin for the software
+	// authenticator. Defaults to PublicBaseURL when empty.
+	PasskeyRpOrigin string `json:"passkey_rp_origin"`
 
 	// EnvelopeTTL is how long a maximal envelope is valid before expiry.
 	EnvelopeTTL time.Duration `json:"envelope_ttl"`
@@ -91,6 +100,8 @@ func Default() Config {
 		ConsensusKeyID: "auditor-ensemble",
 		PrincipalKeyID: "auditor-principal",
 		L3Mode:         "suspend",
+		PasskeyRpID:     "localhost",
+		PasskeyRpOrigin: network.LocalhostHTTPURL(constants.Ports.OperatorHttp),
 		EnvelopeTTL:    5 * time.Minute,
 		OutDir:         "./auditor-out",
 		UseCLIConfig:   true,

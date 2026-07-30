@@ -118,17 +118,17 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		result.number = "2"
 		result.name = "Cross-Domain Release requires Notary authority"
 		result.status = "PASS"
-		result.metrics = "Notary posture // L3 mock principal authorization → L5 actuator records RELEASE"
+		result.metrics = "Notary posture // L3 WebAuthn passkey authorization → L5 actuator records RELEASE"
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintln("  Scenario 2 — Cross-Domain Release requires Notary authority (LOE 1 & 2)")
 		demoPrintln(strings.Repeat("─", 60))
 		demoPrintln()
 		demoPrintln("  PROVES: A cross-domain release is submitted with L2 consensus")
-		demoPrintln("          and a mock L3 principal signature. Under notary posture")
+		demoPrintln("          and a genuine WebAuthn L3 assertion. Under notary posture")
 		demoPrintln("          the Gateway verifies the L3 proof before allowing the")
-		demoPrintln("          release to execute. In production, L3 requires a real")
-		demoPrintln("          WebAuthn passkey ceremony; demos use mock L3 mode.")
+		demoPrintln("          release to execute. The harness uses a software passkey")
+		demoPrintln("          that generates real WebAuthn assertions (ES256).")
 		demoPrintln()
 
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 2 started: Cross-Domain Release requires Notary authority")
@@ -150,18 +150,18 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 
 		// Step 3: Submit dhs-release via agent (L2 + mock L3 principal signature)
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-release", "doctrine check")
-		demoPrintln("  ── Step 3: Submit dhs-release via agent (L2 + mock L3) ────────")
+		demoPrintln("  ── Step 3: Submit dhs-release via agent (L2 + WebAuthn L3) ────")
 		demoPrintln("  Connector requests cross-domain release of TRK-MIL-0007.")
 		demoPrintln("  Under notary posture, the gateway requires L3 authorization.")
-		demoPrintln("  The harness attaches a mock principal Ed25519 signature as L3 proof:")
+		demoPrintln("  The harness attaches a genuine WebAuthn assertion (ES256) as L3 proof:")
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-release", "doctrine admitted")
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "dhs-release", "consensus quorum")
 		demoEmitter.Ledger(tui.LevelInfo, "L1 doctrine admitted envelope for dhs-release")
 		notaryCfg := hcfg
 		notaryCfg.Posture = "notary"
-		notaryCfg.L3Mode = "mock"
-		if err := demoStep(demoDir, "dhs-release via agent (notary mock L3)",
+		notaryCfg.L3Mode = "webauthn"
+		if err := demoStep(demoDir, "dhs-release via agent (notary WebAuthn L3)",
 			false,
 			harnessRun("dhs-release", notaryCfg)...,
 		); err != nil {
@@ -171,8 +171,8 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		}
 
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "dhs-release", "quorum met (3/5)")
-		demoEmitter.Pipeline(tui.StageL3, tui.StatusPassed, "dhs-release", "mock L3 proof verified")
-		demoEmitter.Ledger(tui.LevelInfo, "L3 notary: mock principal signature verified (demo mode)")
+		demoEmitter.Pipeline(tui.StageL3, tui.StatusPassed, "dhs-release", "WebAuthn L3 proof verified")
+		demoEmitter.Ledger(tui.LevelInfo, "L3 notary: WebAuthn assertion verified (software passkey)")
 
 		// Step 4: Verify the RELEASE was executed by the L5 actuator
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusActive, "dhs-release", "actuator executing")
@@ -200,7 +200,7 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		} else {
 			fmt.Println("  [PASS] Scenario 2 — Cross-domain release governed by L3 notary authorization.")
 			fmt.Println("         L1 doctrine admitted; L2 consensus quorum met;")
-			fmt.Println("         L3 notary verified mock principal signature (demo mode).")
+			fmt.Println("         L3 notary verified WebAuthn assertion (software passkey).")
 			fmt.Println("         L5 actuator recorded the RELEASE after authorization.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 2 PASSED — Cross-domain release governed by L3 notary authorization")
 		}

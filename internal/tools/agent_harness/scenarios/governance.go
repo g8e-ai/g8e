@@ -19,7 +19,8 @@ import (
 type GovKit struct {
 	Ensemble          *clientpkg.Ensemble
 	Principal         *clientpkg.Principal
-	L3Mode            string // "mock" | "suspend"
+	Authenticator     *clientpkg.SoftAuthenticator
+	L3Mode            string // "mock" | "suspend" | "webauthn"
 	OperatorID        string
 	OperatorSessionID string
 }
@@ -73,7 +74,7 @@ func governanceScenarios() []Scenario {
 		{
 			Name: "envelope-maximal", Title: "Official notary envelope: L2 consensus + principal L3 signing", Persona: ensembleProducer, RequiresPosture: Notary,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
+				if kit == nil || kit.Ensemble == nil || (kit.Principal == nil && kit.Authenticator == nil) {
 					return constants.ErrHarnessGovKitMissingSign
 				}
 				root, err := c.StateRoot(ctx)
@@ -105,6 +106,20 @@ func governanceScenarios() []Scenario {
 					}
 					r.tx(txHash)
 					r.note("submitted notary envelope %s with inline principal proof (status %d)", short(txHash), status)
+					return nil
+
+				case "webauthn":
+					// Attach a genuine WebAuthn assertion (ES256) as the L3 proof.
+					// The gateway performs full WebAuthn verification and cannot
+					// distinguish this from a browser-based authenticator.
+					m.Authenticator = kit.Authenticator
+					r.note("L3 mode=webauthn: software passkey signs transaction_hash inline")
+					txHash, status, _, err := c.SubmitMaximal(ctx, ensembleProducer, m)
+					if err != nil {
+						return err
+					}
+					r.tx(txHash)
+					r.note("submitted notary envelope %s with inline WebAuthn proof (status %d)", short(txHash), status)
 					return nil
 
 				default: // "suspend" — drive the REAL out-of-band human-notary flow.

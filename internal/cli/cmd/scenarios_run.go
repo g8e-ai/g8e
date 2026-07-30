@@ -65,7 +65,7 @@ func demosScenariosRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&harnessAPIKey, "api-key", "", "operator API key for MCP/A2A surface")
 	cmd.Flags().StringVar(&harnessSessionID, "operator-session", "", "scope audit to a specific Operator session")
 	cmd.Flags().StringVar(&harnessOutDir, "out", "", "report output dir")
-	cmd.Flags().StringVar(&harnessL3Mode, "l3-mode", "", "mock|suspend")
+	cmd.Flags().StringVar(&harnessL3Mode, "l3-mode", "", "mock|suspend|webauthn")
 	cmd.Flags().IntVar(&harnessEnsemble, "ensemble", 3, "consensus ensemble size")
 	cmd.Flags().BoolVar(&harnessVerbose, "verbose", false, "echo each request/response")
 	cmd.Flags().StringVar(&harnessPhase, "phase", "all", "doctrine|consensus|notary|all")
@@ -297,10 +297,32 @@ func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Confi
 	} else {
 		opSessionID = opID
 	}
-	scenarios.SetGovKit(&scenarios.GovKit{
+
+	gk := &scenarios.GovKit{
 		Ensemble: ens, Principal: prin, L3Mode: cfg.L3Mode,
 		OperatorID: opID, OperatorSessionID: opSessionID,
-	})
+	}
+
+	if cfg.L3Mode == "webauthn" {
+		rpID := cfg.PasskeyRpID
+		if rpID == "" {
+			rpID = "localhost"
+		}
+		rpOrigin := cfg.PasskeyRpOrigin
+		if rpOrigin == "" {
+			rpOrigin = cfg.PublicBaseURL
+		}
+		authenticator, err := clientpkg.NewSoftAuthenticator(rpID, rpOrigin)
+		if err != nil {
+			return fmt.Errorf("setup gov kit: soft authenticator: %w", err)
+		}
+		if err := authenticator.Register(ctx, client, opID, opID, opSessionID); err != nil {
+			return fmt.Errorf("setup gov kit: authenticator register: %w", err)
+		}
+		gk.Authenticator = authenticator
+	}
+
+	scenarios.SetGovKit(gk)
 
 	requiresConsensus := false
 	requiresNotary := false

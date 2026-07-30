@@ -283,7 +283,7 @@ func TestDefaultHarnessConfig_ReturnsExpectedDefaults(t *testing.T) {
 	assert.Equal(t, constants.ContainerOperatorKey, cfg.KeyPath)
 	assert.Equal(t, constants.ContainerCABundle, cfg.CAPath)
 	assert.Equal(t, 3, cfg.EnsembleSize)
-	assert.Equal(t, "mock", cfg.L3Mode)
+	assert.Equal(t, "webauthn", cfg.L3Mode)
 	assert.False(t, cfg.UseRun)
 }
 

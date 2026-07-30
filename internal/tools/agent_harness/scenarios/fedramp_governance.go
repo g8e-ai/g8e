@@ -180,6 +180,24 @@ func fedrampScenarios() []Scenario {
 					r.note("authorizing official %q approved inline (mock L3); destruction executed", kit.Principal.KeyID)
 					return nil
 
+				case "webauthn":
+					r.note("L3 mode=webauthn: software passkey signs transaction_hash inline")
+					m.Authenticator = kit.Authenticator
+					txHash, status, body, err := c.SubmitMaximal(ctx, fedrampCloudOperator, m)
+					if err != nil {
+						return fmt.Errorf("submit destroy envelope: %w", err)
+					}
+					r.tx(txHash)
+					r.note("destroy envelope %s submitted with inline WebAuthn proof (status %d)", short(txHash), status)
+					if status >= 400 {
+						return fmt.Errorf("destroy envelope rejected (status %d): %s", status, string(body))
+					}
+					if summary, failed := receiptFailed(body); failed {
+						return fmt.Errorf("destroy tool execution failed: %s", summary)
+					}
+					r.note("WebAuthn L3 proof verified; destruction executed")
+					return nil
+
 				default:
 					r.note("L3 mode=suspend: submit L2-only; resource stays under CSP control until the authorizing official signs")
 					txHash, status, body, err := c.SubmitMaximal(ctx, fedrampCloudOperator, m)

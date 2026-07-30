@@ -1437,7 +1437,7 @@ type harnessConfig struct {
 
 // defaultHarnessConfig returns the config matching the standard demo topology:
 // g8e.local gateway on 8443/8080, operator mTLS certs in the container PKI dir,
-// ensemble size 3, mock L3 mode.
+// ensemble size 3, WebAuthn L3 mode (software passkey).
 func defaultHarnessConfig(container string) harnessConfig {
 	return harnessConfig{
 		Container:    container,
@@ -1447,7 +1447,7 @@ func defaultHarnessConfig(container string) harnessConfig {
 		KeyPath:      constants.ContainerOperatorKey,
 		CAPath:       constants.ContainerCABundle,
 		EnsembleSize: 3,
-		L3Mode:       "mock",
+		L3Mode:       "webauthn",
 	}
 }
 
