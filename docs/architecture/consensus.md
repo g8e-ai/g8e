@@ -53,7 +53,24 @@ Consensus policies can be seeded at gateway startup via the `--consensus-bootstr
   "consensus_id": "dhs-consensus",
   "member_app_ids": ["auditor-ensemble"],
   "quorum": 1,
-  "seed_hex": "87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77"
+  "member_seeds": {
+    "auditor-ensemble": "3b8237753873a5dcc78fddcdf6011ea9bea03c0ae683a8a8fb5f4cba928e8a15"
+  }
+}
+```
+
+For multi-member consensus with distinct per-member keys:
+
+```json
+{
+  "consensus_id": "fedramp-consensus",
+  "member_app_ids": ["fedramp-csp-auditor", "fedramp-3pao", "fedramp-jab"],
+  "quorum": 2,
+  "member_seeds": {
+    "fedramp-csp-auditor": "b194523218024feacafef9acf9e557f9c2e6ed71e87c8c97e5a4fc61e624ea42",
+    "fedramp-3pao": "20544a8efd3f30188095dae9d42993f320fbcdcbd924f88b2c56edfdc719e357",
+    "fedramp-jab": "06946f1a26896983176f6d40b0a734136dd58b16fe502d4b5688bf7db1b97662"
+  }
 }
 ```
 
@@ -62,7 +79,8 @@ Consensus policies can be seeded at gateway startup via the `--consensus-bootstr
 | `consensus_id` | Yes | The consensus ID to create |
 | `member_app_ids` | Yes | List of member app IDs to enroll |
 | `quorum` | Yes | Quorum threshold (must be `>= 1`) |
-| `seed_hex` | No | Hex-encoded Ed25519 seed for deterministic key generation. If omitted, a fresh key pair is generated. |
+| `member_seeds` | No | Map of member app IDs to hex-encoded Ed25519 seeds. Each member gets its own derived key pair, making `RequireDistinct` and quorum cryptographically meaningful. Takes precedence over `seed_hex`. |
+| `seed_hex` | No | Hex-encoded Ed25519 seed for deterministic key generation (single-key fallback). If omitted, a fresh key pair is generated. Ignored when `member_seeds` is present. |
 
 #### Bootstrap Process
 
@@ -70,10 +88,13 @@ The bootstrap function executes the following steps:
 
 1. **Read and parse** the JSON config file
 2. **Idempotency check**: if the consensus already exists, skip bootstrap
-3. **Key derivation**: if `seed_hex` is provided, derive the Ed25519 key pair from the seed; otherwise generate a fresh key pair
-4. **Trusted signer registration**: for each member app ID, register the derived public key as a TrustedSigner (single-key ensemble pattern for demos)
-5. **Member key persistence**: save each member's private key to disk so the in-process LocalDeliberator can sign L2 votes via FileKeyProvider
-6. **ConsensusPolicy creation**: insert the policy into the consensus store with `enabled=true` and `require_distinct=true`
+3. **Key mode selection**: if `member_seeds` is present, use per-member key mode; otherwise fall back to `seed_hex` (single-key) or generate a fresh key pair
+4. **Per-member key derivation** (when `member_seeds` is present): for each member app ID, derive a distinct Ed25519 key pair from the member's seed. The public key is registered as a TrustedSigner for that member, and the private key is saved to the secrets directory.
+5. **Single-key derivation** (when `member_seeds` is absent): derive one Ed25519 key pair from `seed_hex` (or generate a fresh one) and register it as the TrustedSigner for every member
+6. **Member key persistence**: save each member's private key to disk so the in-process LocalDeliberator can sign L2 votes via FileKeyProvider
+7. **ConsensusPolicy creation**: insert the policy into the consensus store with `enabled=true` and `require_distinct=true`
+
+When `member_seeds` is used, each member signs L2 votes with its own distinct Ed25519 key. The L4 Warden verifies each vote's signature against the member's registered public key, and `RequireDistinct` ensures a single key cannot satisfy a multi-member quorum. This makes BFT quorum cryptographically meaningful.
 
 ### Admin API (Runtime Enrollment)
 

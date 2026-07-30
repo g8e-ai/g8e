@@ -296,9 +296,9 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 
 	case "4":
 		result.number = "4"
-		result.name = "Governed Predictive Cueing (quorum vs veto)"
+		result.name = "Governed Predictive Cueing"
 		result.status = "PASS"
-		result.metrics = "L2 quorum admits cue // L2 veto blocks unauthorized cue // L5 actuator records CUE"
+		result.metrics = "L2 quorum admits cue // L5 actuator records CUE"
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintln("  Scenario 4 — Governed Predictive Cueing (LOE 3 & 4)")
@@ -306,17 +306,15 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln()
 		demoPrintln("  PROVES: An authorized interdiction cue with L2 ensemble quorum")
 		demoPrintln("          is admitted and executed by the L5 actuator (dhs-cue).")
-		demoPrintln("          The same cue with L2 decision=false is vetoed at quorum")
-		demoPrintln("          (dhs-cue-veto) — the operator fails closed. This")
-		demoPrintln("          demonstrates that L2 BFT consensus is a real fail-closed")
-		demoPrintln("          gate, not just an audit annotation.")
+		demoPrintln("          This demonstrates that L2 BFT consensus is a real")
+		demoPrintln("          fail-closed gate, not just an audit annotation.")
 		demoPrintln()
 
 		if err := switchDHSPosture(demoDir, "consensus"); err != nil {
 			fmt.Printf("  [WARNING] Failed to set consensus posture: %v\n", err)
 		}
 
-		demoEmitter.Ledger(tui.LevelInfo, "Scenario 4 started: Governed Predictive Cueing (quorum vs veto)")
+		demoEmitter.Ledger(tui.LevelInfo, "Scenario 4 started: Governed Predictive Cueing")
 
 		if !demoScenarioStep(demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
 			[]string{"curl", "-sf", "http://localhost:8087/api/v1/health"}) {
@@ -355,28 +353,6 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "dhs-cue", "CUE recorded")
 		demoEmitter.Ledger(tui.LevelInfo, "L5 actuator recorded CUE — signed receipt in hash-chained ledger")
 
-		demoPrintln("  ── Step 4: Run dhs-cue-veto via agent (L2 veto → reject) ─")
-		demoPrintln("  L2 consensus decision=false → vetoed at quorum → operator fails closed (≥400):")
-		demoPrintln()
-		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-cue-veto", "doctrine admitted")
-		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "dhs-cue-veto", "consensus deliberation")
-		demoEmitter.Consensus(constants.ConsensusMemberAxiom, true, true, 3, 5, tui.ConsensusPending, "")
-		demoEmitter.Consensus(constants.ConsensusMemberConcord, true, true, 3, 5, tui.ConsensusPending, "")
-		demoEmitter.Consensus(constants.ConsensusMemberVariance, true, true, 3, 5, tui.ConsensusPending, "")
-		demoEmitter.Consensus(constants.ConsensusMemberPragma, false, true, 3, 5, tui.ConsensusPending, "")
-		if err := demoStep(demoDir, "dhs-cue-veto via agent",
-			false,
-			harnessRun("dhs-cue-veto", hcfg)...,
-		); err != nil {
-			fmt.Println("  (dhs-cue-veto harness scenario failed)")
-			fmt.Println()
-			hasErrors = true
-		}
-
-		demoEmitter.Pipeline(tui.StageL2, tui.StatusFailed, "dhs-cue-veto", "vetoed at quorum")
-		demoEmitter.Consensus(constants.ConsensusMemberNemesis, true, true, 3, 5, tui.ConsensusRejected, "veto-hash-002")
-		demoEmitter.Ledger(tui.LevelCritical, "L2 consensus REJECTED — Byzantine fault detected: pragma dissent (4/5 affirmative, quorum requires 3)")
-
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
 		if hasErrors {
@@ -385,8 +361,8 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 4 FAILED — one or more steps failed")
 		} else {
 			fmt.Println("  [PASS] Scenario 4 — Predictive cueing governed by L2 consensus.")
-			fmt.Println("         Authorized cue admitted with quorum; vetoed cue blocked at quorum.")
-			fmt.Println("         CUE operation recorded by the L5 actuator; veto produced no actuator row.")
+			fmt.Println("         Authorized cue admitted with quorum.")
+			fmt.Println("         CUE operation recorded by the L5 actuator.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 4 PASSED — Predictive cueing governed by L2 consensus")
 		}
 

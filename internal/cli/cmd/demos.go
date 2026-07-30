@@ -1102,7 +1102,7 @@ Available scenarios:
     1 - Sovereign Multi-Source Ingest (chain-of-custody) (LOE 1)
     2 - Cross-Domain Release requires Notary authority (LOE 1 & 2)
     3 - Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
-    4 - Governed Predictive Cueing (quorum vs veto) (LOE 3 & 4)
+    4 - Governed Predictive Cueing (LOE 3 & 4)
     5 - Sovereign Destruction + tamper-proof audit (LOE 2)
   fedramp: 1-5
     1 - Governed Cloud Resource Provisioning

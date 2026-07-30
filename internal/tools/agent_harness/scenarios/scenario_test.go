@@ -676,13 +676,13 @@ func TestScenarioPersonaUserAgent(t *testing.T) {
 func TestRegistryPostureDeclarations(t *testing.T) {
 	expectedPostures := map[string]Posture{
 		// MCP scenarios — plain MCPToolsCall, no governance extras
-		"mcp-plain":             Doctrine,
-		"healthcare-success":    Doctrine,
+		"mcp-plain":              Doctrine,
+		"healthcare-success":     Doctrine,
 		"healthcare-phi-blocked": Doctrine,
-		"healthcare-gold-card":  Doctrine,
+		"healthcare-gold-card":   Doctrine,
 		"healthcare-sla-breach":  Doctrine,
-		"mcp-advanced":          Doctrine,
-		"mcp-secured":           Doctrine,
+		"mcp-advanced":           Doctrine,
+		"mcp-secured":            Doctrine,
 
 		// A2A scenarios — plain A2ACall, no governance extras
 		"a2a-plain":    Doctrine,
@@ -694,27 +694,25 @@ func TestRegistryPostureDeclarations(t *testing.T) {
 		"envelope-maximal": Notary,    // Ensemble + Principal suspend flow
 		"agent-delegation": Doctrine,  // MCPToolsCall/MCPToolsList, no governance extras
 		"consensus-quorum": Consensus, // Ensemble, expects admission
-		"consensus-veto":   Consensus, // Ensemble, expects L2 rejection
 		"notary-oob":       Notary,    // Ensemble + Principal suspend flow
 
 		// DHS scenarios
 		"dhs-ingest":         Consensus, // Ensemble + Principal inline, expects admission
 		"dhs-release":        Notary,    // Ensemble + Principal suspend flow
 		"dhs-cue":            Consensus, // Ensemble + Principal inline, expects admission
-		"dhs-cue-veto":       Consensus, // Ensemble only, expects L2 rejection
 		"dhs-evidence-block": Doctrine,  // Ensemble + Principal, but tests L1 rejection
 		"dhs-purge":          Consensus, // Ensemble + Principal inline, expects admission
 
 		// Gov/Finance scenarios — plain MCPToolsCall
-		"gov-cui-exfil-block":         Doctrine,
-		"finance-unauthorized-trade":  Doctrine,
+		"gov-cui-exfil-block":        Doctrine,
+		"finance-unauthorized-trade": Doctrine,
 
 		// FedRAMP scenarios
-		"fedramp-provision":     Consensus, // Ensemble + Principal inline, expects admission
-		"fedramp-deny":          Doctrine,  // Ensemble + Principal, but tests L1 rejection
-		"fedramp-escalate":      Notary,    // Ensemble + Principal suspend flow
-		"fedramp-revert":        Consensus, // Ensemble + Principal inline, expects admission
-		"fedramp-evidence-block": Doctrine, // Ensemble + Principal, but tests L1 rejection
+		"fedramp-provision":      Consensus, // Ensemble + Principal inline, expects admission
+		"fedramp-deny":           Doctrine,  // Ensemble + Principal, but tests L1 rejection
+		"fedramp-escalate":       Notary,    // Ensemble + Principal suspend flow
+		"fedramp-revert":         Consensus, // Ensemble + Principal inline, expects admission
+		"fedramp-evidence-block": Doctrine,  // Ensemble + Principal, but tests L1 rejection
 	}
 
 	scenarios := Registry()

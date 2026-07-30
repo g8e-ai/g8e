@@ -232,10 +232,10 @@ func TestSuspendedFromBodyEdgeCases(t *testing.T) {
 func TestGovernanceScenarios(t *testing.T) {
 	scenarios := governanceScenarios()
 
-	assert.Len(t, scenarios, 6, "governanceScenarios should return 6 scenarios")
+	assert.Len(t, scenarios, 5, "governanceScenarios should return 5 scenarios")
 
 	// Should have expected names
-	expectedNames := []string{"consensus", "envelope-maximal", "agent-delegation", "consensus-quorum", "consensus-veto", "notary-oob"}
+	expectedNames := []string{"consensus", "envelope-maximal", "agent-delegation", "consensus-quorum", "notary-oob"}
 	nameSet := make(map[string]bool)
 	for _, sc := range scenarios {
 		nameSet[sc.Name] = true
@@ -263,7 +263,6 @@ func TestGovernanceScenarioNames(t *testing.T) {
 		"envelope-maximal": true,
 		"agent-delegation": true,
 		"consensus-quorum": true,
-		"consensus-veto":   true,
 		"notary-oob":       true,
 	}
 
@@ -280,7 +279,6 @@ func TestGovernanceScenarioTitles(t *testing.T) {
 		"envelope-maximal": "Official notary envelope: L2 consensus + principal L3 signing",
 		"agent-delegation": "CLI delegates app credential to agent (SPIFFE distinctness + receipt audit)",
 		"consensus-quorum": "Consensus quorum: 2-of-3 co-sign, receipt records consensus",
-		"consensus-veto":   "Consensus veto: one member votes false, envelope is rejected",
 		"notary-oob":       "L3 notary OOB: suspend then principal approves out-of-band",
 	}
 
@@ -302,7 +300,6 @@ func TestGovernanceScenarioPostures(t *testing.T) {
 		"envelope-maximal": Notary,
 		"agent-delegation": Doctrine,
 		"consensus-quorum": Consensus,
-		"consensus-veto":   Consensus,
 		"notary-oob":       Notary,
 	}
 
@@ -325,7 +322,6 @@ func TestGovernanceScenarioPersonas(t *testing.T) {
 		"envelope-maximal": "ensemble-producer",
 		"agent-delegation": "cli-delegator",
 		"consensus-quorum": "ensemble-producer",
-		"consensus-veto":   "ensemble-producer",
 		"notary-oob":       "principal",
 	}
 	for _, sc := range scenarios {

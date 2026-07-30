@@ -62,7 +62,9 @@ The gateway runs in **consensus** posture; L2 BFT consensus is enforced as a fai
 
 ### Tribunal bootstrap
 
-The gateway boots with `--posture consensus --consensus-id fedramp-consensus --consensus-bootstrap /etc/g8e/consensus-bootstrap.json`. The bootstrap file seeds a `ConsensusPolicy` and trusted signer from a deterministic Ed25519 seed (`ensemble-seed.hex`), shared with the `agent-runtime` container. This enables the harness to reconstruct the same private key and sign L2 votes that verify against the gateway's trusted signer registry.
+The gateway boots with `--posture consensus --consensus-id fedramp-consensus --consensus-bootstrap /etc/g8e/consensus-bootstrap.json`. The bootstrap file defines a 3-member tribunal with distinct per-member Ed25519 seeds (`member_seeds`), each deriving an independent key pair. The gateway registers each member's public key as a TrustedSigner; the agent-runtime container reads the same bootstrap file to reconstruct the per-member private keys and sign L2 votes independently.
+
+This makes the 2-of-3 quorum a real BFT quorum: each member signs with its own key, and a single compromised key cannot forge enough votes to meet quorum. The `RequireDistinct` flag ensures duplicate signer key IDs are rejected.
 
 ### Phased rollout
 

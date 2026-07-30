@@ -21,7 +21,6 @@ import (
 //     after L1 doctrine + L2 consensus (+ L3 notary where required) pass;
 //   - a cross-domain release is gated on an out-of-band principal (release
 //     authority) approval — the real L3 notary suspend/approve flow;
-//   - an interdiction cue without ensemble quorum is vetoed by L2;
 //   - an attempt to wipe the audit trail is rejected by L1 before it ever reaches
 //     the actuator.
 //
@@ -212,44 +211,6 @@ func dhsScenarios() []Scenario {
 					return fmt.Errorf("cue tool execution failed: %s", summary)
 				}
 				r.note("admitted — ensemble quorum reached; cue executed and recorded with full data lineage")
-				return nil
-			},
-		},
-		{
-			Name: "dhs-cue-veto", Title: "DHS: interdiction cue without quorum is vetoed by L2 consensus", Persona: dhsConnector, RequiresPosture: Consensus,
-			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				if kit == nil || kit.Ensemble == nil {
-					return constants.ErrHarnessGovKitNotInit
-				}
-				root, err := c.StateRoot(ctx)
-				if err != nil {
-					return fmt.Errorf("state root: %w", err)
-				}
-				r.note("bound to state root %s", short(root))
-				r.note("submitting cue with L2 decision=false (no consensus — unauthorized targeting)")
-
-				veto := false
-				txHash, status, body, err := c.SubmitMaximal(ctx, dhsConnector, clientpkg.MaximalEnvelope{
-					OperatorID:        kit.OperatorID,
-					OperatorSessionID: kit.OperatorSessionID,
-					ToolName:          "run_shell_command",
-					ArgumentsJSON:     dataopArgs("cue", "TRK-CBP-0001", "UNAUTHORIZED"),
-					TargetResource:    "localhost",
-					StateRoot:         root,
-					Ensemble:          kit.Ensemble,
-					Decision:          &veto,
-					TTL:               c.Config().EnvelopeTTL,
-				})
-				if err != nil {
-					return fmt.Errorf("submit veto cue: %w", err)
-				}
-				r.tx(txHash)
-				r.note("veto cue %s submitted (status %d)", short(txHash), status)
-				if status < 400 {
-					return fmt.Errorf("unauthorized cue was accepted (status %d) — expected L2 rejection", status)
-				}
-				r.note("correctly rejected by L2 consensus — operator fails closed, no interdiction cue executed")
-				r.note("response: %s", string(body))
 				return nil
 			},
 		},

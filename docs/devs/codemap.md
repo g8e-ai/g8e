@@ -589,7 +589,7 @@ The following packages are test-only and are not part of the production dependen
 - `client/protocols_test.go` - Protocol encoding/decoding tests
 - `client/mtls_test.go` - mTLS client setup and certificate verification tests
 - `config/config.go` - Harness configuration: auth material (client cert/key/CA bundle), gateway URL, posture selection
-- `scenarios/governance.go` - Governance scenarios: consensus, notary, delegation, veto, OOB approval. Contains `receiptFailed` helper that parses `ActionReceipt` JSON body for `EXECUTION_STATUS_FAILED` status.
+- `scenarios/governance.go` - Governance scenarios: consensus, notary, delegation, OOB approval. Contains `receiptFailed` helper that parses `ActionReceipt` JSON body for `EXECUTION_STATUS_FAILED` status.
 - `scenarios/governance_test.go` - Governance scenario tests, including `TestReceiptFailed` table-driven test covering FAILED, COMPLETED, UNSPECIFIED, CANCELLED, non-receipt JSON, empty body, nil body, and malformed JSON.
 - `scenarios/dhs_sovereign.go` - DHS sovereign operations scenarios: multi-step governance workflow with L2 consensus
 - `scenarios/dhs_sovereign_test.go` - DHS sovereign scenario tests

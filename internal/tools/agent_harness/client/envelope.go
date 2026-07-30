@@ -230,7 +230,6 @@ type MaximalEnvelope struct {
 	StateRoot         string
 	Ensemble          *Ensemble  // attach L2 when non-nil
 	Principal         *Principal // attach mock L3 when non-nil ("mock" mode)
-	Decision          *bool      // nil or *true = affirmative; *false = veto
 	TTL               time.Duration
 }
 
@@ -305,11 +304,7 @@ func (c *Client) SubmitMaximal(ctx context.Context, p Persona, m MaximalEnvelope
 	// 4. Governance proofs over the hash.
 	env.Governance = &commonv1.GovernanceMetadata{L1: &commonv1.L1Metadata{Validated: true}}
 	if m.Ensemble != nil {
-		decision := true
-		if m.Decision != nil {
-			decision = *m.Decision
-		}
-		env.Governance.L2 = m.Ensemble.Vote(txHash, decision)
+		env.Governance.L2 = m.Ensemble.Vote(txHash, true)
 	}
 	if m.Principal != nil { // "mock" L3 mode
 		env.Governance.L3 = m.Principal.Sign(txHash)

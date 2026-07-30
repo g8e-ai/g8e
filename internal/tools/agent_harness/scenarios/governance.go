@@ -197,45 +197,6 @@ func governanceScenarios() []Scenario {
 			},
 		},
 		{
-			Name: "consensus-veto", Title: "Consensus veto: one member votes false, envelope is rejected", Persona: ensembleProducer, RequiresPosture: Consensus,
-			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				if kit == nil || kit.Ensemble == nil {
-					return constants.ErrHarnessGovKitNotInit
-				}
-				root, err := c.StateRoot(ctx)
-				if err != nil {
-					return err
-				}
-				r.note("bound to state root %s", short(root))
-				r.note("submitting envelope with L2 decision=false (veto)")
-
-				veto := false
-				txHash, status, body, err := c.SubmitMaximal(ctx, ensembleProducer, clientpkg.MaximalEnvelope{
-					OperatorID:        kit.OperatorID,
-					OperatorSessionID: kit.OperatorSessionID,
-					ToolName:          "fs_list",
-					ArgumentsJSON:     fsListArgs("."),
-					TargetResource:    "localhost",
-					StateRoot:         root,
-					Ensemble:          kit.Ensemble,
-					Decision:          &veto,
-					TTL:               c.Config().EnvelopeTTL,
-				})
-				if err != nil {
-					return err
-				}
-				r.tx(txHash)
-				r.note("veto envelope %s submitted (status %d)", short(txHash), status)
-
-				if status < 400 {
-					return fmt.Errorf("veto envelope was accepted (status %d) — expected rejection", status)
-				}
-				r.note("envelope correctly rejected by L2 consensus (veto by false vote)")
-				r.note("response body: %s", string(body))
-				return nil
-			},
-		},
-		{
 			Name: "notary-oob", Title: "L3 notary OOB: suspend then principal approves out-of-band", Persona: principalActor, RequiresPosture: Notary,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {

@@ -174,7 +174,7 @@ The interactive demo runner (`g8e demos run <org> [scenario]`) provides 17 platf
 - **Consensus** — L1/L2 enforced, L3 audited
 - **Notary** — L1/L2/L3 strictly enforced
 
-**Governance testing** uses cryptographic actors (ensemble co-signers for L2 consensus, principal notary for L3 approval) to exercise maximal governance envelopes without distributed consensus infrastructure.
+**Governance testing** uses cryptographic actors (per-member Ed25519 signers for L2 consensus, principal notary for L3 approval) to exercise maximal governance envelopes without distributed consensus infrastructure. Each consensus member signs with its own distinct key derived from `member_seeds` in the bootstrap config, making `RequireDistinct` and quorum cryptographically meaningful.
 
 ### MCP mTLS Authentication Flow
 
