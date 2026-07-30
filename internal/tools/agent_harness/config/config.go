@@ -94,17 +94,17 @@ type Config struct {
 // Default returns a config wired for a local two-container dev stack.
 func Default() Config {
 	cfg := Config{
-		MTLSBaseURL:    network.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
-		PublicBaseURL:  network.LocalhostHTTPURL(constants.Ports.OperatorHttp),
-		EnsembleSize:   3,
-		ConsensusKeyID: "auditor-ensemble",
-		PrincipalKeyID: "auditor-principal",
-		L3Mode:         "suspend",
+		MTLSBaseURL:     network.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
+		PublicBaseURL:   network.LocalhostHTTPURL(constants.Ports.OperatorHttp),
+		EnsembleSize:    3,
+		ConsensusKeyID:  "auditor-ensemble",
+		PrincipalKeyID:  "auditor-principal",
+		L3Mode:          "suspend",
 		PasskeyRpID:     "localhost",
 		PasskeyRpOrigin: network.LocalhostHTTPURL(constants.Ports.OperatorHttp),
-		EnvelopeTTL:    5 * time.Minute,
-		OutDir:         "./auditor-out",
-		UseCLIConfig:   true,
+		EnvelopeTTL:     5 * time.Minute,
+		OutDir:          "./auditor-out",
+		UseCLIConfig:    true,
 	}
 
 	if cfg.UseCLIConfig {

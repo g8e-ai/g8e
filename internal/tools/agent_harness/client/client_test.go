@@ -376,34 +376,30 @@ func TestClient_RegisterSigner(t *testing.T) {
 	}
 }
 
-func TestClient_Approve(t *testing.T) {
+func TestClient_ApproveWithWebAuthn(t *testing.T) {
 	tests := []struct {
 		name         string
 		txHash       string
 		responseCode int
 		responseBody string
-		wantErr      bool
 	}{
 		{
 			name:         "successful approval",
 			txHash:       "abc123",
 			responseCode: http.StatusOK,
 			responseBody: `{"status": "approved"}`,
-			wantErr:      false,
 		},
 		{
 			name:         "transaction not found",
 			txHash:       "nonexistent",
 			responseCode: http.StatusNotFound,
 			responseBody: `{"error": "not found"}`,
-			wantErr:      false, // no error on status code, just returned
 		},
 		{
 			name:         "server error",
 			txHash:       "abc123",
 			responseCode: http.StatusInternalServerError,
 			responseBody: `{"error": "internal error"}`,
-			wantErr:      false, // no error on status code, just returned
 		},
 	}
 
@@ -423,8 +419,11 @@ func TestClient_Approve(t *testing.T) {
 					t.Errorf("failed to decode request: %v", err)
 				}
 
-				if req["action"] != "approve" {
-					t.Errorf("expected action approve, got %s", req["action"])
+				requiredFields := []string{"id", "rawId", "clientDataJSON", "authenticatorData", "signature"}
+				for _, field := range requiredFields {
+					if req[field] == "" {
+						t.Errorf("expected non-empty %s in request body", field)
+					}
 				}
 
 				w.WriteHeader(tt.responseCode)
@@ -442,18 +441,23 @@ func TestClient_Approve(t *testing.T) {
 				t.Fatalf("New() failed: %v", err)
 			}
 
+			auth, err := NewSoftAuthenticator("localhost", server.URL)
+			if err != nil {
+				t.Fatalf("NewSoftAuthenticator() failed: %v", err)
+			}
+
 			ctx := context.Background()
 			p := Persona{ID: "test-user"}
-			status, body, err := client.Approve(ctx, p, tt.txHash)
+			status, body, err := client.ApproveWithWebAuthn(ctx, p, tt.txHash, auth)
 
 			if err != nil {
-				t.Errorf("Approve() unexpected error = %v", err)
+				t.Errorf("ApproveWithWebAuthn() unexpected error = %v", err)
 			}
 			if status != tt.responseCode {
-				t.Errorf("Approve() status = %d, want %d", status, tt.responseCode)
+				t.Errorf("ApproveWithWebAuthn() status = %d, want %d", status, tt.responseCode)
 			}
 			if string(body) != tt.responseBody {
-				t.Errorf("Approve() body = %s, want %s", string(body), tt.responseBody)
+				t.Errorf("ApproveWithWebAuthn() body = %s, want %s", string(body), tt.responseBody)
 			}
 		})
 	}

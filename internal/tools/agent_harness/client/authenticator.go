@@ -79,9 +79,9 @@ func (a *SoftAuthenticator) Register(ctx context.Context, c *Client, userID, use
 	}
 
 	var challengeResp struct {
-		Success bool             `json:"success"`
-		UserID  string           `json:"user_id"`
-		Options json.RawMessage  `json:"options"`
+		Success bool            `json:"success"`
+		UserID  string          `json:"user_id"`
+		Options json.RawMessage `json:"options"`
 	}
 	if err := json.Unmarshal(respBody, &challengeResp); err != nil {
 		return fmt.Errorf("soft authenticator: parse challenge response: %w", err)
@@ -340,4 +340,3 @@ func (a *SoftAuthenticator) CredentialID() string {
 func (a *SoftAuthenticator) Sign(txHash string) *commonv1.L3Metadata {
 	return a.SignL3(txHash)
 }
-

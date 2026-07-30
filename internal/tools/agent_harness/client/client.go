@@ -233,12 +233,23 @@ func (c *Client) RegisterSigner(ctx context.Context, keyID, pubHex, role string)
 	return nil
 }
 
-// Approve drives the real out-of-band L3 notary flow: the principal POSTs a
-// WebAuthn assertion to /api/v1/approvals/{txHash}/verify to authorize the
-// exact transaction hash. The gateway verifies the assertion and resumes the
-// suspended transaction with an L3 proof attached.
-func (c *Client) Approve(ctx context.Context, p Persona, txHash string) (int, []byte, error) {
-	body, _ := json.Marshal(map[string]string{"action": "approve"})
+// ApproveWithWebAuthn drives the real out-of-band L3 notary flow: it signs a
+// genuine WebAuthn assertion for the given transaction hash using the
+// SoftAuthenticator, then POSTs the assertion to
+// /api/v1/approvals/{txHash}/verify. The gateway verifies the assertion and
+// resumes the suspended transaction with an L3 proof attached.
+func (c *Client) ApproveWithWebAuthn(ctx context.Context, p Persona, txHash string, auth *SoftAuthenticator) (int, []byte, error) {
+	proof, err := auth.SignAssertion(txHash)
+	if err != nil {
+		return 0, nil, fmt.Errorf("approve with webauthn: sign assertion: %w", err)
+	}
+	body, _ := json.Marshal(map[string]string{
+		"id":               proof.CredentialId,
+		"rawId":            proof.CredentialId,
+		"clientDataJSON":   proof.ClientDataJson,
+		"authenticatorData": proof.AuthenticatorData,
+		"signature":        proof.Signature,
+	})
 	return c.do(ctx, p, http.MethodPost,
 		c.cfg.PublicBaseURL+constants.APIPaths.ApprovalsByID+txHash+constants.APIPaths.ApprovalsVerifyAction, body)
 }

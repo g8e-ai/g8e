@@ -705,7 +705,7 @@ func TestHarnessRun(t *testing.T) {
 			"--key", "/root/.g8e/pki/operator.key",
 			"--ca", "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
 			"--ensemble", "3",
-			"--l3-mode", "mock",
+			"--l3-mode", "webauthn",
 			"gov-cui-exfil-block",
 		}, cmd)
 	})

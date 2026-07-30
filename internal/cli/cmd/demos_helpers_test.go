@@ -223,7 +223,7 @@ func TestHarnessRun_ExecMode(t *testing.T) {
 	assert.Contains(t, args, "--ensemble")
 	assert.Contains(t, args, "3")
 	assert.Contains(t, args, "--l3-mode")
-	assert.Contains(t, args, "mock")
+	assert.Contains(t, args, "webauthn")
 	assert.Equal(t, "mcp_basic_read", args[len(args)-1])
 }
 
