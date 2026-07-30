@@ -23,7 +23,7 @@ import (
 
 // defaultDHSHarnessConfig returns the config matching the DHS compose topology.
 func defaultDHSHarnessConfig() harnessConfig {
-	return defaultGovernedHarnessConfig("agent-coalition", "dhs-consensus")
+	return defaultHarnessConfig("agent-coalition")
 }
 
 func switchDHSPosture(demoDir, posture string) error {
@@ -160,7 +160,6 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Ledger(tui.LevelInfo, "L1 doctrine admitted envelope for dhs-release")
 		notaryCfg := hcfg
 		notaryCfg.Posture = "notary"
-		notaryCfg.L3Mode = "webauthn"
 		if err := demoStep(demoDir, "dhs-release via agent (notary WebAuthn L3)",
 			false,
 			harnessRun("dhs-release", notaryCfg)...,

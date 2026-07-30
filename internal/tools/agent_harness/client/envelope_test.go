@@ -220,134 +220,6 @@ func TestEnsemble_Vote_Deterministic(t *testing.T) {
 	}
 }
 
-func TestNewPrincipal(t *testing.T) {
-	tests := []struct {
-		name    string
-		keyID   string
-		wantErr bool
-	}{
-		{
-			name:    "valid principal",
-			keyID:   "principal-key",
-			wantErr: false,
-		},
-		{
-			name:    "empty key ID",
-			keyID:   "",
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			principal, err := NewPrincipal(tt.keyID)
-
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NewPrincipal() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if !tt.wantErr {
-				if principal == nil {
-					t.Fatal("NewPrincipal() returned nil principal")
-				}
-				if principal.KeyID != tt.keyID {
-					t.Errorf("KeyID = %s, want %s", principal.KeyID, tt.keyID)
-				}
-				if principal.priv == nil {
-					t.Error("private key should not be nil")
-				}
-				if principal.pub == nil {
-					t.Error("public key should not be nil")
-				}
-			}
-		})
-	}
-}
-
-func TestPrincipal_PubHex(t *testing.T) {
-	principal, err := NewPrincipal("test-key")
-	if err != nil {
-		t.Fatalf("NewPrincipal() failed: %v", err)
-	}
-
-	pubHex := principal.PubHex()
-	if pubHex == "" {
-		t.Error("PubHex() returned empty string")
-	}
-
-	// Verify it's valid hex
-	_, err = hex.DecodeString(pubHex)
-	if err != nil {
-		t.Errorf("PubHex() returned invalid hex: %v", err)
-	}
-}
-
-func TestPrincipal_Sign(t *testing.T) {
-	principal, err := NewPrincipal("test-key")
-	if err != nil {
-		t.Fatalf("NewPrincipal() failed: %v", err)
-	}
-
-	tests := []struct {
-		name   string
-		txHash string
-	}{
-		{
-			name:   "valid hash",
-			txHash: "abc123",
-		},
-		{
-			name:   "empty hash",
-			txHash: "",
-		},
-		{
-			name:   "long hash",
-			txHash: "very-long-transaction-hash-with-many-characters",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			l3 := principal.Sign(tt.txHash)
-
-			if l3 == nil {
-				t.Fatal("Sign() returned nil L3Metadata")
-			}
-
-			if l3.Proof == nil {
-				t.Fatal("Proof should not be nil")
-			}
-
-			if l3.Proof.Signature == "" {
-				t.Error("Signature should not be empty")
-			}
-
-			// Verify signature is valid hex
-			_, err := hex.DecodeString(l3.Proof.Signature)
-			if err != nil {
-				t.Errorf("Signature is invalid hex: %v", err)
-			}
-		})
-	}
-}
-
-func TestPrincipal_Sign_Deterministic(t *testing.T) {
-	principal, err := NewPrincipal("test-key")
-	if err != nil {
-		t.Fatalf("NewPrincipal() failed: %v", err)
-	}
-
-	txHash := "abc123"
-
-	l3a := principal.Sign(txHash)
-	l3b := principal.Sign(txHash)
-
-	if l3a.Proof.Signature != l3b.Proof.Signature {
-		t.Error("Sign() should produce deterministic signatures for same input")
-	}
-}
-
 func TestSubmitEnvelope(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -502,20 +374,6 @@ func TestSubmitMaximal(t *testing.T) {
 			verifyFields: false,
 		},
 		{
-			name: "with principal",
-			maximal: MaximalEnvelope{
-				OperatorID:     "op-123",
-				ToolName:       "test-tool",
-				ArgumentsJSON:  `{"arg":"value"}`,
-				TargetResource: "localhost",
-				StateRoot:      "root-abc",
-			},
-			responseCode: http.StatusOK,
-			responseBody: `{"status": "accepted"}`,
-			wantErr:      false,
-			verifyFields: false,
-		},
-		{
 			name: "with custom TTL",
 			maximal: MaximalEnvelope{
 				OperatorID:     "op-123",
@@ -590,15 +448,6 @@ func TestSubmitMaximal(t *testing.T) {
 					t.Fatalf("NewEnsemble() failed: %v", err)
 				}
 				tt.maximal.Ensemble = ensemble
-			}
-
-			// Add principal if needed
-			if tt.name == "with principal" {
-				principal, err := NewPrincipal("principal-key")
-				if err != nil {
-					t.Fatalf("NewPrincipal() failed: %v", err)
-				}
-				tt.maximal.Principal = principal
 			}
 
 			txHash, status, body, err := client.SubmitMaximal(ctx, p, tt.maximal)
@@ -713,53 +562,6 @@ func TestSubmitMaximal_WithL2(t *testing.T) {
 		TargetResource: "localhost",
 		StateRoot:      "root-abc",
 		Ensemble:       ensemble,
-	}
-
-	txHash, _, _, err := client.SubmitMaximal(ctx, p, maximal)
-
-	if err != nil {
-		t.Fatalf("SubmitMaximal() failed: %v", err)
-	}
-
-	if txHash == "" {
-		t.Error("txHash should not be empty")
-	}
-}
-
-func TestSubmitMaximal_WithL3(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status": "accepted"}`))
-	})
-
-	server := httptest.NewServer(handler)
-	defer server.Close()
-
-	cfg := config.Config{
-		MTLSBaseURL: server.URL,
-		Auth:        config.Auth{},
-	}
-
-	client, err := New(cfg)
-	if err != nil {
-		t.Fatalf("New() failed: %v", err)
-	}
-
-	ctx := context.Background()
-	p := Persona{ID: "test-client"}
-
-	principal, err := NewPrincipal("principal-key")
-	if err != nil {
-		t.Fatalf("NewPrincipal() failed: %v", err)
-	}
-
-	maximal := MaximalEnvelope{
-		OperatorID:     "op-123",
-		ToolName:       "test-tool",
-		ArgumentsJSON:  `{"arg":"value"}`,
-		TargetResource: "localhost",
-		StateRoot:      "root-abc",
-		Principal:      principal,
 	}
 
 	txHash, _, _, err := client.SubmitMaximal(ctx, p, maximal)

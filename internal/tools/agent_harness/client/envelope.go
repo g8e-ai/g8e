@@ -192,34 +192,6 @@ func (e *Ensemble) Vote(txHash string, decision bool) *commonv1.L2Metadata {
 	}
 }
 
-// Principal is the mock L3 notary: a single "human" key that authorizes the
-// exact transaction hash. In a real notary deployment this is replaced by a
-// WebAuthn/passkey assertion (web) or an mTLS cert fingerprint (CLI) — see the
-// "suspend" L3 mode for the genuine OOB flow.
-type Principal struct {
-	KeyID string
-	priv  ed25519.PrivateKey
-	pub   ed25519.PublicKey
-}
-
-func NewPrincipal(keyID string) (*Principal, error) {
-	pub, priv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		return nil, err
-	}
-	return &Principal{KeyID: keyID, priv: priv, pub: pub}, nil
-}
-
-func (p *Principal) PubHex() string { return hex.EncodeToString(p.pub) }
-
-// Sign returns an L3 proof: a principal signature over the transaction hash.
-func (p *Principal) Sign(txHash string) *commonv1.L3Metadata {
-	sig := ed25519.Sign(p.priv, []byte(txHash))
-	return &commonv1.L3Metadata{
-		Proof: &commonv1.L3Proof{Signature: hex.EncodeToString(sig)},
-	}
-}
-
 // MaximalEnvelope is the input for an official governance envelope submission.
 type MaximalEnvelope struct {
 	OperatorID        string
@@ -229,8 +201,7 @@ type MaximalEnvelope struct {
 	TargetResource    string
 	StateRoot         string
 	Ensemble          *Ensemble          // attach L2 when non-nil
-	Principal         *Principal         // attach mock L3 when non-nil ("mock" mode)
-	Authenticator     *SoftAuthenticator // attach genuine WebAuthn L3 when non-nil ("webauthn" mode)
+	Authenticator     *SoftAuthenticator // attach genuine WebAuthn L3 when non-nil
 	TTL               time.Duration
 }
 
@@ -307,10 +278,7 @@ func (c *Client) SubmitMaximal(ctx context.Context, p Persona, m MaximalEnvelope
 	if m.Ensemble != nil {
 		env.Governance.L2 = m.Ensemble.Vote(txHash, true)
 	}
-	if m.Principal != nil { // "mock" L3 mode
-		env.Governance.L3 = m.Principal.Sign(txHash)
-	}
-	if m.Authenticator != nil { // "webauthn" L3 mode
+	if m.Authenticator != nil {
 		env.Governance.L3 = m.Authenticator.SignL3(txHash)
 	}
 

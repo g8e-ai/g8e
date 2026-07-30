@@ -220,10 +220,6 @@ func TestHarnessRun_ExecMode(t *testing.T) {
 	assert.Contains(t, args, constants.ContainerOperatorKey)
 	assert.Contains(t, args, "--ca")
 	assert.Contains(t, args, constants.ContainerCABundle)
-	assert.Contains(t, args, "--ensemble")
-	assert.Contains(t, args, "3")
-	assert.Contains(t, args, "--l3-mode")
-	assert.Contains(t, args, "webauthn")
 	assert.Equal(t, "mcp_basic_read", args[len(args)-1])
 }
 
@@ -244,19 +240,7 @@ func TestHarnessRun_RunMode(t *testing.T) {
 	assert.Equal(t, "run", args[9])
 }
 
-func TestHarnessRun_WithConsensusSeedAndConsensusID(t *testing.T) {
-	cfg := defaultHarnessConfig("operator")
-	cfg.ConsensusSeed = "abc123"
-	cfg.ConsensusID = "trib-001"
-	args := harnessRun("gov_cui_exfil", cfg)
-
-	assert.Contains(t, args, "--consensus-seed")
-	assert.Contains(t, args, "abc123")
-	assert.Contains(t, args, "--consensus-id")
-	assert.Contains(t, args, "trib-001")
-}
-
-func TestHarnessRun_WithoutEnsembleOrL3Mode(t *testing.T) {
+func TestHarnessRun_WithoutExtraFlags(t *testing.T) {
 	cfg := harnessConfig{
 		Container: "operator",
 		MTLSURL:   "https://g8e.local:8443",
@@ -282,8 +266,6 @@ func TestDefaultHarnessConfig_ReturnsExpectedDefaults(t *testing.T) {
 	assert.Equal(t, constants.ContainerOperatorCert, cfg.CertPath)
 	assert.Equal(t, constants.ContainerOperatorKey, cfg.KeyPath)
 	assert.Equal(t, constants.ContainerCABundle, cfg.CAPath)
-	assert.Equal(t, 3, cfg.EnsembleSize)
-	assert.Equal(t, "webauthn", cfg.L3Mode)
 	assert.False(t, cfg.UseRun)
 }
 

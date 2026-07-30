@@ -23,7 +23,7 @@ import (
 
 // defaultFedRAMPHarnessConfig returns the config matching the FedRAMP compose topology.
 func defaultFedRAMPHarnessConfig() harnessConfig {
-	return defaultGovernedHarnessConfig("agent-runtime", "fedramp-consensus")
+	return defaultHarnessConfig("agent-runtime")
 }
 
 func switchFedRAMPPosture(demoDir, posture string) error {
@@ -212,7 +212,6 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Ledger(tui.LevelInfo, "L1 doctrine admitted envelope for fedramp-escalate")
 		notaryCfg := hcfg
 		notaryCfg.Posture = "notary"
-		notaryCfg.L3Mode = "webauthn"
 		if err := demoStep(demoDir, "fedramp-escalate via agent (notary WebAuthn L3)",
 			false,
 			harnessRun("fedramp-escalate", notaryCfg)...,

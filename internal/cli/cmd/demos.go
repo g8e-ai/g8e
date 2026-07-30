@@ -1421,45 +1421,27 @@ type twoLayerScenarioConfig struct {
 // command for a demos scenarios run. Centralising these in a struct
 // avoids positional-argument drift as flags are added across demos.
 type harnessConfig struct {
-	Container     string
-	MTLSURL       string
-	PublicURL     string
-	CertPath      string
-	KeyPath       string
-	CAPath        string
-	EnsembleSize  int
-	L3Mode        string
-	Posture       string
-	ConsensusSeed string
-	ConsensusID   string
-	UseRun        bool // true for `docker compose run --rm`, false for `exec`
+	Container string
+	MTLSURL   string
+	PublicURL string
+	CertPath  string
+	KeyPath   string
+	CAPath    string
+	Posture   string
+	UseRun    bool // true for `docker compose run --rm`, false for `exec`
 }
 
 // defaultHarnessConfig returns the config matching the standard demo topology:
-// g8e.local gateway on 8443/8080, operator mTLS certs in the container PKI dir,
-// ensemble size 3, WebAuthn L3 mode (software passkey).
+// g8e.local gateway on 8443/8080, operator mTLS certs in the container PKI dir.
 func defaultHarnessConfig(container string) harnessConfig {
 	return harnessConfig{
-		Container:    container,
-		MTLSURL:      "https://g8e.local:8443",
-		PublicURL:    "http://g8e.local:8080",
-		CertPath:     constants.ContainerOperatorCert,
-		KeyPath:      constants.ContainerOperatorKey,
-		CAPath:       constants.ContainerCABundle,
-		EnsembleSize: 3,
-		L3Mode:       "webauthn",
+		Container: container,
+		MTLSURL:   "https://g8e.local:8443",
+		PublicURL: "http://g8e.local:8080",
+		CertPath:  constants.ContainerOperatorCert,
+		KeyPath:   constants.ContainerOperatorKey,
+		CAPath:    constants.ContainerCABundle,
 	}
-}
-
-// defaultGovernedHarnessConfig returns a harness config for demos that use
-// consensus seed and consensus-based governance (DHS, FedRAMP, etc.).
-// It wraps defaultHarnessConfig with the shared ConsensusSeed and a
-// demo-specific ConsensusID.
-func defaultGovernedHarnessConfig(container, ConsensusID string) harnessConfig {
-	cfg := defaultHarnessConfig(container)
-	cfg.ConsensusSeed = constants.ContainerEnsembleSeed
-	cfg.ConsensusID = ConsensusID
-	return cfg
 }
 
 // harnessRun builds the docker compose command for a demos scenarios run.
@@ -1479,18 +1461,6 @@ func harnessRun(scenario string, cfg harnessConfig) []string {
 		"--key", cfg.KeyPath,
 		"--ca", cfg.CAPath,
 	)
-	if cfg.EnsembleSize > 0 {
-		cmd = append(cmd, "--ensemble", fmt.Sprintf("%d", cfg.EnsembleSize))
-	}
-	if cfg.L3Mode != "" {
-		cmd = append(cmd, "--l3-mode", cfg.L3Mode)
-	}
-	if cfg.ConsensusSeed != "" {
-		cmd = append(cmd, "--consensus-seed", cfg.ConsensusSeed)
-	}
-	if cfg.ConsensusID != "" {
-		cmd = append(cmd, "--consensus-id", cfg.ConsensusID)
-	}
 	cmd = append(cmd, scenario)
 	return cmd
 }

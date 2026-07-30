@@ -412,12 +412,8 @@ func TestRunAgentHarness_ConfigLoadError(t *testing.T) {
 		harnessAPIKey = ""
 		harnessSessionID = ""
 		harnessOutDir = ""
-		harnessL3Mode = ""
-		harnessEnsemble = 3
 		harnessVerbose = false
 		harnessPhase = "all"
-		harnessConsensusSeed = ""
-		harnessConsensusID = ""
 
 		cmd := &cobra.Command{}
 		var buf bytes.Buffer

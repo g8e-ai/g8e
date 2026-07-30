@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
 )
 
 func TestDHSScenarios(t *testing.T) {
@@ -145,13 +144,8 @@ func TestDHSScenariosInRegistry(t *testing.T) {
 
 func TestDHSGovKitValidation(t *testing.T) {
 	kit := &GovKit{
-		Ensemble:   &clientpkg.Ensemble{},
-		Principal:  &clientpkg.Principal{},
-		L3Mode:     "mock",
 		OperatorID: "dhs-operator",
 	}
 
-	assert.NotNil(t, kit.Ensemble, "Valid GovKit should have non-nil Ensemble")
-	assert.NotNil(t, kit.Principal, "Valid GovKit should have non-nil Principal")
 	assert.NotEmpty(t, kit.OperatorID, "Valid GovKit should have non-empty OperatorID")
 }

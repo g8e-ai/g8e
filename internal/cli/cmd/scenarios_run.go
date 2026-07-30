@@ -41,12 +41,8 @@ var (
 	harnessAPIKey        string
 	harnessSessionID     string
 	harnessOutDir        string
-	harnessL3Mode        string
-	harnessEnsemble      int
 	harnessVerbose       bool
 	harnessPhase         string
-	harnessConsensusSeed string
-	harnessConsensusID   string
 )
 
 func demosScenariosRunCmd() *cobra.Command {
@@ -65,12 +61,8 @@ func demosScenariosRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&harnessAPIKey, "api-key", "", "operator API key for MCP/A2A surface")
 	cmd.Flags().StringVar(&harnessSessionID, "operator-session", "", "scope audit to a specific Operator session")
 	cmd.Flags().StringVar(&harnessOutDir, "out", "", "report output dir")
-	cmd.Flags().StringVar(&harnessL3Mode, "l3-mode", "", "mock|suspend|webauthn")
-	cmd.Flags().IntVar(&harnessEnsemble, "ensemble", 3, "consensus ensemble size")
 	cmd.Flags().BoolVar(&harnessVerbose, "verbose", false, "echo each request/response")
 	cmd.Flags().StringVar(&harnessPhase, "phase", "all", "doctrine|consensus|notary|all")
-	cmd.Flags().StringVar(&harnessConsensusSeed, "consensus-seed", "", "hex-encoded Ed25519 seed for deterministic ensemble key (or path to seed file)")
-	cmd.Flags().StringVar(&harnessConsensusID, "consensus-id", "", "ConsensusPolicy ID for L2 consensus (defaults to test-consensus)")
 
 	return cmd
 }
@@ -165,20 +157,8 @@ func applyAgentHarnessFlags(cfg *config.Config) {
 	if harnessOutDir != "" {
 		cfg.OutDir = harnessOutDir
 	}
-	if harnessL3Mode != "" {
-		cfg.L3Mode = harnessL3Mode
-	}
-	if harnessEnsemble != 0 {
-		cfg.EnsembleSize = harnessEnsemble
-	}
 	if harnessVerbose {
 		cfg.Verbose = harnessVerbose
-	}
-	if harnessConsensusSeed != "" {
-		cfg.ConsensusSeed = harnessConsensusSeed
-	}
-	if harnessConsensusID != "" {
-		cfg.ConsensusID = harnessConsensusID
 	}
 }
 
@@ -228,68 +208,6 @@ func needsGovKit(ss []scenarios.Scenario) bool {
 }
 
 func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Config, selected []scenarios.Scenario) error {
-	var ens *clientpkg.Ensemble
-	var err error
-	if cfg.ConsensusSeed != "" {
-		seedHex := cfg.ConsensusSeed
-		if _, statErr := os.Stat(seedHex); statErr == nil {
-			data, readErr := os.ReadFile(seedHex)
-			if readErr != nil {
-				return fmt.Errorf("read consensus seed file: %w", readErr)
-			}
-			seedHex = strings.TrimSpace(string(data))
-		}
-		ens, err = clientpkg.NewEnsembleFromSeed(cfg.ConsensusKeyID, cfg.EnsembleSize, seedHex)
-		if err != nil {
-			return fmt.Errorf("setup gov kit: ensemble from seed: %w", err)
-		}
-	} else {
-		ens, err = clientpkg.NewEnsemble(cfg.ConsensusKeyID, cfg.EnsembleSize)
-		if err != nil {
-			return fmt.Errorf("setup gov kit: ensemble: %w", err)
-		}
-	}
-	if cfg.ConsensusID != "" {
-		ens.ConsensusID = cfg.ConsensusID
-	}
-
-	// If the consensus seed is a file path, try to load consensus member app IDs
-	// and per-member seeds from a sibling consensus-bootstrap.json. When
-	// member_seeds is present, reconstruct the ensemble with distinct per-member
-	// keys so each vote is independently signed and RequireDistinct/quorum are
-	// cryptographically meaningful. When only member_app_ids is present, the
-	// ensemble votes with the correct member key IDs but shares one signature
-	// (single-key fallback).
-	if cfg.ConsensusSeed != "" {
-		seedDir := filepath.Dir(cfg.ConsensusSeed)
-		bootstrapPath := filepath.Join(seedDir, "consensus-bootstrap.json")
-		if data, readErr := os.ReadFile(bootstrapPath); readErr == nil {
-			var boot struct {
-				MemberAppIDs []string          `json:"member_app_ids"`
-				ConsensusID  string            `json:"consensus_id"`
-				MemberSeeds  map[string]string `json:"member_seeds"`
-			}
-			if json.Unmarshal(data, &boot) == nil && len(boot.MemberAppIDs) > 0 {
-				if len(boot.MemberSeeds) > 0 {
-					consensusID := boot.ConsensusID
-					if consensusID == "" {
-						consensusID = ens.ConsensusID
-					}
-					ens, err = clientpkg.NewEnsembleFromMemberSeeds(cfg.ConsensusKeyID, consensusID, boot.MemberSeeds)
-					if err != nil {
-						return fmt.Errorf("setup gov kit: ensemble from member seeds: %w", err)
-					}
-				} else {
-					ens.MemberKeyIDs = boot.MemberAppIDs
-				}
-			}
-		}
-	}
-
-	prin, err := clientpkg.NewPrincipal(cfg.PrincipalKeyID)
-	if err != nil {
-		return fmt.Errorf("setup gov kit: principal: %w", err)
-	}
 	opID := cfg.OperatorSessionID
 	opSessionID := ""
 	if opID == "" {
@@ -298,70 +216,28 @@ func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Confi
 		opSessionID = opID
 	}
 
+	rpID := cfg.PasskeyRpID
+	if rpID == "" {
+		rpID = "localhost"
+	}
+	rpOrigin := cfg.PasskeyRpOrigin
+	if rpOrigin == "" {
+		rpOrigin = cfg.PublicBaseURL
+	}
+	authenticator, err := clientpkg.NewSoftAuthenticator(rpID, rpOrigin)
+	if err != nil {
+		return fmt.Errorf("setup gov kit: soft authenticator: %w", err)
+	}
+	if err := authenticator.Register(ctx, client, opID, opID, opSessionID); err != nil {
+		return fmt.Errorf("setup gov kit: authenticator register: %w", err)
+	}
+
 	gk := &scenarios.GovKit{
-		Ensemble: ens, Principal: prin, L3Mode: cfg.L3Mode,
-		OperatorID: opID, OperatorSessionID: opSessionID,
+		Authenticator:     authenticator,
+		OperatorID:        opID,
+		OperatorSessionID: opSessionID,
 	}
-
-	if cfg.L3Mode == "webauthn" {
-		rpID := cfg.PasskeyRpID
-		if rpID == "" {
-			rpID = "localhost"
-		}
-		rpOrigin := cfg.PasskeyRpOrigin
-		if rpOrigin == "" {
-			rpOrigin = cfg.PublicBaseURL
-		}
-		authenticator, err := clientpkg.NewSoftAuthenticator(rpID, rpOrigin)
-		if err != nil {
-			return fmt.Errorf("setup gov kit: soft authenticator: %w", err)
-		}
-		if err := authenticator.Register(ctx, client, opID, opID, opSessionID); err != nil {
-			return fmt.Errorf("setup gov kit: authenticator register: %w", err)
-		}
-		gk.Authenticator = authenticator
-	}
-
 	scenarios.SetGovKit(gk)
-
-	requiresConsensus := false
-	requiresNotary := false
-	for _, s := range selected {
-		if s.RequiresPosture == scenarios.Consensus {
-			requiresConsensus = true
-		}
-		if s.RequiresPosture == scenarios.Notary {
-			requiresNotary = true
-		}
-	}
-
-	if len(ens.MemberKeyIDs) > 0 {
-		for _, appID := range ens.MemberKeyIDs {
-			pubHex := ens.PubHex()
-			if ens.HasPerMemberKeys() {
-				pubHex = ens.MemberPubHex(appID)
-			}
-			if err := client.RegisterSigner(ctx, appID, pubHex, "consensus"); err != nil {
-				if requiresConsensus {
-					return fmt.Errorf("consensus signer registration %s: %w", appID, err)
-				}
-				fmt.Fprintf(os.Stderr, "warning: consensus signer registration %s: %v (non-fatal under doctrine)\n", appID, err)
-			}
-		}
-	} else {
-		if err := client.RegisterSigner(ctx, ens.KeyID, ens.PubHex(), "consensus"); err != nil {
-			if requiresConsensus {
-				return fmt.Errorf("consensus signer registration: %w", err)
-			}
-			fmt.Fprintf(os.Stderr, "warning: consensus signer registration: %v (non-fatal under doctrine)\n", err)
-		}
-	}
-	if err := client.RegisterSigner(ctx, prin.KeyID, prin.PubHex(), "principal"); err != nil {
-		if requiresNotary {
-			return fmt.Errorf("principal signer registration: %w", err)
-		}
-		fmt.Fprintf(os.Stderr, "warning: principal signer registration: %v (non-fatal under doctrine)\n", err)
-	}
 	return nil
 }
 

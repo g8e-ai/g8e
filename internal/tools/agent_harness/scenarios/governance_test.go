@@ -10,15 +10,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 func TestSetGovKit(t *testing.T) {
 	testKit := &GovKit{
-		Ensemble:   nil,
-		Principal:  nil,
-		L3Mode:     "test-mode",
 		OperatorID: "test-operator",
 	}
 
@@ -29,19 +25,10 @@ func TestSetGovKit(t *testing.T) {
 }
 
 func TestGovKitStruct(t *testing.T) {
-	ensemble := &clientpkg.Ensemble{}
-	principal := &clientpkg.Principal{}
-
 	kit := &GovKit{
-		Ensemble:   ensemble,
-		Principal:  principal,
-		L3Mode:     "mock",
 		OperatorID: "test-operator-id",
 	}
 
-	assert.Equal(t, ensemble, kit.Ensemble, "GovKit Ensemble should be set")
-	assert.Equal(t, principal, kit.Principal, "GovKit Principal should be set")
-	assert.Equal(t, "mock", kit.L3Mode, "GovKit L3Mode should be set")
 	assert.Equal(t, "test-operator-id", kit.OperatorID, "GovKit OperatorID should be set")
 }
 
@@ -57,31 +44,8 @@ func TestGovKitValidation(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "nil ensemble",
-			kit: &GovKit{
-				Ensemble:   nil,
-				Principal:  &clientpkg.Principal{},
-				L3Mode:     "mock",
-				OperatorID: "test",
-			},
-			wantErr: true,
-		},
-		{
-			name: "nil principal",
-			kit: &GovKit{
-				Ensemble:   &clientpkg.Ensemble{},
-				Principal:  nil,
-				L3Mode:     "mock",
-				OperatorID: "test",
-			},
-			wantErr: true,
-		},
-		{
 			name: "empty operator ID",
 			kit: &GovKit{
-				Ensemble:   &clientpkg.Ensemble{},
-				Principal:  &clientpkg.Principal{},
-				L3Mode:     "mock",
 				OperatorID: "",
 			},
 			wantErr: true,
@@ -89,9 +53,6 @@ func TestGovKitValidation(t *testing.T) {
 		{
 			name: "valid kit",
 			kit: &GovKit{
-				Ensemble:   &clientpkg.Ensemble{},
-				Principal:  &clientpkg.Principal{},
-				L3Mode:     "mock",
 				OperatorID: "test-operator",
 			},
 			wantErr: false,
@@ -100,7 +61,7 @@ func TestGovKitValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hasErr := tt.kit == nil || tt.kit.Ensemble == nil || tt.kit.Principal == nil || tt.kit.OperatorID == ""
+			hasErr := tt.kit == nil || tt.kit.OperatorID == ""
 			assert.Equal(t, tt.wantErr, hasErr, "GovKit validation error mismatch")
 		})
 	}
@@ -412,50 +373,3 @@ func itoa(n int) string {
 	return fmt.Sprintf("%d", n)
 }
 
-func TestGovKitL3Modes(t *testing.T) {
-	tests := []struct {
-		name   string
-		l3Mode string
-		valid  bool
-	}{
-		{
-			name:   "mock mode",
-			l3Mode: "mock",
-			valid:  true,
-		},
-		{
-			name:   "webauthn mode",
-			l3Mode: "webauthn",
-			valid:  true,
-		},
-		{
-			name:   "suspend mode",
-			l3Mode: "suspend",
-			valid:  true,
-		},
-		{
-			name:   "empty mode",
-			l3Mode: "",
-			valid:  false,
-		},
-		{
-			name:   "invalid mode",
-			l3Mode: "invalid",
-			valid:  false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			kit := &GovKit{
-				Ensemble:   &clientpkg.Ensemble{},
-				Principal:  &clientpkg.Principal{},
-				L3Mode:     tt.l3Mode,
-				OperatorID: "test",
-			}
-
-			isValid := kit.L3Mode == "mock" || kit.L3Mode == "suspend" || kit.L3Mode == "webauthn"
-			assert.Equal(t, tt.valid, isValid, "L3Mode validation mismatch")
-		})
-	}
-}
