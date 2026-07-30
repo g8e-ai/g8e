@@ -1161,6 +1161,22 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool) error {
 		}
 	}
 
+	// Demos with notary scenarios require a real human WebAuthn approval.
+	// Prompt the user to enroll a passkey before running scenarios.
+	if org == constants.DemosOrgDHS || org == constants.DemosOrgFedRAMP {
+		httpPort := demoHTTPPort(org)
+		httpsPort := demoHTTPSPort(org)
+		if httpPort != "" && httpsPort != "" {
+			fmt.Fprintf(os.Stderr, "\n%s\n  Passkey enrollment required\n%s\n", strings.Repeat("─", 60), strings.Repeat("─", 60))
+			fmt.Fprintf(os.Stderr, "  This demo requires real human WebAuthn approvals.\n")
+			fmt.Fprintf(os.Stderr, "  Enroll a passkey now (opens your browser):\n\n")
+			fmt.Fprintf(os.Stderr, "    g8e auth enroll -e localhost:%s --port %s\n\n", httpPort, httpsPort)
+			fmt.Fprintf(os.Stderr, "  Press Enter once enrollment is complete to continue...\n")
+			reader := bufio.NewReader(os.Stdin)
+			_, _ = reader.ReadString('\n')
+		}
+	}
+
 	if useTUI {
 		return runDemosWithTUI(cmd, org, demoDir, args)
 	}

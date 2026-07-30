@@ -13,11 +13,9 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
-// GovKit carries the cryptographic actors the governance scenarios need.
-// main builds it once (registering the software passkey) and injects it
-// before running the consensus/notary block.
+// GovKit carries the governance context the scenarios need.
+// main builds it once and injects it before running the consensus/notary block.
 type GovKit struct {
-	Authenticator     *clientpkg.SoftAuthenticator
 	OperatorID        string
 	OperatorSessionID string
 }
@@ -56,9 +54,9 @@ func governanceScenarios() []Scenario {
 			},
 		},
 		{
-			Name: "envelope-maximal", Title: "Notary envelope: MCP tools/call, gateway suspends, WebAuthn approves", Persona: ensembleProducer, RequiresPosture: Notary,
+			Name: "envelope-maximal", Title: "Notary envelope: MCP tools/call, gateway suspends, human approves via WebAuthn", Persona: ensembleProducer, RequiresPosture: Notary,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				if kit == nil || kit.Authenticator == nil {
+				if kit == nil {
 					return constants.ErrHarnessGovKitMissingSign
 				}
 				r.note("submitting fs_list via MCP tools/call — gateway runs L2, suspends for L3")
@@ -70,18 +68,18 @@ func governanceScenarios() []Scenario {
 
 				if txHash, suspended := clientpkg.Suspended(resp); suspended {
 					r.note("gateway suspended transaction %s pending L3 notary approval", short(txHash))
-					ast, approveBody, aerr := c.ApproveWithWebAuthn(ctx, ensembleProducer, txHash, kit.Authenticator)
+					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, ensembleProducer, txHash, kit.OperatorID)
 					if aerr != nil {
-						return fmt.Errorf("webauthn approve: %w", aerr)
+						return fmt.Errorf("human approval: %w", aerr)
 					}
-					r.note("software passkey approved hash %s via OOB notary (status %d)", short(txHash), ast)
+					r.note("human approved hash %s via browser WebAuthn (status %d)", short(txHash), ast)
 					if ast >= 400 {
-						return fmt.Errorf("OOB approval rejected with status %d", ast)
+						return fmt.Errorf("human approval rejected with status %d", ast)
 					}
 					if summary, failed := receiptFailed(approveBody); failed {
-						return fmt.Errorf("tool execution failed after OOB approval: %s", summary)
+						return fmt.Errorf("tool execution failed after human approval: %s", summary)
 					}
-					r.note("WebAuthn L3 proof verified; transaction resumed")
+					r.note("human WebAuthn L3 proof verified; transaction resumed")
 					return nil
 				}
 
@@ -139,9 +137,9 @@ func governanceScenarios() []Scenario {
 			},
 		},
 		{
-			Name: "notary-oob", Title: "L3 notary OOB: MCP tools/call, gateway suspends, software passkey approves", Persona: principalActor, RequiresPosture: Notary,
+			Name: "notary-oob", Title: "L3 notary OOB: MCP tools/call, gateway suspends, human approves via WebAuthn", Persona: principalActor, RequiresPosture: Notary,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				if kit == nil || kit.Authenticator == nil {
+				if kit == nil {
 					return constants.ErrHarnessGovKitMissingSign
 				}
 				r.note("submitting fs_list via MCP tools/call — gateway suspends for L3 notary")
@@ -153,18 +151,18 @@ func governanceScenarios() []Scenario {
 
 				if txHash, suspended := clientpkg.Suspended(resp); suspended {
 					r.note("gateway suspended transaction %s pending L3 notary approval", short(txHash))
-					ast, approveBody, aerr := c.ApproveWithWebAuthn(ctx, principalActor, txHash, kit.Authenticator)
+					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, principalActor, txHash, kit.OperatorID)
 					if aerr != nil {
-						return fmt.Errorf("webauthn approve: %w", aerr)
+						return fmt.Errorf("human approval: %w", aerr)
 					}
-					r.note("software passkey approved hash %s via OOB notary (status %d)", short(txHash), ast)
+					r.note("human approved hash %s via browser WebAuthn (status %d)", short(txHash), ast)
 					if ast >= 400 {
-						return fmt.Errorf("OOB approval rejected with status %d", ast)
+						return fmt.Errorf("human approval rejected with status %d", ast)
 					}
 					if summary, failed := receiptFailed(approveBody); failed {
-						return fmt.Errorf("tool execution failed after OOB approval: %s", summary)
+						return fmt.Errorf("tool execution failed after human approval: %s", summary)
 					}
-					r.note("WebAuthn L3 proof verified; transaction resumed")
+					r.note("human WebAuthn L3 proof verified; transaction resumed")
 					return nil
 				}
 

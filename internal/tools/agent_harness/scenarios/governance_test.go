@@ -154,10 +154,10 @@ func TestGovernanceScenarioTitles(t *testing.T) {
 
 	expectedTitles := map[string]string{
 		"consensus":        "L2 consensus via MCP tools/call (gateway deliberation)",
-		"envelope-maximal": "Notary envelope: MCP tools/call, gateway suspends, WebAuthn approves",
+		"envelope-maximal": "Notary envelope: MCP tools/call, gateway suspends, human approves via WebAuthn",
 		"agent-delegation": "CLI delegates app credential to agent (SPIFFE distinctness + receipt audit)",
 		"consensus-quorum": "Consensus quorum: MCP tools/call, gateway 2-of-3 deliberation",
-		"notary-oob":       "L3 notary OOB: MCP tools/call, gateway suspends, software passkey approves",
+		"notary-oob":       "L3 notary OOB: MCP tools/call, gateway suspends, human approves via WebAuthn",
 	}
 
 	for _, sc := range scenarios {

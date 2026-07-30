@@ -107,7 +107,7 @@ func fedrampScenarios() []Scenario {
 		{
 			Name: "fedramp-escalate", Title: "FedRAMP: resource destruction gated on authorizing official approval (L3)", Persona: fedrampAuthorizingOfficial, RequiresPosture: Notary,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				if kit == nil || kit.Authenticator == nil {
+				if kit == nil {
 					return constants.ErrHarnessGovKitMissingSign
 				}
 				r.note("operator requests destruction of fedramp-vm-classified-01 (FIPS-199-HIGH)")
@@ -119,18 +119,18 @@ func fedrampScenarios() []Scenario {
 
 				if txHash, suspended := clientpkg.Suspended(resp); suspended {
 					r.note("gateway suspended destroy transaction %s pending L3 notary approval", short(txHash))
-					ast, approveBody, aerr := c.ApproveWithWebAuthn(ctx, fedrampAuthorizingOfficial, txHash, kit.Authenticator)
+					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, fedrampAuthorizingOfficial, txHash, kit.OperatorID)
 					if aerr != nil {
 						return fmt.Errorf("authorizing official approve: %w", aerr)
 					}
-					r.note("authorizing official approved hash %s via OOB notary (status %d)", short(txHash), ast)
+					r.note("authorizing official approved hash %s via browser WebAuthn (status %d)", short(txHash), ast)
 					if ast >= 400 {
 						return fmt.Errorf("authorizing official approval rejected (status %d)", ast)
 					}
 					if summary, failed := receiptFailed(approveBody); failed {
 						return fmt.Errorf("destroy tool execution failed: %s", summary)
 					}
-					r.note("WebAuthn L3 proof verified; destruction executed")
+					r.note("human WebAuthn L3 proof verified; destruction executed")
 					return nil
 				}
 

@@ -16,14 +16,17 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
 )
@@ -371,93 +374,6 @@ func TestClient_RegisterSigner(t *testing.T) {
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("RegisterSigner() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestClient_ApproveWithWebAuthn(t *testing.T) {
-	tests := []struct {
-		name         string
-		txHash       string
-		responseCode int
-		responseBody string
-	}{
-		{
-			name:         "successful approval",
-			txHash:       "abc123",
-			responseCode: http.StatusOK,
-			responseBody: `{"status": "approved"}`,
-		},
-		{
-			name:         "transaction not found",
-			txHash:       "nonexistent",
-			responseCode: http.StatusNotFound,
-			responseBody: `{"error": "not found"}`,
-		},
-		{
-			name:         "server error",
-			txHash:       "abc123",
-			responseCode: http.StatusInternalServerError,
-			responseBody: `{"error": "internal error"}`,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method != http.MethodPost {
-					t.Errorf("expected POST, got %s", r.Method)
-				}
-				expectedPath := constants.APIPaths.ApprovalsByID + tt.txHash + constants.APIPaths.ApprovalsVerifyAction
-				if r.URL.Path != expectedPath {
-					t.Errorf("expected path %s, got %s", expectedPath, r.URL.Path)
-				}
-
-				var req map[string]string
-				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-					t.Errorf("failed to decode request: %v", err)
-				}
-
-				requiredFields := []string{"id", "rawId", "clientDataJSON", "authenticatorData", "signature"}
-				for _, field := range requiredFields {
-					if req[field] == "" {
-						t.Errorf("expected non-empty %s in request body", field)
-					}
-				}
-
-				w.WriteHeader(tt.responseCode)
-				w.Write([]byte(tt.responseBody))
-			}))
-			defer server.Close()
-
-			cfg := config.Config{
-				PublicBaseURL: server.URL,
-				Auth:          config.Auth{},
-			}
-
-			client, err := New(cfg)
-			if err != nil {
-				t.Fatalf("New() failed: %v", err)
-			}
-
-			auth, err := NewSoftAuthenticator("localhost", server.URL)
-			if err != nil {
-				t.Fatalf("NewSoftAuthenticator() failed: %v", err)
-			}
-
-			ctx := context.Background()
-			p := Persona{ID: "test-user"}
-			status, body, err := client.ApproveWithWebAuthn(ctx, p, tt.txHash, auth)
-
-			if err != nil {
-				t.Errorf("ApproveWithWebAuthn() unexpected error = %v", err)
-			}
-			if status != tt.responseCode {
-				t.Errorf("ApproveWithWebAuthn() status = %d, want %d", status, tt.responseCode)
-			}
-			if string(body) != tt.responseBody {
-				t.Errorf("ApproveWithWebAuthn() body = %s, want %s", string(body), tt.responseBody)
 			}
 		})
 	}
@@ -829,6 +745,185 @@ func TestExchange_Marshal(t *testing.T) {
 	}
 	if decoded.Status != ex.Status {
 		t.Errorf("Status mismatch: got %d, want %d", decoded.Status, ex.Status)
+	}
+}
+
+func TestClient_WaitForHumanApproval_Success(t *testing.T) {
+	const userID = "test-user-approval"
+	const txHash = "tx-success-001"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, constants.APIPaths.SSEStream):
+			w.Header().Set("Content-Type", "text/event-stream")
+			eventPayload, err := json.Marshal(models.ApprovalCompletedEvent{
+				Type:   constants.SSEEventTypeApprovalCompleted,
+				UserID: userID,
+				TxHash: txHash,
+			})
+			if err != nil {
+				t.Fatalf("marshal event: %v", err)
+			}
+			envelope := models.SSEPushPayload{
+				UserID: userID,
+				Event:  eventPayload,
+			}
+			envelopeJSON, err := json.Marshal(envelope)
+			if err != nil {
+				t.Fatalf("marshal envelope: %v", err)
+			}
+			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", constants.SSEEventTypeApprovalCompleted, string(envelopeJSON))
+		case strings.HasPrefix(r.URL.Path, constants.APIPaths.ApprovalsCLIStatus):
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(models.ApprovalStatusResponse{
+				Status: string(constants.SuspendedTxStatusApproved),
+				TxHash: txHash,
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := config.Config{
+		PublicBaseURL: srv.URL,
+		MTLSBaseURL:   srv.URL,
+		Auth:          config.Auth{},
+	}
+
+	client, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	status, body, err := client.WaitForHumanApproval(ctx, Persona{ID: "test"}, txHash, userID)
+	if err != nil {
+		t.Fatalf("WaitForHumanApproval() error = %v", err)
+	}
+	if status != http.StatusOK {
+		t.Errorf("expected status 200, got %d", status)
+	}
+	if len(body) == 0 {
+		t.Error("expected non-empty body")
+	}
+}
+
+func TestClient_WaitForHumanApproval_TimeoutNoMatchingEvent(t *testing.T) {
+	const userID = "test-user-timeout"
+	const sentTxHash = "tx-wrong-999"
+	const expectedTxHash = "tx-correct-001"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, constants.APIPaths.SSEStream):
+			w.Header().Set("Content-Type", "text/event-stream")
+			eventPayload, err := json.Marshal(models.ApprovalCompletedEvent{
+				Type:   constants.SSEEventTypeApprovalCompleted,
+				UserID: userID,
+				TxHash: sentTxHash,
+			})
+			if err != nil {
+				t.Fatalf("marshal event: %v", err)
+			}
+			envelope := models.SSEPushPayload{
+				UserID: userID,
+				Event:  eventPayload,
+			}
+			envelopeJSON, err := json.Marshal(envelope)
+			if err != nil {
+				t.Fatalf("marshal envelope: %v", err)
+			}
+			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", constants.SSEEventTypeApprovalCompleted, string(envelopeJSON))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := config.Config{
+		PublicBaseURL: srv.URL,
+		MTLSBaseURL:   srv.URL,
+		Auth:          config.Auth{},
+	}
+
+	client, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	_, _, err = client.WaitForHumanApproval(ctx, Persona{ID: "test"}, expectedTxHash, userID)
+	if err == nil {
+		t.Fatal("expected timeout error, got nil")
+	}
+	if err != constants.ErrApprovalSSETimeout {
+		t.Errorf("expected ErrApprovalSSETimeout, got %v", err)
+	}
+}
+
+func TestClient_WaitForHumanApproval_StatusEndpointError(t *testing.T) {
+	const userID = "test-user-status-err"
+	const txHash = "tx-status-err-456"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, constants.APIPaths.SSEStream):
+			w.Header().Set("Content-Type", "text/event-stream")
+			eventPayload, err := json.Marshal(models.ApprovalCompletedEvent{
+				Type:   constants.SSEEventTypeApprovalCompleted,
+				UserID: userID,
+				TxHash: txHash,
+			})
+			if err != nil {
+				t.Fatalf("marshal event: %v", err)
+			}
+			envelope := models.SSEPushPayload{
+				UserID: userID,
+				Event:  eventPayload,
+			}
+			envelopeJSON, err := json.Marshal(envelope)
+			if err != nil {
+				t.Fatalf("marshal envelope: %v", err)
+			}
+			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", constants.SSEEventTypeApprovalCompleted, string(envelopeJSON))
+		case strings.HasPrefix(r.URL.Path, constants.APIPaths.ApprovalsCLIStatus):
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(models.ApprovalStatusResponse{
+				Status: string(constants.SuspendedTxStatusExpiredOrNotFound),
+				TxHash: txHash,
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := config.Config{
+		PublicBaseURL: srv.URL,
+		MTLSBaseURL:   srv.URL,
+		Auth:          config.Auth{},
+	}
+
+	client, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	status, _, err := client.WaitForHumanApproval(ctx, Persona{ID: "test"}, txHash, userID)
+	if err == nil {
+		t.Fatal("expected error from status endpoint, got nil")
+	}
+	if status != http.StatusInternalServerError {
+		t.Errorf("expected status 500, got %d", status)
 	}
 }
 

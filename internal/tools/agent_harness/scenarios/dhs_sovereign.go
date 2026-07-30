@@ -86,7 +86,7 @@ func dhsScenarios() []Scenario {
 		{
 			Name: "dhs-release", Title: "DHS: cross-domain release gated on out-of-band release-authority approval (L3)", Persona: dhsReleaseAuthority, RequiresPosture: Notary,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				if kit == nil || kit.Authenticator == nil {
+				if kit == nil {
 					return constants.ErrHarnessGovKitMissingSign
 				}
 				r.note("connector requests cross-domain release of TRK-MIL-0007 to the Mission Partner COP")
@@ -98,18 +98,18 @@ func dhsScenarios() []Scenario {
 
 				if txHash, suspended := clientpkg.Suspended(resp); suspended {
 					r.note("gateway suspended release transaction %s pending L3 notary approval", short(txHash))
-					ast, approveBody, aerr := c.ApproveWithWebAuthn(ctx, dhsReleaseAuthority, txHash, kit.Authenticator)
+					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, dhsReleaseAuthority, txHash, kit.OperatorID)
 					if aerr != nil {
 						return fmt.Errorf("release authority approve: %w", aerr)
 					}
-					r.note("release authority approved hash %s via OOB notary (status %d)", short(txHash), ast)
+					r.note("release authority approved hash %s via browser WebAuthn (status %d)", short(txHash), ast)
 					if ast >= 400 {
 						return fmt.Errorf("release approval rejected (status %d)", ast)
 					}
 					if summary, failed := receiptFailed(approveBody); failed {
 						return fmt.Errorf("release tool execution failed: %s", summary)
 					}
-					r.note("WebAuthn L3 proof verified; release executed")
+					r.note("human WebAuthn L3 proof verified; release executed")
 					return nil
 				}
 

@@ -215,24 +215,7 @@ func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Confi
 		opSessionID = opID
 	}
 
-	rpID := cfg.PasskeyRpID
-	if rpID == "" {
-		rpID = "localhost"
-	}
-	rpOrigin := cfg.PasskeyRpOrigin
-	if rpOrigin == "" {
-		rpOrigin = cfg.PublicBaseURL
-	}
-	authenticator, err := clientpkg.NewSoftAuthenticator(rpID, rpOrigin)
-	if err != nil {
-		return fmt.Errorf("setup gov kit: soft authenticator: %w", err)
-	}
-	if err := authenticator.Register(ctx, client, opID, opID, opSessionID); err != nil {
-		return fmt.Errorf("setup gov kit: authenticator register: %w", err)
-	}
-
 	gk := &scenarios.GovKit{
-		Authenticator:     authenticator,
 		OperatorID:        opID,
 		OperatorSessionID: opSessionID,
 	}

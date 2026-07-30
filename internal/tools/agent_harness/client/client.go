@@ -63,10 +63,10 @@ type Exchange struct {
 
 // Client wraps an mTLS-capable http.Client plus the recorder.
 type Client struct {
-	cfg     config.Config
-	http    *http.Client
-	tlsCfg  *tls.Config // shared TLS config for building SSE streaming clients
-	rec     *[]Exchange // optional sink for the current scenario
+	cfg    config.Config
+	http   *http.Client
+	tlsCfg *tls.Config // shared TLS config for building SSE streaming clients
+	rec    *[]Exchange // optional sink for the current scenario
 }
 
 // New builds a Client with mTLS material loaded per config. The MCP/A2A surface

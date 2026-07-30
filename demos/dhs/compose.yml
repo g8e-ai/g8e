@@ -88,7 +88,7 @@ services:
     environment:
       - G8E_GATEWAY_POSTURE=${G8E_GATEWAY_POSTURE:-consensus}
     entrypoint: []
-    command: ["sh", "-c", "exec /g8e gw start -f --posture $${G8E_GATEWAY_POSTURE} --consensus-id dhs-consensus --consensus-bootstrap /etc/g8e/consensus-bootstrap.json --doctrine-dir /etc/g8e/doctrine --passkey-rp-origin http://localhost:8087 --passkey-rp-origin https://localhost:8450"]
+    command: ["sh", "-c", "exec /g8e gw start -f --posture $${G8E_GATEWAY_POSTURE} --consensus-id dhs-consensus --consensus-bootstrap /etc/g8e/consensus-bootstrap.json --doctrine-dir /etc/g8e/doctrine --public-base-url https://localhost:8450 --passkey-rp-origin http://localhost:8087 --passkey-rp-origin https://localhost:8450"]
 
   operator:
     build:

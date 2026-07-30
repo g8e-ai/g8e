@@ -49,14 +49,6 @@ type Config struct {
 	// executed the work. If empty, Agent Harness tries to discover it from /api/operators.
 	OperatorSessionID string `json:"operator_session_id"`
 
-	// PasskeyRpID is the WebAuthn relying party ID for the software authenticator.
-	// Defaults to "localhost" when empty.
-	PasskeyRpID string `json:"passkey_rp_id"`
-
-	// PasskeyRpOrigin is the WebAuthn relying party origin for the software
-	// authenticator. Defaults to PublicBaseURL when empty.
-	PasskeyRpOrigin string `json:"passkey_rp_origin"`
-
 	// EnvelopeTTL is how long a maximal envelope is valid before expiry.
 	EnvelopeTTL time.Duration `json:"envelope_ttl"`
 
@@ -70,13 +62,11 @@ type Config struct {
 // Default returns a config wired for a local two-container dev stack.
 func Default() Config {
 	cfg := Config{
-		MTLSBaseURL:     network.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
-		PublicBaseURL:   network.LocalhostHTTPURL(constants.Ports.OperatorHttp),
-		PasskeyRpID:     "localhost",
-		PasskeyRpOrigin: network.LocalhostHTTPURL(constants.Ports.OperatorHttp),
-		EnvelopeTTL:     5 * time.Minute,
-		OutDir:          "./auditor-out",
-		UseCLIConfig:    true,
+		MTLSBaseURL:   network.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
+		PublicBaseURL: network.LocalhostHTTPURL(constants.Ports.OperatorHttp),
+		EnvelopeTTL:   5 * time.Minute,
+		OutDir:        "./auditor-out",
+		UseCLIConfig:  true,
 	}
 
 	if cfg.UseCLIConfig {
