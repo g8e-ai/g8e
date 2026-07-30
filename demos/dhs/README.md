@@ -109,7 +109,7 @@ g8e demos clean dhs
 
 ## Scenarios
 
-All scenarios run via `demos scenarios run`, a real g8e binary that submits genuine `GovernanceEnvelope`s over mTLS to the gateway. Under consensus posture (Phase 2), L1 doctrine is enforced at admission and L2 BFT consensus is enforced as a fail-closed gate (quorum required). L3 notary proofs are attached and audited in the receipt but do not gate admission. The operator executes admitted commands via `run_shell_command`, driving the `datasvc` actuator through the `dataop` wrapper.
+All scenarios run via `demos scenarios run`, a real g8e binary that submits genuine `GovernanceEnvelope`s over mTLS to the gateway. Scenarios use `MCPToolsCall` (Path A): the harness calls the MCP `tools/call` endpoint, the gateway builds the `GovernanceEnvelope` internally, runs L2 consensus deliberation via `LocalDeliberator`, and suspends transactions requiring L3 notary approval. For notary scenarios, the harness approves via `ApproveWithWebAuthn` using a `SoftAuthenticator` (software WebAuthn passkey that generates genuine ECDSA P-256 assertions). The gateway performs full real WebAuthn verification — no mock L3 bypass exists. The operator executes admitted commands via `run_shell_command`, driving the `datasvc` actuator through the `dataop` wrapper.
 
 ### 1: Sovereign Multi-Source Ingest (chain-of-custody) (LOE 1)
 **Scenario `dhs-ingest`**: A coalition source connector submits a `GovernanceEnvelope` wrapping a `run_shell_command` that drives the Sovereign Data Service (L5 actuator). L1 doctrine admits the envelope; L2 consensus quorum is met and verified. The ingest is executed and a signed receipt is written to the hash-chained ledger. The `datasvc` records an `INGEST` operation.

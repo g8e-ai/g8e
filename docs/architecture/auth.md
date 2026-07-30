@@ -197,6 +197,16 @@ Notary ensures explicit human authorization for sensitive actions:
 - **Request window**: 2 minutes to complete the passkey ceremony after the transaction is suspended. If the passkey approval is not completed within this window, the request expires and the action must be retried.
 - **Dispatch window**: 30 minutes after approval to dispatch the transaction. Transactions not dispatched within that window must be re-approved.
 
+**Software Passkey (SoftAuthenticator) for Demos and Automated Testing:**
+
+The `SoftAuthenticator` (`internal/tools/agent_harness/client/authenticator.go`) is a software WebAuthn authenticator that generates genuine WebAuthn assertions using ECDSA P-256 (ES256, COSE alg -7) with "none" attestation format. It is used by the demo harness and automated test scenarios to produce L3 notary proofs without a browser or hardware token.
+
+- `Register()` calls the console registration endpoints to register a real passkey with the gateway
+- `SignAssertion(txHash)` builds authenticator data (rpIDHash + flags + counter), client data JSON (`webauthn.get` with challenge=base64url(txHash)), signs `authData || SHA256(clientDataJSON)` with ECDSA P-256
+- `ApproveWithWebAuthn` on the client POSTs the assertion to `/api/v1/approvals/{txHash}/verify`
+
+The gateway performs full real WebAuthn verification via `PasskeyService.VerifyL3Proof` and cannot distinguish the `SoftAuthenticator` from a browser-based authenticator. The `G8E_L3_MOCK` environment variable has been removed — the gateway always requires real WebAuthn proof. A fail-closed regression test (`TestGatewayModeService_GetGovernanceDeps_AlwaysUsesRealNotary`) verifies this property.
+
 ### 2.5 Layer 4: Warden (Final Verification)
 
 The Warden is the final fail-closed gate before execution:

@@ -15,7 +15,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -32,17 +31,17 @@ import (
 )
 
 var (
-	harnessConfigPath    string
-	harnessMTLSURL       string
-	harnessPublicURL     string
-	harnessCert          string
-	harnessKey           string
-	harnessCA            string
-	harnessAPIKey        string
-	harnessSessionID     string
-	harnessOutDir        string
-	harnessVerbose       bool
-	harnessPhase         string
+	harnessConfigPath string
+	harnessMTLSURL    string
+	harnessPublicURL  string
+	harnessCert       string
+	harnessKey        string
+	harnessCA         string
+	harnessAPIKey     string
+	harnessSessionID  string
+	harnessOutDir     string
+	harnessVerbose    bool
+	harnessPhase      string
 )
 
 func demosScenariosRunCmd() *cobra.Command {

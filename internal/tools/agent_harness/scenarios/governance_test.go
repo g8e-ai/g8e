@@ -107,89 +107,6 @@ func TestShortEdgeCases(t *testing.T) {
 	}
 }
 
-func TestSuspendedFromBody(t *testing.T) {
-	// Test with a body that contains an /approve/ URL with hex hash
-	body := []byte(`{"error":{"message":"L3 approval required","data":"https://localhost:8443/approve/abc123def456"}}`)
-	hash, ok := suspendedFromBody(body)
-	assert.True(t, ok, "suspendedFromBody should find hash in body with /approve/ URL")
-	assert.Equal(t, "abc123def456", hash, "suspendedFromBody should return correct hash")
-
-	// Test with body that doesn't contain an /approve/ URL
-	body = []byte(`{"other":"data"}`)
-	_, ok = suspendedFromBody(body)
-	assert.False(t, ok, "suspendedFromBody should return false when no /approve/ URL found")
-
-	// Test with empty body
-	body = []byte{}
-	_, ok = suspendedFromBody(body)
-	assert.False(t, ok, "suspendedFromBody should return false for empty body")
-
-	// Test with nil body
-	_, ok = suspendedFromBody(nil)
-	assert.False(t, ok, "suspendedFromBody should return false for nil body")
-
-	// Test with body containing /approve/ but no hash
-	body = []byte(`{"data":"https://localhost:8443/approve/"}`)
-	_, ok = suspendedFromBody(body)
-	assert.False(t, ok, "suspendedFromBody should return false when /approve/ has no hash")
-}
-
-func TestSuspendedFromBodyEdgeCases(t *testing.T) {
-	tests := []struct {
-		name     string
-		body     []byte
-		expected string
-		found    bool
-	}{
-		{
-			name:     "valid hex hash",
-			body:     []byte(`{"data":"https://example.com/approve/abc123def456"}`),
-			expected: "abc123def456",
-			found:    true,
-		},
-		{
-			name:     "hash with uppercase",
-			body:     []byte(`{"data":"https://example.com/approve/ABC123DEF456"}`),
-			expected: "ABC123DEF456",
-			found:    true,
-		},
-		{
-			name:     "hash with mixed case",
-			body:     []byte(`{"data":"https://example.com/approve/aBc123DeF456"}`),
-			expected: "aBc123DeF456",
-			found:    true,
-		},
-		{
-			name:     "hash with numbers only",
-			body:     []byte(`{"data":"https://example.com/approve/123456789012"}`),
-			expected: "123456789012",
-			found:    true,
-		},
-		{
-			name:     "no approve URL",
-			body:     []byte(`{"data":"https://example.com/other/abc123"}`),
-			expected: "",
-			found:    false,
-		},
-		{
-			name:     "malformed URL",
-			body:     []byte(`{"data":"https://example.com/approve/"}`),
-			expected: "",
-			found:    false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			hash, ok := suspendedFromBody(tt.body)
-			assert.Equal(t, tt.found, ok, "suspendedFromBody() found mismatch")
-			if ok {
-				assert.Equal(t, tt.expected, hash, "suspendedFromBody() hash mismatch")
-			}
-		})
-	}
-}
-
 func TestGovernanceScenarios(t *testing.T) {
 	scenarios := governanceScenarios()
 
@@ -236,11 +153,11 @@ func TestGovernanceScenarioTitles(t *testing.T) {
 	scenarios := governanceScenarios()
 
 	expectedTitles := map[string]string{
-		"consensus":        "L2 consensus envelope (ensemble co-sign)",
-		"envelope-maximal": "Official notary envelope: L2 consensus + principal L3 signing",
+		"consensus":        "L2 consensus via MCP tools/call (gateway deliberation)",
+		"envelope-maximal": "Notary envelope: MCP tools/call, gateway suspends, WebAuthn approves",
 		"agent-delegation": "CLI delegates app credential to agent (SPIFFE distinctness + receipt audit)",
-		"consensus-quorum": "Consensus quorum: 2-of-3 co-sign, receipt records consensus",
-		"notary-oob":       "L3 notary OOB: suspend then principal approves out-of-band",
+		"consensus-quorum": "Consensus quorum: MCP tools/call, gateway 2-of-3 deliberation",
+		"notary-oob":       "L3 notary OOB: MCP tools/call, gateway suspends, software passkey approves",
 	}
 
 	for _, sc := range scenarios {
@@ -372,4 +289,3 @@ func TestReceiptFailed(t *testing.T) {
 func itoa(n int) string {
 	return fmt.Sprintf("%d", n)
 }
-

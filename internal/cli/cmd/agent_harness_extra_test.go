@@ -148,4 +148,3 @@ func TestSelectAgentHarnessScenarios_Consensus(t *testing.T) {
 		assert.Greater(t, dhsCount, 0, "consensus phase should include DHS scenarios")
 	})
 }
-

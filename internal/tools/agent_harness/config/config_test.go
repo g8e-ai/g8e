@@ -39,11 +39,11 @@ func TestLoadFile(t *testing.T) {
 
 	// Create a test config file
 	testConfig := map[string]any{
-		"mtls_base_url":    "https://example.com:8443",
-		"public_base_url":  "https://example.com:8080",
-		"envelope_ttl":     600000000000, // 10 minutes in nanoseconds
-		"out_dir":          "/tmp/test-out",
-		"use_cli_config":   false,
+		"mtls_base_url":   "https://example.com:8443",
+		"public_base_url": "https://example.com:8080",
+		"envelope_ttl":    600000000000, // 10 minutes in nanoseconds
+		"out_dir":         "/tmp/test-out",
+		"use_cli_config":  false,
 		"auth": map[string]any{
 			"client_cert": "/path/to/cert.pem",
 			"client_key":  "/path/to/key.pem",

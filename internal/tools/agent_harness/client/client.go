@@ -16,10 +16,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"sync"
 	"time"
 
+	ssepkg "github.com/g8e-ai/g8e/internal/cli/sse"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
 )
 
@@ -59,9 +63,10 @@ type Exchange struct {
 
 // Client wraps an mTLS-capable http.Client plus the recorder.
 type Client struct {
-	cfg  config.Config
-	http *http.Client
-	rec  *[]Exchange // optional sink for the current scenario
+	cfg     config.Config
+	http    *http.Client
+	tlsCfg  *tls.Config // shared TLS config for building SSE streaming clients
+	rec     *[]Exchange // optional sink for the current scenario
 }
 
 // New builds a Client with mTLS material loaded per config. The MCP/A2A surface
@@ -90,7 +95,8 @@ func New(cfg config.Config) (*Client, error) {
 	}
 
 	return &Client{
-		cfg: cfg,
+		cfg:    cfg,
+		tlsCfg: tlsCfg,
 		http: &http.Client{
 			Timeout:   30 * time.Second,
 			Transport: &http.Transport{TLSClientConfig: tlsCfg},
@@ -233,23 +239,96 @@ func (c *Client) RegisterSigner(ctx context.Context, keyID, pubHex, role string)
 	return nil
 }
 
-// ApproveWithWebAuthn drives the real out-of-band L3 notary flow: it signs a
-// genuine WebAuthn assertion for the given transaction hash using the
-// SoftAuthenticator, then POSTs the assertion to
-// /api/v1/approvals/{txHash}/verify. The gateway verifies the assertion and
-// resumes the suspended transaction with an L3 proof attached.
-func (c *Client) ApproveWithWebAuthn(ctx context.Context, p Persona, txHash string, auth *SoftAuthenticator) (int, []byte, error) {
-	proof, err := auth.SignAssertion(txHash)
-	if err != nil {
-		return 0, nil, fmt.Errorf("approve with webauthn: sign assertion: %w", err)
+// WaitForHumanApproval drives the real out-of-band L3 notary flow for human
+// approval: it prints the approval URL, subscribes to the gateway's SSE stream
+// for the approval.completed event matching txHash, and blocks until the human
+// completes the WebAuthn ceremony in their browser. After the SSE event fires,
+// it verifies the approval status via the mTLS status endpoint and returns the
+// response body (an ActionReceipt JSON) on success.
+//
+// The userID scopes the SSE subscription to the operator's user so the harness
+// only receives events for its own transactions. The approval URL is built from
+// the gateway's public base URL so it is reachable from the host browser.
+func (c *Client) WaitForHumanApproval(ctx context.Context, p Persona, txHash, userID string) (int, []byte, error) {
+	approvalURL := c.cfg.PublicBaseURL + constants.APIPaths.ApprovePagePrefix + txHash
+
+	fmt.Fprintf(os.Stderr, "\n  ╔════════════════════════════════════════════════════════════╗\n")
+	fmt.Fprintf(os.Stderr, "  ║  HUMAN APPROVAL REQUIRED                                    ║\n")
+	fmt.Fprintf(os.Stderr, "  ║  Open this URL in your browser and approve with your        ║\n")
+	fmt.Fprintf(os.Stderr, "  ║  passkey (WebAuthn):                                        ║\n")
+	fmt.Fprintf(os.Stderr, "  ║  %s\n", approvalURL)
+	fmt.Fprintf(os.Stderr, "  ║  Transaction: %s\n", txHash)
+	fmt.Fprintf(os.Stderr, "  ╚════════════════════════════════════════════════════════════╝\n\n")
+
+	// Build an SSE-specific HTTP client with no timeout (context-controlled).
+	sseHTTPClient := &http.Client{
+		Timeout:   0,
+		Transport: &http.Transport{TLSClientConfig: c.tlsCfg.Clone()},
 	}
-	body, _ := json.Marshal(map[string]string{
-		"id":               proof.CredentialId,
-		"rawId":            proof.CredentialId,
-		"clientDataJSON":   proof.ClientDataJson,
-		"authenticatorData": proof.AuthenticatorData,
-		"signature":        proof.Signature,
-	})
-	return c.do(ctx, p, http.MethodPost,
-		c.cfg.PublicBaseURL+constants.APIPaths.ApprovalsByID+txHash+constants.APIPaths.ApprovalsVerifyAction, body)
+
+	sseURL := fmt.Sprintf("%s%s?user_id=%s&since_id=0",
+		c.cfg.PublicBaseURL,
+		constants.APIPaths.SSEStream,
+		url.QueryEscape(userID))
+
+	sseClient := ssepkg.NewClient(sseURL, sseHTTPClient)
+
+	// The gateway's approval request TTL is 2 minutes; allow a grace period.
+	waitCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	defer cancel()
+
+	approved := make(chan struct{}, 1)
+	var once sync.Once
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		sseClient.Run(waitCtx, func(eventType, data string) {
+			if eventType != constants.SSEEventTypeApprovalCompleted {
+				return
+			}
+			var envelope models.SSEPushPayload
+			if err := json.Unmarshal([]byte(data), &envelope); err != nil {
+				return
+			}
+			var event models.ApprovalCompletedEvent
+			if err := json.Unmarshal(envelope.Event, &event); err != nil {
+				return
+			}
+			if event.TxHash != txHash {
+				return
+			}
+			once.Do(func() { close(approved) })
+		})
+	}()
+
+	select {
+	case <-approved:
+		cancel()
+		<-done
+	case <-waitCtx.Done():
+		<-done
+		return 0, nil, constants.ErrApprovalSSETimeout
+	}
+
+	// Verify approval status via the mTLS status endpoint.
+	statusPath := constants.APIPaths.ApprovalsCLIStatus + txHash
+	status, body, err := c.do(ctx, p, http.MethodGet, c.cfg.PublicBaseURL+statusPath, nil)
+	if err != nil {
+		return 0, nil, fmt.Errorf("human approval: verify status: %w", err)
+	}
+	if status >= 400 {
+		return status, body, fmt.Errorf("human approval: status check returned %d", status)
+	}
+
+	var approvalStatus models.ApprovalStatusResponse
+	if err := json.Unmarshal(body, &approvalStatus); err != nil {
+		return status, body, fmt.Errorf("human approval: parse status: %w", err)
+	}
+	if approvalStatus.Status != string(constants.SuspendedTxStatusApproved) {
+		return status, body, fmt.Errorf("human approval: unexpected status %q", approvalStatus.Status)
+	}
+
+	fmt.Fprintf(os.Stderr, "  ✓ Human approval confirmed for transaction %s\n\n", txHash)
+	return status, body, nil
 }
