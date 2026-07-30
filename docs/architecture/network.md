@@ -1,7 +1,7 @@
 # Network Architecture
 
-Last Updated: 2026-07-28
-Version: v1.6.6
+Last Updated: 2026-07-30
+Version: v1.6.7
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
 
