@@ -104,8 +104,9 @@ var APIPaths = struct {
 	ApprovalsPrefix    string `json:"approvals_prefix"`
 	ApprovePage        string `json:"approve_page"`
 	ApprovePagePrefix  string `json:"approve_page_prefix"`
-	ApprovalsCLIStatus string `json:"approvals_cli_status"`
-	ApprovalsCLIList   string `json:"approvals_cli_list"`
+	ApprovalsVerifyAction string `json:"approvals_verify_action"`
+	ApprovalsCLIStatus    string `json:"approvals_cli_status"`
+	ApprovalsCLIList      string `json:"approvals_cli_list"`
 	// Admin routes
 	AdminAppPoliciesBySigner string `json:"admin_app_policies_by_signer"`
 	AdminAppsRevoke          string `json:"admin_apps_revoke"`
@@ -236,8 +237,9 @@ var APIPaths = struct {
 	ApprovalsPrefix:    "/api/v1/approvals/",
 	ApprovePage:        "/api/v1/approve/",
 	ApprovePagePrefix:  "/api/v1/approve/",
-	ApprovalsCLIStatus: "/api/v1/approvals/status/",
-	ApprovalsCLIList:   "/api/v1/approvals/pending",
+	ApprovalsVerifyAction: "/verify",
+	ApprovalsCLIStatus:    "/api/v1/approvals/status/",
+	ApprovalsCLIList:      "/api/v1/approvals/pending",
 	// Admin routes
 	AdminAppPoliciesBySigner: "/api/v1/admin/app-policies/",
 	AdminAppsRevoke:          "/api/v1/admin/apps/revoke",

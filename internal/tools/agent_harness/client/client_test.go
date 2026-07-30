@@ -413,7 +413,7 @@ func TestClient_Approve(t *testing.T) {
 				if r.Method != http.MethodPost {
 					t.Errorf("expected POST, got %s", r.Method)
 				}
-				expectedPath := constants.APIPaths.ApprovePagePrefix + tt.txHash
+				expectedPath := constants.APIPaths.ApprovalsByID + tt.txHash + constants.APIPaths.ApprovalsVerifyAction
 				if r.URL.Path != expectedPath {
 					t.Errorf("expected path %s, got %s", expectedPath, r.URL.Path)
 				}

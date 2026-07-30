@@ -39,7 +39,7 @@ var (
 func governanceScenarios() []Scenario {
 	return []Scenario{
 		{
-			Name: "consensus", Title: "L2 consensus envelope (mock ensemble co-sign)", Persona: ensembleProducer, RequiresPosture: Consensus,
+			Name: "consensus", Title: "L2 consensus envelope (ensemble co-sign)", Persona: ensembleProducer, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil {
 					return constants.ErrHarnessGovKitNotInit
@@ -49,7 +49,7 @@ func governanceScenarios() []Scenario {
 					return err
 				}
 				r.note("bound to state root %s", short(root))
-				r.note("mock ensemble: %d agents co-signed transaction_hash|true with key %q",
+				r.note("ensemble: %d agents co-signed transaction_hash|true with key %q",
 					kit.Ensemble.AgentCount(), kit.Ensemble.KeyID)
 
 				txHash, status, _, err := c.SubmitMaximal(ctx, ensembleProducer, clientpkg.MaximalEnvelope{

@@ -233,10 +233,12 @@ func (c *Client) RegisterSigner(ctx context.Context, keyID, pubHex, role string)
 	return nil
 }
 
-// Approve drives the real out-of-band L3 notary flow on the public surface:
-// the principal opens /api/approve/{txHash} and authorizes the exact hash.
+// Approve drives the real out-of-band L3 notary flow: the principal POSTs a
+// WebAuthn assertion to /api/v1/approvals/{txHash}/verify to authorize the
+// exact transaction hash. The gateway verifies the assertion and resumes the
+// suspended transaction with an L3 proof attached.
 func (c *Client) Approve(ctx context.Context, p Persona, txHash string) (int, []byte, error) {
 	body, _ := json.Marshal(map[string]string{"action": "approve"})
 	return c.do(ctx, p, http.MethodPost,
-		c.cfg.PublicBaseURL+constants.APIPaths.ApprovePagePrefix+txHash, body)
+		c.cfg.PublicBaseURL+constants.APIPaths.ApprovalsByID+txHash+constants.APIPaths.ApprovalsVerifyAction, body)
 }

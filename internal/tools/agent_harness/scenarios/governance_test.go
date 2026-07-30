@@ -276,7 +276,7 @@ func TestGovernanceScenarioTitles(t *testing.T) {
 	scenarios := governanceScenarios()
 
 	expectedTitles := map[string]string{
-		"consensus":        "L2 consensus envelope (mock ensemble co-sign)",
+		"consensus":        "L2 consensus envelope (ensemble co-sign)",
 		"envelope-maximal": "Official notary envelope: L2 consensus + principal L3 signing",
 		"agent-delegation": "CLI delegates app credential to agent (SPIFFE distinctness + receipt audit)",
 		"consensus-quorum": "Consensus quorum: 2-of-3 co-sign, receipt records consensus",

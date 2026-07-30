@@ -66,7 +66,7 @@ func demosScenariosRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&harnessSessionID, "operator-session", "", "scope audit to a specific Operator session")
 	cmd.Flags().StringVar(&harnessOutDir, "out", "", "report output dir")
 	cmd.Flags().StringVar(&harnessL3Mode, "l3-mode", "", "mock|suspend")
-	cmd.Flags().IntVar(&harnessEnsemble, "ensemble", 3, "mock consensus voters")
+	cmd.Flags().IntVar(&harnessEnsemble, "ensemble", 3, "consensus ensemble size")
 	cmd.Flags().BoolVar(&harnessVerbose, "verbose", false, "echo each request/response")
 	cmd.Flags().StringVar(&harnessPhase, "phase", "all", "doctrine|consensus|notary|all")
 	cmd.Flags().StringVar(&harnessConsensusSeed, "consensus-seed", "", "hex-encoded Ed25519 seed for deterministic ensemble key (or path to seed file)")
@@ -100,7 +100,7 @@ func runAgentHarness(cmd *cobra.Command, args []string) error {
 	}
 
 	if needsGovKit(selected) {
-		if err := setupGovKit(ctx, client, cfg); err != nil {
+		if err := setupGovKit(ctx, client, cfg, selected); err != nil {
 			return fmt.Errorf("scenarios run: gov kit setup: %w", err)
 		}
 	}
@@ -227,7 +227,7 @@ func needsGovKit(ss []scenarios.Scenario) bool {
 	return false
 }
 
-func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Config) error {
+func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Config, selected []scenarios.Scenario) error {
 	var ens *clientpkg.Ensemble
 	var err error
 	if cfg.ConsensusSeed != "" {
@@ -285,18 +285,38 @@ func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Confi
 		OperatorID: opID, OperatorSessionID: opSessionID,
 	})
 
+	requiresConsensus := false
+	requiresNotary := false
+	for _, s := range selected {
+		if s.RequiresPosture == scenarios.Consensus {
+			requiresConsensus = true
+		}
+		if s.RequiresPosture == scenarios.Notary {
+			requiresNotary = true
+		}
+	}
+
 	if len(ens.MemberKeyIDs) > 0 {
 		for _, appID := range ens.MemberKeyIDs {
 			if err := client.RegisterSigner(ctx, appID, ens.PubHex(), "consensus"); err != nil {
+				if requiresConsensus {
+					return fmt.Errorf("consensus signer registration %s: %w", appID, err)
+				}
 				fmt.Fprintf(os.Stderr, "warning: consensus signer registration %s: %v (non-fatal under doctrine)\n", appID, err)
 			}
 		}
 	} else {
 		if err := client.RegisterSigner(ctx, ens.KeyID, ens.PubHex(), "consensus"); err != nil {
+			if requiresConsensus {
+				return fmt.Errorf("consensus signer registration: %w", err)
+			}
 			fmt.Fprintf(os.Stderr, "warning: consensus signer registration: %v (non-fatal under doctrine)\n", err)
 		}
 	}
 	if err := client.RegisterSigner(ctx, prin.KeyID, prin.PubHex(), "principal"); err != nil {
+		if requiresNotary {
+			return fmt.Errorf("principal signer registration: %w", err)
+		}
 		fmt.Fprintf(os.Stderr, "warning: principal signer registration: %v (non-fatal under doctrine)\n", err)
 	}
 	return nil

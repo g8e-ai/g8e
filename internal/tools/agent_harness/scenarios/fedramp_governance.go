@@ -189,9 +189,14 @@ func fedrampScenarios() []Scenario {
 					r.tx(txHash)
 					r.note("destroy envelope %s submitted (status %d); awaiting authorizing official approval", short(txHash), status)
 
-					if h, ok := suspendedFromBody(body); ok {
-						txHash = h
+					suspendedHash, ok := suspendedFromBody(body)
+					if !ok {
+						if status >= 400 {
+							return fmt.Errorf("destroy envelope rejected (status %d): %s", status, string(body))
+						}
+						return fmt.Errorf("destroy envelope was not suspended (status %d): expected suspension pending L3 notary approval", status)
 					}
+					txHash = suspendedHash
 					ast, approveBody, aerr := c.Approve(ctx, fedrampAuthorizingOfficial, txHash)
 					if aerr != nil {
 						return fmt.Errorf("authorizing official approve: %w", aerr)

@@ -62,7 +62,7 @@ func dataopArgs(op, recordID, detail string) string {
 func dhsScenarios() []Scenario {
 	return []Scenario{
 		{
-			Name: "dhs-ingest", Title: "DHS: governed multi-source ingest into the sovereign data plane", Persona: dhsConnector, RequiresPosture: Doctrine,
+			Name: "dhs-ingest", Title: "DHS: governed multi-source ingest into the sovereign data plane", Persona: dhsConnector, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
 					return constants.ErrHarnessGovKitMissingSign
@@ -152,9 +152,14 @@ func dhsScenarios() []Scenario {
 					r.tx(txHash)
 					r.note("release envelope %s submitted (status %d); awaiting release-authority approval", short(txHash), status)
 
-					if h, ok := suspendedFromBody(body); ok {
-						txHash = h
+					suspendedHash, ok := suspendedFromBody(body)
+					if !ok {
+						if status >= 400 {
+							return fmt.Errorf("release envelope rejected (status %d): %s", status, string(body))
+						}
+						return fmt.Errorf("release envelope was not suspended (status %d): expected suspension pending L3 notary approval", status)
 					}
+					txHash = suspendedHash
 					ast, approveBody, aerr := c.Approve(ctx, dhsReleaseAuthority, txHash)
 					if aerr != nil {
 						return fmt.Errorf("release authority approve: %w", aerr)
@@ -288,7 +293,7 @@ func dhsScenarios() []Scenario {
 			},
 		},
 		{
-			Name: "dhs-purge", Title: "DHS: governed retention destruction with cryptographic receipt", Persona: dhsConnector, RequiresPosture: Doctrine,
+			Name: "dhs-purge", Title: "DHS: governed retention destruction with cryptographic receipt", Persona: dhsConnector, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
 					return constants.ErrHarnessGovKitMissingSign

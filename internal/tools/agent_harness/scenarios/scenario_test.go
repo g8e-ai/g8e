@@ -662,6 +662,82 @@ func TestScenarioPersonaUserAgent(t *testing.T) {
 	}
 }
 
+// TestRegistryPostureDeclarations is a registry-wide regression test that
+// asserts each scenario's RequiresPosture matches the governance elements it
+// uses. The expected posture map documents the classification rationale for
+// every scenario. If a scenario is added or its posture changes, this test
+// forces the developer to update the map and verify the posture is correct.
+//
+// Classification rules:
+//   - Plain MCP/A2A calls (no SubmitMaximal) → Doctrine (L1 only)
+//   - SubmitMaximal with Ensemble, expects admission → Consensus (L1+L2)
+//   - SubmitMaximal with suspend/approve flow → Notary (L1+L2+L3)
+//   - SubmitMaximal that expects L1 rejection → Doctrine (L1 blocks first)
+func TestRegistryPostureDeclarations(t *testing.T) {
+	expectedPostures := map[string]Posture{
+		// MCP scenarios — plain MCPToolsCall, no governance extras
+		"mcp-plain":             Doctrine,
+		"healthcare-success":    Doctrine,
+		"healthcare-phi-blocked": Doctrine,
+		"healthcare-gold-card":  Doctrine,
+		"healthcare-sla-breach":  Doctrine,
+		"mcp-advanced":          Doctrine,
+		"mcp-secured":           Doctrine,
+
+		// A2A scenarios — plain A2ACall, no governance extras
+		"a2a-plain":    Doctrine,
+		"a2a-secured":  Doctrine,
+		"a2a-protobuf": Doctrine,
+
+		// Governance scenarios — SubmitMaximal with Ensemble/Principal
+		"consensus":        Consensus, // Ensemble, no Principal, expects admission
+		"envelope-maximal": Notary,    // Ensemble + Principal suspend flow
+		"agent-delegation": Doctrine,  // MCPToolsCall/MCPToolsList, no governance extras
+		"consensus-quorum": Consensus, // Ensemble, expects admission
+		"consensus-veto":   Consensus, // Ensemble, expects L2 rejection
+		"notary-oob":       Notary,    // Ensemble + Principal suspend flow
+
+		// DHS scenarios
+		"dhs-ingest":         Consensus, // Ensemble + Principal inline, expects admission
+		"dhs-release":        Notary,    // Ensemble + Principal suspend flow
+		"dhs-cue":            Consensus, // Ensemble + Principal inline, expects admission
+		"dhs-cue-veto":       Consensus, // Ensemble only, expects L2 rejection
+		"dhs-evidence-block": Doctrine,  // Ensemble + Principal, but tests L1 rejection
+		"dhs-purge":          Consensus, // Ensemble + Principal inline, expects admission
+
+		// Gov/Finance scenarios — plain MCPToolsCall
+		"gov-cui-exfil-block":         Doctrine,
+		"finance-unauthorized-trade":  Doctrine,
+
+		// FedRAMP scenarios
+		"fedramp-provision":     Consensus, // Ensemble + Principal inline, expects admission
+		"fedramp-deny":          Doctrine,  // Ensemble + Principal, but tests L1 rejection
+		"fedramp-escalate":      Notary,    // Ensemble + Principal suspend flow
+		"fedramp-revert":        Consensus, // Ensemble + Principal inline, expects admission
+		"fedramp-evidence-block": Doctrine, // Ensemble + Principal, but tests L1 rejection
+	}
+
+	scenarios := Registry()
+
+	// Assert every registry scenario has an expected posture entry.
+	for _, sc := range scenarios {
+		expected, ok := expectedPostures[sc.Name]
+		require.True(t, ok, "Scenario %q missing from expectedPostures map — add it with the correct posture", sc.Name)
+		assert.Equal(t, expected, sc.RequiresPosture,
+			"Scenario %q has posture %q but expected %q", sc.Name, sc.RequiresPosture, expected)
+	}
+
+	// Assert no stale entries in the expected map.
+	registryNames := make(map[string]bool)
+	for _, sc := range scenarios {
+		registryNames[sc.Name] = true
+	}
+	for name := range expectedPostures {
+		assert.True(t, registryNames[name],
+			"expectedPostures map contains %q but it is not in the registry — remove the stale entry", name)
+	}
+}
+
 func TestPersonaConstants(t *testing.T) {
 	// Verify that the persona constants are defined
 	// These are package-level variables in mcp_a2a.go

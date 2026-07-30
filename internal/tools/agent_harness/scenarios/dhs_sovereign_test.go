@@ -65,12 +65,12 @@ func TestDHSScenarioPostures(t *testing.T) {
 	scenarios := dhsScenarios()
 
 	expectedPostures := map[string]Posture{
-		"dhs-ingest":         Doctrine,
+		"dhs-ingest":         Consensus,
 		"dhs-release":        Notary,
 		"dhs-cue":            Consensus,
 		"dhs-cue-veto":       Consensus,
 		"dhs-evidence-block": Doctrine,
-		"dhs-purge":          Doctrine,
+		"dhs-purge":          Consensus,
 	}
 
 	for _, sc := range scenarios {
