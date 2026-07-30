@@ -113,6 +113,37 @@ When the gateway's HTTP and HTTPS ports are mapped to different host ports, such
 
 When both flags are used together, `--endpoint` controls the HTTP discovery URL and `--port` controls the HTTPS/mTLS port. For example, running `g8e auth enroll -e localhost:8085 --port 8448` directs HTTP discovery to port 8085 and HTTPS mTLS operations to port 8448.
 
+### `mcp stdio` Credential Flags
+
+The `g8e mcp stdio` subcommand accepts command-scoped credential flags for direct IDE MCP config integration. These flags are **not** root-persistent; they apply only to `mcp stdio`. Credentials resolve in order: flag → `G8E_*` env var → enrolled CLI credential on disk. Cert and key must be supplied as a pair per tier (app or client); supplying only one half fails closed.
+
+| Flag | Purpose | Default |
+|---|---|---|
+| `--client-cert` | Path to CLI client certificate (mTLS) | Enrolled CLI cert on disk |
+| `--client-key` | Path to CLI client key (mTLS) | Enrolled CLI key on disk |
+| `--ca-bundle` | Path to gateway CA bundle PEM | Trust bundle from `.g8e/pki/trust/` |
+| `--gateway-url` | Gateway MCP endpoint URL (https only) | `https://g8e.local:8443/mcp` |
+| `--app-cert` | Path to delegated app certificate (requires `--app-key`) | None |
+| `--app-key` | Path to delegated app key (requires `--app-cert`) | None |
+
+Example IDE MCP config using flags:
+
+```json
+{
+  "mcpServers": {
+    "g8e": {
+      "command": "/home/user/g8e/g8e",
+      "args": [
+        "mcp", "stdio",
+        "--client-cert", "/home/user/.g8e/cli.crt",
+        "--client-key", "/home/user/.g8e/cli.key",
+        "--ca-bundle", "/home/user/g8e/.g8e/pki/trust/g8eg-ca-bundle.pem"
+      ]
+    }
+  }
+}
+```
+
 ### No-DNS / Direct IP Configuration
 
 The platform supports setup without requiring `/etc/hosts` changes or DNS configuration. If `g8e.local` resolution fails, the CLI automatically falls back to direct IP access using the machine's external interface IP.

@@ -1334,3 +1334,16 @@ func TestHttpMCPProxy(t *testing.T) {
 		})
 	})
 }
+
+func TestMcpStdioCmd_FlagsRegistered(t *testing.T) {
+	cmd := mcpStdioCmd()
+	expectedFlags := []string{
+		flagClientCert, flagClientKey, flagCABundle,
+		flagGatewayURL, flagAppCert, flagAppKey,
+	}
+	for _, name := range expectedFlags {
+		f := cmd.Flags().Lookup(name)
+		require.NotNil(t, f, "mcp stdio should have --%s flag", name)
+		assert.Equal(t, "string", f.Value.Type(), "--%s should be a string flag", name)
+	}
+}
