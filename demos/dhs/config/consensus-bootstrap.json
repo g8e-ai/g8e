@@ -2,5 +2,7 @@
   "consensus_id": "dhs-consensus",
   "member_app_ids": ["auditor-ensemble"],
   "quorum": 1,
-  "seed_hex": "87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77"
+  "member_seeds": {
+    "auditor-ensemble": "3b8237753873a5dcc78fddcdf6011ea9bea03c0ae683a8a8fb5f4cba928e8a15"
+  }
 }

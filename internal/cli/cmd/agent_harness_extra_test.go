@@ -18,7 +18,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/scenarios"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -147,43 +146,5 @@ func TestSelectAgentHarnessScenarios_Consensus(t *testing.T) {
 			}
 		}
 		assert.Greater(t, dhsCount, 0, "consensus phase should include DHS scenarios")
-	})
-}
-
-func TestApplyAgentHarnessFlags_ConsensusSeedAndConsensusID(t *testing.T) {
-	t.Run("populates ConsensusSeed and ConsensusID when flags are set", func(t *testing.T) {
-		originalSeed := harnessConsensusSeed
-		originalConsensusID := harnessConsensusID
-		defer func() {
-			harnessConsensusSeed = originalSeed
-			harnessConsensusID = originalConsensusID
-		}()
-
-		harnessConsensusSeed = "/etc/g8e/ensemble-seed.hex"
-		harnessConsensusID = "dhs-consensus"
-
-		cfg := config.Default()
-		applyAgentHarnessFlags(&cfg)
-
-		assert.Equal(t, "/etc/g8e/ensemble-seed.hex", cfg.ConsensusSeed)
-		assert.Equal(t, "dhs-consensus", cfg.ConsensusID)
-	})
-
-	t.Run("leaves ConsensusSeed and ConsensusID empty when flags are unset", func(t *testing.T) {
-		originalSeed := harnessConsensusSeed
-		originalConsensusID := harnessConsensusID
-		defer func() {
-			harnessConsensusSeed = originalSeed
-			harnessConsensusID = originalConsensusID
-		}()
-
-		harnessConsensusSeed = ""
-		harnessConsensusID = ""
-
-		cfg := config.Default()
-		applyAgentHarnessFlags(&cfg)
-
-		assert.Empty(t, cfg.ConsensusSeed)
-		assert.Empty(t, cfg.ConsensusID)
 	})
 }

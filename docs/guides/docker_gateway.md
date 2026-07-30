@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
-Last Updated: 2026-07-28
-Version: v1.6.6
+Last Updated: 2026-07-30
+Version: v1.6.7
 
 This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
 
@@ -93,12 +93,15 @@ Each demo uses its own `compose.yml` file with isolated networks, volumes, and d
 
 ### Consensus Bootstrap Files
 
-Demos that use consensus or notary posture (DHS, FedRAMP) require two bootstrap files:
+Demos that use consensus or notary posture (DHS, FedRAMP) require a bootstrap config file:
 
-- **`consensus-bootstrap.json`**: Defines `MemberKeyIDs`, the list of registered member app IDs that participate in L2 consensus voting. Without this file, `MemberKeyIDs` stays nil and the gateway's L2 consensus verifier silently ignores all votes, resulting in quorum failure (`affirmative=0`).
-- **`ensemble-seed.hex`**: The cryptographic seed for the ensemble's signing key.
+- **`consensus-bootstrap.json`**: Defines the consensus policy, member app IDs, quorum threshold, and cryptographic seeds for member signing keys. The file supports two key modes:
+  - **`member_seeds`** (preferred): A map of member app IDs to individual hex-encoded Ed25519 seeds. Each member gets its own derived key pair, making `RequireDistinct` and quorum cryptographically meaningful. A single key cannot satisfy a multi-member quorum.
+  - **`seed_hex`** (legacy fallback): A single hex-encoded Ed25519 seed shared across all members. When `member_seeds` is omitted but `seed_hex` is provided, the same key is registered for every member (single-key ensemble pattern).
 
-The gateway container mounts only `consensus-bootstrap.json`, which seeds the ConsensusPolicy and trusted signer registry at startup. The agent container mounts both files: `consensus-bootstrap.json` for policy context and `ensemble-seed.hex` to reconstruct the signing key for L2 votes. Both files must be mounted as read-only volumes:
+When `member_seeds` is present, it takes precedence over `seed_hex`. If both are omitted, a fresh key pair is generated and shared across members.
+
+The gateway container mounts `consensus-bootstrap.json`, which seeds the ConsensusPolicy and trusted signer registry at startup. The agent container also mounts `consensus-bootstrap.json` to reconstruct the per-member signing keys for L2 votes:
 
 ```yaml
 # gateway
@@ -110,10 +113,11 @@ volumes:
 # agent
 volumes:
   - ./config/consensus-bootstrap.json:/etc/g8e/consensus-bootstrap.json:ro
-  - ./config/ensemble-seed.hex:/etc/g8e/ensemble-seed.hex:ro
 ```
 
-If the agent mounts `ensemble-seed.hex` without `consensus-bootstrap.json`, the ensemble votes with the default `KeyID` instead of the gateway's registered member app IDs. The gateway's L2 consensus verifier checks each vote's `SignerKeyId` against the consensus policy's `MemberKeyIDs`; votes from unknown signer IDs are silently ignored, resulting in 0 affirmative votes and quorum failure.
+When `member_seeds` is used, the agent harness reads the bootstrap file and reconstructs distinct per-member Ed25519 key pairs via `NewEnsembleFromMemberSeeds`. Each vote is independently signed with the member's own key, and the gateway verifies each signature against the member's registered public key. This makes BFT quorum real: a single compromised key cannot forge enough votes to meet quorum.
+
+If the agent does not mount `consensus-bootstrap.json`, the ensemble votes with the default `KeyID` instead of the gateway's registered member app IDs. The gateway's L2 consensus verifier checks each vote's `SignerKeyId` against the consensus policy's `MemberKeyIDs`; votes from unknown signer IDs are silently ignored, resulting in 0 affirmative votes and quorum failure.
 
 ### Posture Switching During Demos
 

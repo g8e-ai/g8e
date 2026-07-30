@@ -276,6 +276,25 @@ CREATE TABLE IF NOT EXISTS receipts (
 	FOREIGN KEY(operator_session_id) REFERENCES sessions(id)
 );
 
+CREATE TABLE IF NOT EXISTS commitment_ledger (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	transaction_id TEXT NOT NULL,
+	transaction_hash TEXT NOT NULL,
+	prior_commitment_hash TEXT NOT NULL,
+	state_root_at_commit TEXT,
+	l2_signature_digest TEXT,
+	Actuator_intent_signature_digest TEXT,
+	human_signature_digest TEXT,
+	action_type TEXT,
+	target_resource TEXT,
+	committed_at_unix_ms INTEGER NOT NULL,
+	auditor_key_id TEXT,
+	signature TEXT,
+	hash TEXT NOT NULL,
+	attestation_json TEXT NOT NULL,
+	UNIQUE(hash)
+);
+
 CREATE INDEX IF NOT EXISTS idx_events_session_id ON events(operator_session_id);
 CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
 CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
@@ -284,6 +303,7 @@ CREATE INDEX IF NOT EXISTS idx_file_mutation_filepath ON file_mutation_log(filep
 CREATE INDEX IF NOT EXISTS idx_receipts_session_id ON receipts(operator_session_id);
 CREATE INDEX IF NOT EXISTS idx_receipts_timestamp ON receipts(timestamp);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_id_type ON sessions(id, session_type);
+CREATE INDEX IF NOT EXISTS idx_commitment_ledger_committed_at ON commitment_ledger(committed_at_unix_ms);
 `
 
 // CreateSession creates a new session in the audit log

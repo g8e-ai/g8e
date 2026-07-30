@@ -59,42 +59,26 @@ func cloudopArgs(action, resourceID, detail string) string {
 	return shellCommandArgs("cloudop", action, FedRAMPArgs.CloudSvcEndpoint, resourceID, detail)
 }
 
+func cloudopMap(action, resourceID, detail string) map[string]any {
+	return shellCommandMap("cloudop", action, FedRAMPArgs.CloudSvcEndpoint, resourceID, detail)
+}
+
 func fedrampScenarios() []Scenario {
 	return []Scenario{
 		{
 			Name: "fedramp-provision", Title: "FedRAMP: governed cloud resource provisioning with L2 consensus", Persona: fedrampCloudOperator, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
-					return constants.ErrHarnessGovKitMissingSign
+				if kit == nil {
+					return constants.ErrHarnessGovKitNotInit
 				}
-				root, err := c.StateRoot(ctx)
-				if err != nil {
-					return fmt.Errorf("state root: %w", err)
-				}
-				r.note("bound to state root %s", short(root))
-				r.note("cloud operator provisions fedramp-vm-prod-01 (FIPS-199-MODERATE, AWS GovCloud) — L2 consensus + L3 notary")
+				r.note("cloud operator provisions fedramp-vm-prod-01 (FIPS-199-MODERATE, AWS GovCloud) — gateway runs L2 deliberation")
 
-				txHash, status, body, err := c.SubmitMaximal(ctx, fedrampCloudOperator, clientpkg.MaximalEnvelope{
-					OperatorID:        kit.OperatorID,
-					OperatorSessionID: kit.OperatorSessionID,
-					ToolName:          "run_shell_command",
-					ArgumentsJSON:     cloudopArgs("provision", "fedramp-vm-prod-01", "FIPS-199-MODERATE"),
-					TargetResource:    "localhost",
-					StateRoot:         root,
-					Ensemble:          kit.Ensemble,
-					Principal:         kit.Principal,
-					TTL:               c.Config().EnvelopeTTL,
-				})
+				resp, err := c.MCPToolsCall(ctx, fedrampCloudOperator, "run_shell_command", cloudopMap("provision", "fedramp-vm-prod-01", "FIPS-199-MODERATE"))
 				if err != nil {
-					return fmt.Errorf("submit provision envelope: %w", err)
+					return fmt.Errorf("submit provision: %w", err)
 				}
-				r.tx(txHash)
-				r.note("provision envelope %s submitted (admission status %d)", short(txHash), status)
-				if status >= 400 {
-					return fmt.Errorf("provision envelope rejected (status %d): %s", status, string(body))
-				}
-				if summary, failed := receiptFailed(body); failed {
-					return fmt.Errorf("provision tool execution failed: %s", summary)
+				if resp != nil && resp.Error != nil {
+					return fmt.Errorf("provision rejected: %s", resp.Error.Message)
 				}
 				r.note("admitted — operator executing cloudop provision via L5 actuator; provenance receipt written to ledger")
 				return nil
@@ -103,184 +87,96 @@ func fedrampScenarios() []Scenario {
 		{
 			Name: "fedramp-deny", Title: "FedRAMP: unauthorized audit trail destruction blocked by L1 doctrine", Persona: fedrampCloudOperator, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
-					return constants.ErrHarnessGovKitMissingSign
+				if kit == nil {
+					return constants.ErrHarnessGovKitNotInit
 				}
-				root, err := c.StateRoot(ctx)
-				if err != nil {
-					return fmt.Errorf("state root: %w", err)
-				}
-				r.note("bound to state root %s", short(root))
 				r.note("compromised operator tries to destroy the audit trail: run_shell_command 'rm -rf /var/cloudsvc'")
 
-				txHash, status, body, err := c.SubmitMaximal(ctx, fedrampCloudOperator, clientpkg.MaximalEnvelope{
-					OperatorID:        kit.OperatorID,
-					OperatorSessionID: kit.OperatorSessionID,
-					ToolName:          "run_shell_command",
-					ArgumentsJSON:     shellCommandArgs("rm -rf /var/cloudsvc"),
-					TargetResource:    "localhost",
-					StateRoot:         root,
-					Ensemble:          kit.Ensemble,
-					Principal:         kit.Principal,
-					TTL:               c.Config().EnvelopeTTL,
-				})
+				resp, err := c.MCPToolsCall(ctx, fedrampCloudOperator, "run_shell_command", shellCommandMap("rm -rf /var/cloudsvc"))
 				if err != nil {
-					return fmt.Errorf("submit audit-wipe envelope: %w", err)
+					return fmt.Errorf("submit audit-wipe: %w", err)
 				}
-				r.tx(txHash)
-				r.note("audit-wipe envelope %s submitted (status %d)", short(txHash), status)
-				if status < 400 {
-					return fmt.Errorf("audit-wipe was accepted (status %d) — expected L1 rejection", status)
+				if resp == nil || resp.Error == nil {
+					return fmt.Errorf("audit-wipe was accepted — expected L1 rejection")
 				}
 				r.note("correctly rejected by L1 doctrine (CR-26 audit integrity) — audit trail is tamper-evident")
-				r.note("response: %s", string(body))
+				r.note("response: %s", resp.Error.Message)
 				return nil
 			},
 		},
 		{
 			Name: "fedramp-escalate", Title: "FedRAMP: resource destruction gated on authorizing official approval (L3)", Persona: fedrampAuthorizingOfficial, RequiresPosture: Notary,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
+				if kit == nil {
 					return constants.ErrHarnessGovKitMissingSign
 				}
-				root, err := c.StateRoot(ctx)
-				if err != nil {
-					return fmt.Errorf("state root: %w", err)
-				}
-				r.note("bound to state root %s", short(root))
 				r.note("operator requests destruction of fedramp-vm-classified-01 (FIPS-199-HIGH)")
 
-				m := clientpkg.MaximalEnvelope{
-					OperatorID:        kit.OperatorID,
-					OperatorSessionID: kit.OperatorSessionID,
-					ToolName:          "run_shell_command",
-					ArgumentsJSON:     cloudopArgs("destroy", "fedramp-vm-classified-01", "FIPS-199-HIGH"),
-					TargetResource:    "localhost",
-					StateRoot:         root,
-					Ensemble:          kit.Ensemble,
-					TTL:               c.Config().EnvelopeTTL,
+				resp, err := c.MCPToolsCall(ctx, fedrampCloudOperator, "run_shell_command", cloudopMap("destroy", "fedramp-vm-classified-01", "FIPS-199-HIGH"))
+				if err != nil {
+					return fmt.Errorf("submit destroy: %w", err)
 				}
 
-				switch kit.L3Mode {
-				case "mock":
-					r.note("L3 mode=mock: principal %q signs transaction_hash inline", kit.Principal.KeyID)
-					m.Principal = kit.Principal
-					txHash, status, body, err := c.SubmitMaximal(ctx, fedrampCloudOperator, m)
-					if err != nil {
-						return fmt.Errorf("submit destroy envelope: %w", err)
-					}
-					r.tx(txHash)
-					r.note("destroy envelope %s submitted with inline principal proof (status %d)", short(txHash), status)
-					if status >= 400 {
-						return fmt.Errorf("destroy envelope rejected (status %d): %s", status, string(body))
-					}
-					if summary, failed := receiptFailed(body); failed {
-						return fmt.Errorf("destroy tool execution failed: %s", summary)
-					}
-					r.note("authorizing official %q approved inline (mock L3); destruction executed", kit.Principal.KeyID)
-					return nil
-
-				default:
-					r.note("L3 mode=suspend: submit L2-only; resource stays under CSP control until the authorizing official signs")
-					txHash, status, body, err := c.SubmitMaximal(ctx, fedrampCloudOperator, m)
-					if err != nil {
-						return fmt.Errorf("submit destroy envelope: %w", err)
-					}
-					r.tx(txHash)
-					r.note("destroy envelope %s submitted (status %d); awaiting authorizing official approval", short(txHash), status)
-
-					if h, ok := suspendedFromBody(body); ok {
-						txHash = h
-					}
-					ast, approveBody, aerr := c.Approve(ctx, fedrampAuthorizingOfficial, txHash)
+				if txHash, suspended := clientpkg.Suspended(resp); suspended {
+					r.note("gateway suspended destroy transaction %s pending L3 notary approval", short(txHash))
+					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, fedrampAuthorizingOfficial, txHash, kit.OperatorID)
 					if aerr != nil {
 						return fmt.Errorf("authorizing official approve: %w", aerr)
 					}
+					r.note("authorizing official approved hash %s via browser WebAuthn (status %d)", short(txHash), ast)
 					if ast >= 400 {
 						return fmt.Errorf("authorizing official approval rejected (status %d)", ast)
 					}
 					if summary, failed := receiptFailed(approveBody); failed {
 						return fmt.Errorf("destroy tool execution failed: %s", summary)
 					}
-					r.note("authorizing official %q approved hash %s out-of-band (status %d)", kit.Principal.KeyID, short(txHash), ast)
-					r.note("cryptographic proof: principal Ed25519 signature over the exact transaction hash — destruction now executes")
+					r.note("human WebAuthn L3 proof verified; destruction executed")
 					return nil
 				}
+
+				if resp != nil && resp.Error != nil {
+					return fmt.Errorf("destroy rejected: %s", resp.Error.Message)
+				}
+				r.note("gateway admitted destroy (L3 notary satisfied inline)")
+				return nil
 			},
 		},
 		{
 			Name: "fedramp-revert", Title: "FedRAMP: governed configuration revert under L2 consensus quorum", Persona: fedrampCloudOperator, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
-					return constants.ErrHarnessGovKitMissingSign
+				if kit == nil {
+					return constants.ErrHarnessGovKitNotInit
 				}
-				root, err := c.StateRoot(ctx)
-				if err != nil {
-					return fmt.Errorf("state root: %w", err)
-				}
-				r.note("bound to state root %s", short(root))
-				r.note("operator reverts configuration on fedramp-iam-roles-01 with signed tasking — quorum %d", kit.Ensemble.AgentCount())
+				r.note("operator reverts configuration on fedramp-iam-roles-01 with signed tasking")
 
-				txHash, status, body, err := c.SubmitMaximal(ctx, fedrampCloudOperator, clientpkg.MaximalEnvelope{
-					OperatorID:        kit.OperatorID,
-					OperatorSessionID: kit.OperatorSessionID,
-					ToolName:          "run_shell_command",
-					ArgumentsJSON:     cloudopArgs("revert", "fedramp-iam-roles-01", "CM-7-ROLLBACK"),
-					TargetResource:    "localhost",
-					StateRoot:         root,
-					Ensemble:          kit.Ensemble,
-					Principal:         kit.Principal,
-					TTL:               c.Config().EnvelopeTTL,
-				})
+				resp, err := c.MCPToolsCall(ctx, fedrampCloudOperator, "run_shell_command", cloudopMap("revert", "fedramp-iam-roles-01", "CM-7-ROLLBACK"))
 				if err != nil {
-					return fmt.Errorf("submit revert envelope: %w", err)
+					return fmt.Errorf("submit revert: %w", err)
 				}
-				r.tx(txHash)
-				r.note("revert envelope %s submitted (admission status %d)", short(txHash), status)
-				if status >= 400 {
-					return fmt.Errorf("revert envelope rejected (status %d): %s", status, string(body))
+				if resp != nil && resp.Error != nil {
+					return fmt.Errorf("revert rejected: %s", resp.Error.Message)
 				}
-				if summary, failed := receiptFailed(body); failed {
-					return fmt.Errorf("revert tool execution failed: %s", summary)
-				}
-				r.note("admitted — ensemble quorum reached; revert executed and recorded with full configuration lineage")
+				r.note("admitted — gateway quorum reached; revert executed and recorded with full configuration lineage")
 				return nil
 			},
 		},
 		{
 			Name: "fedramp-evidence-block", Title: "FedRAMP: attempt to wipe the gateway audit vault is rejected by L1 doctrine", Persona: fedrampCloudOperator, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
-					return constants.ErrHarnessGovKitMissingSign
+				if kit == nil {
+					return constants.ErrHarnessGovKitNotInit
 				}
-				root, err := c.StateRoot(ctx)
-				if err != nil {
-					return fmt.Errorf("state root: %w", err)
-				}
-				r.note("bound to state root %s", short(root))
 				r.note("compromised operator tries to wipe the gateway audit vault: run_shell_command 'rm -rf /root/.g8e/data'")
 
-				txHash, status, body, err := c.SubmitMaximal(ctx, fedrampCloudOperator, clientpkg.MaximalEnvelope{
-					OperatorID:        kit.OperatorID,
-					OperatorSessionID: kit.OperatorSessionID,
-					ToolName:          "run_shell_command",
-					ArgumentsJSON:     shellCommandArgs("rm -rf /root/.g8e/data"),
-					TargetResource:    "localhost",
-					StateRoot:         root,
-					Ensemble:          kit.Ensemble,
-					Principal:         kit.Principal,
-					TTL:               c.Config().EnvelopeTTL,
-				})
+				resp, err := c.MCPToolsCall(ctx, fedrampCloudOperator, "run_shell_command", shellCommandMap("rm -rf /root/.g8e/data"))
 				if err != nil {
-					return fmt.Errorf("submit vault-wipe envelope: %w", err)
+					return fmt.Errorf("submit vault-wipe: %w", err)
 				}
-				r.tx(txHash)
-				r.note("vault-wipe envelope %s submitted (status %d)", short(txHash), status)
-				if status < 400 {
-					return fmt.Errorf("vault-wipe was accepted (status %d) — expected L1 rejection", status)
+				if resp == nil || resp.Error == nil {
+					return fmt.Errorf("vault-wipe was accepted — expected L1 rejection")
 				}
 				r.note("correctly rejected by L1 doctrine (CR-26 audit integrity) — audit vault is tamper-evident")
-				r.note("response: %s", string(body))
+				r.note("response: %s", resp.Error.Message)
 				return nil
 			},
 		},

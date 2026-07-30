@@ -682,8 +682,6 @@ func TestDefaultHarnessConfig(t *testing.T) {
 		assert.Equal(t, "/root/.g8e/pki/operator.crt", cfg.CertPath)
 		assert.Equal(t, "/root/.g8e/pki/operator.key", cfg.KeyPath)
 		assert.Equal(t, "/root/.g8e/pki/trust/g8eg-ca-bundle.pem", cfg.CAPath)
-		assert.Equal(t, 3, cfg.EnsembleSize)
-		assert.Equal(t, "mock", cfg.L3Mode)
 		assert.False(t, cfg.UseRun)
 	})
 
@@ -704,8 +702,6 @@ func TestHarnessRun(t *testing.T) {
 			"--cert", "/root/.g8e/pki/operator.crt",
 			"--key", "/root/.g8e/pki/operator.key",
 			"--ca", "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
-			"--ensemble", "3",
-			"--l3-mode", "mock",
 			"gov-cui-exfil-block",
 		}, cmd)
 	})
@@ -719,18 +715,7 @@ func TestHarnessRun(t *testing.T) {
 		assert.Contains(t, cmd, "dhs-ingest")
 	})
 
-	t.Run("includes consensus seed and consensus id when set", func(t *testing.T) {
-		cfg := defaultHarnessConfig("agent-runtime")
-		cfg.ConsensusSeed = "deadbeef"
-		cfg.ConsensusID = "test-consensus"
-		cmd := harnessRun("dhs-cue", cfg)
-		assert.Contains(t, cmd, "--consensus-seed")
-		assert.Contains(t, cmd, "deadbeef")
-		assert.Contains(t, cmd, "--consensus-id")
-		assert.Contains(t, cmd, "test-consensus")
-	})
-
-	t.Run("omits ensemble and l3-mode when zero/empty", func(t *testing.T) {
+	t.Run("omits ensemble and l3-mode when not set", func(t *testing.T) {
 		cfg := harnessConfig{
 			Container: "agent-runtime",
 			MTLSURL:   "https://g8e.local:8443",

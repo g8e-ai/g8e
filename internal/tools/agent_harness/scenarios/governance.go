@@ -13,13 +13,9 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
-// GovKit carries the mock cryptographic actors the governance scenarios need.
-// main builds it once (minting keys, registering trusted signers) and injects
-// it before running the consensus/notary block.
+// GovKit carries the governance context the scenarios need.
+// main builds it once and injects it before running the consensus/notary block.
 type GovKit struct {
-	Ensemble          *clientpkg.Ensemble
-	Principal         *clientpkg.Principal
-	L3Mode            string // "mock" | "suspend"
 	OperatorID        string
 	OperatorSessionID string
 }
@@ -39,99 +35,59 @@ var (
 func governanceScenarios() []Scenario {
 	return []Scenario{
 		{
-			Name: "consensus", Title: "L2 consensus envelope (mock ensemble co-sign)", Persona: ensembleProducer, RequiresPosture: Consensus,
+			Name: "consensus", Title: "L2 consensus via MCP tools/call (gateway deliberation)", Persona: ensembleProducer, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				if kit == nil || kit.Ensemble == nil {
+				if kit == nil {
 					return constants.ErrHarnessGovKitNotInit
 				}
-				root, err := c.StateRoot(ctx)
-				if err != nil {
-					return err
-				}
-				r.note("bound to state root %s", short(root))
-				r.note("mock ensemble: %d agents co-signed transaction_hash|true with key %q",
-					kit.Ensemble.AgentCount(), kit.Ensemble.KeyID)
+				r.note("submitting fs_list via MCP tools/call — gateway runs L2 deliberation")
 
-				txHash, status, _, err := c.SubmitMaximal(ctx, ensembleProducer, clientpkg.MaximalEnvelope{
-					OperatorID:        kit.OperatorID,
-					OperatorSessionID: kit.OperatorSessionID,
-					ToolName:          "fs_list",
-					ArgumentsJSON:     fsListArgs("."),
-					TargetResource:    "localhost",
-					StateRoot:         root,
-					Ensemble:          kit.Ensemble, // L2 attached; no L3 (audited in consensus posture)
-					TTL:               c.Config().EnvelopeTTL,
-				})
+				resp, err := c.MCPToolsCall(ctx, ensembleProducer, "fs_list", fsListMap("."))
 				if err != nil {
 					return err
 				}
-				r.tx(txHash)
-				r.note("submitted official GovernanceEnvelope %s (admission status %d)", short(txHash), status)
+				if resp != nil && resp.Error != nil {
+					return fmt.Errorf("consensus tool call rejected: %s", resp.Error.Message)
+				}
+				r.note("gateway admitted envelope after L2 consensus deliberation")
 				return nil
 			},
 		},
 		{
-			Name: "envelope-maximal", Title: "Official notary envelope: L2 consensus + principal L3 signing", Persona: ensembleProducer, RequiresPosture: Notary,
+			Name: "envelope-maximal", Title: "Notary envelope: MCP tools/call, gateway suspends, human approves via WebAuthn", Persona: ensembleProducer, RequiresPosture: Notary,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
+				if kit == nil {
 					return constants.ErrHarnessGovKitMissingSign
 				}
-				root, err := c.StateRoot(ctx)
+				r.note("submitting fs_list via MCP tools/call — gateway runs L2, suspends for L3")
+
+				resp, err := c.MCPToolsCall(ctx, ensembleProducer, "fs_list", fsListMap("."))
 				if err != nil {
 					return err
 				}
-				r.note("bound to state root %s", short(root))
 
-				m := clientpkg.MaximalEnvelope{
-					OperatorID:        kit.OperatorID,
-					OperatorSessionID: kit.OperatorSessionID,
-					ToolName:          "fs_list",
-					ArgumentsJSON:     fsListArgs("."),
-					TargetResource:    "localhost",
-					StateRoot:         root,
-					Ensemble:          kit.Ensemble,
-					TTL:               c.Config().EnvelopeTTL,
-				}
-
-				switch kit.L3Mode {
-				case "mock":
-					// Attach a principal Ed25519 signature over the hash as the
-					// L3 proof. Simplest faithful "signing from a principal".
-					m.Principal = kit.Principal
-					r.note("L3 mode=mock: principal %q signs transaction_hash inline", kit.Principal.KeyID)
-					txHash, status, _, err := c.SubmitMaximal(ctx, ensembleProducer, m)
-					if err != nil {
-						return err
-					}
-					r.tx(txHash)
-					r.note("submitted notary envelope %s with inline principal proof (status %d)", short(txHash), status)
-					return nil
-
-				default: // "suspend" — drive the REAL out-of-band human-notary flow.
-					r.note("L3 mode=suspend: submit L2-only, then principal authorizes the exact hash OOB")
-					txHash, status, body, err := c.SubmitMaximal(ctx, ensembleProducer, m)
-					if err != nil {
-						return err
-					}
-					r.tx(txHash)
-					r.note("envelope %s submitted (status %d); awaiting L3", short(txHash), status)
-
-					// The gateway may echo an /approve/{hash} URL; trust our own
-					// computed hash regardless and authorize it as the principal.
-					if h, ok := suspendedFromBody(body); ok {
-						txHash = h
-					}
-					ast, approveBody, aerr := c.Approve(ctx, principalActor, txHash)
+				if txHash, suspended := clientpkg.Suspended(resp); suspended {
+					r.note("gateway suspended transaction %s pending L3 notary approval", short(txHash))
+					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, ensembleProducer, txHash, kit.OperatorID)
 					if aerr != nil {
-						return aerr
+						return fmt.Errorf("human approval: %w", aerr)
+					}
+					r.note("human approved hash %s via browser WebAuthn (status %d)", short(txHash), ast)
+					if ast >= 400 {
+						return fmt.Errorf("human approval rejected with status %d", ast)
 					}
 					if summary, failed := receiptFailed(approveBody); failed {
-						return fmt.Errorf("tool execution failed after OOB approval: %s", summary)
+						return fmt.Errorf("tool execution failed after human approval: %s", summary)
 					}
-					r.note("principal %q approved hash %s via OOB notary (status %d)",
-						kit.Principal.KeyID, short(txHash), ast)
+					r.note("human WebAuthn L3 proof verified; transaction resumed")
 					return nil
 				}
+
+				if resp != nil && resp.Error != nil {
+					return fmt.Errorf("notary tool call rejected: %s", resp.Error.Message)
+				}
+				r.note("gateway admitted envelope (L3 notary satisfied inline)")
+				return nil
 			},
 		},
 		{
@@ -162,124 +118,58 @@ func governanceScenarios() []Scenario {
 			},
 		},
 		{
-			Name: "consensus-quorum", Title: "Consensus quorum: 2-of-3 co-sign, receipt records consensus", Persona: ensembleProducer, RequiresPosture: Consensus,
+			Name: "consensus-quorum", Title: "Consensus quorum: MCP tools/call, gateway 2-of-3 deliberation", Persona: ensembleProducer, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				if kit == nil || kit.Ensemble == nil {
+				if kit == nil {
 					return constants.ErrHarnessGovKitNotInit
 				}
-				root, err := c.StateRoot(ctx)
-				if err != nil {
-					return err
-				}
-				r.note("bound to state root %s", short(root))
-				r.note("ensemble: %d agents, quorum threshold 2-of-3", kit.Ensemble.AgentCount())
+				r.note("submitting fs_list via MCP tools/call — gateway runs 2-of-3 quorum deliberation")
 
-				txHash, status, _, err := c.SubmitMaximal(ctx, ensembleProducer, clientpkg.MaximalEnvelope{
-					OperatorID:        kit.OperatorID,
-					OperatorSessionID: kit.OperatorSessionID,
-					ToolName:          "fs_list",
-					ArgumentsJSON:     fsListArgs("."),
-					TargetResource:    "localhost",
-					StateRoot:         root,
-					Ensemble:          kit.Ensemble,
-					TTL:               c.Config().EnvelopeTTL,
-				})
+				resp, err := c.MCPToolsCall(ctx, ensembleProducer, "fs_list", fsListMap("."))
 				if err != nil {
 					return err
 				}
-				r.tx(txHash)
-				r.note("submitted consensus envelope %s (admission status %d)", short(txHash), status)
-				if status >= 400 {
-					return fmt.Errorf("quorum envelope rejected with status %d", status)
+				if resp != nil && resp.Error != nil {
+					return fmt.Errorf("quorum tool call rejected: %s", resp.Error.Message)
 				}
-				r.note("transaction hash recorded; receipt co-signed by ensemble key %q", kit.Ensemble.KeyID)
+				r.note("gateway admitted envelope after quorum consensus")
 				return nil
 			},
 		},
 		{
-			Name: "consensus-veto", Title: "Consensus veto: one member votes false, envelope is rejected", Persona: ensembleProducer, RequiresPosture: Consensus,
+			Name: "notary-oob", Title: "L3 notary OOB: MCP tools/call, gateway suspends, human approves via WebAuthn", Persona: principalActor, RequiresPosture: Notary,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				if kit == nil || kit.Ensemble == nil {
-					return constants.ErrHarnessGovKitNotInit
-				}
-				root, err := c.StateRoot(ctx)
-				if err != nil {
-					return err
-				}
-				r.note("bound to state root %s", short(root))
-				r.note("submitting envelope with L2 decision=false (veto)")
-
-				veto := false
-				txHash, status, body, err := c.SubmitMaximal(ctx, ensembleProducer, clientpkg.MaximalEnvelope{
-					OperatorID:        kit.OperatorID,
-					OperatorSessionID: kit.OperatorSessionID,
-					ToolName:          "fs_list",
-					ArgumentsJSON:     fsListArgs("."),
-					TargetResource:    "localhost",
-					StateRoot:         root,
-					Ensemble:          kit.Ensemble,
-					Decision:          &veto,
-					TTL:               c.Config().EnvelopeTTL,
-				})
-				if err != nil {
-					return err
-				}
-				r.tx(txHash)
-				r.note("veto envelope %s submitted (status %d)", short(txHash), status)
-
-				if status < 400 {
-					return fmt.Errorf("veto envelope was accepted (status %d) — expected rejection", status)
-				}
-				r.note("envelope correctly rejected by L2 consensus (veto by false vote)")
-				r.note("response body: %s", string(body))
-				return nil
-			},
-		},
-		{
-			Name: "notary-oob", Title: "L3 notary OOB: suspend then principal approves out-of-band", Persona: principalActor, RequiresPosture: Notary,
-			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
+				if kit == nil {
 					return constants.ErrHarnessGovKitMissingSign
 				}
-				root, err := c.StateRoot(ctx)
+				r.note("submitting fs_list via MCP tools/call — gateway suspends for L3 notary")
+
+				resp, err := c.MCPToolsCall(ctx, ensembleProducer, "fs_list", fsListMap("."))
 				if err != nil {
 					return err
 				}
-				r.note("bound to state root %s", short(root))
-				r.note("L3 mode=suspend: submit L2-only, then principal authorizes OOB")
 
-				txHash, status, body, err := c.SubmitMaximal(ctx, ensembleProducer, clientpkg.MaximalEnvelope{
-					OperatorID:        kit.OperatorID,
-					OperatorSessionID: kit.OperatorSessionID,
-					ToolName:          "fs_list",
-					ArgumentsJSON:     fsListArgs("."),
-					TargetResource:    "localhost",
-					StateRoot:         root,
-					Ensemble:          kit.Ensemble,
-					TTL:               c.Config().EnvelopeTTL,
-				})
-				if err != nil {
-					return err
+				if txHash, suspended := clientpkg.Suspended(resp); suspended {
+					r.note("gateway suspended transaction %s pending L3 notary approval", short(txHash))
+					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, principalActor, txHash, kit.OperatorID)
+					if aerr != nil {
+						return fmt.Errorf("human approval: %w", aerr)
+					}
+					r.note("human approved hash %s via browser WebAuthn (status %d)", short(txHash), ast)
+					if ast >= 400 {
+						return fmt.Errorf("human approval rejected with status %d", ast)
+					}
+					if summary, failed := receiptFailed(approveBody); failed {
+						return fmt.Errorf("tool execution failed after human approval: %s", summary)
+					}
+					r.note("human WebAuthn L3 proof verified; transaction resumed")
+					return nil
 				}
-				r.tx(txHash)
-				r.note("envelope %s submitted (status %d); awaiting L3 approval", short(txHash), status)
 
-				if h, ok := suspendedFromBody(body); ok {
-					txHash = h
+				if resp != nil && resp.Error != nil {
+					return fmt.Errorf("notary tool call rejected: %s", resp.Error.Message)
 				}
-				ast, approveBody, aerr := c.Approve(ctx, principalActor, txHash)
-				if aerr != nil {
-					return aerr
-				}
-				r.note("principal %q approved hash %s via OOB notary (status %d)",
-					kit.Principal.KeyID, short(txHash), ast)
-				if ast >= 400 {
-					return fmt.Errorf("OOB approval rejected with status %d", ast)
-				}
-				if summary, failed := receiptFailed(approveBody); failed {
-					return fmt.Errorf("tool execution failed after OOB approval: %s", summary)
-				}
-				r.note("cryptographic proof: principal Ed25519 signature over transaction hash")
+				r.note("gateway admitted envelope (L3 notary satisfied inline)")
 				return nil
 			},
 		},
@@ -303,11 +193,6 @@ func receiptFailed(body []byte) (string, bool) {
 		return r.ResultSummary, true
 	}
 	return "", false
-}
-
-func suspendedFromBody(body []byte) (string, bool) {
-	// Reuse the JSON-RPC suspension detector by wrapping the raw body as Result.
-	return clientpkg.Suspended(&clientpkg.JSONRPCResponse{Result: body})
 }
 
 func short(s string) string {

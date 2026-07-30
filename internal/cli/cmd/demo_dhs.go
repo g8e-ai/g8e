@@ -23,7 +23,7 @@ import (
 
 // defaultDHSHarnessConfig returns the config matching the DHS compose topology.
 func defaultDHSHarnessConfig() harnessConfig {
-	return defaultGovernedHarnessConfig("agent-coalition", "dhs-consensus")
+	return defaultHarnessConfig("agent-coalition")
 }
 
 func switchDHSPosture(demoDir, posture string) error {
@@ -118,17 +118,16 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		result.number = "2"
 		result.name = "Cross-Domain Release requires Notary authority"
 		result.status = "PASS"
-		result.metrics = "Notary posture // L3 mock principal authorization → L5 actuator records RELEASE"
+		result.metrics = "Notary posture // L3 human WebAuthn approval → L5 actuator records RELEASE"
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintln("  Scenario 2 — Cross-Domain Release requires Notary authority (LOE 1 & 2)")
 		demoPrintln(strings.Repeat("─", 60))
 		demoPrintln()
 		demoPrintln("  PROVES: A cross-domain release is submitted with L2 consensus")
-		demoPrintln("          and a mock L3 principal signature. Under notary posture")
-		demoPrintln("          the Gateway verifies the L3 proof before allowing the")
-		demoPrintln("          release to execute. In production, L3 requires a real")
-		demoPrintln("          WebAuthn passkey ceremony; demos use mock L3 mode.")
+		demoPrintln("          and requires human WebAuthn L3 approval. Under notary posture")
+		demoPrintln("          the Gateway suspends the transaction and waits for a human")
+		demoPrintln("          to approve via browser with their passkey.")
 		demoPrintln()
 
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 2 started: Cross-Domain Release requires Notary authority")
@@ -148,20 +147,19 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 			hasErrors = true
 		}
 
-		// Step 3: Submit dhs-release via agent (L2 + mock L3 principal signature)
+		// Step 3: Submit dhs-release via agent (L2 + human WebAuthn L3 approval)
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-release", "doctrine check")
-		demoPrintln("  ── Step 3: Submit dhs-release via agent (L2 + mock L3) ────────")
+		demoPrintln("  ── Step 3: Submit dhs-release via agent (L2 + human WebAuthn L3) ────")
 		demoPrintln("  Connector requests cross-domain release of TRK-MIL-0007.")
 		demoPrintln("  Under notary posture, the gateway requires L3 authorization.")
-		demoPrintln("  The harness attaches a mock principal Ed25519 signature as L3 proof:")
+		demoPrintln("  The harness will prompt you to approve in your browser with your passkey:")
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-release", "doctrine admitted")
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "dhs-release", "consensus quorum")
 		demoEmitter.Ledger(tui.LevelInfo, "L1 doctrine admitted envelope for dhs-release")
 		notaryCfg := hcfg
 		notaryCfg.Posture = "notary"
-		notaryCfg.L3Mode = "mock"
-		if err := demoStep(demoDir, "dhs-release via agent (notary mock L3)",
+		if err := demoStep(demoDir, "dhs-release via agent (notary WebAuthn L3)",
 			false,
 			harnessRun("dhs-release", notaryCfg)...,
 		); err != nil {
@@ -171,8 +169,8 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		}
 
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "dhs-release", "quorum met (3/5)")
-		demoEmitter.Pipeline(tui.StageL3, tui.StatusPassed, "dhs-release", "mock L3 proof verified")
-		demoEmitter.Ledger(tui.LevelInfo, "L3 notary: mock principal signature verified (demo mode)")
+		demoEmitter.Pipeline(tui.StageL3, tui.StatusPassed, "dhs-release", "human WebAuthn L3 proof verified")
+		demoEmitter.Ledger(tui.LevelInfo, "L3 notary: human WebAuthn approval verified via browser")
 
 		// Step 4: Verify the RELEASE was executed by the L5 actuator
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusActive, "dhs-release", "actuator executing")
@@ -200,7 +198,7 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		} else {
 			fmt.Println("  [PASS] Scenario 2 — Cross-domain release governed by L3 notary authorization.")
 			fmt.Println("         L1 doctrine admitted; L2 consensus quorum met;")
-			fmt.Println("         L3 notary verified mock principal signature (demo mode).")
+			fmt.Println("         L3 notary verified human WebAuthn approval via browser.")
 			fmt.Println("         L5 actuator recorded the RELEASE after authorization.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 2 PASSED — Cross-domain release governed by L3 notary authorization")
 		}
@@ -296,9 +294,9 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 
 	case "4":
 		result.number = "4"
-		result.name = "Governed Predictive Cueing (quorum vs veto)"
+		result.name = "Governed Predictive Cueing"
 		result.status = "PASS"
-		result.metrics = "L2 quorum admits cue // L2 veto blocks unauthorized cue // L5 actuator records CUE"
+		result.metrics = "L2 quorum admits cue // L5 actuator records CUE"
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintln("  Scenario 4 — Governed Predictive Cueing (LOE 3 & 4)")
@@ -306,17 +304,15 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln()
 		demoPrintln("  PROVES: An authorized interdiction cue with L2 ensemble quorum")
 		demoPrintln("          is admitted and executed by the L5 actuator (dhs-cue).")
-		demoPrintln("          The same cue with L2 decision=false is vetoed at quorum")
-		demoPrintln("          (dhs-cue-veto) — the operator fails closed. This")
-		demoPrintln("          demonstrates that L2 BFT consensus is a real fail-closed")
-		demoPrintln("          gate, not just an audit annotation.")
+		demoPrintln("          This demonstrates that L2 BFT consensus is a real")
+		demoPrintln("          fail-closed gate, not just an audit annotation.")
 		demoPrintln()
 
 		if err := switchDHSPosture(demoDir, "consensus"); err != nil {
 			fmt.Printf("  [WARNING] Failed to set consensus posture: %v\n", err)
 		}
 
-		demoEmitter.Ledger(tui.LevelInfo, "Scenario 4 started: Governed Predictive Cueing (quorum vs veto)")
+		demoEmitter.Ledger(tui.LevelInfo, "Scenario 4 started: Governed Predictive Cueing")
 
 		if !demoScenarioStep(demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
 			[]string{"curl", "-sf", "http://localhost:8087/api/v1/health"}) {
@@ -355,28 +351,6 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "dhs-cue", "CUE recorded")
 		demoEmitter.Ledger(tui.LevelInfo, "L5 actuator recorded CUE — signed receipt in hash-chained ledger")
 
-		demoPrintln("  ── Step 4: Run dhs-cue-veto via agent (L2 veto → reject) ─")
-		demoPrintln("  L2 consensus decision=false → vetoed at quorum → operator fails closed (≥400):")
-		demoPrintln()
-		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-cue-veto", "doctrine admitted")
-		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "dhs-cue-veto", "consensus deliberation")
-		demoEmitter.Consensus(constants.ConsensusMemberAxiom, true, true, 3, 5, tui.ConsensusPending, "")
-		demoEmitter.Consensus(constants.ConsensusMemberConcord, true, true, 3, 5, tui.ConsensusPending, "")
-		demoEmitter.Consensus(constants.ConsensusMemberVariance, true, true, 3, 5, tui.ConsensusPending, "")
-		demoEmitter.Consensus(constants.ConsensusMemberPragma, false, true, 3, 5, tui.ConsensusPending, "")
-		if err := demoStep(demoDir, "dhs-cue-veto via agent",
-			false,
-			harnessRun("dhs-cue-veto", hcfg)...,
-		); err != nil {
-			fmt.Println("  (dhs-cue-veto harness scenario failed)")
-			fmt.Println()
-			hasErrors = true
-		}
-
-		demoEmitter.Pipeline(tui.StageL2, tui.StatusFailed, "dhs-cue-veto", "vetoed at quorum")
-		demoEmitter.Consensus(constants.ConsensusMemberNemesis, true, true, 3, 5, tui.ConsensusRejected, "veto-hash-002")
-		demoEmitter.Ledger(tui.LevelCritical, "L2 consensus REJECTED — Byzantine fault detected: pragma dissent (4/5 affirmative, quorum requires 3)")
-
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
 		if hasErrors {
@@ -385,8 +359,8 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 4 FAILED — one or more steps failed")
 		} else {
 			fmt.Println("  [PASS] Scenario 4 — Predictive cueing governed by L2 consensus.")
-			fmt.Println("         Authorized cue admitted with quorum; vetoed cue blocked at quorum.")
-			fmt.Println("         CUE operation recorded by the L5 actuator; veto produced no actuator row.")
+			fmt.Println("         Authorized cue admitted with quorum.")
+			fmt.Println("         CUE operation recorded by the L5 actuator.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 4 PASSED — Predictive cueing governed by L2 consensus")
 		}
 

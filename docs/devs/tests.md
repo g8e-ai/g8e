@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-07-28
+Last Updated: 2026-07-30
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -174,7 +174,7 @@ The interactive demo runner (`g8e demos run <org> [scenario]`) provides 17 platf
 - **Consensus** — L1/L2 enforced, L3 audited
 - **Notary** — L1/L2/L3 strictly enforced
 
-**Governance testing** uses mock cryptographic actors (ensemble co-signers, principal notary) to test maximal governance envelopes without distributed consensus infrastructure.
+**Governance testing** uses cryptographic actors (per-member Ed25519 signers for L2 consensus, human browser approval for L3 notary) to exercise governance flows via `MCPToolsCall` (Path A). The gateway runs `L2ConsensusDeliberator` internally and suspends transactions requiring L3 notary approval. The harness drives the real out-of-band L3 flow via `WaitForHumanApproval` (`client/client.go`), which subscribes to the gateway's SSE stream for `approval.completed` events matching the transaction hash, blocks until a human completes the WebAuthn passkey ceremony in their browser, and verifies the approval status via the mTLS status endpoint. Each consensus member signs with its own distinct key derived from `member_seeds` in the bootstrap config, making `RequireDistinct` and quorum cryptographically meaningful. `SubmitMaximal`/`Ensemble` remain as conformance testing infrastructure only. Unit tests for `WaitForHumanApproval` (3 tests in `client_test.go`: success, SSE timeout, status endpoint error), `shellCommandMap` (`shell_command_test.go`), and `WaitForApprovalSSE` (`approval_sse_test.go`) provide coverage. A fail-closed regression test (`TestGatewayModeService_GetGovernanceDeps_AlwaysUsesRealNotary`) verifies the gateway always requires real WebAuthn proof.
 
 ### MCP mTLS Authentication Flow
 

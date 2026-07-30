@@ -15,6 +15,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -46,7 +47,7 @@ func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 			ProjectRoot: tempDir,
 			RuntimeDir:  tempDir,
 		}
-		_, err = buildGatewayConn(fileSvc, cfg)
+		_, err = buildGatewayConn(fileSvc, cfg, stdioCredentialFlags{})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrFailedToReadTrustBundle)
 	})
@@ -67,7 +68,7 @@ func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 		t.Setenv(envG8EClientCert, certPath)
 		t.Setenv(envG8EClientKey, keyPath)
 
-		_, err = buildGatewayConn(fileSvc, cfg)
+		_, err = buildGatewayConn(fileSvc, cfg, stdioCredentialFlags{})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrFailedToReadTrustBundle)
 	})
@@ -88,7 +89,7 @@ func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 			RuntimeDir:  filepath.Dir(certPath),
 		}
 
-		conn, err := buildGatewayConn(fileSvc, cfg)
+		conn, err := buildGatewayConn(fileSvc, cfg, stdioCredentialFlags{})
 		require.NoError(t, err)
 		assert.NotNil(t, conn)
 		assert.Equal(t, "https://127.0.0.1:9999/mcp", conn.gatewayURL)
@@ -411,12 +412,8 @@ func TestRunAgentHarness_ConfigLoadError(t *testing.T) {
 		harnessAPIKey = ""
 		harnessSessionID = ""
 		harnessOutDir = ""
-		harnessL3Mode = ""
-		harnessEnsemble = 3
 		harnessVerbose = false
 		harnessPhase = "all"
-		harnessConsensusSeed = ""
-		harnessConsensusID = ""
 
 		cmd := &cobra.Command{}
 		var buf bytes.Buffer
@@ -528,5 +525,234 @@ func TestPrintMCPConfigIP_WithValidCerts(t *testing.T) {
 		output := buf.String()
 		assert.Contains(t, output, "mcpServers")
 		assert.Contains(t, output, "g8e")
+	})
+}
+
+// ─── buildGatewayConn flag resolution ─────────────────────────────────────────
+
+func TestBuildGatewayConn_FlagResolution(t *testing.T) {
+	t.Run("flag-only credentials succeed", func(t *testing.T) {
+		certPath, keyPath, caPath := generateTestCerts(t)
+		tempDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+		require.NoError(t, err)
+
+		cfg := &config.Config{
+			ProjectRoot: tempDir,
+			RuntimeDir:  tempDir,
+		}
+
+		flags := stdioCredentialFlags{
+			ClientCert: certPath,
+			ClientKey:  keyPath,
+			CABundle:   caPath,
+		}
+
+		conn, err := buildGatewayConn(fileSvc, cfg, flags)
+		require.NoError(t, err)
+		assert.NotNil(t, conn)
+	})
+
+	t.Run("flag beats env for cert/key", func(t *testing.T) {
+		certPath, keyPath, caPath := generateTestCerts(t)
+		tempDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+		require.NoError(t, err)
+
+		// Set env to wrong values, flags to correct values
+		t.Setenv(envG8EClientCert, "/nonexistent/env-cert.crt")
+		t.Setenv(envG8EClientKey, "/nonexistent/env-key.key")
+		t.Setenv(envG8ECABundle, caPath)
+
+		cfg := &config.Config{
+			ProjectRoot: tempDir,
+			RuntimeDir:  tempDir,
+		}
+
+		flags := stdioCredentialFlags{
+			ClientCert: certPath,
+			ClientKey:  keyPath,
+		}
+
+		conn, err := buildGatewayConn(fileSvc, cfg, flags)
+		require.NoError(t, err)
+		assert.NotNil(t, conn)
+	})
+
+	t.Run("gateway-url flag honored verbatim", func(t *testing.T) {
+		certPath, keyPath, caPath := generateTestCerts(t)
+		tempDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+		require.NoError(t, err)
+
+		cfg := &config.Config{
+			ProjectRoot: tempDir,
+			RuntimeDir:  tempDir,
+		}
+
+		flags := stdioCredentialFlags{
+			ClientCert: certPath,
+			ClientKey:  keyPath,
+			CABundle:   caPath,
+			GatewayURL: "https://10.0.0.99:8443/mcp",
+		}
+
+		conn, err := buildGatewayConn(fileSvc, cfg, flags)
+		require.NoError(t, err)
+		assert.Equal(t, "https://10.0.0.99:8443/mcp", conn.gatewayURL)
+	})
+
+	t.Run("ca-bundle under runtime root reads through fileSvc", func(t *testing.T) {
+		certPath, keyPath, _ := generateTestCerts(t)
+		tempDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+		require.NoError(t, err)
+		require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
+
+		// Write a CA bundle inside the runtime tree
+		caRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+		caData := []byte("fake-ca-bundle")
+		require.NoError(t, fileSvc.WriteFile(context.Background(), caRel, caData, constants.PermFilePublic))
+
+		caAbs := fileSvc.Resolve(caRel)
+
+		cfg := &config.Config{
+			ProjectRoot: tempDir,
+			RuntimeDir:  tempDir,
+		}
+
+		flags := stdioCredentialFlags{
+			ClientCert: certPath,
+			ClientKey:  keyPath,
+			CABundle:   caAbs,
+		}
+
+		conn, err := buildGatewayConn(fileSvc, cfg, flags)
+		require.NoError(t, err)
+		assert.NotNil(t, conn)
+	})
+}
+
+// ─── buildGatewayConn fail-closed ─────────────────────────────────────────────
+
+func TestBuildGatewayConn_FailClosed(t *testing.T) {
+	t.Run("app-cert without app-key returns ErrIncompleteCredentialPair", func(t *testing.T) {
+		tempDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+		require.NoError(t, err)
+
+		cfg := &config.Config{
+			ProjectRoot: tempDir,
+			RuntimeDir:  tempDir,
+		}
+
+		flags := stdioCredentialFlags{
+			AppCert: "/tmp/app.crt",
+		}
+
+		_, err = buildGatewayConn(fileSvc, cfg, flags)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrIncompleteCredentialPair)
+	})
+
+	t.Run("client-key without client-cert returns ErrIncompleteCredentialPair", func(t *testing.T) {
+		tempDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+		require.NoError(t, err)
+
+		cfg := &config.Config{
+			ProjectRoot: tempDir,
+			RuntimeDir:  tempDir,
+		}
+
+		flags := stdioCredentialFlags{
+			ClientKey: "/tmp/client.key",
+		}
+
+		_, err = buildGatewayConn(fileSvc, cfg, flags)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrIncompleteCredentialPair)
+	})
+
+	t.Run("http gateway URL returns ErrMCPConfigGatewayURLInvalidScheme", func(t *testing.T) {
+		certPath, keyPath, caPath := generateTestCerts(t)
+		tempDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+		require.NoError(t, err)
+
+		cfg := &config.Config{
+			ProjectRoot: tempDir,
+			RuntimeDir:  tempDir,
+		}
+
+		flags := stdioCredentialFlags{
+			ClientCert: certPath,
+			ClientKey:  keyPath,
+			CABundle:   caPath,
+			GatewayURL: "http://g8e.local:8443/mcp",
+		}
+
+		_, err = buildGatewayConn(fileSvc, cfg, flags)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrMCPConfigGatewayURLInvalidScheme)
+	})
+
+	t.Run("empty host in gateway URL returns ErrMCPConfigGatewayURLHostEmpty", func(t *testing.T) {
+		certPath, keyPath, caPath := generateTestCerts(t)
+		tempDir := testutil.TempDir(t)
+		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+		require.NoError(t, err)
+
+		cfg := &config.Config{
+			ProjectRoot: tempDir,
+			RuntimeDir:  tempDir,
+		}
+
+		flags := stdioCredentialFlags{
+			ClientCert: certPath,
+			ClientKey:  keyPath,
+			CABundle:   caPath,
+			GatewayURL: "https:///mcp",
+		}
+
+		_, err = buildGatewayConn(fileSvc, cfg, flags)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrMCPConfigGatewayURLHostEmpty)
+	})
+}
+
+// ─── parseStdioCredentialFlags ────────────────────────────────────────────────
+
+func TestParseStdioCredentialFlags(t *testing.T) {
+	t.Run("zero value when nothing is set", func(t *testing.T) {
+		cmd := mcpStdioCmd()
+		cmd.SetArgs([]string{})
+		// Execute to register flags
+		require.NoError(t, cmd.ParseFlags([]string{}))
+
+		flags, err := parseStdioCredentialFlags(cmd)
+		require.NoError(t, err)
+		assert.Equal(t, stdioCredentialFlags{}, flags)
+	})
+
+	t.Run("exact values after flag set", func(t *testing.T) {
+		cmd := mcpStdioCmd()
+		require.NoError(t, cmd.ParseFlags([]string{
+			"--client-cert", "/tmp/cli.crt",
+			"--client-key", "/tmp/cli.key",
+			"--ca-bundle", "/tmp/ca.pem",
+			"--gateway-url", "https://g8e.local:8443/mcp",
+			"--app-cert", "/tmp/app.crt",
+			"--app-key", "/tmp/app.key",
+		}))
+
+		flags, err := parseStdioCredentialFlags(cmd)
+		require.NoError(t, err)
+		assert.Equal(t, "/tmp/cli.crt", flags.ClientCert)
+		assert.Equal(t, "/tmp/cli.key", flags.ClientKey)
+		assert.Equal(t, "/tmp/ca.pem", flags.CABundle)
+		assert.Equal(t, "https://g8e.local:8443/mcp", flags.GatewayURL)
+		assert.Equal(t, "/tmp/app.crt", flags.AppCert)
+		assert.Equal(t, "/tmp/app.key", flags.AppKey)
 	})
 }

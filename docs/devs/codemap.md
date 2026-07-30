@@ -579,17 +579,17 @@ The following packages are test-only and are not part of the production dependen
 ## Agent Harness & Demos
 
 **`internal/tools/agent_harness/`** - Reference client for real governance envelope submission
-- `client/client.go` - mTLS client: `StateRoot`, `RegisterSigner`, `Approve` (uses `constants.APIPaths.*`)
-- `client/client_test.go` - Client unit tests
-- `client/envelope.go` - `SubmitMaximal`: builds real `GovernanceEnvelope` with L1/L2/L3, submits over mTLS
-- `client/envelope_test.go` - Envelope construction and submission tests
+- `client/client.go` - mTLS client: `StateRoot`, `RegisterSigner`, `MCPToolsCall`, `MCPToolsList`, `WaitForHumanApproval` (uses `constants.APIPaths.*`). `WaitForHumanApproval` subscribes to the gateway's SSE stream for `approval.completed` events matching the transaction hash, blocks until a human completes the WebAuthn passkey ceremony in their browser, and verifies the approval status via the mTLS status endpoint.
+- `client/client_test.go` - Client unit tests (includes `TestClient_WaitForHumanApproval_Success`, `TestClient_WaitForHumanApproval_TimeoutNoMatchingEvent`, `TestClient_WaitForHumanApproval_StatusEndpointError`)
+- `client/envelope.go` - `SubmitMaximal`: builds real `GovernanceEnvelope` with L1/L2/L3, submits over mTLS. `Ensemble`/`NewEnsemble`/`NewEnsembleFromSeed`/`NewEnsembleFromMemberSeeds` remain as conformance testing infrastructure.
+- `client/envelope_test.go` - Envelope construction and submission tests (includes `TestSubmitMaximal`, `TestSubmitMaximal_WithL2`, ensemble tests)
 - `client/audit.go` - `AuditReceipts`, `ExportReceipts`, `DiscoverOperator` (parses cert SAN for offline session discovery)
 - `client/audit_test.go` - Audit client tests
 - `client/protocols.go` - JSON-RPC request/response types and A2A protobuf envelope encoding for MCP/A2A protocol ingress
 - `client/protocols_test.go` - Protocol encoding/decoding tests
 - `client/mtls_test.go` - mTLS client setup and certificate verification tests
-- `config/config.go` - Harness configuration: auth material (client cert/key/CA bundle), gateway URL, posture selection
-- `scenarios/governance.go` - Governance scenarios: consensus, notary, delegation, veto, OOB approval. Contains `receiptFailed` helper that parses `ActionReceipt` JSON body for `EXECUTION_STATUS_FAILED` status.
+- `config/config.go` - Harness configuration: auth material (client cert/key/CA bundle), gateway URL, posture selection, passkey RP settings (`PasskeyRpID`, `PasskeyRpOrigin`)
+- `scenarios/governance.go` - Governance scenarios: consensus, notary, delegation, OOB approval. Contains `receiptFailed` helper that parses `ActionReceipt` JSON body for `EXECUTION_STATUS_FAILED` status.
 - `scenarios/governance_test.go` - Governance scenario tests, including `TestReceiptFailed` table-driven test covering FAILED, COMPLETED, UNSPECIFIED, CANCELLED, non-receipt JSON, empty body, nil body, and malformed JSON.
 - `scenarios/dhs_sovereign.go` - DHS sovereign operations scenarios: multi-step governance workflow with L2 consensus
 - `scenarios/dhs_sovereign_test.go` - DHS sovereign scenario tests
@@ -599,10 +599,10 @@ The following packages are test-only and are not part of the production dependen
 - `scenarios/gov_finance_test.go` - Gov/finance scenario tests
 - `scenarios/fedramp_governance.go` - FedRAMP sovereign cloud governance scenarios: `fedramp-provision` (consensus: governed cloud resource provisioning), `fedramp-deny` (doctrine: audit trail destruction blocked by L1), `fedramp-escalate` (notary: resource destruction gated on authorizing official approval), `fedramp-revert` (consensus: governed configuration revert), `fedramp-evidence-block` (doctrine: audit vault wipe rejected by L1)
 - `scenarios/fedramp_governance_test.go` - FedRAMP scenario tests
-- `scenarios/shell_command.go` - Shared `shellCommandArgs` helper using `json.Marshal` with typed `shellCommandJSON` struct, replacing ad-hoc `fmt.Sprintf` JSON construction across scenario files.
-- `scenarios/shell_command_test.go` - Tests for `shellCommandArgs`: valid JSON construction, no-args case, special character escaping.
-- `scenarios/fs_list.go` - Shared `fsListArgs` helper using `json.Marshal` with typed `fsListJSON` struct, replacing ad-hoc JSON construction for `fs_list` tool invocations.
-- `scenarios/fs_list_test.go` - Tests for `fsListArgs`: valid JSON construction, special character escaping.
+- `scenarios/shell_command.go` - Shared `shellCommandArgs` helper (returns JSON string for `SubmitMaximal`) and `shellCommandMap` helper (returns `map[string]any` for `MCPToolsCall`), using typed `shellCommandJSON` struct.
+- `scenarios/shell_command_test.go` - Tests for `shellCommandArgs` and `shellCommandMap`: valid JSON construction, no-args case, special character escaping, map field verification.
+- `scenarios/fs_list.go` - Shared `fsListArgs` helper (returns JSON string for `SubmitMaximal`) and `fsListMap` helper (returns `map[string]any` for `MCPToolsCall`), using typed `fsListJSON` struct.
+- `scenarios/fs_list_test.go` - Tests for `fsListArgs` and `fsListMap`: valid JSON construction, special character escaping, map field verification.
 - `scenarios/scenario.go` - Scenario registry, `Execute`, `Posture` types
 - `scenarios/scenario_test.go` - Scenario registry and execution tests
 
@@ -630,14 +630,14 @@ The following packages are test-only and are not part of the production dependen
 **`demos/gov/`** - Government operations demo
 
 **CLI Demo Scenario Files** (`internal/cli/cmd/`):
-- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, pull, export, import, images, scenarios). Contains `harnessConfig` struct, `defaultHarnessConfig`, `defaultGovernedHarnessConfig` (wraps `defaultHarnessConfig` with `ConsensusSeed` and `ConsensusID` overrides), `harnessRun` helper for building docker compose exec/run commands for demo scenarios, `switchDemoPosture` (shared posture switch helper), and `runTwoLayerScenario` reusable orchestrator. `demoVerbose` flag (set by `-v`/`--verbose`), `demoStep` suppresses output when non-verbose, `demoPrintln`/`demoPrintf` (verbose-aware print helpers), `scenarioCounts` map (healthcare: 4, gov: 1, finance: 1, dhs: 5, fedramp: 5, frontend: 1), `printDemoEndpoints` (prints available endpoints per org).
+- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, pull, export, import, images, scenarios). Contains `harnessConfig` struct (connection params + `UseRun`), `defaultHarnessConfig`, `defaultGovernedHarnessConfig` (wraps `defaultHarnessConfig` with governance posture overrides), `harnessRun` helper for building docker compose exec/run commands for demo scenarios, `switchDemoPosture` (shared posture switch helper), and `runTwoLayerScenario` reusable orchestrator. `demoVerbose` flag (set by `-v`/`--verbose`), `demoStep` suppresses output when non-verbose, `demoPrintln`/`demoPrintf` (verbose-aware print helpers), `scenarioCounts` map (healthcare: 4, gov: 1, finance: 1, dhs: 5, fedramp: 5, frontend: 1), `printDemoEndpoints` (prints available endpoints per org).
 - `demo_gov.go` - Gov demo scenario (uses `runTwoLayerScenario` with `harnessRun`)
 - `demo_finance.go` - Finance demo scenario (uses `runTwoLayerScenario` with `harnessRun`)
 - `demo_healthcare.go` - Healthcare demo scenarios (4 scenarios, each calls `harnessRun`)
 - `demo_dhs.go` - DHS demo scenarios (5 scenarios, each calls `dhsHarnessRun` → `harnessRun`). Contains `dhsHarnessConfig`, `dhsHarnessRun`, `dhsScenarioStep`, `extractFirstTxHash`, `switchDHSPosture` helpers.
 - `demo_fedramp.go` - FedRAMP demo scenarios (5 scenarios, each calls `harnessRun`). Contains `defaultFedRAMPHarnessConfig`, `fedrampHarnessRun`, `switchFedRAMPPosture` helpers (delegates to shared `switchDemoPosture`).
 - `demo_frontend.go` - Frontend demo scenario (1 scenario: third-party frontend enrollment via `runFrontendScenario`).
-- `scenarios_run.go` - `demos scenarios run` subcommand and `runAgentHarness` execution logic. Contains flag definitions, `applyAgentHarnessFlags`, `selectAgentHarnessScenarios`, `needsGovKit`, `setupGovKit`, `printAgentHarnessSummary`, `failedScenariosError` helper (collects failed scenario names and returns formatted error when any `Result.OK` is false).
+- `scenarios_run.go` - `demos scenarios run` subcommand and `runAgentHarness` execution logic. Contains flag definitions, `applyAgentHarnessFlags`, `selectAgentHarnessScenarios`, `needsGovKit`, `setupGovKit` (passes `GovKit` with `{OperatorID, OperatorSessionID, UserID}` for human browser approval via `WaitForHumanApproval`), `printAgentHarnessSummary`, `failedScenariosError` helper (collects failed scenario names and returns formatted error when any `Result.OK` is false).
 - `scenarios_run_test.go` - Tests for `failedScenariosError` helper: all-OK (nil), all-failed (error with all names), mixed (error with only failed names), empty results (nil), single failed (error).
 - `demos_test.go` - Tests for demo CLI commands, `scenarioCounts`, `printDemoEndpoints`, `harnessRun`/`defaultHarnessConfig` unit tests, `defaultHarnessConfig`/`harnessRun` unit tests, and source-file assertions (`TestDemoScenarioFilesCallHarnessRun`, `TestNoGatewayBypassInDemoFiles`, `TestNoSqliteBackdoorInScenarioFiles`, `TestNoCopyPasteInScenarioFiles`). Also tests `TestDemoPrintln`, `TestDemosPullCmd`, `TestCheckDockerAvailable`, `TestToDockerPath`, `TestDefaultHarnessConfig`, `TestHarnessRun`.
 - `demos_helpers_test.go` - Shared test helpers for demo command tests.

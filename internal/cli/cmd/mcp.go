@@ -63,6 +63,17 @@ const (
 	envG8EAppKey     = "G8E_APP_KEY"
 )
 
+// CLI flag names for 'mcp stdio' credential overrides. Registered on the stdio
+// subcommand, not as root persistent flags — see plan: replace-env-vars-with-global-flags.
+const (
+	flagClientCert = "client-cert"
+	flagClientKey  = "client-key"
+	flagCABundle   = "ca-bundle"
+	flagGatewayURL = "gateway-url"
+	flagAppCert    = "app-cert"
+	flagAppKey     = "app-key"
+)
+
 // nativeToolsToDisable lists built-in tools that Claude Code and Codex must
 // disable via --disallowed-tools to force all I/O through g8e's MCP gateway.
 // Other agents use different mechanisms:
@@ -170,7 +181,7 @@ func mcpStdioCmd() *cobra.Command {
 }
 
 func mcpStdioCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "stdio",
 		Short: "Run MCP stdio server with full L1-L5 governance (proxies to gateway)",
 		Long: `Run as an MCP stdio server that proxies all requests to the running gateway over
@@ -179,11 +190,23 @@ pipeline. HTTP is never used for proxy traffic — it is reserved for CA bundle
 discovery and health checks only.
 
 This command is launched automatically by 'g8e mcp agent run'. When invoked
-directly the CLI session is loaded from disk (bootstrapping enrollment if needed).`,
+directly (e.g. from an IDE MCP config), credentials resolve in order:
+  1. CLI flags (--client-cert/--client-key, --app-cert/--app-key, --ca-bundle, --gateway-url)
+  2. G8E_* environment variables (injected by 'agent run')
+  3. Enrolled CLI credentials on disk (bootstrapping enrollment if needed)
+
+Cert and key must be supplied as a pair per tier; supplying only one half fails closed.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runMCPStdioProxy(cmd, args, fileSvcFactory)
 		},
 	}
+	cmd.Flags().String(flagClientCert, "", "Path to CLI client certificate (mTLS)")
+	cmd.Flags().String(flagClientKey, "", "Path to CLI client key (mTLS)")
+	cmd.Flags().String(flagCABundle, "", "Path to gateway CA bundle PEM")
+	cmd.Flags().String(flagGatewayURL, "", "Gateway MCP endpoint URL (https only, e.g. https://g8e.local:8443/mcp)")
+	cmd.Flags().String(flagAppCert, "", "Path to delegated app certificate (requires --app-key)")
+	cmd.Flags().String(flagAppKey, "", "Path to delegated app key (requires --app-cert)")
+	return cmd
 }
 
 func handleInitialize(encoder *json.Encoder, id interface{}) {
@@ -245,18 +268,85 @@ type gatewayConn struct {
 	sseClient  *http.Client
 }
 
-// buildGatewayConn constructs a gatewayConn. It reads the delegated credential
-// from G8E_* environment variables injected by 'mcp agent run'. The delegated cert
-// carries both the app SPIFFE ID and the requestor's user identity in its URI SANs.
-func buildGatewayConn(fileSvc fs.RuntimeFileService, cfg *config.Config) (*gatewayConn, error) {
-	// Use the delegated credential (app cert) for agent runs, or CLI cert for direct CLI usage
-	certFile := envOr(envG8EAppCert, envOr(envG8EClientCert, cfg.CLICertFile()))
-	keyFile := envOr(envG8EAppKey, envOr(envG8EClientKey, cfg.CLIKeyFile()))
+// stdioCredentialFlags holds the credential overrides parsed from 'mcp stdio' flags.
+// Empty fields mean "not supplied" and fall through to G8E_* env vars, then to the
+// enrolled CLI credentials on disk.
+type stdioCredentialFlags struct {
+	ClientCert string
+	ClientKey  string
+	CABundle   string
+	GatewayURL string
+	AppCert    string
+	AppKey     string
+}
+
+// parseStdioCredentialFlags reads the six credential flags from the cobra command.
+// The zero value is valid (all fields empty), so tests that do not exercise flags
+// pass stdioCredentialFlags{}.
+func parseStdioCredentialFlags(cmd *cobra.Command) (stdioCredentialFlags, error) {
+	var f stdioCredentialFlags
+	var err error
+	if f.ClientCert, err = cmd.Flags().GetString(flagClientCert); err != nil {
+		return f, fmt.Errorf("mcp: get %s flag: %w", flagClientCert, err)
+	}
+	if f.ClientKey, err = cmd.Flags().GetString(flagClientKey); err != nil {
+		return f, fmt.Errorf("mcp: get %s flag: %w", flagClientKey, err)
+	}
+	if f.CABundle, err = cmd.Flags().GetString(flagCABundle); err != nil {
+		return f, fmt.Errorf("mcp: get %s flag: %w", flagCABundle, err)
+	}
+	if f.GatewayURL, err = cmd.Flags().GetString(flagGatewayURL); err != nil {
+		return f, fmt.Errorf("mcp: get %s flag: %w", flagGatewayURL, err)
+	}
+	if f.AppCert, err = cmd.Flags().GetString(flagAppCert); err != nil {
+		return f, fmt.Errorf("mcp: get %s flag: %w", flagAppCert, err)
+	}
+	if f.AppKey, err = cmd.Flags().GetString(flagAppKey); err != nil {
+		return f, fmt.Errorf("mcp: get %s flag: %w", flagAppKey, err)
+	}
+	return f, nil
+}
+
+// resolveCredentialPair picks the first complete (cert+key) pair from the ordered
+// tiers. Exactly one half of any tier present returns ErrIncompleteCredentialPair.
+func resolveCredentialPair(tiers []struct{ cert, key, name string }) (string, string, error) {
+	for _, t := range tiers {
+		switch {
+		case t.cert != "" && t.key != "":
+			return t.cert, t.key, nil
+		case t.cert != "" || t.key != "":
+			return "", "", fmt.Errorf("%w: tier %s", constants.ErrIncompleteCredentialPair, t.name)
+		}
+	}
+	return "", "", nil
+}
+
+// buildGatewayConn constructs a gatewayConn. Credentials resolve in order:
+// 1. --app-cert/--app-key flags  2. G8E_APP_CERT/G8E_APP_KEY env
+// 3. --client-cert/--client-key flags  4. G8E_CLIENT_CERT/G8E_CLIENT_KEY env
+// 5. enrolled CLI cert/key on disk (cfg.CLICertFile/cfg.CLIKeyFile)
+// Cert and key are resolved as pairs per tier; supplying only one half fails closed.
+// CA bundle resolves: --ca-bundle flag → G8E_CA_BUNDLE env → auth.ReadTrustBundle.
+// Gateway URL resolves: --gateway-url flag → G8E_GATEWAY_URL env → default https://g8e.local:8443/mcp.
+func buildGatewayConn(fileSvc fs.RuntimeFileService, cfg *config.Config, flags stdioCredentialFlags) (*gatewayConn, error) {
+	certFile, keyFile, err := resolveCredentialPair([]struct{ cert, key, name string }{
+		{flags.AppCert, flags.AppKey, "app flags"},
+		{os.Getenv(envG8EAppCert), os.Getenv(envG8EAppKey), "app env"},
+		{flags.ClientCert, flags.ClientKey, "client flags"},
+		{os.Getenv(envG8EClientCert), os.Getenv(envG8EClientKey), "client env"},
+		{cfg.CLICertFile(), cfg.CLIKeyFile(), "CLI disk"},
+	})
+	if err != nil {
+		return nil, err
+	}
 
 	var caBundleBytes []byte
-	var err error
-	if envCA := os.Getenv(envG8ECABundle); envCA != "" {
-		caBundleBytes, err = os.ReadFile(envCA)
+	caPath := flags.CABundle
+	if caPath == "" {
+		caPath = os.Getenv(envG8ECABundle)
+	}
+	if caPath != "" {
+		caBundleBytes, err = readCABundle(fileSvc, caPath)
 	} else {
 		caBundleBytes, err = auth.ReadTrustBundle(fileSvc, cfg)
 	}
@@ -264,10 +354,20 @@ func buildGatewayConn(fileSvc fs.RuntimeFileService, cfg *config.Config) (*gatew
 		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
 	}
 
-	// Try g8e.local first, fall back to IP if not set in env
-	gatewayURL := os.Getenv(envG8EGatewayURL)
+	gatewayURL := flags.GatewayURL
+	if gatewayURL == "" {
+		gatewayURL = os.Getenv(envG8EGatewayURL)
+	}
 	if gatewayURL == "" {
 		gatewayURL = fmt.Sprintf("https://%s:%d/mcp", constants.GatewayInternalHostname, constants.Ports.OperatorHttps)
+	} else {
+		if u, perr := url.Parse(gatewayURL); perr != nil {
+			return nil, fmt.Errorf("%w: %s", constants.ErrMCPConfigGatewayURLInvalidScheme, gatewayURL)
+		} else if u.Scheme != "https" {
+			return nil, fmt.Errorf("%w: %s", constants.ErrMCPConfigGatewayURLInvalidScheme, gatewayURL)
+		} else if u.Host == "" {
+			return nil, fmt.Errorf("%w: %s", constants.ErrMCPConfigGatewayURLHostEmpty, gatewayURL)
+		}
 	}
 
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
@@ -284,7 +384,6 @@ func buildGatewayConn(fileSvc fs.RuntimeFileService, cfg *config.Config) (*gatew
 		ServerName:   constants.GatewayInternalHostname,
 	}
 
-	// Try to connect with the current gatewayURL
 	session := &gatewayConn{
 		client: &http.Client{
 			Transport: &http.Transport{TLSClientConfig: tlsCfg},
@@ -293,26 +392,30 @@ func buildGatewayConn(fileSvc fs.RuntimeFileService, cfg *config.Config) (*gatew
 		gatewayURL: gatewayURL,
 	}
 
-	// Test the connection - if it fails due to DNS, fall back to IP
 	if !strings.Contains(gatewayURL, constants.GatewayInternalHostname) {
-		// Already using IP or custom URL, return as-is
 		return session, nil
 	}
 
-	// Try to resolve g8e.local via DNS
 	_, err = net.LookupHost(constants.GatewayInternalHostname)
 	if err == nil {
-		// g8e.local resolves, use it
 		return session, nil
 	}
 
-	// DNS failed, fall back to IP
 	externalIP := network.GetExternalInterfaceIP()
 	gatewayURL = fmt.Sprintf("https://%s:%d/mcp", externalIP, constants.Ports.OperatorHttps)
 	session.gatewayURL = gatewayURL
 	slog.Info("g8e.local DNS resolution failed, falling back to direct IP", "ip", externalIP)
 
 	return session, nil
+}
+
+// readCABundle reads a CA bundle from a path, preferring fileSvc.ReadFile when the
+// path is under the .g8e/ runtime root, falling back to os.ReadFile for external paths.
+func readCABundle(fileSvc fs.RuntimeFileService, caPath string) ([]byte, error) {
+	if rel, err := fileSvc.Rel(caPath); err == nil {
+		return fileSvc.ReadFile(context.Background(), rel)
+	}
+	return os.ReadFile(caPath)
 }
 
 func envOr(key, fallback string) string {
@@ -335,9 +438,16 @@ func runMCPStdioProxy(cmd *cobra.Command, _ []string, fileSvcFactory func() (fs.
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
+	// Parse credential flags from the stdio subcommand. Empty fields fall through
+	// to G8E_* env vars, then to the enrolled CLI credentials on disk.
+	credFlags, err := parseStdioCredentialFlags(cmd)
+	if err != nil {
+		return err
+	}
+
 	// Build the mTLS gateway connection once. Identity is in the delegated cert's
 	// URI SANs — no session object or headers. All proxy calls reuse this connection.
-	conn, err := buildGatewayConn(fileSvc, cfg)
+	conn, err := buildGatewayConn(fileSvc, cfg, credFlags)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrGatewayNotReady, err)
 	}
@@ -787,6 +897,7 @@ func getSupportedAgents() []agentInfo {
 	return []agentInfo{
 		{string(constants.AgentBinaryClaude), "Anthropic Claude Desktop / Claude Code"},
 		{string(constants.AgentBinaryCodex), "OpenAI Codex AI coding assistant"},
+		{string(constants.AgentBinaryDevin), "Devin CLI local coding agent"},
 		{string(constants.AgentBinaryGemini), "Google Gemini CLI"},
 		{string(constants.AgentBinaryGoose), "Goose AI coding assistant"},
 	}
@@ -825,6 +936,10 @@ LAUNCH AN AGENT (one command does everything):
   g8e mcp agent run gemini        Launch Gemini CLI with tools.core set to an
                                   empty allowlist in settings.json, forcing all
                                   I/O through g8e MCP.
+
+  g8e mcp agent run devin         Launch Devin CLI with g8e as the only MCP
+                                  server in ~/.config/devin/config.json,
+                                  forcing all I/O through g8e MCP.
 
   Extra args are forwarded to the agent:
     g8e mcp agent run claude -- -p "fix the failing tests"
@@ -1041,7 +1156,7 @@ func startGatewayIfNeeded(fileSvcFactory func() (fs.RuntimeFileService, error)) 
 // agentMCPConfig represents the MCP configuration structure for agents.
 type agentMCPConfig struct {
 	MCPServers   map[string]agentMCPServer `json:"mcpServers"`
-	ExcludeTools []string                  `json:"excludeTools"`
+	ExcludeTools []string                  `json:"excludeTools,omitempty"`
 }
 
 // agentMCPServer represents a single MCP server configuration.
@@ -1121,11 +1236,6 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 				Args:    []string{"mcp", "stdio"},
 			},
 		},
-		ExcludeTools: nativeToolsToDisable,
-	}
-	configJSON, err := json.Marshal(config)
-	if err != nil {
-		return "", nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
 	}
 
 	// Get home directory: prefer os.UserHomeDir() (cross-platform), fall back to HOME env
@@ -1141,6 +1251,19 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 	agentPaths := paths.GetAgentConfigPaths(homeDir)
 
 	switch agentID {
+	case string(constants.AgentBinaryDevin):
+		// Devin CLI reads MCP config from ~/.config/devin/config.json.
+		// Uses the standard mcpServers format with command/args/env.
+		// Governance enforced by making g8e the only MCP server.
+		if err := os.MkdirAll(agentPaths.DevinConfigDir, constants.PermDirStandard); err != nil {
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
+		}
+		configJSON, err := json.Marshal(config)
+		if err != nil {
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
+		}
+		return writeConfigWithBackup(agentPaths.DevinConfigDir, agentPaths.DevinConfigPath, configJSON)
+
 	case string(constants.AgentBinaryGemini):
 		// Gemini uses settings.json for configuration.
 		// We add g8e as the MCP server and disable all built-in tools via tools.core.
@@ -1231,6 +1354,13 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 	default:
 		// For agents that use CLI flags (claude, codex), write a temp config file.
 		// The config is passed via --mcp-config and --strict-mcp-config CLI flags.
+		// ExcludeTools is set for Claude/Codex which use --disallowed-tools to
+		// enforce that all I/O goes through g8e's MCP gateway.
+		config.ExcludeTools = nativeToolsToDisable
+		configJSON, err := json.Marshal(config)
+		if err != nil {
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
+		}
 		tmpFile, err := os.CreateTemp("", "g8e-mcp-*.json")
 		if err != nil {
 			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
@@ -1424,6 +1554,11 @@ func agentLaunchArgs(agentID, mcpConfigPath, binaryPath string) ([]string, error
 		// Gemini uses `gemini mcp add` to register servers, no config file needed
 		// Governance enforced by g8e being the only MCP server
 		return []string{}, nil
+	case "devin":
+		// Devin CLI reads from ~/.config/devin/config.json written by WriteAgentConfig
+		// Governance enforced by g8e being the only MCP server
+		// Devin does not support CLI flags to disable native tools
+		return []string{}, nil
 	default:
 		return nil, fmt.Errorf("%w: agent %q does not support full tool interception. g8e requires agents that can disable all built-in tools so every action routes through the governance gateway. Supported agents: claude, codex, goose, gemini", constants.ErrAgentNotSupported, agentID)
 	}
@@ -1438,6 +1573,8 @@ func verifyToolInterception(agentID, configPath string, launchArgs []string) err
 		return verifyClaudeCodexInterception(configPath, launchArgs)
 	case "goose":
 		return verifyGooseInterception(configPath, launchArgs)
+	case "devin":
+		return verifyDevinInterception(configPath)
 	case "gemini":
 		return verifyGeminiInterception(configPath)
 	default:
@@ -1521,10 +1658,42 @@ func verifyGooseInterception(configPath string, launchArgs []string) error {
 	return nil
 }
 
+// verifyMCPServerEntry reads a config file and verifies it contains the g8e
+// MCP server entry in the mcpServers map. agentName is used for error messages.
+func verifyMCPServerEntry(configPath, agentName string) error {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("read %s config %q: %w", agentName, configPath, err)
+	}
+
+	var cfg agentMCPConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return fmt.Errorf("parse %s config: %w", agentName, err)
+	}
+
+	if _, ok := cfg.MCPServers["g8e"]; !ok {
+		return fmt.Errorf("%s config missing g8e MCP server entry", agentName)
+	}
+
+	return nil
+}
+
+// verifyDevinInterception verifies that the Devin CLI config.json file exists
+// and contains the g8e MCP server entry. Devin CLI reads config from
+// ~/.config/devin/config.json and cannot disable native tools via CLI flags,
+// so governance is enforced by making g8e the only MCP server in the config.
+func verifyDevinInterception(configPath string) error {
+	return verifyMCPServerEntry(configPath, "devin")
+}
+
 // verifyGeminiInterception verifies that the Gemini settings.json file contains
 // tools.core set to an empty array (disabling all built-in tools) and the g8e
 // MCP server entry.
 func verifyGeminiInterception(configPath string) error {
+	if err := verifyMCPServerEntry(configPath, "gemini"); err != nil {
+		return err
+	}
+
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return fmt.Errorf("read gemini settings %q: %w", configPath, err)

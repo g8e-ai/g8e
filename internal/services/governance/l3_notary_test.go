@@ -475,28 +475,6 @@ func TestCompositionMatrix_GatewayNotary_DoesNotAccessSuspendedStore(t *testing.
 	assert.True(t, cliVerifier.called, "gatewayNotary must invoke CLI session verifier when mTLS fingerprint present")
 }
 
-func TestDemoL3Notary_AutoApprovesNonNullProof(t *testing.T) {
-	t.Parallel()
-
-	notary := NewDemoL3Notary(slog.Default())
-	proof := &commonv1.L3Proof{CliSignature: "any-sig"}
-
-	allowed, err := notary.VerifyL3Proof(context.Background(), "demo-user", "demo-tx-hash", "demo-session", proof)
-	require.NoError(t, err)
-	assert.True(t, allowed)
-}
-
-func TestDemoL3Notary_RejectsNilProof(t *testing.T) {
-	t.Parallel()
-
-	notary := NewDemoL3Notary(slog.Default())
-
-	allowed, err := notary.VerifyL3Proof(context.Background(), "demo-user", "demo-tx-hash", "demo-session", nil)
-	require.Error(t, err)
-	assert.False(t, allowed)
-	assert.True(t, errors.Is(err, constants.ErrGatewayL3ProofRequired))
-}
-
 func TestCompositionMatrix_GatewayNotary_NoMTLSFingerprintSkipsCLIVerifier(t *testing.T) {
 	t.Parallel()
 

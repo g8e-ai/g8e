@@ -1102,7 +1102,7 @@ Available scenarios:
     1 - Sovereign Multi-Source Ingest (chain-of-custody) (LOE 1)
     2 - Cross-Domain Release requires Notary authority (LOE 1 & 2)
     3 - Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
-    4 - Governed Predictive Cueing (quorum vs veto) (LOE 3 & 4)
+    4 - Governed Predictive Cueing (LOE 3 & 4)
     5 - Sovereign Destruction + tamper-proof audit (LOE 2)
   fedramp: 1-5
     1 - Governed Cloud Resource Provisioning
@@ -1158,6 +1158,22 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool) error {
 		cmd.Printf("Demo environment '%s' is not running. Starting it now...\n", org)
 		if err := runDemosStart(cmd, args); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
+		}
+	}
+
+	// Demos with notary scenarios require a real human WebAuthn approval.
+	// Prompt the user to enroll a passkey before running scenarios.
+	if org == constants.DemosOrgDHS || org == constants.DemosOrgFedRAMP {
+		httpPort := demoHTTPPort(org)
+		httpsPort := demoHTTPSPort(org)
+		if httpPort != "" && httpsPort != "" {
+			fmt.Fprintf(os.Stderr, "\n%s\n  Passkey enrollment required\n%s\n", strings.Repeat("─", 60), strings.Repeat("─", 60))
+			fmt.Fprintf(os.Stderr, "  This demo requires real human WebAuthn approvals.\n")
+			fmt.Fprintf(os.Stderr, "  Enroll a passkey now (opens your browser):\n\n")
+			fmt.Fprintf(os.Stderr, "    g8e auth enroll -e localhost:%s --port %s\n\n", httpPort, httpsPort)
+			fmt.Fprintf(os.Stderr, "  Press Enter once enrollment is complete to continue...\n")
+			reader := bufio.NewReader(os.Stdin)
+			_, _ = reader.ReadString('\n')
 		}
 	}
 
@@ -1421,45 +1437,27 @@ type twoLayerScenarioConfig struct {
 // command for a demos scenarios run. Centralising these in a struct
 // avoids positional-argument drift as flags are added across demos.
 type harnessConfig struct {
-	Container     string
-	MTLSURL       string
-	PublicURL     string
-	CertPath      string
-	KeyPath       string
-	CAPath        string
-	EnsembleSize  int
-	L3Mode        string
-	Posture       string
-	ConsensusSeed string
-	ConsensusID   string
-	UseRun        bool // true for `docker compose run --rm`, false for `exec`
+	Container string
+	MTLSURL   string
+	PublicURL string
+	CertPath  string
+	KeyPath   string
+	CAPath    string
+	Posture   string
+	UseRun    bool // true for `docker compose run --rm`, false for `exec`
 }
 
 // defaultHarnessConfig returns the config matching the standard demo topology:
-// g8e.local gateway on 8443/8080, operator mTLS certs in the container PKI dir,
-// ensemble size 3, mock L3 mode.
+// g8e.local gateway on 8443/8080, operator mTLS certs in the container PKI dir.
 func defaultHarnessConfig(container string) harnessConfig {
 	return harnessConfig{
-		Container:    container,
-		MTLSURL:      "https://g8e.local:8443",
-		PublicURL:    "http://g8e.local:8080",
-		CertPath:     constants.ContainerOperatorCert,
-		KeyPath:      constants.ContainerOperatorKey,
-		CAPath:       constants.ContainerCABundle,
-		EnsembleSize: 3,
-		L3Mode:       "mock",
+		Container: container,
+		MTLSURL:   "https://g8e.local:8443",
+		PublicURL: "http://g8e.local:8080",
+		CertPath:  constants.ContainerOperatorCert,
+		KeyPath:   constants.ContainerOperatorKey,
+		CAPath:    constants.ContainerCABundle,
 	}
-}
-
-// defaultGovernedHarnessConfig returns a harness config for demos that use
-// consensus seed and consensus-based governance (DHS, FedRAMP, etc.).
-// It wraps defaultHarnessConfig with the shared ConsensusSeed and a
-// demo-specific ConsensusID.
-func defaultGovernedHarnessConfig(container, ConsensusID string) harnessConfig {
-	cfg := defaultHarnessConfig(container)
-	cfg.ConsensusSeed = constants.ContainerEnsembleSeed
-	cfg.ConsensusID = ConsensusID
-	return cfg
 }
 
 // harnessRun builds the docker compose command for a demos scenarios run.
@@ -1479,18 +1477,6 @@ func harnessRun(scenario string, cfg harnessConfig) []string {
 		"--key", cfg.KeyPath,
 		"--ca", cfg.CAPath,
 	)
-	if cfg.EnsembleSize > 0 {
-		cmd = append(cmd, "--ensemble", fmt.Sprintf("%d", cfg.EnsembleSize))
-	}
-	if cfg.L3Mode != "" {
-		cmd = append(cmd, "--l3-mode", cfg.L3Mode)
-	}
-	if cfg.ConsensusSeed != "" {
-		cmd = append(cmd, "--consensus-seed", cfg.ConsensusSeed)
-	}
-	if cfg.ConsensusID != "" {
-		cmd = append(cmd, "--consensus-id", cfg.ConsensusID)
-	}
 	cmd = append(cmd, scenario)
 	return cmd
 }

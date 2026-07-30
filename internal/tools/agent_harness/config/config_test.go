@@ -22,18 +22,6 @@ func TestDefault(t *testing.T) {
 	if cfg.PublicBaseURL == "" {
 		t.Error("PublicBaseURL should not be empty")
 	}
-	if cfg.EnsembleSize != 3 {
-		t.Errorf("EnsembleSize should be 3, got %d", cfg.EnsembleSize)
-	}
-	if cfg.ConsensusKeyID != "auditor-ensemble" {
-		t.Errorf("ConsensusKeyID should be 'auditor-ensemble', got %s", cfg.ConsensusKeyID)
-	}
-	if cfg.PrincipalKeyID != "auditor-principal" {
-		t.Errorf("PrincipalKeyID should be 'auditor-principal', got %s", cfg.PrincipalKeyID)
-	}
-	if cfg.L3Mode != "suspend" {
-		t.Errorf("L3Mode should be 'suspend', got %s", cfg.L3Mode)
-	}
 	if cfg.EnvelopeTTL != 5*time.Minute {
 		t.Errorf("EnvelopeTTL should be 5 minutes, got %v", cfg.EnvelopeTTL)
 	}
@@ -51,15 +39,11 @@ func TestLoadFile(t *testing.T) {
 
 	// Create a test config file
 	testConfig := map[string]any{
-		"mtls_base_url":    "https://example.com:8443",
-		"public_base_url":  "https://example.com:8080",
-		"ensemble_size":    5,
-		"consensus_key_id": "test-key",
-		"principal_key_id": "test-principal",
-		"l3_mode":          "mock",
-		"envelope_ttl":     600000000000, // 10 minutes in nanoseconds
-		"out_dir":          "/tmp/test-out",
-		"use_cli_config":   false,
+		"mtls_base_url":   "https://example.com:8443",
+		"public_base_url": "https://example.com:8080",
+		"envelope_ttl":    600000000000, // 10 minutes in nanoseconds
+		"out_dir":         "/tmp/test-out",
+		"use_cli_config":  false,
 		"auth": map[string]any{
 			"client_cert": "/path/to/cert.pem",
 			"client_key":  "/path/to/key.pem",
@@ -89,15 +73,6 @@ func TestLoadFile(t *testing.T) {
 	}
 	if cfg.PublicBaseURL != "https://example.com:8080" {
 		t.Errorf("PublicBaseURL not loaded correctly, got %s", cfg.PublicBaseURL)
-	}
-	if cfg.EnsembleSize != 5 {
-		t.Errorf("EnsembleSize not loaded correctly, got %d", cfg.EnsembleSize)
-	}
-	if cfg.ConsensusKeyID != "test-key" {
-		t.Errorf("ConsensusKeyID not loaded correctly, got %s", cfg.ConsensusKeyID)
-	}
-	if cfg.L3Mode != "mock" {
-		t.Errorf("L3Mode not loaded correctly, got %s", cfg.L3Mode)
 	}
 	if cfg.OutDir != "/tmp/test-out" {
 		t.Errorf("OutDir not loaded correctly, got %s", cfg.OutDir)
@@ -142,8 +117,7 @@ func TestLoadFile_PartialOverlay(t *testing.T) {
 
 	// Create a partial config with only some fields
 	partialConfig := map[string]any{
-		"ensemble_size": 7,
-		"l3_mode":       "mock",
+		"out_dir": "/tmp/partial-out",
 	}
 
 	data, err := json.Marshal(partialConfig)
@@ -167,10 +141,7 @@ func TestLoadFile_PartialOverlay(t *testing.T) {
 		t.Error("Unchanged field should remain from Default()")
 	}
 	// Changed field should be updated
-	if cfg.EnsembleSize != 7 {
-		t.Errorf("EnsembleSize should be updated to 7, got %d", cfg.EnsembleSize)
-	}
-	if cfg.L3Mode != "mock" {
-		t.Errorf("L3Mode should be updated to mock, got %s", cfg.L3Mode)
+	if cfg.OutDir != "/tmp/partial-out" {
+		t.Errorf("OutDir should be updated to /tmp/partial-out, got %s", cfg.OutDir)
 	}
 }

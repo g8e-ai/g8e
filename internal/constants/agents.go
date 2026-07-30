@@ -62,6 +62,7 @@ type AgentBinary string
 const (
 	AgentBinaryClaude AgentBinary = "claude"
 	AgentBinaryCodex  AgentBinary = "codex"
+	AgentBinaryDevin  AgentBinary = "devin"
 	AgentBinaryGemini AgentBinary = "gemini"
 	AgentBinaryGoose  AgentBinary = "goose"
 )

@@ -49,29 +49,6 @@ type Config struct {
 	// executed the work. If empty, Agent Harness tries to discover it from /api/operators.
 	OperatorSessionID string `json:"operator_session_id"`
 
-	// EnsembleSize is the number of mock consensus agents that "vote" on each
-	// maximal envelope. The envelope still carries a single aggregate L2
-	// signature from the registered consensus key (KeyID), with one AgentID per voter.
-	EnsembleSize int `json:"ensemble_size"`
-	// ConsensusKeyID is the trusted-signer id Agent Harness registers for its L2 key.
-	ConsensusKeyID string `json:"consensus_key_id"`
-	// ConsensusSeed is an optional hex-encoded Ed25519 seed for deterministic
-	// ensemble key generation. When set, the ensemble is reconstructed from
-	// this seed instead of being randomly generated, enabling the gateway to
-	// verify L2 votes against a pre-registered trusted signer.
-	ConsensusSeed string `json:"consensus_seed"`
-	// ConsensusID is the ID of the ConsensusPolicy the gateway uses for L2
-	// consensus verification. The harness sets this on the Ensemble so L2
-	// votes carry the correct consensus_id. Defaults to "test-consensus".
-	ConsensusID string `json:"consensus_id"`
-	// PrincipalKeyID identifies the mock L3 principal (the "human" notary).
-	PrincipalKeyID string `json:"principal_key_id"`
-
-	// L3Mode controls how the maximal path satisfies L3 in notary posture:
-	//   "mock"    - attach a principal Ed25519 signature as governance.l3.proof.signature
-	//   "suspend" - submit without L3, follow the real OOB approve flow as the principal
-	L3Mode string `json:"l3_mode"`
-
 	// EnvelopeTTL is how long a maximal envelope is valid before expiry.
 	EnvelopeTTL time.Duration `json:"envelope_ttl"`
 
@@ -85,15 +62,11 @@ type Config struct {
 // Default returns a config wired for a local two-container dev stack.
 func Default() Config {
 	cfg := Config{
-		MTLSBaseURL:    network.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
-		PublicBaseURL:  network.LocalhostHTTPURL(constants.Ports.OperatorHttp),
-		EnsembleSize:   3,
-		ConsensusKeyID: "auditor-ensemble",
-		PrincipalKeyID: "auditor-principal",
-		L3Mode:         "suspend",
-		EnvelopeTTL:    5 * time.Minute,
-		OutDir:         "./auditor-out",
-		UseCLIConfig:   true,
+		MTLSBaseURL:   network.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
+		PublicBaseURL: network.LocalhostHTTPURL(constants.Ports.OperatorHttp),
+		EnvelopeTTL:   5 * time.Minute,
+		OutDir:        "./auditor-out",
+		UseCLIConfig:  true,
 	}
 
 	if cfg.UseCLIConfig {
