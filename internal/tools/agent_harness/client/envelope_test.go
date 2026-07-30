@@ -15,6 +15,7 @@ package client
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/hex"
 	"io"
 	"net/http"
@@ -928,4 +929,149 @@ func findSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// ---------------------------------------------------------------------------
+// NewEnsembleFromMemberSeeds — per-member key construction (Phase 1)
+// ---------------------------------------------------------------------------
+
+func TestNewEnsembleFromMemberSeeds_ThreeDistinctSeeds(t *testing.T) {
+	seeds := map[string]string{
+		"member-a": "b194523218024feacafef9acf9e557f9c2e6ed71e87c8c97e5a4fc61e624ea42",
+		"member-b": "20544a8efd3f30188095dae9d42993f320fbcdcbd924f88b2c56edfdc719e357",
+		"member-c": "06946f1a26896983176f6d40b0a734136dd58b16fe502d4b5688bf7db1b97662",
+	}
+
+	ens, err := NewEnsembleFromMemberSeeds("consensus-key", "fedramp-consensus", seeds)
+	require.NoError(t, err)
+	require.NotNil(t, ens)
+
+	assert.Equal(t, "consensus-key", ens.KeyID)
+	assert.Equal(t, "fedramp-consensus", ens.ConsensusID)
+	assert.Len(t, ens.MemberKeyIDs, 3, "one MemberKeyID per seed")
+	assert.True(t, ens.HasPerMemberKeys(), "per-member keys must be populated")
+
+	// Each member must have a distinct public key.
+	pubA := ens.MemberPubHex("member-a")
+	pubB := ens.MemberPubHex("member-b")
+	pubC := ens.MemberPubHex("member-c")
+	assert.NotEmpty(t, pubA)
+	assert.NotEmpty(t, pubB)
+	assert.NotEmpty(t, pubC)
+	assert.NotEqual(t, pubA, pubB)
+	assert.NotEqual(t, pubA, pubC)
+	assert.NotEqual(t, pubB, pubC)
+}
+
+func TestNewEnsembleFromMemberSeeds_InvalidHexSeed(t *testing.T) {
+	seeds := map[string]string{
+		"member-a": "not-valid-hex",
+	}
+	_, err := NewEnsembleFromMemberSeeds("k", "c", seeds)
+	require.Error(t, err)
+}
+
+func TestNewEnsembleFromMemberSeeds_ShortSeed(t *testing.T) {
+	seeds := map[string]string{
+		"member-a": "deadbeef",
+	}
+	_, err := NewEnsembleFromMemberSeeds("k", "c", seeds)
+	require.Error(t, err)
+}
+
+func TestNewEnsembleFromMemberSeeds_WhitespaceTrimmed(t *testing.T) {
+	seeds := map[string]string{
+		"member-a": "  b194523218024feacafef9acf9e557f9c2e6ed71e87c8c97e5a4fc61e624ea42  ",
+	}
+	ens, err := NewEnsembleFromMemberSeeds("k", "c", seeds)
+	require.NoError(t, err)
+	assert.NotEmpty(t, ens.MemberPubHex("member-a"))
+}
+
+func TestEnsemble_MemberPubHex_NotFound(t *testing.T) {
+	seeds := map[string]string{
+		"member-a": "b194523218024feacafef9acf9e557f9c2e6ed71e87c8c97e5a4fc61e624ea42",
+	}
+	ens, err := NewEnsembleFromMemberSeeds("k", "c", seeds)
+	require.NoError(t, err)
+	assert.Equal(t, "", ens.MemberPubHex("nonexistent"), "unknown member returns empty string")
+}
+
+func TestEnsemble_MemberPubHex_NoPerMemberKeys(t *testing.T) {
+	ens, err := NewEnsemble("test-key", 2)
+	require.NoError(t, err)
+	assert.Equal(t, "", ens.MemberPubHex("any"), "single-key ensemble returns empty string")
+	assert.False(t, ens.HasPerMemberKeys(), "single-key ensemble has no per-member keys")
+}
+
+// TestEnsemble_Vote_PerMemberKeys_ProducesDistinctSignatures verifies that
+// when per-member keys are in use, each vote is signed with the member's own
+// private key and the signatures differ across members for the same input.
+func TestEnsemble_Vote_PerMemberKeys_ProducesDistinctSignatures(t *testing.T) {
+	seeds := map[string]string{
+		"member-a": "b194523218024feacafef9acf9e557f9c2e6ed71e87c8c97e5a4fc61e624ea42",
+		"member-b": "20544a8efd3f30188095dae9d42993f320fbcdcbd924f88b2c56edfdc719e357",
+		"member-c": "06946f1a26896983176f6d40b0a734136dd58b16fe502d4b5688bf7db1b97662",
+	}
+	ens, err := NewEnsembleFromMemberSeeds("consensus-key", "fedramp-consensus", seeds)
+	require.NoError(t, err)
+
+	l2 := ens.Vote("tx-hash-123", true)
+	require.Len(t, l2.Votes, 3, "one vote per member")
+	assert.Equal(t, "fedramp-consensus", l2.ConsensusSetId)
+
+	sigs := make(map[string]struct{}, 3)
+	for _, v := range l2.Votes {
+		assert.NotEmpty(t, v.ConsensusSignature)
+		assert.True(t, v.Decision)
+		_, dup := sigs[v.ConsensusSignature]
+		assert.False(t, dup, "signatures must be distinct across members")
+		sigs[v.ConsensusSignature] = struct{}{}
+	}
+
+	// Verify each signature against the corresponding member's public key.
+	basis := "tx-hash-123|true"
+	for _, v := range l2.Votes {
+		pubHex := ens.MemberPubHex(v.SignerKeyId)
+		require.NotEmpty(t, pubHex)
+		pubBytes, err := hex.DecodeString(pubHex)
+		require.NoError(t, err)
+		sigBytes, err := hex.DecodeString(v.ConsensusSignature)
+		require.NoError(t, err)
+		assert.True(t, ed25519.Verify(ed25519.PublicKey(pubBytes), []byte(basis), sigBytes),
+			"signature for %s must verify against its member public key", v.SignerKeyId)
+	}
+}
+
+// TestEnsemble_Vote_PerMemberKeys_Deterministic verifies that per-member
+// signatures are deterministic for the same input (Ed25519 is deterministic).
+func TestEnsemble_Vote_PerMemberKeys_Deterministic(t *testing.T) {
+	seeds := map[string]string{
+		"member-a": "b194523218024feacafef9acf9e557f9c2e6ed71e87c8c97e5a4fc61e624ea42",
+		"member-b": "20544a8efd3f30188095dae9d42993f320fbcdcbd924f88b2c56edfdc719e357",
+	}
+	ens, err := NewEnsembleFromMemberSeeds("k", "c", seeds)
+	require.NoError(t, err)
+
+	l2a := ens.Vote("hash", true)
+	l2b := ens.Vote("hash", true)
+	require.Len(t, l2a.Votes, 2)
+	require.Len(t, l2b.Votes, 2)
+	for i := range l2a.Votes {
+		assert.Equal(t, l2a.Votes[i].ConsensusSignature, l2b.Votes[i].ConsensusSignature,
+			"per-member signatures must be deterministic")
+	}
+}
+
+// TestEnsemble_Vote_SingleSeedBackwardCompat verifies that an ensemble built
+// from a single seed (the legacy single-key pattern) still produces valid votes.
+func TestEnsemble_Vote_SingleSeedBackwardCompat(t *testing.T) {
+	ens, err := NewEnsembleFromSeed("legacy-key", 3, "87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77")
+	require.NoError(t, err)
+	assert.False(t, ens.HasPerMemberKeys(), "single-seed ensemble has no per-member keys")
+
+	l2 := ens.Vote("hash", true)
+	require.Len(t, l2.Votes, 1, "single-key ensemble produces one vote")
+	assert.Equal(t, "legacy-key", l2.Votes[0].SignerKeyId)
+	assert.NotEmpty(t, l2.Votes[0].ConsensusSignature)
 }

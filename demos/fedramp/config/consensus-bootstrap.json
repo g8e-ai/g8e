@@ -2,5 +2,9 @@
   "consensus_id": "fedramp-consensus",
   "member_app_ids": ["fedramp-csp-auditor", "fedramp-3pao", "fedramp-jab"],
   "quorum": 2,
-  "seed_hex": "a1200ca127d87aa6f6f986e64e1941fdd1d5a8bfd1de995cd4cd89f333c03030"
+  "member_seeds": {
+    "fedramp-csp-auditor": "b194523218024feacafef9acf9e557f9c2e6ed71e87c8c97e5a4fc61e624ea42",
+    "fedramp-3pao": "20544a8efd3f30188095dae9d42993f320fbcdcbd924f88b2c56edfdc719e357",
+    "fedramp-jab": "06946f1a26896983176f6d40b0a734136dd58b16fe502d4b5688bf7db1b97662"
+  }
 }

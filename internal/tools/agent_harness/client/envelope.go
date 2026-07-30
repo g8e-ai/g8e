@@ -36,10 +36,12 @@ const (
 	ProtocolVersion = "1.0"
 )
 
-// Ensemble is Agent Harness's mock L2 consensus consensus: N agents that each "vote"
-// on a transaction hash. The envelope carries a single aggregate Ed25519
-// signature from the registered consensus key over "<hash>|<decision>", plus
-// one AgentID per voter — exactly what L4Warden.verifyL2Signature checks.
+// Ensemble is Agent Harness's L2 consensus voter pool: N agents that each
+// vote on a transaction hash. When memberKeys is populated (per-member seed
+// mode), each vote is signed with the member's own Ed25519 private key and
+// the corresponding public key is registered as a trusted signer for that
+// member. When memberKeys is nil (single-key mode), all votes share one
+// signature from the ensemble key.
 type Ensemble struct {
 	KeyID        string
 	ConsensusID  string
@@ -47,6 +49,8 @@ type Ensemble struct {
 	priv         ed25519.PrivateKey
 	pub          ed25519.PublicKey
 	agents       []string
+	memberKeys   map[string]ed25519.PrivateKey // per-member private keys (optional)
+	memberPubs   map[string]ed25519.PublicKey  // per-member public keys (optional)
 }
 
 // NewEnsemble mints a fresh consensus key and n agent identities.
@@ -83,6 +87,59 @@ func NewEnsembleFromSeed(keyID string, n int, seedHex string) (*Ensemble, error)
 	return &Ensemble{KeyID: keyID, ConsensusID: "test-consensus", priv: priv, pub: pub, agents: agents}, nil
 }
 
+// NewEnsembleFromMemberSeeds constructs an Ensemble where each member has its
+// own Ed25519 key pair derived from a distinct seed. This makes RequireDistinct
+// and quorum cryptographically meaningful: a single key cannot forge multiple
+// votes. memberSeeds maps member app ID to hex-encoded Ed25519 seed.
+func NewEnsembleFromMemberSeeds(keyID, consensusID string, memberSeeds map[string]string) (*Ensemble, error) {
+	memberKeys := make(map[string]ed25519.PrivateKey, len(memberSeeds))
+	memberPubs := make(map[string]ed25519.PublicKey, len(memberSeeds))
+	memberKeyIDs := make([]string, 0, len(memberSeeds))
+
+	for appID, seedHex := range memberSeeds {
+		seed, err := hex.DecodeString(strings.TrimSpace(seedHex))
+		if err != nil {
+			return nil, fmt.Errorf("ensemble from member seeds: decode hex for %s: %w", appID, err)
+		}
+		if len(seed) != ed25519.SeedSize {
+			return nil, fmt.Errorf("ensemble from member seeds: %w for %s: got %d, expected %d", constants.ErrInvalidSeedLength, appID, len(seed), ed25519.SeedSize)
+		}
+		priv := ed25519.NewKeyFromSeed(seed)
+		pub := priv.Public().(ed25519.PublicKey)
+		memberKeys[appID] = priv
+		memberPubs[appID] = pub
+		memberKeyIDs = append(memberKeyIDs, appID)
+	}
+
+	return &Ensemble{
+		KeyID:        keyID,
+		ConsensusID:  consensusID,
+		MemberKeyIDs: memberKeyIDs,
+		memberKeys:   memberKeys,
+		memberPubs:   memberPubs,
+	}, nil
+}
+
+// MemberPubHex returns the hex-encoded public key for a specific member.
+// Returns empty string if the member is not found or per-member keys are not
+// in use.
+func (e *Ensemble) MemberPubHex(appID string) string {
+	if e.memberPubs == nil {
+		return ""
+	}
+	pub, ok := e.memberPubs[appID]
+	if !ok {
+		return ""
+	}
+	return hex.EncodeToString(pub)
+}
+
+// HasPerMemberKeys returns true when the ensemble uses distinct per-member
+// keys rather than a single shared key.
+func (e *Ensemble) HasPerMemberKeys() bool {
+	return len(e.memberKeys) > 0
+}
+
 // PubHex is the consensus public key for trusted-signer registration.
 func (e *Ensemble) PubHex() string { return hex.EncodeToString(e.pub) }
 
@@ -94,15 +151,25 @@ func (e *Ensemble) AgentCount() int { return len(e.agents) }
 
 // Vote produces the L2 metadata for a decision over the transaction hash.
 // decision==true means "the ensemble agreed this mutation is safe."
+// When per-member keys are in use, each vote is signed with the member's own
+// private key. Otherwise, all votes share the ensemble's single signature.
 func (e *Ensemble) Vote(txHash string, decision bool) *commonv1.L2Metadata {
 	basis := fmt.Sprintf("%s|%v", txHash, decision) // matches l2_consensus.SignDecision
-	sig := ed25519.Sign(e.priv, []byte(basis))
-	sigHex := hex.EncodeToString(sig)
 
 	var votes []*commonv1.L2Vote
 	if len(e.MemberKeyIDs) > 0 {
 		votes = make([]*commonv1.L2Vote, 0, len(e.MemberKeyIDs))
 		for _, keyID := range e.MemberKeyIDs {
+			var sigHex string
+			if e.memberKeys != nil {
+				if mk, ok := e.memberKeys[keyID]; ok {
+					sig := ed25519.Sign(mk, []byte(basis))
+					sigHex = hex.EncodeToString(sig)
+				}
+			} else {
+				sig := ed25519.Sign(e.priv, []byte(basis))
+				sigHex = hex.EncodeToString(sig)
+			}
 			votes = append(votes, &commonv1.L2Vote{
 				SignerKeyId:        keyID,
 				ConsensusSignature: sigHex,
@@ -110,6 +177,8 @@ func (e *Ensemble) Vote(txHash string, decision bool) *commonv1.L2Metadata {
 			})
 		}
 	} else {
+		sig := ed25519.Sign(e.priv, []byte(basis))
+		sigHex := hex.EncodeToString(sig)
 		votes = []*commonv1.L2Vote{{
 			SignerKeyId:        e.KeyID,
 			ConsensusSignature: sigHex,

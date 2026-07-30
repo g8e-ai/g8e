@@ -254,17 +254,34 @@ func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Confi
 	}
 
 	// If the consensus seed is a file path, try to load consensus member app IDs
-	// from a sibling consensus-bootstrap.json so the ensemble votes with the
-	// correct member key IDs (multi-member quorum support).
+	// and per-member seeds from a sibling consensus-bootstrap.json. When
+	// member_seeds is present, reconstruct the ensemble with distinct per-member
+	// keys so each vote is independently signed and RequireDistinct/quorum are
+	// cryptographically meaningful. When only member_app_ids is present, the
+	// ensemble votes with the correct member key IDs but shares one signature
+	// (single-key fallback).
 	if cfg.ConsensusSeed != "" {
 		seedDir := filepath.Dir(cfg.ConsensusSeed)
 		bootstrapPath := filepath.Join(seedDir, "consensus-bootstrap.json")
 		if data, readErr := os.ReadFile(bootstrapPath); readErr == nil {
 			var boot struct {
-				MemberAppIDs []string `json:"member_app_ids"`
+				MemberAppIDs []string          `json:"member_app_ids"`
+				ConsensusID  string            `json:"consensus_id"`
+				MemberSeeds  map[string]string `json:"member_seeds"`
 			}
 			if json.Unmarshal(data, &boot) == nil && len(boot.MemberAppIDs) > 0 {
-				ens.MemberKeyIDs = boot.MemberAppIDs
+				if len(boot.MemberSeeds) > 0 {
+					consensusID := boot.ConsensusID
+					if consensusID == "" {
+						consensusID = ens.ConsensusID
+					}
+					ens, err = clientpkg.NewEnsembleFromMemberSeeds(cfg.ConsensusKeyID, consensusID, boot.MemberSeeds)
+					if err != nil {
+						return fmt.Errorf("setup gov kit: ensemble from member seeds: %w", err)
+					}
+				} else {
+					ens.MemberKeyIDs = boot.MemberAppIDs
+				}
 			}
 		}
 	}
@@ -298,7 +315,11 @@ func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Confi
 
 	if len(ens.MemberKeyIDs) > 0 {
 		for _, appID := range ens.MemberKeyIDs {
-			if err := client.RegisterSigner(ctx, appID, ens.PubHex(), "consensus"); err != nil {
+			pubHex := ens.PubHex()
+			if ens.HasPerMemberKeys() {
+				pubHex = ens.MemberPubHex(appID)
+			}
+			if err := client.RegisterSigner(ctx, appID, pubHex, "consensus"); err != nil {
 				if requiresConsensus {
 					return fmt.Errorf("consensus signer registration %s: %w", appID, err)
 				}
