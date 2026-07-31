@@ -401,6 +401,7 @@ The `g8e` binary (`internal/cli/cmd/main.go`) registers the following subcommand
 - **`swagger`**: Manage Swagger/OpenAPI documentation. Subcommands: `init`, `serve`, `validate`.
 - **`tui`**: Launch the Tactical Governance Console (TUI). Requires a running gateway, enrolled CLI credentials, and mTLS client configuration.
 - **`gui`**: Enroll external frontend applications with the g8e Gateway. Subcommands: `enroll`, `show`, `verify`, `remove`.
+- **`version`**: Print g8e build version information (version, build ID, build time, platform). With `--fips` flag, also reports FIPS 140-3 module status via the native `crypto/fips140` package and exits non-zero if FIPS mode is not active. Used as an auditor/operator self-check for FIPS-compliant builds.
 
 ## MCP Native Tools
 
@@ -440,6 +441,8 @@ The reporting system operates as a self-contained, offline verification utility 
 - **`internal/cli/serve/gateway.go`**: Gateway boot sequence: `RunGateway` orchestrates config loading, `GatewayModeService` construction, in-process execution service initialization, consensus bootstrap (policy seeding via `bootstrapConsensusPolicy`, key loading via `BootstrapConsensus` with `FileKeyProvider`, `NewLocalDeliberator` for L2 consensus), in-process `OperatorPubSubService` construction via `NewGatewayOperatorPubSubService` with `GatewayCommandServiceConfig` (embedding base `CommandServiceConfig` plus `MCPGateway`, `GovDeps *GovernanceDeps`, and `L2ConsensusDeliberator`), `InitHTTPHandler(consensusSvc, cmdSvc)` two-phase construction, and graceful shutdown with 30-second timeout. `ExportActuatorPublicKey` writes the actuator public key to the PKI directory for receipt verification by external harnesses.
 - **`internal/cli/serve/logger.go`**: Logger configuration: `ConfigureLogger` and `ConfigureLoggerWithOutput` produce `slog.Logger` instances with operator-friendly formatting and configurable log levels.
 - **`internal/cli/serve/version.go`**: `VersionInfo` struct holds build-time metadata (version, build ID, build time, platform) set via ldflags.
+- **`internal/cli/cmd/version.go`**: `versionCmd` implements the `g8e version` subcommand. With `--fips`, queries the native `crypto/fips140` package (`Enabled()`, `Enforced()`, `Version()`) to report FIPS 140-3 module status and exits non-zero if approved mode is not active. Used by `make verify-fips` and the `Dockerfile.fips` build-time self-check.
+- **`internal/certs/embed.go`**: Injectable TLS primitives replacing package-level globals. `TrustStore` holds the CA trust bundle, `ClientIdentity` holds the mTLS client certificate, and `TLSConfig` combines them into a `*tls.Config` (TLS 1.3 minimum). `FIPSCurvePreferences()` returns the FIPS 140-3 compliant TLS key agreement curve set (`X25519MLKEM768`, `P-384`, `P-256`), excluding X25519. Returns a fresh slice on each call to prevent mutation of shared state.
 - **`internal/cli/cmd/gateway.go`**: Gateway CLI command tree. `gatewayStartCmd` launches the gateway as a background process via `pm.StartOperator` (`ProcessManager.StartOperator`), resolving configuration from CLI flags and environment variables. With `--follow` flag, runs in foreground by calling `serve.RunGateway` directly. With `--interactive`/`-i` flag, launches the onboarding wizard (`internal/cli/wizard`) before startup; the wizard result is merged into resolved flags via `applyWizardConfig`. `gatewaySettingsCmd`, `gatewayResetCmd`, and `gatewayCleanCmd` manage gateway state over mTLS.
 - **`internal/cli/cmd/tui.go`**: `tuiCmd` launches the Tactical Governance Console (TUI). Loads config, checks operator status, loads credentials, builds an mTLS client, and constructs an SSE stream URL using the CLI session ID for real-time updates.
 - **`internal/cli/cmd/gwstdout.go`**: `printNextSteps` outputs guidance after the gateway starts, including CA trust instructions, CLI enrollment, operator deployment, and Console UI access.
@@ -645,3 +648,13 @@ The following packages are test-only and are not part of the production dependen
 - `demos_docker_error_paths_test.go` - Docker error path tests for demo commands.
 - `demos_run_error_paths_test.go` - Run error path tests for demo scenarios.
 - `demo_dhs_test.go` - Tests for DHS demo scenario helpers.
+
+## FIPS 140-3 Build Infrastructure
+
+- **`Dockerfile.fips`**: FIPS 140-3 compliant Docker build. Builder stage sets `ENV GOFIPS140=v1.0.0` and `CGO_ENABLED=0`, builds the binary for `linux/amd64`, and runs `g8e version --fips` as a build-time self-check. Runtime stage uses pinned `debian:12-slim` (vendor-affirmed OE per CMVP Cert #5247 Table 3). The binary enters FIPS approved mode by default; no runtime env var is required.
+- **`Makefile` `build-fips` target**: Builds `bin/g8e-fips-linux-amd64` with `GOFIPS140=v1.0.0`, `CGO_ENABLED=0`, `GOOS=linux`, `GOARCH=amd64`. Pins to the certified, frozen module version (not `certified` which floats).
+- **`Makefile` `verify-fips` target**: Depends on `build-fips`, then runs `./g8e-fips version --fips` to confirm FIPS approved mode is active. Exits non-zero if the self-check fails.
+- **`.github/workflows/build-and-test-fips.yml`**: CI workflow that builds with `GOFIPS140=v1.0.0`, runs `make verify-fips`, executes the test suite with the FIPS module linked, and verifies static linking.
+- **`demos/fedramp/compose.fips.yml`**: FIPS-mode variant of the FedRAMP demo. All three g8e services (gateway, operator, agent-runtime) build from `Dockerfile.fips`. Uses separate container names (`g8e-fedramp-fips-*`), separate named volumes (`fedramp-fips-*`), and different host ports (8089/8452) to avoid conflicts with the standard demo.
+
+See [FIPS 140-3 Compliance](../reference/fips140-3.md) for the validated boundary, OE matrix, and build/runtime activation details.

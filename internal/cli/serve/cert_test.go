@@ -279,6 +279,8 @@ func TestGenerateCSR(t *testing.T) {
 		ecPub, ok := privKey.Public().(*ecdsa.PublicKey)
 		require.True(t, ok)
 		assert.Equal(t, elliptic.P256(), ecPub.Curve)
+		assert.NotEqual(t, x509.Ed25519, csr.PublicKeyAlgorithm,
+			"CSR must not use Ed25519 (excluded from Go FIPS TLS mode)")
 	})
 
 	t.Run("EmptyCommonName", func(t *testing.T) {

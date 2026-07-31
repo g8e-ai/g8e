@@ -247,15 +247,29 @@ func (c *Client) RegisterSigner(ctx context.Context, keyID, pubHex, role string)
 // response body (an ActionReceipt JSON) on success.
 //
 // The userID scopes the SSE subscription to the operator's user so the harness
-// only receives events for its own transactions. The approval URL is built from
-// the gateway's public base URL so it is reachable from the host browser.
+// only receives events for its own transactions. The SSE subscription and
+// status verification dial PublicBaseURL, which must be reachable from the
+// harness process (container-internal in the demo topology). The approval link
+// printed for the human is built from ApprovalDisplayURL when set — the
+// host-reachable address — so the host browser can actually open it; it falls
+// back to PublicBaseURL when ApprovalDisplayURL is empty.
 func (c *Client) WaitForHumanApproval(ctx context.Context, p Persona, txHash, userID string) (int, []byte, error) {
-	approvalURL := c.cfg.PublicBaseURL + constants.APIPaths.ApprovePagePrefix + txHash
+	// The human approver reaches the gateway from the host, which uses different
+	// host/ports than the harness process (container-internal). Prefer the
+	// host-reachable display URL for the printed link; fall back to PublicBaseURL
+	// so non-demo invocations keep working.
+	displayBase := c.cfg.ApprovalDisplayURL
+	if displayBase == "" {
+		displayBase = c.cfg.PublicBaseURL
+	}
+	approvalURL := displayBase + constants.APIPaths.ApprovePagePrefix + txHash
+	consoleURL := displayBase + constants.APIPaths.ConsolePrefix
 
 	fmt.Fprintf(os.Stderr, "\n  ╔════════════════════════════════════════════════════════════╗\n")
 	fmt.Fprintf(os.Stderr, "  ║  HUMAN APPROVAL REQUIRED                                    ║\n")
-	fmt.Fprintf(os.Stderr, "  ║  Open this URL in your browser and approve with your        ║\n")
-	fmt.Fprintf(os.Stderr, "  ║  passkey (WebAuthn):                                        ║\n")
+	fmt.Fprintf(os.Stderr, "  ║  Approve in your console (approval pushed via SSE):        ║\n")
+	fmt.Fprintf(os.Stderr, "  ║  %s\n", consoleURL)
+	fmt.Fprintf(os.Stderr, "  ║  Or open this direct link as an alternative:                ║\n")
 	fmt.Fprintf(os.Stderr, "  ║  %s\n", approvalURL)
 	fmt.Fprintf(os.Stderr, "  ║  Transaction: %s\n", txHash)
 	fmt.Fprintf(os.Stderr, "  ╚════════════════════════════════════════════════════════════╝\n\n")

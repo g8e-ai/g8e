@@ -1,0 +1,96 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package cmd
+
+import (
+	"bytes"
+	"crypto/fips140"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/cli/serve"
+)
+
+func TestVersionCmd_RegisteredOnRoot(t *testing.T) {
+	rootCmd := NewRootCmd("dev", serve.VersionInfo{})
+	for _, c := range rootCmd.Commands() {
+		if c.Use == "version" {
+			return
+		}
+	}
+	t.Fatalf("version subcommand not registered on root")
+}
+
+func TestRunVersion_PlainPrintsBuildInfo(t *testing.T) {
+	vi := serve.VersionInfo{
+		Version:   "1.2.3",
+		BuildID:   "abc123",
+		BuildTime: "2026-07-31T00:00:00Z",
+		Platform:  "linux/amd64",
+	}
+	var buf bytes.Buffer
+	require.NoError(t, runVersion(&buf, vi, false))
+
+	out := buf.String()
+	assert.Contains(t, out, "g8e version 1.2.3")
+	assert.Contains(t, out, "abc123")
+	assert.Contains(t, out, "2026-07-31T00:00:00Z")
+	assert.Contains(t, out, "linux/amd64")
+	assert.NotContains(t, out, "FIPS 140-3 mode")
+}
+
+func TestRunVersion_PlainOmitsEmptyFields(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, runVersion(&buf, serve.VersionInfo{}, false))
+
+	out := buf.String()
+	assert.Contains(t, out, "g8e version ")
+	assert.NotContains(t, out, "build id:")
+	assert.NotContains(t, out, "build time:")
+	assert.NotContains(t, out, "platform:")
+}
+
+func TestRunVersion_FIPSReportsModuleStatus(t *testing.T) {
+	vi := serve.VersionInfo{Version: "1.2.3", Platform: "linux/amd64"}
+	var buf bytes.Buffer
+	err := runVersion(&buf, vi, true)
+
+	out := buf.String()
+	assert.Contains(t, out, "FIPS 140-3 mode:")
+	assert.Contains(t, out, "FIPS enforcement:")
+	assert.Contains(t, out, "FIPS module version:")
+
+	// In the default (non-FIPS) test build, FIPS mode is not active, so the
+	// self-check must surface that and return an error so auditors/scripts can
+	// detect a non-compliant binary.
+	if !fips140.Enabled() {
+		require.Error(t, err)
+		assert.Contains(t, out, "NOT active")
+		assert.Contains(t, strings.ToLower(out), "gofips140=v1.0.0")
+		return
+	}
+	// When the test binary itself was built with GOFIPS140, approved mode is on.
+	require.NoError(t, err)
+	assert.Contains(t, out, "FIPS 140-3 mode:     enabled")
+}
+
+func TestVersionCmd_HasFipsFlag(t *testing.T) {
+	cmd := versionCmd()
+	f := cmd.Flags().Lookup("fips")
+	require.NotNil(t, f)
+	assert.Equal(t, "false", f.DefValue)
+}

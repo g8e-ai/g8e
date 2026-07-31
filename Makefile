@@ -45,6 +45,20 @@ STRIP_FLAGS := -s -w
 TRIMPATH := -trimpath
 BUILD_TAGS := netgo,osusergo
 
+# FIPS 140-3 build configuration.
+# GOFIPS140 is a BUILD-TIME setting consumed by the go toolchain (not the
+# running binary). Pinning to v1.0.0 links the Go Cryptographic Module
+# (CMVP Cert #5247, CAVP A6650) and enables FIPS 140-3 approved mode by
+# default — the binary enters approved mode on startup and runs its
+# integrity/CAST self-tests at init, with no runtime env var required.
+# v1.26.0 (frozen from Go 1.26, CAVP A8028) is also available in Go 1.26.5
+# but is still Pending Review on the CMVP Modules-In-Process list and must
+# NOT be used for a compliance claim.
+# The FIPS compliance claim is restricted to linux/amd64 (the tested OE).
+GOFIPS140_VERSION := v1.0.0
+FIPS_GOOS := linux
+FIPS_GOARCH := amd64
+
 # Test configuration
 TEST_TIMEOUT := 180s
 # Per-package deadlock backstop for unit tests. Kept generous because `-race`
@@ -159,6 +173,8 @@ help:
 	@echo "  build-windows-docker	Build g8e for Windows in Docker (amd64, arm64)"
 	@echo "  build-darwin-docker		Build g8e for Darwin in Docker (amd64, arm64)"
 	@echo "  build-all-docker		Build g8e for all platforms in Docker"
+	@echo "  build-fips		Build g8e with FIPS 140-3 approved mode (linux/amd64, GOFIPS140=v1.0.0)"
+	@echo "  verify-fips		Build the FIPS variant and run the g8e version --fips self-check"
 	@echo ""
 	@echo "Test:"
 	@echo "  test                  Run all tests (unit + integration)"
@@ -456,6 +472,38 @@ build-all-docker:
 		sha256sum $(BIN_DIR)/$$NODE_BINARY > $(BIN_DIR)/$$NODE_BINARY.sha256; \
 	done
 	@echo "All-platform Docker build complete. Binaries: $(BIN_DIR)/g8e-*"
+
+# FIPS 140-3 build variant.
+# Produces a linux/amd64 binary linked against the Go Cryptographic Module
+# v1.0.0 (CMVP Cert #5247) with FIPS 140-3 approved mode enabled by default.
+# GOFIPS140 is set at BUILD TIME ONLY — the resulting binary enters approved
+# mode on startup without any runtime env var. See:
+#   https://go.dev/doc/security/fips140
+# Verify the deployed binary with: ./g8e version --fips
+.PHONY: build-fips
+build-fips:
+	@echo "Building g8e with FIPS 140-3 approved mode (GOFIPS140=$(GOFIPS140_VERSION), $(FIPS_GOOS)/$(FIPS_GOARCH))..."
+	@gofmt -w .
+	@mkdir -p $(BIN_DIR)
+	@NODE_BINARY=$(BIN_DIR)/g8e-fips-$(FIPS_GOOS)-$(FIPS_GOARCH); \
+	echo "Building $(FIPS_GOOS)/$(FIPS_GOARCH) -> $$NODE_BINARY..."; \
+	GOFIPS140=$(GOFIPS140_VERSION) CGO_ENABLED=$(CGO_ENABLED) GOOS=$(FIPS_GOOS) GOARCH=$(FIPS_GOARCH) \
+		go build $(TRIMPATH) -tags $(BUILD_TAGS) \
+		-ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=$(FIPS_GOOS)_$(FIPS_GOARCH)" \
+		-o $$NODE_BINARY $(MAIN_PKG); \
+	sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
+	cp $$NODE_BINARY g8e-fips
+	@echo "FIPS build complete. Binary: $(BIN_DIR)/g8e-fips-$(FIPS_GOOS)-$(FIPS_GOARCH)"
+	@echo "Verify with: ./g8e-fips version --fips"
+
+# Quick FIPS self-check: build the FIPS variant and confirm the binary reports
+# FIPS 140-3 approved mode is active via the native crypto/fips140 module API.
+# Exits non-zero if the self-check fails. Intended for CI and release gates.
+.PHONY: verify-fips
+verify-fips: build-fips
+	@echo "Verifying FIPS 140-3 approved mode in the built binary..."
+	@./g8e-fips version --fips
+	@echo "FIPS 140-3 self-check passed."
 
 # =============================================================================
 # TEST

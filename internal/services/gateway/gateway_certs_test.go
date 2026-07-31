@@ -18,6 +18,7 @@ package gateway
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/tls"
@@ -33,6 +34,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -472,6 +474,9 @@ func TestPKIAuthority_TLSConfig_Unit(t *testing.T) {
 		assert.Equal(t, tls.RequireAndVerifyClientCert, config.ClientAuth)
 		assert.NotNil(t, config.ClientCAs)
 		assert.NotNil(t, config.GetCertificate)
+		assert.NotContains(t, config.CurvePreferences, tls.X25519,
+			"gateway serving TLS must not use X25519 (excluded from Go's FIPS TLS mode)")
+		assert.Contains(t, config.CurvePreferences, tls.X25519MLKEM768)
 	})
 }
 
@@ -530,4 +535,103 @@ func TestPKIAuthority_SignDelegatedCSR(t *testing.T) {
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrPKIOperatorCANotLoaded)
 	})
+}
+
+func TestPKIAuthority_CertsUseECDSASignatures_NotEd25519(t *testing.T) {
+	dataDir := testutil.TempDir(t)
+	logger := testutil.NewTestLogger()
+	fileSvc := newTestFileSvc(t)
+	db, stores, err := openTestDB(t, dataDir, fileSvc, logger)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	sm := newTestSecretManager(t, db.db, fileSvc)
+
+	pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
+	err = pki.InitializePKI(nil)
+	require.NoError(t, err)
+
+	t.Run("Root CA uses ECDSA signature algorithm", func(t *testing.T) {
+		assert.NotEqual(t, x509.PureEd25519, pki.rootCert.SignatureAlgorithm,
+			"root CA must not use Ed25519 signature (excluded from Go FIPS TLS mode)")
+		assert.Contains(t, pki.rootCert.SignatureAlgorithm.String(), "ECDSA",
+			"root CA must use ECDSA signature algorithm")
+	})
+
+	t.Run("Hub intermediate CA uses ECDSA signature algorithm", func(t *testing.T) {
+		assert.NotEqual(t, x509.PureEd25519, pki.hubCert.SignatureAlgorithm,
+			"hub CA must not use Ed25519 signature (excluded from Go FIPS TLS mode)")
+		assert.Contains(t, pki.hubCert.SignatureAlgorithm.String(), "ECDSA",
+			"hub CA must use ECDSA signature algorithm")
+	})
+
+	t.Run("Operator intermediate CA uses ECDSA signature algorithm", func(t *testing.T) {
+		assert.NotEqual(t, x509.PureEd25519, pki.operatorCert.SignatureAlgorithm,
+			"operator CA must not use Ed25519 signature (excluded from Go FIPS TLS mode)")
+		assert.Contains(t, pki.operatorCert.SignatureAlgorithm.String(), "ECDSA",
+			"operator CA must use ECDSA signature algorithm")
+	})
+
+	t.Run("Gateway peer intermediate CA uses ECDSA signature algorithm", func(t *testing.T) {
+		assert.NotEqual(t, x509.PureEd25519, pki.gatewayPeerCert.SignatureAlgorithm,
+			"gateway peer CA must not use Ed25519 signature (excluded from Go FIPS TLS mode)")
+		assert.Contains(t, pki.gatewayPeerCert.SignatureAlgorithm.String(), "ECDSA",
+			"gateway peer CA must use ECDSA signature algorithm")
+	})
+
+	t.Run("Service certificate uses ECDSA signature algorithm", func(t *testing.T) {
+		x509Cert, err := x509.ParseCertificate(pki.serviceCert.Certificate[0])
+		require.NoError(t, err)
+		assert.NotEqual(t, x509.PureEd25519, x509Cert.SignatureAlgorithm,
+			"service cert must not use Ed25519 signature (excluded from Go FIPS TLS mode)")
+		assert.Contains(t, x509Cert.SignatureAlgorithm.String(), "ECDSA",
+			"service cert must use ECDSA signature algorithm")
+	})
+
+	t.Run("Leaf cert signed via SignCSR uses ECDSA signature algorithm", func(t *testing.T) {
+		csr := testutil.GenerateTestCSRP256(t, "test-operator")
+		certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789", "")
+		require.NoError(t, err)
+
+		block, _ := pem.Decode([]byte(certPEM))
+		require.NotNil(t, block)
+		leafCert, err := x509.ParseCertificate(block.Bytes)
+		require.NoError(t, err)
+
+		assert.NotEqual(t, x509.PureEd25519, leafCert.SignatureAlgorithm,
+			"leaf cert must not use Ed25519 signature (excluded from Go FIPS TLS mode)")
+		assert.Contains(t, leafCert.SignatureAlgorithm.String(), "ECDSA",
+			"leaf cert must use ECDSA signature algorithm")
+	})
+}
+
+func TestLoadCACertificate_RejectsEd25519Signature(t *testing.T) {
+	fileSvc := newTestFileSvc(t)
+
+	ed25519PubKey, ed25519PrivKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "Ed25519 Test CA"},
+		NotBefore:             time.Now().Add(-1 * time.Minute),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, template, ed25519PubKey, ed25519PrivKey)
+	require.NoError(t, err)
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	relPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, "ed25519-test-ca.crt")
+	err = fileSvc.WriteFile(context.Background(), relPath, certPEM, constants.PermFilePublic)
+	require.NoError(t, err)
+
+	var loadedCert *x509.Certificate
+	pki := &PKIAuthority{fileSvc: fileSvc}
+	err = pki.loadCACertificate(relPath, &loadedCert)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrPKIEd25519CertRejected)
+	assert.Nil(t, loadedCert, "rejected cert must not be stored")
 }
