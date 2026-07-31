@@ -32,6 +32,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/certs"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/services/fs"
@@ -180,9 +181,10 @@ func (pki *PKIAuthority) TLSConfig() *tls.Config {
 			c := pki.serviceCert
 			return &c, nil
 		},
-		ClientAuth: tls.RequireAndVerifyClientCert,
-		ClientCAs:  pool,
-		MinVersion: tls.VersionTLS13,
+		ClientAuth:       tls.RequireAndVerifyClientCert,
+		ClientCAs:        pool,
+		MinVersion:       tls.VersionTLS13,
+		CurvePreferences: certs.FIPSCurvePreferences(),
 	}
 }
 
@@ -853,6 +855,10 @@ func (pki *PKIAuthority) loadCACertificate(certRelPath string, cert **x509.Certi
 	parsedCert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
 		return fmt.Errorf("%s: %w", constants.ErrPKIParseCertificate, err)
+	}
+
+	if parsedCert.SignatureAlgorithm == x509.PureEd25519 {
+		return fmt.Errorf("%w: %s", constants.ErrPKIEd25519CertRejected, parsedCert.Subject.CommonName)
 	}
 
 	*cert = parsedCert

@@ -31,17 +31,18 @@ import (
 )
 
 var (
-	harnessConfigPath string
-	harnessMTLSURL    string
-	harnessPublicURL  string
-	harnessCert       string
-	harnessKey        string
-	harnessCA         string
-	harnessAPIKey     string
-	harnessSessionID  string
-	harnessOutDir     string
-	harnessVerbose    bool
-	harnessPhase      string
+	harnessConfigPath  string
+	harnessMTLSURL     string
+	harnessPublicURL   string
+	harnessApprovalURL string
+	harnessCert        string
+	harnessKey         string
+	harnessCA          string
+	harnessAPIKey      string
+	harnessSessionID   string
+	harnessOutDir      string
+	harnessVerbose     bool
+	harnessPhase       string
 )
 
 func demosScenariosRunCmd() *cobra.Command {
@@ -53,7 +54,8 @@ func demosScenariosRunCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&harnessConfigPath, "config", "", "JSON config overlay")
 	cmd.Flags().StringVar(&harnessMTLSURL, "mtls-url", "", "Gateway mTLS surface")
-	cmd.Flags().StringVar(&harnessPublicURL, "public-url", "", "Gateway public surface for OOB approve")
+	cmd.Flags().StringVar(&harnessPublicURL, "public-url", "", "Gateway public surface for OOB approve (must be reachable from the harness process)")
+	cmd.Flags().StringVar(&harnessApprovalURL, "approval-url", "", "Host-reachable base URL for the printed human approval link (defaults to --public-url)")
 	cmd.Flags().StringVar(&harnessCert, "cert", "", "client cert PEM")
 	cmd.Flags().StringVar(&harnessKey, "key", "", "client key PEM")
 	cmd.Flags().StringVar(&harnessCA, "ca", "", "gateway CA bundle PEM")
@@ -137,6 +139,9 @@ func applyAgentHarnessFlags(cfg *config.Config) {
 	}
 	if harnessPublicURL != "" {
 		cfg.PublicBaseURL = harnessPublicURL
+	}
+	if harnessApprovalURL != "" {
+		cfg.ApprovalDisplayURL = harnessApprovalURL
 	}
 	if harnessCert != "" {
 		cfg.Auth.ClientCert = harnessCert

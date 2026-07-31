@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-07-30
-Version: v1.6.7
+Last Updated: 2026-07-31
+Version: v1.6.8
 
 This document explains how to authenticate and authorize actions in the g8e platform. The platform is built as a zero-trust execution environment where every action is verified before execution.
 
@@ -350,6 +350,7 @@ When an action requires human approval:
 - All communication authenticated via mTLS
 - No shared secrets or API keys
 - Identity proven via cryptographic signatures
+- TLS key agreement restricted to FIPS-validated curves: X25519MLKEM768 (FIPS 203 hybrid), P-384, P-256. X25519 is excluded (not SP 800-56A rev3 compliant). See [FIPS 140-3 Compliance](../reference/fips140-3.md) for details.
 
 **Fail-Closed Design:**
 - Unknown routes default to strictest auth mode

@@ -1437,14 +1437,15 @@ type twoLayerScenarioConfig struct {
 // command for a demos scenarios run. Centralising these in a struct
 // avoids positional-argument drift as flags are added across demos.
 type harnessConfig struct {
-	Container string
-	MTLSURL   string
-	PublicURL string
-	CertPath  string
-	KeyPath   string
-	CAPath    string
-	Posture   string
-	UseRun    bool // true for `docker compose run --rm`, false for `exec`
+	Container   string
+	MTLSURL     string
+	PublicURL   string
+	ApprovalURL string // host-reachable base URL for the printed human approval link; empty omits --approval-url
+	CertPath    string
+	KeyPath     string
+	CAPath      string
+	Posture     string
+	UseRun      bool // true for `docker compose run --rm`, false for `exec`
 }
 
 // defaultHarnessConfig returns the config matching the standard demo topology:
@@ -1477,6 +1478,9 @@ func harnessRun(scenario string, cfg harnessConfig) []string {
 		"--key", cfg.KeyPath,
 		"--ca", cfg.CAPath,
 	)
+	if cfg.ApprovalURL != "" {
+		cmd = append(cmd, "--approval-url", cfg.ApprovalURL)
+	}
 	cmd = append(cmd, scenario)
 	return cmd
 }

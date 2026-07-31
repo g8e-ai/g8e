@@ -21,6 +21,22 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
+// FIPSCurvePreferences returns the FIPS 140-3 compliant TLS key agreement
+// curve set used by every g8e TLS configuration. X25519 is excluded because it
+// is not SP 800-56A rev3 compliant and is omitted from Go's FIPS TLS mode.
+// X25519MLKEM768 is the FIPS 203 validated post-quantum hybrid (preferred),
+// followed by the classical ECDH curves P-384 and P-256.
+//
+// The function returns a fresh slice on each call to prevent consumers from
+// mutating a shared package-level slice.
+func FIPSCurvePreferences() []tls.CurveID {
+	return []tls.CurveID{
+		tls.X25519MLKEM768,
+		tls.CurveP384,
+		tls.CurveP256,
+	}
+}
+
 // TrustStore holds the CA trust bundle for TLS verification.
 // It replaces the package-level serverCAPEM global with an injectable type.
 type TrustStore struct {
@@ -111,13 +127,9 @@ func (tc *TLSConfig) GetTLSConfig() (*tls.Config, error) {
 	}
 
 	cfg := &tls.Config{
-		RootCAs:    rootCAs,
-		MinVersion: tls.VersionTLS13,
-		CurvePreferences: []tls.CurveID{
-			tls.X25519,
-			tls.CurveP384,
-			tls.CurveP256,
-		},
+		RootCAs:          rootCAs,
+		MinVersion:       tls.VersionTLS13,
+		CurvePreferences: FIPSCurvePreferences(),
 	}
 
 	if cert, ok := tc.clientIdentity.GetCertificate(); ok {

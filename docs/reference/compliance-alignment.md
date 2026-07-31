@@ -1,8 +1,8 @@
 # Compliance Alignment Report
 
-**Document Version:** 1.6.6  
-**Last Updated:** 2026-07-27  
-**Platform:** g8e v1.6.6  
+**Document Version:** 1.6.8  
+**Last Updated:** 2026-07-31  
+**Platform:** g8e v1.6.8  
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -277,7 +277,7 @@ NIST SP 800-53 Release 5.2.0 (August 27, 2025) adds three new controls: SA-15(13
 | **SC-10** | Network disconnect | Outbound-only operator connections |
 | **SC-11** | Trusted path | mTLS with SPIFFE identity |
 | **SC-12** | Cryptographic key establishment and management | PKI hierarchy with root/intermediate CA |
-| **SC-13** | Use of cryptography | ECDSA P-256, Ed25519, SHA-256 |
+| **SC-13** | Use of cryptography | g8e uses the Go Cryptographic Module v1.0.0 (CMVP Cert #5247, CAVP A6650) in FIPS 140-3 approved mode. See [FIPS 140-3 Compliance](./fips140-3.md) for the validated boundary, OE matrix, and build/runtime activation details. |
 | **SC-17** | Public key infrastructure certificates | Certificate issuance, revocation, CRL |
 | **SC-18** | Mobile code | Single binary, no runtime dependencies (build-time only) |
 | **SC-20** | Secure name/address resolution | g8e.local canonical alias with internal translation |

@@ -22,8 +22,13 @@ import (
 )
 
 // defaultDHSHarnessConfig returns the config matching the DHS compose topology.
+// ApprovalURL is the host-reachable HTTPS/console surface (compose maps 8450
+// -> 8443) so the human approval link printed by the harness is openable from
+// the host browser; PublicURL stays container-internal for the SSE/status dial.
 func defaultDHSHarnessConfig() harnessConfig {
-	return defaultHarnessConfig("agent-coalition")
+	cfg := defaultHarnessConfig("agent-coalition")
+	cfg.ApprovalURL = "https://localhost:8450"
+	return cfg
 }
 
 func switchDHSPosture(demoDir, posture string) error {

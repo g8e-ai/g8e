@@ -62,7 +62,7 @@ func TestDemosScenariosRunCmd(t *testing.T) {
 		cmd := demosScenariosRunCmd()
 		require.NotNil(t, cmd)
 
-		flags := []string{"config", "mtls-url", "public-url", "cert", "key", "ca", "api-key", "operator-session", "out", "verbose", "phase"}
+		flags := []string{"config", "mtls-url", "public-url", "approval-url", "cert", "key", "ca", "api-key", "operator-session", "out", "verbose", "phase"}
 
 		for _, flagName := range flags {
 			flag := cmd.Flags().Lookup(flagName)
@@ -95,6 +95,14 @@ func TestApplyAgentHarnessFlags(t *testing.T) {
 		applyAgentHarnessFlags(&cfg)
 		assert.Equal(t, "https://example.com:"+strconv.Itoa(constants.Ports.OperatorHttps), cfg.PublicBaseURL)
 		harnessPublicURL = ""
+	})
+
+	t.Run("applyAgentHarnessFlags sets approval display URL", func(t *testing.T) {
+		harnessApprovalURL = "https://localhost:8450"
+		cfg := config.Default()
+		applyAgentHarnessFlags(&cfg)
+		assert.Equal(t, "https://localhost:8450", cfg.ApprovalDisplayURL)
+		harnessApprovalURL = ""
 	})
 
 	t.Run("applyAgentHarnessFlags sets cert", func(t *testing.T) {
