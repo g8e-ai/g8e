@@ -350,6 +350,7 @@ When an action requires human approval:
 - All communication authenticated via mTLS
 - No shared secrets or API keys
 - Identity proven via cryptographic signatures
+- TLS key agreement restricted to FIPS-validated curves: X25519MLKEM768 (FIPS 203 hybrid), P-384, P-256. X25519 is excluded (not SP 800-56A rev3 compliant). See [FIPS 140-3 Compliance](../reference/fips140-3.md) for details.
 
 **Fail-Closed Design:**
 - Unknown routes default to strictest auth mode

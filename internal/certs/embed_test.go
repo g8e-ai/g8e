@@ -158,7 +158,8 @@ func TestTLSConfig_GetTLSConfig_WithValidCA(t *testing.T) {
 
 	assert.Equal(t, uint16(tls.VersionTLS13), cfg.MinVersion)
 	assert.NotNil(t, cfg.RootCAs)
-	assert.Contains(t, cfg.CurvePreferences, tls.X25519)
+	assert.NotContains(t, cfg.CurvePreferences, tls.X25519)
+	assert.Contains(t, cfg.CurvePreferences, tls.X25519MLKEM768)
 	assert.Contains(t, cfg.CurvePreferences, tls.CurveP384)
 	assert.Contains(t, cfg.CurvePreferences, tls.CurveP256)
 }
@@ -191,4 +192,18 @@ func TestTLSConfig_GetTLSConfig_WithoutClientCert(t *testing.T) {
 	cfg, err := tc.GetTLSConfig()
 	require.NoError(t, err)
 	assert.Empty(t, cfg.Certificates)
+}
+
+// TestFIPSCurvePreferences_ExcludesX25519 is the FIPS 140-3 regression guard.
+// X25519 is not SP 800-56A rev3 compliant and is excluded from Go's FIPS TLS
+// mode, so it must never appear in any g8e TLS CurvePreferences list. Every
+// g8e TLS configuration references FIPSCurvePreferences, so this single
+// assertion covers the client (embed.go), server (gateway_certs.go), CLI
+// mTLS (cli/auth/tls.go), and bootstrap transport (bootstrap.go) paths.
+func TestFIPSCurvePreferences_ExcludesX25519(t *testing.T) {
+	assert.NotContains(t, FIPSCurvePreferences, tls.X25519,
+		"tls.X25519 is excluded from Go's FIPS TLS mode and must not appear in g8e CurvePreferences")
+	assert.Contains(t, FIPSCurvePreferences, tls.X25519MLKEM768)
+	assert.Contains(t, FIPSCurvePreferences, tls.CurveP384)
+	assert.Contains(t, FIPSCurvePreferences, tls.CurveP256)
 }

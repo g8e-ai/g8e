@@ -1,0 +1,81 @@
+name: CI (FIPS 140-3)
+
+# FIPS 140-3 build & test variant.
+# Builds g8e with GOFIPS140=v1.0.0 (linking the Go Cryptographic Module,
+# CMVP Cert #5247) and runs the test suite under FIPS approved mode to confirm
+# no algorithm path breaks. Also runs the `g8e version --fips` self-check to
+# verify the binary reports FIPS mode active via the native crypto/fips140 API.
+#
+# The FIPS compliance claim is restricted to linux/amd64 (the tested OE).
+# See .local.dev/docs/plans/in-progress/fips140-3-crypto-compliance.md.
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'vendor/**'
+      - 'Makefile'
+      - 'Dockerfile.fips'
+      - '.github/workflows/build-and-test-fips.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'vendor/**'
+      - 'Makefile'
+      - 'Dockerfile.fips'
+      - '.github/workflows/build-and-test-fips.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  fips:
+    name: FIPS 140-3 Build & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.5'
+          cache: true
+          check-latest: true
+
+      - name: Build FIPS variant and run self-check
+        run: make verify-fips
+
+      - name: Unit Tests (FIPS mode)
+        env:
+          # GOFIPS140 is a build-time toolchain setting. Setting it in the env
+          # here causes `go test` to compile the test binaries with the FIPS
+          # module linked in and approved mode enabled by default — the same
+          # configuration as the shipped binary. No runtime env var is needed
+          # by the resulting test binaries.
+          GOFIPS140: v1.0.0
+        run: make test-unit
+
+      - name: Integration Tests (FIPS mode)
+        env:
+          GOFIPS140: v1.0.0
+        run: make test-integration
+
+      - name: Verify Static Linking (FIPS binary)
+        run: |
+          file bin/g8e-fips-linux-amd64 | grep -q "statically linked" || \
+            { echo "ERROR: FIPS binary is not statically linked"; file bin/g8e-fips-linux-amd64; exit 1; }
+          ldd bin/g8e-fips-linux-amd64 2>&1 | grep -q "not a dynamic executable" || \
+            { echo "ERROR: FIPS binary has dynamic dependencies"; ldd bin/g8e-fips-linux-amd64; exit 1; }

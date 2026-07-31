@@ -295,6 +295,20 @@ To rotate vault keys:
 
 ## Compliance
 
+### FIPS 140-3
+
+g8e uses the Go Cryptographic Module v1.0.0 (CMVP Cert #5247, CAVP A6650) in FIPS 140-3 approved mode. FIPS mode is activated at build time via `GOFIPS140=v1.0.0`; no runtime environment variable is required. The binary enters approved mode automatically on startup and runs integrity self-checks and known-answer tests at `init` or first use.
+
+**Validated algorithms used by g8e**: EdDSA (Ed25519) for consensus signatures and receipts, ECDSA P-256 for PKI certificate signatures, AES-256-GCM for vault encryption, HKDF-SHA256 for key derivation, HMAC-SHA256 for auditor authentication, SHA-256 for transaction hashing, TLS 1.3 key schedule, and ML-KEM (FIPS 203) for post-quantum TLS key agreement.
+
+**Excluded algorithms**: X25519 is removed from all TLS configurations (not SP 800-56A rev3 compliant). Ed25519 is excluded from TLS certificate signatures; g8e enforces ECDSA P-256 for all PKI-issued certificates and rejects Ed25519-signed certificates at load time.
+
+**Operating environment**: Debian GNU/Linux 12 on linux/amd64 (vendor-affirmed OE, CMVP Cert #5247 Table 3). The runtime image is pinned to `debian:12-slim` in `Dockerfile.fips`.
+
+**Runtime verification**: `g8e version --fips` calls `crypto/fips140.Enabled()` and `crypto/fips140.Version()` to confirm FIPS mode status.
+
+See [FIPS 140-3 Compliance](../reference/fips140-3.md) for the complete validated boundary, OE matrix, and build/runtime activation details.
+
 ### Encryption Standards
 
 - AES-256-GCM for all data encryption.

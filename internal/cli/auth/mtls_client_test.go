@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -128,6 +129,9 @@ func TestBuildMTLSClient_ValidCertsAndBundle(t *testing.T) {
 	assert.NotNil(t, tlsConfig.RootCAs)
 	assert.Equal(t, uint16(0x0304), tlsConfig.MinVersion) // tls.VersionTLS13
 	assert.Equal(t, 30*time.Second, client.Timeout)
+	assert.NotContains(t, tlsConfig.CurvePreferences, tls.X25519,
+		"CLI mTLS must not use X25519 (excluded from Go's FIPS TLS mode)")
+	assert.Contains(t, tlsConfig.CurvePreferences, tls.X25519MLKEM768)
 }
 
 func TestBuildMTLSClient_ZeroTimeoutForSSEStreaming(t *testing.T) {

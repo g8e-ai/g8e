@@ -825,6 +825,7 @@ var (
 	ErrPKILoadServiceKey         = errors.New("pki: failed to load service private key")
 	ErrPKIStoreServiceKey        = errors.New("pki: failed to store service private key")
 	ErrPKIRenewServiceCert       = errors.New("pki: failed to renew service certificate")
+	ErrPKIEd25519CertRejected    = errors.New("pki: certificate with Ed25519 signature is not permitted in TLS trust chain (FIPS 140-3 exclusion)")
 
 	// Registration service errors
 	ErrRegistrationUserIDRequired                  = errors.New("user_id is required")

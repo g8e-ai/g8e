@@ -1,0 +1,113 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# =============================================================================
+# Multi-stage Dockerfile for g8e Gateway — FIPS 140-3 variant
+#
+# This variant links the Go Cryptographic Module v1.0.0 (CMVP Cert #5247,
+# CAVP A6650) into the binary and enables FIPS 140-3 approved mode by default.
+# GOFIPS140 is a BUILD-TIME setting consumed by the go toolchain; the resulting
+# binary enters approved mode on startup and runs its integrity/CAST self-tests
+# at init — NO runtime env var is required (and none is set in the runtime
+# stage). See https://go.dev/doc/security/fips140.
+#
+# The FIPS 140-3 compliance claim is restricted to linux/amd64, which is the
+# tested operating environment for CMVP Cert #5247. Do not build this variant
+# for other architectures under a FIPS compliance claim.
+#
+# Verify the deployed binary with:  g8e version --fips
+# =============================================================================
+
+# Stage 1: Build (FIPS module linked in here)
+FROM golang:1.26.5 AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git make protobuf-compiler curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /build
+
+# Copy go mod files and vendored dependencies for air-gapped builds
+COPY go.mod go.sum vendor/ ./
+
+# Use vendored modules — no network access required
+ENV GOFLAGS=-mod=vendor
+
+# Copy entire source code
+COPY . .
+
+# Build the binary with the Go Cryptographic Module v1.0.0 linked in and FIPS
+# 140-3 approved mode enabled by default. GOFIPS140 is set ONLY in the builder
+# stage — it is a build-time toolchain setting, not a runtime control. The
+# binary enters approved mode on startup without any runtime env var.
+# CGO_ENABLED=0 is intentional: the Go FIPS module is pure Go and does not
+# require CGO.
+ENV GOFIPS140=v1.0.0
+
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -mod=vendor \
+    -ldflags "-s -w -X main.version=$(cat VERSION) -X main.buildID=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=linux_amd64" \
+    -o /build/g8e \
+    ./cmd/g8e
+
+# Verify the binary built and that FIPS 140-3 approved mode is active via the
+# native crypto/fips140 module API. This is the same self-check operators run
+# in production (`g8e version --fips`); it inspects module state, not env vars.
+RUN /build/g8e version --fips
+
+# =============================================================================
+# Stage 2: Runtime
+# The compiled binary is statically linked (CGO_ENABLED=0) and has zero runtime
+# dependencies. The packages below are container conveniences only (health-check
+# curl, CA certs for outbound TLS) — they are NOT required by the binary itself.
+# GOFIPS140 is deliberately NOT set here: the binary already entered approved
+# mode at build time and needs no runtime env var.
+#
+# OE MATRIX (CMVP Cert #5247, Go Cryptographic Module v1.0.0):
+# - Tested OE: Alpine Linux 3.20 on Intel x86-64 (Dell PowerEdge R660, Xeon
+#   Silver 4410Y), Podman 4 on RHEL (Table 2).
+# - Vendor-Affirmed OEs (Table 3): Debian GNU/Linux 12, Ubuntu 22.04, Ubuntu
+#   24.04, and others.
+# - Vendor-Affirmed platforms (Table 4): Linux 3.10+ on x86-64 and ARMv7/8/9.
+#
+# This image is pinned to Debian GNU/Linux 12 (Bookworm), a vendor-affirmed OE.
+# The slim variant reduces attack surface. Do not change to a different OS or
+# version without confirming it is a tested or vendor-affirmed OE for the
+# applicable CMVP certificate.
+FROM debian:12-slim
+
+# Install container utilities (not binary dependencies)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl wget ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the binary from builder
+COPY --from=builder /build/g8e /g8e
+
+# Copy protocol constants (required for doctrine mode)
+COPY --from=builder /build/protocol/constants /protocol/constants
+
+# Expose default ports (can be overridden at runtime)
+EXPOSE 8080 8443
+
+# Health check - use HTTP endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/api/v1/health || exit 1
+
+# Set entrypoint
+# The same binary can run in gateway mode (doctrine) or operator mode (standard)
+# Mode is selected via command-line flags in docker-compose.yml
+ENTRYPOINT ["/g8e"]

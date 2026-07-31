@@ -106,6 +106,28 @@ g8e audit receipts           # inspect the audit trail / ledger
 g8e demos clean fedramp
 ```
 
+## FIPS 140-3 mode
+
+A FIPS-compliant compose variant is available at `compose.fips.yml`. It builds all g8e containers from `Dockerfile.fips` using the Go Cryptographic Module v1.0.0 (CMVP Cert #5247) with `GOFIPS140=v1.0.0` set at build time. The runtime image is `debian:12-slim` (vendor-affirmed OE).
+
+```bash
+# start the FIPS-mode demo
+docker compose -f compose.fips.yml up -d
+
+# verify FIPS mode is active in the gateway container
+docker exec g8e-fedramp-fips-gateway /g8e version --fips
+
+# run scenarios against the FIPS-mode gateway (ports 8089/8452)
+g8e demos run fedramp
+
+# teardown
+docker compose -f compose.fips.yml down -v
+```
+
+The FIPS variant uses different host ports (8089/8452) and separate named volumes to avoid conflicts with the standard demo. All scenarios run identically under FIPS mode; the governance pipeline, PKI, and TLS stack use only FIPS-validated algorithms.
+
+See [FIPS 140-3 Compliance](../../docs/reference/fips140-3.md) for the validated boundary, OE matrix, and build/runtime activation details.
+
 ## Scenarios
 
 All scenarios run via `demos scenarios run`, a real g8e binary that submits genuine `GovernanceEnvelope`s over mTLS to the gateway. Scenarios use `MCPToolsCall` (Path A): the harness calls the MCP `tools/call` endpoint, the gateway builds the `GovernanceEnvelope` internally, runs L2 consensus deliberation via `LocalDeliberator`, and suspends transactions requiring L3 notary approval. For notary scenarios, the harness waits for human browser approval via `WaitForHumanApproval`, which subscribes to the gateway's SSE stream for `approval.completed` events and prints the approval URL for the human to complete the WebAuthn passkey ceremony in their browser. The gateway performs full real WebAuthn verification — no mock L3 bypass exists. The operator executes admitted commands via `run_shell_command`, driving the `cloudsvc` actuator through the `cloudop` wrapper.
