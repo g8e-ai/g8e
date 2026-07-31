@@ -689,6 +689,18 @@ func TestDefaultHarnessConfig(t *testing.T) {
 		cfg := defaultHarnessConfig("agent-sigint")
 		assert.Equal(t, "agent-sigint", cfg.Container)
 	})
+
+	t.Run("dhs harness config sets host-reachable approval URL", func(t *testing.T) {
+		cfg := defaultDHSHarnessConfig()
+		assert.Equal(t, "https://localhost:8450", cfg.ApprovalURL)
+		assert.Equal(t, "agent-coalition", cfg.Container)
+	})
+
+	t.Run("fedramp harness config sets host-reachable approval URL", func(t *testing.T) {
+		cfg := defaultFedRAMPHarnessConfig()
+		assert.Equal(t, "https://localhost:8451", cfg.ApprovalURL)
+		assert.Equal(t, "agent-runtime", cfg.Container)
+	})
 }
 
 func TestHarnessRun(t *testing.T) {
@@ -727,6 +739,21 @@ func TestHarnessRun(t *testing.T) {
 		cmd := harnessRun("test-scenario", cfg)
 		assert.NotContains(t, cmd, "--ensemble")
 		assert.NotContains(t, cmd, "--l3-mode")
+	})
+
+	t.Run("appends --approval-url when set", func(t *testing.T) {
+		cfg := defaultHarnessConfig("agent-coalition")
+		cfg.ApprovalURL = "https://localhost:8450"
+		cmd := harnessRun("dhs-release", cfg)
+		assert.Contains(t, cmd, "--approval-url")
+		assert.Contains(t, cmd, "https://localhost:8450")
+		assert.Equal(t, "dhs-release", cmd[len(cmd)-1])
+	})
+
+	t.Run("omits --approval-url when empty", func(t *testing.T) {
+		cfg := defaultHarnessConfig("agent-runtime")
+		cmd := harnessRun("dhs-ingest", cfg)
+		assert.NotContains(t, cmd, "--approval-url")
 	})
 
 	t.Run("scenario is always the last argument", func(t *testing.T) {

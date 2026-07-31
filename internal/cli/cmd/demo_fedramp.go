@@ -21,9 +21,15 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// defaultFedRAMPHarnessConfig returns the config matching the FedRAMP compose topology.
+// defaultFedRAMPHarnessConfig returns the config matching the FedRAMP compose
+// topology. ApprovalURL is the host-reachable HTTPS/console surface (compose
+// maps 8451 -> 8443) so the human approval link printed by the harness is
+// openable from the host browser; PublicURL stays container-internal for the
+// SSE/status dial.
 func defaultFedRAMPHarnessConfig() harnessConfig {
-	return defaultHarnessConfig("agent-runtime")
+	cfg := defaultHarnessConfig("agent-runtime")
+	cfg.ApprovalURL = "https://localhost:8451"
+	return cfg
 }
 
 func switchFedRAMPPosture(demoDir, posture string) error {
