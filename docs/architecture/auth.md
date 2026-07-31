@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-07-30
-Version: v1.6.7
+Last Updated: 2026-07-31
+Version: v1.6.8
 
 This document explains how to authenticate and authorize actions in the g8e platform. The platform is built as a zero-trust execution environment where every action is verified before execution.
 
