@@ -14,10 +14,9 @@
 package cmd
 
 import (
+	"crypto/fips140"
 	"fmt"
 	"io"
-
-	"crypto/fips140"
 
 	"github.com/spf13/cobra"
 

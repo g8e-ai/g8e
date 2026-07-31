@@ -50,7 +50,7 @@ func BuildMTLSClient(fileSvc fs.RuntimeFileService, cfg *config.Config, timeout 
 				Certificates:     []tls.Certificate{cliCert},
 				RootCAs:          caPool,
 				MinVersion:       tls.VersionTLS13,
-				CurvePreferences: certs.FIPSCurvePreferences,
+				CurvePreferences: certs.FIPSCurvePreferences(),
 			},
 		},
 		Timeout: timeout,

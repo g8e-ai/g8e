@@ -184,7 +184,7 @@ func (pki *PKIAuthority) TLSConfig() *tls.Config {
 		ClientAuth:       tls.RequireAndVerifyClientCert,
 		ClientCAs:        pool,
 		MinVersion:       tls.VersionTLS13,
-		CurvePreferences: certs.FIPSCurvePreferences,
+		CurvePreferences: certs.FIPSCurvePreferences(),
 	}
 }
 

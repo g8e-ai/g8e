@@ -201,9 +201,10 @@ func TestTLSConfig_GetTLSConfig_WithoutClientCert(t *testing.T) {
 // assertion covers the client (embed.go), server (gateway_certs.go), CLI
 // mTLS (cli/auth/tls.go), and bootstrap transport (bootstrap.go) paths.
 func TestFIPSCurvePreferences_ExcludesX25519(t *testing.T) {
-	assert.NotContains(t, FIPSCurvePreferences, tls.X25519,
+	curves := FIPSCurvePreferences()
+	assert.NotContains(t, curves, tls.X25519,
 		"tls.X25519 is excluded from Go's FIPS TLS mode and must not appear in g8e CurvePreferences")
-	assert.Contains(t, FIPSCurvePreferences, tls.X25519MLKEM768)
-	assert.Contains(t, FIPSCurvePreferences, tls.CurveP384)
-	assert.Contains(t, FIPSCurvePreferences, tls.CurveP256)
+	assert.Contains(t, curves, tls.X25519MLKEM768)
+	assert.Contains(t, curves, tls.CurveP384)
+	assert.Contains(t, curves, tls.CurveP256)
 }
