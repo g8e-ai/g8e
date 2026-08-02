@@ -1064,4 +1064,11 @@ var (
 	ErrKSIInsufficientMethods = errors.New("KSI has insufficient automated methods for target class")
 	ErrKSICatalogInvalid      = errors.New("KSI catalog invalid")
 	ErrOverlayNotFound        = errors.New("overlay not found")
+	ErrOverlayCatalogInvalid  = errors.New("overlay catalog invalid")
+
+	// Compliance KSI history errors
+	ErrKSIHistoryWriteFailed = errors.New("KSI history: write failed")
+	ErrKSIHistoryReadFailed  = errors.New("KSI history: read failed")
+	ErrKSIHistoryParseFailed = errors.New("KSI history: parse failed")
+	ErrKSIHistoryEmpty       = errors.New("KSI history: no snapshots found")
 )

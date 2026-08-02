@@ -1,4 +1,5 @@
 {
+  "_note": "Category-level grouping for the FedRAMP demo. The typed per-KSI catalog at docs/reference/ksi-catalog.json is the source of truth for individual KSI IDs, automated methods, and evidence anchors. This file provides demo grouping only.",
   "ksi_categories": [
     {
       "id": "AC",

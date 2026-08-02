@@ -1,7 +1,7 @@
 # Compliance Alignment Report
 
-**Document Version:** 1.6.8  
-**Last Updated:** 2026-07-31  
+**Document Version:** 1.7.0  
+**Last Updated:** 2026-08-02  
 **Platform:** g8e v1.6.8  
 **Maintained by:** Lateralus Labs, LLC.
 
@@ -19,6 +19,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 - **NIST SP 800-53 Rev 5.2.0:** Moderate-to-High baseline coverage
 - **NIST SP 800-63B-4:** AAL2/AAL3 alignment with phishing-resistant authenticators
 - **PCI DSS v4.0.1:** Relevant controls for cardholder data environments
+- **FedRAMP 20x (CR26):** Machine-readable Key Security Indicators (KSIs) with OSCAL evidence export and COSAiS overlay alignment
 - **NSA Zero Trust Implementation Guidelines (ZIG):** Strong alignment with Discovery, Phase One, and Phase Two activities
 
 ---
@@ -262,7 +263,7 @@ NIST SP 800-53 Release 5.2.0 (August 27, 2025) adds three new controls: SA-15(13
 | **AU-7** | Audit reduction and report generation | Truncation for large outputs |
 | **AU-8** | Time stamps | All events include UTC timestamps |
 | **AU-9** | Protection of audit information | Mandatory encryption at rest |
-| **AU-10** | Non-repudiation | Signed ActionReceipts with Ed25519 |
+| **AU-10** | Non-repudiation | Signed ActionReceipts with Ed25519; evidence anchored to KSI-MLA-07 via the typed KSI model (see [FedRAMP 20x Alignment](#10-fedramp-20x-cr26-alignment)) |
 | **AU-11** | Audit record retention | Configurable retention policies |
 | **AU-12** | Audit generation | All mutations generate audit records |
 
@@ -515,7 +516,79 @@ NIST SP 800-63B-4 (July 2025) supersedes SP 800-63B (2020) and defines technical
 
 ---
 
-## 10. Gap Analysis and Roadmap
+## 10. FedRAMP 20x (CR26) Alignment
+
+FedRAMP's Consolidated Rules for 2026 (CR26) introduce the 20x path, which replaces static System Security Plans with binary-resolution, machine-readable Key Security Indicators (KSIs) that regenerate on demand. g8e produces the raw evidence 20x consumes: signed `ActionReceipts` (Ed25519), a hash-chained git ledger, a SQLite audit vault, and the LFAA retrieval surface. The compliance package (`internal/services/compliance/`) provides typed KSI models, a binary KSI evaluator, OSCAL evidence export, historical snapshot retention, and COSAiS overlay ingestion.
+
+### Certification Classes
+
+CR26 renames legacy impact levels into Certification Classes A through D for the 20x path:
+
+| Class | Approximate legacy level | 20x status | Automation expectation per KSI |
+|-------|--------------------------|-----------|--------------------------------|
+| **Class A** | New, mature program entry | Finalized | MAY automate |
+| **Class B** | Low | Finalized | SHOULD automate, at least 1 automated method |
+| **Class C** | Moderate | Finalized (Phase 2 pilot) | MUST automate, at least 2 automated methods plus historical metrics |
+| **Class D** | High | No 20x path (Phase 4, FY27 est.) | MUST automate, at least 4 automated methods (future) |
+
+Class C is the realistic 20x target for g8e-backed offerings. g8e targets Class C as the design point and treats Class D as out-of-scope until FedRAMP opens Phase 4.
+
+### Key Security Indicators (KSIs)
+
+The typed KSI catalog (`docs/reference/ksi-catalog.json`) defines 31 KSIs across 10 categories (CED, CMT, CNA, IAM, INR, MLA, PIY, RCP, SVC, TPR), seeded from the CR26 reference and cross-checked against RFC-0006 and RFC-0014. Each KSI binds to one or more automated methods that derive binary status (satisfied, not_satisfied, not_applicable) from live g8e state. The KSI evaluator (`internal/services/compliance/ksi_evaluator.go`) enforces minimum method counts per certification class and fails closed if insufficient.
+
+Machine-based resources validate at least every 7 days; non-machine resources at least every 3 months (PVA standard, RFC-0017). The evaluator checks staleness and fails closed for Class C if a KSI exceeds its validation cycle.
+
+### OSCAL Evidence Export
+
+The OSCAL exporter (`internal/services/compliance/oscal.go`) generates machine-readable evidence packages:
+
+- **Component Definition**: g8e platform component with control implementations grouped by KSI category.
+- **Assessment Results**: Per-KSI observations and findings with evidence anchors linking to receipt IDs, ledger commit hashes, and LFAA execution IDs.
+
+CLI commands:
+- `g8e compliance export --format oscal --class C` generates OSCAL JSON artifacts.
+- `g8e compliance ksi --class C` evaluates KSIs and prints the result set as JSON.
+
+### Historical Metrics Retention
+
+Class C requires historical metrics including KSI status over time. The KSI history store (`internal/services/compliance/ksi_history.go`) persists `KSIResultSet` snapshots to `.g8e/data/compliance/ksi-history/` via `RuntimeFileService` on each evaluation cycle. The `g8e compliance ksi-history --ksi <id>` CLI command reads the chronological series for a specific KSI. Snapshots are pruned after a 90-day retention period.
+
+### COSAiS Overlay Alignment
+
+NIST's Control Overlays for Securing AI Systems (COSAiS) provide AI-specific control overlays at concept-paper stage. The overlay loader (`internal/services/compliance/overlay_loader.go`) ingests overlay JSON from a configurable directory (`--overlay-dir`), validates structure, detects duplicate IDs, and checks that KSI overlay references resolve to catalog entries. A placeholder catalog (`docs/reference/cosais-overlays.json`) seeds 5 overlay entries from the COSAiS concept paper use cases, all with `status: draft` until NIST finalizes.
+
+### Doctrine and Detector KSI Linkage
+
+L1 doctrine entries carry typed `ksi_ids`, `control_ids`, and `overlay_ids` fields that project into emitted `ThreatSignal` values. This allows each blocked or detected event to carry its KSI and control projection, providing traceability from governance enforcement to compliance evidence. The FedRAMP demo doctrine (`demos/fedramp/doctrine/fedramp_doctrine.json`) maps all 5 detectors to specific KSI IDs and NIST 800-53 controls.
+
+### FedRAMP Demo KSI Mapping
+
+The FedRAMP sovereign cloud governance demo maps doctrine detectors to typed KSI IDs:
+
+| Doctrine detector | KSI IDs | Controls |
+|-------------------|---------|----------|
+| `fedramp-cr26-destruction` | KSI-MLA-07 | AU-2, AU-6 |
+| `fedramp-ac2-unauthorized-destroy` | KSI-IAM-07 | AC-2 |
+| `fedramp-si4-privilege-escalation` | KSI-IAM-05 | SI-4 |
+| `fedramp-sc8-cross-domain-transfer` | KSI-SVC-03, KSI-CNA-01 | SC-8 |
+| `fedramp-cm7-unauthorized-config` | KSI-CMT-01, KSI-SVC-04 | CM-7 |
+
+See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentation.
+
+### References
+
+- [FedRAMP 20x](https://www.fedramp.gov/20x/)
+- [FedRAMP CR26 Certification](https://preview.fedramp.gov/2026/providers/20x/rules/fedramp-certification/)
+- [FedRAMP 20x Key Security Indicators](https://preview.fedramp.gov/2026/reference/20x/c/key-security-indicators/)
+- [RFC-0006 (Phase One KSIs)](https://www.fedramp.gov/rfcs/0006/)
+- [RFC-0014 (Phase Two KSIs)](https://www.fedramp.gov/rfcs/0014/)
+- [RFC-0017 (Persistent Validation and Assessment)](https://www.fedramp.gov/rfcs/0017/)
+- [NIST COSAiS Project](https://csrc.nist.gov/projects/cosais/)
+
+---
+
+## 11. Gap Analysis and Roadmap
 
 ### Current Strengths
 
@@ -573,6 +646,7 @@ NIST SP 800-63B-4 (July 2025) supersedes SP 800-63B (2020) and defines technical
 - **Gateway construction refactor** to public `InitHTTPHandler()` two-phase pattern, eliminating late-bound dependency injection
 - **Dead code removal** (107 unreachable functions removed from production and test code)
 - **FedRAMP sovereign cloud governance demo** demonstrating compliance posture for federal workloads
+- **FedRAMP 20x (CR26) alignment** with typed KSI model, OSCAL evidence export, historical metrics retention, and COSAiS overlay ingestion for Class C certification
 
 ### Planned Enhancements
 
@@ -594,7 +668,7 @@ NIST SP 800-63B-4 (July 2025) supersedes SP 800-63B (2020) and defines technical
 
 ---
 
-## 11. Evidence Repository
+## 12. Evidence Repository
 
 ### Documentation
 
@@ -627,6 +701,12 @@ NIST SP 800-63B-4 (July 2025) supersedes SP 800-63B (2020) and defines technical
 | **Privileged Route Registry** | `internal/services/gateway/gateway_auth.go` | App certificate governance envelope blocking |
 | **L2 Consensus Policy Store** | `internal/services/governance/l2_consensus.go` | L2 consensus interface and policy store decoupling |
 | **MCP Gateway ThreatScanner** | `internal/services/mcp/gateway.go` | Threat scanning delegation and audit event recording |
+| **KSI Catalog** | `docs/reference/ksi-catalog.json` | Typed per-KSI model with 31 KSIs across 10 categories |
+| **KSI Evaluator** | `internal/services/compliance/ksi_evaluator.go` | Binary KSI status derivation from live audit state |
+| **OSCAL Exporter** | `internal/services/compliance/oscal.go` | OSCAL component-definition and assessment-results generation |
+| **KSI History Store** | `internal/services/compliance/ksi_history.go` | KSI snapshot persistence and historical metrics retention |
+| **COSAiS Overlay Loader** | `internal/services/compliance/overlay_loader.go` | AI control overlay ingestion and KSI reference validation |
+| **Compliance CLI** | `internal/cli/cmd/compliance.go` | `compliance export`, `ksi`, `ksi-history`, and `overlay` subcommands |
 | **Workload Identity** | `protocol/workload_identity.go` | SPIFFE identity specification |
 
 ### Test Evidence
@@ -640,10 +720,11 @@ NIST SP 800-63B-4 (July 2025) supersedes SP 800-63B (2020) and defines technical
 | **L3 Approval Pipeline Tests** | `internal/services/governance/l3_approval_pipeline_integration_test.go` | Full CLI to browser to approval pipeline |
 | **Reporting Verification Tests** | `internal/services/reporting/verification_test.go` | Commitment chain, merkle root, receipt cross-link |
 | **Integration Tests** | `test/*_test.go` | End-to-end security flows |
+| **Compliance Tests** | `internal/services/compliance/*_test.go` | KSI model, evaluator, OSCAL exporter, history store, overlay loader (89.4% coverage) |
 
 ---
 
-## 12. Contact and Support
+## 13. Contact and Support
 
 ### Security Contact
 
@@ -664,7 +745,7 @@ For specific compliance questions or audit support, contact:
 
 ---
 
-## 13. Document Control
+## 14. Document Control
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
@@ -679,7 +760,8 @@ For specific compliance questions or audit support, contact:
 | 1.5.0 | 2026-07-13 | Lateralus Labs | Updated platform version to v1.5.0; added unified Go module, Cosign/sigstore artifact signing, Gitleaks secret scanning, Go-licenses compliance, cross-OS CI matrix, Python protocol conformance suite (151 tests), Go performance benchmarks, and smoke test scripts to current strengths |
 | 1.5.1 | 2026-07-14 | Lateralus Labs | Updated platform version to v1.5.1; added NIST SP 800-63B-4 alignment section; updated NIST SP 800-53 to Rev 5.2.0 with new controls SA-15(13), SA-24, SI-02(07); updated PCI DSS to v4.0.1; added ISO 27001 Amendment 1:2024 reference; corrected ZIG pillars to match DoW seven-pillar framework; added NIST SP 800-207A reference; updated DoD to DoW naming; added RuntimeFileService to current strengths; verified all evidence paths against live codebase |
 | 1.5.8 | 2026-07-19 | Lateralus Labs | Updated platform version to v1.5.8; added interactive gateway onboarding wizard, Anduril Lattice gRPC adapter, MCP tool interception verification, MCP gateway output scrubbing, agent support consolidation, governance interface extraction, and protocol wire-format documentation to current strengths; corrected Python protocol test suite (151 tests) and conformance suite (330 tests) counts; updated test coverage to 75.9%; added receipt signature verification known limitation; verified all evidence paths against live codebase |
-| 1.6.6 | 2026-07-27 | Lateralus Labs | Updated platform version to v1.6.6; added cross-language governance hash parity, enrollment token TOCTOU fix, SSE resilience improvements, governance JSON schema, gateway HTTP handler decomposition, CanonicalDBService Stores struct extraction, L2 consensus interface decoupling, AuthController decomposition, PasskeyOrchestrator extraction, L1 doctrine threat detector expansion, MCP gateway ThreatScanner interface, L5 Actuator decomposition with fail-closed rehydration, MCP gateway AuditEventRecorder interface, error sentinel migration, ScrubbingService constructor fail-closed, "Tribunal" to "Consensus" rename, DBController split, L2 consensus logic extraction, configurable doctrine directory, gateway construction refactor to InitHTTPHandler(), dead code removal (107 functions), and FedRAMP sovereign cloud governance demo to current strengths; updated Python protocol conformance suite count from 330 to 420; added encryption, consensus, and storage architecture docs to evidence repository; added L2 Consensus Policy Store and MCP Gateway ThreatScanner to code evidence; verified all evidence paths against live codebase |
+| 1.6.8 | 2026-07-31 | Lateralus Labs | Updated platform version to v1.6.6; added cross-language governance hash parity, enrollment token TOCTOU fix, SSE resilience improvements, governance JSON schema, gateway HTTP handler decomposition, CanonicalDBService Stores struct extraction, L2 consensus interface decoupling, AuthController decomposition, PasskeyOrchestrator extraction, L1 doctrine threat detector expansion, MCP gateway ThreatScanner interface, L5 Actuator decomposition with fail-closed rehydration, MCP gateway AuditEventRecorder interface, error sentinel migration, ScrubbingService constructor fail-closed, "Tribunal" to "Consensus" rename, DBController split, L2 consensus logic extraction, configurable doctrine directory, gateway construction refactor to InitHTTPHandler(), dead code removal (107 functions), and FedRAMP sovereign cloud governance demo to current strengths; updated Python protocol conformance suite count from 330 to 420; added encryption, consensus, and storage architecture docs to evidence repository; added L2 Consensus Policy Store and MCP Gateway ThreatScanner to code evidence; verified all evidence paths against live codebase |
+| 1.7.0 | 2026-08-02 | Lateralus Labs | Added FedRAMP 20x (CR26) alignment section with Certification Classes A-D, typed KSI model (31 KSIs), OSCAL evidence export, historical metrics retention, COSAiS overlay alignment, and doctrine KSI linkage; updated AU-10 non-repudiation claim to reference KSI-MLA-07; added compliance package code evidence and test evidence entries |
 
 ---
 
@@ -708,6 +790,11 @@ For specific compliance questions or audit support, contact:
 - **DoW:** Department of War (formerly Department of Defense)
 - **ZIG:** Zero Trust Implementation Guidelines
 - **AAL:** Authentication Assurance Level
+- **KSI:** Key Security Indicator (FedRAMP 20x binary-resolution compliance metric)
+- **OSCAL:** Open Security Controls Assessment Language (NIST machine-readable compliance format)
+- **COSAiS:** Control Overlays for Securing AI Systems (NIST AI-specific control overlays)
+- **CR26:** FedRAMP Consolidated Rules for 2026
+- **20x:** FedRAMP 20x path (KSI-based, machine-readable compliance assessment)
 
 ---
 

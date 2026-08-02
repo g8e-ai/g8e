@@ -491,11 +491,14 @@ const (
 
 // Compliance constants for KSI catalog, OSCAL output, and KSI history snapshots.
 const (
-	ComplianceDirname            = "compliance"
-	KSICatalogFilename           = "ksi-catalog.json"
-	COSAiSOverlaysFilename       = "cosais-overlays.json"
+	ComplianceDirname              = "compliance"
+	KSICatalogFilename             = "ksi-catalog.json"
+	COSAiSOverlaysFilename         = "cosais-overlays.json"
 	OSCALAssessmentResultsFilename = "assessment-results.json"
-	OSCALComponentDefFilename   = "component-definition.json"
-	KSIHistoryDirname            = "ksi-history"
-	DefaultKSICatalogPath        = DocsDirname + "/reference/" + KSICatalogFilename
+	OSCALComponentDefFilename      = "component-definition.json"
+	KSIHistoryDirname              = "ksi-history"
+	KSIHistoryFilenamePrefix       = "ksi-result-"
+	DefaultKSICatalogPath          = DocsDirname + "/reference/" + KSICatalogFilename
+	DefaultOverlayDirPath          = DocsDirname + "/reference"
+	KSIHistoryRetentionDays        = 90
 )

@@ -2,7 +2,7 @@
 
 This demo shows how **g8e** provides governed, auditable cloud resource operations for a FedRAMP-authorized cloud service provider. Every provision, configure, destroy, and revert operation passes through the full 5-layer governance gauntlet before touching cloud infrastructure.
 
-It maps to FedRAMP CR26 Key Security Indicators (KSI) for access control (AC), audit and accountability (AU), configuration management (CM), system and communications protection (SC), system and information integrity (SI), and critical requirements (CR).
+It maps to FedRAMP CR26 Key Security Indicators (KSI) for access control (AC), audit and accountability (AU), configuration management (CM), system and communications protection (SC), system and information integrity (SI), and critical requirements (CR). Doctrine detectors carry typed KSI IDs from the CR26 per-KSI catalog (`docs/reference/ksi-catalog.json`), providing traceability from governance enforcement to compliance evidence. The demo emits a KSI result artifact via `g8e compliance ksi --class C` and persists snapshots via `g8e compliance ksi-history`.
 
 ## The teaming model
 
@@ -32,14 +32,16 @@ The cloud resources are **synthetic**; the point is to demonstrate how g8e gover
 
 ## Coverage against FedRAMP CR26 KSI categories
 
-| KSI category | Title | Demonstrated by |
+| KSI category | KSI IDs | Demonstrated by |
 |---|---|---|
-| AC | Access Control | Scenario 1 (governed provisioning), Scenario 2 (unauthorized destruction blocked), Scenario 3 (destruction requires authorizing official) |
-| AU | Audit and Accountability | Scenario 2 (audit trail destruction blocked), Scenario 5 (audit vault wipe blocked), every scenario (signed receipts to hash-chained ledger) |
-| CM | Configuration Management | Scenario 1 (governed provisioning), Scenario 4 (governed configuration revert) |
-| SC | System and Communications Protection | Scenario 2 (cross-domain destruction blocked), mTLS identity required for all submissions |
-| SI | System and Information Integrity | Scenario 3 (privilege escalation detection via notary gating), integrity monitoring via hash-chained ledger |
-| CR | Critical Requirements | CR-26 audit trail integrity, tamper-evident ledger across all scenarios |
+| AC | KSI-IAM-05, KSI-IAM-07 | Scenario 1 (governed provisioning), Scenario 2 (unauthorized destruction blocked), Scenario 3 (destruction requires authorizing official) |
+| AU | KSI-MLA-07 | Scenario 2 (audit trail destruction blocked), Scenario 5 (audit vault wipe blocked), every scenario (signed receipts to hash-chained ledger) |
+| CM | KSI-CMT-01, KSI-SVC-04 | Scenario 1 (governed provisioning), Scenario 4 (governed configuration revert) |
+| SC | KSI-SVC-03, KSI-CNA-01 | Scenario 2 (cross-domain destruction blocked), mTLS identity required for all submissions |
+| SI | KSI-IAM-05 | Scenario 3 (privilege escalation detection via notary gating), integrity monitoring via hash-chained ledger |
+| CR | KSI-MLA-07 | CR-26 audit trail integrity, tamper-evident ledger across all scenarios |
+
+The category-level grouping in `target-data/ksi_categories.json` coexists with the typed per-KSI catalog at `docs/reference/ksi-catalog.json`. The category file provides demo grouping; the typed catalog is the source of truth for individual KSI IDs, automated methods, and evidence anchors.
 
 ## Network topology
 
@@ -150,6 +152,8 @@ All scenarios run via `demos scenarios run`, a real g8e binary that submits genu
 ## Evidence export
 
 After all scenarios, `g8e audit export` produces a single evidence bundle with all receipts. The bundle is tagged to CR26 KSI categories from `ksi_categories.json`. `g8e audit receipts` shows the full hash-chained ledger. Tampering with any record in a copy causes chain verification to fail.
+
+The demo also emits a machine-readable KSI result artifact via `g8e compliance ksi --class C`, which evaluates KSIs against the live audit state and produces a binary result set. Snapshots are persisted to `.g8e/data/compliance/ksi-history/` via `g8e compliance ksi-history` for historical metrics retention. OSCAL `component-definition` and `assessment-results` artifacts are generated via `g8e compliance export --format oscal --class C`.
 
 ## License
 

@@ -487,6 +487,30 @@ func TestAgentRunCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	assert.ErrorIs(t, err, errFactory)
 }
 
+// --- Compliance commands (session 19) ---
+
+func TestComplianceKSIHistoryCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	cmd := complianceKSIHistoryCmdWithConfig(failingFileSvcFactory(errFactory))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestComplianceOverlayCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	cmd := complianceOverlayCmdWithConfig(failingFileSvcFactory(errFactory))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
 // panickingEnrollFunc returns an enrollFunc that panics if called.
 func panickingEnrollFunc() enrollFunc {
 	return func(*config.Config, string, string, string, string) (*auth.RegistrationResponse, error) {
