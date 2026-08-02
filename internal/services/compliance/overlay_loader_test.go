@@ -80,7 +80,7 @@ func TestLoadOverlayCatalog_Success(t *testing.T) {
 func TestLoadOverlayCatalog_FileNotFound(t *testing.T) {
 	_, err := LoadOverlayCatalog("/nonexistent/path/overlays.json")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "read overlay catalog")
+	assert.ErrorIs(t, err, constants.ErrOverlayReadFailed)
 }
 
 // TestLoadOverlayCatalog_InvalidJSON returns an error for malformed JSON.
@@ -91,7 +91,7 @@ func TestLoadOverlayCatalog_InvalidJSON(t *testing.T) {
 
 	_, err := LoadOverlayCatalog(path)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "parse overlay catalog")
+	assert.ErrorIs(t, err, constants.ErrOverlayParseFailed)
 }
 
 // TestOverlayCatalog_Validate_EmptyVersion returns an error for empty version.
@@ -215,7 +215,7 @@ func TestLoadOverlaysFromDir_EmptyPath(t *testing.T) {
 func TestLoadOverlaysFromDir_NonexistentDir(t *testing.T) {
 	_, err := LoadOverlaysFromDir("/nonexistent/overlay/dir")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "read overlay dir")
+	assert.ErrorIs(t, err, constants.ErrOverlayReadFailed)
 }
 
 // TestLoadOverlaysFromDir_SingleFile loads one overlay JSON file.
@@ -302,7 +302,7 @@ func TestLoadOverlaysFromDir_InvalidFile(t *testing.T) {
 
 	_, err := LoadOverlaysFromDir(dir)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "parse overlay file")
+	assert.ErrorIs(t, err, constants.ErrOverlayParseFailed)
 }
 
 // TestValidateOverlayRefs_AllPresent returns no dangling refs when all overlay

@@ -273,6 +273,46 @@ func TestKSIHistoryStore_PruneOlderThan_ZeroRetention(t *testing.T) {
 	assert.Len(t, snapshots, 1)
 }
 
+// TestKSIHistoryStore_ListSnapshots_ReadDirError verifies that non-ErrNotFound
+// ReadDir errors are wrapped with ErrKSIHistoryReadFailed instead of being
+// silently swallowed.
+func TestKSIHistoryStore_ListSnapshots_ReadDirError(t *testing.T) {
+	fileSvc := setupHistoryTestFS(t)
+	ctx := context.Background()
+	historyDir := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.KSIHistoryDirname)
+	store := NewKSIHistoryStore(fileSvc, historyDir)
+
+	// Create a regular file at the history dir path so ReadDir fails with
+	// ENOTDIR (wrapped as ErrDirectoryRead, not ErrNotFound).
+	absPath := fileSvc.Resolve(historyDir)
+	require.NoError(t, os.MkdirAll(filepath.Dir(absPath), constants.PermDirStandard))
+	require.NoError(t, os.WriteFile(absPath, []byte("not a directory"), constants.PermFilePublic))
+
+	_, err := store.ListSnapshots(ctx)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrKSIHistoryReadFailed)
+}
+
+// TestKSIHistoryStore_PruneOlderThan_ReadDirError verifies that non-ErrNotFound
+// ReadDir errors are wrapped with ErrKSIHistoryReadFailed instead of being
+// silently swallowed.
+func TestKSIHistoryStore_PruneOlderThan_ReadDirError(t *testing.T) {
+	fileSvc := setupHistoryTestFS(t)
+	ctx := context.Background()
+	historyDir := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.KSIHistoryDirname)
+	store := NewKSIHistoryStore(fileSvc, historyDir)
+
+	// Create a regular file at the history dir path so ReadDir fails with
+	// ENOTDIR (wrapped as ErrDirectoryRead, not ErrNotFound).
+	absPath := fileSvc.Resolve(historyDir)
+	require.NoError(t, os.MkdirAll(filepath.Dir(absPath), constants.PermDirStandard))
+	require.NoError(t, os.WriteFile(absPath, []byte("not a directory"), constants.PermFilePublic))
+
+	_, err := store.PruneOlderThan(ctx, 24*time.Hour)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrKSIHistoryReadFailed)
+}
+
 // TestSnapshotFilename verifies the filename format.
 func TestSnapshotFilename(t *testing.T) {
 	name := snapshotFilename(1700000000000)

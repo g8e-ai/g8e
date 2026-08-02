@@ -55,12 +55,12 @@ type OverlayCatalog struct {
 func LoadOverlayCatalog(path string) (*OverlayCatalog, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("compliance: read overlay catalog: %w", err)
+		return nil, fmt.Errorf("%w: %s: %w", constants.ErrOverlayReadFailed, path, err)
 	}
 
 	var catalog OverlayCatalog
 	if err := json.Unmarshal(data, &catalog); err != nil {
-		return nil, fmt.Errorf("compliance: parse overlay catalog: %w", err)
+		return nil, fmt.Errorf("%w: %s: %w", constants.ErrOverlayParseFailed, path, err)
 	}
 
 	if err := catalog.Validate(); err != nil {
@@ -133,7 +133,7 @@ func LoadOverlaysFromDir(dir string) (*OverlayCatalog, error) {
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, fmt.Errorf("compliance: read overlay dir %s: %w", dir, err)
+		return nil, fmt.Errorf("%w: %s: %w", constants.ErrOverlayReadFailed, dir, err)
 	}
 
 	merged := &OverlayCatalog{}
@@ -141,19 +141,19 @@ func LoadOverlaysFromDir(dir string) (*OverlayCatalog, error) {
 	loadedCount := 0
 
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), constants.FileExtJSON) {
 			continue
 		}
 
 		path := filepath.Join(dir, entry.Name())
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("compliance: read overlay file %s: %w", entry.Name(), err)
+			return nil, fmt.Errorf("%w: %s: %w", constants.ErrOverlayReadFailed, entry.Name(), err)
 		}
 
 		var cat OverlayCatalog
 		if err := json.Unmarshal(data, &cat); err != nil {
-			return nil, fmt.Errorf("compliance: parse overlay file %s: %w", entry.Name(), err)
+			return nil, fmt.Errorf("%w: %s: %w", constants.ErrOverlayParseFailed, entry.Name(), err)
 		}
 
 		if err := cat.Validate(); err != nil {

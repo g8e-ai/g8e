@@ -16,6 +16,7 @@ package compliance
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -75,7 +76,10 @@ func (s *KSIHistoryStore) SaveSnapshot(ctx context.Context, rs *KSIResultSet) er
 func (s *KSIHistoryStore) ListSnapshots(ctx context.Context) ([]KSIResultSet, error) {
 	entries, err := s.fileSvc.ReadDir(ctx, s.dir)
 	if err != nil {
-		return nil, nil
+		if errors.Is(err, constants.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("%w: %w", constants.ErrKSIHistoryReadFailed, err)
 	}
 
 	var snapshots []KSIResultSet
@@ -148,7 +152,10 @@ func (s *KSIHistoryStore) PruneOlderThan(ctx context.Context, retention time.Dur
 
 	entries, err := s.fileSvc.ReadDir(ctx, s.dir)
 	if err != nil {
-		return 0, nil
+		if errors.Is(err, constants.ErrNotFound) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("%w: %w", constants.ErrKSIHistoryReadFailed, err)
 	}
 
 	cutoff := time.Now().Add(-retention)

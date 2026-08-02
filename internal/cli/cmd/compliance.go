@@ -418,6 +418,9 @@ from the specified directory and validate that KSI overlay references resolve.
 Prints the merged overlay catalog as JSON. Use --overlay-dir to specify a
 custom overlay directory (default: docs/reference/).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// fileSvc is initialized for error-injection test parity with the
+			// other compliance subcommands. The overlay command reads from
+			// docs/reference/ (not .g8e/), so fileSvc itself is unused here.
 			if _, err := fileSvcFactory(); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
