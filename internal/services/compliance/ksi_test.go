@@ -67,9 +67,9 @@ func TestKSICatalog_LoadFromDisk(t *testing.T) {
 // TestKSICatalog_Validate detects structural problems in a catalog.
 func TestKSICatalog_Validate(t *testing.T) {
 	tests := []struct {
-		name      string
-		catalog   *KSICatalog
-		wantErr   bool
+		name        string
+		catalog     *KSICatalog
+		wantErr     bool
 		errContains string
 	}{
 		{
@@ -89,7 +89,7 @@ func TestKSICatalog_Validate(t *testing.T) {
 				Source: "test",
 				KSIs:   []KSI{{ID: "KSI-TEST-01", Title: "Test", Category: KSICategoryCMT}},
 			},
-			wantErr:    true,
+			wantErr:     true,
 			errContains: "version",
 		},
 		{
@@ -98,7 +98,7 @@ func TestKSICatalog_Validate(t *testing.T) {
 				Version: "1.0",
 				KSIs:    []KSI{{ID: "KSI-TEST-01", Title: "Test", Category: KSICategoryCMT}},
 			},
-			wantErr:    true,
+			wantErr:     true,
 			errContains: "source",
 		},
 		{
@@ -108,7 +108,7 @@ func TestKSICatalog_Validate(t *testing.T) {
 				Source:  "test",
 				KSIs:    []KSI{},
 			},
-			wantErr:    true,
+			wantErr:     true,
 			errContains: "no KSIs",
 		},
 		{
@@ -121,7 +121,7 @@ func TestKSICatalog_Validate(t *testing.T) {
 					{ID: "KSI-TEST-01", Title: "Test 2", Category: KSICategoryCMT},
 				},
 			},
-			wantErr:    true,
+			wantErr:     true,
 			errContains: "duplicate",
 		},
 		{
@@ -131,7 +131,7 @@ func TestKSICatalog_Validate(t *testing.T) {
 				Source:  "test",
 				KSIs:    []KSI{{ID: "", Title: "Test", Category: KSICategoryCMT}},
 			},
-			wantErr:    true,
+			wantErr:     true,
 			errContains: "empty ID",
 		},
 		{
@@ -141,7 +141,7 @@ func TestKSICatalog_Validate(t *testing.T) {
 				Source:  "test",
 				KSIs:    []KSI{{ID: "KSI-TEST-01", Title: "", Category: KSICategoryCMT}},
 			},
-			wantErr:    true,
+			wantErr:     true,
 			errContains: "empty title",
 		},
 		{
@@ -151,7 +151,7 @@ func TestKSICatalog_Validate(t *testing.T) {
 				Source:  "test",
 				KSIs:    []KSI{{ID: "KSI-TEST-01", Title: "Test", Category: ""}},
 			},
-			wantErr:    true,
+			wantErr:     true,
 			errContains: "empty category",
 		},
 	}
@@ -161,7 +161,7 @@ func TestKSICatalog_Validate(t *testing.T) {
 			err := tt.catalog.Validate()
 			if tt.wantErr {
 				require.Error(t, err)
-				assert.ErrorIs(t, err, constants.ErrKSINotSatisfied)
+				assert.ErrorIs(t, err, constants.ErrKSICatalogInvalid)
 				if tt.errContains != "" {
 					assert.Contains(t, err.Error(), tt.errContains)
 				}
@@ -280,17 +280,17 @@ func TestKSI_IsStale(t *testing.T) {
 // TestKSI_JSONRoundTrip verifies KSI struct serialization round-trips through JSON.
 func TestKSI_JSONRoundTrip(t *testing.T) {
 	original := KSI{
-		ID:                "KSI-SVC-05",
-		Title:             "Validating Resource Integrity",
-		Category:          KSICategorySVC,
-		Description:       "Cryptographic methods validate integrity of machine-based information resources.",
-		ControlRefs:        []string{"CM-2", "CM-8", "SC-13", "SC-23", "SI-7", "SR-10"},
-		OverlayRefs:        []string{"COSAiS-LLM-001"},
-		ApplicableClasses:  []CertificationClass{ClassB, ClassC},
-		ValidationCycle:    ValidationCycleMachine,
-		Status:             KSIStatusSatisfied,
-		AutomatedMethods:   []AutomatedMethod{{Name: "merkle_root_check", Description: "Verifies ledger Merkle root"}},
-		Evidence:           []Evidence{{Type: EvidenceTypeMerkleRoot, Reference: "abc123", Description: "Current Merkle root"}},
+		ID:                  "KSI-SVC-05",
+		Title:               "Validating Resource Integrity",
+		Category:            KSICategorySVC,
+		Description:         "Cryptographic methods validate integrity of machine-based information resources.",
+		ControlRefs:         []string{"CM-2", "CM-8", "SC-13", "SC-23", "SI-7", "SR-10"},
+		OverlayRefs:         []string{"COSAiS-LLM-001"},
+		ApplicableClasses:   []CertificationClass{ClassB, ClassC},
+		ValidationCycle:     ValidationCycleMachine,
+		Status:              KSIStatusSatisfied,
+		AutomatedMethods:    []AutomatedMethod{{Name: "merkle_root_check", Description: "Verifies ledger Merkle root"}},
+		Evidence:            []Evidence{{Type: EvidenceTypeMerkleRoot, Reference: "abc123", Description: "Current Merkle root"}},
 		LastValidatedUnixMs: time.Now().UnixMilli(),
 	}
 

@@ -30,12 +30,12 @@ import (
 
 // mockAuditReader is a mock implementation of AuditEvidenceReader for unit testing.
 type mockAuditReader struct {
-	receipts        []*models.ActionReceiptRecord
-	receiptsErr     error
-	events          []*storage.Event
-	eventsErr       error
-	mutations       []*storage.FileMutationLog
-	mutationsErr    error
+	receipts     []*models.ActionReceiptRecord
+	receiptsErr  error
+	events       []*storage.Event
+	eventsErr    error
+	mutations    []*storage.FileMutationLog
+	mutationsErr error
 }
 
 func (m *mockAuditReader) ListActionReceipts(_ string, _, _ int) ([]*models.ActionReceiptRecord, error) {
@@ -174,24 +174,24 @@ func TestKSIEvaluator_RegisterMethods(t *testing.T) {
 	method := func(ctx context.Context) (bool, []Evidence, error) {
 		return true, nil, nil
 	}
-	eval.RegisterMethods("KSI-CMT-01", method)
+	require.NoError(t, eval.RegisterMethods("KSI-CMT-01", method))
 	assert.Equal(t, 1, eval.MethodCount("KSI-CMT-01"))
 
-	eval.RegisterMethods("KSI-CMT-01", method)
+	require.NoError(t, eval.RegisterMethods("KSI-CMT-01", method))
 	assert.Equal(t, 2, eval.MethodCount("KSI-CMT-01"))
 }
 
-// TestKSIEvaluator_RegisterMethods_UnknownKSI_Panics verifies that registering
-// methods for an unknown KSI ID panics.
-func TestKSIEvaluator_RegisterMethods_UnknownKSI_Panics(t *testing.T) {
+// TestKSIEvaluator_RegisterMethods_UnknownKSI_ReturnsError verifies that registering
+// methods for an unknown KSI ID returns an error.
+func TestKSIEvaluator_RegisterMethods_UnknownKSI_ReturnsError(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
 
-	assert.Panics(t, func() {
-		eval.RegisterMethods("KSI-FAKE-99", func(ctx context.Context) (bool, []Evidence, error) {
-			return true, nil, nil
-		})
+	err := eval.RegisterMethods("KSI-FAKE-99", func(ctx context.Context) (bool, []Evidence, error) {
+		return true, nil, nil
 	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown KSI ID")
 }
 
 // TestKSIEvaluator_RegisterDefaultMethods registers default methods and verifies
@@ -292,7 +292,7 @@ func TestKSIEvaluator_Evaluate_MethodError_FailClosed(t *testing.T) {
 		return true, []Evidence{{Type: EvidenceTypeReceiptID, Reference: "tx-1"}}, nil
 	}
 
-	eval.RegisterMethods("KSI-CMT-01", errMethod, okMethod)
+	require.NoError(t, eval.RegisterMethods("KSI-CMT-01", errMethod, okMethod))
 
 	result, err := eval.Evaluate(context.Background(), ClassC)
 	require.NoError(t, err)
@@ -318,7 +318,7 @@ func TestKSIEvaluator_Evaluate_MethodReturnsFalse_FailClosed(t *testing.T) {
 		return true, []Evidence{{Type: EvidenceTypeMerkleRoot, Reference: "root"}}, nil
 	}
 
-	eval.RegisterMethods("KSI-CMT-01", falseMethod, trueMethod)
+	require.NoError(t, eval.RegisterMethods("KSI-CMT-01", falseMethod, trueMethod))
 
 	result, err := eval.Evaluate(context.Background(), ClassC)
 	require.NoError(t, err)
@@ -384,7 +384,7 @@ func TestKSIEvaluator_Evaluate_ClassB_LowerThreshold(t *testing.T) {
 	okMethod := func(ctx context.Context) (bool, []Evidence, error) {
 		return true, []Evidence{{Type: EvidenceTypeReceiptID, Reference: "tx-1"}}, nil
 	}
-	eval.RegisterMethods("KSI-CMT-01", okMethod)
+	require.NoError(t, eval.RegisterMethods("KSI-CMT-01", okMethod))
 
 	result, err := eval.Evaluate(context.Background(), ClassB)
 	require.NoError(t, err)
@@ -491,7 +491,7 @@ func TestKSIResultSet_Validate(t *testing.T) {
 		rs := &KSIResultSet{Results: []KSIResult{}}
 		err := rs.Validate(catalog)
 		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrKSINotSatisfied)
+		assert.ErrorIs(t, err, constants.ErrValidationFailed)
 		assert.Contains(t, err.Error(), "empty result set")
 	})
 
@@ -503,7 +503,7 @@ func TestKSIResultSet_Validate(t *testing.T) {
 		}
 		err := rs.Validate(catalog)
 		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrKSINotSatisfied)
+		assert.ErrorIs(t, err, constants.ErrValidationFailed)
 		assert.Contains(t, err.Error(), "unknown KSI")
 	})
 
@@ -515,7 +515,7 @@ func TestKSIResultSet_Validate(t *testing.T) {
 		}
 		err := rs.Validate(catalog)
 		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrKSINotSatisfied)
+		assert.ErrorIs(t, err, constants.ErrValidationFailed)
 		assert.Contains(t, err.Error(), "empty ID")
 	})
 }
@@ -592,12 +592,10 @@ func TestDefaultMethods_ReceiptSignatures(t *testing.T) {
 		ok, _, err := m(context.Background())
 		require.NoError(t, err)
 		if !ok {
-			anyFalse = false
+			anyFalse = true
 		}
 	}
-	// receiptsHaveSignatures should return false, but commitmentChainExists may return true
-	// So we just check that not all methods return true
-	_ = anyFalse // At least one method (receiptsHaveSignatures) returns false
+	assert.True(t, anyFalse, "at least one method should return false when signatures are missing")
 }
 
 // TestKSIEvaluator_Evaluate_FullIntegration verifies end-to-end evaluation

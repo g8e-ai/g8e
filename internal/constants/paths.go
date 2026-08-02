@@ -497,4 +497,5 @@ const (
 	OSCALAssessmentResultsFilename = "assessment-results.json"
 	OSCALComponentDefFilename   = "component-definition.json"
 	KSIHistoryDirname            = "ksi-history"
+	DefaultKSICatalogPath        = DocsDirname + "/reference/" + KSICatalogFilename
 )

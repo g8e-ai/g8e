@@ -72,16 +72,16 @@ type EvidenceType string
 const (
 	EvidenceTypeReceiptID    EvidenceType = "receipt_id"
 	EvidenceTypeLedgerCommit EvidenceType = "ledger_commit"
-	EvidenceTypeExecutionID EvidenceType = "execution_id"
+	EvidenceTypeExecutionID  EvidenceType = "execution_id"
 	EvidenceTypeMerkleRoot   EvidenceType = "merkle_root"
 )
 
 // Evidence points to a specific artifact in g8e's audit store, ledger,
 // or LFAA execution vault that supports a KSI evaluation result.
 type Evidence struct {
-	Type      EvidenceType `json:"type"`
-	Reference string       `json:"reference"`
-	Description string     `json:"description,omitempty"`
+	Type        EvidenceType `json:"type"`
+	Reference   string       `json:"reference"`
+	Description string       `json:"description,omitempty"`
 }
 
 // AutomatedMethod describes a single automated method used to evaluate a KSI.
@@ -96,27 +96,27 @@ type KSIMethod func(ctx context.Context) (bool, []Evidence, error)
 
 // KSI represents a single Key Security Indicator from the FedRAMP 20x program.
 type KSI struct {
-	ID                  string            `json:"id"`
-	Title               string            `json:"title"`
-	Category            KSICategory       `json:"category"`
-	Description         string            `json:"description,omitempty"`
-	ControlRefs         []string          `json:"control_refs"`
-	OverlayRefs          []string          `json:"overlay_refs,omitempty"`
+	ID                  string               `json:"id"`
+	Title               string               `json:"title"`
+	Category            KSICategory          `json:"category"`
+	Description         string               `json:"description,omitempty"`
+	ControlRefs         []string             `json:"control_refs"`
+	OverlayRefs         []string             `json:"overlay_refs,omitempty"`
 	ApplicableClasses   []CertificationClass `json:"applicable_classes"`
-	ValidationCycle     ValidationCycle   `json:"validation_cycle"`
-	Status              KSIStatus         `json:"status"`
-	AutomatedMethods    []AutomatedMethod `json:"automated_methods"`
-	Evidence            []Evidence        `json:"evidence,omitempty"`
-	LastValidatedUnixMs int64             `json:"last_validated_unix_ms,omitempty"`
+	ValidationCycle     ValidationCycle      `json:"validation_cycle"`
+	Status              KSIStatus            `json:"status"`
+	AutomatedMethods    []AutomatedMethod    `json:"automated_methods"`
+	Evidence            []Evidence           `json:"evidence,omitempty"`
+	LastValidatedUnixMs int64                `json:"last_validated_unix_ms,omitempty"`
 }
 
 // KSIResult is the evaluation result for a single KSI at a point in time.
 type KSIResult struct {
-	ID                  string         `json:"id"`
-	Status              KSIStatus      `json:"status"`
-	Evidence            []Evidence     `json:"evidence,omitempty"`
-	LastValidatedUnixMs int64          `json:"last_validated_unix_ms"`
-	MethodCount         int            `json:"method_count"`
+	ID                  string     `json:"id"`
+	Status              KSIStatus  `json:"status"`
+	Evidence            []Evidence `json:"evidence,omitempty"`
+	LastValidatedUnixMs int64      `json:"last_validated_unix_ms"`
+	MethodCount         int        `json:"method_count"`
 }
 
 // KSIResultSet is a collection of KSI evaluation results for a target class.
@@ -155,29 +155,29 @@ func LoadKSICatalog(path string) (*KSICatalog, error) {
 // Validate checks that the catalog has required fields and no duplicate KSI IDs.
 func (c *KSICatalog) Validate() error {
 	if c.Version == "" {
-		return fmt.Errorf("%w: catalog version is empty", constants.ErrKSINotSatisfied)
+		return fmt.Errorf("%w: catalog version is empty", constants.ErrKSICatalogInvalid)
 	}
 	if c.Source == "" {
-		return fmt.Errorf("%w: catalog source is empty", constants.ErrKSINotSatisfied)
+		return fmt.Errorf("%w: catalog source is empty", constants.ErrKSICatalogInvalid)
 	}
 	if len(c.KSIs) == 0 {
-		return fmt.Errorf("%w: catalog has no KSIs", constants.ErrKSINotSatisfied)
+		return fmt.Errorf("%w: catalog has no KSIs", constants.ErrKSICatalogInvalid)
 	}
 
 	seen := make(map[string]bool, len(c.KSIs))
 	for i := range c.KSIs {
 		ksi := &c.KSIs[i]
 		if ksi.ID == "" {
-			return fmt.Errorf("%w: KSI at index %d has empty ID", constants.ErrKSINotSatisfied, i)
+			return fmt.Errorf("%w: KSI at index %d has empty ID", constants.ErrKSICatalogInvalid, i)
 		}
 		if ksi.Title == "" {
-			return fmt.Errorf("%w: KSI %s has empty title", constants.ErrKSINotSatisfied, ksi.ID)
+			return fmt.Errorf("%w: KSI %s has empty title", constants.ErrKSICatalogInvalid, ksi.ID)
 		}
 		if ksi.Category == "" {
-			return fmt.Errorf("%w: KSI %s has empty category", constants.ErrKSINotSatisfied, ksi.ID)
+			return fmt.Errorf("%w: KSI %s has empty category", constants.ErrKSICatalogInvalid, ksi.ID)
 		}
 		if seen[ksi.ID] {
-			return fmt.Errorf("%w: duplicate KSI ID: %s", constants.ErrKSINotSatisfied, ksi.ID)
+			return fmt.Errorf("%w: duplicate KSI ID: %s", constants.ErrKSICatalogInvalid, ksi.ID)
 		}
 		seen[ksi.ID] = true
 	}

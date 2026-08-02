@@ -72,13 +72,13 @@ func NewKSIEvaluator(catalog *KSICatalog) *KSIEvaluator {
 }
 
 // RegisterMethods binds automated methods to a KSI ID.
-// Panics if the KSI ID is not in the catalog (registration error, not a
-// runtime error).
-func (e *KSIEvaluator) RegisterMethods(ksiID string, methods ...KSIMethod) {
+// Returns an error if the KSI ID is not in the catalog.
+func (e *KSIEvaluator) RegisterMethods(ksiID string, methods ...KSIMethod) error {
 	if e.catalog.FindKSI(ksiID) == nil {
-		panic(fmt.Sprintf("compliance: RegisterMethods: unknown KSI ID: %s", ksiID))
+		return fmt.Errorf("compliance: RegisterMethods: unknown KSI ID: %s", ksiID)
 	}
 	e.methods[ksiID] = append(e.methods[ksiID], methods...)
+	return nil
 }
 
 // RegisterDefaultMethods registers g8e's built-in automated methods for all
@@ -141,7 +141,7 @@ func (e *KSIEvaluator) Evaluate(ctx context.Context, class CertificationClass) (
 			continue
 		}
 
-		if ksi.IsStale(now) {
+		if ksi.LastValidatedUnixMs > 0 && ksi.IsStale(now) {
 			res.Status = KSIStatusNotSatisfied
 			result.Results = append(result.Results, res)
 			continue
@@ -157,8 +157,8 @@ func (e *KSIEvaluator) Evaluate(ctx context.Context, class CertificationClass) (
 			if err != nil {
 				allSatisfied = false
 				allEvidence = append(allEvidence, Evidence{
-					Type:      EvidenceTypeExecutionID,
-					Reference: ksiID,
+					Type:        EvidenceTypeExecutionID,
+					Reference:   ksiID,
 					Description: fmt.Sprintf("method error: %v", err),
 				})
 				continue
@@ -219,14 +219,14 @@ func (r *KSIResultSet) NotSatisfiedCount() int {
 // non-trivial class.
 func (r *KSIResultSet) Validate(catalog *KSICatalog) error {
 	if len(r.Results) == 0 {
-		return fmt.Errorf("%w: empty result set", constants.ErrKSINotSatisfied)
+		return fmt.Errorf("%w: empty result set", constants.ErrValidationFailed)
 	}
 	for i, res := range r.Results {
 		if res.ID == "" {
-			return fmt.Errorf("%w: result at index %d has empty ID", constants.ErrKSINotSatisfied, i)
+			return fmt.Errorf("%w: result at index %d has empty ID", constants.ErrValidationFailed, i)
 		}
 		if catalog.FindKSI(res.ID) == nil {
-			return fmt.Errorf("%w: result at index %d references unknown KSI: %s", constants.ErrKSINotSatisfied, i, res.ID)
+			return fmt.Errorf("%w: result at index %d references unknown KSI: %s", constants.ErrValidationFailed, i, res.ID)
 		}
 	}
 	return nil
