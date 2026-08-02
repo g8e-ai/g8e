@@ -488,3 +488,13 @@ const (
 	ReportVerificationFilename     = "verification_summary.csv"
 	ReportManifestFilename         = "manifest.csv"
 )
+
+// Compliance constants for KSI catalog, OSCAL output, and KSI history snapshots.
+const (
+	ComplianceDirname            = "compliance"
+	KSICatalogFilename           = "ksi-catalog.json"
+	COSAiSOverlaysFilename       = "cosais-overlays.json"
+	OSCALAssessmentResultsFilename = "assessment-results.json"
+	OSCALComponentDefFilename   = "component-definition.json"
+	KSIHistoryDirname            = "ksi-history"
+)

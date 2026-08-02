@@ -1551,3 +1551,141 @@ func TestNewL1DoctrineFromDir_NonExistentDir_ReturnsError(t *testing.T) {
 	_, err := NewL1DoctrineFromDir("/nonexistent/path/that/does/not/exist")
 	assert.Error(t, err)
 }
+
+func TestNewL1DoctrineFromDir_KSIControlOverlayProjection(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	docJSON := `{"source":"test_compliance","version":"1.0","last_updated":"2026-01-15","license":"Apache-2.0","doctrines":[
+		{"id":"ksi_test_detector","name":"KSI Test","category":"data_exfiltration","severity":"critical","pattern":"(?i)exfiltrate.*data","mitre_attack":"T1567","mitre_tactic":"Exfiltration","confidence":0.9,"enabled":true,"ksi_ids":["KSI-SVC-03","KSI-CNA-01"],"control_ids":["SC-8","SC-7"],"overlay_ids":["COSAiS-LLM-01"]}
+	]}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "compliance.json"), []byte(docJSON), 0o644))
+
+	d, err := NewL1DoctrineFromDir(dir)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name     string
+		input    string
+		wantKSI  []string
+		wantCtrl []string
+		wantOvly []string
+	}{
+		{
+			name:     "command_match",
+			input:    "exfiltrate sensitive data",
+			wantKSI:  []string{"KSI-SVC-03", "KSI-CNA-01"},
+			wantCtrl: []string{"SC-8", "SC-7"},
+			wantOvly: []string{"COSAiS-LLM-01"},
+		},
+		{
+			name:     "no_match_returns_empty",
+			input:    "ls -la",
+			wantKSI:  nil,
+			wantCtrl: nil,
+			wantOvly: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			signals := d.AnalyzeCommand(tt.input)
+			if tt.wantKSI == nil {
+				for _, sig := range signals {
+					if sig.Indicator == "ksi_test_detector" {
+						t.Fatalf("detector should not match for input: %s", tt.input)
+					}
+				}
+				return
+			}
+			found := false
+			for _, sig := range signals {
+				if sig.Indicator == "ksi_test_detector" {
+					found = true
+					assert.Equal(t, tt.wantKSI, sig.KSIIDs, "KSIIDs should project through ThreatSignal")
+					assert.Equal(t, tt.wantCtrl, sig.ControlIDs, "ControlIDs should project through ThreatSignal")
+					assert.Equal(t, tt.wantOvly, sig.OverlayIDs, "OverlayIDs should project through ThreatSignal")
+				}
+			}
+			assert.True(t, found, "ksi_test_detector should fire for: %s", tt.input)
+		})
+	}
+}
+
+func TestNewL1DoctrineFromDir_KSIProjectionViaMCPArguments(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	docJSON := `{"source":"test_compliance","version":"1.0","doctrines":[
+		{"id":"ksi_mcp_detector","name":"KSI MCP Test","category":"data_exfiltration","severity":"critical","pattern":"(?i)exfiltrate.*data","mitre_attack":"T1567","mitre_tactic":"Exfiltration","confidence":0.9,"enabled":true,"ksi_ids":["KSI-MLA-07"],"control_ids":["AU-2"],"overlay_ids":[]}
+	]}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "compliance.json"), []byte(docJSON), 0o644))
+
+	d, err := NewL1DoctrineFromDir(dir)
+	require.NoError(t, err)
+
+	mcpArgs := `{"command":"cloudop","args":["exfiltrate data from vault"],"timeout":10}`
+	signals, err := d.AnalyzeMCPArguments(mcpArgs)
+	require.NoError(t, err)
+
+	found := false
+	for _, sig := range signals {
+		if sig.Indicator == "ksi_mcp_detector" {
+			found = true
+			assert.Equal(t, []string{"KSI-MLA-07"}, sig.KSIIDs, "KSIIDs should project through MCP argument analysis")
+			assert.Equal(t, []string{"AU-2"}, sig.ControlIDs, "ControlIDs should project through MCP argument analysis")
+			assert.Empty(t, sig.OverlayIDs, "OverlayIDs should be empty")
+			assert.NotEmpty(t, sig.Context, "Context should be set from MCP path")
+		}
+	}
+	assert.True(t, found, "ksi_mcp_detector should fire via MCP arguments")
+}
+
+func TestNewL1DoctrineFromDir_LastUpdatedLicenseParsed(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	docJSON := `{"source":"test","version":"1.0","last_updated":"2026-03-01","license":"MIT","doctrines":[
+		{"id":"test_det","name":"Test","category":"data_exfiltration","severity":"high","pattern":"(?i)test_pattern","confidence":0.9,"enabled":true}
+	]}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "test.json"), []byte(docJSON), 0o644))
+
+	d, err := NewL1DoctrineFromDir(dir)
+	require.NoError(t, err)
+	require.NotNil(t, d)
+
+	signals := d.AnalyzeCommand("test_pattern")
+	found := false
+	for _, sig := range signals {
+		if sig.Indicator == "test_det" {
+			found = true
+		}
+	}
+	assert.True(t, found, "detector should fire; last_updated/license fields should not break parsing")
+}
+
+func TestNewL1DoctrineFromDir_EmptyKSIFields_DefaultToNil(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	docJSON := `{"source":"test","version":"1.0","doctrines":[
+		{"id":"no_ksi","name":"No KSI","category":"data_exfiltration","severity":"high","pattern":"(?i)plain_pattern","confidence":0.9,"enabled":true}
+	]}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "test.json"), []byte(docJSON), 0o644))
+
+	d, err := NewL1DoctrineFromDir(dir)
+	require.NoError(t, err)
+
+	signals := d.AnalyzeCommand("plain_pattern")
+	found := false
+	for _, sig := range signals {
+		if sig.Indicator == "no_ksi" {
+			found = true
+			assert.Nil(t, sig.KSIIDs, "KSIIDs should be nil when not specified in JSON")
+			assert.Nil(t, sig.ControlIDs, "ControlIDs should be nil when not specified in JSON")
+			assert.Nil(t, sig.OverlayIDs, "OverlayIDs should be nil when not specified in JSON")
+		}
+	}
+	assert.True(t, found, "no_ksi detector should fire")
+}

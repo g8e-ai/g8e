@@ -1058,4 +1058,9 @@ var (
 
 	// Console SPA errors
 	ErrConsoleStaticFS = errors.New("console: failed to sub static FS")
+
+	// Compliance KSI errors
+	ErrKSINotSatisfied       = errors.New("KSI not satisfied")
+	ErrKSIInsufficientMethods = errors.New("KSI has insufficient automated methods for target class")
+	ErrOverlayNotFound       = errors.New("overlay not found")
 )
