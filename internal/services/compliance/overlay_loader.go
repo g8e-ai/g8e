@@ -197,3 +197,24 @@ func ValidateOverlayRefs(ksiCatalog *KSICatalog, overlayCatalog *OverlayCatalog)
 	}
 	return dangling
 }
+
+// CheckFinalizedOverlayCoverage checks whether every finalized COSAiS overlay
+// in the catalog is referenced by at least one detector's OverlayIDs.
+// detectorOverlayIDs is the flattened set of all overlay IDs referenced across
+// all doctrine detector entries. Returns a slice of finalized overlay IDs that
+// have no detector coverage. If the slice is empty, all finalized overlays are
+// covered (or no overlays are finalized yet).
+func CheckFinalizedOverlayCoverage(overlayCatalog *OverlayCatalog, detectorOverlayIDs []string) []string {
+	covered := make(map[string]bool, len(detectorOverlayIDs))
+	for _, id := range detectorOverlayIDs {
+		covered[id] = true
+	}
+
+	var uncovered []string
+	for _, ov := range overlayCatalog.Overlays {
+		if ov.Status == OverlayStatusFinalized && !covered[ov.ID] {
+			uncovered = append(uncovered, ov.ID)
+		}
+	}
+	return uncovered
+}

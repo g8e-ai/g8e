@@ -354,6 +354,105 @@ func TestValidateOverlayRefs_NoOverlayRefs(t *testing.T) {
 	assert.Empty(t, dangling)
 }
 
+// TestCheckFinalizedOverlayCoverage_NoFinalizedOverlays returns empty when
+// all overlays are still in draft status.
+func TestCheckFinalizedOverlayCoverage_NoFinalizedOverlays(t *testing.T) {
+	catalog := &OverlayCatalog{
+		Version: "v1",
+		Source:  "src",
+		Overlays: []Overlay{
+			{ID: "COSAiS-A-01", Title: "A", UseCase: "a", Status: OverlayStatusDraft},
+			{ID: "COSAiS-B-01", Title: "B", UseCase: "b", Status: OverlayStatusDraft},
+		},
+	}
+
+	uncovered := CheckFinalizedOverlayCoverage(catalog, nil)
+	assert.Empty(t, uncovered)
+}
+
+// TestCheckFinalizedOverlayCoverage_AllCovered returns empty when every
+// finalized overlay is referenced by at least one detector.
+func TestCheckFinalizedOverlayCoverage_AllCovered(t *testing.T) {
+	catalog := &OverlayCatalog{
+		Version: "v1",
+		Source:  "src",
+		Overlays: []Overlay{
+			{ID: "COSAiS-A-01", Title: "A", UseCase: "a", Status: OverlayStatusFinalized},
+			{ID: "COSAiS-B-01", Title: "B", UseCase: "b", Status: OverlayStatusFinalized},
+			{ID: "COSAiS-C-01", Title: "C", UseCase: "c", Status: OverlayStatusDraft},
+		},
+	}
+
+	detectorIDs := []string{"COSAiS-A-01", "COSAiS-B-01", "COSAiS-C-01"}
+	uncovered := CheckFinalizedOverlayCoverage(catalog, detectorIDs)
+	assert.Empty(t, uncovered)
+}
+
+// TestCheckFinalizedOverlayCoverage_UncoveredFinalized returns the finalized
+// overlay IDs that no detector references.
+func TestCheckFinalizedOverlayCoverage_UncoveredFinalized(t *testing.T) {
+	catalog := &OverlayCatalog{
+		Version: "v1",
+		Source:  "src",
+		Overlays: []Overlay{
+			{ID: "COSAiS-A-01", Title: "A", UseCase: "a", Status: OverlayStatusFinalized},
+			{ID: "COSAiS-B-01", Title: "B", UseCase: "b", Status: OverlayStatusFinalized},
+			{ID: "COSAiS-C-01", Title: "C", UseCase: "c", Status: OverlayStatusDraft},
+		},
+	}
+
+	detectorIDs := []string{"COSAiS-A-01"}
+	uncovered := CheckFinalizedOverlayCoverage(catalog, detectorIDs)
+	assert.Len(t, uncovered, 1)
+	assert.Contains(t, uncovered, "COSAiS-B-01")
+}
+
+// TestCheckFinalizedOverlayCoverage_DeprecatedIgnored confirms that
+// deprecated overlays are not checked for coverage.
+func TestCheckFinalizedOverlayCoverage_DeprecatedIgnored(t *testing.T) {
+	catalog := &OverlayCatalog{
+		Version: "v1",
+		Source:  "src",
+		Overlays: []Overlay{
+			{ID: "COSAiS-A-01", Title: "A", UseCase: "a", Status: OverlayStatusFinalized},
+			{ID: "COSAiS-B-01", Title: "B", UseCase: "b", Status: OverlayStatusDeprecated},
+		},
+	}
+
+	uncovered := CheckFinalizedOverlayCoverage(catalog, nil)
+	assert.Len(t, uncovered, 1)
+	assert.Contains(t, uncovered, "COSAiS-A-01")
+}
+
+// TestCheckFinalizedOverlayCoverage_EmptyCatalog returns empty for a
+// catalog with no overlays.
+func TestCheckFinalizedOverlayCoverage_EmptyCatalog(t *testing.T) {
+	catalog := &OverlayCatalog{
+		Version:  "v1",
+		Source:   "src",
+		Overlays: []Overlay{},
+	}
+
+	uncovered := CheckFinalizedOverlayCoverage(catalog, nil)
+	assert.Empty(t, uncovered)
+}
+
+// TestCheckFinalizedOverlayCoverage_DuplicateDetectorIDs handles duplicate
+// overlay IDs in the detector slice without issue.
+func TestCheckFinalizedOverlayCoverage_DuplicateDetectorIDs(t *testing.T) {
+	catalog := &OverlayCatalog{
+		Version: "v1",
+		Source:  "src",
+		Overlays: []Overlay{
+			{ID: "COSAiS-A-01", Title: "A", UseCase: "a", Status: OverlayStatusFinalized},
+		},
+	}
+
+	detectorIDs := []string{"COSAiS-A-01", "COSAiS-A-01", "COSAiS-A-01"}
+	uncovered := CheckFinalizedOverlayCoverage(catalog, detectorIDs)
+	assert.Empty(t, uncovered)
+}
+
 // TestOverlayJSON_RoundTrip verifies that an OverlayCatalog serializes and
 // deserializes correctly via JSON.
 func TestOverlayJSON_RoundTrip(t *testing.T) {

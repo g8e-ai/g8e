@@ -186,6 +186,7 @@ help:
 	@echo "  lint          Run all linting and quality checks"
 	@echo "  vulncheck     Run Operator vulnerability check"
 	@echo "  validate-doctrines Validate doctrine JSON schema"
+	@echo "  validate-cosais     Validate COSAiS overlay coverage (Phase 8 CI guard)"
 	@echo "  swagger-generate Generate Swagger/OpenAPI documentation from code annotations"
 	@echo ""
 	@echo "Cleanup:"
@@ -600,7 +601,7 @@ test-coverage:
 # LINT & QUALITY
 # =============================================================================
 .PHONY: lint
-lint: lint-no-embedded-newlines vulncheck validate-doctrines swagger-generate
+lint: lint-no-embedded-newlines vulncheck validate-doctrines validate-cosais swagger-generate
 	@golangci-lint run
 	@echo "All linting and quality checks complete."
 
@@ -624,6 +625,11 @@ validate-doctrines:
 		fi \
 	done
 	@echo "All doctrine files are valid JSON."
+
+.PHONY: validate-cosais
+validate-cosais:
+	@echo "Validating COSAiS overlay coverage..."
+	@bash scripts/validate-cosais-overlays.sh
 
 .PHONY: swagger-generate
 swagger-generate:
