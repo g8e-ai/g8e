@@ -27,6 +27,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: ${G8E_PREFIX:-g8e}-gateway
+    working_dir: /root
     networks:
       g8e-net:
         aliases:
@@ -58,6 +59,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: ${G8E_PREFIX:-g8e}-operator
+    working_dir: /root
     networks:
       - g8e-net
     volumes:

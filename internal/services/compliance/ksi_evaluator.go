@@ -24,8 +24,7 @@ import (
 )
 
 // AuditEvidenceReader provides read-only access to audit store evidence
-// for KSI evaluation. SQLAuditStore and storagetest.TestSQLAuditStore
-// satisfy this interface.
+// for KSI evaluation. SQLAuditStore satisfies this interface.
 type AuditEvidenceReader interface {
 	ListActionReceipts(operatorSessionID string, limit, offset int) ([]*models.ActionReceiptRecord, error)
 	ListEvents(sessionID string, limit, offset int) ([]*storage.Event, error)

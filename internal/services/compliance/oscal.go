@@ -307,9 +307,10 @@ func (e *OSCALExporter) GenerateAssessmentResults(resultSet *KSIResultSet) (*OSC
 
 		// Map KSI status to OSCAL finding status.
 		status := "not-satisfied"
-		if res.Status == KSIStatusSatisfied {
+		switch res.Status {
+		case KSIStatusSatisfied:
 			status = "satisfied"
-		} else if res.Status == KSIStatusNotApplicable {
+		case KSIStatusNotApplicable:
 			status = "not-applicable"
 		}
 
