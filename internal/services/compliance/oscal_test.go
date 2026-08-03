@@ -353,6 +353,76 @@ func TestOSCALExporter_GenerateAssessmentResults_UnknownKSI(t *testing.T) {
 	assert.Contains(t, err.Error(), "unknown KSI")
 }
 
+// TestOSCALExporter_GenerateComponentDefinition_DedupControlRefs verifies that
+// when multiple KSIs in the same category reference the same control-id, the
+// resulting OSCAL document has a single implemented-control entry with merged
+// statements from all referencing KSIs. OSCAL 1.1.2 requires control-id to be
+// unique within a control-implementation.
+func TestOSCALExporter_GenerateComponentDefinition_DedupControlRefs(t *testing.T) {
+	cat := &KSICatalog{
+		Version: "test-1.0",
+		Source:  "test",
+		KSIs: []KSI{
+			{
+				ID:                "KSI-CMT-01",
+				Title:             "Logging Changes",
+				Category:          KSICategoryCMT,
+				ControlRefs:       []string{"AU-2", "CM-3"},
+				ApplicableClasses: []CertificationClass{ClassC},
+				ValidationCycle:   ValidationCycleMachine,
+				AutomatedMethods: []AutomatedMethod{
+					{Name: "audit_events_check", Description: "Verifies audit events exist"},
+				},
+			},
+			{
+				ID:                "KSI-CMT-02",
+				Title:             "Audit Review",
+				Category:          KSICategoryCMT,
+				ControlRefs:       []string{"AU-2"},
+				ApplicableClasses: []CertificationClass{ClassC},
+				ValidationCycle:   ValidationCycleMachine,
+				AutomatedMethods: []AutomatedMethod{
+					{Name: "ledger_commits_check", Description: "Verifies ledger commits exist"},
+				},
+			},
+		},
+	}
+	exporter := NewOSCALExporter(cat)
+
+	compDef, err := exporter.GenerateComponentDefinition()
+	require.NoError(t, err)
+	require.NotNil(t, compDef)
+
+	require.Len(t, compDef.Components, 1)
+	comp := compDef.Components[0]
+	require.Len(t, comp.ControlImplementations, 1)
+	cmtImpl := comp.ControlImplementations[0]
+
+	// AU-2 should appear once, not twice, even though both KSIs reference it.
+	// CM-3 appears once from KSI-CMT-01. Total: 2 unique control-ids.
+	require.Len(t, cmtImpl.ImplementedControls, 2)
+
+	// Find the AU-2 entry (could be at index 0 or 1 depending on iteration order).
+	var au2 *OSCALImplementedControl
+	for i := range cmtImpl.ImplementedControls {
+		if cmtImpl.ImplementedControls[i].ControlID == "AU-2" {
+			au2 = &cmtImpl.ImplementedControls[i]
+			break
+		}
+	}
+	require.NotNil(t, au2, "AU-2 implemented control must exist")
+
+	// Merged description from both KSIs.
+	assert.Contains(t, au2.Description, "Logging Changes")
+	assert.Contains(t, au2.Description, "Audit Review")
+
+	// Merged statements: 1 from KSI-CMT-01 + 1 from KSI-CMT-02 = 2 total.
+	require.Len(t, au2.Statements, 2)
+	statementIDs := []string{au2.Statements[0].StatementID, au2.Statements[1].StatementID}
+	assert.Contains(t, statementIDs, "KSI-CMT-01:audit_events_check")
+	assert.Contains(t, statementIDs, "KSI-CMT-02:ledger_commits_check")
+}
+
 // TestOSCALExporter_GenerateComponentDefinition_NoControlRefs asserts that a
 // KSI with no control refs produces a validation error.
 func TestOSCALExporter_GenerateComponentDefinition_NoControlRefs(t *testing.T) {

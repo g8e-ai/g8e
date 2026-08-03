@@ -200,7 +200,12 @@ func (e *OSCALExporter) GenerateComponentDefinition() (*OSCALComponentDefinition
 	var controlImpls []OSCALControlImplementation
 	for _, cat := range categories {
 		ksis := categoryKSIs[cat]
-		var implemented []OSCALImplementedControl
+
+		// Group implemented controls by control-id, merging statements from
+		// multiple KSIs that reference the same control. OSCAL 1.1.2 requires
+		// control-id to be unique within a control-implementation.
+		implemented := make([]OSCALImplementedControl, 0)
+		controlIndex := make(map[string]int)
 		for _, ksi := range ksis {
 			if len(ksi.ControlRefs) == 0 {
 				return nil, fmt.Errorf("%w: KSI %s has no control refs", constants.ErrValidationFailed, ksi.ID)
@@ -213,11 +218,17 @@ func (e *OSCALExporter) GenerateComponentDefinition() (*OSCALComponentDefinition
 				})
 			}
 			for _, controlRef := range ksi.ControlRefs {
-				implemented = append(implemented, OSCALImplementedControl{
-					ControlID:   controlRef,
-					Description: ksi.Title,
-					Statements:  statements,
-				})
+				if idx, exists := controlIndex[controlRef]; exists {
+					implemented[idx].Statements = append(implemented[idx].Statements, statements...)
+					implemented[idx].Description = implemented[idx].Description + "; " + ksi.Title
+				} else {
+					controlIndex[controlRef] = len(implemented)
+					implemented = append(implemented, OSCALImplementedControl{
+						ControlID:   controlRef,
+						Description: ksi.Title,
+						Statements:  statements,
+					})
+				}
 			}
 		}
 		controlImpls = append(controlImpls, OSCALControlImplementation{

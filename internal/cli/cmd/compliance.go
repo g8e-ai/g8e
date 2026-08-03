@@ -312,11 +312,18 @@ func openVault(ctx context.Context, fileSvc fs.RuntimeFileService) (*vault.Vault
 	}
 	vaultKeyRel := constants.SecretsDirname + "/" + constants.VaultKeyFilename
 	keyData, keyErr := fileSvc.ReadFile(ctx, vaultKeyRel)
-	if keyErr == nil {
-		keyHex := strings.TrimSpace(string(keyData))
-		if keyBytes, decErr := hex.DecodeString(keyHex); decErr == nil {
-			_ = v.Unlock(keyBytes)
-		}
+	if keyErr != nil {
+		logger.Warn("compliance: vault key file not found, proceeding with locked vault", "path", vaultKeyRel, "error", keyErr)
+		return v, func() {}
+	}
+	keyHex := strings.TrimSpace(string(keyData))
+	keyBytes, decErr := hex.DecodeString(keyHex)
+	if decErr != nil {
+		logger.Warn("compliance: vault key hex decode failed, proceeding with locked vault", "error", decErr)
+		return v, func() {}
+	}
+	if unlockErr := v.Unlock(keyBytes); unlockErr != nil {
+		logger.Warn("compliance: vault unlock failed, proceeding with locked vault", "error", unlockErr)
 	}
 	return v, func() {}
 }
