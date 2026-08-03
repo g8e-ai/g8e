@@ -398,6 +398,7 @@ The `g8e` binary (`internal/cli/cmd/main.go`) registers the following subcommand
 - **`demos`** (alias `demo`): Demo scenario management. Subcommands: `list`, `start`, `stop`, `status`, `clean`, `rebuild`, `reset`, `run`, `pull`, `export`, `import`, `images`, `scenarios` (with `list` and `run` subcommands).
 - **`audit`**: Run audit reports for compliance. Subcommands: `receipts`, `export`, `report`, `events`, `summary`.
 - **`report`**: Generate CSV evidence reports. Subcommands: `all`, `verify`.
+- **`compliance`**: FedRAMP 20x (CR26) compliance operations. Subcommands: `export` (generate OSCAL `component-definition` and `assessment-results` JSON artifacts), `ksi` (evaluate KSIs and print result set as JSON), `ksi-history` (list KSI snapshot history or filter by KSI ID), `overlay` (load and validate COSAiS overlay catalogs).
 - **`swagger`**: Manage Swagger/OpenAPI documentation. Subcommands: `init`, `serve`, `validate`.
 - **`tui`**: Launch the Tactical Governance Console (TUI). Requires a running gateway, enrolled CLI credentials, and mTLS client configuration.
 - **`gui`**: Enroll external frontend applications with the g8e Gateway. Subcommands: `enroll`, `show`, `verify`, `remove`.
@@ -433,6 +434,27 @@ The reporting system operates as a self-contained, offline verification utility 
 - **`internal/services/reporting/`**: Reads from database and storage backends (including decrypted execution vault, replay store, git ledger directory, and suspended transaction store) to write flat, deterministic CSV evidence files. Modules: `reporter.go` (orchestrator), `verification.go` (cryptographic verification pass), `commitments.go`, `events.go`, `executions.go`, `file_mutations.go`, `ledger.go`, `receipts.go`, `replay.go`, `rows.go`, `suspended.go`, `csvwriter.go`.
 - **Cryptographic Verification**: Re-validates receipt signatures, verifies the sequential commitment hash chain, and checks the git ledger Merkle root to ensure system integrity.
 - **Test Coverage**: `verification_test.go` provides 15 hermetic tests covering all 5 verification checks (commitment chain integrity, git merkle root, file mutation linkage, receipt/commitment cross-link, context cancellation) with real SQLite + vault. `verification.go` at 80.8% coverage.
+
+## Compliance Package
+
+**`internal/services/compliance/`** - FedRAMP 20x (CR26) KSI/OSCAL/COSAiS compliance tooling
+
+- **`ksi.go`**: Typed KSI model with `KSI`, `KSIMethod`, `KSIResult`, `KSIResultSet`, `KSICatalog`, `Evidence`, `AutomatedMethod` structs. Typed enums for `KSICategory`, `KSIStatus`, `CertificationClass`, `ValidationCycle`, `EvidenceType`. No raw maps. Catalog loaded from `docs/reference/ksi-catalog.json` (31 KSIs across 10 categories, seeded from CR26 reference).
+- **`ksi_test.go`**: 11 unit tests covering catalog loading, validation (7 edge cases), lookup, class filtering, staleness detection (6 scenarios), JSON round-trip, error paths.
+- **`ksi_evaluator.go`**: `KSIEvaluator` struct with `RegisterMethods`, `RegisterDefaultMethods`, `Evaluate` methods. Derives binary KSI status from live g8e state via `EvaluatorDeps` (audit store, ledger, commitment ledger). Enforces minimum method counts per certification class (fail-closed for Class C: at least 2). `DefaultMethods` provides 8 reusable method closures bound to automatable KSIs.
+- **`ksi_evaluator_test.go`**: 17 unit tests covering method registration, evaluation (all-satisfied, insufficient methods, stale, method error, nil deps, empty stores, class thresholds, context cancellation), result set helpers, default method correctness, full integration.
+- **`ksi_evaluator_integration_test.go`**: 2 integration tests (build tag: `integration`) against real `SQLAuditStore` + `GitLedgerService` + `CommitmentLedger` using the shipped catalog. `TestKSIEvaluator_Integration_SeededEvidenceSatisfiesAutomatableKSIs` seeds full evidence chain and asserts all 10 automatable KSIs satisfied. `TestKSIEvaluator_Integration_EmptyStoresFailClosed` asserts all KSIs fail-closed on empty stores.
+- **`oscal.go`**: `OSCALExporter` struct with `GenerateComponentDefinition` and `GenerateAssessmentResults` methods. Typed OSCAL structs for `component-definition` and `assessment-results` models. Evidence anchors link to receipt IDs, ledger commit hashes, and LFAA execution IDs. No `map[string]interface{}`.
+- **`oscal_test.go`**: 11 unit tests covering component-definition generation, assessment-results generation, nil/empty/unknown-KSI error paths, JSON marshaling, not-applicable status mapping, deterministic UUID generation.
+- **`ksi_history.go`**: `KSIHistoryStore` struct with `SaveSnapshot`, `ListSnapshots`, `GetHistoryForKSI`, `PruneOlderThan` methods. Persists `KSIResultSet` snapshots to `.g8e/data/compliance/ksi-history/` via `RuntimeFileService`. 90-day retention pruning.
+- **`ksi_history_test.go`**: 12 unit tests covering write/read round-trip, multiple snapshots sorted, per-KSI history filtering, not-found errors, empty directory, nil result set, pruning, zero retention, ReadDir error propagation (B1/B2 regression), filename format.
+- **`overlay_loader.go`**: `Overlay`, `OverlayCatalog`, `OverlayStatus` types. `LoadOverlayCatalog(path)`, `LoadOverlaysFromDir(dir)` (mirrors `NewL1DoctrineFromDir`), `Validate()`, `FindOverlay`/`HasOverlay`, `ValidateOverlayRefs(ksiCat, overlayCat)` for dangling reference detection, `CheckFinalizedOverlayCoverage(overlayCatalog, detectorOverlayIDs)` for Phase 8 CI guard (returns finalized overlay IDs lacking detector coverage).
+- **`overlay_loader_test.go`**: 32 unit tests covering catalog load, validation (8 sub-tests), lookup, directory loader (8 tests), ref validation (3 tests), finalized overlay coverage (6 tests), JSON round-trip.
+- **Package coverage**: 92.8% (exceeds 75% threshold).
+- **Error constants**: `ErrKSICatalogInvalid`, `ErrOverlayCatalogInvalid`, `ErrOverlayReadFailed`, `ErrOverlayParseFailed`, `ErrKSIHistoryWriteFailed`, `ErrKSIHistoryReadFailed`, `ErrKSIHistoryParseFailed`, `ErrKSIHistoryEmpty` in `internal/constants/errors.go`.
+- **Path constants**: `ComplianceDirname`, `KSICatalogFilename`, `COSAiSOverlaysFilename`, `OSCALAssessmentResultsFilename`, `OSCALComponentDefFilename`, `KSIHistoryDirname`, `KSIHistoryFilenamePrefix`, `KSIHistoryRetentionDays`, `DefaultOverlayDirPath` in `internal/constants/paths.go`.
+- **CI guard**: `scripts/validate-cosais-overlays.sh` checks that finalized COSAiS overlays have detector `overlay_ids` coverage. Invoked via `make validate-cosais` (part of `make lint`) and as a CI workflow step.
+- **Container support**: `Dockerfile` copies `docs/reference` into the runtime image (`COPY --from=builder /build/docs/reference /docs/reference`) so `g8e compliance ksi/export` works in containers. `docker-compose.yml` sets `working_dir: /root` on both services so named volumes at `/root/.g8e` are used correctly.
 
 ## CLI Serve Layer (Operator & Gateway Boot)
 
@@ -559,6 +581,7 @@ The following packages are test-only and are not part of the production dependen
 - `test/e2e/auth_e2e_test.go` - E2E authentication flow tests (build tag: `e2e`)
 - `test/e2e/gateway_e2e_test.go` - E2E gateway lifecycle and health tests (build tag: `e2e`)
 - `test/e2e/mcp_stdio_e2e_test.go` - E2E MCP stdio config output, JSON-RPC parsing, config template validation (build tag: `e2e`)
+- `test/e2e/compliance_e2e_test.go` - E2E compliance KSI pipeline test (build tag: `e2e`): runs `g8e compliance ksi/export/ksi-history` inside the operator container, verifies typed result sets, history snapshots, OSCAL artifacts, and evidence anchor resolution against real ledger commits (4 subtests)
 - `test/e2e/main_test.go` - E2E test main entry point and fixture setup (build tag: `e2e`)
 
 ## Python Protocol Package

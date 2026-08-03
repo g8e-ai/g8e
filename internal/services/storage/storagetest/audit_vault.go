@@ -27,17 +27,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/pathutil"
-	"github.com/g8e-ai/g8e/internal/timesvc"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/pathutil"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/vault"
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 )
 
 // ChaosEvent represents a chaos test event (test-only).
@@ -397,6 +397,25 @@ CREATE TABLE IF NOT EXISTS chaos_events (
 	FOREIGN KEY(operator_session_id) REFERENCES sessions(id)
 );
 
+CREATE TABLE IF NOT EXISTS commitment_ledger (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	transaction_id TEXT NOT NULL,
+	transaction_hash TEXT NOT NULL,
+	prior_commitment_hash TEXT NOT NULL,
+	state_root_at_commit TEXT,
+	l2_signature_digest TEXT,
+	actuator_intent_signature_digest TEXT,
+	human_signature_digest TEXT,
+	action_type TEXT,
+	target_resource TEXT,
+	committed_at_unix_ms INTEGER NOT NULL,
+	auditor_key_id TEXT,
+	signature TEXT,
+	hash TEXT NOT NULL,
+	attestation_json TEXT NOT NULL,
+	UNIQUE(hash)
+);
+
 CREATE INDEX IF NOT EXISTS idx_events_session_id ON events(operator_session_id);
 CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
 CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
@@ -408,6 +427,7 @@ CREATE INDEX IF NOT EXISTS idx_chaos_events_session_id ON chaos_events(operator_
 CREATE INDEX IF NOT EXISTS idx_chaos_events_timestamp ON chaos_events(timestamp);
 CREATE INDEX IF NOT EXISTS idx_chaos_events_category ON chaos_events(category);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_id_type ON sessions(id, session_type);
+CREATE INDEX IF NOT EXISTS idx_commitment_ledger_committed_at ON commitment_ledger(committed_at_unix_ms);
 `
 
 // CreateSession creates a new session in the audit log
@@ -1148,6 +1168,166 @@ func (avs *TestSQLAuditStore) GetFileMutations(eventID int64) ([]*storage.FileMu
 			row.mutation.DiffStat = row.diffStat.String
 		}
 
+		mutations = append(mutations, &row.mutation)
+	}
+
+	return mutations, nil
+}
+
+// ListEvents retrieves events with optional session filter and pagination, ordered by timestamp ASC.
+// When sessionID is empty, all events across all sessions are returned.
+// Content fields are decrypted if they were stored encrypted and the vault is unlocked.
+func (avs *TestSQLAuditStore) ListEvents(sessionID string, limit, offset int) ([]*storage.Event, error) {
+	if avs == nil || avs.db == nil {
+		return nil, constants.ErrAuditStoreDisabled
+	}
+
+	if limit <= 0 {
+		limit = 100
+	}
+
+	var query strings.Builder
+	query.WriteString(`
+	SELECT id, operator_session_id, timestamp, type, content_text,
+		command_raw, command_exit_code, command_stdout, command_stderr,
+		execution_duration_ms, stored_locally, stdout_truncated, stderr_truncated,
+		COALESCE(encrypted, 0) as encrypted
+	FROM events
+	`)
+
+	args := []interface{}{}
+	if sessionID != "" {
+		query.WriteString(" WHERE operator_session_id = ?")
+		args = append(args, sessionID)
+	}
+	query.WriteString(" ORDER BY timestamp ASC LIMIT ? OFFSET ?")
+	args = append(args, limit, offset)
+
+	type eventRow struct {
+		event              storage.Event
+		timestampStr       string
+		contentTextBytes   []byte
+		commandStdoutBytes []byte
+		commandStderrBytes []byte
+		commandRaw         sql.NullString
+		commandExitCode    sql.NullInt64
+		storedLocally      sql.NullBool
+		stdoutTruncated    sql.NullBool
+		stderrTruncated    sql.NullBool
+		encryptedFlag      int
+	}
+
+	rows, err := sqliteutil.MaterializeRows(avs.db, query.String(), args, func(r *sql.Rows) (eventRow, error) {
+		var row eventRow
+		err := r.Scan(
+			&row.event.ID, &row.event.OperatorSessionID, &row.timestampStr, &row.event.Type,
+			&row.contentTextBytes, &row.commandRaw, &row.commandExitCode,
+			&row.commandStdoutBytes, &row.commandStderrBytes, &row.event.ExecutionDurationMs,
+			&row.storedLocally, &row.stdoutTruncated, &row.stderrTruncated, &row.encryptedFlag,
+		)
+		return row, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrAuditStoreQueryEventsFailed, err)
+	}
+
+	var events []*storage.Event
+	for _, row := range rows {
+		row.event.Timestamp, _ = timesvc.ParseTimestamp(row.timestampStr)
+
+		if row.encryptedFlag == 1 && avs.encryptionVault != nil && avs.encryptionVault.IsUnlocked() {
+			if len(row.contentTextBytes) > 0 {
+				if dec, err := avs.decryptContent(row.contentTextBytes); err == nil {
+					row.event.ContentText = dec
+				}
+			}
+			if len(row.commandStdoutBytes) > 0 {
+				if dec, err := avs.decryptContent(row.commandStdoutBytes); err == nil {
+					row.event.CommandStdout = dec
+				}
+			}
+			if len(row.commandStderrBytes) > 0 {
+				if dec, err := avs.decryptContent(row.commandStderrBytes); err == nil {
+					row.event.CommandStderr = dec
+				}
+			}
+		} else {
+			row.event.ContentText = string(row.contentTextBytes)
+			row.event.CommandStdout = string(row.commandStdoutBytes)
+			row.event.CommandStderr = string(row.commandStderrBytes)
+		}
+
+		if row.commandRaw.Valid {
+			row.event.CommandRaw = row.commandRaw.String
+		}
+		if row.commandExitCode.Valid {
+			row.event.CommandExitCode = int(row.commandExitCode.Int64)
+		} else {
+			row.event.CommandExitCode = constants.ExitCodeNone
+		}
+		if row.storedLocally.Valid {
+			row.event.StoredLocally = row.storedLocally.Bool
+		}
+		if row.stdoutTruncated.Valid {
+			row.event.StdoutTruncated = row.stdoutTruncated.Bool
+		}
+		if row.stderrTruncated.Valid {
+			row.event.StderrTruncated = row.stderrTruncated.Bool
+		}
+
+		events = append(events, &row.event)
+	}
+
+	return events, nil
+}
+
+// ListFileMutations retrieves file mutations with pagination, ordered by id ASC.
+func (avs *TestSQLAuditStore) ListFileMutations(limit, offset int) ([]*storage.FileMutationLog, error) {
+	if avs == nil || avs.db == nil {
+		return nil, constants.ErrAuditStoreDisabled
+	}
+
+	if limit <= 0 {
+		limit = 100
+	}
+
+	query := `
+	SELECT id, event_id, filepath, operation, ledger_hash_before, ledger_hash_after, diff_stat
+	FROM file_mutation_log
+	ORDER BY id ASC
+	LIMIT ? OFFSET ?
+	`
+
+	type mutationRow struct {
+		mutation   storage.FileMutationLog
+		hashBefore sql.NullString
+		hashAfter  sql.NullString
+		diffStat   sql.NullString
+	}
+
+	rows, err := sqliteutil.MaterializeRows(avs.db, query, []interface{}{limit, offset}, func(r *sql.Rows) (mutationRow, error) {
+		var row mutationRow
+		err := r.Scan(
+			&row.mutation.ID, &row.mutation.EventID, &row.mutation.Filepath, &row.mutation.Operation,
+			&row.hashBefore, &row.hashAfter, &row.diffStat,
+		)
+		return row, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrAuditStoreQueryFileMutationsFailed, err)
+	}
+
+	var mutations []*storage.FileMutationLog
+	for _, row := range rows {
+		if row.hashBefore.Valid {
+			row.mutation.LedgerHashBefore = row.hashBefore.String
+		}
+		if row.hashAfter.Valid {
+			row.mutation.LedgerHashAfter = row.hashAfter.String
+		}
+		if row.diffStat.Valid {
+			row.mutation.DiffStat = row.diffStat.String
+		}
 		mutations = append(mutations, &row.mutation)
 	}
 

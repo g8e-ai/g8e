@@ -14,7 +14,10 @@
       "mitre_attack": "T1070",
       "mitre_tactic": "defense-evasion",
       "confidence": 0.98,
-      "enabled": true
+      "enabled": true,
+      "ksi_ids": ["KSI-MLA-07"],
+      "control_ids": ["AU-2", "AU-6"],
+      "overlay_ids": []
     },
     {
       "id": "fedramp-ac2-unauthorized-destroy",
@@ -26,7 +29,10 @@
       "mitre_attack": "T1485",
       "mitre_tactic": "impact",
       "confidence": 0.92,
-      "enabled": true
+      "enabled": true,
+      "ksi_ids": ["KSI-IAM-07"],
+      "control_ids": ["AC-2"],
+      "overlay_ids": []
     },
     {
       "id": "fedramp-si4-privilege-escalation",
@@ -38,7 +44,10 @@
       "mitre_attack": "T1548",
       "mitre_tactic": "privilege-escalation",
       "confidence": 0.90,
-      "enabled": true
+      "enabled": true,
+      "ksi_ids": ["KSI-IAM-05"],
+      "control_ids": ["SI-4"],
+      "overlay_ids": []
     },
     {
       "id": "fedramp-sc8-cross-domain-transfer",
@@ -50,7 +59,10 @@
       "mitre_attack": "T1048",
       "mitre_tactic": "exfiltration",
       "confidence": 0.94,
-      "enabled": true
+      "enabled": true,
+      "ksi_ids": ["KSI-SVC-03", "KSI-CNA-01"],
+      "control_ids": ["SC-8"],
+      "overlay_ids": []
     },
     {
       "id": "fedramp-cm7-unauthorized-config",
@@ -62,7 +74,10 @@
       "mitre_attack": "T1565",
       "mitre_tactic": "impact",
       "confidence": 0.85,
-      "enabled": true
+      "enabled": true,
+      "ksi_ids": ["KSI-CMT-01", "KSI-SVC-04"],
+      "control_ids": ["CM-7"],
+      "overlay_ids": []
     }
   ]
 }

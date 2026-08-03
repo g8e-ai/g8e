@@ -65,6 +65,9 @@ jobs:
           git diff --exit-code
           make validate-doctrines
 
+      - name: Validate COSAiS Overlay Coverage
+        run: make validate-cosais
+
       - name: Generate & Validate Swagger Docs
         run: |
           make swagger-generate

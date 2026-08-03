@@ -136,7 +136,7 @@ Return centralized error constants from `internal/constants/errors.go` for known
 - See [Testing Guide](tests.md) for detailed test patterns and infrastructure
 
 **Test infrastructure separation:**
-- `internal/services/storage/storagetest/` - Test-only audit storage (`TestSQLAuditStore` with Git ledger, no-op `DocSet`) and `TestTokenStore` (in-memory `TokenStore` with TTL)
+- `internal/services/storage/storagetest/` - Test-only audit storage (`TestSQLAuditStore` with Git ledger, no-op `DocSet`) and `TestTokenStore` (in-memory `TokenStore` with TTL). `TestSQLAuditStore` satisfies `compliance.AuditEvidenceReader` via `ListEvents` and `ListFileMutations` methods.
 - `internal/services/pubsub/pubsubtest/` - Test-only `PubSubClient` mock (`MockOperatorPubSubClient`)
 - `internal/services/governance/governancetest/` - Test-only governance store fixtures (`SimpleConsensusStore`, `SimpleAppPolicyStore`, `SimpleStateRootProvider`)
 - `internal/tools/chaos/` - Chaos engineering infrastructure (uses `storagetest.TestSQLAuditStore`)

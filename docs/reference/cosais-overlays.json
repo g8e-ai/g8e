@@ -1,0 +1,46 @@
+{
+  "version": "COSAiS-2025-08-concept-paper",
+  "source": "NIST Control Overlays for Securing AI Systems (COSAiS) concept paper",
+  "overlays": [
+    {
+      "id": "COSAiS-GENAI-01",
+      "title": "GenAI/LLM Assistant Overlay",
+      "description": "Controls for systems using generative AI and large language models as interactive assistants, covering prompt injection, output validation, and model provenance.",
+      "use_case": "genai_llm_assistant",
+      "control_refs": ["AC-3", "AU-2", "AU-6", "IA-5", "SC-8", "SI-4", "SR-11"],
+      "status": "draft"
+    },
+    {
+      "id": "COSAiS-PREDAI-01",
+      "title": "Predictive AI Overlay",
+      "description": "Controls for systems using predictive AI models for forecasting, classification, and recommendation, covering data integrity, model drift detection, and feedback loop security.",
+      "use_case": "predictive_ai",
+      "control_refs": ["AU-2", "AU-6", "CM-3", "IA-5", "SI-4"],
+      "status": "draft"
+    },
+    {
+      "id": "COSAiS-SINGLE-AGENT-01",
+      "title": "Single-Agent AI Overlay",
+      "description": "Controls for systems with a single autonomous AI agent executing actions on behalf of a user, covering action authorization, scope limitation, and audit trail completeness.",
+      "use_case": "single_agent",
+      "control_refs": ["AC-2", "AC-3", "AU-2", "AU-6", "CM-7", "IA-2", "SI-4"],
+      "status": "draft"
+    },
+    {
+      "id": "COSAiS-MULTI-AGENT-01",
+      "title": "Multi-Agent AI Overlay",
+      "description": "Controls for systems with multiple interacting autonomous AI agents, covering inter-agent authentication, consensus verification, delegation chains, and collective action auditability.",
+      "use_case": "multi_agent",
+      "control_refs": ["AC-2", "AC-3", "AU-2", "AU-6", "AU-10", "IA-2", "IA-8", "SC-8", "SI-4"],
+      "status": "draft"
+    },
+    {
+      "id": "COSAiS-AI-DEV-01",
+      "title": "AI Developer Overlay",
+      "description": "Controls for systems where AI assists in software development, covering code generation validation, dependency chain security, test coverage enforcement, and deployment authorization.",
+      "use_case": "ai_developer",
+      "control_refs": ["CM-3", "CM-4", "CM-7", "SA-11", "SI-2", "SR-11"],
+      "status": "draft"
+    }
+  ]
+}

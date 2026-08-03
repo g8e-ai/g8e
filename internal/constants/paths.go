@@ -268,6 +268,7 @@ const (
 	ContainerInspectRFPy   = "/app/inspect_rf.py"
 	ContainerInspectPNTPy  = "/app/inspect_pnt.py"
 	ContainerVerifySlewsPy = "/app/verify_slews.py"
+	ContainerKSICatalog    = "/docs/reference/" + KSICatalogFilename
 )
 
 // Local binary names for the g8e CLI executable.
@@ -487,4 +488,18 @@ const (
 	ReportSuspendedTxFilename      = "suspended_transactions.csv"
 	ReportVerificationFilename     = "verification_summary.csv"
 	ReportManifestFilename         = "manifest.csv"
+)
+
+// Compliance constants for KSI catalog, OSCAL output, and KSI history snapshots.
+const (
+	ComplianceDirname              = "compliance"
+	KSICatalogFilename             = "ksi-catalog.json"
+	COSAiSOverlaysFilename         = "cosais-overlays.json"
+	OSCALAssessmentResultsFilename = "assessment-results.json"
+	OSCALComponentDefFilename      = "component-definition.json"
+	KSIHistoryDirname              = "ksi-history"
+	KSIHistoryFilenamePrefix       = "ksi-result-"
+	DefaultKSICatalogPath          = DocsDirname + "/reference/" + KSICatalogFilename
+	DefaultOverlayDirPath          = DocsDirname + "/reference"
+	KSIHistoryRetentionDays        = 90
 )

@@ -92,7 +92,7 @@ func setupReportingEnv(t *testing.T, seed bool) (Options, string) {
 		prior_commitment_hash TEXT NOT NULL,
 		state_root_at_commit TEXT,
 		l2_signature_digest TEXT,
-		Actuator_intent_signature_digest TEXT,
+		actuator_intent_signature_digest TEXT,
 		human_signature_digest TEXT,
 		action_type TEXT,
 		target_resource TEXT,

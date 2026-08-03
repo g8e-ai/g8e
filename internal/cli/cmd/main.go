@@ -100,6 +100,7 @@ Running './g8e' with no arguments launches the Tactical Governance Console (TUI)
 		tuiCmd(),
 		guiCmd(),
 		versionCmd(),
+		complianceCmd(),
 	)
 
 	return rootCmd
