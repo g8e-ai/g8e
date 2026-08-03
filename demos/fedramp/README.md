@@ -153,7 +153,7 @@ All scenarios run via `demos scenarios run`, a real g8e binary that submits genu
 
 After all scenarios, `g8e audit export` produces a single evidence bundle with all receipts. The bundle is tagged to CR26 KSI categories from `ksi_categories.json`. `g8e audit receipts` shows the full hash-chained ledger. Tampering with any record in a copy causes chain verification to fail.
 
-The demo also emits a machine-readable KSI result artifact via `g8e compliance ksi --class C`, which evaluates KSIs against the live audit state and produces a binary result set. Snapshots are persisted to `.g8e/data/compliance/ksi-history/` via `g8e compliance ksi-history` for historical metrics retention. OSCAL `component-definition` and `assessment-results` artifacts are generated via `g8e compliance export --format oscal --class C`.
+The demo also emits a machine-readable KSI result artifact via `g8e compliance ksi --class C`, which evaluates KSIs against the live audit state and produces a binary result set. This step runs automatically after all five scenarios complete — the demo orchestrator executes `g8e compliance ksi --class C --catalog /docs/reference/ksi-catalog.json` inside the gateway container, then verifies the snapshots via `verify_ops.py --ksi-result`. Snapshots are persisted to `/root/.g8e/data/compliance/ksi-history/` inside the gateway container. OSCAL `component-definition` and `assessment-results` artifacts are generated via `g8e compliance export --format oscal --class C`.
 
 ## License
 

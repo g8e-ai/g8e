@@ -394,3 +394,30 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 	}
 	return result, nil
 }
+
+// runFedRAMPKSIEvidence runs g8e compliance ksi inside the gateway container
+// to emit KSI result snapshots, then verifies them via verify_ops.py --ksi-result.
+// Returns true if both steps succeed.
+func runFedRAMPKSIEvidence(demoDir string) bool {
+	demoPrintf("\n%s\n", strings.Repeat("-", 60))
+	demoPrintln("  KSI Evidence Export")
+	demoPrintln(strings.Repeat("-", 60))
+	demoPrintln()
+
+	if !demoScenarioStep(demoDir, "Step 1: Emit KSI result snapshots (g8e compliance ksi --class C)",
+		[]string{"docker", "compose", "exec", "-T", "gateway",
+			"/g8e", "compliance", "ksi", "--class", "C", "--catalog", constants.ContainerKSICatalog}) {
+		fmt.Println("  [FAIL] KSI evidence export — could not emit snapshots.")
+		return false
+	}
+
+	if !demoScenarioStep(demoDir, "Step 2: Verify KSI result snapshots (verify_ops.py --ksi-result)",
+		[]string{"docker", "compose", "exec", "-T", "cloudsvc",
+			"python", constants.ContainerVerifyOpsPy, "--ksi-result"}) {
+		fmt.Println("  [FAIL] KSI evidence export — snapshot verification failed.")
+		return false
+	}
+
+	fmt.Println("  [PASS] KSI evidence export — snapshots emitted and verified.")
+	return true
+}

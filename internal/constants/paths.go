@@ -268,6 +268,7 @@ const (
 	ContainerInspectRFPy   = "/app/inspect_rf.py"
 	ContainerInspectPNTPy  = "/app/inspect_pnt.py"
 	ContainerVerifySlewsPy = "/app/verify_slews.py"
+	ContainerKSICatalog    = "/docs/reference/" + KSICatalogFilename
 )
 
 // Local binary names for the g8e CLI executable.

@@ -1255,6 +1255,10 @@ func runAllScenarios(cmd *cobra.Command, org, demoDir string) error {
 		results = append(results, result)
 	}
 
+	if org == constants.DemosOrgFedRAMP {
+		runFedRAMPKSIEvidence(demoDir)
+	}
+
 	printResultsTable(cmd, org, results)
 
 	hasFail, hasSkip := false, false
