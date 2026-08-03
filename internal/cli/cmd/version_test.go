@@ -84,8 +84,22 @@ func TestRunVersion_FIPSReportsModuleStatus(t *testing.T) {
 		return
 	}
 	// When the test binary itself was built with GOFIPS140, approved mode is on.
+	// Enforcement off is the common production posture (e.g. when SSH streaming
+	// needs non-approved primitives); the command must warn but exit 0 so
+	// operators get a status report, not a false alarm. CI/release gates that
+	// require the strict posture run under GODEBUG=fips140=only (see `make
+	// verify-fips`).
+	if !fips140.Enforced() {
+		require.NoError(t, err)
+		assert.Contains(t, out, "FIPS 140-3 mode:     enabled")
+		assert.Contains(t, out, "FIPS enforcement:    disabled")
+		assert.Contains(t, out, "WARNING: FIPS 140-3 approved mode is active but enforcement is OFF")
+		return
+	}
 	require.NoError(t, err)
 	assert.Contains(t, out, "FIPS 140-3 mode:     enabled")
+	assert.Contains(t, out, "FIPS enforcement:    enabled")
+	assert.NotContains(t, out, "WARNING:")
 }
 
 func TestVersionCmd_HasFipsFlag(t *testing.T) {

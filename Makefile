@@ -498,12 +498,15 @@ build-fips:
 	@echo "Verify with: ./g8e-fips version --fips"
 
 # Quick FIPS self-check: build the FIPS variant and confirm the binary reports
-# FIPS 140-3 approved mode is active via the native crypto/fips140 module API.
+# FIPS 140-3 approved mode AND enforcement are active via the native
+# crypto/fips140 module API. GODEBUG=fips140=only is set at runtime to switch
+# the module into enforcement mode (rejecting non-approved primitives);
+# GOFIPS140 alone only enables approved mode (GODEBUG defaults to fips140=on).
 # Exits non-zero if the self-check fails. Intended for CI and release gates.
 .PHONY: verify-fips
 verify-fips: build-fips
-	@echo "Verifying FIPS 140-3 approved mode in the built binary..."
-	@./g8e-fips version --fips
+	@echo "Verifying FIPS 140-3 approved mode and enforcement in the built binary..."
+	@GODEBUG=fips140=only ./g8e-fips version --fips
 	@echo "FIPS 140-3 self-check passed."
 
 # =============================================================================
