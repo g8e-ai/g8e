@@ -17,7 +17,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strconv"
 	"testing"
 	"time"
 
@@ -227,17 +226,14 @@ func TestKSIHistoryStore_PruneOlderThan(t *testing.T) {
 		Results:       []KSIResult{{ID: "KSI-CMT-01", Status: KSIStatusSatisfied, MethodCount: 2}},
 	}))
 
-	// Manually write an old snapshot file with a backdated modification time.
+	// Save an old snapshot with a timestamp beyond the retention period.
+	// Pruning is based on EvaluatedAtMs in the filename, not file mtime.
 	oldMs := now.Add(-100 * 24 * time.Hour).UnixMilli()
-	oldFilename := snapshotFilename(oldMs)
-	oldRelPath := filepath.Join(historyDir, oldFilename)
-	oldData := []byte(`{"class":"C","evaluated_at_ms":` + strconv.FormatInt(oldMs, 10) + `,"results":[]}`)
-	require.NoError(t, fileSvc.MkdirAll(ctx, historyDir, constants.PermDirStandard))
-	require.NoError(t, fileSvc.WriteFile(ctx, oldRelPath, oldData, constants.PermFilePublic))
-
-	// Backdate the file's modification time.
-	absPath := fileSvc.Resolve(oldRelPath)
-	require.NoError(t, os.Chtimes(absPath, now.Add(-100*24*time.Hour), now.Add(-100*24*time.Hour)))
+	require.NoError(t, store.SaveSnapshot(ctx, &KSIResultSet{
+		Class:         ClassC,
+		EvaluatedAtMs: oldMs,
+		Results:       []KSIResult{{ID: "KSI-CMT-01", Status: KSIStatusSatisfied, MethodCount: 2}},
+	}))
 
 	// Prune with 90-day retention.
 	removed, err := store.PruneOlderThan(ctx, 90*24*time.Hour)
@@ -317,4 +313,53 @@ func TestKSIHistoryStore_PruneOlderThan_ReadDirError(t *testing.T) {
 func TestSnapshotFilename(t *testing.T) {
 	name := snapshotFilename(1700000000000)
 	assert.Equal(t, "ksi-result-1700000000000.json", name)
+}
+
+// TestParseSnapshotFilename verifies that parseSnapshotFilename correctly
+// extracts the evaluation timestamp from valid filenames and rejects invalid ones.
+func TestParseSnapshotFilename(t *testing.T) {
+	ms, ok := parseSnapshotFilename("ksi-result-1700000000000.json")
+	require.True(t, ok)
+	assert.Equal(t, int64(1700000000000), ms)
+
+	_, ok = parseSnapshotFilename("not-a-snapshot.json")
+	assert.False(t, ok)
+
+	_, ok = parseSnapshotFilename("ksi-result-notanumber.json")
+	assert.False(t, ok)
+
+	_, ok = parseSnapshotFilename("ksi-result-1700000000000.txt")
+	assert.False(t, ok)
+}
+
+// TestKSIHistoryStore_PruneOlderThan_ImmuneToMtimeChanges verifies that pruning
+// is based on EvaluatedAtMs in the filename, not file modification time. Even
+// if an external tool touches the file to update its mtime, an old snapshot is
+// still pruned correctly.
+func TestKSIHistoryStore_PruneOlderThan_ImmuneToMtimeChanges(t *testing.T) {
+	fileSvc := setupHistoryTestFS(t)
+	ctx := context.Background()
+	historyDir := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.KSIHistoryDirname)
+	store := NewKSIHistoryStore(fileSvc, historyDir)
+
+	now := time.Now()
+
+	// Save an old snapshot (timestamp beyond 90-day retention).
+	oldMs := now.Add(-100 * 24 * time.Hour).UnixMilli()
+	require.NoError(t, store.SaveSnapshot(ctx, &KSIResultSet{
+		Class:         ClassC,
+		EvaluatedAtMs: oldMs,
+		Results:       []KSIResult{{ID: "KSI-CMT-01", Status: KSIStatusSatisfied, MethodCount: 2}},
+	}))
+
+	// Simulate an external tool touching the file to update its mtime to now.
+	oldFilename := snapshotFilename(oldMs)
+	absPath := fileSvc.Resolve(filepath.Join(historyDir, oldFilename))
+	require.NoError(t, os.Chtimes(absPath, now, now))
+
+	// Prune with 90-day retention — the old snapshot must still be pruned
+	// because its EvaluatedAtMs (in the filename) is beyond retention.
+	removed, err := store.PruneOlderThan(ctx, 90*24*time.Hour)
+	require.NoError(t, err)
+	assert.Equal(t, 1, removed)
 }

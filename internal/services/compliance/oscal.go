@@ -18,6 +18,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
@@ -210,14 +212,16 @@ func (e *OSCALExporter) GenerateComponentDefinition() (*OSCALComponentDefinition
 					Description: m.Description,
 				})
 			}
-			implemented = append(implemented, OSCALImplementedControl{
-				ControlID:   ksi.ControlRefs[0],
-				Description: ksi.Title,
-				Statements:  statements,
-			})
+			for _, controlRef := range ksi.ControlRefs {
+				implemented = append(implemented, OSCALImplementedControl{
+					ControlID:   controlRef,
+					Description: ksi.Title,
+					Statements:  statements,
+				})
+			}
 		}
 		controlImpls = append(controlImpls, OSCALControlImplementation{
-			UUID:                generateUUID("g8e-ci-" + string(cat)),
+			UUID:                generateUUID(),
 			Source:              "FedRAMP 20x KSI catalog (CR26)",
 			Description:         "g8e control implementations for KSI category " + string(cat),
 			ImplementedControls: implemented,
@@ -225,7 +229,7 @@ func (e *OSCALExporter) GenerateComponentDefinition() (*OSCALComponentDefinition
 	}
 
 	return &OSCALComponentDefinition{
-		UUID: generateUUID("g8e-component-definition"),
+		UUID: generateUUID(),
 		Metadata: OSCALMetadata{
 			Title:        "g8e Platform Component Definition",
 			Published:    now,
@@ -235,7 +239,7 @@ func (e *OSCALExporter) GenerateComponentDefinition() (*OSCALComponentDefinition
 		},
 		Components: []OSCALComponent{
 			{
-				UUID:                   generateUUID("g8e-platform-component"),
+				UUID:                   generateUUID(),
 				Type:                   "software",
 				Title:                  "g8e Zero-Trust Execution Platform",
 				Description:            "g8e is a zero-trust execution platform for agentic infrastructure. Mutations are typed, signed, state-bound, and verified through a 5-layer gauntlet.",
@@ -245,7 +249,7 @@ func (e *OSCALExporter) GenerateComponentDefinition() (*OSCALComponentDefinition
 		BackMatter: OSCALBackMatter{
 			Resources: []OSCALResource{
 				{
-					UUID:        generateUUID("g8e-ksi-catalog-resource"),
+					UUID:        generateUUID(),
 					Title:       "FedRAMP 20x KSI Catalog",
 					Description: "CR26 Key Security Indicators reference catalog",
 					Props: []OSCALProp{
@@ -291,13 +295,13 @@ func (e *OSCALExporter) GenerateAssessmentResults(resultSet *KSIResultSet) (*OSC
 		}
 
 		observations = append(observations, OSCALObservation{
-			UUID:        generateUUID("g8e-obs-" + res.ID),
+			UUID:        generateUUID(),
 			Title:       "KSI " + res.ID + " Evaluation",
 			Description: ksi.Title,
 			Methods:     []OSCALMethodRef{{MethodID: "TEST-AUTOMATED"}},
 			Subjects: []OSCALSubject{
 				{
-					SubjectUUID: generateUUID("g8e-ksi-" + res.ID),
+					SubjectUUID: generateUUID(),
 					Type:        "assessment-target",
 					Title:       res.ID,
 				},
@@ -315,7 +319,7 @@ func (e *OSCALExporter) GenerateAssessmentResults(resultSet *KSIResultSet) (*OSC
 		}
 
 		findings = append(findings, OSCALFinding{
-			UUID:        generateUUID("g8e-finding-" + res.ID),
+			UUID:        generateUUID(),
 			Title:       "KSI " + res.ID + " Finding",
 			Description: fmt.Sprintf("KSI %s (%s): %s — %d automated methods evaluated", res.ID, ksi.Title, res.Status, res.MethodCount),
 			Target: OSCALFindingTarget{
@@ -326,7 +330,7 @@ func (e *OSCALExporter) GenerateAssessmentResults(resultSet *KSIResultSet) (*OSC
 	}
 
 	return &OSCALAssessmentResults{
-		UUID: generateUUID("g8e-assessment-results"),
+		UUID: generateUUID(),
 		Metadata: OSCALMetadata{
 			Title:        "g8e KSI Assessment Results",
 			Published:    now,
@@ -336,7 +340,7 @@ func (e *OSCALExporter) GenerateAssessmentResults(resultSet *KSIResultSet) (*OSC
 		},
 		Results: []OSCALResult{
 			{
-				UUID:         generateUUID("g8e-result-class-" + string(resultSet.Class)),
+				UUID:         generateUUID(),
 				Title:        "FedRAMP 20x Class " + string(resultSet.Class) + " KSI Assessment",
 				Description:  fmt.Sprintf("Automated KSI evaluation for FedRAMP 20x Certification Class %s", resultSet.Class),
 				Start:        evaluatedAt,
@@ -347,28 +351,8 @@ func (e *OSCALExporter) GenerateAssessmentResults(resultSet *KSIResultSet) (*OSC
 	}, nil
 }
 
-// generateUUID produces a deterministic-looking UUID v4 string from a seed.
-// This is not cryptographically random — it is for OSCAL document UUIDs which
-// only need to be unique within a submission package.
-func generateUUID(seed string) string {
-	// Simple deterministic UUID format from seed hash.
-	// Uses a fixed prefix to ensure uniqueness across document types.
-	h := simpleHash(seed)
-	return fmt.Sprintf("%08x-%04x-4%03x-8%03x-%012x",
-		h&0xFFFFFFFF,
-		(h>>32)&0xFFFF,
-		(h>>48)&0xFFF,
-		(h>>16)&0xFFF,
-		h&0xFFFFFFFFFFFF,
-	)
-}
-
-// simpleHash produces a 64-bit hash from a string (FNV-1a).
-func simpleHash(s string) uint64 {
-	var h uint64 = 14695981039346656037
-	for i := 0; i < len(s); i++ {
-		h ^= uint64(s[i])
-		h *= 1099511628211
-	}
-	return h
+// generateUUID produces a random RFC 4122 UUID v4 string using crypto/rand
+// via the google/uuid package. Each call returns a unique UUID.
+func generateUUID() string {
+	return uuid.New().String()
 }

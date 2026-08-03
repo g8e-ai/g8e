@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -99,7 +100,7 @@ func TestOSCALExporter_GenerateComponentDefinition(t *testing.T) {
 
 	// UUID must be non-empty and look like a UUID.
 	assert.NotEmpty(t, compDef.UUID)
-	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-8[0-9a-f]{3}-[0-9a-f]{12}$`, compDef.UUID)
+	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`, compDef.UUID)
 
 	// Metadata.
 	assert.Equal(t, "g8e Platform Component Definition", compDef.Metadata.Title)
@@ -122,10 +123,14 @@ func TestOSCALExporter_GenerateComponentDefinition(t *testing.T) {
 	assert.Equal(t, "CMT", string(cat.KSIs[0].Category))
 	assert.NotEmpty(t, cmtImpl.UUID)
 	assert.Contains(t, cmtImpl.Description, "CMT")
-	require.Len(t, cmtImpl.ImplementedControls, 1)
+	// KSI-CMT-01 has two control refs (AU-2, CM-3), so two implemented controls.
+	require.Len(t, cmtImpl.ImplementedControls, 2)
 	assert.Equal(t, "AU-2", cmtImpl.ImplementedControls[0].ControlID)
+	assert.Equal(t, "CM-3", cmtImpl.ImplementedControls[1].ControlID)
 	assert.Equal(t, "Logging Changes", cmtImpl.ImplementedControls[0].Description)
+	assert.Equal(t, "Logging Changes", cmtImpl.ImplementedControls[1].Description)
 	require.Len(t, cmtImpl.ImplementedControls[0].Statements, 2)
+	require.Len(t, cmtImpl.ImplementedControls[1].Statements, 2)
 
 	// Back-matter resource.
 	require.Len(t, compDef.BackMatter.Resources, 1)
@@ -373,14 +378,16 @@ func TestOSCALExporter_GenerateComponentDefinition_NoControlRefs(t *testing.T) {
 	assert.Contains(t, err.Error(), "no control refs")
 }
 
-// TestGenerateUUID_Deterministic verifies that the same seed produces the same
-// UUID and different seeds produce different UUIDs.
-func TestGenerateUUID_Deterministic(t *testing.T) {
-	u1 := generateUUID("test-seed")
-	u2 := generateUUID("test-seed")
-	u3 := generateUUID("different-seed")
+// TestGenerateUUID_RandomV4 verifies that generateUUID produces unique
+// RFC 4122 UUID v4 strings with the correct format.
+func TestGenerateUUID_RandomV4(t *testing.T) {
+	u1 := generateUUID()
+	u2 := generateUUID()
 
-	assert.Equal(t, u1, u2, "same seed should produce same UUID")
-	assert.NotEqual(t, u1, u3, "different seeds should produce different UUIDs")
-	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-8[0-9a-f]{3}-[0-9a-f]{12}$`, u1)
+	assert.NotEqual(t, u1, u2, "two calls should produce different UUIDs")
+	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`, u1)
+	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`, u2)
+
+	_, err := uuid.Parse(u1)
+	assert.NoError(t, err)
 }

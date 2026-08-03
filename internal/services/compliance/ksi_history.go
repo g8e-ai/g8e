@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -158,7 +159,7 @@ func (s *KSIHistoryStore) PruneOlderThan(ctx context.Context, retention time.Dur
 		return 0, fmt.Errorf("%w: %w", constants.ErrKSIHistoryReadFailed, err)
 	}
 
-	cutoff := time.Now().Add(-retention)
+	cutoffMs := time.Now().Add(-retention).UnixMilli()
 	removed := 0
 
 	for _, entry := range entries {
@@ -168,12 +169,15 @@ func (s *KSIHistoryStore) PruneOlderThan(ctx context.Context, retention time.Dur
 		if !strings.HasPrefix(entry.Name(), constants.KSIHistoryFilenamePrefix) {
 			continue
 		}
-
-		info, err := entry.Info()
-		if err != nil {
+		if !strings.HasSuffix(entry.Name(), constants.FileExtJSON) {
 			continue
 		}
-		if info.ModTime().Before(cutoff) {
+
+		evaluatedAtMs, ok := parseSnapshotFilename(entry.Name())
+		if !ok {
+			continue
+		}
+		if evaluatedAtMs < cutoffMs {
 			relPath := filepath.Join(s.dir, entry.Name())
 			if err := s.fileSvc.Remove(ctx, relPath); err != nil {
 				return removed, fmt.Errorf("%w: %s: %w", constants.ErrKSIHistoryWriteFailed, entry.Name(), err)
@@ -189,4 +193,19 @@ func (s *KSIHistoryStore) PruneOlderThan(ctx context.Context, retention time.Dur
 // timestamp in milliseconds. The format is ksi-result-<unix_ms>.json.
 func snapshotFilename(evaluatedAtMs int64) string {
 	return fmt.Sprintf("%s%d%s", constants.KSIHistoryFilenamePrefix, evaluatedAtMs, constants.FileExtJSON)
+}
+
+// parseSnapshotFilename extracts the evaluation timestamp (Unix ms) from a
+// snapshot filename. Returns false if the filename does not match the
+// expected format.
+func parseSnapshotFilename(name string) (int64, bool) {
+	if !strings.HasPrefix(name, constants.KSIHistoryFilenamePrefix) || !strings.HasSuffix(name, constants.FileExtJSON) {
+		return 0, false
+	}
+	tsStr := strings.TrimSuffix(strings.TrimPrefix(name, constants.KSIHistoryFilenamePrefix), constants.FileExtJSON)
+	ms, err := strconv.ParseInt(tsStr, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return ms, true
 }
