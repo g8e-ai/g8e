@@ -397,7 +397,7 @@ func TestListCommitments_WithData(t *testing.T) {
 			"transaction_hash": "thash-%d",
 			"state_root_at_commit": "sr-%d",
 			"l2_signature_digest": "l2-%d",
-			"Actuator_intent_signature_digest": "act-%d",
+			"actuator_intent_signature_digest": "act-%d",
 			"human_signature_digest": "hsig-%d",
 			"action_type": "write",
 			"target_resource": "/file%d",

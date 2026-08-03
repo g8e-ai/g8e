@@ -186,6 +186,7 @@ help:
 	@echo "  lint          Run all linting and quality checks"
 	@echo "  vulncheck     Run Operator vulnerability check"
 	@echo "  validate-doctrines Validate doctrine JSON schema"
+	@echo "  validate-cosais     Validate COSAiS overlay coverage (Phase 8 CI guard)"
 	@echo "  swagger-generate Generate Swagger/OpenAPI documentation from code annotations"
 	@echo ""
 	@echo "Cleanup:"
@@ -497,12 +498,15 @@ build-fips:
 	@echo "Verify with: ./g8e-fips version --fips"
 
 # Quick FIPS self-check: build the FIPS variant and confirm the binary reports
-# FIPS 140-3 approved mode is active via the native crypto/fips140 module API.
+# FIPS 140-3 approved mode AND enforcement are active via the native
+# crypto/fips140 module API. GODEBUG=fips140=only is set at runtime to switch
+# the module into enforcement mode (rejecting non-approved primitives);
+# GOFIPS140 alone only enables approved mode (GODEBUG defaults to fips140=on).
 # Exits non-zero if the self-check fails. Intended for CI and release gates.
 .PHONY: verify-fips
 verify-fips: build-fips
-	@echo "Verifying FIPS 140-3 approved mode in the built binary..."
-	@./g8e-fips version --fips
+	@echo "Verifying FIPS 140-3 approved mode and enforcement in the built binary..."
+	@GODEBUG=fips140=only ./g8e-fips version --fips
 	@echo "FIPS 140-3 self-check passed."
 
 # =============================================================================
@@ -600,7 +604,7 @@ test-coverage:
 # LINT & QUALITY
 # =============================================================================
 .PHONY: lint
-lint: lint-no-embedded-newlines vulncheck validate-doctrines swagger-generate
+lint: lint-no-embedded-newlines vulncheck validate-doctrines validate-cosais swagger-generate
 	@golangci-lint run
 	@echo "All linting and quality checks complete."
 
@@ -624,6 +628,11 @@ validate-doctrines:
 		fi \
 	done
 	@echo "All doctrine files are valid JSON."
+
+.PHONY: validate-cosais
+validate-cosais:
+	@echo "Validating COSAiS overlay coverage..."
+	@bash scripts/validate-cosais-overlays.sh
 
 .PHONY: swagger-generate
 swagger-generate:

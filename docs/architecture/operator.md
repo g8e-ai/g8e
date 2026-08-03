@@ -4,8 +4,8 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-07-28
-Version: v1.6.6
+Last Updated: 2026-08-02
+Version: v1.6.9
 
 The **Governed Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions with L1-L3 proofs attached from the Gateway (PDP), re-verifies those proofs locally, then enforces L4 Warden and L5 Actuator gates, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
@@ -241,6 +241,26 @@ Each receipt includes:
 - Signed ActionReceipt
 - State root before/after
 - Operator session ID
+
+### 5b. Export FedRAMP 20x Compliance Evidence
+
+For FedRAMP 20x (CR26) workloads, the `g8e compliance` command derives binary Key Security Indicator (KSI) status from the live audit state and emits machine-readable OSCAL artifacts:
+
+```bash
+# Evaluate KSIs against live state and print the result set as JSON
+g8e compliance ksi --class C
+
+# Export OSCAL component-definition and assessment-results JSON artifacts
+g8e compliance export --format oscal --class C
+
+# Read persisted KSI evaluation history snapshots (optionally filter by KSI ID)
+g8e compliance ksi-history --ksi KSI-CMT-01
+
+# Load and validate COSAiS overlay catalogs against the KSI catalog
+g8e compliance overlay --overlay-dir docs/reference
+```
+
+KSI snapshots are persisted to `.g8e/data/compliance/ksi-history/` on each evaluation and pruned after a 90-day retention period. The KSI catalog (`docs/reference/ksi-catalog.json`) and COSAiS overlay catalog (`docs/reference/cosais-overlays.json`) ship with the runtime image. See [Compliance Alignment Report](../../reference/compliance-alignment.md#10-fedramp-20x-cr26-alignment) for the full KSI model, certification classes, and evidence anchor mapping.
 
 ### 6. Explore Native Tools
 

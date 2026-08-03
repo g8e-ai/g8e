@@ -42,14 +42,20 @@ func versionCmd() *cobra.Command {
 With --fips, also report the FIPS 140-3 status of the running binary by
 querying the Go Cryptographic Module (crypto/fips140). A binary built with
 GOFIPS140=v1.0.0 enters FIPS approved mode by default; this flag confirms
-that mode is active and prints the validated module version. The command
-exits non-zero if --fips is requested but FIPS mode is not active, so it can
-be used as an auditor/operator self-check.`,
+that mode is active and prints the validated module version.
+
+The command exits non-zero only if FIPS approved mode is NOT active. If
+approved mode is active but enforcement is off (the common production
+posture when non-approved primitives such as ChaCha20-Poly1305 SSH are
+required), the command prints a warning and exits 0 — this is informational
+for operators, not a failure. CI/release gates that require the strict
+posture should run the binary under GODEBUG=fips140=only (see 'make
+verify-fips').`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runVersion(cmd.OutOrStdout(), versionInfoFromCmd(cmd), fips)
 		},
 	}
-	cmd.Flags().BoolVar(&fips, "fips", false, "report FIPS 140-3 module status and exit non-zero if FIPS mode is not active")
+	cmd.Flags().BoolVar(&fips, "fips", false, "report FIPS 140-3 module status; exit non-zero only if approved mode is not active")
 	return cmd
 }
 
@@ -84,6 +90,18 @@ func runVersion(w io.Writer, vi serve.VersionInfo, fips bool) error {
 		fmt.Fprint(w, "the Go Cryptographic Module (CMVP Cert #5247) and enable approved mode by\n")
 		fmt.Fprint(w, "default (e.g. `make build-fips` or the Dockerfile.fips builder stage).\n")
 		return fmt.Errorf("fips 140-3 mode is not active")
+	}
+	if !enforced {
+		// Approved mode is active but enforcement is off. This is the common
+		// production posture when non-approved primitives (e.g. ChaCha20-Poly1305
+		// for SSH streaming) are required. Warn but do not fail — operators get a
+		// status report, not a false alarm. CI/release gates that need the strict
+		// posture run under GODEBUG=fips140=only (see `make verify-fips`).
+		fmt.Fprintln(w)
+		fmt.Fprint(w, "WARNING: FIPS 140-3 approved mode is active but enforcement is OFF.\n")
+		fmt.Fprint(w, "Non-approved cryptographic primitives are not rejected at runtime.\n")
+		fmt.Fprint(w, "Set GODEBUG=fips140=only in the process environment to enable enforcement\n")
+		fmt.Fprint(w, "(e.g. `GODEBUG=fips140=only ./g8e version --fips`).\n")
 	}
 	return nil
 }

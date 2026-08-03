@@ -67,7 +67,7 @@ func (cl *CommitmentLedger) ListCommitments() ([]*CommitmentRow, error) {
 
 	query := `
 	SELECT id, transaction_id, transaction_hash, prior_commitment_hash, hash,
-		state_root_at_commit, l2_signature_digest, Actuator_intent_signature_digest,
+		state_root_at_commit, l2_signature_digest, actuator_intent_signature_digest,
 		human_signature_digest, action_type, target_resource,
 		committed_at_unix_ms, auditor_key_id, signature
 	FROM commitment_ledger
@@ -152,7 +152,7 @@ func (cl *CommitmentLedger) AppendCommitmentJSON(attestationJSON []byte, priorHa
 		TransactionHash               string `json:"transaction_hash"`
 		StateRootAtCommit             string `json:"state_root_at_commit"`
 		L2SignatureDigest             string `json:"l2_signature_digest"`
-		ActuatorIntentSignatureDigest string `json:"Actuator_intent_signature_digest"`
+		ActuatorIntentSignatureDigest string `json:"actuator_intent_signature_digest"`
 		HumanSignatureDigest          string `json:"human_signature_digest"`
 		ActionType                    string `json:"action_type"`
 		TargetResource                string `json:"target_resource"`
@@ -192,7 +192,7 @@ func (cl *CommitmentLedger) AppendCommitmentJSON(attestationJSON []byte, priorHa
 			prior_commitment_hash,
 			state_root_at_commit,
 			l2_signature_digest,
-			Actuator_intent_signature_digest,
+			actuator_intent_signature_digest,
 			human_signature_digest,
 			action_type,
 			target_resource,

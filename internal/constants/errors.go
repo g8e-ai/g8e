@@ -1058,4 +1058,16 @@ var (
 
 	// Console SPA errors
 	ErrConsoleStaticFS = errors.New("console: failed to sub static FS")
+
+	// Compliance KSI errors
+	ErrKSICatalogInvalid     = errors.New("KSI catalog invalid")
+	ErrOverlayCatalogInvalid = errors.New("overlay catalog invalid")
+	ErrOverlayReadFailed     = errors.New("overlay read failed")
+	ErrOverlayParseFailed    = errors.New("overlay parse failed")
+
+	// Compliance KSI history errors
+	ErrKSIHistoryWriteFailed = errors.New("KSI history: write failed")
+	ErrKSIHistoryReadFailed  = errors.New("KSI history: read failed")
+	ErrKSIHistoryParseFailed = errors.New("KSI history: parse failed")
+	ErrKSIHistoryEmpty       = errors.New("KSI history: no snapshots found")
 )

@@ -95,6 +95,7 @@ reports/*
 # Binaries
 /g8e
 /buf
+/g8e-fips
 /operator
 protocol/governance_envelope
 protocol/workload_identity

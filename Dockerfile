@@ -66,6 +66,9 @@ COPY --from=builder /build/g8e /g8e
 # Copy protocol constants (required for doctrine mode)
 COPY --from=builder /build/protocol/constants /protocol/constants
 
+# Copy docs reference data (KSI catalog, COSAiS overlays) for compliance CLI
+COPY --from=builder /build/docs/reference /docs/reference
+
 # Expose default ports (can be overridden at runtime)
 EXPOSE 8080 8443
 

@@ -49,23 +49,28 @@ func NewL1Doctrine() *L1Doctrine {
 
 // doctrineFile represents the JSON schema of a doctrine file.
 type doctrineFile struct {
-	Source    string          `json:"source"`
-	Version   string          `json:"version"`
-	Doctrines []doctrineEntry `json:"doctrines"`
+	Source      string          `json:"source"`
+	Version     string          `json:"version"`
+	LastUpdated string          `json:"last_updated,omitempty"`
+	License     string          `json:"license,omitempty"`
+	Doctrines   []doctrineEntry `json:"doctrines"`
 }
 
 // doctrineEntry represents a single doctrine rule in a doctrine JSON file.
 type doctrineEntry struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Description string  `json:"description,omitempty"`
-	Category    string  `json:"category"`
-	Severity    string  `json:"severity"`
-	Pattern     string  `json:"pattern"`
-	MitreAttack string  `json:"mitre_attack"`
-	MitreTactic string  `json:"mitre_tactic"`
-	Confidence  float64 `json:"confidence"`
-	Enabled     bool    `json:"enabled"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Category    string   `json:"category"`
+	Severity    string   `json:"severity"`
+	Pattern     string   `json:"pattern"`
+	MitreAttack string   `json:"mitre_attack"`
+	MitreTactic string   `json:"mitre_tactic"`
+	Confidence  float64  `json:"confidence"`
+	Enabled     bool     `json:"enabled"`
+	KSIIDs      []string `json:"ksi_ids,omitempty"`
+	ControlIDs  []string `json:"control_ids,omitempty"`
+	OverlayIDs  []string `json:"overlay_ids,omitempty"`
 }
 
 // NewL1DoctrineFromDir creates a doctrine validator that combines the hardcoded
@@ -129,6 +134,9 @@ func NewL1DoctrineFromDir(doctrineDir string) (*L1Doctrine, error) {
 				mitreTactic:      de.MitreTactic,
 				blockRecommended: blockRecommended,
 				source:           df.Source,
+				ksiIDs:           de.KSIIDs,
+				controlIDs:       de.ControlIDs,
+				overlayIDs:       de.OverlayIDs,
 			}
 			d.inputThreatDetectors = append(d.inputThreatDetectors, detector)
 			loadedCount++
@@ -358,6 +366,9 @@ type ThreatSignal struct {
 	Recommendation   string         `json:"recommendation,omitempty"`
 	BlockRecommended bool           `json:"block_recommended"`
 	Source           string         `json:"source,omitempty"`
+	KSIIDs           []string       `json:"ksi_ids,omitempty"`
+	ControlIDs       []string       `json:"control_ids,omitempty"`
+	OverlayIDs       []string       `json:"overlay_ids,omitempty"`
 }
 
 // ThreatDetector is the interface for threat detection
@@ -378,6 +389,9 @@ type InputThreatDetector struct {
 	recommendation   string
 	blockRecommended bool
 	source           string
+	ksiIDs           []string
+	controlIDs       []string
+	overlayIDs       []string
 }
 
 func (d *InputThreatDetector) Name() string { return d.name }
@@ -394,6 +408,9 @@ func (d *InputThreatDetector) Detect(input string) []ThreatSignal {
 			Recommendation:   d.recommendation,
 			BlockRecommended: d.blockRecommended,
 			Source:           d.source,
+			KSIIDs:           d.ksiIDs,
+			ControlIDs:       d.controlIDs,
+			OverlayIDs:       d.overlayIDs,
 		}}
 	}
 	return nil

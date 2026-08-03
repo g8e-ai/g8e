@@ -1255,6 +1255,24 @@ func runAllScenarios(cmd *cobra.Command, org, demoDir string) error {
 		results = append(results, result)
 	}
 
+	if org == constants.DemosOrgFedRAMP {
+		if !runFedRAMPKSIEvidence(demoDir) {
+			results = append(results, scenarioResult{
+				number:  "KSI",
+				name:    "KSI Evidence Export",
+				status:  "FAIL",
+				metrics: "snapshot emission or verification failed",
+			})
+		} else {
+			results = append(results, scenarioResult{
+				number:  "KSI",
+				name:    "KSI Evidence Export",
+				status:  "PASS",
+				metrics: "snapshots emitted and verified",
+			})
+		}
+	}
+
 	printResultsTable(cmd, org, results)
 
 	hasFail, hasSkip := false, false
