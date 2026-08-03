@@ -93,7 +93,7 @@ func setupTestCommitmentLedger(t *testing.T) (*storage.CommitmentLedger, *sqlite
 			prior_commitment_hash TEXT NOT NULL,
 			state_root_at_commit TEXT,
 			l2_signature_digest TEXT,
-			Actuator_intent_signature_digest TEXT,
+			actuator_intent_signature_digest TEXT,
 			human_signature_digest TEXT,
 			action_type TEXT,
 			target_resource TEXT,
@@ -126,7 +126,7 @@ func insertCommitment(t *testing.T, cl *storage.CommitmentLedger, txID, txHash, 
 		"signature":                        "test-sig",
 		"state_root_at_commit":             "",
 		"l2_signature_digest":              "",
-		"Actuator_intent_signature_digest": "",
+		"actuator_intent_signature_digest": "",
 		"human_signature_digest":           "",
 	}
 	attJSON, err := json.Marshal(attestation)

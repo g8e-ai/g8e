@@ -196,6 +196,60 @@ func TestSQLAuditStore_ListEvents_EncryptedContent(t *testing.T) {
 	assert.Equal(t, secretStdout, events[0].CommandStdout)
 }
 
+func TestSQLAuditStore_ListEvents_LockedVault(t *testing.T) {
+	tempDir := testutil.TempDir(t)
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	encVault := CreateTestVault(t, vaultDir, privKey)
+	fileSvc := NewTestFileSvc(t, tempDir)
+	config := &TestSQLAuditStoreConfig{
+		DBPath:                    "test.db",
+		LedgerDir:                 "ledger",
+		MaxDBSizeMB:               100,
+		RetentionDays:             7,
+		PruneIntervalMinutes:      60,
+		OutputTruncationThreshold: 102400,
+		HeadTailSize:              51200,
+		EncryptionVault:           encVault,
+	}
+
+	avs, err := NewTestSQLAuditStore(config, testutil.NewTestLogger(), fileSvc)
+	require.NoError(t, err)
+	defer avs.Close()
+
+	sessionID := "list-events-locked-vault-session"
+	require.NoError(t, avs.CreateSession(sessionID, "operator", "Locked Vault", "user@test.com"))
+
+	plaintextContent := "classified secret output"
+	plaintextStdout := "secret stdout"
+	_, err = avs.RecordEvent(&storage.Event{
+		OperatorSessionID: sessionID,
+		Timestamp:         time.Now().UTC(),
+		Type:              constants.Event.Operator.Audit.Command,
+		ContentText:       plaintextContent,
+		CommandStdout:     plaintextStdout,
+		CommandExitCode:   0,
+	})
+	require.NoError(t, err)
+
+	// Lock the vault so ListEvents cannot decrypt
+	encVault.Lock()
+	require.False(t, encVault.IsUnlocked())
+
+	events, err := avs.ListEvents(sessionID, 100, 0)
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+
+	// Content should be ciphertext (raw bytes as string), not the plaintext
+	assert.NotEqual(t, plaintextContent, events[0].ContentText)
+	assert.NotEqual(t, plaintextStdout, events[0].CommandStdout)
+	// Ciphertext is non-empty (encrypted data was stored)
+	assert.NotEmpty(t, events[0].ContentText)
+	assert.NotEmpty(t, events[0].CommandStdout)
+}
+
 func TestSQLAuditStore_ListEvents_DefaultLimit(t *testing.T) {
 	tempDir := testutil.TempDir(t)
 	vaultDir := filepath.Join(tempDir, "vault")
