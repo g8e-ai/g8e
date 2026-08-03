@@ -101,7 +101,8 @@ directory (default: .g8e/data/compliance/).`,
 				return fmt.Errorf("%w: cannot evaluate KSIs (audit store or ledger unavailable)", constants.ErrReportStoreUnavailable)
 			}
 
-			if err := saveKSIHistorySnapshot(cmd.Context(), fileSvc, resultSet); err != nil {
+			historyStore := newKSIHistoryStore(fileSvc)
+			if err := saveKSIHistorySnapshot(cmd.Context(), historyStore, resultSet); err != nil {
 				slog.Default().Warn("compliance: failed to save KSI history snapshot", "error", err)
 			}
 
@@ -191,7 +192,8 @@ for the specified certification class and print the KSIResultSet as JSON.`,
 				return fmt.Errorf("%w: cannot evaluate KSIs (audit store or ledger unavailable)", constants.ErrReportStoreUnavailable)
 			}
 
-			if err := saveKSIHistorySnapshot(cmd.Context(), fileSvc, resultSet); err != nil {
+			historyStore := newKSIHistoryStore(fileSvc)
+			if err := saveKSIHistorySnapshot(cmd.Context(), historyStore, resultSet); err != nil {
 				slog.Default().Warn("compliance: failed to save KSI history snapshot", "error", err)
 			}
 
@@ -248,64 +250,111 @@ func evaluateKSIs(ctx context.Context, fileSvc fs.RuntimeFileService, cat *compl
 
 // openEvaluatorDeps opens the audit store, git ledger, and commitment ledger
 // from the runtime file service. Returns ok=false if any store is unavailable.
+// Each evidence source is opened by a dedicated opener (openVault,
+// openAuditStore, openCommitments, openLedger); this function composes them and
+// aggregates their cleanups so a failure in a later opener releases resources
+// acquired by earlier ones.
 func openEvaluatorDeps(ctx context.Context, fileSvc fs.RuntimeFileService) (compliance.EvaluatorDeps, func(), bool) {
-	logger := slog.Default()
+	var cleanups []func()
 
-	// Open vault (locked is OK — metadata-only mode still lists receipts/events).
+	v, vaultCleanup := openVault(ctx, fileSvc)
+	cleanups = append(cleanups, vaultCleanup)
+
+	auditStore, auditCleanup, ok := openAuditStore(fileSvc, v)
+	if !ok {
+		runCleanups(cleanups)
+		return compliance.EvaluatorDeps{}, nil, false
+	}
+	cleanups = append(cleanups, auditCleanup)
+
+	cl, commitCleanup, ok := openCommitments(fileSvc)
+	if !ok {
+		runCleanups(cleanups)
+		return compliance.EvaluatorDeps{}, nil, false
+	}
+	cleanups = append(cleanups, commitCleanup)
+
+	ledger, ledgerCleanup, ok := openLedger(fileSvc, v)
+	if !ok {
+		runCleanups(cleanups)
+		return compliance.EvaluatorDeps{}, nil, false
+	}
+	cleanups = append(cleanups, ledgerCleanup)
+
+	return compliance.EvaluatorDeps{
+		Audit:       auditStore,
+		Ledger:      ledger,
+		Commitments: cl,
+	}, func() { runCleanups(cleanups) }, true
+}
+
+// runCleanups invokes each cleanup in reverse acquisition order (LIFO) so
+// resources are released in the opposite order they were opened.
+func runCleanups(cleanups []func()) {
+	for i := len(cleanups) - 1; i >= 0; i-- {
+		cleanups[i]()
+	}
+}
+
+// openVault opens the encryption vault and attempts to unlock it with the
+// runtime vault key. A nil vault (with a no-op cleanup) is returned if vault
+// creation fails — callers proceed without encryption, which is fine for
+// metadata-only evidence reads.
+func openVault(ctx context.Context, fileSvc fs.RuntimeFileService) (*vault.Vault, func()) {
+	logger := slog.Default()
 	v, vaultErr := vault.NewVault(&vault.VaultConfig{
 		DataDir: fileSvc.Resolve(constants.VaultDirname),
 		Logger:  logger,
 	})
 	if vaultErr != nil {
 		logger.Warn("compliance: vault creation failed, proceeding without encryption", "error", vaultErr)
+		return nil, func() {}
 	}
 	vaultKeyRel := constants.SecretsDirname + "/" + constants.VaultKeyFilename
 	keyData, keyErr := fileSvc.ReadFile(ctx, vaultKeyRel)
-	if keyErr == nil && v != nil {
+	if keyErr == nil {
 		keyHex := strings.TrimSpace(string(keyData))
 		if keyBytes, decErr := hex.DecodeString(keyHex); decErr == nil {
 			_ = v.Unlock(keyBytes)
 		}
 	}
+	return v, func() {}
+}
 
-	// Open audit store.
+// openAuditStore opens the SQL audit store. Returns ok=false on failure.
+func openAuditStore(fileSvc fs.RuntimeFileService, v *vault.Vault) (*storage.SQLAuditStore, func(), bool) {
 	auditCfg := storage.DefaultAuditStoreConfig()
 	auditCfg.EncryptionVault = v
-	auditStore, err := storage.NewSQLAuditStore(auditCfg, logger, fileSvc)
+	auditStore, err := storage.NewSQLAuditStore(auditCfg, slog.Default(), fileSvc)
 	if err != nil {
-		return compliance.EvaluatorDeps{}, nil, false
+		return nil, nil, false
 	}
+	return auditStore, func() { auditStore.Close() }, true
+}
 
-	// Open commitment ledger (shares g8e.db with audit store).
+// openCommitments opens the shared g8e.db connection and constructs a
+// commitment ledger over it. Returns ok=false on failure.
+func openCommitments(fileSvc fs.RuntimeFileService) (*storage.CommitmentLedger, func(), bool) {
 	dbPath := pathutil.ResolveDBPath(fileSvc.Resolve(constants.DataDirname), constants.DbFilename)
-	mainDB, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), logger)
+	mainDB, err := sqliteutil.OpenDB(sqliteutil.DefaultDBConfig(dbPath), slog.Default())
 	if err != nil {
-		auditStore.Close()
-		return compliance.EvaluatorDeps{}, nil, false
+		return nil, nil, false
 	}
-	cl := storage.NewCommitmentLedger(mainDB, logger)
+	cl := storage.NewCommitmentLedger(mainDB, slog.Default())
+	return cl, func() { mainDB.Close() }, true
+}
 
-	// Open git ledger.
+// openLedger opens the git-backed ledger service. Returns ok=false on failure.
+func openLedger(fileSvc fs.RuntimeFileService, v *vault.Vault) (*storage.GitLedgerService, func(), bool) {
 	ledgerCfg := &storage.LedgerConfig{
 		GitPath:         "git",
 		EncryptionVault: v,
 	}
-	ledger, err := storage.NewGitLedgerService(ledgerCfg, logger, fileSvc)
+	ledger, err := storage.NewGitLedgerService(ledgerCfg, slog.Default(), fileSvc)
 	if err != nil {
-		auditStore.Close()
-		mainDB.Close()
-		return compliance.EvaluatorDeps{}, nil, false
+		return nil, nil, false
 	}
-
-	cleanup := func() {
-		auditStore.Close()
-		mainDB.Close()
-	}
-	return compliance.EvaluatorDeps{
-		Audit:       auditStore,
-		Ledger:      ledger,
-		Commitments: cl,
-	}, cleanup, true
+	return ledger, func() {}, true
 }
 
 // complianceKSIHistoryCmdWithConfig creates the `compliance ksi-history` subcommand
@@ -330,8 +379,7 @@ Without --ksi, prints all snapshots as a JSON array.`,
 				ctx = context.Background()
 			}
 
-			historyDir := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.KSIHistoryDirname)
-			store := compliance.NewKSIHistoryStore(fileSvc, historyDir)
+			store := newKSIHistoryStore(fileSvc)
 
 			if ksiID != "" {
 				results, err := store.GetHistoryForKSI(ctx, ksiID)
@@ -368,12 +416,17 @@ Without --ksi, prints all snapshots as a JSON array.`,
 	return cmd
 }
 
-// saveKSIHistorySnapshot persists a KSIResultSet snapshot to the history directory.
-// Prunes snapshots older than the retention period after saving.
-func saveKSIHistorySnapshot(ctx context.Context, fileSvc fs.RuntimeFileService, rs *compliance.KSIResultSet) error {
+// newKSIHistoryStore constructs a KSIHistoryStore rooted at the canonical
+// runtime KSI history directory. Centralized so callers do not each rebuild
+// the directory path and store independently.
+func newKSIHistoryStore(fileSvc fs.RuntimeFileService) *compliance.KSIHistoryStore {
 	historyDir := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.KSIHistoryDirname)
-	store := compliance.NewKSIHistoryStore(fileSvc, historyDir)
+	return compliance.NewKSIHistoryStore(fileSvc, historyDir)
+}
 
+// saveKSIHistorySnapshot persists a KSIResultSet snapshot via the given history
+// store. Prunes snapshots older than the retention period after saving.
+func saveKSIHistorySnapshot(ctx context.Context, store *compliance.KSIHistoryStore, rs *compliance.KSIResultSet) error {
 	if err := store.SaveSnapshot(ctx, rs); err != nil {
 		return err
 	}

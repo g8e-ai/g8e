@@ -12,22 +12,39 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 OVERLAY_FILE="$ROOT_DIR/docs/reference/cosais-overlays.json"
-DOCTRINE_DIR="$ROOT_DIR/demos/fedramp/doctrine"
 
 if [ ! -f "$OVERLAY_FILE" ]; then
     echo "ERROR: COSAiS overlay catalog not found at $OVERLAY_FILE"
     exit 1
 fi
 
+# Collect every doctrine directory under demos/*/doctrine/ so overlays declared
+# by any demo doctrine (not just demos/fedramp/doctrine) are checked for
+# detector coverage. Pass them all to the Python checker as trailing args.
+DOCTRINE_DIRS=()
+shopt -s nullglob
+for d in "$ROOT_DIR"/demos/*/doctrine; do
+    if [ -d "$d" ]; then
+        DOCTRINE_DIRS+=("$d")
+    fi
+done
+shopt -u nullglob
+
+if [ "${#DOCTRINE_DIRS[@]}" -eq 0 ]; then
+    echo "ERROR: No doctrine directories found under demos/*/doctrine/"
+    exit 1
+fi
+
 # Use python3 to parse JSON and check coverage (python3 is a CI dependency).
-python3 - "$OVERLAY_FILE" "$DOCTRINE_DIR" <<'PYEOF'
+# Usage: python3 ... <overlay_file> <doctrine_dir> [<doctrine_dir> ...]
+python3 - "$OVERLAY_FILE" "${DOCTRINE_DIRS[@]}" <<'PYEOF'
 import json
 import os
 import sys
 import glob
 
 overlay_file = sys.argv[1]
-doctrine_dir = sys.argv[2]
+doctrine_dirs = sys.argv[2:]
 
 with open(overlay_file) as f:
     catalog = json.load(f)
@@ -40,9 +57,11 @@ if not finalized:
     print("      Detector OverlayIDs will be checked when NIST finalizes.")
     sys.exit(0)
 
-# Collect all overlay_ids from doctrine JSON files.
+# Collect all overlay_ids from doctrine JSON files across every doctrine dir.
 detector_overlay_ids = set()
-doctrine_files = glob.glob(os.path.join(doctrine_dir, "*.json"))
+doctrine_files = []
+for doctrine_dir in doctrine_dirs:
+    doctrine_files.extend(glob.glob(os.path.join(doctrine_dir, "*.json")))
 for path in doctrine_files:
     with open(path) as f:
         data = json.load(f)
