@@ -66,8 +66,10 @@ func complianceExportCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService,
 		Use:   "export",
 		Short: "Export OSCAL compliance artifacts",
 		Long: `Export OSCAL component-definition and assessment-results JSON artifacts
-from the KSI catalog and g8e's live evaluation state. Output is written to
-the specified directory (default: .g8e/data/compliance/).`,
+from the KSI catalog and g8e's live evaluation state. Both artifacts are
+always emitted; the command fails if the audit store or ledger are
+unavailable for KSI evaluation. Output is written to the specified
+directory (default: .g8e/data/compliance/).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if format != "oscal" {
 				return fmt.Errorf("%w: unsupported format: %s (only 'oscal' is supported)", constants.ErrValidationFailed, format)
@@ -94,21 +96,18 @@ the specified directory (default: .g8e/data/compliance/).`,
 				return fmt.Errorf("compliance: generate component-definition: %w", err)
 			}
 
-			// Attempt evaluation for assessment-results.
 			resultSet := evaluateKSIs(cmd.Context(), fileSvc, cat, certClass)
-
-			if resultSet != nil {
-				if err := saveKSIHistorySnapshot(cmd.Context(), fileSvc, resultSet); err != nil {
-					slog.Default().Warn("compliance: failed to save KSI history snapshot", "error", err)
-				}
+			if resultSet == nil {
+				return fmt.Errorf("%w: cannot evaluate KSIs (audit store or ledger unavailable)", constants.ErrReportStoreUnavailable)
 			}
 
-			var assessResults *compliance.OSCALAssessmentResults
-			if resultSet != nil {
-				assessResults, err = exporter.GenerateAssessmentResults(resultSet)
-				if err != nil {
-					return fmt.Errorf("compliance: generate assessment-results: %w", err)
-				}
+			if err := saveKSIHistorySnapshot(cmd.Context(), fileSvc, resultSet); err != nil {
+				slog.Default().Warn("compliance: failed to save KSI history snapshot", "error", err)
+			}
+
+			assessResults, err := exporter.GenerateAssessmentResults(resultSet)
+			if err != nil {
+				return fmt.Errorf("compliance: generate assessment-results: %w", err)
 			}
 
 			// Resolve output directory.
@@ -136,27 +135,19 @@ the specified directory (default: .g8e/data/compliance/).`,
 			}
 
 			assessPath := filepath.Join(relOutDir, constants.OSCALAssessmentResultsFilename)
-			if assessResults != nil {
-				assessJSON, err := json.MarshalIndent(assessResults, "", "  ")
-				if err != nil {
-					return fmt.Errorf("compliance: marshal assessment-results: %w", err)
-				}
-				if err := fileSvc.WriteFile(ctx, assessPath, assessJSON, constants.PermFilePublic); err != nil {
-					return fmt.Errorf("compliance: write assessment-results: %w", err)
-				}
+			assessJSON, err := json.MarshalIndent(assessResults, "", "  ")
+			if err != nil {
+				return fmt.Errorf("compliance: marshal assessment-results: %w", err)
+			}
+			if err := fileSvc.WriteFile(ctx, assessPath, assessJSON, constants.PermFilePublic); err != nil {
+				return fmt.Errorf("compliance: write assessment-results: %w", err)
 			}
 
 			cmd.Printf("OSCAL artifacts written to: %s\n", fileSvc.Resolve(relOutDir))
 			cmd.Printf("  %s\n", constants.OSCALComponentDefFilename)
-			if assessResults != nil {
-				cmd.Printf("  %s\n", constants.OSCALAssessmentResultsFilename)
-			}
-			if resultSet != nil {
-				cmd.Printf("KSI evaluation: %d satisfied, %d not satisfied (Class %s)\n",
-					resultSet.SatisfiedCount(), resultSet.NotSatisfiedCount(), class)
-			} else {
-				cmd.Printf("KSI evaluation: skipped (stores unavailable)\n")
-			}
+			cmd.Printf("  %s\n", constants.OSCALAssessmentResultsFilename)
+			cmd.Printf("KSI evaluation: %d satisfied, %d not satisfied (Class %s)\n",
+				resultSet.SatisfiedCount(), resultSet.NotSatisfiedCount(), class)
 			return nil
 		},
 	}
@@ -231,7 +222,7 @@ func loadKSICatalog(path string) (*compliance.KSICatalog, error) {
 
 // evaluateKSIs opens the runtime stores, creates a KSI evaluator, registers
 // default methods, and runs evaluation. Returns nil if stores are unavailable
-// (fail-closed: the caller decides how to handle the absence).
+// or evaluation fails. Callers must treat nil as a fail-closed error.
 func evaluateKSIs(ctx context.Context, fileSvc fs.RuntimeFileService, cat *compliance.KSICatalog, class compliance.CertificationClass) *compliance.KSIResultSet {
 	if ctx == nil {
 		ctx = context.Background()
