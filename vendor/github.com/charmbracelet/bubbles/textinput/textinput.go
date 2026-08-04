@@ -1,3 +1,5 @@
+// Package textinput provides a text input component for Bubble Tea
+// applications.
 package textinput
 
 import (
@@ -12,6 +14,7 @@ import (
 	"github.com/charmbracelet/bubbles/runeutil"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	rw "github.com/mattn/go-runewidth"
 	"github.com/rivo/uniseg"
 )
@@ -398,7 +401,7 @@ func (m *Model) deleteWordBackward() {
 	// Linter note: it's critical that we acquire the initial cursor position
 	// here prior to altering it via SetCursor() below. As such, moving this
 	// call into the corresponding if clause does not apply here.
-	oldPos := m.pos //nolint:ifshort
+	oldPos := m.pos
 
 	m.SetCursor(m.pos - 1)
 	for unicode.IsSpace(m.value[m.pos]) {
@@ -565,7 +568,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 	// Let's remember where the position of the cursor currently is so that if
 	// the cursor position changes, we can reset the blink.
-	oldPos := m.pos //nolint
+	oldPos := m.pos
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -658,14 +661,14 @@ func (m Model) View() string {
 	pos := max(0, m.pos-m.offset)
 	v := styleText(m.echoTransform(string(value[:pos])))
 
-	if pos < len(value) {
+	if pos < len(value) { //nolint:nestif
 		char := m.echoTransform(string(value[pos]))
 		m.Cursor.SetChar(char)
 		v += m.Cursor.View()                                   // cursor and text under it
 		v += styleText(m.echoTransform(string(value[pos+1:]))) // text after cursor
 		v += m.completionView(0)                               // suggested completion
 	} else {
-		if m.canAcceptSuggestion() {
+		if m.focus && m.canAcceptSuggestion() {
 			suggestion := m.matchedSuggestions[m.currentSuggestionIndex]
 			if len(value) < len(suggestion) {
 				m.Cursor.TextStyle = m.CompletionStyle
@@ -700,39 +703,32 @@ func (m Model) View() string {
 func (m Model) placeholderView() string {
 	var (
 		v     string
-		p     = []rune(m.Placeholder)
 		style = m.PlaceholderStyle.Inline(true).Render
+		p     = m.PromptStyle.Render(m.Prompt)
 	)
 
 	m.Cursor.TextStyle = m.PlaceholderStyle
-	m.Cursor.SetChar(string(p[:1]))
+	first, rest, _, _ := uniseg.FirstGraphemeClusterInString(m.Placeholder, 0)
+	m.Cursor.SetChar(first)
 	v += m.Cursor.View()
 
 	// If the entire placeholder is already set and no padding is needed, finish
-	if m.Width < 1 && len(p) <= 1 {
+	if m.Width < 1 && uniseg.StringWidth(rest) <= 1 {
 		return m.PromptStyle.Render(m.Prompt) + v
 	}
 
 	// If Width is set then size placeholder accordingly
 	if m.Width > 0 {
-		// available width is width - len + cursor offset of 1
-		minWidth := lipgloss.Width(m.Placeholder)
-		availWidth := m.Width - minWidth + 1
-
-		// if width < len, 'subtract'(add) number to len and dont add padding
-		if availWidth < 0 {
-			minWidth += availWidth
-			availWidth = 0
-		}
-		// append placeholder[len] - cursor, append padding
-		v += style(string(p[1:minWidth]))
-		v += style(strings.Repeat(" ", availWidth))
+		width := m.Width - lipgloss.Width(p) - lipgloss.Width(v)
+		placeholderRest := ansi.Truncate(rest, width, "…")
+		availWidth := max(0, width-lipgloss.Width(placeholderRest))
+		v += style(placeholderRest) + strings.Repeat(" ", availWidth)
 	} else {
 		// if there is no width, the placeholder can be any length
-		v += style(string(p[1:]))
+		v += style(rest)
 	}
 
-	return m.PromptStyle.Render(m.Prompt) + v
+	return p + v
 }
 
 // Blink is a command used to initialize cursor blinking.
@@ -756,31 +752,20 @@ func clamp(v, low, high int) int {
 	return min(high, max(low, v))
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 // Deprecated.
 
-// Deprecated: use cursor.Mode.
+// Deprecated: use [cursor.Mode].
+//
+//nolint:revive
 type CursorMode int
 
+//nolint:revive
 const (
-	// Deprecated: use cursor.CursorBlink.
+	// Deprecated: use [cursor.CursorBlink].
 	CursorBlink = CursorMode(cursor.CursorBlink)
-	// Deprecated: use cursor.CursorStatic.
+	// Deprecated: use [cursor.CursorStatic].
 	CursorStatic = CursorMode(cursor.CursorStatic)
-	// Deprecated: use cursor.CursorHide.
+	// Deprecated: use [cursor.CursorHide].
 	CursorHide = CursorMode(cursor.CursorHide)
 )
 
@@ -788,12 +773,16 @@ func (c CursorMode) String() string {
 	return cursor.Mode(c).String()
 }
 
-// Deprecated: use cursor.Mode().
+// Deprecated: use [cursor.Mode].
+//
+//nolint:revive
 func (m Model) CursorMode() CursorMode {
 	return CursorMode(m.Cursor.Mode())
 }
 
 // Deprecated: use cursor.SetMode().
+//
+//nolint:revive
 func (m *Model) SetCursorMode(mode CursorMode) tea.Cmd {
 	return m.Cursor.SetMode(cursor.Mode(mode))
 }
@@ -813,14 +802,27 @@ func (m Model) completionView(offset int) string {
 	return ""
 }
 
-// AvailableSuggestions returns the list of available suggestions.
-func (m *Model) AvailableSuggestions() []string {
-	suggestions := make([]string, len(m.suggestions))
-	for i, s := range m.suggestions {
+func (m *Model) getSuggestions(sugs [][]rune) []string {
+	suggestions := make([]string, len(sugs))
+	for i, s := range sugs {
 		suggestions[i] = string(s)
 	}
-
 	return suggestions
+}
+
+// AvailableSuggestions returns the list of available suggestions.
+func (m *Model) AvailableSuggestions() []string {
+	return m.getSuggestions(m.suggestions)
+}
+
+// MatchedSuggestions returns the list of matched suggestions.
+func (m *Model) MatchedSuggestions() []string {
+	return m.getSuggestions(m.matchedSuggestions)
+}
+
+// CurrentSuggestionIndex returns the currently selected suggestion index.
+func (m *Model) CurrentSuggestionIndex() int {
+	return m.currentSuggestionIndex
 }
 
 // CurrentSuggestion returns the currently selected suggestion.
