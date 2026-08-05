@@ -51,7 +51,7 @@ func securityValidateCmd() *cobra.Command {
 	return securityValidateCmdWithConfig(newFileSvc)
 }
 
-func securityValidateCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func securityValidateCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var pkiDir string
 	var secretsDir string
 
@@ -275,7 +275,7 @@ func securityPKIEnrollCmd() *cobra.Command {
 	return securityPKIEnrollCmdWithConfig(loadConfig, defaultEnrollFunc, newFileSvc)
 }
 
-func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, error), enroll enrollFunc, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, error), enroll enrollFunc, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var outputDir string
 
 	cmd := &cobra.Command{

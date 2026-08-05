@@ -1243,6 +1243,7 @@ func enrollDemoHost(cmd *cobra.Command, org, demoDir string) (hostIdentity, erro
 	}
 	return hostIdentity{UserID: creds.UserID, CLISessionID: creds.CLISessionID}, nil
 }
+
 // waitForDemoGateway polls the demo gateway HTTP health endpoint until it
 // responds or the 90s timeout expires. The gateway may have just been started
 // by runDemosStart and enrollment requires it to be reachable. It is a

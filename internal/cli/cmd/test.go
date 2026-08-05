@@ -123,7 +123,7 @@ func testE2ECmd() *cobra.Command {
 	return testE2ECmdWithConfig(loadConfig, newFileSvc)
 }
 
-func testE2ECmdWithConfig(configLoader func(string) (*config.Config, error), fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func testE2ECmdWithConfig(configLoader func(string) (*config.Config, error), fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "e2e",
 		Short: "Run Tier 3 (Live Platform E2E) tests",
