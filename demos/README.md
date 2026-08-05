@@ -88,14 +88,14 @@ The `frontend` demo deploys a nginx-served static HTML app on net_perimeter for 
 
 Each org demonstrates different compliance requirements and use cases:
 
-| Dimension | Gov | Healthcare | Finance | DHS | FedRAMP | Frontend |
-|---|---|---|---|---|---|---|
-| Doctrine content | CUI, classification markings, CMMC rules | PHI scrub patterns, PA workflow gates | Tx limits, dual-control triggers | USPER PII minimization, cross-domain release, sovereign destruction | CR-26 audit integrity, AC-2 access control, SC-8 cross-domain, CM-7 config management | Unauthorized API access, CORS origin spoofing, session hijacking |
-| Target data content | Simulated classified document store | Simulated EHR / PA records | Simulated ledger / positions | Mock multi-source coalition feeds + sovereign manifest | Cloud resources (VMs, DBs, IAM) and KSI control categories | None (frontend enrollment demo) |
-| Gateway posture | doctrine | doctrine | doctrine | consensus | consensus | doctrine |
-| Agent principal type | DoD contractor agent | Clinical AI agent | Algorithmic trading agent | Coalition source connectors + predictive-analytics agent | FedRAMP cloud service operator + authorizing official | Browser-based frontend app (WebAuthn + SSE) |
-| Target system mock | Classified doc API | EHR / PA processor | Trade execution API | Sovereign data vault + partner fusion COP | Sovereign cloud service (provision, configure, destroy, revert) | None (nginx-served static HTML) |
-| Demo narrative | CUI exfil attempt blocked | PHI scrub + PA approval flow | Unauthorized trade blocked | Sovereign coalition data plane: govern ingest, release, use, destruction | Sovereign cloud governance: provision, destroy, revert, audit integrity | Third-party frontend enrollment with CORS and passkey authentication |
+| Dimension | Healthcare | Finance | DHS | FedRAMP | Frontend |
+|---|---|---|---|---|---|
+| Doctrine content | PHI scrub patterns, PA workflow gates | Tx limits, dual-control triggers | USPER PII minimization, cross-domain release, sovereign destruction | CR-26 audit integrity, AC-2 access control, SC-8 cross-domain, CM-7 config management | Unauthorized API access, CORS origin spoofing, session hijacking |
+| Target data content | Simulated EHR / PA records | Simulated ledger / positions | Mock multi-source coalition feeds + sovereign manifest | Cloud resources (VMs, DBs, IAM) and KSI control categories | None (frontend enrollment demo) |
+| Gateway posture | doctrine | doctrine | consensus | consensus | doctrine |
+| Agent principal type | Clinical AI agent | Algorithmic trading agent | Coalition source connectors + predictive-analytics agent | FedRAMP cloud service operator + authorizing official | Browser-based frontend app (WebAuthn + SSE) |
+| Target system mock | EHR / PA processor | Trade execution API | Sovereign data vault + partner fusion COP | Sovereign cloud service (provision, configure, destroy, revert) | None (nginx-served static HTML) |
+| Demo narrative | PHI scrub + PA approval flow | Unauthorized trade blocked | Sovereign coalition data plane: govern ingest, release, use, destruction | Sovereign cloud governance: provision, destroy, revert, audit integrity | Third-party frontend enrollment with CORS and passkey authentication |
 
 ## Quick Start
 

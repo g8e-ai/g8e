@@ -192,7 +192,7 @@ help:
 	@echo "  clean         Remove all build artifacts and runtime state"
 	@echo ""
 	@echo "Demos:"
-	@echo "  demo-verify         Build and run all 6 demo environments (requires Docker)"
+	@echo "  demo-verify         Build and run all 5 demo environments (requires Docker)"
 	@echo ""
 	@echo "Python Protocol:"
 	@echo "  python-build  Copy constants and build the Python protocol package"

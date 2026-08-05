@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-07-28
-Version: v1.6.6
+Last Updated: 2026-08-05
+Version: v1.6.10
 
 ---
 
@@ -452,7 +452,7 @@ For example, to enroll against the healthcare demo: `./g8e auth enroll -e localh
 
 ### Verify all demos
 
-Run the one-command demo verification target to build the binary and run all 6 demos sequentially:
+Run the one-command demo verification target to build the binary and run all 5 demos sequentially:
 
 ```bash
 make demo-verify
@@ -465,7 +465,7 @@ This target depends on `make build`, then for each demo (healthcare, finance, dh
 3. Stops and cleans up after the demo
 4. Reports PASS or FAIL
 
-If any demo fails, the target exits immediately with a non-zero status. All 6 demos must pass for the target to succeed.
+If any demo fails, the target exits immediately with a non-zero status. All 5 demos must pass for the target to succeed.
 
 ---
 

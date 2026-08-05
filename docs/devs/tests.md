@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-07-30
+Last Updated: 2026-08-05
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -304,7 +304,9 @@ GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 - `smoke-test` — Clean-environment install verification for both Python and Go packages
 - `secret-scan` — gitleaks full-history secret scanning
 - `license-check` — go-licenses report with forbidden copyleft license detection (GPL, AGPL, LGPL, SSPL, BUSL)
-- `demo-verify` — Builds and runs all 6 demo environments via Docker Compose (gated on `ci` job)
+
+**Local-only targets** (not run in CI):
+- `demo-verify` — Builds and runs all 5 demo environments via Docker Compose
 
 CI does **not** run Tier 3 Docker E2E tests.
 
