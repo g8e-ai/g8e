@@ -364,6 +364,18 @@ func TestRunDemosReset_MissingDemoDirReturnsNotFound(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrNotFound)
 }
 
+func TestEnrollDemoHost_UnknownOrgReturnsPortMissingError(t *testing.T) {
+	cmd := demosRunCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	_, err := enrollDemoHost(cmd, "nonexistent-org")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrDemoGatewayPortMissing)
+	assert.Contains(t, err.Error(), "nonexistent-org")
+}
+
 func TestRunDemosRun_MissingDemoDirReturnsNotFound(t *testing.T) {
 	chdirTemp(t)
 

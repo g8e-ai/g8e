@@ -608,17 +608,6 @@ func printDemoEndpoints(cmd *cobra.Command, org string) {
 	default:
 		cmd.Printf("  No endpoint information available for '%s'\n", org)
 	}
-
-	httpPort := demoHTTPPort(org)
-	httpsPort := demoHTTPSPort(org)
-	if httpPort != "" && httpsPort != "" {
-		cmd.Println()
-		cmd.Println("  Enroll a passkey for human approval:")
-		cmd.Printf("    g8e auth enroll -e localhost:%s --port %s\n", httpPort, httpsPort)
-		cmd.Println()
-		cmd.Println("  This enrolls your CLI session and registers a WebAuthn passkey")
-		cmd.Println("  in your browser. The passkey is required for all governed operations.")
-	}
 }
 
 // demoHTTPPorts maps each demo org to its Docker-published HTTP port.

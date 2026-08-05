@@ -303,7 +303,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "localhost:5433")
 		assert.Contains(t, output, "http://localhost:3001")
 		assert.Contains(t, output, "https://localhost:8444/console/")
-		assert.Contains(t, output, "g8e auth enroll -e localhost:8081 --port 8444")
+		assert.NotContains(t, output, "auth enroll")
 	})
 
 	t.Run("prints gov endpoints", func(t *testing.T) {
@@ -319,7 +319,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "https://localhost:8443")
 		assert.Contains(t, output, "http://localhost:3000")
 		assert.Contains(t, output, "https://localhost:8443/console/")
-		assert.Contains(t, output, "g8e auth enroll -e localhost:8080 --port 8443")
+		assert.NotContains(t, output, "auth enroll")
 	})
 
 	t.Run("prints finance endpoints", func(t *testing.T) {
@@ -335,7 +335,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "https://localhost:8445")
 		assert.Contains(t, output, "http://localhost:3002")
 		assert.Contains(t, output, "https://localhost:8445/console/")
-		assert.Contains(t, output, "g8e auth enroll -e localhost:8082 --port 8445")
+		assert.NotContains(t, output, "auth enroll")
 	})
 
 	t.Run("prints dhs endpoints", func(t *testing.T) {
@@ -350,7 +350,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "http://localhost:8087")
 		assert.Contains(t, output, "https://localhost:8450")
 		assert.Contains(t, output, "https://localhost:8450/console/")
-		assert.Contains(t, output, "g8e auth enroll -e localhost:8087 --port 8450")
+		assert.NotContains(t, output, "auth enroll")
 	})
 
 	t.Run("prints fedramp endpoints", func(t *testing.T) {
@@ -365,7 +365,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "http://localhost:8088")
 		assert.Contains(t, output, "https://localhost:8451")
 		assert.Contains(t, output, "https://localhost:8451/console/")
-		assert.Contains(t, output, "g8e auth enroll -e localhost:8088 --port 8451")
+		assert.NotContains(t, output, "auth enroll")
 	})
 
 	t.Run("prints default message for unknown org", func(t *testing.T) {
