@@ -8,14 +8,6 @@ This directory contains Docker Compose demo environments for org-specific g8e de
 demos/
 ├── bin/                        # built g8e binary, used by g8e demos CLI commands
 │   └── g8e
-├── gov/                        # Government/CUI demo
-│   ├── compose.yml
-│   ├── config/
-│   │   ├── gateway.yml
-│   │   └── operator.yml
-│   ├── doctrine/               # CUI/CMMC L1 pattern rules
-│   ├── target-data/            # Simulated classified document store
-│   └── README.md               # Gov-specific documentation
 ├── healthcare/                # Healthcare/PHI demo
 │   ├── compose.yml
 │   ├── config/
@@ -197,9 +189,6 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 - `g8e demos run healthcare 3` - SLA Breach and OHA Reporting
 - `g8e demos run healthcare 4` - Bad Actor PHI Exfiltration Blocked
 
-**Gov Demo Scenarios:**
-- `g8e demos run gov 1` - CUI Exfiltration Attempt Blocked
-
 **Finance Demo Scenarios:**
 - `g8e demos run finance 1` - Unauthorized Trade Blocked
 
@@ -233,7 +222,7 @@ Note: The `g8e demos run` command automatically starts the demo environment if i
 You can also use Docker Compose directly:
 
 ```bash
-cd demos/gov
+cd demos/finance
 docker compose up -d
 ```
 
@@ -293,7 +282,6 @@ Each org uses different host ports to allow simultaneous deployment:
 
 | Org | HTTP Port | HTTPS Port | Additional Ports |
 |---|---|---|---|
-| gov | 8080 | 8443 | Demo UI: 3000 |
 | healthcare | 8081 | 8444 | Metabase: 3001, RabbitMQ Mgmt: 15673, PostgreSQL: 5433 |
 | finance | 8082 | 8445 | Demo UI: 3002 |
 | dhs | 8087 | 8450 | |

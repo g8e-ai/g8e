@@ -576,11 +576,6 @@ func printDemoEndpoints(cmd *cobra.Command, org string) {
 		cmd.Println("  RabbitMQ UI:   http://localhost:15673")
 		cmd.Println("  PostgreSQL:    localhost:5433")
 		cmd.Println("  Metabase:      http://localhost:3001")
-	case constants.DemosOrgGov:
-		cmd.Println("  Gateway HTTP:  http://localhost:8080")
-		cmd.Println("  Gateway HTTPS: https://localhost:8443")
-		cmd.Println("  Console:       https://localhost:8443/console/")
-		cmd.Println("  Demo UI:       http://localhost:3000")
 	case constants.DemosOrgFinance:
 		cmd.Println("  Gateway HTTP:  http://localhost:8082")
 		cmd.Println("  Gateway HTTPS: https://localhost:8445")
@@ -607,7 +602,6 @@ func printDemoEndpoints(cmd *cobra.Command, org string) {
 // demoHTTPPorts maps each demo org to its Docker-published HTTP port.
 var demoHTTPPorts = map[string]string{
 	constants.DemosOrgHealthcare: "8081",
-	constants.DemosOrgGov:        "8080",
 	constants.DemosOrgFinance:    "8082",
 	constants.DemosOrgDHS:        "8087",
 	constants.DemosOrgFedRAMP:    "8088",
@@ -617,7 +611,6 @@ var demoHTTPPorts = map[string]string{
 // demoHTTPSPorts maps each demo org to its Docker-published HTTPS port.
 var demoHTTPSPorts = map[string]string{
 	constants.DemosOrgHealthcare: "8444",
-	constants.DemosOrgGov:        "8443",
 	constants.DemosOrgFinance:    "8445",
 	constants.DemosOrgDHS:        "8450",
 	constants.DemosOrgFedRAMP:    "8451",
@@ -1077,7 +1070,6 @@ func runDemosReset(cmd *cobra.Command, args []string) error {
 // scenarioCounts maps each org to the number of defined scenarios.
 var scenarioCounts = map[string]int{
 	constants.DemosOrgHealthcare: 4,
-	constants.DemosOrgGov:        1,
 	constants.DemosOrgFinance:    1,
 	constants.DemosOrgDHS:        5,
 	constants.DemosOrgFedRAMP:    5,
@@ -1098,8 +1090,6 @@ Available scenarios:
     2 - Gold Card Auto-Approval
     3 - SLA Breach and OHA Reporting
     4 - Bad Actor PHI Exfiltration Blocked
-  gov: 1
-    1 - CUI Exfiltration Attempt Blocked
   finance: 1
     1 - Unauthorized Trade Blocked
   dhs: 1-5
@@ -1402,8 +1392,6 @@ func runScenarioWithResult(org, demoDir, scenario string, hostID hostIdentity) (
 	switch org {
 	case constants.DemosOrgHealthcare:
 		return runHealthcareScenario(demoDir, scenario)
-	case constants.DemosOrgGov:
-		return runGovScenario(demoDir, scenario)
 	case constants.DemosOrgFinance:
 		return runFinanceScenario(demoDir, scenario)
 	case constants.DemosOrgDHS:

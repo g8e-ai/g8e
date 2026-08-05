@@ -223,7 +223,7 @@ func TestRunDemosImages_ValidManifestListsImages(t *testing.T) {
 
 	demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 	require.NoError(t, os.MkdirAll(demosDir, 0o755))
-	manifest := `[{"image":"alpine","tag":"latest","digest":"sha256:abc","demos":["gov","dhs"]}]`
+	manifest := `[{"image":"alpine","tag":"latest","digest":"sha256:abc","demos":["finance","dhs"]}]`
 	require.NoError(t, os.WriteFile(filepath.Join(demosDir, constants.DemosImagesManifestFile), []byte(manifest), 0o644))
 
 	cmd := demosImagesCmd()
@@ -236,7 +236,7 @@ func TestRunDemosImages_ValidManifestListsImages(t *testing.T) {
 
 	output := buf.String()
 	assert.Contains(t, output, "alpine@sha256:abc")
-	assert.Contains(t, output, "gov, dhs")
+	assert.Contains(t, output, "finance, dhs")
 }
 
 func TestRunDemosStart_MissingDemoDirReturnsNotFound(t *testing.T) {

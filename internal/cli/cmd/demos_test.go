@@ -48,7 +48,6 @@ func getProjectRoot() string {
 // harnessRun or runTwoLayerScenario. Extracted as a package-level var to avoid
 // drift across multiple test functions.
 var expectedDemoFiles = []string{
-	"demo_gov.go",
 	"demo_finance.go",
 	"demo_healthcare.go",
 	"demo_dhs.go",
@@ -220,10 +219,8 @@ func TestDemosRunCmd(t *testing.T) {
 	t.Run("run command has detailed long description", func(t *testing.T) {
 		cmd := demosRunCmd()
 		assert.Contains(t, cmd.Long, "healthcare")
-		assert.Contains(t, cmd.Long, "gov")
 		assert.Contains(t, cmd.Long, "finance")
 		assert.Contains(t, cmd.Long, "FHIR PA Request")
-		assert.Contains(t, cmd.Long, "CUI Exfiltration")
 		assert.Contains(t, cmd.Long, "Unauthorized Trade")
 		assert.Contains(t, cmd.Long, "Sovereign Multi-Source Ingest")
 		assert.Contains(t, cmd.Long, "Governed Cloud Resource Provisioning")
@@ -234,7 +231,6 @@ func TestDemosRunCmd(t *testing.T) {
 func TestScenarioCounts(t *testing.T) {
 	t.Run("scenario counts map is correctly defined", func(t *testing.T) {
 		assert.Equal(t, 4, scenarioCounts["healthcare"])
-		assert.Equal(t, 1, scenarioCounts["gov"])
 		assert.Equal(t, 1, scenarioCounts["finance"])
 		assert.Equal(t, 5, scenarioCounts["dhs"])
 		assert.Equal(t, 5, scenarioCounts["fedramp"])
@@ -242,7 +238,7 @@ func TestScenarioCounts(t *testing.T) {
 	})
 
 	t.Run("scenario counts map has expected entries", func(t *testing.T) {
-		expectedOrgs := []string{"healthcare", "gov", "finance", "dhs", "fedramp", "frontend"}
+		expectedOrgs := []string{"healthcare", "finance", "dhs", "fedramp", "frontend"}
 		for _, org := range expectedOrgs {
 			_, exists := scenarioCounts[org]
 			assert.True(t, exists, "scenarioCounts should have entry for %s", org)
@@ -250,17 +246,16 @@ func TestScenarioCounts(t *testing.T) {
 	})
 
 	t.Run("scenario counts map does not contain removed demos", func(t *testing.T) {
-		removedOrgs := []string{"secure-data", "dow", "swarm"}
+		removedOrgs := []string{"secure-data", "dow", "swarm", "gov"}
 		for _, org := range removedOrgs {
 			_, exists := scenarioCounts[org]
 			assert.False(t, exists, "scenarioCounts should NOT have entry for removed demo %s", org)
 		}
 	})
 
-	t.Run("scenario counts map keys exactly match remaining 6 demo orgs", func(t *testing.T) {
+	t.Run("scenario counts map keys exactly match remaining 5 demo orgs", func(t *testing.T) {
 		expectedOrgs := map[string]bool{
 			"healthcare": true,
-			"gov":        true,
 			"finance":    true,
 			"dhs":        true,
 			"fedramp":    true,
@@ -303,22 +298,6 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "localhost:5433")
 		assert.Contains(t, output, "http://localhost:3001")
 		assert.Contains(t, output, "https://localhost:8444/console/")
-		assert.NotContains(t, output, "auth enroll")
-	})
-
-	t.Run("prints gov endpoints", func(t *testing.T) {
-		var buf bytes.Buffer
-		cmd := &cobra.Command{}
-		cmd.SetOut(&buf)
-
-		printDemoEndpoints(cmd, "gov")
-
-		output := buf.String()
-		assert.Contains(t, output, "Available endpoints:")
-		assert.Contains(t, output, "http://localhost:8080")
-		assert.Contains(t, output, "https://localhost:8443")
-		assert.Contains(t, output, "http://localhost:3000")
-		assert.Contains(t, output, "https://localhost:8443/console/")
 		assert.NotContains(t, output, "auth enroll")
 	})
 
@@ -397,13 +376,6 @@ func TestRunScenario(t *testing.T) {
 		assert.Contains(t, err.Error(), "valid: 1-4")
 	})
 
-	t.Run("returns error with valid range for invalid gov scenario number", func(t *testing.T) {
-		_, err := runGovScenario("/tmp", "99")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid scenario number for gov")
-		assert.Contains(t, err.Error(), "valid: 1")
-	})
-
 	t.Run("returns error with valid range for invalid finance scenario number", func(t *testing.T) {
 		_, err := runFinanceScenario("/tmp", "99")
 		require.Error(t, err)
@@ -431,10 +403,6 @@ func TestRunScenario(t *testing.T) {
 		assert.NotNil(t, runHealthcareScenario)
 	})
 
-	t.Run("gov scenario functions exist", func(t *testing.T) {
-		assert.NotNil(t, runGovScenario)
-	})
-
 	t.Run("finance scenario functions exist", func(t *testing.T) {
 		assert.NotNil(t, runFinanceScenario)
 	})
@@ -460,12 +428,6 @@ func TestRunAllScenarios(t *testing.T) {
 		count, ok := scenarioCounts["healthcare"]
 		assert.True(t, ok)
 		assert.Equal(t, 4, count)
-	})
-
-	t.Run("gov has 1 scenario", func(t *testing.T) {
-		count, ok := scenarioCounts["gov"]
-		assert.True(t, ok)
-		assert.Equal(t, 1, count)
 	})
 
 	t.Run("finance has 1 scenario", func(t *testing.T) {
@@ -610,14 +572,6 @@ func TestHealthcareScenarioDescriptions(t *testing.T) {
 	})
 }
 
-func TestGovScenarioDescriptions(t *testing.T) {
-	t.Run("scenario descriptions are documented in run command", func(t *testing.T) {
-		cmd := demosRunCmd()
-		assert.Contains(t, cmd.Long, "gov: 1")
-		assert.Contains(t, cmd.Long, "CUI Exfiltration")
-	})
-}
-
 func TestFinanceScenarioDescriptions(t *testing.T) {
 	t.Run("scenario descriptions are documented in run command", func(t *testing.T) {
 		cmd := demosRunCmd()
@@ -728,7 +682,7 @@ func TestDefaultHarnessConfig(t *testing.T) {
 func TestHarnessRun(t *testing.T) {
 	t.Run("exec mode builds docker compose exec command", func(t *testing.T) {
 		cfg := defaultHarnessConfig("agent-runtime")
-		cmd := harnessRun("gov-cui-exfil-block", cfg)
+		cmd := harnessRun("finance-unauthorized-trade", cfg)
 		assert.Equal(t, []string{
 			"docker", "compose", "exec", "-T", "agent-runtime", "/g8e", "demos", "scenarios", "run",
 			"--mtls-url", "https://g8e.local:8443",
@@ -739,7 +693,7 @@ func TestHarnessRun(t *testing.T) {
 			"--cli-ca", "/host-creds/" + constants.PkiFileGatewayBundle,
 			"--cli-cert", "/host-creds/" + constants.CliCertFilename,
 			"--cli-key", "/host-creds/" + constants.CliKeyFilename,
-			"gov-cui-exfil-block",
+			"finance-unauthorized-trade",
 		}, cmd)
 	})
 
@@ -898,7 +852,7 @@ func TestDemosPullCmd(t *testing.T) {
 			Image:  "alpine",
 			Tag:    "latest",
 			Digest: "sha256:abc123",
-			Demos:  []string{"gov"},
+			Demos:  []string{"finance"},
 		}
 		data, err := json.Marshal(entry)
 		require.NoError(t, err)

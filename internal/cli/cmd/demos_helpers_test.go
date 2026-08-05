@@ -72,7 +72,6 @@ func TestDemoHTTPPort_AllKnownOrgs(t *testing.T) {
 		expected string
 	}{
 		{constants.DemosOrgHealthcare, "8081"},
-		{constants.DemosOrgGov, "8080"},
 		{constants.DemosOrgFinance, "8082"},
 		{constants.DemosOrgDHS, "8087"},
 		{constants.DemosOrgFedRAMP, "8088"},
@@ -95,7 +94,6 @@ func TestDemoHTTPSPort_AllKnownOrgs(t *testing.T) {
 		expected string
 	}{
 		{constants.DemosOrgHealthcare, "8444"},
-		{constants.DemosOrgGov, "8443"},
 		{constants.DemosOrgFinance, "8445"},
 		{constants.DemosOrgDHS, "8450"},
 		{constants.DemosOrgFedRAMP, "8451"},

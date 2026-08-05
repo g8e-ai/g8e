@@ -417,7 +417,6 @@ docker compose down -v
 | healthcare | 2 | Gold card auto-approval |
 | healthcare | 3 | SLA breach and OHA reporting |
 | healthcare | 4 | Bad actor PHI exfiltration blocked |
-| gov | 1 | CUI exfiltration attempt blocked |
 | finance | 1 | Unauthorized trade blocked |
 | dhs | 1 | Sovereign multi-source ingest (chain-of-custody) |
 | dhs | 2 | Cross-domain release requires Notary authority |
@@ -437,7 +436,6 @@ Each demo uses distinct host ports to allow simultaneous deployment:
 
 | Demo | HTTP | HTTPS | Demo UI |
 |---|---|---|---|
-| gov | 8080 | 8443 | 3000 |
 | healthcare | 8081 | 8444 | 3001 |
 | finance | 8082 | 8445 | 3002 |
 | dhs | 8087 | 8450 | - |
@@ -460,7 +458,7 @@ Run the one-command demo verification target to build the binary and run all 6 d
 make demo-verify
 ```
 
-This target depends on `make build`, then for each demo (healthcare, gov, finance, dhs, fedramp, frontend) it:
+This target depends on `make build`, then for each demo (healthcare, finance, dhs, fedramp, frontend) it:
 
 1. Stops any running instance and cleans up volumes
 2. Runs all scenarios via `g8e demos run <org>`

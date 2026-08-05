@@ -621,8 +621,8 @@ The following packages are test-only and are not part of the production dependen
 - `scenarios/dhs_sovereign_test.go` - DHS sovereign scenario tests
 - `scenarios/mcp_a2a.go` - MCP and A2A protocol scenarios: plain MCP, mTLS MCP, A2A JSON, A2A mTLS, A2A protobuf
 - `scenarios/mcp_a2a_test.go` - MCP/A2A protocol scenario tests
-- `scenarios/gov_finance.go` - Gov/finance doctrine scenarios: `gov-cui-exfil-block` and `finance-unauthorized-trade`
-- `scenarios/gov_finance_test.go` - Gov/finance scenario tests
+- `scenarios/finance.go` - Finance doctrine scenarios: `finance-unauthorized-trade`
+- `scenarios/finance_test.go` - Finance scenario tests
 - `scenarios/fedramp_governance.go` - FedRAMP sovereign cloud governance scenarios: `fedramp-provision` (consensus: governed cloud resource provisioning), `fedramp-deny` (doctrine: audit trail destruction blocked by L1), `fedramp-escalate` (notary: resource destruction gated on authorizing official approval), `fedramp-revert` (consensus: governed configuration revert), `fedramp-evidence-block` (doctrine: audit vault wipe rejected by L1)
 - `scenarios/fedramp_governance_test.go` - FedRAMP scenario tests
 - `scenarios/shell_command.go` - Shared `shellCommandArgs` helper (returns JSON string for `SubmitMaximal`) and `shellCommandMap` helper (returns `map[string]any` for `MCPToolsCall`), using typed `shellCommandJSON` struct.
@@ -653,11 +653,8 @@ The following packages are test-only and are not part of the production dependen
 
 **`demos/finance/`** - Financial data governance demo
 
-**`demos/gov/`** - Government operations demo
-
 **CLI Demo Scenario Files** (`internal/cli/cmd/`):
-- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, pull, export, import, images, scenarios). Contains `harnessConfig` struct (connection params + `UseRun`), `defaultHarnessConfig`, `defaultGovernedHarnessConfig` (wraps `defaultHarnessConfig` with governance posture overrides), `harnessRun` helper for building docker compose exec/run commands for demo scenarios, `switchDemoPosture` (shared posture switch helper), and `runTwoLayerScenario` reusable orchestrator. `demoVerbose` flag (set by `-v`/`--verbose`), `demoStep` suppresses output when non-verbose, `demoPrintln`/`demoPrintf` (verbose-aware print helpers), `scenarioCounts` map (healthcare: 4, gov: 1, finance: 1, dhs: 5, fedramp: 5, frontend: 1), `printDemoEndpoints` (prints available endpoints per org).
-- `demo_gov.go` - Gov demo scenario (uses `runTwoLayerScenario` with `harnessRun`)
+- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, pull, export, import, images, scenarios). Contains `harnessConfig` struct (connection params + `UseRun`), `defaultHarnessConfig`, `defaultGovernedHarnessConfig` (wraps `defaultHarnessConfig` with governance posture overrides), `harnessRun` helper for building docker compose exec/run commands for demo scenarios, `switchDemoPosture` (shared posture switch helper), and `runTwoLayerScenario` reusable orchestrator. `demoVerbose` flag (set by `-v`/`--verbose`), `demoStep` suppresses output when non-verbose, `demoPrintln`/`demoPrintf` (verbose-aware print helpers), `scenarioCounts` map (healthcare: 4, finance: 1, dhs: 5, fedramp: 5, frontend: 1), `printDemoEndpoints` (prints available endpoints per org).
 - `demo_finance.go` - Finance demo scenario (uses `runTwoLayerScenario` with `harnessRun`)
 - `demo_healthcare.go` - Healthcare demo scenarios (4 scenarios, each calls `harnessRun`)
 - `demo_dhs.go` - DHS demo scenarios (5 scenarios, each calls `dhsHarnessRun` → `harnessRun`). Contains `dhsHarnessConfig`, `dhsHarnessRun`, `dhsScenarioStep`, `extractFirstTxHash`, `switchDHSPosture` helpers.

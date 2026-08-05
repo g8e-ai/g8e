@@ -107,7 +107,6 @@ EXCLUDE_FILES := \
 	internal/cli/cmd/demos.go \
 	internal/cli/cmd/demo_dhs.go \
 	internal/cli/cmd/demo_finance.go \
-	internal/cli/cmd/demo_gov.go \
 	internal/cli/cmd/demo_healthcare.go \
 	internal/cli/cmd/mcp_backup.go
 
@@ -556,10 +555,10 @@ test-airgap:
 # =============================================================================
 # DEMO VERIFICATION
 # =============================================================================
-# Requires Docker. Builds the binary, then runs all 6 demo environments.
+# Requires Docker. Builds the binary, then runs all 5 demo environments.
 # Each demo is torn down (with volumes) before the next starts to avoid
 # port conflicts and stale PKI state.
-DEMO_ORGS := healthcare gov finance dhs fedramp frontend
+DEMO_ORGS := healthcare finance dhs fedramp frontend
 
 .PHONY: demo-verify
 demo-verify: build
