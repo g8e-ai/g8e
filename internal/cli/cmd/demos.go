@@ -35,7 +35,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/scenarios"
 )
 
@@ -1221,7 +1220,7 @@ func enrollDemoHost(cmd *cobra.Command, org, demoDir string) (hostIdentity, erro
 	// Root the fileSvc at the demo directory so demo credentials are
 	// isolated in demos/<org>/.g8e/ and do not clobber the developer's
 	// local <cwd>/.g8e/ state (IQ5 option a).
-	fileSvc, err := newDemoFileSvc(demoDir, slog.Default())
+	fileSvc, err := newFileSvc(demoDir, slog.Default())
 	if err != nil {
 		return hostIdentity{}, fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 	}
@@ -1244,12 +1243,6 @@ func enrollDemoHost(cmd *cobra.Command, org, demoDir string) (hostIdentity, erro
 	}
 	return hostIdentity{UserID: creds.UserID, CLISessionID: creds.CLISessionID}, nil
 }
-
-// newDemoFileSvc is the file service factory used by enrollDemoHost. It is a
-// package-level var so tests can swap it for a failing factory to test the
-// ErrFileServiceInit wrapping at Tier 1.
-var newDemoFileSvc = fs.NewRuntimeFileService
-
 // waitForDemoGateway polls the demo gateway HTTP health endpoint until it
 // responds or the 90s timeout expires. The gateway may have just been started
 // by runDemosStart and enrollment requires it to be reachable. It is a

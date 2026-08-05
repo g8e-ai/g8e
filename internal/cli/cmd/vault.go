@@ -19,6 +19,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"strings"
 
@@ -83,7 +84,7 @@ func vaultInitCmd() *cobra.Command {
 	return vaultInitCmdWithConfig(newFileSvc)
 }
 
-func vaultInitCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func vaultInitCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var vaultDir string
 	var keyPath string
 
@@ -92,7 +93,7 @@ func vaultInitCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)
 		Short: "Initialize a new encryption vault",
 		Long:  `Generate a new encryption vault with a random key. The key is saved to the specified key path.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -158,7 +159,7 @@ func vaultUnlockCmd() *cobra.Command {
 	return vaultUnlockCmdWithConfig(newFileSvc)
 }
 
-func vaultUnlockCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func vaultUnlockCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var vaultDir string
 	var keyPath string
 
@@ -167,7 +168,7 @@ func vaultUnlockCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, erro
 		Short: "Unlock the encryption vault",
 		Long:  `Unlock an existing vault using the private key.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -219,7 +220,7 @@ func vaultRekeyCmd() *cobra.Command {
 	return vaultRekeyCmdWithConfig(newFileSvc)
 }
 
-func vaultRekeyCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func vaultRekeyCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var vaultDir string
 	var keyPath string
 	var newKeyPath string
@@ -229,7 +230,7 @@ func vaultRekeyCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error
 		Short: "Re-key the vault with a new private key",
 		Long:  `Re-encrypt the vault's DEK with a new private key. Both old and new keys are required.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -302,7 +303,7 @@ func vaultStatusCmd() *cobra.Command {
 	return vaultStatusCmdWithConfig(newFileSvc)
 }
 
-func vaultStatusCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func vaultStatusCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var vaultDir string
 
 	cmd := &cobra.Command{
@@ -310,7 +311,7 @@ func vaultStatusCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, erro
 		Short: "Show vault status",
 		Long:  `Display whether the vault is initialized and unlocked.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -357,7 +358,7 @@ func vaultResetCmd() *cobra.Command {
 	return vaultResetCmdWithConfig(newFileSvc)
 }
 
-func vaultResetCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func vaultResetCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var vaultDir string
 	var confirm bool
 
@@ -366,7 +367,7 @@ func vaultResetCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error
 		Short: "Destroy the vault and all encrypted data",
 		Long:  `Reset the vault completely. This is a destructive operation that makes all encrypted data unrecoverable.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -422,7 +423,7 @@ func vaultExportCmd() *cobra.Command {
 	return vaultExportCmdWithConfig(newFileSvc)
 }
 
-func vaultExportCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func vaultExportCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var keyPath string
 
 	cmd := &cobra.Command{
@@ -430,7 +431,7 @@ func vaultExportCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, erro
 		Short: "Export the vault key",
 		Long:  `Export the vault private key in hex format. Use with extreme caution.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -461,7 +462,7 @@ func vaultImportCmd() *cobra.Command {
 	return vaultImportCmdWithConfig(newFileSvc)
 }
 
-func vaultImportCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func vaultImportCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var keyPath string
 	var keyHex string
 
@@ -470,7 +471,7 @@ func vaultImportCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, erro
 		Short: "Import a vault key",
 		Long:  `Import a vault private key from hex string or stdin.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}

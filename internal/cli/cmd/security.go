@@ -18,6 +18,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -64,7 +65,7 @@ and confirms that the CA bundle is properly configured for mTLS.`,
 			cmd.Println("Running platform security validation...")
 			failed := false
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -292,7 +293,7 @@ func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, e
 				return fmt.Errorf("security: load config: %w", err)
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}

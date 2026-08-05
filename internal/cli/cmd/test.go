@@ -16,6 +16,7 @@ package cmd
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -148,7 +149,7 @@ func testE2ECmdWithConfig(configLoader func(string) (*config.Config, error), fil
 
 			// Fallback to ProcessManager check (for background/host mode)
 			if !isRunning {
-				fileSvc, err := fileSvcFactory()
+				fileSvc, err := fileSvcFactory("", slog.Default())
 				if err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 				}

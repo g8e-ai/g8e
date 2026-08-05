@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -110,7 +111,7 @@ func TestDataAuditCmd(t *testing.T) {
 func TestDataCommandsRequireAuthentication(t *testing.T) {
 	testCases := []struct {
 		name string
-		cmd  func(func(string) (*config.Config, error), apiClientFactory, func() (fs.RuntimeFileService, error)) *cobra.Command
+		cmd  func(func(string) (*config.Config, error), apiClientFactory, func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command
 	}{
 		{"users", dataUsersCmdWithConfig},
 		{"operators", dataOperatorsCmdWithConfig},

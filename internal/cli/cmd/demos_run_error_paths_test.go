@@ -435,14 +435,14 @@ func TestEnrollDemoHost_ConfigLoadFailure(t *testing.T) {
 
 func TestEnrollDemoHost_FileServiceInitError(t *testing.T) {
 	origWait := waitForDemoGateway
-	origFileSvc := newDemoFileSvc
+	origFileSvc := newFileSvc
 	defer func() {
 		waitForDemoGateway = origWait
-		newDemoFileSvc = origFileSvc
+		newFileSvc = origFileSvc
 	}()
 
 	waitForDemoGateway = func(string) error { return nil }
-	newDemoFileSvc = func(string, *slog.Logger) (fs.RuntimeFileService, error) {
+	newFileSvc = func(string, *slog.Logger) (fs.RuntimeFileService, error) {
 		return nil, errors.New("file service init error")
 	}
 
