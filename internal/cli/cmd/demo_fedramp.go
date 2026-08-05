@@ -29,6 +29,8 @@ import (
 func defaultFedRAMPHarnessConfig() harnessConfig {
 	cfg := defaultHarnessConfig("agent-runtime")
 	cfg.ApprovalURL = "https://localhost:8451"
+	cfg.UserID = demoIdentity.UserID
+	cfg.CLISessionID = demoIdentity.CLISessionID
 	return cfg
 }
 

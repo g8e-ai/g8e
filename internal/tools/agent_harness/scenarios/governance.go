@@ -18,6 +18,8 @@ import (
 type GovKit struct {
 	OperatorID        string
 	OperatorSessionID string
+	UserID            string // user_id for SSE subscription (the human approver)
+	CLISessionID      string // cli_session_id for the X-CLI-Session-ID submit header
 }
 
 var kit *GovKit
@@ -68,7 +70,7 @@ func governanceScenarios() []Scenario {
 
 				if txHash, suspended := clientpkg.Suspended(resp); suspended {
 					r.note("gateway suspended transaction %s pending L3 notary approval", short(txHash))
-					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, ensembleProducer, txHash, kit.OperatorID)
+					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, ensembleProducer, txHash, kit.UserID)
 					if aerr != nil {
 						return fmt.Errorf("human approval: %w", aerr)
 					}
@@ -151,7 +153,7 @@ func governanceScenarios() []Scenario {
 
 				if txHash, suspended := clientpkg.Suspended(resp); suspended {
 					r.note("gateway suspended transaction %s pending L3 notary approval", short(txHash))
-					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, principalActor, txHash, kit.OperatorID)
+					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, principalActor, txHash, kit.UserID)
 					if aerr != nil {
 						return fmt.Errorf("human approval: %w", aerr)
 					}

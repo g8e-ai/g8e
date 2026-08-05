@@ -701,6 +701,33 @@ func TestDefaultHarnessConfig(t *testing.T) {
 		assert.Equal(t, "https://localhost:8451", cfg.ApprovalURL)
 		assert.Equal(t, "agent-runtime", cfg.Container)
 	})
+
+	t.Run("dhs harness config propagates demoIdentity", func(t *testing.T) {
+		original := demoIdentity
+		defer func() { demoIdentity = original }()
+		demoIdentity = hostIdentity{UserID: "host-user-1", CLISessionID: "host-sess-1"}
+		cfg := defaultDHSHarnessConfig()
+		assert.Equal(t, "host-user-1", cfg.UserID)
+		assert.Equal(t, "host-sess-1", cfg.CLISessionID)
+	})
+
+	t.Run("fedramp harness config propagates demoIdentity", func(t *testing.T) {
+		original := demoIdentity
+		defer func() { demoIdentity = original }()
+		demoIdentity = hostIdentity{UserID: "host-user-2", CLISessionID: "host-sess-2"}
+		cfg := defaultFedRAMPHarnessConfig()
+		assert.Equal(t, "host-user-2", cfg.UserID)
+		assert.Equal(t, "host-sess-2", cfg.CLISessionID)
+	})
+
+	t.Run("harness config defaults empty identity when demoIdentity unset", func(t *testing.T) {
+		original := demoIdentity
+		defer func() { demoIdentity = original }()
+		demoIdentity = hostIdentity{}
+		cfg := defaultDHSHarnessConfig()
+		assert.Empty(t, cfg.UserID)
+		assert.Empty(t, cfg.CLISessionID)
+	})
 }
 
 func TestHarnessRun(t *testing.T) {
@@ -760,6 +787,25 @@ func TestHarnessRun(t *testing.T) {
 		cfg := defaultHarnessConfig("agent-runtime")
 		cmd := harnessRun("my-scenario", cfg)
 		assert.Equal(t, "my-scenario", cmd[len(cmd)-1])
+	})
+
+	t.Run("appends --user-id and --cli-session-id when set", func(t *testing.T) {
+		cfg := defaultHarnessConfig("agent-runtime")
+		cfg.UserID = "user-123"
+		cfg.CLISessionID = "sess-456"
+		cmd := harnessRun("dhs-release", cfg)
+		assert.Contains(t, cmd, "--user-id")
+		assert.Contains(t, cmd, "user-123")
+		assert.Contains(t, cmd, "--cli-session-id")
+		assert.Contains(t, cmd, "sess-456")
+		assert.Equal(t, "dhs-release", cmd[len(cmd)-1])
+	})
+
+	t.Run("omits --user-id and --cli-session-id when empty", func(t *testing.T) {
+		cfg := defaultHarnessConfig("agent-runtime")
+		cmd := harnessRun("dhs-ingest", cfg)
+		assert.NotContains(t, cmd, "--user-id")
+		assert.NotContains(t, cmd, "--cli-session-id")
 	})
 }
 

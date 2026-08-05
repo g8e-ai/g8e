@@ -816,9 +816,17 @@ func TestClient_WaitForHumanApproval_TimeoutNoMatchingEvent(t *testing.T) {
 	const sentTxHash = "tx-wrong-999"
 	const expectedTxHash = "tx-correct-001"
 
+	// sseUserID captures the user_id query parameter from the SSE subscription
+	// request so the test can assert WaitForHumanApproval subscribes with the
+	// caller-supplied userID (the host user's id after the demo refactor), not a
+	// hardcoded operator id. This is the regression guard for the
+	// kit.OperatorID → kit.UserID fix in the notary scenarios.
+	var sseUserID string
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasPrefix(r.URL.Path, constants.APIPaths.SSEStream):
+			sseUserID = r.URL.Query().Get("user_id")
 			w.Header().Set("Content-Type", "text/event-stream")
 			eventPayload, err := json.Marshal(models.ApprovalCompletedEvent{
 				Type:   constants.SSEEventTypeApprovalCompleted,
@@ -863,6 +871,11 @@ func TestClient_WaitForHumanApproval_TimeoutNoMatchingEvent(t *testing.T) {
 	}
 	if err != constants.ErrApprovalSSETimeout {
 		t.Errorf("expected ErrApprovalSSETimeout, got %v", err)
+	}
+	// The SSE subscription must carry the caller-supplied userID so the harness
+	// receives events scoped to the human approver's user, not the operator id.
+	if sseUserID != userID {
+		t.Errorf("SSE subscription user_id: got %q, want %q (the WaitForHumanApproval userID arg)", sseUserID, userID)
 	}
 }
 

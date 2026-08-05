@@ -60,6 +60,17 @@ type Config struct {
 	// executed the work. If empty, Agent Harness tries to discover it from /api/operators.
 	OperatorSessionID string `json:"operator_session_id"`
 
+	// UserID is the host CLI user_id used to scope the SSE approval subscription.
+	// When set, WaitForHumanApproval subscribes with this user_id instead of the
+	// operator id, so the harness receives events for transactions tagged with
+	// the host user's identity.
+	UserID string `json:"user_id"`
+
+	// CLISessionID is the host CLI session id sent as X-CLI-Session-ID on
+	// notary submit so handleCLIAuth stamps the host user onto the suspended
+	// transaction.
+	CLISessionID string `json:"cli_session_id"`
+
 	// EnvelopeTTL is how long a maximal envelope is valid before expiry.
 	EnvelopeTTL time.Duration `json:"envelope_ttl"`
 

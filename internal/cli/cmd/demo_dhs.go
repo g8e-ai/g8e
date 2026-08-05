@@ -28,6 +28,8 @@ import (
 func defaultDHSHarnessConfig() harnessConfig {
 	cfg := defaultHarnessConfig("agent-coalition")
 	cfg.ApprovalURL = "https://localhost:8450"
+	cfg.UserID = demoIdentity.UserID
+	cfg.CLISessionID = demoIdentity.CLISessionID
 	return cfg
 }
 

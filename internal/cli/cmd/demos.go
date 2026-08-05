@@ -29,6 +29,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/internal/cli/auth"
+	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/scenarios"
@@ -60,6 +62,25 @@ func demoPrintf(format string, a ...any) {
 // demoStep, etc.) can emit TUI events without threading an emitter through
 // every function signature.
 var demoEmitter DemoEmitter
+
+// demoIdentity holds the host CLI user identity enrolled inline by runDemosRun
+// for notary demos (dhs, fedramp). It is a package-level variable so the deep
+// scenario call chain (runScenario → runFedRAMPScenario → harnessRun) can read
+// the host user_id and cli_session_id without threading them through every
+// function signature — matching the demoEmitter/demoVerbose pattern. It is
+// empty for non-notary demos and reset to demoIdentity{} at the end of
+// runDemosRun so successive runs do not leak identity across demos.
+var demoIdentity hostIdentity
+
+// hostIdentity carries the host CLI user identity needed to bind the harness
+// transaction-submit identity to the browser approver identity. UserID scopes
+// the SSE approval subscription; CLISessionID is sent as X-CLI-Session-ID on
+// the notary submit so handleCLIAuth stamps the host user onto the suspended
+// transaction.
+type hostIdentity struct {
+	UserID       string
+	CLISessionID string
+}
 
 // DemoEmitter translates demo scenario events into TUI messages.
 // When --tui is not active, demoEmitter is nil and all methods are no-ops.
@@ -1162,19 +1183,21 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool) error {
 	}
 
 	// Demos with notary scenarios require a real human WebAuthn approval.
-	// Prompt the user to enroll a passkey before running scenarios.
+	// Enroll the host CLI session inline (in-process) so the demo runner has
+	// direct access to the resulting user_id and cli_session_id, which are
+	// threaded into the harness so the suspended transaction is tagged with
+	// the same user_id as the browser approver. This replaces the old
+	// "print a prompt and wait for Enter" flow that required a separate
+	// terminal and produced a disjoint user identity.
+	demoIdentity = hostIdentity{}
+	defer func() { demoIdentity = hostIdentity{} }()
+
 	if org == constants.DemosOrgDHS || org == constants.DemosOrgFedRAMP {
-		httpPort := demoHTTPPort(org)
-		httpsPort := demoHTTPSPort(org)
-		if httpPort != "" && httpsPort != "" {
-			fmt.Fprintf(os.Stderr, "\n%s\n  Passkey enrollment required\n%s\n", strings.Repeat("─", 60), strings.Repeat("─", 60))
-			fmt.Fprintf(os.Stderr, "  This demo requires real human WebAuthn approvals.\n")
-			fmt.Fprintf(os.Stderr, "  Enroll a passkey now (opens your browser):\n\n")
-			fmt.Fprintf(os.Stderr, "    g8e auth enroll -e localhost:%s --port %s\n\n", httpPort, httpsPort)
-			fmt.Fprintf(os.Stderr, "  Press Enter once enrollment is complete to continue...\n")
-			reader := bufio.NewReader(os.Stdin)
-			_, _ = reader.ReadString('\n')
+		hostID, err := enrollDemoHost(cmd, org)
+		if err != nil {
+			return err
 		}
+		demoIdentity = hostID
 	}
 
 	if useTUI {
@@ -1186,6 +1209,69 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool) error {
 	}
 
 	return runAllScenarios(cmd, org, demoDir)
+}
+
+// enrollDemoHost performs inline host-CLI enrollment against the demo gateway
+// for notary demos (dhs, fedramp). It points the CLI config at the demo
+// gateway's HTTP/HTTPS ports, waits for the gateway to become healthy, runs
+// performEnroll in-process (which opens a browser for passkey registration),
+// loads the resulting credentials, and returns the host user identity. The
+// endpoint overrides are cleared on return so subsequent operations in the
+// same process are unaffected.
+func enrollDemoHost(cmd *cobra.Command, org string) (hostIdentity, error) {
+	httpPort := demoHTTPPort(org)
+	httpsPort := demoHTTPSPort(org)
+	if httpPort == "" || httpsPort == "" {
+		return hostIdentity{}, fmt.Errorf("demos run: %s: %w", org, constants.ErrDemoGatewayPortMissing)
+	}
+
+	// Point the CLI at the demo gateway for the enrollment call, then clear
+	// the overrides so subsequent operations in the same process are
+	// unaffected. Restore even on enrollment error so a failure does not
+	// poison the process-wide config.
+	config.SetHTTPEndpointOverride(fmt.Sprintf("localhost:%s", httpPort))
+	config.SetHTTPSEndpointOverride(fmt.Sprintf("localhost:%s", httpsPort))
+	defer config.SetEndpointOverride("")
+
+	if err := waitForDemoGateway(httpPort); err != nil {
+		return hostIdentity{}, fmt.Errorf("demos run: enroll: %w", err)
+	}
+
+	fileSvc, err := newFileSvc()
+	if err != nil {
+		return hostIdentity{}, fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+	}
+	cfg, err := loadConfig("")
+	if err != nil {
+		return hostIdentity{}, err
+	}
+
+	cmd.Printf("\n%s\n  Passkey enrollment required\n%s\n", strings.Repeat("─", 60), strings.Repeat("─", 60))
+	cmd.Printf("  This demo requires real human WebAuthn approvals.\n")
+	cmd.Printf("  Enrolling a passkey now (opens your browser)...\n\n")
+
+	if err := performEnroll(cmd, fileSvc, cfg, false); err != nil {
+		return hostIdentity{}, fmt.Errorf("demos run: enroll: %w", err)
+	}
+
+	creds, err := auth.LoadCredentials(fileSvc, cfg)
+	if err != nil || creds == nil {
+		return hostIdentity{}, fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
+	}
+	return hostIdentity{UserID: creds.UserID, CLISessionID: creds.CLISessionID}, nil
+}
+
+// waitForDemoGateway polls the demo gateway HTTP health endpoint until it
+// responds or the 90s timeout expires. The gateway may have just been started
+// by runDemosStart and enrollment requires it to be reachable.
+func waitForDemoGateway(httpPort string) error {
+	for i := 0; i < 30; i++ {
+		if err := exec.Command("curl", "-sf", "http://localhost:"+httpPort+"/api/v1/health").Run(); err == nil {
+			return nil
+		}
+		time.Sleep(3 * time.Second)
+	}
+	return fmt.Errorf("gateway did not become healthy on port %s after 90s", httpPort)
 }
 
 // runDemosWithTUI launches the bubbletea TUI, sets the package-level
@@ -1455,15 +1541,17 @@ type twoLayerScenarioConfig struct {
 // command for a demos scenarios run. Centralising these in a struct
 // avoids positional-argument drift as flags are added across demos.
 type harnessConfig struct {
-	Container   string
-	MTLSURL     string
-	PublicURL   string
-	ApprovalURL string // host-reachable base URL for the printed human approval link; empty omits --approval-url
-	CertPath    string
-	KeyPath     string
-	CAPath      string
-	Posture     string
-	UseRun      bool // true for `docker compose run --rm`, false for `exec`
+	Container    string
+	MTLSURL      string
+	PublicURL    string
+	ApprovalURL  string // host-reachable base URL for the printed human approval link; empty omits --approval-url
+	CertPath     string
+	KeyPath      string
+	CAPath       string
+	Posture      string
+	UserID       string // host CLI user_id for SSE subscription and suspended-tx tagging; empty omits --user-id
+	CLISessionID string // host CLI session id for X-CLI-Session-ID header on submit; empty omits --cli-session-id
+	UseRun       bool   // true for `docker compose run --rm`, false for `exec`
 }
 
 // defaultHarnessConfig returns the config matching the standard demo topology:
@@ -1498,6 +1586,12 @@ func harnessRun(scenario string, cfg harnessConfig) []string {
 	)
 	if cfg.ApprovalURL != "" {
 		cmd = append(cmd, "--approval-url", cfg.ApprovalURL)
+	}
+	if cfg.UserID != "" {
+		cmd = append(cmd, "--user-id", cfg.UserID)
+	}
+	if cfg.CLISessionID != "" {
+		cmd = append(cmd, "--cli-session-id", cfg.CLISessionID)
 	}
 	cmd = append(cmd, scenario)
 	return cmd

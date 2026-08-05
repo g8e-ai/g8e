@@ -119,7 +119,7 @@ func fedrampScenarios() []Scenario {
 
 				if txHash, suspended := clientpkg.Suspended(resp); suspended {
 					r.note("gateway suspended destroy transaction %s pending L3 notary approval", short(txHash))
-					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, fedrampAuthorizingOfficial, txHash, kit.OperatorID)
+					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, fedrampAuthorizingOfficial, txHash, kit.UserID)
 					if aerr != nil {
 						return fmt.Errorf("authorizing official approve: %w", aerr)
 					}

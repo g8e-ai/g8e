@@ -18,6 +18,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/scenarios"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -146,5 +147,49 @@ func TestSelectAgentHarnessScenarios_Consensus(t *testing.T) {
 			}
 		}
 		assert.Greater(t, dhsCount, 0, "consensus phase should include DHS scenarios")
+	})
+}
+
+func TestDemosScenariosRunCmd_IdentityFlags(t *testing.T) {
+	cmd := demosScenariosRunCmd()
+
+	t.Run("has --user-id flag", func(t *testing.T) {
+		flag := cmd.Flags().Lookup("user-id")
+		require.NotNil(t, flag)
+		assert.Equal(t, "", flag.DefValue)
+		assert.Contains(t, flag.Usage, "user_id")
+	})
+
+	t.Run("has --cli-session-id flag", func(t *testing.T) {
+		flag := cmd.Flags().Lookup("cli-session-id")
+		require.NotNil(t, flag)
+		assert.Equal(t, "", flag.DefValue)
+		assert.Contains(t, flag.Usage, "session")
+	})
+}
+
+func TestApplyAgentHarnessFlags_IdentityFields(t *testing.T) {
+	t.Run("propagates user-id and cli-session-id to config", func(t *testing.T) {
+		harnessUserID = "test-user"
+		harnessCLISessionID = "test-session"
+		defer func() {
+			harnessUserID = ""
+			harnessCLISessionID = ""
+		}()
+
+		cfg := config.Default()
+		applyAgentHarnessFlags(&cfg)
+		assert.Equal(t, "test-user", cfg.UserID)
+		assert.Equal(t, "test-session", cfg.CLISessionID)
+	})
+
+	t.Run("leaves identity empty when flags unset", func(t *testing.T) {
+		harnessUserID = ""
+		harnessCLISessionID = ""
+
+		cfg := config.Default()
+		applyAgentHarnessFlags(&cfg)
+		assert.Empty(t, cfg.UserID)
+		assert.Empty(t, cfg.CLISessionID)
 	})
 }

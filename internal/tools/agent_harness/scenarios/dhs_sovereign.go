@@ -98,7 +98,7 @@ func dhsScenarios() []Scenario {
 
 				if txHash, suspended := clientpkg.Suspended(resp); suspended {
 					r.note("gateway suspended release transaction %s pending L3 notary approval", short(txHash))
-					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, dhsReleaseAuthority, txHash, kit.OperatorID)
+					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, dhsReleaseAuthority, txHash, kit.UserID)
 					if aerr != nil {
 						return fmt.Errorf("release authority approve: %w", aerr)
 					}
