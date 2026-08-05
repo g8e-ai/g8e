@@ -39,6 +39,9 @@ var (
 	harnessKey          string
 	harnessCA           string
 	harnessAPIKey       string
+	harnessCLICert      string
+	harnessCLIKey       string
+	harnessCLICA        string
 	harnessSessionID    string
 	harnessUserID       string
 	harnessCLISessionID string
@@ -61,6 +64,9 @@ func demosScenariosRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&harnessCert, "cert", "", "client cert PEM")
 	cmd.Flags().StringVar(&harnessKey, "key", "", "client key PEM")
 	cmd.Flags().StringVar(&harnessCA, "ca", "", "gateway CA bundle PEM")
+	cmd.Flags().StringVar(&harnessCLICert, "cli-cert", "", "host CLI client cert PEM for notary submits")
+	cmd.Flags().StringVar(&harnessCLIKey, "cli-key", "", "host CLI client key PEM for notary submits")
+	cmd.Flags().StringVar(&harnessCLICA, "cli-ca", "", "gateway CA bundle PEM for CLI-cert client (defaults to --ca)")
 	cmd.Flags().StringVar(&harnessAPIKey, "api-key", "", "operator API key for MCP/A2A surface")
 	cmd.Flags().StringVar(&harnessSessionID, "operator-session", "", "scope audit to a specific Operator session")
 	cmd.Flags().StringVar(&harnessUserID, "user-id", "", "host CLI user_id for SSE approval subscription")
@@ -173,6 +179,15 @@ func applyAgentHarnessFlags(cfg *config.Config) {
 	}
 	if harnessVerbose {
 		cfg.Verbose = harnessVerbose
+	}
+	if harnessCLICert != "" {
+		cfg.CLIAuth.ClientCert = harnessCLICert
+	}
+	if harnessCLIKey != "" {
+		cfg.CLIAuth.ClientKey = harnessCLIKey
+	}
+	if harnessCLICA != "" {
+		cfg.CLIAuth.CABundle = harnessCLICA
 	}
 }
 

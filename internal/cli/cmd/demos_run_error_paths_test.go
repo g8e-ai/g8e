@@ -370,7 +370,7 @@ func TestEnrollDemoHost_UnknownOrgReturnsPortMissingError(t *testing.T) {
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
-	_, err := enrollDemoHost(cmd, "nonexistent-org")
+	_, err := enrollDemoHost(cmd, "nonexistent-org", "")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrDemoGatewayPortMissing)
 	assert.Contains(t, err.Error(), "nonexistent-org")
@@ -404,4 +404,69 @@ func TestRunDemosRun_MissingComposeFileReturnsNotFound(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrNotFound)
 	assert.Contains(t, err.Error(), "compose.yml")
+}
+
+func TestEnrollDemoHost_ConfigLoadFailure(t *testing.T) {
+	origWait := waitForDemoGateway
+	origConfigLoad := configLoad
+	defer func() {
+		waitForDemoGateway = origWait
+		configLoad = origConfigLoad
+	}()
+
+	waitForDemoGateway = func(string) error { return nil }
+	configLoad = func(string) (*config.Config, error) {
+		return nil, errors.New("config load error")
+	}
+
+	cmd := demosRunCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	_, err := enrollDemoHost(cmd, constants.DemosOrgDHS, t.TempDir())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrConfigLoadFailed)
+}
+
+func TestEnrollDemoHost_FileServiceInitError(t *testing.T) {
+	origWait := waitForDemoGateway
+	defer func() {
+		waitForDemoGateway = origWait
+	}()
+
+	waitForDemoGateway = func(string) error { return nil }
+
+	cmd := demosRunCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	_, err := enrollDemoHost(cmd, constants.DemosOrgDHS, "/nonexistent/path/that/does/not/exist")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+}
+
+func TestEnrollDemoHost_EndpointOverrideClearedOnError(t *testing.T) {
+	origWait := waitForDemoGateway
+	origConfigLoad := configLoad
+	defer func() {
+		waitForDemoGateway = origWait
+		configLoad = origConfigLoad
+	}()
+
+	waitForDemoGateway = func(string) error { return nil }
+	configLoad = func(string) (*config.Config, error) {
+		return nil, errors.New("config load error")
+	}
+
+	cmd := demosRunCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	_, err := enrollDemoHost(cmd, constants.DemosOrgFedRAMP, t.TempDir())
+	require.Error(t, err)
+
+	assert.Equal(t, "", config.OperatorHTTPURL(), "endpoint override should be cleared after error")
 }

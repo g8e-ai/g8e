@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
@@ -205,20 +206,28 @@ func (c *Config) OperatorHTTPSPort() int {
 // When cfg.Paths.Host is a full URL (contains "://"), it is returned directly.
 // This allows tests to override the URL by setting cfg.Paths.Host to the test server URL.
 func (c *Config) OperatorHTTPURL() string {
-	if httpsEndpointOverride != "" {
-		if strings.Contains(httpsEndpointOverride, "://") {
-			return httpsEndpointOverride
+	endpointMu.RLock()
+	override := httpsEndpointOverride
+	endpointMu.RUnlock()
+	if override != "" {
+		if strings.Contains(override, "://") {
+			return override
 		}
-		if _, _, err := net.SplitHostPort(httpsEndpointOverride); err != nil {
-			return fmt.Sprintf("https://%s:%d", httpsEndpointOverride, constants.Ports.OperatorHttps)
+		if _, _, err := net.SplitHostPort(override); err != nil {
+			return fmt.Sprintf("https://%s:%d", override, constants.Ports.OperatorHttps)
 		}
-		return fmt.Sprintf("https://%s", httpsEndpointOverride)
+		return fmt.Sprintf("https://%s", override)
 	}
 	if c.Paths != nil && strings.Contains(c.Paths.Host, "://") {
 		return c.Paths.Host
 	}
 	return network.LocalhostHTTPSURL(c.OperatorHTTPSPort())
 }
+
+// endpointMu guards httpEndpointOverride and httpsEndpointOverride against
+// concurrent read/write races between enrollment (which sets and clears
+// overrides) and request handlers (which read them via OperatorHTTPURL etc).
+var endpointMu sync.RWMutex
 
 // httpEndpointOverride is set by the -e/--endpoint flag to allow
 // connecting to a remote gateway HTTP discovery endpoint instead of localhost.
@@ -231,17 +240,23 @@ var httpsEndpointOverride string
 // SetEndpointOverride sets both HTTP and HTTPS endpoint overrides to the same value.
 // Backward-compatible — used by tests that pass full URLs.
 func SetEndpointOverride(endpoint string) {
+	endpointMu.Lock()
+	defer endpointMu.Unlock()
 	httpEndpointOverride = endpoint
 	httpsEndpointOverride = endpoint
 }
 
 // SetHTTPEndpointOverride sets only the HTTP discovery override.
 func SetHTTPEndpointOverride(endpoint string) {
+	endpointMu.Lock()
+	defer endpointMu.Unlock()
 	httpEndpointOverride = endpoint
 }
 
 // SetHTTPSEndpointOverride sets only the HTTPS/mTLS override.
 func SetHTTPSEndpointOverride(endpoint string) {
+	endpointMu.Lock()
+	defer endpointMu.Unlock()
 	httpsEndpointOverride = endpoint
 }
 
@@ -249,14 +264,17 @@ func SetHTTPSEndpointOverride(endpoint string) {
 // When cfg.Paths.Host is a full URL (contains "://"), it is returned directly,
 // matching OperatorHTTPURL behavior for test overrides.
 func (c *Config) OperatorPublicURL() string {
-	if httpsEndpointOverride != "" {
-		if strings.Contains(httpsEndpointOverride, "://") {
-			return httpsEndpointOverride
+	endpointMu.RLock()
+	override := httpsEndpointOverride
+	endpointMu.RUnlock()
+	if override != "" {
+		if strings.Contains(override, "://") {
+			return override
 		}
-		if _, _, err := net.SplitHostPort(httpsEndpointOverride); err != nil {
-			return fmt.Sprintf("https://%s:%d", httpsEndpointOverride, constants.Ports.OperatorHttps)
+		if _, _, err := net.SplitHostPort(override); err != nil {
+			return fmt.Sprintf("https://%s:%d", override, constants.Ports.OperatorHttps)
 		}
-		return fmt.Sprintf("https://%s", httpsEndpointOverride)
+		return fmt.Sprintf("https://%s", override)
 	}
 	if c.Paths != nil && strings.Contains(c.Paths.Host, "://") {
 		return c.Paths.Host
@@ -268,14 +286,17 @@ func (c *Config) OperatorPublicURL() string {
 // When cfg.Paths.Host is a full URL (contains "://"), it is returned directly,
 // allowing tests to override the discovery URL via cfg.Paths.Host.
 func (c *Config) OperatorDiscoveryURL() string {
-	if httpEndpointOverride != "" {
-		if strings.Contains(httpEndpointOverride, "://") {
-			return httpEndpointOverride
+	endpointMu.RLock()
+	override := httpEndpointOverride
+	endpointMu.RUnlock()
+	if override != "" {
+		if strings.Contains(override, "://") {
+			return override
 		}
-		if _, _, err := net.SplitHostPort(httpEndpointOverride); err != nil {
-			return fmt.Sprintf("http://%s:%d", httpEndpointOverride, constants.Ports.OperatorHttp)
+		if _, _, err := net.SplitHostPort(override); err != nil {
+			return fmt.Sprintf("http://%s:%d", override, constants.Ports.OperatorHttp)
 		}
-		return fmt.Sprintf("http://%s", httpEndpointOverride)
+		return fmt.Sprintf("http://%s", override)
 	}
 	if c.Paths != nil && strings.Contains(c.Paths.Host, "://") {
 		return c.Paths.Host

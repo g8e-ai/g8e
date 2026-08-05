@@ -19,10 +19,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -33,6 +35,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/scenarios"
 )
 
@@ -62,15 +65,6 @@ func demoPrintf(format string, a ...any) {
 // demoStep, etc.) can emit TUI events without threading an emitter through
 // every function signature.
 var demoEmitter DemoEmitter
-
-// demoIdentity holds the host CLI user identity enrolled inline by runDemosRun
-// for notary demos (dhs, fedramp). It is a package-level variable so the deep
-// scenario call chain (runScenario → runFedRAMPScenario → harnessRun) can read
-// the host user_id and cli_session_id without threading them through every
-// function signature — matching the demoEmitter/demoVerbose pattern. It is
-// empty for non-notary demos and reset to demoIdentity{} at the end of
-// runDemosRun so successive runs do not leak identity across demos.
-var demoIdentity hostIdentity
 
 // hostIdentity carries the host CLI user identity needed to bind the harness
 // transaction-submit identity to the browser approver identity. UserID scopes
@@ -1178,26 +1172,34 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool) error {
 	// the same user_id as the browser approver. This replaces the old
 	// "print a prompt and wait for Enter" flow that required a separate
 	// terminal and produced a disjoint user identity.
-	demoIdentity = hostIdentity{}
-	defer func() { demoIdentity = hostIdentity{} }()
+	var hostID hostIdentity
 
 	if org == constants.DemosOrgDHS || org == constants.DemosOrgFedRAMP {
-		hostID, err := enrollDemoHost(cmd, org)
+		id, err := enrollDemoHost(cmd, org, demoDir)
 		if err != nil {
 			return err
 		}
-		demoIdentity = hostID
+		hostID = id
+
+		// Set HOST_G8E_PKI so docker compose can resolve the bind-mount
+		// for the agent container. The PKI dir is rooted at the demo
+		// directory's .g8e/ tree (IQ5 option a) so demo credentials are
+		// isolated from the developer's local <cwd>/.g8e/ state.
+		hostPKI := filepath.Join(demoDir, constants.RuntimeDirname, constants.PkiDirname)
+		if err := os.Setenv("HOST_G8E_PKI", hostPKI); err != nil {
+			return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+		}
 	}
 
 	if useTUI {
-		return runDemosWithTUI(cmd, org, demoDir, args)
+		return runDemosWithTUI(cmd, org, demoDir, args, hostID)
 	}
 
 	if len(args) >= 2 {
-		return runScenario(org, demoDir, args[1]) //nolint:gosec // length checked above
+		return runScenario(org, demoDir, args[1], hostID) //nolint:gosec // length checked above
 	}
 
-	return runAllScenarios(cmd, org, demoDir)
+	return runAllScenarios(cmd, org, demoDir, hostID)
 }
 
 // enrollDemoHost performs inline host-CLI enrollment against the demo gateway
@@ -1207,7 +1209,7 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool) error {
 // loads the resulting credentials, and returns the host user identity. The
 // endpoint overrides are cleared on return so subsequent operations in the
 // same process are unaffected.
-func enrollDemoHost(cmd *cobra.Command, org string) (hostIdentity, error) {
+func enrollDemoHost(cmd *cobra.Command, org, demoDir string) (hostIdentity, error) {
 	httpPort := demoHTTPPort(org)
 	httpsPort := demoHTTPSPort(org)
 	if httpPort == "" || httpsPort == "" {
@@ -1226,11 +1228,14 @@ func enrollDemoHost(cmd *cobra.Command, org string) (hostIdentity, error) {
 		return hostIdentity{}, fmt.Errorf("demos run: enroll: %w", err)
 	}
 
-	fileSvc, err := newFileSvc()
+	// Root the fileSvc at the demo directory so demo credentials are
+	// isolated in demos/<org>/.g8e/ and do not clobber the developer's
+	// local <cwd>/.g8e/ state (IQ5 option a).
+	fileSvc, err := fs.NewRuntimeFileService(demoDir, slog.Default())
 	if err != nil {
 		return hostIdentity{}, fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 	}
-	cfg, err := loadConfig("")
+	cfg, err := loadConfig(demoDir)
 	if err != nil {
 		return hostIdentity{}, err
 	}
@@ -1252,8 +1257,9 @@ func enrollDemoHost(cmd *cobra.Command, org string) (hostIdentity, error) {
 
 // waitForDemoGateway polls the demo gateway HTTP health endpoint until it
 // responds or the 90s timeout expires. The gateway may have just been started
-// by runDemosStart and enrollment requires it to be reachable.
-func waitForDemoGateway(httpPort string) error {
+// by runDemosStart and enrollment requires it to be reachable. It is a
+// package-level var so tests can swap it for a no-op.
+var waitForDemoGateway = func(httpPort string) error {
 	for i := 0; i < 30; i++ {
 		if err := exec.Command("curl", "-sf", "http://localhost:"+httpPort+"/api/v1/health").Run(); err == nil {
 			return nil
@@ -1268,7 +1274,7 @@ func waitForDemoGateway(httpPort string) error {
 // in a goroutine, and then waits for the user to quit the TUI. After the TUI
 // exits, it waits up to 5 seconds for the scenario goroutine to finish so
 // errors are not silently lost.
-func runDemosWithTUI(cmd *cobra.Command, org, demoDir string, args []string) error {
+func runDemosWithTUI(cmd *cobra.Command, org, demoDir string, args []string, hostID hostIdentity) error {
 	m := tui.NewModel(tui.Options{
 		Version:  "tactical",
 		NodeName: "tactical-edge-01",
@@ -1282,9 +1288,9 @@ func runDemosWithTUI(cmd *cobra.Command, org, demoDir string, args []string) err
 	scenarioErrCh := make(chan error, 1)
 	go func() {
 		if len(args) >= 2 {
-			scenarioErrCh <- runScenario(org, demoDir, args[1])
+			scenarioErrCh <- runScenario(org, demoDir, args[1], hostID)
 		} else {
-			scenarioErrCh <- runAllScenarios(cmd, org, demoDir)
+			scenarioErrCh <- runAllScenarios(cmd, org, demoDir, hostID)
 		}
 	}()
 
@@ -1310,7 +1316,7 @@ func isDemoRunning(demoDir, composePath string) bool {
 	return len(strings.TrimSpace(string(output))) > 0
 }
 
-func runAllScenarios(cmd *cobra.Command, org, demoDir string) error {
+func runAllScenarios(cmd *cobra.Command, org, demoDir string, hostID hostIdentity) error {
 	count, ok := scenarioCounts[org]
 	if !ok {
 		return fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
@@ -1323,7 +1329,7 @@ func runAllScenarios(cmd *cobra.Command, org, demoDir string) error {
 
 	for i := 1; i <= count; i++ {
 		scenarioNum := fmt.Sprintf("%d", i)
-		result, err := runScenarioWithResult(org, demoDir, scenarioNum)
+		result, err := runScenarioWithResult(org, demoDir, scenarioNum, hostID)
 		if err != nil {
 			return err
 		}
@@ -1382,12 +1388,12 @@ type scenarioResult struct {
 	metrics string
 }
 
-func runScenario(org, demoDir, scenario string) error {
-	_, err := runScenarioWithResult(org, demoDir, scenario)
+func runScenario(org, demoDir, scenario string, hostID hostIdentity) error {
+	_, err := runScenarioWithResult(org, demoDir, scenario, hostID)
 	return err
 }
 
-func runScenarioWithResult(org, demoDir, scenario string) (scenarioResult, error) {
+func runScenarioWithResult(org, demoDir, scenario string, hostID hostIdentity) (scenarioResult, error) {
 	switch org {
 	case constants.DemosOrgHealthcare:
 		return runHealthcareScenario(demoDir, scenario)
@@ -1396,9 +1402,9 @@ func runScenarioWithResult(org, demoDir, scenario string) (scenarioResult, error
 	case constants.DemosOrgFinance:
 		return runFinanceScenario(demoDir, scenario)
 	case constants.DemosOrgDHS:
-		return runDHSScenario(demoDir, scenario)
+		return runDHSScenario(demoDir, scenario, hostID)
 	case constants.DemosOrgFedRAMP:
-		return runFedRAMPScenario(demoDir, scenario)
+		return runFedRAMPScenario(demoDir, scenario, hostID)
 	case constants.DemosOrgFrontend:
 		return runFrontendScenario(demoDir, scenario)
 	default:
@@ -1530,17 +1536,19 @@ type twoLayerScenarioConfig struct {
 // command for a demos scenarios run. Centralising these in a struct
 // avoids positional-argument drift as flags are added across demos.
 type harnessConfig struct {
-	Container    string
-	MTLSURL      string
-	PublicURL    string
-	ApprovalURL  string // host-reachable base URL for the printed human approval link; empty omits --approval-url
-	CertPath     string
-	KeyPath      string
-	CAPath       string
-	Posture      string
-	UserID       string // host CLI user_id for SSE subscription and suspended-tx tagging; empty omits --user-id
-	CLISessionID string // host CLI session id for X-CLI-Session-ID header on submit; empty omits --cli-session-id
-	UseRun       bool   // true for `docker compose run --rm`, false for `exec`
+	Container  string
+	MTLSURL    string
+	PublicURL  string
+	CertPath   string
+	KeyPath    string
+	CAPath     string
+	Posture    string
+	UseRun     bool // true for `docker compose run --rm`, false for `exec`
+
+	// ExtraFlags holds optional flags emitted as --<key> <value> after the
+	// fixed args. Keys are sorted for deterministic output. Use this for
+	// flags that are conditionally present (cli-cert, approval-url, etc).
+	ExtraFlags map[string]string
 }
 
 // defaultHarnessConfig returns the config matching the standard demo topology:
@@ -1553,12 +1561,18 @@ func defaultHarnessConfig(container string) harnessConfig {
 		CertPath:  constants.ContainerOperatorCert,
 		KeyPath:   constants.ContainerOperatorKey,
 		CAPath:    constants.ContainerCABundle,
+		ExtraFlags: map[string]string{
+			"cli-cert": "/host-creds/" + constants.CliCertFilename,
+			"cli-key":  "/host-creds/" + constants.CliKeyFilename,
+			"cli-ca":   "/host-creds/" + constants.PkiFileGatewayBundle,
+		},
 	}
 }
 
 // harnessRun builds the docker compose command for a demos scenarios run.
 // Uses exec by default (long-running sleep-infinity container with a fixed IP).
 // When cfg.UseRun is true, uses `docker compose run --rm` instead.
+// ExtraFlags keys are sorted for deterministic output.
 func harnessRun(scenario string, cfg harnessConfig) []string {
 	var cmd []string
 	if cfg.UseRun {
@@ -1573,14 +1587,13 @@ func harnessRun(scenario string, cfg harnessConfig) []string {
 		"--key", cfg.KeyPath,
 		"--ca", cfg.CAPath,
 	)
-	if cfg.ApprovalURL != "" {
-		cmd = append(cmd, "--approval-url", cfg.ApprovalURL)
+	keys := make([]string, 0, len(cfg.ExtraFlags))
+	for k := range cfg.ExtraFlags {
+		keys = append(keys, k)
 	}
-	if cfg.UserID != "" {
-		cmd = append(cmd, "--user-id", cfg.UserID)
-	}
-	if cfg.CLISessionID != "" {
-		cmd = append(cmd, "--cli-session-id", cfg.CLISessionID)
+	sort.Strings(keys)
+	for _, k := range keys {
+		cmd = append(cmd, "--"+k, cfg.ExtraFlags[k])
 	}
 	cmd = append(cmd, scenario)
 	return cmd

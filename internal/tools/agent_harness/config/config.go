@@ -56,6 +56,13 @@ type Config struct {
 	// UseCLIConfig uses the CLI credentials directory for all paths.
 	UseCLIConfig bool `json:"use_cli_config"`
 
+	// CLIAuth holds the host CLI mTLS material used for notary-scenario
+	// transaction submits. When populated, the harness client builds a
+	// second http.Client with this cert pair so handleCLIAuth stamps the
+	// host user's identity onto the suspended transaction. Non-notary MCP
+	// calls continue using the operator cert in Auth.
+	CLIAuth Auth `json:"cli_auth"`
+
 	// OperatorSessionID scopes audit receipt queries to the real Operator that
 	// executed the work. If empty, Agent Harness tries to discover it from /api/operators.
 	OperatorSessionID string `json:"operator_session_id"`
@@ -98,6 +105,15 @@ func Default() Config {
 			cfg.Auth.ClientKey = cliCfg.CLIKeyFile()
 			cfg.Auth.CABundle = cliCfg.ResolvedTrustBundlePath()
 		}
+	}
+
+	// When CLIAuth is not explicitly set, default it to the same cert as
+	// Auth so the harness works out-of-the-box for non-demo invocations.
+	// Demo invocations override CLIAuth via --cli-cert/--cli-key/--cli-ca.
+	if cfg.CLIAuth.ClientCert == "" && cfg.Auth.ClientCert != "" {
+		cfg.CLIAuth.ClientCert = cfg.Auth.ClientCert
+		cfg.CLIAuth.ClientKey = cfg.Auth.ClientKey
+		cfg.CLIAuth.CABundle = cfg.Auth.CABundle
 	}
 
 	return cfg

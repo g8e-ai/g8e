@@ -112,7 +112,8 @@ func fedrampScenarios() []Scenario {
 				}
 				r.note("operator requests destruction of fedramp-vm-classified-01 (FIPS-199-HIGH)")
 
-				resp, err := c.MCPToolsCall(ctx, fedrampCloudOperator, "run_shell_command", cloudopMap("destroy", "fedramp-vm-classified-01", "FIPS-199-HIGH"))
+				cliPersona := withCLIIdentity(fedrampCloudOperator)
+				resp, err := c.MCPToolsCallWithCLI(ctx, cliPersona, "run_shell_command", cloudopMap("destroy", "fedramp-vm-classified-01", "FIPS-199-HIGH"))
 				if err != nil {
 					return fmt.Errorf("submit destroy: %w", err)
 				}

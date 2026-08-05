@@ -91,7 +91,8 @@ func dhsScenarios() []Scenario {
 				}
 				r.note("connector requests cross-domain release of TRK-MIL-0007 to the Mission Partner COP")
 
-				resp, err := c.MCPToolsCall(ctx, dhsConnector, "run_shell_command", dataopMap("release", "TRK-MIL-0007", "MISSION_PARTNER_COP"))
+				cliPersona := withCLIIdentity(dhsConnector)
+				resp, err := c.MCPToolsCallWithCLI(ctx, cliPersona, "run_shell_command", dataopMap("release", "TRK-MIL-0007", "MISSION_PARTNER_COP"))
 				if err != nil {
 					return fmt.Errorf("submit release: %w", err)
 				}

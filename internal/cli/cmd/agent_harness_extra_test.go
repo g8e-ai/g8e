@@ -193,3 +193,59 @@ func TestApplyAgentHarnessFlags_IdentityFields(t *testing.T) {
 		assert.Empty(t, cfg.CLISessionID)
 	})
 }
+
+func TestDemosScenariosRunCmd_CLICertFlags(t *testing.T) {
+	cmd := demosScenariosRunCmd()
+
+	t.Run("has --cli-cert flag", func(t *testing.T) {
+		flag := cmd.Flags().Lookup("cli-cert")
+		require.NotNil(t, flag)
+		assert.Equal(t, "", flag.DefValue)
+		assert.Contains(t, flag.Usage, "notary")
+	})
+
+	t.Run("has --cli-key flag", func(t *testing.T) {
+		flag := cmd.Flags().Lookup("cli-key")
+		require.NotNil(t, flag)
+		assert.Equal(t, "", flag.DefValue)
+		assert.Contains(t, flag.Usage, "notary")
+	})
+
+	t.Run("has --cli-ca flag", func(t *testing.T) {
+		flag := cmd.Flags().Lookup("cli-ca")
+		require.NotNil(t, flag)
+		assert.Equal(t, "", flag.DefValue)
+		assert.Contains(t, flag.Usage, "CLI")
+	})
+}
+
+func TestApplyAgentHarnessFlags_CLIAuth(t *testing.T) {
+	t.Run("propagates cli-cert/cli-key/cli-ca to config.CLIAuth", func(t *testing.T) {
+		harnessCLICert = "/path/to/cli.crt"
+		harnessCLIKey = "/path/to/cli.key"
+		harnessCLICA = "/path/to/ca-bundle.pem"
+		defer func() {
+			harnessCLICert = ""
+			harnessCLIKey = ""
+			harnessCLICA = ""
+		}()
+
+		cfg := config.Default()
+		applyAgentHarnessFlags(&cfg)
+		assert.Equal(t, "/path/to/cli.crt", cfg.CLIAuth.ClientCert)
+		assert.Equal(t, "/path/to/cli.key", cfg.CLIAuth.ClientKey)
+		assert.Equal(t, "/path/to/ca-bundle.pem", cfg.CLIAuth.CABundle)
+	})
+
+	t.Run("leaves CLIAuth empty when flags unset", func(t *testing.T) {
+		harnessCLICert = ""
+		harnessCLIKey = ""
+		harnessCLICA = ""
+
+		cfg := config.Config{}
+		applyAgentHarnessFlags(&cfg)
+		assert.Empty(t, cfg.CLIAuth.ClientCert)
+		assert.Empty(t, cfg.CLIAuth.ClientKey)
+		assert.Empty(t, cfg.CLIAuth.CABundle)
+	})
+}

@@ -26,11 +26,15 @@ import (
 // maps 8451 -> 8443) so the human approval link printed by the harness is
 // openable from the host browser; PublicURL stays container-internal for the
 // SSE/status dial.
-func defaultFedRAMPHarnessConfig() harnessConfig {
+func defaultFedRAMPHarnessConfig(hostID hostIdentity) harnessConfig {
 	cfg := defaultHarnessConfig("agent-runtime")
-	cfg.ApprovalURL = "https://localhost:8451"
-	cfg.UserID = demoIdentity.UserID
-	cfg.CLISessionID = demoIdentity.CLISessionID
+	cfg.ExtraFlags["approval-url"] = "https://localhost:8451"
+	if hostID.UserID != "" {
+		cfg.ExtraFlags["user-id"] = hostID.UserID
+	}
+	if hostID.CLISessionID != "" {
+		cfg.ExtraFlags["cli-session-id"] = hostID.CLISessionID
+	}
 	return cfg
 }
 
@@ -38,8 +42,8 @@ func switchFedRAMPPosture(demoDir, posture string) error {
 	return switchDemoPosture(demoDir, posture, "8088")
 }
 
-func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
-	hcfg := defaultFedRAMPHarnessConfig()
+func runFedRAMPScenario(demoDir, scenario string, hostID hostIdentity) (scenarioResult, error) {
+	hcfg := defaultFedRAMPHarnessConfig(hostID)
 	var result scenarioResult
 	var hasErrors bool
 

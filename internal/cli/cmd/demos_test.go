@@ -384,7 +384,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 
 func TestRunScenario(t *testing.T) {
 	t.Run("returns ErrNotFound wrapped error for unknown org", func(t *testing.T) {
-		err := runScenario("unknown-org", "/tmp", "1")
+		err := runScenario("unknown-org", "/tmp", "1", hostIdentity{})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrNotFound)
 		assert.Contains(t, err.Error(), "no scenarios defined for demo environment 'unknown-org'")
@@ -412,14 +412,14 @@ func TestRunScenario(t *testing.T) {
 	})
 
 	t.Run("returns error with valid range for invalid dhs scenario number", func(t *testing.T) {
-		_, err := runDHSScenario("/tmp", "99")
+		_, err := runDHSScenario("/tmp", "99", hostIdentity{})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for dhs")
 		assert.Contains(t, err.Error(), "valid: 1-5")
 	})
 
 	t.Run("returns error with valid range for invalid fedramp scenario number", func(t *testing.T) {
-		_, err := runFedRAMPScenario("/tmp", "99")
+		_, err := runFedRAMPScenario("/tmp", "99", hostIdentity{})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for fedramp")
 		assert.Contains(t, err.Error(), "valid: 1-5")
@@ -450,7 +450,7 @@ func TestRunScenario(t *testing.T) {
 
 func TestRunAllScenarios(t *testing.T) {
 	t.Run("returns ErrNotFound wrapped error for org without scenarios", func(t *testing.T) {
-		err := runAllScenarios(&cobra.Command{}, "unknown-org", "/tmp")
+		err := runAllScenarios(&cobra.Command{}, "unknown-org", "/tmp", hostIdentity{})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrNotFound)
 		assert.Contains(t, err.Error(), "no scenarios defined for demo environment 'unknown-org'")
@@ -691,42 +691,37 @@ func TestDefaultHarnessConfig(t *testing.T) {
 	})
 
 	t.Run("dhs harness config sets host-reachable approval URL", func(t *testing.T) {
-		cfg := defaultDHSHarnessConfig()
-		assert.Equal(t, "https://localhost:8450", cfg.ApprovalURL)
+		cfg := defaultDHSHarnessConfig(hostIdentity{})
+		assert.Equal(t, "https://localhost:8450", cfg.ExtraFlags["approval-url"])
 		assert.Equal(t, "agent-coalition", cfg.Container)
 	})
 
 	t.Run("fedramp harness config sets host-reachable approval URL", func(t *testing.T) {
-		cfg := defaultFedRAMPHarnessConfig()
-		assert.Equal(t, "https://localhost:8451", cfg.ApprovalURL)
+		cfg := defaultFedRAMPHarnessConfig(hostIdentity{})
+		assert.Equal(t, "https://localhost:8451", cfg.ExtraFlags["approval-url"])
 		assert.Equal(t, "agent-runtime", cfg.Container)
 	})
 
-	t.Run("dhs harness config propagates demoIdentity", func(t *testing.T) {
-		original := demoIdentity
-		defer func() { demoIdentity = original }()
-		demoIdentity = hostIdentity{UserID: "host-user-1", CLISessionID: "host-sess-1"}
-		cfg := defaultDHSHarnessConfig()
-		assert.Equal(t, "host-user-1", cfg.UserID)
-		assert.Equal(t, "host-sess-1", cfg.CLISessionID)
+	t.Run("dhs harness config propagates hostIdentity", func(t *testing.T) {
+		hostID := hostIdentity{UserID: "host-user-1", CLISessionID: "host-sess-1"}
+		cfg := defaultDHSHarnessConfig(hostID)
+		assert.Equal(t, "host-user-1", cfg.ExtraFlags["user-id"])
+		assert.Equal(t, "host-sess-1", cfg.ExtraFlags["cli-session-id"])
 	})
 
-	t.Run("fedramp harness config propagates demoIdentity", func(t *testing.T) {
-		original := demoIdentity
-		defer func() { demoIdentity = original }()
-		demoIdentity = hostIdentity{UserID: "host-user-2", CLISessionID: "host-sess-2"}
-		cfg := defaultFedRAMPHarnessConfig()
-		assert.Equal(t, "host-user-2", cfg.UserID)
-		assert.Equal(t, "host-sess-2", cfg.CLISessionID)
+	t.Run("fedramp harness config propagates hostIdentity", func(t *testing.T) {
+		hostID := hostIdentity{UserID: "host-user-2", CLISessionID: "host-sess-2"}
+		cfg := defaultFedRAMPHarnessConfig(hostID)
+		assert.Equal(t, "host-user-2", cfg.ExtraFlags["user-id"])
+		assert.Equal(t, "host-sess-2", cfg.ExtraFlags["cli-session-id"])
 	})
 
-	t.Run("harness config defaults empty identity when demoIdentity unset", func(t *testing.T) {
-		original := demoIdentity
-		defer func() { demoIdentity = original }()
-		demoIdentity = hostIdentity{}
-		cfg := defaultDHSHarnessConfig()
-		assert.Empty(t, cfg.UserID)
-		assert.Empty(t, cfg.CLISessionID)
+	t.Run("harness config defaults empty identity when hostIdentity unset", func(t *testing.T) {
+		cfg := defaultDHSHarnessConfig(hostIdentity{})
+		_, hasUserID := cfg.ExtraFlags["user-id"]
+		assert.False(t, hasUserID)
+		_, hasSession := cfg.ExtraFlags["cli-session-id"]
+		assert.False(t, hasSession)
 	})
 }
 
@@ -741,6 +736,9 @@ func TestHarnessRun(t *testing.T) {
 			"--cert", "/root/.g8e/pki/operator.crt",
 			"--key", "/root/.g8e/pki/operator.key",
 			"--ca", "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
+			"--cli-ca", "/host-creds/" + constants.PkiFileGatewayBundle,
+			"--cli-cert", "/host-creds/" + constants.CliCertFilename,
+			"--cli-key", "/host-creds/" + constants.CliKeyFilename,
 			"gov-cui-exfil-block",
 		}, cmd)
 	})
@@ -770,7 +768,7 @@ func TestHarnessRun(t *testing.T) {
 
 	t.Run("appends --approval-url when set", func(t *testing.T) {
 		cfg := defaultHarnessConfig("agent-coalition")
-		cfg.ApprovalURL = "https://localhost:8450"
+		cfg.ExtraFlags["approval-url"] = "https://localhost:8450"
 		cmd := harnessRun("dhs-release", cfg)
 		assert.Contains(t, cmd, "--approval-url")
 		assert.Contains(t, cmd, "https://localhost:8450")
@@ -791,8 +789,8 @@ func TestHarnessRun(t *testing.T) {
 
 	t.Run("appends --user-id and --cli-session-id when set", func(t *testing.T) {
 		cfg := defaultHarnessConfig("agent-runtime")
-		cfg.UserID = "user-123"
-		cfg.CLISessionID = "sess-456"
+		cfg.ExtraFlags["user-id"] = "user-123"
+		cfg.ExtraFlags["cli-session-id"] = "sess-456"
 		cmd := harnessRun("dhs-release", cfg)
 		assert.Contains(t, cmd, "--user-id")
 		assert.Contains(t, cmd, "user-123")
