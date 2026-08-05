@@ -243,7 +243,6 @@ const (
 	DemosImagesManifestFile  = "images.json"
 	DemosOrgHealthcare       = "healthcare"
 	DemosOrgFinance          = "finance"
-	DemosOrgGov              = "gov"
 	DemosOrgDHS              = "dhs"
 	DemosOrgFedRAMP          = "fedramp"
 	DemosOrgFrontend         = "frontend"

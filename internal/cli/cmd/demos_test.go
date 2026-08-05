@@ -48,7 +48,6 @@ func getProjectRoot() string {
 // harnessRun or runTwoLayerScenario. Extracted as a package-level var to avoid
 // drift across multiple test functions.
 var expectedDemoFiles = []string{
-	"demo_gov.go",
 	"demo_finance.go",
 	"demo_healthcare.go",
 	"demo_dhs.go",
@@ -220,10 +219,8 @@ func TestDemosRunCmd(t *testing.T) {
 	t.Run("run command has detailed long description", func(t *testing.T) {
 		cmd := demosRunCmd()
 		assert.Contains(t, cmd.Long, "healthcare")
-		assert.Contains(t, cmd.Long, "gov")
 		assert.Contains(t, cmd.Long, "finance")
 		assert.Contains(t, cmd.Long, "FHIR PA Request")
-		assert.Contains(t, cmd.Long, "CUI Exfiltration")
 		assert.Contains(t, cmd.Long, "Unauthorized Trade")
 		assert.Contains(t, cmd.Long, "Sovereign Multi-Source Ingest")
 		assert.Contains(t, cmd.Long, "Governed Cloud Resource Provisioning")
@@ -234,7 +231,6 @@ func TestDemosRunCmd(t *testing.T) {
 func TestScenarioCounts(t *testing.T) {
 	t.Run("scenario counts map is correctly defined", func(t *testing.T) {
 		assert.Equal(t, 4, scenarioCounts["healthcare"])
-		assert.Equal(t, 1, scenarioCounts["gov"])
 		assert.Equal(t, 1, scenarioCounts["finance"])
 		assert.Equal(t, 5, scenarioCounts["dhs"])
 		assert.Equal(t, 5, scenarioCounts["fedramp"])
@@ -242,7 +238,7 @@ func TestScenarioCounts(t *testing.T) {
 	})
 
 	t.Run("scenario counts map has expected entries", func(t *testing.T) {
-		expectedOrgs := []string{"healthcare", "gov", "finance", "dhs", "fedramp", "frontend"}
+		expectedOrgs := []string{"healthcare", "finance", "dhs", "fedramp", "frontend"}
 		for _, org := range expectedOrgs {
 			_, exists := scenarioCounts[org]
 			assert.True(t, exists, "scenarioCounts should have entry for %s", org)
@@ -250,17 +246,16 @@ func TestScenarioCounts(t *testing.T) {
 	})
 
 	t.Run("scenario counts map does not contain removed demos", func(t *testing.T) {
-		removedOrgs := []string{"secure-data", "dow", "swarm"}
+		removedOrgs := []string{"secure-data", "dow", "swarm", "gov"}
 		for _, org := range removedOrgs {
 			_, exists := scenarioCounts[org]
 			assert.False(t, exists, "scenarioCounts should NOT have entry for removed demo %s", org)
 		}
 	})
 
-	t.Run("scenario counts map keys exactly match remaining 6 demo orgs", func(t *testing.T) {
+	t.Run("scenario counts map keys exactly match remaining 5 demo orgs", func(t *testing.T) {
 		expectedOrgs := map[string]bool{
 			"healthcare": true,
-			"gov":        true,
 			"finance":    true,
 			"dhs":        true,
 			"fedramp":    true,
@@ -303,23 +298,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "localhost:5433")
 		assert.Contains(t, output, "http://localhost:3001")
 		assert.Contains(t, output, "https://localhost:8444/console/")
-		assert.Contains(t, output, "g8e auth enroll -e localhost:8081 --port 8444")
-	})
-
-	t.Run("prints gov endpoints", func(t *testing.T) {
-		var buf bytes.Buffer
-		cmd := &cobra.Command{}
-		cmd.SetOut(&buf)
-
-		printDemoEndpoints(cmd, "gov")
-
-		output := buf.String()
-		assert.Contains(t, output, "Available endpoints:")
-		assert.Contains(t, output, "http://localhost:8080")
-		assert.Contains(t, output, "https://localhost:8443")
-		assert.Contains(t, output, "http://localhost:3000")
-		assert.Contains(t, output, "https://localhost:8443/console/")
-		assert.Contains(t, output, "g8e auth enroll -e localhost:8080 --port 8443")
+		assert.NotContains(t, output, "auth enroll")
 	})
 
 	t.Run("prints finance endpoints", func(t *testing.T) {
@@ -335,7 +314,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "https://localhost:8445")
 		assert.Contains(t, output, "http://localhost:3002")
 		assert.Contains(t, output, "https://localhost:8445/console/")
-		assert.Contains(t, output, "g8e auth enroll -e localhost:8082 --port 8445")
+		assert.NotContains(t, output, "auth enroll")
 	})
 
 	t.Run("prints dhs endpoints", func(t *testing.T) {
@@ -350,7 +329,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "http://localhost:8087")
 		assert.Contains(t, output, "https://localhost:8450")
 		assert.Contains(t, output, "https://localhost:8450/console/")
-		assert.Contains(t, output, "g8e auth enroll -e localhost:8087 --port 8450")
+		assert.NotContains(t, output, "auth enroll")
 	})
 
 	t.Run("prints fedramp endpoints", func(t *testing.T) {
@@ -365,7 +344,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "http://localhost:8088")
 		assert.Contains(t, output, "https://localhost:8451")
 		assert.Contains(t, output, "https://localhost:8451/console/")
-		assert.Contains(t, output, "g8e auth enroll -e localhost:8088 --port 8451")
+		assert.NotContains(t, output, "auth enroll")
 	})
 
 	t.Run("prints default message for unknown org", func(t *testing.T) {
@@ -384,7 +363,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 
 func TestRunScenario(t *testing.T) {
 	t.Run("returns ErrNotFound wrapped error for unknown org", func(t *testing.T) {
-		err := runScenario("unknown-org", "/tmp", "1")
+		err := runScenario("unknown-org", "/tmp", "1", hostIdentity{})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrNotFound)
 		assert.Contains(t, err.Error(), "no scenarios defined for demo environment 'unknown-org'")
@@ -397,13 +376,6 @@ func TestRunScenario(t *testing.T) {
 		assert.Contains(t, err.Error(), "valid: 1-4")
 	})
 
-	t.Run("returns error with valid range for invalid gov scenario number", func(t *testing.T) {
-		_, err := runGovScenario("/tmp", "99")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid scenario number for gov")
-		assert.Contains(t, err.Error(), "valid: 1")
-	})
-
 	t.Run("returns error with valid range for invalid finance scenario number", func(t *testing.T) {
 		_, err := runFinanceScenario("/tmp", "99")
 		require.Error(t, err)
@@ -412,14 +384,14 @@ func TestRunScenario(t *testing.T) {
 	})
 
 	t.Run("returns error with valid range for invalid dhs scenario number", func(t *testing.T) {
-		_, err := runDHSScenario("/tmp", "99")
+		_, err := runDHSScenario("/tmp", "99", hostIdentity{})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for dhs")
 		assert.Contains(t, err.Error(), "valid: 1-5")
 	})
 
 	t.Run("returns error with valid range for invalid fedramp scenario number", func(t *testing.T) {
-		_, err := runFedRAMPScenario("/tmp", "99")
+		_, err := runFedRAMPScenario("/tmp", "99", hostIdentity{})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for fedramp")
 		assert.Contains(t, err.Error(), "valid: 1-5")
@@ -429,10 +401,6 @@ func TestRunScenario(t *testing.T) {
 		// Verify the scenario function exists and doesn't panic on valid input
 		// We don't execute it since it requires Docker
 		assert.NotNil(t, runHealthcareScenario)
-	})
-
-	t.Run("gov scenario functions exist", func(t *testing.T) {
-		assert.NotNil(t, runGovScenario)
 	})
 
 	t.Run("finance scenario functions exist", func(t *testing.T) {
@@ -450,7 +418,7 @@ func TestRunScenario(t *testing.T) {
 
 func TestRunAllScenarios(t *testing.T) {
 	t.Run("returns ErrNotFound wrapped error for org without scenarios", func(t *testing.T) {
-		err := runAllScenarios(&cobra.Command{}, "unknown-org", "/tmp")
+		err := runAllScenarios(&cobra.Command{}, "unknown-org", "/tmp", hostIdentity{})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrNotFound)
 		assert.Contains(t, err.Error(), "no scenarios defined for demo environment 'unknown-org'")
@@ -460,12 +428,6 @@ func TestRunAllScenarios(t *testing.T) {
 		count, ok := scenarioCounts["healthcare"]
 		assert.True(t, ok)
 		assert.Equal(t, 4, count)
-	})
-
-	t.Run("gov has 1 scenario", func(t *testing.T) {
-		count, ok := scenarioCounts["gov"]
-		assert.True(t, ok)
-		assert.Equal(t, 1, count)
 	})
 
 	t.Run("finance has 1 scenario", func(t *testing.T) {
@@ -610,14 +572,6 @@ func TestHealthcareScenarioDescriptions(t *testing.T) {
 	})
 }
 
-func TestGovScenarioDescriptions(t *testing.T) {
-	t.Run("scenario descriptions are documented in run command", func(t *testing.T) {
-		cmd := demosRunCmd()
-		assert.Contains(t, cmd.Long, "gov: 1")
-		assert.Contains(t, cmd.Long, "CUI Exfiltration")
-	})
-}
-
 func TestFinanceScenarioDescriptions(t *testing.T) {
 	t.Run("scenario descriptions are documented in run command", func(t *testing.T) {
 		cmd := demosRunCmd()
@@ -691,22 +645,44 @@ func TestDefaultHarnessConfig(t *testing.T) {
 	})
 
 	t.Run("dhs harness config sets host-reachable approval URL", func(t *testing.T) {
-		cfg := defaultDHSHarnessConfig()
-		assert.Equal(t, "https://localhost:8450", cfg.ApprovalURL)
+		cfg := defaultDHSHarnessConfig(hostIdentity{})
+		assert.Equal(t, "https://localhost:8450", cfg.ExtraFlags["approval-url"])
 		assert.Equal(t, "agent-coalition", cfg.Container)
 	})
 
 	t.Run("fedramp harness config sets host-reachable approval URL", func(t *testing.T) {
-		cfg := defaultFedRAMPHarnessConfig()
-		assert.Equal(t, "https://localhost:8451", cfg.ApprovalURL)
+		cfg := defaultFedRAMPHarnessConfig(hostIdentity{})
+		assert.Equal(t, "https://localhost:8451", cfg.ExtraFlags["approval-url"])
 		assert.Equal(t, "agent-runtime", cfg.Container)
+	})
+
+	t.Run("dhs harness config propagates hostIdentity", func(t *testing.T) {
+		hostID := hostIdentity{UserID: "host-user-1", CLISessionID: "host-sess-1"}
+		cfg := defaultDHSHarnessConfig(hostID)
+		assert.Equal(t, "host-user-1", cfg.ExtraFlags["user-id"])
+		assert.Equal(t, "host-sess-1", cfg.ExtraFlags["cli-session-id"])
+	})
+
+	t.Run("fedramp harness config propagates hostIdentity", func(t *testing.T) {
+		hostID := hostIdentity{UserID: "host-user-2", CLISessionID: "host-sess-2"}
+		cfg := defaultFedRAMPHarnessConfig(hostID)
+		assert.Equal(t, "host-user-2", cfg.ExtraFlags["user-id"])
+		assert.Equal(t, "host-sess-2", cfg.ExtraFlags["cli-session-id"])
+	})
+
+	t.Run("harness config defaults empty identity when hostIdentity unset", func(t *testing.T) {
+		cfg := defaultDHSHarnessConfig(hostIdentity{})
+		_, hasUserID := cfg.ExtraFlags["user-id"]
+		assert.False(t, hasUserID)
+		_, hasSession := cfg.ExtraFlags["cli-session-id"]
+		assert.False(t, hasSession)
 	})
 }
 
 func TestHarnessRun(t *testing.T) {
 	t.Run("exec mode builds docker compose exec command", func(t *testing.T) {
 		cfg := defaultHarnessConfig("agent-runtime")
-		cmd := harnessRun("gov-cui-exfil-block", cfg)
+		cmd := harnessRun("finance-unauthorized-trade", cfg)
 		assert.Equal(t, []string{
 			"docker", "compose", "exec", "-T", "agent-runtime", "/g8e", "demos", "scenarios", "run",
 			"--mtls-url", "https://g8e.local:8443",
@@ -714,7 +690,10 @@ func TestHarnessRun(t *testing.T) {
 			"--cert", "/root/.g8e/pki/operator.crt",
 			"--key", "/root/.g8e/pki/operator.key",
 			"--ca", "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
-			"gov-cui-exfil-block",
+			"--cli-ca", "/host-creds/" + constants.PkiFileGatewayBundle,
+			"--cli-cert", "/host-creds/" + constants.CliCertFilename,
+			"--cli-key", "/host-creds/" + constants.CliKeyFilename,
+			"finance-unauthorized-trade",
 		}, cmd)
 	})
 
@@ -743,7 +722,7 @@ func TestHarnessRun(t *testing.T) {
 
 	t.Run("appends --approval-url when set", func(t *testing.T) {
 		cfg := defaultHarnessConfig("agent-coalition")
-		cfg.ApprovalURL = "https://localhost:8450"
+		cfg.ExtraFlags["approval-url"] = "https://localhost:8450"
 		cmd := harnessRun("dhs-release", cfg)
 		assert.Contains(t, cmd, "--approval-url")
 		assert.Contains(t, cmd, "https://localhost:8450")
@@ -760,6 +739,25 @@ func TestHarnessRun(t *testing.T) {
 		cfg := defaultHarnessConfig("agent-runtime")
 		cmd := harnessRun("my-scenario", cfg)
 		assert.Equal(t, "my-scenario", cmd[len(cmd)-1])
+	})
+
+	t.Run("appends --user-id and --cli-session-id when set", func(t *testing.T) {
+		cfg := defaultHarnessConfig("agent-runtime")
+		cfg.ExtraFlags["user-id"] = "user-123"
+		cfg.ExtraFlags["cli-session-id"] = "sess-456"
+		cmd := harnessRun("dhs-release", cfg)
+		assert.Contains(t, cmd, "--user-id")
+		assert.Contains(t, cmd, "user-123")
+		assert.Contains(t, cmd, "--cli-session-id")
+		assert.Contains(t, cmd, "sess-456")
+		assert.Equal(t, "dhs-release", cmd[len(cmd)-1])
+	})
+
+	t.Run("omits --user-id and --cli-session-id when empty", func(t *testing.T) {
+		cfg := defaultHarnessConfig("agent-runtime")
+		cmd := harnessRun("dhs-ingest", cfg)
+		assert.NotContains(t, cmd, "--user-id")
+		assert.NotContains(t, cmd, "--cli-session-id")
 	})
 }
 
@@ -854,7 +852,7 @@ func TestDemosPullCmd(t *testing.T) {
 			Image:  "alpine",
 			Tag:    "latest",
 			Digest: "sha256:abc123",
-			Demos:  []string{"gov"},
+			Demos:  []string{"finance"},
 		}
 		data, err := json.Marshal(entry)
 		require.NoError(t, err)

@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -57,7 +58,7 @@ func operatorListCmd() *cobra.Command {
 	return operatorListCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all Operator instances",
@@ -68,7 +69,7 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 				return err
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -389,7 +390,7 @@ func operatorDeployCmd() *cobra.Command {
 	return operatorDeployCmdWithConfig(loadConfig, newFileSvc)
 }
 
-func operatorDeployCmdWithConfig(configLoader func(string) (*config.Config, error), fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func operatorDeployCmdWithConfig(configLoader func(string) (*config.Config, error), fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var hosts string
 	var port int
 	var identityFile string
@@ -405,7 +406,7 @@ func operatorDeployCmdWithConfig(configLoader func(string) (*config.Config, erro
 				return err
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}

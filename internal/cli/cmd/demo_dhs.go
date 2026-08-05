@@ -25,9 +25,15 @@ import (
 // ApprovalURL is the host-reachable HTTPS/console surface (compose maps 8450
 // -> 8443) so the human approval link printed by the harness is openable from
 // the host browser; PublicURL stays container-internal for the SSE/status dial.
-func defaultDHSHarnessConfig() harnessConfig {
+func defaultDHSHarnessConfig(hostID hostIdentity) harnessConfig {
 	cfg := defaultHarnessConfig("agent-coalition")
-	cfg.ApprovalURL = "https://localhost:8450"
+	cfg.ExtraFlags["approval-url"] = "https://localhost:8450"
+	if hostID.UserID != "" {
+		cfg.ExtraFlags["user-id"] = hostID.UserID
+	}
+	if hostID.CLISessionID != "" {
+		cfg.ExtraFlags["cli-session-id"] = hostID.CLISessionID
+	}
 	return cfg
 }
 
@@ -35,8 +41,8 @@ func switchDHSPosture(demoDir, posture string) error {
 	return switchDemoPosture(demoDir, posture, "8087")
 }
 
-func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
-	hcfg := defaultDHSHarnessConfig()
+func runDHSScenario(demoDir, scenario string, hostID hostIdentity) (scenarioResult, error) {
+	hcfg := defaultDHSHarnessConfig(hostID)
 	var result scenarioResult
 	var hasErrors bool
 

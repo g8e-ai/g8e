@@ -8,14 +8,6 @@ This directory contains Docker Compose demo environments for org-specific g8e de
 demos/
 ├── bin/                        # built g8e binary, used by g8e demos CLI commands
 │   └── g8e
-├── gov/                        # Government/CUI demo
-│   ├── compose.yml
-│   ├── config/
-│   │   ├── gateway.yml
-│   │   └── operator.yml
-│   ├── doctrine/               # CUI/CMMC L1 pattern rules
-│   ├── target-data/            # Simulated classified document store
-│   └── README.md               # Gov-specific documentation
 ├── healthcare/                # Healthcare/PHI demo
 │   ├── compose.yml
 │   ├── config/
@@ -96,14 +88,14 @@ The `frontend` demo deploys a nginx-served static HTML app on net_perimeter for 
 
 Each org demonstrates different compliance requirements and use cases:
 
-| Dimension | Gov | Healthcare | Finance | DHS | FedRAMP | Frontend |
-|---|---|---|---|---|---|---|
-| Doctrine content | CUI, classification markings, CMMC rules | PHI scrub patterns, PA workflow gates | Tx limits, dual-control triggers | USPER PII minimization, cross-domain release, sovereign destruction | CR-26 audit integrity, AC-2 access control, SC-8 cross-domain, CM-7 config management | Unauthorized API access, CORS origin spoofing, session hijacking |
-| Target data content | Simulated classified document store | Simulated EHR / PA records | Simulated ledger / positions | Mock multi-source coalition feeds + sovereign manifest | Cloud resources (VMs, DBs, IAM) and KSI control categories | None (frontend enrollment demo) |
-| Gateway posture | doctrine | doctrine | doctrine | consensus | consensus | doctrine |
-| Agent principal type | DoD contractor agent | Clinical AI agent | Algorithmic trading agent | Coalition source connectors + predictive-analytics agent | FedRAMP cloud service operator + authorizing official | Browser-based frontend app (WebAuthn + SSE) |
-| Target system mock | Classified doc API | EHR / PA processor | Trade execution API | Sovereign data vault + partner fusion COP | Sovereign cloud service (provision, configure, destroy, revert) | None (nginx-served static HTML) |
-| Demo narrative | CUI exfil attempt blocked | PHI scrub + PA approval flow | Unauthorized trade blocked | Sovereign coalition data plane: govern ingest, release, use, destruction | Sovereign cloud governance: provision, destroy, revert, audit integrity | Third-party frontend enrollment with CORS and passkey authentication |
+| Dimension | Healthcare | Finance | DHS | FedRAMP | Frontend |
+|---|---|---|---|---|---|
+| Doctrine content | PHI scrub patterns, PA workflow gates | Tx limits, dual-control triggers | USPER PII minimization, cross-domain release, sovereign destruction | CR-26 audit integrity, AC-2 access control, SC-8 cross-domain, CM-7 config management | Unauthorized API access, CORS origin spoofing, session hijacking |
+| Target data content | Simulated EHR / PA records | Simulated ledger / positions | Mock multi-source coalition feeds + sovereign manifest | Cloud resources (VMs, DBs, IAM) and KSI control categories | None (frontend enrollment demo) |
+| Gateway posture | doctrine | doctrine | consensus | consensus | doctrine |
+| Agent principal type | Clinical AI agent | Algorithmic trading agent | Coalition source connectors + predictive-analytics agent | FedRAMP cloud service operator + authorizing official | Browser-based frontend app (WebAuthn + SSE) |
+| Target system mock | EHR / PA processor | Trade execution API | Sovereign data vault + partner fusion COP | Sovereign cloud service (provision, configure, destroy, revert) | None (nginx-served static HTML) |
+| Demo narrative | PHI scrub + PA approval flow | Unauthorized trade blocked | Sovereign coalition data plane: govern ingest, release, use, destruction | Sovereign cloud governance: provision, destroy, revert, audit integrity | Third-party frontend enrollment with CORS and passkey authentication |
 
 ## Quick Start
 
@@ -197,9 +189,6 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 - `g8e demos run healthcare 3` - SLA Breach and OHA Reporting
 - `g8e demos run healthcare 4` - Bad Actor PHI Exfiltration Blocked
 
-**Gov Demo Scenarios:**
-- `g8e demos run gov 1` - CUI Exfiltration Attempt Blocked
-
 **Finance Demo Scenarios:**
 - `g8e demos run finance 1` - Unauthorized Trade Blocked
 
@@ -233,7 +222,7 @@ Note: The `g8e demos run` command automatically starts the demo environment if i
 You can also use Docker Compose directly:
 
 ```bash
-cd demos/gov
+cd demos/finance
 docker compose up -d
 ```
 
@@ -293,7 +282,6 @@ Each org uses different host ports to allow simultaneous deployment:
 
 | Org | HTTP Port | HTTPS Port | Additional Ports |
 |---|---|---|---|
-| gov | 8080 | 8443 | Demo UI: 3000 |
 | healthcare | 8081 | 8444 | Metabase: 3001, RabbitMQ Mgmt: 15673, PostgreSQL: 5433 |
 | finance | 8082 | 8445 | Demo UI: 3002 |
 | dhs | 8087 | 8450 | |

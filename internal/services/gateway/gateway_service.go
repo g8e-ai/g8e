@@ -676,14 +676,11 @@ func (ls *GatewayModeService) Stop(ctx context.Context) error {
 
 	if !ls.running {
 		// Even if the service was never started, resources like the
-		// suspended transaction service are opened during build() and
-		// must be closed to avoid leaking file handles (especially on
-		// Windows where open files cannot be deleted from TempDir).
-		if ls.suspendedTxService != nil {
-			if err := ls.suspendedTxService.Close(); err != nil {
-				ls.logger.Error("Suspended transaction service close error", "state", string(constants.ConnectionStateError), "error", err)
-			}
-		}
+		// database, pub/sub broker, and suspended transaction service are
+		// opened during build() and must be closed to avoid leaking
+		// goroutines and file handles (especially on Windows where open
+		// files cannot be deleted from TempDir).
+		ls.closeResources()
 		return nil
 	}
 
@@ -710,24 +707,31 @@ func (ls *GatewayModeService) Stop(ctx context.Context) error {
 		ls.logger.Error("HTTPS server shutdown error", "state", string(constants.ConnectionStateError), "error", err)
 	}
 
-	// Close pub/sub broker (disconnects all WebSocket clients)
-	ls.pubsub.Close()
+	ls.closeResources()
 
-	// Close suspended transaction service database
+	ls.running = false
+	ls.logger.Info("Gateway service stopped")
+	return nil
+}
+
+// closeResources releases all resources allocated during build(): the
+// pub/sub broker, suspended transaction service, and the canonical database.
+// All close methods are idempotent, so this is safe to call even if some
+// resources have already been closed.
+func (ls *GatewayModeService) closeResources() {
+	if ls.pubsub != nil {
+		ls.pubsub.Close()
+	}
 	if ls.suspendedTxService != nil {
 		if err := ls.suspendedTxService.Close(); err != nil {
 			ls.logger.Error("Suspended transaction service close error", "state", string(constants.ConnectionStateError), "error", err)
 		}
 	}
-
-	// Close database
-	if err := ls.db.Close(); err != nil {
-		ls.logger.Error("Database close error", "state", string(constants.ConnectionStateError), "error", err)
+	if ls.db != nil {
+		if err := ls.db.Close(); err != nil {
+			ls.logger.Error("Database close error", "state", string(constants.ConnectionStateError), "error", err)
+		}
 	}
-
-	ls.running = false
-	ls.logger.Info("Gateway service stopped")
-	return nil
 }
 
 // runEnrollmentTokenCleanup periodically removes expired enrollment tokens

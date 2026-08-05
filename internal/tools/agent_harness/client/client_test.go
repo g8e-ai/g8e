@@ -25,6 +25,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -439,7 +442,8 @@ func TestClient_do(t *testing.T) {
 			responseBody: `{"result": "ok"}`,
 			wantErr:      false,
 			verifyHeaders: map[string]string{
-				"Authorization": "Bearer session-123",
+				"Authorization":                   "Bearer session-123",
+				constants.HeaderOperatorSessionID: "session-123",
 			},
 		},
 		{
@@ -816,9 +820,17 @@ func TestClient_WaitForHumanApproval_TimeoutNoMatchingEvent(t *testing.T) {
 	const sentTxHash = "tx-wrong-999"
 	const expectedTxHash = "tx-correct-001"
 
+	// sseUserID captures the user_id query parameter from the SSE subscription
+	// request so the test can assert WaitForHumanApproval subscribes with the
+	// caller-supplied userID (the host user's id after the demo refactor), not a
+	// hardcoded operator id. This is the regression guard for the
+	// kit.OperatorID → kit.UserID fix in the notary scenarios.
+	var sseUserID string
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasPrefix(r.URL.Path, constants.APIPaths.SSEStream):
+			sseUserID = r.URL.Query().Get("user_id")
 			w.Header().Set("Content-Type", "text/event-stream")
 			eventPayload, err := json.Marshal(models.ApprovalCompletedEvent{
 				Type:   constants.SSEEventTypeApprovalCompleted,
@@ -863,6 +875,11 @@ func TestClient_WaitForHumanApproval_TimeoutNoMatchingEvent(t *testing.T) {
 	}
 	if err != constants.ErrApprovalSSETimeout {
 		t.Errorf("expected ErrApprovalSSETimeout, got %v", err)
+	}
+	// The SSE subscription must carry the caller-supplied userID so the harness
+	// receives events scoped to the human approver's user, not the operator id.
+	if sseUserID != userID {
+		t.Errorf("SSE subscription user_id: got %q, want %q (the WaitForHumanApproval userID arg)", sseUserID, userID)
 	}
 }
 
@@ -955,4 +972,101 @@ func TestPersona(t *testing.T) {
 	if p.OperatorID != "operator-123" {
 		t.Errorf("OperatorID mismatch")
 	}
+}
+
+func TestNew_CLIAuthBuildsSecondClient(t *testing.T) {
+	t.Run("cliHTTP is nil when CLIAuth equals Auth", func(t *testing.T) {
+		cfg := config.Config{Auth: config.Auth{}}
+		c, err := New(cfg)
+		require.NoError(t, err)
+		assert.Nil(t, c.cliHTTP, "cliHTTP should be nil when CLIAuth is not set")
+		assert.Nil(t, c.cliTLS, "cliTLS should be nil when CLIAuth is not set")
+	})
+
+	t.Run("cliHTTP is nil when CLIAuth matches Auth", func(t *testing.T) {
+		cfg := config.Config{
+			Auth: config.Auth{
+				ClientCert: "/same/cert",
+				ClientKey:  "/same/key",
+			},
+			CLIAuth: config.Auth{
+				ClientCert: "/same/cert",
+				ClientKey:  "/same/key",
+			},
+		}
+		c, err := New(cfg)
+		require.NoError(t, err)
+		assert.Nil(t, c.cliHTTP, "cliHTTP should be nil when CLIAuth matches Auth")
+	})
+
+	t.Run("cliHTTP is non-nil when CLIAuth differs from Auth (paths missing, tolerated)", func(t *testing.T) {
+		cfg := config.Config{
+			Auth: config.Auth{
+				ClientCert: "/operator/cert",
+				ClientKey:  "/operator/key",
+			},
+			CLIAuth: config.Auth{
+				ClientCert: "/cli/cert",
+				ClientKey:  "/cli/key",
+			},
+		}
+		c, err := New(cfg)
+		require.NoError(t, err)
+		assert.NotNil(t, c.cliHTTP, "cliHTTP should be built when CLIAuth differs from Auth")
+		assert.NotNil(t, c.cliTLS, "cliTLS should be built when CLIAuth differs from Auth")
+	})
+}
+
+func TestMCPToolsCallWithCLI_RoutesThroughCLI(t *testing.T) {
+	var sawRequest bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawRequest = true
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{}}`))
+	}))
+	defer srv.Close()
+
+	cfg := config.Config{
+		MTLSBaseURL: srv.URL,
+		Auth:        config.Auth{},
+		CLIAuth: config.Auth{
+			ClientCert: "/cli/cert",
+			ClientKey:  "/cli/key",
+		},
+	}
+
+	c, err := New(cfg)
+	require.NoError(t, err)
+	assert.NotNil(t, c.cliHTTP, "cliHTTP must be non-nil for MCPToolsCallWithCLI to route through it")
+
+	ctx := context.Background()
+	_, err = c.MCPToolsCallWithCLI(ctx, Persona{ID: "test"}, "fs_list", map[string]any{"path": "."})
+	require.NoError(t, err)
+	assert.True(t, sawRequest, "server should have received the request")
+}
+
+func TestMCPToolsCallWithCLI_FallsBackToDoWhenNoCLIHTTP(t *testing.T) {
+	var sawRequest bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawRequest = true
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{}}`))
+	}))
+	defer srv.Close()
+
+	cfg := config.Config{
+		MTLSBaseURL: srv.URL,
+		Auth:        config.Auth{},
+	}
+
+	c, err := New(cfg)
+	require.NoError(t, err)
+	assert.Nil(t, c.cliHTTP, "cliHTTP should be nil — fallback to do() expected")
+
+	ctx := context.Background()
+	_, err = c.MCPToolsCallWithCLI(ctx, Persona{ID: "test"}, "fs_list", map[string]any{"path": "."})
+	require.NoError(t, err)
+	assert.True(t, sawRequest, "server should have received the fallback request")
 }

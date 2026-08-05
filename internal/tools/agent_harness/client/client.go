@@ -63,10 +63,12 @@ type Exchange struct {
 
 // Client wraps an mTLS-capable http.Client plus the recorder.
 type Client struct {
-	cfg    config.Config
-	http   *http.Client
-	tlsCfg *tls.Config // shared TLS config for building SSE streaming clients
-	rec    *[]Exchange // optional sink for the current scenario
+	cfg     config.Config
+	http    *http.Client
+	cliHTTP *http.Client // second client using CLI cert for notary submits; nil falls back to http
+	tlsCfg  *tls.Config  // shared TLS config for building SSE streaming clients
+	cliTLS  *tls.Config  // TLS config for CLI cert; nil falls back to tlsCfg
+	rec     *[]Exchange  // optional sink for the current scenario
 }
 
 // New builds a Client with mTLS material loaded per config. The MCP/A2A surface
@@ -94,14 +96,47 @@ func New(cfg config.Config) (*Client, error) {
 		}
 	}
 
-	return &Client{
+	c := &Client{
 		cfg:    cfg,
 		tlsCfg: tlsCfg,
 		http: &http.Client{
 			Timeout:   30 * time.Second,
 			Transport: &http.Transport{TLSClientConfig: tlsCfg},
 		},
-	}, nil
+	}
+
+	// Build a second TLS client using the CLI cert when it differs from
+	// the operator cert. This lets notary-scenario submits use the host
+	// CLI identity so handleCLIAuth stamps the host user onto the
+	// suspended transaction.
+	if cfg.CLIAuth.ClientCert != "" && cfg.CLIAuth.ClientKey != "" &&
+		(cfg.CLIAuth.ClientCert != cfg.Auth.ClientCert || cfg.CLIAuth.ClientKey != cfg.Auth.ClientKey) {
+		cliTLS := &tls.Config{MinVersion: tls.VersionTLS13}
+		if cfg.CLIAuth.CABundle != "" {
+			if pem, err := os.ReadFile(cfg.CLIAuth.CABundle); err == nil {
+				pool := x509.NewCertPool()
+				if pool.AppendCertsFromPEM(pem) {
+					cliTLS.RootCAs = pool
+				}
+			}
+		}
+		if _, err := os.Stat(cfg.CLIAuth.ClientCert); err == nil {
+			if _, err := os.Stat(cfg.CLIAuth.ClientKey); err == nil {
+				crt, err := tls.LoadX509KeyPair(cfg.CLIAuth.ClientCert, cfg.CLIAuth.ClientKey)
+				if err != nil {
+					return nil, fmt.Errorf("load CLI client cert: %w", err)
+				}
+				cliTLS.Certificates = []tls.Certificate{crt}
+			}
+		}
+		c.cliTLS = cliTLS
+		c.cliHTTP = &http.Client{
+			Timeout:   30 * time.Second,
+			Transport: &http.Transport{TLSClientConfig: cliTLS},
+		}
+	}
+
+	return c, nil
 }
 
 // Config exposes the live config (scenarios need TTLs, key ids, etc.).
@@ -110,8 +145,24 @@ func (c *Client) Config() config.Config { return c.cfg }
 // Record points the client at a sink; every subsequent call appends an Exchange.
 func (c *Client) Record(sink *[]Exchange) { c.rec = sink }
 
+// doWithCLI is like do but uses the CLI-cert TLS client when available.
+// It is used for notary-scenario transaction submits so handleCLIAuth
+// stamps the host user's identity onto the suspended transaction.
+func (c *Client) doWithCLI(ctx context.Context, p Persona, method, url string, body []byte) (int, []byte, error) {
+	if c.cliHTTP != nil {
+		return c.doWithClient(ctx, p, method, url, body, c.cliHTTP)
+	}
+	return c.do(ctx, p, method, url, body)
+}
+
 // do executes a JSON request against the mTLS surface and records it.
 func (c *Client) do(ctx context.Context, p Persona, method, url string, body []byte) (int, []byte, error) {
+	return c.doWithClient(ctx, p, method, url, body, c.http)
+}
+
+// doWithClient is the core request executor. It is shared by do (operator cert)
+// and doWithCLI (CLI cert) so both paths get identical header/recording logic.
+func (c *Client) doWithClient(ctx context.Context, p Persona, method, url string, body []byte, hc *http.Client) (int, []byte, error) {
 	start := time.Now()
 	var rdr io.Reader
 	if body != nil {
@@ -143,8 +194,11 @@ func (c *Client) do(ctx context.Context, p Persona, method, url string, body []b
 	if p.OperatorID != "" {
 		req.Header.Set(constants.HeaderOperatorID, p.OperatorID)
 	}
+	if p.OperatorSessionID != "" {
+		req.Header.Set(constants.HeaderOperatorSessionID, p.OperatorSessionID)
+	}
 
-	resp, err := c.http.Do(req)
+	resp, err := hc.Do(req)
 	ex := Exchange{Persona: p.ID, Method: method, URL: url, At: start}
 	attachBody(&ex.ReqBody, &ex.ReqRaw, body)
 
@@ -275,9 +329,16 @@ func (c *Client) WaitForHumanApproval(ctx context.Context, p Persona, txHash, us
 	fmt.Fprintf(os.Stderr, "  ╚════════════════════════════════════════════════════════════╝\n\n")
 
 	// Build an SSE-specific HTTP client with no timeout (context-controlled).
+	// Prefer the CLI-cert TLS config so the SSE subscription is authenticated
+	// with the same identity as the notary submit; fall back to the operator
+	// cert when no CLI cert is configured.
+	sseTLS := c.cliTLS
+	if sseTLS == nil {
+		sseTLS = c.tlsCfg
+	}
 	sseHTTPClient := &http.Client{
 		Timeout:   0,
-		Transport: &http.Transport{TLSClientConfig: c.tlsCfg.Clone()},
+		Transport: &http.Transport{TLSClientConfig: sseTLS.Clone()},
 	}
 
 	sseURL := fmt.Sprintf("%s%s?user_id=%s&since_id=0",
@@ -325,9 +386,12 @@ func (c *Client) WaitForHumanApproval(ctx context.Context, p Persona, txHash, us
 		return 0, nil, constants.ErrApprovalSSETimeout
 	}
 
-	// Verify approval status via the mTLS status endpoint.
+	// Verify approval status via the CLI-cert client when available so the
+	// status check is authenticated with the same identity as the submit.
+	statusPersona := p
+	statusPersona.UserID = userID
 	statusPath := constants.APIPaths.ApprovalsCLIStatus + txHash
-	status, body, err := c.do(ctx, p, http.MethodGet, c.cfg.PublicBaseURL+statusPath, nil)
+	status, body, err := c.doWithCLI(ctx, statusPersona, http.MethodGet, c.cfg.PublicBaseURL+statusPath, nil)
 	if err != nil {
 		return 0, nil, fmt.Errorf("human approval: verify status: %w", err)
 	}

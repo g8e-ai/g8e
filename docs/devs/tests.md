@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-07-30
+Last Updated: 2026-08-05
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -150,7 +150,7 @@ make lint              # golangci-lint + lint-no-embedded-newlines + vulncheck +
 # 3. Docker E2E tests (requires Docker)
 make test-docker
 
-# 4. Authenticate (required for mTLS tests)
+# 4. Authenticate (required for non-demo mTLS tests; demo runs enroll inline)
 ./g8e auth enroll
 ```
 
@@ -165,9 +165,9 @@ make test-docker
 
 The demo scenarios tool (`g8e demos scenarios run`) impersonates arbitrary AI tools against a **REAL** g8e Gateway and Operator. The only fiction is the client identity — the Gateway and Operator are real infrastructure.
 
-**29 scenarios total**: 7 MCP + 3 A2A + 6 governance + 6 DHS + 2 gov/finance + 5 FedRAMP.
+**28 scenarios total**: 7 MCP + 3 A2A + 6 governance + 6 DHS + 1 finance + 5 FedRAMP.
 
-The interactive demo runner (`g8e demos run <org> [scenario]`) provides 17 platform demos across 6 environments: healthcare (4), gov (1), finance (1), dhs (5), fedramp (5), frontend (1). These drive the real Gateway and Operator with interactive passkey authentication and posture switching.
+The interactive demo runner (`g8e demos run <org> [scenario]`) provides 16 platform demos across 5 environments: healthcare (4), finance (1), dhs (5), fedramp (5), frontend (1). These drive the real Gateway and Operator with posture switching. For notary demos (dhs, fedramp), `demos run` enrolls a host CLI session and registers a WebAuthn passkey inline before running scenarios — a browser window opens automatically for the passkey ceremony, with no separate terminal or manual `auth enroll` step. The enrolled `user_id` and `cli_session_id` are threaded into the harness so the suspended transaction and the browser approver share the same user identity.
 
 **Testing postures**:
 - **Doctrine** — L1 enforced, L2/L3 audited
@@ -304,7 +304,9 @@ GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 - `smoke-test` — Clean-environment install verification for both Python and Go packages
 - `secret-scan` — gitleaks full-history secret scanning
 - `license-check` — go-licenses report with forbidden copyleft license detection (GPL, AGPL, LGPL, SSPL, BUSL)
-- `demo-verify` — Builds and runs all 6 demo environments via Docker Compose (gated on `ci` job)
+
+**Local-only targets** (not run in CI):
+- `demo-verify` — Builds and runs all 5 demo environments via Docker Compose
 
 CI does **not** run Tier 3 Docker E2E tests.
 

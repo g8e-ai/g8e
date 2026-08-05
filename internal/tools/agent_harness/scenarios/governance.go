@@ -18,6 +18,8 @@ import (
 type GovKit struct {
 	OperatorID        string
 	OperatorSessionID string
+	UserID            string // user_id for SSE subscription (the human approver)
+	CLISessionID      string // cli_session_id for the X-CLI-Session-ID submit header
 }
 
 var kit *GovKit
@@ -31,6 +33,18 @@ var (
 	cliDelegator     = clientpkg.Persona{ID: "cli-delegator", UserAgent: "g8e-cli/1.x (delegation)"}
 	delegateAgent    = clientpkg.Persona{ID: "delegate-agent", UserAgent: "g8e-agent/1.x (delegated)"}
 )
+
+// withCLIIdentity returns a copy of base with the host CLI user_id and
+// cli_session_id from GovKit so the submit headers bind the suspended
+// transaction to the same identity as the browser approver.
+func withCLIIdentity(base clientpkg.Persona) clientpkg.Persona {
+	out := base
+	if kit != nil {
+		out.UserID = kit.UserID
+		out.CLISessionID = kit.CLISessionID
+	}
+	return out
+}
 
 func governanceScenarios() []Scenario {
 	return []Scenario{
@@ -59,16 +73,17 @@ func governanceScenarios() []Scenario {
 				if kit == nil {
 					return constants.ErrHarnessGovKitMissingSign
 				}
-				r.note("submitting fs_list via MCP tools/call — gateway runs L2, suspends for L3")
+				r.note("submitting fs_list via MCP tools/call (CLI-cert) — gateway runs L2, suspends for L3")
 
-				resp, err := c.MCPToolsCall(ctx, ensembleProducer, "fs_list", fsListMap("."))
+				cliPersona := withCLIIdentity(ensembleProducer)
+				resp, err := c.MCPToolsCallWithCLI(ctx, cliPersona, "fs_list", fsListMap("."))
 				if err != nil {
 					return err
 				}
 
 				if txHash, suspended := clientpkg.Suspended(resp); suspended {
 					r.note("gateway suspended transaction %s pending L3 notary approval", short(txHash))
-					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, ensembleProducer, txHash, kit.OperatorID)
+					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, ensembleProducer, txHash, kit.UserID)
 					if aerr != nil {
 						return fmt.Errorf("human approval: %w", aerr)
 					}
@@ -142,16 +157,17 @@ func governanceScenarios() []Scenario {
 				if kit == nil {
 					return constants.ErrHarnessGovKitMissingSign
 				}
-				r.note("submitting fs_list via MCP tools/call — gateway suspends for L3 notary")
+				r.note("submitting fs_list via MCP tools/call (CLI-cert) — gateway suspends for L3 notary")
 
-				resp, err := c.MCPToolsCall(ctx, ensembleProducer, "fs_list", fsListMap("."))
+				cliPersona := withCLIIdentity(ensembleProducer)
+				resp, err := c.MCPToolsCallWithCLI(ctx, cliPersona, "fs_list", fsListMap("."))
 				if err != nil {
 					return err
 				}
 
 				if txHash, suspended := clientpkg.Suspended(resp); suspended {
 					r.note("gateway suspended transaction %s pending L3 notary approval", short(txHash))
-					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, principalActor, txHash, kit.OperatorID)
+					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, principalActor, txHash, kit.UserID)
 					if aerr != nil {
 						return fmt.Errorf("human approval: %w", aerr)
 					}

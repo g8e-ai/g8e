@@ -20,6 +20,8 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,7 +29,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
@@ -219,7 +223,7 @@ func TestRunDemosImages_ValidManifestListsImages(t *testing.T) {
 
 	demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 	require.NoError(t, os.MkdirAll(demosDir, 0o755))
-	manifest := `[{"image":"alpine","tag":"latest","digest":"sha256:abc","demos":["gov","dhs"]}]`
+	manifest := `[{"image":"alpine","tag":"latest","digest":"sha256:abc","demos":["finance","dhs"]}]`
 	require.NoError(t, os.WriteFile(filepath.Join(demosDir, constants.DemosImagesManifestFile), []byte(manifest), 0o644))
 
 	cmd := demosImagesCmd()
@@ -232,7 +236,7 @@ func TestRunDemosImages_ValidManifestListsImages(t *testing.T) {
 
 	output := buf.String()
 	assert.Contains(t, output, "alpine@sha256:abc")
-	assert.Contains(t, output, "gov, dhs")
+	assert.Contains(t, output, "finance, dhs")
 }
 
 func TestRunDemosStart_MissingDemoDirReturnsNotFound(t *testing.T) {
@@ -364,6 +368,18 @@ func TestRunDemosReset_MissingDemoDirReturnsNotFound(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrNotFound)
 }
 
+func TestEnrollDemoHost_UnknownOrgReturnsPortMissingError(t *testing.T) {
+	cmd := demosRunCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	_, err := enrollDemoHost(cmd, "nonexistent-org", "")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrDemoGatewayPortMissing)
+	assert.Contains(t, err.Error(), "nonexistent-org")
+}
+
 func TestRunDemosRun_MissingDemoDirReturnsNotFound(t *testing.T) {
 	chdirTemp(t)
 
@@ -392,4 +408,75 @@ func TestRunDemosRun_MissingComposeFileReturnsNotFound(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrNotFound)
 	assert.Contains(t, err.Error(), "compose.yml")
+}
+
+func TestEnrollDemoHost_ConfigLoadFailure(t *testing.T) {
+	origWait := waitForDemoGateway
+	origConfigLoad := configLoad
+	defer func() {
+		waitForDemoGateway = origWait
+		configLoad = origConfigLoad
+	}()
+
+	waitForDemoGateway = func(string) error { return nil }
+	configLoad = func(string) (*config.Config, error) {
+		return nil, errors.New("config load error")
+	}
+
+	cmd := demosRunCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	_, err := enrollDemoHost(cmd, constants.DemosOrgDHS, t.TempDir())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrConfigLoadFailed)
+}
+
+func TestEnrollDemoHost_FileServiceInitError(t *testing.T) {
+	origWait := waitForDemoGateway
+	origFileSvc := newFileSvc
+	defer func() {
+		waitForDemoGateway = origWait
+		newFileSvc = origFileSvc
+	}()
+
+	waitForDemoGateway = func(string) error { return nil }
+	newFileSvc = func(string, *slog.Logger) (fs.RuntimeFileService, error) {
+		return nil, errors.New("file service init error")
+	}
+
+	cmd := demosRunCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	_, err := enrollDemoHost(cmd, constants.DemosOrgDHS, t.TempDir())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+}
+
+func TestEnrollDemoHost_EndpointOverrideClearedOnError(t *testing.T) {
+	origWait := waitForDemoGateway
+	origConfigLoad := configLoad
+	defer func() {
+		waitForDemoGateway = origWait
+		configLoad = origConfigLoad
+	}()
+
+	waitForDemoGateway = func(string) error { return nil }
+	configLoad = func(string) (*config.Config, error) {
+		return nil, errors.New("config load error")
+	}
+
+	cmd := demosRunCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	_, err := enrollDemoHost(cmd, constants.DemosOrgFedRAMP, t.TempDir())
+	require.Error(t, err)
+
+	cfg := &config.Config{}
+	assert.NotContains(t, cfg.OperatorHTTPURL(), "8451", "endpoint override should be cleared after error")
 }

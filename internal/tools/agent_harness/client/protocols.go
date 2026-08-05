@@ -51,6 +51,22 @@ func (c *Client) rpc(ctx context.Context, p Persona, path, method string, params
 	return &resp, nil
 }
 
+// rpcWithCLI is like rpc but uses the CLI-cert TLS client so handleCLIAuth
+// stamps the host user's identity onto the suspended transaction.
+func (c *Client) rpcWithCLI(ctx context.Context, p Persona, path, method string, params any) (*JSONRPCResponse, error) {
+	req := JSONRPCRequest{JSONRPC: "2.0", ID: 1, Method: method, Params: params}
+	body, _ := json.Marshal(req)
+	_, raw, err := c.doWithCLI(ctx, p, http.MethodPost, c.cfg.MTLSBaseURL+path, body)
+	if err != nil {
+		return nil, err
+	}
+	var resp JSONRPCResponse
+	if len(raw) > 0 && json.Valid(raw) {
+		_ = json.Unmarshal(raw, &resp)
+	}
+	return &resp, nil
+}
+
 // ---- MCP --------------------------------------------------------------------
 
 func (c *Client) MCPToolsList(ctx context.Context, p Persona) (*JSONRPCResponse, error) {
@@ -61,6 +77,16 @@ func (c *Client) MCPToolsList(ctx context.Context, p Persona) (*JSONRPCResponse,
 // envelope, runs the interlock sequence, and dispatches to the real Operator.
 func (c *Client) MCPToolsCall(ctx context.Context, p Persona, tool string, args map[string]any) (*JSONRPCResponse, error) {
 	return c.rpc(ctx, p, "/mcp", "tools/call", map[string]any{
+		"name":      tool,
+		"arguments": args,
+	})
+}
+
+// MCPToolsCallWithCLI is like MCPToolsCall but routes through the CLI-cert
+// TLS client so the gateway's handleCLIAuth stamps the host user's identity
+// onto the suspended transaction. Use this for notary-scenario submits.
+func (c *Client) MCPToolsCallWithCLI(ctx context.Context, p Persona, tool string, args map[string]any) (*JSONRPCResponse, error) {
+	return c.rpcWithCLI(ctx, p, "/mcp", "tools/call", map[string]any{
 		"name":      tool,
 		"arguments": args,
 	})

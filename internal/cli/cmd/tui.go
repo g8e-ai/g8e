@@ -16,6 +16,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -32,7 +33,7 @@ import (
 // enabling Tier 1 unit tests to stub external calls.
 type tuiDeps struct {
 	configLoader         func(string) (*config.Config, error)
-	fileSvcFactory       func() (fs.RuntimeFileService, error)
+	fileSvcFactory       func(string, *slog.Logger) (fs.RuntimeFileService, error)
 	checkOperatorRunning func(*config.Config) error
 	loadCredentials      func(fs.RuntimeFileService, *config.Config) (*auth.Credentials, error)
 	buildMTLSClient      func(fs.RuntimeFileService, *config.Config, time.Duration) (*http.Client, error)
@@ -90,7 +91,7 @@ func runTUI(cmd *cobra.Command, args []string, deps tuiDeps) error {
 		return fmt.Errorf("%w — start it with 'g8e gw start': %w", constants.ErrGatewayNotReachable, err)
 	}
 
-	fileSvc, err := deps.fileSvcFactory()
+	fileSvc, err := deps.fileSvcFactory("", slog.Default())
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 	}

@@ -18,6 +18,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/scenarios"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -146,5 +147,105 @@ func TestSelectAgentHarnessScenarios_Consensus(t *testing.T) {
 			}
 		}
 		assert.Greater(t, dhsCount, 0, "consensus phase should include DHS scenarios")
+	})
+}
+
+func TestDemosScenariosRunCmd_IdentityFlags(t *testing.T) {
+	cmd := demosScenariosRunCmd()
+
+	t.Run("has --user-id flag", func(t *testing.T) {
+		flag := cmd.Flags().Lookup("user-id")
+		require.NotNil(t, flag)
+		assert.Equal(t, "", flag.DefValue)
+		assert.Contains(t, flag.Usage, "user_id")
+	})
+
+	t.Run("has --cli-session-id flag", func(t *testing.T) {
+		flag := cmd.Flags().Lookup("cli-session-id")
+		require.NotNil(t, flag)
+		assert.Equal(t, "", flag.DefValue)
+		assert.Contains(t, flag.Usage, "session")
+	})
+}
+
+func TestApplyAgentHarnessFlags_IdentityFields(t *testing.T) {
+	t.Run("propagates user-id and cli-session-id to config", func(t *testing.T) {
+		harnessUserID = "test-user"
+		harnessCLISessionID = "test-session"
+		defer func() {
+			harnessUserID = ""
+			harnessCLISessionID = ""
+		}()
+
+		cfg := config.Default()
+		applyAgentHarnessFlags(&cfg)
+		assert.Equal(t, "test-user", cfg.UserID)
+		assert.Equal(t, "test-session", cfg.CLISessionID)
+	})
+
+	t.Run("leaves identity empty when flags unset", func(t *testing.T) {
+		harnessUserID = ""
+		harnessCLISessionID = ""
+
+		cfg := config.Default()
+		applyAgentHarnessFlags(&cfg)
+		assert.Empty(t, cfg.UserID)
+		assert.Empty(t, cfg.CLISessionID)
+	})
+}
+
+func TestDemosScenariosRunCmd_CLICertFlags(t *testing.T) {
+	cmd := demosScenariosRunCmd()
+
+	t.Run("has --cli-cert flag", func(t *testing.T) {
+		flag := cmd.Flags().Lookup("cli-cert")
+		require.NotNil(t, flag)
+		assert.Equal(t, "", flag.DefValue)
+		assert.Contains(t, flag.Usage, "notary")
+	})
+
+	t.Run("has --cli-key flag", func(t *testing.T) {
+		flag := cmd.Flags().Lookup("cli-key")
+		require.NotNil(t, flag)
+		assert.Equal(t, "", flag.DefValue)
+		assert.Contains(t, flag.Usage, "notary")
+	})
+
+	t.Run("has --cli-ca flag", func(t *testing.T) {
+		flag := cmd.Flags().Lookup("cli-ca")
+		require.NotNil(t, flag)
+		assert.Equal(t, "", flag.DefValue)
+		assert.Contains(t, flag.Usage, "CLI")
+	})
+}
+
+func TestApplyAgentHarnessFlags_CLIAuth(t *testing.T) {
+	t.Run("propagates cli-cert/cli-key/cli-ca to config.CLIAuth", func(t *testing.T) {
+		harnessCLICert = "/path/to/cli.crt"
+		harnessCLIKey = "/path/to/cli.key"
+		harnessCLICA = "/path/to/ca-bundle.pem"
+		defer func() {
+			harnessCLICert = ""
+			harnessCLIKey = ""
+			harnessCLICA = ""
+		}()
+
+		cfg := config.Default()
+		applyAgentHarnessFlags(&cfg)
+		assert.Equal(t, "/path/to/cli.crt", cfg.CLIAuth.ClientCert)
+		assert.Equal(t, "/path/to/cli.key", cfg.CLIAuth.ClientKey)
+		assert.Equal(t, "/path/to/ca-bundle.pem", cfg.CLIAuth.CABundle)
+	})
+
+	t.Run("leaves CLIAuth empty when flags unset", func(t *testing.T) {
+		harnessCLICert = ""
+		harnessCLIKey = ""
+		harnessCLICA = ""
+
+		cfg := config.Config{}
+		applyAgentHarnessFlags(&cfg)
+		assert.Empty(t, cfg.CLIAuth.ClientCert)
+		assert.Empty(t, cfg.CLIAuth.ClientKey)
+		assert.Empty(t, cfg.CLIAuth.CABundle)
 	})
 }

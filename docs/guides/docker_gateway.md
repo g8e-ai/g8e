@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
-Last Updated: 2026-07-30
-Version: v1.6.7
+Last Updated: 2026-08-05
+Version: v1.6.10
 
 This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
 
@@ -76,7 +76,6 @@ G8E_HTTP_PORT=3000 G8E_HTTPS_PORT=3443 G8E_PREFIX=myg8e docker compose up -d
 Functional demo environments are located in the `demos/` directory. These configurations demonstrate multi-network isolation and specialized doctrine enforcement:
 
 - **Healthcare**: FHIR R4 compliance and PHI protection.
-- **Gov**: CUI protection and CMMC compliance enforcement.
 - **Finance**: High-integrity ledger and audit requirements.
 - **DHS**: Persistent sovereign capability for coalition data handling with USPER PII minimization, cross-domain release control, and consensus posture.
 - **FedRAMP**: Sovereign cloud governance with audit integrity, access control, cross-domain protection, and human-in-the-loop resource destruction approval.

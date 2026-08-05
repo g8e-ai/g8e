@@ -363,7 +363,7 @@ func gatewayStartCmd() *cobra.Command {
 
 func gatewayStartCmdWithConfig(
 	configLoader func(string) (*config.Config, error),
-	fileSvcFactory func() (fs.RuntimeFileService, error),
+	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 	runWizard wizardRunner,
 ) *cobra.Command {
 	var flags GatewayFlags
@@ -442,7 +442,7 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 				// Write network identity to file if needed
 				var networkIdentityFile string
 				if len(identityResult.IdentityData) > 0 {
-					fileSvc, err := fileSvcFactory()
+					fileSvc, err := fileSvcFactory("", slog.Default())
 					if err != nil {
 						return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 					}
@@ -469,7 +469,7 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 			}
 
 			// Background mode: start gateway as a background process
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -527,7 +527,7 @@ func gatewayStopCmd() *cobra.Command {
 
 func gatewayStopCmdWithConfig(
 	configLoader func(string) (*config.Config, error),
-	fileSvcFactory func() (fs.RuntimeFileService, error),
+	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 ) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stop",
@@ -540,7 +540,7 @@ managed process. If the gateway is not running, this command is a no-op.`,
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -576,7 +576,7 @@ func gatewayStatusCmd() *cobra.Command {
 
 func gatewayStatusCmdWithConfig(
 	configLoader func(string) (*config.Config, error),
-	fileSvcFactory func() (fs.RuntimeFileService, error),
+	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 ) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status",
@@ -594,7 +594,7 @@ Displays the process ID and endpoint URLs when the gateway is running.`,
 			cmd.Println("========================")
 
 			// Try HTTP check first (works for Docker/foreground/background modes)
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -653,7 +653,7 @@ func gatewayRestartCmd() *cobra.Command {
 
 func gatewayRestartCmdWithConfig(
 	configLoader func(string) (*config.Config, error),
-	fileSvcFactory func() (fs.RuntimeFileService, error),
+	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 ) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "restart",
@@ -668,7 +668,7 @@ missing, the gateway defaults to 'doctrine' posture.`,
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -727,7 +727,7 @@ func gatewayLogsCmd() *cobra.Command {
 
 func gatewayLogsCmdWithConfig(
 	configLoader func(string) (*config.Config, error),
-	fileSvcFactory func() (fs.RuntimeFileService, error),
+	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 ) *cobra.Command {
 	var follow bool
 
@@ -742,7 +742,7 @@ output (like tail -f).`,
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -770,7 +770,7 @@ func gatewaySettingsCmd() *cobra.Command {
 	return gatewaySettingsCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func gatewaySettingsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func gatewaySettingsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "settings",
 		Short: "Manage Gateway settings",
@@ -782,7 +782,7 @@ Gateway over mTLS.`,
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -873,7 +873,7 @@ func gatewayCleanCmd() *cobra.Command {
 
 func gatewayCleanCmdWithConfig(
 	configLoader func(string) (*config.Config, error),
-	fileSvcFactory func() (fs.RuntimeFileService, error),
+	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 ) *cobra.Command {
 	var force bool
 
@@ -910,7 +910,7 @@ Use --force to skip the confirmation prompt.`,
 				}
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}

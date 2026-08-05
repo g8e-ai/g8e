@@ -107,7 +107,6 @@ EXCLUDE_FILES := \
 	internal/cli/cmd/demos.go \
 	internal/cli/cmd/demo_dhs.go \
 	internal/cli/cmd/demo_finance.go \
-	internal/cli/cmd/demo_gov.go \
 	internal/cli/cmd/demo_healthcare.go \
 	internal/cli/cmd/mcp_backup.go
 
@@ -193,7 +192,7 @@ help:
 	@echo "  clean         Remove all build artifacts and runtime state"
 	@echo ""
 	@echo "Demos:"
-	@echo "  demo-verify         Build and run all 6 demo environments (requires Docker)"
+	@echo "  demo-verify         Build and run all 5 demo environments (requires Docker)"
 	@echo ""
 	@echo "Python Protocol:"
 	@echo "  python-build  Copy constants and build the Python protocol package"
@@ -556,10 +555,10 @@ test-airgap:
 # =============================================================================
 # DEMO VERIFICATION
 # =============================================================================
-# Requires Docker. Builds the binary, then runs all 6 demo environments.
+# Requires Docker. Builds the binary, then runs all 5 demo environments.
 # Each demo is torn down (with volumes) before the next starts to avoid
 # port conflicts and stale PKI state.
-DEMO_ORGS := healthcare gov finance dhs fedramp frontend
+DEMO_ORGS := healthcare finance dhs fedramp frontend
 
 .PHONY: demo-verify
 demo-verify: build

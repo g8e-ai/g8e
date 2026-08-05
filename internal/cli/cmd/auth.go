@@ -18,6 +18,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"runtime"
 
@@ -50,7 +51,7 @@ func enrollCmd() *cobra.Command {
 
 func enrollCmdWithConfig(
 	configLoader func(string) (*config.Config, error),
-	fileSvcFactory func() (fs.RuntimeFileService, error),
+	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 	checkOperatorRunning func(*config.Config) error,
 ) *cobra.Command {
 	var useTPM bool
@@ -73,7 +74,7 @@ The Gateway must already be running (use './g8e gw start' first).`,
 				return err
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -245,7 +246,7 @@ func logoutCmd() *cobra.Command {
 
 func logoutCmdWithConfig(
 	configLoader func(string) (*config.Config, error),
-	fileSvcFactory func() (fs.RuntimeFileService, error),
+	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 ) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "logout",
@@ -257,7 +258,7 @@ func logoutCmdWithConfig(
 				return err
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}

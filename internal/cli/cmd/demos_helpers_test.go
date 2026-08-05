@@ -72,7 +72,6 @@ func TestDemoHTTPPort_AllKnownOrgs(t *testing.T) {
 		expected string
 	}{
 		{constants.DemosOrgHealthcare, "8081"},
-		{constants.DemosOrgGov, "8080"},
 		{constants.DemosOrgFinance, "8082"},
 		{constants.DemosOrgDHS, "8087"},
 		{constants.DemosOrgFedRAMP, "8088"},
@@ -95,7 +94,6 @@ func TestDemoHTTPSPort_AllKnownOrgs(t *testing.T) {
 		expected string
 	}{
 		{constants.DemosOrgHealthcare, "8444"},
-		{constants.DemosOrgGov, "8443"},
 		{constants.DemosOrgFinance, "8445"},
 		{constants.DemosOrgDHS, "8450"},
 		{constants.DemosOrgFedRAMP, "8451"},
@@ -479,14 +477,14 @@ func TestPrintResultsTable_OutputContainsAllRows(t *testing.T) {
 }
 
 func TestRunScenarioWithResult_UnknownOrgReturnsNotFound(t *testing.T) {
-	_, err := runScenarioWithResult("unknown-org", "/tmp", "1")
+	_, err := runScenarioWithResult("unknown-org", "/tmp", "1", hostIdentity{})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrNotFound))
 }
 
 func TestRunAllScenarios_UnknownOrgReturnsNotFound(t *testing.T) {
 	cmd := &cobra.Command{}
-	err := runAllScenarios(cmd, "unknown-org", "/tmp")
+	err := runAllScenarios(cmd, "unknown-org", "/tmp", hostIdentity{})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrNotFound))
 }

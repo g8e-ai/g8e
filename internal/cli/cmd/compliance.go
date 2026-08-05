@@ -56,7 +56,7 @@ artifacts. Persists KSI evaluation snapshots for historical metrics.`,
 
 // complianceExportCmdWithConfig creates the `compliance export` subcommand
 // with injectable dependencies for testing.
-func complianceExportCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func complianceExportCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var format string
 	var class string
 	var outDir string
@@ -75,7 +75,7 @@ directory (default: .g8e/data/compliance/).`,
 				return fmt.Errorf("%w: unsupported format: %s (only 'oscal' is supported)", constants.ErrValidationFailed, format)
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -163,7 +163,7 @@ directory (default: .g8e/data/compliance/).`,
 
 // complianceKSICmdWithConfig creates the `compliance ksi` subcommand with
 // injectable dependencies for testing.
-func complianceKSICmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func complianceKSICmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var class string
 	var catalogPath string
 
@@ -173,7 +173,7 @@ func complianceKSICmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, er
 		Long: `Evaluate g8e's live state against the FedRAMP 20x Key Security Indicators
 for the specified certification class and print the KSIResultSet as JSON.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -366,7 +366,7 @@ func openLedger(fileSvc fs.RuntimeFileService, v *vault.Vault) (*storage.GitLedg
 
 // complianceKSIHistoryCmdWithConfig creates the `compliance ksi-history` subcommand
 // with injectable dependencies for testing.
-func complianceKSIHistoryCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func complianceKSIHistoryCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var ksiID string
 
 	cmd := &cobra.Command{
@@ -376,7 +376,7 @@ func complianceKSIHistoryCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileServ
 When --ksi is specified, prints the chronological series for that KSI ID.
 Without --ksi, prints all snapshots as a JSON array.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -457,7 +457,7 @@ func validateCertClass(class string) (compliance.CertificationClass, error) {
 // complianceOverlayCmdWithConfig creates the `compliance overlay` subcommand
 // with injectable dependencies for testing. It loads COSAiS overlay catalogs
 // from a directory and validates KSI overlay references.
-func complianceOverlayCmdWithConfig(fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func complianceOverlayCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var overlayDir string
 	var catalogPath string
 
@@ -472,7 +472,7 @@ custom overlay directory (default: docs/reference/).`,
 			// fileSvc is initialized for error-injection test parity with the
 			// other compliance subcommands. The overlay command reads from
 			// docs/reference/ (not .g8e/), so fileSvc itself is unused here.
-			if _, err := fileSvcFactory(); err != nil {
+			if _, err := fileSvcFactory("", slog.Default()); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 

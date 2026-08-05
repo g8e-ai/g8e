@@ -16,6 +16,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,7 +52,7 @@ func auditReceiptsCmd() *cobra.Command {
 	return auditReceiptsCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func auditReceiptsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func auditReceiptsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
 	var txID string
 	var jsonOutput bool
@@ -68,7 +69,7 @@ transaction hash, and --json to output raw JSON instead of a table.`,
 				return err
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -174,7 +175,7 @@ func auditExportCmd() *cobra.Command {
 	return auditExportCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func auditExportCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func auditExportCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
 	var outPath string
 
@@ -190,7 +191,7 @@ file path (defaults to stdout).`,
 				return err
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -246,7 +247,7 @@ func auditReportCmd() *cobra.Command {
 	return auditReportCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func auditReportCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func auditReportCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
 	var outDir string
 
@@ -262,7 +263,7 @@ directory for the report file.`,
 				return err
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -330,7 +331,7 @@ func auditEventsCmd() *cobra.Command {
 	return auditEventsCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func auditEventsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func auditEventsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
 	var limit int
 	var jsonOutput bool
@@ -352,7 +353,7 @@ filter by operator session ID, --limit to control the number of results, and
 				return fmt.Errorf("%w: limit must be between 1 and 10000", constants.ErrValidationFailed)
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -449,7 +450,7 @@ func auditSummaryCmd() *cobra.Command {
 	return auditSummaryCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func auditSummaryCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func auditSummaryCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
 
 	cmd := &cobra.Command{
@@ -463,7 +464,7 @@ Gateway over mTLS. Use --session to filter by operator session ID.`,
 				return err
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}

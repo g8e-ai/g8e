@@ -1016,6 +1016,9 @@ var (
 	ErrHarnessGovKitNotInit     = errors.New("gov kit not initialized (call SetGovKit)")
 	ErrHarnessGovKitMissingSign = errors.New("gov kit not initialized (need ensemble + principal)")
 
+	// Demo errors
+	ErrDemoGatewayPortMissing = errors.New("demo gateway port not configured for org")
+
 	// Browser errors
 	ErrBrowserURLEmpty = errors.New("browser URL cannot be empty")
 

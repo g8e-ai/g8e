@@ -112,14 +112,15 @@ func fedrampScenarios() []Scenario {
 				}
 				r.note("operator requests destruction of fedramp-vm-classified-01 (FIPS-199-HIGH)")
 
-				resp, err := c.MCPToolsCall(ctx, fedrampCloudOperator, "run_shell_command", cloudopMap("destroy", "fedramp-vm-classified-01", "FIPS-199-HIGH"))
+				cliPersona := withCLIIdentity(fedrampCloudOperator)
+				resp, err := c.MCPToolsCallWithCLI(ctx, cliPersona, "run_shell_command", cloudopMap("destroy", "fedramp-vm-classified-01", "FIPS-199-HIGH"))
 				if err != nil {
 					return fmt.Errorf("submit destroy: %w", err)
 				}
 
 				if txHash, suspended := clientpkg.Suspended(resp); suspended {
 					r.note("gateway suspended destroy transaction %s pending L3 notary approval", short(txHash))
-					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, fedrampAuthorizingOfficial, txHash, kit.OperatorID)
+					ast, approveBody, aerr := c.WaitForHumanApproval(ctx, fedrampAuthorizingOfficial, txHash, kit.UserID)
 					if aerr != nil {
 						return fmt.Errorf("authorizing official approve: %w", aerr)
 					}

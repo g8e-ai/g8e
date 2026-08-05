@@ -7,36 +7,34 @@ import (
 	"testing"
 )
 
-func TestGovFinanceScenarios(t *testing.T) {
-	scenarios := govFinanceScenarios()
+func TestFinanceScenarios(t *testing.T) {
+	scenarios := financeScenarios()
 
-	if len(scenarios) != 2 {
-		t.Errorf("govFinanceScenarios should return 2 scenarios, got %d", len(scenarios))
+	if len(scenarios) != 1 {
+		t.Errorf("financeScenarios should return 1 scenario, got %d", len(scenarios))
 	}
 
 	expectedNames := map[string]bool{
-		"gov-cui-exfil-block":        true,
 		"finance-unauthorized-trade": true,
 	}
 
 	for _, sc := range scenarios {
 		if !expectedNames[sc.Name] {
-			t.Errorf("Unexpected gov/finance scenario name: %q", sc.Name)
+			t.Errorf("Unexpected finance scenario name: %q", sc.Name)
 		}
 		if sc.Run == nil {
-			t.Errorf("gov/finance scenario %q should have non-nil Run function", sc.Name)
+			t.Errorf("finance scenario %q should have non-nil Run function", sc.Name)
 		}
 		if sc.RequiresPosture != Doctrine {
-			t.Errorf("gov/finance scenario %q should require Doctrine posture, got %q", sc.Name, sc.RequiresPosture)
+			t.Errorf("finance scenario %q should require Doctrine posture, got %q", sc.Name, sc.RequiresPosture)
 		}
 	}
 }
 
-func TestGovFinanceScenarioTitles(t *testing.T) {
-	scenarios := govFinanceScenarios()
+func TestFinanceScenarioTitles(t *testing.T) {
+	scenarios := financeScenarios()
 
 	expectedTitles := map[string]string{
-		"gov-cui-exfil-block":        "CUI exfiltration blocked by L1 doctrine",
 		"finance-unauthorized-trade": "Unauthorized trade blocked by L1 doctrine",
 	}
 
@@ -52,11 +50,10 @@ func TestGovFinanceScenarioTitles(t *testing.T) {
 	}
 }
 
-func TestGovFinanceScenarioPersonas(t *testing.T) {
-	scenarios := govFinanceScenarios()
+func TestFinanceScenarioPersonas(t *testing.T) {
+	scenarios := financeScenarios()
 
 	expectedPersonas := map[string]string{
-		"gov-cui-exfil-block":        "gov-agent",
 		"finance-unauthorized-trade": "finance-agent",
 	}
 
@@ -70,21 +67,13 @@ func TestGovFinanceScenarioPersonas(t *testing.T) {
 			t.Errorf("Scenario %q should have persona %q, got %q", sc.Name, expected, sc.Persona.ID)
 		}
 		if sc.Persona.UserAgent == "" {
-			t.Errorf("gov/finance scenario %q should have non-empty UserAgent", sc.Name)
+			t.Errorf("finance scenario %q should have non-empty UserAgent", sc.Name)
 		}
 	}
 }
 
-func TestGovFinanceScenariosInRegistry(t *testing.T) {
-	sc, ok := Find("gov-cui-exfil-block")
-	if !ok {
-		t.Fatal("Registry should include gov-cui-exfil-block scenario")
-	}
-	if sc.RequiresPosture != Doctrine {
-		t.Errorf("gov-cui-exfil-block should require Doctrine posture, got %q", sc.RequiresPosture)
-	}
-
-	sc, ok = Find("finance-unauthorized-trade")
+func TestFinanceScenariosInRegistry(t *testing.T) {
+	sc, ok := Find("finance-unauthorized-trade")
 	if !ok {
 		t.Fatal("Registry should include finance-unauthorized-trade scenario")
 	}

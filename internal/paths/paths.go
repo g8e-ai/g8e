@@ -102,7 +102,6 @@ var Infra struct {
 	DemosDir                         string
 	DemosHealthcareDir               string
 	DemosFinanceDir                  string
-	DemosGovDir                      string
 	DemosHealthcareTargetDataDir     string
 	DemosHealthcareDoctrineDir       string
 	DemosHealthcarePARequestsPath    string
@@ -173,7 +172,6 @@ var Infra struct {
 	DemosDir                         string
 	DemosHealthcareDir               string
 	DemosFinanceDir                  string
-	DemosGovDir                      string
 	DemosHealthcareTargetDataDir     string
 	DemosHealthcareDoctrineDir       string
 	DemosHealthcarePARequestsPath    string
@@ -238,7 +236,6 @@ var Infra struct {
 	DemosDir:                         constants.DemosDirname,
 	DemosHealthcareDir:               constants.DemosDirname + "/" + constants.DemosOrgHealthcare,
 	DemosFinanceDir:                  constants.DemosDirname + "/" + constants.DemosOrgFinance,
-	DemosGovDir:                      constants.DemosDirname + "/" + constants.DemosOrgGov,
 	DemosHealthcareTargetDataDir:     constants.DemosDirname + "/" + constants.DemosOrgHealthcare + "/" + constants.DemosTargetDataDir,
 	DemosHealthcareDoctrineDir:       constants.DemosDirname + "/" + constants.DemosOrgHealthcare + "/" + constants.DemosDoctrineDir,
 	DemosHealthcarePARequestsPath:    constants.DemosDirname + "/" + constants.DemosOrgHealthcare + "/" + constants.DemosTargetDataDir + "/" + constants.DemosPARequestsFile,
@@ -341,7 +338,6 @@ func InitWithBase(baseDir string) error {
 	Infra.DemosDir = pathutil.SafeJoin(baseDir, constants.DemosDirname)
 	Infra.DemosHealthcareDir = pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgHealthcare)
 	Infra.DemosFinanceDir = pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgFinance)
-	Infra.DemosGovDir = pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgGov)
 	Infra.DemosHealthcareTargetDataDir = pathutil.SafeJoin(Infra.DemosHealthcareDir, constants.DemosTargetDataDir)
 	Infra.DemosHealthcareDoctrineDir = pathutil.SafeJoin(Infra.DemosHealthcareDir, constants.DemosDoctrineDir)
 	Infra.DemosHealthcarePARequestsPath = pathutil.SafeJoin(Infra.DemosHealthcareTargetDataDir, constants.DemosPARequestsFile)

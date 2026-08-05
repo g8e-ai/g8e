@@ -133,7 +133,6 @@ func TestInitWithBase(t *testing.T) {
 		{"DemosDir", Infra.DemosDir, pathutil.SafeJoin(base, constants.DemosDirname)},
 		{"DemosHealthcareDir", Infra.DemosHealthcareDir, pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgHealthcare)},
 		{"DemosFinanceDir", Infra.DemosFinanceDir, pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgFinance)},
-		{"DemosGovDir", Infra.DemosGovDir, pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgGov)},
 		{"DemosHealthcareTargetDataDir", Infra.DemosHealthcareTargetDataDir, pathutil.SafeJoin(Infra.DemosHealthcareDir, constants.DemosTargetDataDir)},
 		{"DemosHealthcareDoctrineDir", Infra.DemosHealthcareDoctrineDir, pathutil.SafeJoin(Infra.DemosHealthcareDir, constants.DemosDoctrineDir)},
 		{"DemosHealthcarePARequestsPath", Infra.DemosHealthcarePARequestsPath, pathutil.SafeJoin(Infra.DemosHealthcareTargetDataDir, constants.DemosPARequestsFile)},
@@ -633,7 +632,6 @@ func TestInfraDefaults_BeforeInit(t *testing.T) {
 		DemosDir                         string
 		DemosHealthcareDir               string
 		DemosFinanceDir                  string
-		DemosGovDir                      string
 		DemosHealthcareTargetDataDir     string
 		DemosHealthcareDoctrineDir       string
 		DemosHealthcarePARequestsPath    string
