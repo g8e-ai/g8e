@@ -17,6 +17,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -52,7 +53,7 @@ func dataUsersCmd() *cobra.Command {
 	return dataUsersCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func dataUsersCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func dataUsersCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "users",
 		Short: "Manage user accounts",
@@ -63,7 +64,7 @@ func dataUsersCmdWithConfig(configLoader func(string) (*config.Config, error), c
 				return err
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -99,7 +100,7 @@ func dataOperatorsCmd() *cobra.Command {
 	return dataOperatorsCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func dataOperatorsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func dataOperatorsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "operators",
 		Short: "Manage Operator instances",
@@ -110,7 +111,7 @@ func dataOperatorsCmdWithConfig(configLoader func(string) (*config.Config, error
 				return err
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -146,7 +147,7 @@ func dataSettingsCmd() *cobra.Command {
 	return dataSettingsCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func dataSettingsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func dataSettingsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "settings",
 		Short: "Manage Gateway settings",
@@ -157,7 +158,7 @@ func dataSettingsCmdWithConfig(configLoader func(string) (*config.Config, error)
 				return err
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -198,7 +199,7 @@ func dataStoreCmd() *cobra.Command {
 	return dataStoreCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func dataStoreCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func dataStoreCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var collection string
 	var documentID string
 
@@ -214,7 +215,7 @@ or provide --document-id to fetch a specific document.`,
 				return err
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -281,7 +282,7 @@ func dataAuditListCmd() *cobra.Command {
 	return dataAuditListCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
-func dataAuditListCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func dataAuditListCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var operatorSessionID string
 	var limit int
 
@@ -297,7 +298,7 @@ to control the number of results.`,
 				return err
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}

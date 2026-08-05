@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -23,8 +24,8 @@ func newCmdTestEnv(t *testing.T) (fs.RuntimeFileService, *config.Config) {
 
 // fileSvcFactoryFor returns a fileSvcFactory that always returns the given fileSvc.
 // Used in tests to inject a hermetic fileSvc into *WithConfig functions.
-func fileSvcFactoryFor(fileSvc fs.RuntimeFileService) func() (fs.RuntimeFileService, error) {
-	return func() (fs.RuntimeFileService, error) { return fileSvc, nil }
+func fileSvcFactoryFor(fileSvc fs.RuntimeFileService) func(string, *slog.Logger) (fs.RuntimeFileService, error) {
+	return func(string, *slog.Logger) (fs.RuntimeFileService, error) { return fileSvc, nil }
 }
 
 // mustRel converts an absolute .g8e/ path to a relative path, failing the test on error.
@@ -37,8 +38,8 @@ func mustRel(t *testing.T, fileSvc fs.RuntimeFileService, absPath string) string
 
 // failingFileSvcFactory returns a fileSvcFactory that always returns the given error.
 // Used in tests to verify that *WithConfig functions handle fileSvcFactory errors correctly.
-func failingFileSvcFactory(err error) func() (fs.RuntimeFileService, error) {
-	return func() (fs.RuntimeFileService, error) { return nil, err }
+func failingFileSvcFactory(err error) func(string, *slog.Logger) (fs.RuntimeFileService, error) {
+	return func(string, *slog.Logger) (fs.RuntimeFileService, error) { return nil, err }
 }
 
 // panickingClientFactory returns an apiClientFactory that panics if called.

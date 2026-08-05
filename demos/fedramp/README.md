@@ -102,11 +102,13 @@ The scenarios that exercise real L1 enforcement:
 make build
 
 g8e demos start fedramp
-g8e demos run fedramp        # run all five scenarios
+g8e demos run fedramp        # enrolls a passkey inline, then runs all five scenarios
 g8e demos run fedramp 3      # run a single scenario
 g8e audit receipts           # inspect the audit trail / ledger
 g8e demos clean fedramp
 ```
+
+`g8e demos run` enrolls a host CLI session and registers a WebAuthn passkey in-process before running scenarios. A browser window opens automatically for the passkey ceremony — no separate terminal or manual `auth enroll` step is required. The enrolled identity is threaded into the harness so the suspended transaction and the browser approver share the same user identity.
 
 ## FIPS 140-3 mode
 
@@ -141,7 +143,7 @@ All scenarios run via `demos scenarios run`, a real g8e binary that submits genu
 **Scenario `fedramp-deny`**: A compromised operator tries to destroy the cloud operations ledger with `rm -rf /var/cloudsvc`. L1 doctrine rejects it at admission (the `destroy_rm_rf_system_dirs` detector fires). Even with valid L2 and L3 proofs attached, L1 is the hard gate and runs first. Nothing reaches the actuator.
 
 ### 3: Resource Destruction Requires Authorizing Official (SI, AC, AU)
-**Scenario `fedramp-escalate`**: The gateway is restarted in **notary** posture. A resource destruction is submitted with L2 consensus only. Under notary posture the Gateway suspends the transaction pending an out-of-band L3 principal (authorizing official) approval. The scenario extracts the suspended transaction hash from the gateway's pending approvals API, then invokes `g8e approve`, which opens a browser for WebAuthn passkey approval of the exact transaction hash. Once approved, the destruction executes on the L5 actuator (cloudsvc records a `DESTROY` operation). The gateway is then restored to consensus posture.
+**Scenario `fedramp-escalate`**: The gateway is restarted in **notary** posture. A resource destruction is submitted with L2 consensus only. Under notary posture the Gateway suspends the transaction pending an out-of-band L3 principal (authorizing official) approval. The harness prints the approval URL and subscribes to the gateway's SSE stream for the `approval.completed` event. The human completes the WebAuthn passkey ceremony in their browser (using the passkey enrolled inline at the start of `demos run`). Once approved, the destruction executes on the L5 actuator (cloudsvc records a `DESTROY` operation). The gateway is then restored to consensus posture.
 
 ### 4: Governed Configuration Revert (CM, AU)
 **Scenario `fedramp-revert`**: A configuration revert is submitted to roll back a resource to its prior version. L1 doctrine admits the envelope; L2 consensus quorum is met. The revert is executed and the `cloudsvc` records a `REVERT` operation with the prior state hash. The revert appears in the ledger as an evidenced, attributed action.

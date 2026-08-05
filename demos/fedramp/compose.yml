@@ -73,6 +73,7 @@ services:
       - fedramp-operator-state:/root/.g8e:ro
       - ./config/ensemble-seed.hex:/etc/g8e/ensemble-seed.hex:ro
       - ./config/consensus-bootstrap.json:/etc/g8e/consensus-bootstrap.json:ro
+      - ${HOST_G8E_PKI:-/dev/null}:/host-creds:ro
     networks:
       net_internal:
         ipv4_address: 10.72.0.30

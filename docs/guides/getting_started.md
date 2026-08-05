@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-07-28
-Version: v1.6.6
+Last Updated: 2026-08-05
+Version: v1.6.10
 
 ---
 
@@ -417,7 +417,6 @@ docker compose down -v
 | healthcare | 2 | Gold card auto-approval |
 | healthcare | 3 | SLA breach and OHA reporting |
 | healthcare | 4 | Bad actor PHI exfiltration blocked |
-| gov | 1 | CUI exfiltration attempt blocked |
 | finance | 1 | Unauthorized trade blocked |
 | dhs | 1 | Sovereign multi-source ingest (chain-of-custody) |
 | dhs | 2 | Cross-domain release requires Notary authority |
@@ -437,7 +436,6 @@ Each demo uses distinct host ports to allow simultaneous deployment:
 
 | Demo | HTTP | HTTPS | Demo UI |
 |---|---|---|---|
-| gov | 8080 | 8443 | 3000 |
 | healthcare | 8081 | 8444 | 3001 |
 | finance | 8082 | 8445 | 3002 |
 | dhs | 8087 | 8450 | - |
@@ -454,20 +452,20 @@ For example, to enroll against the healthcare demo: `./g8e auth enroll -e localh
 
 ### Verify all demos
 
-Run the one-command demo verification target to build the binary and run all 6 demos sequentially:
+Run the one-command demo verification target to build the binary and run all 5 demos sequentially:
 
 ```bash
 make demo-verify
 ```
 
-This target depends on `make build`, then for each demo (healthcare, gov, finance, dhs, fedramp, frontend) it:
+This target depends on `make build`, then for each demo (healthcare, finance, dhs, fedramp, frontend) it:
 
 1. Stops any running instance and cleans up volumes
 2. Runs all scenarios via `g8e demos run <org>`
 3. Stops and cleans up after the demo
 4. Reports PASS or FAIL
 
-If any demo fails, the target exits immediately with a non-zero status. All 6 demos must pass for the target to succeed.
+If any demo fails, the target exits immediately with a non-zero status. All 5 demos must pass for the target to succeed.
 
 ---
 

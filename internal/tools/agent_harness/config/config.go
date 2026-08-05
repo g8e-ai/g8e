@@ -56,9 +56,27 @@ type Config struct {
 	// UseCLIConfig uses the CLI credentials directory for all paths.
 	UseCLIConfig bool `json:"use_cli_config"`
 
+	// CLIAuth holds the host CLI mTLS material used for notary-scenario
+	// transaction submits. When populated, the harness client builds a
+	// second http.Client with this cert pair so handleCLIAuth stamps the
+	// host user's identity onto the suspended transaction. Non-notary MCP
+	// calls continue using the operator cert in Auth.
+	CLIAuth Auth `json:"cli_auth"`
+
 	// OperatorSessionID scopes audit receipt queries to the real Operator that
 	// executed the work. If empty, Agent Harness tries to discover it from /api/operators.
 	OperatorSessionID string `json:"operator_session_id"`
+
+	// UserID is the host CLI user_id used to scope the SSE approval subscription.
+	// When set, WaitForHumanApproval subscribes with this user_id instead of the
+	// operator id, so the harness receives events for transactions tagged with
+	// the host user's identity.
+	UserID string `json:"user_id"`
+
+	// CLISessionID is the host CLI session id sent as X-CLI-Session-ID on
+	// notary submit so handleCLIAuth stamps the host user onto the suspended
+	// transaction.
+	CLISessionID string `json:"cli_session_id"`
 
 	// EnvelopeTTL is how long a maximal envelope is valid before expiry.
 	EnvelopeTTL time.Duration `json:"envelope_ttl"`
@@ -87,6 +105,15 @@ func Default() Config {
 			cfg.Auth.ClientKey = cliCfg.CLIKeyFile()
 			cfg.Auth.CABundle = cliCfg.ResolvedTrustBundlePath()
 		}
+	}
+
+	// When CLIAuth is not explicitly set, default it to the same cert as
+	// Auth so the harness works out-of-the-box for non-demo invocations.
+	// Demo invocations override CLIAuth via --cli-cert/--cli-key/--cli-ca.
+	if cfg.CLIAuth.ClientCert == "" && cfg.Auth.ClientCert != "" {
+		cfg.CLIAuth.ClientCert = cfg.Auth.ClientCert
+		cfg.CLIAuth.ClientKey = cfg.Auth.ClientKey
+		cfg.CLIAuth.CABundle = cfg.Auth.CABundle
 	}
 
 	return cfg

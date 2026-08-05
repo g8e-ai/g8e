@@ -571,7 +571,7 @@ func TestRegistryScenarioOrder(t *testing.T) {
 	assert.Contains(t, scenarios[0].Name, "mcp", "First scenario should be MCP")
 
 	lastName := scenarios[len(scenarios)-1].Name
-	validLastPrefixes := []string{"consensus", "envelope", "notary", "consensus", "delegation", "dhs", "gov", "finance", "fedramp"}
+	validLastPrefixes := []string{"consensus", "envelope", "notary", "consensus", "delegation", "dhs", "finance", "fedramp"}
 	found := false
 	for _, p := range validLastPrefixes {
 		if strings.Contains(lastName, p) {
@@ -606,7 +606,7 @@ func TestRegistryUniqueNames(t *testing.T) {
 
 func TestRegistryCount(t *testing.T) {
 	scenarios := Registry()
-	expectedCount := len(mcpScenarios()) + len(a2aScenarios()) + len(governanceScenarios()) + len(dhsScenarios()) + len(govFinanceScenarios()) + len(fedrampScenarios())
+	expectedCount := len(mcpScenarios()) + len(a2aScenarios()) + len(governanceScenarios()) + len(dhsScenarios()) + len(financeScenarios()) + len(fedrampScenarios())
 
 	assert.Equal(t, expectedCount, len(scenarios), "Registry should have correct scenario count")
 }
@@ -703,8 +703,7 @@ func TestRegistryPostureDeclarations(t *testing.T) {
 		"dhs-evidence-block": Doctrine,  // Ensemble + Authenticator, but tests L1 rejection
 		"dhs-purge":          Consensus, // Ensemble + Authenticator inline, expects admission
 
-		// Gov/Finance scenarios — plain MCPToolsCall
-		"gov-cui-exfil-block":        Doctrine,
+		// Finance scenarios — plain MCPToolsCall
 		"finance-unauthorized-trade": Doctrine,
 
 		// FedRAMP scenarios

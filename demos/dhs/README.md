@@ -101,11 +101,13 @@ The scenarios that exercise real L1 enforcement:
 make build && cp g8e demos/bin/g8e
 
 g8e demos start dhs
-g8e demos run dhs        # run all five scenarios
+g8e demos run dhs        # enrolls a passkey inline, then runs all five scenarios
 g8e demos run dhs 2      # run a single scenario
 g8e audit receipts       # inspect the audit trail / ledger
 g8e demos clean dhs
 ```
+
+`g8e demos run` enrolls a host CLI session and registers a WebAuthn passkey in-process before running scenarios. A browser window opens automatically for the passkey ceremony — no separate terminal or manual `auth enroll` step is required. The enrolled identity is threaded into the harness so the suspended transaction and the browser approver share the same user identity.
 
 ## Scenarios
 
@@ -115,7 +117,7 @@ All scenarios run via `demos scenarios run`, a real g8e binary that submits genu
 **Scenario `dhs-ingest`**: A coalition source connector submits a `GovernanceEnvelope` wrapping a `run_shell_command` that drives the Sovereign Data Service (L5 actuator). L1 doctrine admits the envelope; L2 consensus quorum is met and verified. The ingest is executed and a signed receipt is written to the hash-chained ledger. The `datasvc` records an `INGEST` operation.
 
 ### 2: Cross-Domain Release requires Notary authority (LOE 1 & 2)
-**Scenario `dhs-release`**: The gateway is restarted in **notary** posture. A cross-domain release is submitted with L2 consensus only. Under notary posture the Gateway suspends the transaction pending an out-of-band L3 principal (release authority) approval. The scenario extracts the suspended transaction hash from the gateway's pending approvals API, then invokes `g8e approve`, which opens a browser for WebAuthn passkey approval of the exact transaction hash. Once approved, the release executes on the L5 actuator (datasvc records a `RELEASE` operation). The gateway is then restored to consensus posture.
+**Scenario `dhs-release`**: The gateway is restarted in **notary** posture. A cross-domain release is submitted with L2 consensus only. Under notary posture the Gateway suspends the transaction pending an out-of-band L3 principal (release authority) approval. The harness prints the approval URL and subscribes to the gateway's SSE stream for the `approval.completed` event. The human completes the WebAuthn passkey ceremony in their browser (using the passkey enrolled inline at the start of `demos run`). Once approved, the release executes on the L5 actuator (datasvc records a `RELEASE` operation). The gateway is then restored to consensus posture.
 
 ### 3: Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
 The Mission Partner datalink is severed (docker network disconnect). Governance continues locally; a `dhs-ingest` scenario runs through the gateway with the datalink down. Every decision is committed to the Git-backed ledger and SQLite audit vault on the operator. The datalink is restored afterward. No cloud required.

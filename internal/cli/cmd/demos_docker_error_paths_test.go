@@ -217,7 +217,7 @@ func TestRunDemosPull_WithValidManifestButNoDocker(t *testing.T) {
 
 	demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 	require.NoError(t, os.MkdirAll(demosDir, 0o755))
-	manifest := `[{"image":"alpine","tag":"latest","digest":"sha256:abc","demos":["gov"]}]`
+	manifest := `[{"image":"alpine","tag":"latest","digest":"sha256:abc","demos":["finance"]}]`
 	require.NoError(t, os.WriteFile(filepath.Join(demosDir, constants.DemosImagesManifestFile), []byte(manifest), 0o644))
 
 	cmd := demosPullCmd()
@@ -238,7 +238,7 @@ func TestRunDemosExport_WithValidManifestWithEntriesCreatesDir(t *testing.T) {
 
 	demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 	require.NoError(t, os.MkdirAll(demosDir, 0o755))
-	manifest := `[{"image":"alpine","tag":"latest","digest":"sha256:abc","demos":["gov"]}]`
+	manifest := `[{"image":"alpine","tag":"latest","digest":"sha256:abc","demos":["finance"]}]`
 	require.NoError(t, os.WriteFile(filepath.Join(demosDir, constants.DemosImagesManifestFile), []byte(manifest), 0o644))
 
 	cmd := demosExportCmd()

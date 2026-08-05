@@ -16,6 +16,7 @@ package cmd
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -122,7 +123,7 @@ func testE2ECmd() *cobra.Command {
 	return testE2ECmdWithConfig(loadConfig, newFileSvc)
 }
 
-func testE2ECmdWithConfig(configLoader func(string) (*config.Config, error), fileSvcFactory func() (fs.RuntimeFileService, error)) *cobra.Command {
+func testE2ECmdWithConfig(configLoader func(string) (*config.Config, error), fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "e2e",
 		Short: "Run Tier 3 (Live Platform E2E) tests",
@@ -148,7 +149,7 @@ func testE2ECmdWithConfig(configLoader func(string) (*config.Config, error), fil
 
 			// Fallback to ProcessManager check (for background/host mode)
 			if !isRunning {
-				fileSvc, err := fileSvcFactory()
+				fileSvc, err := fileSvcFactory("", slog.Default())
 				if err != nil {
 					return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 				}

@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -50,7 +51,7 @@ func approveCmd() *cobra.Command {
 func approveCmdWithConfig(
 	configLoader func(string) (*config.Config, error),
 	clientFactory apiClientFactory,
-	fileSvcFactory func() (fs.RuntimeFileService, error),
+	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 ) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "approve <transaction_hash>",
@@ -67,7 +68,7 @@ gateway's SSE stream and waits for the approval.completed event. CLI credentials
 				return err
 			}
 
-			fileSvc, err := fileSvcFactory()
+			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
