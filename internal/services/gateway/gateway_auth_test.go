@@ -1403,9 +1403,10 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 
 		// Mock CLI session in DB
 		cliDoc := &models.CLISession{
-			ID:        cliSessionID,
-			UserID:    userID,
-			ExpiresAt: time.Now().Add(1 * time.Hour),
+			ID:                cliSessionID,
+			UserID:            userID,
+			OperatorSessionID: opSessionID,
+			ExpiresAt:         time.Now().Add(1 * time.Hour),
 		}
 		cliBytes, _ := json.Marshal(cliDoc)
 		require.NoError(t, stores.DocStore.DocSet("cli_sessions", cliSessionID, cliBytes))
@@ -1448,5 +1449,6 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 		assert.Equal(t, userID, capturedCtx.Value(constants.ContextKeyUserID))
 		assert.Equal(t, opID, capturedCtx.Value(constants.ContextKeyOperatorID))
 		assert.Equal(t, opSessionID, capturedCtx.Value(constants.ContextKeyOperatorSessionID))
+		assert.Equal(t, cliSessionID, capturedCtx.Value(constants.ContextKeyCLISessionID))
 	})
 }

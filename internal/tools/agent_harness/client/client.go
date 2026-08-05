@@ -63,12 +63,12 @@ type Exchange struct {
 
 // Client wraps an mTLS-capable http.Client plus the recorder.
 type Client struct {
-	cfg      config.Config
-	http     *http.Client
-	cliHTTP  *http.Client // second client using CLI cert for notary submits; nil falls back to http
-	tlsCfg   *tls.Config  // shared TLS config for building SSE streaming clients
-	cliTLS   *tls.Config  // TLS config for CLI cert; nil falls back to tlsCfg
-	rec      *[]Exchange  // optional sink for the current scenario
+	cfg     config.Config
+	http    *http.Client
+	cliHTTP *http.Client // second client using CLI cert for notary submits; nil falls back to http
+	tlsCfg  *tls.Config  // shared TLS config for building SSE streaming clients
+	cliTLS  *tls.Config  // TLS config for CLI cert; nil falls back to tlsCfg
+	rec     *[]Exchange  // optional sink for the current scenario
 }
 
 // New builds a Client with mTLS material loaded per config. The MCP/A2A surface

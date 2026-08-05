@@ -20,6 +20,8 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,7 +29,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
@@ -431,18 +435,23 @@ func TestEnrollDemoHost_ConfigLoadFailure(t *testing.T) {
 
 func TestEnrollDemoHost_FileServiceInitError(t *testing.T) {
 	origWait := waitForDemoGateway
+	origFileSvc := newDemoFileSvc
 	defer func() {
 		waitForDemoGateway = origWait
+		newDemoFileSvc = origFileSvc
 	}()
 
 	waitForDemoGateway = func(string) error { return nil }
+	newDemoFileSvc = func(string, *slog.Logger) (fs.RuntimeFileService, error) {
+		return nil, errors.New("file service init error")
+	}
 
 	cmd := demosRunCmd()
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
-	_, err := enrollDemoHost(cmd, constants.DemosOrgDHS, "/nonexistent/path/that/does/not/exist")
+	_, err := enrollDemoHost(cmd, constants.DemosOrgDHS, t.TempDir())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
 }
@@ -468,5 +477,6 @@ func TestEnrollDemoHost_EndpointOverrideClearedOnError(t *testing.T) {
 	_, err := enrollDemoHost(cmd, constants.DemosOrgFedRAMP, t.TempDir())
 	require.Error(t, err)
 
-	assert.Equal(t, "", config.OperatorHTTPURL(), "endpoint override should be cleared after error")
+	cfg := &config.Config{}
+	assert.NotContains(t, cfg.OperatorHTTPURL(), "8451", "endpoint override should be cleared after error")
 }

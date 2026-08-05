@@ -442,7 +442,7 @@ func TestClient_do(t *testing.T) {
 			responseBody: `{"result": "ok"}`,
 			wantErr:      false,
 			verifyHeaders: map[string]string{
-				"Authorization":             "Bearer session-123",
+				"Authorization":                   "Bearer session-123",
 				constants.HeaderOperatorSessionID: "session-123",
 			},
 		},

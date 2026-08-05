@@ -150,7 +150,7 @@ make lint              # golangci-lint + lint-no-embedded-newlines + vulncheck +
 # 3. Docker E2E tests (requires Docker)
 make test-docker
 
-# 4. Authenticate (required for mTLS tests)
+# 4. Authenticate (required for non-demo mTLS tests; demo runs enroll inline)
 ./g8e auth enroll
 ```
 
