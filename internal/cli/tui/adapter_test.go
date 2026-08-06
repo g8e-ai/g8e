@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 )
 
 func TestParseStage(t *testing.T) {
@@ -180,6 +181,43 @@ func TestTranslateSSEEvent(t *testing.T) {
 		require.True(t, ok)
 		assert.Equal(t, StageL2, pm.Stage)
 		assert.Equal(t, StatusActive, pm.Status)
+	})
+
+	t.Run("R14: extracts type from SSEPushPayload envelope when eventType is empty", func(t *testing.T) {
+		// When the server omits the event: field (R14), eventType is empty
+		// and the top-level JSON has no "type" field. The data is a
+		// SSEPushPayload envelope wrapping the inner event JSON. The adapter
+		// must extract the type from the inner event.
+		innerEvent := `{"type":"pipeline.advance","payload":{"stage":"L3","status":"waiting","detail":"FIDO2 touch"}}`
+		envelope := models.SSEPushPayload{
+			CliSessionID: "cli-123",
+			Event:        json.RawMessage(innerEvent),
+		}
+		envelopeJSON, err := json.Marshal(envelope)
+		require.NoError(t, err)
+
+		msg := translateSSEEvent("", string(envelopeJSON))
+		pm, ok := msg.(PipelineMsg)
+		require.True(t, ok, "expected PipelineMsg from SSEPushPayload envelope, got %T", msg)
+		assert.Equal(t, StageL3, pm.Stage)
+		assert.Equal(t, StatusWaiting, pm.Status)
+		assert.Equal(t, "FIDO2 touch", pm.Detail)
+	})
+
+	t.Run("R14: extracts consensus type from SSEPushPayload envelope when eventType is empty", func(t *testing.T) {
+		innerEvent := `{"type":"consensus.vote","payload":{"member":"axiom","decision":true,"signed":true,"quorum":3,"total":5}}`
+		envelope := models.SSEPushPayload{
+			UserID: "user-123",
+			Event:  json.RawMessage(innerEvent),
+		}
+		envelopeJSON, err := json.Marshal(envelope)
+		require.NoError(t, err)
+
+		msg := translateSSEEvent("", string(envelopeJSON))
+		cm, ok := msg.(ConsensusMsg)
+		require.True(t, ok, "expected ConsensusMsg from SSEPushPayload envelope, got %T", msg)
+		assert.Equal(t, constants.ConsensusMemberAxiom, cm.Member)
+		assert.True(t, cm.Decision)
 	})
 }
 

@@ -109,3 +109,84 @@ func TestPubSubBackPressure_ConcurrentPublishersNoDeadlock(t *testing.T) {
 	broker.mu.RUnlock()
 	assert.True(t, stillSubscribed, "subscriber should remain subscribed after back-pressure")
 }
+
+// TestDropOldestBuf_DroppedCountAndEvictionOrder verifies that dropOldestBuf
+// correctly tracks the dropped count and evicts the oldest message first when
+// the buffer is full.
+func TestDropOldestBuf_DroppedCountAndEvictionOrder(t *testing.T) {
+	buf := newDropOldestBuf(2)
+
+	// Fill the buffer.
+	ok, dropped := buf.send([]byte("msg-1"))
+	assert.True(t, ok)
+	assert.Equal(t, int64(0), dropped)
+
+	ok, dropped = buf.send([]byte("msg-2"))
+	assert.True(t, ok)
+	assert.Equal(t, int64(0), dropped)
+
+	// Third send should evict msg-1 (oldest) and increment dropped count.
+	ok, dropped = buf.send([]byte("msg-3"))
+	assert.True(t, ok)
+	assert.Equal(t, int64(1), dropped, "dropped count should be 1 after one eviction")
+
+	// Verify buffer contains msg-2 and msg-3 (msg-1 was evicted).
+	first := <-buf.recv()
+	assert.Equal(t, "msg-2", string(first), "oldest surviving message should be msg-2")
+	second := <-buf.recv()
+	assert.Equal(t, "msg-3", string(second), "newest message should be msg-3")
+
+	// Fourth send on empty buffer should reset dropped count to 0.
+	ok, dropped = buf.send([]byte("msg-4"))
+	assert.True(t, ok)
+	assert.Equal(t, int64(1), dropped, "dropped count is cumulative and should still be 1")
+}
+
+// TestDropOldestBuf_CloseTerminatesRecv verifies that Close closes the
+// underlying channel, causing recv() to return a closed channel.
+func TestDropOldestBuf_CloseTerminatesRecv(t *testing.T) {
+	buf := newDropOldestBuf(2)
+	buf.Close()
+
+	_, ok := <-buf.recv()
+	assert.False(t, ok, "recv should return false after Close")
+}
+
+// TestDropOldestBuf_ConcurrentSendNoDeadlock verifies that concurrent send
+// calls do not deadlock under mutex contention.
+func TestDropOldestBuf_ConcurrentSendNoDeadlock(t *testing.T) {
+	buf := newDropOldestBuf(4)
+
+	const numGoroutines = 10
+	const sendsPerGoroutine = 100
+
+	var wg sync.WaitGroup
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < sendsPerGoroutine; j++ {
+				buf.send([]byte("msg"))
+			}
+		}()
+	}
+
+	wg.Wait()
+	buf.Close()
+
+	// Drain remaining messages — should not block.
+	drained := 0
+	for {
+		select {
+		case _, ok := <-buf.recv():
+			if !ok {
+				goto done
+			}
+			drained++
+		default:
+			goto done
+		}
+	}
+done:
+	assert.Greater(t, drained, 0, "should have some messages remaining after concurrent sends")
+}

@@ -160,3 +160,39 @@ func TestWaitForApprovalSSE_EmptyTxHashAcceptsAny(t *testing.T) {
 	err := WaitForApprovalSSE(ctx, srv.Client(), srv.URL, userID, "")
 	require.NoError(t, err)
 }
+
+// TestWaitForApprovalSSE_NoEventHeaderExtractsTypeFromPayload verifies that
+// when the server omits the SSE event: field (R14), the consumer extracts the
+// event type from the inner ApprovalCompletedEvent.Type field and still
+// matches the approval event.
+func TestWaitForApprovalSSE_NoEventHeaderExtractsTypeFromPayload(t *testing.T) {
+	const userID = "user-no-header"
+	const txHash = "tx-no-header-001"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		inner := models.ApprovalCompletedEvent{
+			Type:   constants.SSEEventTypeApprovalCompleted,
+			UserID: userID,
+			TxHash: txHash,
+		}
+		innerJSON, err := json.Marshal(inner)
+		require.NoError(t, err)
+		envelope := models.SSEPushPayload{
+			UserID: userID,
+			Event:  innerJSON,
+		}
+		envelopeJSON, err := json.Marshal(envelope)
+		require.NoError(t, err)
+		// No event: field — only data: line. The consumer must extract the
+		// type from the inner payload (R14 fallback).
+		fmt.Fprintf(w, "data: %s\n\n", string(envelopeJSON))
+	}))
+	t.Cleanup(srv.Close)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := WaitForApprovalSSE(ctx, srv.Client(), srv.URL, userID, txHash)
+	require.NoError(t, err)
+}

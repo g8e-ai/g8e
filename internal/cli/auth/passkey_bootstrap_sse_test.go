@@ -4,6 +4,7 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/sse"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -75,6 +77,52 @@ func TestMonitorPasskeyRegistration_SSEEventTriggersRegisteredMsg(t *testing.T) 
 	require.True(t, ok, "expected passkeyRegisteredMsg within timeout")
 	_, isRegistered := msg.(passkeyRegisteredMsg)
 	assert.True(t, isRegistered, "expected passkeyRegisteredMsg, got %T", msg)
+}
+
+// TestMonitorPasskeyRegistration_NoEventHeaderExtractsTypeFromPayload verifies
+// that when the server omits the SSE event: field (R14), the consumer extracts
+// the event type from the inner SSEPushPayload.Event.type field and still
+// triggers the passkeyRegisteredMsg.
+func TestMonitorPasskeyRegistration_NoEventHeaderExtractsTypeFromPayload(t *testing.T) {
+	fileSvc, cfg := newAuthTestEnv(t)
+	writeTestCLICert(t, fileSvc, cfg)
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher, ok := w.(http.Flusher)
+		require.True(t, ok, "ResponseWriter must support flushing")
+		// Build an SSEPushPayload envelope wrapping an inner event with
+		// type "passkey.registered" but send it without the event: header.
+		innerJSON, err := json.Marshal(map[string]string{"type": "passkey.registered"})
+		require.NoError(t, err)
+		envelope := models.SSEPushPayload{
+			CliSessionID: "test-session",
+			Event:        innerJSON,
+		}
+		envelopeJSON, err := json.Marshal(envelope)
+		require.NoError(t, err)
+		fmt.Fprintf(w, "data: %s\n\n", string(envelopeJSON))
+		flusher.Flush()
+		<-r.Context().Done()
+	}
+	server := startTLSEnrollServer(t, cfg, handler)
+
+	sseURL := fmt.Sprintf("%s/sse?cli_session_id=test-session&since_id=1", server.URL)
+	httpClient, err := BuildMTLSClient(fileSvc, cfg, 0)
+	require.NoError(t, err)
+	sseClient := sse.NewClient(sseURL, httpClient)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	sender := newMockProgramSender()
+	go monitorPasskeyRegistration(ctx, sseClient, sender)
+
+	msg, ok := sender.waitForMsg(3 * time.Second)
+	require.True(t, ok, "expected passkeyRegisteredMsg within timeout")
+	_, isRegistered := msg.(passkeyRegisteredMsg)
+	assert.True(t, isRegistered, "expected passkeyRegisteredMsg from no-event-header payload, got %T", msg)
 }
 
 func TestMonitorPasskeyRegistration_TimeoutSendsEnrollErrMsg(t *testing.T) {

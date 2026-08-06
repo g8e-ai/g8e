@@ -1256,3 +1256,259 @@ func TestSSEPushPayload_EmptyEvent(t *testing.T) {
 	// json.RawMessage for a nil field unmarshals to the bytes "null"
 	assert.Equal(t, "null", string(decoded.Event))
 }
+
+// ---------------------------------------------------------------------------
+// R15 regression: no persistence on authorization failure
+// ---------------------------------------------------------------------------
+
+func TestHandleInternalSSEPush_AuthFailureDoesNotPersistEvent(t *testing.T) {
+	h, _, _ := setupTestHTTPHandler(t)
+	opID := "op-no-persist"
+	opSessID := "opsess-no-persist"
+	userID := "user-no-persist"
+	cliSessionID := "cli-no-persist"
+
+	seedOperatorDoc(t, h, opID, userID, opSessID)
+	seedCLISessionDoc(t, h, cliSessionID, userID, opSessID)
+
+	// Use a mismatched app identity so authorization fails with 403.
+	cert := makeTestAppCert(t, []string{"spiffe://g8e.local/app/wrong-opsess"})
+	body := fmt.Sprintf(`{"cli_session_id":"%s","event":{"type":"should_not_persist"}}`, cliSessionID)
+	req := makeTLSRequest(http.MethodPost, "/api/v1/sse/push", body, cert)
+	rr := httptest.NewRecorder()
+	h.sseController.handleInternalSSEPush(rr, req)
+	assert.Equal(t, http.StatusForbidden, rr.Code)
+
+	// R15: the event must NOT be persisted in the DB.
+	route := SSERoute{CLISessionID: cliSessionID}
+	count, err := h.dataController.sseStore.SSEEventsCount()
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), count, "no events should be persisted after auth failure")
+
+	rows, err := h.dataController.sseStore.SSEEventsListSince(route, 0, 10)
+	require.NoError(t, err)
+	assert.Empty(t, rows, "no rows should be retrievable for the route after auth failure")
+}
+
+// ---------------------------------------------------------------------------
+// R14 regression: stream emits id: and data: only, no event: field
+// ---------------------------------------------------------------------------
+
+func TestHandleInternalSSEStream_ReplayEmitsNoEventField(t *testing.T) {
+	h, _, _ := setupTestHTTPHandler(t)
+	opSessID := "opsess-no-event-field"
+	userID := "user-no-event-field"
+	cliSessionID := "cli-no-event-field"
+	seedCLISessionDoc(t, h, cliSessionID, userID, opSessID)
+
+	route := SSERoute{CLISessionID: cliSessionID}
+	_, err := h.dataController.sseStore.SSEEventsAppend(route, "test_type", `{"event":{"type":"test_type"}}`, "app1")
+	require.NoError(t, err)
+
+	rows, err := h.dataController.sseStore.SSEEventsListSince(route, 0, 10)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	eventID := rows[0].ID
+
+	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, opSessID)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream?cli_session_id="+cliSessionID, nil).WithContext(ctx)
+	rr := httptest.NewRecorder()
+
+	streamCtx, cancel := context.WithCancel(ctx)
+	req = req.WithContext(streamCtx)
+
+	done := make(chan struct{})
+	go func() {
+		h.sseController.handleInternalSSEStream(rr, req)
+		close(done)
+	}()
+
+	time.Sleep(150 * time.Millisecond)
+	cancel()
+	<-done
+
+	body := rr.Body.String()
+	assert.Contains(t, body, fmt.Sprintf("id: %d", eventID))
+	assert.Contains(t, body, "data: ")
+	// R14: no SSE "event:" field should be present at the start of any line.
+	// The JSON payload may contain "event": as a key, so we check for the SSE
+	// field prefix specifically (line starts with "event:").
+	for _, line := range strings.Split(body, "\n") {
+		assert.False(t, strings.HasPrefix(line, "event:"), "stream should not emit SSE event: field, found: %s", line)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// R1/R2 regression: duplicate suppression by lastEmittedID
+// ---------------------------------------------------------------------------
+
+func TestHandleInternalSSEStream_DuplicatePubSubEventSuppressed(t *testing.T) {
+	h, _, _ := setupTestHTTPHandler(t)
+	opSessID := "opsess-dedup"
+	userID := "user-dedup"
+	cliSessionID := "cli-dedup"
+	seedCLISessionDoc(t, h, cliSessionID, userID, opSessID)
+
+	route := SSERoute{CLISessionID: cliSessionID}
+	// Insert two events: event1 (ID 1) and event2 (ID 2).
+	_, err := h.dataController.sseStore.SSEEventsAppend(route, "event1_type", `{"event":{"type":"event1_type"}}`, "app1")
+	require.NoError(t, err)
+	_, err = h.dataController.sseStore.SSEEventsAppend(route, "event2_type", `{"event":{"type":"event2_type"}}`, "app1")
+	require.NoError(t, err)
+
+	rows, err := h.dataController.sseStore.SSEEventsListSince(route, 0, 10)
+	require.NoError(t, err)
+	require.Len(t, rows, 2)
+	event2ID := rows[1].ID
+
+	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, opSessID)
+	// Last-Event-ID=event1.ID so replay returns only event2 and sets lastEmittedID=event2.ID.
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream?cli_session_id="+cliSessionID, nil).WithContext(ctx)
+	req.Header.Set("Last-Event-ID", fmt.Sprintf("%d", rows[0].ID))
+	rr := httptest.NewRecorder()
+
+	streamCtx, cancel := context.WithCancel(ctx)
+	req = req.WithContext(streamCtx)
+
+	done := make(chan struct{})
+	go func() {
+		h.sseController.handleInternalSSEStream(rr, req)
+		close(done)
+	}()
+
+	// Wait for replay to complete (event2 is replayed, lastEmittedID = event2ID).
+	time.Sleep(100 * time.Millisecond)
+
+	// Publish a duplicate event with the same ID as the replayed row.
+	// The stream handler should suppress it via lastEmittedID dedup.
+	dupPayload := `{"event":{"type":"event2_type"}}`
+	dupEvent := models.SSEPublishedEvent{ID: event2ID, Payload: json.RawMessage(dupPayload)}
+	dupJSON, err := json.Marshal(dupEvent)
+	require.NoError(t, err)
+	h.pubsub.Publish("sse:cli:"+cliSessionID, dupJSON)
+
+	// Also publish a new event with a higher ID — should be delivered.
+	newPayload := `{"event":{"type":"live_type"}}`
+	newEvent := models.SSEPublishedEvent{ID: event2ID + 1, Payload: json.RawMessage(newPayload)}
+	newJSON, err := json.Marshal(newEvent)
+	require.NoError(t, err)
+	h.pubsub.Publish("sse:cli:"+cliSessionID, newJSON)
+
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	<-done
+
+	body := rr.Body.String()
+	// event2_type should appear exactly once (via replay, not via pub/sub duplicate).
+	count := strings.Count(body, "event2_type")
+	assert.Equal(t, 1, count, "event2_type should appear exactly once (duplicate suppressed), got %d\nbody: %s", count, body)
+	// The new live event should be delivered.
+	assert.Contains(t, body, "live_type")
+}
+
+// ---------------------------------------------------------------------------
+// R3 regression: write error terminates stream goroutine
+// ---------------------------------------------------------------------------
+
+func TestHandleInternalSSEStream_WriteErrorTerminatesGoroutine(t *testing.T) {
+	h, _, _ := setupTestHTTPHandler(t)
+	opSessID := "opsess-write-err"
+	userID := "user-write-err"
+	cliSessionID := "cli-write-err"
+	seedCLISessionDoc(t, h, cliSessionID, userID, opSessID)
+
+	route := SSERoute{CLISessionID: cliSessionID}
+	_, err := h.dataController.sseStore.SSEEventsAppend(route, "test_type", `{"event":{"type":"test_type"}}`, "app1")
+	require.NoError(t, err)
+
+	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, opSessID)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream?cli_session_id="+cliSessionID, nil).WithContext(ctx)
+	// Set Last-Event-ID to 0 so replay is triggered.
+	req.Header.Set("Last-Event-ID", "0")
+
+	// errorWriter always returns an error on Write to simulate a broken pipe.
+	ew := &errorWriter{header: make(http.Header)}
+	streamCtx, cancel := context.WithCancel(ctx)
+	req = req.WithContext(streamCtx)
+
+	done := make(chan struct{})
+	go func() {
+		h.sseController.handleInternalSSEStream(ew, req)
+		close(done)
+	}()
+
+	// The handler should return quickly because the first Fprintf fails.
+	select {
+	case <-done:
+		// Success: goroutine terminated on write error.
+	case <-time.After(2 * time.Second):
+		cancel()
+		t.Fatal("stream goroutine did not terminate within 2s after write error")
+	}
+	cancel()
+	<-done
+}
+
+// errorWriter implements http.ResponseWriter but always returns an error on Write.
+// It also implements http.Flusher as a no-op so the SSE handler can proceed.
+type errorWriter struct {
+	header http.Header
+}
+
+func (w *errorWriter) Header() http.Header {
+	if w.header == nil {
+		w.header = make(http.Header)
+	}
+	return w.header
+}
+
+func (w *errorWriter) Write([]byte) (int, error) {
+	return 0, fmt.Errorf("broken pipe: simulated write error")
+}
+
+func (w *errorWriter) WriteHeader(int) {}
+
+func (w *errorWriter) Flush() {}
+
+// ---------------------------------------------------------------------------
+// R6 regression: truncation sentinel when replay hits the limit
+// ---------------------------------------------------------------------------
+
+func TestHandleInternalSSEStream_TruncationSentinelOnFullReplay(t *testing.T) {
+	h, _, _ := setupTestHTTPHandler(t)
+	opSessID := "opsess-truncation"
+	userID := "user-truncation"
+	cliSessionID := "cli-truncation"
+	seedCLISessionDoc(t, h, cliSessionID, userID, opSessID)
+
+	route := SSERoute{CLISessionID: cliSessionID}
+	// Insert exactly 1000 events to trigger the truncation sentinel.
+	for i := 0; i < 1000; i++ {
+		_, err := h.dataController.sseStore.SSEEventsAppend(route, "trunc_type", `{"event":{"type":"trunc_type"}}`, "app1")
+		require.NoError(t, err)
+	}
+
+	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, opSessID)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream?cli_session_id="+cliSessionID, nil).WithContext(ctx)
+	req.Header.Set("Last-Event-ID", "0")
+	rr := httptest.NewRecorder()
+
+	streamCtx, cancel := context.WithCancel(ctx)
+	req = req.WithContext(streamCtx)
+
+	done := make(chan struct{})
+	go func() {
+		h.sseController.handleInternalSSEStream(rr, req)
+		close(done)
+	}()
+
+	// Allow time for the 1000-row replay + sentinel to be written.
+	time.Sleep(500 * time.Millisecond)
+	cancel()
+	<-done
+
+	body := rr.Body.String()
+	// R6: the truncation sentinel must be present.
+	assert.Contains(t, body, `"type":"truncated"`)
+	assert.Contains(t, body, `"limit":1000`)
+}

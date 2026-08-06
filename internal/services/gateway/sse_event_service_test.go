@@ -594,4 +594,25 @@ func TestSSEEventService_EventDataIntegrity(t *testing.T) {
 			lastID = currentID
 		}
 	})
+
+	t.Run("SSEEventsAppend returns sequential row IDs", func(t *testing.T) {
+		sseSvc := setupSSEEventServiceTest(t)
+		route := SSERoute{WebSessionID: "web-session-seq-ids"}
+
+		var prevID int64 = 0
+		for i := 0; i < 5; i++ {
+			id, err := sseSvc.SSEEventsAppend(route, "event", `{"data":"value"}`, "producer")
+			require.NoError(t, err)
+			assert.Greater(t, id, prevID, "returned row ID should be greater than previous")
+			prevID = id
+		}
+
+		// Verify the returned IDs match the DB row IDs.
+		events, err := sseSvc.SSEEventsListSince(route, 0, 10)
+		require.NoError(t, err)
+		require.Len(t, events, 5)
+		for i, row := range events {
+			assert.Equal(t, int64(i+1), row.ID, "DB row ID should be sequential starting at 1")
+		}
+	})
 }
