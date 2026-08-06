@@ -372,6 +372,14 @@ func (g *GatewayService) handleMCPSSE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// http.Server.WriteTimeout is an absolute deadline from the first response
+	// write, not an idle-between-writes timeout. Without clearing it the server
+	// closes this SSE stream 30s in regardless of the keepalive heartbeat below.
+	rc := http.NewResponseController(w)
+	if err := rc.SetWriteDeadline(time.Time{}); err != nil {
+		g.logger.Warn("mcp_endpoint: failed to clear WriteTimeout, SSE stream may be killed by server deadline", "error", err)
+	}
+
 	// Send initial SSE event to confirm connection
 	fmt.Fprintf(w, "event: connected\ndata: {\"status\":\"connected\"}\n\n")
 	flusher.Flush()

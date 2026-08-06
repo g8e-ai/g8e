@@ -535,6 +535,17 @@ func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// http.Server.WriteTimeout is an absolute deadline measured from the first
+	// response write, not an idle-between-writes timeout. Left in place, it
+	// closes the connection 30s into the stream regardless of heartbeats,
+	// producing the connect→30s→disconnect→3s→reconnect cycle seen in the
+	// operator log. Clear it for this long-lived stream; the heartbeat loop
+	// below handles liveness and r.Context() handles cancellation.
+	rc := http.NewResponseController(w)
+	if err := rc.SetWriteDeadline(time.Time{}); err != nil {
+		c.logger.Warn("SSE Stream: failed to clear WriteTimeout, stream may be killed by server deadline", "channel", channel, "error", err)
+	}
+
 	// Subscribe to real-time events FIRST to avoid missing any during replay.
 	// The pub/sub payload is a models.SSEPublishedEvent JSON envelope carrying
 	// the DB row ID, which the live loop uses to deduplicate against replayed
