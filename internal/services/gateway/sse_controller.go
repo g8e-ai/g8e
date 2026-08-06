@@ -574,7 +574,12 @@ func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.R
 			// has a signal that a gap occurred, rather than silently swallowing
 			// the error and proceeding to the live loop.
 			c.logger.Error("SSE Stream: replay failed", "channel", channel, "error", err)
-			if _, wErr := fmt.Fprintf(w, "data: {\"type\":\"error\",\"reason\":\"replay_failed\"}\n\n"); wErr != nil {
+			sentinel, mErr := json.Marshal(models.SSEErrorEvent{Type: "error", Reason: "replay_failed"})
+			if mErr != nil {
+				c.logger.Error("SSE Stream: failed to marshal replay-error sentinel", "channel", channel, "error", mErr)
+				return
+			}
+			if _, wErr := fmt.Fprintf(w, "data: %s\n\n", sentinel); wErr != nil {
 				c.logger.Info("SSE Stream: write error during replay sentinel, disconnecting", "channel", channel, "error", wErr)
 				return
 			}
@@ -595,7 +600,12 @@ func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.R
 			// more backlog. Emit a sentinel so the client can decide to
 			// reconnect with a higher since_id.
 			if len(rows) == 1000 {
-				if _, wErr := fmt.Fprintf(w, "data: {\"type\":\"truncated\",\"since_id\":%d,\"limit\":1000}\n\n", lastEmittedID); wErr != nil {
+				truncSentinel, mErr := json.Marshal(models.SSETruncationEvent{Type: "truncated", SinceID: lastEmittedID, Limit: 1000})
+				if mErr != nil {
+					c.logger.Error("SSE Stream: failed to marshal truncation sentinel", "channel", channel, "error", mErr)
+					return
+				}
+				if _, wErr := fmt.Fprintf(w, "data: %s\n\n", truncSentinel); wErr != nil {
 					c.logger.Info("SSE Stream: write error during truncation sentinel, disconnecting", "channel", channel, "error", wErr)
 					return
 				}

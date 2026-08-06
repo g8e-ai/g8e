@@ -239,7 +239,7 @@ func TestRun(t *testing.T) {
 	})
 }
 
-func TestParseSSEStream_IDAndRetry(t *testing.T) {
+func TestParseSSEStream_IDLine(t *testing.T) {
 	t.Run("parses id line and updates client lastEventID", func(t *testing.T) {
 		input := "id: 42\ndata: hello\n\n"
 		c := NewClient("http://localhost", nil)
@@ -249,23 +249,13 @@ func TestParseSSEStream_IDAndRetry(t *testing.T) {
 		assert.Equal(t, int64(42), c.lastEventID, "lastEventID should be set from id: line")
 	})
 
-	t.Run("parses retry line and updates client retryDelay", func(t *testing.T) {
-		input := "retry: 5000\ndata: hello\n\n"
-		c := NewClient("http://localhost", nil)
-
-		err := parseSSEStream(context.Background(), strings.NewReader(input), func(eventType, data string) {}, c)
-		require.NoError(t, err)
-		assert.Equal(t, 5*time.Second, c.retryDelay, "retryDelay should be set from retry: line")
-	})
-
-	t.Run("ignores invalid id and retry values", func(t *testing.T) {
-		input := "id: notanumber\nretry: alsoNaN\ndata: hello\n\n"
+	t.Run("ignores invalid id value", func(t *testing.T) {
+		input := "id: notanumber\ndata: hello\n\n"
 		c := NewClient("http://localhost", nil)
 
 		err := parseSSEStream(context.Background(), strings.NewReader(input), func(eventType, data string) {}, c)
 		require.NoError(t, err)
 		assert.Equal(t, int64(0), c.lastEventID, "lastEventID should remain 0 on invalid id")
-		assert.Equal(t, time.Duration(0), c.retryDelay, "retryDelay should remain 0 on invalid retry")
 	})
 }
 

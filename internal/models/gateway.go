@@ -212,6 +212,23 @@ type SSEPublishedEvent struct {
 	Payload json.RawMessage `json:"payload"`
 }
 
+// SSEErrorEvent is the sentinel payload emitted on the SSE stream when a
+// replay query fails, signaling a gap to the client so it can react rather
+// than silently missing backlog.
+type SSEErrorEvent struct {
+	Type   string `json:"type"`
+	Reason string `json:"reason"`
+}
+
+// SSETruncationEvent is the sentinel payload emitted on the SSE stream when
+// a replay hits the row limit, signaling that more backlog may exist beyond
+// the returned window.
+type SSETruncationEvent struct {
+	Type    string `json:"type"`
+	SinceID int64  `json:"since_id"`
+	Limit   int    `json:"limit"`
+}
+
 // SSEPushResponse is the typed response for POST /api/internal/sse/push.
 type SSEPushResponse struct {
 	Success   bool `json:"success"`

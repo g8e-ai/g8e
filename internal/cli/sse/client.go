@@ -39,11 +39,10 @@ type EventHandler func(eventType, data string)
 // Client is a reusable SSE client that connects to an SSE endpoint,
 // parses frames, and dispatches events to a handler.
 type Client struct {
-	url          string
-	headers      map[string]string
-	client       *http.Client
-	lastEventID  int64
-	retryDelay   time.Duration
+	url         string
+	headers     map[string]string
+	client      *http.Client
+	lastEventID int64
 }
 
 // NewClient creates an SSE client. The http.Client should be configured with
@@ -83,9 +82,23 @@ func (c *Client) Run(ctx context.Context, handler EventHandler) {
 		default:
 		}
 
-		err := c.ConnectOnce(ctx, handler)
+		// R13: reset the backoff attempt counter once a connection is
+		// established and delivering events, so a transient drop after a
+		// healthy session does not inherit the accumulated backoff. The
+		// wrapper runs synchronously inside ConnectOnce (parseSSEStream),
+		// so received is read only after ConnectOnce returns — no race.
+		received := false
+		wrapped := func(eventType, data string) {
+			received = true
+			handler(eventType, data)
+		}
+
+		err := c.ConnectOnce(ctx, wrapped)
 		if err == nil {
 			return
+		}
+		if received {
+			attempt = 0
 		}
 
 		// R13: exponential backoff with jitter, capped at 30s.
@@ -152,9 +165,9 @@ func (c *Client) ConnectOnce(ctx context.Context, handler EventHandler) error {
 }
 
 // parseSSEStream reads SSE frames from the reader and dispatches events to
-// the handler. It parses id:, retry:, event:, and data: lines per the SSE
-// spec. The lastEventID field on Client is updated when an id: line is
-// encountered so that subsequent reconnects can send Last-Event-ID.
+// the handler. It parses id:, event:, and data: lines per the SSE spec. The
+// lastEventID field on Client is updated when an id: line is encountered so
+// that subsequent reconnects can send Last-Event-ID.
 func parseSSEStream(ctx context.Context, r io.Reader, handler EventHandler, c *Client) error {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -181,14 +194,6 @@ func parseSSEStream(ctx context.Context, r io.Reader, handler EventHandler, c *C
 					c.lastEventID = id
 				}
 			}
-		} else if strings.HasPrefix(line, "retry: ") {
-			// R11: parse retry: line to track server-suggested reconnect delay.
-			retryStr := strings.TrimPrefix(line, "retry: ")
-			if ms, err := strconv.ParseInt(retryStr, 10, 64); err == nil {
-				if c != nil {
-					c.retryDelay = time.Duration(ms) * time.Millisecond
-				}
-			}
 		} else if strings.HasPrefix(line, "event: ") {
 			eventType = strings.TrimPrefix(line, "event: ")
 		} else if strings.HasPrefix(line, "data: ") {
@@ -212,8 +217,8 @@ func parseSSEStream(ctx context.Context, r io.Reader, handler EventHandler, c *C
 // rand source to avoid the global lock contention of math/rand's top-level
 // functions.
 var (
-	randMu   sync.Mutex
-	randSrc  = rand.NewSource(time.Now().UnixNano())
+	randMu  sync.Mutex
+	randSrc = rand.NewSource(time.Now().UnixNano())
 )
 
 func randFloat() float64 {
