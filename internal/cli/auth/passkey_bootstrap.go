@@ -28,6 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/cli/sse"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
@@ -196,7 +197,20 @@ func VerifyPasskeyRegistration(fileSvc fs.RuntimeFileService, cfg *config.Config
 // registration event, it sends enrollErrMsg with ErrPasskeySSEStreamClosed.
 func monitorPasskeyRegistration(ctx context.Context, sseClient *sse.Client, sender programSender) {
 	sseClient.Run(ctx, func(eventType, data string) {
-		if eventType == "passkey.registered" {
+		// When the server omits the event: field (R14), eventType is empty.
+		// Extract the type from the inner payload (SSEPushPayload.Event.type).
+		innerType := eventType
+		if innerType == "" {
+			var envelope models.SSEPushPayload
+			if err := json.Unmarshal([]byte(data), &envelope); err == nil {
+				var inner struct {
+					Type string `json:"type"`
+				}
+				_ = json.Unmarshal(envelope.Event, &inner)
+				innerType = inner.Type
+			}
+		}
+		if innerType == "passkey.registered" {
 			sender.Send(passkeyRegisteredMsg{})
 		}
 	})

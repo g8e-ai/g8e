@@ -359,15 +359,21 @@ func (c *Client) WaitForHumanApproval(ctx context.Context, p Persona, txHash, us
 	go func() {
 		defer close(done)
 		sseClient.Run(waitCtx, func(eventType, data string) {
-			if eventType != constants.SSEEventTypeApprovalCompleted {
-				return
-			}
 			var envelope models.SSEPushPayload
 			if err := json.Unmarshal([]byte(data), &envelope); err != nil {
 				return
 			}
 			var event models.ApprovalCompletedEvent
 			if err := json.Unmarshal(envelope.Event, &event); err != nil {
+				return
+			}
+			// When the server omits the event: field (R14), eventType is empty.
+			// Extract the type from the inner payload instead.
+			innerType := eventType
+			if innerType == "" {
+				innerType = event.Type
+			}
+			if innerType != constants.SSEEventTypeApprovalCompleted {
 				return
 			}
 			if event.TxHash != txHash {

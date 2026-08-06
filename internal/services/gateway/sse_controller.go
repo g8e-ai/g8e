@@ -536,7 +536,7 @@ func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.R
 		rows, err := c.sseStore.SSEEventsListSince(route, sinceID, 1000)
 		if err == nil {
 			for _, row := range rows {
-				fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", row.ID, row.EventType, row.Payload)
+				fmt.Fprintf(w, "id: %d\ndata: %s\n\n", row.ID, row.Payload)
 			}
 			flusher.Flush()
 		}
@@ -560,15 +560,7 @@ func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.R
 		case raw := <-eventCh:
 			var p models.SSEPushPayload
 			if err := json.Unmarshal(raw, &p); err == nil {
-				var inner struct {
-					Type string `json:"type"`
-				}
-				_ = json.Unmarshal(p.Event, &inner)
-				if inner.Type == "" {
-					inner.Type = string(constants.SystemHealthUnknown)
-				}
-
-				fmt.Fprintf(w, "event: %s\ndata: %s\n\n", inner.Type, string(raw))
+				fmt.Fprintf(w, "data: %s\n\n", string(raw))
 				flusher.Flush()
 			}
 		}

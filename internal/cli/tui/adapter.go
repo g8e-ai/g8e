@@ -25,6 +25,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/sse"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 )
 
 // Adapter bridges external event sources to bubbletea messages.
@@ -119,7 +120,10 @@ func (a *Adapter) Run(ctx context.Context) {
 
 // translateSSEEvent maps an SSE event_type + data payload to a tea.Msg.
 // The SSE event types are free-form strings; this function maps known
-// patterns to the appropriate TUI message types.
+// patterns to the appropriate TUI message types. When the server omits the
+// event: field (R14), eventType is empty and the type is extracted from the
+// data payload. The data may be a direct sseEvent JSON or a SSEPushPayload
+// envelope wrapping the inner event JSON.
 func translateSSEEvent(eventType, data string) tea.Msg {
 	var raw sseEvent
 	if err := json.Unmarshal([]byte(data), &raw); err != nil {
@@ -131,15 +135,36 @@ func translateSSEEvent(eventType, data string) tea.Msg {
 		innerType = eventType
 	}
 
+	// When both the SSE event: field and the top-level JSON type are empty,
+	// the data is likely a SSEPushPayload envelope. Extract the inner event
+	// JSON and parse it for the type and payload.
+	var innerPayload json.RawMessage
+	if innerType == "" && raw.Payload == nil {
+		var envelope models.SSEPushPayload
+		if err := json.Unmarshal([]byte(data), &envelope); err == nil && len(envelope.Event) > 0 {
+			var inner sseEvent
+			if err := json.Unmarshal(envelope.Event, &inner); err == nil {
+				innerType = inner.Type
+				innerPayload = inner.Payload
+			}
+		}
+	} else {
+		innerPayload = raw.Payload
+	}
+
+	if innerType == "" {
+		innerType = "unknown"
+	}
+
 	switch {
 	case strings.HasPrefix(innerType, "pipeline."):
-		return parsePipelineEvent(raw.Payload)
+		return parsePipelineEvent(innerPayload)
 	case strings.HasPrefix(innerType, "ledger."):
-		return parseLedgerEvent(raw.Payload)
+		return parseLedgerEvent(innerPayload)
 	case strings.HasPrefix(innerType, "consensus."):
-		return parseConsensusEvent(raw.Payload)
+		return parseConsensusEvent(innerPayload)
 	default:
-		return LedgerMsg{Level: LevelInfo, Message: innerType + ": " + string(raw.Payload), Time: timeNow()}
+		return LedgerMsg{Level: LevelInfo, Message: innerType + ": " + string(innerPayload), Time: timeNow()}
 	}
 }
 
