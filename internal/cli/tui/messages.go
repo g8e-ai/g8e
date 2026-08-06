@@ -35,7 +35,7 @@ func (s PipelineStage) String() string {
 	case StageL1:
 		return "L1: Technical Bedrock"
 	case StageL2:
-		return "L2: Consensus Consensus"
+		return "L2: Consensus"
 	case StageL3:
 		return "L3: Notary"
 	case StageL4:

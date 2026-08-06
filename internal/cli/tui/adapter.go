@@ -28,12 +28,19 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 )
 
+// messageSender abstracts the Send method of tea.Program so tests can
+// capture messages without a real bubbletea program.
+type messageSender interface {
+	Send(msg tea.Msg)
+}
+
 // Adapter bridges external event sources to bubbletea messages.
 // It does not modify production code — it subscribes to existing event
 // sources and translates them into tea.Msg values.
 type Adapter struct {
+	sseURL    string
 	sseClient *sse.Client
-	program   *tea.Program
+	sender    messageSender
 }
 
 // sseEvent is the top-level envelope for SSE event data.
@@ -67,6 +74,9 @@ type consensusPayload struct {
 	Hash     string `json:"hash"`
 }
 
+// reconnectBackoff is the fixed delay between SSE reconnection attempts.
+const reconnectBackoff = 3 * time.Second
+
 // NewAdapter creates an Adapter that connects to the gateway's SSE stream.
 func NewAdapter(sseURL, token string, program *tea.Program, client *http.Client) *Adapter {
 	c := sse.NewClient(sseURL, client)
@@ -74,8 +84,9 @@ func NewAdapter(sseURL, token string, program *tea.Program, client *http.Client)
 		c.SetHeader("Authorization", "Bearer "+token)
 	}
 	return &Adapter{
+		sseURL:    sseURL,
 		sseClient: c,
-		program:   program,
+		sender:    program,
 	}
 }
 
@@ -83,11 +94,10 @@ func NewAdapter(sseURL, token string, program *tea.Program, client *http.Client)
 // translates events into tea.Msg values until the context is cancelled.
 // It emits ConnStatusMsg to keep the TUI informed about connection state.
 func (a *Adapter) Run(ctx context.Context) {
-	if a.sseClient == nil || a.program == nil {
+	if a.sseURL == "" {
 		return
 	}
-
-	a.program.Send(ConnStatusMsg{Status: ConnConnecting})
+	a.sender.Send(ConnStatusMsg{Status: ConnConnecting})
 
 	for {
 		select {
@@ -96,25 +106,30 @@ func (a *Adapter) Run(ctx context.Context) {
 		default:
 		}
 
+		connected := false
 		err := a.sseClient.ConnectOnce(ctx, func(eventType, data string) {
+			if !connected {
+				a.sender.Send(ConnStatusMsg{Status: ConnConnected})
+				connected = true
+			}
 			msg := translateSSEEvent(eventType, data)
 			if msg != nil {
-				a.program.Send(msg)
+				a.sender.Send(msg)
 			}
 		})
 		if err == nil {
 			return
 		}
 
-		a.program.Send(ConnStatusMsg{Status: ConnReconnecting, Detail: err.Error()})
+		a.sender.Send(ConnStatusMsg{Status: ConnReconnecting, Detail: err.Error()})
 
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(3 * time.Second):
+		case <-time.After(reconnectBackoff):
 		}
 
-		a.program.Send(ConnStatusMsg{Status: ConnConnecting})
+		a.sender.Send(ConnStatusMsg{Status: ConnConnecting})
 	}
 }
 

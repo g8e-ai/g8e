@@ -14,14 +14,20 @@
 package tui
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/cli/sse"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 )
@@ -334,7 +340,7 @@ func TestAdapterNewAdapter(t *testing.T) {
 	t.Run("creates adapter with nil client default", func(t *testing.T) {
 		a := NewAdapter("http://localhost:8080/sse", "token", nil, nil)
 		assert.NotNil(t, a.sseClient)
-		assert.Nil(t, a.program)
+		assert.Nil(t, a.sender)
 	})
 
 	t.Run("creates adapter with provided http client", func(t *testing.T) {
@@ -355,4 +361,84 @@ func TestAdapterRunEmptyURL(t *testing.T) {
 	case <-time.After(1 * time.Second):
 		t.Fatal("adapter.Run with empty URL should return immediately")
 	}
+}
+
+// mockSender captures tea.Msg values sent by the adapter for test assertions.
+type mockSender struct {
+	mu       sync.Mutex
+	messages []tea.Msg
+}
+
+func (m *mockSender) Send(msg tea.Msg) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.messages = append(m.messages, msg)
+}
+
+func (m *mockSender) snapshot() []tea.Msg {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]tea.Msg, len(m.messages))
+	copy(out, m.messages)
+	return out
+}
+
+// newAdapterWithSender constructs an Adapter wired to a mock sender for tests.
+func newAdapterWithSender(sseURL string, sender messageSender) *Adapter {
+	c := sse.NewClient(sseURL, nil)
+	return &Adapter{
+		sseURL:    sseURL,
+		sseClient: c,
+		sender:    sender,
+	}
+}
+
+func TestAdapterRun_EmitsConnConnectedOnFirstEvent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprintf(w, "data: {\"type\":\"ledger.entry\",\"payload\":{\"level\":\"info\",\"message\":\"hello\"}}\n\n")
+	}))
+	defer srv.Close()
+
+	sender := &mockSender{}
+	a := newAdapterWithSender(srv.URL, sender)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		a.Run(ctx)
+		close(done)
+	}()
+
+	require.Eventually(t, func() bool {
+		msgs := sender.snapshot()
+		for _, m := range msgs {
+			if cs, ok := m.(ConnStatusMsg); ok && cs.Status == ConnConnected {
+				return true
+			}
+		}
+		return false
+	}, 3*time.Second, 50*time.Millisecond, "adapter never emitted ConnConnected")
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("adapter.Run did not return after context cancellation")
+	}
+
+	msgs := sender.snapshot()
+	var connecting, connected bool
+	for _, m := range msgs {
+		if cs, ok := m.(ConnStatusMsg); ok {
+			if cs.Status == ConnConnecting {
+				connecting = true
+			}
+			if cs.Status == ConnConnected {
+				connected = true
+			}
+		}
+	}
+	assert.True(t, connecting, "expected ConnConnecting before ConnConnected")
+	assert.True(t, connected, "expected ConnConnected after first event")
 }

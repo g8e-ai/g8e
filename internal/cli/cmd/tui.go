@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -112,12 +113,14 @@ func runTUI(cmd *cobra.Command, args []string, deps tuiDeps) error {
 	}
 
 	// Construct the SSE stream URL.
-	baseURL := cfg.OperatorHTTPURL()
-	sseURL := baseURL + constants.APIPaths.SSEStream + "?cli_session_id=" + creds.CLISessionID
+	sseURL := cfg.OperatorHTTPURL() + constants.APIPaths.SSEStream
+	q := url.Values{}
+	q.Set("cli_session_id", creds.CLISessionID)
+	sseURL = sseURL + "?" + q.Encode()
 
 	version := cmd.Root().Version
 	if version == "" {
-		version = "dev"
+		version = string(constants.VersionStabilityDev)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

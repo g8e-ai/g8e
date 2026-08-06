@@ -490,8 +490,10 @@ func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.R
 		UserID:       strings.TrimSpace(q.Get("user_id")),
 	}
 	sinceIDStr := q.Get("since_id")
-	if lastEventID := r.Header.Get("Last-Event-ID"); lastEventID != "" {
-		sinceIDStr = lastEventID
+	sinceIDPresent := sinceIDStr != ""
+	lastEventIDHeader := r.Header.Get("Last-Event-ID")
+	if lastEventIDHeader != "" {
+		sinceIDStr = lastEventIDHeader
 	}
 	sinceID, _ := strconv.ParseInt(sinceIDStr, 10, 64)
 
@@ -566,8 +568,15 @@ func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.R
 	// duplicate-delivery race window, F1) is suppressed on the live path.
 	var lastEmittedID int64
 
-	// Replay from DB if sinceID is provided
-	if sinceID > 0 {
+	// Replay from DB. A replay is requested when:
+	//   - Last-Event-ID header is present (replay from that cursor; 0 means
+	//     "from the beginning"),
+	//   - since_id query param is present and > 0,
+	//   - Neither is present (fresh connection; replay full backlog from ID 0).
+	// When since_id=0 is explicitly set without Last-Event-ID, skip replay —
+	// the client is signaling it wants live events only.
+	replayRequested := lastEventIDHeader != "" || !sinceIDPresent || sinceID > 0
+	if replayRequested {
 		rows, err := c.sseStore.SSEEventsListSince(route, sinceID, 1000)
 		if err != nil {
 			// R4: log replay failures and emit an error sentinel so the client
