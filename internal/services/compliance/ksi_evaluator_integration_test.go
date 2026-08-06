@@ -115,7 +115,7 @@ func newIntegrationEvaluatorFixture(t *testing.T) *integrationEvaluatorFixture {
 func (f *integrationEvaluatorFixture) seedEvidence(t *testing.T) {
 	t.Helper()
 
-	require.NoError(t, f.auditStore.CreateSession(integrationSessionID, string(constants.UserRoleOperator), "KSI integration", "test-user"))
+	require.NoError(t, f.auditStore.CreateSession(integrationSessionID, constants.SessionTypeOperator, "KSI integration", "test-user"))
 
 	now := time.Now().UTC()
 	eventID, err := f.auditStore.RecordEvent(&storage.Event{
