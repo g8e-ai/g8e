@@ -338,19 +338,64 @@ func TestParseConsensusEvent(t *testing.T) {
 
 func TestAdapterNewAdapter(t *testing.T) {
 	t.Run("creates adapter with nil client default", func(t *testing.T) {
-		a := NewAdapter("http://localhost:8080/sse", "token", nil, nil)
+		a := NewAdapter("http://localhost:8080/sse", "token", "", nil, nil)
 		assert.NotNil(t, a.sseClient)
 		assert.Nil(t, a.sender)
 	})
 
 	t.Run("creates adapter with provided http client", func(t *testing.T) {
-		a := NewAdapter("url", "", nil, &http.Client{Timeout: 5 * time.Second})
+		a := NewAdapter("url", "", "", nil, &http.Client{Timeout: 5 * time.Second})
 		assert.NotNil(t, a.sseClient)
 	})
 }
 
+// TestAdapterNewAdapter_SetsCLISessionHeader verifies that the CLI session ID
+// passed to NewAdapter is sent as the X-G8E-CLI-Session-ID header on the SSE
+// request. Without this header, the gateway mTLS auth middleware cannot locate
+// the CLI session and returns 401.
+func TestAdapterNewAdapter_SetsCLISessionHeader(t *testing.T) {
+	var mu sync.Mutex
+	var gotHeader string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		gotHeader = r.Header.Get(constants.HeaderCLISessionID)
+		mu.Unlock()
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprintf(w, "data: {\"type\":\"ledger.entry\",\"payload\":{\"level\":\"info\",\"message\":\"hi\"}}\n\n")
+	}))
+	defer srv.Close()
+
+	sender := &mockSender{}
+	a := NewAdapter(srv.URL, "", "cli-sess-123", sender, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		a.Run(ctx)
+		close(done)
+	}()
+
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return gotHeader != ""
+	}, 3*time.Second, 50*time.Millisecond, "SSE request never received the CLI session header")
+
+	mu.Lock()
+	assert.Equal(t, "cli-sess-123", gotHeader, "X-G8E-CLI-Session-ID header must match cliSessionID arg")
+	mu.Unlock()
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("adapter.Run did not return after context cancellation")
+	}
+}
+
 func TestAdapterRunEmptyURL(t *testing.T) {
-	a := NewAdapter("", "", nil, nil)
+	a := NewAdapter("", "", "", nil, nil)
 	done := make(chan struct{})
 	go func() {
 		a.Run(t.Context())

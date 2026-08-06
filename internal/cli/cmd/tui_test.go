@@ -216,6 +216,7 @@ func TestTUI_TUIRunCalledWithCorrectOptions(t *testing.T) {
 		assert.Equal(t, "mTLS", capturedOpts.NetLabel)
 		assert.Contains(t, capturedOpts.SSEURL, constants.APIPaths.SSEStream)
 		assert.Contains(t, capturedOpts.SSEURL, "cli_session_id=cli-sess-test")
+		assert.Equal(t, "cli-sess-test", capturedOpts.CLISessionID, "CLISessionID must be threaded into tui.Options for X-G8E-CLI-Session-ID header")
 		assert.NotNil(t, capturedOpts.HTTPClient)
 	})
 

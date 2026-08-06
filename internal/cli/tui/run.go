@@ -37,7 +37,7 @@ func Run(ctx context.Context, opts Options) error {
 
 	var wg sync.WaitGroup
 	if opts.SSEURL != "" {
-		adapter := NewAdapter(opts.SSEURL, opts.Token, p, opts.HTTPClient)
+		adapter := NewAdapter(opts.SSEURL, opts.Token, opts.CLISessionID, p, opts.HTTPClient)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

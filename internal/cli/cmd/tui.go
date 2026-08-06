@@ -127,10 +127,11 @@ func runTUI(cmd *cobra.Command, args []string, deps tuiDeps) error {
 	defer cancel()
 
 	return deps.tuiRun(ctx, tui.Options{
-		Version:    version,
-		NodeName:   creds.OperatorID,
-		NetLabel:   "mTLS",
-		SSEURL:     sseURL,
-		HTTPClient: httpClient,
+		Version:      version,
+		NodeName:     creds.OperatorID,
+		NetLabel:     "mTLS",
+		SSEURL:       sseURL,
+		CLISessionID: creds.CLISessionID,
+		HTTPClient:   httpClient,
 	})
 }

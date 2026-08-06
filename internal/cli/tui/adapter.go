@@ -78,15 +78,18 @@ type consensusPayload struct {
 const reconnectBackoff = 3 * time.Second
 
 // NewAdapter creates an Adapter that connects to the gateway's SSE stream.
-func NewAdapter(sseURL, token string, program *tea.Program, client *http.Client) *Adapter {
+func NewAdapter(sseURL, token, cliSessionID string, sender messageSender, client *http.Client) *Adapter {
 	c := sse.NewClient(sseURL, client)
 	if token != "" {
 		c.SetHeader("Authorization", "Bearer "+token)
 	}
+	if cliSessionID != "" {
+		c.SetHeader(constants.HeaderCLISessionID, cliSessionID)
+	}
 	return &Adapter{
 		sseURL:    sseURL,
 		sseClient: c,
-		sender:    program,
+		sender:    sender,
 	}
 }
 
