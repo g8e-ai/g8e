@@ -34,7 +34,7 @@ func TestPubSubBackPressure_DropsOldestUnderBurst(t *testing.T) {
 
 	// Create a subscriber with a tiny buffer (capacity 2).
 	sub := &wsSubscriber{
-		send: make(chan []byte, 2),
+		buf:  newDropOldestBuf(2),
 		done: make(chan struct{}),
 	}
 	broker.subscribe("burst-channel", sub)
@@ -53,7 +53,7 @@ func TestPubSubBackPressure_DropsOldestUnderBurst(t *testing.T) {
 	received := make([]string, 0, 2)
 	for {
 		select {
-		case msg := <-sub.send:
+		case msg := <-sub.buf.recv():
 			received = append(received, string(msg))
 		default:
 			goto done
@@ -81,7 +81,7 @@ func TestPubSubBackPressure_ConcurrentPublishersNoDeadlock(t *testing.T) {
 
 	// Subscriber with a small buffer that will fill up quickly.
 	sub := &wsSubscriber{
-		send: make(chan []byte, 4),
+		buf:  newDropOldestBuf(4),
 		done: make(chan struct{}),
 	}
 	broker.subscribe("concurrent-channel", sub)

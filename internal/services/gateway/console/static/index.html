@@ -129,6 +129,7 @@ footer { text-align: center; padding: 16px; color: var(--muted); font-size: 0.75
 <script>
 var user = null, passkeys = [], approvals = [], health = null, bootstrapped = false;
 var auditEs = null, auditConnected = false, auditEvents = [], auditAutoScroll = true, auditFilter = '', auditMaxEvents = 500;
+var auditReconnectAttempt = 0, auditSeenIds = new Set(), auditOpenTimeout = null;
 
 function b64urlToBuf(s) {
   s = s.replace(/-/g,'+').replace(/_/g,'/');
@@ -330,7 +331,7 @@ async function revokePasskey(credId) {
 async function signOut() {
   disconnectAuditStream();
   await api('/api/v1/auth/logout', { method: 'POST' });
-  user = null; passkeys = []; approvals = []; auditEvents = []; render();
+  user = null; passkeys = []; approvals = []; auditEvents = []; auditSeenIds = new Set(); auditReconnectAttempt = 0; render();
 }
 
 function connectAuditStream() {
@@ -345,24 +346,44 @@ function connectAuditStream() {
   }
   var url = '/api/v1/sse/stream' + (params.toString() ? '?' + params.toString() : '');
   auditEs = new EventSource(url);
+  // R8: connection-open timeout guard — if onopen does not fire within 10s,
+  // close the EventSource and trigger reconnect.
+  auditOpenTimeout = setTimeout(function() {
+    if (!auditConnected && auditEs) {
+      auditEs.close();
+      auditEs = null;
+      if (user) scheduleAuditReconnect();
+    }
+  }, 10000);
   auditEs.onopen = function() {
+    if (auditOpenTimeout) { clearTimeout(auditOpenTimeout); auditOpenTimeout = null; }
     auditConnected = true;
+    auditReconnectAttempt = 0;
     updateAuditStatus('connected');
   };
   auditEs.onerror = function() {
+    if (auditOpenTimeout) { clearTimeout(auditOpenTimeout); auditOpenTimeout = null; }
     auditConnected = false;
     updateAuditStatus('disconnected');
     auditEs.close();
     auditEs = null;
-    // Auto-retry after 3s if still logged in
-    if (user) setTimeout(function() { if (user) connectAuditStream(); }, 3000);
+    if (user) scheduleAuditReconnect();
   };
   auditEs.onmessage = function(ev) { handleAuditEvent(ev.data, 'message', ev.lastEventId); };
 }
 
+function scheduleAuditReconnect() {
+  // R7: exponential backoff with jitter, capped at 30s.
+  var delay = Math.min(30000, 1000 * Math.pow(2, auditReconnectAttempt)) + Math.random() * 500;
+  auditReconnectAttempt++;
+  setTimeout(function() { if (user) connectAuditStream(); }, delay);
+}
+
 function disconnectAuditStream() {
+  if (auditOpenTimeout) { clearTimeout(auditOpenTimeout); auditOpenTimeout = null; }
   if (auditEs) { auditEs.close(); auditEs = null; }
   auditConnected = false;
+  auditReconnectAttempt = 0;
   updateAuditStatus('disconnected');
 }
 
@@ -377,6 +398,15 @@ function handleAuditEvent(rawData, fallbackType, lastEventId) {
       payload: innerEvent,
       raw: rawData
     };
+    // R10: client-side dedup — skip events with non-zero IDs already seen.
+    if (entry.id && auditSeenIds.has(entry.id)) return;
+    if (entry.id) {
+      auditSeenIds.add(entry.id);
+      if (auditSeenIds.size > auditMaxEvents) {
+        var it = auditSeenIds.values();
+        auditSeenIds.delete(it.next().value);
+      }
+    }
     auditEvents.push(entry);
     if (auditEvents.length > auditMaxEvents) auditEvents.shift();
     appendAuditEntry(entry);
@@ -432,6 +462,7 @@ function updateAuditStatus(state) {
 
 function clearAuditEvents() {
   auditEvents = [];
+  auditSeenIds = new Set();
   var log = document.getElementById('auditLog');
   if (log) log.innerHTML = '';
   var countEl = document.getElementById('auditCount');
@@ -623,6 +654,15 @@ function render() {
     registerPasskey();
     return;
   }
+
+  // R9: visibility-change reconnect — reconnect when tab refocuses if disconnected.
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible' && !auditConnected && user && !auditEs) {
+      connectAuditStream();
+      var btn = document.getElementById('auditConnectBtn');
+      if (btn) btn.textContent = 'Disconnect';
+    }
+  });
 
   var txHash = hashParams.get('approve');
   if (txHash && user) { approveTransaction(txHash); }

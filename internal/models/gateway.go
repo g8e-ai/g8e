@@ -202,6 +202,16 @@ type SSEEventRow struct {
 	CreatedAt    string `json:"created_at"`
 }
 
+// SSEPublishedEvent is the internal pub/sub envelope for live SSE events.
+// It pairs the persisted DB row ID with the raw event payload JSON so that
+// the stream handler can deduplicate against replayed rows and emit an `id:`
+// field on the live path (fixing the duplicate-delivery race and the
+// missing Last-Event-ID cursor on reconnect).
+type SSEPublishedEvent struct {
+	ID      int64           `json:"id"`
+	Payload json.RawMessage `json:"payload"`
+}
+
 // SSEPushResponse is the typed response for POST /api/internal/sse/push.
 type SSEPushResponse struct {
 	Success   bool `json:"success"`

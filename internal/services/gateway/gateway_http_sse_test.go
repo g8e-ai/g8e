@@ -812,7 +812,7 @@ func TestHandleInternalSSEEvents_Success(t *testing.T) {
 
 	// Push an event first
 	route := SSERoute{CLISessionID: cliSessionID}
-	err := h.dataController.sseStore.SSEEventsAppend(route, "test_event", `{"event":{"type":"test_event"}}`, "test-app")
+	_, err := h.dataController.sseStore.SSEEventsAppend(route, "test_event", `{"event":{"type":"test_event"}}`, "test-app")
 	require.NoError(t, err)
 
 	// Query events with operator mTLS auth
@@ -950,8 +950,10 @@ func TestHandleInternalSSEStream_LastEventIDOverridesSinceID(t *testing.T) {
 
 	// Push two events
 	route := SSERoute{CLISessionID: cliSessionID}
-	require.NoError(t, h.dataController.sseStore.SSEEventsAppend(route, "event1", `{"event":{"type":"event1"}}`, "app1"))
-	require.NoError(t, h.dataController.sseStore.SSEEventsAppend(route, "event2", `{"event":{"type":"event2"}}`, "app1"))
+	_, err := h.dataController.sseStore.SSEEventsAppend(route, "event1", `{"event":{"type":"event1"}}`, "app1")
+	require.NoError(t, err)
+	_, err = h.dataController.sseStore.SSEEventsAppend(route, "event2", `{"event":{"type":"event2"}}`, "app1")
+	require.NoError(t, err)
 
 	// Get all events to find the first event's ID
 	rows, err := h.dataController.sseStore.SSEEventsListSince(route, 0, 100)
@@ -992,8 +994,10 @@ func TestHandleInternalSSEStream_ReplaysEventsFromDB(t *testing.T) {
 
 	route := SSERoute{CLISessionID: cliSessionID}
 	// Push a dummy event first so the real event gets ID > 1
-	require.NoError(t, h.dataController.sseStore.SSEEventsAppend(route, "dummy_event", `{"event":{"type":"dummy_event"}}`, "app1"))
-	require.NoError(t, h.dataController.sseStore.SSEEventsAppend(route, "replay_event", `{"event":{"type":"replay_event"}}`, "app1"))
+	_, err := h.dataController.sseStore.SSEEventsAppend(route, "dummy_event", `{"event":{"type":"dummy_event"}}`, "app1")
+	require.NoError(t, err)
+	_, err = h.dataController.sseStore.SSEEventsAppend(route, "replay_event", `{"event":{"type":"replay_event"}}`, "app1")
+	require.NoError(t, err)
 
 	// Get all events to find IDs
 	rows, err := h.dataController.sseStore.SSEEventsListSince(route, 0, 100)
@@ -1035,7 +1039,8 @@ func TestHandleInternalSSEStream_NoReplayWhenSinceIDZero(t *testing.T) {
 	seedCLISessionDoc(t, h, cliSessionID, userID, opSessID)
 
 	route := SSERoute{CLISessionID: cliSessionID}
-	require.NoError(t, h.dataController.sseStore.SSEEventsAppend(route, "no_replay_event", `{"event":{"type":"no_replay_event"}}`, "app1"))
+	_, err := h.dataController.sseStore.SSEEventsAppend(route, "no_replay_event", `{"event":{"type":"no_replay_event"}}`, "app1")
+	require.NoError(t, err)
 
 	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, opSessID)
 	// since_id=0 and no Last-Event-ID → no replay should occur
@@ -1083,9 +1088,14 @@ func TestHandleInternalSSEStream_PubSubEventDelivery(t *testing.T) {
 	// Wait for stream to start
 	time.Sleep(100 * time.Millisecond)
 
-	// Publish an event to the pubsub channel
+	// Publish an event to the pubsub channel. The stream handler expects a
+	// models.SSEPublishedEvent envelope (R1) carrying the DB row ID and the
+	// raw SSEPushPayload JSON as the payload.
 	payload := `{"cli_session_id":"` + cliSessionID + `","event":{"type":"pubsub_event","data":"hello"}}`
-	h.pubsub.Publish("sse:cli:"+cliSessionID, []byte(payload))
+	pubEvent := models.SSEPublishedEvent{ID: 1, Payload: json.RawMessage(payload)}
+	envelopeJSON, err := json.Marshal(pubEvent)
+	require.NoError(t, err)
+	h.pubsub.Publish("sse:cli:"+cliSessionID, envelopeJSON)
 
 	// Wait for delivery
 	time.Sleep(100 * time.Millisecond)
@@ -1095,6 +1105,7 @@ func TestHandleInternalSSEStream_PubSubEventDelivery(t *testing.T) {
 	body := rr.Body.String()
 	assert.Contains(t, body, "pubsub_event")
 	assert.Contains(t, body, "data: "+payload)
+	assert.Contains(t, body, "id: 1")
 }
 
 func TestHandleInternalSSEStream_HeartbeatSent(t *testing.T) {

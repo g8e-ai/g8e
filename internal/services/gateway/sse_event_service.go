@@ -73,22 +73,30 @@ func (r SSERoute) validate() error {
 	}
 }
 
-// SSEEventsAppend inserts a row into the sse_events table. The route MUST set
-// exactly one of WebSessionID, CLISessionID, UserID. The producer_id is the
-// app identity (SPIFFE ID) that produced the event for attribution.
-func (s *SSEEventService) SSEEventsAppend(route SSERoute, eventType, payload, producerID string) error {
+// SSEEventsAppend inserts a row into the sse_events table and returns the
+// assigned row ID. The route MUST set exactly one of WebSessionID,
+// CLISessionID, UserID. The producer_id is the app identity (SPIFFE ID) that
+// produced the event for attribution. The returned ID is stamped into the
+// pub/sub envelope (models.SSEPublishedEvent) so the stream handler can
+// deduplicate live events against replayed rows and emit an `id:` field on
+// the live path.
+func (s *SSEEventService) SSEEventsAppend(route SSERoute, eventType, payload, producerID string) (int64, error) {
 	if err := route.validate(); err != nil {
-		return err
+		return 0, err
 	}
 	now := timesvc.NowTimestamp()
-	_, err := s.db.ExecWithRetry(
+	result, err := s.db.ExecWithRetry(
 		"INSERT INTO sse_events (web_session_id, cli_session_id, user_id, event_type, payload, producer_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		nullIfEmpty(route.WebSessionID), nullIfEmpty(route.CLISessionID), nullIfEmpty(route.UserID), eventType, payload, nullIfEmpty(producerID), now,
 	)
 	if err != nil {
-		return fmt.Errorf("sse_event_service: append: %w", err)
+		return 0, fmt.Errorf("sse_event_service: append: %w", err)
 	}
-	return nil
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("sse_event_service: append: last insert id: %w", err)
+	}
+	return id, nil
 }
 
 // nullIfEmpty returns sql.NullString for empty strings so the

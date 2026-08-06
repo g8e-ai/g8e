@@ -91,17 +91,27 @@ func (o *PasskeyOrchestrator) EmitApprovalCompletedSSE(userID, txHash string) {
 		return
 	}
 
-	if err := o.sseStore.SSEEventsAppend(
+	// R15: persist after the (internal) authorization boundary and stamp the
+	// returned row ID into the SSEPublishedEvent envelope (R1) so the stream
+	// handler can dedup and emit `id:` on the live path (R2).
+	rowID, err := o.sseStore.SSEEventsAppend(
 		SSERoute{UserID: userID},
 		constants.SSEEventTypeApprovalCompleted,
 		string(envelopeJSON),
 		"g8eg",
-	); err != nil {
+	)
+	if err != nil {
 		o.logger.Error("approval: failed to append SSE event", "error", err)
 		return
 	}
 
-	o.pubsub.Publish("sse:user:"+userID, envelopeJSON)
+	pubEvent := models.SSEPublishedEvent{ID: rowID, Payload: json.RawMessage(envelopeJSON)}
+	pubJSON, err := json.Marshal(pubEvent)
+	if err != nil {
+		o.logger.Error("approval: failed to marshal published event", "error", err)
+		return
+	}
+	o.pubsub.Publish("sse:user:"+userID, pubJSON)
 }
 
 // EmitPasskeyRegisteredSSE publishes a passkey.registered SSE event scoped to the
@@ -133,15 +143,23 @@ func (o *PasskeyOrchestrator) EmitPasskeyRegisteredSSE(userID, cliSessionID stri
 		return
 	}
 
-	if err := o.sseStore.SSEEventsAppend(
+	// R15/R1: persist and stamp the row ID into the SSEPublishedEvent envelope.
+	rowID, err := o.sseStore.SSEEventsAppend(
 		SSERoute{CLISessionID: cliSessionID},
 		"passkey.registered",
 		string(envelopeJSON),
 		"g8eg",
-	); err != nil {
+	)
+	if err != nil {
 		o.logger.Error("passkey: failed to append SSE event", string(constants.ConnectionStateError), err)
 		return
 	}
 
-	o.pubsub.Publish("sse:cli:"+cliSessionID, envelopeJSON)
+	pubEvent := models.SSEPublishedEvent{ID: rowID, Payload: json.RawMessage(envelopeJSON)}
+	pubJSON, err := json.Marshal(pubEvent)
+	if err != nil {
+		o.logger.Error("passkey: failed to marshal published event", string(constants.ConnectionStateError), err)
+		return
+	}
+	o.pubsub.Publish("sse:cli:"+cliSessionID, pubJSON)
 }

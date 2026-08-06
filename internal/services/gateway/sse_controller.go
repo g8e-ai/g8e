@@ -159,14 +159,11 @@ func (c *SSEController) handleInternalSSEPush(w http.ResponseWriter, r *http.Req
 		inner.Type = string(constants.SystemHealthUnknown)
 	}
 
-	if err := c.sseStore.SSEEventsAppend(route, inner.Type, string(body), appID); err != nil {
-		c.logger.Error("SSE push: failed to append event", string(constants.ConnectionStateError), err, "type", inner.Type)
-		c.responder.Error(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
 	// Authorization: Enforce producer-to-target ownership.
 	// The app identity extracted from the peer certificate must be associated with the target.
+	// NOTE: SSEEventsAppend is called AFTER authorization (R15) so that an
+	// unauthorized push never durably persists an event that would later be
+	// replayed to consumers.
 	if route.WebSessionID != "" {
 		webBindKey := sessionWebBindKey(route.WebSessionID)
 		raw, ok := c.kvStore.KVGet(webBindKey)
@@ -273,6 +270,17 @@ func (c *SSEController) handleInternalSSEPush(w http.ResponseWriter, r *http.Req
 		}
 	}
 
+	// Persist the event AFTER authorization (R15) and wrap the payload in a
+	// models.SSEPublishedEvent envelope stamped with the DB row ID (R1). The
+	// stream handler unmarshals this envelope to deduplicate live events
+	// against replayed rows and to emit an `id:` field on the live path (R2).
+	rowID, err := c.sseStore.SSEEventsAppend(route, inner.Type, string(body), appID)
+	if err != nil {
+		c.logger.Error("SSE push: failed to append event", string(constants.ConnectionStateError), err, "type", inner.Type)
+		c.responder.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	// Publish to pub/sub for real-time streaming
 	// We use the same routing logic: exactly one of web_session_id, cli_session_id, or user_id.
 	var channel string
@@ -286,9 +294,14 @@ func (c *SSEController) handleInternalSSEPush(w http.ResponseWriter, r *http.Req
 	}
 
 	if channel != "" {
-		// We publish the full body which is the models.SSEPushPayload JSON.
-		// The streamer will wrap this in SSE format.
-		c.pubsub.Publish(channel, body)
+		pubEvent := models.SSEPublishedEvent{ID: rowID, Payload: json.RawMessage(body)}
+		envelopeJSON, err := json.Marshal(pubEvent)
+		if err != nil {
+			c.logger.Error("SSE push: failed to marshal published event", string(constants.ConnectionStateError), err)
+			c.responder.Error(w, http.StatusInternalServerError, "failed to publish event")
+			return
+		}
+		c.pubsub.Publish(channel, envelopeJSON)
 	}
 
 	c.responder.JSON(w, http.StatusOK, models.SSEPushResponse{
@@ -520,25 +533,74 @@ func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Subscribe to real-time events FIRST to avoid missing any during replay
-	eventCh := make(chan []byte, 100)
+	// Subscribe to real-time events FIRST to avoid missing any during replay.
+	// The pub/sub payload is a models.SSEPublishedEvent JSON envelope carrying
+	// the DB row ID, which the live loop uses to deduplicate against replayed
+	// rows (R1) and to emit an `id:` field (R2).
+	//
+	// R5: back-pressure is enforced via dropOldestBuf, unifying semantics with
+	// the WebSocket path. Drop-oldest is the correct policy for an append-only
+	// event log: the consumer can recover evicted events via DB replay on
+	// reconnect, while a dropped newest event would be lost until the next
+	// reconnect. The buffer is closed on handler exit so the writer goroutine
+	// (this loop) cannot block on a closed channel after unregister.
+	buf := newDropOldestBuf(100)
 	unregister := c.pubsub.RegisterHandler(channel, func(ch string, data []byte) {
-		select {
-		case eventCh <- data:
-		default:
-			c.logger.Warn("SSE Stream: back-pressure dropping event", "channel", channel)
+		if ok, dropped := buf.send(data); !ok {
+			c.logger.Error("SSE Stream: back-pressure enqueue failed after drop-oldest",
+				"channel", channel, "dropped_total", dropped)
+		} else if dropped > 0 {
+			c.logger.Warn("SSE Stream: back-pressure dropped oldest queued event",
+				"channel", channel, "dropped_total", dropped)
 		}
 	})
-	defer unregister()
+	defer func() {
+		unregister()
+		buf.Close()
+	}()
+
+	// lastEmittedID tracks the highest event ID emitted on this connection.
+	// It is maintained inside the single HTTP-handler goroutine, so no mutex
+	// is required. It seeds the dedup cursor from the replay cursor so that
+	// any event appended between RegisterHandler and SSEEventsListSince (the
+	// duplicate-delivery race window, F1) is suppressed on the live path.
+	var lastEmittedID int64
 
 	// Replay from DB if sinceID is provided
 	if sinceID > 0 {
 		rows, err := c.sseStore.SSEEventsListSince(route, sinceID, 1000)
-		if err == nil {
-			for _, row := range rows {
-				fmt.Fprintf(w, "id: %d\ndata: %s\n\n", row.ID, row.Payload)
+		if err != nil {
+			// R4: log replay failures and emit an error sentinel so the client
+			// has a signal that a gap occurred, rather than silently swallowing
+			// the error and proceeding to the live loop.
+			c.logger.Error("SSE Stream: replay failed", "channel", channel, "error", err)
+			if _, wErr := fmt.Fprintf(w, "data: {\"type\":\"error\",\"reason\":\"replay_failed\"}\n\n"); wErr != nil {
+				c.logger.Info("SSE Stream: write error during replay sentinel, disconnecting", "channel", channel, "error", wErr)
+				return
 			}
 			flusher.Flush()
+		} else {
+			for _, row := range rows {
+				// R3: capture write errors and exit immediately on a broken
+				// pipe to avoid goroutine leaks on half-open connections.
+				if _, wErr := fmt.Fprintf(w, "id: %d\ndata: %s\n\n", row.ID, row.Payload); wErr != nil {
+					c.logger.Info("SSE Stream: write error during replay, disconnecting", "channel", channel, "error", wErr)
+					return
+				}
+				lastEmittedID = row.ID
+			}
+			flusher.Flush()
+			// R6: signal replay truncation. If the replay hit the limit, the
+			// client received only the first `limit` rows and there may be
+			// more backlog. Emit a sentinel so the client can decide to
+			// reconnect with a higher since_id.
+			if len(rows) == 1000 {
+				if _, wErr := fmt.Fprintf(w, "data: {\"type\":\"truncated\",\"since_id\":%d,\"limit\":1000}\n\n", lastEmittedID); wErr != nil {
+					c.logger.Info("SSE Stream: write error during truncation sentinel, disconnecting", "channel", channel, "error", wErr)
+					return
+				}
+				flusher.Flush()
+			}
 		}
 	}
 
@@ -555,14 +617,35 @@ func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.R
 			c.logger.Info("SSE Stream: client disconnected", "channel", channel)
 			return
 		case <-ticker.C:
-			fmt.Fprintf(w, ": heartbeat\n\n")
-			flusher.Flush()
-		case raw := <-eventCh:
-			var p models.SSEPushPayload
-			if err := json.Unmarshal(raw, &p); err == nil {
-				fmt.Fprintf(w, "data: %s\n\n", string(raw))
-				flusher.Flush()
+			// R3: exit on heartbeat write error (broken pipe / half-open).
+			if _, wErr := fmt.Fprintf(w, ": heartbeat\n\n"); wErr != nil {
+				c.logger.Info("SSE Stream: write error on heartbeat, disconnecting", "channel", channel, "error", wErr)
+				return
 			}
+			flusher.Flush()
+		case raw, ok := <-buf.recv():
+			// buf.Close() (on handler exit) closes the channel; exit cleanly.
+			if !ok {
+				c.logger.Info("SSE Stream: event buffer closed, disconnecting", "channel", channel)
+				return
+			}
+			// R1/R2: unmarshal the SSEPublishedEvent envelope, dedup against
+			// lastEmittedID, and emit `id:` + `data:` (no `event:` field — R14).
+			var pubEvent models.SSEPublishedEvent
+			if err := json.Unmarshal(raw, &pubEvent); err != nil {
+				c.logger.Warn("SSE Stream: failed to unmarshal published event", "channel", channel, "error", err)
+				continue
+			}
+			if pubEvent.ID <= lastEmittedID {
+				// Already emitted via replay; suppress the duplicate.
+				continue
+			}
+			if _, wErr := fmt.Fprintf(w, "id: %d\ndata: %s\n\n", pubEvent.ID, string(pubEvent.Payload)); wErr != nil {
+				c.logger.Info("SSE Stream: write error on live event, disconnecting", "channel", channel, "error", wErr)
+				return
+			}
+			lastEmittedID = pubEvent.ID
+			flusher.Flush()
 		}
 	}
 }
