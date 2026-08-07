@@ -31,6 +31,8 @@ make build          # Build the g8e Operator binary
 | `./g8e gw start` | Start the Gateway (`--doctrine-dir` loads JSON doctrine files for L1 threat detection) |
 | `./g8e gw status` | Gateway health and status |
 | `./g8e auth enroll` | Authenticate the local CLI |
+| `./g8e gui enroll` | Enroll an external frontend application origin with the Gateway |
+| `./g8e compliance` | FedRAMP 20x KSI evaluation and OSCAL export |
 | `./g8e test` | Run test suites |
 
 Startup sequence: binary check/build → root of trust generation (first boot) → service convergence via health checks.
@@ -42,8 +44,11 @@ Startup sequence: binary check/build → root of trust generation (first boot) �
 - `cmd/g8e/` - Binary entrypoint
 - `internal/cli/cmd/` - Cobra command tree
 - `internal/cli/serve/` - Gateway and operator boot sequences
+- `internal/cli/sse/` - Reusable SSE client (frame parsing, reconnection, mTLS headers)
+- `internal/cli/tui/` - Tactical Governance Console (Bubble Tea TUI)
 - `internal/` - Internal Go packages
 - `internal/pkg/` - Shared internal packages (e.g., SSH utilities)
+- `test/` - E2E and integration tests (gateway, MCP, consensus, native tool registry)
 - `docs/` - Documentation
 
 **Runtime paths** (`.g8e/`):
@@ -140,6 +145,8 @@ Return centralized error constants from `internal/constants/errors.go` for known
 - `internal/services/pubsub/pubsubtest/` - Test-only `PubSubClient` mock (`MockOperatorPubSubClient`)
 - `internal/services/governance/governancetest/` - Test-only governance store fixtures (`SimpleConsensusStore`, `SimpleAppPolicyStore`, `SimpleStateRootProvider`)
 - `internal/tools/chaos/` - Chaos engineering infrastructure (uses `storagetest.TestSQLAuditStore`)
+- `internal/tools/agent_harness/` - Agent test harness with scenario runner (`client/`, `config/`, `scenarios/`) for MCP/A2A gateway integration tests
+- `test/` - Root-level E2E and integration tests (gateway, MCP, consensus, native tool registry, A2A)
 - Production gateway mode wires `DocumentStoreService` as `TransactionAuditStore`
 - Production outbound mode uses `auditStoreTransactionStore` adapter in `g8eo.go`
 
@@ -196,6 +203,9 @@ MCP tools compiled into the g8e binary that execute within the Operator's execut
 | JSON model definitions | `protocol/models/` |
 | Go registry files | `internal/constants/` |
 | Governance layers | `internal/services/governance/` |
+| Gateway service | `internal/services/gateway/` |
+| MCP gateway & native tools | `internal/services/mcp/` |
+| Compliance (KSI/OSCAL) | `internal/services/compliance/` |
 | CLI entry points | `cmd/g8e/` → `internal/cli/cmd/` |
 | Architecture docs | `docs/architecture/` |
 

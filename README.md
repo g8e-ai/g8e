@@ -282,7 +282,7 @@ We welcome contributions of all kinds, including bug reports, feature ideas, doc
 - [Governance](docs/architecture/governance.md)
 - [Consensus](docs/architecture/consensus.md)
 - [AI Agents](docs/architecture/agents.md)
-- [Lattice Adapter](docs/architecture/lattice.md)
+- [Lattice Adapter](internal/adapters/lattice/README.md)
 - [Protocol Library](docs/architecture/protocol.md)
 - [Scripts](docs/architecture/scripts.md)
 

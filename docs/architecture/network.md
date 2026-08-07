@@ -1,6 +1,6 @@
 # Network Architecture
 
-Last Updated: 2026-07-30
+Last Updated: 2026-08-07
 Version: v1.6.7
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
@@ -34,15 +34,15 @@ The platform uses a four-tier PKI hierarchy issued by the Governance Gateway:
 
 ### Intermediate Split Rationale
 
-The hub and Operator intermediate CAs are kept separate to enforce a clean blast-radius boundary. The hub intermediate signs only the gateway's serving identity, while the Operator intermediate signs delegated workload leaves. This separation allows the operator-issuing key to be rotated or revoked without touching the gateway's serving trust, and vice versa.
+The hub and Operator intermediate CAs are kept separate to enforce a blast-radius boundary. The hub intermediate signs only the gateway's serving identity, while the Operator intermediate signs delegated workload leaves. This separation allows the operator-issuing key to be rotated or revoked without touching the gateway's serving trust, and vice versa.
 
 ### Curve Policy
 
-All certificates (root, intermediates, serving, and leaves) use ECDSA P-256 for maximum interoperability with SPIFFE/SPIRE and TLS 1.3 stacks.
+All certificates (root, intermediates, serving, and leaves) use ECDSA P-256 for broad interoperability with SPIFFE/SPIRE and TLS 1.3 stacks.
 
 ### Revocation
 
-Certificate revocation is enforced via a database-backed denylist checked per-request in the mTLS middleware. A standard X.509 CRL signed by the Operator intermediate CA is served at `/.well-known/g8e/pki/crl` for external consumption.
+Certificate revocation is enforced per-request during mTLS verification. A standard X.509 CRL signed by the Operator intermediate CA is served at `/.well-known/g8e/pki/crl` for external consumption.
 
 ---
 
@@ -69,7 +69,7 @@ The Governance Gateway enforces TLS 1.3 for all L7 communication. Network transp
 
 - The gateway requests and verifies client certificates when present during the TLS handshake, allowing browser-based clients (such as the g8e Console) to connect without certificates.
 - For all non-public routes, application-layer middleware acts as a strict, fail-closed gate requiring a verified client certificate.
-- Certificate revocation is checked against a database-backed revoked certificates store.
+- Certificate revocation is checked against the revoked certificates store.
 - Middleware verifies that the SPIFFE ID in the client certificate matches the specific session identifier (such as `operator_session_id` or `cli_session_id`) inside the `GovernanceEnvelope`.
 
 ### Identity Binding
@@ -126,24 +126,6 @@ The `g8e mcp stdio` subcommand accepts command-scoped credential flags for direc
 | `--app-cert` | Path to delegated app certificate (requires `--app-key`) | None |
 | `--app-key` | Path to delegated app key (requires `--app-cert`) | None |
 
-Example IDE MCP config using flags:
-
-```json
-{
-  "mcpServers": {
-    "g8e": {
-      "command": "/home/user/g8e/g8e",
-      "args": [
-        "mcp", "stdio",
-        "--client-cert", "/home/user/.g8e/cli.crt",
-        "--client-key", "/home/user/.g8e/cli.key",
-        "--ca-bundle", "/home/user/g8e/.g8e/pki/trust/g8eg-ca-bundle.pem"
-      ]
-    }
-  }
-}
-```
-
 ### No-DNS / Direct IP Configuration
 
 The platform supports setup without requiring `/etc/hosts` changes or DNS configuration. If `g8e.local` resolution fails, the CLI automatically falls back to direct IP access using the machine's external interface IP.
@@ -154,10 +136,10 @@ On Windows, `g8e auth enroll` auto-detects the platform and uses the Windows Cer
 
 1. **CLI Enrollment**: Run `g8e auth enroll [--tpm]` to generate an ECDSA P-256 keypair in the Windows Certificate Store.
 2. **CSR Signing**: The CLI submits a CSR to the Governance Gateway and receives a signed certificate with SPIFFE URI SAN.
-3. **Certificate Import**: The signed certificate is imported to `Cert:\CurrentUser\My` in the Windows Certificate Store for Windows Hello native API access.
+3. **Certificate Import**: The signed certificate is imported to the Windows Certificate Store for Windows Hello native API access.
 4. **Session Binding**: The Governance Gateway extracts the SPIFFE URI SAN from the client certificate and creates a `cli_session_id` bound to the user identity.
 
-**TPM-Backed Keys**: The `--tpm` flag (Windows-only) utilizes the Microsoft Platform Crypto Provider KSP to generate keys in hardware. Currently, the implementation uses a software-backed key with TPM annotation as full CNG API integration is pending.
+**TPM-Backed Keys**: The `--tpm` flag (Windows-only) generates keys with TPM backing when available.
 
 ---
 
@@ -169,12 +151,12 @@ Default ports:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **HTTP (Bootstrap)** | `8080` (plain HTTP) | No TLS | Health checks, state endpoint, trust establishment scripts, CA discovery, enrollment, deploy scripts, and node binary distribution. Unregistered paths return 404. |
+| **HTTP (Bootstrap)** | `8080` (plain HTTP) | No TLS | Health checks, state endpoint, trust establishment scripts, CA discovery, enrollment, deploy scripts, and node binary distribution. |
 | **HTTPS (Merged API + Console)** | `8443` (hybrid TLS) | mTLS / WebSession / JWT / Public | The primary execution boundary. Includes the g8e Console, browser WebAuthn endpoints, CA bundle and CRL endpoints, all mTLS-guarded operator API and MCP routes, and JWT-authenticated A2A ingress when JWKS is configured. |
 
 ### Port Constraints
 
-- **HTTP Surface** (`8080`): Serves plain HTTP for health checks, state endpoint, trust scripts (`/web-cert.sh`, `/web-cert.ps1`), CA bundle and fingerprint discovery, enrollment endpoints, deploy scripts, and node binary distribution. Unregistered paths return 404; there is no redirect to HTTPS.
+- **HTTP Surface** (`8080`): Serves plain HTTP for health checks, state endpoint, trust scripts (`/web-cert.sh`, `/web-cert.ps1`), CA bundle and fingerprint discovery, enrollment endpoints, deploy scripts, and node binary distribution.
 - **HTTPS Surface** (`8443`): Accepts optional client certificates at the transport layer, allowing public access to browser-based assets while requiring application-layer mTLS verification for all governed execution routes. All governed execution endpoints and operator routes require a verified SPIFFE identity via client certificate, while public routes (the Console SPA, static assets, CA bundle, CRL, and WebAuthn browser endpoints) are accessible directly. When JWKS is configured, MCP and A2A endpoints accept JWT authentication as an alternative to mTLS for BYO clients.
 - **Collision Prevention**: The gateway fails startup if multiple logical surfaces are assigned to the same port, ensuring no downgrade of the mTLS execution boundary.
 
@@ -207,8 +189,8 @@ When `g8e.local` does not resolve via system DNS, the CLI falls back to the mach
 ### Local Operator Delivery
 
 1. A `GovernanceEnvelope` arrives at the local gateway via the pub/sub stream.
-2. The gateway identifies the target Operator via the internal pub/sub router.
-3. If the Operator is local, the gateway delivers the envelope via in-process dispatch to the command service.
+2. The gateway identifies the target Operator from the envelope routing metadata.
+3. If the Operator is local, the gateway delivers the envelope directly to the local command handler.
 
 ---
 
@@ -220,11 +202,11 @@ The Governed Operator uses dial-out WebSocket pub/sub connections with zero inbo
 
 ### WebSocket Pub/Sub
 
-The gateway provides a WebSocket fan-out via `/api/v1/pubsub/stream`, authenticated by mTLS middleware. The channel naming convention is `cmd:<operator_id>:<operator_session_id>` for commands, `results:<operator_id>:<operator_session_id>` for results, and `heartbeat:<operator_id>:<operator_session_id>` for operator heartbeats. All channels require mTLS authentication, and topic ACLs enforce that subscribers can only subscribe to channels matching their mTLS workload identity.
+The gateway provides a WebSocket fan-out via `/api/v1/pubsub/stream`, authenticated by mTLS. Channels are scoped per operator and session, covering command, result, and heartbeat streams. Subscribers can only access channels matching their mTLS workload identity.
 
 ### Server-Sent Events (SSE)
 
-The gateway provides real-time event streaming from app workloads to browser and CLI clients via three endpoints: `POST /api/v1/sse/push` (app workload producers), `GET /api/v1/sse/events` (polling), and `GET /api/v1/sse/stream` (live SSE stream). Events are routed by `web_session_id`, `cli_session_id`, or `user_id`. See [SSE Streaming](./sse.md) for details.
+The gateway provides real-time event streaming from app workloads to browser and CLI clients via dedicated push, polling, and live stream endpoints. Events are routed by session or user identity. See [SSE Streaming](./sse.md) for details.
 
 ### Agent Integration
 
