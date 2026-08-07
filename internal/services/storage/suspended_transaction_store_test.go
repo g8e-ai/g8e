@@ -948,6 +948,103 @@ func TestSuspendedTransactionStore_FullWorkflow(t *testing.T) {
 	assert.False(t, found)
 }
 
+func TestStoreAndGetSuspendedTransaction_SubmitterCLISessionID(t *testing.T) {
+	t.Parallel()
+
+	sts := setupTestSuspendedTransactionStore(t)
+	ctx := context.Background()
+
+	tx := &models.SuspendedTransaction{
+		TransactionHash:       "cli-session-roundtrip",
+		Envelope:              []byte("test-envelope"),
+		CreatedAt:             time.Now().UTC(),
+		ExpiresAt:             time.Now().UTC().Add(time.Hour),
+		ToolName:              "test_tool",
+		UserID:                "user-123",
+		OperatorID:            "operator-456",
+		SubmitterCLISessionID: "cli-session-abc",
+	}
+
+	err := sts.StoreSuspendedTransaction(ctx, tx)
+	require.NoError(t, err)
+
+	retrieved, found, err := sts.GetSuspendedTransaction(ctx, "cli-session-roundtrip")
+	require.NoError(t, err)
+	assert.True(t, found)
+	require.NotNil(t, retrieved)
+	assert.Equal(t, "cli-session-abc", retrieved.SubmitterCLISessionID)
+}
+
+func TestListSuspendedTransactions_SubmitterCLISessionID(t *testing.T) {
+	t.Parallel()
+
+	sts := setupTestSuspendedTransactionStore(t)
+	ctx := context.Background()
+
+	now := time.Now().UTC()
+
+	transactions := []*models.SuspendedTransaction{
+		{
+			TransactionHash:       "list-cli-1",
+			Envelope:              []byte("env-1"),
+			CreatedAt:             now,
+			ExpiresAt:             now.Add(time.Hour),
+			UserID:                "user-1",
+			OperatorID:            "op-1",
+			SubmitterCLISessionID: "cli-session-1",
+		},
+		{
+			TransactionHash:       "list-cli-2",
+			Envelope:              []byte("env-2"),
+			CreatedAt:             now,
+			ExpiresAt:             now.Add(time.Hour),
+			UserID:                "user-1",
+			OperatorID:            "op-2",
+			SubmitterCLISessionID: "cli-session-2",
+		},
+	}
+
+	for _, tx := range transactions {
+		err := sts.StoreSuspendedTransaction(ctx, tx)
+		require.NoError(t, err)
+	}
+
+	txs, err := sts.ListSuspendedTransactions(ctx, "user-1")
+	require.NoError(t, err)
+	assert.Len(t, txs, 2)
+
+	for _, tx := range txs {
+		assert.NotEmpty(t, tx.SubmitterCLISessionID, "ListSuspendedTransactions must populate SubmitterCLISessionID")
+	}
+}
+
+func TestGetExpiredSuspendedTransactions_SubmitterCLISessionID(t *testing.T) {
+	t.Parallel()
+
+	sts := setupTestSuspendedTransactionStore(t)
+	ctx := context.Background()
+
+	now := time.Now().UTC()
+
+	tx := &models.SuspendedTransaction{
+		TransactionHash:       "expired-cli-session",
+		Envelope:              []byte("expired-env"),
+		CreatedAt:             now,
+		ExpiresAt:             now.Add(-time.Hour),
+		UserID:                "user-1",
+		OperatorID:            "op-1",
+		SubmitterCLISessionID: "cli-session-expired",
+	}
+
+	err := sts.StoreSuspendedTransaction(ctx, tx)
+	require.NoError(t, err)
+
+	txs, err := sts.GetExpiredSuspendedTransactions(ctx)
+	require.NoError(t, err)
+	require.Len(t, txs, 1)
+	assert.Equal(t, "cli-session-expired", txs[0].SubmitterCLISessionID)
+}
+
 func TestSuspendedTransactionPrune_DeletesExpired(t *testing.T) {
 	t.Parallel()
 

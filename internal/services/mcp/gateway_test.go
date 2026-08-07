@@ -1046,6 +1046,20 @@ func TestGatewayService_StoreSuspendedTransaction(t *testing.T) {
 		require.Equal(t, "cert-fp-abc123", tx.ExpectedCertFingerprint)
 	})
 
+	t.Run("populates submitter CLI session ID from context", func(t *testing.T) {
+		t.Parallel()
+		store := &fakeSuspendedStore{}
+		g := newTestGatewayService(t, withSuspendedStore(store))
+
+		ctx := context.WithValue(context.Background(), constants.ContextKeyCLISessionID, "cli-session-from-ctx")
+		g.StoreSuspendedTransaction(ctx, "hash-cli-ctx", []byte(`{"id":"123"}`), "test-tool", json.RawMessage(`{"arg":"val"}`), "user-1", "op-1", "cert-fp-abc123")
+
+		tx, found, err := store.GetSuspendedTransaction(context.Background(), "hash-cli-ctx")
+		require.NoError(t, err)
+		require.True(t, found)
+		require.Equal(t, "cli-session-from-ctx", tx.SubmitterCLISessionID)
+	})
+
 	t.Run("nil store does not panic", func(t *testing.T) {
 		t.Parallel()
 		g := newTestGatewayService(t, withSuspendedStore(nil))
