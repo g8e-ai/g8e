@@ -1,7 +1,7 @@
 # Encryption Architecture
 
-Last Updated: 2026-07-31
-Version: v1.6.8
+Last Updated: 2026-08-07
+Version: v1.7.0
 
 ## Overview
 
@@ -13,7 +13,7 @@ See [Authentication & Authorization](./auth.md) for identity enrollment and sess
 
 - **Fail-closed**: Encryption is mandatory. Platform services fail to initialize without an unlocked vault.
 - **Zero-knowledge**: The Data Encryption Key (DEK) is never persisted to disk in plaintext; only its wrapped form is stored.
-- **Key rotation**: Support for re-keying vault data without data loss.
+- **Key rotation**: Re-keying rotates the DEK wrapper without data loss.
 - **Auditability**: Encryption state is recorded in audit logs, and vault lifecycle operations produce verifiable audit entries.
 - **Mutual authentication**: All network connections require client certificates verified against the platform CA chain.
 
@@ -33,7 +33,7 @@ The vault uses a three-tier key hierarchy:
 
 1. **Private Key**: A 32-byte hex-encoded value, user-provided or auto-generated, used to unlock the vault.
 2. **Key Encryption Key (KEK)**: Derived from the private key via HKDF-SHA256. Used to wrap and unwrap the Data Encryption Key.
-3. **Data Encryption Key (DEK)**: A per-vault random key, wrapped with AES Key Wrap (RFC 3394). Used for per-record AES-256-GCM encryption with unique 12-byte nonces.
+3. **Data Encryption Key (DEK)**: A per-vault random key, wrapped with AES Key Wrap (RFC 3394). Used for per-record AES-256-GCM encryption with unique nonces.
 
 ## Encrypted Data
 
@@ -43,90 +43,47 @@ All storage services require an unlocked vault at initialization. The following 
 - **Execution vault**: Compressed stdout, compressed stderr, and compressed file diffs from command executions.
 - **Ledger**: File content stored in the git-backed ledger with `.enc` suffix.
 - **Key-value store**: Sentinel token values in the canonical key-value store.
-- **Platform Keystore**: Session encryption keys, session tokens, Ed25519 signing keys (actuator, notary, operator, CLI), CA private keys, service certificate private keys, external API keys, and auditor HMAC keys.
+
+Platform signing keys, certificate keys, and session secrets are encrypted separately via the [Platform Keystore](#platform-keystore).
 
 ## Vault Lifecycle
 
 ### Initialization
 
-```bash
-# Generate new vault with auto-generated key
-g8e vault init
+1. Generate a new vault with an auto-generated key: `g8e vault init`.
+2. To use a custom vault directory, add `--vault-dir <path>`.
+3. To use a custom key path, add `--key-path <path>`.
+4. To import an existing key from a hex string, run `g8e vault import --key-hex <hex-string>`, or `g8e vault import` to read the key from stdin.
 
-# Initialize with custom vault directory
-g8e vault init --vault-dir /custom/path
-
-# Initialize with custom key path
-g8e vault init --key-path /custom/path/key
-
-# Import key from hex string
-g8e vault import --key-hex <hex-string>
-
-# Import key from stdin
-g8e vault import
-```
-
-The gateway auto-initializes a vault on first start if no vault header exists. A random private key is generated and saved to the default key path. This enables zero-config startup for development and testing.
+The gateway auto-initializes a vault on first start if no vault header exists. A random private key is generated and saved to the default key path, enabling zero-config startup for development and testing.
 
 ### Unlocking
 
-```bash
-# Unlock vault with key file
-g8e vault unlock --key-path /path/to/vault/key
-
-# Unlock with custom vault directory
-g8e vault unlock --vault-dir /custom/path --key-path /custom/path/key
-
-# Unlock with environment variable (used by gateway/operator)
-export G8E_VAULT_KEY=/path/to/vault/key
-g8e gw start
-
-# Or pass the key path directly to the gateway
-g8e gw start --vault-key /path/to/vault/key
-```
+1. Unlock the vault with a key file: `g8e vault unlock --key-path <path/to/vault/key>`.
+2. For a custom vault directory, add `--vault-dir <path>`.
+3. For gateway or operator startup, set `G8E_VAULT_KEY` to the key path, or pass `--vault-key <path>` to `g8e gw start`.
 
 ### Re-keying
 
-```bash
-# Re-encrypt vault with new key
-g8e vault rekey --key-path /path/to/vault/key --new-key-path /path/to/new.key
-
-# Re-key with custom vault directory
-g8e vault rekey --vault-dir /custom/path --key-path /custom/path/key --new-key-path /custom/path/key.new
-```
+1. Re-encrypt the vault with a new key: `g8e vault rekey --key-path <path/to/vault/key> --new-key-path <path/to/new.key>`.
+2. For a custom vault directory, add `--vault-dir <path>`.
+3. Update configuration to reference the new key path, then restart the gateway.
 
 ### Status
 
-```bash
-# Check vault status
-g8e vault status
-
-# Check status with custom vault directory
-g8e vault status --vault-dir /custom/path
-```
+Check vault state with `g8e vault status`, or `g8e vault status --vault-dir <path>` for a custom vault directory.
 
 ### Reset
 
-```bash
-# Destroy vault and all encrypted data (destructive)
-g8e vault reset
+Reset destroys the vault and all encrypted data irrecoverably.
 
-# Reset with custom vault directory
-g8e vault reset --vault-dir /custom/path
-
-# Skip interactive confirmation
-g8e vault reset --confirm
-```
+1. Run `g8e vault reset` to trigger the destructive reset.
+2. For a custom vault directory, add `--vault-dir <path>`.
+3. Add `--confirm` to skip interactive confirmation.
 
 ### Export
 
-```bash
-# Export private key in hex format
-g8e vault export --key-path /path/to/vault/key
-
-# Export with default key path
-g8e vault export
-```
+Export the private key in hex format with `g8e vault export --key-path <path/to/vault/key>`, or `g8e vault export` to use the default key path.
 
 ## Configuration
 
@@ -136,7 +93,7 @@ g8e vault export
 - `--key-path`: Path to vault key (used in vault commands).
 - `--new-key-path`: Path to save new vault key during rekey (default: `<vault-dir>/key.new`).
 - `--confirm`: Skip interactive confirmation for vault reset.
-- `--key-hex`: Vault key as hex string for import command.
+- `--key-hex`: Vault key as hex string for the import command.
 
 ### Gateway Flags
 
@@ -164,9 +121,9 @@ The vault directory defaults to `.g8e/vault` and the vault key defaults to `.g8e
 ### Key Management
 
 - Private keys are 32-byte hex-encoded values.
-- Key fingerprints are computed using SHA-256 with a domain-separation pepper for identification purposes.
+- Key fingerprints are computed using SHA-256 with a domain-separation pepper for identification.
 - Keys can be imported or exported for backup via `g8e vault export` and `g8e vault import`.
-- Re-keying rotates the DEK wrapper without data loss because only the DEK wrapper changes.
+- Re-keying rotates the DEK wrapper without data loss because only the wrapper changes.
 - Vault reset destroys all data irrecoverably.
 
 ### Fail-Closed Behavior
@@ -188,14 +145,14 @@ The keystore uses the OS-native credential store when available, with a file-bas
 - **macOS**: Keychain.
 - **Windows**: File-based storage.
 
-The file-based fallback stores the master key as a base64-encoded file with restrictive permissions. Atomic writes are performed via temporary file rename operations. All keystore file I/O within `.g8e/` enforces restrictive file permissions.
+The file-based fallback stores the master key as a base64-encoded file with restrictive permissions. Atomic writes are performed via temporary file rename operations, and all keystore file I/O within `.g8e/` enforces restrictive file permissions.
 
 ### Encrypted Secrets
 
-The following platform secrets are encrypted at rest via the keystore:
+The keystore encrypts the following platform secrets at rest:
 
 - Session encryption keys and session tokens.
-- ED25519 signing keys (actuator, notary, operator, CLI).
+- Ed25519 signing keys (actuator, notary, operator, CLI).
 - CA private keys (root, hub, operator, gateway peer).
 - Service certificate private keys.
 - API keys for external service integrations.
@@ -280,99 +237,47 @@ The gateway automatically regenerates its serving certificate if it is missing o
 
 For existing deployments with unencrypted data:
 
-1. Initialize vault: `g8e vault init`
-2. Unlock vault: `g8e vault unlock --key-path .g8e/vault/key`
-3. Restart gateway: `g8e gw restart`
+1. Initialize the vault: `g8e vault init`.
+2. Unlock the vault: `g8e vault unlock --key-path .g8e/vault/key`.
+3. Restart the gateway: `g8e gw restart`.
 4. New data is encrypted automatically.
 
 ### Key Rotation
 
-To rotate vault keys:
-
-1. Generate new key: `g8e vault rekey --key-path .g8e/vault/key --new-key-path .g8e/vault/key.new`
-2. Update configuration to use new key.
-3. Restart gateway.
+To rotate vault keys, follow the [Re-keying](#re-keying) steps, then update configuration to reference the new key path and restart the gateway.
 
 ## Compliance
 
 ### FIPS 140-3
 
-g8e uses the Go Cryptographic Module v1.0.0 (CMVP Cert #5247, CAVP A6650) in FIPS 140-3 approved mode. FIPS mode is activated at build time via `GOFIPS140=v1.0.0`; no runtime environment variable is required. The binary enters approved mode automatically on startup and runs integrity self-checks and known-answer tests at `init` or first use.
+g8e uses the Go Cryptographic Module v1.0.0 (CMVP Cert #5247, CAVP A6650) in FIPS 140-3 approved mode. FIPS mode is activated at build time via `GOFIPS140=v1.0.0`; no runtime environment variable is required. The binary enters approved mode automatically on startup and runs integrity self-checks and known-answer tests at init or first use.
 
 **Validated algorithms used by g8e**: EdDSA (Ed25519) for consensus signatures and receipts, ECDSA P-256 for PKI certificate signatures, AES-256-GCM for vault encryption, HKDF-SHA256 for key derivation, HMAC-SHA256 for auditor authentication, SHA-256 for transaction hashing, TLS 1.3 key schedule, and ML-KEM (FIPS 203) for post-quantum TLS key agreement.
 
 **Excluded algorithms**: X25519 is removed from all TLS configurations (not SP 800-56A rev3 compliant). Ed25519 is excluded from TLS certificate signatures; g8e enforces ECDSA P-256 for all PKI-issued certificates and rejects Ed25519-signed certificates at load time.
 
-**Operating environment**: Debian GNU/Linux 12 on linux/amd64 (vendor-affirmed OE, CMVP Cert #5247 Table 3). The runtime image is pinned to `debian:12-slim` in `Dockerfile.fips`.
+The `g8e version --fips` command reports FIPS approved mode, enforcement state, and validated module version. It exits non-zero only if approved mode is not active.
 
-**Runtime verification**: `g8e version --fips` calls `crypto/fips140.Enabled()` and `crypto/fips140.Version()` to confirm FIPS mode status.
-
-See [FIPS 140-3 Compliance](../reference/fips140-3.md) for the complete validated boundary, OE matrix, and build/runtime activation details.
-
-### Encryption Standards
-
-- AES-256-GCM for all data encryption.
-- HKDF-SHA256 for Key Encryption Key derivation.
-- AES Key Wrap (RFC 3394) for DEK wrapping.
-- SHA-256 for key fingerprinting with domain-separation pepper.
-- Key material is zeroed from memory after use in both the vault and keystore.
-
-### TLS Standards
-
-- TLS 1.3 minimum for all HTTPS connections.
-- ECDSA P-256 for all certificate keys.
-- mTLS with client certificate verification on HTTPS port.
-- SPIFFE SVIDs for workload identity binding.
-- X.509 CRL for certificate revocation.
-
-### Data Protection
-
-- Sensitive data encrypted at rest.
-- The DEK is never persisted in plaintext; only its wrapped form is stored.
-- CA private keys encrypted via keystore with OS keyring backing.
-- Encryption state tracked in audit records.
-- Support for key rotation and deletion.
+See [FIPS 140-3 Compliance](../reference/fips140-3.md) for the complete validated boundary, operating environment matrix, and build and runtime activation details.
 
 ## Troubleshooting
 
 ### Vault Locked
 
-If services fail with a locked vault error:
-
-```bash
-# Check vault status
-g8e vault status
-
-# Unlock vault
-g8e vault unlock --key-path /path/to/vault/key
-
-# Restart gateway
-g8e gw restart
-```
+If services fail with a locked vault error, check vault state with `g8e vault status`, unlock with `g8e vault unlock --key-path <path/to/vault/key>`, then restart the gateway with `g8e gw restart`.
 
 ### Invalid Key
 
 If vault unlock fails with an invalid key error:
 
-- Verify key path is correct.
-- Ensure key file exists and is readable.
-- Check key format (32-byte hex-encoded).
-- If key is lost, data is unrecoverable.
+- Verify the key path is correct.
+- Ensure the key file exists and is readable.
+- Check the key format (32-byte hex-encoded).
+- If the key is lost, data is unrecoverable.
 
 ### Vault Not Initialized
 
-If services fail with an uninitialized vault error:
-
-```bash
-# Initialize vault
-g8e vault init
-
-# Unlock vault
-g8e vault unlock --key-path .g8e/vault/key
-
-# Restart gateway
-g8e gw restart
-```
+If services fail with an uninitialized vault error, initialize the vault with `g8e vault init`, unlock it with `g8e vault unlock --key-path .g8e/vault/key`, then restart the gateway with `g8e gw restart`.
 
 ### Certificate Expired
 
@@ -387,4 +292,3 @@ If mTLS connections fail with certificate errors:
 The gateway signs action receipts with its Actuator Ed25519 private key. The actuator public key is exported to the PKI directory during gateway boot in both PEM and JSON formats with its key ID, enabling offline verification by external harnesses.
 
 Consumers that need to cryptographically verify receipt authenticity must obtain the public key out-of-band by reading the exported files from the gateway PKI directory. Consumers can implement Ed25519 signature verification using standard cryptographic libraries with the exported public key.
-

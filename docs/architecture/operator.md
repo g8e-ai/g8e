@@ -4,8 +4,8 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-08-02
-Version: v1.6.9
+Last Updated: 2026-08-07
+Version: v1.7.0
 
 The **Governed Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions with L1-L3 proofs attached from the Gateway (PDP), re-verifies those proofs locally, then enforces L4 Warden and L5 Actuator gates, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
@@ -20,7 +20,7 @@ This document focuses on the **Governed Operator** (PEP) role.
 
 ## 1. Introduction
 
-The core invariant of the Operator is absolute defense-in-depth: a typed, signed, state-bound transaction reaches a sovereign host agent that distrusts upstream inputs and refuses to mutate reality unless every independent proof checks out. 
+The core invariant of the Operator is defense-in-depth: a typed, signed, state-bound transaction reaches a sovereign host agent that distrusts upstream inputs and refuses to mutate reality unless every independent proof checks out.
 
 The Operator is the only component capable of mutating the host. It executes remote operations, such as running shell commands, editing files, interacting with cloud CLIs, and reading file history, but only after translating the request into a canonical `GovernanceEnvelope` transaction and verifying it locally.
 
@@ -66,7 +66,7 @@ By exposing standard MCP and A2A interfaces, the Operator acts as the admission 
 The Governed Operator compiles native tool playbooks directly into the `g8e` binary to provide memory-safe, boundary-enforced execution for common operational tasks. These tools execute within the Governed Operator's execution boundary locally, without proxying to downstream MCP servers. AI agents interact with clean JSON schemas while the internal memory-safe execution layer enforces hard boundaries.
 
 #### Database Triage & Performance Playbook
-- **db_discover_topology**: Automatically scans database schemas, tables, and column data types, returning a highly compressed JSON map. AI agents need this first to prevent hallucinated queries.
+- **db_discover_topology**: Automatically scans database schemas, tables, and column data types, returning a compressed JSON map. AI agents need this first to prevent hallucinated queries.
 - **db_query_validate**: Intercepts any AI-generated SQL and runs it through EXPLAIN QUERY PLAN natively. If the engine flags an unindexed, full-table scan on a production dataset, the `g8e` binary rejects the task before execution.
 - **db_isolated_read**: Executes SELECT statements in read-only mode to prevent destructive injections (e.g., ; DROP TABLE...).
 - **db_index_triage**: Queries internal fragmentation statistics and indexes to diagnose slow queries without letting the AI guess the performance bottleneck.
@@ -77,7 +77,7 @@ The Governed Operator compiles native tool playbooks directly into the `g8e` bin
 - **config_diff_mask**: Compares application configuration states against environmental baselines. It strips out actual passwords, tokens, and salts inside the `g8e` binary before outputting the structural differences to the AI.
 
 #### Resource & Process Governance Playbook
-- **proc_metric_top**: Extracts process IDs, memory maps, and CPU tracking from the host. It returns a tightly structured JSON array of the top resource-hogging processes.
+- **proc_metric_top**: Extracts process IDs, memory maps, and CPU tracking from the host. It returns a structured JSON array of the top resource-hogging processes.
 - **fs_disk_profile**: Recursively calculates directory sizes natively (equivalent to an optimized du --max-depth=2) starting from an approved path root. It instantly isolates unrotated log files or bloated tmp directories.
 - **proc_signal_safe**: Allows the AI to send explicit termination signals (SIGTERM, SIGKILL) to a process, but enforces a strict binary-level denylist (e.g., rejecting attempts to kill critical system processes or the Governed Operator itself).
 - **proc_tree**: Inspects the process hierarchy to map parent-child relationships and identify process trees for targeted operations.
@@ -91,7 +91,7 @@ The Governed Operator compiles native tool playbooks directly into the `g8e` bin
 - **net_ssh_known_hosts**: Manages SSH known_hosts entries for secure remote access validation.
 
 #### System Introspection Playbook
-- **sys_info**: Returns comprehensive system information including OS version, kernel, architecture, and hardware details.
+- **sys_info**: Returns system information including OS version, kernel, architecture, and hardware details.
 - **sys_env_vars**: Lists environment variables with optional filtering and masking of sensitive values.
 - **sys_service_status**: Checks the status of system services (systemd, init.d) to determine if services are running, stopped, or failed.
 - **sys_container_status**: Inspects container runtime status (Docker, containerd) to identify running containers and their health.
@@ -163,34 +163,15 @@ After completing platform bootstrap via `g8e auth enroll`, follow this workflow 
 
 ### 1. Verify Gateway Health
 
-Confirm the Governance Gateway is running and accessible:
-
-```bash
-g8e gw status
-```
+Confirm the Governance Gateway is running and accessible with `g8e gw status`.
 
 ### 2. Enroll Remote Operators (Multi-Host Setups)
 
-For distributed enforcement across multiple hosts, enroll each remote operator:
-
-```bash
-g8e gw security pki enroll -e <gateway-ip>
-```
-
-Each Operator receives a unique SPIFFE workload identity bound to its mTLS certificate. To deploy the binary to remote hosts, use `g8e operator deploy` or `g8e operator stream`.
+For distributed enforcement across multiple hosts, enroll each remote operator with `g8e gw security pki enroll -e <gateway-ip>`. Each Operator receives a unique SPIFFE workload identity bound to its mTLS certificate. To deploy the binary to remote hosts, use `g8e operator deploy` or `g8e operator stream`.
 
 ### 3. Configure AI Client Integration
 
-Configure your AI client to connect to the Gateway's universal HTTP MCP endpoint:
-
-```bash
-# Generate MCP configuration for a specific agent
-g8e mcp agent show claude
-
-# The command outputs JSON configurations for three transport modes:
-#   g8e.local (mTLS), IP Address (mTLS), and Stdio Transport
-# Copy the appropriate JSON configuration to your MCP client's config file
-```
+Configure your AI client to connect to the Gateway's universal HTTP MCP endpoint. Generate MCP configuration for a specific agent with `g8e mcp agent show <agent>` (for example, `g8e mcp agent show claude`). The command outputs JSON configurations for three transport modes: `g8e.local` (mTLS), IP Address (mTLS), and Stdio Transport. Copy the appropriate JSON configuration to your MCP client's config file.
 
 **Protocol Integration:**
 - **All Clients**: Use the universal HTTP endpoint with mTLS authentication
@@ -199,12 +180,7 @@ g8e mcp agent show claude
 
 ### 4. Test with a Simple Mutation
 
-Execute a benign diagnostic command to verify the verification sequence:
-
-```bash
-# Via MCP client: request a tool call
-# Example: db_discover_topology or sys_oom_detect
-```
+Execute a benign diagnostic command via your MCP client to verify the verification sequence, such as a `db_discover_topology` or `sys_oom_detect` tool call.
 
 The Operator will:
 1. Translate the request into a GovernanceEnvelope
@@ -218,22 +194,11 @@ The Operator will:
 
 Query the audit vault to verify governance enforcement:
 
-```bash
-# List signed receipts (auto-discovers session from credentials)
-g8e audit receipts
-
-# Query raw audit events with optional session filter
-g8e audit events --limit 100
-
-# Generate a compliance report (JSON + Markdown)
-g8e audit report
-
-# Export the full receipts bundle for archival
-g8e audit export --out receipts.json
-
-# Aggregate summary by event type and receipt status
-g8e audit summary
-```
+- `g8e audit receipts` - List signed receipts (auto-discovers session from credentials)
+- `g8e audit events --limit 100` - Query raw audit events with an optional session filter
+- `g8e audit report` - Generate a compliance report (JSON and Markdown)
+- `g8e audit export --out receipts.json` - Export the full receipts bundle for archival
+- `g8e audit summary` - Aggregate summary by event type and receipt status
 
 Each receipt includes:
 - Transaction hash
@@ -246,19 +211,10 @@ Each receipt includes:
 
 For FedRAMP 20x (CR26) workloads, the `g8e compliance` command derives binary Key Security Indicator (KSI) status from the live audit state and emits machine-readable OSCAL artifacts:
 
-```bash
-# Evaluate KSIs against live state and print the result set as JSON
-g8e compliance ksi --class C
-
-# Export OSCAL component-definition and assessment-results JSON artifacts
-g8e compliance export --format oscal --class C
-
-# Read persisted KSI evaluation history snapshots (optionally filter by KSI ID)
-g8e compliance ksi-history --ksi KSI-CMT-01
-
-# Load and validate COSAiS overlay catalogs against the KSI catalog
-g8e compliance overlay --overlay-dir docs/reference
-```
+- `g8e compliance ksi --class C` - Evaluate KSIs against live state and print the result set as JSON
+- `g8e compliance export --format oscal --class C` - Export OSCAL component-definition and assessment-results JSON artifacts
+- `g8e compliance ksi-history --ksi KSI-CMT-01` - Read persisted KSI evaluation history snapshots (optionally filter by KSI ID)
+- `g8e compliance overlay --overlay-dir docs/reference` - Load and validate COSAiS overlay catalogs against the KSI catalog
 
 KSI snapshots are persisted to `.g8e/data/compliance/ksi-history/` on each evaluation and pruned after a 90-day retention period. The KSI catalog (`docs/reference/ksi-catalog.json`) and COSAiS overlay catalog (`docs/reference/cosais-overlays.json`) ship with the runtime image. See [Compliance Alignment Report](../../reference/compliance-alignment.md#10-fedramp-20x-cr26-alignment) for the full KSI model, certification classes, and evidence anchor mapping.
 
@@ -293,4 +249,4 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 - [Storage Architecture](./storage.md) for audit vault and ledger internals
 - [Consensus](./consensus.md) for consensus configuration and consensus setup
 - [Encryption](./encryption.md) for encryption at rest details
-- [Lattice Adapter](./lattice.md) for Anduril Lattice COP integration
+- [Lattice Adapter](../../internal/adapters/lattice/README.md) for Anduril Lattice COP integration

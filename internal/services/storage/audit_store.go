@@ -69,6 +69,7 @@ const (
 // OperatorSession represents a chat session in the audit log
 type OperatorSession struct {
 	ID           string
+	SessionType  string
 	Title        string
 	CreatedAt    time.Time
 	UserIdentity string
@@ -315,7 +316,7 @@ CREATE INDEX IF NOT EXISTS idx_commitment_ledger_committed_at ON commitment_ledg
 `
 
 // CreateSession creates a new session in the audit log
-func (ass *SQLAuditStore) CreateSession(id, sessionType, title, userIdentity string) error {
+func (ass *SQLAuditStore) CreateSession(id string, sessionType constants.SessionType, title, userIdentity string) error {
 	if ass == nil || ass.db == nil {
 		return nil
 	}
@@ -323,16 +324,16 @@ func (ass *SQLAuditStore) CreateSession(id, sessionType, title, userIdentity str
 		return constants.ErrAuditSessionMissing
 	}
 	if sessionType == "" {
-		sessionType = string(constants.UserRoleOperator)
+		sessionType = constants.SessionTypeOperator
 	}
 
 	query := `INSERT INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`
-	_, err := ass.db.ExecWithRetry(query, id, sessionType, title, userIdentity)
+	_, err := ass.db.ExecWithRetry(query, id, string(sessionType), title, userIdentity)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreCreateSessionFailed, err)
 	}
 
-	ass.logger.Info("OperatorSession created", "operator_session_id", id, "session_type", sessionType, "title", title)
+	ass.logger.Info("OperatorSession created", "operator_session_id", id, "session_type", string(sessionType), "title", title)
 	return nil
 }
 
@@ -342,13 +343,13 @@ func (ass *SQLAuditStore) GetOperatorSession(id string) (*OperatorSession, error
 		return nil, constants.ErrAuditStoreDisabled
 	}
 
-	query := `SELECT id, title, created_at, user_identity FROM sessions WHERE id = ?`
+	query := `SELECT id, session_type, title, created_at, user_identity FROM sessions WHERE id = ?`
 	row := ass.db.QueryRowWithRetry(query, id)
 
 	var session OperatorSession
-	var title, userIdentity sql.NullString
+	var sessionType, title, userIdentity sql.NullString
 	var createdAtStr string
-	err := row.Scan(&session.ID, &title, &createdAtStr, &userIdentity)
+	err := row.Scan(&session.ID, &sessionType, &title, &createdAtStr, &userIdentity)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -358,6 +359,9 @@ func (ass *SQLAuditStore) GetOperatorSession(id string) (*OperatorSession, error
 
 	session.CreatedAt, _ = timesvc.ParseTimestamp(createdAtStr)
 
+	if sessionType.Valid {
+		session.SessionType = sessionType.String
+	}
 	if title.Valid {
 		session.Title = title.String
 	}
@@ -486,8 +490,8 @@ func (ass *SQLAuditStore) RecordEvent(event *Event) (int64, error) {
 		// This mirrors the behavior in RecordActionReceipt
 		if event.OperatorSessionID != "" {
 			_, _ = tx.Exec(
-				`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, 'app', ?, ?)`,
-				event.OperatorSessionID, event.OperatorSessionID, event.OperatorSessionID,
+				`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`,
+				event.OperatorSessionID, string(constants.SessionTypeApp), event.OperatorSessionID, event.OperatorSessionID,
 			)
 		}
 
@@ -579,8 +583,8 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 	// Gateway mode never pre-populates sessions; auto-create a row so the FK is satisfied.
 	if record.OperatorSessionID != "" {
 		_, _ = ass.db.ExecWithRetry(
-			`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, 'operator', ?, ?)`,
-			record.OperatorSessionID, record.OperatorSessionID, record.OperatorID,
+			`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`,
+			record.OperatorSessionID, string(constants.SessionTypeOperator), record.OperatorSessionID, record.OperatorID,
 		)
 	}
 
@@ -1035,6 +1039,9 @@ func (ass *SQLAuditStore) ListSessions(limit, offset int) ([]*OperatorSession, e
 	var sessions []*OperatorSession
 	for _, row := range rows {
 		row.session.CreatedAt, _ = timesvc.ParseTimestamp(row.createdAtStr)
+		if row.sessionType.Valid {
+			row.session.SessionType = row.sessionType.String
+		}
 		if row.title.Valid {
 			row.session.Title = row.title.String
 		}

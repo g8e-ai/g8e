@@ -1,4 +1,4 @@
-# AI Documentation Agent Guide
+/# AI Documentation Agent Guide
 
 Guidelines for any AI agent creating or updating g8e documentation. The codebase is the source of truth; documentation describes what the system does, not how.
 

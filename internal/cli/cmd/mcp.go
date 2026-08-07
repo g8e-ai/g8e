@@ -254,17 +254,27 @@ func sendSuccess(encoder *json.Encoder, id interface{}, result interface{}) {
 // ─── stdio: governed proxy, full mTLS + CLI session to gateway ────────────────
 
 // gatewayConn is the mTLS connection to the gateway established at startup.
-// Identity is cryptographically bound in the delegated cert's URI SANs — the cert
-// IS the session. No server-side session object or identity headers are used.
+// For delegated app credentials, identity is cryptographically bound in the
+// cert's URI SANs — the cert IS the session. For CLI credentials (the enrolled
+// CLI cert on disk), the cert's URI SAN is a CLI SPIFFE URI that the gateway
+// validates against the CLI session ID, so cliSessionID must be sent as the
+// X-G8E-CLI-Session-ID header on every proxied request.
 type gatewayConn struct {
 	client     *http.Client
 	gatewayURL string
 
+	// cliSessionID is set when the resolved credential tier is a CLI cert (client
+	// flags, client env, or enrolled CLI disk cert). When non-empty, it is attached
+	// as X-G8E-CLI-Session-ID on every proxied request so the gateway routes the
+	// request through handleCLIAuth instead of falling through to handleAppAuth
+	// (which would reject a CLI cert SAN) and returning 401.
+	cliSessionID string
+
 	// SSE fields for L3 approval notifications. Populated when CLI credentials
 	// are available so the stdio proxy can subscribe to approval.completed events
-	// instead of polling.
+	// instead of polling. The cliSessionID is sent as the X-G8E-CLI-Session-ID
+	// header on the SSE subscription; user_id is derived from the mTLS cert.
 	sseBaseURL string
-	userID     string
 	sseClient  *http.Client
 }
 
@@ -309,16 +319,32 @@ func parseStdioCredentialFlags(cmd *cobra.Command) (stdioCredentialFlags, error)
 
 // resolveCredentialPair picks the first complete (cert+key) pair from the ordered
 // tiers. Exactly one half of any tier present returns ErrIncompleteCredentialPair.
-func resolveCredentialPair(tiers []struct{ cert, key, name string }) (string, string, error) {
+// The name of the winning tier is returned so callers can distinguish delegated
+// app credentials (which carry identity in the cert URI SANs) from CLI credentials
+// (which require an X-G8E-CLI-Session-ID header for gateway auth).
+func resolveCredentialPair(tiers []struct{ cert, key, name string }) (string, string, string, error) {
 	for _, t := range tiers {
 		switch {
 		case t.cert != "" && t.key != "":
-			return t.cert, t.key, nil
+			return t.cert, t.key, t.name, nil
 		case t.cert != "" || t.key != "":
-			return "", "", fmt.Errorf("%w: tier %s", constants.ErrIncompleteCredentialPair, t.name)
+			return "", "", "", fmt.Errorf("%w: tier %s", constants.ErrIncompleteCredentialPair, t.name)
 		}
 	}
-	return "", "", nil
+	return "", "", "", nil
+}
+
+// isCLICredentialTier reports whether the resolved credential tier carries a CLI
+// SPIFFE URI SAN (validated by the gateway via handleCLIAuth) rather than a
+// delegated app SAN (validated via handleAppAuth). CLI tiers require the
+// X-G8E-CLI-Session-ID header; app tiers do not.
+func isCLICredentialTier(tierName string) bool {
+	switch tierName {
+	case "client flags", "client env", "CLI disk":
+		return true
+	default:
+		return false
+	}
 }
 
 // buildGatewayConn constructs a gatewayConn. Credentials resolve in order:
@@ -329,7 +355,7 @@ func resolveCredentialPair(tiers []struct{ cert, key, name string }) (string, st
 // CA bundle resolves: --ca-bundle flag → G8E_CA_BUNDLE env → auth.ReadTrustBundle.
 // Gateway URL resolves: --gateway-url flag → G8E_GATEWAY_URL env → default https://g8e.local:8443/mcp.
 func buildGatewayConn(fileSvc fs.RuntimeFileService, cfg *config.Config, flags stdioCredentialFlags) (*gatewayConn, error) {
-	certFile, keyFile, err := resolveCredentialPair([]struct{ cert, key, name string }{
+	certFile, keyFile, tierName, err := resolveCredentialPair([]struct{ cert, key, name string }{
 		{flags.AppCert, flags.AppKey, "app flags"},
 		{os.Getenv(envG8EAppCert), os.Getenv(envG8EAppKey), "app env"},
 		{flags.ClientCert, flags.ClientKey, "client flags"},
@@ -390,6 +416,24 @@ func buildGatewayConn(fileSvc fs.RuntimeFileService, cfg *config.Config, flags s
 			Timeout:   30 * time.Second,
 		},
 		gatewayURL: gatewayURL,
+	}
+
+	// CLI-tier certs (client flags, client env, or enrolled CLI disk cert) carry a
+	// CLI SPIFFE URI SAN that the gateway validates against the CLI session ID via
+	// handleCLIAuth. The gateway only routes to handleCLIAuth when the X-G8E-CLI-
+	// Session-ID header is present; without it, the request falls through to
+	// handleAppAuth (which rejects a CLI SAN) and returns 401. Delegated app certs
+	// (app flags / app env) carry an app SAN and authenticate via handleAppAuth
+	// without any header, so we only attach the session ID for CLI tiers.
+	//
+	// Best-effort: tests and some edge cases use synthetic certs without enrolled
+	// credentials on disk. If LoadCredentials fails, leave cliSessionID empty and
+	// let the gateway reject the request — this preserves existing behavior for
+	// delegated app certs and fails closed for CLI certs without a session.
+	if isCLICredentialTier(tierName) {
+		if creds, cerr := auth.LoadCredentials(fileSvc, cfg); cerr == nil && creds != nil && creds.CLISessionID != "" {
+			session.cliSessionID = creds.CLISessionID
+		}
 	}
 
 	if !strings.Contains(gatewayURL, constants.GatewayInternalHostname) {
@@ -460,15 +504,14 @@ func runMCPStdioProxy(cmd *cobra.Command, _ []string, fileSvcFactory func(string
 	// the CLI cert (not the delegated/app cert) because the gateway's SSE auth
 	// middleware validates CLI session ownership. The gateway URL is stripped
 	// of the /mcp suffix to get the base URL for SSE endpoints.
-	if creds, err := auth.LoadCredentials(fileSvc, cfg); err == nil && creds != nil && creds.UserID != "" {
+	if creds, err := auth.LoadCredentials(fileSvc, cfg); err == nil && creds != nil && creds.CLISessionID != "" {
 		if sseClient, err := auth.BuildMTLSClient(fileSvc, cfg, 0); err == nil {
 			conn.sseClient = sseClient
-			conn.userID = creds.UserID
 			// Use OperatorPublicURL (g8e.local) for SSE to ensure TLS ServerName
 			// matches the gateway cert SAN. Deriving from gatewayURL may produce
 			// an IP-based URL that fails TLS verification.
 			conn.sseBaseURL = strings.TrimSuffix(cfg.OperatorPublicURL(), "/")
-			logger.Info("SSE approval notifications enabled", "user_id", creds.UserID)
+			logger.Info("SSE approval notifications enabled", "cli_session_id", creds.CLISessionID)
 		}
 	}
 
@@ -539,7 +582,15 @@ func proxySessionToGateway(session *gatewayConn, req JSONRPCRequest) (JSONRPCRes
 	}
 	httpReq.Header.Set(constants.HeaderContentType, "application/json")
 
-	// Identity is now carried in the delegated credential (mTLS cert), not in headers
+	// For CLI-tier credentials, the cert's URI SAN is a CLI SPIFFE URI that the
+	// gateway validates against the CLI session ID in handleCLIAuth. That path is
+	// only reached when X-G8E-CLI-Session-ID is present; without it the gateway
+	// falls through to handleAppAuth (which rejects a CLI SAN) and returns 401.
+	// Delegated app certs carry identity in their URI SANs and need no header.
+	if session.cliSessionID != "" {
+		httpReq.Header.Set(constants.HeaderCLISessionID, session.cliSessionID)
+	}
+
 	httpResp, err := session.client.Do(httpReq)
 	if err != nil {
 		return JSONRPCResponse{}, fmt.Errorf("mcp: execute request: %w", err)
@@ -585,12 +636,12 @@ func proxySessionToGatewayWithRetryContext(ctx context.Context, session *gateway
 		fmt.Fprintf(os.Stderr, "\n[g8e] Please visit: %s\n", approvalURL)
 	}
 
-	if session.sseClient == nil || session.sseBaseURL == "" || session.userID == "" {
+	if session.sseClient == nil || session.sseBaseURL == "" || session.cliSessionID == "" {
 		return resp, fmt.Errorf("L3 approval: %w", constants.ErrNotAuthenticated)
 	}
 
 	txHash := extractTxHashFromApprovalURL(approvalURL)
-	if err := auth.WaitForApprovalSSE(ctx, session.sseClient, session.sseBaseURL, session.userID, txHash); err != nil {
+	if err := auth.WaitForApprovalSSE(ctx, session.sseClient, session.sseBaseURL, session.cliSessionID, txHash); err != nil {
 		if logger != nil {
 			logger.Warn("L3 approval SSE wait ended", "error", err)
 		}

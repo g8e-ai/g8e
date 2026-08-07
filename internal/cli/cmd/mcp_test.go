@@ -629,11 +629,11 @@ func TestProxyToGatewayWithRetry(t *testing.T) {
 		defer sseServer.Close()
 
 		conn := &gatewayConn{
-			client:     &http.Client{Timeout: 5 * time.Second},
-			gatewayURL: gatewayServer.URL,
-			sseClient:  &http.Client{Timeout: 5 * time.Second},
-			sseBaseURL: sseServer.URL,
-			userID:     "user-timeout-test",
+			client:       &http.Client{Timeout: 5 * time.Second},
+			gatewayURL:   gatewayServer.URL,
+			sseClient:    &http.Client{Timeout: 5 * time.Second},
+			sseBaseURL:   sseServer.URL,
+			cliSessionID: "cli-timeout-test",
 		}
 
 		req := JSONRPCRequest{

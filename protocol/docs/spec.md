@@ -4,8 +4,8 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-07-28
-Version: v1.6.6
+Last Updated: 2026-08-07
+Version: v1.7.0
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -182,7 +182,7 @@ The Consensus service is the reference implementation of L2 Consensus shipped wi
 ### L3 Notary: Human Authorization
 Hardware-bound proof of human presence. Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) is defined in `../../internal/services/governance/l3_notary.go`.
 - **Web Sessions**: Real WebAuthn/FIDO2 proof with the transaction hash as the assertion challenge. WebAuthn passkey bootstrap provides secure initial enrollment without password dependencies.
-- **CLI Sessions**: Authenticates via mTLS certificates with SPIFFE URI SANs. The L3 proof includes the SHA-256 fingerprint of the mTLS certificate (`mtls_cert_fingerprint`) and a cryptographic `cli_signature` over the `transaction_hash`. In outbound mode, transactions requiring L3 are suspended and must be approved via CLI commands such as `g8e approve <tx_hash>`.
+- **CLI Sessions**: Authenticates via mTLS certificates with SPIFFE URI SANs. The L3 proof includes the SHA-256 fingerprint of the mTLS certificate (`mtls_cert_fingerprint`) and a cryptographic `cli_signature` over the `transaction_hash`. In outbound mode, transactions requiring L3 are suspended and must be approved via CLI commands such as `g8e approve <tx_hash>`. The suspended transaction records the `submitter_cli_session_id` so that the resulting `approval.completed` SSE event is scoped to that specific CLI session, preventing cross-session approval leakage.
 - **Auto-Approval**: Explicit policy permits auto-approval for benign diagnostic verbs. Auto-approval never bypasses L1 or L2 gates.
 
 ### L4 Warden: Pre-dispatch Verification
@@ -325,7 +325,20 @@ The protocol enforces strict separation between session types to guarantee conte
 | **CLI** | `cli_session_id` | BYO/CLI client | mTLS (CLI cert, URI SAN) |
 | **Web** | `web_session_id` | Browser frontend | Passkey (WebAuthn) |
 
-Sessions are cryptographically bound to their authentication mechanism and cannot be conflated. SSE and pub/sub routing uses these identifiers to prevent cross-tenant data leakage.
+Sessions are cryptographically bound to their authentication mechanism and cannot be conflated.
+
+### SSE & Pub/Sub Routing
+
+SSE and pub/sub routing uses a two-dimensional model that separates ownership from delivery:
+
+- **Ownership dimension**: `user_id` is always required. It identifies the human user who owns the event stream and is bound by the authenticated identity (mTLS certificate or web session cookie). `user_id` alone is not a valid delivery target.
+- **Delivery dimension**: Exactly one of `web_session_id` or `cli_session_id` must be set. This identifies the specific session that should receive the event. The two session IDs are mutually exclusive on the delivery axis.
+
+The prior three-way mutually-exclusive routing model (`user_id` / `web_session_id` / `cli_session_id` — pick exactly one) is removed. The `user_id`-only fan-out route is removed entirely, so approval events are scoped to the specific CLI session that submitted the transaction, eliminating cross-session leakage.
+
+Routing and identity identifiers are carried in headers and auth context, not in URL query strings. For mTLS clients, `user_id` is derived from the certificate and the session ID is sent via the `X-G8E-CLI-Session-ID` or `X-G8E-Web-Session-ID` header. For cookie-authenticated browser clients, `web_session_id` is derived from the session cookie. This matches the transport model used by every other gateway controller and prevents identity/routing IDs from leaking into access logs, browser history, and referrer headers.
+
+See [SSE Streaming](../../docs/architecture/sse.md) for the full endpoint and security model.
 
 ---
 

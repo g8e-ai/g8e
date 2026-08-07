@@ -4,8 +4,8 @@ title: A2A Protocol
 
 # A2A Protocol
 
-Last Updated: 2026-07-29
-Version: v1.6.6
+Last Updated: 2026-08-07
+Version: v1.7.0
 
 The g8e Operator supports Agent-to-Agent (A2A) protocol integration. A2A agents submit HTTP/JSON skill invocation requests to the g8e Gateway, which encapsulates them in a governance envelope, executes the 5-layer verification sequence (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator), and dispatches verified payloads to a configured downstream A2A server.
 
@@ -129,15 +129,17 @@ The g8e platform enforces security across five layers:
 
 ### L2 Consensus
 
-- **Ed25519 signatures**: Consensus agents sign envelopes with Ed25519 private keys.
-- **Signer verification**: The gateway verifies signatures against trusted signers in the SQLite store.
+- **Ed25519 signatures**: Consensus agents sign envelopes with Ed25519 private keys. Application-layer Ed25519 remains valid for consensus, receipts, and notary proofs even in FIPS 140-3 builds (see [FIPS 140-3 Compliance](../../docs/reference/fips140-3.md)); only Ed25519-signed *TLS* certificates are rejected.
+- **Per-member distinct keys**: Consensus bootstrap supports `member_seeds` (a map of member app IDs to individual hex-encoded Ed25519 seeds), so each member signs with its own derived key pair. Combined with `RequireDistinct` and quorum, a single compromised key can no longer forge enough votes to satisfy a multi-member quorum.
+- **Signer verification**: The gateway verifies signatures against trusted signers in the SQLite store and enforces quorum against the consensus policy (`ConsensusSetId`, `MemberKeyIDs`, `Quorum`, `RequireDistinct`).
 - **Doctrine mode**: L2 signatures are not required; the L2 status is recorded as `L2_STATUS_NOT_REQUIRED`.
 - **L2 status tracking**: `ActionReceipt.l2_status` distinguishes between `L2_STATUS_NOT_REQUIRED`, `L2_STATUS_REQUIRED_VALID`, and `L2_STATUS_REQUIRED_FAILED`.
 
 ### L3 Notary (Authorization)
 
 - **mTLS fingerprint**: CLI sessions use mTLS certificate fingerprints as proof. The `CLISessionVerifier` in `internal/services/gateway/cli_session_verifier.go` performs user active, session validity, and certificate revocation checks.
-- **Unified notary**: `NewGatewayL3Notary` in `internal/services/governance/l3_notary.go` creates a composite `L3Notary` that uses a layered model: passkey (WebAuthn) verification is always required first, and CLI mTLS session verification is additionally performed when `mtls_cert_fingerprint` is present in the proof.
+- **Unified notary**: `NewGatewayL3Notary` in `internal/services/governance/l3_notary.go` creates a composite `L3Notary` that uses a layered model: passkey (WebAuthn) verification is always required first, and CLI mTLS session verification is additionally performed when `mtls_cert_fingerprint` is present in the proof. Proofs without a `credential_id` are rejected with `ErrPasskeyProofRequired`.
+- **No mock bypass**: The `G8E_L3_MOCK` env var and the auto-approving `demoL3Notary` were removed in v1.6.7. The gateway always requires real WebAuthn proof for L3 notary approval; a fail-closed regression test (`TestGatewayModeService_GetGovernanceDeps_AlwaysUsesRealNotary`) verifies no mock notary is ever instantiated.
 - **Suspension**: Transactions requiring L3 approval are suspended and stored for later resumption via WebAuthn or CLI proof.
 - **L3 status tracking**: `ActionReceipt.l3_status` distinguishes between `L3_STATUS_NOT_REQUIRED`, `L3_STATUS_REQUIRED_VALID`, and `L3_STATUS_REQUIRED_FAILED`.
 
@@ -192,6 +194,8 @@ The platform uses a consolidated 2-port gateway:
 | `8080` | HTTP (bootstrap, MCP, A2A) | Plain HTTP with loopback origin protection. |
 | `8443` | HTTPS (mTLS API, public) | mTLS (RequireAndVerifyClientCert). |
 
+> **FIPS 140-3**: In FIPS builds the HTTPS/mTLS port uses `certs.FIPSCurvePreferences()` (`X25519MLKEM768`, P-384, P-256) for TLS key agreement — X25519 is excluded. Ed25519-signed TLS certificates are rejected at load time (`ErrPKIEd25519CertRejected`); PKI certificates must use ECDSA P-256. Application-layer Ed25519 (consensus, receipts, notary) is unaffected. See [FIPS 140-3 Compliance](../../docs/reference/fips140-3.md).
+
 ### CLI Configuration
 
 The g8e platform uses CLI flags for production configuration. See [g8e Protocol](./spec.md) for the full environment variable list. A2A-relevant flags:
@@ -244,6 +248,7 @@ Sessions are cryptographically bound to their authentication mechanism.
 | Response models | `internal/services/mcp/models.go` |
 | Envelope construction | `internal/services/mcp/gateway.go` (`processGatewayTransaction`) |
 | L1 doctrine validation | `internal/services/governance/l1_doctrine.go` |
+| L2 consensus verification | `internal/services/governance/l2_consensus.go` |
 | Transaction verification | `internal/services/governance/l4_warden.go` |
 | Envelope processor interface | `internal/services/governance/types.go` (`EnvelopeProcessor`) |
 | Envelope processor impl | `internal/services/pubsub/pubsub_commands.go` (`OperatorPubSubService.ProcessEnvelope`) |

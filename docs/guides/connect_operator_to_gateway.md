@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-07-28
-Version: v1.6.6
+Last Updated: 2026-08-07
+Version: v1.7.0
 
 ---
 
@@ -71,7 +71,7 @@ The gateway provides CLI commands to deploy and manage operators on remote hosts
 ./g8e operator deploy --hosts <host1,host2> --background
 ```
 
-This command copies the operator binary to remote hosts via SCP, makes it executable via SSH, and optionally starts the gateway in the background. Requires `./g8e auth enroll` first. Additional flags include `-P` for SSH port and `-i` for SSH identity file.
+This command copies the operator binary to remote hosts via SCP, makes it executable via SSH, and optionally starts the operator in the background. Requires `./g8e auth enroll` first. Additional flags include `-P` for SSH port and `-i` for SSH identity file.
 
 **Stream operator binary to remote hosts:**
 
@@ -79,9 +79,21 @@ This command copies the operator binary to remote hosts via SCP, makes it execut
 ./g8e operator stream <host1> <host2> --endpoint <gateway-ip>
 ```
 
-This command streams the operator binary to remote hosts via native Go crypto/ssh and executes it directly on each host. Supports concurrent streaming, structured JSON output, and advanced SSH configuration. When `--endpoint` is provided, the operator starts automatically on each remote host after the binary is injected. Without `--endpoint`, the binary is saved to a temporary file on the remote host with instructions for manual startup.
+This command streams the operator binary to remote hosts over SSH and executes it directly on each host. When `--endpoint` is provided, the operator starts automatically on each remote host after the binary is injected. Without `--endpoint`, the binary is saved to a temporary file on the remote host with instructions for manual startup.
 
-Hosts are specified as positional arguments or via `--hosts <file>` (one host per line, or `-` for stdin). Additional flags include `--arch` (target architecture: amd64, arm64, 386), `--concurrency` (max parallel SSH sessions), `--timeout` (per-host dial and inject timeout in seconds), `--ssh-config` (path to SSH config file), `--known-hosts` (path to SSH known_hosts file), `--ssh-identity-file` (SSH identity file path), `--ssh-user` (SSH username), `--ssh-passphrase` (passphrase for encrypted SSH private keys), `--binary-dir` (directory containing architecture-specific operator builds), `--no-git` (disable ledger), and `--preflight` (enable pre-flight SSH connectivity check before binary transfer).
+Hosts are specified as positional arguments or via `--hosts <file>` (one host per line, or `-` for stdin). Additional flags:
+
+- `--arch`: target architecture (amd64, arm64, 386)
+- `--concurrency`: max parallel SSH sessions
+- `--timeout`: per-host dial and inject timeout in seconds
+- `--ssh-config`: path to SSH config file
+- `--known-hosts`: path to SSH known_hosts file
+- `--ssh-identity-file`: SSH identity file path
+- `--ssh-user`: SSH username
+- `--ssh-passphrase`: passphrase for encrypted SSH private keys
+- `--binary-dir`: directory containing architecture-specific operator builds
+- `--no-git`: disable ledger
+- `--preflight`: enable pre-flight SSH connectivity check before binary transfer
 
 **Copy operator binary locally:**
 
@@ -219,7 +231,7 @@ This starts the gateway (if not already running), performs CLI auth, and launche
 To wrap an external MCP server with g8e governance:
 
 ```bash
-./g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /home/user
+./g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem ~/projects
 ```
 
 ### L3 Transaction Approval
@@ -255,7 +267,7 @@ Operators and CLI clients connecting to the g8e Gateway can use the g8e Protocol
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.6.6
+go get github.com/g8e-ai/g8e@v1.6.10
 ```
 
 The module provides protobuf types for governance envelopes, operator messages, and common protocol structures. It also includes SPIFFE workload identity helpers for generating operator, CLI, and gateway identities used in mTLS enrollment.
@@ -267,7 +279,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For operator-side tooling or Python-based services:
 
 ```bash
-pip install g8e==1.6.6
+pip install g8e==1.6.10
 ```
 
 Provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
@@ -396,13 +408,7 @@ After `gw clean`, re-enroll with `./g8e auth enroll` to obtain new credentials.
 
 ### Certificate Errors
 
-Verify PKI directory exists and contains valid certificates:
-
-```bash
-ls -la .g8e/pki/
-```
-
-Verify runtime directory exists and contains client certificates:
+Verify the PKI directory as described in [Gateway Fails to Start](#gateway-fails-to-start). Then verify the runtime directory contains client certificates:
 
 ```bash
 ls -la .g8e/cli.crt .g8e/cli.key

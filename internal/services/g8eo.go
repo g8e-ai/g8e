@@ -219,7 +219,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		return fmt.Errorf("%w: %w", constants.ErrGatewayOperatorSessionInvalid, err)
 	}
 	if operator_session == nil {
-		if err := auditStore.CreateSession(vs.config.OperatorSessionId, string(constants.UserRoleOperator), "Operator Session", vs.config.OperatorID); err != nil {
+		if err := auditStore.CreateSession(vs.config.OperatorSessionId, constants.SessionTypeOperator, "Operator Session", vs.config.OperatorID); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrAuditRecordUserMsg, err)
 		}
 	}
