@@ -148,7 +148,7 @@ Internal enumeration constants, each defined as a typed string:
 - `UserStatus`: `UserStatusActive`, `UserStatusDisabled`
 - `AuthProvider`: `AuthProviderJWT`, `AuthProviderLocal`, `AuthProviderPasskey`
 - `ApprovalType`: `ApprovalTypeAgentContinue` (`agent.continue`), `ApprovalTypeCommand` (`command`), `ApprovalTypeFileEdit` (`file.edit`), `ApprovalTypeIntent` (`intent`), `ApprovalTypeStream` (`stream`). Values use dot-separated format consistent with `EventType` naming conventions.
-- `SessionType`: `SessionTypeCLI`, `SessionTypeOperator`, `SessionTypeWeb`
+- `SessionType`: `SessionTypeCLI`, `SessionTypeOperator`, `SessionTypeWeb`, `SessionTypeApp` (`app`). `SessionTypeApp` is an auto-created stub session row in the audit store for FK satisfaction when an event arrives with an unknown session ID; distinct from operator/cli/web which are first-class authenticated sessions.
 - `StreamStatus`: `StreamStatusCancelled`, `StreamStatusCompleted`, `StreamStatusExited`, `StreamStatusFailed`, `StreamStatusSummary`
 - `CommandExitStatus`: `CommandExitStatusError`, `CommandExitStatusFailure`, `CommandExitStatusInterrupted`, `CommandExitStatusInvalidExit`, `CommandExitStatusKilled`, `CommandExitStatusMisuse`, `CommandExitStatusNotExecutable`, `CommandExitStatusNotFound`, `CommandExitStatusSuccess`, `CommandExitStatusTerminated`, `CommandExitStatusSignal1` (SIGHUP), `CommandExitStatusSignal2` (SIGINT), `CommandExitStatusSignal3` (SIGQUIT), `CommandExitStatusSignal6` (SIGABRT), `CommandExitStatusSignal9` (SIGKILL), `CommandExitStatusSignal11` (SIGSEGV), `CommandExitStatusSignal13` (SIGPIPE), `CommandExitStatusSignal15` (SIGTERM)
 - `VaultMode`: `VaultModeScrubbed`, `VaultModeRaw`
