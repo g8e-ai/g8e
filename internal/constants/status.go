@@ -132,6 +132,7 @@ const (
 	SessionTypeCLI      SessionType = "cli"
 	SessionTypeOperator SessionType = "operator"
 	SessionTypeWeb      SessionType = "web"
+	SessionTypeApp      SessionType = "app"
 )
 
 // StreamStatus is a typed string for stream status.

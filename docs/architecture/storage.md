@@ -1,11 +1,11 @@
 # Storage Architecture
 
-Last Updated: 2026-07-28
-Version: v1.6.6
+Last Updated: 2026-08-07
+Version: v1.7.0
 
 ## Overview
 
-The g8e storage layer is split into discrete services, each responsible for a specific persistence concern. Most services use SQLite as their backing store; the Ledger uses git for file version control, and the History Handler is a stateless coordinator that delegates to the Audit Store and Ledger. Mandatory [encryption at rest](./encryption.md) is enforced for sensitive data.
+The g8e storage layer is split into discrete services, each responsible for a specific persistence concern. Most services use SQLite as their backing store; the Ledger uses git for file version control, and the History Handler is a stateless coordinator that delegates to the Audit Store and Ledger. Sensitive data is encrypted at rest; see [Encryption Architecture](./encryption.md) for vault and key management.
 
 Services that handle sensitive content require an unlocked vault. The Audit Store, Execution Vault, and Token Store fail closed when the vault is locked, returning errors rather than writing plaintext. The Ledger encrypts file copies when the vault is unlocked and fails closed for file retrieval and restoration. Services that store only public or non-sensitive data (nonces, governance envelopes, attestations) do not require encryption.
 
@@ -20,7 +20,7 @@ The storage layer consists of the following primary services:
 - **Replay Store**: Nonce-based replay protection for governance transactions
 - **Suspended Transaction Store**: Persistence for transactions awaiting [L3 approval](./auth.md#layer-3-notary-l3notary)
 - **Commitment Ledger**: Commitment attestations with chain integrity verification
-- **History Handler**: Unified history retrieval combining the audit store and ledger
+- **History Handler**: Unified history retrieval combining the Audit Store and Ledger
 - **Canonical Gateway Persistence**: Document, key-value, blob, and event stream persistence in the shared database
 
 ---
@@ -29,35 +29,35 @@ The storage layer consists of the following primary services:
 
 ### Audit Store
 
-The Audit Store is the authoritative append-only record of operator sessions, events, file mutations, and signed action receipts. It tracks system activity and provides the data backbone for audit queries and compliance reporting. The Audit Store operates on the shared gateway database (`g8e.db`) alongside the KV store, document store, and other gateway services.
+The Audit Store is the authoritative append-only record of operator sessions, events, file mutations, and signed action receipts. It tracks system activity and provides the data backbone for audit queries and compliance reporting. The Audit Store operates on the shared gateway database alongside the KV store, document store, and other gateway services.
 
 **Capabilities:**
 
 - Records operator and app sessions, events, file mutations, and signed action receipts
 - Encrypts event content, command stdout, and command stderr at rest using AES-256-GCM
 - Fails closed when the vault is locked: events are not recorded until the vault is unlocked
-- Truncates large command outputs using a head/tail strategy to prevent database bloat
+- Truncates large command outputs to prevent database bloat
 - Validates that events reference an existing session before recording
 - Supports atomic batch event insertion within a single transaction
-- Stores signed action receipts with upsert semantics on transaction ID
+- Stores signed action receipts with idempotent updates keyed by transaction ID
 - Prunes old events, file mutations, receipts, and orphaned sessions on a configurable schedule
 
 ---
 
 ### Ledger
 
-The Ledger provides git-backed version control for all file modifications performed by the operator. Each operator session maintains its own isolated git repository, ensuring that file changes from different sessions do not interfere. The go-git library is used directly; no external git binary is invoked.
+The Ledger provides git-backed version control for all file modifications performed by the operator. Each operator session maintains its own isolated git repository, ensuring that file changes from different sessions do not interfere.
 
 **Two-Phase Commit:**
 
-File operations follow a two-phase commit pattern. The ledger snapshots the pre-mutation state, the operator performs the filesystem mutation, then the ledger completes the commit by copying the post-mutation file and committing to git. This produces accurate diff content and statistics for each change. The three supported operations are write, delete, and create.
+File operations follow a two-phase commit pattern. The Ledger snapshots the pre-mutation state, the operator performs the filesystem mutation, then the Ledger completes the commit by copying the post-mutation file and committing to git. This produces accurate diff content and statistics for each change. The three supported operations are write, delete, and create.
 
 **Capabilities:**
 
 - Encrypts file copies at rest using AES-256-GCM when the vault is unlocked
-- Enforces a 100 MB size limit on encrypted copies to prevent memory exhaustion during encryption
+- Enforces a size limit on encrypted copies to prevent memory exhaustion during encryption
 - Fails closed for file retrieval and restoration when the vault is locked
-- Normalizes file paths across platforms by stripping Windows drive letters and converting backslashes
+- Normalizes file paths across platforms for consistent history
 - Exposes the HEAD commit hash of the global files ledger as a BFT-verifiable state snapshot
 - Supports file history queries, point-in-time retrieval, and restoration from prior commits
 
@@ -73,7 +73,7 @@ The Execution Vault stores command execution results and file diffs. All content
 - Stores content hashes alongside compressed blobs for integrity verification
 - Links execution records to workflow metadata such as case, task, and investigation IDs
 - Prunes records older than the retention threshold and removes the oldest rows when the database exceeds the configured size limit
-- Uses upsert semantics on stable string IDs for both execution and file diff records
+- Stores execution and file diff records with idempotent updates keyed by stable string IDs
 - Supports retrieving file diffs scoped to an operator session
 
 ---
@@ -88,22 +88,21 @@ The Token Store provides encrypted key-value persistence for Sentinel tokens use
 - Fails closed on all operations when the vault is locked
 - Supports TTL-based expiration for token entries
 - Supports prefix-based scanning to retrieve all tokens matching a namespace
-- Sentinel keys are namespaced with a dedicated prefix to avoid collisions with cache and document invalidation entries in the same table
-- Writes entries as observed-state so they do not participate in the bound state root hash
+- Uses namespaced keys to avoid collisions with other entries in the shared table
 
 ---
 
 ### Replay Store
 
-The Replay Store provides nonce-based replay protection for governance transactions. It relies on SQLite's UNIQUE constraint on the nonce column for atomic replay detection, avoiding race conditions from separate read-then-write patterns.
+The Replay Store provides nonce-based replay protection for governance transactions. Nonce reservation is atomic, detecting duplicates without application-level locking.
 
-In gateway mode, the Replay Store operates on the shared gateway database (`g8e.db`) alongside the Audit Store and Token Store. In outbound mode, the Replay Store uses a standalone SQLite database with its own schema.
+In gateway mode, the Replay Store operates on the shared gateway database alongside the Audit Store and Token Store. In outbound mode, the Replay Store uses a standalone SQLite database with its own schema.
 
 **Capabilities:**
 
-- Atomically reserves nonces using a UNIQUE constraint to detect duplicates without application-level locking
+- Atomically reserves nonces to detect duplicates without application-level locking
 - Supports a nonce lifecycle: reserve, then either finalize (mark as used) or release (delete on transaction failure)
-- Fails closed on any SQLite error during cleanup or insertion, preventing replay protection from being silently bypassed
+- Fails closed on any error during cleanup or insertion, preventing replay protection from being silently bypassed
 - Provides expired nonce cleanup to prevent stale entries from accumulating
 - Provides stale reservation cleanup for recovery after crashes (outbound mode)
 - Does not require encryption, as nonce data contains no sensitive content
@@ -118,7 +117,7 @@ The Suspended Transaction Store persists governance transactions that are awaiti
 **Capabilities:**
 
 - Stores the complete governance envelope as text for replay after approval
-- Uses upsert semantics on transaction hash, allowing re-submission with updated approval metadata
+- Supports idempotent updates keyed by transaction hash, allowing re-submission with updated approval metadata
 - Tracks approval status, approver identity, cryptographic signature, expected certificate fingerprint, and Ed25519 public key for verification at L3 notary time
 - Supports both Ed25519 CLI-based and passkey WebAuthn-based approval proofs
 - Filters out expired transactions on retrieval
@@ -135,8 +134,8 @@ The Commitment Ledger stores commitment attestations as raw JSON with atomic app
 
 **Capabilities:**
 
-- Enforces chain integrity by verifying that each new attestation's prior hash matches the current latest hash, all within a single transaction
-- Prevents two concurrent attestations from chaining to the same prior hash via transactional check-then-insert
+- Enforces chain integrity by verifying that each new attestation's prior hash matches the current latest hash within a single transaction
+- Prevents two concurrent attestations from chaining to the same prior hash
 - Stores the raw attestation JSON alongside structured fields extracted at insert time
 - Tracks all signature digests and the auditor signature as discrete columns
 - Does not require encryption, as attestation JSON is treated as public audit data
@@ -150,10 +149,10 @@ The History Handler is a thin coordinator that combines the Audit Store and Ledg
 **Capabilities:**
 
 - Fetches audit events for a session and attaches file mutations for completed file edits
-- Delegates file history queries to the ledger's git log
-- Delegates point-in-time file retrieval and file restoration to the ledger
+- Delegates file history queries to the Ledger's git log
+- Delegates point-in-time file retrieval and file restoration to the Ledger
 - Scopes all operations to an operator session ID
-- Uses dependency injection for the audit store and ledger, enabling unit testing with mocks
+- Uses dependency injection for the Audit Store and Ledger, enabling unit testing with mocks
 
 ---
 
@@ -162,37 +161,21 @@ The History Handler is a thin coordinator that combines the Audit Store and Ledg
 The canonical gateway database (`g8e.db`) provides unified storage primitives used by higher-level gateway services:
 
 - **Document Store**: Stores JSON documents keyed by collection and identifier, tracking state versions for Merkle root computation
-- **Key-Value Store**: Provides TTL-bearing key-value persistence with state tiers (`bound` or `observed`) and cache invalidation triggers
-- **Blob Store**: Manages raw binary attachments with namespace isolation, TTL, and state tier classification
-- **SSE Event Buffer**: Maintains a per-routing-target ring buffer enabling reconnection replay across web sessions, CLI sessions, and user streams
+- **Key-Value Store**: Provides TTL-bearing key-value persistence with cache invalidation triggers
+- **Blob Store**: Manages raw binary attachments with namespace isolation and TTL
+- **SSE Event Buffer**: Maintains a per-routing-target buffer enabling reconnection replay across web sessions, CLI sessions, and user streams
 
 ---
 
 ## Runtime File I/O Abstraction
 
-All storage services that interact with the filesystem do so through a shared file I/O abstraction scoped to the `.g8e/` runtime directory. This abstraction provides atomic file writes via a temporary file and rename pattern, path resolution that confines operations within the runtime directory, and recursive permission enforcement for directories and files. The Ledger and Audit Store both rely on this abstraction for all filesystem operations, ensuring consistent path handling and preventing writes outside the runtime directory.
-
----
-
-## Encryption and Vault Behavior
-
-Services that handle sensitive content use AES-256-GCM encryption via the [vault](./encryption.md). Following v1.0.10, encryption at rest is mandatory for sensitive data storage.
-
-Behavior when the vault is locked varies by service:
-
-- **Audit Store**: Fails closed. Events are not recorded until the vault is unlocked.
-- **Execution Vault**: Fails closed. No plaintext fallback for reads or writes.
-- **Token Store**: Fails closed on all operations. No plaintext fallback.
-- **Ledger**: File retrieval and restoration fail closed. New file copies are encrypted when the vault is unlocked.
-- **Replay Store**: No encryption required. Nonces contain no sensitive content.
-- **Suspended Transaction Store**: No encryption required. Governance envelopes are public audit data.
-- **Commitment Ledger**: No encryption required. Attestations are public audit data.
+All storage services that interact with the filesystem do so through a shared file I/O abstraction scoped to the `.g8e/` runtime directory. This abstraction provides atomic file writes, path resolution that confines operations within the runtime directory, and permission enforcement for directories and files. The Ledger and Audit Store both rely on this abstraction for all filesystem operations, ensuring consistent path handling and preventing writes outside the runtime directory.
 
 ---
 
 ## Retention and Pruning
 
-Most services run a background pruner that periodically deletes records older than the configured retention threshold and removes the oldest rows when the database exceeds the configured size limit. Pruning also runs incremental vacuum to reclaim space without a full database lock.
+Most services run a background pruner that periodically deletes records older than the configured retention threshold and removes the oldest rows when the database exceeds the configured size limit. Pruning reclaims space without a full database lock.
 
 Two services do not start a background pruner:
 - **Replay Store**: Callers invoke pruning and stale reservation cleanup directly.
@@ -202,24 +185,20 @@ Two services do not start a background pruner:
 
 ## Cross-Platform Path Handling
 
-All storage services construct filesystem paths through a shared path utility layer that prevents a Windows-specific double-join issue: when two absolute paths are joined with standard library functions, the result is an invalid concatenated path (for example, `C:\temp\C:\temp\data.db`). The utility layer detects absolute paths in the joined elements and uses them as-is instead of concatenating.
-
-Configuration paths for databases and directories can be either relative or absolute. Relative paths are resolved against a base data directory. Absolute paths are respected and used without modification, allowing operators to place individual databases on separate volumes or drives.
-
-Paths are normalized for platform-appropriate separators on Windows, converting forward slashes to backslashes and removing redundant separators. The Ledger additionally strips Windows drive letters and leading separators before constructing ledger-relative paths, ensuring that file history is consistent across platforms.
+All storage services construct filesystem paths through a shared path utility layer that normalizes separators and prevents invalid path joins on Windows. Configuration paths for databases and directories can be either relative or absolute. Relative paths are resolved against a base data directory; absolute paths are respected and used without modification, allowing operators to place individual databases on separate volumes or drives. The Ledger normalizes paths for consistent file history across platforms.
 
 ---
 
 ## Security Properties
 
-1. **Encryption at rest**: Sensitive fields are encrypted using AES-256-GCM. The Audit Store, Execution Vault, and Token Store all use fail-closed semantics, returning errors when the vault is locked.
-2. **Fail-closed replay protection**: Nonce reservation returns an error on any SQLite failure, preventing replay protection from being silently bypassed.
-3. **Commitment chain integrity**: The Commitment Ledger verifies the prior commitment hash inside a transaction to prevent chain forks under concurrent writes.
-4. **Session validation**: Audit events must reference an existing session row. Foreign key constraints are enforced at the schema level.
-5. **Path traversal protection**: The Ledger strips drive letters and leading separators before constructing ledger-relative paths.
-6. **Cross-Platform path safety**: The shared path utility layer prevents double-joining of absolute paths on Windows and normalizes separators across platforms. See [Cross-Platform Path Handling](#cross-platform-path-handling).
-7. **Size limits for encrypted copies**: The Ledger enforces a 100 MB cap on encrypted file copies to prevent OOM during the full-read required by AES-GCM.
-8. **Atomic nonce reservation**: The UNIQUE constraint on the nonce column provides atomicity without application-level locking.
+1. **Encryption at rest**: Sensitive fields are encrypted using AES-256-GCM. The Audit Store, Execution Vault, and Token Store use fail-closed semantics, returning errors when the vault is locked.
+2. **Fail-closed replay protection**: Nonce reservation returns an error on any failure, preventing replay protection from being silently bypassed.
+3. **Commitment chain integrity**: The Commitment Ledger verifies the prior commitment hash within a transaction to prevent chain forks under concurrent writes.
+4. **Session validation**: Audit events must reference an existing session.
+5. **Path traversal protection**: The Ledger normalizes paths before constructing ledger-relative paths.
+6. **Cross-platform path safety**: The shared path utility layer prevents invalid path joins on Windows and normalizes separators across platforms.
+7. **Size limits for encrypted copies**: The Ledger enforces a cap on encrypted file copies to prevent memory exhaustion during encryption.
+8. **Atomic nonce reservation**: Nonce reservation is atomic without application-level locking.
 9. **Runtime directory confinement**: The shared file I/O abstraction resolves all paths relative to the `.g8e/` runtime directory, preventing writes outside the intended scope.
 
 ---
@@ -237,7 +216,9 @@ Paths are normalized for platform-appropriate separators on Windows, converting 
 
 ### Transaction Flow
 
-1. The governance layer processes the transaction through the [five-layer interlock](./auth.md); the L4 Warden reserves the nonce via the Replay Store as stage 1 of L4 processing.
+The governance layer processes each transaction through the [five-layer interlock](./auth.md): L1 Doctrine (technical safety), L2 Consensus (multi-agent approval), L3 Notary (human authorization), L4 Warden (final verification), and L5 Actuator (execution). The storage layer participates as follows:
+
+1. The L4 Warden reserves the nonce via the Replay Store as stage 1 of L4 processing.
 2. The Execution Vault stores the execution result.
 3. The Audit Store records the signed action receipt.
 4. The Replay Store finalizes the nonce.
@@ -261,4 +242,3 @@ Paths are normalized for platform-appropriate separators on Windows, converting 
 - [**Gateway Architecture**](./gateway.md): CanonicalDBService and gateway-mode service initialization
 - [**Network Architecture**](./network.md): Mutual TLS and identity binding
 - [**g8e Protocol**](../../protocol/docs/spec.md): The wire contract and governance hierarchy
-

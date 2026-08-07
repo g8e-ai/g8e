@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect an Existing Frontend to g8e Gateway
 
-Last Updated: 2026-07-28
-Version: v1.6.6
+Last Updated: 2026-08-07
+Version: v1.7.0
 
 ---
 
@@ -130,8 +130,8 @@ Authenticated endpoints (session cookie required):
 - `GET /api/v1/approvals` - List pending suspended transactions
 - `GET /api/v1/approvals/{txHash}/challenge` - Get WebAuthn challenge for approval
 - `POST /api/v1/approvals/{txHash}/verify` - Verify WebAuthn assertion to approve transaction
-- `GET /api/v1/sse/stream?web_session_id={id}` - SSE live event stream
-- `GET /api/v1/sse/events?web_session_id={id}&since_id={n}` - Poll SSE events
+- `GET /api/v1/sse/stream` - SSE live event stream (web_session_id derived from cookie)
+- `GET /api/v1/sse/events?since_id={n}` - Poll SSE events (web_session_id derived from cookie)
 
 The gateway also serves a full OpenAPI/Swagger specification at `/swagger/doc.json` (and browsable UI at `/swagger/`). Use this to auto-discover the full API surface and schemas.
 
@@ -190,8 +190,8 @@ Handle error responses:
 
 ### Connection
 
-- Connect to `GET /api/v1/sse/stream?web_session_id={id}` using `EventSource` with `withCredentials: true`.
-- The `web_session_id` comes from `GET /api/v1/auth/sessions/me` after login.
+- Connect to `GET /api/v1/sse/stream` using `EventSource` with `withCredentials: true`.
+- The `web_session_id` is derived from the authenticated session cookie by the gateway; do NOT pass it in the URL.
 - On open, update connection status to connected. On error, update status to disconnected and auto-reconnect after 3 seconds.
 - Parse incoming messages via the `onmessage` handler.
 
@@ -205,7 +205,7 @@ Handle error responses:
 
 ### Polling Fallback
 
-If `EventSource` does not send cookies cross-origin, fall back to polling `GET /api/v1/sse/events?web_session_id={id}&since_id={lastId}` every 2 seconds.
+If `EventSource` does not send cookies cross-origin, fall back to polling `GET /api/v1/sse/events?since_id={lastId}` every 2 seconds (the `web_session_id` is derived from the session cookie).
 
 ### WebSocket Note
 

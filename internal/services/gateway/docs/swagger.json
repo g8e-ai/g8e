@@ -688,7 +688,7 @@
         },
         "/api/v1/sse/events": {
             "get": {
-                "description": "Polls stored SSE events since a given ID. Dual auth: mTLS for CLI/operator, web session\ncookie for browser. Exactly one routing target must be set via query string.",
+                "description": "Polls stored SSE events since a given ID. Dual auth: mTLS for CLI/operator, web session\ncookie for browser. The route is built entirely from auth context: user_id from\ncert/cookie, session from header/cookie. The query string carries only since_id and limit.",
                 "produces": [
                     "application/json"
                 ],
@@ -699,21 +699,9 @@
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Web session ID",
-                        "name": "web_session_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "CLI session ID",
-                        "name": "cli_session_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "User ID",
-                        "name": "user_id",
-                        "in": "query"
+                        "description": "CLI session ID (mTLS only — user_id derived from cert)",
+                        "name": "X-G8E-CLI-Session-ID",
+                        "in": "header"
                     },
                     {
                         "type": "integer",
@@ -752,7 +740,7 @@
         },
         "/api/v1/sse/push": {
             "post": {
-                "description": "Appends an event to the SSE event store and publishes it to the pub/sub channel.\nRequires mTLS app workload identity. Exactly one routing target must be set:\nweb_session_id, cli_session_id, or user_id.",
+                "description": "Appends an event to the SSE event store and publishes it to the pub/sub channel.\nRequires mTLS app workload identity. user_id is required, plus exactly one\nof web_session_id or cli_session_id as the delivery target.",
                 "consumes": [
                     "application/json"
                 ],
@@ -804,7 +792,7 @@
         },
         "/api/v1/sse/stream": {
             "get": {
-                "description": "Streams events via Server-Sent Events (text/event-stream). Dual auth: mTLS for\nCLI/operator, web session cookie for browser. Supports Last-Event-ID header for\nreconnection. Exactly one routing target must be set via query string.",
+                "description": "Streams events via Server-Sent Events (text/event-stream). Dual auth: mTLS for\nCLI/operator, web session cookie for browser. Supports Last-Event-ID header for\nreconnection. The route is built entirely from auth context: user_id from cert/cookie,\nsession from header/cookie. The query string carries only since_id.",
                 "produces": [
                     "text/event-stream"
                 ],
@@ -815,21 +803,9 @@
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Web session ID",
-                        "name": "web_session_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "CLI session ID",
-                        "name": "cli_session_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "User ID",
-                        "name": "user_id",
-                        "in": "query"
+                        "description": "CLI session ID (mTLS only — user_id derived from cert)",
+                        "name": "X-G8E-CLI-Session-ID",
+                        "in": "header"
                     },
                     {
                         "type": "integer",

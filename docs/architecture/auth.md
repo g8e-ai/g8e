@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-07-31
-Version: v1.6.8
+Last Updated: 2026-08-07
+Version: v1.7.0
 
 This document explains how to authenticate and authorize actions in the g8e platform. The platform is built as a zero-trust execution environment where every action is verified before execution.
 
@@ -197,17 +197,17 @@ Notary ensures explicit human authorization for sensitive actions:
 - **Request window**: 2 minutes to complete the passkey ceremony after the transaction is suspended. If the passkey approval is not completed within this window, the request expires and the action must be retried.
 - **Dispatch window**: 30 minutes after approval to dispatch the transaction. Transactions not dispatched within that window must be re-approved.
 
-**Human Browser Approval Flow (WaitForHumanApproval):**
+**Human Browser Approval Flow (Harness):**
 
-The demo harness and automated test scenarios use `Client.WaitForHumanApproval` (`internal/tools/agent_harness/client/client.go`) to drive the real out-of-band L3 notary flow. Instead of a software passkey, the harness now requires a human to complete a WebAuthn ceremony in their browser:
+The demo harness and automated test scenarios drive the real out-of-band L3 notary flow. Instead of a software passkey, the harness requires a human to complete a WebAuthn ceremony in their browser:
 
-1. The harness prints the approval URL (`/api/v1/approve/{txHash}`) to stderr
-2. The harness subscribes to the gateway's SSE stream (`/api/v1/sse/stream`), filtering for `approval.completed` events matching the transaction hash and user ID
+1. The harness prints the approval URL to stderr
+2. The harness subscribes to the gateway's SSE stream, routing events via the `X-G8E-CLI-Session-ID` header from the CLI session. SSE routing requires `user_id` plus exactly one session ID (`cli_session_id` or `web_session_id`). The `user_id` is bound to the authenticated identity from the mTLS certificate; the session ID determines the delivery channel. No routing IDs appear in URL query parameters
 3. The human opens the approval URL in their browser and completes the WebAuthn passkey ceremony
-4. The gateway emits an `approval.completed` SSE event when the passkey is verified
-5. The harness verifies the approval status via the mTLS status endpoint (`/api/v1/approvals/status/{txHash}`) and returns the receipt body
+4. The gateway emits an `approval.completed` SSE event scoped to the submitter's CLI session when the passkey is verified
+5. The harness verifies the approval status via the mTLS status endpoint and returns the receipt body
 
-The gateway performs full real WebAuthn verification via `PasskeyService.VerifyL3Proof`. The `G8E_L3_MOCK` environment variable has been removed — the gateway always requires real WebAuthn proof. A fail-closed regression test (`TestGatewayModeService_GetGovernanceDeps_AlwaysUsesRealNotary`) verifies this property.
+The gateway always requires real WebAuthn proof. The `G8E_L3_MOCK` environment variable has been removed; there is no bypass for L3 notary verification.
 
 ### 2.5 Layer 4: Warden (Final Verification)
 
@@ -253,7 +253,7 @@ When you use the Console, you can control multiple Operators on different hosts.
 
 **What Binding Enables:**
 
-- SSE events can be pushed to your web session
+- SSE events can be pushed to your web session, routed by `user_id` plus `web_session_id`
 - You can set an active target Operator
 - Commands can be dispatched from web to Operator
 
@@ -339,7 +339,7 @@ When an action requires human approval:
 2. CLI opens browser to approval page
 3. Authenticate with passkey
 4. Approve or reject the transaction
-5. CLI receives decision via SSE stream
+5. CLI receives decision via SSE stream, routed by the `X-G8E-CLI-Session-ID` header
 6. Transaction proceeds if approved
 
 ---

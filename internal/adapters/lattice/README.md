@@ -1,14 +1,11 @@
----
-title: Lattice Adapter
-parent: Architecture
----
-
 # Lattice Adapter
 
 Last Updated: 2026-07-28
 Version: v1.6.6
 
 The Lattice adapter integrates the g8e Operator with Anduril's Lattice Common Operating Picture (COP). It publishes the Operator as a live entity in Lattice, subscribes to task assignments, and reports execution status back to the COP. The adapter communicates over gRPC using TLS and OAuth2 client credentials authentication.
+
+Vendored protobuf definitions for the Lattice SDK live in `third_party/anduril/anduril/`; see that directory's README for proto source, pinning, and code generation details.
 
 ---
 
@@ -112,7 +109,7 @@ This sequence stops task ingestion after pub/sub shutdown while keeping status r
 
 ## See Also
 
-- [Operator Architecture](./operator.md) for the Operator service lifecycle and boot sequence
-- [Governance](./governance.md) for posture configuration and the 5-layer verification pipeline
-- [Encryption](./encryption.md) for TLS and certificate management details
-
+- [Operator Architecture](../../../docs/architecture/operator.md) for the Operator service lifecycle and boot sequence
+- [Governance](../../../docs/architecture/governance.md) for posture configuration and the 5-layer verification pipeline
+- [Encryption](../../../docs/architecture/encryption.md) for TLS and certificate management details
+- [Vendored Lattice Protos](../../../third_party/anduril/anduril/README.md) for proto source, pinning, and code generation

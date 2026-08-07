@@ -1970,6 +1970,12 @@
         "_go_const": "SessionTypeWeb",
         "_python_const": "WEB",
         "value": "web"
+      },
+      "app": {
+        "_go_const": "SessionTypeApp",
+        "_python_const": "APP",
+        "value": "app",
+        "description": "Auto-created stub session row in the audit store for FK satisfaction when an event arrives with an unknown session ID. Distinct from operator/cli/web which are first-class authenticated sessions."
       }
     },
     "severity": {

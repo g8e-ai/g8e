@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-07-28
-Version: v1.6.6
+Last Updated: 2026-08-07
+Version: v1.7.0
 
 The g8e Protocol platform is implemented as a single static binary that operates in two modes:
 
@@ -136,7 +136,7 @@ The gateway builds two distinct HTTP routers, one per protocol surface. The rout
 
 ### Bootstrap HTTP Router
 
-Served on the HTTP port (8080), this router handles only bootstrap and PKI discovery endpoints. It registers health, state, bootstrap enrollment, CLI and device enrollment, PKI apps enrollment, CSR signing, CA bundle and fingerprint discovery, trust script download (Linux and Windows), node binary download, and deploy script routes. Unregistered paths return a 404 response. The router is wrapped with path traversal guard and rate limiting middleware.
+Served on the HTTP port (8080), this router handles only bootstrap and PKI discovery endpoints. It registers health, state, bootstrap enrollment, CLI and device enrollment, PKI apps enrollment, CSR signing, CA bundle and fingerprint discovery, trust script download (Linux and Windows), node binary download, and deploy script routes. A catch-all handler redirects all non-bootstrap requests to HTTPS, validating the Host header against localhost, loopback, RFC 1918 private IPs, and configured endpoints before reflecting it into the redirect target. Unrecognized hosts fall back to a safe default to prevent open-redirect abuse. The router is wrapped with path traversal guard and rate limiting middleware.
 
 ### Public HTTPS Router
 
@@ -359,7 +359,7 @@ Runs on the Operator substrate. Performs isolated boundary tool dispatch (via MC
 
 ## Out-of-Band (OOB) Suspension & WebAuthn Approval Flow
 
-When a standard AI client (such as Claude Code, Codex, Goose, or Gemini CLI) requests a mutation, it typically cannot generate an L3 Notary human signature.
+When a standard AI client (such as Claude Code, Codex, Goose, Gemini CLI, or Devin CLI) requests a mutation, it typically cannot generate an L3 Notary human signature.
 
 1.  **Suspension**: The gateway detects missing L3 Notary proof and suspends the transaction in the SQLite `suspended_transactions` store.
 2.  **Challenge**: The gateway returns an OOB WebAuthn challenge URL to the AI client.
@@ -415,13 +415,13 @@ This architecture ensures the Governed Operator (g8eo) never requires outbound i
 
 ## Agent Integration
 
-The Governance Gateway provides zero-config ingress for agentic CLI coding tools (Claude Code, OpenAI Codex, Goose, Gemini CLI) through the MCP agent subcommands. Each supported agent has its native/built-in tools disabled at launch, forcing all I/O through the g8e MCP gateway for full L1-L5 governance enforcement.
+The Governance Gateway provides zero-config ingress for agentic CLI coding tools (Claude Code, OpenAI Codex, Goose, Gemini CLI, Devin CLI) through the MCP agent subcommands. Each supported agent has its native/built-in tools disabled at launch, forcing all I/O through the g8e MCP gateway for full L1-L5 governance enforcement.
 
 ### Agent Subcommands
 
 The agent integration provides the following subcommands:
 
-**`g8e mcp agent list`**: Lists all supported agent binaries that g8e supports for MCP integration: Claude Code, OpenAI Codex, Goose, and Gemini CLI.
+**`g8e mcp agent list`**: Lists all supported agent binaries that g8e supports for MCP integration: Claude Code, OpenAI Codex, Devin CLI, Goose, and Gemini CLI.
 
 **`g8e mcp agent show <agent>`**: Prints MCP client configuration for connecting to the Governance Gateway from local coding tools. Displays three configuration matrices:
 - g8e.local (mTLS): For production environments with DNS configured
@@ -429,7 +429,7 @@ The agent integration provides the following subcommands:
 - Stdio Transport: For direct native tool access without gateway
 
 **`g8e mcp agent run [--url <url>] [--verify] [-- <command> [args...]]`**: Launches an AI agent or wraps an external MCP server with g8e governance. Supports:
-- Launching supported agents (claude, codex, goose, gemini) with automatic MCP configuration and native tool disabling
+- Launching supported agents (claude, codex, devin, goose, gemini) with automatic MCP configuration and native tool disabling
 - Wrapping external MCP servers via HTTP or subprocess for governance reverse proxy
 - Forwarding extra arguments to the agent binary
 - Runtime verification (`--verify`, enabled by default): before launching the agent, g8e verifies that the agent's tool-disabling configuration was correctly written, checking MCP config files, CLI flags, and agent-specific settings (e.g., `tools.core: []` for Gemini, `--disallowed-tools` for Claude/Codex, `--no-profile` for Goose). Use `--verify=false` to skip verification (e.g., for CI/CD pipelines where the config is pre-validated).

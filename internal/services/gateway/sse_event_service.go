@@ -39,20 +39,23 @@ func NewSSEEventService(db *sqliteutil.DB, logger *slog.Logger) *SSEEventService
 	}
 }
 
-// SSERoute is the routing target for an SSE event row. Exactly one of the
-// three id fields MUST be non-empty. The Gateway refuses to talk about a
-// bare session id - every routing key is tagged at the type level so a
-// web_session_id can never be mis-delivered as a cli_session_id (or vice
-// versa) and a user_id (background fan-out) can never be mistaken for a
-// per-session id.
+// SSERoute is the routing target for an SSE event row. UserID is always
+// required (ownership/identity dimension). Exactly one of WebSessionID or
+// CLISessionID MUST be set (delivery/routing dimension). The Gateway refuses
+// to talk about a bare session id - every routing key is tagged at the type
+// level so a web_session_id can never be mis-delivered as a cli_session_id
+// (or vice versa). user_id alone is not a valid route.
 type SSERoute struct {
+	UserID       string
 	WebSessionID string
 	CLISessionID string
-	UserID       string
 }
 
-// validate ensures exactly one routing id is set.
+// validate ensures user_id is set and exactly one session id is set.
 func (r SSERoute) validate() error {
+	if r.UserID == "" {
+		return constants.ErrGatewaySSERouteUserIDRequired
+	}
 	n := 0
 	if r.WebSessionID != "" {
 		n++
@@ -60,35 +63,40 @@ func (r SSERoute) validate() error {
 	if r.CLISessionID != "" {
 		n++
 	}
-	if r.UserID != "" {
-		n++
-	}
 	switch n {
 	case 0:
-		return constants.ErrGatewaySSERouteRequired
+		return constants.ErrGatewaySSERouteSessionRequired
 	case 1:
 		return nil
 	default:
-		return constants.ErrGatewaySSERouteMutuallyExclusive
+		return constants.ErrGatewaySSERouteSessionMutuallyExclusive
 	}
 }
 
-// SSEEventsAppend inserts a row into the sse_events table. The route MUST set
-// exactly one of WebSessionID, CLISessionID, UserID. The producer_id is the
-// app identity (SPIFFE ID) that produced the event for attribution.
-func (s *SSEEventService) SSEEventsAppend(route SSERoute, eventType, payload, producerID string) error {
+// SSEEventsAppend inserts a row into the sse_events table and returns the
+// assigned row ID. The route MUST set UserID and exactly one of WebSessionID
+// or CLISessionID. The producer_id is the app identity (SPIFFE ID) that
+// produced the event for attribution. The returned ID is stamped into the
+// pub/sub envelope (models.SSEPublishedEvent) so the stream handler can
+// deduplicate live events against replayed rows and emit an `id:` field on
+// the live path.
+func (s *SSEEventService) SSEEventsAppend(route SSERoute, eventType, payload, producerID string) (int64, error) {
 	if err := route.validate(); err != nil {
-		return err
+		return 0, err
 	}
 	now := timesvc.NowTimestamp()
-	_, err := s.db.ExecWithRetry(
-		"INSERT INTO sse_events (web_session_id, cli_session_id, user_id, event_type, payload, producer_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		nullIfEmpty(route.WebSessionID), nullIfEmpty(route.CLISessionID), nullIfEmpty(route.UserID), eventType, payload, nullIfEmpty(producerID), now,
+	result, err := s.db.ExecWithRetry(
+		"INSERT INTO sse_events (user_id, web_session_id, cli_session_id, event_type, payload, producer_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		route.UserID, nullIfEmpty(route.WebSessionID), nullIfEmpty(route.CLISessionID), eventType, payload, nullIfEmpty(producerID), now,
 	)
 	if err != nil {
-		return fmt.Errorf("sse_event_service: append: %w", err)
+		return 0, fmt.Errorf("sse_event_service: append: %w", err)
 	}
-	return nil
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("sse_event_service: append: last insert id: %w", err)
+	}
+	return id, nil
 }
 
 // nullIfEmpty returns sql.NullString for empty strings so the
@@ -139,8 +147,8 @@ func (s *SSEEventService) SSEEventsCount() (int64, error) {
 }
 
 // SSEEventsListSince returns up to `limit` events with id > sinceID, ordered by
-// id ascending. The route MUST set exactly one of WebSessionID, CLISessionID,
-// UserID. SSEEventsListAllSince is the admin-only "all routes" variant.
+// id ascending. The route MUST set UserID and exactly one of WebSessionID or
+// CLISessionID. SSEEventsListAllSince is the admin-only "all routes" variant.
 func (s *SSEEventService) SSEEventsListSince(route SSERoute, sinceID int64, limit int) ([]models.SSEEventRow, error) {
 	if err := route.validate(); err != nil {
 		return nil, err
@@ -152,25 +160,23 @@ func (s *SSEEventService) SSEEventsListSince(route SSERoute, sinceID int64, limi
 	var args []interface{}
 	switch {
 	case route.WebSessionID != "":
-		query = "SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE web_session_id = ? AND id > ? ORDER BY id ASC LIMIT ?"
-		args = []interface{}{route.WebSessionID, sinceID, limit}
+		query = "SELECT id, user_id, web_session_id, cli_session_id, event_type, payload, created_at FROM sse_events WHERE web_session_id = ? AND user_id = ? AND id > ? ORDER BY id ASC LIMIT ?"
+		args = []interface{}{route.WebSessionID, route.UserID, sinceID, limit}
 	case route.CLISessionID != "":
-		query = "SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE cli_session_id = ? AND id > ? ORDER BY id ASC LIMIT ?"
-		args = []interface{}{route.CLISessionID, sinceID, limit}
+		query = "SELECT id, user_id, web_session_id, cli_session_id, event_type, payload, created_at FROM sse_events WHERE cli_session_id = ? AND user_id = ? AND id > ? ORDER BY id ASC LIMIT ?"
+		args = []interface{}{route.CLISessionID, route.UserID, sinceID, limit}
 	default:
-		query = "SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE user_id = ? AND id > ? ORDER BY id ASC LIMIT ?"
-		args = []interface{}{route.UserID, sinceID, limit}
+		return nil, constants.ErrGatewaySSERouteSessionRequired
 	}
 
 	return sqliteutil.MaterializeRows(s.db, query, args, func(r *sql.Rows) (models.SSEEventRow, error) {
 		var row models.SSEEventRow
-		var web, cli, user sql.NullString
-		if err := r.Scan(&row.ID, &web, &cli, &user, &row.EventType, &row.Payload, &row.CreatedAt); err != nil {
+		var web, cli sql.NullString
+		if err := r.Scan(&row.ID, &row.UserID, &web, &cli, &row.EventType, &row.Payload, &row.CreatedAt); err != nil {
 			return models.SSEEventRow{}, fmt.Errorf("sse_event_service: list_since: scan: %w", err)
 		}
 		row.WebSessionID = web.String
 		row.CLISessionID = cli.String
-		row.UserID = user.String
 		return row, nil
 	})
 }
@@ -183,17 +189,16 @@ func (s *SSEEventService) SSEEventsListAllSince(sinceID int64, limit int) ([]mod
 		limit = 200
 	}
 	return sqliteutil.MaterializeRows(s.db,
-		"SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE id > ? ORDER BY id ASC LIMIT ?",
+		"SELECT id, user_id, web_session_id, cli_session_id, event_type, payload, created_at FROM sse_events WHERE id > ? ORDER BY id ASC LIMIT ?",
 		[]any{sinceID, limit},
 		func(r *sql.Rows) (models.SSEEventRow, error) {
 			var row models.SSEEventRow
-			var web, cli, user sql.NullString
-			if err := r.Scan(&row.ID, &web, &cli, &user, &row.EventType, &row.Payload, &row.CreatedAt); err != nil {
+			var web, cli sql.NullString
+			if err := r.Scan(&row.ID, &row.UserID, &web, &cli, &row.EventType, &row.Payload, &row.CreatedAt); err != nil {
 				return models.SSEEventRow{}, fmt.Errorf("sse_event_service: list_all_since: scan: %w", err)
 			}
 			row.WebSessionID = web.String
 			row.CLISessionID = cli.String
-			row.UserID = user.String
 			return row, nil
 		})
 }

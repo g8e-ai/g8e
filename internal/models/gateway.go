@@ -179,27 +179,55 @@ type BlobDeleteResponse struct {
 	Deleted int64 `json:"deleted"`
 }
 
-// SSEPushPayload is the wire envelope for SSE push events. Producers set
-// exactly one of WebSessionID, CLISessionID, or UserID as the routing key;
-// Event carries the typed event JSON. This is the shared typed model for the
-// wire shape produced by the gateway and consumed by CLI clients.
+// SSEPushPayload is the wire envelope for SSE push events. UserID is always
+// required (ownership). Exactly one of WebSessionID or CliSessionID must be
+// set as the delivery target. Event carries the typed event JSON. This is the
+// shared typed model for the wire shape produced by the gateway and consumed
+// by CLI clients.
 type SSEPushPayload struct {
+	UserID       string          `json:"user_id"`
 	WebSessionID string          `json:"web_session_id"`
 	CliSessionID string          `json:"cli_session_id"`
-	UserID       string          `json:"user_id"`
 	Event        json.RawMessage `json:"event"`
 }
 
-// SSEEventRow is a single row from the sse_events table. Exactly one of the
-// three routing id fields will be populated per row.
+// SSEEventRow is a single row from the sse_events table. UserID is always
+// populated. Exactly one of WebSessionID or CLISessionID will be populated.
 type SSEEventRow struct {
 	ID           int64  `json:"id"`
+	UserID       string `json:"user_id"`
 	WebSessionID string `json:"web_session_id,omitempty"`
 	CLISessionID string `json:"cli_session_id,omitempty"`
-	UserID       string `json:"user_id,omitempty"`
 	EventType    string `json:"event_type"`
 	Payload      string `json:"payload"`
 	CreatedAt    string `json:"created_at"`
+}
+
+// SSEPublishedEvent is the internal pub/sub envelope for live SSE events.
+// It pairs the persisted DB row ID with the raw event payload JSON so that
+// the stream handler can deduplicate against replayed rows and emit an `id:`
+// field on the live path (fixing the duplicate-delivery race and the
+// missing Last-Event-ID cursor on reconnect).
+type SSEPublishedEvent struct {
+	ID      int64           `json:"id"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+// SSEErrorEvent is the sentinel payload emitted on the SSE stream when a
+// replay query fails, signaling a gap to the client so it can react rather
+// than silently missing backlog.
+type SSEErrorEvent struct {
+	Type   string `json:"type"`
+	Reason string `json:"reason"`
+}
+
+// SSETruncationEvent is the sentinel payload emitted on the SSE stream when
+// a replay hits the row limit, signaling that more backlog may exist beyond
+// the returned window.
+type SSETruncationEvent struct {
+	Type    string `json:"type"`
+	SinceID int64  `json:"since_id"`
+	Limit   int    `json:"limit"`
 }
 
 // SSEPushResponse is the typed response for POST /api/internal/sse/push.

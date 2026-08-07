@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## v1.7.x
+
+| Version | Date | Description | Notes |
+|---------|------|-------------|-------|
+| 1.7.0 | 2026-08-07 | SSE routing model refactor: replaces the three-way mutually-exclusive routing model with a two-dimensional `user_id` (ownership, always required) + exactly one session ID (delivery) model, removes the `user_id`-only fan-out route (eliminating cross-session approval leakage), moves routing/identity IDs out of URL query strings into headers/auth context, adds `SubmitterCLISessionID` to suspended transactions for session-scoped approval events, makes `sse_events.user_id` NOT NULL with a CHECK constraint, and splits the SSE integration test file into 5 focused files. | [v1.7.0](docs/release_notes/v1.7.x/v1.7.0.md) |
+
 ## v1.6.x
 
 | Version | Date | Description | Notes |

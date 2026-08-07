@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
-Last Updated: 2026-08-05
-Version: v1.6.10
+Last Updated: 2026-08-07
+Version: v1.7.0
 
 This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
 
@@ -95,8 +95,8 @@ Each demo uses its own `compose.yml` file with isolated networks, volumes, and d
 Demos that use consensus or notary posture (DHS, FedRAMP) require a bootstrap config file:
 
 - **`consensus-bootstrap.json`**: Defines the consensus policy, member app IDs, quorum threshold, and cryptographic seeds for member signing keys. The file supports two key modes:
-  - **`member_seeds`** (preferred): A map of member app IDs to individual hex-encoded Ed25519 seeds. Each member gets its own derived key pair, making `RequireDistinct` and quorum cryptographically meaningful. A single key cannot satisfy a multi-member quorum.
-  - **`seed_hex`** (legacy fallback): A single hex-encoded Ed25519 seed shared across all members. When `member_seeds` is omitted but `seed_hex` is provided, the same key is registered for every member (single-key ensemble pattern).
+  - **`member_seeds`** (preferred): A map of member app IDs to individual hex-encoded Ed25519 seeds. Each member gets its own key pair, so a single compromised key cannot satisfy a multi-member quorum.
+  - **`seed_hex`** (legacy fallback): A single hex-encoded Ed25519 seed shared across all members. When `member_seeds` is omitted but `seed_hex` is provided, the same key is registered for every member.
 
 When `member_seeds` is present, it takes precedence over `seed_hex`. If both are omitted, a fresh key pair is generated and shared across members.
 
@@ -114,19 +114,15 @@ volumes:
   - ./config/consensus-bootstrap.json:/etc/g8e/consensus-bootstrap.json:ro
 ```
 
-When `member_seeds` is used, the agent harness reads the bootstrap file and reconstructs distinct per-member Ed25519 key pairs via `NewEnsembleFromMemberSeeds`. Each vote is independently signed with the member's own key, and the gateway verifies each signature against the member's registered public key. This makes BFT quorum real: a single compromised key cannot forge enough votes to meet quorum.
+When `member_seeds` is used, each member signs votes with its own distinct key, and the gateway verifies each signature against the registered public key. This makes Byzantine quorum meaningful: a single compromised key cannot forge enough votes to meet quorum.
 
-If the agent does not mount `consensus-bootstrap.json`, the ensemble votes with the default `KeyID` instead of the gateway's registered member app IDs. The gateway's L2 consensus verifier checks each vote's `SignerKeyId` against the consensus policy's `MemberKeyIDs`; votes from unknown signer IDs are silently ignored, resulting in 0 affirmative votes and quorum failure.
+If the agent does not mount `consensus-bootstrap.json`, votes are signed with a default key ID that does not match the gateway's registered members. The gateway rejects these votes, resulting in zero affirmative votes and quorum failure.
 
 ### Posture Switching During Demos
 
-The DHS and FedRAMP demos dynamically switch the gateway's posture mid-scenario using the `switchDemoPosture` function. This function:
+The DHS and FedRAMP demos dynamically switch the gateway's posture mid-scenario. The gateway container is stopped and recreated with a new `G8E_GATEWAY_POSTURE` environment variable, then the demo waits for the gateway to become healthy before continuing.
 
-1. Stops the gateway container (`docker compose stop gateway`)
-2. Recreates it with the new `G8E_GATEWAY_POSTURE` environment variable (`docker compose up -d --force-recreate --no-deps gateway`)
-3. Polls the health endpoint every 3 seconds (up to 30 attempts = 90s timeout) until the gateway is live
-
-This allows a single demo to test multiple posture modes (e.g., consensus → notary → consensus) without restarting the entire Docker Compose stack. The gateway container is recreated in-place; other services (operator, agent, actuators) remain running.
+This allows a single demo to test multiple posture modes (e.g., consensus, then notary, then consensus) without restarting the entire Docker Compose stack. Other services (operator, agent, actuators) remain running during the switch.
 
 ## Configuration
 
@@ -196,7 +192,7 @@ The image includes:
 The protocol constants are bundled from the `protocol/` directory. The Python package (`g8e`) is not included in the Docker image by default. If you need Python protocol access inside a container, install it separately:
 
 ```bash
-pip install g8e==1.6.6
+pip install g8e==1.6.10
 ```
 
 Or set `G8E_PROTOCOL_DIR=/protocol` to point the Python package at the bundled constants. See the [Protocol Library documentation](../architecture/protocol.md) for details.

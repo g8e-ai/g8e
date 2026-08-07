@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-08-05
-Version: v1.6.10
+Last Updated: 2026-08-07
+Version: v1.7.0
 
 ---
 
@@ -63,14 +63,14 @@ cd g8e
 
 ## Use the Protocol Library (Go Module or Python Package)
 
-If you only need the g8e wire protocol — constants, models, enums, or protobuf definitions — for your own client or service, you can consume the published packages without building the full platform. Both packages share the same version number as the platform binary.
+If you only need the g8e wire protocol, constants, models, enums, or protobuf definitions, for your own client or service, you can consume the published packages without building the full platform. Both packages share the same version number as the platform binary.
 
 ### Go module
 
 As of v1.5.0, the protocol is part of the root Go module. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.6.6
+go get github.com/g8e-ai/g8e@v1.6.10
 ```
 
 Import the protocol packages in your Go code:
@@ -95,13 +95,13 @@ pip install g8e
 Pinned to a specific version:
 
 ```bash
-pip install g8e==1.6.6
+pip install g8e==1.6.10
 ```
 
 The package provides:
-- `g8e.constants` — JSON protocol constants (events, status, collections, headers, etc.)
-- `g8e.enums` — Dynamic `StrEnum` and `IntEnum` generation from protocol constants
-- `g8e.models` — Pydantic v2 models for protocol data structures
+- `g8e.constants`: JSON protocol constants (events, status, collections, headers, etc.)
+- `g8e.enums`: Dynamic `StrEnum` and `IntEnum` generation from protocol constants
+- `g8e.models`: Pydantic v2 models for protocol data structures
 
 ```python
 from g8e.constants import EVENTS, ComponentName
@@ -124,7 +124,7 @@ Requires `make` and Go 1.26+ installed on your machine. If you're not sure, run 
 make build
 ```
 
-Produces the `g8e` binary in the repository root and platform-specific binaries in `bin/`. All dependencies are resolved at build time; the compiled binary is statically linked (`CGO_ENABLED=0`) and has zero runtime dependencies. No Go toolchain, OpenSSL, Git, or other external tools are needed on the target host.
+Produces the `g8e` binary in the repository root and platform-specific binaries in `bin/`. All dependencies are resolved at build time; the compiled binary is statically linked and has zero runtime dependencies. No Go toolchain, OpenSSL, Git, or other external tools are needed on the target host.
 
 Additional build targets:
 
@@ -154,7 +154,7 @@ Build the binary for Linux (amd64):
 make build-docker
 ```
 
-This builds a `g8e-builder` Docker image using the `builder` stage of the Dockerfile, then runs the Go compiler inside it. The output binary lands in `bin/g8e-linux-amd64`.
+This builds a `g8e-builder` Docker image and runs the Go compiler inside it. The output binary lands in `bin/g8e-linux-amd64`.
 
 Additional Docker build targets:
 
@@ -341,7 +341,14 @@ The CLI displays configurations for `g8e.local` (mTLS), IP Address (mTLS), and S
 
 ## Industry Demos
 
-The `demos/` directory contains Docker Compose environments for six demo environments: **Healthcare** (HIPAA/PHI), **Finance** (trading controls), **Government** (CUI/CMMC), **DHS** (persistent sovereign capability with coalition data-plane governance, cross-domain release control, and cryptographically receipted destruction), **FedRAMP** (sovereign cloud governance with CR-26 audit integrity, access control, and cross-domain protection), and **Frontend** (third-party frontend enrollment with CORS, passkey, and SSE protection). Each demo is hermetically sealed with its own networks, volumes, and doctrine rules.
+The `demos/` directory contains Docker Compose environments for six demo environments. Each demo is isolated with its own networks, volumes, and doctrine rules.
+
+- **Healthcare**: HIPAA/PHI governance
+- **Finance**: trading controls
+- **Government**: CUI/CMMC handling
+- **DHS**: persistent sovereign capability with coalition data-plane governance, cross-domain release control, and cryptographically receipted destruction
+- **FedRAMP**: sovereign cloud governance with CR-26 audit integrity, access control, and cross-domain protection
+- **Frontend**: third-party frontend enrollment with CORS, passkey, and SSE protection
 
 ### What the demos use Docker for
 
@@ -353,7 +360,9 @@ Each demo spins up a full isolated stack via Docker Compose:
 - **Target system**, mock EHR/trading/classified-doc API on `net_secure`
 - **Observability**, log aggregator and audit viewer on `net_mgmt`
 
-All g8e services (gateway, operator, agent runtime) use `demos/Dockerfile` with `build: context: ..`, which copies a pre-built binary from `demos/bin/g8e` into the image. Run `make build` first to compile the binary and copy it to `demos/bin/g8e`. Auxiliary services (target systems, sensors, bad actors, observability) use Alpine, Python, Nginx, or other base images. The DHS demo deploys a real `agent-coalition` container running `demos scenarios run`, a real `datasvc` Python HTTP actuator on `net_secure`, and display-only source connectors modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries. The FedRAMP demo deploys a real `agent-runtime` container running `demos scenarios run`, a real `cloudsvc` Python HTTP actuator on `net_secure`, a `bad-actor` on `net_untrusted`, and an `observability` container on `net_mgmt`.
+All g8e services (gateway, operator, agent runtime) use `demos/Dockerfile`, which copies a pre-built binary from `demos/bin/g8e` into the image. Run `make build` first to compile the binary and copy it to `demos/bin/g8e`. Auxiliary services (target systems, sensors, bad actors, observability) use Alpine, Python, Nginx, or other base images.
+
+The DHS and FedRAMP demos additionally deploy real agent runtime containers, Python HTTP actuators on the secure network, and display-only source connectors modeling sovereignty boundaries.
 
 All demos use the `/api/v1/health` endpoint for gateway health checks.
 

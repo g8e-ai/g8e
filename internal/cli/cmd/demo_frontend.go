@@ -89,7 +89,7 @@ func runFrontendEnrollmentScenario(demoDir string) (scenarioResult, error) {
 	if err := demoStepHTTP(demoDir, "SSE endpoint protection", "401",
 		"curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
 		"-H", "Origin: http://localhost:3003",
-		"https://localhost:8446/api/v1/sse/stream?web_session_id=invalid",
+		"https://localhost:8446/api/v1/sse/stream",
 		"-k",
 	); err != nil {
 		fmt.Printf("  (SSE endpoint check failed: %s)\n", err)

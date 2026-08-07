@@ -121,7 +121,7 @@ func waitForApprovalAndVerify(ctx context.Context, cmd *cobra.Command, fileSvc f
 	}
 
 	cmd.Printf("\nWaiting for browser approval (SSE)...\n")
-	if err := auth.WaitForApprovalSSE(ctx, sseClient, cfg.OperatorPublicURL(), creds.UserID, txHash); err != nil {
+	if err := auth.WaitForApprovalSSE(ctx, sseClient, cfg.OperatorPublicURL(), creds.CLISessionID, txHash); err != nil {
 		return fmt.Errorf("approve: %w", err)
 	}
 

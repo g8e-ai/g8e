@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -300,9 +299,11 @@ func (c *Client) RegisterSigner(ctx context.Context, keyID, pubHex, role string)
 // it verifies the approval status via the mTLS status endpoint and returns the
 // response body (an ActionReceipt JSON) on success.
 //
-// The userID scopes the SSE subscription to the operator's user so the harness
-// only receives events for its own transactions. The SSE subscription and
-// status verification dial PublicBaseURL, which must be reachable from the
+// SSE routing is via the X-G8E-CLI-Session-ID header set from Persona.CLISessionID;
+// user_id is bound by the mTLS cert and stamped into context by the auth
+// middleware. The userID parameter is used only for the status-check persona
+// (statusPersona.UserID = userID), not for SSE routing. The SSE subscription
+// and status verification dial PublicBaseURL, which must be reachable from the
 // harness process (container-internal in the demo topology). The approval link
 // printed for the human is built from ApprovalDisplayURL when set — the
 // host-reachable address — so the host browser can actually open it; it falls
@@ -341,12 +342,14 @@ func (c *Client) WaitForHumanApproval(ctx context.Context, p Persona, txHash, us
 		Transport: &http.Transport{TLSClientConfig: sseTLS.Clone()},
 	}
 
-	sseURL := fmt.Sprintf("%s%s?user_id=%s&since_id=0",
+	sseURL := fmt.Sprintf("%s%s?since_id=0",
 		c.cfg.PublicBaseURL,
-		constants.APIPaths.SSEStream,
-		url.QueryEscape(userID))
+		constants.APIPaths.SSEStream)
 
 	sseClient := ssepkg.NewClient(sseURL, sseHTTPClient)
+	if p.CLISessionID != "" {
+		sseClient.SetHeader(constants.HeaderCLISessionID, p.CLISessionID)
+	}
 
 	// The gateway's approval request TTL is 2 minutes; allow a grace period.
 	waitCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
@@ -359,15 +362,21 @@ func (c *Client) WaitForHumanApproval(ctx context.Context, p Persona, txHash, us
 	go func() {
 		defer close(done)
 		sseClient.Run(waitCtx, func(eventType, data string) {
-			if eventType != constants.SSEEventTypeApprovalCompleted {
-				return
-			}
 			var envelope models.SSEPushPayload
 			if err := json.Unmarshal([]byte(data), &envelope); err != nil {
 				return
 			}
 			var event models.ApprovalCompletedEvent
 			if err := json.Unmarshal(envelope.Event, &event); err != nil {
+				return
+			}
+			// When the server omits the event: field (R14), eventType is empty.
+			// Extract the type from the inner payload instead.
+			innerType := eventType
+			if innerType == "" {
+				innerType = event.Type
+			}
+			if innerType != constants.SSEEventTypeApprovalCompleted {
 				return
 			}
 			if event.TxHash != txHash {

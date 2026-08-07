@@ -111,23 +111,25 @@ func runTUI(cmd *cobra.Command, args []string, deps tuiDeps) error {
 		return fmt.Errorf("tui: build mTLS client: %w", err)
 	}
 
-	// Construct the SSE stream URL.
-	baseURL := cfg.OperatorHTTPURL()
-	sseURL := baseURL + constants.APIPaths.SSEStream + "?cli_session_id=" + creds.CLISessionID
+	// Construct the SSE stream URL. The CLI session ID is sent via the
+	// X-G8E-CLI-Session-ID header (set by the TUI adapter from opts.CLISessionID),
+	// not in the URL query string. The mTLS cert binds user_id at the gateway.
+	sseURL := cfg.OperatorHTTPURL() + constants.APIPaths.SSEStream
 
 	version := cmd.Root().Version
 	if version == "" {
-		version = "dev"
+		version = string(constants.VersionStabilityDev)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	return deps.tuiRun(ctx, tui.Options{
-		Version:    version,
-		NodeName:   creds.OperatorID,
-		NetLabel:   "mTLS",
-		SSEURL:     sseURL,
-		HTTPClient: httpClient,
+		Version:      version,
+		NodeName:     creds.OperatorID,
+		NetLabel:     "mTLS",
+		SSEURL:       sseURL,
+		CLISessionID: creds.CLISessionID,
+		HTTPClient:   httpClient,
 	})
 }

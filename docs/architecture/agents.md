@@ -5,8 +5,8 @@ parent: Architecture
 
 # AI Agents in a g8e-Compatible Agentic Ensemble
 
-Last Updated: 2026-07-30
-Version: v1.6.7
+Last Updated: 2026-08-07
+Version: v1.7.0
 
 ## Overview
 
@@ -90,7 +90,7 @@ The primary LLM's interpretation of intent is passed to the consensus layer, the
 
 The protocol is designed to support [Condorcet's Jury Theorem](https://en.wikipedia.org/wiki/Condorcet%27s_jury_theorem): if each juror has a probability greater than 0.5 of making the correct judgment, and the jurors are independent, then the probability of a correct majority judgment approaches 1 as the number of jurors increases. The protocol allows each consensus member to use its own evaluation logic, enabling heterogeneous juries with independent reasoning. The reference implementation shipped with g8e uses a shared deterministic L1 Doctrine evaluation across all members with distinct signing keys; this provides multi-signature safety with cryptographic independence (each member signs with its own key) but not evaluation independence. Alternative consensus implementations can provide diverse evaluation strategies per member to achieve full Condorcet independence.
 
-The number of jurors is configurable per consensus. Results vary depending on how much validating is needed for a specific task. A low-risk action may need a 1-of-1 consensus. A high-risk production change may require a 5-of-7 consensus. The quorum threshold is set in the `ConsensusPolicy` and enforced by the L4 Warden.
+The number of jurors is configurable per consensus. Results vary depending on how much validating is needed for a specific task. A low-risk action may need a 1-of-1 consensus. A high-risk production change may require a 5-of-7 consensus. The quorum threshold is set in the consensus policy and enforced by the L4 Warden.
 
 ### Step 3: Consensus Failure → Reinterpret
 
@@ -115,9 +115,9 @@ The request is then published to a **unique pub/sub channel for each operator**.
 
 ### Step 7: Operator Pulls Work and Executes
 
-The operator pulls the work from its unique pub/sub channel. Before any execution occurs, the **entire L1–L4 gauntlet is re-validated locally on the Governed Operator**; the operator does not trust the gateway. It re-derives every proof from scratch against its own local state.
+The operator pulls the work from its unique pub/sub channel. Before any execution occurs, the **entire L1-L4 gauntlet is re-validated locally on the Governed Operator**; the operator does not trust the gateway. It re-derives every proof from scratch against its own local state.
 
-Once L1–L4 pass, the **L5 Actuator** initiates execution:
+Once L1-L4 pass, the **L5 Actuator** initiates execution:
 
 1. **EXECUTING receipt**: An EXECUTING receipt is signed and persisted to the local audit vault before any execution begins. If signing or logging fails, the system fails closed and execution does not proceed.
 2. **PII hydration**: Sensitive data (credentials, PII) that was scrubbed upstream is rehydrated at the execution site using local vault keys. The cloud never saw the raw values, only tokenized projections.
@@ -148,7 +148,7 @@ All agents in the ensemble have access to **doctrines**, the JSON-defined rules 
 
 Doctrine is **enforced regardless** of agent cooperation; L1 Doctrine is a fail-closed gate in all postures. Providing doctrine to agents is a **courtesy**: it lets them shape their suggestions to be in-line with what the platform will accept, reducing round-trips and consensus failures. But even if an agent ignores doctrine and proposes a forbidden action, the L1 layer will reject it before execution.
 
-See the [doctrine registry](../../protocol/constants/doctrine/doctrine_registry.json) for the full list of doctrine sources.
+See [Governance](./governance.md) for the doctrine sources and how they are loaded into the pipeline.
 
 ---
 
@@ -161,7 +161,7 @@ See the [doctrine registry](../../protocol/constants/doctrine/doctrine_registry.
 | **Hash verification → Human** | Human signs intent + proposed solution. Can deny and restart the loop. |
 | **Human approval → Warden** | Warden re-validates all hashes on the Gateway's in-process Operator before dispatch. |
 | **Dispatch → Operator scope** | Only operators on the approved hosts list receive work. No broadcast. |
-| **Operator → Execution** | L1–L4 re-validated locally. L5 signs EXECUTING receipt, hydrates PII, mints JIT capability, executes, dissolves capability, signs final receipt. |
+| **Operator → Execution** | L1-L4 re-validated locally. L5 signs EXECUTING receipt, hydrates PII, mints JIT capability, executes, dissolves capability, signs final receipt. |
 | **Execution → Ledger** | Every action written to local hash-chained ledger. Ledger feeds next agent's context. |
 
 ---
@@ -182,11 +182,11 @@ See the [doctrine registry](../../protocol/constants/doctrine/doctrine_registry.
 
 When `g8e mcp stdio` is invoked directly from an IDE MCP config (Windsurf, Cursor, VS Code), credentials resolve in the following order:
 
-1. **CLI flags** (`--client-cert`/`--client-key`, `--app-cert`/`--app-key`, `--ca-bundle`, `--gateway-url`) — universally supported in IDE `args` arrays
-2. **`G8E_*` environment variables** (`G8E_CLIENT_CERT`, `G8E_CLIENT_KEY`, `G8E_CA_BUNDLE`, `G8E_GATEWAY_URL`, `G8E_APP_CERT`, `G8E_APP_KEY`) — injected by `g8e mcp agent run` into the agent subprocess
-3. **Enrolled CLI credentials on disk** — loaded from `.g8e/pki/client/` (bootstrapping enrollment if needed)
+1. **CLI flags** (`--client-cert`/`--client-key`, `--app-cert`/`--app-key`, `--ca-bundle`, `--gateway-url`): universally supported in IDE `args` arrays
+2. **`G8E_*` environment variables** (`G8E_CLIENT_CERT`, `G8E_CLIENT_KEY`, `G8E_CA_BUNDLE`, `G8E_GATEWAY_URL`, `G8E_APP_CERT`, `G8E_APP_KEY`): injected by `g8e mcp agent run` into the agent subprocess
+3. **Enrolled CLI credentials on disk**: loaded from the local client credential store, bootstrapping enrollment if needed
 
-Cert and key are resolved as **pairs per tier**: app flags → app env → client flags → client env → CLI disk. Supplying only one half of a pair (e.g. `--app-cert` without `--app-key`) fails closed with `ErrIncompleteCredentialPair` instead of silently mixing tiers.
+Cert and key are resolved as **pairs per tier**: app flags → app env → client flags → client env → CLI disk. Supplying only one half of a pair (e.g. `--app-cert` without `--app-key`) fails closed instead of silently mixing tiers.
 
 The `--gateway-url` flag validates scheme (`https` only) and host (non-empty) to prevent plaintext traffic bypassing mTLS identity binding.
 

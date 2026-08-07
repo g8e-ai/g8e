@@ -25,14 +25,22 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/sse"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 )
+
+// messageSender abstracts the Send method of tea.Program so tests can
+// capture messages without a real bubbletea program.
+type messageSender interface {
+	Send(msg tea.Msg)
+}
 
 // Adapter bridges external event sources to bubbletea messages.
 // It does not modify production code — it subscribes to existing event
 // sources and translates them into tea.Msg values.
 type Adapter struct {
+	sseURL    string
 	sseClient *sse.Client
-	program   *tea.Program
+	sender    messageSender
 }
 
 // sseEvent is the top-level envelope for SSE event data.
@@ -66,15 +74,22 @@ type consensusPayload struct {
 	Hash     string `json:"hash"`
 }
 
+// reconnectBackoff is the fixed delay between SSE reconnection attempts.
+const reconnectBackoff = 3 * time.Second
+
 // NewAdapter creates an Adapter that connects to the gateway's SSE stream.
-func NewAdapter(sseURL, token string, program *tea.Program, client *http.Client) *Adapter {
+func NewAdapter(sseURL, token, cliSessionID string, sender messageSender, client *http.Client) *Adapter {
 	c := sse.NewClient(sseURL, client)
 	if token != "" {
 		c.SetHeader("Authorization", "Bearer "+token)
 	}
+	if cliSessionID != "" {
+		c.SetHeader(constants.HeaderCLISessionID, cliSessionID)
+	}
 	return &Adapter{
+		sseURL:    sseURL,
 		sseClient: c,
-		program:   program,
+		sender:    sender,
 	}
 }
 
@@ -82,11 +97,10 @@ func NewAdapter(sseURL, token string, program *tea.Program, client *http.Client)
 // translates events into tea.Msg values until the context is cancelled.
 // It emits ConnStatusMsg to keep the TUI informed about connection state.
 func (a *Adapter) Run(ctx context.Context) {
-	if a.sseClient == nil || a.program == nil {
+	if a.sseURL == "" {
 		return
 	}
-
-	a.program.Send(ConnStatusMsg{Status: ConnConnecting})
+	a.sender.Send(ConnStatusMsg{Status: ConnConnecting})
 
 	for {
 		select {
@@ -95,31 +109,39 @@ func (a *Adapter) Run(ctx context.Context) {
 		default:
 		}
 
+		connected := false
 		err := a.sseClient.ConnectOnce(ctx, func(eventType, data string) {
+			if !connected {
+				a.sender.Send(ConnStatusMsg{Status: ConnConnected})
+				connected = true
+			}
 			msg := translateSSEEvent(eventType, data)
 			if msg != nil {
-				a.program.Send(msg)
+				a.sender.Send(msg)
 			}
 		})
 		if err == nil {
 			return
 		}
 
-		a.program.Send(ConnStatusMsg{Status: ConnReconnecting, Detail: err.Error()})
+		a.sender.Send(ConnStatusMsg{Status: ConnReconnecting, Detail: err.Error()})
 
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(3 * time.Second):
+		case <-time.After(reconnectBackoff):
 		}
 
-		a.program.Send(ConnStatusMsg{Status: ConnConnecting})
+		a.sender.Send(ConnStatusMsg{Status: ConnConnecting})
 	}
 }
 
 // translateSSEEvent maps an SSE event_type + data payload to a tea.Msg.
 // The SSE event types are free-form strings; this function maps known
-// patterns to the appropriate TUI message types.
+// patterns to the appropriate TUI message types. When the server omits the
+// event: field (R14), eventType is empty and the type is extracted from the
+// data payload. The data may be a direct sseEvent JSON or a SSEPushPayload
+// envelope wrapping the inner event JSON.
 func translateSSEEvent(eventType, data string) tea.Msg {
 	var raw sseEvent
 	if err := json.Unmarshal([]byte(data), &raw); err != nil {
@@ -131,15 +153,36 @@ func translateSSEEvent(eventType, data string) tea.Msg {
 		innerType = eventType
 	}
 
+	// When both the SSE event: field and the top-level JSON type are empty,
+	// the data is likely a SSEPushPayload envelope. Extract the inner event
+	// JSON and parse it for the type and payload.
+	var innerPayload json.RawMessage
+	if innerType == "" && raw.Payload == nil {
+		var envelope models.SSEPushPayload
+		if err := json.Unmarshal([]byte(data), &envelope); err == nil && len(envelope.Event) > 0 {
+			var inner sseEvent
+			if err := json.Unmarshal(envelope.Event, &inner); err == nil {
+				innerType = inner.Type
+				innerPayload = inner.Payload
+			}
+		}
+	} else {
+		innerPayload = raw.Payload
+	}
+
+	if innerType == "" {
+		innerType = "unknown"
+	}
+
 	switch {
 	case strings.HasPrefix(innerType, "pipeline."):
-		return parsePipelineEvent(raw.Payload)
+		return parsePipelineEvent(innerPayload)
 	case strings.HasPrefix(innerType, "ledger."):
-		return parseLedgerEvent(raw.Payload)
+		return parseLedgerEvent(innerPayload)
 	case strings.HasPrefix(innerType, "consensus."):
-		return parseConsensusEvent(raw.Payload)
+		return parseConsensusEvent(innerPayload)
 	default:
-		return LedgerMsg{Level: LevelInfo, Message: innerType + ": " + string(raw.Payload), Time: timeNow()}
+		return LedgerMsg{Level: LevelInfo, Message: innerType + ": " + string(innerPayload), Time: timeNow()}
 	}
 }
 

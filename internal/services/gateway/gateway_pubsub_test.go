@@ -45,7 +45,7 @@ func TestPubSubBackPressureDropsOldestAndLogs(t *testing.T) {
 
 	// Inject a subscriber with a tiny buffer and no ws so trySend's
 	// nil-guard path is exercised.
-	sub := &wsSubscriber{send: make(chan []byte, 1), done: make(chan struct{})}
+	sub := &wsSubscriber{buf: newDropOldestBuf(1), done: make(chan struct{})}
 	broker.subscribe("ch", sub)
 
 	oldest := []byte(`"oldest"`)
@@ -58,15 +58,15 @@ func TestPubSubBackPressureDropsOldestAndLogs(t *testing.T) {
 	// was delivered to the buffer.
 	require.Equal(t, 1, broker.Publish("ch", newest))
 
-	sub.mu.Lock()
-	dropped := sub.dropped
-	sub.mu.Unlock()
+	sub.buf.mu.Lock()
+	dropped := sub.buf.dropped
+	sub.buf.mu.Unlock()
 	assert.False(t, sub.isDone(), "subscriber must remain connected under drop-oldest policy")
-	assert.Equal(t, uint64(1), dropped, "dropped counter must increment exactly once")
+	assert.Equal(t, int64(1), dropped, "dropped counter must increment exactly once")
 
 	// Buffer holds exactly the newest frame; the oldest was evicted.
-	require.Len(t, sub.send, 1, "buffer must hold exactly one frame after drop-oldest")
-	got := <-sub.send
+	require.Len(t, sub.buf.recv(), 1, "buffer must hold exactly one frame after drop-oldest")
+	got := <-sub.buf.recv()
 	var event pubsubv1.PubSubEvent
 	require.NoError(t, proto.Unmarshal(got, &event))
 	assert.Equal(t, newest, event.Data, "newest message must survive drop-oldest")
@@ -86,7 +86,7 @@ func TestPubSubBackPressureKeepsSubscriptions(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewGatewayWebSocketHandler(logger)
 
-	sub := &wsSubscriber{send: make(chan []byte, 1), done: make(chan struct{})}
+	sub := &wsSubscriber{buf: newDropOldestBuf(1), done: make(chan struct{})}
 	broker.subscribe("ch", sub)
 
 	payload := []byte(`"x"`)
@@ -107,7 +107,7 @@ func TestPubSubSessionHandler_handleAction(t *testing.T) {
 	broker := NewGatewayWebSocketHandler(logger)
 
 	sub := &wsSubscriber{
-		send:             make(chan []byte, 10),
+		buf:              newDropOldestBuf(10),
 		done:             make(chan struct{}),
 		identitySPIFFEID: "spiffe://g8e.local/app/test-app",
 		operatorID:       "test-operator",
@@ -182,7 +182,7 @@ func TestPubSubSessionHandler_cleanup(t *testing.T) {
 	broker := NewGatewayWebSocketHandler(logger)
 
 	sub := &wsSubscriber{
-		send:             make(chan []byte, 10),
+		buf:              newDropOldestBuf(10),
 		done:             make(chan struct{}),
 		identitySPIFFEID: "spiffe://g8e.local/app/test-app",
 		operatorID:       "test-operator",
@@ -217,7 +217,7 @@ func TestPubSubSubscriberShutdownIsIdempotentAndFailsFast(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewGatewayWebSocketHandler(logger)
 
-	sub := &wsSubscriber{send: make(chan []byte, 4), done: make(chan struct{})}
+	sub := &wsSubscriber{buf: newDropOldestBuf(4), done: make(chan struct{})}
 	broker.subscribe("ch", sub)
 
 	// Happy path still works before shutdown.
@@ -251,7 +251,7 @@ func TestPubSubHappyPathDoesNotLogDrop(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
 	broker := NewGatewayWebSocketHandler(logger)
 
-	sub := &wsSubscriber{send: make(chan []byte, 4), done: make(chan struct{})}
+	sub := &wsSubscriber{buf: newDropOldestBuf(4), done: make(chan struct{})}
 	broker.subscribe("ch", sub)
 
 	require.Equal(t, 1, broker.Publish("ch", []byte(`"ok"`)))
@@ -303,7 +303,7 @@ func TestSubscribe(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewGatewayWebSocketHandler(logger)
 
-	sub := &wsSubscriber{send: make(chan []byte, 4), done: make(chan struct{})}
+	sub := &wsSubscriber{buf: newDropOldestBuf(4), done: make(chan struct{})}
 
 	// Subscribe to a channel
 	broker.subscribe("test-channel", sub)

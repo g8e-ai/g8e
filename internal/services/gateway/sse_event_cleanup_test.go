@@ -29,17 +29,19 @@ import (
 func TestSSEEventService_CleanupDeletesOldEvents(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 
-	route := SSERoute{CLISessionID: "cli-cleanup-test"}
+	route := SSERoute{UserID: "u-cleanup-test", CLISessionID: "cli-cleanup-test"}
 
 	// Insert an old event (created in the past via direct DB manipulation).
 	// We use SSEEventsAppend which uses now, then sleep briefly, insert another,
 	// and cleanup with a max age between the two.
-	require.NoError(t, h.dataController.sseStore.SSEEventsAppend(route, "old-event", `{"msg":"old"}`, "test-producer"))
+	_, err := h.dataController.sseStore.SSEEventsAppend(route, "old-event", `{"msg":"old"}`, "test-producer")
+	require.NoError(t, err)
 
 	// Wait a tiny bit so the second event has a strictly later timestamp.
 	time.Sleep(10 * time.Millisecond)
 
-	require.NoError(t, h.dataController.sseStore.SSEEventsAppend(route, "new-event", `{"msg":"new"}`, "test-producer"))
+	_, err = h.dataController.sseStore.SSEEventsAppend(route, "new-event", `{"msg":"new"}`, "test-producer")
+	require.NoError(t, err)
 
 	// Cleanup events older than 5ms — should delete the first but keep the second.
 	// We use a small duration to separate the two events.
@@ -70,10 +72,12 @@ func TestSSEEventService_CleanupDeletesOldEvents(t *testing.T) {
 func TestSSEEventService_CleanupWithZeroAgeDeletesAll(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 
-	route := SSERoute{CLISessionID: "cli-cleanup-zero"}
+	route := SSERoute{UserID: "u-cleanup-zero", CLISessionID: "cli-cleanup-zero"}
 
-	require.NoError(t, h.dataController.sseStore.SSEEventsAppend(route, "event-1", `{"msg":"1"}`, "test-producer"))
-	require.NoError(t, h.dataController.sseStore.SSEEventsAppend(route, "event-2", `{"msg":"2"}`, "test-producer"))
+	_, err := h.dataController.sseStore.SSEEventsAppend(route, "event-1", `{"msg":"1"}`, "test-producer")
+	require.NoError(t, err)
+	_, err = h.dataController.sseStore.SSEEventsAppend(route, "event-2", `{"msg":"2"}`, "test-producer")
+	require.NoError(t, err)
 
 	// Small sleep to ensure events are strictly in the past relative to "now".
 	time.Sleep(5 * time.Millisecond)
@@ -97,11 +101,12 @@ func TestSSEEventService_AppendRejectsMutuallyExclusiveRoute(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 
 	route := SSERoute{
+		UserID:       "u-mutex-test",
 		WebSessionID: "web-123",
 		CLISessionID: "cli-456",
 	}
 
-	err := h.dataController.sseStore.SSEEventsAppend(route, "test-event", `{"msg":"test"}`, "test-producer")
+	_, err := h.dataController.sseStore.SSEEventsAppend(route, "test-event", `{"msg":"test"}`, "test-producer")
 	assert.Error(t, err, "expected error when multiple route IDs are set")
 }
 
@@ -112,6 +117,6 @@ func TestSSEEventService_AppendRejectsEmptyRoute(t *testing.T) {
 
 	route := SSERoute{}
 
-	err := h.dataController.sseStore.SSEEventsAppend(route, "test-event", `{"msg":"test"}`, "test-producer")
+	_, err := h.dataController.sseStore.SSEEventsAppend(route, "test-event", `{"msg":"test"}`, "test-producer")
 	assert.Error(t, err, "expected error when no route ID is set")
 }

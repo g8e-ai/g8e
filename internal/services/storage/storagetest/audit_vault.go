@@ -431,7 +431,7 @@ CREATE INDEX IF NOT EXISTS idx_commitment_ledger_committed_at ON commitment_ledg
 `
 
 // CreateSession creates a new session in the audit log
-func (avs *TestSQLAuditStore) CreateSession(id, sessionType, title, userIdentity string) error {
+func (avs *TestSQLAuditStore) CreateSession(id string, sessionType constants.SessionType, title, userIdentity string) error {
 	if avs == nil || avs.db == nil {
 		return nil
 	}
@@ -439,16 +439,16 @@ func (avs *TestSQLAuditStore) CreateSession(id, sessionType, title, userIdentity
 		return constants.ErrAuditSessionMissing
 	}
 	if sessionType == "" {
-		sessionType = string(constants.UserRoleOperator)
+		sessionType = constants.SessionTypeOperator
 	}
 
 	query := `INSERT INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`
-	_, err := avs.db.ExecWithRetry(query, id, sessionType, title, userIdentity)
+	_, err := avs.db.ExecWithRetry(query, id, string(sessionType), title, userIdentity)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreCreateSessionFailed, err)
 	}
 
-	avs.logger.Info("OperatorSession created", "operator_session_id", id, "session_type", sessionType, "title", title)
+	avs.logger.Info("OperatorSession created", "operator_session_id", id, "session_type", string(sessionType), "title", title)
 	return nil
 }
 
@@ -458,13 +458,13 @@ func (avs *TestSQLAuditStore) GetOperatorSession(id string) (*storage.OperatorSe
 		return nil, constants.ErrAuditStoreDisabled
 	}
 
-	query := `SELECT id, title, created_at, user_identity FROM sessions WHERE id = ?`
+	query := `SELECT id, session_type, title, created_at, user_identity FROM sessions WHERE id = ?`
 	row := avs.db.QueryRowWithRetry(query, id)
 
 	var session storage.OperatorSession
-	var title, userIdentity sql.NullString
+	var sessionType, title, userIdentity sql.NullString
 	var createdAtStr string
-	err := row.Scan(&session.ID, &title, &createdAtStr, &userIdentity)
+	err := row.Scan(&session.ID, &sessionType, &title, &createdAtStr, &userIdentity)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -474,6 +474,9 @@ func (avs *TestSQLAuditStore) GetOperatorSession(id string) (*storage.OperatorSe
 
 	session.CreatedAt, _ = timesvc.ParseTimestamp(createdAtStr)
 
+	if sessionType.Valid {
+		session.SessionType = sessionType.String
+	}
 	if title.Valid {
 		session.Title = title.String
 	}
@@ -755,8 +758,8 @@ func (avs *TestSQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRe
 	// Auto-create session row for FK satisfaction (matches production behavior)
 	if record.OperatorSessionID != "" {
 		_, _ = avs.db.ExecWithRetry(
-			`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, 'operator', ?, ?)`,
-			record.OperatorSessionID, record.OperatorSessionID, record.OperatorID,
+			`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`,
+			record.OperatorSessionID, string(constants.SessionTypeOperator), record.OperatorSessionID, record.OperatorID,
 		)
 	}
 

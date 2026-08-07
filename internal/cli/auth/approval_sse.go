@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"sync"
 	"time"
 
@@ -33,20 +32,24 @@ import (
 const ApprovalSSETimeout = 3 * time.Minute
 
 // WaitForApprovalSSE subscribes to the gateway's SSE stream scoped to the given
-// user and blocks until an approval.completed event with a matching txHash
+// CLI session and blocks until an approval.completed event with a matching txHash
 // arrives or the context expires. The httpClient must be configured with mTLS
 // certificates. The baseURL should be the gateway's public HTTPS URL (e.g.,
 // cfg.OperatorPublicURL()) to ensure TLS ServerName matches the cert SAN.
 //
-// If txHash is empty, the first approval.completed event for the user is
+// The cliSessionID is sent as the X-G8E-CLI-Session-ID header so the gateway
+// can route the SSE subscription to the correct session. The user_id is derived
+// from the mTLS cert at the gateway — it is not passed in the URL.
+//
+// If txHash is empty, the first approval.completed event for the session is
 // accepted (useful for backward compatibility but not recommended).
-func WaitForApprovalSSE(ctx context.Context, httpClient *http.Client, baseURL, userID, txHash string) error {
-	sseURL := fmt.Sprintf("%s%s?user_id=%s&since_id=0",
+func WaitForApprovalSSE(ctx context.Context, httpClient *http.Client, baseURL, cliSessionID, txHash string) error {
+	sseURL := fmt.Sprintf("%s%s?since_id=0",
 		baseURL,
-		constants.APIPaths.SSEStream,
-		url.QueryEscape(userID))
+		constants.APIPaths.SSEStream)
 
 	sseClient := sse.NewClient(sseURL, httpClient)
+	sseClient.SetHeader(constants.HeaderCLISessionID, cliSessionID)
 
 	waitCtx, cancel := context.WithTimeout(ctx, ApprovalSSETimeout)
 	defer cancel()
@@ -58,10 +61,6 @@ func WaitForApprovalSSE(ctx context.Context, httpClient *http.Client, baseURL, u
 	go func() {
 		defer close(done)
 		sseClient.Run(waitCtx, func(eventType, data string) {
-			if eventType != constants.SSEEventTypeApprovalCompleted {
-				return
-			}
-
 			var envelope models.SSEPushPayload
 			if err := json.Unmarshal([]byte(data), &envelope); err != nil {
 				return
@@ -69,6 +68,16 @@ func WaitForApprovalSSE(ctx context.Context, httpClient *http.Client, baseURL, u
 
 			var event models.ApprovalCompletedEvent
 			if err := json.Unmarshal(envelope.Event, &event); err != nil {
+				return
+			}
+
+			// When the server omits the event: field (R14), eventType is empty.
+			// Extract the type from the inner payload instead.
+			innerType := eventType
+			if innerType == "" {
+				innerType = event.Type
+			}
+			if innerType != constants.SSEEventTypeApprovalCompleted {
 				return
 			}
 

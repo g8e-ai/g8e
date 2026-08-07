@@ -5,8 +5,8 @@ parent: Guides
 
 # Lovable Frontend Integration
 
-Last Updated: 2026-07-28
-Version: v1.6.6
+Last Updated: 2026-08-07
+Version: v1.7.0
 
 ---
 
@@ -23,12 +23,12 @@ This guide covers Lovable-specific configuration, the AI agent prompt, and compo
 3. **[Enroll the Frontend](./build_frontend.md#frontend-enrollment-commands)** - Run `g8e gui enroll` to validate CORS and generate a TypeScript config snippet
 4. **[Review the API Reference](./build_frontend.md#api-reference)** - Understand the public and authenticated endpoints (see [Build a g8e-Compatible Frontend](./build_frontend.md))
 5. **[Review API Data Types](./build_frontend.md#api-data-types)** - Use the Swagger spec for request and response schemas (see [Build a g8e-Compatible Frontend](./build_frontend.md))
-6. **[Build Pages and Components](#pages-and-components)** - AuthContext, Login, Dashboard, ApprovalFlow, URL hash handling
+6. **[Build Pages and Components](#6-pages-and-components)** - AuthContext, Login, Dashboard, ApprovalFlow, URL hash handling
 7. **[Define WebAuthn Flow Requirements](./build_frontend.md#webauthn-flow-requirements)** - Registration, authentication, and approval ceremonies (see [Build a g8e-Compatible Frontend](./build_frontend.md))
 8. **[Define SSE Requirements](./build_frontend.md#sse-live-audit-stream)** - Live event streaming with auto-reconnect and polling fallback (see [Build a g8e-Compatible Frontend](./build_frontend.md))
-9. **[Apply UI/UX Guidelines](#uiux-guidelines)** - Dark theme, monospace hashes, toast notifications, responsive layout
-10. **[Handle Errors](#error-handling)** - 401 redirects, `needs_setup`, enrollment token errors, WebAuthn availability
-11. **[Verify the Integration](#verification-checklist)** - CORS headers, preflight, passkey flows, cookie attributes, SSE, approvals
+9. **[Apply UI/UX Guidelines](#9-uiux-guidelines)** - Dark theme, monospace hashes, toast notifications, responsive layout
+10. **[Handle Errors](#10-error-handling)** - 401 redirects, `needs_setup`, enrollment token errors, WebAuthn availability
+11. **[Verify the Integration](#11-verification-checklist)** - CORS headers, preflight, passkey flows, cookie attributes, SSE, approvals
 
 ### Architecture
 
@@ -181,8 +181,8 @@ All paths are relative to `API_BASE_URL`. All authenticated routes require `cred
 | `GET` | `/api/v1/approvals` | List pending suspended transactions |
 | `GET` | `/api/v1/approvals/{txHash}/challenge` | Get WebAuthn approval challenge |
 | `POST` | `/api/v1/approvals/{txHash}/verify` | Verify approval assertion |
-| `GET` | `/api/v1/sse/stream?web_session_id={id}` | SSE stream for live audit events |
-| `GET` | `/api/v1/sse/events?web_session_id={id}&since_id={n}` | Poll SSE events |
+| `GET` | `/api/v1/sse/stream` | SSE stream for live audit events (web_session_id from cookie) |
+| `GET` | `/api/v1/sse/events?since_id={n}` | Poll SSE events (web_session_id from cookie) |
 
 ### Route Authentication
 
@@ -295,7 +295,7 @@ When a destructive mutation is suspended by the gateway's governance gauntlet, t
 
 For the Lovable app, you have two options:
 
-1. **Handle approvals inline** (recommended): The Lovable app implements the approval flow directly (see [Approval Flow](#64-approval-flow-srccomponentsapprovalflowtsx)). When a mutation is suspended, the API response includes the transaction hash. The Lovable app can auto-trigger the approval flow using the `#approve={txHash}` URL hash pattern.
+1. **Handle approvals inline** (recommended): The Lovable app implements the approval flow directly (see [Approval Flow](#64-approval-flow)). When a mutation is suspended, the API response includes the transaction hash. The Lovable app can auto-trigger the approval flow using the `#approve={txHash}` URL hash pattern.
 
 2. **Redirect to the gateway console**: If the Lovable app does not implement the approval flow, redirect the user's browser to `{API_BASE_URL}/approve/{txHash}`. The gateway console at `/console/` handles the WebAuthn approval ceremony. Note: this requires the passkey RP ID to match the gateway's domain. If the RP ID is set to the Lovable app's domain (recommended), the console redirect will not be able to perform WebAuthn. Use option 1 instead.
 
@@ -353,8 +353,8 @@ The app must provide a live audit event stream with the following requirements:
 
 ### Connection
 
-- Connect to `GET /api/v1/sse/stream?web_session_id={id}` using `EventSource` with `withCredentials: true`.
-- The `web_session_id` comes from `GET /api/v1/auth/sessions/me` after login.
+- Connect to `GET /api/v1/sse/stream` using `EventSource` with `withCredentials: true`.
+- The `web_session_id` is derived from the authenticated session cookie by the gateway; do NOT pass it in the URL.
 - Show connection status: green (connected), yellow (connecting), red (disconnected).
 - Provide manual connect and disconnect buttons.
 
@@ -374,7 +374,7 @@ The app must provide a live audit event stream with the following requirements:
 
 ### Polling Fallback
 
-If `EventSource` does not send cookies cross-origin, fall back to polling `GET /api/v1/sse/events?web_session_id={id}&since_id={lastId}` every 2 seconds.
+If `EventSource` does not send cookies cross-origin, fall back to polling `GET /api/v1/sse/events?since_id={lastId}` every 2 seconds (the `web_session_id` is derived from the session cookie).
 
 ### WebSocket Note
 

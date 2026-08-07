@@ -1,9 +1,9 @@
 # g8e Scripts
 
-Last Updated: 2026-07-29
-Version: v1.6.6
+Last Updated: 2026-08-07
+Version: v1.7.0
 
-g8e provides platform-specific bootstrap scripts for local development, gateway-served deploy scripts for remote operator installation, and smoke test scripts that verify SDK importability in clean environments. The `g8e demos` CLI also supports air-gapped image export and import for demo environments.
+g8e provides platform-specific bootstrap scripts for local development, gateway-served deploy scripts for remote operator installation, smoke test scripts that verify SDK importability in clean environments, and a CI guard script that validates doctrine detector coverage of finalized COSAiS overlays. The `g8e demos` CLI also supports air-gapped image export and import for demo environments.
 
 ## Overview
 
@@ -12,8 +12,9 @@ g8e provides platform-specific bootstrap scripts for local development, gateway-
 | Dev bootstrap | `linux-setup.sh` | Fresh-clone to working binary on Linux |
 | Dev bootstrap | `macos-setup.sh` | Fresh-clone to working binary on macOS |
 | Dev bootstrap | `windows-setup.ps1` | Fresh-clone to working binary on Windows |
-| Smoke test | `smoke-test-go.sh` | Verifies the Go module imports in a clean project |
+| Smoke test | `smoke-test-go.sh` | Verifies the Go SDK imports in a clean project |
 | Smoke test | `smoke-test-python.sh` | Verifies the Python package installs and imports in a clean venv |
+| CI guard | `validate-cosais-overlays.sh` | Verifies doctrine detectors cover finalized COSAiS overlays |
 | Remote deploy | `g8e-deploy.sh` | Served by gateway; downloads binary on Linux/macOS hosts |
 | Remote deploy | `g8e-deploy.ps1` | Served by gateway; downloads binary on Windows hosts |
 | Air-gapped deploy | `g8e demos` CLI | Pull, export, import, and list Docker images for air-gapped demo deployments |
@@ -52,8 +53,21 @@ Run `bash scripts/smoke-test-go.sh` to verify the Go SDK and `bash scripts/smoke
 
 ### What Each Script Does
 
-- **`smoke-test-go.sh`**: Creates a temporary Go module, adds a replace directive pointing at the local repository, imports the protocol package, and builds a minimal binary.
-- **`smoke-test-python.sh`**: Creates a clean virtual environment, installs the Python package in editable mode, verifies README imports and example scripts, then removes the environment.
+- **`smoke-test-go.sh`**: Creates an isolated temporary Go project, imports the Go SDK, and builds a minimal binary against the local repository.
+- **`smoke-test-python.sh`**: Creates a clean virtual environment, installs the Python package, verifies the README quickstart imports and example scripts, then removes the environment.
+
+## CI Guard Script
+
+The `validate-cosais-overlays.sh` script enforces doctrine detector coverage of finalized COSAiS overlays. It runs as part of `make lint` via the `make validate-cosais` target and fails when any overlay that NIST has finalized lacks a referencing doctrine detector.
+
+### Usage
+
+Run `make validate-cosais` from the repository root. The script scans every demo doctrine directory and the overlay catalog, then reports any finalized overlay that no detector references.
+
+### Prerequisites
+
+- `python3` available on PATH (used to parse the overlay catalog and doctrine files).
+- The overlay catalog and at least one demo doctrine directory must exist in the repository.
 
 ## Remote Deploy Scripts (Gateway-Served)
 
@@ -71,7 +85,7 @@ On Linux or macOS, run `curl -fsSL http://<gateway-ip>:8080/g8e-deploy.sh | bash
 
 ## Air-Gapped Deployment Commands
 
-The `g8e demos` CLI provides `pull`, `export`, `import`, and `images` commands for air-gapped demo environments. The manifest at `demos/images.json` pins all external Docker images to sha256 digests.
+The `g8e demos` CLI provides `pull`, `export`, `import`, and `images` commands for air-gapped demo environments. The manifest at `demos/images.json` pins every external Docker image to a fixed digest so air-gapped hosts reproduce the connected build exactly.
 
 ### Usage
 

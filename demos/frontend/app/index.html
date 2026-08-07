@@ -319,7 +319,9 @@
                 return;
             }
 
-            const url = API_BASE + '/api/v1/sse/stream?web_session_id=' + encodeURIComponent(webSessionId);
+            // Security: web_session_id is NEVER passed in the URL. The gateway
+            // derives it from the authenticated session cookie.
+            const url = API_BASE + '/api/v1/sse/stream';
             eventSource = new EventSource(url, { withCredentials: true });
 
             eventSource.onopen = function() {

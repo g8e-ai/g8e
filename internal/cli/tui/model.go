@@ -24,14 +24,15 @@ import (
 
 // Options configures the TUI at launch.
 type Options struct {
-	Version    string
-	NodeName   string
-	NetLabel   string
-	Quorum     int
-	Total      int
-	SSEURL     string
-	Token      string
-	HTTPClient *http.Client
+	Version      string
+	NodeName     string
+	NetLabel     string
+	Quorum       int
+	Total        int
+	SSEURL       string
+	Token        string
+	CLISessionID string
+	HTTPClient   *http.Client
 
 	// ProgramOptions are appended to the default bubbletea program options
 	// (AltScreen, MouseCellMotion). Tests use this to inject headless options.

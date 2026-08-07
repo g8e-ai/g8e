@@ -8,6 +8,8 @@ This directory contains Docker Compose demo environments for org-specific g8e de
 demos/
 ├── bin/                        # built g8e binary, used by g8e demos CLI commands
 │   └── g8e
+├── Dockerfile                  # Shared image build for all orgs; copies bin/g8e into a minimal Debian image
+├── images.json                 # Pinned sha256 digests for all external Docker images (air-gapped manifest)
 ├── healthcare/                # Healthcare/PHI demo
 │   ├── compose.yml
 │   ├── config/
@@ -34,8 +36,9 @@ demos/
 │   └── README.md               # DHS-specific documentation and LOE mapping
 ├── fedramp/                    # FedRAMP sovereign cloud governance demo
 │   ├── compose.yml
+│   ├── compose.fips.yml        # FIPS variant (uses Dockerfile.fips, ports 8089/8452)
 │   ├── config/                 # Gateway/operator config, consensus-bootstrap.json, ensemble-seed.hex
-│   ├── doctrine/               # FedRAMP L1 rules (CR-26 audit integrity, AC-2 access control, SC-8 cross-domain)
+│   ├── doctrine/               # FedRAMP L1 rules (CR-26, AC-2, SI-4, SC-8, CM-7)
 │   ├── target-data/            # Cloud resources and KSI control categories
 │   ├── cloudop.sh              # Wrapper script bridging operator execution to cloudsvc
 │   ├── cloudsvc.py             # Sovereign Cloud Service (L5 actuator, Python HTTP server)
@@ -76,11 +79,11 @@ Each org deploys five isolated networks:
 
 \† Gateway appears on net_secure only in the `dhs` and `fedramp` demos, where it needs direct access to the actuator boundary.
 
-The `healthcare` demo adds PA workflow services on net_secure (pa-submission-service, provider-exemption-rules, pa-processing-worker, message-broker, reporting-db) and a Metabase compliance dashboard on net_perimeter.
+The `healthcare` demo adds PA workflow services on net_secure (provider-exemption-rules, pa-processing-worker, message-broker, reporting-db) plus pa-submission-service which bridges net_internal and net_secure so the gateway can enforce PHI doctrine on inbound FHIR requests. A Metabase compliance dashboard runs on net_perimeter (with a net_secure leg to reach reporting-db), and a one-shot metabase-setup service on net_perimeter configures it on startup.
 
-The `dhs` demo deploys a real `agent-coalition` container (running `demos scenarios run`) on net_internal, a real `datasvc` Python HTTP actuator on net_secure, display-only source connectors on net_internal and net_untrusted, and a partner fusion-COP plus a severable coalition datalink on net_perimeter, modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries. The `agent-coalition` container is a real g8e binary that submits genuine `GovernanceEnvelope`s. The display connectors are Alpine echo loops for narrative only.
+The `dhs` demo deploys a real `agent-coalition` container (the exec target for `g8e demos run`) on net_internal, a real `datasvc` Python HTTP actuator on net_secure, display-only source connectors on net_internal and net_untrusted, and a partner fusion-COP plus a severable coalition datalink on net_perimeter, modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries. The `agent-coalition` container is a real g8e binary that submits genuine `GovernanceEnvelope`s when driven by the CLI. The display connectors are Alpine echo loops for narrative only.
 
-The `fedramp` demo deploys a real `agent-runtime` container (running `demos scenarios run`) on net_internal, a real `cloudsvc` Python HTTP actuator on net_secure, a `bad-actor` on net_untrusted, and an `observability` container on net_mgmt. The `agent-runtime` container is a real g8e binary that submits genuine `GovernanceEnvelope`s driving cloud resource operations (provision, configure, destroy, revert) through the `cloudop.sh` wrapper. The gateway runs in consensus posture by default and switches to notary posture for scenario 3 (resource destruction requiring authorizing official approval).
+The `fedramp` demo deploys a real `agent-runtime` container (the exec target for `g8e demos run`) on net_internal, a real `cloudsvc` Python HTTP actuator on net_secure, a `bad-actor` on net_untrusted, and an `observability` container on net_mgmt. The `agent-runtime` container is a real g8e binary that submits genuine `GovernanceEnvelope`s driving cloud resource operations (provision, configure, destroy, revert) through the `cloudop.sh` wrapper when driven by the CLI. The gateway runs in consensus posture by default and switches to notary posture for scenario 3 (resource destruction requiring authorizing official approval).
 
 The `frontend` demo deploys a nginx-served static HTML app on net_perimeter for WebAuthn passkey enrollment and SSE event streaming. No target system or bad actor container. The gateway runs in doctrine posture with CORS and passkey RP origins pre-configured for the frontend origin.
 
@@ -90,7 +93,7 @@ Each org demonstrates different compliance requirements and use cases:
 
 | Dimension | Healthcare | Finance | DHS | FedRAMP | Frontend |
 |---|---|---|---|---|---|
-| Doctrine content | PHI scrub patterns, PA workflow gates | Tx limits, dual-control triggers | USPER PII minimization, cross-domain release, sovereign destruction | CR-26 audit integrity, AC-2 access control, SC-8 cross-domain, CM-7 config management | Unauthorized API access, CORS origin spoofing, session hijacking |
+| Doctrine content | PHI scrub patterns, PA workflow gates | Tx limits, dual-control triggers | USPER PII minimization, cross-domain release, sovereign destruction | CR-26 audit integrity, AC-2 access control, SI-4 privilege escalation, SC-8 cross-domain, CM-7 config management | Unauthorized API access, CORS origin spoofing, session hijacking |
 | Target data content | Simulated EHR / PA records | Simulated ledger / positions | Mock multi-source coalition feeds + sovereign manifest | Cloud resources (VMs, DBs, IAM) and KSI control categories | None (frontend enrollment demo) |
 | Gateway posture | doctrine | doctrine | consensus | consensus | doctrine |
 | Agent principal type | Clinical AI agent | Algorithmic trading agent | Coalition source connectors + predictive-analytics agent | FedRAMP cloud service operator + authorizing official | Browser-based frontend app (WebAuthn + SSE) |
@@ -271,10 +274,10 @@ The `demos/Dockerfile` is shared across all org directories. It copies the pre-b
 The following must hold in every org environment:
 
 1. The Operator is the only g8e process on net_secure. No agent, no observability service is co-located on net_secure. In the `dhs` and `fedramp` demos, the Gateway is also attached to net_secure so it can reach the actuator boundary.
-2. No named volume is shared between services. Each service owns its own volume.
+2. No named volume is shared with write access between services. Each service owns its own writable volume; read-only mounts are permitted for agent credential sharing (`operator_state:ro` on agent-runtime/agent-coalition) and observability audit tailing (`gateway_state:ro`, `operator_state:ro`).
 3. No PKI material is pre-distributed via filesystem. Identity propagates through enrollment over mTLS.
 4. Doctrine is a bind mount, not baked into an image. Org behavior is data, not code.
-5. The `demos/Dockerfile` is the only build artifact shared across org directories. Each compose file references `build: context: ..` to copy the pre-built binary from `demos/bin/g8e` into the container. No compilation happens inside the container. All `agent-runtime` containers use the same image with `entrypoint: ["sh", "-c", "sleep infinity"]` for exec-based scenarios run invocation.
+5. The `demos/Dockerfile` is the only build artifact shared across org directories. Each compose file references `build: context: ..` to copy the pre-built binary from `demos/bin/g8e` into the container. No compilation happens inside the container. All agent containers (`agent-runtime` / `agent-coalition`) use the same image with `entrypoint: ["sh", "-c", "sleep infinity"]` for exec-based scenarios run invocation.
 
 ## Port Mappings
 
@@ -286,6 +289,7 @@ Each org uses different host ports to allow simultaneous deployment:
 | finance | 8082 | 8445 | Demo UI: 3002 |
 | dhs | 8087 | 8450 | |
 | fedramp | 8088 | 8451 | |
+| fedramp (FIPS) | 8089 | 8452 | Uses `compose.fips.yml` and `Dockerfile.fips`; invoke manually with `docker compose -f compose.fips.yml` |
 | frontend | 8083 | 8446 | Frontend App: 3003 |
 
 ## PKI and Enrollment
@@ -304,7 +308,7 @@ This reflects real deployment: the Operator on a remote air-gapped host has no f
 
 ## Observability
 
-The observability container mounts audit vault volumes read-only and tails log files. This provides out-of-band inspection of the audit trail without requiring live network connections to services.
+The observability container mounts audit vault and state volumes read-only, providing out-of-band inspection of the audit trail and actuator state without requiring live network connections to services. In the `healthcare`, `finance`, `dhs`, and `frontend` demos it actively tails the gateway operator log; the `fedramp` observability container exposes the mounted volumes for manual `docker compose exec` inspection.
 
 ## Troubleshooting
 

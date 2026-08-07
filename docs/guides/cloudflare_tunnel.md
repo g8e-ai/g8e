@@ -5,8 +5,8 @@ parent: Guides
 
 # Cloudflare Tunnel Integration
 
-Last Updated: 2026-07-28
-Version: v1.6.6
+Last Updated: 2026-08-07
+Version: v1.7.0
 
 ---
 
@@ -190,7 +190,7 @@ curl -s https://console.g8e.ai/api/v1/health
 Expected response:
 
 ```json
-{"status":"ok","mode":"gateway","version":"v1.6.6","pid":12345,"governance_ready":true,"state_merkle_root":"..."}
+{"status":"ok","mode":"gateway","version":"v1.6.10","pid":12345,"governance_ready":true,"state_merkle_root":"..."}
 ```
 
 Open the console in a browser:
@@ -205,7 +205,7 @@ You should see the g8e Console SPA with WebAuthn passkey enrollment.
 
 ## Step 6: Cloudflare Access (Zero-Trust Hardening)
 
-For maximum security, add Cloudflare Access as an identity proxy in front of the tunnel. This adds an authentication layer before traffic even reaches the gateway.
+Add Cloudflare Access as an identity proxy in front of the tunnel to require identity verification before traffic reaches the gateway.
 
 ### Create an Access Application
 
@@ -248,9 +248,7 @@ curl -s https://console.g8e.ai/api/v1/health \
 
 ## Lovable Frontend Integration
 
-For building a g8e Governance Console UI with [Lovable](https://lovable.dev), including gateway-side CORS and passkey RP configuration, frontend enrollment, API reference, WebAuthn flows, and SSE streaming, see the [Lovable Frontend Integration guide](./lovable.md).
-
-When configuring the gateway for a Lovable frontend, add the Lovable app's origin to `--cors-origin` (or `G8E_ALLOWED_ORIGINS`) in addition to the tunnel hostname. The `http2Origin: true` setting in the tunnel config ensures SSE streaming works through the tunnel.
+When configuring the gateway for a Lovable frontend, add the Lovable app's origin to `--cors-origin` (or `G8E_ALLOWED_ORIGINS`) in addition to the tunnel hostname. The `http2Origin: true` setting in the tunnel config ensures SSE streaming works through the tunnel. For full frontend enrollment, WebAuthn flows, and API reference, see the [Lovable Frontend Integration guide](./lovable.md).
 
 ---
 

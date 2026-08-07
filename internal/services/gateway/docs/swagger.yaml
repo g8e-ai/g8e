@@ -1115,19 +1115,12 @@ paths:
     get:
       description: |-
         Polls stored SSE events since a given ID. Dual auth: mTLS for CLI/operator, web session
-        cookie for browser. Exactly one routing target must be set via query string.
+        cookie for browser. The route is built entirely from auth context: user_id from
+        cert/cookie, session from header/cookie. The query string carries only since_id and limit.
       parameters:
-      - description: Web session ID
-        in: query
-        name: web_session_id
-        type: string
-      - description: CLI session ID
-        in: query
-        name: cli_session_id
-        type: string
-      - description: User ID
-        in: query
-        name: user_id
+      - description: CLI session ID (mTLS only — user_id derived from cert)
+        in: header
+        name: X-G8E-CLI-Session-ID
         type: string
       - description: Return events after this ID
         in: query
@@ -1161,8 +1154,8 @@ paths:
       - application/json
       description: |-
         Appends an event to the SSE event store and publishes it to the pub/sub channel.
-        Requires mTLS app workload identity. Exactly one routing target must be set:
-        web_session_id, cli_session_id, or user_id.
+        Requires mTLS app workload identity. user_id is required, plus exactly one
+        of web_session_id or cli_session_id as the delivery target.
       parameters:
       - description: SSE push payload
         in: body
@@ -1197,19 +1190,12 @@ paths:
       description: |-
         Streams events via Server-Sent Events (text/event-stream). Dual auth: mTLS for
         CLI/operator, web session cookie for browser. Supports Last-Event-ID header for
-        reconnection. Exactly one routing target must be set via query string.
+        reconnection. The route is built entirely from auth context: user_id from cert/cookie,
+        session from header/cookie. The query string carries only since_id.
       parameters:
-      - description: Web session ID
-        in: query
-        name: web_session_id
-        type: string
-      - description: CLI session ID
-        in: query
-        name: cli_session_id
-        type: string
-      - description: User ID
-        in: query
-        name: user_id
+      - description: CLI session ID (mTLS only — user_id derived from cert)
+        in: header
+        name: X-G8E-CLI-Session-ID
         type: string
       - description: Replay events after this ID
         in: query

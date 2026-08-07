@@ -4,8 +4,8 @@ title: MCP Protocol
 
 # MCP Protocol
 
-Last Updated: 2026-07-27
-Version: v1.6.6
+Last Updated: 2026-08-07
+Version: v1.7.0
 
 The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer governance verification sequence (L1Doctrine/L2Consensus/L3Notary/L4Warden/L5Actuator), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
@@ -315,7 +315,7 @@ Validation failures are rejected before envelope construction, ensuring maliciou
 
 - **mTLS fingerprint**: CLI sessions use mTLS certificate fingerprint as proof via the CLI session verifier (`internal/services/gateway/cli_session_verifier.go`)
 - **WebAuthn**: Browser-based clients authenticate with passkeys via PasskeyService
-- **Gateway L3 notary**: `NewGatewayL3Notary` in `internal/services/governance/l3_notary.go` uses a layered model: passkey authorization is required for all proofs (browser and CLI), and CLI callers additionally present mTLS fields for transport-layer authentication via the CLI session verifier
+- **Gateway L3 notary**: `NewGatewayL3Notary` in `internal/services/governance/l3_notary.go` uses a layered model: passkey authorization is required for all proofs (browser and CLI), and CLI callers additionally present mTLS fields for transport-layer authentication via the CLI session verifier. When a CLI-submitted transaction is suspended for L3 approval, the suspended transaction records the `submitter_cli_session_id` so that the resulting `approval.completed` SSE event is scoped to that specific CLI session, preventing cross-session approval leakage.
 
 ### L4 Warden (Pre-Dispatch Verification)
 
@@ -372,7 +372,7 @@ Gateway verification errors are mapped to JSON-RPC error responses:
 
 ### L3 Suspension
 
-When L3 proof is missing (`ErrL3ProofMissing`), the gateway suspends the transaction and returns an approval URL for out-of-band WebAuthn authorization. The client must retry after approval.
+When L3 proof is missing (`ErrL3ProofMissing`), the gateway suspends the transaction and returns an approval URL for out-of-band WebAuthn authorization. The suspended transaction records the `submitter_cli_session_id` so the resulting `approval.completed` SSE event is delivered only to the CLI session that submitted the transaction. The client receives the approval notification in real time via the SSE stream and retries after approval.
 
 ---
 
@@ -431,7 +431,20 @@ The Gateway enforces strict session separation via SQLite-backed session store:
 | **CLI Session** | `cli_session_id` | mTLS certificate | CLI/BYO clients |
 | **Operator Session** | `operator_session_id` | mTLS certificate | In-process execution context |
 
-Sessions are cryptographically bound to their authentication mechanism and cannot be conflated. SSE and pub/sub routing uses these identifiers to prevent cross-tenant data leakage.
+Sessions are cryptographically bound to their authentication mechanism and cannot be conflated.
+
+### SSE & Pub/Sub Routing
+
+SSE and pub/sub routing uses a two-dimensional model that separates ownership from delivery:
+
+- **Ownership dimension**: `user_id` is always required. It identifies the human user who owns the event stream and is bound by the authenticated identity (mTLS certificate or web session cookie). `user_id` alone is not a valid delivery target.
+- **Delivery dimension**: Exactly one of `web_session_id` or `cli_session_id` must be set. This identifies the specific session that should receive the event. The two session IDs are mutually exclusive on the delivery axis.
+
+The prior three-way mutually-exclusive routing model (`user_id` / `web_session_id` / `cli_session_id` — pick exactly one) is removed. The `user_id`-only fan-out route is removed entirely, so approval events are scoped to the specific CLI session that submitted the transaction, eliminating cross-session leakage.
+
+Routing and identity identifiers are carried in headers and auth context, not in URL query strings. For mTLS clients, `user_id` is derived from the certificate and the session ID is sent via the `X-G8E-CLI-Session-ID` or `X-G8E-Web-Session-ID` header. For cookie-authenticated browser clients, `web_session_id` is derived from the session cookie. This matches the transport model used by every other gateway controller and prevents identity/routing IDs from leaking into access logs, browser history, and referrer headers.
+
+See [SSE Streaming](../../docs/architecture/sse.md) for the full endpoint and security model.
 
 ---
 

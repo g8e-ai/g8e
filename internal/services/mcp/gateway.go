@@ -966,6 +966,7 @@ func (g *GatewayService) StoreSuspendedTransaction(ctx context.Context, txHash s
 	if g.suspendedStore == nil {
 		return
 	}
+	cliSessionID, _ := ctx.Value(constants.ContextKeyCLISessionID).(string)
 	tx := &models.SuspendedTransaction{
 		TransactionHash:         txHash,
 		Envelope:                json.RawMessage(envelope),
@@ -975,6 +976,7 @@ func (g *GatewayService) StoreSuspendedTransaction(ctx context.Context, txHash s
 		ToolArguments:           toolArgs,
 		UserID:                  userID,
 		OperatorID:              operatorID,
+		SubmitterCLISessionID:   cliSessionID,
 		ExpectedCertFingerprint: certFingerprint,
 	}
 	if err := g.suspendedStore.StoreSuspendedTransaction(ctx, tx); err != nil {

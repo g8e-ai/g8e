@@ -64,10 +64,11 @@ func (o *PasskeyOrchestrator) ListSuspendedTransactions(ctx context.Context, use
 }
 
 // EmitApprovalCompletedSSE publishes an approval.completed SSE event scoped to
-// the original submitting user so any waiting CLI client (stdio proxy or
-// approve command) receives real-time notification without polling.
-func (o *PasskeyOrchestrator) EmitApprovalCompletedSSE(userID, txHash string) {
-	if o.sseStore == nil || o.pubsub == nil || userID == "" {
+// the specific CLI session that submitted the transaction, so the waiting CLI
+// client receives real-time notification without polling.
+func (o *PasskeyOrchestrator) EmitApprovalCompletedSSE(userID, cliSessionID, txHash string) {
+	if o.sseStore == nil || o.pubsub == nil || userID == "" || cliSessionID == "" {
+		o.logger.Warn("approval: skipping SSE emission due to missing parameters", "user_id", userID, "cli_session_id", cliSessionID, "tx_hash", txHash)
 		return
 	}
 
@@ -82,8 +83,9 @@ func (o *PasskeyOrchestrator) EmitApprovalCompletedSSE(userID, txHash string) {
 	}
 
 	envelope := models.SSEPushPayload{
-		UserID: userID,
-		Event:  eventPayload,
+		UserID:       userID,
+		CliSessionID: cliSessionID,
+		Event:        eventPayload,
 	}
 	envelopeJSON, err := json.Marshal(envelope)
 	if err != nil {
@@ -91,17 +93,24 @@ func (o *PasskeyOrchestrator) EmitApprovalCompletedSSE(userID, txHash string) {
 		return
 	}
 
-	if err := o.sseStore.SSEEventsAppend(
-		SSERoute{UserID: userID},
+	rowID, err := o.sseStore.SSEEventsAppend(
+		SSERoute{UserID: userID, CLISessionID: cliSessionID},
 		constants.SSEEventTypeApprovalCompleted,
 		string(envelopeJSON),
 		"g8eg",
-	); err != nil {
+	)
+	if err != nil {
 		o.logger.Error("approval: failed to append SSE event", "error", err)
 		return
 	}
 
-	o.pubsub.Publish("sse:user:"+userID, envelopeJSON)
+	pubEvent := models.SSEPublishedEvent{ID: rowID, Payload: json.RawMessage(envelopeJSON)}
+	pubJSON, err := json.Marshal(pubEvent)
+	if err != nil {
+		o.logger.Error("approval: failed to marshal published event", "error", err)
+		return
+	}
+	o.pubsub.Publish("sse:cli:"+cliSessionID, pubJSON)
 }
 
 // EmitPasskeyRegisteredSSE publishes a passkey.registered SSE event scoped to the
@@ -133,15 +142,23 @@ func (o *PasskeyOrchestrator) EmitPasskeyRegisteredSSE(userID, cliSessionID stri
 		return
 	}
 
-	if err := o.sseStore.SSEEventsAppend(
-		SSERoute{CLISessionID: cliSessionID},
+	// R15/R1: persist and stamp the row ID into the SSEPublishedEvent envelope.
+	rowID, err := o.sseStore.SSEEventsAppend(
+		SSERoute{UserID: userID, CLISessionID: cliSessionID},
 		"passkey.registered",
 		string(envelopeJSON),
 		"g8eg",
-	); err != nil {
+	)
+	if err != nil {
 		o.logger.Error("passkey: failed to append SSE event", string(constants.ConnectionStateError), err)
 		return
 	}
 
-	o.pubsub.Publish("sse:cli:"+cliSessionID, envelopeJSON)
+	pubEvent := models.SSEPublishedEvent{ID: rowID, Payload: json.RawMessage(envelopeJSON)}
+	pubJSON, err := json.Marshal(pubEvent)
+	if err != nil {
+		o.logger.Error("passkey: failed to marshal published event", string(constants.ConnectionStateError), err)
+		return
+	}
+	o.pubsub.Publish("sse:cli:"+cliSessionID, pubJSON)
 }

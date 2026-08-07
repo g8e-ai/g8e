@@ -14,9 +14,13 @@
 package gateway
 
 import (
+	"net"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 
+	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/services/gateway/console"
@@ -211,8 +215,144 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.DeployScriptLinux, h.pkiController.handleDeployScriptLinux)
 	mux.HandleFunc(constants.APIPaths.DeployScriptWindows, h.pkiController.handleDeployScriptWindows)
 
+	// Catch-all: redirect all non-bootstrap requests to HTTPS. The console,
+	// SSE stream, and all API routes are served exclusively via TLS on the
+	// HTTPS port. Without this redirect, a browser that lands on the plain
+	// HTTP port (e.g. http://host:8080/console/) gets a 404 and the Secure
+	// web-session cookie is never set, so SSE EventSource auth fails silently.
+	//
+	// The Host header is validated against localhost, loopback, RFC 1918
+	// private IPs, and the configured Endpoint/PublicBaseURL before being
+	// reflected into the redirect target. Unrecognized hosts fall back to a
+	// safe default to prevent open-redirect abuse.
+	mux.HandleFunc("/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		if parsed, _, err := net.SplitHostPort(host); err == nil {
+			host = parsed
+		}
+
+		if !isSafeHost(host, h.cfg) {
+			if h.cfg != nil && h.cfg.Endpoint != "" {
+				host = h.cfg.Endpoint
+				if parsed, _, err := net.SplitHostPort(host); err == nil {
+					host = parsed
+				}
+			} else {
+				host = "localhost"
+			}
+		}
+
+		var httpsPort int
+		if h.cfg != nil && h.cfg.Gateway.HTTPSPort != 0 {
+			httpsPort = h.cfg.Gateway.HTTPSPort
+		} else {
+			httpsPort = constants.Ports.OperatorHttps
+		}
+
+		var targetHost string
+		if httpsPort == 443 {
+			targetHost = host
+		} else {
+			targetHost = net.JoinHostPort(host, strconv.Itoa(httpsPort))
+		}
+
+		// Collapse leading double slashes to prevent path-injection redirects
+		// (e.g. //evil.com/x -> /evil.com/x, which stays on this host).
+		path := r.URL.Path
+		if path == "" {
+			path = "/"
+		}
+		for strings.HasPrefix(path, "//") {
+			path = path[1:]
+		}
+
+		target := "https://" + targetHost + path
+		if r.URL.RawQuery != "" {
+			target += "?" + r.URL.RawQuery
+		}
+
+		http.Redirect(w, r, target, http.StatusMovedPermanently) // #nosec G710 -- host validated by isSafeHost
+	})
+
 	// Wrap with rate limiting
 	return h.pathTraversalGuard(h.rateLimitMiddleware(mux))
+}
+
+// isSafeHost checks if the requested host is a recognized local, private, or
+// configured endpoint. Unrecognized public hosts (e.g. attacker-controlled
+// domains reflected via the Host header) return false so the catch-all
+// redirect falls back to a safe default instead of creating an open redirect.
+func isSafeHost(host string, cfg *config.Config) bool {
+	if host == "" {
+		return false
+	}
+
+	// Reject any host containing characters that are unsafe to reflect into a
+	// Location header (path separators, query delimiters, CRLF, etc.).
+	for i := 0; i < len(host); i++ {
+		c := host[i]
+		isAlphanumeric := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+		isSpecial := c == '.' || c == '-' || c == '[' || c == ']' || c == ':'
+		if !isAlphanumeric && !isSpecial {
+			return false
+		}
+	}
+
+	if host == "localhost" {
+		return true
+	}
+
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.IsLoopback() {
+			return true
+		}
+		if isPrivateIP(ip) {
+			return true
+		}
+	}
+
+	if cfg != nil {
+		if cfg.Endpoint != "" {
+			endpointHost := cfg.Endpoint
+			if h, _, err := net.SplitHostPort(endpointHost); err == nil {
+				endpointHost = h
+			}
+			if strings.EqualFold(host, endpointHost) {
+				return true
+			}
+		}
+
+		if cfg.Gateway.PublicBaseURL != "" {
+			if u, err := url.Parse(cfg.Gateway.PublicBaseURL); err == nil {
+				publicHost := u.Hostname()
+				if strings.EqualFold(host, publicHost) {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+// isPrivateIP reports whether ip is an RFC 1918 private IPv4 address.
+// IPv6 addresses are not handled here and return false.
+func isPrivateIP(ip net.IP) bool {
+	if ip4 := ip.To4(); ip4 != nil {
+		// 10.0.0.0/8
+		if ip4[0] == 10 {
+			return true
+		}
+		// 172.16.0.0/12
+		if ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31 {
+			return true
+		}
+		// 192.168.0.0/16
+		if ip4[0] == 192 && ip4[1] == 168 {
+			return true
+		}
+	}
+	return false
 }
 
 const swaggerUIHTML = `<!DOCTYPE html>

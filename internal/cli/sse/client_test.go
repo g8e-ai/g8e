@@ -54,7 +54,7 @@ func TestParseSSEStream(t *testing.T) {
 		handler := func(eventType, data string) {
 			events = append(events, struct{ event, data string }{eventType, data})
 		}
-		err := parseSSEStream(context.Background(), strings.NewReader(input), handler)
+		err := parseSSEStream(context.Background(), strings.NewReader(input), handler, nil)
 		require.NoError(t, err)
 		require.Len(t, events, 1)
 		assert.Equal(t, "passkey.registered", events[0].event)
@@ -67,7 +67,7 @@ func TestParseSSEStream(t *testing.T) {
 		handler := func(eventType, data string) {
 			count++
 		}
-		err := parseSSEStream(context.Background(), strings.NewReader(input), handler)
+		err := parseSSEStream(context.Background(), strings.NewReader(input), handler, nil)
 		require.NoError(t, err)
 		assert.Equal(t, 2, count)
 	})
@@ -78,7 +78,7 @@ func TestParseSSEStream(t *testing.T) {
 		handler := func(eventType, data string) {
 			count++
 		}
-		err := parseSSEStream(context.Background(), strings.NewReader(input), handler)
+		err := parseSSEStream(context.Background(), strings.NewReader(input), handler, nil)
 		require.NoError(t, err)
 		assert.Equal(t, 0, count)
 	})
@@ -89,7 +89,7 @@ func TestParseSSEStream(t *testing.T) {
 		handler := func(eventType, data string) {
 			events = append(events, struct{ event, data string }{eventType, data})
 		}
-		err := parseSSEStream(context.Background(), strings.NewReader(input), handler)
+		err := parseSSEStream(context.Background(), strings.NewReader(input), handler, nil)
 		require.NoError(t, err)
 		require.Len(t, events, 1)
 		assert.Equal(t, "", events[0].event)
@@ -102,7 +102,7 @@ func TestParseSSEStream(t *testing.T) {
 		handler := func(eventType, data string) {
 			events = append(events, struct{ event, data string }{eventType, data})
 		}
-		err := parseSSEStream(context.Background(), strings.NewReader(input), handler)
+		err := parseSSEStream(context.Background(), strings.NewReader(input), handler, nil)
 		require.NoError(t, err)
 		require.Len(t, events, 1)
 		assert.Equal(t, "test", events[0].event)
@@ -236,5 +236,58 @@ func TestRun(t *testing.T) {
 			}
 		})
 		assert.True(t, gotEvent.Load(), "should receive event after reconnect")
+	})
+}
+
+func TestParseSSEStream_IDLine(t *testing.T) {
+	t.Run("parses id line and updates client lastEventID", func(t *testing.T) {
+		input := "id: 42\ndata: hello\n\n"
+		c := NewClient("http://localhost", nil)
+
+		err := parseSSEStream(context.Background(), strings.NewReader(input), func(eventType, data string) {}, c)
+		require.NoError(t, err)
+		assert.Equal(t, int64(42), c.lastEventID, "lastEventID should be set from id: line")
+	})
+
+	t.Run("ignores invalid id value", func(t *testing.T) {
+		input := "id: notanumber\ndata: hello\n\n"
+		c := NewClient("http://localhost", nil)
+
+		err := parseSSEStream(context.Background(), strings.NewReader(input), func(eventType, data string) {}, c)
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), c.lastEventID, "lastEventID should remain 0 on invalid id")
+	})
+}
+
+func TestConnectOnce_SendsLastEventIDHeader(t *testing.T) {
+	t.Run("sends Last-Event-ID header when lastEventID is set", func(t *testing.T) {
+		var gotLastEventID string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotLastEventID = r.Header.Get("Last-Event-ID")
+			w.Header().Set("Content-Type", "text/event-stream")
+			fmt.Fprintf(w, "data: ok\n\n")
+		}))
+		defer srv.Close()
+
+		c := NewClient(srv.URL, nil)
+		c.lastEventID = 99
+		err := c.ConnectOnce(context.Background(), func(string, string) {})
+		require.NoError(t, err)
+		assert.Equal(t, "99", gotLastEventID, "Last-Event-ID header should be sent on reconnect")
+	})
+
+	t.Run("does not send Last-Event-ID header when lastEventID is zero", func(t *testing.T) {
+		var gotLastEventID string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotLastEventID = r.Header.Get("Last-Event-ID")
+			w.Header().Set("Content-Type", "text/event-stream")
+			fmt.Fprintf(w, "data: ok\n\n")
+		}))
+		defer srv.Close()
+
+		c := NewClient(srv.URL, nil)
+		err := c.ConnectOnce(context.Background(), func(string, string) {})
+		require.NoError(t, err)
+		assert.Empty(t, gotLastEventID, "Last-Event-ID header should not be sent on first connect")
 	})
 }

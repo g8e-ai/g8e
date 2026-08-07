@@ -45,27 +45,91 @@ type GatewayWebSocketHandler struct {
 	onHeartbeat   func(channel string, data []byte)
 }
 
+// dropOldestBuf is a bounded buffer that enforces drop-oldest back-pressure
+// under a mutex. When the buffer is full, send evicts the oldest queued
+// message to make room for the newer one, keeping the subscriber connected.
+// This trades lossy delivery for connection stability under bursts, which is
+// the correct trade-off for an append-only event log where the consumer can
+// recover dropped events via DB replay on reconnect (R5).
+//
+// dropped is the cumulative count of evicted messages; it is returned from
+// send so callers can log it. The mutex makes the drain+enqueue sequence
+// atomic with respect to concurrent send calls on the same buffer.
+type dropOldestBuf struct {
+	ch      chan []byte
+	mu      sync.Mutex
+	dropped int64
+}
+
+// newDropOldestBuf creates a dropOldestBuf with the given channel capacity.
+func newDropOldestBuf(cap int) *dropOldestBuf {
+	return &dropOldestBuf{ch: make(chan []byte, cap)}
+}
+
+// send enqueues msg. If the buffer is full, it evicts the oldest queued
+// message and increments dropped. Returns (true, dropped) on success and
+// (false, dropped) only if the enqueue fails after drain (defensive — should
+// not happen under mu since the channel can only drain during this window).
+func (b *dropOldestBuf) send(msg []byte) (bool, int64) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	select {
+	case b.ch <- msg:
+		return true, b.dropped
+	default:
+		// Back-pressure: drop-oldest policy. Evict one queued frame to make
+		// room for the newer one. b.mu is held across the drain+enqueue, so
+		// no other send can race us. The consumer only receives from b.ch,
+		// so capacity can only increase during this window; the second send
+		// is guaranteed to succeed.
+		select {
+		case <-b.ch:
+		default:
+		}
+		b.dropped++
+		total := b.dropped
+		select {
+		case b.ch <- msg:
+			return true, total
+		default:
+			// Defensive: enqueue should always succeed after drain under
+			// b.mu. If it does not, something is deeply wrong; surface it
+			// rather than silently losing the message.
+			return false, total
+		}
+	}
+}
+
+// recv returns the channel for receiving buffered messages. Callers read
+// from this channel directly; the buffer does not wrap receive logic.
+func (b *dropOldestBuf) recv() <-chan []byte {
+	return b.ch
+}
+
+// Close closes the underlying channel. After Close, send returns false.
+func (b *dropOldestBuf) Close() {
+	close(b.ch)
+}
+
 // wsSubscriber represents a single WebSocket connection.
 //
 // Shutdown is expressed as a single atomic event: shutdown() closes done
 // (the sole "closed?" signal) and the underlying websocket, guarded by
 // sync.Once so repeated calls from any lifecycle path (writer error, read
-// loop exit, broker Close) are safe and coalesced. The send channel is
+// loop exit, broker Close) are safe and coalesced. The send buffer is
 // deliberately never closed: the writer goroutine exits via <-done, and
 // trySend is fully non-blocking, so there is no sender/close race and
 // therefore no need to track a separate "send closed" flag.
 //
-// mu is a narrow lock that exists only to make the drop-oldest
-// drain+enqueue sequence atomic with respect to concurrent trySend calls
-// on the same subscriber. It does NOT participate in shutdown tracking.
+// buf is a dropOldestBuf that enforces drop-oldest back-pressure under a
+// per-subscriber mutex (R5). It unifies back-pressure semantics across the
+// WebSocket and SSE transport paths.
 type wsSubscriber struct {
 	ws           *websocket.Conn
-	send         chan []byte
+	buf          *dropOldestBuf
 	done         chan struct{}
 	shutdownOnce sync.Once
-
-	mu      sync.Mutex
-	dropped uint64 // cumulative back-pressure drops; guarded by mu
 
 	// mTLS identity for topic ACL enforcement (Plan §5)
 	identitySPIFFEID string // SPIFFE ID from the client certificate's URI SAN
@@ -230,7 +294,7 @@ func (b *GatewayWebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http
 		broker: b,
 		sub: &wsSubscriber{
 			ws:               ws,
-			send:             make(chan []byte, 4096),
+			buf:              newDropOldestBuf(4096),
 			done:             make(chan struct{}),
 			identitySPIFFEID: identitySPIFFEID,
 			operatorID:       operatorID,
@@ -256,7 +320,7 @@ func (h *pubSubSessionHandler) run() {
 			select {
 			case <-h.sub.done:
 				return
-			case msg := <-h.sub.send:
+			case msg := <-h.sub.buf.recv():
 				if err := h.sub.ws.WriteMessage(websocket.BinaryMessage, msg); err != nil {
 					return
 				}
@@ -355,59 +419,36 @@ func (b *GatewayWebSocketHandler) removeSub(sub *wsSubscriber) {
 }
 
 func (b *GatewayWebSocketHandler) trySend(sub *wsSubscriber, msg []byte) bool {
-	sub.mu.Lock()
-	defer sub.mu.Unlock()
-
 	if sub.isDone() {
 		return false
 	}
 
-	select {
-	case sub.send <- msg:
-		return true
-	default:
-		// Back-pressure: drop-oldest policy. Evict one queued frame to make
-		// room for the newer one, keeping the subscriber connected. This
-		// trades lossy delivery for connection stability under bursts
-		// (e.g., large stdout frame followed by rapid heartbeats), which is
-		// the correct trade-off for status/heartbeat streams where newer
-		// frames supersede older ones.
-		//
-		// sub.mu is held across the drain+enqueue, so no other trySend can
-		// race us on this subscriber. The writer goroutine only receives
-		// from sub.send, so capacity can only increase during this window;
-		// the second send is guaranteed to succeed.
-		select {
-		case <-sub.send:
-		default:
-		}
-		sub.dropped++
-		dropped := sub.dropped
+	ok, dropped := sub.buf.send(msg)
+	if !ok {
 		remote := ""
 		if sub.ws != nil {
 			remote = sub.ws.RemoteAddr().String()
 		}
-		select {
-		case sub.send <- msg:
-			b.logger.Warn("pubsub back-pressure: dropped oldest queued message",
-				"remote", remote,
-				"buffer_capacity", cap(sub.send),
-				"message_bytes", len(msg),
-				"dropped_total", dropped,
-			)
-			return true
-		default:
-			// Defensive: enqueue should always succeed after drain under
-			// sub.mu. If it does not, something is deeply wrong; surface it
-			// rather than silently losing the message.
-			b.logger.Error("pubsub back-pressure: enqueue failed after drop-oldest",
-				"remote", remote,
-				"buffer_capacity", cap(sub.send),
-				"dropped_total", dropped,
-			)
-			return false
-		}
+		b.logger.Error("pubsub back-pressure: enqueue failed after drop-oldest",
+			"remote", remote,
+			"buffer_capacity", cap(sub.buf.ch),
+			"dropped_total", dropped,
+		)
+		return false
 	}
+	if dropped > 0 {
+		remote := ""
+		if sub.ws != nil {
+			remote = sub.ws.RemoteAddr().String()
+		}
+		b.logger.Warn("pubsub back-pressure: dropped oldest queued message",
+			"remote", remote,
+			"buffer_capacity", cap(sub.buf.ch),
+			"message_bytes", len(msg),
+			"dropped_total", dropped,
+		)
+	}
+	return true
 }
 
 // Close disconnects all subscribers.

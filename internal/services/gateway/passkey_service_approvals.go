@@ -165,7 +165,7 @@ func (h *PasskeyHandler) handleApprovalVerify(w http.ResponseWriter, r *http.Req
 	if sseUserID == "" {
 		sseUserID = suspendedTx.UserID
 	}
-	h.orchestrator.EmitApprovalCompletedSSE(sseUserID, txHash)
+	h.orchestrator.EmitApprovalCompletedSSE(sseUserID, suspendedTx.SubmitterCLISessionID, txHash)
 
 	h.responder.JSON(w, http.StatusOK, receipt)
 }

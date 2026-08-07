@@ -4,8 +4,8 @@ title: g8e Protocol Library
 
 # g8e Protocol Library
 
-Last Updated: 2026-07-28
-Version: v1.6.6
+Last Updated: 2026-08-07
+Version: v1.7.0
 
 The g8e Protocol Library is the canonical wire contract for all mutations in the g8e zero-trust execution platform. It provides schema definitions, JSON constant registries, JSON model schemas, Pydantic models, dynamic enum generation, SPIFFE workload identity helpers, and example programs for building compatible clients and services. Every mutation passing through the platform flows through a 5-layer interlock sequence:
 
@@ -53,12 +53,12 @@ The protocol publishes as two independent packages: a Go module sharing the plat
 
 ### Go Requirements & Installation
 
-The Go protocol package requires Go 1.26 or later. Direct dependencies include `google.golang.org/grpc v1.82.1` and `google.golang.org/protobuf v1.36.11`. Transitive dependencies are vendored in the root vendor directory.
+The Go protocol package requires Go 1.26 or later. Direct dependencies include `google.golang.org/grpc v1.83.0` and `google.golang.org/protobuf v1.36.11`. Transitive dependencies are vendored in the root vendor directory.
 
 Install or update the Go module using standard Go tooling:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.6.6
+go get github.com/g8e-ai/g8e@v1.7.0
 ```
 
 To fetch the latest release:
@@ -122,7 +122,7 @@ pip install g8e
 To pin a specific release version:
 
 ```bash
-pip install g8e==1.6.6
+pip install g8e==1.7.0
 ```
 
 ### Python Package Overview
@@ -216,7 +216,7 @@ The protocol packages and platform binary share a single version number tracked 
 - **MINOR**: Backward-compatible new protocol features.
 - **PATCH**: Backward-compatible bug fixes and minor updates.
 
-Version strings use a `v` prefix (`v1.6.6`) in tags, repository version files, and documentation headers. Python distribution files omit the prefix (`1.6.6`).
+Version strings use a `v` prefix (`v1.7.0`) in tags, repository version files, and documentation headers. Python distribution files omit the prefix (`1.7.0`).
 
 ### Release Workflow
 
