@@ -6,7 +6,7 @@ parent: Architecture
 # AI Agents in a g8e-Compatible Agentic Ensemble
 
 Last Updated: 2026-08-07
-Version: v1.6.10
+Version: v1.7.0
 
 ## Overview
 

@@ -1,7 +1,7 @@
 # Storage Architecture
 
 Last Updated: 2026-08-07
-Version: v1.6.6
+Version: v1.7.0
 
 ## Overview
 
