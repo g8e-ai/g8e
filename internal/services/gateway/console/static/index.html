@@ -338,9 +338,11 @@ function connectAuditStream() {
   if (auditEs) return;
   auditConnected = false;
   updateAuditStatus('connecting');
-  // Security: web_session_id is NEVER passed in the URL. The gateway derives it
-  // from the authenticated session cookie. Only since_id (a non-secret event
-  // cursor) is passed as a query parameter.
+  // Security: routing IDs (web_session_id, user_id) are NEVER passed in the URL.
+  // The gateway derives both user_id and web_session_id from the authenticated
+  // session cookie. Every event carries user_id (ownership) paired with exactly
+  // one session ID (delivery). Only since_id (a non-secret event cursor) is
+  // passed as a query parameter.
   var params = new URLSearchParams();
   if (auditEvents.length > 0) {
     var last = auditEvents[auditEvents.length - 1];

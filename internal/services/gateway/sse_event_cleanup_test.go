@@ -29,7 +29,7 @@ import (
 func TestSSEEventService_CleanupDeletesOldEvents(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 
-	route := SSERoute{CLISessionID: "cli-cleanup-test"}
+	route := SSERoute{UserID: "u-cleanup-test", CLISessionID: "cli-cleanup-test"}
 
 	// Insert an old event (created in the past via direct DB manipulation).
 	// We use SSEEventsAppend which uses now, then sleep briefly, insert another,
@@ -72,7 +72,7 @@ func TestSSEEventService_CleanupDeletesOldEvents(t *testing.T) {
 func TestSSEEventService_CleanupWithZeroAgeDeletesAll(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 
-	route := SSERoute{CLISessionID: "cli-cleanup-zero"}
+	route := SSERoute{UserID: "u-cleanup-zero", CLISessionID: "cli-cleanup-zero"}
 
 	_, err := h.dataController.sseStore.SSEEventsAppend(route, "event-1", `{"msg":"1"}`, "test-producer")
 	require.NoError(t, err)
@@ -101,6 +101,7 @@ func TestSSEEventService_AppendRejectsMutuallyExclusiveRoute(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 
 	route := SSERoute{
+		UserID:       "u-mutex-test",
 		WebSessionID: "web-123",
 		CLISessionID: "cli-456",
 	}

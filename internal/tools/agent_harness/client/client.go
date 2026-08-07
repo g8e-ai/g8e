@@ -299,9 +299,11 @@ func (c *Client) RegisterSigner(ctx context.Context, keyID, pubHex, role string)
 // it verifies the approval status via the mTLS status endpoint and returns the
 // response body (an ActionReceipt JSON) on success.
 //
-// The userID scopes the SSE subscription to the operator's user so the harness
-// only receives events for its own transactions. The SSE subscription and
-// status verification dial PublicBaseURL, which must be reachable from the
+// SSE routing is via the X-G8E-CLI-Session-ID header set from Persona.CLISessionID;
+// user_id is bound by the mTLS cert and stamped into context by the auth
+// middleware. The userID parameter is used only for the status-check persona
+// (statusPersona.UserID = userID), not for SSE routing. The SSE subscription
+// and status verification dial PublicBaseURL, which must be reachable from the
 // harness process (container-internal in the demo topology). The approval link
 // printed for the human is built from ApprovalDisplayURL when set — the
 // host-reachable address — so the host browser can actually open it; it falls

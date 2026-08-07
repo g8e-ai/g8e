@@ -525,7 +525,7 @@ func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
 
 		handler.orchestrator.EmitPasskeyRegisteredSSE(userID, cliSessionID)
 
-		route := SSERoute{CLISessionID: cliSessionID}
+		route := SSERoute{UserID: userID, CLISessionID: cliSessionID}
 		events, err := sseStore.SSEEventsListSince(route, 0, 10)
 		require.NoError(t, err)
 		require.Len(t, events, 1)
@@ -556,7 +556,7 @@ func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
 		}
 
 		sseStore := NewSSEEventService(stores.DB, logger)
-		route := SSERoute{CLISessionID: cliSessionID}
+		route := SSERoute{UserID: userID, CLISessionID: cliSessionID}
 		events, err := sseStore.SSEEventsListSince(route, 0, 10)
 		require.NoError(t, err)
 		assert.Empty(t, events)

@@ -197,7 +197,7 @@ func TestPasskeyOrchestrator_EmitPasskeyRegisteredSSE_NoOpGuards(t *testing.T) {
 
 		o.EmitPasskeyRegisteredSSE("u-1", "cli-1")
 
-		events, err := sseStore.SSEEventsListSince(SSERoute{CLISessionID: "cli-1"}, 0, 10)
+		events, err := sseStore.SSEEventsListSince(SSERoute{UserID: "u-1", CLISessionID: "cli-1"}, 0, 10)
 		require.NoError(t, err)
 		assert.Empty(t, events)
 	})
@@ -210,7 +210,7 @@ func TestPasskeyOrchestrator_EmitPasskeyRegisteredSSE_NoOpGuards(t *testing.T) {
 
 		o.EmitPasskeyRegisteredSSE("u-1", "cli-1")
 
-		events, err := sseStore.SSEEventsListSince(SSERoute{CLISessionID: "cli-1"}, 0, 10)
+		events, err := sseStore.SSEEventsListSince(SSERoute{UserID: "u-1", CLISessionID: "cli-1"}, 0, 10)
 		require.NoError(t, err)
 		assert.Empty(t, events)
 	})

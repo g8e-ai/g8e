@@ -533,15 +533,17 @@ func TestHandleApprovalVerify_SSE_EmittedToApproverWhenSuspendedTxUserIDEmpty(t 
 	t.Cleanup(func() { pubsub.Close() })
 
 	const approverUserID = "u-approver-sse-test"
+	const submitterCLISessionID = "cli-submitter-empty-userid"
 	const txHash = "tx-empty-suspended-userid"
 
 	mockMCP := &mockMCPServiceProvider{
 		suspendedTx: &models.SuspendedTransaction{
-			TransactionHash: txHash,
-			UserID:          "",
-			ToolName:        "test-tool",
-			ToolArguments:   []byte("{}"),
-			ExpiresAt:       time.Now().Add(5 * time.Minute),
+			TransactionHash:       txHash,
+			UserID:                "",
+			SubmitterCLISessionID: submitterCLISessionID,
+			ToolName:              "test-tool",
+			ToolArguments:         []byte("{}"),
+			ExpiresAt:             time.Now().Add(5 * time.Minute),
 		},
 		found:   true,
 		receipt: &operatorv1.ActionReceipt{TransactionHash: txHash, Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED},
@@ -565,7 +567,7 @@ func TestHandleApprovalVerify_SSE_EmittedToApproverWhenSuspendedTxUserIDEmpty(t 
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 
-	route := SSERoute{UserID: approverUserID}
+	route := SSERoute{UserID: approverUserID, CLISessionID: submitterCLISessionID}
 	events, err := sseStore.SSEEventsListSince(route, 0, 10)
 	require.NoError(t, err)
 	require.Len(t, events, 1)
