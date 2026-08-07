@@ -5,14 +5,14 @@ parent: Guides
 
 # Build a g8e-Compatible Frontend
 
-Last Updated: 2026-07-28
-Version: v1.6.6
+Last Updated: 2026-08-07
+Version: v1.6.10
 
 ---
 
 ## Overview
 
-This guide is the comprehensive reference for building a g8e-compatible web UI. It covers everything from gateway configuration and frontend enrollment through WebAuthn authentication, SSE streaming, approval flows, API data types, UI/UX guidelines, and the recommended project structure. Whether you are building a custom React app, a Vue dashboard, a vanilla JS console, or integrating a hosted platform like Lovable, this document defines what it means to be g8e-compatible.
+This guide describes how to build a g8e-compatible web UI. It covers gateway configuration, frontend enrollment, WebAuthn authentication, SSE streaming, approval flows, API data types, UI/UX guidelines, and the recommended project structure. It applies to custom React apps, Vue dashboards, vanilla JS consoles, and hosted platforms like Lovable.
 
 The `g8e gui` command family enrolls external frontend applications with the g8e Gateway. Enrollment validates that the gateway is running with the correct CORS and passkey RP configuration for the frontend origin, persists the origin to a local enrollment file, and outputs a TypeScript configuration snippet for the frontend developer.
 
@@ -255,7 +255,7 @@ Handle error responses:
 ### Connection
 
 - Connect to `GET /api/v1/sse/stream` using `EventSource` with `withCredentials: true`.
-- The `web_session_id` is derived from the authenticated session cookie by the gateway — do NOT pass it in the URL.
+- The `web_session_id` is derived from the authenticated session cookie by the gateway; do not pass it in the URL.
 - Show connection status: green (connected), yellow (connecting), red (disconnected).
 - Provide manual connect and disconnect buttons.
 
@@ -361,15 +361,7 @@ After authentication, show:
 
 ### Approval Flow Component
 
-When user clicks "Approve" on a transaction:
-
-1. `GET /api/v1/approvals/{txHash}/challenge` - returns WebAuthn `PublicKeyCredentialRequestOptions`
-2. Decode the challenge and allowedCredentials from base64url to ArrayBuffers
-3. Call `navigator.credentials.get({ publicKey: decodedOptions })`
-4. Encode the assertion response fields to base64url
-5. `POST /api/v1/approvals/{txHash}/verify` with the encoded assertion
-6. Show success or error message
-7. Refresh the approvals list
+When the user clicks "Approve" on a transaction, run the steps described in [Approval Flow (Suspended Transaction)](#approval-flow-suspended-transaction). On success or failure, show the corresponding message and refresh the approvals list.
 
 ### URL Hash Handling
 
@@ -409,7 +401,13 @@ After processing, clean the URL with `history.replaceState`.
 
 ## Recommended Project Structure
 
-Organize the frontend with separate concerns: an auth context for global state, page components for login and dashboard, card components for stats, passkeys, approvals, audit stream, and account, a hook for SSE audit stream management, and library modules for the API fetch wrapper (with `credentials: 'include'`), WebAuthn flow helpers, and type definitions.
+Organize the frontend with separate concerns:
+
+- An auth context for global state
+- Page components for login and dashboard
+- Card components for stats, passkeys, approvals, audit stream, and account
+- A hook for SSE audit stream management
+- Library modules for the API fetch wrapper (with `credentials: 'include'`), WebAuthn flow helpers, and type definitions
 
 ---
 

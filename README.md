@@ -220,7 +220,7 @@ If you only need the g8e wire protocol for your own client or service, consume t
 **Go module** (requires Go 1.26+):
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.6.3
+go get github.com/g8e-ai/g8e@v1.6.10
 ```
 
 **Python package** (requires Python 3.10+):

@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Gateway
 
-Last Updated: 2026-07-28
-Version: v1.6.6
+Last Updated: 2026-08-07
+Version: v1.6.10
 
 ---
 
@@ -155,7 +155,7 @@ Custom gateway implementations need the g8e Protocol Library for protobuf schema
 The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.6.6
+go get github.com/g8e-ai/g8e@v1.6.10
 ```
 
 Import the protobuf types and SPIFFE workload identity helpers from the Go module. The package provides governance envelope definitions, the Operator gRPC service, pub/sub message types, and workload identity helpers for SPIFFE URI SAN generation and validation across all identity types (Operator, CLI, App, User, Hub, GatewayPeer).
@@ -167,7 +167,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For gateway-side tooling, testing, or Python-based services that need to consume protocol constants:
 
 ```bash
-pip install g8e==1.6.6
+pip install g8e==1.6.10
 ```
 
 The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
@@ -192,61 +192,31 @@ The gateway must act as the platform Certificate Authority:
 
 #### 2. Persistence Layer
 
-The gateway must maintain canonical platform state:
-
-- **Document Store**: JSON document CRUD on a Collection/ID pattern with query support.
-- **KV Store**: TTL-aware ephemeral state with pattern scanning and cursor-based iteration.
-- **Blob Store**: Binary persistence for attachments and large objects.
-- **State Root Provider**: Compute and serve a deterministic Merkle state root across all authoritative data.
-- **Nonce Manager**: Implement sliding-window replay protection for governance transactions.
+The gateway must maintain canonical platform state, including JSON documents, TTL-aware ephemeral state, binary attachments, a deterministic state root across all authoritative data, and replay-protected transaction nonces.
 
 #### 3. Messaging Broker
 
-The gateway must serve as the Pub/Sub broker:
-
-- **WebSocket Fan-Out**: Real-time event streaming to subscribed clients.
-- **Channel Format**: Use the `{prefix}:{operator_id}:{operator_session_id}` channel format.
-- **Mutation Channels**: Restrict `cmd:*` and `scenarios:*` channels to envelope-based mutations only.
-- **Non-Mutation Channels**: Allow direct publishing to `heartbeat:*`, `results:*`, `sse:*`, `ws_session:*`, `internal:*`.
-- **Subscribe-and-Wait**: Require subscribers to wait for the broker's subscription acknowledgment before publishing.
+The gateway must serve as the Pub/Sub broker with real-time WebSocket fan-out to subscribed clients. Channels are operator-scoped. Mutation channels accept only envelope-based transactions, while non-mutation channels (heartbeats, results, session events) accept direct publishing. Subscribers must wait for the broker's subscription acknowledgment before publishing.
 
 #### 4. Admission APIs
 
-The gateway must expose HTTP endpoints:
-
-- **Envelope Submission**: `POST /api/v1/governance/envelopes` for canonical JSON GovernanceEnvelope transactions.
-- **Device Enrollment**: `POST /api/v1/pki/devices/enroll` for CSR-based device enrollment (Operator and CLI certificates).
-- **Certificate Revocation**: `POST /api/v1/pki/certificates/revoke` for certificate revocation.
-- **Revocation Bundle**: `GET /api/v1/pki/revocation-bundle` for the signed revocation list.
-- **MCP Endpoint**: `POST /mcp` for JSON-RPC MCP tool calls (Streamable HTTP transport).
-- **A2A Endpoint**: `POST /api/v1/a2a/call` for HTTP/JSON A2A skill invocations.
-- **CSR Signing**: `POST /api/v1/pki/csr/sign` for certificate signing request processing.
-- **CRL Distribution**: `GET /.well-known/g8e/pki/crl` for the certificate revocation list.
-- **Trust Bundle**: `GET /.well-known/g8e/pki/ca-bundle` for the CA trust bundle.
+The gateway must expose HTTP endpoints for envelope submission, CSR-based device enrollment, certificate revocation and signing, trust bundle and CRL distribution, and MCP/A2A protocol translation. See the [Protocol Library documentation](../architecture/protocol.md) for the canonical endpoint paths and request shapes.
 
 #### 5. Protocol Translation
 
-The gateway must translate standard protocols into governed operations:
-
-- **MCP Translation**: Accept JSON-RPC MCP tool calls and wrap them in GovernanceEnvelope format.
-- **A2A Translation**: Accept HTTP/JSON A2A skill invocations and wrap them in GovernanceEnvelope format.
-- **Canonical JSON**: Use protojson (canonical JSON) as the wire format for all client-facing interactions.
+The gateway must translate standard protocols into governed operations. MCP JSON-RPC tool calls and A2A HTTP/JSON skill invocations are wrapped in GovernanceEnvelope format, using canonical JSON as the wire format for all client-facing interactions.
 
 #### 6. Audit Authority
 
-The gateway must maintain an authoritative audit trail:
-
-- **Encrypted Audit Vault**: Store audit entries keyed by transaction_hash.
-- **ActionReceipts**: Emit signed receipts for every governed mutation.
-- **Fail-Closed Writes**: Reject events with missing or unknown operator_session_id.
+The gateway must maintain an authoritative audit trail in an encrypted audit vault, emit signed receipts for every governed mutation, and fail closed on events with missing or unknown sessions.
 
 ### Protocol Invariants
 
 Your implementation must enforce these core invariants:
 
-1. **Transaction Hash Verification**: The envelope `id` must match the deterministic transaction_hash computed from its content.
+1. **Transaction Integrity**: The envelope identifier must match the deterministic hash computed from its content.
 2. **State Binding**: Every transaction must include a state root and be verified against the current authoritative state.
-3. **Replay Defense**: Nonces must be validated against a sliding window to prevent replay attacks.
+3. **Replay Defense**: Transaction nonces must be validated to prevent replay attacks.
 4. **Expiry Enforcement**: Transactions must be rejected if they have expired.
 5. **Fail-Closed Execution**: Any verification failure must result in a typed rejection and audit entry. No fallback paths or silent retries.
 
@@ -262,11 +232,11 @@ The gateway must support three operating modes:
 
 The gateway must enforce strict separation between session types:
 
-- **Operator Session**: Authenticates host-side operators via mTLS certificates bound to operator_session_id.
-- **CLI Session**: Authenticates BYO/CLI clients via mTLS certificates bound to cli_session_id.
-- **Web Session**: Authenticates browser-based clients via passkey (WebAuthn) bound to web_session_id.
+- **Operator Session**: Authenticates host-side operators via mTLS certificates bound to an operator session.
+- **CLI Session**: Authenticates BYO/CLI clients via mTLS certificates bound to a CLI session.
+- **Web Session**: Authenticates browser-based clients via passkey (WebAuthn) bound to a web session.
 
-Session routing must be disjoint. A web_session_id can never receive events intended for a cli_session_id.
+Session routing must be disjoint. A web session can never receive events intended for a CLI session.
 
 ### Two-Port Architecture
 
@@ -277,7 +247,7 @@ The gateway exposes two ports with distinct transport and authentication propert
 | **HTTP 8080** | Plain HTTP | None | Health checks, state endpoint, bootstrap, PKI discovery, CSR signing, deploy scripts |
 | **HTTPS 8443** | TLS 1.3 | Verified when present | API, pub/sub, console, MCP, A2A, governance, audit |
 
-The HTTPS port uses `tls.VerifyClientCertIfGiven`: client certificates are accepted and verified when present, but not required at the TLS layer. This allows browser clients (console, WebAuthn flows) to reach public routes without a client certificate. mTLS enforcement for protected routes happens at the application layer via route classification: each route is assigned an auth mode (none, mTLS, web session, or dual), and requests are fail-closed for unknown routes.
+The HTTPS port accepts and verifies client certificates when presented, but does not require them at the transport layer. This allows browser clients (console, WebAuthn flows) to reach public routes without a client certificate. mTLS enforcement for protected routes happens at the application layer, and requests are fail-closed for unknown routes.
 
 ---
 

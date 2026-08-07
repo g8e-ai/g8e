@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect an Existing Frontend to g8e Gateway
 
-Last Updated: 2026-07-28
-Version: v1.6.6
+Last Updated: 2026-08-07
+Version: v1.6.10
 
 ---
 
@@ -191,7 +191,7 @@ Handle error responses:
 ### Connection
 
 - Connect to `GET /api/v1/sse/stream` using `EventSource` with `withCredentials: true`.
-- The `web_session_id` is derived from the authenticated session cookie by the gateway — do NOT pass it in the URL.
+- The `web_session_id` is derived from the authenticated session cookie by the gateway; do NOT pass it in the URL.
 - On open, update connection status to connected. On error, update status to disconnected and auto-reconnect after 3 seconds.
 - Parse incoming messages via the `onmessage` handler.
 

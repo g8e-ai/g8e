@@ -5,14 +5,14 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-07-28
-Version: v1.6.6
+Last Updated: 2026-08-07
+Version: v1.6.10
 
 ---
 
 ## Overview
 
-This guide covers connecting applications to the g8e Gateway. The g8e Gateway serves as the central Policy Decision Point (PDP) that enforces 5-layer Byzantine Fault Tolerant governance over all AI agent mutations. Applications connect via multiple protocol surfaces: MCP (Model Context Protocol), A2A (Agent-to-Agent), direct governance envelopes, WebSocket pub/sub, and JSON API.
+This guide covers connecting applications to the g8e Gateway. The g8e Gateway serves as the central Policy Decision Point (PDP) that enforces 5-layer Byzantine Fault Tolerant governance over all AI agent mutations. Applications connect via multiple protocol surfaces: MCP (Model Context Protocol), A2A (Agent-to-Agent), direct governance envelopes, WebSocket pub/sub, and the document store API.
 
 ---
 
@@ -51,7 +51,7 @@ Starting the gateway creates the `.g8e` directory structure:
 - `.g8e/vault/` - Encryption vault for data at rest
 - `.g8e/logs/` - Component logs
 
-The g8e Gateway runs in the default mode (Doctrine: L1 enforced, L2/L3 audited). To run in different enforcement modes, use the `--posture` flag:
+The g8e Gateway runs in the default mode (Doctrine: L1 enforced, L2/L3 audited). The `--posture` flag controls which of the first three governance layers are enforced as fail-closed gates versus audited. Layers L4 (Warden, pre-dispatch verification) and L5 (Actuator, isolated tool dispatch with signed receipts) are always enforced regardless of posture. To run in different enforcement modes, use the `--posture` flag:
 
 #### Doctrine Mode (Default)
 
@@ -90,7 +90,9 @@ The g8e Gateway exposes two consolidated protocol surfaces. Each surface serves 
 
 The g8e Gateway enforces strict port separation for security:
 - **HTTP Surface**: Plain HTTP for health checks, bootstrap enrollment, PKI discovery, and deploy scripts. No MCP, A2A, governance, or mutation endpoints are exposed on this surface.
-- **HTTPS Surface**: TLS with optional client certificate verification at the TLS layer. mTLS enforcement occurs at the application layer, where every route is classified into one of four auth modes: public (no auth), mTLS (client certificate required), web session (cookie-based browser auth), and dual (mTLS preferred, cookie fallback). Public routes (health, console SPA, bootstrap, passkey console, approval page) bypass mTLS; mTLS routes require a valid client certificate; web session routes validate a session cookie; dual routes try mTLS first and fall back to cookie auth.
+- **HTTPS Surface**: TLS-protected surface for all governance, MCP, A2A, document store, WebSocket, and console routes. Every route is classified into one of four auth modes: public (no auth), mTLS (client certificate required), web session (cookie-based browser auth), and dual (mTLS preferred, cookie fallback).
+
+Public routes (health, console SPA, bootstrap, passkey console, approval page) bypass mTLS. mTLS routes require a valid client certificate. Web session routes validate a session cookie. Dual routes try mTLS first and fall back to cookie auth.
 
 Port mixing is prohibited. The gateway fails startup if the HTTP and HTTPS surfaces are assigned to the same port, as this would conflate plain-HTTP bootstrap routes with TLS-protected API routes.
 
@@ -116,9 +118,9 @@ The Gateway provides a unified health endpoint across all services for consisten
 
 ### 1. MCP (Model Context Protocol)
 
-MCP is a JSON-RPC 2.0 protocol for AI tool invocation. The Gateway translates MCP tool calls into governance envelopes, runs them through L1/L2/L3 verification, and dispatches to downstream MCP servers or local execution.
+MCP is a JSON-RPC 2.0 protocol for AI tool invocation. The Gateway accepts MCP tool calls, applies governance verification, and dispatches to native tools or downstream MCP servers.
 
-The Gateway provides a unified MCP endpoint architecture with input validation that enforces fail-closed security for all tool inputs.
+The Gateway exposes a single unified MCP endpoint with fail-closed input validation for all tool calls.
 
 #### Native Tools
 
@@ -178,7 +180,7 @@ The Gateway includes a registry of native tools that execute locally with full g
 **Operator Tools**
 - `operator_deploy` - Deploys the g8e operator to remote hosts via SSH.
 
-All native tools include input validation to prevent SQL injection, SSRF attacks, path traversal, and other security vulnerabilities.
+All native tools enforce fail-closed input validation.
 
 #### MCP Endpoints
 
@@ -233,7 +235,7 @@ The Gateway provides a special `read_field` tool for governed field access with 
 
 ### 2. A2A (Agent-to-Agent)
 
-A2A is an HTTP/JSON protocol for agent skill invocation. The Gateway wraps A2A skill calls in governance envelopes with the same L1/L2/L3 verification pipeline.
+A2A is an HTTP/JSON protocol for agent skill invocation. The Gateway applies the same governance verification to A2A skill calls as it does to MCP tool calls.
 
 #### A2A Endpoints
 
@@ -277,7 +279,7 @@ curl -X POST https://localhost:8443/api/v1/governance/envelopes \
   -d @envelope.json
 ```
 
-The envelope `id` must match the deterministic transaction hash computed from critical envelope fields. The Gateway rejects envelopes with mismatched IDs.
+The envelope `id` must match the transaction hash computed from the envelope fields. The Gateway rejects envelopes with mismatched IDs.
 
 ---
 
@@ -361,18 +363,18 @@ Applications connecting to the g8e Gateway can use the g8e Protocol Library to c
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.6.6
+go get github.com/g8e-ai/g8e@v1.6.10
 ```
 
-The Go module provides protobuf types for envelope construction and receipt parsing, SPIFFE workload identity helpers, and JSON constant registries.
+The Go module provides types for envelope construction, receipt parsing, and SPIFFE workload identity.
 
 ### Python Package
 
 ```bash
-pip install g8e==1.6.6
+pip install g8e==1.6.10
 ```
 
-The Python package provides event type constants, request context models, and HTTP header constants for gateway communication. Requires Python 3.10+.
+The Python package provides constants and models for gateway communication. Requires Python 3.10+.
 
 See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference, usage examples, and package contents.
 
@@ -418,17 +420,9 @@ Web sessions use WebAuthn signatures as L3 proof.
 
 ### CSR-Based Enrollment
 
-**The mental model:** CSR-based enrollment is cryptographic identity proof. Instead of
-sharing a secret (like an API key), a client generates its own key pair and asks the
-Gateway to sign a certificate attesting "this public key belongs to this identity." The
-Gateway acts as a Certificate Authority (CA). The act of starting the Gateway is itself
-the Platform Owner's authorization; there are no standing invite codes, pre-shared keys,
-or manual approval steps. The client then proves its identity on every subsequent call by
-signing with its private key (via mTLS). No shared secrets, no API keys to leak.
+CSR-based enrollment is cryptographic identity proof. Instead of sharing a secret, a client generates its own key pair and asks the Gateway to sign a certificate attesting the identity. The Gateway acts as a Certificate Authority (CA). Starting the Gateway is itself the Platform Owner's authorization; there are no invite codes, pre-shared keys, or manual approval steps. The client proves its identity on every subsequent call via mTLS. No shared secrets, no API keys to leak.
 
-All authentication to the Gateway uses CSR-based enrollment. The first human to
-authenticate via `./g8e auth enroll` becomes the Platform Owner. All other entities
-(operators, MCP servers, AI clients, applications) enroll via the same CSR flow.
+All authentication to the Gateway uses CSR-based enrollment. The first human to authenticate via `./g8e auth enroll` becomes the Platform Owner. All other entities (operators, MCP servers, AI clients, applications) enroll via the same CSR flow.
 
 #### Enrollment Flow
 
@@ -439,8 +433,7 @@ authenticate via `./g8e auth enroll` becomes the Platform Owner. All other entit
    certificate with a SPIFFE URI SAN
 3. **Client receives certificate**: The client gets `client.crt` (signed by the Gateway's CA)
    and uses it with its private key for all subsequent authentication
-4. **Short-lived by design**: Leaf certificates expire after 7 days, so a
-   compromised key has limited lifetime
+4. **Short-lived by design**: Leaf certificates expire after 7 days, limiting the lifetime of a compromised key
 5. **Certificate renewal**: Clients must re-enroll before certificate expiry
 
 #### Device Enrollment
@@ -538,7 +531,7 @@ After enrollment, the frontend developer must:
 - **CORS**: All `fetch` calls must include `credentials: 'include'`
 - **Passkey RP**: The RP ID must match the gateway's hostname (derived from the origin or set via `--passkey-rp-id`)
 - **SSE**: `EventSource` must use `withCredentials: true`
-- **Session cookie**: The gateway sets `g8e_web_session_cookie` with `SameSite=None; Secure` for cross-origin configurations (`SameSite=Lax` for same-origin)
+- **Session cookie**: The gateway sets a session cookie with cross-origin attributes for enrolled origins
 
 #### Key Endpoints
 
@@ -687,7 +680,7 @@ curl -X POST https://localhost:8443/api/v1/approvals/{tx_hash}/verify \
   }'
 ```
 
-The Gateway attaches the L3 proof to the stored envelope and resubmits it through the verification pipeline. On success, the suspended transaction is deleted and the signed receipt is returned.
+The Gateway attaches the L3 proof and resubmits the envelope through the verification pipeline. On success, the signed receipt is returned.
 
 ---
 
@@ -723,7 +716,7 @@ curl https://localhost:8443/api/v1/audit/receipts/export?since=2026-01-01T00:00:
 For custom g8e-compatible gateway implementations, connection follows the same operational pattern:
 
 1. **Initialize PKI**: Generate root CA and intermediate CAs with SPIFFE URI SAN support
-2. **Configure Persistence**: Set up document store, KV store, and blob store with state root computation
+2. **Configure Persistence**: Set up document store and persistence backends
 3. **Configure Ports**: Bind the two logical surfaces (HTTP and HTTPS) to appropriate ports with correct TLS settings
 4. **Start Gateway**: Launch in desired mode (doctrine, consensus, or notary)
 5. **Enroll Clients**: Use CSR-based enrollment for operators and CLI clients
@@ -733,7 +726,7 @@ For custom g8e-compatible gateway implementations, connection follows the same o
 
 Custom gateways must support:
 - CLI flags for runtime parameters (ports, mode, paths)
-- Strict port separation with optional client certificate verification on the HTTPS surface and application-layer auth enforcement per route classification
+- Strict port separation with TLS on the HTTPS surface and per-route auth classification
 
 ---
 
