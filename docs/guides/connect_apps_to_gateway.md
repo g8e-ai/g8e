@@ -551,7 +551,7 @@ After enrollment, the frontend developer must:
 | `/api/v1/auth/passkeys/console/authenticate/challenge` | POST | Begin passkey authentication |
 | `/api/v1/auth/passkeys/console/authenticate/verify` | POST | Verify passkey authentication |
 | `/api/v1/users/me` | GET | Get current user (requires session) |
-| `/api/v1/sse/stream?web_session_id=<id>` | GET | SSE live events (requires session) |
+| `/api/v1/sse/stream` | GET | SSE live events (requires session; web_session_id from cookie) |
 | `/api/v1/approvals` | GET | List pending approvals (requires session) |
 
 ### Example: Lovable Integration

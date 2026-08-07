@@ -797,7 +797,7 @@ func TestHandleInternalSSEEvents_AuthFailure(t *testing.T) {
 func TestHandleInternalSSEEvents_BadRequestFromMultipleTargets(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, "opsess1")
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events?cli_session_id=sess1&web_session_id=web1", nil).WithContext(ctx)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/events?cli_session_id=sess1&user_id=user1", nil).WithContext(ctx)
 	rr := httptest.NewRecorder()
 	h.sseController.handleInternalSSEEvents(rr, req)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
@@ -1176,7 +1176,9 @@ func TestHandleInternalSSEStream_ClientLabelWebSession(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), constants.ContextKeyWebSessionID, webSessionID)
 	ctx = context.WithValue(ctx, constants.ContextKeyUserID, userID)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream?web_session_id="+webSessionID, nil).WithContext(ctx)
+	// Security: web_session_id is NOT passed in the URL. It is derived from
+	// the context (set by the auth middleware from the session cookie).
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream", nil).WithContext(ctx)
 	rr := httptest.NewRecorder()
 
 	streamCtx, cancel := context.WithCancel(ctx)

@@ -27,6 +27,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -45,9 +46,104 @@ import (
 	"github.com/g8e-ai/g8e/protocol"
 )
 
-func TestHTTPRouterNoRedirect(t *testing.T) {
+func TestIsPrivateIP(t *testing.T) {
 
-	h, _, _ := setupTestHTTPHandler(t)
+	cases := []struct {
+		ip       string
+		expected bool
+	}{
+		// 10.0.0.0/8
+		{"10.0.0.1", true},
+		{"10.255.255.255", true},
+		{"10.128.0.1", true},
+		// 172.16.0.0/12
+		{"172.16.0.1", true},
+		{"172.31.255.255", true},
+		{"172.20.0.1", true},
+		{"172.17.0.1", true},
+		{"172.30.255.255", true},
+		// 192.168.0.0/16
+		{"192.168.0.1", true},
+		{"192.168.255.255", true},
+		{"192.168.1.1", true},
+		{"192.168.100.50", true},
+		// Public IPs should be false
+		{"8.8.8.8", false},
+		{"1.1.1.1", false},
+		{"172.32.0.1", false},      // Outside 172.16.0.0/12
+		{"172.15.255.255", false},  // Outside 172.16.0.0/12
+		{"192.169.0.1", false},     // Outside 192.168.0.0/16
+		{"11.0.0.1", false},        // Outside 10.0.0.0/8
+		{"172.15.0.1", false},      // Just outside 172.16.0.0/12
+		{"172.32.0.1", false},      // Just outside 172.16.0.0/12
+		{"192.167.255.255", false}, // Just outside 192.168.0.0/16
+		{"192.169.0.0", false},     // Just outside 192.168.0.0/16
+		{"9.255.255.255", false},   // Just outside 10.0.0.0/8
+		{"11.0.0.0", false},        // Just outside 10.0.0.0/8
+		// IPv6 addresses (not handled by this function, should return false)
+		{"::1", false},
+		{"2001:db8::1", false},
+		{"fe80::1", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.ip, func(t *testing.T) {
+			ip := net.ParseIP(tc.ip)
+			require.NotNil(t, ip, "Failed to parse IP: %s", tc.ip)
+			result := isPrivateIP(ip)
+			assert.Equal(t, tc.expected, result, "IP %s should return %v", tc.ip, tc.expected)
+		})
+	}
+}
+
+func TestIsSafeHost(t *testing.T) {
+
+	cfg := &config.Config{
+		Endpoint: "g8e.local",
+		Gateway: config.GatewayConfig{
+			PublicBaseURL: "https://g8e-public.com:8443",
+		},
+	}
+
+	cases := []struct {
+		host     string
+		expected bool
+	}{
+		// Local / Loopback
+		{"localhost", true},
+		{"127.0.0.1", true},
+		{"::1", true},
+		// RFC 1918 Private IPs
+		{"192.168.1.1", true},
+		{"10.0.0.1", true},
+		{"172.16.0.1", true},
+		// Configured Endpoint
+		{"g8e.local", true},
+		// Configured PublicBaseURL
+		{"g8e-public.com", true},
+		// Case insensitivity
+		{"G8E.LOCAL", true},
+		// Invalid / Malicious Characters
+		{"evil.com;sh", false},
+		{"evil.com/path", false},
+		{"evil.com?param=value", false},
+		{"evil.com", false},
+		{"google.com", false},
+		{"", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.host, func(t *testing.T) {
+			result := isSafeHost(tc.host, cfg)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestCatchAllRedirect(t *testing.T) {
+
+	h, cfg, _ := setupTestHTTPHandler(t)
+	cfg.Gateway.HTTPSPort = 8443
 
 	router := h.buildHTTPRouter()
 
@@ -56,24 +152,35 @@ func TestHTTPRouterNoRedirect(t *testing.T) {
 		reqHost        string
 		reqPath        string
 		expectedStatus int
+		expectedLoc    string
 	}{
 		{
-			name:           "Unregistered path returns 404 not redirect",
+			name:           "Redirect safe host localhost",
 			reqHost:        "localhost",
 			reqPath:        "/some/path?foo=bar",
-			expectedStatus: http.StatusNotFound,
+			expectedStatus: http.StatusMovedPermanently,
+			expectedLoc:    "https://localhost:8443/some/path?foo=bar",
 		},
 		{
-			name:           "Unregistered path with port returns 404",
+			name:           "Redirect safe host with port",
 			reqHost:        "localhost:8080",
 			reqPath:        "/some/path",
-			expectedStatus: http.StatusNotFound,
+			expectedStatus: http.StatusMovedPermanently,
+			expectedLoc:    "https://localhost:8443/some/path",
 		},
 		{
-			name:           "Unregistered path with unsafe host returns 404",
+			name:           "Fallback for unsafe host",
 			reqHost:        "evil.com",
 			reqPath:        "/some/path",
-			expectedStatus: http.StatusNotFound,
+			expectedStatus: http.StatusMovedPermanently,
+			expectedLoc:    "https://localhost:8443/some/path",
+		},
+		{
+			name:           "Prevent path injection redirect",
+			reqHost:        "localhost",
+			reqPath:        "//evil.com/some/path",
+			expectedStatus: http.StatusTemporaryRedirect, // Go's ServeMux intercepts and cleans double slashes with a 307
+			expectedLoc:    "/evil.com/some/path",
 		},
 	}
 
@@ -86,7 +193,7 @@ func TestHTTPRouterNoRedirect(t *testing.T) {
 			router.ServeHTTP(rr, req)
 
 			assert.Equal(t, tc.expectedStatus, rr.Code)
-			assert.Empty(t, rr.Header().Get("Location"))
+			assert.Equal(t, tc.expectedLoc, rr.Header().Get("Location"))
 		})
 	}
 }
@@ -767,7 +874,7 @@ func TestHTTPHandler_handleInternalSSEEvents(t *testing.T) {
 
 	t.Run("mTLS auth - multiple routing parameters", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, "op-session-1")
-		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events?cli_session_id=cli-1&web_session_id=web-1", nil)
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events?cli_session_id=cli-1&user_id=user-1", nil)
 		req = req.WithContext(ctx)
 		rr := httptest.NewRecorder()
 		h.sseController.handleInternalSSEEvents(rr, req)
@@ -775,26 +882,29 @@ func TestHTTPHandler_handleInternalSSEEvents(t *testing.T) {
 		assert.JSONEq(t, `{"error":"exactly one routing target required"}`, rr.Body.String())
 	})
 
-	t.Run("cookie auth - missing routing parameter", func(t *testing.T) {
+	t.Run("cookie auth - derives web_session_id from context (no URL param needed)", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyWebSessionID, "web-session-1")
 		ctx = context.WithValue(ctx, constants.ContextKeyUserID, "user-1")
 		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events", nil)
 		req = req.WithContext(ctx)
 		rr := httptest.NewRecorder()
 		h.sseController.handleInternalSSEEvents(rr, req)
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error":"exactly one routing target required"}`, rr.Body.String())
+		// Cookie auth derives web_session_id from context, so no URL param is needed.
+		// The handler should succeed (200) since the routing target is resolved from context.
+		assert.Equal(t, http.StatusOK, rr.Code)
 	})
 
-	t.Run("cookie auth - web session mismatch", func(t *testing.T) {
+	t.Run("cookie auth - URL web_session_id is ignored (security: session fixation prevention)", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyWebSessionID, "web-session-auth")
 		ctx = context.WithValue(ctx, constants.ContextKeyUserID, "user-1")
-		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events?web_session_id=web-session-other", nil)
+		// Pass a different web_session_id in the URL — it MUST be ignored.
+		// The context (cookie) value is the source of truth.
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events?web_session_id=web-session-attacker", nil)
 		req = req.WithContext(ctx)
 		rr := httptest.NewRecorder()
 		h.sseController.handleInternalSSEEvents(rr, req)
-		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "web session does not match")
+		// Should succeed using the context web_session_id, ignoring the URL value.
+		assert.Equal(t, http.StatusOK, rr.Code)
 	})
 }
 

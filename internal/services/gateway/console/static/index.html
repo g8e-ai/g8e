@@ -338,14 +338,16 @@ function connectAuditStream() {
   if (auditEs) return;
   auditConnected = false;
   updateAuditStatus('connecting');
+  // Security: web_session_id is NEVER passed in the URL. The gateway derives it
+  // from the authenticated session cookie. Only since_id (a non-secret event
+  // cursor) is passed as a query parameter.
   var params = new URLSearchParams();
-  if (user && user.web_session_id) params.set('web_session_id', user.web_session_id);
   if (auditEvents.length > 0) {
     var last = auditEvents[auditEvents.length - 1];
     if (last && last.id) params.set('since_id', last.id);
   }
   var url = '/api/v1/sse/stream' + (params.toString() ? '?' + params.toString() : '');
-  auditEs = new EventSource(url);
+  auditEs = new EventSource(url, { withCredentials: true });
   // R8: connection-open timeout guard — if onopen does not fire within 10s,
   // close the EventSource and trigger reconnect.
   auditOpenTimeout = setTimeout(function() {

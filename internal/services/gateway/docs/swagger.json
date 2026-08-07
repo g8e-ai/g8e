@@ -688,7 +688,7 @@
         },
         "/api/v1/sse/events": {
             "get": {
-                "description": "Polls stored SSE events since a given ID. Dual auth: mTLS for CLI/operator, web session\ncookie for browser. Exactly one routing target must be set via query string.",
+                "description": "Polls stored SSE events since a given ID. Dual auth: mTLS for CLI/operator, web session\ncookie for browser. For mTLS auth, exactly one routing target (cli_session_id or\nuser_id) must be set via query string. For browser/cookie auth, the web_session_id\nis derived from the session cookie — it MUST NOT be passed in the URL.",
                 "produces": [
                     "application/json"
                 ],
@@ -699,19 +699,13 @@
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Web session ID",
-                        "name": "web_session_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "CLI session ID",
+                        "description": "CLI session ID (mTLS only)",
                         "name": "cli_session_id",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "User ID",
+                        "description": "User ID (mTLS only)",
                         "name": "user_id",
                         "in": "query"
                     },
@@ -804,7 +798,7 @@
         },
         "/api/v1/sse/stream": {
             "get": {
-                "description": "Streams events via Server-Sent Events (text/event-stream). Dual auth: mTLS for\nCLI/operator, web session cookie for browser. Supports Last-Event-ID header for\nreconnection. Exactly one routing target must be set via query string.",
+                "description": "Streams events via Server-Sent Events (text/event-stream). Dual auth: mTLS for\nCLI/operator, web session cookie for browser. Supports Last-Event-ID header for\nreconnection. For mTLS auth, exactly one routing target (cli_session_id or\nuser_id) must be set via query string. For browser/cookie auth, the web_session_id\nis derived from the session cookie — it MUST NOT be passed in the URL.",
                 "produces": [
                     "text/event-stream"
                 ],
@@ -815,19 +809,13 @@
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Web session ID",
-                        "name": "web_session_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "CLI session ID",
+                        "description": "CLI session ID (mTLS only)",
                         "name": "cli_session_id",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "User ID",
+                        "description": "User ID (mTLS only)",
                         "name": "user_id",
                         "in": "query"
                     },

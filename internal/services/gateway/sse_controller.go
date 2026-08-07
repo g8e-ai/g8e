@@ -19,13 +19,20 @@ package gateway
 //                            Body MUST set exactly one of
 //                            web_session_id, cli_session_id, user_id.
 // GET  /api/v1/sse/events   → Consumer (CLI / dashboard) polls events.
-//                            Query string MUST set exactly one of
-//                            web_session_id, cli_session_id, user_id,
+//                            For mTLS auth (CLI/operator), query string MUST set
+//                            exactly one of cli_session_id or user_id,
 //                            plus since_id=N and limit=K.
+//                            For browser/cookie auth, the web_session_id is
+//                            derived from the authenticated session cookie —
+//                            it MUST NOT be passed in the URL.
 // GET  /api/v1/sse/stream   → Consumer streams events via SSE.
 //                            Auth: dual — mTLS for CLI/operator, web session
 //                            cookie for browser. The unified middleware stamps
 //                            context with the appropriate identity.
+//                            For browser/cookie auth, the web_session_id is
+//                            derived from the session cookie — it MUST NOT be
+//                            passed in the URL (security: prevents session ID
+//                            leakage via logs, browser history, referrer).
 //
 // The Gateway refuses to talk about a bare session id - every routing
 // target is tagged at the type level so a web_session_id can never be
@@ -323,6 +330,13 @@ func (e *sseAuthError) Error() string { return e.message }
 // channel string on success. The middleware stamps context with either
 // ContextKeyOperatorSessionID (mTLS path) or ContextKeyWebSessionID +
 // ContextKeyUserID (cookie path); this helper enforces ownership for both.
+//
+// Security: For cookie/browser auth, the web_session_id is ALWAYS derived from
+// the authenticated session cookie (via context). It MUST NOT be accepted from
+// the URL query string — accepting it there would allow session ID leakage via
+// access logs, browser history, and referrer headers, and would enable session
+// fixation attacks. The route.WebSessionID field is populated exclusively from
+// the context for cookie-authenticated requests.
 func (c *SSEController) authorizeSSERoute(route SSERoute, r *http.Request) (string, error) {
 	operatorSessionID, _ := r.Context().Value(constants.ContextKeyOperatorSessionID).(string)
 	webSessionID, _ := r.Context().Value(constants.ContextKeyWebSessionID).(string)
@@ -337,6 +351,14 @@ func (c *SSEController) authorizeSSERoute(route SSERoute, r *http.Request) (stri
 
 	if !isMTLSAuth && !isCookieAuth {
 		return "", &sseAuthError{status: http.StatusUnauthorized, message: "missing auth identity"}
+	}
+
+	// For cookie/browser auth, the web_session_id MUST come from the authenticated
+	// session cookie (stamped into context by the middleware), NEVER from the URL.
+	// Ignore any web_session_id that might be present in the route (URL query) for
+	// cookie-authenticated requests — use the context value as the source of truth.
+	if isCookieAuth {
+		route.WebSessionID = webSessionID
 	}
 
 	switch {
@@ -413,12 +435,13 @@ func (c *SSEController) authorizeSSERoute(route SSERoute, r *http.Request) (stri
 
 // @Summary		Poll SSE events
 // @Description	Polls stored SSE events since a given ID. Dual auth: mTLS for CLI/operator, web session
-// @Description	cookie for browser. Exactly one routing target must be set via query string.
+// @Description	cookie for browser. For mTLS auth, exactly one routing target (cli_session_id or
+// @Description	user_id) must be set via query string. For browser/cookie auth, the web_session_id
+// @Description	is derived from the session cookie — it MUST NOT be passed in the URL.
 // @Tags			telemetry
 // @Produce		json
-// @Param			web_session_id	query		string	false	"Web session ID"
-// @Param			cli_session_id	query		string	false	"CLI session ID"
-// @Param			user_id			query		string	false	"User ID"
+// @Param			cli_session_id	query		string	false	"CLI session ID (mTLS only)"
+// @Param			user_id			query		string	false	"User ID (mTLS only)"
 // @Param			since_id		query		int		false	"Return events after this ID"
 // @Param			limit			query		int		false	"Maximum events to return"
 // @Success		200			{object}	models.SSEEventsResponse
@@ -431,8 +454,10 @@ func (c *SSEController) handleInternalSSEEvents(w http.ResponseWriter, r *http.R
 		return
 	}
 	q := r.URL.Query()
+	// Security: web_session_id is NEVER read from the URL query string. For
+	// browser/cookie auth, it is derived from the authenticated session cookie
+	// (stamped into context by the auth middleware) inside authorizeSSERoute.
 	route := SSERoute{
-		WebSessionID: strings.TrimSpace(q.Get("web_session_id")),
 		CLISessionID: strings.TrimSpace(q.Get("cli_session_id")),
 		UserID:       strings.TrimSpace(q.Get("user_id")),
 	}
@@ -466,12 +491,14 @@ func (c *SSEController) handleInternalSSEEvents(w http.ResponseWriter, r *http.R
 // @Summary		Stream SSE events
 // @Description	Streams events via Server-Sent Events (text/event-stream). Dual auth: mTLS for
 // @Description	CLI/operator, web session cookie for browser. Supports Last-Event-ID header for
-// @Description	reconnection. Exactly one routing target must be set via query string.
+// @Description	reconnection. For mTLS auth, exactly one routing target (cli_session_id or
+// @Description	user_id) must be set via query string. For browser/cookie auth, the
+// @Description	web_session_id is derived from the session cookie — it MUST NOT be
+// @Description	passed in the URL.
 // @Tags			telemetry
 // @Produce		text/event-stream
-// @Param			web_session_id	query		string	false	"Web session ID"
-// @Param			cli_session_id	query		string	false	"CLI session ID"
-// @Param			user_id			query		string	false	"User ID"
+// @Param			cli_session_id	query		string	false	"CLI session ID (mTLS only)"
+// @Param			user_id			query		string	false	"User ID (mTLS only)"
 // @Param			since_id		query		int		false	"Replay events after this ID"
 // @Success		200			{string}	string			"SSE stream"
 // @Failure		400			{string}	string			"Bad Request"
@@ -484,8 +511,11 @@ func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.R
 	}
 
 	q := r.URL.Query()
+	// Security: web_session_id is NEVER read from the URL query string. For
+	// browser/cookie auth, it is derived from the authenticated session cookie
+	// (stamped into context by the auth middleware) inside authorizeSSERoute.
+	// Only cli_session_id and user_id are accepted as query params (mTLS path).
 	route := SSERoute{
-		WebSessionID: strings.TrimSpace(q.Get("web_session_id")),
 		CLISessionID: strings.TrimSpace(q.Get("cli_session_id")),
 		UserID:       strings.TrimSpace(q.Get("user_id")),
 	}

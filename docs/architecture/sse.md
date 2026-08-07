@@ -89,9 +89,11 @@ The gateway produces SSE events directly, bypassing the push endpoint. These eve
 **Authentication**: Dual auth. If a client certificate is present, mTLS authentication is used. Otherwise, the web session cookie is validated.
 
 **Query Parameters**:
-- `web_session_id`, `cli_session_id`, or `user_id`: Filter by routing target (exactly one required)
+- `cli_session_id` or `user_id`: Filter by routing target (mTLS auth only — exactly one required)
 - `since_id`: Return events with ID greater than this value (default: 0)
 - `limit`: Maximum events to return (default: 200, max: 1000)
+
+**Browser/cookie auth**: The `web_session_id` is derived from the authenticated session cookie — it MUST NOT be passed in the URL. The gateway resolves the routing target from the cookie automatically.
 
 **Response**: Returns an ordered list of events ascending by ID with count. Unset routing fields are omitted from each event in the response.
 
@@ -102,8 +104,10 @@ The gateway produces SSE events directly, bypassing the push endpoint. These eve
 **Authentication**: Dual auth, same as the events endpoint. When both a client certificate and cookie are present, mTLS takes precedence.
 
 **Query Parameters**:
-- `web_session_id`, `cli_session_id`, or `user_id`: Filter by routing target (exactly one required)
+- `cli_session_id` or `user_id`: Filter by routing target (mTLS auth only — exactly one required)
 - `since_id`: Start from event ID (also supports the `Last-Event-ID` header for reconnection)
+
+**Browser/cookie auth**: The `web_session_id` is derived from the authenticated session cookie — it MUST NOT be passed in the URL. Passing it in the URL is a security violation (session ID leakage via logs, browser history, referrer headers, and session fixation risk).
 
 **Response**: A standard SSE stream (`text/event-stream`). The stream sets `Cache-Control: no-cache`, `Connection: keep-alive`, and `X-Accel-Buffering: no` headers.
 
@@ -144,7 +148,7 @@ SSE consumer endpoints support dual auth: mTLS with an Operator session or CLI u
 
 Authorization is enforced per routing target:
 - **mTLS path**: For `web_session_id`, the Operator session must own the web session. For `cli_session_id`, the Operator session must own the CLI session, or the CLI user must match. For `user_id`, the Operator or CLI user must belong to the user.
-- **Cookie path**: For `web_session_id`, the session must match. For `cli_session_id`, the CLI session user must match. For `user_id`, the user must match.
+- **Cookie path**: The `web_session_id` is always derived from the authenticated session cookie (never from the URL). The session must match. For `cli_session_id`, the CLI session user must match. For `user_id`, the user must match.
 
 Multi-tenant isolation is enforced at the query level.
 
