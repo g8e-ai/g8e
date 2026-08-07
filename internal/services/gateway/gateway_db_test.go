@@ -61,7 +61,7 @@ func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 
 	// Append some SSE events
-	route := SSERoute{WebSessionID: "test-session"}
+	route := SSERoute{UserID: "test-user", WebSessionID: "test-session"}
 	for i := 0; i < 5; i++ {
 		_, err := stores.SSEStore.SSEEventsAppend(route, fmt.Sprintf("event-type-%d", i), fmt.Sprintf(`{"data":"%d"}`, i), "test-producer")
 		require.NoError(t, err)
@@ -391,11 +391,11 @@ func TestSSEEventsCount_EmptyTable(t *testing.T) {
 func TestSSEEventsAppendAndCount(t *testing.T) {
 	_, stores := newTestDB(t)
 
-	_, err := stores.SSEStore.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"hello"}`, "")
+	_, err := stores.SSEStore.SSEEventsAppend(SSERoute{UserID: "test-user", WebSessionID: "sess-1"}, "TEXT", `{"chunk":"hello"}`, "")
 	require.NoError(t, err)
-	_, err = stores.SSEStore.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"world"}`, "")
+	_, err = stores.SSEStore.SSEEventsAppend(SSERoute{UserID: "test-user", WebSessionID: "sess-1"}, "TEXT", `{"chunk":"world"}`, "")
 	require.NoError(t, err)
-	_, err = stores.SSEStore.SSEEventsAppend(SSERoute{CLISessionID: "sess-2"}, "DONE", `{}`, "")
+	_, err = stores.SSEStore.SSEEventsAppend(SSERoute{UserID: "test-user", CLISessionID: "sess-2"}, "DONE", `{}`, "")
 	require.NoError(t, err)
 
 	count, err := stores.SSEStore.SSEEventsCount()
@@ -406,9 +406,9 @@ func TestSSEEventsAppendAndCount(t *testing.T) {
 func TestSSEEventsWipe_DeletesAllRows(t *testing.T) {
 	_, stores := newTestDB(t)
 
-	_, err := stores.SSEStore.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"a"}`, "")
+	_, err := stores.SSEStore.SSEEventsAppend(SSERoute{UserID: "test-user", WebSessionID: "sess-1"}, "TEXT", `{"chunk":"a"}`, "")
 	require.NoError(t, err)
-	_, err = stores.SSEStore.SSEEventsAppend(SSERoute{CLISessionID: "sess-2"}, "DONE", `{}`, "")
+	_, err = stores.SSEStore.SSEEventsAppend(SSERoute{UserID: "test-user", CLISessionID: "sess-2"}, "DONE", `{}`, "")
 	require.NoError(t, err)
 
 	deleted, err := stores.SSEStore.SSEEventsWipe()

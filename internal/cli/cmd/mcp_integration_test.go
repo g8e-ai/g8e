@@ -86,11 +86,11 @@ func TestProxySessionToGatewayWithRetry(t *testing.T) {
 		defer sseServer.Close()
 
 		conn := &gatewayConn{
-			client:     &http.Client{Timeout: 5 * time.Second},
-			gatewayURL: gatewayServer.URL,
-			sseClient:  &http.Client{Timeout: 5 * time.Second},
-			sseBaseURL: sseServer.URL,
-			userID:     "user-sse-success",
+			client:       &http.Client{Timeout: 5 * time.Second},
+			gatewayURL:   gatewayServer.URL,
+			sseClient:    &http.Client{Timeout: 5 * time.Second},
+			sseBaseURL:   sseServer.URL,
+			cliSessionID: "cli-sse-success",
 		}
 
 		req := JSONRPCRequest{
@@ -136,11 +136,11 @@ func TestProxySessionToGatewayWithRetry(t *testing.T) {
 		defer sseServer.Close()
 
 		conn := &gatewayConn{
-			client:     &http.Client{Timeout: 5 * time.Second},
-			gatewayURL: gatewayServer.URL,
-			sseClient:  &http.Client{Timeout: 5 * time.Second},
-			sseBaseURL: sseServer.URL,
-			userID:     "user-sse-timeout",
+			client:       &http.Client{Timeout: 5 * time.Second},
+			gatewayURL:   gatewayServer.URL,
+			sseClient:    &http.Client{Timeout: 5 * time.Second},
+			sseBaseURL:   sseServer.URL,
+			cliSessionID: "cli-sse-timeout",
 		}
 
 		req := JSONRPCRequest{
