@@ -150,9 +150,9 @@ func TestPasskeyOrchestrator_EmitApprovalCompletedSSE_NoOpGuards(t *testing.T) {
 		sseStore := NewSSEEventService(stores.DB, logger)
 		o := NewPasskeyOrchestrator(nil, nil, nil, pubsub, logger)
 
-		o.EmitApprovalCompletedSSE("u-1", "tx-1")
+		o.EmitApprovalCompletedSSE("u-1", "cli-1", "tx-1")
 
-		events, err := sseStore.SSEEventsListSince(SSERoute{UserID: "u-1"}, 0, 10)
+		events, err := sseStore.SSEEventsListSince(SSERoute{UserID: "u-1", CLISessionID: "cli-1"}, 0, 10)
 		require.NoError(t, err)
 		assert.Empty(t, events)
 	})
@@ -163,9 +163,9 @@ func TestPasskeyOrchestrator_EmitApprovalCompletedSSE_NoOpGuards(t *testing.T) {
 		sseStore := NewSSEEventService(stores.DB, logger)
 		o := NewPasskeyOrchestrator(nil, nil, sseStore, nil, logger)
 
-		o.EmitApprovalCompletedSSE("u-1", "tx-1")
+		o.EmitApprovalCompletedSSE("u-1", "cli-1", "tx-1")
 
-		events, err := sseStore.SSEEventsListSince(SSERoute{UserID: "u-1"}, 0, 10)
+		events, err := sseStore.SSEEventsListSince(SSERoute{UserID: "u-1", CLISessionID: "cli-1"}, 0, 10)
 		require.NoError(t, err)
 		assert.Empty(t, events)
 	})
@@ -178,9 +178,9 @@ func TestPasskeyOrchestrator_EmitApprovalCompletedSSE_NoOpGuards(t *testing.T) {
 		t.Cleanup(func() { pubsub.Close() })
 		o := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
 
-		o.EmitApprovalCompletedSSE("", "tx-1")
+		o.EmitApprovalCompletedSSE("", "cli-1", "tx-1")
 
-		events, err := sseStore.SSEEventsListSince(SSERoute{UserID: "u-1"}, 0, 10)
+		events, err := sseStore.SSEEventsListSince(SSERoute{UserID: "u-1", CLISessionID: "cli-1"}, 0, 10)
 		require.NoError(t, err)
 		assert.Empty(t, events)
 	})

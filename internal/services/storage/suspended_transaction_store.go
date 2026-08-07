@@ -118,6 +118,10 @@ func NewSuspendedTransactionService(config *SuspendedTransactionConfig, logger *
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
+	// Backwards-compatible migration for existing SQLite database files.
+	// Fails silently if the column already exists.
+	_, _ = db.Exec("ALTER TABLE suspended_transactions ADD COLUMN submitter_cli_session_id TEXT;")
+
 	sts := &SuspendedTransactionService{
 		config: config,
 		logger: logger,
@@ -144,6 +148,7 @@ CREATE TABLE IF NOT EXISTS suspended_transactions (
 	tool_arguments TEXT,
 	user_id TEXT,
 	operator_id TEXT,
+	submitter_cli_session_id TEXT,
 	approved INTEGER DEFAULT 0,
 	approved_at TEXT,
 	approved_by TEXT,
@@ -167,10 +172,10 @@ func (sts *SuspendedTransactionService) StoreSuspendedTransaction(ctx context.Co
 	query := `
 	INSERT INTO suspended_transactions (
 		transaction_hash, envelope, created_at, expires_at,
-		tool_name, tool_arguments, user_id, operator_id,
+		tool_name, tool_arguments, user_id, operator_id, submitter_cli_session_id,
 		approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint, approval_public_key,
 		passkey_credential_id, passkey_client_data_json, passkey_authenticator_data, passkey_signature
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(transaction_hash) DO UPDATE SET
 		envelope = excluded.envelope,
 		expires_at = excluded.expires_at,
@@ -202,6 +207,7 @@ func (sts *SuspendedTransactionService) StoreSuspendedTransaction(ctx context.Co
 		string(tx.ToolArguments),
 		tx.UserID,
 		tx.OperatorID,
+		tx.SubmitterCLISessionID,
 		tx.Approved,
 		approvedAtStr,
 		tx.ApprovedBy,
@@ -225,13 +231,13 @@ func (sts *SuspendedTransactionService) GetSuspendedTransaction(ctx context.Cont
 	if sts == nil || sts.db == nil {
 		return nil, false, fmt.Errorf("suspended_transaction_store: get transaction: store not initialized")
 	}
-	var envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID, approvedBy, approvalSignature, expectedCertFingerprint, approvalPublicKey, passkeyCredentialID, passkeyClientDataJSON, passkeyAuthenticatorData, passkeySignature sql.NullString
+	var envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID, submitterCLISessionID, approvedBy, approvalSignature, expectedCertFingerprint, approvalPublicKey, passkeyCredentialID, passkeyClientDataJSON, passkeyAuthenticatorData, passkeySignature sql.NullString
 	var approved int
 	var approvedAtStr sql.NullString
 	err := sts.db.QueryRowWithRetry(
-		"SELECT envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint, approval_public_key, passkey_credential_id, passkey_client_data_json, passkey_authenticator_data, passkey_signature FROM suspended_transactions WHERE transaction_hash = ? AND expires_at > ?",
+		"SELECT envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, submitter_cli_session_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint, approval_public_key, passkey_credential_id, passkey_client_data_json, passkey_authenticator_data, passkey_signature FROM suspended_transactions WHERE transaction_hash = ? AND expires_at > ?",
 		txHash, timesvc.NowTimestamp(),
-	).Scan(&envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID, &approved, &approvedAtStr, &approvedBy, &approvalSignature, &expectedCertFingerprint, &approvalPublicKey, &passkeyCredentialID, &passkeyClientDataJSON, &passkeyAuthenticatorData, &passkeySignature)
+	).Scan(&envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID, &submitterCLISessionID, &approved, &approvedAtStr, &approvedBy, &approvalSignature, &expectedCertFingerprint, &approvalPublicKey, &passkeyCredentialID, &passkeyClientDataJSON, &passkeyAuthenticatorData, &passkeySignature)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, false, nil
@@ -263,6 +269,7 @@ func (sts *SuspendedTransactionService) GetSuspendedTransaction(ctx context.Cont
 		ToolArguments:            toolArgs,
 		UserID:                   userID.String,
 		OperatorID:               operatorID.String,
+		SubmitterCLISessionID:   submitterCLISessionID.String,
 		Approved:                 approved == 1,
 		ApprovedAt:               approvedAt,
 		ApprovedBy:               approvedBy.String,
@@ -287,10 +294,10 @@ func (sts *SuspendedTransactionService) ListSuspendedTransactions(ctx context.Co
 	var args []interface{}
 
 	if userID != "" {
-		query = "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint, approval_public_key, passkey_credential_id, passkey_client_data_json, passkey_authenticator_data, passkey_signature FROM suspended_transactions WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC"
+		query = "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, submitter_cli_session_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint, approval_public_key, passkey_credential_id, passkey_client_data_json, passkey_authenticator_data, passkey_signature FROM suspended_transactions WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC"
 		args = []interface{}{userID, timesvc.NowTimestamp()}
 	} else {
-		query = "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint, approval_public_key, passkey_credential_id, passkey_client_data_json, passkey_authenticator_data, passkey_signature FROM suspended_transactions WHERE expires_at > ? ORDER BY created_at DESC"
+		query = "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, submitter_cli_session_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint, approval_public_key, passkey_credential_id, passkey_client_data_json, passkey_authenticator_data, passkey_signature FROM suspended_transactions WHERE expires_at > ? ORDER BY created_at DESC"
 		args = []interface{}{timesvc.NowTimestamp()}
 	}
 
@@ -303,6 +310,7 @@ func (sts *SuspendedTransactionService) ListSuspendedTransactions(ctx context.Co
 		toolArgsStr              sql.NullString
 		userID                   sql.NullString
 		operatorID               sql.NullString
+		submitterCLISessionID    sql.NullString
 		approved                 int
 		approvedAtStr            sql.NullString
 		approvedBy               sql.NullString
@@ -317,7 +325,7 @@ func (sts *SuspendedTransactionService) ListSuspendedTransactions(ctx context.Co
 
 	rows, err := sqliteutil.MaterializeRows(sts.db, query, args, func(r *sql.Rows) (suspendedTxRow, error) {
 		var row suspendedTxRow
-		err := r.Scan(&row.txHash, &row.envelopeStr, &row.createdAtStr, &row.expiresAtStr, &row.toolName, &row.toolArgsStr, &row.userID, &row.operatorID, &row.approved, &row.approvedAtStr, &row.approvedBy, &row.approvalSignature, &row.expectedCertFingerprint, &row.approvalPublicKey, &row.passkeyCredentialID, &row.passkeyClientDataJSON, &row.passkeyAuthenticatorData, &row.passkeySignature)
+		err := r.Scan(&row.txHash, &row.envelopeStr, &row.createdAtStr, &row.expiresAtStr, &row.toolName, &row.toolArgsStr, &row.userID, &row.operatorID, &row.submitterCLISessionID, &row.approved, &row.approvedAtStr, &row.approvedBy, &row.approvalSignature, &row.expectedCertFingerprint, &row.approvalPublicKey, &row.passkeyCredentialID, &row.passkeyClientDataJSON, &row.passkeyAuthenticatorData, &row.passkeySignature)
 		return row, err
 	})
 	if err != nil {
@@ -349,6 +357,7 @@ func (sts *SuspendedTransactionService) ListSuspendedTransactions(ctx context.Co
 			ToolArguments:            toolArgs,
 			UserID:                   row.userID.String,
 			OperatorID:               row.operatorID.String,
+			SubmitterCLISessionID:   row.submitterCLISessionID.String,
 			Approved:                 row.approved == 1,
 			ApprovedAt:               approvedAt,
 			ApprovedBy:               row.approvedBy.String,
@@ -434,7 +443,7 @@ func (sts *SuspendedTransactionService) GetExpiredSuspendedTransactions(ctx cont
 		return nil, fmt.Errorf("suspended_transaction_store: get expired transactions: store not initialized")
 	}
 
-	query := "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint, approval_public_key, passkey_credential_id, passkey_client_data_json, passkey_authenticator_data, passkey_signature FROM suspended_transactions WHERE expires_at < ? ORDER BY expires_at ASC"
+	query := "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, submitter_cli_session_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint, approval_public_key, passkey_credential_id, passkey_client_data_json, passkey_authenticator_data, passkey_signature FROM suspended_transactions WHERE expires_at < ? ORDER BY expires_at ASC"
 
 	type suspendedTxRow struct {
 		txHash                   sql.NullString
@@ -445,6 +454,7 @@ func (sts *SuspendedTransactionService) GetExpiredSuspendedTransactions(ctx cont
 		toolArgsStr              sql.NullString
 		userID                   sql.NullString
 		operatorID               sql.NullString
+		submitterCLISessionID    sql.NullString
 		approved                 int
 		approvedAtStr            sql.NullString
 		approvedBy               sql.NullString
@@ -459,7 +469,7 @@ func (sts *SuspendedTransactionService) GetExpiredSuspendedTransactions(ctx cont
 
 	rows, err := sqliteutil.MaterializeRows(sts.db, query, []interface{}{timesvc.NowTimestamp()}, func(r *sql.Rows) (suspendedTxRow, error) {
 		var row suspendedTxRow
-		err := r.Scan(&row.txHash, &row.envelopeStr, &row.createdAtStr, &row.expiresAtStr, &row.toolName, &row.toolArgsStr, &row.userID, &row.operatorID, &row.approved, &row.approvedAtStr, &row.approvedBy, &row.approvalSignature, &row.expectedCertFingerprint, &row.approvalPublicKey, &row.passkeyCredentialID, &row.passkeyClientDataJSON, &row.passkeyAuthenticatorData, &row.passkeySignature)
+		err := r.Scan(&row.txHash, &row.envelopeStr, &row.createdAtStr, &row.expiresAtStr, &row.toolName, &row.toolArgsStr, &row.userID, &row.operatorID, &row.submitterCLISessionID, &row.approved, &row.approvedAtStr, &row.approvedBy, &row.approvalSignature, &row.expectedCertFingerprint, &row.approvalPublicKey, &row.passkeyCredentialID, &row.passkeyClientDataJSON, &row.passkeyAuthenticatorData, &row.passkeySignature)
 		return row, err
 	})
 	if err != nil {
@@ -491,6 +501,7 @@ func (sts *SuspendedTransactionService) GetExpiredSuspendedTransactions(ctx cont
 			ToolArguments:            toolArgs,
 			UserID:                   row.userID.String,
 			OperatorID:               row.operatorID.String,
+			SubmitterCLISessionID:   row.submitterCLISessionID.String,
 			Approved:                 row.approved == 1,
 			ApprovedAt:               approvedAt,
 			ApprovedBy:               row.approvedBy.String,

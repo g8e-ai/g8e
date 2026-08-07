@@ -272,9 +272,9 @@ type gatewayConn struct {
 
 	// SSE fields for L3 approval notifications. Populated when CLI credentials
 	// are available so the stdio proxy can subscribe to approval.completed events
-	// instead of polling.
+	// instead of polling. The cliSessionID is sent as the X-G8E-CLI-Session-ID
+	// header on the SSE subscription; user_id is derived from the mTLS cert.
 	sseBaseURL string
-	userID     string
 	sseClient  *http.Client
 }
 
@@ -504,15 +504,14 @@ func runMCPStdioProxy(cmd *cobra.Command, _ []string, fileSvcFactory func(string
 	// the CLI cert (not the delegated/app cert) because the gateway's SSE auth
 	// middleware validates CLI session ownership. The gateway URL is stripped
 	// of the /mcp suffix to get the base URL for SSE endpoints.
-	if creds, err := auth.LoadCredentials(fileSvc, cfg); err == nil && creds != nil && creds.UserID != "" {
+	if creds, err := auth.LoadCredentials(fileSvc, cfg); err == nil && creds != nil && creds.CLISessionID != "" {
 		if sseClient, err := auth.BuildMTLSClient(fileSvc, cfg, 0); err == nil {
 			conn.sseClient = sseClient
-			conn.userID = creds.UserID
 			// Use OperatorPublicURL (g8e.local) for SSE to ensure TLS ServerName
 			// matches the gateway cert SAN. Deriving from gatewayURL may produce
 			// an IP-based URL that fails TLS verification.
 			conn.sseBaseURL = strings.TrimSuffix(cfg.OperatorPublicURL(), "/")
-			logger.Info("SSE approval notifications enabled", "user_id", creds.UserID)
+			logger.Info("SSE approval notifications enabled", "cli_session_id", creds.CLISessionID)
 		}
 	}
 
@@ -637,12 +636,12 @@ func proxySessionToGatewayWithRetryContext(ctx context.Context, session *gateway
 		fmt.Fprintf(os.Stderr, "\n[g8e] Please visit: %s\n", approvalURL)
 	}
 
-	if session.sseClient == nil || session.sseBaseURL == "" || session.userID == "" {
+	if session.sseClient == nil || session.sseBaseURL == "" || session.cliSessionID == "" {
 		return resp, fmt.Errorf("L3 approval: %w", constants.ErrNotAuthenticated)
 	}
 
 	txHash := extractTxHashFromApprovalURL(approvalURL)
-	if err := auth.WaitForApprovalSSE(ctx, session.sseClient, session.sseBaseURL, session.userID, txHash); err != nil {
+	if err := auth.WaitForApprovalSSE(ctx, session.sseClient, session.sseBaseURL, session.cliSessionID, txHash); err != nil {
 		if logger != nil {
 			logger.Warn("L3 approval SSE wait ended", "error", err)
 		}

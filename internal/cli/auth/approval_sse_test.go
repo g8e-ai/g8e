@@ -46,8 +46,9 @@ func sseApprovalServer(t *testing.T, userID, txHash string, delay time.Duration)
 		})
 		require.NoError(t, err)
 		envelope := models.SSEPushPayload{
-			UserID: userID,
-			Event:  eventPayload,
+			UserID:       userID,
+			CliSessionID: "cli-session",
+			Event:        eventPayload,
 		}
 		envelopeJSON, err := json.Marshal(envelope)
 		require.NoError(t, err)
@@ -56,51 +57,52 @@ func sseApprovalServer(t *testing.T, userID, txHash string, delay time.Duration)
 }
 
 func TestWaitForApprovalSSE_CorrectTxHashMatch(t *testing.T) {
-	const userID = "user-match"
+	const cliSessionID = "cli-session"
 	const txHash = "tx-match-123"
 
-	srv := sseApprovalServer(t, userID, txHash, 0)
+	srv := sseApprovalServer(t, "user-match", txHash, 0)
 	t.Cleanup(srv.Close)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err := WaitForApprovalSSE(ctx, srv.Client(), srv.URL, userID, txHash)
+	err := WaitForApprovalSSE(ctx, srv.Client(), srv.URL, cliSessionID, txHash)
 	require.NoError(t, err)
 }
 
 func TestWaitForApprovalSSE_WrongTxHashFiltered(t *testing.T) {
-	const userID = "user-filter"
+	const cliSessionID = "cli-session"
 	const sentTxHash = "tx-wrong-999"
 	const expectedTxHash = "tx-correct-001"
 
-	srv := sseApprovalServer(t, userID, sentTxHash, 0)
+	srv := sseApprovalServer(t, "user-filter", sentTxHash, 0)
 	t.Cleanup(srv.Close)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
-	err := WaitForApprovalSSE(ctx, srv.Client(), srv.URL, userID, expectedTxHash)
+	err := WaitForApprovalSSE(ctx, srv.Client(), srv.URL, cliSessionID, expectedTxHash)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrApprovalSSETimeout)
 }
 
 func TestWaitForApprovalSSE_EnvelopeUnmarshaling(t *testing.T) {
-	const userID = "user-envelope"
+	const cliSessionID = "cli-session"
 	const txHash = "tx-envelope-456"
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		inner := models.ApprovalCompletedEvent{
 			Type:   constants.SSEEventTypeApprovalCompleted,
-			UserID: userID,
+			UserID: "user-envelope",
 			TxHash: txHash,
 		}
 		innerJSON, err := json.Marshal(inner)
 		require.NoError(t, err)
 		envelope := models.SSEPushPayload{
-			UserID: userID,
-			Event:  innerJSON,
+			UserID:       "user-envelope",
+			CliSessionID: cliSessionID,
+			Event:        innerJSON,
 		}
 		envelopeJSON, err := json.Marshal(envelope)
 		require.NoError(t, err)
@@ -111,7 +113,7 @@ func TestWaitForApprovalSSE_EnvelopeUnmarshaling(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err := WaitForApprovalSSE(ctx, srv.Client(), srv.URL, userID, txHash)
+	err := WaitForApprovalSSE(ctx, srv.Client(), srv.URL, cliSessionID, txHash)
 	require.NoError(t, err)
 }
 
@@ -125,7 +127,7 @@ func TestWaitForApprovalSSE_TimeoutNoEvents(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	err := WaitForApprovalSSE(ctx, srv.Client(), srv.URL, "user-timeout", "tx-timeout")
+	err := WaitForApprovalSSE(ctx, srv.Client(), srv.URL, "cli-timeout", "tx-timeout")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrApprovalSSETimeout)
 }
@@ -143,21 +145,21 @@ func TestWaitForApprovalSSE_ContextCancellation(t *testing.T) {
 		cancel()
 	}()
 
-	err := WaitForApprovalSSE(ctx, srv.Client(), srv.URL, "user-cancel", "tx-cancel")
+	err := WaitForApprovalSSE(ctx, srv.Client(), srv.URL, "cli-cancel", "tx-cancel")
 	require.Error(t, err)
 }
 
 func TestWaitForApprovalSSE_EmptyTxHashAcceptsAny(t *testing.T) {
-	const userID = "user-any"
+	const cliSessionID = "cli-session"
 	const txHash = "tx-any-789"
 
-	srv := sseApprovalServer(t, userID, txHash, 0)
+	srv := sseApprovalServer(t, "user-any", txHash, 0)
 	t.Cleanup(srv.Close)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err := WaitForApprovalSSE(ctx, srv.Client(), srv.URL, userID, "")
+	err := WaitForApprovalSSE(ctx, srv.Client(), srv.URL, cliSessionID, "")
 	require.NoError(t, err)
 }
 
@@ -166,21 +168,22 @@ func TestWaitForApprovalSSE_EmptyTxHashAcceptsAny(t *testing.T) {
 // event type from the inner ApprovalCompletedEvent.Type field and still
 // matches the approval event.
 func TestWaitForApprovalSSE_NoEventHeaderExtractsTypeFromPayload(t *testing.T) {
-	const userID = "user-no-header"
+	const cliSessionID = "cli-session"
 	const txHash = "tx-no-header-001"
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		inner := models.ApprovalCompletedEvent{
 			Type:   constants.SSEEventTypeApprovalCompleted,
-			UserID: userID,
+			UserID: "user-no-header",
 			TxHash: txHash,
 		}
 		innerJSON, err := json.Marshal(inner)
 		require.NoError(t, err)
 		envelope := models.SSEPushPayload{
-			UserID: userID,
-			Event:  innerJSON,
+			UserID:       "user-no-header",
+			CliSessionID: cliSessionID,
+			Event:        innerJSON,
 		}
 		envelopeJSON, err := json.Marshal(envelope)
 		require.NoError(t, err)
@@ -193,6 +196,6 @@ func TestWaitForApprovalSSE_NoEventHeaderExtractsTypeFromPayload(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err := WaitForApprovalSSE(ctx, srv.Client(), srv.URL, userID, txHash)
+	err := WaitForApprovalSSE(ctx, srv.Client(), srv.URL, cliSessionID, txHash)
 	require.NoError(t, err)
 }

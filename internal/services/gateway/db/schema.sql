@@ -59,18 +59,16 @@ BEGIN
 END;
 
 -- SSE event buffer: per-routing-target ring buffer for reconnection replay.
--- Each row carries exactly one of three first-class routing keys, expressed as
--- distinct columns so the Gateway never has to talk about a bare session id:
+-- Every row carries user_id (ownership/identity, always NOT NULL) plus exactly
+-- one session column (delivery/routing):
 --   * web_session_id - browser UI session (mTLS cookie session)
 --   * cli_session_id - BYO/CLI/scripted client session (mTLS cert session)
---   * user_id        - background fanout to every session a user owns
--- web and cli are routed identically by the Gateway but MUST never be
--- conflated under a single shared id namespace.
+-- user_id alone is not a valid route — it is always paired with a session.
 CREATE TABLE IF NOT EXISTS sse_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
     web_session_id TEXT,
     cli_session_id TEXT,
-    user_id TEXT,
     event_type TEXT NOT NULL,
     payload TEXT NOT NULL,
     producer_id TEXT,
@@ -78,13 +76,12 @@ CREATE TABLE IF NOT EXISTS sse_events (
     CHECK (
         (CASE WHEN web_session_id IS NULL THEN 0 ELSE 1 END)
       + (CASE WHEN cli_session_id IS NULL THEN 0 ELSE 1 END)
-      + (CASE WHEN user_id        IS NULL THEN 0 ELSE 1 END)
       = 1
     )
 );
 CREATE INDEX IF NOT EXISTS idx_sse_web ON sse_events(web_session_id, id) WHERE web_session_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_sse_cli ON sse_events(cli_session_id, id) WHERE cli_session_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_sse_user ON sse_events(user_id, id) WHERE user_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_sse_user ON sse_events(user_id, id);
 CREATE INDEX IF NOT EXISTS idx_sse_created ON sse_events(created_at);
 
 -- Blob store: raw binary attachments keyed by namespace + id

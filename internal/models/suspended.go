@@ -28,6 +28,7 @@ type SuspendedTransaction struct {
 	ToolArguments           json.RawMessage
 	UserID                  string
 	OperatorID              string
+	SubmitterCLISessionID   string // CLI session that submitted the transaction
 	Approved                bool
 	ApprovedAt              *time.Time
 	ApprovedBy              string // CLI session ID or user ID of approver

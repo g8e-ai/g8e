@@ -62,10 +62,11 @@ func TestMonitorPasskeyRegistration_SSEEventTriggersRegisteredMsg(t *testing.T) 
 	}
 	server := startTLSEnrollServer(t, cfg, handler)
 
-	sseURL := fmt.Sprintf("%s/sse?cli_session_id=test-session&since_id=1", server.URL)
+	sseURL := fmt.Sprintf("%s/sse?since_id=1", server.URL)
 	httpClient, err := BuildMTLSClient(fileSvc, cfg, 0)
 	require.NoError(t, err)
 	sseClient := sse.NewClient(sseURL, httpClient)
+	sseClient.SetHeader(constants.HeaderCLISessionID, "test-session")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -108,10 +109,11 @@ func TestMonitorPasskeyRegistration_NoEventHeaderExtractsTypeFromPayload(t *test
 	}
 	server := startTLSEnrollServer(t, cfg, handler)
 
-	sseURL := fmt.Sprintf("%s/sse?cli_session_id=test-session&since_id=1", server.URL)
+	sseURL := fmt.Sprintf("%s/sse?since_id=1", server.URL)
 	httpClient, err := BuildMTLSClient(fileSvc, cfg, 0)
 	require.NoError(t, err)
 	sseClient := sse.NewClient(sseURL, httpClient)
+	sseClient.SetHeader(constants.HeaderCLISessionID, "test-session")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -136,10 +138,11 @@ func TestMonitorPasskeyRegistration_TimeoutSendsEnrollErrMsg(t *testing.T) {
 	}
 	server := startTLSEnrollServer(t, cfg, handler)
 
-	sseURL := fmt.Sprintf("%s/sse?cli_session_id=test-session&since_id=1", server.URL)
+	sseURL := fmt.Sprintf("%s/sse?since_id=1", server.URL)
 	httpClient, err := BuildMTLSClient(fileSvc, cfg, 0)
 	require.NoError(t, err)
 	sseClient := sse.NewClient(sseURL, httpClient)
+	sseClient.SetHeader(constants.HeaderCLISessionID, "test-session")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -169,10 +172,11 @@ func TestMonitorPasskeyRegistration_SSEStreamClosedSendsEnrollErrMsg(t *testing.
 
 	server := startTLSEnrollServer(t, cfg, handler)
 
-	sseURL := fmt.Sprintf("%s/sse?cli_session_id=test-session&since_id=1", server.URL)
+	sseURL := fmt.Sprintf("%s/sse?since_id=1", server.URL)
 	httpClient, err := BuildMTLSClient(fileSvc, cfg, 0)
 	require.NoError(t, err)
 	sseClient := sse.NewClient(sseURL, httpClient)
+	sseClient.SetHeader(constants.HeaderCLISessionID, "test-session")
 
 	// Use a long context timeout so the SSE stream close is what triggers the message,
 	// not the context expiry.

@@ -445,9 +445,9 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 		const userID = "u-approval-sse-1"
 		const txHash = "tx-approval-sse-1"
 
-		handler.orchestrator.EmitApprovalCompletedSSE(userID, txHash)
+		handler.orchestrator.EmitApprovalCompletedSSE(userID, "cli-approval-sse-1", txHash)
 
-		route := SSERoute{UserID: userID}
+		route := SSERoute{UserID: userID, CLISessionID: "cli-approval-sse-1"}
 		events, err := sseStore.SSEEventsListSince(route, 0, 10)
 		require.NoError(t, err)
 		require.Len(t, events, 1)
@@ -484,11 +484,11 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 		const txHash = "tx-approval-no-sse-1"
 
 		if handler.orchestrator != nil {
-			handler.orchestrator.EmitApprovalCompletedSSE(userID, txHash)
+			handler.orchestrator.EmitApprovalCompletedSSE(userID, "cli-no-sse-1", txHash)
 		}
 
 		sseStore := NewSSEEventService(stores.DB, logger)
-		route := SSERoute{UserID: userID}
+		route := SSERoute{UserID: userID, CLISessionID: "cli-no-sse-1"}
 		events, err := sseStore.SSEEventsListSince(route, 0, 10)
 		require.NoError(t, err)
 		assert.Empty(t, events)
@@ -513,9 +513,9 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 			Orchestrator:  orchestrator,
 		})
 
-		handler.orchestrator.EmitApprovalCompletedSSE("", "tx-empty-user")
+		handler.orchestrator.EmitApprovalCompletedSSE("", "cli-empty-user", "tx-empty-user")
 
-		events, err := sseStore.SSEEventsListSince(SSERoute{UserID: ""}, 0, 10)
+		events, err := sseStore.SSEEventsListSince(SSERoute{UserID: "", CLISessionID: "cli-empty-user"}, 0, 10)
 		require.Error(t, err)
 		assert.Empty(t, events)
 	})

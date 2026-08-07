@@ -567,6 +567,12 @@ func (s *AuthService) handleOperatorAuth(w http.ResponseWriter, r *http.Request,
 		ctx = context.WithValue(ctx, constants.ContextKeyTenantID, op.OrganizationID)
 		ctx = context.WithValue(ctx, constants.ContextKeyOperatorID, op.ID)
 		ctx = context.WithValue(ctx, constants.ContextKeyOperatorSessionID, operatorSessionID)
+		if cliSessionID != "" {
+			ctx = context.WithValue(ctx, constants.ContextKeyCLISessionID, cliSessionID)
+		}
+		if webSessionID := r.Header.Get(constants.HeaderWebSessionID); webSessionID != "" {
+			ctx = context.WithValue(ctx, constants.ContextKeyWebSessionID, webSessionID)
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 		return true
 	}

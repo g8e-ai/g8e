@@ -16,27 +16,23 @@ package gateway
 // SSE Event Bridge
 //
 // POST /api/v1/sse/push     → Producer (g8e-compatible agentic ensemble) appends an event.
-//                            Body MUST set exactly one of
-//                            web_session_id, cli_session_id, user_id.
+//                            Body MUST set user_id and exactly one of
+//                            web_session_id or cli_session_id.
 // GET  /api/v1/sse/events   → Consumer (CLI / dashboard) polls events.
-//                            For mTLS auth (CLI/operator), query string MUST set
-//                            exactly one of cli_session_id or user_id,
-//                            plus since_id=N and limit=K.
-//                            For browser/cookie auth, the web_session_id is
-//                            derived from the authenticated session cookie —
-//                            it MUST NOT be passed in the URL.
+//                            Route is built entirely from auth context:
+//                            user_id from cert/cookie, session from header/cookie.
+//                            Query string carries only since_id and limit.
 // GET  /api/v1/sse/stream   → Consumer streams events via SSE.
 //                            Auth: dual — mTLS for CLI/operator, web session
 //                            cookie for browser. The unified middleware stamps
 //                            context with the appropriate identity.
-//                            For browser/cookie auth, the web_session_id is
-//                            derived from the session cookie — it MUST NOT be
-//                            passed in the URL (security: prevents session ID
-//                            leakage via logs, browser history, referrer).
+//                            Route is built entirely from auth context.
+//                            Query string carries only since_id.
 //
 // The Gateway refuses to talk about a bare session id - every routing
 // target is tagged at the type level so a web_session_id can never be
-// mis-delivered as a cli_session_id (or vice versa).
+// mis-delivered as a cli_session_id (or vice versa). user_id alone is
+// not a valid route.
 //
 // All SSE handlers live on SSEController (sse_controller.go).
 
@@ -91,8 +87,8 @@ func newSSEController(cfg *config.Config, logger *slog.Logger, docStore *Documen
 
 // @Summary		Push SSE event
 // @Description	Appends an event to the SSE event store and publishes it to the pub/sub channel.
-// @Description	Requires mTLS app workload identity. Exactly one routing target must be set:
-// @Description	web_session_id, cli_session_id, or user_id.
+// @Description	Requires mTLS app workload identity. user_id is required, plus exactly one
+// @Description	of web_session_id or cli_session_id as the delivery target.
 // @Tags			telemetry
 // @Accept			json
 // @Produce		json
@@ -152,9 +148,13 @@ func (c *SSEController) handleInternalSSEPush(w http.ResponseWriter, r *http.Req
 	}
 
 	route := SSERoute{
+		UserID:       strings.TrimSpace(p.UserID),
 		WebSessionID: strings.TrimSpace(p.WebSessionID),
 		CLISessionID: strings.TrimSpace(p.CliSessionID),
-		UserID:       strings.TrimSpace(p.UserID),
+	}
+	if err := route.validate(); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	// Extract event.type for indexing/filtering. Store the full envelope as the payload.
@@ -247,34 +247,6 @@ func (c *SSEController) handleInternalSSEPush(w http.ResponseWriter, r *http.Req
 			c.responder.Error(w, http.StatusForbidden, "unauthorized for target session")
 			return
 		}
-	} else if route.UserID != "" {
-		// User-scoped pushes: app must be authorized for AT LEAST ONE session belonging to the user.
-		// We check if the app identity corresponds to an Operator owned by this user.
-		filters := []models.DocFilter{
-			{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", route.UserID))},
-		}
-		docs, err := c.docStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 100)
-		if err != nil || len(docs) == 0 {
-			c.logger.Warn("SSE push: user has no operators", "user_id", route.UserID, "app_id", appID)
-			c.responder.Error(w, http.StatusForbidden, "unauthorized for target user")
-			return
-		}
-
-		// Check if the app is authorized for any of the user's operators
-		authorized := false
-		wid := protocol.NewWorkloadIdentity()
-		for _, doc := range docs {
-			if wid.MatchesApp(appID, doc.ID) {
-				authorized = true
-				break
-			}
-		}
-
-		if !authorized {
-			c.logger.Warn("SSE push: app not authorized for target user", "app_id", appID, "user_id", route.UserID)
-			c.responder.Error(w, http.StatusForbidden, "unauthorized for target user")
-			return
-		}
 	}
 
 	// Persist the event AFTER authorization (R15) and wrap the payload in a
@@ -288,16 +260,13 @@ func (c *SSEController) handleInternalSSEPush(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Publish to pub/sub for real-time streaming
-	// We use the same routing logic: exactly one of web_session_id, cli_session_id, or user_id.
+	// Publish to pub/sub for real-time streaming.
 	var channel string
 	switch {
 	case route.CLISessionID != "":
 		channel = "sse:cli:" + route.CLISessionID
 	case route.WebSessionID != "":
 		channel = "sse:web:" + route.WebSessionID
-	case route.UserID != "":
-		channel = "sse:user:" + route.UserID
 	}
 
 	if channel != "" {
@@ -326,43 +295,39 @@ type sseAuthError struct {
 func (e *sseAuthError) Error() string { return e.message }
 
 // authorizeSSERoute verifies that the authenticated identity (from context) is
-// authorized to access the requested SSE routing target. Returns the pub/sub
-// channel string on success. The middleware stamps context with either
-// ContextKeyOperatorSessionID (mTLS path) or ContextKeyWebSessionID +
-// ContextKeyUserID (cookie path); this helper enforces ownership for both.
-//
-// Security: For cookie/browser auth, the web_session_id is ALWAYS derived from
-// the authenticated session cookie (via context). It MUST NOT be accepted from
-// the URL query string — accepting it there would allow session ID leakage via
-// access logs, browser history, and referrer headers, and would enable session
-// fixation attacks. The route.WebSessionID field is populated exclusively from
-// the context for cookie-authenticated requests.
+// authorized to access the requested SSE routing target. The handler constructs
+// the route entirely from auth context (user_id from cert/cookie, session from
+// header/cookie); this function enforces ownership as defense-in-depth. Returns
+// the pub/sub channel string on success.
 func (c *SSEController) authorizeSSERoute(route SSERoute, r *http.Request) (string, error) {
+	ctxUserID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
 	operatorSessionID, _ := r.Context().Value(constants.ContextKeyOperatorSessionID).(string)
-	webSessionID, _ := r.Context().Value(constants.ContextKeyWebSessionID).(string)
-	userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
 	appID, _ := r.Context().Value(constants.ContextKeyAppID).(string)
 
-	// CLI mTLS auth stamps ContextKeyUserID but not ContextKeyOperatorSessionID.
-	// Exclude app certs (which also stamp ContextKeyUserID for delegated user SANs)
-	// by requiring ContextKeyAppID to be empty.
-	isMTLSAuth := operatorSessionID != "" || (userID != "" && webSessionID == "" && appID == "")
-	isCookieAuth := webSessionID != ""
-
-	if !isMTLSAuth && !isCookieAuth {
+	// App certs are not SSE consumers.
+	if appID != "" {
 		return "", &sseAuthError{status: http.StatusUnauthorized, message: "missing auth identity"}
 	}
 
-	// For cookie/browser auth, the web_session_id MUST come from the authenticated
-	// session cookie (stamped into context by the middleware), NEVER from the URL.
-	// Ignore any web_session_id that might be present in the route (URL query) for
-	// cookie-authenticated requests — use the context value as the source of truth.
-	if isCookieAuth {
-		route.WebSessionID = webSessionID
+	// Every SSE consumer must have a user_id from auth context.
+	if ctxUserID == "" {
+		return "", &sseAuthError{status: http.StatusUnauthorized, message: "missing auth identity"}
 	}
 
+	// The route's user_id MUST match the authenticated user. No exceptions.
+	if route.UserID != ctxUserID {
+		return "", &sseAuthError{status: http.StatusForbidden, message: "user does not match authenticated user"}
+	}
+
+	if err := route.validate(); err != nil {
+		return "", &sseAuthError{status: http.StatusBadRequest, message: err.Error()}
+	}
+
+	// Session ownership verification. The session ID came from context
+	// (header for mTLS, cookie for browser), so it is already authenticated
+	// as belonging to this user. These checks are defense-in-depth.
 	switch {
-	case route.CLISessionID != "" && route.WebSessionID == "" && route.UserID == "":
+	case route.CLISessionID != "":
 		doc, err := c.docStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
 		if err != nil {
 			c.logger.Error("SSE: failed to fetch CLI session", string(constants.ConnectionStateError), err, "cli_session_id", route.CLISessionID)
@@ -379,54 +344,26 @@ func (c *SSEController) authorizeSSERoute(route SSERoute, r *http.Request) (stri
 		if err := json.Unmarshal(b, &cliSess); err != nil {
 			return "", &sseAuthError{status: http.StatusInternalServerError, message: "failed to verify cli session"}
 		}
-		if isMTLSAuth {
-			if operatorSessionID != "" {
-				// Operator mTLS auth — check operator session ownership
-				if cliSess.OperatorSessionID != operatorSessionID {
-					return "", &sseAuthError{status: http.StatusForbidden, message: "operator session does not own this cli session"}
-				}
-			} else {
-				// CLI mTLS auth — check user ownership
-				if cliSess.UserID != userID {
-					return "", &sseAuthError{status: http.StatusForbidden, message: "user does not own this cli session"}
-				}
-			}
-		} else {
-			if cliSess.UserID != userID {
-				return "", &sseAuthError{status: http.StatusForbidden, message: "user does not own this cli session"}
-			}
+		if cliSess.UserID != route.UserID {
+			return "", &sseAuthError{status: http.StatusForbidden, message: "user does not own this cli session"}
+		}
+		// For operator mTLS, also verify operator session ownership.
+		if operatorSessionID != "" && cliSess.OperatorSessionID != operatorSessionID {
+			return "", &sseAuthError{status: http.StatusForbidden, message: "operator session does not own this cli session"}
 		}
 		return "sse:cli:" + route.CLISessionID, nil
 
-	case route.WebSessionID != "" && route.CLISessionID == "" && route.UserID == "":
-		if isMTLSAuth {
-			operatorBindKey := sessionOperatorBindKey(operatorSessionID)
-			boundWebSessionID, ok := c.kvStore.KVGet(operatorBindKey)
+	case route.WebSessionID != "":
+		if operatorSessionID != "" {
+			// Operator mTLS: verify operator owns this web session.
+			boundWebSessionID, ok := c.kvStore.KVGet(sessionOperatorBindKey(operatorSessionID))
 			if !ok || boundWebSessionID != route.WebSessionID {
 				return "", &sseAuthError{status: http.StatusForbidden, message: "operator session does not own this web session"}
 			}
-		} else {
-			if route.WebSessionID != webSessionID {
-				return "", &sseAuthError{status: http.StatusForbidden, message: "web session does not match authenticated session"}
-			}
 		}
+		// Cookie auth: web_session_id came from context (cookie validation),
+		// so it is already verified as belonging to this user.
 		return "sse:web:" + route.WebSessionID, nil
-
-	case route.UserID != "" && route.WebSessionID == "" && route.CLISessionID == "":
-		if isMTLSAuth {
-			op, err := c.auth.ValidateOperatorSession(operatorSessionID)
-			if err != nil {
-				return "", &sseAuthError{status: http.StatusUnauthorized, message: "invalid Operator session"}
-			}
-			if op.UserID != route.UserID {
-				return "", &sseAuthError{status: http.StatusForbidden, message: "operator does not belong to this user"}
-			}
-		} else {
-			if route.UserID != userID {
-				return "", &sseAuthError{status: http.StatusForbidden, message: "user does not match authenticated user"}
-			}
-		}
-		return "sse:user:" + route.UserID, nil
 
 	default:
 		return "", &sseAuthError{status: http.StatusBadRequest, message: "exactly one routing target required"}
@@ -435,18 +372,16 @@ func (c *SSEController) authorizeSSERoute(route SSERoute, r *http.Request) (stri
 
 // @Summary		Poll SSE events
 // @Description	Polls stored SSE events since a given ID. Dual auth: mTLS for CLI/operator, web session
-// @Description	cookie for browser. For mTLS auth, exactly one routing target (cli_session_id or
-// @Description	user_id) must be set via query string. For browser/cookie auth, the web_session_id
-// @Description	is derived from the session cookie — it MUST NOT be passed in the URL.
+// @Description	cookie for browser. The route is built entirely from auth context: user_id from
+// @Description	cert/cookie, session from header/cookie. The query string carries only since_id and limit.
 // @Tags			telemetry
 // @Produce		json
-// @Param			cli_session_id	query		string	false	"CLI session ID (mTLS only)"
-// @Param			user_id			query		string	false	"User ID (mTLS only)"
-// @Param			since_id		query		int		false	"Return events after this ID"
-// @Param			limit			query		int		false	"Maximum events to return"
-// @Success		200			{object}	models.SSEEventsResponse
-// @Failure		400			{string}	string				"Bad Request"
-// @Failure		403			{string}	string				"Forbidden — unauthorized"
+// @Param			X-G8E-CLI-Session-ID	header		string	false	"CLI session ID (mTLS only — user_id derived from cert)"
+// @Param			since_id				query		int		false	"Return events after this ID"
+// @Param			limit					query		int		false	"Maximum events to return"
+// @Success		200						{object}	models.SSEEventsResponse
+// @Failure		400						{string}	string	"Bad Request"
+// @Failure		403						{string}	string	"Forbidden — unauthorized"
 // @Router			/api/v1/sse/events [get]
 func (c *SSEController) handleInternalSSEEvents(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -454,15 +389,21 @@ func (c *SSEController) handleInternalSSEEvents(w http.ResponseWriter, r *http.R
 		return
 	}
 	q := r.URL.Query()
-	// Security: web_session_id is NEVER read from the URL query string. For
-	// browser/cookie auth, it is derived from the authenticated session cookie
-	// (stamped into context by the auth middleware) inside authorizeSSERoute.
-	route := SSERoute{
-		CLISessionID: strings.TrimSpace(q.Get("cli_session_id")),
-		UserID:       strings.TrimSpace(q.Get("user_id")),
-	}
 	sinceID, _ := strconv.ParseInt(q.Get("since_id"), 10, 64)
 	limit, _ := strconv.Atoi(q.Get("limit"))
+
+	// Build route from context only. No routing IDs from URL.
+	ctxUserID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
+	ctxCLISessionID, _ := r.Context().Value(constants.ContextKeyCLISessionID).(string)
+	ctxWebSessionID, _ := r.Context().Value(constants.ContextKeyWebSessionID).(string)
+
+	route := SSERoute{UserID: ctxUserID}
+	switch {
+	case ctxCLISessionID != "":
+		route.CLISessionID = ctxCLISessionID
+	case ctxWebSessionID != "":
+		route.WebSessionID = ctxWebSessionID
+	}
 
 	// Authorization: verify the authenticated identity (from context) has the
 	// right to access the requested routing buffer. Without this check, any
@@ -491,18 +432,15 @@ func (c *SSEController) handleInternalSSEEvents(w http.ResponseWriter, r *http.R
 // @Summary		Stream SSE events
 // @Description	Streams events via Server-Sent Events (text/event-stream). Dual auth: mTLS for
 // @Description	CLI/operator, web session cookie for browser. Supports Last-Event-ID header for
-// @Description	reconnection. For mTLS auth, exactly one routing target (cli_session_id or
-// @Description	user_id) must be set via query string. For browser/cookie auth, the
-// @Description	web_session_id is derived from the session cookie — it MUST NOT be
-// @Description	passed in the URL.
+// @Description	reconnection. The route is built entirely from auth context: user_id from cert/cookie,
+// @Description	session from header/cookie. The query string carries only since_id.
 // @Tags			telemetry
 // @Produce		text/event-stream
-// @Param			cli_session_id	query		string	false	"CLI session ID (mTLS only)"
-// @Param			user_id			query		string	false	"User ID (mTLS only)"
-// @Param			since_id		query		int		false	"Replay events after this ID"
-// @Success		200			{string}	string			"SSE stream"
-// @Failure		400			{string}	string			"Bad Request"
-// @Failure		403			{string}	string			"Forbidden — unauthorized"
+// @Param			X-G8E-CLI-Session-ID	header		string	false	"CLI session ID (mTLS only — user_id derived from cert)"
+// @Param			since_id				query		int		false	"Replay events after this ID"
+// @Success		200						{string}	string	"SSE stream"
+// @Failure		400						{string}	string	"Bad Request"
+// @Failure		403						{string}	string	"Forbidden — unauthorized"
 // @Router			/api/v1/sse/stream [get]
 func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -511,14 +449,20 @@ func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.R
 	}
 
 	q := r.URL.Query()
-	// Security: web_session_id is NEVER read from the URL query string. For
-	// browser/cookie auth, it is derived from the authenticated session cookie
-	// (stamped into context by the auth middleware) inside authorizeSSERoute.
-	// Only cli_session_id and user_id are accepted as query params (mTLS path).
-	route := SSERoute{
-		CLISessionID: strings.TrimSpace(q.Get("cli_session_id")),
-		UserID:       strings.TrimSpace(q.Get("user_id")),
+
+	// Build route from context only. No routing IDs from URL.
+	ctxUserID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
+	ctxCLISessionID, _ := r.Context().Value(constants.ContextKeyCLISessionID).(string)
+	ctxWebSessionID, _ := r.Context().Value(constants.ContextKeyWebSessionID).(string)
+
+	route := SSERoute{UserID: ctxUserID}
+	switch {
+	case ctxCLISessionID != "":
+		route.CLISessionID = ctxCLISessionID
+	case ctxWebSessionID != "":
+		route.WebSessionID = ctxWebSessionID
 	}
+
 	sinceIDStr := q.Get("since_id")
 	sinceIDPresent := sinceIDStr != ""
 	lastEventIDHeader := r.Header.Get("Last-Event-ID")

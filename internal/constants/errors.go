@@ -419,8 +419,9 @@ var (
 	ErrGatewayA2AError                     = errors.New("A2A error")
 	ErrGatewayAlreadyRunning               = errors.New("gateway service already running")
 	ErrGatewayShutdownTimeout              = errors.New("shutdown timeout exceeded")
-	ErrGatewaySSERouteRequired             = errors.New("sse route requires exactly one of web_session_id, cli_session_id, user_id")
-	ErrGatewaySSERouteMutuallyExclusive    = errors.New("sse route is mutually-exclusive: set exactly one of web_session_id, cli_session_id, user_id")
+	ErrGatewaySSERouteUserIDRequired          = errors.New("sse route requires user_id")
+	ErrGatewaySSERouteSessionRequired         = errors.New("sse route requires exactly one of web_session_id or cli_session_id")
+	ErrGatewaySSERouteSessionMutuallyExclusive = errors.New("sse route session is mutually-exclusive: set exactly one of web_session_id or cli_session_id")
 
 	// Gateway approval errors
 	ErrGatewayUnauthorized                = errors.New("unauthorized")

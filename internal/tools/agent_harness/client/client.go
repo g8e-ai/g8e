@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -341,12 +340,14 @@ func (c *Client) WaitForHumanApproval(ctx context.Context, p Persona, txHash, us
 		Transport: &http.Transport{TLSClientConfig: sseTLS.Clone()},
 	}
 
-	sseURL := fmt.Sprintf("%s%s?user_id=%s&since_id=0",
+	sseURL := fmt.Sprintf("%s%s?since_id=0",
 		c.cfg.PublicBaseURL,
-		constants.APIPaths.SSEStream,
-		url.QueryEscape(userID))
+		constants.APIPaths.SSEStream)
 
 	sseClient := ssepkg.NewClient(sseURL, sseHTTPClient)
+	if p.CLISessionID != "" {
+		sseClient.SetHeader(constants.HeaderCLISessionID, p.CLISessionID)
+	}
 
 	// The gateway's approval request TTL is 2 minutes; allow a grace period.
 	waitCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)

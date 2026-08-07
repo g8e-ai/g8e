@@ -66,10 +66,9 @@ func RegisterPasskeyViaBrowser(fileSvc fs.RuntimeFileService, cfg *config.Config
 		return err
 	}
 
-	sseURL := fmt.Sprintf("%s%s?cli_session_id=%s&since_id=1",
+	sseURL := fmt.Sprintf("%s%s?since_id=1",
 		cfg.OperatorPublicURL(),
-		constants.APIPaths.SSEStream,
-		url.QueryEscape(cliSessionID))
+		constants.APIPaths.SSEStream)
 
 	sseClient := sse.NewClient(sseURL, mtlsClient)
 	sseClient.SetHeader(constants.HeaderCLISessionID, cliSessionID)
