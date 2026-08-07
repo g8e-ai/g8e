@@ -37,6 +37,7 @@ package gateway
 // All SSE handlers live on SSEController (sse_controller.go).
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -360,14 +361,42 @@ func (c *SSEController) authorizeSSERoute(route SSERoute, r *http.Request) (stri
 			if !ok || boundWebSessionID != route.WebSessionID {
 				return "", &sseAuthError{status: http.StatusForbidden, message: "operator session does not own this web session"}
 			}
+		} else {
+			// Cookie auth: defense-in-depth — verify route's web_session_id
+			// matches the one from auth context (set by cookie validation).
+			ctxWebSessionID, _ := r.Context().Value(constants.ContextKeyWebSessionID).(string)
+			if ctxWebSessionID != "" && ctxWebSessionID != route.WebSessionID {
+				return "", &sseAuthError{status: http.StatusForbidden, message: "web session does not match authenticated session"}
+			}
 		}
-		// Cookie auth: web_session_id came from context (cookie validation),
-		// so it is already verified as belonging to this user.
 		return "sse:web:" + route.WebSessionID, nil
 
 	default:
 		return "", &sseAuthError{status: http.StatusBadRequest, message: "exactly one routing target required"}
 	}
+}
+
+// buildSSERouteFromContext constructs an SSERoute entirely from auth context.
+// No routing or identity ID is ever read from the URL query string — the auth
+// middleware stamps ContextKeyUserID (from cert SAN or session cookie) and
+// exactly one of ContextKeyCLISessionID (from the X-G8E-CLI-Session-ID header,
+// mTLS only) or ContextKeyWebSessionID (from the session cookie, browser only).
+// CLI session takes precedence over web session when both are present, matching
+// the established switch behavior. The returned route is not yet validated —
+// the caller (or authorizeSSERoute) is responsible for invoking validate().
+func buildSSERouteFromContext(ctx context.Context) SSERoute {
+	userID, _ := ctx.Value(constants.ContextKeyUserID).(string)
+	cliSessionID, _ := ctx.Value(constants.ContextKeyCLISessionID).(string)
+	webSessionID, _ := ctx.Value(constants.ContextKeyWebSessionID).(string)
+
+	route := SSERoute{UserID: userID}
+	switch {
+	case cliSessionID != "":
+		route.CLISessionID = cliSessionID
+	case webSessionID != "":
+		route.WebSessionID = webSessionID
+	}
+	return route
 }
 
 // @Summary		Poll SSE events
@@ -393,17 +422,7 @@ func (c *SSEController) handleInternalSSEEvents(w http.ResponseWriter, r *http.R
 	limit, _ := strconv.Atoi(q.Get("limit"))
 
 	// Build route from context only. No routing IDs from URL.
-	ctxUserID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
-	ctxCLISessionID, _ := r.Context().Value(constants.ContextKeyCLISessionID).(string)
-	ctxWebSessionID, _ := r.Context().Value(constants.ContextKeyWebSessionID).(string)
-
-	route := SSERoute{UserID: ctxUserID}
-	switch {
-	case ctxCLISessionID != "":
-		route.CLISessionID = ctxCLISessionID
-	case ctxWebSessionID != "":
-		route.WebSessionID = ctxWebSessionID
-	}
+	route := buildSSERouteFromContext(r.Context())
 
 	// Authorization: verify the authenticated identity (from context) has the
 	// right to access the requested routing buffer. Without this check, any
@@ -451,17 +470,7 @@ func (c *SSEController) handleInternalSSEStream(w http.ResponseWriter, r *http.R
 	q := r.URL.Query()
 
 	// Build route from context only. No routing IDs from URL.
-	ctxUserID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
-	ctxCLISessionID, _ := r.Context().Value(constants.ContextKeyCLISessionID).(string)
-	ctxWebSessionID, _ := r.Context().Value(constants.ContextKeyWebSessionID).(string)
-
-	route := SSERoute{UserID: ctxUserID}
-	switch {
-	case ctxCLISessionID != "":
-		route.CLISessionID = ctxCLISessionID
-	case ctxWebSessionID != "":
-		route.WebSessionID = ctxWebSessionID
-	}
+	route := buildSSERouteFromContext(r.Context())
 
 	sinceIDStr := q.Get("since_id")
 	sinceIDPresent := sinceIDStr != ""

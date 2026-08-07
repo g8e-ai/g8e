@@ -831,6 +831,7 @@ func TestHTTPHandler_handleInternalSSEPush(t *testing.T) {
 
 	t.Run("Missing event field", func(t *testing.T) {
 		payload := map[string]string{
+			"user_id":        "user-1",
 			"web_session_id": "web-1",
 		}
 		body, _ := json.Marshal(payload)
@@ -855,7 +856,7 @@ func TestHTTPHandler_handleInternalSSEEvents(t *testing.T) {
 	})
 
 	t.Run("Missing auth identity (no context, no mTLS)", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events?cli_session_id=cli-1", nil)
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events", nil)
 		rr := httptest.NewRecorder()
 		h.sseController.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
@@ -863,24 +864,21 @@ func TestHTTPHandler_handleInternalSSEEvents(t *testing.T) {
 	})
 
 	t.Run("mTLS auth - missing routing parameter", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, "op-session-1")
+		// Context has UserID but no session ID → route has UserID only → 400.
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, "user-1")
 		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events", nil)
 		req = req.WithContext(ctx)
 		rr := httptest.NewRecorder()
 		h.sseController.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error":"exactly one routing target required"}`, rr.Body.String())
+		assert.JSONEq(t, `{"error":"sse route requires exactly one of web_session_id or cli_session_id"}`, rr.Body.String())
 	})
 
-	t.Run("mTLS auth - multiple routing parameters", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, "op-session-1")
-		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events?cli_session_id=cli-1&user_id=user-1", nil)
-		req = req.WithContext(ctx)
-		rr := httptest.NewRecorder()
-		h.sseController.handleInternalSSEEvents(rr, req)
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error":"exactly one routing target required"}`, rr.Body.String())
-	})
+	// Note: "multiple routing parameters" is not testable through the handler
+	// because buildSSERouteFromContext always picks one session (CLI takes
+	// precedence over web). The mutually-exclusive scenario is tested directly
+	// at the authorizeSSERoute level in sse_authorize_test.go
+	// (TestAuthorizeSSERoute_MultipleRoutingTargets).
 
 	t.Run("cookie auth - derives web_session_id from context (no URL param needed)", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyWebSessionID, "web-session-1")
@@ -920,7 +918,7 @@ func TestHTTPHandler_handleInternalSSEStream(t *testing.T) {
 	})
 
 	t.Run("Missing auth identity (no context, no mTLS)", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream?cli_session_id=cli-1", nil)
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream", nil)
 		rr := httptest.NewRecorder()
 		h.sseController.handleInternalSSEStream(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
@@ -928,24 +926,39 @@ func TestHTTPHandler_handleInternalSSEStream(t *testing.T) {
 	})
 
 	t.Run("mTLS auth - missing routing parameter", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, "op-session-1")
+		// Context has UserID but no session ID → route has UserID only → 400.
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, "user-1")
 		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream", nil)
 		req = req.WithContext(ctx)
 		rr := httptest.NewRecorder()
 		h.sseController.handleInternalSSEStream(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error":"exactly one routing target required"}`, rr.Body.String())
+		assert.JSONEq(t, `{"error":"sse route requires exactly one of web_session_id or cli_session_id"}`, rr.Body.String())
 	})
 
-	t.Run("cookie auth - missing routing parameter", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyWebSessionID, "web-session-1")
+	t.Run("cookie auth - derives web_session_id from context (stream starts)", func(t *testing.T) {
+		// Context has WebSessionID + UserID → handler builds route with both →
+		// auth succeeds and the SSE stream starts. Use a cancellable context +
+		// goroutine to avoid blocking the test (the stream is long-lived).
+		ctx, cancel := context.WithCancel(context.Background())
+		ctx = context.WithValue(ctx, constants.ContextKeyWebSessionID, "web-session-1")
 		ctx = context.WithValue(ctx, constants.ContextKeyUserID, "user-1")
 		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream", nil)
 		req = req.WithContext(ctx)
 		rr := httptest.NewRecorder()
-		h.sseController.handleInternalSSEStream(rr, req)
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error":"exactly one routing target required"}`, rr.Body.String())
+
+		done := make(chan struct{})
+		go func() {
+			h.sseController.handleInternalSSEStream(rr, req)
+			close(done)
+		}()
+
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+		<-done
+
+		// The stream should have started — Content-Type set to text/event-stream.
+		assert.Equal(t, "text/event-stream", rr.Header().Get("Content-Type"))
 	})
 }
 
@@ -966,20 +979,34 @@ func TestHTTPHandler_handleInternalSSEStream_CLIMTLSAuth(t *testing.T) {
 	require.NoError(t, h.dataController.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b))
 
 	t.Run("CLI mTLS auth with matching user ID passes auth", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		// Context stamps UserID + CLISessionID (simulating auth middleware).
+		// The handler builds the route from context — no URL params needed.
+		ctx, cancel := context.WithCancel(context.Background())
 		ctx = context.WithValue(ctx, constants.ContextKeyUserID, userID)
-		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream?cli_session_id="+cliSessionID, nil)
+		ctx = context.WithValue(ctx, constants.ContextKeyCLISessionID, cliSessionID)
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream", nil)
 		req = req.WithContext(ctx)
 		rr := httptest.NewRecorder()
-		h.sseController.handleInternalSSEStream(rr, req)
+
+		done := make(chan struct{})
+		go func() {
+			h.sseController.handleInternalSSEStream(rr, req)
+			close(done)
+		}()
+
+		time.Sleep(100 * time.Millisecond)
 		cancel()
-		assert.NotEqual(t, http.StatusUnauthorized, rr.Code)
-		assert.NotEqual(t, http.StatusForbidden, rr.Code)
+		<-done
+
+		// Stream should have started — not 401/403.
+		assert.Equal(t, "text/event-stream", rr.Header().Get("Content-Type"))
 	})
 
 	t.Run("CLI mTLS auth with wrong user ID is forbidden", func(t *testing.T) {
+		// Route has UserID "other-user" but CLI session belongs to userID → 403.
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, "other-user")
-		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream?cli_session_id="+cliSessionID, nil)
+		ctx = context.WithValue(ctx, constants.ContextKeyCLISessionID, cliSessionID)
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream", nil)
 		req = req.WithContext(ctx)
 		rr := httptest.NewRecorder()
 		h.sseController.handleInternalSSEStream(rr, req)
@@ -987,9 +1014,11 @@ func TestHTTPHandler_handleInternalSSEStream_CLIMTLSAuth(t *testing.T) {
 	})
 
 	t.Run("CLI mTLS auth with app ID is rejected as mTLS auth", func(t *testing.T) {
+		// App cert → 401 "missing auth identity" (app workloads are not SSE consumers).
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, userID)
+		ctx = context.WithValue(ctx, constants.ContextKeyCLISessionID, cliSessionID)
 		ctx = context.WithValue(ctx, constants.ContextKeyAppID, "app-1")
-		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream?cli_session_id="+cliSessionID, nil)
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream", nil)
 		req = req.WithContext(ctx)
 		rr := httptest.NewRecorder()
 		h.sseController.handleInternalSSEStream(rr, req)
