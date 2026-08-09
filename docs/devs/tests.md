@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-08-07
+Last Updated: 2026-08-09
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -87,6 +87,48 @@ Helpers: `failingFileSvcFactory(err)` returns a factory that always errors. `pan
 - **`configLoaderFor(cfg)`**: Returns a config loader closure that always returns the given `cfg`.
 - **`mustRel(t, fileSvc, absPath)`**: Converts an absolute `.g8e/` path to a relative path, failing the test on error.
 - **`newAuthTestEnv(t)`**: Returns `(fileSvc, cfg)` with auth-specific fixture setup (temp-rooted `fileSvc` with runtime tree created, minimal config with `ProjectRoot`/`RuntimeDir`/`Paths.Host` set).
+
+---
+
+## Cross-Protocol Gateway Tests
+
+The MCP and A2A gateway protocols share the same suspension, approval, and error-handling mechanics but differ in wire shape (endpoint path, JSON-RPC method, params field names, response structure). Cross-protocol tests use a shared adapter pattern to avoid duplicating test logic.
+
+### `protocolAdapter` Interface
+
+Defined in `test/protocol_test_helpers_test.go` (build tag: `integration`). The interface abstracts the wire-level differences between protocols:
+
+- **`name()`**: Short identifier for subtest names (`"mcp"`, `"a2a"`)
+- **`endpoint()`**: Canonical API path from `constants.APIPaths` (no path literals)
+- **`callMethod()`**: JSON-RPC method (`"tools/call"` for MCP, `"a2a/call"` for A2A)
+- **`nameParamKey()`** / **`payloadParamKey()`**: JSON params field names (`"name"`/`"arguments"` for MCP, `"skill_name"`/`"payload"` for A2A)
+- **`makeCallBody(name, payload)`**: Builds a JSON-RPC request body. `payload` is `any` because payload-variation tests deliberately exercise arbitrary shapes (nested, unicode, large, empty, null) — this is the documented exception to the "no `Any` types for known shapes" rule in devs.md
+- **`parseSuspendedStatus(t, body)`**: Extracts the suspended-status signal from the response body for assertion against typed constants
+
+Implementations: `mcpAdapter` and `a2aAdapter`. The `bothAdapters()` helper returns `[]protocolAdapter{mcpAdapter{}, a2aAdapter{}}`.
+
+### Shared Test Tables
+
+Two table-driven tests iterate over `bothAdapters()` × a shared case table:
+
+- **`test/protocol_payload_test.go`** → `TestGatewayProtocols_PayloadVariationsSuspendExecution` + `payloadCases` (5 cases: nested, unicode, large 100KB, empty, null). Asserts `constants.MCPApprovalPausedPrefix` for MCP, `constants.GatewayResponseStatusSuspended` for A2A.
+- **`test/protocol_errors_test.go`** → `TestGatewayProtocols_MalformedRequestsReturnJSONRPCErrors` + `errorCases` (7 cases: invalid version, missing method, unknown method, malformed JSON, missing name, invalid payload, missing params). Malformed-JSON case asserts `constants.JSONRPCErrorCodeParseError` + `constants.JSONRPCErrorMessageParseError`.
+
+Subtest names follow `protocol/scenario` format (e.g. `mcp/unicode_and_special_characters`).
+
+### Rules
+
+- **Extend the shared tables, not per-protocol test functions**: New payload shapes or error scenarios are added to `payloadCases` or `errorCases` and automatically covered for both protocols. Do not add new per-protocol payload or error test functions to `mcp_gateway_test.go` or `a2a_gateway_test.go`.
+- **Use typed constants for assertions**: Assert against `constants.GatewayResponseStatusSuspended`, `constants.MCPApprovalPausedPrefix`, `constants.JSONRPCErrorCodeParseError`, and `constants.JSONRPCErrorMessageParseError` — not hardcoded strings.
+- **New protocols**: Add a new `protocolAdapter` implementation and register it in `bothAdapters()`. The shared tables cover it automatically.
+
+### Fixture Helpers
+
+The `adapterFixture` struct in `test/protocol_test_helpers_test.go` bundles a `GatewayFixture` with an enrolled identity and mTLS client. Helpers:
+
+- **`newAdapterFixture(t, testName, downstreamURL)`**: Creates a gateway fixture configured for both MCP and A2A downstream servers, enrolls a client identity, and returns an `adapterFixture`.
+- **`postAdapter(t, adapter, body)`**: Sends a raw request body to the adapter's endpoint. Used by error-case tests that send malformed bodies.
+- **`postAdapterWithStatus(t, adapter, body)`**: Same as `postAdapter` but also returns the HTTP status code.
 
 ---
 
