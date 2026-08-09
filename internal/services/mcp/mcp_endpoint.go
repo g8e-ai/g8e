@@ -127,7 +127,7 @@ func (g *GatewayService) HandleMCP(w http.ResponseWriter, r *http.Request) {
 
 	var req JSONRPCRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		g.responder.RPCError(w, nil, -32700, "parse error: invalid JSON")
+		g.responder.RPCError(w, nil, constants.JSONRPCErrorCodeParseError, constants.JSONRPCErrorMessageParseError+": invalid JSON")
 		return
 	}
 

@@ -1501,7 +1501,7 @@ func TestGatewayService_HandleA2ARequest(t *testing.T) {
 		err := json.Unmarshal(w.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		require.NotNil(t, resp.Error)
-		require.Contains(t, resp.Error.Message, "parse error")
+		require.Contains(t, resp.Error.Message, constants.JSONRPCErrorMessageParseError)
 	})
 
 	t.Run("invalid JSON-RPC version", func(t *testing.T) {

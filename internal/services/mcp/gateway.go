@@ -418,7 +418,7 @@ func (g *GatewayService) handleA2ARequest(w http.ResponseWriter, r *http.Request
 
 	var req JSONRPCRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		g.responder.RPCError(w, nil, -32700, "parse error: invalid JSON")
+		g.responder.RPCError(w, nil, constants.JSONRPCErrorCodeParseError, constants.JSONRPCErrorMessageParseError+": invalid JSON")
 		return
 	}
 
@@ -883,7 +883,7 @@ func (g *GatewayService) a2aCall(ctx context.Context, r *http.Request, params js
 			approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
 			return A2ASuspensionResponse{
 				ID:          hash,
-				Status:      "suspended",
+				Status:      string(constants.GatewayResponseStatusSuspended),
 				TxHash:      hash,
 				ApprovalURL: approvalURL,
 				Message:     approvalPausedMessage(approvalURL),

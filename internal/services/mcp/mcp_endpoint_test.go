@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/stretchr/testify/require"
 )
@@ -328,8 +329,8 @@ func TestHandleMCP_InvalidJSON(t *testing.T) {
 
 	require.Contains(t, respBody, "error")
 	errObj := respBody["error"].(map[string]interface{})
-	require.InEpsilon(t, float64(-32700), errObj["code"], 0.0)
-	require.Contains(t, errObj["message"].(string), "parse error")
+	require.InEpsilon(t, float64(constants.JSONRPCErrorCodeParseError), errObj["code"], 0.0)
+	require.Contains(t, errObj["message"].(string), constants.JSONRPCErrorMessageParseError)
 }
 
 func TestHandleMCP_ToolsList(t *testing.T) {

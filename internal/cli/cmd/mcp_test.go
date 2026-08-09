@@ -207,12 +207,12 @@ func TestJSONRPCResponse(t *testing.T) {
 func TestRPCError(t *testing.T) {
 	t.Run("RPC error structure is correct", func(t *testing.T) {
 		err := RPCError{
-			Code:    -32700,
-			Message: "parse error",
+			Code:    constants.JSONRPCErrorCodeParseError,
+			Message: constants.JSONRPCErrorMessageParseError,
 			Data:    "invalid JSON",
 		}
-		assert.Equal(t, -32700, err.Code)
-		assert.Equal(t, "parse error", err.Message)
+		assert.Equal(t, constants.JSONRPCErrorCodeParseError, err.Code)
+		assert.Equal(t, constants.JSONRPCErrorMessageParseError, err.Message)
 		assert.Equal(t, "invalid JSON", err.Data)
 	})
 }

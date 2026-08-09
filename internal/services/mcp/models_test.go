@@ -19,6 +19,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func TestCallToolJSON(t *testing.T) {
@@ -1401,7 +1403,7 @@ func TestA2AModelsJSON(t *testing.T) {
 	t.Run("A2ASuspensionResponse marshalling", func(t *testing.T) {
 		res := A2ASuspensionResponse{
 			ID:          "id1",
-			Status:      "suspended",
+			Status:      string(constants.GatewayResponseStatusSuspended),
 			TxHash:      "hash1",
 			ApprovalURL: "http://approval",
 		}
