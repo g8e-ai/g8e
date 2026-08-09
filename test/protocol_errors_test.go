@@ -34,9 +34,9 @@ import (
 // no error-code assertion, only HTTP 200); wantMsgContains is a substring the
 // error message must contain (empty means no message assertion).
 type errorCase struct {
-	name           string
-	buildBody      func(adapter protocolAdapter) []byte
-	wantCode       int
+	name            string
+	buildBody       func(adapter protocolAdapter) []byte
+	wantCode        int
 	wantMsgContains string
 }
 

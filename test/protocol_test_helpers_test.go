@@ -78,8 +78,8 @@ func (mcpAdapter) name() string { return "mcp" }
 
 func (mcpAdapter) endpoint() string { return constants.APIPaths.MCPEndpoint }
 
-func (mcpAdapter) callMethod() string  { return "tools/call" }
-func (mcpAdapter) nameParamKey() string { return "name" }
+func (mcpAdapter) callMethod() string      { return "tools/call" }
+func (mcpAdapter) nameParamKey() string    { return "name" }
 func (mcpAdapter) payloadParamKey() string { return "arguments" }
 
 func (mcpAdapter) makeCallBody(name string, payload any) []byte {
@@ -120,8 +120,8 @@ func (a2aAdapter) name() string { return "a2a" }
 
 func (a2aAdapter) endpoint() string { return constants.APIPaths.A2ACall }
 
-func (a2aAdapter) callMethod() string  { return "a2a/call" }
-func (a2aAdapter) nameParamKey() string { return "skill_name" }
+func (a2aAdapter) callMethod() string      { return "a2a/call" }
+func (a2aAdapter) nameParamKey() string    { return "skill_name" }
 func (a2aAdapter) payloadParamKey() string { return "payload" }
 
 func (a2aAdapter) makeCallBody(name string, payload any) []byte {
