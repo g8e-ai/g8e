@@ -317,8 +317,10 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 			L3Notary:             RejectingL3Notary{},
 			FieldReader:          govDeps.FieldReader,
 		},
-		MCPGateway:             mcpGateway,
-		L2ConsensusDeliberator: l2Deliberator,
+		MCPGateway:              mcpGateway,
+		L2ConsensusDeliberator:  l2Deliberator,
+		EnvProcAdapter:          ls.GetEnvProcAdapter(),
+		SessionValidatorAdapter: ls.GetSessionValidatorAdapter(),
 	})
 	require.NoError(t, err)
 

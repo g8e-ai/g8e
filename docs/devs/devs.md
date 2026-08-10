@@ -150,25 +150,44 @@ Return centralized error constants from `internal/constants/errors.go` for known
 - Production gateway mode wires `DocumentStoreService` as `TransactionAuditStore`
 - Production outbound mode uses `auditStoreTransactionStore` adapter in `g8eo.go`
 
-## Thread Safety for Late-Bound Dependencies
+## Dependency Construction Model
 
-Several services have dependencies that cannot be passed to the constructor because they are created later in the boot sequence (circular or late-resolved dependency graphs). The canonical pattern for these is:
+`mcp.GatewayService` uses a **single-phase construction model**: all dependencies
+are passed to `NewGatewayService` via the `Dependencies` struct and are immutable
+after construction. There is no `SetRuntimeDeps`, no `atomic.Pointer`, and no
+`runtimeReady()` gate.
 
-- **`atomic.Pointer[T]`** for pointer-typed late-bound deps (e.g., `mcp.GatewayService.runtimeDeps`).
+**Construction-phase** (`Dependencies` struct, immutable after `NewGatewayService`):
+`Logger`, `Responder`, `SuspendedStore`, `ScrubbingService`, `ThreatScanner`,
+`MaxPayloadBytes`, `Posture`, `A2ADownstreamURL`, `PublicBaseURL`, `AuditStore`,
+`FieldPathRegistryFactory`, `EnvProc`, `StateRootProvider`, `SigningKey`, `KeyID`,
+`DownstreamURL`, `DBService`, `SessionValidator`, `AuditLogger`,
+`L2ConsensusDeliberator`.
 
-**Pattern rules:**
+**Lazy forwarding adapters** break the circular dependency between
+`mcp.GatewayService` (needs `EnvProc` / `SessionValidator`) and
+`OperatorPubSubService` (needs `mcpGateway` for egress):
 
-1. The field is declared as `atomic.Pointer[T]` or `atomic.Value`, never as a raw pointer.
-2. A `SetXxx` method stores via `.Store()` — it must **not** rebuild routers or mutate other state.
-3. The handler/method reads via `.Load()` and checks for nil. If nil, return a fail-closed error (503 or equivalent).
-4. Routes that depend on late-bound deps are **always registered** in the router. The handler checks the atomic pointer at request time, eliminating the need for a router rebuild when the dependency is wired.
-5. `go test -race` must pass — the atomic access guarantees no data races even if the boot sequence changes.
+- `pubsub.GatewayEnvProcAdapter` — implements `governance.EnvelopeProcessor`,
+  delegates to `OperatorPubSubService` once it is constructed. The adapter is
+  pre-allocated in `GatewayModeService.build()` and passed to
+  `NewGatewayService` as `EnvProc`. `NewGatewayOperatorPubSubService` calls
+  `adapter.SetTarget(rs)` to wire the real target. Before `SetTarget` is called,
+  `ProcessEnvelope` returns `constants.ErrGatewayNotReady` (fail-closed).
+- `pubsub.GatewaySessionValidatorAdapter` — same pattern for
+  `mcp.SessionValidator`.
 
-**Single-phase dependency model for `mcp.GatewayService`:**
+**Narrow setters for genuinely late-bound deps** (no circular dependency, no
+`atomic.Pointer`, no `runtimeReady()` guard — the fields are nil-checked at their
+call sites):
 
-- **Construction-phase** (`Dependencies` struct, immutable after `NewGatewayService`): `Logger`, `Responder`, `SuspendedStore`, `ScrubbingService`, `ThreatScanner`, `MaxPayloadBytes`, `Posture`, `A2ADownstreamURL`, `PublicBaseURL`, `AuditStore`, `FieldPathRegistryFactory`, `EnvProc`, `StateRootProvider`, `SigningKey`, `KeyID`, `DownstreamURL`, `DBService`, `SessionValidator`, `AuditLogger`, `L2ConsensusDeliberator`.
-- **Lazy forwarding adapters**: `pubsub.GatewayEnvProcAdapter` and `pubsub.GatewaySessionValidatorAdapter` break circular dependencies between `mcp.GatewayService` and `OperatorPubSubService`.
-- **Narrow setters**: `SetAuditLogger` and `SetL2ConsensusDeliberator` are provided for genuinely late-bound dependencies that cannot be resolved at construction time.
+- `SetAuditLogger` — `AuditStore` comes from `CommandServiceConfig.AuditStore`,
+  configured in `serve/gateway.go` after `GatewayModeService` exists.
+- `SetL2ConsensusDeliberator` — the deliberator requires `GatewayModeService` to
+  exist for `ConsensusBootstrap`.
+
+These two setters are the only post-construction mutators on `mcp.GatewayService`.
+All other dependencies are construction-phase only.
 
 ## Constants & Doctrines
 

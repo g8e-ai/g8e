@@ -135,7 +135,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   └── gateway.DocumentStoreService (from Stores [SHARED])
 ├── gateway.WebSessionService
 │   └── gateway.DocumentStoreService (from Stores [SHARED])
-├── gateway.HTTPHandler (receives Stores via HTTPHandlerDependencies, delegates to controllers)
+├── gateway.HTTPHandler (router + middleware shell; deps injected via HTTPHandlerDependencies as per-controller Deps structs)
 │   ├── gateway.GatewayWebSocketHandler
 │   ├── gateway.AuthService
 │   ├── gateway.PKIAuthority
