@@ -297,7 +297,11 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		l2Deliberator = cs.Deliberator
 	}
 
-	cmdSvc, err := pubsub.NewGatewayOperatorPubSubService(pubsub.GatewayCommandServiceConfig{
+	// Construct the in-process command service. The returned service is not
+	// retained (cmdSvc) — the important side effect is wiring the
+	// EnvProcAdapter and SessionValidatorAdapter targets so the HTTP handler's
+	// GovernanceController can delegate envelope submission to this service.
+	_, err = pubsub.NewGatewayOperatorPubSubService(pubsub.GatewayCommandServiceConfig{
 		CommandServiceConfig: pubsub.CommandServiceConfig{
 			Config:             cfg,
 			Logger:             testutil.NewTestLogger(),
@@ -328,8 +332,11 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	// NewGatewayOperatorPubSubService (mcpGateway was passed in through
 	// GatewayCommandServiceConfig.MCPGateway above), so no extra wiring is needed.
 
-	// Phase 2: create HTTP handler and servers with all deps injected.
-	require.NoError(t, ls.InitHTTPHandler(consensusSvc, cmdSvc))
+	// Wire the consensus service into the already-constructed HTTP handler.
+	// The handler was built during NewGatewayModeService with consensusSvc nil;
+	// SetConsensusService updates the field that GovernanceController reads at
+	// request time. Nil is valid (no consensus configured for this fixture).
+	ls.SetConsensusService(consensusSvc)
 
 	// Seed platform_settings required for health check
 	err = ls.GetDocStore().DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
@@ -686,7 +693,8 @@ type ConsensusSetup struct {
 // and returns a LocalDeliberator via ConsensusSetup.Deliberator. The caller
 // passes the deliberator through GatewayCommandServiceConfig.L2ConsensusDeliberator
 // so it is wired into the MCP gateway's RuntimeDependencies. The returned
-// ConsensusSetup.Service is passed to InitHTTPHandler by the caller.
+// ConsensusSetup.Service is wired into the gateway via SetConsensusService by
+// the caller.
 //
 // If nServiceMembers < nMembers, only the first nServiceMembers are given private keys
 // — the remaining policy members exist in the store but cannot vote (their keys resolve

@@ -94,8 +94,8 @@ type OperatorPubSubService struct {
 // verification in both outbound and gateway modes. These interfaces are
 // implemented by CanonicalDBService (ReplayStore, StateRootProvider,
 // TransactionAuditStore) and the governance L3Notary. In outbound mode,
-// ConsensusPolicyStore and FieldReader are wired with no-op implementations
-// (NoopConsensusPolicyStore, NoopFieldReader) to eliminate nil fields.
+// ConsensusPolicyStore and FieldReader are nil (feature not configured);
+// call sites nil-check with fail-closed behavior.
 type GovernanceDeps struct {
 	ReplayStore          governance.ReplayStore
 	StateRootProvider    governance.StateRootProvider
@@ -173,8 +173,8 @@ func (a *GatewaySessionValidatorAdapter) ValidateSession(operatorSessionID strin
 // gateway-only fields that are not applicable in outbound mode.
 //
 // MCPGateway is the egress dispatcher for protocol translation.
-// GovDeps provides the governance dependencies (including FieldReader) that
-// are shared between gateway construction and the pubsub command service.
+// GovDeps provides the governance dependencies that are shared between
+// gateway construction and the pubsub command service.
 type GatewayCommandServiceConfig struct {
 	CommandServiceConfig
 	GovDeps                 *GovernanceDeps
@@ -256,14 +256,6 @@ func NewOperatorPubSubService(c CommandServiceConfig, govDeps GovernanceDeps) (*
 	}
 	// L3Notary is optional for outbound mode (platform verifies L3)
 	// Mutations requiring L3 will fail-closed at TransactionVerifier if L3Notary is nil
-
-	// Provide no-op defaults for optional governance deps to eliminate nil fields
-	if govDeps.ConsensusPolicyStore == nil {
-		govDeps.ConsensusPolicyStore = &governance.NoopConsensusPolicyStore{}
-	}
-	if govDeps.FieldReader == nil {
-		govDeps.FieldReader = &mcp.NoopFieldReader{}
-	}
 
 	// Initialize governance services after trusted signers are loaded
 	rs.initializeGovernance(c, govDeps)

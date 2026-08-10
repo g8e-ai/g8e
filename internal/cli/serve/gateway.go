@@ -294,12 +294,11 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	// by NewGatewayOperatorPubSubService, which received mcpSvc and l2Deliberator
 	// through GatewayCommandServiceConfig. No additional gateway wiring is needed.
 
-	// Phase 2: create HTTP handler and servers with all dependencies injected.
-	// This ensures consensus and envelope processor are wired before any
-	// request can be served, eliminating the need for 503 fail-closed guards.
-	if err := svc.InitHTTPHandler(consensusSvc, cmdSvc); err != nil {
-		return fmt.Errorf("gateway: initialize HTTP handler: %w", err)
-	}
+	// Wire the consensus service into the already-constructed HTTP handler.
+	// The handler was built during NewGatewayModeService with consensusSvc nil;
+	// SetConsensusService updates the field that GovernanceController reads at
+	// request time. Nil is valid (doctrine posture or no consensus configured).
+	svc.SetConsensusService(consensusSvc)
 
 	var wg sync.WaitGroup
 	errChan := make(chan error, 2)

@@ -133,8 +133,8 @@ type FieldReader interface {
 }
 
 // NoopFieldReader is a no-op implementation of FieldReader.
-// It returns an empty FieldValue with no error, eliminating nil checks at
-// call sites. Used in outbound mode where no MCP gateway is configured.
+// It returns an empty FieldValue with no error. Used in tests;
+// production outbound mode uses nil with explicit nil-checks.
 type NoopFieldReader struct{}
 
 func (NoopFieldReader) GetField(string, string, string) (FieldValue, error) {

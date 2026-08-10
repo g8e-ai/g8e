@@ -53,7 +53,9 @@ func newTestGatewayService(t *testing.T, opts testGatewayOpts) *GatewayModeServi
 
 	ls, err := NewGatewayModeService(cfg, fileSvc, logger)
 	require.NoError(t, err)
-	require.NoError(t, ls.InitHTTPHandler(nil, nil))
+	// HTTP handler is now built during NewGatewayModeService construction.
+	// InitHTTPHandler is a no-op kept for backward compatibility.
+	require.NoError(t, ls.InitHTTPHandler())
 	t.Cleanup(func() { ls.Stop(context.Background()) })
 	return ls
 }

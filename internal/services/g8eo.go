@@ -35,7 +35,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/gateway"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
-	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
@@ -307,13 +306,11 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	}
 
 	govDeps := pubsub.GovernanceDeps{
-		ReplayStore:          vs.replayStore,
-		StateRootProvider:    stateRootProvider,
-		TransactionAudit:     transactionAudit,
-		SignerStore:          signerStore,
-		L3Notary:             cliL3Notary,
-		ConsensusPolicyStore: &governance.NoopConsensusPolicyStore{},
-		FieldReader:          &mcp.NoopFieldReader{},
+		ReplayStore:       vs.replayStore,
+		StateRootProvider: stateRootProvider,
+		TransactionAudit:  transactionAudit,
+		SignerStore:       signerStore,
+		L3Notary:          cliL3Notary,
 	}
 
 	vs.pubSubCommands, err = pubsub.NewOperatorPubSubService(psConfig, govDeps)

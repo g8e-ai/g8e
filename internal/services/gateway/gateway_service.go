@@ -81,6 +81,7 @@ type GatewayModeService struct {
 	mcpGateway              *mcp.GatewayService
 	envProcAdapter          *pubsub.GatewayEnvProcAdapter
 	sessionValidatorAdapter *pubsub.GatewaySessionValidatorAdapter
+	consensusSvc            *consensus.ConsensusService
 	responder               *response.Writer
 	server                  *http.Server
 	publicServer            *http.Server
@@ -289,6 +290,15 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		responder:               res,
 	}
 
+	// Fold InitHTTPHandler into construction: build the HTTP handler and
+	// servers now, with consensusSvc nil (wired later via SetConsensusService
+	// before Start) and envProc as the lazy envProcAdapter (wired by
+	// NewGatewayOperatorPubSubService). The handler reads these at request
+	// time, so nil-at-construction is safe.
+	if err := ls.initHTTPHandler(); err != nil {
+		return nil, fmt.Errorf("gateway: initialize HTTP handler: %w", err)
+	}
+
 	return ls, nil
 }
 
@@ -385,16 +395,42 @@ func detectBasicNonLoopbackIPv4Addresses() []net.IP {
 	return extraIPs
 }
 
+// SetConsensusService wires the consensus service after construction.
+// Called once before Start(). Nil is valid (consensus not configured for the
+// current posture, e.g. doctrine mode). The consensus service is constructed
+// between NewGatewayModeService and Start because it reads from the DB that
+// the constructor opens (via ConsensusBootstrap). The HTTP handler built in
+// the constructor captures a pointer to ls.consensusSvc, so setting this
+// field before Start() is observed by the GovernanceController at request
+// time without rebuilding the handler.
+func (ls *GatewayModeService) SetConsensusService(svc *consensus.ConsensusService) {
+	ls.consensusSvc = svc
+}
+
 // InitHTTPHandler creates the HTTP handler and servers with all dependencies
-// injected. This is the second phase of construction — call after wiring
-// late-bound dependencies (consensus service, envelope processor) that require
-// the base service to exist first. consensusSvc may be nil if the gateway
-// posture does not require L2 consensus. envProc may be nil if envelope
-// submission is not enabled.
-func (ls *GatewayModeService) InitHTTPHandler(consensusSvc *consensus.ConsensusService, envProc governance.EnvelopeProcessor) error {
-	if envProc == nil && ls.envProcAdapter != nil {
-		envProc = ls.envProcAdapter
+// injected. Consensus is read from ls.consensusSvc (set via
+// SetConsensusService after construction); nil is valid if the gateway posture
+// does not require L2 consensus. The envelope processor falls back to
+// ls.envProcAdapter when nil, which is the lazy adapter wired by
+// NewGatewayOperatorPubSubService.
+//
+// Deprecated: NewGatewayModeService now calls initHTTPHandler internally, so
+// InitHTTPHandler is a no-op kept for backward compatibility with tests that
+// construct GatewayModeService without going through the constructor. It will
+// be removed in a follow-up.
+func (ls *GatewayModeService) InitHTTPHandler() error {
+	if ls.handler != nil {
+		return nil // already initialized (e.g. by NewGatewayModeService)
 	}
+	return ls.initHTTPHandler()
+}
+
+// initHTTPHandler is the internal constructor for the HTTP handler and
+// servers. Called once by NewGatewayModeService. Reads ls.consensusSvc (set
+// via SetConsensusService before Start) and ls.envProcAdapter (lazy adapter
+// wired by NewGatewayOperatorPubSubService) at request time, so nil values at
+// construction time are safe.
+func (ls *GatewayModeService) initHTTPHandler() error {
 	cfg := ls.cfg
 	logger := ls.logger
 	pubsub := ls.pubsub
@@ -405,6 +441,17 @@ func (ls *GatewayModeService) InitHTTPHandler(consensusSvc *consensus.ConsensusS
 	reg := ls.reg
 	passkey := ls.passkey
 	userSvc := ls.userSvc
+
+	// The envelope processor is the lazy adapter wired by
+	// NewGatewayOperatorPubSubService. Avoid converting a nil pointer to the
+	// interface — that would produce a non-nil interface wrapping nil and
+	// bypass the controller's nil-check. Leave envProc as the nil interface
+	// when the adapter is absent (tests construct GatewayModeService without
+	// setting envProcAdapter).
+	var envProc governance.EnvelopeProcessor
+	if ls.envProcAdapter != nil {
+		envProc = ls.envProcAdapter
+	}
 
 	// Initialize AppEnrollmentService for external app enrollment
 	appEnrollment := NewAppEnrollmentService(ls.docStore, pki, logger)
@@ -511,7 +558,7 @@ func (ls *GatewayModeService) InitHTTPHandler(consensusSvc *consensus.ConsensusS
 			Cfg:       cfg,
 			Logger:    logger,
 			Responder: ls.responder,
-			Consensus: consensusSvc,
+			Consensus: &ls.consensusSvc,
 			EnvProc:   envProc,
 		},
 		MCPControllerDeps: MCPControllerDeps{
@@ -634,8 +681,9 @@ func (ls *GatewayModeService) GetSessionValidatorAdapter() *pubsub.GatewaySessio
 	return ls.sessionValidatorAdapter
 }
 
-// GetHTTPHandler returns the HTTP handler. Returns nil if InitHTTPHandler
-// has not been called yet.
+// GetHTTPHandler returns the HTTP handler. The handler is built during
+// NewGatewayModeService construction; this returns nil only if construction
+// failed before the handler was initialized.
 func (ls *GatewayModeService) GetHTTPHandler() *HTTPHandler {
 	return ls.handler
 }
