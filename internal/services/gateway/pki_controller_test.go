@@ -99,7 +99,7 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
 	reg := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 
-	controller := newPKIController(cfg, logger, pki, appEnrollment, reg, resp)
+	controller := newPKIController(PKIControllerDeps{Cfg: cfg, Logger: logger, PKI: pki, AppEnrollment: appEnrollment, Registration: reg, Responder: resp})
 	return controller, cfg, db
 }
 
@@ -481,7 +481,7 @@ func TestNewPKIController(t *testing.T) {
 	registration := &RegistrationService{}
 	responder := &response.Writer{}
 
-	controller := newPKIController(cfg, logger, pki, appEnrollment, registration, responder)
+	controller := newPKIController(PKIControllerDeps{Cfg: cfg, Logger: logger, PKI: pki, AppEnrollment: appEnrollment, Registration: registration, Responder: responder})
 
 	assert.NotNil(t, controller)
 	assert.Equal(t, cfg, controller.cfg)
@@ -765,7 +765,7 @@ func TestPKIController_HandlePKIAppsEnroll(t *testing.T) {
 			t.Fatalf("Failed to initialize script templates: %v", err)
 		}
 
-		controller := newPKIController(cfg, logger, pki, nil, nil, resp)
+		controller := newPKIController(PKIControllerDeps{Cfg: cfg, Logger: logger, PKI: pki, Responder: resp})
 
 		validPayload := map[string]string{
 			"csr_pem":  testutil.GenerateTestCSRP256(t, "test-app"),

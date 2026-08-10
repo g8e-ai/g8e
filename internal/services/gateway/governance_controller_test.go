@@ -36,7 +36,7 @@ func newTestGovernanceController(t *testing.T) *GovernanceController {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	responder := response.NewWriter(logger)
-	return newGovernanceController(cfg, logger, responder, nil, nil)
+	return newGovernanceController(GovernanceControllerDeps{Cfg: cfg, Logger: logger, Responder: responder})
 }
 
 func TestConsensusDeliberate_NotConfigured_Returns503(t *testing.T) {

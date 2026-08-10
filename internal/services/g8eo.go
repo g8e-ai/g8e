@@ -35,7 +35,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/gateway"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
-	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
@@ -57,7 +56,6 @@ type G8eoService struct {
 	tokenStore       storage.TokenStore
 	suspendedTxStore *storage.SuspendedTransactionService
 	gatewayDB        *gateway.CanonicalDBService
-	gatewayStores    *gateway.Stores
 
 	pubSubClient pubsub.PubSubClient
 	tlsConfig    *certs.TLSConfig
@@ -83,12 +81,13 @@ type G8eoService struct {
 // NewG8eoService creates a new Operator service in Outbound Mode.
 // In this mode, the Operator initiates all connections to the platform
 // on port 443 and performs command execution on the local host.
-func NewG8eoService(cfg *config.Config, logger *slog.Logger, tlsConfig *certs.TLSConfig) (*G8eoService, error) {
+func NewG8eoService(cfg *config.Config, logger *slog.Logger, tlsConfig *certs.TLSConfig, fileSvc fs.RuntimeFileService) (*G8eoService, error) {
 	service := &G8eoService{
 		config:    cfg,
 		logger:    logger,
 		startTime: time.Now().UTC(),
 		tlsConfig: tlsConfig,
+		fileSvc:   fileSvc,
 	}
 
 	bootstrapService, err := auth.NewBootstrapService(cfg, logger, tlsConfig)
@@ -98,14 +97,6 @@ func NewG8eoService(cfg *config.Config, logger *slog.Logger, tlsConfig *certs.TL
 	service.bootstrap = bootstrapService
 
 	return service, nil
-}
-
-// SetFileService injects a RuntimeFileService for file I/O within the .g8e/ directory.
-// Must be called before Start().
-func (vs *G8eoService) SetFileService(fileSvc fs.RuntimeFileService) {
-	vs.mu.Lock()
-	defer vs.mu.Unlock()
-	vs.fileSvc = fileSvc
 }
 
 func (vs *G8eoService) Start(ctx context.Context) error {
@@ -121,7 +112,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		"posture", vs.config.Posture)
 
 	if vs.fileSvc == nil {
-		return fmt.Errorf("%w: fileSvc must be set via SetFileService before Start()", constants.ErrInternal)
+		return fmt.Errorf("%w: fileSvc must be provided to NewG8eoService", constants.ErrInternal)
 	}
 
 	bootstrapConfig, err := vs.bootstrap.RequestBootstrapConfig(ctx)
@@ -146,12 +137,11 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	if vaultKeyPath == "" {
 		vaultKeyPath = paths.Infra.VaultKeyPath
 	}
-	gatewayDB, gatewayStores, err := gateway.OpenCanonicalDBService(dataDir, vs.config.VaultDir, vs.logger, vaultKeyPath, vs.keystore, vs.fileSvc)
+	gatewayDB, _, err := gateway.OpenCanonicalDBService(dataDir, vs.config.VaultDir, vs.logger, vaultKeyPath, vs.keystore, vs.fileSvc)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrGatewayDatabaseServiceNotConfigured, err)
 	}
 	vs.gatewayDB = gatewayDB
-	vs.gatewayStores = gatewayStores
 	vs.logger.Info("Gateway database initialized (canonical state root)")
 
 	vs.secretManager = gatewayDB.GetSecretManager()
@@ -182,7 +172,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Token persistence for Sentinel UEI tokens routes through the canonical gateway
 	// DB (g8e.db) via EncryptedKVAdapter — no separate token_store.db.
-	vs.tokenStore = gateway.NewEncryptedKVAdapter(vs.gatewayStores.KVStore, encryptionVault)
+	vs.tokenStore = gateway.NewEncryptedKVAdapter(vs.gatewayDB.GetKVStore(), encryptionVault)
 	vs.logger.Info("Token store initialized (canonical KV store)")
 
 	// Initialize SuspendedTransactionService for L3 approval workflow
@@ -209,7 +199,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	// Reuse the SQLAuditStore from CanonicalDBService — both the standalone
 	// and canonical instances open the same g8e.db file, so a separate connection
 	// pool and pruner are redundant. CanonicalDBService.Close() handles lifecycle.
-	auditStore := vs.gatewayStores.AuditStore
+	auditStore := vs.gatewayDB.GetAuditStore()
 
 	if vs.config.OperatorSessionId == "" {
 		return fmt.Errorf("%w: operator session ID required before audit store can accept events", constants.ErrGatewayOperatorSessionIDRequired)
@@ -271,7 +261,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Create governance dependencies for transaction verification
 	// Use CanonicalDBService for canonical state root calculation (same schema as gateway mode)
-	stateRootProvider := vs.gatewayStores.StateRootSvc
+	stateRootProvider := vs.gatewayDB.GetStateRootSvc()
 	transactionAudit := &auditStoreTransactionStore{store: auditStore}
 	// L3Notary for outbound mode: CLI-based approval via suspended transactions
 	// Mutations requiring L3 are suspended and must be approved via CLI command
@@ -316,13 +306,11 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	}
 
 	govDeps := pubsub.GovernanceDeps{
-		ReplayStore:          vs.replayStore,
-		StateRootProvider:    stateRootProvider,
-		TransactionAudit:     transactionAudit,
-		SignerStore:          signerStore,
-		L3Notary:             cliL3Notary,
-		ConsensusPolicyStore: &governance.NoopConsensusPolicyStore{},
-		FieldReader:          &mcp.NoopFieldReader{},
+		ReplayStore:       vs.replayStore,
+		StateRootProvider: stateRootProvider,
+		TransactionAudit:  transactionAudit,
+		SignerStore:       signerStore,
+		L3Notary:          cliL3Notary,
 	}
 
 	vs.pubSubCommands, err = pubsub.NewOperatorPubSubService(psConfig, govDeps)
@@ -436,9 +424,9 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 	}
 
 	// Drain audit store writes (CanonicalDBService.Close() handles final close)
-	if vs.gatewayStores != nil && vs.gatewayStores.AuditStore != nil {
+	if vs.gatewayDB != nil && vs.gatewayDB.GetAuditStore() != nil {
 		vs.logger.Info("Waiting for audit writes to drain...")
-		vs.gatewayStores.AuditStore.Wait()
+		vs.gatewayDB.GetAuditStore().Wait()
 	}
 
 	// Wait for shutdown handler goroutine to complete

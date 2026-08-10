@@ -16,26 +16,26 @@
 package tests
 
 /*
-TestUniversalGateway exercises the universal gateway with in-process gateway
-via GatewayFixture. This test suite validates:
+TestUniversalGateway exercises the universal gateway with an in-process
+GatewayFixture. This file retains only the behaviors unique to the universal
+endpoint that are not covered by the dedicated per-protocol files:
 
-1. MCP protocol translation and governance enforcement
-2. A2A protocol translation and governance enforcement
-3. Multi-protocol payload auto-detection on the universal HTTP endpoint
-4. Full L1/L2/L3 governance gate verification
-5. OOB suspension and approval flow
-6. Downstream server integration
-7. Canonical JSON wire format with protojson GovernanceEnvelope
+  - Multi-protocol auto-detection on the universal HTTP endpoint
+  - OOB suspension and querying suspended transactions
 
-This test uses the in-process gateway via GatewayFixture - no external
-platform or auth login required.
+The MCP flow, A2A flow, governance envelope verification, downstream
+integration, and canonical JSON wire format tests were removed: the first four
+are covered by mcp_gateway_test.go, a2a_gateway_test.go, and
+l2_consensus_integration_test.go with real assertions, and the canonical JSON
+test had no meaningful assertions. The cross-protocol payload-variation and
+error-case coverage lives in protocol_payload_test.go and
+protocol_errors_test.go via the protocolAdapter pattern.
 */
 
 import (
 	"bytes"
 	"encoding/json"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -48,185 +48,10 @@ import (
 	"github.com/g8e-ai/g8e/test/fixtures"
 )
 
-// TestUniversalGateway_MCPFlow validates the complete MCP flow
-// with in-process gateway via GatewayFixture.
-func TestUniversalGateway_MCPFlow(t *testing.T) {
-	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName:          "universal-mcp",
-		Posture:           config.PostureNotary,
-		AllowTestPortZero: true,
-	})
-
-	// Enroll a client identity for mTLS authentication
-	identity := fixtures.EnrollClientIdentity(t, f, "test-user", "test-org", "test-fingerprint", "test-host")
-	apiClient := fixtures.CreateMTLSClient(t, f, identity)
-
-	t.Run("health check", func(t *testing.T) {
-		// The full health response (including StateMerkleRoot) is served on the
-		// mTLS HTTPS API surface; the plain HTTP port only serves bootstrap
-		// health, which omits the state root.
-		mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
-		resp, err := apiClient.Get(mtlsURL + constants.APIPaths.Health)
-		require.NoError(t, err)
-
-		var health models.HealthResponse
-		require.NoError(t, json.NewDecoder(resp.Body).Decode(&health))
-		resp.Body.Close()
-		require.NotEmpty(t, health.StateMerkleRoot)
-		t.Logf("State root: %s", health.StateMerkleRoot)
-	})
-
-	t.Run("MCP tools/list with gateway", func(t *testing.T) {
-		mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
-		listReq := mcp.JSONRPCRequest{
-			JSONRPC: "2.0",
-			Method:  "tools/list",
-			ID:      1,
-		}
-		reqBody, _ := json.Marshal(listReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := apiClient.Do(req)
-		if err != nil {
-			t.Logf("tools/list failed: %v (may indicate no downstream MCP server configured)", err)
-			return
-		}
-		defer resp.Body.Close()
-
-		var mcpResp struct {
-			Result mcp.ToolsListResult `json:"result"`
-		}
-		require.NoError(t, json.NewDecoder(resp.Body).Decode(&mcpResp))
-		t.Logf("Tools listed: %d tools", len(mcpResp.Result.Tools))
-	})
-
-	t.Run("MCP resources/list with gateway", func(t *testing.T) {
-		mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
-		listReq := mcp.JSONRPCRequest{
-			JSONRPC: "2.0",
-			Method:  "resources/list",
-			ID:      1,
-		}
-		reqBody, _ := json.Marshal(listReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := apiClient.Do(req)
-		if err != nil {
-			t.Logf("resources/list failed: %v", err)
-			return
-		}
-		defer resp.Body.Close()
-
-		var mcpResp struct {
-			Result mcp.ResourcesListResult `json:"result"`
-		}
-		require.NoError(t, json.NewDecoder(resp.Body).Decode(&mcpResp))
-		t.Logf("Resources listed: %d resources", len(mcpResp.Result.Resources))
-	})
-
-	t.Run("MCP prompts/list with gateway", func(t *testing.T) {
-		mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
-		listReq := mcp.JSONRPCRequest{
-			JSONRPC: "2.0",
-			Method:  "prompts/list",
-			ID:      1,
-		}
-		reqBody, _ := json.Marshal(listReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := apiClient.Do(req)
-		if err != nil {
-			t.Logf("prompts/list failed: %v", err)
-			return
-		}
-		defer resp.Body.Close()
-
-		var mcpResp struct {
-			Result mcp.PromptsListResult `json:"result"`
-		}
-		require.NoError(t, json.NewDecoder(resp.Body).Decode(&mcpResp))
-		t.Logf("Prompts listed: %d prompts", len(mcpResp.Result.Prompts))
-	})
-
-	t.Run("MCP tools/call with governance envelope", func(t *testing.T) {
-		mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
-		callReq := map[string]interface{}{
-			"jsonrpc": "2.0",
-			"method":  "tools/call",
-			"id":      1,
-			"params": map[string]interface{}{
-				"name":      "echo",
-				"arguments": map[string]string{"message": "hello from gateway"},
-			},
-		}
-
-		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest("POST", mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
-
-		resp, err := apiClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		var result map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err == nil {
-			if txHash, ok := result["transaction_hash"].(string); ok {
-				t.Logf("Transaction hash: %s", txHash)
-			}
-		}
-		t.Logf("MCP tools/call response: %v", result)
-	})
-}
-
-// TestUniversalGateway_A2AFlow validates the complete A2A flow
-// with in-process gateway via GatewayFixture.
-func TestUniversalGateway_A2AFlow(t *testing.T) {
-	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName:          "universal-a2a",
-		Posture:           config.PostureNotary,
-		AllowTestPortZero: true,
-	})
-
-	identity := fixtures.EnrollClientIdentity(t, f, "test-user", "test-org", "test-fingerprint", "test-host")
-	apiClient := fixtures.CreateMTLSClient(t, f, identity)
-
-	t.Run("A2A skill call with governance envelope", func(t *testing.T) {
-		mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
-		callReq := map[string]interface{}{
-			"jsonrpc": "2.0",
-			"method":  "a2a/call",
-			"id":      1,
-			"params": map[string]interface{}{
-				"skill_name": "test_skill",
-				"payload": map[string]string{
-					"action": "test",
-					"data":   "a2a call",
-				},
-			},
-		}
-
-		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest("POST", mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
-
-		resp, err := apiClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		var result map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err == nil {
-			if txHash, ok := result["transaction_hash"].(string); ok {
-				t.Logf("Transaction hash: %s", txHash)
-			}
-		}
-		t.Logf("A2A call response: %v", result)
-	})
-}
-
-// TestUniversalGateway_MultiProtocolAutoDetection validates that the
-// universal HTTP endpoint auto-detects MCP and A2A payloads.
+// TestUniversalGateway_MultiProtocolAutoDetection verifies that the universal
+// HTTP endpoint auto-detects MCP and A2A payloads by their JSON-RPC method and
+// dispatches each to the correct protocol handler. Both protocols must return
+// HTTP 200 with a well-formed JSON-RPC response body.
 func TestUniversalGateway_MultiProtocolAutoDetection(t *testing.T) {
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
 		TestName:          "universal-autodetect",
@@ -236,17 +61,15 @@ func TestUniversalGateway_MultiProtocolAutoDetection(t *testing.T) {
 
 	identity := fixtures.EnrollClientIdentity(t, f, "test-user", "test-org", "test-fingerprint", "test-host")
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
+	mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 
-	t.Run("MCP payload detected on universal endpoint", func(t *testing.T) {
-		mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
-		callReq := map[string]interface{}{
-			"jsonrpc": "2.0",
-			"method":  "tools/list",
-			"id":      1,
-			"params":  map[string]interface{}{},
+	t.Run("mcp_payload_detected_on_universal_endpoint", func(t *testing.T) {
+		listReq := mcp.JSONRPCRequest{
+			JSONRPC: constants.JSONRPCVersion,
+			Method:  "tools/list",
+			ID:      1,
 		}
-
-		reqBody, _ := json.Marshal(callReq)
+		reqBody, _ := json.Marshal(listReq)
 		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
@@ -254,13 +77,19 @@ func TestUniversalGateway_MultiProtocolAutoDetection(t *testing.T) {
 		resp, err := apiClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
-		t.Logf("MCP detection response: %d", resp.StatusCode)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var mcpResp struct {
+			Result mcp.ToolsListResult `json:"result"`
+		}
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&mcpResp))
+		require.NotNil(t, mcpResp.Result.Tools, "MCP tools/list must return a tools array")
+		require.NotEmpty(t, mcpResp.Result.Tools, "MCP tools/list must return at least one tool from the downstream server")
 	})
 
-	t.Run("A2A payload detected on universal endpoint", func(t *testing.T) {
-		mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+	t.Run("a2a_payload_detected_on_universal_endpoint", func(t *testing.T) {
 		callReq := map[string]interface{}{
-			"jsonrpc": "2.0",
+			"jsonrpc": constants.JSONRPCVersion,
 			"method":  "a2a/call",
 			"id":      1,
 			"params": map[string]interface{}{
@@ -270,125 +99,32 @@ func TestUniversalGateway_MultiProtocolAutoDetection(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest("POST", mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.A2ACall, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
 
 		resp, err := apiClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
-		t.Logf("A2A detection response: %d", resp.StatusCode)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var a2aRes struct {
+			Result struct {
+				Status      string `json:"status"`
+				ApprovalURL string `json:"approval_url"`
+			} `json:"result"`
+		}
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&a2aRes))
+		require.Equal(t, string(constants.GatewayResponseStatusSuspended), a2aRes.Result.Status,
+			"A2A call under notary posture must suspend for L3 approval")
+		require.NotEmpty(t, a2aRes.Result.ApprovalURL, "Suspended A2A call must return an approval URL")
 	})
 }
 
-// TestUniversalGateway_GovernanceEnvelopeVerification validates that
-// all requests pass through the L1/L2/L3 governance gates.
-func TestUniversalGateway_GovernanceEnvelopeVerification(t *testing.T) {
-	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName:          "universal-governance",
-		Posture:           config.PostureNotary,
-		AllowTestPortZero: true,
-	})
-
-	identity := fixtures.EnrollClientIdentity(t, f, "test-user", "test-org", "test-fingerprint", "test-host")
-	apiClient := fixtures.CreateMTLSClient(t, f, identity)
-
-	t.Run("L1 hard gates enforced", func(t *testing.T) {
-		mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
-		callReq := map[string]interface{}{
-			"jsonrpc": "2.0",
-			"method":  "tools/call",
-			"id":      1,
-			"params": map[string]interface{}{
-				"name": "execute_command",
-				"arguments": map[string]string{
-					"command": "sudo rm -rf /",
-				},
-			},
-		}
-
-		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest("POST", mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
-
-		resp, err := apiClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		var result map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err == nil {
-			if errorMsg, ok := result["error"].(string); ok {
-				t.Logf("L1 rejection: %s", errorMsg)
-				require.Contains(t, strings.ToLower(errorMsg), "forbidden")
-			}
-		}
-	})
-
-	t.Run("L2 consensus verification", func(t *testing.T) {
-		mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
-		callReq := map[string]interface{}{
-			"jsonrpc": "2.0",
-			"method":  "tools/call",
-			"id":      1,
-			"params": map[string]interface{}{
-				"name":      "consensus_tool",
-				"arguments": map[string]string{"action": "require_consensus"},
-			},
-		}
-
-		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest("POST", mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
-
-		resp, err := apiClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		var result map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err == nil {
-			if l2Meta, ok := result["l2_metadata"].(map[string]interface{}); ok {
-				t.Logf("L2 metadata present: %v", l2Meta)
-			}
-		}
-	})
-
-	t.Run("L3 approval verification", func(t *testing.T) {
-		mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
-		callReq := map[string]interface{}{
-			"jsonrpc": "2.0",
-			"method":  "tools/call",
-			"id":      1,
-			"params": map[string]interface{}{
-				"name":      "approval_tool",
-				"arguments": map[string]string{"action": "require_approval"},
-			},
-		}
-
-		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest("POST", mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
-
-		resp, err := apiClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		var result map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err == nil {
-			if approvalURL, ok := result["approval_url"].(string); ok {
-				t.Logf("L3 approval URL: %s", approvalURL)
-			}
-			if status, ok := result["status"].(string); ok {
-				t.Logf("Transaction status: %s", status)
-			}
-		}
-	})
-}
-
-// TestUniversalGateway_OOBSuspensionAndApproval validates the OOB
-// suspension and approval flow.
+// TestUniversalGateway_OOBSuspensionAndApproval verifies that a state-changing
+// tool call suspends for L3 notary approval and that the suspended transaction
+// is subsequently listable via the GET /api/v1/approvals endpoint filtered to
+// the authenticated user.
 func TestUniversalGateway_OOBSuspensionAndApproval(t *testing.T) {
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
 		TestName:          "universal-suspension",
@@ -398,11 +134,11 @@ func TestUniversalGateway_OOBSuspensionAndApproval(t *testing.T) {
 
 	identity := fixtures.EnrollClientIdentity(t, f, "test-user", "test-org", "test-fingerprint", "test-host")
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
+	mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 
-	t.Run("transaction suspension for L3 approval", func(t *testing.T) {
-		mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+	t.Run("transaction_suspension_for_l3_approval", func(t *testing.T) {
 		callReq := map[string]interface{}{
-			"jsonrpc": "2.0",
+			"jsonrpc": constants.JSONRPCVersion,
 			"method":  "tools/call",
 			"id":      1,
 			"params": map[string]interface{}{
@@ -412,138 +148,42 @@ func TestUniversalGateway_OOBSuspensionAndApproval(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest("POST", mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
-
-		resp, err := apiClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-		t.Logf("Suspension test response: %d", resp.StatusCode)
-	})
-
-	t.Run("query suspended transactions", func(t *testing.T) {
-		mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
-		req, _ := http.NewRequest("GET", mtlsURL+"/api/v1/suspended-transactions", nil)
-		req.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
-
-		resp, err := apiClient.Do(req)
-		if err != nil {
-			t.Logf("Failed to query suspended transactions: %v", err)
-			return
-		}
-		defer resp.Body.Close()
-
-		var transactions []map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&transactions); err == nil {
-			t.Logf("Suspended transactions: %d", len(transactions))
-		}
-	})
-}
-
-// TestUniversalGateway_DownstreamIntegration validates integration
-// with the downstream MCP server configured in the gateway.
-func TestUniversalGateway_DownstreamIntegration(t *testing.T) {
-	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName:          "universal-downstream",
-		Posture:           config.PostureNotary,
-		AllowTestPortZero: true,
-	})
-
-	identity := fixtures.EnrollClientIdentity(t, f, "test-user", "test-org", "test-fingerprint", "test-host")
-	apiClient := fixtures.CreateMTLSClient(t, f, identity)
-
-	t.Run("downstream server tools/list", func(t *testing.T) {
-		mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
-		listReq := mcp.JSONRPCRequest{
-			JSONRPC: "2.0",
-			Method:  "tools/list",
-			ID:      1,
-		}
-		reqBody, _ := json.Marshal(listReq)
 		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		resp, err := apiClient.Do(req)
-		if err != nil {
-			t.Logf("Downstream server not configured: %v", err)
-			return
-		}
-		defer resp.Body.Close()
-
-		var mcpResp struct {
-			Result mcp.ToolsListResult `json:"result"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&mcpResp); err == nil {
-			t.Logf("Downstream tools: %d", len(mcpResp.Result.Tools))
-		}
-	})
-
-	t.Run("downstream server tools/call", func(t *testing.T) {
-		mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
-		callReq := map[string]interface{}{
-			"jsonrpc": "2.0",
-			"method":  "tools/call",
-			"id":      1,
-			"params": map[string]interface{}{
-				"name":      "execute_command",
-				"arguments": map[string]string{"command": "echo test"},
-			},
-		}
-
-		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest("POST", mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
 
 		resp, err := apiClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
-		t.Logf("Downstream call response: %d", resp.StatusCode)
-	})
-}
+		require.Equal(t, http.StatusOK, resp.StatusCode)
 
-// TestUniversalGateway_CanonicalJSONWireFormat validates that the gateway
-// uses canonical JSON (protojson) for all wire formats.
-func TestUniversalGateway_CanonicalJSONWireFormat(t *testing.T) {
-	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName:          "universal-canonical",
-		Posture:           config.PostureNotary,
-		AllowTestPortZero: true,
-	})
-
-	identity := fixtures.EnrollClientIdentity(t, f, "test-user", "test-org", "test-fingerprint", "test-host")
-	apiClient := fixtures.CreateMTLSClient(t, f, identity)
-
-	t.Run("governance envelope uses protojson", func(t *testing.T) {
-		mtlsURL := network.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
-		callReq := map[string]interface{}{
-			"jsonrpc": "2.0",
-			"method":  "tools/call",
-			"id":      1,
-			"params": map[string]interface{}{
-				"name":      "canonical_test",
-				"arguments": map[string]string{"test": "data"},
-			},
+		var mcpRes struct {
+			Result struct {
+				Content []mcp.TextContent `json:"content"`
+			} `json:"result"`
 		}
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&mcpRes))
+		require.NotEmpty(t, mcpRes.Result.Content, "Suspended MCP call must return content")
+		require.Contains(t, mcpRes.Result.Content[0].Text, constants.MCPApprovalPausedPrefix,
+			"Suspended MCP call content must start with the approval-paused prefix")
+	})
 
-		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest("POST", mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
+	t.Run("query_suspended_transactions_lists_suspended_tx_for_user", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, mtlsURL+constants.APIPaths.ApprovalsCLIList, nil)
 		req.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
 
 		resp, err := apiClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
 
-		var result map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err == nil {
-			if txHash, ok := result["transaction_hash"].(string); ok {
-				t.Logf("Canonical transaction_hash: %s", txHash)
-			}
-			if timestamp, ok := result["timestamp"].(string); ok {
-				t.Logf("Canonical timestamp: %s", timestamp)
-			}
-		}
-		t.Logf("Canonical JSON wire format validated")
+		var suspendedResp models.SuspendedTransactionsResponse
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&suspendedResp))
+		require.NotEmpty(t, suspendedResp.Transactions,
+			"The transaction suspended in the previous subtest must be listable via GET /api/v1/approvals")
+		require.Equal(t, identity.UserID, suspendedResp.Transactions[0].UserID,
+			"Suspended transaction must be attributed to the authenticated user")
+		require.Equal(t, "sensitive_tool", suspendedResp.Transactions[0].ToolName,
+			"Suspended transaction must record the tool name from the suspended call")
 	})
 }

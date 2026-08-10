@@ -213,22 +213,109 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config, *TestInfr
 	})
 	require.NoError(t, err, "failed to create MCP gateway")
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
-		Cfg:                infra.Cfg,
-		Logger:             infra.Logger,
-		Stores:             infra.Stores,
-		Pubsub:             infra.Pubsub,
-		Auth:               infra.Auth,
-		PKI:                infra.PKI,
-		CLISessionSvc:      infra.CLISessionSvc,
-		OperatorSessionSvc: infra.OperatorSessionSvc,
-		WebSessionSvc:      infra.WebSessionSvc,
-		Reg:                infra.Reg,
-		Passkey:            infra.Passkey,
-		UserSvc:            infra.UserSvc,
-		Responder:          infra.Responder,
-		MCPGateway:         mcpGateway,
-		IsReady:            func() bool { return true },
-		IsGovernanceReady:  func() bool { return true },
+		Cfg:    infra.Cfg,
+		Logger: infra.Logger,
+		Auth:   infra.Auth,
+		PKIControllerDeps: PKIControllerDeps{
+			Cfg:          infra.Cfg,
+			Logger:       infra.Logger,
+			PKI:          infra.PKI,
+			Registration: infra.Reg,
+			Responder:    infra.Responder,
+		},
+		AuditControllerDeps: AuditControllerDeps{
+			Cfg:        infra.Cfg,
+			Logger:     infra.Logger,
+			AuditStore: infra.Stores.AuditStore,
+			Responder:  infra.Responder,
+		},
+		DataControllerDeps: DataControllerDeps{
+			Cfg:       infra.Cfg,
+			Logger:    infra.Logger,
+			DocStore:  infra.Stores.DocStore,
+			KVStore:   infra.Stores.KVStore,
+			SSEStore:  infra.Stores.SSEStore,
+			BlobStore: infra.Stores.BlobStore,
+			Pubsub:    infra.Pubsub,
+			Responder: infra.Responder,
+		},
+		SignerControllerDeps: SignerControllerDeps{
+			Cfg:         infra.Cfg,
+			Logger:      infra.Logger,
+			DocStore:    infra.Stores.DocStore,
+			SignerStore: infra.Stores.SignerStore,
+			Responder:   infra.Responder,
+		},
+		BootstrapControllerDeps: BootstrapControllerDeps{
+			Cfg:                infra.Cfg,
+			Logger:             infra.Logger,
+			DocStore:           infra.Stores.DocStore,
+			UserSvc:            infra.UserSvc,
+			PKI:                infra.PKI,
+			CLISessionSvc:      infra.CLISessionSvc,
+			OperatorSessionSvc: infra.OperatorSessionSvc,
+			Responder:          infra.Responder,
+		},
+		EnrollmentTokenControllerDeps: EnrollmentTokenControllerDeps{
+			Cfg:       infra.Cfg,
+			Logger:    infra.Logger,
+			Responder: infra.Responder,
+		},
+		UserControllerDeps: UserControllerDeps{
+			Cfg:       infra.Cfg,
+			Logger:    infra.Logger,
+			UserSvc:   infra.UserSvc,
+			Responder: infra.Responder,
+		},
+		SessionControllerDeps: SessionControllerDeps{
+			Logger:      infra.Logger,
+			DocStore:    infra.Stores.DocStore,
+			Responder:   infra.Responder,
+			CrossOrigin: len(infra.Cfg.Gateway.AllowedOrigins) > 0,
+		},
+		AdminControllerDeps: AdminControllerDeps{
+			Cfg:            infra.Cfg,
+			Logger:         infra.Logger,
+			DocStore:       infra.Stores.DocStore,
+			SignerStore:    infra.Stores.SignerStore,
+			ConsensusStore: infra.Stores.ConsensusStore,
+			UserSvc:        infra.UserSvc,
+			Responder:      infra.Responder,
+		},
+		OperatorControllerDeps: OperatorControllerDeps{
+			Cfg:       infra.Cfg,
+			Logger:    infra.Logger,
+			Reg:       infra.Reg,
+			Auth:      infra.Auth,
+			Responder: infra.Responder,
+		},
+		SSEControllerDeps: SSEControllerDeps{
+			Cfg:       infra.Cfg,
+			Logger:    infra.Logger,
+			DocStore:  infra.Stores.DocStore,
+			KVStore:   infra.Stores.KVStore,
+			SSEStore:  infra.Stores.SSEStore,
+			Pubsub:    infra.Pubsub,
+			Auth:      infra.Auth,
+			Responder: infra.Responder,
+		},
+		HealthControllerDeps: HealthControllerDeps{
+			Cfg:               infra.Cfg,
+			Logger:            infra.Logger,
+			DocStore:          infra.Stores.DocStore,
+			StateRootSvc:      infra.Stores.StateRootSvc,
+			Responder:         infra.Responder,
+			IsReady:           func() bool { return true },
+			IsGovernanceReady: func() bool { return true },
+		},
+		GovernanceControllerDeps: GovernanceControllerDeps{
+			Cfg:       infra.Cfg,
+			Logger:    infra.Logger,
+			Responder: infra.Responder,
+		},
+		MCPControllerDeps:     MCPControllerDeps{MCPGateway: mcpGateway},
+		PubSubControllerDeps:  PubSubControllerDeps{Handler: infra.Pubsub},
+		PasskeyControllerDeps: PasskeyControllerDeps{Handler: infra.Passkey},
 	})
 	require.NoError(t, err, "failed to create HTTP handler")
 	return h, infra.Cfg, infra
@@ -255,7 +342,13 @@ func setupTestGatewayService(t *testing.T) (*GatewayModeService, *config.Config)
 		cfg:                infra.Cfg,
 		logger:             infra.Logger,
 		db:                 infra.DB,
-		stores:             infra.Stores,
+		docStore:           infra.Stores.DocStore,
+		consensusStore:     infra.Stores.ConsensusStore,
+		signerStore:        infra.Stores.SignerStore,
+		auditStore:         infra.Stores.AuditStore,
+		stateRootSvc:       infra.Stores.StateRootSvc,
+		kvStore:            infra.Stores.KVStore,
+		replayStore:        infra.Stores.ReplayStore,
 		pubsub:             infra.Pubsub,
 		auth:               infra.Auth,
 		pki:                infra.PKI,
@@ -269,7 +362,7 @@ func setupTestGatewayService(t *testing.T) (*GatewayModeService, *config.Config)
 		responder:          infra.Responder,
 	}
 
-	require.NoError(t, ls.InitHTTPHandler(nil, nil))
+	require.NoError(t, ls.initHTTPHandler())
 
 	return ls, infra.Cfg
 }
@@ -318,7 +411,7 @@ func TestAuthMiddleware(t *testing.T) {
 	err = h.dataController.docStore.DocSet("settings", "platform_settings", settingsBytes)
 	require.NoError(t, err)
 
-	handler := h.auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := h.authMiddleware.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -333,7 +426,7 @@ func TestAuthMiddleware(t *testing.T) {
 func TestAuthWebSocket(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 
-	handler := h.auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := h.authMiddleware.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -348,7 +441,7 @@ func TestAuthWebSocket(t *testing.T) {
 func TestAuthMiddlewareDeep(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 
-	handler := h.auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := h.authMiddleware.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -523,15 +616,15 @@ func TestNewHTTPHandler(t *testing.T) {
 	assert.NotNil(t, h.dataController.docStore)
 	assert.NotNil(t, h.dataController.kvStore)
 	assert.NotNil(t, h.dataController.sseStore)
-	assert.NotNil(t, h.pubsub)
-	assert.NotNil(t, h.auth)
+	assert.NotNil(t, h.GetGatewayWebSocketHandler())
+	assert.NotNil(t, h.authMiddleware)
 	assert.NotNil(t, h.pkiController.pki)
 	assert.NotNil(t, h.bootstrapController.cliSessionSvc)
 	assert.NotNil(t, h.bootstrapController.operatorSessionSvc)
-	assert.NotNil(t, h.passkey)
+	assert.NotNil(t, h.GetPasskeyHandler())
 	assert.NotNil(t, h.adminController.userSvc)
 	assert.NotNil(t, h.responder)
-	assert.NotNil(t, h.mcp)
+	assert.NotNil(t, h.GetMCPGateway())
 	assert.NotNil(t, h.pkiController)
 	assert.NotNil(t, h.dataController)
 	assert.NotNil(t, h.bootstrapController)
@@ -663,7 +756,7 @@ func TestCLICertBoundToOperator(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("CLI cert bound to Operator session is accepted", func(t *testing.T) {
-		bound, err := h.auth.cliCertBoundToOperator(
+		bound, err := h.authMiddleware.cliCertBoundToOperator(
 			[]*url.URL{cliURI}, cliSessionID, userID, operatorSessionID,
 		)
 		require.NoError(t, err)
@@ -671,7 +764,7 @@ func TestCLICertBoundToOperator(t *testing.T) {
 	})
 
 	t.Run("CLI cert bound to a different Operator session is rejected", func(t *testing.T) {
-		bound, err := h.auth.cliCertBoundToOperator(
+		bound, err := h.authMiddleware.cliCertBoundToOperator(
 			[]*url.URL{cliURI}, cliSessionID, userID, otherOpSessionID,
 		)
 		require.NoError(t, err)
@@ -679,7 +772,7 @@ func TestCLICertBoundToOperator(t *testing.T) {
 	})
 
 	t.Run("operator URI is not accepted via the CLI path", func(t *testing.T) {
-		bound, err := h.auth.cliCertBoundToOperator(
+		bound, err := h.authMiddleware.cliCertBoundToOperator(
 			[]*url.URL{opURI}, cliSessionID, userID, operatorSessionID,
 		)
 		require.NoError(t, err)
@@ -697,7 +790,7 @@ func TestCLICertBoundToOperator(t *testing.T) {
 		require.NoError(t, h.dataController.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), "cli-expired", eb))
 		expiredURI, err := wid.CLISPIFFEURL(userID, "cli-expired")
 		require.NoError(t, err)
-		bound, err := h.auth.cliCertBoundToOperator(
+		bound, err := h.authMiddleware.cliCertBoundToOperator(
 			[]*url.URL{expiredURI}, "cli-expired", userID, operatorSessionID,
 		)
 		require.NoError(t, err)
@@ -1044,23 +1137,109 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 		require.NoError(t, err)
 
 		h, err := newHTTPHandler(HTTPHandlerDependencies{
-			Cfg:                infra.Cfg,
-			Logger:             infra.Logger,
-			Stores:             infra.Stores,
-			Pubsub:             infra.Pubsub,
-			Auth:               infra.Auth,
-			PKI:                infra.PKI,
-			CLISessionSvc:      infra.CLISessionSvc,
-			OperatorSessionSvc: infra.OperatorSessionSvc,
-			WebSessionSvc:      infra.WebSessionSvc,
-			Reg:                infra.Reg,
-			Passkey:            infra.Passkey,
-			UserSvc:            infra.UserSvc,
-			Responder:          infra.Responder,
-			MCPGateway:         mcpGateway,
-			AppEnrollment:      nil,
-			IsReady:            func() bool { return true },
-			IsGovernanceReady:  func() bool { return true },
+			Cfg:    infra.Cfg,
+			Logger: infra.Logger,
+			Auth:   infra.Auth,
+			PKIControllerDeps: PKIControllerDeps{
+				Cfg:          infra.Cfg,
+				Logger:       infra.Logger,
+				PKI:          infra.PKI,
+				Registration: infra.Reg,
+				Responder:    infra.Responder,
+			},
+			AuditControllerDeps: AuditControllerDeps{
+				Cfg:        infra.Cfg,
+				Logger:     infra.Logger,
+				AuditStore: infra.Stores.AuditStore,
+				Responder:  infra.Responder,
+			},
+			DataControllerDeps: DataControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				DocStore:  infra.Stores.DocStore,
+				KVStore:   infra.Stores.KVStore,
+				SSEStore:  infra.Stores.SSEStore,
+				BlobStore: infra.Stores.BlobStore,
+				Pubsub:    infra.Pubsub,
+				Responder: infra.Responder,
+			},
+			SignerControllerDeps: SignerControllerDeps{
+				Cfg:         infra.Cfg,
+				Logger:      infra.Logger,
+				DocStore:    infra.Stores.DocStore,
+				SignerStore: infra.Stores.SignerStore,
+				Responder:   infra.Responder,
+			},
+			BootstrapControllerDeps: BootstrapControllerDeps{
+				Cfg:                infra.Cfg,
+				Logger:             infra.Logger,
+				DocStore:           infra.Stores.DocStore,
+				UserSvc:            infra.UserSvc,
+				PKI:                infra.PKI,
+				CLISessionSvc:      infra.CLISessionSvc,
+				OperatorSessionSvc: infra.OperatorSessionSvc,
+				Responder:          infra.Responder,
+			},
+			EnrollmentTokenControllerDeps: EnrollmentTokenControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				Responder: infra.Responder,
+			},
+			UserControllerDeps: UserControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				UserSvc:   infra.UserSvc,
+				Responder: infra.Responder,
+			},
+			SessionControllerDeps: SessionControllerDeps{
+				Logger:      infra.Logger,
+				DocStore:    infra.Stores.DocStore,
+				Responder:   infra.Responder,
+				CrossOrigin: len(infra.Cfg.Gateway.AllowedOrigins) > 0,
+			},
+			AdminControllerDeps: AdminControllerDeps{
+				Cfg:            infra.Cfg,
+				Logger:         infra.Logger,
+				DocStore:       infra.Stores.DocStore,
+				SignerStore:    infra.Stores.SignerStore,
+				ConsensusStore: infra.Stores.ConsensusStore,
+				UserSvc:        infra.UserSvc,
+				Responder:      infra.Responder,
+			},
+			OperatorControllerDeps: OperatorControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				Reg:       infra.Reg,
+				Auth:      infra.Auth,
+				Responder: infra.Responder,
+			},
+			SSEControllerDeps: SSEControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				DocStore:  infra.Stores.DocStore,
+				KVStore:   infra.Stores.KVStore,
+				SSEStore:  infra.Stores.SSEStore,
+				Pubsub:    infra.Pubsub,
+				Auth:      infra.Auth,
+				Responder: infra.Responder,
+			},
+			HealthControllerDeps: HealthControllerDeps{
+				Cfg:               infra.Cfg,
+				Logger:            infra.Logger,
+				DocStore:          infra.Stores.DocStore,
+				StateRootSvc:      infra.Stores.StateRootSvc,
+				Responder:         infra.Responder,
+				IsReady:           func() bool { return true },
+				IsGovernanceReady: func() bool { return true },
+			},
+			GovernanceControllerDeps: GovernanceControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				Responder: infra.Responder,
+			},
+			MCPControllerDeps:     MCPControllerDeps{MCPGateway: mcpGateway},
+			PubSubControllerDeps:  PubSubControllerDeps{Handler: infra.Pubsub},
+			PasskeyControllerDeps: PasskeyControllerDeps{Handler: infra.Passkey},
 		})
 		require.NoError(t, err)
 
@@ -1103,23 +1282,109 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 		require.NoError(t, err)
 
 		h, err := newHTTPHandler(HTTPHandlerDependencies{
-			Cfg:                infra.Cfg,
-			Logger:             infra.Logger,
-			Stores:             infra.Stores,
-			Pubsub:             infra.Pubsub,
-			Auth:               infra.Auth,
-			PKI:                infra.PKI,
-			CLISessionSvc:      infra.CLISessionSvc,
-			OperatorSessionSvc: infra.OperatorSessionSvc,
-			WebSessionSvc:      infra.WebSessionSvc,
-			Reg:                infra.Reg,
-			Passkey:            infra.Passkey,
-			UserSvc:            infra.UserSvc,
-			Responder:          infra.Responder,
-			MCPGateway:         mcpGateway,
-			AppEnrollment:      nil,
-			IsReady:            func() bool { return true },
-			IsGovernanceReady:  func() bool { return true },
+			Cfg:    infra.Cfg,
+			Logger: infra.Logger,
+			Auth:   infra.Auth,
+			PKIControllerDeps: PKIControllerDeps{
+				Cfg:          infra.Cfg,
+				Logger:       infra.Logger,
+				PKI:          infra.PKI,
+				Registration: infra.Reg,
+				Responder:    infra.Responder,
+			},
+			AuditControllerDeps: AuditControllerDeps{
+				Cfg:        infra.Cfg,
+				Logger:     infra.Logger,
+				AuditStore: infra.Stores.AuditStore,
+				Responder:  infra.Responder,
+			},
+			DataControllerDeps: DataControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				DocStore:  infra.Stores.DocStore,
+				KVStore:   infra.Stores.KVStore,
+				SSEStore:  infra.Stores.SSEStore,
+				BlobStore: infra.Stores.BlobStore,
+				Pubsub:    infra.Pubsub,
+				Responder: infra.Responder,
+			},
+			SignerControllerDeps: SignerControllerDeps{
+				Cfg:         infra.Cfg,
+				Logger:      infra.Logger,
+				DocStore:    infra.Stores.DocStore,
+				SignerStore: infra.Stores.SignerStore,
+				Responder:   infra.Responder,
+			},
+			BootstrapControllerDeps: BootstrapControllerDeps{
+				Cfg:                infra.Cfg,
+				Logger:             infra.Logger,
+				DocStore:           infra.Stores.DocStore,
+				UserSvc:            infra.UserSvc,
+				PKI:                infra.PKI,
+				CLISessionSvc:      infra.CLISessionSvc,
+				OperatorSessionSvc: infra.OperatorSessionSvc,
+				Responder:          infra.Responder,
+			},
+			EnrollmentTokenControllerDeps: EnrollmentTokenControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				Responder: infra.Responder,
+			},
+			UserControllerDeps: UserControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				UserSvc:   infra.UserSvc,
+				Responder: infra.Responder,
+			},
+			SessionControllerDeps: SessionControllerDeps{
+				Logger:      infra.Logger,
+				DocStore:    infra.Stores.DocStore,
+				Responder:   infra.Responder,
+				CrossOrigin: len(infra.Cfg.Gateway.AllowedOrigins) > 0,
+			},
+			AdminControllerDeps: AdminControllerDeps{
+				Cfg:            infra.Cfg,
+				Logger:         infra.Logger,
+				DocStore:       infra.Stores.DocStore,
+				SignerStore:    infra.Stores.SignerStore,
+				ConsensusStore: infra.Stores.ConsensusStore,
+				UserSvc:        infra.UserSvc,
+				Responder:      infra.Responder,
+			},
+			OperatorControllerDeps: OperatorControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				Reg:       infra.Reg,
+				Auth:      infra.Auth,
+				Responder: infra.Responder,
+			},
+			SSEControllerDeps: SSEControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				DocStore:  infra.Stores.DocStore,
+				KVStore:   infra.Stores.KVStore,
+				SSEStore:  infra.Stores.SSEStore,
+				Pubsub:    infra.Pubsub,
+				Auth:      infra.Auth,
+				Responder: infra.Responder,
+			},
+			HealthControllerDeps: HealthControllerDeps{
+				Cfg:               infra.Cfg,
+				Logger:            infra.Logger,
+				DocStore:          infra.Stores.DocStore,
+				StateRootSvc:      infra.Stores.StateRootSvc,
+				Responder:         infra.Responder,
+				IsReady:           func() bool { return true },
+				IsGovernanceReady: func() bool { return true },
+			},
+			GovernanceControllerDeps: GovernanceControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				Responder: infra.Responder,
+			},
+			MCPControllerDeps:     MCPControllerDeps{MCPGateway: mcpGateway},
+			PubSubControllerDeps:  PubSubControllerDeps{Handler: infra.Pubsub},
+			PasskeyControllerDeps: PasskeyControllerDeps{Handler: infra.Passkey},
 		})
 		require.NoError(t, err)
 
@@ -1162,23 +1427,109 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 		require.NoError(t, err)
 
 		h, err := newHTTPHandler(HTTPHandlerDependencies{
-			Cfg:                infra.Cfg,
-			Logger:             infra.Logger,
-			Stores:             infra.Stores,
-			Pubsub:             infra.Pubsub,
-			Auth:               infra.Auth,
-			PKI:                infra.PKI,
-			CLISessionSvc:      infra.CLISessionSvc,
-			OperatorSessionSvc: infra.OperatorSessionSvc,
-			WebSessionSvc:      infra.WebSessionSvc,
-			Reg:                infra.Reg,
-			Passkey:            infra.Passkey,
-			UserSvc:            infra.UserSvc,
-			Responder:          infra.Responder,
-			MCPGateway:         mcpGateway,
-			AppEnrollment:      nil,
-			IsReady:            func() bool { return true },
-			IsGovernanceReady:  func() bool { return true },
+			Cfg:    infra.Cfg,
+			Logger: infra.Logger,
+			Auth:   infra.Auth,
+			PKIControllerDeps: PKIControllerDeps{
+				Cfg:          infra.Cfg,
+				Logger:       infra.Logger,
+				PKI:          infra.PKI,
+				Registration: infra.Reg,
+				Responder:    infra.Responder,
+			},
+			AuditControllerDeps: AuditControllerDeps{
+				Cfg:        infra.Cfg,
+				Logger:     infra.Logger,
+				AuditStore: infra.Stores.AuditStore,
+				Responder:  infra.Responder,
+			},
+			DataControllerDeps: DataControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				DocStore:  infra.Stores.DocStore,
+				KVStore:   infra.Stores.KVStore,
+				SSEStore:  infra.Stores.SSEStore,
+				BlobStore: infra.Stores.BlobStore,
+				Pubsub:    infra.Pubsub,
+				Responder: infra.Responder,
+			},
+			SignerControllerDeps: SignerControllerDeps{
+				Cfg:         infra.Cfg,
+				Logger:      infra.Logger,
+				DocStore:    infra.Stores.DocStore,
+				SignerStore: infra.Stores.SignerStore,
+				Responder:   infra.Responder,
+			},
+			BootstrapControllerDeps: BootstrapControllerDeps{
+				Cfg:                infra.Cfg,
+				Logger:             infra.Logger,
+				DocStore:           infra.Stores.DocStore,
+				UserSvc:            infra.UserSvc,
+				PKI:                infra.PKI,
+				CLISessionSvc:      infra.CLISessionSvc,
+				OperatorSessionSvc: infra.OperatorSessionSvc,
+				Responder:          infra.Responder,
+			},
+			EnrollmentTokenControllerDeps: EnrollmentTokenControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				Responder: infra.Responder,
+			},
+			UserControllerDeps: UserControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				UserSvc:   infra.UserSvc,
+				Responder: infra.Responder,
+			},
+			SessionControllerDeps: SessionControllerDeps{
+				Logger:      infra.Logger,
+				DocStore:    infra.Stores.DocStore,
+				Responder:   infra.Responder,
+				CrossOrigin: len(infra.Cfg.Gateway.AllowedOrigins) > 0,
+			},
+			AdminControllerDeps: AdminControllerDeps{
+				Cfg:            infra.Cfg,
+				Logger:         infra.Logger,
+				DocStore:       infra.Stores.DocStore,
+				SignerStore:    infra.Stores.SignerStore,
+				ConsensusStore: infra.Stores.ConsensusStore,
+				UserSvc:        infra.UserSvc,
+				Responder:      infra.Responder,
+			},
+			OperatorControllerDeps: OperatorControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				Reg:       infra.Reg,
+				Auth:      infra.Auth,
+				Responder: infra.Responder,
+			},
+			SSEControllerDeps: SSEControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				DocStore:  infra.Stores.DocStore,
+				KVStore:   infra.Stores.KVStore,
+				SSEStore:  infra.Stores.SSEStore,
+				Pubsub:    infra.Pubsub,
+				Auth:      infra.Auth,
+				Responder: infra.Responder,
+			},
+			HealthControllerDeps: HealthControllerDeps{
+				Cfg:               infra.Cfg,
+				Logger:            infra.Logger,
+				DocStore:          infra.Stores.DocStore,
+				StateRootSvc:      infra.Stores.StateRootSvc,
+				Responder:         infra.Responder,
+				IsReady:           func() bool { return true },
+				IsGovernanceReady: func() bool { return true },
+			},
+			GovernanceControllerDeps: GovernanceControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				Responder: infra.Responder,
+			},
+			MCPControllerDeps:     MCPControllerDeps{MCPGateway: mcpGateway},
+			PubSubControllerDeps:  PubSubControllerDeps{Handler: infra.Pubsub},
+			PasskeyControllerDeps: PasskeyControllerDeps{Handler: infra.Passkey},
 		})
 		require.NoError(t, err)
 
@@ -1226,23 +1577,109 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 		require.NoError(t, err)
 
 		h, err := newHTTPHandler(HTTPHandlerDependencies{
-			Cfg:                infra.Cfg,
-			Logger:             infra.Logger,
-			Stores:             infra.Stores,
-			Pubsub:             infra.Pubsub,
-			Auth:               infra.Auth,
-			PKI:                infra.PKI,
-			CLISessionSvc:      infra.CLISessionSvc,
-			OperatorSessionSvc: infra.OperatorSessionSvc,
-			WebSessionSvc:      infra.WebSessionSvc,
-			Reg:                infra.Reg,
-			Passkey:            infra.Passkey,
-			UserSvc:            infra.UserSvc,
-			Responder:          infra.Responder,
-			MCPGateway:         mcpGateway,
-			AppEnrollment:      nil,
-			IsReady:            func() bool { return true },
-			IsGovernanceReady:  func() bool { return true },
+			Cfg:    infra.Cfg,
+			Logger: infra.Logger,
+			Auth:   infra.Auth,
+			PKIControllerDeps: PKIControllerDeps{
+				Cfg:          infra.Cfg,
+				Logger:       infra.Logger,
+				PKI:          infra.PKI,
+				Registration: infra.Reg,
+				Responder:    infra.Responder,
+			},
+			AuditControllerDeps: AuditControllerDeps{
+				Cfg:        infra.Cfg,
+				Logger:     infra.Logger,
+				AuditStore: infra.Stores.AuditStore,
+				Responder:  infra.Responder,
+			},
+			DataControllerDeps: DataControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				DocStore:  infra.Stores.DocStore,
+				KVStore:   infra.Stores.KVStore,
+				SSEStore:  infra.Stores.SSEStore,
+				BlobStore: infra.Stores.BlobStore,
+				Pubsub:    infra.Pubsub,
+				Responder: infra.Responder,
+			},
+			SignerControllerDeps: SignerControllerDeps{
+				Cfg:         infra.Cfg,
+				Logger:      infra.Logger,
+				DocStore:    infra.Stores.DocStore,
+				SignerStore: infra.Stores.SignerStore,
+				Responder:   infra.Responder,
+			},
+			BootstrapControllerDeps: BootstrapControllerDeps{
+				Cfg:                infra.Cfg,
+				Logger:             infra.Logger,
+				DocStore:           infra.Stores.DocStore,
+				UserSvc:            infra.UserSvc,
+				PKI:                infra.PKI,
+				CLISessionSvc:      infra.CLISessionSvc,
+				OperatorSessionSvc: infra.OperatorSessionSvc,
+				Responder:          infra.Responder,
+			},
+			EnrollmentTokenControllerDeps: EnrollmentTokenControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				Responder: infra.Responder,
+			},
+			UserControllerDeps: UserControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				UserSvc:   infra.UserSvc,
+				Responder: infra.Responder,
+			},
+			SessionControllerDeps: SessionControllerDeps{
+				Logger:      infra.Logger,
+				DocStore:    infra.Stores.DocStore,
+				Responder:   infra.Responder,
+				CrossOrigin: len(infra.Cfg.Gateway.AllowedOrigins) > 0,
+			},
+			AdminControllerDeps: AdminControllerDeps{
+				Cfg:            infra.Cfg,
+				Logger:         infra.Logger,
+				DocStore:       infra.Stores.DocStore,
+				SignerStore:    infra.Stores.SignerStore,
+				ConsensusStore: infra.Stores.ConsensusStore,
+				UserSvc:        infra.UserSvc,
+				Responder:      infra.Responder,
+			},
+			OperatorControllerDeps: OperatorControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				Reg:       infra.Reg,
+				Auth:      infra.Auth,
+				Responder: infra.Responder,
+			},
+			SSEControllerDeps: SSEControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				DocStore:  infra.Stores.DocStore,
+				KVStore:   infra.Stores.KVStore,
+				SSEStore:  infra.Stores.SSEStore,
+				Pubsub:    infra.Pubsub,
+				Auth:      infra.Auth,
+				Responder: infra.Responder,
+			},
+			HealthControllerDeps: HealthControllerDeps{
+				Cfg:               infra.Cfg,
+				Logger:            infra.Logger,
+				DocStore:          infra.Stores.DocStore,
+				StateRootSvc:      infra.Stores.StateRootSvc,
+				Responder:         infra.Responder,
+				IsReady:           func() bool { return true },
+				IsGovernanceReady: func() bool { return true },
+			},
+			GovernanceControllerDeps: GovernanceControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				Responder: infra.Responder,
+			},
+			MCPControllerDeps:     MCPControllerDeps{MCPGateway: mcpGateway},
+			PubSubControllerDeps:  PubSubControllerDeps{Handler: infra.Pubsub},
+			PasskeyControllerDeps: PasskeyControllerDeps{Handler: infra.Passkey},
 		})
 		require.NoError(t, err)
 
@@ -1293,23 +1730,109 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 		require.NoError(t, err)
 
 		h, err := newHTTPHandler(HTTPHandlerDependencies{
-			Cfg:                infra.Cfg,
-			Logger:             infra.Logger,
-			Stores:             infra.Stores,
-			Pubsub:             infra.Pubsub,
-			Auth:               infra.Auth,
-			PKI:                infra.PKI,
-			CLISessionSvc:      infra.CLISessionSvc,
-			OperatorSessionSvc: infra.OperatorSessionSvc,
-			WebSessionSvc:      infra.WebSessionSvc,
-			Reg:                infra.Reg,
-			Passkey:            infra.Passkey,
-			UserSvc:            infra.UserSvc,
-			Responder:          infra.Responder,
-			MCPGateway:         mcpGateway,
-			AppEnrollment:      nil,
-			IsReady:            func() bool { return true },
-			IsGovernanceReady:  func() bool { return true },
+			Cfg:    infra.Cfg,
+			Logger: infra.Logger,
+			Auth:   infra.Auth,
+			PKIControllerDeps: PKIControllerDeps{
+				Cfg:          infra.Cfg,
+				Logger:       infra.Logger,
+				PKI:          infra.PKI,
+				Registration: infra.Reg,
+				Responder:    infra.Responder,
+			},
+			AuditControllerDeps: AuditControllerDeps{
+				Cfg:        infra.Cfg,
+				Logger:     infra.Logger,
+				AuditStore: infra.Stores.AuditStore,
+				Responder:  infra.Responder,
+			},
+			DataControllerDeps: DataControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				DocStore:  infra.Stores.DocStore,
+				KVStore:   infra.Stores.KVStore,
+				SSEStore:  infra.Stores.SSEStore,
+				BlobStore: infra.Stores.BlobStore,
+				Pubsub:    infra.Pubsub,
+				Responder: infra.Responder,
+			},
+			SignerControllerDeps: SignerControllerDeps{
+				Cfg:         infra.Cfg,
+				Logger:      infra.Logger,
+				DocStore:    infra.Stores.DocStore,
+				SignerStore: infra.Stores.SignerStore,
+				Responder:   infra.Responder,
+			},
+			BootstrapControllerDeps: BootstrapControllerDeps{
+				Cfg:                infra.Cfg,
+				Logger:             infra.Logger,
+				DocStore:           infra.Stores.DocStore,
+				UserSvc:            infra.UserSvc,
+				PKI:                infra.PKI,
+				CLISessionSvc:      infra.CLISessionSvc,
+				OperatorSessionSvc: infra.OperatorSessionSvc,
+				Responder:          infra.Responder,
+			},
+			EnrollmentTokenControllerDeps: EnrollmentTokenControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				Responder: infra.Responder,
+			},
+			UserControllerDeps: UserControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				UserSvc:   infra.UserSvc,
+				Responder: infra.Responder,
+			},
+			SessionControllerDeps: SessionControllerDeps{
+				Logger:      infra.Logger,
+				DocStore:    infra.Stores.DocStore,
+				Responder:   infra.Responder,
+				CrossOrigin: len(infra.Cfg.Gateway.AllowedOrigins) > 0,
+			},
+			AdminControllerDeps: AdminControllerDeps{
+				Cfg:            infra.Cfg,
+				Logger:         infra.Logger,
+				DocStore:       infra.Stores.DocStore,
+				SignerStore:    infra.Stores.SignerStore,
+				ConsensusStore: infra.Stores.ConsensusStore,
+				UserSvc:        infra.UserSvc,
+				Responder:      infra.Responder,
+			},
+			OperatorControllerDeps: OperatorControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				Reg:       infra.Reg,
+				Auth:      infra.Auth,
+				Responder: infra.Responder,
+			},
+			SSEControllerDeps: SSEControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				DocStore:  infra.Stores.DocStore,
+				KVStore:   infra.Stores.KVStore,
+				SSEStore:  infra.Stores.SSEStore,
+				Pubsub:    infra.Pubsub,
+				Auth:      infra.Auth,
+				Responder: infra.Responder,
+			},
+			HealthControllerDeps: HealthControllerDeps{
+				Cfg:               infra.Cfg,
+				Logger:            infra.Logger,
+				DocStore:          infra.Stores.DocStore,
+				StateRootSvc:      infra.Stores.StateRootSvc,
+				Responder:         infra.Responder,
+				IsReady:           func() bool { return true },
+				IsGovernanceReady: func() bool { return true },
+			},
+			GovernanceControllerDeps: GovernanceControllerDeps{
+				Cfg:       infra.Cfg,
+				Logger:    infra.Logger,
+				Responder: infra.Responder,
+			},
+			MCPControllerDeps:     MCPControllerDeps{MCPGateway: mcpGateway},
+			PubSubControllerDeps:  PubSubControllerDeps{Handler: infra.Pubsub},
+			PasskeyControllerDeps: PasskeyControllerDeps{Handler: infra.Passkey},
 		})
 		require.NoError(t, err)
 

@@ -36,16 +36,26 @@ type HealthController struct {
 	isGovernanceReady func() bool
 }
 
-// newHealthController creates a HealthController with the given dependencies.
-func newHealthController(cfg *config.Config, logger *slog.Logger, docStore *DocumentStoreService, stateRootSvc *StateRootService, responder *response.Writer, isReady func() bool, isGovernanceReady func() bool) *HealthController {
+// HealthControllerDeps groups all dependencies for HealthController.
+type HealthControllerDeps struct {
+	Cfg               *config.Config
+	Logger            *slog.Logger
+	DocStore          *DocumentStoreService
+	StateRootSvc      *StateRootService
+	Responder         *response.Writer
+	IsReady           func() bool
+	IsGovernanceReady func() bool
+}
+
+func newHealthController(d HealthControllerDeps) *HealthController {
 	return &HealthController{
-		cfg:               cfg,
-		logger:            logger,
-		docStore:          docStore,
-		stateRootSvc:      stateRootSvc,
-		responder:         responder,
-		isReady:           isReady,
-		isGovernanceReady: isGovernanceReady,
+		cfg:               d.Cfg,
+		logger:            d.Logger,
+		docStore:          d.DocStore,
+		stateRootSvc:      d.StateRootSvc,
+		responder:         d.Responder,
+		isReady:           d.IsReady,
+		isGovernanceReady: d.IsGovernanceReady,
 	}
 }
 

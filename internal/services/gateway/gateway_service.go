@@ -60,22 +60,31 @@ type GatewayModeService struct {
 	fileSvc  fs.RuntimeFileService
 	doctrine *governance.L1Doctrine
 
-	db                 *CanonicalDBService
-	stores             *Stores
-	pubsub             *GatewayWebSocketHandler
-	auth               *AuthService
-	pki                *PKIAuthority
-	reg                *RegistrationService
-	passkey            *PasskeyHandler
-	userSvc            *UserService
-	cliSessionSvc      *CLISessionService
-	operatorSessionSvc *OperatorSessionService
-	webSessionSvc      *WebSessionService
-	suspendedTxService *storage.SuspendedTransactionService
-	mcpGateway         *mcp.GatewayService
-	responder          *response.Writer
-	server             *http.Server
-	publicServer       *http.Server
+	db                      *CanonicalDBService
+	docStore                *DocumentStoreService
+	consensusStore          *ConsensusStoreService
+	signerStore             *SignerStoreService
+	auditStore              *storage.SQLAuditStore
+	stateRootSvc            *StateRootService
+	kvStore                 *KVStoreService
+	replayStore             *ReplayStoreService
+	pubsub                  *GatewayWebSocketHandler
+	auth                    *AuthService
+	pki                     *PKIAuthority
+	reg                     *RegistrationService
+	passkey                 *PasskeyHandler
+	userSvc                 *UserService
+	cliSessionSvc           *CLISessionService
+	operatorSessionSvc      *OperatorSessionService
+	webSessionSvc           *WebSessionService
+	suspendedTxService      *storage.SuspendedTransactionService
+	mcpGateway              *mcp.GatewayService
+	envProcAdapter          *pubsub.GatewayEnvProcAdapter
+	sessionValidatorAdapter *pubsub.GatewaySessionValidatorAdapter
+	consensusSvc            *consensus.ConsensusService
+	responder               *response.Writer
+	server                  *http.Server
+	publicServer            *http.Server
 
 	handler *HTTPHandler
 
@@ -113,7 +122,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		return nil, fmt.Errorf("gateway: failed to initialize database: %w", err)
 	}
 
-	pubsub := NewGatewayWebSocketHandler(logger)
+	wsHandler := NewGatewayWebSocketHandler(logger)
 
 	// --- Secret manager ---
 	sm := db.GetSecretManager()
@@ -212,52 +221,82 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		return nil, fmt.Errorf("gateway: load doctrine: %w", err)
 	}
 
+	actuatorPriv, actuatorKeyID, err := sm.GetActuatorKey()
+	if err != nil {
+		return nil, fmt.Errorf("gateway: load actuator signing key: %w", err)
+	}
+
+	envProcAdapter := &pubsub.GatewayEnvProcAdapter{}
+	sessionValidatorAdapter := &pubsub.GatewaySessionValidatorAdapter{}
+
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:           logger,
-		Responder:        res,
-		SuspendedStore:   suspendedTxService,
-		ScrubbingService: scrubbingService,
-		ThreatScanner:    doctrine,
-		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
-		Posture:          string(cfg.Gateway.Posture),
-		A2ADownstreamURL: cfg.Gateway.A2ADownstreamURL,
-		PublicBaseURL:    publicBaseURL,
-		AuditStore:       stores.AuditStore,
+		Logger:            logger,
+		Responder:         res,
+		SuspendedStore:    suspendedTxService,
+		ScrubbingService:  scrubbingService,
+		ThreatScanner:     doctrine,
+		MaxPayloadBytes:   cfg.Gateway.MaxPayloadBytes,
+		Posture:           string(cfg.Gateway.Posture),
+		A2ADownstreamURL:  cfg.Gateway.A2ADownstreamURL,
+		PublicBaseURL:     publicBaseURL,
+		AuditStore:        stores.AuditStore,
+		EnvProc:           envProcAdapter,
+		StateRootProvider: stores.StateRootSvc,
+		SigningKey:        actuatorPriv,
+		KeyID:             actuatorKeyID,
+		DownstreamURL:     cfg.Gateway.MCPDownstreamURL,
+		DBService:         stores.DocStore,
+		SessionValidator:  sessionValidatorAdapter,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("gateway: failed to initialize MCP gateway: %w", err)
 	}
 
-	passkeyOrchestrator := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, pubsub, logger)
+	passkeyOrchestrator := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, wsHandler, logger)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:       passkey,
 		WebSessionSvc: webSessionSvc,
 		Responder:     res,
-		MaxPayload:    cfg.Gateway.MaxPayloadBytes,
 		Orchestrator:  passkeyOrchestrator,
-		CrossOrigin:   len(cfg.Gateway.AllowedOrigins) > 0,
 	})
 
 	ls := &GatewayModeService{
-		cfg:                cfg,
-		logger:             logger,
-		fileSvc:            b.fileSvc,
-		doctrine:           doctrine,
-		db:                 db,
-		stores:             stores,
-		pubsub:             pubsub,
-		auth:               auth,
-		pki:                pki,
-		reg:                reg,
-		passkey:            passkeyHandler,
-		userSvc:            userSvc,
-		cliSessionSvc:      cliSessionSvc,
-		operatorSessionSvc: operatorSessionSvc,
-		webSessionSvc:      webSessionSvc,
-		suspendedTxService: suspendedTxService,
-		extraIPs:           extraIPs,
-		mcpGateway:         mcpGateway,
-		responder:          res,
+		cfg:                     cfg,
+		logger:                  logger,
+		fileSvc:                 b.fileSvc,
+		doctrine:                doctrine,
+		db:                      db,
+		docStore:                stores.DocStore,
+		consensusStore:          stores.ConsensusStore,
+		signerStore:             stores.SignerStore,
+		auditStore:              stores.AuditStore,
+		stateRootSvc:            stores.StateRootSvc,
+		kvStore:                 stores.KVStore,
+		replayStore:             stores.ReplayStore,
+		pubsub:                  wsHandler,
+		auth:                    auth,
+		pki:                     pki,
+		reg:                     reg,
+		passkey:                 passkeyHandler,
+		userSvc:                 userSvc,
+		cliSessionSvc:           cliSessionSvc,
+		operatorSessionSvc:      operatorSessionSvc,
+		webSessionSvc:           webSessionSvc,
+		suspendedTxService:      suspendedTxService,
+		extraIPs:                extraIPs,
+		mcpGateway:              mcpGateway,
+		envProcAdapter:          envProcAdapter,
+		sessionValidatorAdapter: sessionValidatorAdapter,
+		responder:               res,
+	}
+
+	// Fold InitHTTPHandler into construction: build the HTTP handler and
+	// servers now, with consensusSvc nil (wired later via SetConsensusService
+	// before Start) and envProc as the lazy envProcAdapter (wired by
+	// NewGatewayOperatorPubSubService). The handler reads these at request
+	// time, so nil-at-construction is safe.
+	if err := ls.initHTTPHandler(); err != nil {
+		return nil, fmt.Errorf("gateway: initialize HTTP handler: %w", err)
 	}
 
 	return ls, nil
@@ -356,13 +395,24 @@ func detectBasicNonLoopbackIPv4Addresses() []net.IP {
 	return extraIPs
 }
 
-// InitHTTPHandler creates the HTTP handler and servers with all dependencies
-// injected. This is the second phase of construction — call after wiring
-// late-bound dependencies (consensus service, envelope processor) that require
-// the base service to exist first. consensusSvc may be nil if the gateway
-// posture does not require L2 consensus. envProc may be nil if envelope
-// submission is not enabled.
-func (ls *GatewayModeService) InitHTTPHandler(consensusSvc *consensus.ConsensusService, envProc governance.EnvelopeProcessor) error {
+// SetConsensusService wires the consensus service after construction.
+// Called once before Start(). Nil is valid (consensus not configured for the
+// current posture, e.g. doctrine mode). The consensus service is constructed
+// between NewGatewayModeService and Start because it reads from the DB that
+// the constructor opens (via ConsensusBootstrap). The HTTP handler built in
+// the constructor captures a pointer to ls.consensusSvc, so setting this
+// field before Start() is observed by the GovernanceController at request
+// time without rebuilding the handler.
+func (ls *GatewayModeService) SetConsensusService(svc *consensus.ConsensusService) {
+	ls.consensusSvc = svc
+}
+
+// initHTTPHandler is the internal constructor for the HTTP handler and
+// servers. Called once by NewGatewayModeService. Reads ls.consensusSvc (set
+// via SetConsensusService before Start) and ls.envProcAdapter (lazy adapter
+// wired by NewGatewayOperatorPubSubService) at request time, so nil values at
+// construction time are safe.
+func (ls *GatewayModeService) initHTTPHandler() error {
 	cfg := ls.cfg
 	logger := ls.logger
 	pubsub := ls.pubsub
@@ -370,34 +420,138 @@ func (ls *GatewayModeService) InitHTTPHandler(consensusSvc *consensus.ConsensusS
 	pki := ls.pki
 	cliSessionSvc := ls.cliSessionSvc
 	operatorSessionSvc := ls.operatorSessionSvc
-	webSessionSvc := ls.webSessionSvc
 	reg := ls.reg
 	passkey := ls.passkey
 	userSvc := ls.userSvc
 
+	// The envelope processor is the lazy adapter wired by
+	// NewGatewayOperatorPubSubService. Avoid converting a nil pointer to the
+	// interface — that would produce a non-nil interface wrapping nil and
+	// bypass the controller's nil-check. Leave envProc as the nil interface
+	// when the adapter is absent (tests construct GatewayModeService without
+	// setting envProcAdapter).
+	var envProc governance.EnvelopeProcessor
+	if ls.envProcAdapter != nil {
+		envProc = ls.envProcAdapter
+	}
+
 	// Initialize AppEnrollmentService for external app enrollment
-	appEnrollment := NewAppEnrollmentService(ls.stores.DocStore, pki, logger)
+	appEnrollment := NewAppEnrollmentService(ls.docStore, pki, logger)
 
 	handler, err := newHTTPHandler(HTTPHandlerDependencies{
-		Cfg:                cfg,
-		Logger:             logger,
-		Stores:             ls.stores,
-		Pubsub:             pubsub,
-		Auth:               auth,
-		PKI:                pki,
-		CLISessionSvc:      cliSessionSvc,
-		OperatorSessionSvc: operatorSessionSvc,
-		WebSessionSvc:      webSessionSvc,
-		Reg:                reg,
-		Passkey:            passkey,
-		UserSvc:            userSvc,
-		Responder:          ls.responder,
-		MCPGateway:         ls.mcpGateway,
-		AppEnrollment:      appEnrollment,
-		Consensus:          consensusSvc,
-		EnvProc:            envProc,
-		IsReady:            ls.IsReady,
-		IsGovernanceReady:  ls.IsGovernanceReady,
+		Cfg:    cfg,
+		Logger: logger,
+		Auth:   auth,
+		PKIControllerDeps: PKIControllerDeps{
+			Cfg:           cfg,
+			Logger:        logger,
+			PKI:           pki,
+			AppEnrollment: appEnrollment,
+			Registration:  reg,
+			Responder:     ls.responder,
+		},
+		AuditControllerDeps: AuditControllerDeps{
+			Cfg:        cfg,
+			Logger:     logger,
+			AuditStore: ls.db.GetStores().AuditStore,
+			Responder:  ls.responder,
+		},
+		DataControllerDeps: DataControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			DocStore:  ls.db.GetStores().DocStore,
+			KVStore:   ls.db.GetStores().KVStore,
+			SSEStore:  ls.db.GetStores().SSEStore,
+			BlobStore: ls.db.GetStores().BlobStore,
+			Pubsub:    pubsub,
+			Responder: ls.responder,
+		},
+		SignerControllerDeps: SignerControllerDeps{
+			Cfg:         cfg,
+			Logger:      logger,
+			DocStore:    ls.db.GetStores().DocStore,
+			SignerStore: ls.db.GetStores().SignerStore,
+			Responder:   ls.responder,
+		},
+		BootstrapControllerDeps: BootstrapControllerDeps{
+			Cfg:                cfg,
+			Logger:             logger,
+			DocStore:           ls.docStore,
+			UserSvc:            userSvc,
+			PKI:                pki,
+			CLISessionSvc:      cliSessionSvc,
+			OperatorSessionSvc: operatorSessionSvc,
+			Responder:          ls.responder,
+			ActuatorKeyReader:  &fileActuatorKeyReader{path: paths.Infra.ActuatorPubJSONPath},
+		},
+		EnrollmentTokenControllerDeps: EnrollmentTokenControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			Responder: ls.responder,
+		},
+		UserControllerDeps: UserControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			UserSvc:   userSvc,
+			Responder: ls.responder,
+		},
+		SessionControllerDeps: SessionControllerDeps{
+			Logger:      logger,
+			DocStore:    ls.docStore,
+			Responder:   ls.responder,
+			CrossOrigin: len(cfg.Gateway.AllowedOrigins) > 0,
+		},
+		AdminControllerDeps: AdminControllerDeps{
+			Cfg:            cfg,
+			Logger:         logger,
+			DocStore:       ls.docStore,
+			SignerStore:    ls.signerStore,
+			ConsensusStore: ls.consensusStore,
+			UserSvc:        userSvc,
+			Responder:      ls.responder,
+		},
+		OperatorControllerDeps: OperatorControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			Reg:       reg,
+			Auth:      auth,
+			Responder: ls.responder,
+		},
+		SSEControllerDeps: SSEControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			DocStore:  ls.docStore,
+			KVStore:   ls.kvStore,
+			SSEStore:  ls.db.GetStores().SSEStore,
+			Pubsub:    pubsub,
+			Auth:      auth,
+			Responder: ls.responder,
+		},
+		HealthControllerDeps: HealthControllerDeps{
+			Cfg:               cfg,
+			Logger:            logger,
+			DocStore:          ls.docStore,
+			StateRootSvc:      ls.stateRootSvc,
+			Responder:         ls.responder,
+			IsReady:           ls.IsReady,
+			IsGovernanceReady: ls.IsGovernanceReady,
+		},
+		GovernanceControllerDeps: GovernanceControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			Responder: ls.responder,
+			Consensus: &ls.consensusSvc,
+			EnvProc:   envProc,
+		},
+		MCPControllerDeps: MCPControllerDeps{
+			MCPGateway: ls.mcpGateway,
+		},
+		PubSubControllerDeps: PubSubControllerDeps{
+			Handler: pubsub,
+		},
+		PasskeyControllerDeps: PasskeyControllerDeps{
+			Handler: passkey,
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("gateway: failed to create HTTP handler: %w", err)
@@ -459,9 +613,39 @@ func (ls *GatewayModeService) InitHTTPHandler(consensusSvc *consensus.ConsensusS
 	return nil
 }
 
-// GetStores returns the extracted store services for direct injection.
-func (ls *GatewayModeService) GetStores() *Stores {
-	return ls.stores
+// GetDocStore returns the document store service.
+func (ls *GatewayModeService) GetDocStore() *DocumentStoreService {
+	return ls.docStore
+}
+
+// GetConsensusStore returns the consensus store service.
+func (ls *GatewayModeService) GetConsensusStore() *ConsensusStoreService {
+	return ls.consensusStore
+}
+
+// GetSignerStore returns the signer store service.
+func (ls *GatewayModeService) GetSignerStore() *SignerStoreService {
+	return ls.signerStore
+}
+
+// GetAuditStore returns the audit store service.
+func (ls *GatewayModeService) GetAuditStore() *storage.SQLAuditStore {
+	return ls.auditStore
+}
+
+// GetStateRootSvc returns the state root service.
+func (ls *GatewayModeService) GetStateRootSvc() *StateRootService {
+	return ls.stateRootSvc
+}
+
+// GetKVStore returns the key-value store service.
+func (ls *GatewayModeService) GetKVStore() *KVStoreService {
+	return ls.kvStore
+}
+
+// GetReplayStore returns the replay store service.
+func (ls *GatewayModeService) GetReplayStore() *ReplayStoreService {
+	return ls.replayStore
 }
 
 // GetSecretManager returns the secret manager initialized during database open.
@@ -469,8 +653,19 @@ func (ls *GatewayModeService) GetSecretManager() (*SecretManager, error) {
 	return ls.db.GetSecretManager(), nil
 }
 
-// GetHTTPHandler returns the HTTP handler. Returns nil if InitHTTPHandler
-// has not been called yet.
+// GetEnvProcAdapter returns the lazy adapter for governance.EnvelopeProcessor.
+func (ls *GatewayModeService) GetEnvProcAdapter() *pubsub.GatewayEnvProcAdapter {
+	return ls.envProcAdapter
+}
+
+// GetSessionValidatorAdapter returns the lazy adapter for mcp.SessionValidator.
+func (ls *GatewayModeService) GetSessionValidatorAdapter() *pubsub.GatewaySessionValidatorAdapter {
+	return ls.sessionValidatorAdapter
+}
+
+// GetHTTPHandler returns the HTTP handler. The handler is built during
+// NewGatewayModeService construction; this returns nil only if construction
+// failed before the handler was initialized.
 func (ls *GatewayModeService) GetHTTPHandler() *HTTPHandler {
 	return ls.handler
 }
@@ -519,7 +714,7 @@ func (ls *GatewayModeService) IsGovernanceReady() bool {
 	if ls.cfg.Gateway.Posture == config.PostureDoctrine || ls.cfg.Gateway.Posture == "" {
 		return true
 	}
-	ready, err := ls.stores.SignerStore.HasTrustedSigners()
+	ready, err := ls.signerStore.HasTrustedSigners()
 	if err != nil {
 		ls.logger.Error("Failed to check if governance is ready", "state", string(constants.ConnectionStateError), "error", err)
 		return false
@@ -531,18 +726,18 @@ func (ls *GatewayModeService) IsGovernanceReady() bool {
 // This enables the in-process OperatorPubSubService to perform fail-closed verification.
 // The L3 notary handles both WebAuthn (web sessions) and mTLS (CLI sessions).
 func (ls *GatewayModeService) GetGovernanceDeps() *pubsub.GovernanceDeps {
-	cliVerifier := NewCLISessionVerifier(ls.stores.DocStore, ls.pki, ls.logger, ls.userSvc, ls.cliSessionSvc)
+	cliVerifier := NewCLISessionVerifier(ls.docStore, ls.pki, ls.logger, ls.userSvc, ls.cliSessionSvc)
 
 	l3Notary := governance.NewGatewayL3Notary(cliVerifier, ls.passkey.PasskeyService, ls.logger)
 
 	return &pubsub.GovernanceDeps{
-		ReplayStore:          ls.stores.ReplayStore,
-		StateRootProvider:    ls.stores.StateRootSvc,
-		TransactionAudit:     ls.stores.DocStore,
+		ReplayStore:          ls.replayStore,
+		StateRootProvider:    ls.stateRootSvc,
+		TransactionAudit:     ls.docStore,
 		L3Notary:             l3Notary,
-		SignerStore:          ls.stores.SignerStore,
-		ConsensusPolicyStore: ls.stores.ConsensusStore,
-		FieldReader:          ls.stores.DocStore,
+		SignerStore:          ls.signerStore,
+		ConsensusPolicyStore: ls.consensusStore,
+		FieldReader:          ls.docStore,
 		Doctrine:             ls.doctrine,
 	}
 }
@@ -838,7 +1033,7 @@ func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte
 		return
 	}
 
-	if _, err := ls.stores.DocStore.DocUpdate(string(constants.CollectionOperators), env.GetOperatorId(), update); err != nil {
+	if _, err := ls.docStore.DocUpdate(string(constants.CollectionOperators), env.GetOperatorId(), update); err != nil {
 		ls.logger.Warn("heartbeat: failed to update operator document", "operator_id", env.GetOperatorId(), "error", err)
 		return
 	}

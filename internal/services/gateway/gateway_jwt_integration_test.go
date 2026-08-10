@@ -167,6 +167,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
+	mockEnvProc := &mockEnvelopeProcessor{}
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:           logger,
 		Responder:        resp,
@@ -175,13 +176,11 @@ func TestGateway_JWTIntegration(t *testing.T) {
 		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
+		EnvProc:          mockEnvProc,
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)
 	}
-
-	mockEnvProc := &mockEnvelopeProcessor{}
-	mcpGateway.SetRuntimeDeps(mcp.RuntimeDependencies{EnvProc: mockEnvProc})
 
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:       passkey,
@@ -192,22 +191,109 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	})
 
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
-		Cfg:                cfg,
-		Logger:             logger,
-		Stores:             stores,
-		Pubsub:             pubsub,
-		Auth:               auth,
-		PKI:                pki,
-		CLISessionSvc:      cliSessionSvc,
-		OperatorSessionSvc: operatorSessionSvc,
-		WebSessionSvc:      webSessionSvc,
-		Reg:                reg,
-		Passkey:            passkeyHandler,
-		UserSvc:            userSvc,
-		Responder:          resp,
-		MCPGateway:         mcpGateway,
-		IsReady:            func() bool { return true },
-		IsGovernanceReady:  func() bool { return true },
+		Cfg:    cfg,
+		Logger: logger,
+		Auth:   auth,
+		PKIControllerDeps: PKIControllerDeps{
+			Cfg:          cfg,
+			Logger:       logger,
+			PKI:          pki,
+			Registration: reg,
+			Responder:    resp,
+		},
+		AuditControllerDeps: AuditControllerDeps{
+			Cfg:        cfg,
+			Logger:     logger,
+			AuditStore: stores.AuditStore,
+			Responder:  resp,
+		},
+		DataControllerDeps: DataControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			DocStore:  stores.DocStore,
+			KVStore:   stores.KVStore,
+			SSEStore:  stores.SSEStore,
+			BlobStore: stores.BlobStore,
+			Pubsub:    pubsub,
+			Responder: resp,
+		},
+		SignerControllerDeps: SignerControllerDeps{
+			Cfg:         cfg,
+			Logger:      logger,
+			DocStore:    stores.DocStore,
+			SignerStore: stores.SignerStore,
+			Responder:   resp,
+		},
+		BootstrapControllerDeps: BootstrapControllerDeps{
+			Cfg:                cfg,
+			Logger:             logger,
+			DocStore:           stores.DocStore,
+			UserSvc:            userSvc,
+			PKI:                pki,
+			CLISessionSvc:      cliSessionSvc,
+			OperatorSessionSvc: operatorSessionSvc,
+			Responder:          resp,
+		},
+		EnrollmentTokenControllerDeps: EnrollmentTokenControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			Responder: resp,
+		},
+		UserControllerDeps: UserControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			UserSvc:   userSvc,
+			Responder: resp,
+		},
+		SessionControllerDeps: SessionControllerDeps{
+			Logger:      logger,
+			DocStore:    stores.DocStore,
+			Responder:   resp,
+			CrossOrigin: len(cfg.Gateway.AllowedOrigins) > 0,
+		},
+		AdminControllerDeps: AdminControllerDeps{
+			Cfg:            cfg,
+			Logger:         logger,
+			DocStore:       stores.DocStore,
+			SignerStore:    stores.SignerStore,
+			ConsensusStore: stores.ConsensusStore,
+			UserSvc:        userSvc,
+			Responder:      resp,
+		},
+		OperatorControllerDeps: OperatorControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			Reg:       reg,
+			Auth:      auth,
+			Responder: resp,
+		},
+		SSEControllerDeps: SSEControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			DocStore:  stores.DocStore,
+			KVStore:   stores.KVStore,
+			SSEStore:  stores.SSEStore,
+			Pubsub:    pubsub,
+			Auth:      auth,
+			Responder: resp,
+		},
+		HealthControllerDeps: HealthControllerDeps{
+			Cfg:               cfg,
+			Logger:            logger,
+			DocStore:          stores.DocStore,
+			StateRootSvc:      stores.StateRootSvc,
+			Responder:         resp,
+			IsReady:           func() bool { return true },
+			IsGovernanceReady: func() bool { return true },
+		},
+		GovernanceControllerDeps: GovernanceControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			Responder: resp,
+		},
+		MCPControllerDeps:     MCPControllerDeps{MCPGateway: mcpGateway},
+		PubSubControllerDeps:  PubSubControllerDeps{Handler: pubsub},
+		PasskeyControllerDeps: PasskeyControllerDeps{Handler: passkeyHandler},
 	})
 	if err != nil {
 		t.Fatalf("failed to create HTTP handler: %v", err)
@@ -318,6 +404,7 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
+	mockEnvProc := &mockEnvelopeProcessor{}
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:           logger,
 		Responder:        resp,
@@ -326,13 +413,11 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
+		EnvProc:          mockEnvProc,
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)
 	}
-
-	mockEnvProc := &mockEnvelopeProcessor{}
-	mcpGateway.SetRuntimeDeps(mcp.RuntimeDependencies{EnvProc: mockEnvProc})
 
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:       passkey,
@@ -343,22 +428,109 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 	})
 
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
-		Cfg:                cfg,
-		Logger:             logger,
-		Stores:             stores,
-		Pubsub:             pubsub,
-		Auth:               auth,
-		PKI:                pki,
-		CLISessionSvc:      cliSessionSvc,
-		OperatorSessionSvc: operatorSessionSvc,
-		WebSessionSvc:      webSessionSvc,
-		Reg:                reg,
-		Passkey:            passkeyHandler,
-		UserSvc:            userSvc,
-		Responder:          resp,
-		MCPGateway:         mcpGateway,
-		IsReady:            func() bool { return true },
-		IsGovernanceReady:  func() bool { return true },
+		Cfg:    cfg,
+		Logger: logger,
+		Auth:   auth,
+		PKIControllerDeps: PKIControllerDeps{
+			Cfg:          cfg,
+			Logger:       logger,
+			PKI:          pki,
+			Registration: reg,
+			Responder:    resp,
+		},
+		AuditControllerDeps: AuditControllerDeps{
+			Cfg:        cfg,
+			Logger:     logger,
+			AuditStore: stores.AuditStore,
+			Responder:  resp,
+		},
+		DataControllerDeps: DataControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			DocStore:  stores.DocStore,
+			KVStore:   stores.KVStore,
+			SSEStore:  stores.SSEStore,
+			BlobStore: stores.BlobStore,
+			Pubsub:    pubsub,
+			Responder: resp,
+		},
+		SignerControllerDeps: SignerControllerDeps{
+			Cfg:         cfg,
+			Logger:      logger,
+			DocStore:    stores.DocStore,
+			SignerStore: stores.SignerStore,
+			Responder:   resp,
+		},
+		BootstrapControllerDeps: BootstrapControllerDeps{
+			Cfg:                cfg,
+			Logger:             logger,
+			DocStore:           stores.DocStore,
+			UserSvc:            userSvc,
+			PKI:                pki,
+			CLISessionSvc:      cliSessionSvc,
+			OperatorSessionSvc: operatorSessionSvc,
+			Responder:          resp,
+		},
+		EnrollmentTokenControllerDeps: EnrollmentTokenControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			Responder: resp,
+		},
+		UserControllerDeps: UserControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			UserSvc:   userSvc,
+			Responder: resp,
+		},
+		SessionControllerDeps: SessionControllerDeps{
+			Logger:      logger,
+			DocStore:    stores.DocStore,
+			Responder:   resp,
+			CrossOrigin: len(cfg.Gateway.AllowedOrigins) > 0,
+		},
+		AdminControllerDeps: AdminControllerDeps{
+			Cfg:            cfg,
+			Logger:         logger,
+			DocStore:       stores.DocStore,
+			SignerStore:    stores.SignerStore,
+			ConsensusStore: stores.ConsensusStore,
+			UserSvc:        userSvc,
+			Responder:      resp,
+		},
+		OperatorControllerDeps: OperatorControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			Reg:       reg,
+			Auth:      auth,
+			Responder: resp,
+		},
+		SSEControllerDeps: SSEControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			DocStore:  stores.DocStore,
+			KVStore:   stores.KVStore,
+			SSEStore:  stores.SSEStore,
+			Pubsub:    pubsub,
+			Auth:      auth,
+			Responder: resp,
+		},
+		HealthControllerDeps: HealthControllerDeps{
+			Cfg:               cfg,
+			Logger:            logger,
+			DocStore:          stores.DocStore,
+			StateRootSvc:      stores.StateRootSvc,
+			Responder:         resp,
+			IsReady:           func() bool { return true },
+			IsGovernanceReady: func() bool { return true },
+		},
+		GovernanceControllerDeps: GovernanceControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			Responder: resp,
+		},
+		MCPControllerDeps:     MCPControllerDeps{MCPGateway: mcpGateway},
+		PubSubControllerDeps:  PubSubControllerDeps{Handler: pubsub},
+		PasskeyControllerDeps: PasskeyControllerDeps{Handler: passkeyHandler},
 	})
 	if err != nil {
 		t.Fatalf("failed to create HTTP handler: %v", err)
@@ -484,6 +656,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
+	mockEnvProc := &mockEnvelopeProcessor{}
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:           logger,
 		Responder:        resp,
@@ -492,13 +665,11 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
+		EnvProc:          mockEnvProc,
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)
 	}
-
-	mockEnvProc := &mockEnvelopeProcessor{}
-	mcpGateway.SetRuntimeDeps(mcp.RuntimeDependencies{EnvProc: mockEnvProc})
 
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:       passkey,
@@ -509,22 +680,109 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	})
 
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
-		Cfg:                cfg,
-		Logger:             logger,
-		Stores:             stores,
-		Pubsub:             pubsub,
-		Auth:               auth,
-		PKI:                pki,
-		CLISessionSvc:      cliSessionSvc,
-		OperatorSessionSvc: operatorSessionSvc,
-		WebSessionSvc:      webSessionSvc,
-		Reg:                reg,
-		Passkey:            passkeyHandler,
-		UserSvc:            userSvc,
-		Responder:          resp,
-		MCPGateway:         mcpGateway,
-		IsReady:            func() bool { return true },
-		IsGovernanceReady:  func() bool { return true },
+		Cfg:    cfg,
+		Logger: logger,
+		Auth:   auth,
+		PKIControllerDeps: PKIControllerDeps{
+			Cfg:          cfg,
+			Logger:       logger,
+			PKI:          pki,
+			Registration: reg,
+			Responder:    resp,
+		},
+		AuditControllerDeps: AuditControllerDeps{
+			Cfg:        cfg,
+			Logger:     logger,
+			AuditStore: stores.AuditStore,
+			Responder:  resp,
+		},
+		DataControllerDeps: DataControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			DocStore:  stores.DocStore,
+			KVStore:   stores.KVStore,
+			SSEStore:  stores.SSEStore,
+			BlobStore: stores.BlobStore,
+			Pubsub:    pubsub,
+			Responder: resp,
+		},
+		SignerControllerDeps: SignerControllerDeps{
+			Cfg:         cfg,
+			Logger:      logger,
+			DocStore:    stores.DocStore,
+			SignerStore: stores.SignerStore,
+			Responder:   resp,
+		},
+		BootstrapControllerDeps: BootstrapControllerDeps{
+			Cfg:                cfg,
+			Logger:             logger,
+			DocStore:           stores.DocStore,
+			UserSvc:            userSvc,
+			PKI:                pki,
+			CLISessionSvc:      cliSessionSvc,
+			OperatorSessionSvc: operatorSessionSvc,
+			Responder:          resp,
+		},
+		EnrollmentTokenControllerDeps: EnrollmentTokenControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			Responder: resp,
+		},
+		UserControllerDeps: UserControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			UserSvc:   userSvc,
+			Responder: resp,
+		},
+		SessionControllerDeps: SessionControllerDeps{
+			Logger:      logger,
+			DocStore:    stores.DocStore,
+			Responder:   resp,
+			CrossOrigin: len(cfg.Gateway.AllowedOrigins) > 0,
+		},
+		AdminControllerDeps: AdminControllerDeps{
+			Cfg:            cfg,
+			Logger:         logger,
+			DocStore:       stores.DocStore,
+			SignerStore:    stores.SignerStore,
+			ConsensusStore: stores.ConsensusStore,
+			UserSvc:        userSvc,
+			Responder:      resp,
+		},
+		OperatorControllerDeps: OperatorControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			Reg:       reg,
+			Auth:      auth,
+			Responder: resp,
+		},
+		SSEControllerDeps: SSEControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			DocStore:  stores.DocStore,
+			KVStore:   stores.KVStore,
+			SSEStore:  stores.SSEStore,
+			Pubsub:    pubsub,
+			Auth:      auth,
+			Responder: resp,
+		},
+		HealthControllerDeps: HealthControllerDeps{
+			Cfg:               cfg,
+			Logger:            logger,
+			DocStore:          stores.DocStore,
+			StateRootSvc:      stores.StateRootSvc,
+			Responder:         resp,
+			IsReady:           func() bool { return true },
+			IsGovernanceReady: func() bool { return true },
+		},
+		GovernanceControllerDeps: GovernanceControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			Responder: resp,
+		},
+		MCPControllerDeps:     MCPControllerDeps{MCPGateway: mcpGateway},
+		PubSubControllerDeps:  PubSubControllerDeps{Handler: pubsub},
+		PasskeyControllerDeps: PasskeyControllerDeps{Handler: passkeyHandler},
 	})
 	if err != nil {
 		t.Fatalf("failed to create HTTP handler: %v", err)

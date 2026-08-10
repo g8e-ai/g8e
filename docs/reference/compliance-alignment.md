@@ -1,8 +1,8 @@
 # Compliance Alignment Report
 
-**Document Version:** 1.6.9  
-**Last Updated:** 2026-08-02  
-**Platform:** g8e v1.6.9  
+**Document Version:** 1.7.1  
+**Last Updated:** 2026-08-10  
+**Platform:** g8e v1.7.1  
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -643,7 +643,7 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 - **DBController split** into DataController, AuditController, and SignerController for single-responsibility data management
 - **L2 consensus logic extraction** from L4 Warden into dedicated `l2_consensus.go` for separation of concerns
 - **Configurable doctrine directory** (`--doctrine-dir` CLI flag) for external doctrine rules and custom threat patterns
-- **Gateway construction refactor** to public `InitHTTPHandler()` two-phase pattern, eliminating late-bound dependency injection
+- **Gateway construction refactor** to single-phase construction with lazy forwarding adapters and per-controller dependency injection, eliminating late-bound dependency injection
 - **Dead code removal** (107 unreachable functions removed from production and test code)
 - **FedRAMP sovereign cloud governance demo** demonstrating compliance posture for federal workloads
 - **FedRAMP 20x (CR26) alignment** with typed KSI model, OSCAL evidence export, historical metrics retention, and COSAiS overlay ingestion for Class C certification

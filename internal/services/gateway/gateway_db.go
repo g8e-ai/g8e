@@ -337,6 +337,66 @@ func (s *CanonicalDBService) GetVault() *vault.Vault {
 	return s.vault
 }
 
+// GetDB returns the underlying SQLite database handle.
+func (s *CanonicalDBService) GetDB() *sqliteutil.DB {
+	return s.stores.DB
+}
+
+// GetDocStore returns the document store service.
+func (s *CanonicalDBService) GetDocStore() *DocumentStoreService {
+	return s.stores.DocStore
+}
+
+// GetAppPolicyStore returns the app policy store service.
+func (s *CanonicalDBService) GetAppPolicyStore() *AppPolicyStoreService {
+	return s.stores.AppPolicyStore
+}
+
+// GetSignerStore returns the signer store service.
+func (s *CanonicalDBService) GetSignerStore() *SignerStoreService {
+	return s.stores.SignerStore
+}
+
+// GetConsensusStore returns the consensus store service.
+func (s *CanonicalDBService) GetConsensusStore() *ConsensusStoreService {
+	return s.stores.ConsensusStore
+}
+
+// GetStateRootSvc returns the state root service.
+func (s *CanonicalDBService) GetStateRootSvc() *StateRootService {
+	return s.stores.StateRootSvc
+}
+
+// GetReplayStore returns the replay store service.
+func (s *CanonicalDBService) GetReplayStore() *ReplayStoreService {
+	return s.stores.ReplayStore
+}
+
+// GetKVStore returns the key-value store service.
+func (s *CanonicalDBService) GetKVStore() *KVStoreService {
+	return s.stores.KVStore
+}
+
+// GetSSEStore returns the SSE event store service.
+func (s *CanonicalDBService) GetSSEStore() *SSEEventService {
+	return s.stores.SSEStore
+}
+
+// GetBlobStore returns the blob store service.
+func (s *CanonicalDBService) GetBlobStore() *BlobStoreService {
+	return s.stores.BlobStore
+}
+
+// GetAuditStore returns the audit store service.
+func (s *CanonicalDBService) GetAuditStore() *storage.SQLAuditStore {
+	return s.stores.AuditStore
+}
+
+// GetStores returns the internal Stores aggregation struct for HTTPHandler construction.
+func (s *CanonicalDBService) GetStores() *Stores {
+	return s.stores
+}
+
 // Close closes the database connection and waits for background workers.
 func (s *CanonicalDBService) Close() error {
 	s.mu.Lock()

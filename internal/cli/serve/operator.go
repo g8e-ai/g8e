@@ -316,13 +316,11 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		logger.Info("Execution vault disabled (command output sent to cloud)")
 	}
 
-	g8eoService, err := services.NewG8eoService(cfg, logger, tlsConfig)
+	g8eoService, err := services.NewG8eoService(cfg, logger, tlsConfig, fileSvc)
 	if err != nil {
 		logger.Error("Failed to create Operator service", string(constants.ConnectionStateError), err)
 		os.Exit(exitcode.FromError(err))
 	}
-
-	g8eoService.SetFileService(fileSvc)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

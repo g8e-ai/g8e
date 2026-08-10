@@ -65,15 +65,13 @@ func TestMCPGatewayEndToEndIntegration(t *testing.T) {
 	_ = pubKey
 
 	g := &GatewayService{
-		logger:          slog.Default(),
-		maxPayloadBytes: 10 * 1024 * 1024, // 10MB
+		logger:            slog.Default(),
+		maxPayloadBytes:   10 * 1024 * 1024, // 10MB
+		envProc:           wrappedProcessor,
+		signingKey:        privKey,
+		keyID:             "test-key",
+		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
 	}
-	g.SetRuntimeDeps(RuntimeDependencies{
-		EnvProc:           wrappedProcessor,
-		SigningKey:        privKey,
-		KeyID:             "test-key",
-		StateRootProvider: &fakeStateRootProvider{root: "test-root"},
-	})
 
 	// Execute a tools/call request
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{"foo":"bar"}}}`
@@ -138,15 +136,13 @@ func TestReceiptIntegration(t *testing.T) {
 	_ = pubKey
 
 	g := &GatewayService{
-		logger:          slog.Default(),
-		maxPayloadBytes: 10 * 1024 * 1024, // 10MB
+		logger:            slog.Default(),
+		maxPayloadBytes:   10 * 1024 * 1024, // 10MB
+		envProc:           processor,
+		signingKey:        privKey,
+		keyID:             "test-key",
+		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
 	}
-	g.SetRuntimeDeps(RuntimeDependencies{
-		EnvProc:           processor,
-		SigningKey:        privKey,
-		KeyID:             "test-key",
-		StateRootProvider: &fakeStateRootProvider{root: "test-root"},
-	})
 
 	// Execute a tools/call request
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{}}}`
@@ -213,17 +209,16 @@ func TestCircuitBreakerIntegration(t *testing.T) {
 	_ = pubKey
 
 	g := &GatewayService{
-		logger:           slog.New(slog.NewTextHandler(os.Stdout, nil)),
-		maxPayloadBytes:  10 * 1024 * 1024,
-		maxFailures:      3, // Lower threshold for faster test
-		cooldownDuration: 100 * time.Millisecond,
+		logger:            slog.New(slog.NewTextHandler(os.Stdout, nil)),
+		maxPayloadBytes:   10 * 1024 * 1024,
+		maxFailures:       3, // Lower threshold for faster test
+		cooldownDuration:  100 * time.Millisecond,
+		envProc:           &fakeEnvelopeProcessor{},
+		signingKey:        privKey,
+		keyID:             "circuit-test-key",
+		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+		downstreamURL:     "http://localhost:9999", // Invalid URL that will fail
 	}
-	g.SetRuntimeDeps(RuntimeDependencies{
-		SigningKey:        privKey,
-		KeyID:             "circuit-test-key",
-		StateRootProvider: &fakeStateRootProvider{root: "test-root"},
-		DownstreamURL:     "http://localhost:9999", // Invalid URL that will fail
-	})
 	nativeToolHandler, err := NewNativeToolHandler(nil)
 	if err != nil {
 		t.Fatalf("failed to create native tool handler: %v", err)
@@ -304,15 +299,13 @@ func TestGatewayErrorCodesIntegration(t *testing.T) {
 			_ = pubKey
 
 			g := &GatewayService{
-				logger:          slog.Default(),
-				maxPayloadBytes: 10 * 1024 * 1024,
+				logger:            slog.Default(),
+				maxPayloadBytes:   10 * 1024 * 1024,
+				envProc:           processor,
+				signingKey:        privKey,
+				keyID:             "error-test-key",
+				stateRootProvider: &fakeStateRootProvider{root: "test-root"},
 			}
-			g.SetRuntimeDeps(RuntimeDependencies{
-				EnvProc:           processor,
-				SigningKey:        privKey,
-				KeyID:             "error-test-key",
-				StateRootProvider: &fakeStateRootProvider{root: "test-root"},
-			})
 
 			reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test","arguments":{}}}`
 			req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
@@ -349,16 +342,14 @@ func TestNativeToolExecutionIntegration(t *testing.T) {
 	}
 
 	g := &GatewayService{
-		logger:          logger,
-		responder:       response.NewWriter(logger),
-		maxPayloadBytes: 10 * 1024 * 1024,
+		logger:            logger,
+		responder:         response.NewWriter(logger),
+		maxPayloadBytes:   10 * 1024 * 1024,
+		envProc:           processor,
+		signingKey:        privKey,
+		keyID:             "native-test-key",
+		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
 	}
-	g.SetRuntimeDeps(RuntimeDependencies{
-		EnvProc:           processor,
-		SigningKey:        privKey,
-		KeyID:             "native-test-key",
-		StateRootProvider: &fakeStateRootProvider{root: "test-root"},
-	})
 
 	// Test with a known native tool (e.g., uptime)
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"uptime","arguments":{}}}`
@@ -439,16 +430,14 @@ func TestReadFieldIntegration(t *testing.T) {
 		responder:         response.NewWriter(logger),
 		maxPayloadBytes:   10 * 1024 * 1024,
 		fieldPathRegistry: fieldPathRegistry,
+		envProc:           envProc,
+		signingKey:        privKey,
+		keyID:             "readfield-test-key",
+		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+		dbService:         dbService,
+		sessionValidator:  sessionValidator,
+		auditLogger:       auditLogger,
 	}
-	g.SetRuntimeDeps(RuntimeDependencies{
-		EnvProc:           envProc,
-		SigningKey:        privKey,
-		KeyID:             "readfield-test-key",
-		StateRootProvider: &fakeStateRootProvider{root: "test-root"},
-		DBService:         dbService,
-		SessionValidator:  sessionValidator,
-		AuditLogger:       auditLogger,
-	})
 
 	// Verify read_field flows through the governance pipeline (envProc).
 	// handleReadField is called inside DispatchToDownstream, inside the real pipeline.
@@ -509,12 +498,10 @@ func TestHandleReadField(t *testing.T) {
 		logger:            logger,
 		fieldPathRegistry: fieldPathRegistry,
 		threatScanner:     governance.NewL1Doctrine(),
+		dbService:         dbService,
+		sessionValidator:  sessionValidator,
+		auditLogger:       auditLogger,
 	}
-	g.SetRuntimeDeps(RuntimeDependencies{
-		DBService:        dbService,
-		SessionValidator: sessionValidator,
-		AuditLogger:      auditLogger,
-	})
 
 	t.Run("successful read", func(t *testing.T) {
 		args, _ := json.Marshal(map[string]string{
@@ -646,10 +633,8 @@ func TestNativeToolSingleAudit(t *testing.T) {
 		auditStore:        noopAuditEventRecorder{},
 		maxPayloadBytes:   10 * 1024 * 1024,
 		posture:           "doctrine",
+		envProc:           processor,
 	}
-	g.SetRuntimeDeps(RuntimeDependencies{
-		EnvProc: processor,
-	})
 
 	// Execute a native tool call through the gateway
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"db_discover_topology","arguments":{}}}`

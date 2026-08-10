@@ -31,35 +31,49 @@ import (
 )
 
 // GovernanceController handles governance envelope submission and consensus
-// deliberation endpoints. Both consensus and envelope processor are injected
-// at construction time. A nil value means the feature is not configured for
-// the current posture (e.g. doctrine mode has no consensus service).
+// deliberation endpoints. Consensus is wired via a pointer-to-pointer
+// (**consensus.ConsensusService) so it can be set after HTTP handler
+// construction via SetConsensusService — the ConsensusService is built
+// between NewGatewayModeService and Start because it reads from the DB that
+// the constructor opens. A nil value (or nil dereference) means the feature
+// is not configured for the current posture (e.g. doctrine mode has no
+// consensus service). EnvProc is injected at construction time; a nil value
+// means envelope submission is not enabled.
 type GovernanceController struct {
 	cfg       *config.Config
 	logger    *slog.Logger
 	responder *response.Writer
-	consensus *consensus.ConsensusService
+	consensus **consensus.ConsensusService
 	envProc   governance.EnvelopeProcessor
 }
 
-// newGovernanceController creates a GovernanceController with all dependencies
-// injected at construction time. consensus may be nil if the gateway posture
-// does not require L2 consensus. envProc may be nil if envelope submission is
-// not enabled.
-func newGovernanceController(cfg *config.Config, logger *slog.Logger, responder *response.Writer, consensusSvc *consensus.ConsensusService, envProc governance.EnvelopeProcessor) *GovernanceController {
+// GovernanceControllerDeps groups all dependencies for GovernanceController.
+// Consensus is a pointer-to-pointer so the consensus service can be wired
+// after HTTP handler construction (via SetConsensusService on
+// GatewayModeService). It may be nil if the gateway posture does not require
+// L2 consensus. EnvProc may be nil if envelope submission is not enabled.
+type GovernanceControllerDeps struct {
+	Cfg       *config.Config
+	Logger    *slog.Logger
+	Responder *response.Writer
+	Consensus **consensus.ConsensusService
+	EnvProc   governance.EnvelopeProcessor
+}
+
+func newGovernanceController(d GovernanceControllerDeps) *GovernanceController {
 	return &GovernanceController{
-		cfg:       cfg,
-		logger:    logger,
-		responder: responder,
-		consensus: consensusSvc,
-		envProc:   envProc,
+		cfg:       d.Cfg,
+		logger:    d.Logger,
+		responder: d.Responder,
+		consensus: d.Consensus,
+		envProc:   d.EnvProc,
 	}
 }
 
 // handleConsensusDeliberate is the HTTP handler for the consensus deliberate
 // endpoint. If consensus is not configured for the current posture, returns 503.
 func (c *GovernanceController) handleConsensusDeliberate(w http.ResponseWriter, r *http.Request) {
-	if c.consensus == nil {
+	if c.consensus == nil || *c.consensus == nil {
 		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrConsensusNotConfigured.Error())
 		return
 	}
