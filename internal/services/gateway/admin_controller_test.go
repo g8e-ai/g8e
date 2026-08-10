@@ -36,7 +36,7 @@ import (
 func setupTestAdminController(t *testing.T) *AdminController {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
-	return newAdminController(infra.Cfg, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore, infra.Stores.ConsensusStore, infra.UserSvc, infra.Responder)
+	return newAdminController(AdminControllerDeps{Cfg: infra.Cfg, Logger: infra.Logger, DocStore: infra.Stores.DocStore, SignerStore: infra.Stores.SignerStore, ConsensusStore: infra.Stores.ConsensusStore, UserSvc: infra.UserSvc, Responder: infra.Responder})
 }
 
 func TestAdminControllerHandleAppPolicySigner(t *testing.T) {

@@ -46,7 +46,7 @@ func TestNewOperatorController(t *testing.T) {
 	auth := &AuthService{}
 	resp := &response.Writer{}
 
-	controller := newOperatorController(cfg, logger, reg, auth, resp)
+	controller := newOperatorController(OperatorControllerDeps{Cfg: cfg, Logger: logger, Reg: reg, Auth: auth, Responder: resp})
 
 	assert.NotNil(t, controller)
 	assert.Equal(t, cfg, controller.cfg)
@@ -66,7 +66,7 @@ func TestHandleReauth_MalformedJSON(t *testing.T) {
 	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 	reg := &RegistrationService{}
 	cfg := &config.Config{Gateway: config.GatewayConfig{MaxPayloadBytes: 1024}}
-	controller := newOperatorController(cfg, logger, reg, auth, res)
+	controller := newOperatorController(OperatorControllerDeps{Cfg: cfg, Logger: logger, Reg: reg, Auth: auth, Responder: res})
 
 	// Create a valid Operator session
 	operatorSessionID := "test-session-123"
@@ -108,7 +108,7 @@ func TestHandleReauth_MalformedJSON(t *testing.T) {
 func TestOperatorController_HandleListOperators(t *testing.T) {
 
 	infra := setupTestInfrastructure(t, false)
-	controller := newOperatorController(infra.Cfg, infra.Logger, infra.Reg, infra.Auth, infra.Responder)
+	controller := newOperatorController(OperatorControllerDeps{Cfg: infra.Cfg, Logger: infra.Logger, Reg: infra.Reg, Auth: infra.Auth, Responder: infra.Responder})
 
 	t.Run("Wrong method returns 405", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/operators?user_id=user-123", nil)
@@ -146,7 +146,7 @@ func TestOperatorController_HandleListOperators(t *testing.T) {
 func TestOperatorController_HandleTerminateOperator(t *testing.T) {
 
 	infra := setupTestInfrastructure(t, false)
-	controller := newOperatorController(infra.Cfg, infra.Logger, infra.Reg, infra.Auth, infra.Responder)
+	controller := newOperatorController(OperatorControllerDeps{Cfg: infra.Cfg, Logger: infra.Logger, Reg: infra.Reg, Auth: infra.Auth, Responder: infra.Responder})
 
 	t.Run("Wrong method returns 405", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/operators/terminate", nil)
@@ -211,7 +211,7 @@ func TestOperatorController_HandleTerminateOperator(t *testing.T) {
 func TestOperatorController_HandleBindOperators(t *testing.T) {
 
 	infra := setupTestInfrastructure(t, false)
-	controller := newOperatorController(infra.Cfg, infra.Logger, infra.Reg, infra.Auth, infra.Responder)
+	controller := newOperatorController(OperatorControllerDeps{Cfg: infra.Cfg, Logger: infra.Logger, Reg: infra.Reg, Auth: infra.Auth, Responder: infra.Responder})
 
 	t.Run("Wrong method returns 405", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/operators/bind", nil)
@@ -265,7 +265,7 @@ func TestOperatorController_HandleBindOperators(t *testing.T) {
 func TestOperatorController_HandleUnbindOperators(t *testing.T) {
 
 	infra := setupTestInfrastructure(t, false)
-	controller := newOperatorController(infra.Cfg, infra.Logger, infra.Reg, infra.Auth, infra.Responder)
+	controller := newOperatorController(OperatorControllerDeps{Cfg: infra.Cfg, Logger: infra.Logger, Reg: infra.Reg, Auth: infra.Auth, Responder: infra.Responder})
 
 	t.Run("Wrong method returns 405", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/operators/unbind", nil)
@@ -319,7 +319,7 @@ func TestOperatorController_HandleUnbindOperators(t *testing.T) {
 func TestOperatorController_HandleSetTargetContext(t *testing.T) {
 
 	infra := setupTestInfrastructure(t, false)
-	controller := newOperatorController(infra.Cfg, infra.Logger, infra.Reg, infra.Auth, infra.Responder)
+	controller := newOperatorController(OperatorControllerDeps{Cfg: infra.Cfg, Logger: infra.Logger, Reg: infra.Reg, Auth: infra.Auth, Responder: infra.Responder})
 
 	t.Run("Wrong method returns 405", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/operators/target", nil)
@@ -373,7 +373,7 @@ func TestOperatorController_HandleSetTargetContext(t *testing.T) {
 func TestOperatorController_HandleReauth(t *testing.T) {
 
 	infra := setupTestInfrastructure(t, false)
-	controller := newOperatorController(infra.Cfg, infra.Logger, infra.Reg, infra.Auth, infra.Responder)
+	controller := newOperatorController(OperatorControllerDeps{Cfg: infra.Cfg, Logger: infra.Logger, Reg: infra.Reg, Auth: infra.Auth, Responder: infra.Responder})
 
 	t.Run("Wrong method returns 405", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/operators/reauth", nil)

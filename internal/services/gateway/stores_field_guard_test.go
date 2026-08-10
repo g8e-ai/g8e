@@ -35,10 +35,6 @@ import (
 // Allowed exceptions:
 //   - gateway_db.go: CanonicalDBService.stores is the lifecycle owner of the
 //     Stores bundle and is permitted to hold it.
-//   - gateway_http.go: HTTPHandlerDependencies.Stores is a deliberate
-//     exception documented in the struct comment. newHTTPHandler decomposes
-//     it into per-controller Deps structs immediately at construction, so the
-//     bag does not propagate past the construction site.
 func TestStoresFieldNotLeakedPastGatewayDB(t *testing.T) {
 	dir := "." // test runs with package directory as cwd
 	entries, err := os.ReadDir(dir)
@@ -49,8 +45,7 @@ func TestStoresFieldNotLeakedPastGatewayDB(t *testing.T) {
 	// allowedStructs maps "filename.go:StructName" to an allow marker. Only
 	// these production struct declarations may hold a *Stores field.
 	allowedStructs := map[string]bool{
-		"gateway_db.go:CanonicalDBService":         true, // lifecycle owner
-		"gateway_http.go:HTTPHandlerDependencies":  true, // documented exception
+		"gateway_db.go:CanonicalDBService": true, // lifecycle owner
 	}
 
 	fset := token.NewFileSet()
@@ -93,8 +88,8 @@ func TestStoresFieldNotLeakedPastGatewayDB(t *testing.T) {
 					}
 					pos := fset.Position(field.Pos())
 					t.Errorf("%s: struct %s declares *Stores field %q — only CanonicalDBService (gateway_db.go) "+
-						"and HTTPHandlerDependencies (gateway_http.go) may hold *Stores; use narrow accessor "+
-						"methods on CanonicalDBService instead (see codemap remediation plan, Smell 1)",
+						"may hold *Stores; use narrow accessor methods on CanonicalDBService instead "+
+						"(see codemap remediation plan, Smell 1)",
 						pos, structName, fieldName(field))
 				}
 			}

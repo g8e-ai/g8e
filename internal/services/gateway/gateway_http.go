@@ -23,43 +23,37 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
-	"github.com/g8e-ai/g8e/internal/services/consensus"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
-	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 )
 
-// HTTPHandlerDependencies groups all dependencies for HTTPHandler to reduce constructor bloat.
+// HTTPHandlerDependencies groups all dependencies for HTTPHandler as
+// per-controller Deps structs. Each controller's dependency surface is
+// explicit and reviewable. Shared infrastructure (Cfg, Logger, Auth,
+// Responder) is kept as top-level fields because they are cross-cutting,
+// not domain-specific.
 type HTTPHandlerDependencies struct {
-	Cfg                *config.Config
-	Logger             *slog.Logger
-	// Stores is the full gateway store bundle. It is deliberately kept here
-	// (and not split into per-controller fields) because newHTTPHandler
-	// decomposes it into per-controller Deps structs immediately at
-	// construction (see lines below). The bag does not propagate past the
-	// construction site, so the Interface Segregation concern that motivated
-	// removing *Stores from GatewayModeService and G8eoService does not apply
-	// here. Revisit once Smell 3 (HTTPHandler decomposition) lands and the
-	// per-controller Deps structs are the canonical dependency surface.
-	Stores             *Stores
-	Pubsub             *GatewayWebSocketHandler
-	Auth               *AuthService
-	PKI                *PKIAuthority
-	CLISessionSvc      *CLISessionService
-	OperatorSessionSvc *OperatorSessionService
-	WebSessionSvc      *WebSessionService
-	Reg                *RegistrationService
-	Passkey            *PasskeyHandler
-	UserSvc            *UserService
-	Responder          *response.Writer
-	MCPGateway         *mcp.GatewayService
-	AppEnrollment      *AppEnrollmentService
-	Consensus          *consensus.ConsensusService
-	EnvProc            governance.EnvelopeProcessor
-	IsReady            func() bool
-	IsGovernanceReady  func() bool
+	Cfg    *config.Config
+	Logger *slog.Logger
+	Auth   *AuthService
+
+	PKIControllerDeps             PKIControllerDeps
+	AuditControllerDeps           AuditControllerDeps
+	DataControllerDeps            DataControllerDeps
+	SignerControllerDeps          SignerControllerDeps
+	BootstrapControllerDeps       BootstrapControllerDeps
+	EnrollmentTokenControllerDeps EnrollmentTokenControllerDeps
+	UserControllerDeps            UserControllerDeps
+	SessionControllerDeps         SessionControllerDeps
+	AdminControllerDeps           AdminControllerDeps
+	OperatorControllerDeps        OperatorControllerDeps
+	SSEControllerDeps             SSEControllerDeps
+	HealthControllerDeps          HealthControllerDeps
+	GovernanceControllerDeps      GovernanceControllerDeps
+	MCPControllerDeps             MCPControllerDeps
+	PubSubControllerDeps          PubSubControllerDeps
+	PasskeyControllerDeps         PasskeyControllerDeps
 }
 
 // HTTPHandler manages the web API for the gateway service.
@@ -102,86 +96,44 @@ type HTTPHandler struct {
 }
 
 func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
-	h := &HTTPHandler{
-		cfg:             deps.Cfg,
-		logger:          deps.Logger,
-		authMiddleware:  deps.Auth,
-		responder:       deps.Responder,
-		mcpController:   newMCPController(MCPControllerDeps{MCPGateway: deps.MCPGateway}),
-		pubsubController: newPubSubController(PubSubControllerDeps{Handler: deps.Pubsub}),
-		passkeyController: newPasskeyController(PasskeyControllerDeps{Handler: deps.Passkey}),
-		limiters:        make(map[string]*tokenBucket),
-		limiterLastUsed: make(map[string]time.Time),
-	}
-
 	// Initialize script templates
 	if err := scripts.Init(deps.Logger); err != nil {
 		return nil, fmt.Errorf("gateway: failed to initialize script templates: %w", err)
 	}
 
-	// Initialize controllers
-	h.pkiController = newPKIController(deps.Cfg, deps.Logger, deps.PKI, deps.AppEnrollment, deps.Reg, deps.Responder)
-	h.auditController = newAuditController(AuditControllerDeps{
-		Cfg:        deps.Cfg,
-		Logger:     deps.Logger,
-		AuditStore: deps.Stores.AuditStore,
-		Responder:  deps.Responder,
-	})
-	h.dataController = newDataController(DataControllerDeps{
-		Cfg:       deps.Cfg,
-		Logger:    deps.Logger,
-		DocStore:  deps.Stores.DocStore,
-		KVStore:   deps.Stores.KVStore,
-		SSEStore:  deps.Stores.SSEStore,
-		BlobStore: deps.Stores.BlobStore,
-		Pubsub:    deps.Pubsub,
-		Responder: deps.Responder,
-	})
-	h.signerController = newSignerController(SignerControllerDeps{
-		Cfg:         deps.Cfg,
-		Logger:      deps.Logger,
-		DocStore:    deps.Stores.DocStore,
-		SignerStore: deps.Stores.SignerStore,
-		Responder:   deps.Responder,
-	})
+	// Derive the responder from any controller Deps that carry it. All
+	// controllers share the same responder instance, so we can read it
+	// from any one. PKIControllerDeps is first in the struct.
+	responder := deps.PKIControllerDeps.Responder
 
-	// Initialize auth sub-controllers
-	enrollmentTokenSvc := NewEnrollmentTokenService(deps.Stores.DocStore, deps.Logger)
-	h.bootstrapController = newBootstrapController(BootstrapControllerDeps{
-		Cfg:                deps.Cfg,
-		Logger:             deps.Logger,
-		DocStore:           deps.Stores.DocStore,
-		UserSvc:            deps.UserSvc,
-		PKI:                deps.PKI,
-		CLISessionSvc:      deps.CLISessionSvc,
-		OperatorSessionSvc: deps.OperatorSessionSvc,
-		Responder:          deps.Responder,
-		ActuatorKeyReader:  &fileActuatorKeyReader{path: paths.Infra.ActuatorPubJSONPath},
-	})
-	h.enrollmentTokenController = newEnrollmentTokenController(EnrollmentTokenControllerDeps{
-		Cfg:                deps.Cfg,
-		Logger:             deps.Logger,
-		EnrollmentTokenSvc: enrollmentTokenSvc,
-		Responder:          deps.Responder,
-	})
-	h.userController = newUserController(UserControllerDeps{
-		Cfg:       deps.Cfg,
-		Logger:    deps.Logger,
-		UserSvc:   deps.UserSvc,
-		Responder: deps.Responder,
-	})
-	h.sessionController = newSessionController(SessionControllerDeps{
-		Logger:      deps.Logger,
-		DocStore:    deps.Stores.DocStore,
-		Responder:   deps.Responder,
-		CrossOrigin: len(deps.Cfg.Gateway.AllowedOrigins) > 0,
-	})
-	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.SignerStore, deps.Stores.ConsensusStore, deps.UserSvc, deps.Responder)
-	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)
+	// Initialize enrollment token service (shared dependency, not a controller)
+	enrollmentTokenSvc := NewEnrollmentTokenService(deps.BootstrapControllerDeps.DocStore, deps.Logger)
+	deps.EnrollmentTokenControllerDeps.EnrollmentTokenSvc = enrollmentTokenSvc
 
-	h.sseController = newSSEController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.KVStore, deps.Stores.SSEStore, deps.Pubsub, deps.Auth, deps.Responder, 0)
-	h.healthController = newHealthController(deps.Cfg, deps.Logger, deps.Stores.DocStore, deps.Stores.StateRootSvc, deps.Responder, deps.IsReady, deps.IsGovernanceReady)
-	h.governanceController = newGovernanceController(deps.Cfg, deps.Logger, deps.Responder, deps.Consensus, deps.EnvProc)
+	h := &HTTPHandler{
+		cfg:                      deps.Cfg,
+		logger:                   deps.Logger,
+		authMiddleware:           deps.Auth,
+		responder:                responder,
+		pkiController:            newPKIController(deps.PKIControllerDeps),
+		auditController:          newAuditController(deps.AuditControllerDeps),
+		dataController:           newDataController(deps.DataControllerDeps),
+		signerController:         newSignerController(deps.SignerControllerDeps),
+		bootstrapController:      newBootstrapController(deps.BootstrapControllerDeps),
+		enrollmentTokenController: newEnrollmentTokenController(deps.EnrollmentTokenControllerDeps),
+		userController:           newUserController(deps.UserControllerDeps),
+		sessionController:        newSessionController(deps.SessionControllerDeps),
+		adminController:          newAdminController(deps.AdminControllerDeps),
+		operatorController:       newOperatorController(deps.OperatorControllerDeps),
+		sseController:            newSSEController(deps.SSEControllerDeps),
+		healthController:         newHealthController(deps.HealthControllerDeps),
+		governanceController:     newGovernanceController(deps.GovernanceControllerDeps),
+		mcpController:            newMCPController(deps.MCPControllerDeps),
+		pubsubController:         newPubSubController(deps.PubSubControllerDeps),
+		passkeyController:        newPasskeyController(deps.PasskeyControllerDeps),
+		limiters:                 make(map[string]*tokenBucket),
+		limiterLastUsed:          make(map[string]time.Time),
+	}
 
 	// Build router once to avoid per-request overhead
 	h.router = h.buildPublicRouter()

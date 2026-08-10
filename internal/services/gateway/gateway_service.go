@@ -402,7 +402,6 @@ func (ls *GatewayModeService) InitHTTPHandler(consensusSvc *consensus.ConsensusS
 	pki := ls.pki
 	cliSessionSvc := ls.cliSessionSvc
 	operatorSessionSvc := ls.operatorSessionSvc
-	webSessionSvc := ls.webSessionSvc
 	reg := ls.reg
 	passkey := ls.passkey
 	userSvc := ls.userSvc
@@ -411,25 +410,119 @@ func (ls *GatewayModeService) InitHTTPHandler(consensusSvc *consensus.ConsensusS
 	appEnrollment := NewAppEnrollmentService(ls.docStore, pki, logger)
 
 	handler, err := newHTTPHandler(HTTPHandlerDependencies{
-		Cfg:                cfg,
-		Logger:             logger,
-		Stores:             ls.db.GetStores(),
-		Pubsub:             pubsub,
-		Auth:               auth,
-		PKI:                pki,
-		CLISessionSvc:      cliSessionSvc,
-		OperatorSessionSvc: operatorSessionSvc,
-		WebSessionSvc:      webSessionSvc,
-		Reg:                reg,
-		Passkey:            passkey,
-		UserSvc:            userSvc,
-		Responder:          ls.responder,
-		MCPGateway:         ls.mcpGateway,
-		AppEnrollment:      appEnrollment,
-		Consensus:          consensusSvc,
-		EnvProc:            envProc,
-		IsReady:            ls.IsReady,
-		IsGovernanceReady:  ls.IsGovernanceReady,
+		Cfg:    cfg,
+		Logger: logger,
+		Auth:   auth,
+		PKIControllerDeps: PKIControllerDeps{
+			Cfg:           cfg,
+			Logger:        logger,
+			PKI:           pki,
+			AppEnrollment: appEnrollment,
+			Registration:  reg,
+			Responder:     ls.responder,
+		},
+		AuditControllerDeps: AuditControllerDeps{
+			Cfg:        cfg,
+			Logger:     logger,
+			AuditStore: ls.db.GetStores().AuditStore,
+			Responder:  ls.responder,
+		},
+		DataControllerDeps: DataControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			DocStore:  ls.db.GetStores().DocStore,
+			KVStore:   ls.db.GetStores().KVStore,
+			SSEStore:  ls.db.GetStores().SSEStore,
+			BlobStore: ls.db.GetStores().BlobStore,
+			Pubsub:    pubsub,
+			Responder: ls.responder,
+		},
+		SignerControllerDeps: SignerControllerDeps{
+			Cfg:         cfg,
+			Logger:      logger,
+			DocStore:    ls.db.GetStores().DocStore,
+			SignerStore: ls.db.GetStores().SignerStore,
+			Responder:   ls.responder,
+		},
+		BootstrapControllerDeps: BootstrapControllerDeps{
+			Cfg:                cfg,
+			Logger:             logger,
+			DocStore:           ls.docStore,
+			UserSvc:            userSvc,
+			PKI:                pki,
+			CLISessionSvc:      cliSessionSvc,
+			OperatorSessionSvc: operatorSessionSvc,
+			Responder:          ls.responder,
+			ActuatorKeyReader:  &fileActuatorKeyReader{path: paths.Infra.ActuatorPubJSONPath},
+		},
+		EnrollmentTokenControllerDeps: EnrollmentTokenControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			Responder: ls.responder,
+		},
+		UserControllerDeps: UserControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			UserSvc:   userSvc,
+			Responder: ls.responder,
+		},
+		SessionControllerDeps: SessionControllerDeps{
+			Logger:      logger,
+			DocStore:    ls.docStore,
+			Responder:   ls.responder,
+			CrossOrigin: len(cfg.Gateway.AllowedOrigins) > 0,
+		},
+		AdminControllerDeps: AdminControllerDeps{
+			Cfg:            cfg,
+			Logger:         logger,
+			DocStore:       ls.docStore,
+			SignerStore:    ls.signerStore,
+			ConsensusStore: ls.consensusStore,
+			UserSvc:        userSvc,
+			Responder:      ls.responder,
+		},
+		OperatorControllerDeps: OperatorControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			Reg:       reg,
+			Auth:      auth,
+			Responder: ls.responder,
+		},
+		SSEControllerDeps: SSEControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			DocStore:  ls.docStore,
+			KVStore:   ls.kvStore,
+			SSEStore:  ls.db.GetStores().SSEStore,
+			Pubsub:    pubsub,
+			Auth:      auth,
+			Responder: ls.responder,
+		},
+		HealthControllerDeps: HealthControllerDeps{
+			Cfg:               cfg,
+			Logger:            logger,
+			DocStore:          ls.docStore,
+			StateRootSvc:      ls.stateRootSvc,
+			Responder:         ls.responder,
+			IsReady:           ls.IsReady,
+			IsGovernanceReady: ls.IsGovernanceReady,
+		},
+		GovernanceControllerDeps: GovernanceControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			Responder: ls.responder,
+			Consensus: consensusSvc,
+			EnvProc:   envProc,
+		},
+		MCPControllerDeps: MCPControllerDeps{
+			MCPGateway: ls.mcpGateway,
+		},
+		PubSubControllerDeps: PubSubControllerDeps{
+			Handler: pubsub,
+		},
+		PasskeyControllerDeps: PasskeyControllerDeps{
+			Handler: passkey,
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("gateway: failed to create HTTP handler: %w", err)

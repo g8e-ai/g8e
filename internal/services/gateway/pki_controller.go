@@ -45,14 +45,24 @@ type PKIController struct {
 	responder     *response.Writer
 }
 
-func newPKIController(cfg *config.Config, logger *slog.Logger, pki *PKIAuthority, appEnrollment *AppEnrollmentService, registration *RegistrationService, responder *response.Writer) *PKIController {
+// PKIControllerDeps groups all dependencies for PKIController.
+type PKIControllerDeps struct {
+	Cfg           *config.Config
+	Logger        *slog.Logger
+	PKI           *PKIAuthority
+	AppEnrollment *AppEnrollmentService
+	Registration  *RegistrationService
+	Responder     *response.Writer
+}
+
+func newPKIController(d PKIControllerDeps) *PKIController {
 	return &PKIController{
-		cfg:           cfg,
-		logger:        logger,
-		pki:           pki,
-		appEnrollment: appEnrollment,
-		registration:  registration,
-		responder:     responder,
+		cfg:           d.Cfg,
+		logger:        d.Logger,
+		pki:           d.PKI,
+		appEnrollment: d.AppEnrollment,
+		registration:  d.Registration,
+		responder:     d.Responder,
 	}
 }
 

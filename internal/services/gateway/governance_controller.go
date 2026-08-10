@@ -42,17 +42,24 @@ type GovernanceController struct {
 	envProc   governance.EnvelopeProcessor
 }
 
-// newGovernanceController creates a GovernanceController with all dependencies
-// injected at construction time. consensus may be nil if the gateway posture
-// does not require L2 consensus. envProc may be nil if envelope submission is
-// not enabled.
-func newGovernanceController(cfg *config.Config, logger *slog.Logger, responder *response.Writer, consensusSvc *consensus.ConsensusService, envProc governance.EnvelopeProcessor) *GovernanceController {
+// GovernanceControllerDeps groups all dependencies for GovernanceController.
+// Consensus may be nil if the gateway posture does not require L2 consensus.
+// EnvProc may be nil if envelope submission is not enabled.
+type GovernanceControllerDeps struct {
+	Cfg       *config.Config
+	Logger    *slog.Logger
+	Responder *response.Writer
+	Consensus *consensus.ConsensusService
+	EnvProc   governance.EnvelopeProcessor
+}
+
+func newGovernanceController(d GovernanceControllerDeps) *GovernanceController {
 	return &GovernanceController{
-		cfg:       cfg,
-		logger:    logger,
-		responder: responder,
-		consensus: consensusSvc,
-		envProc:   envProc,
+		cfg:       d.Cfg,
+		logger:    d.Logger,
+		responder: d.Responder,
+		consensus: d.Consensus,
+		envProc:   d.EnvProc,
 	}
 }
 
