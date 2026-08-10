@@ -362,7 +362,7 @@ func setupTestGatewayService(t *testing.T) (*GatewayModeService, *config.Config)
 		responder:          infra.Responder,
 	}
 
-	require.NoError(t, ls.InitHTTPHandler())
+	require.NoError(t, ls.initHTTPHandler())
 
 	return ls, infra.Cfg
 }

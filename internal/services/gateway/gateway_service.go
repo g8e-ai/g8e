@@ -407,24 +407,6 @@ func (ls *GatewayModeService) SetConsensusService(svc *consensus.ConsensusServic
 	ls.consensusSvc = svc
 }
 
-// InitHTTPHandler creates the HTTP handler and servers with all dependencies
-// injected. Consensus is read from ls.consensusSvc (set via
-// SetConsensusService after construction); nil is valid if the gateway posture
-// does not require L2 consensus. The envelope processor falls back to
-// ls.envProcAdapter when nil, which is the lazy adapter wired by
-// NewGatewayOperatorPubSubService.
-//
-// Deprecated: NewGatewayModeService now calls initHTTPHandler internally, so
-// InitHTTPHandler is a no-op kept for backward compatibility with tests that
-// construct GatewayModeService without going through the constructor. It will
-// be removed in a follow-up.
-func (ls *GatewayModeService) InitHTTPHandler() error {
-	if ls.handler != nil {
-		return nil // already initialized (e.g. by NewGatewayModeService)
-	}
-	return ls.initHTTPHandler()
-}
-
 // initHTTPHandler is the internal constructor for the HTTP handler and
 // servers. Called once by NewGatewayModeService. Reads ls.consensusSvc (set
 // via SetConsensusService before Start) and ls.envProcAdapter (lazy adapter
