@@ -83,12 +83,13 @@ type G8eoService struct {
 // NewG8eoService creates a new Operator service in Outbound Mode.
 // In this mode, the Operator initiates all connections to the platform
 // on port 443 and performs command execution on the local host.
-func NewG8eoService(cfg *config.Config, logger *slog.Logger, tlsConfig *certs.TLSConfig) (*G8eoService, error) {
+func NewG8eoService(cfg *config.Config, logger *slog.Logger, tlsConfig *certs.TLSConfig, fileSvc fs.RuntimeFileService) (*G8eoService, error) {
 	service := &G8eoService{
 		config:    cfg,
 		logger:    logger,
 		startTime: time.Now().UTC(),
 		tlsConfig: tlsConfig,
+		fileSvc:   fileSvc,
 	}
 
 	bootstrapService, err := auth.NewBootstrapService(cfg, logger, tlsConfig)
@@ -98,14 +99,6 @@ func NewG8eoService(cfg *config.Config, logger *slog.Logger, tlsConfig *certs.TL
 	service.bootstrap = bootstrapService
 
 	return service, nil
-}
-
-// SetFileService injects a RuntimeFileService for file I/O within the .g8e/ directory.
-// Must be called before Start().
-func (vs *G8eoService) SetFileService(fileSvc fs.RuntimeFileService) {
-	vs.mu.Lock()
-	defer vs.mu.Unlock()
-	vs.fileSvc = fileSvc
 }
 
 func (vs *G8eoService) Start(ctx context.Context) error {
@@ -121,7 +114,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		"posture", vs.config.Posture)
 
 	if vs.fileSvc == nil {
-		return fmt.Errorf("%w: fileSvc must be set via SetFileService before Start()", constants.ErrInternal)
+		return fmt.Errorf("%w: fileSvc must be provided to NewG8eoService", constants.ErrInternal)
 	}
 
 	bootstrapConfig, err := vs.bootstrap.RequestBootstrapConfig(ctx)

@@ -73,6 +73,8 @@ type GatewayModeService struct {
 	webSessionSvc      *WebSessionService
 	suspendedTxService *storage.SuspendedTransactionService
 	mcpGateway         *mcp.GatewayService
+	envProcAdapter     *pubsub.GatewayEnvProcAdapter
+	sessionValidatorAdapter *pubsub.GatewaySessionValidatorAdapter
 	responder          *response.Writer
 	server             *http.Server
 	publicServer       *http.Server
@@ -113,7 +115,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		return nil, fmt.Errorf("gateway: failed to initialize database: %w", err)
 	}
 
-	pubsub := NewGatewayWebSocketHandler(logger)
+	wsHandler := NewGatewayWebSocketHandler(logger)
 
 	// --- Secret manager ---
 	sm := db.GetSecretManager()
@@ -212,52 +214,67 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		return nil, fmt.Errorf("gateway: load doctrine: %w", err)
 	}
 
+	actuatorPriv, actuatorKeyID, err := sm.GetActuatorKey()
+	if err != nil {
+		return nil, fmt.Errorf("gateway: load actuator signing key: %w", err)
+	}
+
+	envProcAdapter := &pubsub.GatewayEnvProcAdapter{}
+	sessionValidatorAdapter := &pubsub.GatewaySessionValidatorAdapter{}
+
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:           logger,
-		Responder:        res,
-		SuspendedStore:   suspendedTxService,
-		ScrubbingService: scrubbingService,
-		ThreatScanner:    doctrine,
-		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
-		Posture:          string(cfg.Gateway.Posture),
-		A2ADownstreamURL: cfg.Gateway.A2ADownstreamURL,
-		PublicBaseURL:    publicBaseURL,
-		AuditStore:       stores.AuditStore,
+		Logger:            logger,
+		Responder:         res,
+		SuspendedStore:    suspendedTxService,
+		ScrubbingService:  scrubbingService,
+		ThreatScanner:     doctrine,
+		MaxPayloadBytes:   cfg.Gateway.MaxPayloadBytes,
+		Posture:           string(cfg.Gateway.Posture),
+		A2ADownstreamURL:  cfg.Gateway.A2ADownstreamURL,
+		PublicBaseURL:     publicBaseURL,
+		AuditStore:        stores.AuditStore,
+		EnvProc:           envProcAdapter,
+		StateRootProvider: stores.StateRootSvc,
+		SigningKey:        actuatorPriv,
+		KeyID:             actuatorKeyID,
+		DownstreamURL:     cfg.Gateway.MCPDownstreamURL,
+		DBService:         stores.DocStore,
+		SessionValidator:  sessionValidatorAdapter,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("gateway: failed to initialize MCP gateway: %w", err)
 	}
 
-	passkeyOrchestrator := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, pubsub, logger)
+	passkeyOrchestrator := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, wsHandler, logger)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:       passkey,
 		WebSessionSvc: webSessionSvc,
 		Responder:     res,
-		MaxPayload:    cfg.Gateway.MaxPayloadBytes,
 		Orchestrator:  passkeyOrchestrator,
-		CrossOrigin:   len(cfg.Gateway.AllowedOrigins) > 0,
 	})
 
 	ls := &GatewayModeService{
-		cfg:                cfg,
-		logger:             logger,
-		fileSvc:            b.fileSvc,
-		doctrine:           doctrine,
-		db:                 db,
-		stores:             stores,
-		pubsub:             pubsub,
-		auth:               auth,
-		pki:                pki,
-		reg:                reg,
-		passkey:            passkeyHandler,
-		userSvc:            userSvc,
-		cliSessionSvc:      cliSessionSvc,
-		operatorSessionSvc: operatorSessionSvc,
-		webSessionSvc:      webSessionSvc,
-		suspendedTxService: suspendedTxService,
-		extraIPs:           extraIPs,
-		mcpGateway:         mcpGateway,
-		responder:          res,
+		cfg:                     cfg,
+		logger:                  logger,
+		fileSvc:                 b.fileSvc,
+		doctrine:                doctrine,
+		db:                      db,
+		stores:                  stores,
+		pubsub:                  wsHandler,
+		auth:                    auth,
+		pki:                     pki,
+		reg:                     reg,
+		passkey:                 passkeyHandler,
+		userSvc:                 userSvc,
+		cliSessionSvc:           cliSessionSvc,
+		operatorSessionSvc:      operatorSessionSvc,
+		webSessionSvc:           webSessionSvc,
+		suspendedTxService:      suspendedTxService,
+		extraIPs:                extraIPs,
+		mcpGateway:              mcpGateway,
+		envProcAdapter:          envProcAdapter,
+		sessionValidatorAdapter: sessionValidatorAdapter,
+		responder:               res,
 	}
 
 	return ls, nil
@@ -363,6 +380,9 @@ func detectBasicNonLoopbackIPv4Addresses() []net.IP {
 // posture does not require L2 consensus. envProc may be nil if envelope
 // submission is not enabled.
 func (ls *GatewayModeService) InitHTTPHandler(consensusSvc *consensus.ConsensusService, envProc governance.EnvelopeProcessor) error {
+	if envProc == nil && ls.envProcAdapter != nil {
+		envProc = ls.envProcAdapter
+	}
 	cfg := ls.cfg
 	logger := ls.logger
 	pubsub := ls.pubsub
@@ -467,6 +487,16 @@ func (ls *GatewayModeService) GetStores() *Stores {
 // GetSecretManager returns the secret manager initialized during database open.
 func (ls *GatewayModeService) GetSecretManager() (*SecretManager, error) {
 	return ls.db.GetSecretManager(), nil
+}
+
+// GetEnvProcAdapter returns the lazy adapter for governance.EnvelopeProcessor.
+func (ls *GatewayModeService) GetEnvProcAdapter() *pubsub.GatewayEnvProcAdapter {
+	return ls.envProcAdapter
+}
+
+// GetSessionValidatorAdapter returns the lazy adapter for mcp.SessionValidator.
+func (ls *GatewayModeService) GetSessionValidatorAdapter() *pubsub.GatewaySessionValidatorAdapter {
+	return ls.sessionValidatorAdapter
 }
 
 // GetHTTPHandler returns the HTTP handler. Returns nil if InitHTTPHandler

@@ -167,6 +167,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
+	mockEnvProc := &mockEnvelopeProcessor{}
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:           logger,
 		Responder:        resp,
@@ -175,13 +176,11 @@ func TestGateway_JWTIntegration(t *testing.T) {
 		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
+		EnvProc:          mockEnvProc,
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)
 	}
-
-	mockEnvProc := &mockEnvelopeProcessor{}
-	mcpGateway.SetRuntimeDeps(mcp.RuntimeDependencies{EnvProc: mockEnvProc})
 
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:       passkey,
@@ -318,6 +317,7 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
+	mockEnvProc := &mockEnvelopeProcessor{}
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:           logger,
 		Responder:        resp,
@@ -326,13 +326,11 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
+		EnvProc:          mockEnvProc,
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)
 	}
-
-	mockEnvProc := &mockEnvelopeProcessor{}
-	mcpGateway.SetRuntimeDeps(mcp.RuntimeDependencies{EnvProc: mockEnvProc})
 
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:       passkey,
@@ -484,6 +482,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
+	mockEnvProc := &mockEnvelopeProcessor{}
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:           logger,
 		Responder:        resp,
@@ -492,13 +491,11 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
+		EnvProc:          mockEnvProc,
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)
 	}
-
-	mockEnvProc := &mockEnvelopeProcessor{}
-	mcpGateway.SetRuntimeDeps(mcp.RuntimeDependencies{EnvProc: mockEnvProc})
 
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:       passkey,

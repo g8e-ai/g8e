@@ -40,12 +40,11 @@ func TestG8eoService_Start_BootstrapFailure(t *testing.T) {
 	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
 	tlsCfg := certs.NewTLSConfig(trustStore, clientIdentity)
 
-	service, err := NewG8eoService(cfg, logger, tlsCfg)
-	require.NoError(t, err)
-
 	fileSvc, err := fs.NewRuntimeFileService(testutil.TempDir(t), logger)
 	require.NoError(t, err)
-	service.SetFileService(fileSvc)
+
+	service, err := NewG8eoService(cfg, logger, tlsCfg, fileSvc)
+	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()

@@ -33,7 +33,6 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -107,10 +106,15 @@ type GatewayService struct {
 	publicBaseURL     string // construction-phase (immutable after NewGatewayService)
 	maxPayloadBytes   int64
 
-	// runtimeDeps bundles all runtime-phase dependencies into a single atomic
-	// assignment. nil until SetRuntimeDeps is called; runtime methods must call
-	// runtimeReady() or getRuntimeDeps() before accessing these fields.
-	runtimeDeps atomic.Pointer[RuntimeDependencies]
+	envProc                governance.EnvelopeProcessor
+	stateRootProvider      StateRootProvider
+	signingKey             ed25519.PrivateKey
+	keyID                  string
+	downstreamURL          string
+	dbService              FieldReader
+	sessionValidator       SessionValidator
+	auditLogger            AuditLogger
+	l2ConsensusDeliberator L2ConsensusDeliberator
 
 	// Circuit breaker state
 	mu               sync.RWMutex
@@ -165,8 +169,7 @@ type noopAuditEventRecorder struct{}
 
 func (noopAuditEventRecorder) RecordEvent(*storage.Event) (int64, error) { return 0, nil }
 
-// Dependencies groups all construction-phase dependencies for NewGatewayService.
-// These fields are immutable after construction.
+// Dependencies groups all dependencies for NewGatewayService.
 type Dependencies struct {
 	Logger           *slog.Logger
 	Responder        *response.Writer
@@ -175,8 +178,8 @@ type Dependencies struct {
 	ThreatScanner    ThreatScanner
 	MaxPayloadBytes  int64
 	Posture          string // Gateway posture: doctrine, consensus, or notary
-	A2ADownstreamURL string // A2A downstream server URL (construction-phase)
-	PublicBaseURL    string // Public base URL for approval links (construction-phase)
+	A2ADownstreamURL string // A2A downstream server URL
+	PublicBaseURL    string // Public base URL for approval links
 
 	// AuditStore records audit events for suspended transactions and downstream
 	// MCP calls. When nil, a no-op recorder is used (events are silently dropped).
@@ -186,12 +189,7 @@ type Dependencies struct {
 	// When nil, NewFieldPathRegistry is used. This allows tests to inject a failing
 	// factory to verify error handling in NewGatewayService.
 	FieldPathRegistryFactory func(*slog.Logger) (*FieldPathRegistry, error)
-}
 
-// RuntimeDependencies bundles all runtime-phase dependencies that are set once
-// before the first request, via SetRuntimeDeps. This replaces the individual
-// SetDependencies/SetDBService/SetSessionValidator/SetAuditLogger setters.
-type RuntimeDependencies struct {
 	EnvProc                governance.EnvelopeProcessor
 	StateRootProvider      StateRootProvider
 	SigningKey             ed25519.PrivateKey
@@ -234,20 +232,29 @@ func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 	}
 
 	g := &GatewayService{
-		logger:            deps.Logger,
-		responder:         deps.Responder,
-		suspendedStore:    deps.SuspendedStore,
-		fieldPathRegistry: fieldPathRegistry,
-		auditStore:        auditStore,
-		nativeToolHandler: nativeToolHandler,
-		scrubbingService:  deps.ScrubbingService,
-		threatScanner:     deps.ThreatScanner,
-		posture:           deps.Posture,
-		a2aDownstreamURL:  deps.A2ADownstreamURL,
-		publicBaseURL:     deps.PublicBaseURL,
-		maxFailures:       5,
-		cooldownDuration:  1 * time.Minute,
-		maxPayloadBytes:   deps.MaxPayloadBytes,
+		logger:                 deps.Logger,
+		responder:              deps.Responder,
+		suspendedStore:         deps.SuspendedStore,
+		fieldPathRegistry:      fieldPathRegistry,
+		auditStore:             auditStore,
+		nativeToolHandler:      nativeToolHandler,
+		scrubbingService:       deps.ScrubbingService,
+		threatScanner:          deps.ThreatScanner,
+		posture:                deps.Posture,
+		a2aDownstreamURL:       deps.A2ADownstreamURL,
+		publicBaseURL:          deps.PublicBaseURL,
+		maxFailures:            5,
+		cooldownDuration:       1 * time.Minute,
+		maxPayloadBytes:        deps.MaxPayloadBytes,
+		envProc:                deps.EnvProc,
+		stateRootProvider:      deps.StateRootProvider,
+		signingKey:             deps.SigningKey,
+		keyID:                  deps.KeyID,
+		downstreamURL:          deps.DownstreamURL,
+		dbService:              deps.DBService,
+		sessionValidator:       deps.SessionValidator,
+		auditLogger:            deps.AuditLogger,
+		l2ConsensusDeliberator: deps.L2ConsensusDeliberator,
 	}
 	return g, nil
 }
@@ -318,21 +325,16 @@ func (g *GatewayService) RunMaintenance(ctx context.Context) {
 	}
 }
 
-// SetRuntimeDeps atomically sets all runtime-phase dependencies. This replaces
-// the individual SetDependencies/SetDBService/SetSessionValidator/SetAuditLogger
-// setters. Must be called once before the first request is processed.
-func (g *GatewayService) SetRuntimeDeps(deps RuntimeDependencies) {
-	g.runtimeDeps.Store(&deps)
+// SetAuditLogger sets the audit logger. Called by NewGatewayOperatorPubSubService
+// after construction.
+func (g *GatewayService) SetAuditLogger(l AuditLogger) {
+	g.auditLogger = l
 }
 
-// runtimeReady returns true if runtime dependencies have been wired.
-func (g *GatewayService) runtimeReady() bool {
-	return g.runtimeDeps.Load() != nil
-}
-
-// getRuntimeDeps returns the runtime dependencies or nil if not yet wired.
-func (g *GatewayService) getRuntimeDeps() *RuntimeDependencies {
-	return g.runtimeDeps.Load()
+// SetL2ConsensusDeliberator sets the L2 consensus deliberator. Called
+// after construction when consensus is bootstrapped.
+func (g *GatewayService) SetL2ConsensusDeliberator(d L2ConsensusDeliberator) {
+	g.l2ConsensusDeliberator = d
 }
 
 // isNativeTool checks if a tool name is a native tool compiled into the Operator.
@@ -369,7 +371,7 @@ func (g *GatewayService) recordFailure() {
 	if g.failureCount >= g.maxFailures {
 		if !g.circuitOpen {
 			if g.logger != nil {
-				g.logger.Warn("MCP downstream circuit breaker OPENED", "url", g.getRuntimeDeps().DownstreamURL, "failures", g.failureCount)
+				g.logger.Warn("MCP downstream circuit breaker OPENED", "url", g.downstreamURL, "failures", g.failureCount)
 			}
 		}
 		g.circuitOpen = true
@@ -382,7 +384,7 @@ func (g *GatewayService) recordSuccess() {
 
 	if g.circuitOpen {
 		if g.logger != nil {
-			g.logger.Info("MCP downstream circuit breaker CLOSED", "url", g.getRuntimeDeps().DownstreamURL)
+			g.logger.Info("MCP downstream circuit breaker CLOSED", "url", g.downstreamURL)
 		}
 	}
 	g.failureCount = 0
@@ -396,7 +398,7 @@ func (g *GatewayService) handleA2ARequest(w http.ResponseWriter, r *http.Request
 	}
 
 	if g.isCircuitOpen() {
-		g.logger.Warn("MCP downstream circuit is open, rejecting request", "method", method, "url", g.getRuntimeDeps().DownstreamURL)
+		g.logger.Warn("MCP downstream circuit is open, rejecting request", "method", method, "url", g.downstreamURL)
 		g.responder.RPCError(w, nil, -32603, "downstream MCP server is temporarily unavailable (circuit open)")
 		return
 	}
@@ -497,7 +499,7 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 		return nil, err
 	}
 
-	receipt, err := g.getRuntimeDeps().EnvProc.ProcessEnvelope(ctx, envelopeBytes)
+	receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
 	if err != nil {
 		if errors.Is(err, governance.ErrL3ProofMissing) {
 			userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
@@ -539,8 +541,7 @@ func (g *GatewayService) handleReadField(ctx context.Context, arguments json.Raw
 		return nil, constants.ErrGatewayFieldPathRegistryNotInit
 	}
 
-	deps := g.getRuntimeDeps()
-	if deps.DBService == nil {
+	if g.dbService == nil {
 		return nil, constants.ErrGatewayDatabaseServiceNotConfigured
 	}
 
@@ -569,8 +570,8 @@ func (g *GatewayService) handleReadField(ctx context.Context, arguments json.Raw
 	}
 
 	// L3: Validate Operator session
-	if deps.SessionValidator != nil {
-		valid, err := deps.SessionValidator.ValidateSession(req.OperatorSessionID)
+	if g.sessionValidator != nil {
+		valid, err := g.sessionValidator.ValidateSession(req.OperatorSessionID)
 		if err != nil {
 			return nil, fmt.Errorf("gateway: %w", constants.ErrInternal)
 		}
@@ -580,7 +581,7 @@ func (g *GatewayService) handleReadField(ctx context.Context, arguments json.Raw
 	}
 
 	// Extract field value from database
-	value, err := deps.DBService.GetField(req.Collection, req.DocumentID, req.FieldPath)
+	value, err := g.dbService.GetField(req.Collection, req.DocumentID, req.FieldPath)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: %w", constants.ErrInternal)
 	}
@@ -591,8 +592,8 @@ func (g *GatewayService) handleReadField(ctx context.Context, arguments json.Raw
 	}
 
 	// Audit vault logging
-	if deps.AuditLogger != nil {
-		if err := deps.AuditLogger.LogFieldRead(req.OperatorSessionID, req.Collection, req.DocumentID, req.FieldPath, value); err != nil {
+	if g.auditLogger != nil {
+		if err := g.auditLogger.LogFieldRead(req.OperatorSessionID, req.Collection, req.DocumentID, req.FieldPath, value); err != nil {
 			g.logger.Warn("Failed to log field read to audit vault", "error", err, "collection", req.Collection, "field_path", req.FieldPath)
 		}
 	}
@@ -661,7 +662,7 @@ func (g *GatewayService) readResource(ctx context.Context, params json.RawMessag
 		return nil, err
 	}
 
-	receipt, err := g.getRuntimeDeps().EnvProc.ProcessEnvelope(ctx, envelopeBytes)
+	receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -710,7 +711,7 @@ func (g *GatewayService) getPrompt(ctx context.Context, params json.RawMessage) 
 		return nil, err
 	}
 
-	receipt, err := g.getRuntimeDeps().EnvProc.ProcessEnvelope(ctx, envelopeBytes)
+	receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -741,9 +742,9 @@ type processGatewayOptions struct {
 
 func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts processGatewayOptions) (hash string, envelopeBytes []byte, err error) {
 	stateRoot := ""
-	if deps := g.getRuntimeDeps(); deps != nil && deps.StateRootProvider != nil {
+	if g.stateRootProvider != nil {
 		var err error
-		stateRoot, err = deps.StateRootProvider.GetCurrentStateRoot()
+		stateRoot, err = g.stateRootProvider.GetCurrentStateRoot()
 		if err != nil {
 			g.logger.Warn("Failed to get current state root", "error", err)
 		}
@@ -806,8 +807,8 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 	// The Consensus collects signed votes from its members and returns the
 	// envelope with L2 metadata populated. If the deliberator is not configured,
 	// the envelope proceeds without L2 votes and will fail-closed at L4 verification.
-	if (g.posture == "consensus" || g.posture == "notary") && g.getRuntimeDeps().L2ConsensusDeliberator != nil {
-		deliberatedBytes, err := g.getRuntimeDeps().L2ConsensusDeliberator.Deliberate(ctx, envelopeBytes)
+	if (g.posture == "consensus" || g.posture == "notary") && g.l2ConsensusDeliberator != nil {
+		deliberatedBytes, err := g.l2ConsensusDeliberator.Deliberate(ctx, envelopeBytes)
 		if err != nil {
 			g.logger.Error("L2 consensus deliberation failed", "tx_hash", hash, "error", err)
 			return "", nil, fmt.Errorf("gateway: l2 consensus deliberation: %w", err)
@@ -826,7 +827,7 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 // @Success		200	{object}	map[string]interface{}
 // @Router			/api/v1/a2a/call [post]
 func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
-	if !g.runtimeReady() {
+	if g.envProc == nil {
 		g.responder.RPCError(w, nil, -32603, constants.ErrGatewayNotReady.Error())
 		return
 	}
@@ -871,7 +872,7 @@ func (g *GatewayService) a2aCall(ctx context.Context, r *http.Request, params js
 		return nil, err
 	}
 
-	receipt, err := g.getRuntimeDeps().EnvProc.ProcessEnvelope(ctx, envelopeBytes)
+	receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
 	if err != nil {
 		if errors.Is(err, governance.ErrL3ProofMissing) || errors.Is(err, governance.ErrL3ProofInvalid) {
 			userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
@@ -1031,7 +1032,7 @@ func (g *GatewayService) DeleteSuspendedTransaction(ctx context.Context, txHash 
 // The signed receipt returned by the Gateway is forwarded to the caller so
 // the OOB approval UI can surface the downstream tool result to the user.
 func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID string, proof *commonv1.L3Proof) (*operatorv1.ActionReceipt, error) {
-	if !g.runtimeReady() {
+	if g.envProc == nil {
 		return nil, constants.ErrGatewayNotReady
 	}
 	if proof == nil {
@@ -1071,7 +1072,7 @@ func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID s
 		return nil, fmt.Errorf("gateway: %w", constants.ErrInternal)
 	}
 
-	receipt, procErr := g.getRuntimeDeps().EnvProc.ProcessEnvelope(ctx, resubmitted)
+	receipt, procErr := g.envProc.ProcessEnvelope(ctx, resubmitted)
 	if procErr != nil {
 		// Keep the suspension in place so the user can retry the proof
 		// without re-issuing the upstream MCP call.
@@ -1138,7 +1139,7 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 		return summary, nil
 	}
 
-	if g.getRuntimeDeps().DownstreamURL == "" {
+	if g.downstreamURL == "" {
 		return "", constants.ErrGatewayNoDownstreamConfigured
 	}
 
@@ -1170,7 +1171,7 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Post(g.getRuntimeDeps().DownstreamURL, "application/json", strings.NewReader(string(reqBody)))
+	resp, err := client.Post(g.downstreamURL, "application/json", strings.NewReader(string(reqBody)))
 	if err != nil {
 		g.recordFailure()
 		return "", fmt.Errorf("gateway: %w", constants.ErrGatewayDownstreamUnavailable)

@@ -2,8 +2,6 @@ package mcp
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -155,36 +153,26 @@ func TestRuntimeDeps_L2ConsensusDeliberator(t *testing.T) {
 
 	t.Run("nil deliberator by default", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{logger: slog.Default()}
-		_, privKey, _ := ed25519.GenerateKey(rand.Reader)
-		g.SetRuntimeDeps(RuntimeDependencies{
-			EnvProc:           &fakeEnvelopeProcessor{},
-			StateRootProvider: &fakeStateRootProvider{root: "test"},
-			SigningKey:        privKey,
-			KeyID:             "key-1",
-			DownstreamURL:     "http://downstream",
-		})
-		deps := g.getRuntimeDeps()
-		require.NotNil(t, deps)
-		assert.Nil(t, deps.L2ConsensusDeliberator)
+		g := &GatewayService{
+			logger: slog.Default(),
+			envProc: &fakeEnvelopeProcessor{},
+			stateRootProvider: &fakeStateRootProvider{root: "test"},
+			downstreamURL: "http://downstream",
+		}
+		assert.Nil(t, g.l2ConsensusDeliberator)
 	})
 
-	t.Run("deliberator accessible via RuntimeDependencies", func(t *testing.T) {
+	t.Run("deliberator accessible via field", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{logger: slog.Default()}
-		_, privKey, _ := ed25519.GenerateKey(rand.Reader)
+		g := &GatewayService{
+			logger: slog.Default(),
+			envProc: &fakeEnvelopeProcessor{},
+			stateRootProvider: &fakeStateRootProvider{root: "test"},
+			downstreamURL: "http://downstream",
+		}
 		mock := &mockL2ConsensusDeliberator{}
-		g.SetRuntimeDeps(RuntimeDependencies{
-			EnvProc:                &fakeEnvelopeProcessor{},
-			StateRootProvider:      &fakeStateRootProvider{root: "test"},
-			SigningKey:             privKey,
-			KeyID:                  "key-1",
-			DownstreamURL:          "http://downstream",
-			L2ConsensusDeliberator: mock,
-		})
-		deps := g.getRuntimeDeps()
-		require.NotNil(t, deps)
-		assert.Same(t, mock, deps.L2ConsensusDeliberator)
+		g.SetL2ConsensusDeliberator(mock)
+		assert.Same(t, mock, g.l2ConsensusDeliberator)
 	})
 }
 

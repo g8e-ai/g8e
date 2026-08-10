@@ -277,9 +277,11 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 			ActuatorSigningKey: actuatorPriv,
 			ActuatorKeyID:      actuatorKeyID,
 		},
-		GovDeps:                govDeps,
-		MCPGateway:             mcpSvc,
-		L2ConsensusDeliberator: l2Deliberator,
+		GovDeps:                 govDeps,
+		MCPGateway:              mcpSvc,
+		L2ConsensusDeliberator:  l2Deliberator,
+		EnvProcAdapter:          svc.GetEnvProcAdapter(),
+		SessionValidatorAdapter: svc.GetSessionValidatorAdapter(),
 	}
 
 	cmdSvc, err := pubsub.NewGatewayOperatorPubSubService(psConfig)
