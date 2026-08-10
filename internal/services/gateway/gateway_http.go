@@ -58,12 +58,12 @@ type HTTPHandlerDependencies struct {
 
 // HTTPHandler manages the web API for the gateway service.
 type HTTPHandler struct {
-	cfg             *config.Config
-	logger          *slog.Logger
-	authMiddleware  *AuthService
-	responder       *response.Writer
-	mcpController   *MCPController
-	pubsubController *PubSubController
+	cfg               *config.Config
+	logger            *slog.Logger
+	authMiddleware    *AuthService
+	responder         *response.Writer
+	mcpController     *MCPController
+	pubsubController  *PubSubController
 	passkeyController *PasskeyController
 	// Controllers for domain-specific endpoints
 	pkiController             *PKIController
@@ -111,28 +111,28 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	deps.EnrollmentTokenControllerDeps.EnrollmentTokenSvc = enrollmentTokenSvc
 
 	h := &HTTPHandler{
-		cfg:                      deps.Cfg,
-		logger:                   deps.Logger,
-		authMiddleware:           deps.Auth,
-		responder:                responder,
-		pkiController:            newPKIController(deps.PKIControllerDeps),
-		auditController:          newAuditController(deps.AuditControllerDeps),
-		dataController:           newDataController(deps.DataControllerDeps),
-		signerController:         newSignerController(deps.SignerControllerDeps),
-		bootstrapController:      newBootstrapController(deps.BootstrapControllerDeps),
+		cfg:                       deps.Cfg,
+		logger:                    deps.Logger,
+		authMiddleware:            deps.Auth,
+		responder:                 responder,
+		pkiController:             newPKIController(deps.PKIControllerDeps),
+		auditController:           newAuditController(deps.AuditControllerDeps),
+		dataController:            newDataController(deps.DataControllerDeps),
+		signerController:          newSignerController(deps.SignerControllerDeps),
+		bootstrapController:       newBootstrapController(deps.BootstrapControllerDeps),
 		enrollmentTokenController: newEnrollmentTokenController(deps.EnrollmentTokenControllerDeps),
-		userController:           newUserController(deps.UserControllerDeps),
-		sessionController:        newSessionController(deps.SessionControllerDeps),
-		adminController:          newAdminController(deps.AdminControllerDeps),
-		operatorController:       newOperatorController(deps.OperatorControllerDeps),
-		sseController:            newSSEController(deps.SSEControllerDeps),
-		healthController:         newHealthController(deps.HealthControllerDeps),
-		governanceController:     newGovernanceController(deps.GovernanceControllerDeps),
-		mcpController:            newMCPController(deps.MCPControllerDeps),
-		pubsubController:         newPubSubController(deps.PubSubControllerDeps),
-		passkeyController:        newPasskeyController(deps.PasskeyControllerDeps),
-		limiters:                 make(map[string]*tokenBucket),
-		limiterLastUsed:          make(map[string]time.Time),
+		userController:            newUserController(deps.UserControllerDeps),
+		sessionController:         newSessionController(deps.SessionControllerDeps),
+		adminController:           newAdminController(deps.AdminControllerDeps),
+		operatorController:        newOperatorController(deps.OperatorControllerDeps),
+		sseController:             newSSEController(deps.SSEControllerDeps),
+		healthController:          newHealthController(deps.HealthControllerDeps),
+		governanceController:      newGovernanceController(deps.GovernanceControllerDeps),
+		mcpController:             newMCPController(deps.MCPControllerDeps),
+		pubsubController:          newPubSubController(deps.PubSubControllerDeps),
+		passkeyController:         newPasskeyController(deps.PasskeyControllerDeps),
+		limiters:                  make(map[string]*tokenBucket),
+		limiterLastUsed:           make(map[string]time.Time),
 	}
 
 	// Build router once to avoid per-request overhead

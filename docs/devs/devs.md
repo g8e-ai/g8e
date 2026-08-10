@@ -164,10 +164,11 @@ Several services have dependencies that cannot be passed to the constructor beca
 4. Routes that depend on late-bound deps are **always registered** in the router. The handler checks the atomic pointer at request time, eliminating the need for a router rebuild when the dependency is wired.
 5. `go test -race` must pass — the atomic access guarantees no data races even if the boot sequence changes.
 
-**Two-phase dependency model for `mcp.GatewayService`:**
+**Single-phase dependency model for `mcp.GatewayService`:**
 
-- **Construction-phase** (`Dependencies` struct, immutable after `NewGatewayService`): `Logger`, `Responder`, `SuspendedStore`, `ScrubbingService`, `ThreatScanner`, `MaxPayloadBytes`, `Posture`, `A2ADownstreamURL`, `PublicBaseURL`, `AuditStore` (defaults to no-op when nil), `FieldPathRegistryFactory` (test injection point, defaults to `NewFieldPathRegistry`).
-- **Runtime-phase** (`RuntimeDependencies` struct, set once via `SetRuntimeDeps` before first request): `EnvProc`, `StateRootProvider`, `SigningKey`, `KeyID`, `DownstreamURL`, `DBService`, `SessionValidator`, `AuditLogger`, `L2ConsensusDeliberator`. Stored via `atomic.Pointer[RuntimeDependencies]` with `runtimeReady()` gate.
+- **Construction-phase** (`Dependencies` struct, immutable after `NewGatewayService`): `Logger`, `Responder`, `SuspendedStore`, `ScrubbingService`, `ThreatScanner`, `MaxPayloadBytes`, `Posture`, `A2ADownstreamURL`, `PublicBaseURL`, `AuditStore`, `FieldPathRegistryFactory`, `EnvProc`, `StateRootProvider`, `SigningKey`, `KeyID`, `DownstreamURL`, `DBService`, `SessionValidator`, `AuditLogger`, `L2ConsensusDeliberator`.
+- **Lazy forwarding adapters**: `pubsub.GatewayEnvProcAdapter` and `pubsub.GatewaySessionValidatorAdapter` break circular dependencies between `mcp.GatewayService` and `OperatorPubSubService`.
+- **Narrow setters**: `SetAuditLogger` and `SetL2ConsensusDeliberator` are provided for genuinely late-bound dependencies that cannot be resolved at construction time.
 
 ## Constants & Doctrines
 
