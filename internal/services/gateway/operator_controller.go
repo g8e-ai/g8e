@@ -33,13 +33,22 @@ type OperatorController struct {
 	responder *response.Writer
 }
 
-func newOperatorController(cfg *config.Config, logger *slog.Logger, reg *RegistrationService, auth *AuthService, responder *response.Writer) *OperatorController {
+// OperatorControllerDeps groups all dependencies for OperatorController.
+type OperatorControllerDeps struct {
+	Cfg       *config.Config
+	Logger    *slog.Logger
+	Reg       *RegistrationService
+	Auth      *AuthService
+	Responder *response.Writer
+}
+
+func newOperatorController(d OperatorControllerDeps) *OperatorController {
 	return &OperatorController{
-		cfg:       cfg,
-		logger:    logger,
-		reg:       reg,
-		auth:      auth,
-		responder: responder,
+		cfg:       d.Cfg,
+		logger:    d.Logger,
+		reg:       d.Reg,
+		auth:      d.Auth,
+		responder: d.Responder,
 	}
 }
 

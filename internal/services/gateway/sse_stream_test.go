@@ -188,7 +188,7 @@ func TestHandleInternalSSEStream_PubSubEventDelivery(t *testing.T) {
 	pubEvent := models.SSEPublishedEvent{ID: 1, Payload: json.RawMessage(payload)}
 	envelopeJSON, err := json.Marshal(pubEvent)
 	require.NoError(t, err)
-	h.pubsub.Publish("sse:cli:"+cliSessionID, envelopeJSON)
+	h.GetGatewayWebSocketHandler().Publish("sse:cli:"+cliSessionID, envelopeJSON)
 
 	// Wait for delivery
 	time.Sleep(100 * time.Millisecond)
@@ -317,14 +317,14 @@ func TestHandleInternalSSEStream_DuplicatePubSubEventSuppressed(t *testing.T) {
 	dupEvent := models.SSEPublishedEvent{ID: event2ID, Payload: json.RawMessage(dupPayload)}
 	dupJSON, err := json.Marshal(dupEvent)
 	require.NoError(t, err)
-	h.pubsub.Publish("sse:cli:"+cliSessionID, dupJSON)
+	h.GetGatewayWebSocketHandler().Publish("sse:cli:"+cliSessionID, dupJSON)
 
 	// Also publish a new event with a higher ID — should be delivered.
 	newPayload := `{"event":{"type":"live_type"}}`
 	newEvent := models.SSEPublishedEvent{ID: event2ID + 1, Payload: json.RawMessage(newPayload)}
 	newJSON, err := json.Marshal(newEvent)
 	require.NoError(t, err)
-	h.pubsub.Publish("sse:cli:"+cliSessionID, newJSON)
+	h.GetGatewayWebSocketHandler().Publish("sse:cli:"+cliSessionID, newJSON)
 
 	time.Sleep(100 * time.Millisecond)
 	cancel()

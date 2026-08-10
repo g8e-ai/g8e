@@ -24,7 +24,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   │   ├── governance.ReplayStore (storage.SQLReplayStore)
 │   │   ├── governance.StateRootProvider (gateway.StateRootService via Stores) [SHARED]
 │   │   ├── governance.SignerStore (governance.FilesystemSignerStore)
-│   │   ├── governance.L2ConsensusPolicyStore (via GovernanceDeps.ConsensusPolicyStore; NoopConsensusPolicyStore in outbound mode, gateway.ConsensusStoreService in gateway mode)
+│   │   ├── governance.L2ConsensusPolicyStore (via GovernanceDeps.ConsensusPolicyStore; nil in outbound mode with fail-closed nil-check, gateway.ConsensusStoreService in gateway mode)
 │   │   ├── governance.L1Doctrine (from GovernanceDeps.Doctrine in gateway mode; defaults to NewL1Doctrine() at pubsub_commands.go call site when nil in outbound mode)
 │   │   └── governance.L3Notary (governance.outboundNotary implementation)
 │   │       └── storage.SuspendedTransactionService
@@ -135,7 +135,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   └── gateway.DocumentStoreService (from Stores [SHARED])
 ├── gateway.WebSessionService
 │   └── gateway.DocumentStoreService (from Stores [SHARED])
-├── gateway.HTTPHandler (receives Stores via HTTPHandlerDependencies, delegates to controllers)
+├── gateway.HTTPHandler (router + middleware shell; deps injected via HTTPHandlerDependencies as per-controller Deps structs)
 │   ├── gateway.GatewayWebSocketHandler
 │   ├── gateway.AuthService
 │   ├── gateway.PKIAuthority
@@ -238,15 +238,14 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── mcp.FieldPathRegistry
 │   ├── mcp.NativeToolHandler
 │   ├── mcp.AuditEventRecorder (interface; storage.SQLAuditStore in production via Stores.AuditStore, noopAuditEventRecorder when not wired)
-│   ├── RuntimeDependencies (atomic.Pointer, set once via SetRuntimeDeps before first request):
-│   │   ├── mcp.SessionValidator (set by in-process OperatorPubSubService in gateway mode)
-│   │   ├── mcp.AuditLogger (pubsubAuditLogger, set by in-process OperatorPubSubService in gateway mode)
-│   │   ├── governance.EnvelopeProcessor (set by in-process OperatorPubSubService in gateway mode)
-│   │   ├── StateRootProvider (set by in-process OperatorPubSubService in gateway mode)
-│   │   ├── Ed25519 signing key/keyID (set by in-process OperatorPubSubService in gateway mode)
-│   │   ├── downstreamURL (MCP egress, set by in-process OperatorPubSubService in gateway mode)
-│   │   ├── DBService (mcp.FieldReader, gateway.DocumentStoreService) [SHARED] (set by in-process OperatorPubSubService in gateway mode; not applicable in outbound mode)
-│   │   └── consensus.L2ConsensusDeliberator (consensus.LocalDeliberator in gateway mode, not applicable in outbound mode)
+│   ├── governance.EnvelopeProcessor (via pubsub.GatewayEnvProcAdapter lazy wrapper)
+│   ├── mcp.SessionValidator (via pubsub.GatewaySessionValidatorAdapter lazy wrapper)
+│   ├── StateRootProvider (gateway.StateRootService)
+│   ├── Ed25519 signing key/keyID
+│   ├── downstreamURL (MCP egress)
+│   ├── DBService (mcp.FieldReader, gateway.DocumentStoreService) [SHARED]
+│   ├── consensus.L2ConsensusDeliberator (consensus.LocalDeliberator in gateway mode; narrow setter)
+│   ├── mcp.AuditLogger (pubsubAuditLogger in gateway mode; narrow setter)
 │   ├── a2aDownstreamURL (construction-phase, immutable after NewGatewayService)
 │   └── publicBaseURL (construction-phase, immutable after NewGatewayService)
 └── response.Writer
@@ -258,7 +257,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - **Mode-specific services**: `G8eoService` (outbound mode only), `GatewayModeService` (gateway mode only), `mcp.GatewayService` (gateway-only; `MCPGateway` is in `GatewayCommandServiceConfig` and wired via `NewGatewayOperatorPubSubService`; not present in outbound mode's `CommandServiceConfig`)
 - **Shared services**: `CanonicalDBService` (used in both modes for state root calculation - full service in gateway mode, state root calculation only in outbound mode)
 - **Governance dependencies**: `FieldReader`, `ConsensusPolicyStore`, `ReplayStore`, `StateRootProvider`, `TransactionAudit`, `L3Notary`, `SignerStore`, and `Doctrine` are consolidated in `pubsub.GovernanceDeps`, passed as a separate parameter to `NewOperatorPubSubService` and embedded via the `GovDeps` field in `GatewayCommandServiceConfig`.
-  In outbound mode, `ConsensusPolicyStore` and `FieldReader` default to no-op implementations (`NoopConsensusPolicyStore`, `NoopFieldReader`) via constructor-level defaults in `NewOperatorPubSubService`; in gateway mode, all fields are populated via `GetGovernanceDeps`.
+  In outbound mode, `ConsensusPolicyStore` and `FieldReader` are nil (feature not configured); call sites nil-check with fail-closed behavior. In gateway mode, all fields are populated via `GetGovernanceDeps`.
 
 ### Data Handling Convergence
 - **`gateway.CanonicalDBService`** is the canonical SQLite root for gateway mode; it contains only lifecycle code (Open, Close, GetVault, schema/migrations, maintenance loop). Domain logic lives in dedicated service fields. In outbound mode, it is used only for state root calculation and provides the shared vault instance.
@@ -271,8 +270,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - **`gateway.SSEEventService`** provides Server-Sent Events fan-out for gateway mode. Callers access it directly via the `SSEStore` field on `Stores` (returned by `OpenCanonicalDBService`) - no delegation wrappers.
 - **`gateway.BlobStoreService`** provides binary persistence for attachments and certificate material for gateway mode. Callers access it directly via the `BlobStore` field on `Stores` (returned by `OpenCanonicalDBService`) - no delegation wrappers.
 - **`Stores.DB`** provides the raw `sqliteutil.DB` connection for consumers needing direct DB access (e.g., `NewConsensusStoreService`, `NewStateRootService`). Accessible via the `DB` field on `Stores` (returned by `OpenCanonicalDBService`).
-- **`gateway.Stores`** is a read-only aggregation struct returned by `OpenCanonicalDBService`. It bundles 11 store services for transport convenience. Consumers decompose it at the call site - controllers receive individual stores via `Deps` structs (e.g., `AuditControllerDeps`, `DataControllerDeps`, `SignerControllerDeps`, `BootstrapControllerDeps`), not the whole `Stores` struct.
-  The trade-off: `GatewayModeService` and `G8eoService` retain the full `Stores` as a field, giving them access to all 11 stores even if they only use 2-4. This is acceptable because (1) the struct is read-only, (2) Go's type system prevents accessing the wrong store, and (3) splitting into themed groups would add types without reducing actual coupling since controllers already get individual stores via DI.
+- **`gateway.Stores`** is an internal aggregation struct returned by `OpenCanonicalDBService` to bundle store initialization. Consumers do not retain the `*Stores` struct past initialization. `GatewayModeService` holds narrow individual store fields, `G8eoService` uses narrow accessors on `CanonicalDBService`, and `HTTPHandlerDependencies` distributes individual store references into per-controller `Deps` structs. A lint guard test (`TestStoresFieldNotLeakedPastGatewayDB`) asserts no production struct outside `gateway_db.go` declares a `*Stores` field.
 - **`storage.SuspendedTransactionService`** is the L3 approval workflow store used consistently in both gateway and outbound modes (implements `storage.SuspendedTransactionStore`). In both `GatewayModeService` and `G8eoService`, a single `*storage.SuspendedTransactionService` field serves both store operations and `Close` - no separate closer field.
 - **`mcp.NewGatewayService`** fails fast on construction errors: `FieldPathRegistry` initialization errors are returned (not silently logged), making governance system initialization failures fatal. The `Dependencies.FieldPathRegistryFactory` field allows tests to inject a failing factory.
 - **`mcp.AuditEventRecorder`** interface on `GatewayService` provides audit event recording. `NewGatewayService` defaults to a no-op recorder when `Dependencies.AuditStore` is nil. Production wires `stores.AuditStore` (`*storage.SQLAuditStore`) via `Dependencies.AuditStore`. The field is always non-nil, eliminating nil guards at call sites.
@@ -338,9 +336,7 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 ### Transport & Protocol Layer
 - `pubsub.OperatorPubSubService` is the dispatcher for outbound mode (WebSocket pub/sub).
 - `mcp.GatewayService` handles MCP/A2A protocol translation and downstream dispatch (gateway mode only; shared between HTTP ingress and OperatorPubSubService egress).
-- `gateway.HTTPHandler` is a thin router and middleware shell for gateway mode. It holds only router infrastructure (rate limiting, CORS, path traversal guard), direct accessors (`passkey`, `mcp`, `pubsub`), and 13 controller fields. All domain handler logic lives on controllers:
-  `PKIController`, `AuditController`, `DataController`, `SignerController`, `BootstrapController`, `EnrollmentTokenController`, `UserController`, `SessionController`, `AdminController`, `OperatorController`, `SSEController`, `HealthController`, `GovernanceController`.
-  See HTTP Controller Decomposition below for per-controller responsibilities and dependencies.
+- `gateway.HTTPHandler` is a router and middleware shell for gateway mode. It holds router infrastructure (rate limiting, CORS, path traversal guard), cross-cutting infrastructure (`responder`, `authMiddleware`), and 16 controller fields: `PKIController`, `AuditController`, `DataController`, `SignerController`, `BootstrapController`, `EnrollmentTokenController`, `UserController`, `SessionController`, `AdminController`, `OperatorController`, `SSEController`, `HealthController`, `GovernanceController`, `MCPController`, `PubSubController`, `PasskeyController`. All HTTP endpoint logic lives on controllers. Dependencies are injected via `HTTPHandlerDependencies`, composed of per-controller `Deps` structs.
 - `gateway.GatewayWebSocketHandler` is the in-process pub/sub broker for gateway mode.
 - `gateway.PKIAuthority` manages PKI hierarchy and certificate lifecycle for gateway mode.
 - `network.Detector` detects host IP addresses and DNS names to configure TLS certificate identities dynamically during boot and renewal.
@@ -376,8 +372,7 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - **`gateway.HealthController`** (`health_controller.go`): Health check, bootstrap health, state endpoint, and landing page.
 - **`gateway.GovernanceController`** (`governance_controller.go`): Governance envelope submission, consensus deliberation. Both `consensus.ConsensusService` and `governance.EnvelopeProcessor` are injected at construction time. A nil value means the feature is not configured for the current posture (e.g. doctrine mode has no consensus). Handlers check for nil and return 503 ("not configured for this posture").
 
-  **Two-phase construction (eliminates circular dependency):** `GatewayModeService` construction is split into two phases. Phase 1 (`NewGatewayModeService`) opens the DB, creates stores, PKI, auth, and MCP gateway - but does NOT create the HTTP handler. Phase 2 (`InitHTTPHandler`) creates the HTTP handler and servers with all dependencies injected.
-  This breaks the circular dependency: Consensus needs gateway stores, which are available after Phase 1, so `ConsensusService` is constructed between phases, and `HTTPHandler` (including `GovernanceController`) is created in Phase 2 with `ConsensusService` already in hand.
+  **Single-phase construction with narrow setter:** `GatewayModeService` constructs the HTTP handler in `NewGatewayModeService` (via `gatewayServiceBuilder.build()`). The `ConsensusService` is wired after construction via `SetConsensusService` (a narrow setter for a genuinely late-bound dependency — `ConsensusService` requires `GatewayModeService` to exist first for `ConsensusBootstrap`). The `GovernanceController` holds `consensus **consensus.ConsensusService` (pointer-to-pointer): `initHTTPHandler` captures `&ls.consensusSvc` at construction time; `SetConsensusService` mutates `ls.consensusSvc` in place; the controller dereferences `*c.consensus` at request time. Tests that bypass the constructor call `initHTTPHandler` directly (same package).
 
 ### JWT Authentication
 - **`gateway.JWKSProvider`** (`jwks.go`): Optional external IdP JWT validation via JWKS endpoint. When configured, MCP/A2A routes accept JWT auth in addition to mTLS.
@@ -469,7 +464,7 @@ The reporting system operates as a self-contained, offline verification utility 
   HTTP client uses 15s timeout. Error wrapping standardized with `ErrEmptyTrustBundle`, `ErrCAParseFailed`, `ErrMissingRequiredField`.
 - **`internal/cli/serve/operator.go`**: Operator boot sequence: `RunOperator` orchestrates config loading, trust bundle setup, enrollment, and signal handling. Path resolution, cert loading, and load option helpers are extracted for testability.
 - **`internal/cli/serve/gateway.go`**: Gateway boot sequence: `RunGateway` orchestrates config loading, `GatewayModeService` construction, in-process execution service initialization, consensus bootstrap (policy seeding, key loading via `BootstrapConsensus` with `FileKeyProvider`, `NewLocalDeliberator` for L2 consensus), in-process `OperatorPubSubService` construction via `NewGatewayOperatorPubSubService` with `GatewayCommandServiceConfig`.
-  Two-phase `InitHTTPHandler` construction and graceful shutdown with 30-second timeout follow.
+  `SetConsensusService` wires the consensus service after construction. Graceful shutdown uses a 30-second timeout.
   `ExportActuatorPublicKey` writes the actuator public key to the PKI directory for receipt verification by external harnesses.
 - **`internal/cli/serve/logger.go`**: Logger configuration: `ConfigureLogger` and `ConfigureLoggerWithOutput` produce `slog.Logger` instances with operator-friendly formatting and configurable log levels.
 - **`internal/cli/serve/version.go`**: `VersionInfo` struct holds build-time metadata (version, build ID, build time, platform) set via ldflags.

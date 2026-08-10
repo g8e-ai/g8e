@@ -90,7 +90,7 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnforcePermissions())
 
-	service, err := NewG8eoService(cfg, testutil.NewVerboseTestLogger(t), newTestTLSConfig(t))
+	service, err := NewG8eoService(cfg, testutil.NewVerboseTestLogger(t), newTestTLSConfig(t), fileSvc)
 	require.NoError(t, err)
 
 	// 3. Inject mocks
@@ -101,9 +101,6 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	service.mu.Lock()
 	service.keystore = ks
 	service.mu.Unlock()
-
-	// Inject file service (required before Start)
-	service.SetFileService(fileSvc)
 
 	// Inject Mock PubSub Client
 	mockPubSub := pubsubtest.NewMockOperatorPubSubClient()

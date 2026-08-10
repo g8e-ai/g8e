@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/stretchr/testify/require"
 )
@@ -35,13 +36,8 @@ type endpointTestOption func(*GatewayService)
 // withEndpointSigningKey sets custom signing key and keyID for the test GatewayService.
 func withEndpointSigningKey(privKey ed25519.PrivateKey, keyID string) endpointTestOption {
 	return func(g *GatewayService) {
-		var deps RuntimeDependencies
-		if d := g.getRuntimeDeps(); d != nil {
-			deps = *d
-		}
-		deps.SigningKey = privKey
-		deps.KeyID = keyID
-		g.SetRuntimeDeps(deps)
+		g.signingKey = privKey
+		g.keyID = keyID
 	}
 }
 
@@ -49,18 +45,15 @@ func withEndpointSigningKey(privKey ed25519.PrivateKey, keyID string) endpointTe
 // Options can be provided to override specific fields.
 func newEndpointTestGatewayService(opts ...endpointTestOption) *GatewayService {
 	logger := slog.Default()
+	_, privKey, _ := ed25519.GenerateKey(rand.Reader)
 	g := &GatewayService{
 		logger:          logger,
 		responder:       response.NewWriter(logger),
 		maxPayloadBytes: 10 * 1024 * 1024,
+		envProc:         &fakeEnvelopeProcessor{},
+		signingKey:      privKey,
+		keyID:           "endpoint-test-key",
 	}
-
-	// Set default runtime dependencies so runtime-gated methods work
-	_, privKey, _ := ed25519.GenerateKey(rand.Reader)
-	g.SetRuntimeDeps(RuntimeDependencies{
-		SigningKey: privKey,
-		KeyID:      "endpoint-test-key",
-	})
 
 	// Apply options
 	for _, opt := range opts {
@@ -328,8 +321,8 @@ func TestHandleMCP_InvalidJSON(t *testing.T) {
 
 	require.Contains(t, respBody, "error")
 	errObj := respBody["error"].(map[string]interface{})
-	require.InEpsilon(t, float64(-32700), errObj["code"], 0.0)
-	require.Contains(t, errObj["message"].(string), "parse error")
+	require.InEpsilon(t, float64(constants.JSONRPCErrorCodeParseError), errObj["code"], 0.0)
+	require.Contains(t, errObj["message"].(string), constants.JSONRPCErrorMessageParseError)
 }
 
 func TestHandleMCP_ToolsList(t *testing.T) {

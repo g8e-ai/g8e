@@ -33,7 +33,7 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 
 	// Setup test infrastructure (PKI is now initialized by setupTestGatewayService)
 	gateway, _ := setupTestGatewayService(t)
-	docStore := gateway.stores.DocStore
+	docStore := gateway.GetDocStore()
 	logger := gateway.logger
 	pki := gateway.pki
 
@@ -210,7 +210,7 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 
 func TestAppEnrollmentService_EnrollDelegatedApp(t *testing.T) {
 	gateway, _ := setupTestGatewayService(t)
-	docStore := gateway.stores.DocStore
+	docStore := gateway.GetDocStore()
 	logger := gateway.logger
 	pki := gateway.pki
 

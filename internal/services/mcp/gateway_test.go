@@ -1501,7 +1501,7 @@ func TestGatewayService_HandleA2ARequest(t *testing.T) {
 		err := json.Unmarshal(w.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		require.NotNil(t, resp.Error)
-		require.Contains(t, resp.Error.Message, "parse error")
+		require.Contains(t, resp.Error.Message, constants.JSONRPCErrorMessageParseError)
 	})
 
 	t.Run("invalid JSON-RPC version", func(t *testing.T) {
@@ -1605,40 +1605,40 @@ func TestGatewayService_HandleA2ARequest(t *testing.T) {
 	})
 }
 
-func TestGatewayService_SetRuntimeDeps(t *testing.T) {
+func TestGatewayService_Dependencies(t *testing.T) {
 	t.Parallel()
 
-	t.Run("runtimeReady false before SetRuntimeDeps", func(t *testing.T) {
+	t.Run("envProc nil before initialization", func(t *testing.T) {
 		t.Parallel()
 		g := &GatewayService{logger: slog.Default()}
-		require.False(t, g.runtimeReady(), "runtimeReady should be false before SetRuntimeDeps")
+		require.Nil(t, g.envProc, "envProc should be nil initially")
 	})
 
-	t.Run("runtimeReady true after SetRuntimeDeps", func(t *testing.T) {
+	t.Run("runtime fields accessible when configured", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{logger: slog.Default()}
 		_, privKey, _ := ed25519.GenerateKey(rand.Reader)
 		mock := &mockL2ConsensusDeliberator{}
-		g.SetRuntimeDeps(RuntimeDependencies{
-			EnvProc:                &fakeEnvelopeProcessor{},
-			StateRootProvider:      &fakeStateRootProvider{root: "test"},
-			SigningKey:             privKey,
-			KeyID:                  "key-1",
-			DownstreamURL:          "http://downstream",
-			L2ConsensusDeliberator: mock,
-		})
-		require.True(t, g.runtimeReady(), "runtimeReady should be true after SetRuntimeDeps")
-		deps := g.getRuntimeDeps()
-		require.NotNil(t, deps)
-		require.NotNil(t, deps.EnvProc)
-		require.NotNil(t, deps.StateRootProvider)
-		require.NotNil(t, deps.SigningKey)
-		require.Equal(t, "key-1", deps.KeyID)
-		require.Equal(t, "http://downstream", deps.DownstreamURL)
-		assert.Same(t, mock, deps.L2ConsensusDeliberator)
+		envProc := &fakeEnvelopeProcessor{}
+		stateRoot := &fakeStateRootProvider{root: "test"}
+		g := &GatewayService{
+			logger:            slog.Default(),
+			envProc:           envProc,
+			stateRootProvider: stateRoot,
+			signingKey:        privKey,
+			keyID:             "key-1",
+			downstreamURL:     "http://downstream",
+		}
+		g.SetL2ConsensusDeliberator(mock)
+
+		require.Same(t, envProc, g.envProc)
+		require.Same(t, stateRoot, g.stateRootProvider)
+		require.Equal(t, privKey, g.signingKey)
+		require.Equal(t, "key-1", g.keyID)
+		require.Equal(t, "http://downstream", g.downstreamURL)
+		assert.Same(t, mock, g.l2ConsensusDeliberator)
 	})
 
-	t.Run("dispatchMCP returns not-ready error before SetRuntimeDeps", func(t *testing.T) {
+	t.Run("dispatchMCP returns not-ready error before deps are wired", func(t *testing.T) {
 		t.Parallel()
 		g := &GatewayService{
 			logger:          slog.Default(),
@@ -1657,7 +1657,7 @@ func TestGatewayService_SetRuntimeDeps(t *testing.T) {
 		require.Contains(t, resp.Error.Message, "not ready")
 	})
 
-	t.Run("dispatchMCP allows initialize without runtime deps", func(t *testing.T) {
+	t.Run("dispatchMCP allows initialize without deps", func(t *testing.T) {
 		t.Parallel()
 		g := &GatewayService{
 			logger:          slog.Default(),
@@ -1675,7 +1675,7 @@ func TestGatewayService_SetRuntimeDeps(t *testing.T) {
 		require.NotNil(t, respBody["result"])
 	})
 
-	t.Run("dispatchMCP allows ping without runtime deps", func(t *testing.T) {
+	t.Run("dispatchMCP allows ping without deps", func(t *testing.T) {
 		t.Parallel()
 		g := &GatewayService{
 			logger:          slog.Default(),
@@ -1739,12 +1739,7 @@ type testGatewayOption func(*GatewayService)
 // withEnvProc sets a custom envelope processor for the test GatewayService
 func withEnvProc(proc governance.EnvelopeProcessor) testGatewayOption {
 	return func(g *GatewayService) {
-		var deps RuntimeDependencies
-		if d := g.getRuntimeDeps(); d != nil {
-			deps = *d
-		}
-		deps.EnvProc = proc
-		g.SetRuntimeDeps(deps)
+		g.envProc = proc
 	}
 }
 
@@ -1765,12 +1760,7 @@ func withAuditStore(auditStore AuditEventRecorder) testGatewayOption {
 // withDownstreamURL sets a custom downstream URL for the test GatewayService
 func withDownstreamURL(url string) testGatewayOption {
 	return func(g *GatewayService) {
-		var deps RuntimeDependencies
-		if d := g.getRuntimeDeps(); d != nil {
-			deps = *d
-		}
-		deps.DownstreamURL = url
-		g.SetRuntimeDeps(deps)
+		g.downstreamURL = url
 	}
 }
 
@@ -1813,36 +1803,21 @@ func withFieldPathRegistry(registry *FieldPathRegistry) testGatewayOption {
 // withDBService sets a custom database service for the test GatewayService
 func withDBService(db FieldReader) testGatewayOption {
 	return func(g *GatewayService) {
-		var deps RuntimeDependencies
-		if d := g.getRuntimeDeps(); d != nil {
-			deps = *d
-		}
-		deps.DBService = db
-		g.SetRuntimeDeps(deps)
+		g.dbService = db
 	}
 }
 
 // withSessionValidator sets a custom session validator for the test GatewayService
 func withSessionValidator(v SessionValidator) testGatewayOption {
 	return func(g *GatewayService) {
-		var deps RuntimeDependencies
-		if d := g.getRuntimeDeps(); d != nil {
-			deps = *d
-		}
-		deps.SessionValidator = v
-		g.SetRuntimeDeps(deps)
+		g.sessionValidator = v
 	}
 }
 
 // withAuditLogger sets a custom audit logger for the test GatewayService
 func withAuditLogger(audit AuditLogger) testGatewayOption {
 	return func(g *GatewayService) {
-		var deps RuntimeDependencies
-		if d := g.getRuntimeDeps(); d != nil {
-			deps = *d
-		}
-		deps.AuditLogger = audit
-		g.SetRuntimeDeps(deps)
+		g.auditLogger = audit
 	}
 }
 
@@ -1853,29 +1828,25 @@ func newTestGatewayService(t *testing.T, opts ...testGatewayOption) *GatewayServ
 	_, privKey, _ := ed25519.GenerateKey(rand.Reader)
 
 	g := &GatewayService{
-		logger:           slog.Default(),
-		responder:        response.NewWriter(slog.Default()),
-		suspendedStore:   &fakeSuspendedStore{},
-		auditStore:       noopAuditEventRecorder{},
-		threatScanner:    governance.NewL1Doctrine(),
-		publicBaseURL:    network.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
-		maxFailures:      5,
-		cooldownDuration: 1 * time.Minute,
-		maxPayloadBytes:  10 * 1024 * 1024,
+		logger:            slog.Default(),
+		responder:         response.NewWriter(slog.Default()),
+		suspendedStore:    &fakeSuspendedStore{},
+		auditStore:        noopAuditEventRecorder{},
+		threatScanner:     governance.NewL1Doctrine(),
+		publicBaseURL:     network.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
+		maxFailures:       5,
+		cooldownDuration:  1 * time.Minute,
+		maxPayloadBytes:   10 * 1024 * 1024,
+		envProc:           &fakeEnvelopeProcessor{},
+		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+		signingKey:        privKey,
+		keyID:             "test-key",
 	}
 	nativeToolHandler, err := NewNativeToolHandler(nil)
 	if err != nil {
 		t.Fatalf("failed to create native tool handler: %v", err)
 	}
 	g.nativeToolHandler = nativeToolHandler
-
-	// Set default runtime dependencies
-	g.SetRuntimeDeps(RuntimeDependencies{
-		EnvProc:           &fakeEnvelopeProcessor{},
-		StateRootProvider: &fakeStateRootProvider{root: "test-root"},
-		SigningKey:        privKey,
-		KeyID:             "test-key",
-	})
 
 	// Apply options
 	for _, opt := range opts {

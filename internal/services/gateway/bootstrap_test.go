@@ -120,7 +120,7 @@ func TestBootstrapFlow(t *testing.T) {
 	assert.True(t, user.IsBootstrap)
 
 	// 5. Verify bootstrap user can authenticate
-	op, err := h.auth.ValidateOperatorSession(bootstrapSessionID)
+	op, err := h.authMiddleware.ValidateOperatorSession(bootstrapSessionID)
 	require.NoError(t, err)
 	assert.Equal(t, bootstrapUserID, op.UserID)
 
@@ -158,7 +158,7 @@ func TestBootstrapFlow(t *testing.T) {
 	assert.Equal(t, "retired_by_real_login", auditEntry.Details.Reason)
 
 	// 8. Verify bootstrap user is REJECTED during authentication
-	op, err = h.auth.ValidateOperatorSession(bootstrapSessionID)
+	op, err = h.authMiddleware.ValidateOperatorSession(bootstrapSessionID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "identity disabled")
 	assert.Nil(t, op)

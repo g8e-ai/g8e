@@ -37,7 +37,7 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 		}
 		opBytes, err := json.Marshal(opDoc)
 		require.NoError(t, err)
-		err = ls.stores.DocStore.DocSet("operators", "op-123", opBytes)
+		err = ls.GetDocStore().DocSet("operators", "op-123", opBytes)
 		require.NoError(t, err)
 
 		envelope := &commonv1.GovernanceEnvelope{
@@ -57,7 +57,7 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 
 		ls.handleHeartbeatPublish("test-channel", heartbeatBytes)
 
-		updatedDoc, err := ls.stores.DocStore.DocGet("operators", "op-123")
+		updatedDoc, err := ls.GetDocStore().DocGet("operators", "op-123")
 		require.NoError(t, err)
 		assert.NotNil(t, updatedDoc)
 		assert.Contains(t, updatedDoc.Data, "latest_heartbeat_snapshot")

@@ -121,6 +121,13 @@ const (
 	JSONRPCFieldMessage      = "message"
 	JSONRPCFieldData         = "data"
 	JSONRPCErrorCodeInternal = -32603
+	// JSONRPCErrorCodeParseError is the standard JSON-RPC 2.0 parse error code
+	// (https://www.jsonrpc.org/specification#error_object), returned when a
+	// request body cannot be parsed as valid JSON.
+	JSONRPCErrorCodeParseError = -32700
+	// JSONRPCErrorMessageParseError is the standard JSON-RPC 2.0 parse error
+	// message prefix emitted by the gateway when a request body is invalid JSON.
+	JSONRPCErrorMessageParseError = "parse error"
 )
 
 // HTTP header value constants.

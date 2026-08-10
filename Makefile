@@ -97,7 +97,8 @@ TEST_EXCLUDE_PKGS := \
 # These compile and may be tested, but their statements should not affect
 # the coverage threshold (e.g. generated protobuf code, example programs).
 COVERAGE_ONLY_EXCLUDE_PKGS := \
-	g8e-ai/g8e/protocol/
+	g8e-ai/g8e/protocol/ \
+	adapters/lattice/gen
 
 # All packages excluded from coverage: test exclusions + coverage-only exclusions.
 COVERAGE_EXCLUDE_PKGS := $(TEST_EXCLUDE_PKGS) $(COVERAGE_ONLY_EXCLUDE_PKGS)

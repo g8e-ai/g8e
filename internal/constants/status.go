@@ -359,6 +359,23 @@ const (
 	SuspendedTxStatusExpiredOrNotFound SuspendedTxStatus = "expired_or_not_found"
 )
 
+// GatewayResponseStatus is a typed string for the status field returned in
+// gateway suspension responses (A2A suspension response, OOB suspension
+// queries). It is the wire value clients compare against to detect that a
+// mutation has been paused awaiting L3 notary approval.
+type GatewayResponseStatus string
+
+const (
+	GatewayResponseStatusSuspended GatewayResponseStatus = "suspended"
+)
+
+// MCPApprovalPausedPrefix is the leading text of the directive returned to the
+// calling agent when an MCP tool call is paused awaiting human passkey
+// authorization under notary posture. The full message is built by
+// mcp.approvalPausedMessage; tests assert the response content starts with
+// this prefix rather than matching the entire dynamic string.
+const MCPApprovalPausedPrefix = "Execution paused"
+
 // HistoryActor is a typed string for history actor.
 type HistoryActor string
 

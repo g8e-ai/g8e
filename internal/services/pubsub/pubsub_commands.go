@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/config"
@@ -93,8 +94,8 @@ type OperatorPubSubService struct {
 // verification in both outbound and gateway modes. These interfaces are
 // implemented by CanonicalDBService (ReplayStore, StateRootProvider,
 // TransactionAuditStore) and the governance L3Notary. In outbound mode,
-// ConsensusPolicyStore and FieldReader are wired with no-op implementations
-// (NoopConsensusPolicyStore, NoopFieldReader) to eliminate nil fields.
+// ConsensusPolicyStore and FieldReader are nil (feature not configured);
+// call sites nil-check with fail-closed behavior.
 type GovernanceDeps struct {
 	ReplayStore          governance.ReplayStore
 	StateRootProvider    governance.StateRootProvider
@@ -129,17 +130,58 @@ type CommandServiceConfig struct {
 	ActuatorKeyID      string
 }
 
+// GatewayEnvProcAdapter is a lazy forwarding wrapper that implements
+// governance.EnvelopeProcessor by delegating to OperatorPubSubService
+// once it is constructed. This breaks the circular dependency between
+// mcp.GatewayService (needs EnvProc) and OperatorPubSubService (needs
+// mcpGateway for egress).
+type GatewayEnvProcAdapter struct {
+	target atomic.Pointer[OperatorPubSubService]
+}
+
+func (a *GatewayEnvProcAdapter) SetTarget(target *OperatorPubSubService) {
+	a.target.Store(target)
+}
+
+func (a *GatewayEnvProcAdapter) ProcessEnvelope(ctx context.Context, payload []byte) (*operatorv1.ActionReceipt, error) {
+	t := a.target.Load()
+	if t == nil {
+		return nil, constants.ErrGatewayNotReady
+	}
+	return t.ProcessEnvelope(ctx, payload)
+}
+
+// GatewaySessionValidatorAdapter is a lazy forwarding wrapper that
+// implements mcp.SessionValidator by delegating to OperatorPubSubService.
+type GatewaySessionValidatorAdapter struct {
+	target atomic.Pointer[OperatorPubSubService]
+}
+
+func (a *GatewaySessionValidatorAdapter) SetTarget(target *OperatorPubSubService) {
+	a.target.Store(target)
+}
+
+func (a *GatewaySessionValidatorAdapter) ValidateSession(operatorSessionID string) (bool, error) {
+	t := a.target.Load()
+	if t == nil {
+		return false, constants.ErrGatewayNotReady
+	}
+	return t.ValidateSession(operatorSessionID)
+}
+
 // GatewayCommandServiceConfig embeds CommandServiceConfig and adds
 // gateway-only fields that are not applicable in outbound mode.
 //
 // MCPGateway is the egress dispatcher for protocol translation.
-// GovDeps provides the governance dependencies (including FieldReader) that
-// are shared between gateway construction and the pubsub command service.
+// GovDeps provides the governance dependencies that are shared between
+// gateway construction and the pubsub command service.
 type GatewayCommandServiceConfig struct {
 	CommandServiceConfig
-	GovDeps                *GovernanceDeps
-	MCPGateway             *mcp.GatewayService
-	L2ConsensusDeliberator mcp.L2ConsensusDeliberator
+	GovDeps                 *GovernanceDeps
+	MCPGateway              *mcp.GatewayService
+	L2ConsensusDeliberator  mcp.L2ConsensusDeliberator
+	EnvProcAdapter          *GatewayEnvProcAdapter
+	SessionValidatorAdapter *GatewaySessionValidatorAdapter
 }
 
 // NewOperatorPubSubService creates the dispatcher and all first-class sub-services using the provided config.
@@ -215,14 +257,6 @@ func NewOperatorPubSubService(c CommandServiceConfig, govDeps GovernanceDeps) (*
 	// L3Notary is optional for outbound mode (platform verifies L3)
 	// Mutations requiring L3 will fail-closed at TransactionVerifier if L3Notary is nil
 
-	// Provide no-op defaults for optional governance deps to eliminate nil fields
-	if govDeps.ConsensusPolicyStore == nil {
-		govDeps.ConsensusPolicyStore = &governance.NoopConsensusPolicyStore{}
-	}
-	if govDeps.FieldReader == nil {
-		govDeps.FieldReader = &mcp.NoopFieldReader{}
-	}
-
 	// Initialize governance services after trusted signers are loaded
 	rs.initializeGovernance(c, govDeps)
 
@@ -261,19 +295,18 @@ func NewGatewayOperatorPubSubService(c GatewayCommandServiceConfig) (*OperatorPu
 			auditLogger = &pubsubAuditLogger{store: c.AuditStore, logger: c.Logger}
 		}
 
-		fieldReader := c.GovDeps.FieldReader
+		rs.mcpGateway.SetAuditLogger(auditLogger)
 
-		rs.mcpGateway.SetRuntimeDeps(mcp.RuntimeDependencies{
-			EnvProc:                rs,
-			StateRootProvider:      c.GovDeps.StateRootProvider,
-			SigningKey:             c.ActuatorSigningKey,
-			KeyID:                  c.ActuatorKeyID,
-			DownstreamURL:          c.Config.Gateway.MCPDownstreamURL,
-			DBService:              fieldReader,
-			SessionValidator:       rs,
-			AuditLogger:            auditLogger,
-			L2ConsensusDeliberator: c.L2ConsensusDeliberator,
-		})
+		if c.L2ConsensusDeliberator != nil {
+			rs.mcpGateway.SetL2ConsensusDeliberator(c.L2ConsensusDeliberator)
+		}
+
+		if c.EnvProcAdapter != nil {
+			c.EnvProcAdapter.SetTarget(rs)
+		}
+		if c.SessionValidatorAdapter != nil {
+			c.SessionValidatorAdapter.SetTarget(rs)
+		}
 	}
 
 	return rs, nil

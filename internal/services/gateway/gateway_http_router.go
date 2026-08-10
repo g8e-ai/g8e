@@ -76,21 +76,21 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 
 	// JIT passkey bootstrap: allow first-credential registration via JWT
 	// This unblocks OIDC/JIT users who have zero credentials and cannot reach RouteAuthWebSession routes
-	if h.auth != nil && h.auth.HasJWKS() {
+	if h.authMiddleware != nil && h.authMiddleware.HasJWKS() {
 		jwtPasskeyMux := http.NewServeMux()
-		jwtPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysJITRegisterChallenge, h.passkey.RegisterChallenge(jitCfg))
-		jwtPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysJITRegisterVerify, h.passkey.RegisterVerify(jitCfg))
-		mux.Handle(constants.APIPaths.AuthPasskeysJITRegisterChallenge, h.auth.JWTAuthMiddleware(jwtPasskeyMux))
-		mux.Handle(constants.APIPaths.AuthPasskeysJITRegisterVerify, h.auth.JWTAuthMiddleware(jwtPasskeyMux))
+		jwtPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysJITRegisterChallenge, h.passkeyController.registerChallenge(jitCfg))
+		jwtPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysJITRegisterVerify, h.passkeyController.registerVerify(jitCfg))
+		mux.Handle(constants.APIPaths.AuthPasskeysJITRegisterChallenge, h.authMiddleware.JWTAuthMiddleware(jwtPasskeyMux))
+		mux.Handle(constants.APIPaths.AuthPasskeysJITRegisterVerify, h.authMiddleware.JWTAuthMiddleware(jwtPasskeyMux))
 	}
 
 	// Passkey console routes (public, no auth required).
 	// console/*  — Browser-facing passkey registration and authentication (creates web session, sets cookie).
 	passkeyMux := http.NewServeMux()
-	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysConsoleRegisterChallenge, h.passkey.RegisterChallenge(browserBootstrapRegisterCfg))
-	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysConsoleRegisterVerify, h.passkey.RegisterVerify(browserBootstrapRegisterCfg))
-	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysConsoleAuthenticateChallenge, h.passkey.AuthenticateChallenge(browserBootstrapAuthCfg))
-	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysConsoleAuthenticateVerify, h.passkey.AuthenticateVerify(browserBootstrapAuthCfg))
+	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysConsoleRegisterChallenge, h.passkeyController.registerChallenge(browserBootstrapRegisterCfg))
+	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysConsoleRegisterVerify, h.passkeyController.registerVerify(browserBootstrapRegisterCfg))
+	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysConsoleAuthenticateChallenge, h.passkeyController.authenticateChallenge(browserBootstrapAuthCfg))
+	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysConsoleAuthenticateVerify, h.passkeyController.authenticateVerify(browserBootstrapAuthCfg))
 
 	mux.Handle(constants.APIPaths.AuthPasskeysConsoleRegisterChallenge, passkeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysConsoleRegisterVerify, passkeyMux)
@@ -134,7 +134,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.Handle(constants.APIPaths.DataDB, http.HandlerFunc(h.dataController.handleDataDB))
 	mux.Handle(constants.APIPaths.KV, http.HandlerFunc(h.dataController.handleKV))
 	mux.HandleFunc(constants.APIPaths.PubSubPublish, h.dataController.handlePubSubPublish)
-	mux.Handle(constants.APIPaths.PubSubStream, h.auth.Middleware(http.HandlerFunc(h.pubsub.HandleWebSocket)))
+	mux.Handle(constants.APIPaths.PubSubStream, h.authMiddleware.Middleware(http.HandlerFunc(h.pubsubController.handleWebSocket)))
 
 	// PKI management routes (require mTLS)
 	mux.HandleFunc(constants.APIPaths.PKICSRSign, h.pkiController.handlePKICSRSign)
@@ -146,25 +146,25 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.Users, h.userController.handleUsers)
 
 	// Passkey CLI status (require mTLS)
-	mux.HandleFunc(constants.APIPaths.AuthPasskeysCLIStatus, h.passkey.CLIStatus)
+	mux.HandleFunc(constants.APIPaths.AuthPasskeysCLIStatus, h.passkeyController.cliStatus)
 
 	// Enrollment token generation (require mTLS CLI session)
 	mux.HandleFunc(constants.APIPaths.AuthEnrollmentTokenGenerate, h.enrollmentTokenController.handleEnrollmentTokenGenerate)
 
 	// OOB Approval UI for suspended MCP/A2A transactions
-	mux.HandleFunc(constants.APIPaths.ApprovePage, h.passkey.handleApprovalPage)
-	mux.HandleFunc(constants.APIPaths.ApprovalsCLIStatus, h.passkey.handleCLIApprovalStatus)
-	mux.HandleFunc(constants.APIPaths.ApprovalsCLIList, h.passkey.handleCLIListSuspended)
+	mux.HandleFunc(constants.APIPaths.ApprovePage, h.passkeyController.handleApprovalPage)
+	mux.HandleFunc(constants.APIPaths.ApprovalsCLIStatus, h.passkeyController.handleCLIApprovalStatus)
+	mux.HandleFunc(constants.APIPaths.ApprovalsCLIList, h.passkeyController.handleCLIListSuspended)
 
 	// Browser-facing routes (RouteAuthWebSession — unified middleware validates cookie)
 	mux.HandleFunc(constants.APIPaths.UsersMe, h.userController.handleUserMe)
 	mux.HandleFunc(constants.APIPaths.AuthSessionsMe, h.sessionController.handleWebSession)
-	mux.Handle(constants.APIPaths.ApprovalsByID, http.HandlerFunc(h.passkey.handleApprovalAction))
-	mux.HandleFunc(constants.APIPaths.Approvals, h.passkey.handleListSuspendedTransactions)
-	mux.HandleFunc(constants.APIPaths.AuthPasskeys, h.passkey.ListCredentials)
-	mux.Handle(constants.APIPaths.AuthPasskeysByID, http.HandlerFunc(h.passkey.RevokeCredential))
+	mux.Handle(constants.APIPaths.ApprovalsByID, http.HandlerFunc(h.passkeyController.handleApprovalAction))
+	mux.HandleFunc(constants.APIPaths.Approvals, h.passkeyController.handleListSuspendedTransactions)
+	mux.HandleFunc(constants.APIPaths.AuthPasskeys, h.passkeyController.listCredentials)
+	mux.Handle(constants.APIPaths.AuthPasskeysByID, http.HandlerFunc(h.passkeyController.revokeCredential))
 
-	return h.corsMiddleware(h.pathTraversalGuard(h.auth.Middleware(mux)))
+	return h.corsMiddleware(h.pathTraversalGuard(h.authMiddleware.Middleware(mux)))
 }
 
 // buildMCPHandler creates the rate-limited, auth-wrapped handler for all MCP/A2A ingress routes.
@@ -172,13 +172,13 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 // routes rely on mTLS + AppPolicy enforced by the main middleware at the router level.
 func (h *HTTPHandler) buildMCPHandler() http.Handler {
 	mcpMux := http.NewServeMux()
-	mcpMux.HandleFunc(constants.APIPaths.MCPEndpoint, h.mcp.HandleMCP)
-	mcpMux.HandleFunc(constants.APIPaths.A2ACall, h.mcp.HandleA2aCall)
+	mcpMux.HandleFunc(constants.APIPaths.MCPEndpoint, h.mcpController.handleMCP)
+	mcpMux.HandleFunc(constants.APIPaths.A2ACall, h.mcpController.handleA2aCall)
 
 	mcpRateLimited := h.rateLimitMiddleware(mcpMux)
 
-	if h.auth != nil && h.auth.HasJWKS() {
-		return h.auth.JWTAuthMiddleware(mcpRateLimited)
+	if h.authMiddleware != nil && h.authMiddleware.HasJWKS() {
+		return h.authMiddleware.JWTAuthMiddleware(mcpRateLimited)
 	}
 	return mcpRateLimited
 }

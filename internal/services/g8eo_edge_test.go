@@ -73,7 +73,7 @@ func TestNewG8eoService_NilTLSConfig(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	_, err := NewG8eoService(cfg, logger, nil)
+	_, err := NewG8eoService(cfg, logger, nil, nil)
 	assert.Error(t, err)
 }
 

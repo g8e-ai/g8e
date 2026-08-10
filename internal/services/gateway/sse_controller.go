@@ -67,21 +67,35 @@ type SSEController struct {
 	heartbeat time.Duration
 }
 
+// SSEControllerDeps groups all dependencies for SSEController.
+type SSEControllerDeps struct {
+	Cfg       *config.Config
+	Logger    *slog.Logger
+	DocStore  *DocumentStoreService
+	KVStore   *KVStoreService
+	SSEStore  *SSEEventService
+	Pubsub    *GatewayWebSocketHandler
+	Auth      *AuthService
+	Responder *response.Writer
+	Heartbeat time.Duration
+}
+
 // newSSEController creates an SSEController with the given dependencies.
-// If heartbeat is 0, a 30s default is applied.
-func newSSEController(cfg *config.Config, logger *slog.Logger, docStore *DocumentStoreService, kvStore *KVStoreService, sseStore *SSEEventService, pubsub *GatewayWebSocketHandler, auth *AuthService, responder *response.Writer, heartbeat time.Duration) *SSEController {
+// If Heartbeat is 0, a 30s default is applied.
+func newSSEController(d SSEControllerDeps) *SSEController {
+	heartbeat := d.Heartbeat
 	if heartbeat == 0 {
 		heartbeat = 30 * time.Second
 	}
 	return &SSEController{
-		cfg:       cfg,
-		logger:    logger,
-		docStore:  docStore,
-		kvStore:   kvStore,
-		sseStore:  sseStore,
-		pubsub:    pubsub,
-		auth:      auth,
-		responder: responder,
+		cfg:       d.Cfg,
+		logger:    d.Logger,
+		docStore:  d.DocStore,
+		kvStore:   d.KVStore,
+		sseStore:  d.SSEStore,
+		pubsub:    d.Pubsub,
+		auth:      d.Auth,
+		responder: d.Responder,
 		heartbeat: heartbeat,
 	}
 }

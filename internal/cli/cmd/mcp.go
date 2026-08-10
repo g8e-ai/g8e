@@ -527,7 +527,7 @@ func runMCPStdioProxy(cmd *cobra.Command, _ []string, fileSvcFactory func(string
 		var req JSONRPCRequest
 		if err := json.Unmarshal([]byte(line), &req); err != nil {
 			logger.Error("Failed to parse JSON-RPC request", "error", err)
-			sendError(encoder, nil, -32700, "parse error")
+			sendError(encoder, nil, constants.JSONRPCErrorCodeParseError, constants.JSONRPCErrorMessageParseError)
 			continue
 		}
 
@@ -1830,7 +1830,7 @@ func runMCPProxy(args []string, downstreamURL string) error {
 
 		var req JSONRPCRequest
 		if err := json.Unmarshal([]byte(line), &req); err != nil {
-			sendError(encoder, nil, -32700, "parse error")
+			sendError(encoder, nil, constants.JSONRPCErrorCodeParseError, constants.JSONRPCErrorMessageParseError)
 			continue
 		}
 

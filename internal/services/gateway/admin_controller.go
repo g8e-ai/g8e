@@ -41,15 +41,26 @@ type AdminController struct {
 	responder      *response.Writer
 }
 
-func newAdminController(cfg *config.Config, logger *slog.Logger, docStore *DocumentStoreService, signerStore *SignerStoreService, consensusStore *ConsensusStoreService, userSvc *UserService, responder *response.Writer) *AdminController {
+// AdminControllerDeps groups all dependencies for AdminController.
+type AdminControllerDeps struct {
+	Cfg            *config.Config
+	Logger         *slog.Logger
+	DocStore       *DocumentStoreService
+	SignerStore    *SignerStoreService
+	ConsensusStore *ConsensusStoreService
+	UserSvc        *UserService
+	Responder      *response.Writer
+}
+
+func newAdminController(d AdminControllerDeps) *AdminController {
 	return &AdminController{
-		cfg:            cfg,
-		logger:         logger,
-		docStore:       docStore,
-		signerStore:    signerStore,
-		consensusStore: consensusStore,
-		userSvc:        userSvc,
-		responder:      responder,
+		cfg:            d.Cfg,
+		logger:         d.Logger,
+		docStore:       d.DocStore,
+		signerStore:    d.SignerStore,
+		consensusStore: d.ConsensusStore,
+		userSvc:        d.UserSvc,
+		responder:      d.Responder,
 	}
 }
 

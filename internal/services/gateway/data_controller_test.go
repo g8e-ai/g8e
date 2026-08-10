@@ -592,7 +592,7 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	cfg := testutil.NewTestConfig(t)
 	resp := response.NewWriter(logger)
-	adminController := newAdminController(cfg, logger, stores.DocStore, stores.SignerStore, stores.ConsensusStore, userSvc, resp)
+	adminController := newAdminController(AdminControllerDeps{Cfg: cfg, Logger: logger, DocStore: stores.DocStore, SignerStore: stores.SignerStore, ConsensusStore: stores.ConsensusStore, UserSvc: userSvc, Responder: resp})
 
 	bootstrapUser, err := userSvc.CreateBootstrapUserWithOSUser(nil)
 	require.NoError(t, err)

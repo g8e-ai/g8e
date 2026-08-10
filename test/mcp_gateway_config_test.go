@@ -16,7 +16,6 @@
 package tests
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,47 +23,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-/*
-TestMCPGateway_JSONRPCParsing validates that the gateway can parse
-JSON-RPC requests from HTTP format.
-*/
-func TestMCPGateway_JSONRPCParsing(t *testing.T) {
-	t.Run("valid tools/list request", func(t *testing.T) {
-		req := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`
-		var parsed struct {
-			JSONRPC string          `json:"jsonrpc"`
-			ID      int             `json:"id"`
-			Method  string          `json:"method"`
-			Params  json.RawMessage `json:"params"`
-		}
-		err := json.Unmarshal([]byte(req), &parsed)
-		require.NoError(t, err)
-		assert.Equal(t, "tools/list", parsed.Method)
-	})
-
-	t.Run("valid tools/call request", func(t *testing.T) {
-		req := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test_tool","arguments":{}}}`
-		var parsed struct {
-			JSONRPC string          `json:"jsonrpc"`
-			ID      int             `json:"id"`
-			Method  string          `json:"method"`
-			Params  json.RawMessage `json:"params"`
-		}
-		err := json.Unmarshal([]byte(req), &parsed)
-		require.NoError(t, err)
-		assert.Equal(t, "tools/call", parsed.Method)
-	})
-
-	t.Run("invalid JSON", func(t *testing.T) {
-		req := `invalid json`
-		var parsed struct {
-			JSONRPC string `json:"jsonrpc"`
-		}
-		err := json.Unmarshal([]byte(req), &parsed)
-		require.Error(t, err, "invalid JSON should fail to parse")
-	})
-}
 
 /*
 TestMCPGateway_ConfigTemplate validates that the config template file
