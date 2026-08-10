@@ -154,10 +154,10 @@ func TestRuntimeDeps_L2ConsensusDeliberator(t *testing.T) {
 	t.Run("nil deliberator by default", func(t *testing.T) {
 		t.Parallel()
 		g := &GatewayService{
-			logger: slog.Default(),
-			envProc: &fakeEnvelopeProcessor{},
+			logger:            slog.Default(),
+			envProc:           &fakeEnvelopeProcessor{},
 			stateRootProvider: &fakeStateRootProvider{root: "test"},
-			downstreamURL: "http://downstream",
+			downstreamURL:     "http://downstream",
 		}
 		assert.Nil(t, g.l2ConsensusDeliberator)
 	})
@@ -165,10 +165,10 @@ func TestRuntimeDeps_L2ConsensusDeliberator(t *testing.T) {
 	t.Run("deliberator accessible via field", func(t *testing.T) {
 		t.Parallel()
 		g := &GatewayService{
-			logger: slog.Default(),
-			envProc: &fakeEnvelopeProcessor{},
+			logger:            slog.Default(),
+			envProc:           &fakeEnvelopeProcessor{},
 			stateRootProvider: &fakeStateRootProvider{root: "test"},
-			downstreamURL: "http://downstream",
+			downstreamURL:     "http://downstream",
 		}
 		mock := &mockL2ConsensusDeliberator{}
 		g.SetL2ConsensusDeliberator(mock)

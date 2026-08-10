@@ -55,7 +55,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		}
 		signerBytes, err := json.Marshal(signer)
 		require.NoError(t, err)
-		err = ls.stores.DocStore.DocSet("trusted_signers", "test-signer-1", signerBytes)
+		err = ls.GetDocStore().DocSet("trusted_signers", "test-signer-1", signerBytes)
 		require.NoError(t, err)
 
 		assert.True(t, ls.IsGovernanceReady())
@@ -73,7 +73,7 @@ func TestGatewayModeService_GetGovernanceDeps(t *testing.T) {
 	assert.NotNil(t, deps.L3Notary)
 	assert.NotNil(t, deps.SignerStore)
 	assert.NotNil(t, deps.FieldReader)
-	assert.Equal(t, ls.stores.DocStore, deps.FieldReader)
+	assert.Equal(t, ls.GetDocStore(), deps.FieldReader)
 	assert.NotNil(t, deps.Doctrine, "GovernanceDeps.Doctrine should be populated by GetGovernanceDeps")
 }
 

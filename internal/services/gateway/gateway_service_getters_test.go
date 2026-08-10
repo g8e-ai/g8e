@@ -43,8 +43,14 @@ func TestGatewayModeService_Getters(t *testing.T) {
 		assert.NotNil(t, ls.GetHTTPHandler())
 	})
 
-	t.Run("GetStores returns non-nil", func(t *testing.T) {
-		assert.NotNil(t, ls.GetStores())
+	t.Run("narrow store getters return non-nil", func(t *testing.T) {
+		assert.NotNil(t, ls.GetDocStore())
+		assert.NotNil(t, ls.GetConsensusStore())
+		assert.NotNil(t, ls.GetSignerStore())
+		assert.NotNil(t, ls.GetAuditStore())
+		assert.NotNil(t, ls.GetStateRootSvc())
+		assert.NotNil(t, ls.GetKVStore())
+		assert.NotNil(t, ls.GetReplayStore())
 	})
 
 	t.Run("GetHTTPPort returns 0 when not started", func(t *testing.T) {

@@ -35,6 +35,14 @@ import (
 type HTTPHandlerDependencies struct {
 	Cfg                *config.Config
 	Logger             *slog.Logger
+	// Stores is the full gateway store bundle. It is deliberately kept here
+	// (and not split into per-controller fields) because newHTTPHandler
+	// decomposes it into per-controller Deps structs immediately at
+	// construction (see lines below). The bag does not propagate past the
+	// construction site, so the Interface Segregation concern that motivated
+	// removing *Stores from GatewayModeService and G8eoService does not apply
+	// here. Revisit once Smell 3 (HTTPHandler decomposition) lands and the
+	// per-controller Deps structs are the canonical dependency surface.
 	Stores             *Stores
 	Pubsub             *GatewayWebSocketHandler
 	Auth               *AuthService
@@ -78,7 +86,13 @@ type HTTPHandler struct {
 	healthController          *HealthController
 	governanceController      *GovernanceController
 
-	// Main router cached at construction to avoid rebuilding on every request
+	// router is the main HTTP router, built once at construction by
+	// buildPublicRouter and cached for the lifetime of the handler. It is
+	// never invalidated or rebuilt — all route registrations are resolved
+	// against the controller set fixed at construction time. If runtime
+	// reconfiguration of routes is ever needed (e.g., hot-reloading
+	// controllers), this cache contract must be revisited: the handler would
+	// need to rebuild the router under a mutex or swap it atomically.
 	router http.Handler
 
 	// Rate limiting state

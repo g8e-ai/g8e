@@ -60,24 +60,30 @@ type GatewayModeService struct {
 	fileSvc  fs.RuntimeFileService
 	doctrine *governance.L1Doctrine
 
-	db                 *CanonicalDBService
-	stores             *Stores
-	pubsub             *GatewayWebSocketHandler
-	auth               *AuthService
-	pki                *PKIAuthority
-	reg                *RegistrationService
-	passkey            *PasskeyHandler
-	userSvc            *UserService
-	cliSessionSvc      *CLISessionService
-	operatorSessionSvc *OperatorSessionService
-	webSessionSvc      *WebSessionService
-	suspendedTxService *storage.SuspendedTransactionService
-	mcpGateway         *mcp.GatewayService
-	envProcAdapter     *pubsub.GatewayEnvProcAdapter
+	db                      *CanonicalDBService
+	docStore                *DocumentStoreService
+	consensusStore          *ConsensusStoreService
+	signerStore             *SignerStoreService
+	auditStore              *storage.SQLAuditStore
+	stateRootSvc            *StateRootService
+	kvStore                 *KVStoreService
+	replayStore             *ReplayStoreService
+	pubsub                  *GatewayWebSocketHandler
+	auth                    *AuthService
+	pki                     *PKIAuthority
+	reg                     *RegistrationService
+	passkey                 *PasskeyHandler
+	userSvc                 *UserService
+	cliSessionSvc           *CLISessionService
+	operatorSessionSvc      *OperatorSessionService
+	webSessionSvc           *WebSessionService
+	suspendedTxService      *storage.SuspendedTransactionService
+	mcpGateway              *mcp.GatewayService
+	envProcAdapter          *pubsub.GatewayEnvProcAdapter
 	sessionValidatorAdapter *pubsub.GatewaySessionValidatorAdapter
-	responder          *response.Writer
-	server             *http.Server
-	publicServer       *http.Server
+	responder               *response.Writer
+	server                  *http.Server
+	publicServer            *http.Server
 
 	handler *HTTPHandler
 
@@ -259,7 +265,13 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		fileSvc:                 b.fileSvc,
 		doctrine:                doctrine,
 		db:                      db,
-		stores:                  stores,
+		docStore:                stores.DocStore,
+		consensusStore:          stores.ConsensusStore,
+		signerStore:             stores.SignerStore,
+		auditStore:              stores.AuditStore,
+		stateRootSvc:            stores.StateRootSvc,
+		kvStore:                 stores.KVStore,
+		replayStore:             stores.ReplayStore,
 		pubsub:                  wsHandler,
 		auth:                    auth,
 		pki:                     pki,
@@ -396,12 +408,12 @@ func (ls *GatewayModeService) InitHTTPHandler(consensusSvc *consensus.ConsensusS
 	userSvc := ls.userSvc
 
 	// Initialize AppEnrollmentService for external app enrollment
-	appEnrollment := NewAppEnrollmentService(ls.stores.DocStore, pki, logger)
+	appEnrollment := NewAppEnrollmentService(ls.docStore, pki, logger)
 
 	handler, err := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:                cfg,
 		Logger:             logger,
-		Stores:             ls.stores,
+		Stores:             ls.db.GetStores(),
 		Pubsub:             pubsub,
 		Auth:               auth,
 		PKI:                pki,
@@ -479,9 +491,39 @@ func (ls *GatewayModeService) InitHTTPHandler(consensusSvc *consensus.ConsensusS
 	return nil
 }
 
-// GetStores returns the extracted store services for direct injection.
-func (ls *GatewayModeService) GetStores() *Stores {
-	return ls.stores
+// GetDocStore returns the document store service.
+func (ls *GatewayModeService) GetDocStore() *DocumentStoreService {
+	return ls.docStore
+}
+
+// GetConsensusStore returns the consensus store service.
+func (ls *GatewayModeService) GetConsensusStore() *ConsensusStoreService {
+	return ls.consensusStore
+}
+
+// GetSignerStore returns the signer store service.
+func (ls *GatewayModeService) GetSignerStore() *SignerStoreService {
+	return ls.signerStore
+}
+
+// GetAuditStore returns the audit store service.
+func (ls *GatewayModeService) GetAuditStore() *storage.SQLAuditStore {
+	return ls.auditStore
+}
+
+// GetStateRootSvc returns the state root service.
+func (ls *GatewayModeService) GetStateRootSvc() *StateRootService {
+	return ls.stateRootSvc
+}
+
+// GetKVStore returns the key-value store service.
+func (ls *GatewayModeService) GetKVStore() *KVStoreService {
+	return ls.kvStore
+}
+
+// GetReplayStore returns the replay store service.
+func (ls *GatewayModeService) GetReplayStore() *ReplayStoreService {
+	return ls.replayStore
 }
 
 // GetSecretManager returns the secret manager initialized during database open.
@@ -549,7 +591,7 @@ func (ls *GatewayModeService) IsGovernanceReady() bool {
 	if ls.cfg.Gateway.Posture == config.PostureDoctrine || ls.cfg.Gateway.Posture == "" {
 		return true
 	}
-	ready, err := ls.stores.SignerStore.HasTrustedSigners()
+	ready, err := ls.signerStore.HasTrustedSigners()
 	if err != nil {
 		ls.logger.Error("Failed to check if governance is ready", "state", string(constants.ConnectionStateError), "error", err)
 		return false
@@ -561,18 +603,18 @@ func (ls *GatewayModeService) IsGovernanceReady() bool {
 // This enables the in-process OperatorPubSubService to perform fail-closed verification.
 // The L3 notary handles both WebAuthn (web sessions) and mTLS (CLI sessions).
 func (ls *GatewayModeService) GetGovernanceDeps() *pubsub.GovernanceDeps {
-	cliVerifier := NewCLISessionVerifier(ls.stores.DocStore, ls.pki, ls.logger, ls.userSvc, ls.cliSessionSvc)
+	cliVerifier := NewCLISessionVerifier(ls.docStore, ls.pki, ls.logger, ls.userSvc, ls.cliSessionSvc)
 
 	l3Notary := governance.NewGatewayL3Notary(cliVerifier, ls.passkey.PasskeyService, ls.logger)
 
 	return &pubsub.GovernanceDeps{
-		ReplayStore:          ls.stores.ReplayStore,
-		StateRootProvider:    ls.stores.StateRootSvc,
-		TransactionAudit:     ls.stores.DocStore,
+		ReplayStore:          ls.replayStore,
+		StateRootProvider:    ls.stateRootSvc,
+		TransactionAudit:     ls.docStore,
 		L3Notary:             l3Notary,
-		SignerStore:          ls.stores.SignerStore,
-		ConsensusPolicyStore: ls.stores.ConsensusStore,
-		FieldReader:          ls.stores.DocStore,
+		SignerStore:          ls.signerStore,
+		ConsensusPolicyStore: ls.consensusStore,
+		FieldReader:          ls.docStore,
 		Doctrine:             ls.doctrine,
 	}
 }
@@ -868,7 +910,7 @@ func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte
 		return
 	}
 
-	if _, err := ls.stores.DocStore.DocUpdate(string(constants.CollectionOperators), env.GetOperatorId(), update); err != nil {
+	if _, err := ls.docStore.DocUpdate(string(constants.CollectionOperators), env.GetOperatorId(), update); err != nil {
 		ls.logger.Warn("heartbeat: failed to update operator document", "operator_id", env.GetOperatorId(), "error", err)
 		return
 	}

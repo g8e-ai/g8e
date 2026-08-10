@@ -1605,7 +1605,7 @@ func TestGatewayService_HandleA2ARequest(t *testing.T) {
 	})
 }
 
-func TestGatewayService_SetRuntimeDeps(t *testing.T) {
+func TestGatewayService_Dependencies(t *testing.T) {
 	t.Parallel()
 
 	t.Run("envProc nil before initialization", func(t *testing.T) {
@@ -1638,7 +1638,7 @@ func TestGatewayService_SetRuntimeDeps(t *testing.T) {
 		assert.Same(t, mock, g.l2ConsensusDeliberator)
 	})
 
-	t.Run("dispatchMCP returns not-ready error before SetRuntimeDeps", func(t *testing.T) {
+	t.Run("dispatchMCP returns not-ready error before deps are wired", func(t *testing.T) {
 		t.Parallel()
 		g := &GatewayService{
 			logger:          slog.Default(),
@@ -1657,7 +1657,7 @@ func TestGatewayService_SetRuntimeDeps(t *testing.T) {
 		require.Contains(t, resp.Error.Message, "not ready")
 	})
 
-	t.Run("dispatchMCP allows initialize without runtime deps", func(t *testing.T) {
+	t.Run("dispatchMCP allows initialize without deps", func(t *testing.T) {
 		t.Parallel()
 		g := &GatewayService{
 			logger:          slog.Default(),
@@ -1675,7 +1675,7 @@ func TestGatewayService_SetRuntimeDeps(t *testing.T) {
 		require.NotNil(t, respBody["result"])
 	})
 
-	t.Run("dispatchMCP allows ping without runtime deps", func(t *testing.T) {
+	t.Run("dispatchMCP allows ping without deps", func(t *testing.T) {
 		t.Parallel()
 		g := &GatewayService{
 			logger:          slog.Default(),

@@ -57,7 +57,6 @@ type G8eoService struct {
 	tokenStore       storage.TokenStore
 	suspendedTxStore *storage.SuspendedTransactionService
 	gatewayDB        *gateway.CanonicalDBService
-	gatewayStores    *gateway.Stores
 
 	pubSubClient pubsub.PubSubClient
 	tlsConfig    *certs.TLSConfig
@@ -139,12 +138,11 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	if vaultKeyPath == "" {
 		vaultKeyPath = paths.Infra.VaultKeyPath
 	}
-	gatewayDB, gatewayStores, err := gateway.OpenCanonicalDBService(dataDir, vs.config.VaultDir, vs.logger, vaultKeyPath, vs.keystore, vs.fileSvc)
+	gatewayDB, _, err := gateway.OpenCanonicalDBService(dataDir, vs.config.VaultDir, vs.logger, vaultKeyPath, vs.keystore, vs.fileSvc)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrGatewayDatabaseServiceNotConfigured, err)
 	}
 	vs.gatewayDB = gatewayDB
-	vs.gatewayStores = gatewayStores
 	vs.logger.Info("Gateway database initialized (canonical state root)")
 
 	vs.secretManager = gatewayDB.GetSecretManager()
@@ -175,7 +173,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Token persistence for Sentinel UEI tokens routes through the canonical gateway
 	// DB (g8e.db) via EncryptedKVAdapter — no separate token_store.db.
-	vs.tokenStore = gateway.NewEncryptedKVAdapter(vs.gatewayStores.KVStore, encryptionVault)
+	vs.tokenStore = gateway.NewEncryptedKVAdapter(vs.gatewayDB.GetKVStore(), encryptionVault)
 	vs.logger.Info("Token store initialized (canonical KV store)")
 
 	// Initialize SuspendedTransactionService for L3 approval workflow
@@ -202,7 +200,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	// Reuse the SQLAuditStore from CanonicalDBService — both the standalone
 	// and canonical instances open the same g8e.db file, so a separate connection
 	// pool and pruner are redundant. CanonicalDBService.Close() handles lifecycle.
-	auditStore := vs.gatewayStores.AuditStore
+	auditStore := vs.gatewayDB.GetAuditStore()
 
 	if vs.config.OperatorSessionId == "" {
 		return fmt.Errorf("%w: operator session ID required before audit store can accept events", constants.ErrGatewayOperatorSessionIDRequired)
@@ -264,7 +262,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Create governance dependencies for transaction verification
 	// Use CanonicalDBService for canonical state root calculation (same schema as gateway mode)
-	stateRootProvider := vs.gatewayStores.StateRootSvc
+	stateRootProvider := vs.gatewayDB.GetStateRootSvc()
 	transactionAudit := &auditStoreTransactionStore{store: auditStore}
 	// L3Notary for outbound mode: CLI-based approval via suspended transactions
 	// Mutations requiring L3 are suspended and must be approved via CLI command
@@ -429,9 +427,9 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 	}
 
 	// Drain audit store writes (CanonicalDBService.Close() handles final close)
-	if vs.gatewayStores != nil && vs.gatewayStores.AuditStore != nil {
+	if vs.gatewayDB != nil && vs.gatewayDB.GetAuditStore() != nil {
 		vs.logger.Info("Waiting for audit writes to drain...")
-		vs.gatewayStores.AuditStore.Wait()
+		vs.gatewayDB.GetAuditStore().Wait()
 	}
 
 	// Wait for shutdown handler goroutine to complete

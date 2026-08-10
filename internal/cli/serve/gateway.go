@@ -183,7 +183,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 			logger.Warn("L2 posture requires consensus but no --consensus-id set; L2-gated transactions will be rejected until a consensus is configured",
 				"posture", cfg.Posture)
 		} else {
-			policy, err := svc.GetStores().ConsensusStore.GetConsensus(cfg.ConsensusID)
+			policy, err := svc.GetConsensusStore().GetConsensus(cfg.ConsensusID)
 			if err != nil || policy == nil || !policy.Enabled {
 				logger.Warn("L2 posture requires consensus but policy not found or disabled; L2-gated transactions will be rejected until consensus is enrolled",
 					"posture", cfg.Posture, "consensus_id", cfg.ConsensusID)
@@ -234,8 +234,8 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	// Get the GatewayDBService's AuditStore for full audit storage
 	// This ensures ActionReceipts are persisted in the receipts table
 	var auditStore *storage.SQLAuditStore
-	if svc.GetStores() != nil && svc.GetStores().AuditStore != nil {
-		auditStore = svc.GetStores().AuditStore
+	if svc != nil && svc.GetAuditStore() != nil {
+		auditStore = svc.GetAuditStore()
 		logger.Info("Gateway AuditStore enabled for full audit storage")
 	} else {
 		logger.Warn("Gateway AuditStore not available - ActionReceipts will not be stored in audit store")
@@ -248,7 +248,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 
 	// Bootstrap Consensus service for L2-requiring postures before constructing
 	// the pubsub command service, so the L2ConsensusDeliberator can be passed
-	// through GatewayCommandServiceConfig into the MCP gateway's RuntimeDependencies.
+	// through GatewayCommandServiceConfig into the MCP gateway's Dependencies.
 	// Under doctrine posture, the Consensus is not constructed.
 	var consensusSvc *consensus.ConsensusService
 	var l2Deliberator *consensus.LocalDeliberator
@@ -451,7 +451,7 @@ func consensusPolicyBootstrap(svc *gateway.GatewayModeService, bootstrapPath str
 	}
 
 	// Check if consensus already exists (idempotent)
-	existing, err := svc.GetStores().ConsensusStore.GetConsensus(boot.ConsensusID)
+	existing, err := svc.GetConsensusStore().GetConsensus(boot.ConsensusID)
 	if err != nil {
 		return fmt.Errorf("consensus bootstrap: check existing: %w", err)
 	}
@@ -523,7 +523,7 @@ func consensusPolicyBootstrap(svc *gateway.GatewayModeService, bootstrapPath str
 			AddedAt:   time.Now().UTC(),
 			Enabled:   true,
 		}
-		if err := svc.GetStores().SignerStore.AddTrustedSigner(signer); err != nil {
+		if err := svc.GetSignerStore().AddTrustedSigner(signer); err != nil {
 			return fmt.Errorf("consensus bootstrap: register signer %s: %w", appID, err)
 		}
 		if err := consensus.SaveMemberKey(secretsDir, boot.ConsensusID, appID, privKey); err != nil {
@@ -540,7 +540,7 @@ func consensusPolicyBootstrap(svc *gateway.GatewayModeService, bootstrapPath str
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	if err := svc.GetStores().ConsensusStore.AddConsensus(policy); err != nil {
+	if err := svc.GetConsensusStore().AddConsensus(policy); err != nil {
 		return fmt.Errorf("consensus bootstrap: create policy: %w", err)
 	}
 	logger.Info("Consensus policy created", "consensus_id", boot.ConsensusID, "members", len(boot.MemberAppIDs), "quorum", boot.Quorum)
@@ -556,7 +556,7 @@ func ConsensusBootstrap(svc *gateway.GatewayModeService, consensusID string, act
 	if svc == nil {
 		return nil, constants.ErrGatewayServiceNil
 	}
-	policy, err := svc.GetStores().ConsensusStore.GetConsensus(consensusID)
+	policy, err := svc.GetConsensusStore().GetConsensus(consensusID)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap consensus: load policy: %w", err)
 	}
