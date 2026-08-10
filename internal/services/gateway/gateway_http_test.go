@@ -324,7 +324,7 @@ func TestAuthMiddleware(t *testing.T) {
 	err = h.dataController.docStore.DocSet("settings", "platform_settings", settingsBytes)
 	require.NoError(t, err)
 
-	handler := h.auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := h.authMiddleware.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -339,7 +339,7 @@ func TestAuthMiddleware(t *testing.T) {
 func TestAuthWebSocket(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 
-	handler := h.auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := h.authMiddleware.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -354,7 +354,7 @@ func TestAuthWebSocket(t *testing.T) {
 func TestAuthMiddlewareDeep(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 
-	handler := h.auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := h.authMiddleware.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -529,15 +529,15 @@ func TestNewHTTPHandler(t *testing.T) {
 	assert.NotNil(t, h.dataController.docStore)
 	assert.NotNil(t, h.dataController.kvStore)
 	assert.NotNil(t, h.dataController.sseStore)
-	assert.NotNil(t, h.pubsub)
-	assert.NotNil(t, h.auth)
+	assert.NotNil(t, h.GetGatewayWebSocketHandler())
+	assert.NotNil(t, h.authMiddleware)
 	assert.NotNil(t, h.pkiController.pki)
 	assert.NotNil(t, h.bootstrapController.cliSessionSvc)
 	assert.NotNil(t, h.bootstrapController.operatorSessionSvc)
-	assert.NotNil(t, h.passkey)
+	assert.NotNil(t, h.GetPasskeyHandler())
 	assert.NotNil(t, h.adminController.userSvc)
 	assert.NotNil(t, h.responder)
-	assert.NotNil(t, h.mcp)
+	assert.NotNil(t, h.GetMCPGateway())
 	assert.NotNil(t, h.pkiController)
 	assert.NotNil(t, h.dataController)
 	assert.NotNil(t, h.bootstrapController)
@@ -669,7 +669,7 @@ func TestCLICertBoundToOperator(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("CLI cert bound to Operator session is accepted", func(t *testing.T) {
-		bound, err := h.auth.cliCertBoundToOperator(
+		bound, err := h.authMiddleware.cliCertBoundToOperator(
 			[]*url.URL{cliURI}, cliSessionID, userID, operatorSessionID,
 		)
 		require.NoError(t, err)
@@ -677,7 +677,7 @@ func TestCLICertBoundToOperator(t *testing.T) {
 	})
 
 	t.Run("CLI cert bound to a different Operator session is rejected", func(t *testing.T) {
-		bound, err := h.auth.cliCertBoundToOperator(
+		bound, err := h.authMiddleware.cliCertBoundToOperator(
 			[]*url.URL{cliURI}, cliSessionID, userID, otherOpSessionID,
 		)
 		require.NoError(t, err)
@@ -685,7 +685,7 @@ func TestCLICertBoundToOperator(t *testing.T) {
 	})
 
 	t.Run("operator URI is not accepted via the CLI path", func(t *testing.T) {
-		bound, err := h.auth.cliCertBoundToOperator(
+		bound, err := h.authMiddleware.cliCertBoundToOperator(
 			[]*url.URL{opURI}, cliSessionID, userID, operatorSessionID,
 		)
 		require.NoError(t, err)
@@ -703,7 +703,7 @@ func TestCLICertBoundToOperator(t *testing.T) {
 		require.NoError(t, h.dataController.docStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), "cli-expired", eb))
 		expiredURI, err := wid.CLISPIFFEURL(userID, "cli-expired")
 		require.NoError(t, err)
-		bound, err := h.auth.cliCertBoundToOperator(
+		bound, err := h.authMiddleware.cliCertBoundToOperator(
 			[]*url.URL{expiredURI}, "cli-expired", userID, operatorSessionID,
 		)
 		require.NoError(t, err)

@@ -64,13 +64,13 @@ type HTTPHandlerDependencies struct {
 
 // HTTPHandler manages the web API for the gateway service.
 type HTTPHandler struct {
-	cfg       *config.Config
-	logger    *slog.Logger
-	pubsub    *GatewayWebSocketHandler
-	auth      *AuthService
-	passkey   *PasskeyHandler
-	responder *response.Writer
-	mcp       *mcp.GatewayService
+	cfg             *config.Config
+	logger          *slog.Logger
+	authMiddleware  *AuthService
+	responder       *response.Writer
+	mcpController   *MCPController
+	pubsubController *PubSubController
+	passkeyController *PasskeyController
 	// Controllers for domain-specific endpoints
 	pkiController             *PKIController
 	auditController           *AuditController
@@ -105,11 +105,11 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	h := &HTTPHandler{
 		cfg:             deps.Cfg,
 		logger:          deps.Logger,
-		pubsub:          deps.Pubsub,
-		auth:            deps.Auth,
-		passkey:         deps.Passkey,
+		authMiddleware:  deps.Auth,
 		responder:       deps.Responder,
-		mcp:             deps.MCPGateway,
+		mcpController:   newMCPController(MCPControllerDeps{MCPGateway: deps.MCPGateway}),
+		pubsubController: newPubSubController(PubSubControllerDeps{Handler: deps.Pubsub}),
+		passkeyController: newPasskeyController(PasskeyControllerDeps{Handler: deps.Passkey}),
 		limiters:        make(map[string]*tokenBucket),
 		limiterLastUsed: make(map[string]time.Time),
 	}
@@ -206,13 +206,13 @@ func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HTTPHandler) GetMCPGateway() *mcp.GatewayService {
-	return h.mcp
+	return h.mcpController.MCPGateway()
 }
 
 func (h *HTTPHandler) GetPasskeyHandler() *PasskeyHandler {
-	return h.passkey
+	return h.passkeyController.PasskeyHandler()
 }
 
 func (h *HTTPHandler) GetGatewayWebSocketHandler() *GatewayWebSocketHandler {
-	return h.pubsub
+	return h.pubsubController.WebSocketHandler()
 }
