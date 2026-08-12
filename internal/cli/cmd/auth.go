@@ -14,18 +14,15 @@
 package cmd
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"log/slog"
-	"os"
-	"runtime"
+
+	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/fs"
-	"github.com/spf13/cobra"
 )
 
 func authCmd() *cobra.Command {
@@ -44,6 +41,25 @@ func authCmd() *cobra.Command {
 	return cmd
 }
 
+// enrollCoordinatorFactory builds an EnrollmentCoordinator from an output
+// function, file service, and config. It is a package-level var so tests can
+// swap it for a mock coordinator that avoids network I/O, sudo, and browser
+// launches.
+var enrollCoordinatorFactory = newDefaultEnrollmentCoordinator
+
+// newDefaultEnrollmentCoordinator is the production coordinator factory. It
+// injects production defaults (real gateway client, file-backed key provider,
+// real system-trust installer, real browser opener, hardened passkey
+// registrar) and an OutputFunc that writes to the provided output sink.
+func newDefaultEnrollmentCoordinator(out auth.OutputFunc, fileSvc fs.RuntimeFileService, cfg *config.Config) *auth.EnrollmentCoordinator {
+	return auth.NewEnrollmentCoordinator(auth.EnrollmentCoordinatorDeps{
+		FileSvc: fileSvc,
+		Cfg:     cfg,
+		Out:     out,
+		Logger:  slog.Default(),
+	})
+}
+
 func enrollCmd() *cobra.Command {
 	return enrollCmdWithConfig(loadConfig, newFileSvc, auth.CheckOperatorRunning)
 }
@@ -53,12 +69,27 @@ func enrollCmdWithConfig(
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 	checkOperatorRunning func(*config.Config) error,
 ) *cobra.Command {
+	var (
+		noSystemTrust bool
+		rotateCLI     bool
+	)
 	cmd := &cobra.Command{
 		Use:   "enroll",
 		Short: "Enroll CLI session with the running Gateway and register a passkey",
-		Long: `Enroll a CLI session with the running Gateway via CSR-based enrollment, then register a passkey for secure authentication. Generates client keypairs, submits CSRs to the Gateway's CA, saves signed mTLS credentials, and opens a browser to register a WebAuthn/FIDO2 passkey for web session authentication.
+		Long: `Enroll a CLI session with the running Gateway via CSR-based enrollment, then register a passkey for secure authentication.
 
-On Windows, the signed certificate is imported into the Windows Certificate Store for Windows Hello native API access.
+The coordinator inspects the local CLI identity and chooses the correct action:
+  - No local identity on an unbootstrapped gateway: bootstrap (creates the first user/session).
+  - No local identity on a bootstrapped gateway: human-approved CLI recovery (a one-time
+    approval in the gateway console with an existing passkey).
+  - Complete, valid identity: reuse it (no new certificate is issued).
+  - Complete, expiring identity: rotate via the mTLS rotation endpoint exactly once.
+  - Partial or corrupt local state: human-approved recovery (never silently overwrite one file).
+
+OS trust installation runs BEFORE the browser-based passkey ceremony by default. If
+system trust installation fails, the browser phase is not started. Use --no-system-trust
+to skip the installer when an administrator has pre-installed the gateway root CA; the
+passkey ceremony still runs and runtime mTLS/trust-bundle errors still fail enrollment.
 
 The Gateway must already be running (use './g8e gw start' first).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -76,155 +107,39 @@ The Gateway must already be running (use './g8e gw start' first).`,
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
-			return performEnroll(cmd, fileSvc, cfg)
+			coordinator := enrollCoordinatorFactory(func(format string, args ...any) {
+				cmd.Printf(format+"\n", args...)
+			}, fileSvc, cfg)
+			result, err := coordinator.Enroll(cmd.Context(), auth.EnrollmentOptions{
+				NoSystemTrust: noSystemTrust,
+				RotateCLI:     rotateCLI,
+			})
+			if err != nil {
+				return err
+			}
+
+			// Progress lines for the user-visible identity. The coordinator
+			// already prints intermediate progress via OutputFunc; these are
+			// the final summary lines so the user sees the bound identity.
+			if result.Reused {
+				cmd.Printf("Reusing existing CLI identity (no new certificate issued).\n")
+			} else {
+				cmd.Printf("\nCLI session %s complete\n", result.Source)
+			}
+			cmd.Printf("User ID: %s\n", result.UserID)
+			cmd.Printf("CLI Session ID: %s\n", result.CLISessionID)
+			if result.SystemTrustInstalled {
+				cmd.Println("System trust: installed gateway root CA. Restart any open browsers so they pick up the new trust anchor.")
+			}
+			return nil
 		},
 	}
 
+	cmd.Flags().BoolVar(&noSystemTrust, "no-system-trust", false,
+		"Skip OS trust installation (administrator must have pre-installed the gateway root CA). The passkey ceremony still runs.")
+	cmd.Flags().BoolVar(&rotateCLI, "rotate-cli", false,
+		"Force an mTLS CLI rotation even when the local identity is complete and not expiring.")
 	return cmd
-}
-
-// performEnroll handles CLI session enrollment and browser-based passkey registration.
-// On Windows, the signed cert is imported into the Windows Certificate Store for
-// Windows Hello native API access.
-func performEnroll(cmd *cobra.Command, fileSvc fs.RuntimeFileService, cfg *config.Config) error {
-	ctx := context.Background()
-
-	// Check if local credentials exist
-	credsRel, err := fileSvc.RelFromAbs(cfg.CredentialsFile())
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
-	}
-	credsExist, err := fileSvc.FileExists(ctx, credsRel)
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
-	}
-	certRel, err := fileSvc.RelFromAbs(cfg.CLICertFile())
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
-	}
-	certExists, err := fileSvc.FileExists(ctx, certRel)
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
-	}
-	hasLocalCreds := credsExist && certExists
-
-	// No local credentials: first-time bootstrap or new CLI on an existing gateway.
-	if !hasLocalCreds {
-		cmd.Println("Performing CLI session enrollment...")
-		if err := auth.EnrollCLI(fileSvc, cfg); err != nil {
-			return err
-		}
-		creds, err := auth.LoadCredentials(fileSvc, cfg)
-		if err != nil || creds == nil {
-			return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
-		}
-		cmd.Printf("\nCLI session enrollment complete\n")
-		cmd.Printf("User ID: %s\n", creds.UserID)
-		cmd.Printf("CLI Session ID: %s\n", creds.CLISessionID)
-
-		// Register passkey for the newly enrolled user via browser (web session)
-		cmd.Println("\nRegistering passkey via browser...")
-		if err := auth.RegisterPasskeyViaBrowser(ctx, fileSvc, cfg, creds.UserID, creds.CLISessionID); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrPasskeyRegistrationFailed, err)
-		}
-		return nil
-	}
-
-	// Local credentials present — attempt CSR-based re-enrollment with mTLS.
-	cmd.Println("Gateway already bootstrapped. Attempting re-enrollment via CSR with mTLS...")
-
-	// Check if operator certificate exists (CLI-only bootstrap has no operator)
-	opCertRel, err := fileSvc.RelFromAbs(cfg.OperatorCertFile())
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
-	}
-	opCertExists, err := fileSvc.FileExists(ctx, opCertRel)
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
-	}
-	hasOperatorCert := opCertExists
-
-	// Check if certificates are expiring soon and auto-renew if needed
-	cmd.Println("Checking certificate expiry...")
-	if err := auth.AutoRenewCertificate(fileSvc, cfg, "cli", ""); err != nil {
-		return err
-	}
-
-	cmd.Println("Generating keys and CSRs...")
-	hostname, _ := os.Hostname()
-	cliCSR, cliKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
-	}
-
-	var regResp *auth.RegistrationResponse
-	if hasOperatorCert {
-		// Full re-enrollment with operator CSR
-		cmd.Println("Re-enrolling with operator...")
-		regResp, err = auth.ReEnroll(fileSvc, cfg, "", cliCSR, "")
-		if err != nil {
-			// Check if this is a TLS verification error (stale trust bundle after gateway PKI regeneration)
-			if errors.Is(err, constants.ErrTrustBundleStale) {
-				return fmt.Errorf("%w: %w", constants.ErrTrustBundleStale, err)
-			}
-			return err
-		}
-	} else {
-		// CLI-only re-enrollment (no operator)
-		cmd.Println("Re-enrolling CLI credentials...")
-		regResp, err = auth.CLIEnroll(cfg, cliCSR, "")
-		if err != nil {
-			return err
-		}
-	}
-
-	if regResp.CLISessionID == "" || regResp.CLICert == "" {
-		return constants.ErrMissingRequiredField
-	}
-
-	cliCertRel, err := fileSvc.RelFromAbs(cfg.CLICertFile())
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
-	}
-	cliKeyRel, err := fileSvc.RelFromAbs(cfg.CLIKeyFile())
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
-	}
-	if err := auth.SaveCertAndKey(fileSvc, regResp.CLICert, regResp.CLICertChain, cliKey, cliCertRel, cliKeyRel); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
-	}
-	if runtime.GOOS == "windows" {
-		if importErr := auth.ImportCertificateToWindowsStore(regResp.CLICert); importErr != nil {
-			cmd.Printf("Warning: failed to import CLI cert to Windows Certificate Store: %v\n", importErr)
-		}
-	}
-
-	if regResp.HubTrustBundle != "" {
-		if err := auth.WriteTrustBundleFS(fileSvc, cfg, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
-		}
-	}
-
-	creds := &auth.Credentials{
-		OperatorSessionID: regResp.OperatorSessionID,
-		UserID:            regResp.UserID,
-		OperatorID:        regResp.OperatorID,
-		CLISessionID:      regResp.CLISessionID,
-	}
-
-	if err := auth.SaveCredentials(fileSvc, cfg, creds); err != nil {
-		return err
-	}
-
-	cmd.Printf("\nCLI session re-enrollment complete\n")
-	cmd.Printf("User ID: %s\n", regResp.UserID)
-	cmd.Printf("CLI Session ID: %s\n", regResp.CLISessionID)
-
-	cmd.Println("\nRegistering passkey via browser...")
-	if err := auth.RegisterPasskeyViaBrowser(ctx, fileSvc, cfg, creds.UserID, creds.CLISessionID); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrPasskeyRegistrationFailed, err)
-	}
-	return nil
 }
 
 func logoutCmd() *cobra.Command {
@@ -238,7 +153,11 @@ func logoutCmdWithConfig(
 	cmd := &cobra.Command{
 		Use:   "logout",
 		Short: "Clear local Operator session and credentials",
-		Long:  `Clear the local Operator session by deleting stored credentials from disk. This does not revoke the session on the gateway side — it only removes the local credential files so the CLI can no longer authenticate.`,
+		Long: `Clear the local Operator session by deleting stored credentials from disk. This does not revoke the session on the gateway side — it only removes the local credential files so the CLI can no longer authenticate.
+
+The shared OS root CA is NOT removed. System trust is shared and may be used by
+another runtime or gateway; logout only clears the local CLI credential material
+(credentials JSON, CLI cert, CLI key, and the runtime trust bundle).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -250,7 +169,8 @@ func logoutCmdWithConfig(
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
-			creds, err := auth.LoadCredentials(fileSvc, cfg)
+			store := auth.NewCredentialStore(fileSvc, cfg)
+			creds, err := store.LoadCredentials(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 			}
@@ -260,7 +180,7 @@ func logoutCmdWithConfig(
 				return nil
 			}
 
-			if err := auth.DeleteCredentials(fileSvc, cfg); err != nil {
+			if err := store.Clear(cmd.Context()); err != nil {
 				return err
 			}
 

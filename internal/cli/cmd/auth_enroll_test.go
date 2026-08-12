@@ -74,41 +74,19 @@ func TestEnrollCmdWithConfig_HasRunE(t *testing.T) {
 	require.NotNil(t, cmd.RunE)
 }
 
-func TestPerformEnroll_NoLocalCredsGatewayDownReturnsError(t *testing.T) {
-	config.SetEndpointOverride("127.0.0.1:1")
-	defer config.SetEndpointOverride("")
-
+// TestEnrollCmdWithConfig_FlagsRegistered verifies the command registers the
+// --no-system-trust and --rotate-cli flags with the correct defaults. The
+// coordinator itself is exercised by internal/cli/auth tests; this asserts the
+// command adapter exposes the new options.
+func TestEnrollCmdWithConfig_FlagsRegistered(t *testing.T) {
 	fileSvc, cfg := newCmdTestEnv(t)
-
-	cmd := enrollCmdWithConfig(func(string) (*config.Config, error) {
-		return cfg, nil
-	}, newFileSvc, auth.CheckOperatorRunning)
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-
-	err := performEnroll(cmd, fileSvc, cfg)
-	require.Error(t, err)
-}
-
-func TestPerformEnroll_WithLocalCredsGatewayDownReturnsError(t *testing.T) {
-	config.SetEndpointOverride("127.0.0.1:1")
-	defer config.SetEndpointOverride("")
-
-	fileSvc, cfg := newCmdTestEnv(t)
-
-	require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CredentialsFile()), []byte(`{"user_id":"u1","cli_session_id":"s1"}`), constants.PermFilePrivate))
-	require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()), []byte("-----BEGIN CERTIFICATE-----\nMIIBdummy==\n-----END CERTIFICATE-----\n"), constants.PermFilePrivate))
-
-	cmd := enrollCmdWithConfig(func(string) (*config.Config, error) {
-		return cfg, nil
-	}, newFileSvc, auth.CheckOperatorRunning)
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-
-	err := performEnroll(cmd, fileSvc, cfg)
-	require.Error(t, err)
+	cmd := enrollCmdWithConfig(func(string) (*config.Config, error) { return cfg, nil }, fileSvcFactoryFor(fileSvc), auth.CheckOperatorRunning)
+	noSystemTrustFlag := cmd.Flags().Lookup("no-system-trust")
+	require.NotNil(t, noSystemTrustFlag)
+	assert.Equal(t, "false", noSystemTrustFlag.DefValue)
+	rotateFlag := cmd.Flags().Lookup("rotate-cli")
+	require.NotNil(t, rotateFlag)
+	assert.Equal(t, "false", rotateFlag.DefValue)
 }
 
 func TestEnrollCmdWithConfig_UsesInjectedConfigLoader(t *testing.T) {
@@ -133,4 +111,66 @@ func TestEnrollCmdWithConfig_PropagatesConfigError(t *testing.T) {
 	cmd := enrollCmdWithConfig(loader, newFileSvc, auth.CheckOperatorRunning)
 	err := cmd.RunE(cmd, nil)
 	require.Error(t, err)
+}
+
+// TestEnrollCmdWithConfig_GatewayDownReturnsError verifies that when the
+// coordinator factory is the production default and the gateway is
+// unreachable, the command returns an error rather than silently succeeding.
+// This replaces the old TestPerformEnroll_* tests that exercised the deleted
+// performEnroll function.
+func TestEnrollCmdWithConfig_GatewayDownReturnsError(t *testing.T) {
+	config.SetEndpointOverride("127.0.0.1:1")
+	defer config.SetEndpointOverride("")
+
+	fileSvc, cfg := newCmdTestEnv(t)
+
+	cmd := enrollCmdWithConfig(func(string) (*config.Config, error) {
+		return cfg, nil
+	}, fileSvcFactoryFor(fileSvc), auth.CheckOperatorRunning)
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	// The production coordinator factory will try to reach the gateway
+	// (CheckBootstrapStatus) and fail because the endpoint is unreachable.
+	// CheckOperatorRunning already fails before the coordinator is built,
+	// so this asserts the preflight check fails closed.
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+}
+
+// TestLogoutCmdWithConfig_RemovesLocalCredentials verifies logout routes
+// through CredentialStore.Clear and removes the local CLI credential material
+// (credentials JSON, CLI cert, CLI key) while leaving the OS root CA untouched
+// (Clear never touches the OS trust store).
+func TestLogoutCmdWithConfig_RemovesLocalCredentials(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+
+	creds := &auth.Credentials{
+		OperatorSessionID: "op-sess-123",
+		UserID:            "user-456",
+		OperatorID:        "op-789",
+		CLISessionID:      "cli-sess-abc",
+	}
+	require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()), []byte("cli-cert"), constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLIKeyFile()), []byte("cli-key"), constants.PermFilePrivate))
+
+	cmd := logoutCmdWithConfig(func(_ string) (*config.Config, error) { return cfg, nil }, fileSvcFactoryFor(fileSvc))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	require.NoError(t, cmd.RunE(cmd, nil))
+	assert.Contains(t, buf.String(), "Logged out successfully")
+
+	exists, err := fileSvc.FileExists(context.Background(), mustRel(t, fileSvc, cfg.CredentialsFile()))
+	require.NoError(t, err)
+	assert.False(t, exists)
+	exists, err = fileSvc.FileExists(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()))
+	require.NoError(t, err)
+	assert.False(t, exists)
+	exists, err = fileSvc.FileExists(context.Background(), mustRel(t, fileSvc, cfg.CLIKeyFile()))
+	require.NoError(t, err)
+	assert.False(t, exists)
 }
