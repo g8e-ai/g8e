@@ -83,6 +83,11 @@ var APIPaths = struct {
 	AuthBootstrapStatus                      string `json:"auth_bootstrap_status"`
 	AuthCLIEnroll                            string `json:"auth_cli_enroll"`
 	AuthDeviceEnroll                         string `json:"auth_device_enroll"`
+	AuthCLIRecoveryRequest                   string `json:"auth_cli_recovery_request"`
+	AuthCLIRecoveryStatus                    string `json:"auth_cli_recovery_status"`
+	AuthCLIRecoveryApprove                   string `json:"auth_cli_recovery_approve"`
+	AuthCLIRecoveryComplete                  string `json:"auth_cli_recovery_complete"`
+	AuthCLIRotate                            string `json:"auth_cli_rotate"`
 	AuthPasskeys                             string `json:"auth_passkeys"`
 	AuthPasskeysByID                         string `json:"auth_passkeys_by_id"`
 	AuthPasskeysJITRegisterChallenge         string `json:"auth_passkeys_jit_register_challenge"`
@@ -212,6 +217,11 @@ var APIPaths = struct {
 	AuthBootstrapStatus:                      "/api/v1/auth/bootstrap/status",
 	AuthCLIEnroll:                            "/api/v1/auth/cli/enroll",
 	AuthDeviceEnroll:                         "/api/v1/auth/device/enroll",
+	AuthCLIRecoveryRequest:                   "/api/v1/auth/cli/recovery/request",
+	AuthCLIRecoveryStatus:                    "/api/v1/auth/cli/recovery/status",
+	AuthCLIRecoveryApprove:                   "/api/v1/auth/cli/recovery/approve",
+	AuthCLIRecoveryComplete:                  "/api/v1/auth/cli/recovery/complete",
+	AuthCLIRotate:                            "/api/v1/auth/cli/rotate",
 	AuthPasskeys:                             "/api/v1/auth/passkeys",
 	AuthPasskeysByID:                         "/api/v1/auth/passkeys/",
 	AuthPasskeysJITRegisterChallenge:         "/api/v1/auth/passkeys/jit-register/challenge",

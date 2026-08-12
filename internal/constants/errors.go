@@ -461,6 +461,18 @@ var (
 	ErrEnrollmentTokenExpired           = errors.New("enrollment token has expired")
 	ErrEnrollmentTokenConsumed          = errors.New("enrollment token has already been consumed")
 
+	// CLI recovery errors
+	ErrCLIRecoveryRequestFailed   = errors.New("CLI recovery request failed")
+	ErrCLIRecoveryRequestNotFound = errors.New("CLI recovery request not found")
+	ErrCLIRecoveryRequestExpired  = errors.New("CLI recovery request has expired")
+	ErrCLIRecoveryRequestConsumed = errors.New("CLI recovery request has already been consumed")
+	ErrCLIRecoveryRequestDenied   = errors.New("CLI recovery request was denied")
+	ErrCLIRecoveryProofInvalid    = errors.New("CLI recovery proof-of-possession signature is invalid")
+	ErrCLIRecoveryCSRMismatch     = errors.New("CLI recovery CSR does not match the original request")
+	ErrCLIRecoveryNotApproved     = errors.New("CLI recovery request has not been approved")
+	ErrCLIRotationFailed          = errors.New("CLI rotation failed")
+	ErrCLIRotationCSRRequired     = errors.New("cli_csr_pem is required for rotation")
+
 	// Passkey credential validation errors
 	ErrPasskeyCredentialInvalidID          = errors.New("passkey credential ID is empty")
 	ErrPasskeyCredentialIDTooLong          = errors.New("passkey credential ID exceeds 1024 bytes")
