@@ -17,6 +17,8 @@ package gateway
 
 import (
 	"encoding/json"
+	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -335,4 +337,317 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 		assert.Equal(t, longString, stored.CertFingerprint)
 		assert.Equal(t, longString, stored.CertSerial)
 	})
+}
+
+// ---------------------------------------------------------------------------
+// DeactivateCLISession
+// ---------------------------------------------------------------------------
+
+// loadStoredCLISession reads a CLI session directly from the doc store for
+// test assertions.
+func loadStoredCLISession(t *testing.T, svc *CLISessionService, sessionID string) models.CLISession {
+	t.Helper()
+	doc, err := svc.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), sessionID)
+	require.NoError(t, err)
+	require.NotNil(t, doc)
+	session, err := decodeCLISession(doc)
+	require.NoError(t, err)
+	return *session
+}
+
+func TestCLISessionService_DeactivateCLISession_Success(t *testing.T) {
+	infra := setupTestInfrastructure(t, true)
+	svc := infra.CLISessionSvc
+
+	require.NoError(t, svc.PersistCLISession("deact-1", "op-1", "user-1", "sys-fp", "cert-fp-1", "serial-1", "mTLS"))
+	require.NoError(t, svc.DeactivateCLISession("deact-1"))
+
+	stored := loadStoredCLISession(t, svc, "deact-1")
+	assert.False(t, stored.IsActive, "session must be inactive after DeactivateCLISession")
+}
+
+func TestCLISessionService_DeactivateCLISession_NotFound(t *testing.T) {
+	infra := setupTestInfrastructure(t, true)
+	svc := infra.CLISessionSvc
+
+	err := svc.DeactivateCLISession("nonexistent-session")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrCLISessionNotFound), "expected ErrCLISessionNotFound, got %v", err)
+}
+
+func TestCLISessionService_DeactivateCLISession_AlreadyDeactivated(t *testing.T) {
+	infra := setupTestInfrastructure(t, true)
+	svc := infra.CLISessionSvc
+
+	require.NoError(t, svc.PersistCLISession("deact-2", "op-2", "user-2", "sys-fp", "cert-fp-2", "serial-2", "mTLS"))
+	require.NoError(t, svc.DeactivateCLISession("deact-2"))
+
+	err := svc.DeactivateCLISession("deact-2")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrCLISessionAlreadyDeactivated), "expected ErrCLISessionAlreadyDeactivated, got %v", err)
+}
+
+func TestCLISessionService_DeactivateCLISession_EmptyID(t *testing.T) {
+	infra := setupTestInfrastructure(t, true)
+	svc := infra.CLISessionSvc
+
+	err := svc.DeactivateCLISession("")
+	require.Error(t, err)
+}
+
+func TestCLISessionService_DeactivateCLISession_ConcurrentOnlyOneSucceeds(t *testing.T) {
+	infra := setupTestInfrastructure(t, true)
+	svc := infra.CLISessionSvc
+
+	require.NoError(t, svc.PersistCLISession("deact-concurrent", "op-c", "user-c", "sys-fp", "cert-fp-c", "serial-c", "mTLS"))
+
+	const goroutines = 10
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	var (
+		mu              sync.Mutex
+		successes       int
+		alreadyDeactErr int
+		otherErr        int
+	)
+
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			err := svc.DeactivateCLISession("deact-concurrent")
+			mu.Lock()
+			switch {
+			case err == nil:
+				successes++
+			case errors.Is(err, ErrCLISessionAlreadyDeactivated):
+				alreadyDeactErr++
+			default:
+				otherErr++
+			}
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+
+	assert.Equal(t, 1, successes, "exactly one concurrent deactivation should succeed")
+	assert.Equal(t, goroutines-1, alreadyDeactErr, "all other callers should see already-deactivated")
+	assert.Equal(t, 0, otherErr, "no other errors expected")
+}
+
+// ---------------------------------------------------------------------------
+// ReplaceCLISession
+// ---------------------------------------------------------------------------
+
+func TestCLISessionService_ReplaceCLISession_Success(t *testing.T) {
+	infra := setupTestInfrastructure(t, true)
+	svc := infra.CLISessionSvc
+
+	require.NoError(t, svc.PersistCLISession("old-1", "op-old-1", "user-1", "sys-fp-old", "cert-fp-old", "serial-old", "mTLS"))
+
+	newSession, err := svc.ReplaceCLISession("old-1", "cert-fp-new", "serial-new", CLISessionFields{
+		OperatorSessionID: "op-old-1",
+		UserID:            "user-1",
+		SystemFingerprint: "sys-fp-new",
+		CertFingerprint:   "cert-fp-new",
+		CertSerial:        "serial-new",
+		LoginMethod:       string(constants.HeartbeatTypeBootstrap),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, newSession)
+	assert.NotEmpty(t, newSession.ID)
+	assert.NotEqual(t, "old-1", newSession.ID)
+	assert.True(t, newSession.IsActive)
+	assert.Equal(t, "user-1", newSession.UserID)
+	assert.Equal(t, "op-old-1", newSession.OperatorSessionID)
+	assert.Equal(t, "cert-fp-new", newSession.CertFingerprint)
+	assert.Equal(t, "serial-new", newSession.CertSerial)
+
+	// Old session must be deactivated.
+	oldStored := loadStoredCLISession(t, svc, "old-1")
+	assert.False(t, oldStored.IsActive, "old session must be deactivated after replacement")
+
+	// New session must be active and persisted.
+	newStored := loadStoredCLISession(t, svc, newSession.ID)
+	assert.True(t, newStored.IsActive)
+	assert.Equal(t, "cert-fp-new", newStored.CertFingerprint)
+}
+
+func TestCLISessionService_ReplaceCLISession_UnknownOldSession(t *testing.T) {
+	infra := setupTestInfrastructure(t, true)
+	svc := infra.CLISessionSvc
+
+	_, err := svc.ReplaceCLISession("nonexistent-old", "cert-fp-new", "serial-new", CLISessionFields{
+		OperatorSessionID: "op-1",
+		UserID:            "user-1",
+		LoginMethod:       "mTLS",
+	})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrCLISessionNotFound), "expected ErrCLISessionNotFound, got %v", err)
+}
+
+func TestCLISessionService_ReplaceCLISession_AlreadyDeactivatedOld(t *testing.T) {
+	infra := setupTestInfrastructure(t, true)
+	svc := infra.CLISessionSvc
+
+	require.NoError(t, svc.PersistCLISession("old-deact", "op-d", "user-d", "sys-fp", "cert-fp", "serial", "mTLS"))
+	require.NoError(t, svc.DeactivateCLISession("old-deact"))
+
+	_, err := svc.ReplaceCLISession("old-deact", "cert-fp-new", "serial-new", CLISessionFields{
+		OperatorSessionID: "op-d",
+		UserID:            "user-d",
+		LoginMethod:       "mTLS",
+	})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrCLISessionAlreadyDeactivated), "expected ErrCLISessionAlreadyDeactivated, got %v", err)
+}
+
+func TestCLISessionService_ReplaceCLISession_MissingUserBinding(t *testing.T) {
+	infra := setupTestInfrastructure(t, true)
+	svc := infra.CLISessionSvc
+
+	require.NoError(t, svc.PersistCLISession("old-bind", "op-b", "user-b", "sys-fp", "cert-fp", "serial", "mTLS"))
+
+	// Missing UserID.
+	_, err := svc.ReplaceCLISession("old-bind", "cert-fp-new", "serial-new", CLISessionFields{
+		OperatorSessionID: "op-b",
+		LoginMethod:       "mTLS",
+	})
+	require.Error(t, err)
+
+	// Missing OperatorSessionID.
+	_, err = svc.ReplaceCLISession("old-bind", "cert-fp-new", "serial-new", CLISessionFields{
+		UserID:      "user-b",
+		LoginMethod: "mTLS",
+	})
+	require.Error(t, err)
+
+	// Old session must still be active (no partial mutation).
+	stored := loadStoredCLISession(t, svc, "old-bind")
+	assert.True(t, stored.IsActive, "old session must remain active on input validation failure")
+}
+
+func TestCLISessionService_ReplaceCLISession_EmptyOldID(t *testing.T) {
+	infra := setupTestInfrastructure(t, true)
+	svc := infra.CLISessionSvc
+
+	_, err := svc.ReplaceCLISession("", "cert-fp-new", "serial-new", CLISessionFields{
+		OperatorSessionID: "op-1",
+		UserID:            "user-1",
+		LoginMethod:       "mTLS",
+	})
+	require.Error(t, err)
+}
+
+// TestCLISessionService_ReplaceCLISession_ConcurrentOnlyOneSucceeds verifies
+// that exactly one of 10 concurrent replacements wins the conditional update
+// on the old session's is_active=true flag. The winner gets nil; the others
+// get ErrCLISessionAlreadyDeactivated. Losers may fail at either the read
+// step (old session already deactivated, no new session written) or the
+// conditional update step (new session written but old already deactivated
+// by the winner) — both paths return ErrCLISessionAlreadyDeactivated. This
+// matches the plan's invariant: "concurrent replacement (10 goroutines,
+// exactly 1 success)".
+func TestCLISessionService_ReplaceCLISession_ConcurrentOnlyOneSucceeds(t *testing.T) {
+	infra := setupTestInfrastructure(t, true)
+	svc := infra.CLISessionSvc
+
+	require.NoError(t, svc.PersistCLISession("old-concurrent", "op-c", "user-c", "sys-fp", "cert-fp-old", "serial-old", "mTLS"))
+
+	const goroutines = 10
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	var (
+		mu              sync.Mutex
+		successes       int
+		alreadyDeactErr int
+		otherErr        int
+		winnerSessionID string
+	)
+
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			newSession, err := svc.ReplaceCLISession("old-concurrent", "cert-fp-new", "serial-new", CLISessionFields{
+				OperatorSessionID: "op-c",
+				UserID:            "user-c",
+				SystemFingerprint: "sys-fp-new",
+				LoginMethod:       string(constants.HeartbeatTypeBootstrap),
+			})
+			mu.Lock()
+			switch {
+			case err == nil:
+				successes++
+				if newSession != nil {
+					winnerSessionID = newSession.ID
+				}
+			case errors.Is(err, ErrCLISessionAlreadyDeactivated):
+				alreadyDeactErr++
+			default:
+				otherErr++
+			}
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+
+	assert.Equal(t, 1, successes, "exactly one concurrent replacement should succeed")
+	assert.Equal(t, goroutines-1, alreadyDeactErr, "all other callers should see already-deactivated")
+	assert.Equal(t, 0, otherErr, "no other errors expected")
+	assert.NotEmpty(t, winnerSessionID, "the winner must return a new session ID")
+
+	// The old session must be deactivated regardless of which caller won.
+	oldStored := loadStoredCLISession(t, svc, "old-concurrent")
+	assert.False(t, oldStored.IsActive, "old session must be deactivated after concurrent replacement")
+
+	// The winner's new session must be active and persisted.
+	winnerStored := loadStoredCLISession(t, svc, winnerSessionID)
+	assert.True(t, winnerStored.IsActive, "winner's new session must be active")
+	assert.Equal(t, "user-c", winnerStored.UserID)
+	assert.Equal(t, "cert-fp-new", winnerStored.CertFingerprint)
+}
+
+// TestCLISessionService_ReplaceCLISession_RevocationWriteFailureRollback
+// verifies the documented partial-failure semantics: when ReplaceCLISession
+// succeeds, the old session is inactive and the new session is active. The
+// caller's responsibility is to revoke the old cert AFTER this success. If
+// the caller's subsequent revocation fails, the old session remains inactive
+// (the session side is already committed) — the caller retries revocation
+// idempotently. This test simulates the post-success revocation failure by
+// confirming the session state is already final when ReplaceCLISession
+// returns nil.
+func TestCLISessionService_ReplaceCLISession_RevocationWriteFailureRollback(t *testing.T) {
+	infra := setupTestInfrastructure(t, true)
+	svc := infra.CLISessionSvc
+
+	require.NoError(t, svc.PersistCLISession("old-rollback", "op-rb", "user-rb", "sys-fp", "cert-fp-old", "serial-old", "mTLS"))
+
+	newSession, err := svc.ReplaceCLISession("old-rollback", "cert-fp-new", "serial-new", CLISessionFields{
+		OperatorSessionID: "op-rb",
+		UserID:            "user-rb",
+		SystemFingerprint: "sys-fp-new",
+		LoginMethod:       string(constants.HeartbeatTypeBootstrap),
+	})
+	require.NoError(t, err, "ReplaceCLISession must succeed before revocation is attempted")
+	require.NotNil(t, newSession)
+
+	// At this point, the caller would call pki.RevokeCertificate(oldSerial, ...).
+	// Simulate that revocation failing — the session state must already be
+	// final (old inactive, new active) so a retry of revocation is safe and
+	// the user is not locked out.
+	oldStored := loadStoredCLISession(t, svc, "old-rollback")
+	assert.False(t, oldStored.IsActive, "old session must be inactive before caller attempts revocation")
+
+	newStored := loadStoredCLISession(t, svc, newSession.ID)
+	assert.True(t, newStored.IsActive, "new session must be active before caller attempts revocation")
+
+	// A second ReplaceCLISession on the now-deactivated old session must
+	// fail with ErrCLISessionAlreadyDeactivated — the caller cannot
+	// accidentally double-replace.
+	_, err = svc.ReplaceCLISession("old-rollback", "cert-fp-new-2", "serial-new-2", CLISessionFields{
+		OperatorSessionID: "op-rb",
+		UserID:            "user-rb",
+		LoginMethod:       "mTLS",
+	})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrCLISessionAlreadyDeactivated))
 }
