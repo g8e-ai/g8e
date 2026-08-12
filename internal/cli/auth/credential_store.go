@@ -327,19 +327,41 @@ func (s *CredentialStore) Rollback(staged *stagedIdentity) {
 //   - credentials JSON
 //   - CLI cert
 //   - CLI key
-//   - runtime trust bundle
 //
-// It does NOT remove the shared OS root CA — system trust is shared and
-// may be used by another runtime or gateway (per §4.3 ownership policy).
-// Callers that also want to remove an exact Windows Personal-store
-// certificate should do so separately via the platform key provider.
+// It does NOT remove the shared OS root CA (the runtime trust bundle) —
+// system trust is shared and may be used by another runtime or gateway
+// (per §4.3 ownership policy). Callers that need a full reset including
+// the trust bundle should call DeleteCredentials directly. Callers that
+// also want to remove an exact Windows Personal-store certificate should
+// do so separately via the platform key provider.
 func (s *CredentialStore) Clear(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if err := DeleteCredentials(s.fileSvc, s.cfg); err != nil {
-		return err
+	credsRel, err := s.fileSvc.RelFromAbs(s.cfg.CredentialsFile())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
 	}
+	if err := s.fileSvc.Remove(ctx, credsRel); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
+	}
+
+	cliCertRel, err := s.fileSvc.RelFromAbs(s.cfg.CLICertFile())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
+	}
+	if err := s.fileSvc.Remove(ctx, cliCertRel); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
+	}
+
+	cliKeyRel, err := s.fileSvc.RelFromAbs(s.cfg.CLIKeyFile())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
+	}
+	if err := s.fileSvc.Remove(ctx, cliKeyRel); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
+	}
+
 	return nil
 }
 

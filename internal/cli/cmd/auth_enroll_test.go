@@ -485,7 +485,7 @@ func TestLogoutCmd_OSRootCARetained(t *testing.T) {
 // connection, never enrolling, opening a browser, or installing system trust.
 // This is the §11.5 3.8 negative assertion.
 func TestMCPStdio_DoesNotInvokeEnrollment(t *testing.T) {
-	fileSvc, cfg := newCmdTestEnv(t)
+	fileSvc, _ := newCmdTestEnv(t)
 
 	// Swap the factory with a panicking mock. If the stdio path calls it,
 	// the test panics.

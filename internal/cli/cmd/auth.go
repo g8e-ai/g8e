@@ -163,9 +163,9 @@ func logoutCmdWithConfig(
 		Short: "Clear local Operator session and credentials",
 		Long: `Clear the local Operator session by deleting stored credentials from disk. This does not revoke the session on the gateway side — it only removes the local credential files so the CLI can no longer authenticate.
 
-The shared OS root CA is NOT removed. System trust is shared and may be used by
-another runtime or gateway; logout only clears the local CLI credential material
-(credentials JSON, CLI cert, CLI key, and the runtime trust bundle).`,
+The shared OS root CA (runtime trust bundle) is NOT removed. System trust is
+shared and may be used by another runtime or gateway; logout only clears the
+local CLI credential material (credentials JSON, CLI cert, CLI key).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
