@@ -43,6 +43,7 @@ type HTTPHandlerDependencies struct {
 	DataControllerDeps            DataControllerDeps
 	SignerControllerDeps          SignerControllerDeps
 	BootstrapControllerDeps       BootstrapControllerDeps
+	CLIRecoveryControllerDeps     CLIRecoveryControllerDeps
 	EnrollmentTokenControllerDeps EnrollmentTokenControllerDeps
 	UserControllerDeps            UserControllerDeps
 	SessionControllerDeps         SessionControllerDeps
@@ -71,6 +72,7 @@ type HTTPHandler struct {
 	dataController            *DataController
 	signerController          *SignerController
 	bootstrapController       *BootstrapController
+	cliRecoveryController     *CLIRecoveryController
 	enrollmentTokenController *EnrollmentTokenController
 	userController            *UserController
 	sessionController         *SessionController
@@ -110,6 +112,34 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	enrollmentTokenSvc := NewEnrollmentTokenService(deps.BootstrapControllerDeps.DocStore, deps.Logger)
 	deps.EnrollmentTokenControllerDeps.EnrollmentTokenSvc = enrollmentTokenSvc
 
+	// Initialize CLI recovery service (shared dependency, not a controller)
+	cliRecoverySvc := NewCLIRecoveryService(deps.BootstrapControllerDeps.DocStore, deps.Logger)
+	deps.CLIRecoveryControllerDeps.RecoverySvc = cliRecoverySvc
+	if deps.CLIRecoveryControllerDeps.Cfg == nil {
+		deps.CLIRecoveryControllerDeps.Cfg = deps.Cfg
+	}
+	if deps.CLIRecoveryControllerDeps.Logger == nil {
+		deps.CLIRecoveryControllerDeps.Logger = deps.Logger
+	}
+	if deps.CLIRecoveryControllerDeps.UserSvc == nil {
+		deps.CLIRecoveryControllerDeps.UserSvc = deps.BootstrapControllerDeps.UserSvc
+	}
+	if deps.CLIRecoveryControllerDeps.PKI == nil {
+		deps.CLIRecoveryControllerDeps.PKI = deps.BootstrapControllerDeps.PKI
+	}
+	if deps.CLIRecoveryControllerDeps.CLISessionSvc == nil {
+		deps.CLIRecoveryControllerDeps.CLISessionSvc = deps.BootstrapControllerDeps.CLISessionSvc
+	}
+	if deps.CLIRecoveryControllerDeps.OperatorSessionSvc == nil {
+		deps.CLIRecoveryControllerDeps.OperatorSessionSvc = deps.BootstrapControllerDeps.OperatorSessionSvc
+	}
+	if deps.CLIRecoveryControllerDeps.DocStore == nil {
+		deps.CLIRecoveryControllerDeps.DocStore = deps.BootstrapControllerDeps.DocStore
+	}
+	if deps.CLIRecoveryControllerDeps.Responder == nil {
+		deps.CLIRecoveryControllerDeps.Responder = responder
+	}
+
 	h := &HTTPHandler{
 		cfg:                       deps.Cfg,
 		logger:                    deps.Logger,
@@ -120,6 +150,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 		dataController:            newDataController(deps.DataControllerDeps),
 		signerController:          newSignerController(deps.SignerControllerDeps),
 		bootstrapController:       newBootstrapController(deps.BootstrapControllerDeps),
+		cliRecoveryController:     newCLIRecoveryController(deps.CLIRecoveryControllerDeps),
 		enrollmentTokenController: newEnrollmentTokenController(deps.EnrollmentTokenControllerDeps),
 		userController:            newUserController(deps.UserControllerDeps),
 		sessionController:         newSessionController(deps.SessionControllerDeps),

@@ -94,6 +94,13 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addExact(constants.APIPaths.AuthEnrollmentTokenValidate, RouteAuthNone)
 	r.addPrefix(constants.APIPaths.ApprovePage, RouteAuthNone)
 
+	// CLI recovery discovery surface — public, token-scoped.
+	// The opaque token (looked up via its hash) and proof-of-possession
+	// signature provide the authorization context; no mTLS or cookie required.
+	r.addExact(constants.APIPaths.AuthCLIRecoveryRequest, RouteAuthNone)
+	r.addExact(constants.APIPaths.AuthCLIRecoveryStatus, RouteAuthNone)
+	r.addExact(constants.APIPaths.AuthCLIRecoveryComplete, RouteAuthNone)
+
 	// Console SPA (public, no auth required)
 	r.addPrefix(constants.APIPaths.ConsolePrefix, RouteAuthNone)
 
@@ -109,6 +116,9 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addPrefix(constants.APIPaths.AuthSessionsPrefix, RouteAuthWebSession)
 	r.addPrefix(constants.APIPaths.Approvals, RouteAuthWebSession)
 	r.addPrefix(constants.APIPaths.AuthPasskeys, RouteAuthWebSession)
+
+	// CLI recovery approval — browser console, authenticated existing user.
+	r.addExact(constants.APIPaths.AuthCLIRecoveryApprove, RouteAuthWebSession)
 
 	// --- RouteAuthMTLS: mTLS-protected sub-paths under WebSession prefixes ---
 	// These exact paths must be checked before the WebSession prefix matches.

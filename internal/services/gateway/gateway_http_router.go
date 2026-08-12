@@ -63,6 +63,13 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.PKIAppsEnroll, h.pkiController.handlePKIAppsEnroll)
 	mux.HandleFunc(constants.APIPaths.PKIDevicesEnroll, h.pkiController.handlePKIDevicesEnroll)
 
+	// CLI recovery flow — request/status/complete are public (token-scoped);
+	// approve is web-session protected (browser console only).
+	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryRequest, h.cliRecoveryController.handleRecoveryRequest)
+	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryStatus, h.cliRecoveryController.handleRecoveryStatus)
+	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryApprove, h.cliRecoveryController.handleRecoveryApprove)
+	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryComplete, h.cliRecoveryController.handleRecoveryComplete)
+
 	// Enrollment token validation (public — the token itself is the credential)
 	mux.HandleFunc(constants.APIPaths.AuthEnrollmentTokenValidate, h.enrollmentTokenController.handleEnrollmentTokenValidate)
 
@@ -207,6 +214,14 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.PKICSRSign, h.pkiController.handlePKICSRSign)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
+
+	// CLI recovery discovery surface — request/status/complete are reachable
+	// over plain HTTP so a new CLI without trusted TLS can initiate recovery.
+	// The approve endpoint is intentionally NOT registered here: approval
+	// requires a web-session cookie, which is only set over HTTPS.
+	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryRequest, h.cliRecoveryController.handleRecoveryRequest)
+	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryStatus, h.cliRecoveryController.handleRecoveryStatus)
+	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryComplete, h.cliRecoveryController.handleRecoveryComplete)
 
 	mux.HandleFunc("/.well-known/g8e/bin/", h.pkiController.handleNodeBinaryDownload)
 	mux.HandleFunc(constants.APIPaths.DeployScriptLinux, h.pkiController.handleDeployScriptLinux)
