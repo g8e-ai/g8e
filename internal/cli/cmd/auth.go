@@ -14,6 +14,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 
@@ -24,6 +25,14 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 )
+
+// Enroller is the interface satisfied by *auth.EnrollmentCoordinator. The
+// command layer depends on this interface rather than the concrete type so
+// tests can inject a mock coordinator that records calls and returns canned
+// EnrollmentResults without network I/O, sudo, or browser launches.
+type Enroller interface {
+	Enroll(ctx context.Context, opts auth.EnrollmentOptions) (*auth.EnrollmentResult, error)
+}
 
 func authCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -41,17 +50,16 @@ func authCmd() *cobra.Command {
 	return cmd
 }
 
-// enrollCoordinatorFactory builds an EnrollmentCoordinator from an output
-// function, file service, and config. It is a package-level var so tests can
-// swap it for a mock coordinator that avoids network I/O, sudo, and browser
-// launches.
+// enrollCoordinatorFactory builds an Enroller from an output function, file
+// service, and config. It is a package-level var so tests can swap it for a
+// mock coordinator that avoids network I/O, sudo, and browser launches.
 var enrollCoordinatorFactory = newDefaultEnrollmentCoordinator
 
 // newDefaultEnrollmentCoordinator is the production coordinator factory. It
 // injects production defaults (real gateway client, file-backed key provider,
 // real system-trust installer, real browser opener, hardened passkey
 // registrar) and an OutputFunc that writes to the provided output sink.
-func newDefaultEnrollmentCoordinator(out auth.OutputFunc, fileSvc fs.RuntimeFileService, cfg *config.Config) *auth.EnrollmentCoordinator {
+func newDefaultEnrollmentCoordinator(out auth.OutputFunc, fileSvc fs.RuntimeFileService, cfg *config.Config) Enroller {
 	return auth.NewEnrollmentCoordinator(auth.EnrollmentCoordinatorDeps{
 		FileSvc: fileSvc,
 		Cfg:     cfg,

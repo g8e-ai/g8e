@@ -54,7 +54,10 @@ func printNextSteps(cmd *cobra.Command, _ governance.GovernancePosture, external
 	cmd.Printf("       %s auth enroll -e %s\n", bin, externalIP)
 	cmd.Println()
 	cmd.Println("     `auth enroll` performs the human passkey ceremony and prepares the")
-	cmd.Println("     CLI credentials needed to access the console and MCP endpoints.")
+	cmd.Println("     CLI credentials needed to access the console and MCP endpoints. It also")
+	cmd.Println("     installs the gateway root CA into the OS trust store before opening the")
+	cmd.Println("     browser; pass `--no-system-trust` to skip that step (an administrator")
+	cmd.Println("     must pre-install trust in that case).")
 	cmd.Println()
 
 	// CLI section

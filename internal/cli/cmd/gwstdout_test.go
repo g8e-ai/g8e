@@ -53,6 +53,10 @@ func TestPrintNextSteps_DoctrinePosture(t *testing.T) {
 	assert.Contains(t, out, "1. Enroll your CLI identity and register a passkey")
 	assert.Contains(t, out, bin+" auth enroll -e 192.168.1.100")
 	assert.Contains(t, out, "`auth enroll` performs the human passkey ceremony")
+	// Built-in OS trust installation is mentioned, including the
+	// --no-system-trust opt-out (administrator-managed trust).
+	assert.Contains(t, out, "installs the gateway root CA into the OS trust store")
+	assert.Contains(t, out, "--no-system-trust")
 
 	// CLI section
 	assert.Contains(t, out, "CLI")

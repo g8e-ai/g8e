@@ -781,8 +781,14 @@ func TestRemovedCLIEnrollRoute(t *testing.T) {
 	// Public HTTPS router: the path is no longer explicitly classified and
 	// the handler is gone, so it fail-closes to RouteAuthMTLS → 401 (never
 	// 200 with a cert).
+	//
+	// The path is inlined as a literal because the
+	// constants.APIPaths.AuthCLIEnroll constant was deleted in Section 9
+	// (handleCLIEnrollment removal). These tests assert the route's
+	// absence, so a literal is intentional and avoids reintroducing a
+	// constant for a removed endpoint.
 	publicRouter := h.buildPublicRouter()
-	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthCLIEnroll, bytes.NewReader([]byte(enrollBody)))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/enroll", bytes.NewReader([]byte(enrollBody)))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	publicRouter.ServeHTTP(rr, req)
@@ -792,8 +798,10 @@ func TestRemovedCLIEnrollRoute(t *testing.T) {
 
 	// Plain HTTP router: the handler was never registered here either, so
 	// the path is a 404 (or fail-closed). Either way, never 200 with a cert.
+	// Literal path: see note above (AuthCLIEnroll constant removed in
+	// Section 9).
 	httpRouter := h.buildHTTPRouter()
-	req = httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthCLIEnroll, bytes.NewReader([]byte(enrollBody)))
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/enroll", bytes.NewReader([]byte(enrollBody)))
 	req.Header.Set("Content-Type", "application/json")
 	rr = httptest.NewRecorder()
 	httpRouter.ServeHTTP(rr, req)

@@ -394,7 +394,13 @@ func TestRouteAuthRegistry_RotationAndRemovedEnroll(t *testing.T) {
 	// We cannot assert "absence of classification" directly through the
 	// public API, but we can confirm the fail-closed default still applies:
 	// the path must resolve to RouteAuthMTLS, never RouteAuthNone.
-	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.APIPaths.AuthCLIEnroll),
+	//
+	// The path is inlined as a literal because the
+	// constants.APIPaths.AuthCLIEnroll constant was deleted in Section 9
+	// (handleCLIEnrollment removal). This assertion verifies the removed
+	// route fail-closes via the registry default, so a literal preserves
+	// the intent without reintroducing a constant for a removed endpoint.
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode("/api/v1/auth/cli/enroll"),
 		"removed CLI enroll route must fail-closed to RouteAuthMTLS, never RouteAuthNone")
 }
 
