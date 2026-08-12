@@ -75,13 +75,16 @@ type BrowserOpener interface {
 }
 
 // PasskeyRegistrar runs the browser-based passkey registration ceremony.
-// Section 8 will replace the default implementation with a hardened
-// PasskeyRegistrar that prepares the SSE listener before browser launch,
-// fixes the cursor strategy, and surfaces browser-open errors.
+// The default implementation (passkeyRegistrar) prepares the SSE listener
+// before browser launch, uses a correct cursor strategy (since_id=0 for
+// live-only events), filters events by type/user/session, surfaces
+// browser-open errors, and propagates context cancellation.
 type PasskeyRegistrar interface {
 	// Register opens the gateway console for WebAuthn passkey registration
 	// and waits for the passkey.registered SSE event. The userID and
 	// cliSessionID identify the newly enrolled (or reused) CLI identity.
+	// The userID is used for client-side SSE event filtering; the gateway
+	// derives identity from the mTLS certificate context.
 	Register(ctx context.Context, userID, cliSessionID string) error
 }
 
@@ -135,7 +138,7 @@ type EnrollmentCoordinatorDeps struct {
 //   - Keys: a FileKeyProvider (file-backed EC P-256 on all platforms).
 //   - Trust: a new *platform.SystemTrustInstaller (real os/exec).
 //   - Browser: a defaultBrowserOpener wrapping platform.OpenBrowser.
-//   - Passkey: a defaultPasskeyRegistrar wrapping RegisterPasskeyViaBrowser.
+//   - Passkey: a defaultPasskeyRegistrar wrapping the hardened passkeyRegistrar.
 //   - Clock: time.Now.
 //   - Logger: slog.Default().
 //   - Out: a no-op writer (the command layer should always supply this).
@@ -168,7 +171,9 @@ func NewEnrollmentCoordinator(deps EnrollmentCoordinatorDeps) *EnrollmentCoordin
 	}
 	passkey := deps.Passkey
 	if passkey == nil {
-		passkey = &defaultPasskeyRegistrar{fileSvc: deps.FileSvc, cfg: deps.Cfg}
+		passkey = &defaultPasskeyRegistrar{
+			registrar: newPasskeyRegistrar(deps.FileSvc, deps.Cfg, PasskeyRegistrarOptions{}),
+		}
 	}
 	clock := deps.Clock
 	if clock == nil {
@@ -531,16 +536,14 @@ func (defaultBrowserOpener) Open(url string) error {
 	return platform.OpenBrowser(url)
 }
 
-// defaultPasskeyRegistrar wraps the existing RegisterPasskeyViaBrowser
-// function. Section 8 will replace this with a hardened registrar that
-// prepares the SSE listener before browser launch, fixes the cursor
-// strategy, and surfaces browser-open errors.
+// defaultPasskeyRegistrar wraps the hardened passkeyRegistrar. It satisfies
+// the PasskeyRegistrar interface and is the production default injected by
+// NewEnrollmentCoordinator.
 type defaultPasskeyRegistrar struct {
-	fileSvc fs.RuntimeFileService
-	cfg     *config.Config
+	registrar *passkeyRegistrar
 }
 
-// Register delegates to RegisterPasskeyViaBrowser.
-func (r *defaultPasskeyRegistrar) Register(_ context.Context, userID, cliSessionID string) error {
-	return RegisterPasskeyViaBrowser(r.fileSvc, r.cfg, userID, cliSessionID)
+// Register delegates to passkeyRegistrar.Register.
+func (r *defaultPasskeyRegistrar) Register(ctx context.Context, userID, cliSessionID string) error {
+	return r.registrar.Register(ctx, userID, cliSessionID)
 }

@@ -130,6 +130,10 @@ footer { text-align: center; padding: 16px; color: var(--muted); font-size: 0.75
 var user = null, passkeys = [], approvals = [], health = null, bootstrapped = false;
 var auditEs = null, auditConnected = false, auditEvents = [], auditAutoScroll = true, auditFilter = '', auditMaxEvents = 500;
 var auditReconnectAttempt = 0, auditSeenIds = new Set(), auditOpenTimeout = null;
+// pendingRecoveryToken holds an opaque CLI recovery token read from the URL
+// fragment (#recovery=<token>) awaiting browser approval by an authenticated
+// existing user. It is kept only in memory after the fragment is cleared.
+var pendingRecoveryToken = null, recoveryState = null, recoveryResolved = false;
 
 function b64urlToBuf(s) {
   s = s.replace(/-/g,'+').replace(/_/g,'/');
@@ -286,6 +290,9 @@ async function authenticatePasskey() {
   var vd = await vr.json();
   if (vd.success) {
     await loadState();
+    // Refresh recovery status now that the user is authenticated, in case the
+    // state changed while the sign-in ceremony was in progress.
+    if (pendingRecoveryToken) await loadRecoveryStatus(pendingRecoveryToken);
     render();
     var params = new URLSearchParams(location.hash.slice(1));
     var txHash = params.get('approve');
@@ -319,6 +326,125 @@ async function approveTransaction(txHash) {
   });
   if (vr && vr.ok) { showMsg('success', 'Transaction approved!'); await loadState(); render(); }
   else { var ed = vr ? await vr.json() : {}; showMsg('error', ed.error || 'Approval failed'); }
+}
+
+// ---- CLI Recovery Approval ----
+// The recovery approval flow is intentionally SEPARATE from normal passkey
+// registration so an existing user understands exactly what they are
+// authorizing: a brand-new CLI is requesting enrollment credentials for this
+// gateway, gated by a one-time human approval.
+
+// loadRecoveryStatus fetches the current lifecycle state of the pending
+// recovery request. The status endpoint is public (the opaque token is the
+// lookup key), so only the state is returned — no CSR/identity details.
+async function loadRecoveryStatus(token) {
+  try {
+    var r = await fetch('/api/v1/auth/cli/recovery/status?token=' + encodeURIComponent(token),
+      { credentials: 'same-origin' });
+    if (!r.ok) {
+      // 404 = not found, 410 = expired, 409 = consumed. Map to a terminal
+      // recovery state so the UI shows a clear, final message.
+      recoveryState = r.status === 404 ? 'not_found'
+                    : r.status === 410 ? 'expired'
+                    : r.status === 409 ? 'consumed'
+                    : 'error';
+      recoveryResolved = true;
+      return;
+    }
+    var d = await r.json();
+    recoveryState = d.state;
+    // Terminal states — no approval action is possible.
+    if (recoveryState === 'completed' || recoveryState === 'denied' || recoveryState === 'expired') {
+      recoveryResolved = true;
+    }
+  } catch (e) {
+    recoveryState = 'error';
+    recoveryResolved = true;
+  }
+}
+
+// approveRecovery posts the approve/deny decision to the recovery approve
+// endpoint. This requires an authenticated web session (RouteAuthWebSession);
+// if the session has lapsed, the api() helper sets user=null and re-renders,
+// which surfaces the sign-in prompt again.
+async function approveRecovery(token, approve) {
+  var btnApprove = document.getElementById('recApproveBtn');
+  var btnDeny = document.getElementById('recDenyBtn');
+  if (btnApprove) btnApprove.disabled = true;
+  if (btnDeny) btnDeny.disabled = true;
+  showRecMsg('info', approve ? 'Approving CLI recovery...' : 'Denying CLI recovery...');
+  var r = await api('/api/v1/auth/cli/recovery/approve', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ token: token, approve: approve })
+  });
+  if (!r) { if (btnApprove) btnApprove.disabled = false; if (btnDeny) btnDeny.disabled = false; return; }
+  var d = await r.json().catch(function() { return {}; });
+  if (r.ok && d.success) {
+    recoveryState = d.state;
+    recoveryResolved = true;
+    showRecMsg('success', approve
+      ? 'CLI recovery approved. The new CLI can now complete enrollment.'
+      : 'CLI recovery denied.');
+  } else {
+    showRecMsg('error', d.error || 'Recovery approval failed.');
+    if (btnApprove) btnApprove.disabled = false;
+    if (btnDeny) btnDeny.disabled = false;
+  }
+  render();
+}
+
+// showRecMsg displays a message inside the recovery card's dedicated
+// message element (#recMsg), avoiding conflicts with other #msg elements
+// elsewhere on the page.
+function showRecMsg(cls, text) {
+  var m = document.getElementById('recMsg'); if (!m) return;
+  m.className = 'msg msg-' + cls; m.textContent = text; m.style.display = 'block';
+}
+
+// recoveryStateLabel maps a recovery state to a human-readable label.
+function recoveryStateLabel(s) {
+  switch (s) {
+    case 'pending':   return 'Pending — awaiting your approval';
+    case 'approved':  return 'Approved — the new CLI may now complete enrollment';
+    case 'completed': return 'Completed — the new CLI has finished enrollment';
+    case 'denied':    return 'Denied — you rejected this request';
+    case 'expired':   return 'Expired — this request timed out';
+    case 'not_found': return 'Not found — this recovery link is invalid';
+    case 'consumed':  return 'Already used — this recovery link was completed';
+    case 'error':     return 'Error — could not reach the gateway';
+    default:          return s || 'Unknown';
+  }
+}
+
+// renderRecoveryCard builds the CLI recovery approval card. It is rendered at
+// the TOP of the main area, above all other cards, so the approver sees it
+// first. Only rendered when pendingRecoveryToken is set and the user is
+// authenticated.
+function renderRecoveryCard() {
+  var card = el('div', {className:'card', style:'border-color:var(--warning)'},
+    el('h2', null, 'CLI Recovery Approval'),
+    el('p', {style:'color:var(--text);font-size:0.9rem;margin-bottom:10px'},
+      'A new CLI is requesting enrollment access to this gateway. Approving ' +
+      'allows the new CLI to complete enrollment and obtain CLI credentials. ' +
+      'Only approve if you initiated this recovery.'),
+    el('div', {style:'color:var(--muted);font-size:0.8rem;margin-bottom:12px'},
+      'State: ' + recoveryStateLabel(recoveryState))
+  );
+  if (!recoveryResolved && recoveryState === 'pending') {
+    card.appendChild(el('div', {className:'row'},
+      el('button', {className:'btn btn-primary', id:'recApproveBtn',
+        onclick: function() { approveRecovery(pendingRecoveryToken, true); }},
+        'Approve'),
+      el('button', {className:'btn btn-danger', id:'recDenyBtn',
+        onclick: function() { approveRecovery(pendingRecoveryToken, false); }},
+        'Deny')
+    ));
+  } else if (recoveryResolved) {
+    card.appendChild(el('p', {style:'color:var(--muted);font-size:0.8rem'},
+      'No further action is required for this request.'));
+  }
+  card.appendChild(el('div', {id:'recMsg'}));
+  return card;
 }
 
 async function revokePasskey(credId) {
@@ -500,6 +626,14 @@ function render() {
 
   if (!user) {
     ud.textContent = '';
+    if (pendingRecoveryToken) {
+      m.appendChild(el('div', {className:'card', style:'border-color:var(--warning)'},
+        el('h2', null, 'CLI Recovery Approval'),
+        el('p', {style:'color:var(--text);font-size:0.9rem;margin-bottom:10px'},
+          'A new CLI is requesting enrollment access to this gateway. ' +
+          'Sign in with your passkey below to review and approve or deny the request.')
+      ));
+    }
     if (!bootstrapped) {
       m.appendChild(el('div', {className:'card'},
         el('h2', null, 'Enroll Passkey'),
@@ -534,6 +668,8 @@ function render() {
 
   ud.textContent = (user.email || user.name || user.id || 'User');
   var v = health ? (health.version || '') : '';
+
+  if (pendingRecoveryToken) m.appendChild(renderRecoveryCard());
 
   m.appendChild(el('div', {className:'row'},
     el('div', {className:'stat'}, el('div', {className:'num', style:'color:var(--accent)'}, '' + passkeys.length), el('div', {className:'label'}, 'Passkeys')),
@@ -629,6 +765,18 @@ function render() {
   var hashParams = new URLSearchParams(location.hash.slice(1));
   var registerMode = hashParams.get('register');
   var hashToken = hashParams.get('token');
+  var recoveryToken = hashParams.get('recovery');
+
+  // CLI recovery approval: the opaque token arrives in the URL fragment so it
+  // never reaches server-side access logs. Clear the fragment immediately
+  // after reading it, then keep the token only in memory.
+  if (recoveryToken) {
+    pendingRecoveryToken = recoveryToken;
+    history.replaceState(null, '', location.pathname + location.search);
+    // Load the recovery status up front so the card can show the current
+    // state regardless of whether the user is already authenticated.
+    await loadRecoveryStatus(recoveryToken);
+  }
 
   await loadState();
   render();
