@@ -370,6 +370,34 @@ func TestRouteAuthRegistry_SSEDualAuth(t *testing.T) {
 	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.SSEEvents), "SSE events must be RouteAuthDual")
 }
 
+// TestRouteAuthRegistry_RotationAndRemovedEnroll verifies that the CLI
+// rotation route is explicitly classified as RouteAuthMTLS, and that the
+// deprecated CLI enroll route (handleCLIEnrollment was removed in 5f) is no
+// longer explicitly classified — it must fail-closed to the default
+// RouteAuthMTLS so an unregistered, unauthenticated enrollment endpoint can
+// never issue credentials.
+func TestRouteAuthRegistry_RotationAndRemovedEnroll(t *testing.T) {
+
+	registry := NewRouteAuthRegistry(false)
+
+	// Rotation must be explicitly RouteAuthMTLS — the caller's identity is
+	// derived from the verified mTLS certificate URI SAN.
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.APIPaths.AuthCLIRotate),
+		"CLI rotation must be RouteAuthMTLS (mTLS-derived identity)")
+
+	// The deprecated enroll route must NOT be explicitly classified. It
+	// relies on the fail-closed default (RouteAuthMTLS), and the handler is
+	// no longer registered on either router (asserted in
+	// TestRemovedCLIEnrollRoute). An explicit classification would be
+	// misleading now that the handler is gone.
+	//
+	// We cannot assert "absence of classification" directly through the
+	// public API, but we can confirm the fail-closed default still applies:
+	// the path must resolve to RouteAuthMTLS, never RouteAuthNone.
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.APIPaths.AuthCLIEnroll),
+		"removed CLI enroll route must fail-closed to RouteAuthMTLS, never RouteAuthNone")
+}
+
 func TestAuthService_Middleware_DualAuthDispatch(t *testing.T) {
 	_, stores := newTestDB(t)
 	logger := testutil.NewTestLogger()

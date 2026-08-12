@@ -35,8 +35,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/response"
-	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // setupTestCLIRotationController creates a CLIRotationController backed by
@@ -61,58 +59,6 @@ func setupTestCLIRotationController(t *testing.T) (*CLIRotationController, *mode
 	require.NotNil(t, user)
 
 	return c, user
-}
-
-// setupTestCLIRotationControllerVerbose is identical to
-// setupTestCLIRotationController but uses a verbose logger that writes to
-// t.Log, for debugging rotation failures.
-func setupTestCLIRotationControllerVerbose(t *testing.T) (*CLIRotationController, *models.User, *TestInfrastructure) {
-	t.Helper()
-	cfg := testutil.NewTestConfig(t)
-	logger := testutil.NewVerboseTestLogger(t)
-
-	fileSvc := newTestFileSvc(t)
-	dbDir := testutil.TempDir(t)
-
-	ks := newTestKeystore(t, fileSvc, logger)
-	db, stores, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-
-	pubsub := NewGatewayWebSocketHandler(logger)
-	t.Cleanup(func() { pubsub.Close() })
-
-	sm := db.GetSecretManager()
-	pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
-	err = pki.InitializePKI(nil)
-	require.NoError(t, err)
-
-	userSvc := NewUserService(stores.DocStore, logger)
-	resp := response.NewWriter(logger)
-	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-
-	c := newCLIRotationController(CLIRotationControllerDeps{
-		Cfg:           cfg,
-		Logger:        logger,
-		PKI:           pki,
-		CLISessionSvc: cliSessionSvc,
-		UserSvc:       userSvc,
-		Responder:     resp,
-	})
-
-	user, err := userSvc.CreateUser()
-	require.NoError(t, err)
-	require.NotNil(t, user)
-
-	return c, user, &TestInfrastructure{
-		Cfg:           cfg,
-		Logger:        logger,
-		Stores:        stores,
-		PKI:           pki,
-		UserSvc:       userSvc,
-		Responder:     resp,
-		CLISessionSvc: cliSessionSvc,
-	}
 }
 
 // persistActiveCLISession creates an active CLI session for the given user
@@ -190,7 +136,7 @@ func parseRotationResponse(t *testing.T, rr *httptest.ResponseRecorder) models.C
 // ---------------------------------------------------------------------------
 
 func TestCLIRotationController_Rotate_Success(t *testing.T) {
-	c, user, _ := setupTestCLIRotationControllerVerbose(t)
+	c, user := setupTestCLIRotationController(t)
 	oldSessionID, _, _ := persistActiveCLISession(t, c, user.ID)
 
 	csrPEM, newPrivKey, _ := generateTestCSR(t, "rotation-new-cli")
@@ -401,7 +347,7 @@ func TestCLIRotationController_Rotate_AlreadyDeactivatedSession(t *testing.T) {
 	c.handleRotate(rr, req)
 
 	assert.Equal(t, http.StatusConflict, rr.Code)
-	assert.Contains(t, rr.Body.String(), ErrCLISessionAlreadyDeactivated.Error())
+	assert.Contains(t, rr.Body.String(), constants.ErrCLISessionAlreadyDeactivated.Error())
 }
 
 // ---------------------------------------------------------------------------

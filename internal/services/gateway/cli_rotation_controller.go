@@ -82,10 +82,12 @@ func newCLIRotationController(deps CLIRotationControllerDeps) *CLIRotationContro
 //  1. Validate the request body (CSR present, parseable).
 //  2. Load the caller's active CLI session; reject if missing or inactive.
 //  3. Verify the active session's user is still permitted to authenticate.
-//  4. Sign the new CLI CSR with the same user/session binding.
-//  5. ReplaceCLISession: persist the new session, atomically deactivate
-//     the old one. On the concurrent-loss path, return the typed error so
-//     the caller can revoke the cert it just signed.
+//  4. Pre-generate the new CLI session ID and sign the new CLI CSR with
+//     that ID in the URI SAN.
+//  5. ReplaceCLISession: persist the new session (with the pre-generated
+//     ID), atomically deactivate the old one. On the concurrent-loss path,
+//     the orphaned new session is cleaned up and the typed error is
+//     returned so the caller can revoke the cert it just signed.
 //  6. Revoke the old certificate (best-effort, idempotent retry on failure).
 //  7. Return the new certificate, chain, session ID, and full trust bundle.
 //
@@ -135,7 +137,7 @@ func (c *CLIRotationController) handleRotate(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if !oldSession.IsActive {
-		c.writeRotationError(w, ErrCLISessionAlreadyDeactivated)
+		c.writeRotationError(w, constants.ErrCLISessionAlreadyDeactivated)
 		return
 	}
 
@@ -170,16 +172,9 @@ func (c *CLIRotationController) handleRotate(w http.ResponseWriter, r *http.Requ
 
 	// Sign the new CLI CSR BEFORE replacing the session. A signing failure
 	// leaves the old session untouched and the caller can retry. The new
-	// session ID is generated inside ReplaceCLISession; we pass it through
-	// SignCSR so the certificate URI SAN binds to the new session.
-	//
-	// To get the new session ID ahead of signing, we would have to
-	// generate it here and pass it down — but SignCSR's contract is to
-	// embed the supplied sessionID in the URI SAN, so we generate the new
-	// session ID here, sign with it, and hand it to ReplaceCLISession.
-	//
-	// ReplaceCLISession persists a new session document with this ID, so
-	// the cert and session stay bound.
+	// session ID is pre-generated here so the certificate URI SAN binds to
+	// it, and the same ID is passed to ReplaceCLISession so the persisted
+	// session and the signed cert stay bound.
 	newCLISessionID := uuid.NewString()
 	newCertPEM, newCertChainPEM, err := c.pki.SignCSR(
 		req.CLICSRPEM,
@@ -205,9 +200,12 @@ func (c *CLIRotationController) handleRotate(w http.ResponseWriter, r *http.Requ
 
 	// Transactionally replace the old session with the new one. The new
 	// session inherits the operator binding and system fingerprint from
-	// the old session so the caller's routing namespace is preserved.
-	newSession, err := c.cliSessionSvc.ReplaceCLISession(
+	// the old session so the caller's routing namespace is preserved. The
+	// new session ID is the one we signed the cert's URI SAN against, so
+	// the cert and session stay bound.
+	_, err = c.cliSessionSvc.ReplaceCLISession(
 		oldCLISessionID,
+		newCLISessionID,
 		newCertFingerprint,
 		newCertSerial,
 		CLISessionFields{
@@ -220,39 +218,21 @@ func (c *CLIRotationController) handleRotate(w http.ResponseWriter, r *http.Requ
 		},
 	)
 	if err != nil {
-		// Even on the concurrent-loss path, ReplaceCLISession returns
-		// the freshly-persisted new session so we can revoke the cert
-		// we just signed. Surface the typed error to the caller; the
-		// cert is unusable because the caller lost the race.
+		// ReplaceCLISession cleans up the orphaned new session on the
+		// concurrent-loss path, so the cert we just signed has no
+		// matching active session. Revoke it best-effort so it cannot
+		// be used, then surface the typed error to the caller.
 		c.logger.Warn("CLI rotation: ReplaceCLISession failed",
 			"error", err,
 			"user_id", userID,
 			"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
 			"new_cli_session_id_prefix", safeTruncateID(newCLISessionID, 8),
 		)
-		// Best-effort: revoke the new cert we just signed so it cannot
-		// be used even though the session replacement lost the race.
 		if revokeErr := c.pki.RevokeCertificate(newCertSerial, "rotation_race_lost"); revokeErr != nil {
 			c.logger.Error("CLI rotation: failed to revoke orphaned new cert after race loss",
 				"error", revokeErr, "new_cert_serial", newCertSerial)
 		}
 		c.writeRotationError(w, err)
-		return
-	}
-
-	// The new session ID returned by ReplaceCLISession must match the one
-	// we signed the cert against. If they ever diverge, the cert URI SAN
-	// would not match the persisted session — refuse to return it.
-	if newSession.ID != newCLISessionID {
-		c.logger.Error("CLI rotation: session ID mismatch after replace",
-			"expected", newCLISessionID,
-			"actual", newSession.ID,
-		)
-		if revokeErr := c.pki.RevokeCertificate(newCertSerial, "rotation_session_id_mismatch"); revokeErr != nil {
-			c.logger.Error("CLI rotation: failed to revoke cert after session ID mismatch",
-				"error", revokeErr, "new_cert_serial", newCertSerial)
-		}
-		c.writeRotationError(w, fmt.Errorf("%s: session ID mismatch", constants.ErrCLIRotationFailed))
 		return
 	}
 
@@ -304,9 +284,9 @@ func (c *CLIRotationController) writeRotationError(w http.ResponseWriter, err er
 		return
 	}
 	switch {
-	case errors.Is(err, ErrCLISessionNotFound):
+	case errors.Is(err, constants.ErrCLISessionNotFound):
 		c.responder.Error(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, ErrCLISessionAlreadyDeactivated):
+	case errors.Is(err, constants.ErrCLISessionAlreadyDeactivated):
 		c.responder.Error(w, http.StatusConflict, err.Error())
 	case errors.Is(err, constants.ErrCLIRotationCSRRequired):
 		c.responder.Error(w, http.StatusBadRequest, err.Error())

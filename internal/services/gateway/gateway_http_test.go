@@ -767,6 +767,41 @@ func TestRemovedTrustScriptRoutes(t *testing.T) {
 	assert.NotEmpty(t, rr.Body.Bytes(), "ca-bundle must return a non-empty PEM bundle")
 }
 
+// TestRemovedCLIEnrollRoute verifies that the deprecated
+// POST /api/v1/auth/cli/enroll endpoint (handleCLIEnrollment) no longer
+// issues credentials on either the public HTTPS router or the plain HTTP
+// router. The handler was removed in 5f; the path must never return 200 with
+// a certificate. It fail-closes to mTLS auth rejection (401) on the public
+// router and is not registered on the plain HTTP router (404).
+func TestRemovedCLIEnrollRoute(t *testing.T) {
+	h, _, _ := setupTestHTTPHandler(t)
+
+	enrollBody := `{"cli_csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\n-----END CERTIFICATE REQUEST-----\n"}`
+
+	// Public HTTPS router: the path is no longer explicitly classified and
+	// the handler is gone, so it fail-closes to RouteAuthMTLS → 401 (never
+	// 200 with a cert).
+	publicRouter := h.buildPublicRouter()
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthCLIEnroll, bytes.NewReader([]byte(enrollBody)))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	publicRouter.ServeHTTP(rr, req)
+	assert.NotEqual(t, http.StatusOK, rr.Code, "enroll must not return 200 on public router")
+	assert.NotContains(t, rr.Body.String(), "cli_cert", "enroll must not issue a CLI certificate on public router")
+	assert.NotContains(t, rr.Body.String(), "BEGIN CERTIFICATE", "enroll must not return any certificate on public router")
+
+	// Plain HTTP router: the handler was never registered here either, so
+	// the path is a 404 (or fail-closed). Either way, never 200 with a cert.
+	httpRouter := h.buildHTTPRouter()
+	req = httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthCLIEnroll, bytes.NewReader([]byte(enrollBody)))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	httpRouter.ServeHTTP(rr, req)
+	assert.NotEqual(t, http.StatusOK, rr.Code, "enroll must not return 200 on plain HTTP router")
+	assert.NotContains(t, rr.Body.String(), "cli_cert", "enroll must not issue a CLI certificate on plain HTTP router")
+	assert.NotContains(t, rr.Body.String(), "BEGIN CERTIFICATE", "enroll must not return any certificate on plain HTTP router")
+}
+
 type errorReader struct{}
 
 func (e *errorReader) Read(p []byte) (n int, err error) {

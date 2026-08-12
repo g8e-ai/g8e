@@ -498,6 +498,12 @@ func csrPublicKeyFingerprint(csrPEM string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("parse CSR: %w", err)
 	}
+	// Verify the CSR signature integrity before trusting the embedded
+	// public key. A CSR with an invalid signature must not be used to
+	// bind a recovery request or compute a proof-of-possession fingerprint.
+	if err := csr.CheckSignature(); err != nil {
+		return "", fmt.Errorf("CSR signature verification failed: %w", err)
+	}
 	pubDER, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
 	if err != nil {
 		return "", fmt.Errorf("marshal public key: %w", err)

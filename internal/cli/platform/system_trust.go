@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -194,7 +195,7 @@ func verifyRootUsable(roots []*x509.Certificate, bundlePEM []byte, now func() ti
 			return nil
 		}
 	}
-	return fmt.Errorf("no certificate in the bundle chains to the identified root anchor")
+	return constants.ErrSystemTrustNoChainToAnchor
 }
 
 // parseBundleCerts decodes all CERTIFICATE PEM blocks from data and parses
@@ -250,7 +251,7 @@ func writeTempCert(certPEM []byte) (dir, path string, err error) {
 	if err != nil {
 		return "", "", fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 	}
-	path = dir + "/root.pem"
+	path = filepath.Join(dir, "root.pem")
 	if err = os.WriteFile(path, certPEM, constants.PermFilePrivate); err != nil {
 		os.RemoveAll(dir)
 		return "", "", fmt.Errorf("%w: %w", constants.ErrSystemTrustInstallFailed, err)

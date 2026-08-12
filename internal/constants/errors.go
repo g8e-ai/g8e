@@ -462,16 +462,18 @@ var (
 	ErrEnrollmentTokenConsumed          = errors.New("enrollment token has already been consumed")
 
 	// CLI recovery errors
-	ErrCLIRecoveryRequestFailed   = errors.New("CLI recovery request failed")
-	ErrCLIRecoveryRequestNotFound = errors.New("CLI recovery request not found")
-	ErrCLIRecoveryRequestExpired  = errors.New("CLI recovery request has expired")
-	ErrCLIRecoveryRequestConsumed = errors.New("CLI recovery request has already been consumed")
-	ErrCLIRecoveryRequestDenied   = errors.New("CLI recovery request was denied")
-	ErrCLIRecoveryProofInvalid    = errors.New("CLI recovery proof-of-possession signature is invalid")
-	ErrCLIRecoveryCSRMismatch     = errors.New("CLI recovery CSR does not match the original request")
-	ErrCLIRecoveryNotApproved     = errors.New("CLI recovery request has not been approved")
-	ErrCLIRotationFailed          = errors.New("CLI rotation failed")
-	ErrCLIRotationCSRRequired     = errors.New("cli_csr_pem is required for rotation")
+	ErrCLIRecoveryRequestFailed     = errors.New("CLI recovery request failed")
+	ErrCLIRecoveryRequestNotFound   = errors.New("CLI recovery request not found")
+	ErrCLIRecoveryRequestExpired    = errors.New("CLI recovery request has expired")
+	ErrCLIRecoveryRequestConsumed   = errors.New("CLI recovery request has already been consumed")
+	ErrCLIRecoveryRequestDenied     = errors.New("CLI recovery request was denied")
+	ErrCLIRecoveryProofInvalid      = errors.New("CLI recovery proof-of-possession signature is invalid")
+	ErrCLIRecoveryCSRMismatch       = errors.New("CLI recovery CSR does not match the original request")
+	ErrCLIRecoveryNotApproved       = errors.New("CLI recovery request has not been approved")
+	ErrCLIRotationFailed            = errors.New("CLI rotation failed")
+	ErrCLIRotationCSRRequired       = errors.New("cli_csr_pem is required for rotation")
+	ErrCLISessionNotFound           = errors.New("CLI session not found")
+	ErrCLISessionAlreadyDeactivated = errors.New("CLI session already deactivated")
 
 	// Passkey credential validation errors
 	ErrPasskeyCredentialInvalidID          = errors.New("passkey credential ID is empty")
@@ -497,6 +499,7 @@ var (
 	ErrSystemTrustElevationRequired = errors.New("elevated privileges required for system trust installation")
 	ErrSystemTrustUnsupported       = errors.New("system trust installation unsupported on this platform")
 	ErrSystemTrustDelegated         = errors.New("browser trust explicitly delegated to the administrator")
+	ErrSystemTrustNoChainToAnchor   = errors.New("no certificate in the bundle chains to the identified root anchor")
 
 	// Data command errors
 	ErrCollectionRequired         = errors.New("collection required")
@@ -1007,6 +1010,7 @@ var (
 	ErrWebSessionValidationFailed = errors.New("web session validation failed")
 	ErrWebSessionNotFound         = errors.New("web session not found")
 	ErrWebSessionExpired          = errors.New("web session expired")
+	ErrWebSessionAuthRequired     = errors.New("web session authentication required")
 	ErrJWTAuthNotConfigured       = errors.New("JWT authentication not configured")
 	ErrJWTTokenMissing            = errors.New("missing JWT token")
 	ErrJWTSignatureMissing        = errors.New("missing JWT bearer token")

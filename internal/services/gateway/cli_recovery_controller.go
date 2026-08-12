@@ -212,7 +212,7 @@ func (c *CLIRecoveryController) handleRecoveryApprove(w http.ResponseWriter, r *
 	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok || userID == "" {
 		c.logger.Warn("CLI recovery approve: missing authenticated user context")
-		c.responder.Error(w, http.StatusUnauthorized, "web session authentication required")
+		c.responder.Error(w, http.StatusUnauthorized, constants.ErrWebSessionAuthRequired.Error())
 		return
 	}
 
@@ -383,6 +383,17 @@ func (c *CLIRecoveryController) issueCLIIdentity(req *models.CLIRecoveryRequest)
 	orgID := user.ID // Use user ID as org ID (matches bootstrap/CLI-enroll pattern)
 	now := time.Now().UTC()
 
+	// Sign the CLI CSR stored in the recovery request BEFORE persisting any
+	// documents. A signing failure must not leave an orphaned operator
+	// document in the database.
+	cliCertPEM, cliCertChainPEM, err := c.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID, "")
+	if err != nil {
+		return models.CLIRecoveryCompleteResponse{}, fmt.Errorf("sign CLI CSR: %w", err)
+	}
+
+	cliCertFingerprint := calculateFingerprintFromPEM(cliCertPEM)
+	cliCertSerial := calculateSerialFromPEM(cliCertPEM)
+
 	// Create operator slot associated with this recovered CLI identity.
 	operator := &models.OperatorDocumentGo{
 		ID:                operatorID,
@@ -406,15 +417,6 @@ func (c *CLIRecoveryController) issueCLIIdentity(req *models.CLIRecoveryRequest)
 	if err := c.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
 		return models.CLIRecoveryCompleteResponse{}, fmt.Errorf("persist operator document: %w", err)
 	}
-
-	// Sign the CLI CSR stored in the recovery request.
-	cliCertPEM, cliCertChainPEM, err := c.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID, "")
-	if err != nil {
-		return models.CLIRecoveryCompleteResponse{}, fmt.Errorf("sign CLI CSR: %w", err)
-	}
-
-	cliCertFingerprint := calculateFingerprintFromPEM(cliCertPEM)
-	cliCertSerial := calculateSerialFromPEM(cliCertPEM)
 
 	// Persist CLI session linked to the operator session.
 	if err := c.cliSessionSvc.PersistCLISession(
