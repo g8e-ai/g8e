@@ -18,7 +18,6 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"log/slog"
-	"runtime"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -133,8 +132,7 @@ type EnrollmentCoordinatorDeps struct {
 // Nil fields get production defaults:
 //   - Gateway: a new *EnrollmentClient (plain HTTP, no mTLS).
 //   - Store: a new *CredentialStore over FileSvc/Cfg.
-//   - Keys: a defaultKeyProvider (file-backed EC P-256; Windows uses the
-//     Windows Certificate Store via the build-tag-resolved stub).
+//   - Keys: a FileKeyProvider (file-backed EC P-256 on all platforms).
 //   - Trust: a new *platform.SystemTrustInstaller (real os/exec).
 //   - Browser: a defaultBrowserOpener wrapping platform.OpenBrowser.
 //   - Passkey: a defaultPasskeyRegistrar wrapping RegisterPasskeyViaBrowser.
@@ -158,7 +156,7 @@ func NewEnrollmentCoordinator(deps EnrollmentCoordinatorDeps) *EnrollmentCoordin
 	}
 	keys := deps.Keys
 	if keys == nil {
-		keys = &defaultKeyProvider{}
+		keys = FileKeyProvider{}
 	}
 	trust := deps.Trust
 	if trust == nil {
@@ -518,29 +516,12 @@ func (c *EnrollmentCoordinator) generateCLICSR(ctx context.Context) (string, *ec
 var (
 	_ EnrollmentGateway    = (*EnrollmentClient)(nil)
 	_ SystemTrustInstaller = (*platform.SystemTrustInstaller)(nil)
-	_ KeyProvider          = (*defaultKeyProvider)(nil)
+	_ KeyProvider          = FileKeyProvider{}
 	_ BrowserOpener        = defaultBrowserOpener{}
 	_ PasskeyRegistrar     = (*defaultPasskeyRegistrar)(nil)
 )
 
 // --- Default implementations ---
-
-// defaultKeyProvider generates file-backed EC P-256 keys. On Windows it
-// uses the Windows Certificate Store via GenerateWindowsCSR (build-tag
-// resolved). Section 7 will replace this with a full KeyProvider
-// abstraction resolved by build tags; the coordinator never branches on
-// runtime.GOOS.
-type defaultKeyProvider struct {
-	useTPM bool
-}
-
-// GenerateCLIKeyAndCSR delegates to the platform-appropriate CSR generator.
-func (p *defaultKeyProvider) GenerateCLIKeyAndCSR(_ context.Context, commonName string) (string, *ecdsa.PrivateKey, error) {
-	if runtime.GOOS == "windows" {
-		return GenerateWindowsCSR(commonName, p.useTPM)
-	}
-	return GenerateCSR(commonName)
-}
 
 // defaultBrowserOpener wraps platform.OpenBrowser.
 type defaultBrowserOpener struct{}

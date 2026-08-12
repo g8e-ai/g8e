@@ -25,12 +25,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-func TestGenerateWindowsCSR_NonWindowsReturnsErrWindowsSpecificEnrollment(t *testing.T) {
-	_, _, err := GenerateWindowsCSR("test", false)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrWindowsSpecificEnrollment)
-}
-
 func TestImportCertificateToWindowsStore_NonWindowsReturnsErrWindowsCertStoreImport(t *testing.T) {
 	err := ImportCertificateToWindowsStore("dummy")
 	require.Error(t, err)

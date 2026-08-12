@@ -1233,7 +1233,7 @@ func enrollDemoHost(cmd *cobra.Command, org, demoDir string) (hostIdentity, erro
 	cmd.Printf("  This demo requires real human WebAuthn approvals.\n")
 	cmd.Printf("  Enrolling a passkey now (opens your browser)...\n\n")
 
-	if err := performEnroll(cmd, fileSvc, cfg, false); err != nil {
+	if err := performEnroll(cmd, fileSvc, cfg); err != nil {
 		return hostIdentity{}, fmt.Errorf("demos run: enroll: %w", err)
 	}
 

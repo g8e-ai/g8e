@@ -15,7 +15,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -54,14 +53,12 @@ func enrollCmdWithConfig(
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 	checkOperatorRunning func(*config.Config) error,
 ) *cobra.Command {
-	var useTPM bool
-
 	cmd := &cobra.Command{
 		Use:   "enroll",
 		Short: "Enroll CLI session with the running Gateway and register a passkey",
 		Long: `Enroll a CLI session with the running Gateway via CSR-based enrollment, then register a passkey for secure authentication. Generates client keypairs, submits CSRs to the Gateway's CA, saves signed mTLS credentials, and opens a browser to register a WebAuthn/FIDO2 passkey for web session authentication.
 
-On Windows, the CLI key is generated in the Windows Certificate Store and the signed certificate is imported for Windows Hello native API access. Use --tpm for TPM-backed keys via Windows Hello for Business.
+On Windows, the signed certificate is imported into the Windows Certificate Store for Windows Hello native API access.
 
 The Gateway must already be running (use './g8e gw start' first).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -79,21 +76,17 @@ The Gateway must already be running (use './g8e gw start' first).`,
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
-			return performEnroll(cmd, fileSvc, cfg, useTPM)
+			return performEnroll(cmd, fileSvc, cfg)
 		},
-	}
-
-	if runtime.GOOS == "windows" {
-		cmd.Flags().BoolVar(&useTPM, "tpm", false, "Use TPM-backed key via Windows Hello for Business")
 	}
 
 	return cmd
 }
 
 // performEnroll handles CLI session enrollment and browser-based passkey registration.
-// On Windows, it uses the Windows Certificate Store for key generation and imports
-// the signed cert for Windows Hello native API access.
-func performEnroll(cmd *cobra.Command, fileSvc fs.RuntimeFileService, cfg *config.Config, useTPM bool) error {
+// On Windows, the signed cert is imported into the Windows Certificate Store for
+// Windows Hello native API access.
+func performEnroll(cmd *cobra.Command, fileSvc fs.RuntimeFileService, cfg *config.Config) error {
 	ctx := context.Background()
 
 	// Check if local credentials exist
@@ -118,7 +111,7 @@ func performEnroll(cmd *cobra.Command, fileSvc fs.RuntimeFileService, cfg *confi
 	// No local credentials: first-time bootstrap or new CLI on an existing gateway.
 	if !hasLocalCreds {
 		cmd.Println("Performing CLI session enrollment...")
-		if err := auth.EnrollCLI(fileSvc, cfg, useTPM); err != nil {
+		if err := auth.EnrollCLI(fileSvc, cfg); err != nil {
 			return err
 		}
 		creds, err := auth.LoadCredentials(fileSvc, cfg)
@@ -159,13 +152,7 @@ func performEnroll(cmd *cobra.Command, fileSvc fs.RuntimeFileService, cfg *confi
 
 	cmd.Println("Generating keys and CSRs...")
 	hostname, _ := os.Hostname()
-	var cliCSR string
-	var cliKey *ecdsa.PrivateKey
-	if runtime.GOOS == "windows" {
-		cliCSR, cliKey, err = auth.GenerateWindowsCSR(fmt.Sprintf("g8e-cli-%s", hostname), useTPM)
-	} else {
-		cliCSR, cliKey, err = auth.GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
-	}
+	cliCSR, cliKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}

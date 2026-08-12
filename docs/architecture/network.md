@@ -129,14 +129,12 @@ The platform supports setup without requiring `/etc/hosts` changes or DNS config
 
 ### Windows Certificate Store Enrollment
 
-On Windows, `g8e auth enroll` auto-detects the platform and uses the Windows Certificate Store for CLI session enrollment. This certificate-based CLI enrollment is distinct from the browser-based WebAuthn passkey flow.
+On Windows, `g8e auth enroll` auto-detects the platform and imports the signed CLI certificate into the Windows Certificate Store. This certificate-based CLI enrollment is distinct from the browser-based WebAuthn passkey flow.
 
-1. **CLI Enrollment**: Run `g8e auth enroll [--tpm]` to generate an ECDSA P-256 keypair in the Windows Certificate Store.
+1. **CLI Enrollment**: Run `g8e auth enroll` to generate an ECDSA P-256 keypair and submit a CSR to the Governance Gateway.
 2. **CSR Signing**: The CLI submits a CSR to the Governance Gateway and receives a signed certificate with SPIFFE URI SAN.
 3. **Certificate Import**: The signed certificate is imported to the Windows Certificate Store for Windows Hello native API access.
 4. **Session Binding**: The Governance Gateway extracts the SPIFFE URI SAN from the client certificate and creates a `cli_session_id` bound to the user identity.
-
-**TPM-Backed Keys**: The `--tpm` flag (Windows-only) generates keys with TPM backing when available.
 
 ---
 

@@ -613,14 +613,6 @@ session enrollment. The signed certificate is imported to
 distinct from the browser-based WebAuthn passkey flow, which uses a
 cookie-based web session.
 
-### TPM-backed keys
-
-The `--tpm` flag requests TPM-backed keys via Windows Hello for
-Business. Currently, the implementation uses a software-backed key with
-TPM annotation. Full CNG API integration for hardware-backed keys is
-pending. If TPM enrollment fails, omit the `--tpm` flag and use
-software-backed keys.
-
 ### Keystore file-based fallback
 
 On Windows, the keystore uses only the file-based fallback for platform

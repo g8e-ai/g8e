@@ -1480,7 +1480,7 @@ func ensureCLIAuth(fileSvc fs.RuntimeFileService, cfg *config.Config) (*auth.Cre
 	creds, err := auth.LoadCredentials(fileSvc, cfg)
 	if err != nil || creds == nil {
 		fmt.Fprintf(os.Stderr, "[g8e] No CLI credentials found, enrolling...\n")
-		if err := auth.EnrollCLI(fileSvc, cfg, false); err != nil {
+		if err := auth.EnrollCLI(fileSvc, cfg); err != nil {
 			return nil, fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 		}
 		fmt.Fprintf(os.Stderr, "[g8e] CLI enrolled successfully\n")

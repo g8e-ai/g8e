@@ -80,7 +80,7 @@ The `auth enroll` command prepares the CLI identity, installs the gateway Root C
 
 **Windows-Specific Behavior:**
 
-On Windows, the CLI uses the Windows Certificate Store for key generation. The `--tpm` flag requests TPM-backed keys via Windows Hello for Business, though software-backed keys are currently used as a fallback. This is separate from browser-based WebAuthn passkeys.
+On Windows, the signed CLI certificate is imported into the Windows Certificate Store for Windows Hello native API access. CLI keys are file-backed ECDSA P-256 on all platforms. This is separate from browser-based WebAuthn passkeys.
 
 ### 1.2 Browser Authentication (Passkeys)
 

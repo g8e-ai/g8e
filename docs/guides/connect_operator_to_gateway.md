@@ -338,7 +338,7 @@ This command automatically checks certificate expiry and performs auto-renewal i
 
 **Windows Enrollment:**
 
-On Windows, `./g8e auth enroll` generates the CLI key in the Windows Certificate Store and imports the signed certificate for Windows Hello native API access. Use the `--tpm` flag to request TPM-backed key generation via Windows Hello for Business.
+On Windows, `./g8e auth enroll` imports the signed CLI certificate into the Windows Certificate Store for Windows Hello native API access. CLI keys are file-backed ECDSA P-256 on all platforms.
 
 ---
 

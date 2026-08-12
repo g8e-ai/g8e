@@ -17,15 +17,8 @@
 package auth
 
 import (
-	"crypto/ecdsa"
-
 	"github.com/g8e-ai/g8e/internal/constants"
 )
-
-// GenerateWindowsCSR is a stub for non-Windows platforms.
-func GenerateWindowsCSR(commonName string, useTPM bool) (string, *ecdsa.PrivateKey, error) {
-	return "", nil, constants.ErrWindowsSpecificEnrollment
-}
 
 // ImportCertificateToWindowsStore is a stub for non-Windows platforms.
 func ImportCertificateToWindowsStore(certPEM string) error {
