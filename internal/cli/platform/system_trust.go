@@ -131,6 +131,15 @@ func (i *SystemTrustInstaller) EnsureSystemTrust(ctx context.Context, bundlePEM 
 	return SystemTrustResult{Status: SystemTrustInstalled, Fingerprint: fingerprint}, nil
 }
 
+// ExtractRootAnchors parses every PEM certificate in bundlePEM, rejects
+// malformed or expired input, and returns the self-signed CA certificates
+// that serve as trust anchors. Exported so the enrollment trust-bundle
+// helper can derive OS-trust root anchors from the runtime bundle without
+// duplicating the parsing/validation logic.
+func ExtractRootAnchors(bundlePEM []byte, now func() time.Time) ([]*x509.Certificate, error) {
+	return extractRootAnchors(bundlePEM, now)
+}
+
 // extractRootAnchors parses every PEM certificate in bundlePEM, rejects
 // malformed or expired input, and returns the self-signed CA certificates
 // that serve as trust anchors.
@@ -198,6 +207,13 @@ func verifyRootUsable(roots []*x509.Certificate, bundlePEM []byte, now func() ti
 	return constants.ErrSystemTrustNoChainToAnchor
 }
 
+// ParseBundleCerts decodes all CERTIFICATE PEM blocks from data and parses
+// each into an x509.Certificate. Exported for reuse by the enrollment
+// trust-bundle helper.
+func ParseBundleCerts(data []byte) ([]*x509.Certificate, error) {
+	return parseBundleCerts(data)
+}
+
 // parseBundleCerts decodes all CERTIFICATE PEM blocks from data and parses
 // each into an x509.Certificate.
 func parseBundleCerts(data []byte) ([]*x509.Certificate, error) {
@@ -219,6 +235,12 @@ func parseBundleCerts(data []byte) ([]*x509.Certificate, error) {
 		certs = append(certs, cert)
 	}
 	return certs, nil
+}
+
+// CertFingerprint returns the hex-encoded SHA-256 hash of the certificate's
+// DER encoding. Exported for reuse by the enrollment trust-bundle helper.
+func CertFingerprint(cert *x509.Certificate) string {
+	return certFingerprint(cert)
 }
 
 // certFingerprint returns the hex-encoded SHA-256 hash of the certificate's
