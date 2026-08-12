@@ -44,6 +44,7 @@ type HTTPHandlerDependencies struct {
 	SignerControllerDeps          SignerControllerDeps
 	BootstrapControllerDeps       BootstrapControllerDeps
 	CLIRecoveryControllerDeps     CLIRecoveryControllerDeps
+	CLIRotationControllerDeps     CLIRotationControllerDeps
 	EnrollmentTokenControllerDeps EnrollmentTokenControllerDeps
 	UserControllerDeps            UserControllerDeps
 	SessionControllerDeps         SessionControllerDeps
@@ -73,6 +74,7 @@ type HTTPHandler struct {
 	signerController          *SignerController
 	bootstrapController       *BootstrapController
 	cliRecoveryController     *CLIRecoveryController
+	cliRotationController     *CLIRotationController
 	enrollmentTokenController *EnrollmentTokenController
 	userController            *UserController
 	sessionController         *SessionController
@@ -140,6 +142,28 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 		deps.CLIRecoveryControllerDeps.Responder = responder
 	}
 
+	// CLIRotationController shares the same shared services as recovery
+	// (PKI, CLISessionSvc, UserSvc). Defaults are filled from the
+	// bootstrap deps so callers only need to set overrides.
+	if deps.CLIRotationControllerDeps.Cfg == nil {
+		deps.CLIRotationControllerDeps.Cfg = deps.Cfg
+	}
+	if deps.CLIRotationControllerDeps.Logger == nil {
+		deps.CLIRotationControllerDeps.Logger = deps.Logger
+	}
+	if deps.CLIRotationControllerDeps.PKI == nil {
+		deps.CLIRotationControllerDeps.PKI = deps.BootstrapControllerDeps.PKI
+	}
+	if deps.CLIRotationControllerDeps.CLISessionSvc == nil {
+		deps.CLIRotationControllerDeps.CLISessionSvc = deps.BootstrapControllerDeps.CLISessionSvc
+	}
+	if deps.CLIRotationControllerDeps.UserSvc == nil {
+		deps.CLIRotationControllerDeps.UserSvc = deps.BootstrapControllerDeps.UserSvc
+	}
+	if deps.CLIRotationControllerDeps.Responder == nil {
+		deps.CLIRotationControllerDeps.Responder = responder
+	}
+
 	h := &HTTPHandler{
 		cfg:                       deps.Cfg,
 		logger:                    deps.Logger,
@@ -151,6 +175,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 		signerController:          newSignerController(deps.SignerControllerDeps),
 		bootstrapController:       newBootstrapController(deps.BootstrapControllerDeps),
 		cliRecoveryController:     newCLIRecoveryController(deps.CLIRecoveryControllerDeps),
+		cliRotationController:     newCLIRotationController(deps.CLIRotationControllerDeps),
 		enrollmentTokenController: newEnrollmentTokenController(deps.EnrollmentTokenControllerDeps),
 		userController:            newUserController(deps.UserControllerDeps),
 		sessionController:         newSessionController(deps.SessionControllerDeps),

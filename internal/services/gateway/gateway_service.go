@@ -494,6 +494,14 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			DocStore:           ls.docStore,
 			Responder:          ls.responder,
 		},
+		CLIRotationControllerDeps: CLIRotationControllerDeps{
+			Cfg:           cfg,
+			Logger:        logger,
+			PKI:           pki,
+			CLISessionSvc: cliSessionSvc,
+			UserSvc:       userSvc,
+			Responder:     ls.responder,
+		},
 		EnrollmentTokenControllerDeps: EnrollmentTokenControllerDeps{
 			Cfg:       cfg,
 			Logger:    logger,

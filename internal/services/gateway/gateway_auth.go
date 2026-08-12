@@ -127,6 +127,12 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addExact(constants.APIPaths.ApprovalsCLIList, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.AuthEnrollmentTokenGenerate, RouteAuthMTLS)
 
+	// CLI rotation — mTLS only. The caller's identity (user ID + active CLI
+	// session ID) is derived from the verified CLI certificate URI SAN.
+	// The fail-closed default already covers this path, but the explicit
+	// classification documents the requirement and is asserted by tests.
+	r.addExact(constants.APIPaths.AuthCLIRotate, RouteAuthMTLS)
+
 	// JIT passkey routes: RouteAuthNone when JWKS is enabled (JWT middleware handles auth),
 	// RouteAuthMTLS when JWKS is disabled (not accessible without mTLS).
 	if jwksEnabled {
