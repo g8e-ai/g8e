@@ -479,6 +479,13 @@ var (
 	ErrWindowsRegistryOpenKey    = errors.New("failed to open registry key")
 	ErrWindowsRegistryReadValue  = errors.New("failed to read registry value")
 
+	// System trust installation errors
+	ErrSystemTrustInvalidAnchor     = errors.New("invalid or missing trust anchor")
+	ErrSystemTrustInstallFailed     = errors.New("system trust installation failed")
+	ErrSystemTrustElevationRequired = errors.New("elevated privileges required for system trust installation")
+	ErrSystemTrustUnsupported       = errors.New("system trust installation unsupported on this platform")
+	ErrSystemTrustDelegated         = errors.New("browser trust explicitly delegated to the administrator")
+
 	// Data command errors
 	ErrCollectionRequired         = errors.New("collection required")
 	ErrOperatorSessionIDRequired  = errors.New("operator session id required")
