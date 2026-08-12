@@ -15,6 +15,8 @@ package cmd
 
 import (
 	"bytes"
+	"context"
+	"crypto/ecdsa"
 	"errors"
 	"testing"
 
@@ -434,7 +436,7 @@ func TestSecurityValidateCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 
 func TestSecurityPKIEnrollCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
-	cmd := securityPKIEnrollCmdWithConfig(configLoaderFor(cfg), panickingEnrollFunc(), failingFileSvcFactory(errFactory))
+	cmd := securityPKIEnrollCmdWithConfig(configLoaderFor(cfg), panickingRemoteOperatorEnrollerFactory(), failingFileSvcFactory(errFactory))
 	cmd.Flags().StringP("endpoint", "e", "localhost:8080", "Gateway endpoint")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -511,9 +513,17 @@ func TestComplianceOverlayCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	assert.ErrorIs(t, err, errFactory)
 }
 
-// panickingEnrollFunc returns an enrollFunc that panics if called.
-func panickingEnrollFunc() enrollFunc {
-	return func(*config.Config, string, string, string, string) (*auth.RegistrationResponse, error) {
-		panic("enroll should not be called when fileSvcFactory fails")
+// panickingRemoteOperatorEnrollerFactory returns a remoteOperatorEnroller
+// factory whose enroller panics if called. Used to assert that enrollment is
+// not attempted when an earlier dependency (e.g. fileSvcFactory) fails.
+func panickingRemoteOperatorEnrollerFactory() func(*config.Config) remoteOperatorEnroller {
+	return func(*config.Config) remoteOperatorEnroller {
+		return &panickingRemoteOperatorEnroller{}
 	}
+}
+
+type panickingRemoteOperatorEnroller struct{}
+
+func (p *panickingRemoteOperatorEnroller) EnrollRemoteOperator(_ context.Context, _, _ string, _ *ecdsa.PrivateKey, _ string, _ *ecdsa.PrivateKey, _ string) (auth.EnrollmentArtifacts, error) {
+	panic("enroll should not be called when fileSvcFactory fails")
 }

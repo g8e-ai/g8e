@@ -16,6 +16,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -41,13 +42,25 @@ import (
 
 var errMockEnroll = errors.New("enrollment server error")
 
+// mockRemoteOperatorEnroller is a test double for remoteOperatorEnroller.
+type mockRemoteOperatorEnroller struct {
+	artifacts auth.EnrollmentArtifacts
+	err       error
+	called    bool
+}
+
+func (m *mockRemoteOperatorEnroller) EnrollRemoteOperator(_ context.Context, _, _ string, _ *ecdsa.PrivateKey, _ string, _ *ecdsa.PrivateKey, _ string) (auth.EnrollmentArtifacts, error) {
+	m.called = true
+	return m.artifacts, m.err
+}
+
 // enrollCmdWithRoot wraps the enroll command under a root command that defines
 // the persistent --endpoint flag, matching the real CLI structure so that
 // cmd.Flags().GetString("endpoint") can find the inherited flag in tests.
-func enrollCmdWithRoot(configLoader func(string) (*config.Config, error), enroll enrollFunc) *cobra.Command {
+func enrollCmdWithRoot(configLoader func(string) (*config.Config, error), enroller remoteOperatorEnroller) *cobra.Command {
 	root := &cobra.Command{Use: "g8e"}
 	root.PersistentFlags().StringP("endpoint", "e", "", "Gateway endpoint (host or host:port)")
-	enrollCmd := securityPKIEnrollCmdWithConfig(configLoader, enroll, newFileSvc)
+	enrollCmd := securityPKIEnrollCmdWithConfig(configLoader, func(*config.Config) remoteOperatorEnroller { return enroller }, newFileSvc)
 	root.AddCommand(enrollCmd)
 	// Trigger cobra's persistent flag merging so cmd.Flags() can see the inherited --endpoint flag
 	_ = enrollCmd.ParseFlags([]string{})
@@ -102,19 +115,19 @@ func TestSecurityPKIEnrollCmd_API_MockHappyPath(t *testing.T) {
 	_, cfg := setupTestConfig(t, testutil.TempDir(t))
 	tmpDir := testutil.TempDir(t)
 
-	mockEnroll := func(_ *config.Config, _, _, _, _ string) (*auth.RegistrationResponse, error) {
-		return &auth.RegistrationResponse{
-			Success:           true,
-			OperatorID:        "op-test-123",
-			OperatorSessionID: "sess-test-456",
-			OperatorCert:      "-----BEGIN CERTIFICATE-----\nMIIBdummy==\n-----END CERTIFICATE-----",
-			OperatorCertChain: "-----BEGIN CERTIFICATE-----\nMIIBchain==\n-----END CERTIFICATE-----",
-		}, nil
+	enroller := &mockRemoteOperatorEnroller{
+		artifacts: auth.EnrollmentArtifacts{
+			Source:               auth.EnrollmentSourceRemoteOperator,
+			OperatorID:           "op-test-123",
+			OperatorSessionID:    "sess-test-456",
+			OperatorCertPEM:      "-----BEGIN CERTIFICATE-----\nMIIBdummy==\n-----END CERTIFICATE-----",
+			OperatorCertChainPEM: "-----BEGIN CERTIFICATE-----\nMIIBchain==\n-----END CERTIFICATE-----",
+		},
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 
-	cmd := enrollCmdWithRoot(loader, mockEnroll)
+	cmd := enrollCmdWithRoot(loader, enroller)
 	cmd.Flags().Set("endpoint", "127.0.0.1")
 	cmd.Flags().Set("output-dir", tmpDir)
 	var buf bytes.Buffer
@@ -132,20 +145,20 @@ func TestSecurityPKIEnrollCmd_API_MockHappyPathWithTrustBundle(t *testing.T) {
 	_, cfg := setupTestConfig(t, testutil.TempDir(t))
 	tmpDir := testutil.TempDir(t)
 
-	mockEnroll := func(_ *config.Config, _, _, _, _ string) (*auth.RegistrationResponse, error) {
-		return &auth.RegistrationResponse{
-			Success:           true,
-			OperatorID:        "op-trust",
-			OperatorSessionID: "sess-trust",
-			OperatorCert:      "-----BEGIN CERTIFICATE-----\nMIIBdummy==\n-----END CERTIFICATE-----",
-			OperatorCertChain: "-----BEGIN CERTIFICATE-----\nMIIBchain==\n-----END CERTIFICATE-----",
-			HubTrustBundle:    "-----BEGIN CERTIFICATE-----\nMIIBtrust==\n-----END CERTIFICATE-----",
-		}, nil
+	enroller := &mockRemoteOperatorEnroller{
+		artifacts: auth.EnrollmentArtifacts{
+			Source:               auth.EnrollmentSourceRemoteOperator,
+			OperatorID:           "op-trust",
+			OperatorSessionID:    "sess-trust",
+			OperatorCertPEM:      "-----BEGIN CERTIFICATE-----\nMIIBdummy==\n-----END CERTIFICATE-----",
+			OperatorCertChainPEM: "-----BEGIN CERTIFICATE-----\nMIIBchain==\n-----END CERTIFICATE-----",
+			TrustBundlePEM:       "-----BEGIN CERTIFICATE-----\nMIIBtrust==\n-----END CERTIFICATE-----",
+		},
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 
-	cmd := enrollCmdWithRoot(loader, mockEnroll)
+	cmd := enrollCmdWithRoot(loader, enroller)
 	cmd.Flags().Set("endpoint", "192.168.1.50")
 	cmd.Flags().Set("output-dir", tmpDir)
 	var buf bytes.Buffer
@@ -161,12 +174,11 @@ func TestSecurityPKIEnrollCmd_API_MissingEndpoint(t *testing.T) {
 	_, cfg := setupTestConfig(t, testutil.TempDir(t))
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	mockEnroll := func(_ *config.Config, _, _, _, _ string) (*auth.RegistrationResponse, error) {
-		t.Fatal("enroll should not be called when endpoint is missing")
-		return nil, nil
+	enroller := &mockRemoteOperatorEnroller{
+		err: fmt.Errorf("enroll should not be called when endpoint is missing"),
 	}
 
-	cmd := enrollCmdWithRoot(loader, mockEnroll)
+	cmd := enrollCmdWithRoot(loader, enroller)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -180,12 +192,11 @@ func TestSecurityPKIEnrollCmd_API_ConfigLoadError(t *testing.T) {
 	loader := func(string) (*config.Config, error) {
 		return nil, constants.ErrConfigLoadFailed
 	}
-	mockEnroll := func(_ *config.Config, _, _, _, _ string) (*auth.RegistrationResponse, error) {
-		t.Fatal("enroll should not be called on config load failure")
-		return nil, nil
+	enroller := &mockRemoteOperatorEnroller{
+		err: fmt.Errorf("enroll should not be called on config load failure"),
 	}
 
-	cmd := enrollCmdWithRoot(loader, mockEnroll)
+	cmd := enrollCmdWithRoot(loader, enroller)
 	cmd.Flags().Set("endpoint", "127.0.0.1")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -199,13 +210,11 @@ func TestSecurityPKIEnrollCmd_API_ConfigLoadError(t *testing.T) {
 func TestSecurityPKIEnrollCmd_API_EnrollError(t *testing.T) {
 	_, cfg := setupTestConfig(t, testutil.TempDir(t))
 
-	mockEnroll := func(_ *config.Config, _, _, _, _ string) (*auth.RegistrationResponse, error) {
-		return nil, errMockEnroll
-	}
+	enroller := &mockRemoteOperatorEnroller{err: errMockEnroll}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 
-	cmd := enrollCmdWithRoot(loader, mockEnroll)
+	cmd := enrollCmdWithRoot(loader, enroller)
 	cmd.Flags().Set("endpoint", "127.0.0.1")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -219,17 +228,17 @@ func TestSecurityPKIEnrollCmd_API_EnrollError(t *testing.T) {
 func TestSecurityPKIEnrollCmd_API_MissingCertInResponse(t *testing.T) {
 	_, cfg := setupTestConfig(t, testutil.TempDir(t))
 
-	mockEnroll := func(_ *config.Config, _, _, _, _ string) (*auth.RegistrationResponse, error) {
-		return &auth.RegistrationResponse{
-			Success:      true,
-			OperatorID:   "op-nocert",
-			OperatorCert: "",
-		}, nil
+	enroller := &mockRemoteOperatorEnroller{
+		artifacts: auth.EnrollmentArtifacts{
+			Source:         auth.EnrollmentSourceRemoteOperator,
+			OperatorID:     "op-nocert",
+			OperatorCertPEM: "",
+		},
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 
-	cmd := enrollCmdWithRoot(loader, mockEnroll)
+	cmd := enrollCmdWithRoot(loader, enroller)
 	cmd.Flags().Set("endpoint", "127.0.0.1")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)

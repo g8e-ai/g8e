@@ -14,13 +14,11 @@
 package auth
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/hex"
@@ -28,10 +26,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
-	"log/slog"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"os/user"
@@ -44,7 +39,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/pkg/certutil"
-	"github.com/g8e-ai/g8e/internal/services/auth"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
@@ -91,20 +85,6 @@ func RemoveTrustBundleFS(fileSvc fs.RuntimeFileService, cfg *config.Config) erro
 // isNotFound checks if an error indicates the file does not exist.
 func isNotFound(err error) bool {
 	return errors.Is(err, constants.ErrNotFound) || errors.Is(err, os.ErrNotExist)
-}
-
-type RegistrationResponse struct {
-	Success           bool   `json:"success"`
-	OperatorSessionID string `json:"operator_session_id"`
-	CLISessionID      string `json:"cli_session_id"`
-	OperatorID        string `json:"operator_id"`
-	OperatorCert      string `json:"operator_cert"`
-	OperatorCertChain string `json:"operator_cert_chain,omitempty"`
-	CLICert           string `json:"cli_cert"`
-	CLICertChain      string `json:"cli_cert_chain,omitempty"`
-	HubTrustBundle    string `json:"hub_trust_bundle,omitempty"`
-	UserID            string `json:"user_id,omitempty"`
-	Error             string `json:"error,omitempty"`
 }
 
 type Credentials struct {
@@ -197,272 +177,6 @@ func VerifyCAFingerprint(caPEM []byte, expectedFingerprint string) error {
 	}
 
 	return nil
-}
-
-// BootstrapWithURL allows overriding the gateway URL for testing.
-// If baseURL is empty, it uses cfg.OperatorDiscoveryURL().
-func BootstrapWithURL(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint string, baseURL string) (*RegistrationResponse, error) {
-	// Generate proper system fingerprint
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	systemFp, err := auth.GenerateSystemFingerprint(logger)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
-	}
-
-	// Get local OS user information to send to gateway
-	localOSUser := getLocalOSUser()
-
-	req := models.BootstrapRequest{
-		CSR:               operatorCSR,
-		CLICSR:            cliCSR,
-		SystemFingerprint: systemFp.Fingerprint,
-		LocalOSUser:       localOSUser,
-	}
-
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
-	}
-
-	// Use bootstrap port (plain HTTP) for initial bootstrap
-	discoveryURL := cfg.OperatorDiscoveryURL()
-	if baseURL != "" {
-		discoveryURL = baseURL
-	}
-	url := fmt.Sprintf("%s%s", discoveryURL, constants.APIPaths.AuthBootstrap)
-	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
-	}
-
-	httpReq.Header.Set(constants.HeaderContentType, constants.HeaderValueApplicationJSON)
-
-	// Use plain HTTP client for bootstrap (no TLS required)
-	client := &http.Client{Timeout: httpTimeout}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
-	}
-
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
-	}
-
-	var regResp RegistrationResponse
-	if err := json.Unmarshal(respBody, &regResp); err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
-	}
-
-	if regResp.Error != "" {
-		return nil, fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, regResp.Error)
-	}
-
-	// Verify CA bundle fingerprint if pin is provided
-	if caFingerprint != "" && regResp.HubTrustBundle != "" {
-		if err := VerifyCAFingerprint([]byte(regResp.HubTrustBundle), caFingerprint); err != nil {
-			return nil, fmt.Errorf("%w: %w", constants.ErrValidationFailed, err)
-		}
-	}
-
-	return &regResp, nil
-}
-
-// CLIEnroll performs CLI-only enrollment after bootstrap when local CLI credentials are missing.
-// This is used when the gateway is already bootstrapped but the CLI has lost its credentials.
-// It uses the plain HTTP bootstrap port since the CLI has no mTLS credentials.
-// If baseURL is empty, it uses cfg.OperatorDiscoveryURL().
-func CLIEnroll(cfg *config.Config, cliCSR string, baseURL string) (*RegistrationResponse, error) {
-	// Generate proper system fingerprint
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	systemFp, err := auth.GenerateSystemFingerprint(logger)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
-	}
-
-	// Get local OS user information to send to gateway
-	localOSUser := getLocalOSUser()
-
-	req := models.CLIEnrollRequest{
-		CLICSR:            cliCSR,
-		SystemFingerprint: systemFp.Fingerprint,
-		LocalOSUser:       localOSUser,
-	}
-
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
-	}
-
-	// Use bootstrap port (plain HTTP) for CLI enrollment
-	discoveryURL := cfg.OperatorDiscoveryURL()
-	if baseURL != "" {
-		discoveryURL = baseURL
-	}
-	url := fmt.Sprintf("%s%s", discoveryURL, constants.APIPaths.AuthCLIEnroll)
-	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
-	}
-
-	httpReq.Header.Set(constants.HeaderContentType, constants.HeaderValueApplicationJSON)
-
-	// Use plain HTTP client for enrollment (no TLS required)
-	client := &http.Client{Timeout: httpTimeout}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
-	}
-
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
-	}
-
-	var regResp RegistrationResponse
-	if err := json.Unmarshal(respBody, &regResp); err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
-	}
-
-	if regResp.Error != "" {
-		return nil, fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, regResp.Error)
-	}
-
-	return &regResp, nil
-}
-
-// ReEnroll performs CSR-based re-enrollment using existing mTLS credentials.
-// This is used when the platform is already bootstrapped and the CLI has valid certificates.
-func ReEnroll(fileSvc fs.RuntimeFileService, cfg *config.Config, operatorCSR, cliCSR string, caFingerprint string) (*RegistrationResponse, error) {
-	// Generate proper system fingerprint
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	systemFp, err := auth.GenerateSystemFingerprint(logger)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
-	}
-
-	// Fetch current trust bundle from Operator bootstrap endpoint to handle CA rotation
-	discoveryURL := cfg.OperatorDiscoveryURL()
-	trustBundleURL := fmt.Sprintf("%s%s", discoveryURL, constants.APIPaths.WellKnownPKICABundle)
-	client := &http.Client{Timeout: httpTimeout}
-	trustBundleResp, err := client.Get(trustBundleURL)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
-	}
-	defer trustBundleResp.Body.Close()
-
-	// Accept 2xx status codes as success (200 OK, 201 Created, etc.)
-	if trustBundleResp.StatusCode < http.StatusOK || trustBundleResp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, trustBundleResp.StatusCode)
-	}
-
-	currentTrustBundle, err := io.ReadAll(trustBundleResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
-	}
-
-	if len(currentTrustBundle) == 0 {
-		return nil, constants.ErrEmptyTrustBundle
-	}
-
-	// Verify CA bundle fingerprint if pin is provided
-	if caFingerprint != "" {
-		if err := VerifyCAFingerprint(currentTrustBundle, caFingerprint); err != nil {
-			return nil, fmt.Errorf("%w: %w", constants.ErrValidationFailed, err)
-		}
-	}
-
-	// Load existing CLI certificate for mTLS
-	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
-	}
-
-	// Use the freshly fetched trust bundle for TLS verification
-	caPEM := currentTrustBundle
-
-	caPool := x509.NewCertPool()
-	if !caPool.AppendCertsFromPEM(caPEM) {
-		return nil, constants.ErrCAParseFailed
-	}
-
-	tlsConfig := &tls.Config{
-		RootCAs:      caPool,
-		Certificates: []tls.Certificate{cliCert},
-		MinVersion:   tls.VersionTLS13,
-	}
-
-	transport := &http.Transport{
-		TLSClientConfig: tlsConfig,
-	}
-
-	client = &http.Client{Transport: transport, Timeout: httpTimeout}
-
-	req := models.BootstrapRequest{
-		CSR:               operatorCSR,
-		CLICSR:            cliCSR,
-		SystemFingerprint: systemFp.Fingerprint,
-	}
-
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
-	}
-
-	publicURL := cfg.OperatorPublicURL()
-	url := fmt.Sprintf("%s%s", publicURL, constants.APIPaths.PKIDevicesEnroll)
-	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
-	}
-
-	httpReq.Header.Set(constants.HeaderContentType, constants.HeaderValueApplicationJSON)
-
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		// Check if this is a TLS certificate verification error (stale trust bundle)
-		if isCertificateVerificationError(err) {
-			return nil, fmt.Errorf("%w: %w", constants.ErrTrustBundleStale, err)
-		}
-		return nil, fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
-	}
-
-	// Accept 2xx status codes as success (200 OK, 201 Created, etc.)
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
-	}
-
-	var regResp RegistrationResponse
-	if err := json.Unmarshal(respBody, &regResp); err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
-	}
-
-	if regResp.Error != "" {
-		return nil, fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, regResp.Error)
-	}
-
-	// Write updated trust bundle only after successful mTLS enrollment
-	if err := WriteTrustBundleFS(fileSvc, cfg, currentTrustBundle, constants.PermFilePublic); err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
-	}
-
-	return &regResp, nil
 }
 
 // isCertificateVerificationError checks if an error is a TLS certificate verification error
@@ -613,35 +327,6 @@ func CheckOperatorRunningAtURL(operatorURL string) error {
 	return nil
 }
 
-// CheckBootstrapStatus returns whether the platform has been bootstrapped.
-// If baseURL is empty, it uses cfg.OperatorDiscoveryURL().
-func CheckBootstrapStatus(cfg *config.Config, baseURL string) (bool, error) {
-	// Check remote bootstrap status via bootstrap port (plain HTTP)
-	discoveryURL := cfg.OperatorDiscoveryURL()
-	if baseURL != "" {
-		discoveryURL = baseURL
-	}
-	url := fmt.Sprintf("%s%s", discoveryURL, constants.APIPaths.AuthBootstrapStatus)
-	client := &http.Client{Timeout: httpTimeout}
-	resp, err := client.Get(url)
-	if err != nil {
-		return false, fmt.Errorf("%w: %w", constants.ErrServiceUnavailable, err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return false, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
-	}
-
-	var statusResp models.BootstrapStatusResponse
-	if err := json.Unmarshal(respBody, &statusResp); err != nil {
-		return false, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
-	}
-
-	return statusResp.Bootstrapped, nil
-}
-
 // parseCertPEM parses a PEM-encoded certificate file from the runtime directory and returns the x509 certificate.
 func parseCertPEM(fileSvc fs.RuntimeFileService, certRelPath string) (*x509.Certificate, error) {
 	certPEM, err := fileSvc.ReadFile(context.Background(), certRelPath)
@@ -670,156 +355,4 @@ func CheckCertExpiry(fileSvc fs.RuntimeFileService, certRelPath string) (bool, e
 	}
 
 	return isCertExpiringSoon(cert), nil
-}
-
-// AutoRenewCertificate performs automatic re-enrollment if the certificate is expiring soon.
-// This is a fail-closed operation: if renewal fails, it returns an error rather than falling back.
-func AutoRenewCertificate(fileSvc fs.RuntimeFileService, cfg *config.Config, certType string, caFingerprint string) error {
-	var certAbsPath string
-	switch certType {
-	case "cli":
-		certAbsPath = cfg.CLICertFile()
-	case "operator":
-		certAbsPath = cfg.OperatorCertFile()
-	default:
-		return constants.ErrValidationFailed
-	}
-
-	certRelPath, err := fileSvc.RelFromAbs(certAbsPath)
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCertParseFailed, err)
-	}
-
-	expiringSoon, err := CheckCertExpiry(fileSvc, certRelPath)
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCertParseFailed, err)
-	}
-
-	if !expiringSoon {
-		return nil
-	}
-
-	hostname, err := os.Hostname()
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrNetworkGetHostname, err)
-	}
-
-	cliCSR, cliKey, err := GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
-	}
-
-	regResp, err := ReEnroll(fileSvc, cfg, "", cliCSR, caFingerprint)
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
-	}
-
-	if regResp.CLISessionID == "" || regResp.CLICert == "" {
-		return constants.ErrMissingRequiredField
-	}
-
-	cliCertRel, err := fileSvc.RelFromAbs(cfg.CLICertFile())
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
-	}
-	cliKeyRel, err := fileSvc.RelFromAbs(cfg.CLIKeyFile())
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
-	}
-	if err := SaveCertAndKey(fileSvc, regResp.CLICert, regResp.CLICertChain, cliKey, cliCertRel, cliKeyRel); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
-	}
-
-	if regResp.HubTrustBundle != "" {
-		if err := WriteTrustBundleFS(fileSvc, cfg, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
-		}
-	}
-
-	creds := &Credentials{
-		OperatorSessionID: regResp.OperatorSessionID,
-		UserID:            regResp.UserID,
-		OperatorID:        regResp.OperatorID,
-		CLISessionID:      regResp.CLISessionID,
-	}
-
-	if err := SaveCredentials(fileSvc, cfg, creds); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrFileWriteFailed, err)
-	}
-
-	return nil
-}
-
-// EnrollWithGateway enrolls a device with a remote Gateway via CSR-based enrollment.
-// This is used for deploying operators on remote hosts that need to connect to a central Gateway.
-func EnrollWithGateway(cfg *config.Config, gatewayEndpoint, operatorCSR, cliCSR string, caFingerprint string) (*RegistrationResponse, error) {
-	// Generate proper system fingerprint
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	systemFp, err := auth.GenerateSystemFingerprint(logger)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
-	}
-
-	hostname, err := os.Hostname()
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrNetworkGetHostname, err)
-	}
-
-	req := models.DeviceEnrollRequest{
-		CSR:               operatorCSR,
-		CLICSR:            cliCSR,
-		SystemFingerprint: systemFp.Fingerprint,
-		Hostname:          hostname,
-	}
-
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
-	}
-
-	// Use the device enrollment endpoint for initial enrollment (no mTLS required)
-	url := fmt.Sprintf("http://%s%s", gatewayEndpoint, constants.APIPaths.AuthDeviceEnroll)
-	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
-	}
-
-	httpReq.Header.Set(constants.HeaderContentType, constants.HeaderValueApplicationJSON)
-
-	// For initial enrollment without mTLS, use plain HTTP client
-	client := &http.Client{Timeout: httpTimeout}
-
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
-	}
-
-	// Accept 2xx status codes as success (200 OK, 201 Created, etc.)
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
-	}
-
-	var regResp RegistrationResponse
-	if err := json.Unmarshal(respBody, &regResp); err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
-	}
-
-	if !regResp.Success {
-		return nil, fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, regResp.Error)
-	}
-
-	// Verify CA bundle fingerprint if pin is provided
-	if caFingerprint != "" && regResp.HubTrustBundle != "" {
-		if err := VerifyCAFingerprint([]byte(regResp.HubTrustBundle), caFingerprint); err != nil {
-			return nil, fmt.Errorf("%w: %w", constants.ErrValidationFailed, err)
-		}
-	}
-
-	return &regResp, nil
 }

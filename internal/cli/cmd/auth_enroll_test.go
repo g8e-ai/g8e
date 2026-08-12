@@ -160,6 +160,8 @@ func TestLogoutCmdWithConfig_RemovesLocalCredentials(t *testing.T) {
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
+	ctx := context.Background()
+	cmd.SetContext(ctx)
 
 	require.NoError(t, cmd.RunE(cmd, nil))
 	assert.Contains(t, buf.String(), "Logged out successfully")

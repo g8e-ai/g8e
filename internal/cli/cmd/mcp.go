@@ -1471,10 +1471,6 @@ func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, 
 	if enrollResult.UserID == "" || enrollResult.CLISessionID == "" {
 		return fmt.Errorf("%w: enrollment returned empty identity", constants.ErrEnrollmentFailed)
 	}
-	creds := &auth.Credentials{
-		UserID:       enrollResult.UserID,
-		CLISessionID: enrollResult.CLISessionID,
-	}
 
 	// Enroll the agent as an external app for audit trail attribution
 	appID, appCert, appKey, err := auth.EnrollAgentApp(fileSvc, cfg, strings.ToLower(agentID))

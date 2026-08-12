@@ -58,6 +58,7 @@ func TestLogoutCmd(t *testing.T) {
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
+		cmd.SetContext(context.Background())
 
 		err := cmd.RunE(cmd, []string{})
 		require.NoError(t, err)

@@ -355,10 +355,43 @@ func (c *EnrollmentClient) EnrollRemoteOperator(ctx context.Context, gatewayEndp
 	if operatorKey != nil {
 		artifacts.OperatorKeyPEM = encodePrivateKeyPEM(operatorKey)
 	}
-	if err := validateLocalCLI(artifacts, caFingerprint); err != nil {
-		return EnrollmentArtifacts{}, err
+	// When a CLI CSR was supplied, validate the full local-CLI artifact set
+	// (session/user/cert/trust bundle/fingerprint/cert-key match). When the
+	// caller passed an empty CLI CSR (headless operator-only enrollment, e.g.
+	// `security pki enroll`), the gateway does not issue CLI credentials, so
+	// only the operator cert is required and the trust bundle/fingerprint pin
+	// are validated opportunistically when present.
+	if cliCSR != "" {
+		if err := validateLocalCLI(artifacts, caFingerprint); err != nil {
+			return EnrollmentArtifacts{}, err
+		}
+	} else {
+		if err := validateRemoteOperator(artifacts, caFingerprint); err != nil {
+			return EnrollmentArtifacts{}, err
+		}
 	}
 	return artifacts, nil
+}
+
+// validateRemoteOperator validates the operator-only enrollment artifact set
+// returned when EnrollRemoteOperator is called with an empty CLI CSR. The
+// operator certificate is required; the trust bundle and CA fingerprint pin
+// are validated only when both are present (the trust bundle is optional for
+// headless operator enrollment).
+func validateRemoteOperator(a EnrollmentArtifacts, caFingerprint string) error {
+	if a.OperatorCertPEM == "" {
+		return constants.ErrMissingCertificate
+	}
+	if a.TrustBundlePEM != "" && caFingerprint != "" {
+		bundle, err := ParseTrustBundle([]byte(a.TrustBundlePEM), time.Now())
+		if err != nil {
+			return fmt.Errorf("%w: %w", constants.ErrValidationFailed, err)
+		}
+		if err := bundle.VerifyFingerprintPin(caFingerprint); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // CheckBootstrapStatus reports whether the gateway has been bootstrapped
