@@ -87,7 +87,7 @@ func TestPerformEnroll_NoLocalCredsGatewayDownReturnsError(t *testing.T) {
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
-	err := performEnroll(cmd, fileSvc, cfg, false)
+	err := performEnroll(cmd, fileSvc, cfg)
 	require.Error(t, err)
 }
 
@@ -107,7 +107,7 @@ func TestPerformEnroll_WithLocalCredsGatewayDownReturnsError(t *testing.T) {
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
-	err := performEnroll(cmd, fileSvc, cfg, false)
+	err := performEnroll(cmd, fileSvc, cfg)
 	require.Error(t, err)
 }
 
