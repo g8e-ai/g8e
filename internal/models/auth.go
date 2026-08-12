@@ -558,7 +558,7 @@ const (
 // the CSR public-key fingerprint for proof-of-possession at completion,
 // and the approving user ID after the browser approval step.
 type CLIRecoveryRequest struct {
-	ID                string           `json:"id"`                           // Request ID (UUID)
+	ID                string           `json:"request_id"`                   // Request ID (UUID)
 	TokenHash         string           `json:"token_hash"`                   // SHA-256 hash of the opaque token (hex)
 	CLICSRPEM         string           `json:"cli_csr_pem"`                  // CSR submitted by the new CLI
 	CSRFingerprint    string           `json:"csr_fingerprint"`              // SHA-256 of the CSR public key (hex)
