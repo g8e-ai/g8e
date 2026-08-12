@@ -20,8 +20,6 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -474,21 +472,4 @@ func (s *CredentialStore) ResolveCLIKeyPath() string {
 // external path if configured, otherwise the default runtime path).
 func (s *CredentialStore) ResolveTrustBundlePath() string {
 	return s.cfg.ResolvedTrustBundlePath()
-}
-
-// fileExists is a small helper used by Inspect classification paths that
-// need to distinguish "absent" from "present but unreadable".
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
-// ensureDir is a small helper for external (custom) paths that may not
-// have their parent directory created yet.
-func ensureDir(path string) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, constants.PermDirPrivate); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
-	}
-	return nil
 }

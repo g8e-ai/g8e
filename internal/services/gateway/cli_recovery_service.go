@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -492,7 +491,7 @@ func decodeCLIRecoveryRequest(doc *models.Document) (*models.CLIRecoveryRequest,
 func csrPublicKeyFingerprint(csrPEM string) (string, error) {
 	block, _ := pem.Decode([]byte(csrPEM))
 	if block == nil || block.Type != "CERTIFICATE REQUEST" {
-		return "", errors.New("invalid CSR PEM")
+		return "", fmt.Errorf("%w: invalid CSR PEM", constants.ErrPEMDecodeFailed)
 	}
 	csr, err := x509.ParseCertificateRequest(block.Bytes)
 	if err != nil {

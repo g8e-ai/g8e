@@ -17,8 +17,6 @@ import (
 	"context"
 	"crypto/x509"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -157,21 +155,6 @@ func WriteTrustBundleToDisk(ctx context.Context, fileSvc fs.RuntimeFileService, 
 func RemoveTrustBundleFromDisk(ctx context.Context, fileSvc fs.RuntimeFileService, cfg *config.Config) error {
 	if err := RemoveTrustBundleFS(fileSvc, cfg); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
-	}
-	return nil
-}
-
-// ensureTrustBundleDir is a small helper for external (custom) bundle paths
-// that may not have their parent directory created yet. It is a no-op for
-// the default runtime path, which is created by the file service.
-func ensureTrustBundleDir(cfg *config.Config) error {
-	custom := cfg.CustomTrustBundlePath()
-	if custom == "" {
-		return nil
-	}
-	dir := filepath.Dir(custom)
-	if err := os.MkdirAll(dir, constants.PermDirPrivate); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 	}
 	return nil
 }
