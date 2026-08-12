@@ -93,14 +93,11 @@ Clients enroll in the platform using a Certificate Signing Request (CSR) bootstr
 
 ### Trusting the Self-Signed Root CA
 
-Since the Governance Gateway acts as a self-signed CA, clients must explicitly trust the platform Root CA to allow secure HTTPS communication, especially for browser-based WebAuthn registration. The gateway serves platform-specific bootstrap scripts that automate the installation of the CA bundle into the system trust store.
+Since the Governance Gateway acts as a self-signed CA, clients must explicitly trust the platform Root CA to allow secure HTTPS communication, especially for browser-based WebAuthn registration. The `auth enroll` command installs the platform Root CA into the OS trust store as part of the interactive enrollment flow, before opening the browser for the passkey ceremony.
 
-| Platform | Endpoint | Action |
-| :--- | :--- | :--- |
-| **Linux/macOS** | `/web-cert.sh` | Downloads CA and installs to system store via `update-ca-certificates`. |
-| **Windows** | `/web-cert.ps1` | Downloads CA and installs to Root store via `Import-Certificate`. |
+If automatic OS trust installation fails, `auth enroll` stops before opening the browser and returns actionable remediation. Use `--no-system-trust` only when an administrator has already installed the Root CA on the host; it does not skip the passkey ceremony.
 
-After running any trust script, users must restart all open browsers. Browsers cache certificate trust state, and WebAuthn registration fails if the browser does not recognize the platform CA.
+After installing the Root CA, restart any browser that was already running so the new trust anchor is recognized. Firefox and other browser-private trust stores may require separate handling.
 
 ### CLI Endpoint Override Flags
 
@@ -156,7 +153,7 @@ Default ports:
 
 ### Port Constraints
 
-- **HTTP Surface** (`8080`): Serves plain HTTP for health checks, state endpoint, trust scripts (`/web-cert.sh`, `/web-cert.ps1`), CA bundle and fingerprint discovery, enrollment endpoints, deploy scripts, and node binary distribution.
+- **HTTP Surface** (`8080`): Serves plain HTTP for health checks, state endpoint, CA bundle and fingerprint discovery, enrollment endpoints, deploy scripts, and node binary distribution.
 - **HTTPS Surface** (`8443`): Accepts optional client certificates at the transport layer, allowing public access to browser-based assets while requiring application-layer mTLS verification for all governed execution routes. All governed execution endpoints and operator routes require a verified SPIFFE identity via client certificate, while public routes (the Console SPA, static assets, CA bundle, CRL, and WebAuthn browser endpoints) are accessible directly. When JWKS is configured, MCP and A2A endpoints accept JWT authentication as an alternative to mTLS for BYO clients.
 - **Collision Prevention**: The gateway fails startup if multiple logical surfaces are assigned to the same port, ensuring no downgrade of the mTLS execution boundary.
 

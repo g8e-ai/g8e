@@ -720,19 +720,6 @@ paths:
       summary: Get PKI fingerprint
       tags:
       - pki
-  /.well-known/g8e/pki/trust-windows:
-    get:
-      description: Returns the Windows CA trust script (alias endpoint)
-      produces:
-      - text/plain
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: string
-      summary: Web cert trust script (Windows alias)
-      tags:
-      - bootstrap
   /api/v1/approvals:
     get:
       description: Lists suspended transactions pending L3 passkey approval for the
@@ -1355,32 +1342,6 @@ paths:
       summary: State root
       tags:
       - state
-  /web-cert.ps1:
-    get:
-      description: Returns the Windows CA trust script for remote workstations
-      produces:
-      - text/plain
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: string
-      summary: Web cert trust script (Windows)
-      tags:
-      - bootstrap
-  /web-cert.sh:
-    get:
-      description: Returns a combined Linux/macOS CA trust script for remote workstations
-      produces:
-      - text/plain
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: string
-      summary: Web cert trust script (Linux/macOS)
-      tags:
-      - bootstrap
   /ws/v1/pubsub:
     get:
       description: |-

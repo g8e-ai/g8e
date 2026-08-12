@@ -74,12 +74,9 @@ This ensures that sensitive session identifiers are never exposed in browser his
 
 **Trusting the Gateway Certificate:**
 
-Since the Gateway uses self-signed certificates, you must trust the platform's Root CA before browser-based operations work:
+The `auth enroll` command prepares the CLI identity, installs the gateway Root CA into the OS trust store before opening a browser, and then runs the human passkey ceremony. Use `--no-system-trust` only when an administrator has already installed the Root CA on the host; it does not skip the passkey step.
 
-- **Linux/macOS**: `curl -fsSL http://<gateway-ip>:8080/web-cert.sh | sh`
-- **Windows**: `irm http://<gateway-ip>:8080/web-cert.ps1 | iex`
-
-**Important**: After running a trust script, restart all browsers for the CA to be recognized.
+**Important**: If a browser was already running before the Root CA was installed, restart it so the new trust anchor is recognized. Firefox and other browser-private trust stores may require separate handling.
 
 **Windows-Specific Behavior:**
 

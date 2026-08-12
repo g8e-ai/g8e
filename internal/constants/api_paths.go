@@ -121,10 +121,6 @@ var APIPaths = struct {
 	WellKnownPKIFingerprint string `json:"well_known_pki_fingerprint"`
 	WellKnownBinPrefix      string `json:"well_known_bin_prefix"`
 	WellKnownPKIPrefix      string `json:"well_known_pki_prefix"`
-	WellKnownTrustWindows   string `json:"well_known_trust_windows"`
-	// Web cert trust scripts (for remote workstations)
-	WebCertLinux   string `json:"web_cert_linux"`
-	WebCertWindows string `json:"web_cert_windows"`
 	// Deploy scripts
 	DeployScriptLinux   string `json:"deploy_script_linux"`
 	DeployScriptWindows string `json:"deploy_script_windows"`
@@ -254,10 +250,6 @@ var APIPaths = struct {
 	WellKnownPKIFingerprint: "/.well-known/g8e/pki/fingerprint",
 	WellKnownBinPrefix:      "/.well-known/g8e/bin/",
 	WellKnownPKIPrefix:      "/.well-known/g8e/pki/",
-	WellKnownTrustWindows:   "/.well-known/g8e/pki/trust-windows",
-	// Web cert trust scripts (for remote workstations)
-	WebCertLinux:   "/web-cert.sh",
-	WebCertWindows: "/web-cert.ps1",
 	// Deploy scripts
 	DeployScriptLinux:   "/" + DeployScriptFilenameLinux,
 	DeployScriptWindows: "/" + DeployScriptFilenameWindows,

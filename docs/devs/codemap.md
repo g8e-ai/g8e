@@ -159,7 +159,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   ├── consensus.ConsensusService (injected at construction time; nil = not configured for posture)
 │   │   ├── governance.EnvelopeProcessor (injected at construction time; nil = not configured for posture)
 │   │   └── response.Writer
-│   ├── gateway.PKIController (PKI enrollment, CSR signing, trust scripts, deploy scripts)
+│   ├── gateway.PKIController (PKI enrollment, CSR signing, CA bundle discovery, deploy scripts)
 │   │   ├── gateway.PKIAuthority [SHARED]
 │   │   ├── gateway.AppEnrollmentService [SHARED]
 │   │   ├── gateway.RegistrationService [SHARED]
@@ -347,7 +347,7 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 
 ### Gateway HTTP Dual-Router Architecture
 - **`buildPublicRouter`** (HTTPS port): Full API surface with mTLS middleware via `auth.Middleware`. Routes include governance envelopes, audit, PKI management, user management, MCP/A2A ingress, SSE, pub/sub, console SPA, passkey endpoints, and approval UI. WebSessionAuth-protected routes bypass mTLS and use cookie-based auth with their own middleware. The landing page (`/`) redirects to `/console/`.
-- **`buildHTTPRouter`** (HTTP port): Bootstrap-only surface for CA discovery, trust scripts, deploy scripts, CLI enrollment, and state endpoint. All other paths redirect to HTTPS. Wrapped with rate limiting and path traversal guard.
+- **`buildHTTPRouter`** (HTTP port): Bootstrap-only surface for CA discovery, deploy scripts, CLI enrollment, and state endpoint. All other paths redirect to HTTPS. Wrapped with rate limiting and path traversal guard.
 - **`RouteAuthRegistry`** classifies every route by its authentication mode (`RouteAuthNone`, `RouteAuthMTLS`, `RouteAuthWebSession`, `RouteAuthDual`). Exact paths are matched with highest priority, then prefix matches. Unknown routes default to `RouteAuthMTLS` (fail-closed). When JWKS is enabled, MCP/A2A and JIT passkey routes are reclassified to `RouteAuthNone` (JWT middleware handles auth).
 - **`PrivilegedRouteRegistry`** blocks app certificates from governance envelope submission and query endpoints. Only operator and CLI auth are accepted on these routes.
 - **`gateway_http_middleware.go`**: `rateLimitMiddleware` applies per-IP token bucket rate limiting with 5-minute stale entry cleanup. `pathTraversalGuard` rejects requests containing `..` path segments before ServeMux normalization.

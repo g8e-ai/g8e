@@ -96,8 +96,7 @@ HTTP route paths for the Gateway REST API, defined as a struct `APIPaths` with J
 - Approval: `Approvals`, `ApprovalsByID`, `ApprovalsPrefix`, `ApprovePage`, `ApprovePagePrefix`, `ApprovalsCLIStatus`, `ApprovalsCLIList`
 - Admin: `AdminAppPoliciesBySigner`, `AdminAppsRevoke`, `AdminAppPoliciesPrefix`, `AdminConsensus`, `AdminConsensusByID`, `AdminConsensusPrefix`
 - Consensus: `ConsensusDeliberate` (`/consensus/v1/deliberate`)
-- Well-known: `WellKnownPKICABundle`, `WellKnownPKIFingerprint`, `WellKnownBinPrefix`, `WellKnownPKIPrefix`, `WellKnownTrustWindows`
-- Trust scripts: `WebCertLinux` (`/web-cert.sh`), `WebCertWindows` (`/web-cert.ps1`)
+- Well-known: `WellKnownPKICABundle`, `WellKnownPKIFingerprint`, `WellKnownBinPrefix`, `WellKnownPKIPrefix`
 - Deploy scripts: `DeployScriptLinux` (`/g8e-deploy.sh`), `DeployScriptWindows` (`/g8e-deploy.ps1`)
 - Health: `Health` (`/api/v1/health`)
 - State: `State` (`/api/v1/state`)

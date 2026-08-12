@@ -81,11 +81,6 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addPrefix(constants.APIPaths.WellKnownPKIPrefix, RouteAuthNone)
 	r.addPrefix(constants.APIPaths.WellKnownBinPrefix, RouteAuthNone)
 
-	// Web cert trust script endpoints (public for remote workstations)
-	r.addExact(constants.APIPaths.WebCertLinux, RouteAuthNone)
-	r.addExact(constants.APIPaths.WebCertWindows, RouteAuthNone)
-	r.addExact(constants.APIPaths.WellKnownTrustWindows, RouteAuthNone)
-
 	// Deploy script endpoints (public for initial deployment)
 	r.addExact(constants.APIPaths.DeployScriptLinux, RouteAuthNone)
 	r.addExact(constants.APIPaths.DeployScriptWindows, RouteAuthNone)

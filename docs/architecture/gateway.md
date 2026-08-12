@@ -114,7 +114,7 @@ By passing `--posture doctrine`, `--posture consensus`, or `--posture notary`, t
 
 The Governance Gateway exposes two logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port. See [Network Architecture](./network.md) for detailed port topology, authentication requirements, and port constraints.
 
-**HTTP Port (8080)**: Plain HTTP for bootstrap enrollment and PKI discovery endpoints only. This port serves the platform trust scripts (e.g., `/web-cert.sh`, `/web-cert.ps1`) required for self-signed CA trust. No MCP routes are available on this port.
+**HTTP Port (8080)**: Plain HTTP for bootstrap enrollment and PKI discovery endpoints only. This port serves CA bundle and fingerprint discovery, deploy scripts, and node binary distribution. OS trust installation is handled by `auth enroll`, not by HTTP-served scripts. No MCP routes are available on this port.
 
 **HTTPS Port (8443)**: mTLS for all routes including API, public, enrollment, and MCP endpoints. MCP endpoints require mTLS authentication (or JWT when JWKS is configured). The public HTTPS router also serves Swagger UI at `/swagger/*` and the OpenAPI specification at `/swagger/doc.json`, providing interactive API documentation.
 
@@ -136,7 +136,7 @@ The gateway builds two distinct HTTP routers, one per protocol surface. The rout
 
 ### Bootstrap HTTP Router
 
-Served on the HTTP port (8080), this router handles only bootstrap and PKI discovery endpoints. It registers health, state, bootstrap enrollment, CLI and device enrollment, PKI apps enrollment, CSR signing, CA bundle and fingerprint discovery, trust script download (Linux and Windows), node binary download, and deploy script routes. A catch-all handler redirects all non-bootstrap requests to HTTPS, validating the Host header against localhost, loopback, RFC 1918 private IPs, and configured endpoints before reflecting it into the redirect target. Unrecognized hosts fall back to a safe default to prevent open-redirect abuse. The router is wrapped with path traversal guard and rate limiting middleware.
+Served on the HTTP port (8080), this router handles only bootstrap and PKI discovery endpoints. It registers health, state, bootstrap enrollment, CLI and device enrollment, PKI apps enrollment, CSR signing, CA bundle and fingerprint discovery, node binary download, and deploy script routes. A catch-all handler redirects all non-bootstrap requests to HTTPS, validating the Host header against localhost, loopback, RFC 1918 private IPs, and configured endpoints before reflecting it into the redirect target. Unrecognized hosts fall back to a safe default to prevent open-redirect abuse. The router is wrapped with path traversal guard and rate limiting middleware.
 
 ### Public HTTPS Router
 

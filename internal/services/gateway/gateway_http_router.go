@@ -43,7 +43,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 		http.ServeFile(w, r, paths.SwaggerFilePath)
 	})
 
-	// Bootstrap routes (CA discovery, trust scripts) - now on public HTTPS
+	// Bootstrap routes (CA discovery) - now on public HTTPS
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
 	mux.HandleFunc(constants.APIPaths.PKICRL, h.pkiController.handlePKIRevocationBundle)
@@ -208,9 +208,6 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
 
-	mux.HandleFunc(constants.APIPaths.WebCertLinux, h.pkiController.handleTrustScriptLinux)
-	mux.HandleFunc(constants.APIPaths.WebCertWindows, h.pkiController.handleTrustScriptWindows)
-	mux.HandleFunc("/.well-known/g8e/pki/trust-windows", h.pkiController.handleTrustScriptWindowsAlias)
 	mux.HandleFunc("/.well-known/g8e/bin/", h.pkiController.handleNodeBinaryDownload)
 	mux.HandleFunc(constants.APIPaths.DeployScriptLinux, h.pkiController.handleDeployScriptLinux)
 	mux.HandleFunc(constants.APIPaths.DeployScriptWindows, h.pkiController.handleDeployScriptWindows)

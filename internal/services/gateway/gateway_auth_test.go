@@ -336,6 +336,31 @@ func TestRouteAuthRegistry_PasskeyRoutes(t *testing.T) {
 	}
 }
 
+// TestRouteAuthRegistry_RemovedTrustScriptPaths verifies that the deprecated
+// trust-script paths are no longer classified as RouteAuthNone. /web-cert.sh and
+// /web-cert.ps1 were exact RouteAuthNone entries that have been removed; they must
+// now fail-closed to RouteAuthMTLS. The /.well-known/g8e/pki/ prefix remains
+// RouteAuthNone so that ca-bundle and fingerprint discovery still work, but the
+// removed trust-windows handler is simply no longer registered (asserted at the
+// router level in gateway_http_test.go).
+func TestRouteAuthRegistry_RemovedTrustScriptPaths(t *testing.T) {
+
+	registry := NewRouteAuthRegistry(false)
+
+	// Removed exact RouteAuthNone entries must default to RouteAuthMTLS.
+	removedExactPaths := []string{
+		"/web-cert.sh",
+		"/web-cert.ps1",
+	}
+	for _, path := range removedExactPaths {
+		assert.Equal(t, RouteAuthMTLS, registry.AuthMode(path), "removed path %s should default to RouteAuthMTLS (fail-closed)", path)
+	}
+
+	// The PKI well-known prefix must remain RouteAuthNone so CA discovery works.
+	assert.Equal(t, RouteAuthNone, registry.AuthMode(constants.APIPaths.WellKnownPKICABundle), "ca-bundle must remain RouteAuthNone")
+	assert.Equal(t, RouteAuthNone, registry.AuthMode(constants.APIPaths.WellKnownPKIFingerprint), "fingerprint must remain RouteAuthNone")
+}
+
 func TestRouteAuthRegistry_SSEDualAuth(t *testing.T) {
 
 	registry := NewRouteAuthRegistry(false)

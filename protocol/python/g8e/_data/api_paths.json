@@ -77,8 +77,6 @@
   "admin_app_policies_prefix": "/api/v1/admin/app-policies/",
   "well_known_pki_ca_bundle": "/.well-known/g8e/pki/ca-bundle",
   "well_known_pki_fingerprint": "/.well-known/g8e/pki/fingerprint",
-  "web_cert_linux": "/web-cert.sh",
-  "web_cert_windows": "/web-cert.ps1",
   "deploy_script_linux": "/g8e-deploy.sh",
   "deploy_script_windows": "/g8e-deploy.ps1",
   "health": "/api/v1/health",
