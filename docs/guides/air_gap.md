@@ -30,7 +30,7 @@ In an air-gapped deployment, the g8e Gateway operates as the central Policy Deci
 
 The gateway exposes two logical communication surfaces:
 
-- **HTTP (port 8080)**: Serves health checks, local trust bundles, bootstrap CA trust scripts, device and app enrollment, deploy scripts, and binary downloads. Unregistered paths return 404.
+- **HTTP (port 8080)**: Serves health checks, local trust bundles, CA discovery, CLI recovery request/status/complete (token-scoped), device and app enrollment, deploy scripts, and binary downloads. Unregistered paths return 404. The old trust-script routes (`/web-cert.sh`, `/web-cert.ps1`, `/.well-known/g8e/pki/trust-windows`) are removed; OS trust installation is handled by `auth enroll` directly.
 - **HTTPS (port 8443)**: Receives governance envelope mutation payloads, handles persistence, runs WebSocket pub/sub and SSE event streaming, serves MCP and A2A ingress, provides WebAuthn passkey authentication, and hosts the browser management console.
 
 Surfaces with conflicting TLS client-authentication requirements do not share a network port. The initialization sequence validates port isolation and fails if configurations overlap.

@@ -83,13 +83,13 @@ The g8e Gateway exposes two consolidated protocol surfaces. Each surface serves 
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **HTTP Surface** | 8080 (HTTP) | None | Health checks, bootstrap enrollment, PKI discovery endpoints, deploy scripts |
+| **HTTP Surface** | 8080 (HTTP) | None | Health checks, bootstrap enrollment, CLI recovery request/status/complete (token-scoped), PKI discovery endpoints, deploy scripts |
 | **HTTPS Surface** | 8443 (TLS) | mTLS (app-layer) + URI SAN | Governance envelopes, MCP/A2A APIs, document store, WebSocket pub/sub, console SPA |
 
 ### Port Separation
 
 The g8e Gateway enforces strict port separation for security:
-- **HTTP Surface**: Plain HTTP for health checks, bootstrap enrollment, PKI discovery, and deploy scripts. No MCP, A2A, governance, or mutation endpoints are exposed on this surface.
+- **HTTP Surface**: Plain HTTP for health checks, bootstrap enrollment, CLI recovery request/status/complete (token-scoped), PKI discovery, and deploy scripts. The old trust-script routes and `handleCLIEnrollment` are removed. No MCP, A2A, governance, or mutation endpoints are exposed on this surface.
 - **HTTPS Surface**: TLS-protected surface for all governance, MCP, A2A, document store, WebSocket, and console routes. Every route is classified into one of four auth modes: public (no auth), mTLS (client certificate required), web session (cookie-based browser auth), and dual (mTLS preferred, cookie fallback).
 
 Public routes (health, console SPA, bootstrap, passkey console, approval page) bypass mTLS. mTLS routes require a valid client certificate. Web session routes validate a session cookie. Dual routes try mTLS first and fall back to cookie auth.
@@ -434,7 +434,7 @@ All authentication to the Gateway uses CSR-based enrollment. The first human to 
 3. **Client receives certificate**: The client gets `client.crt` (signed by the Gateway's CA)
    and uses it with its private key for all subsequent authentication
 4. **Short-lived by design**: Leaf certificates expire after 7 days, limiting the lifetime of a compromised key
-5. **Certificate renewal**: Clients must re-enroll before certificate expiry
+5. **Certificate renewal**: Clients must re-enroll before certificate expiry. The enrollment coordinator reuses valid credentials without rotation; use `--rotate-cli` to force rotation. Partial or corrupt credentials trigger the one-time human-approved recovery flow.
 
 #### Device Enrollment
 

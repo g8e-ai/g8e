@@ -244,4 +244,7 @@ func TestCredentialStore_ClearRetainsTrustBundle(t *testing.T) {
 	bundleExists, err = fileSvc.FileExists(context.Background(), cfg.DefaultTrustBundleRelPath())
 	require.NoError(t, err)
 	assert.True(t, bundleExists, "Clear must NOT remove the runtime trust bundle (shared OS root CA)")
+
+	// Calling Clear a second time when files are already gone is idempotent and succeeds.
+	require.NoError(t, store.Clear(context.Background()))
 }

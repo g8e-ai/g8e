@@ -113,7 +113,7 @@ Generate an mTLS client certificate from the Gateway via CSR-based enrollment:
 ./g8e auth enroll
 ```
 
-This generates a local keypair, submits a CSR to the Gateway CA, and stores the signed certificate in `.g8e/cli.crt` with the private key in `.g8e/cli.key`. Enrollment opens a browser to register a WebAuthn passkey on all platforms. On Windows, the CLI key is generated in the Windows Certificate Store and the signed certificate is imported for Windows Hello native API access. The Gateway must be running before enrollment (`./g8e gw start`).
+This generates a local keypair, submits a CSR to the Gateway CA, and stores the signed certificate in `.g8e/cli.crt` with the private key in `.g8e/cli.key`. The command installs the gateway Root CA into the OS trust store before opening the browser for the passkey ceremony. Use `--no-system-trust` only if an administrator has already installed the Root CA. After trust installation, restart any already-running browser. On Windows, the signed certificate is imported into the Windows Certificate Store for Windows Hello native API access. CLI keys are file-backed ECDSA P-256 on all platforms. The Gateway must be running before enrollment (`./g8e gw start`).
 
 ### Step 2: Fetch State Root
 

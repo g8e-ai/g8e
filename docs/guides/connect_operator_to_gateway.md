@@ -330,7 +330,13 @@ When the mTLS certificate expires, re-authenticate using:
 ./g8e auth enroll
 ```
 
-This command automatically checks certificate expiry and performs auto-renewal if needed. For remote device enrollment, use CSR-based enrollment:
+The enrollment coordinator checks the local credential state. If credentials are complete and valid, they are reused without rotation. If credentials are partial or corrupt, the coordinator initiates the one-time human-approved recovery flow. To force certificate rotation (e.g., before expiry), use:
+
+```bash
+./g8e auth enroll --rotate-cli
+```
+
+Rotation is mTLS-protected — the caller's identity is derived from the existing CLI certificate. Only one replacement certificate is issued per run. For remote device enrollment, use CSR-based enrollment:
 
 ```bash
 ./g8e gw security pki enroll -e <gateway-ip>

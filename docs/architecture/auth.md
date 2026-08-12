@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-08-07
-Version: v1.7.0
+Last Updated: 2026-08-12
+Version: v1.7.2
 
 This document explains how to authenticate and authorize actions in the g8e platform. The platform is built as a zero-trust execution environment where every action is verified before execution.
 
@@ -21,22 +21,37 @@ Authentication is how you prove your identity to the platform. The g8e platform 
 
 ### 1.1 CLI Authentication
 
-The CLI uses mTLS certificates for authentication. When you run `g8e auth enroll`, the CLI generates its own key pair and asks the Gateway to sign a certificate attesting that "this public key belongs to this identity."
+The CLI uses mTLS certificates for authentication. When you run `g8e auth enroll`, the `EnrollmentCoordinator` orchestrates the entire enrollment state machine — inspecting local credentials, deciding between reuse, bootstrap, recovery, or rotation, and running the human passkey ceremony.
 
 **Key Concepts:**
 - No shared secrets or API keys to leak
 - You prove your identity by signing with your private key on every call
 - The Gateway acts as the Certificate Authority (CA)
+- A single coordinator (`EnrollmentCoordinator`) owns all local CLI enrollment state transitions
+- Local credentials are managed atomically by `CredentialStore` (staged writes, 0600 permissions, no torn state)
 
-**Enrollment Process:**
+**Enrollment State Machine:**
 
-There are three enrollment scenarios:
+The `EnrollmentCoordinator` classifies the local CLI identity on disk into one of four states and takes the appropriate action:
+
+| State | Condition | Coordinator Action |
+|------|-----------|-------------------|
+| **Complete** | CLI cert, CLI key, and credentials JSON all present and valid | **Reuse** — no new certificate is issued. The existing identity is used as-is. |
+| **Absent** | No local credentials found | **Bootstrap** — CLI connects over plain HTTP, Gateway bootstraps itself, then runs the passkey ceremony. |
+| **Partial** | Some credential files present but others missing | **Recovery** — initiates the one-time human-approved recovery flow (see below). Does NOT silently overwrite. |
+| **Corrupt** | Credential files present but fail validation (e.g., expired cert, key mismatch) | **Recovery** or **Rotation** depending on the nature of the corruption. |
+
+Healthy `auth enroll` runs with a complete identity do not rotate credentials unexpectedly. The `--rotate-cli` flag forces rotation even when the identity is complete.
+
+**Enrollment Scenarios:**
 
 | Scenario | When It Happens | How It Works |
 |----------|----------------|--------------|
 | **First-time setup** | Gateway never bootstrapped | CLI connects over plain HTTP to the gateway HTTP port, Gateway bootstraps itself |
-| **New CLI on existing gateway** | Gateway exists, no local credentials | CLI connects over plain HTTP, Gateway enrolls CLI |
-| **Re-enrollment** | Credentials exist, need rotation | CLI uses existing mTLS cert to request new cert |
+| **New CLI on existing gateway** | Gateway exists, no local credentials | CLI bootstraps, generates an enrollment token, opens browser for passkey ceremony |
+| **Recovery (partial/corrupt)** | Some credentials missing or invalid | One-time human-approved recovery flow via console SPA (see below) |
+| **Rotation** | Credentials valid but `--rotate-cli` flag used, or cert near expiry | mTLS-protected rotation: one replacement certificate per run |
+| **Reuse** | Credentials complete and valid | No action needed — existing identity reused |
 
 **Two-Phase Enrollment & Split Endpoint Flags:**
 
@@ -72,11 +87,42 @@ To prevent exposing raw session identifiers in browser history, referrer headers
 
 This ensures that sensitive session identifiers are never exposed in browser history or referrer headers, while maintaining the security of the enrollment flow.
 
-**Trusting the Gateway Certificate:**
+**System Trust Installation:**
 
-The `auth enroll` command prepares the CLI identity, installs the gateway Root CA into the OS trust store before opening a browser, and then runs the human passkey ceremony. Use `--no-system-trust` only when an administrator has already installed the Root CA on the host; it does not skip the passkey step.
+By default, `auth enroll` installs the gateway Root CA into the OS trust store **before** opening the browser for the passkey ceremony. This ensures the browser recognizes the gateway's TLS certificate during the WebAuthn flow.
 
-**Important**: If a browser was already running before the Root CA was installed, restart it so the new trust anchor is recognized. Firefox and other browser-private trust stores may require separate handling.
+- If system trust installation fails, the coordinator **stops before launching the browser**. The user sees the error and guidance to restart the browser after manually installing the Root CA.
+- Use `--no-system-trust` only when an administrator has already installed the Root CA on the host. This is an administrator-managed trust opt-out — it does **not** skip the passkey step, and it does **not** enable headless enrollment.
+- After trust installation, **restart any already-running browser** so the new trust anchor is recognized.
+- Firefox and other browsers with private trust stores may require separate handling even after OS trust is installed.
+
+**CLI Recovery Flow (One-Time Human Approval):**
+
+When local credentials are partial or corrupt, the coordinator initiates a recovery flow that requires one-time human approval through the console SPA:
+
+1. CLI sends a recovery request to `/api/v1/auth/cli/recovery/request` (public, token-scoped)
+2. Gateway creates a recovery record with an opaque token and bounded TTL
+3. CLI opens the browser to the console SPA with the token in the URL **fragment** (`#recovery=1&token=<token>`) — the token never appears in server logs, referrer headers, or browser history
+4. An authenticated user (existing browser session) approves the recovery at `/api/v1/auth/cli/recovery/approve` (web-session protected)
+5. CLI polls `/api/v1/auth/cli/recovery/status` until the recovery is approved or expires
+6. On approval, CLI calls `/api/v1/auth/cli/recovery/complete` to receive a new CLI certificate
+7. The recovery token is one-time-use; expired or replayed tokens are rejected
+
+The recovery flow is the only path for a CLI with partial or corrupt credentials. There is no silent overwrite or fallback to plain-HTTP enrollment.
+
+**CLI Rotation Flow (mTLS-Protected):**
+
+When the `--rotate-cli` flag is used or the certificate is near expiry, the coordinator initiates rotation:
+
+1. CLI uses its existing mTLS certificate to authenticate to `/api/v1/auth/cli/rotate`
+2. The caller's identity (user ID + active CLI session ID) is derived from the verified mTLS certificate URI SAN — not from request body fields
+3. Gateway issues a replacement CLI certificate and revokes the old one
+4. Only **one replacement certificate** is issued per rotation run
+5. Rotation is classified as `RouteAuthMTLS` — it is never available on plain HTTP
+
+**Logout Ownership Policy:**
+
+`g8e auth logout` removes local CLI credential material (credentials JSON, CLI certificate, CLI key) but does **NOT** remove the shared OS Root CA. The Root CA is a shared trust anchor that may be used by other processes or users on the host. Removing it would break other enrolled CLIs or browser sessions on the same machine. An administrator must manually remove the Root CA if needed.
 
 **Windows-Specific Behavior:**
 
@@ -308,15 +354,38 @@ The vault is required. On first run, the gateway auto-initializes a new vault wi
 2. Run `g8e auth enroll` to enroll your CLI
    - For default ports: `g8e auth enroll`
    - For Docker demos with split ports: `g8e auth enroll -e localhost:<httpPort> --port <httpsPort>`
-3. Trust the Gateway CA (run the appropriate script for your OS)
-4. Restart your browser
-5. Navigate to the Console and register a passkey
+   - The coordinator installs the gateway Root CA into the OS trust store automatically before opening the browser
+   - If trust installation fails, the browser does not open — resolve the trust issue and re-run
+   - Use `--no-system-trust` only if an administrator has already installed the Root CA
+3. Restart your browser (so it recognizes the newly installed Root CA)
+4. Complete the passkey ceremony in the browser
+5. Your CLI identity is now enrolled and ready for use
+
+### 6.1.1 Recovering a CLI
+
+If your local CLI credentials are partial or corrupt (e.g., files were accidentally deleted, cert expired):
+
+1. Run `g8e auth enroll` — the coordinator detects the partial/corrupt state
+2. The coordinator initiates the recovery flow and opens the browser
+3. An authenticated user approves the recovery in the console SPA
+4. The coordinator receives a new CLI certificate and commits it atomically
+
+### 6.1.2 Rotating a CLI Certificate
+
+To manually rotate your CLI certificate (e.g., before expiry):
+
+1. Run `g8e auth enroll --rotate-cli`
+2. The coordinator uses your existing mTLS certificate to request rotation
+3. A replacement certificate is issued and the old one is revoked
+4. Only one replacement is issued per run
 
 ### 6.2 Daily Usage
 
 **CLI:**
 - Your enrolled certificate handles authentication automatically
-- Run `g8e auth enroll` again if your certificate expires
+- Run `g8e auth enroll` again — if your identity is complete and valid, it is reused without rotation
+- Run `g8e auth enroll --rotate-cli` to force certificate rotation
+- If credentials are partial or corrupt, the coordinator automatically initiates the recovery flow
 
 **Browser:**
 - Navigate to `https://<gateway-ip>:8443/console/`

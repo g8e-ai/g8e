@@ -1,7 +1,7 @@
 # Network Architecture
 
-Last Updated: 2026-08-07
-Version: v1.7.0
+Last Updated: 2026-08-12
+Version: v1.7.2
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
 
@@ -99,6 +99,20 @@ If automatic OS trust installation fails, `auth enroll` stops before opening the
 
 After installing the Root CA, restart any browser that was already running so the new trust anchor is recognized. Firefox and other browser-private trust stores may require separate handling.
 
+### CLI Recovery and Rotation Routes
+
+The old `handleCLIEnrollment` endpoint (`/api/v1/auth/cli/enroll`) and the trust-script routes (`/web-cert.sh`, `/web-cert.ps1`, `/.well-known/g8e/pki/trust-windows`) have been **removed**. They are replaced by the following routes:
+
+| Route | Port | Auth | Purpose |
+|------|------|------|---------|
+| `/api/v1/auth/cli/recovery/request` | HTTP + HTTPS | Public (token-scoped) | Create a recovery request for partial/corrupt CLI credentials |
+| `/api/v1/auth/cli/recovery/status` | HTTP + HTTPS | Public (token-scoped) | Poll recovery request status |
+| `/api/v1/auth/cli/recovery/approve` | HTTPS only | Web session (browser) | Human approval of a recovery request via console SPA |
+| `/api/v1/auth/cli/recovery/complete` | HTTP + HTTPS | Public (token-scoped) | Complete recovery and receive a new CLI certificate |
+| `/api/v1/auth/cli/rotate` | HTTPS only | mTLS only | Rotate an existing CLI certificate (one replacement per run) |
+
+The recovery request, status, and complete endpoints are reachable over both plain HTTP and HTTPS so a new CLI without trusted TLS can initiate recovery. The approve endpoint is HTTPS-only because it requires a web-session cookie, which is only set over TLS. The rotation endpoint is HTTPS-only and mTLS-protected — it is never registered on the plain HTTP router.
+
 ### CLI Endpoint Override Flags
 
 When the gateway's HTTP and HTTPS ports are mapped to different host ports, such as in Docker environments where container ports 8080 and 8443 are exposed on host ports 8085 and 8448, the CLI provides flags to independently override each endpoint:
@@ -146,12 +160,12 @@ Default ports:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **HTTP (Bootstrap)** | `8080` (plain HTTP) | No TLS | Health checks, state endpoint, trust establishment scripts, CA discovery, enrollment, deploy scripts, and node binary distribution. |
+| **HTTP (Bootstrap)** | `8080` (plain HTTP) | No TLS | Health checks, state endpoint, CA discovery, CLI recovery request/status/complete, deploy scripts, and node binary distribution. |
 | **HTTPS (Merged API + Console)** | `8443` (hybrid TLS) | mTLS / WebSession / JWT / Public | The primary execution boundary. Includes the g8e Console, browser WebAuthn endpoints, CA bundle and CRL endpoints, all mTLS-guarded operator API and MCP routes, and JWT-authenticated A2A ingress when JWKS is configured. |
 
 ### Port Constraints
 
-- **HTTP Surface** (`8080`): Serves plain HTTP for health checks, state endpoint, CA bundle and fingerprint discovery, enrollment endpoints, deploy scripts, and node binary distribution.
+- **HTTP Surface** (`8080`): Serves plain HTTP for health checks, state endpoint, CA bundle and fingerprint discovery, CLI recovery request/status/complete (token-scoped, no mTLS required), deploy scripts, and node binary distribution. The old trust-script routes (`/web-cert.sh`, `/web-cert.ps1`, `/.well-known/g8e/pki/trust-windows`) and `handleCLIEnrollment` (`/api/v1/auth/cli/enroll`) are **removed** — trust installation is now handled by `auth enroll` directly, and enrollment is handled by the recovery/rotation flow.
 - **HTTPS Surface** (`8443`): Accepts optional client certificates at the transport layer, allowing public access to browser-based assets while requiring application-layer mTLS verification for all governed execution routes. All governed execution endpoints and operator routes require a verified SPIFFE identity via client certificate, while public routes (the Console SPA, static assets, CA bundle, CRL, and WebAuthn browser endpoints) are accessible directly. When JWKS is configured, MCP and A2A endpoints accept JWT authentication as an alternative to mTLS for BYO clients.
 - **Collision Prevention**: The gateway fails startup if multiple logical surfaces are assigned to the same port, ensuring no downgrade of the mTLS execution boundary.
 

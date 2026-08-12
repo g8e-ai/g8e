@@ -342,7 +342,7 @@ func (s *CredentialStore) Clear(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
 	}
-	if err := s.fileSvc.Remove(ctx, credsRel); err != nil {
+	if err := s.fileSvc.Remove(ctx, credsRel); err != nil && !isNotFound(err) {
 		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
 	}
 
@@ -350,7 +350,7 @@ func (s *CredentialStore) Clear(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
 	}
-	if err := s.fileSvc.Remove(ctx, cliCertRel); err != nil {
+	if err := s.fileSvc.Remove(ctx, cliCertRel); err != nil && !isNotFound(err) {
 		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
 	}
 
@@ -358,7 +358,7 @@ func (s *CredentialStore) Clear(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
 	}
-	if err := s.fileSvc.Remove(ctx, cliKeyRel); err != nil {
+	if err := s.fileSvc.Remove(ctx, cliKeyRel); err != nil && !isNotFound(err) {
 		return fmt.Errorf("%w: %w", constants.ErrFileRemoveFailed, err)
 	}
 
