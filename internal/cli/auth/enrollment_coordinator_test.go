@@ -538,6 +538,32 @@ func TestEnroll_PartialState_UsesRecovery(t *testing.T) {
 	assert.True(t, recorder.contains("partial"))
 }
 
+// TestEnroll_PartialState_Unbootstrapped_PerformsBootstrap verifies that
+// a partial local identity on an unbootstrapped gateway bootstraps rather
+// than attempting recovery (which the gateway would reject with 403). This
+// is the defense-in-depth companion to the classifier fix: even if partial
+// state reaches the coordinator, it must not bypass the bootstrap check.
+func TestEnroll_PartialState_Unbootstrapped_PerformsBootstrap(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, _, _, _, recorder, fileSvc, cfg := setupCoordinatorTest(t)
+
+	// Write only the credentials JSON (no cert/key/bundle) → partial.
+	creds := &Credentials{UserID: "user-partial", CLISessionID: "cli-partial"}
+	require.NoError(t, SaveCredentials(fileSvc, cfg, creds))
+
+	gw.bootstrapStatus = false
+	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
+	gw.bootstrapArtifacts = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, EnrollmentSourceBootstrap, result.Source)
+	assert.Equal(t, 1, gw.bootstrapCalls, "bootstrap should be called on unbootstrapped gateway")
+	assert.Equal(t, 0, gw.recoveryRequestCalls, "recovery must not be attempted on unbootstrapped gateway")
+	assert.True(t, recorder.contains("bootstrap"))
+}
+
 func TestEnroll_CorruptState_UsesRecovery(t *testing.T) {
 	t.Parallel()
 	coord, gw, keys, _, _, _, recorder, fileSvc, cfg := setupCoordinatorTest(t)

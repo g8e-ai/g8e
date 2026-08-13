@@ -20,6 +20,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -132,7 +133,13 @@ func (r *passkeyRegistrar) Register(ctx context.Context, userID, cliSessionID st
 		return err
 	}
 
-	consoleURL := fmt.Sprintf("%s/console/#register=1&token=%s",
+	// The console dispatches on #enroll=1&token=... to the dedicated
+	// CLI enrollment flow (registerPasskeyEnrollment), which posts the
+	// token to the enrollment register endpoints. The legacy
+	// #register=1&token=... fragment targeted the browser-bootstrap
+	// flow and triggered the 400 Bad Request documented in
+	// passkey-enrollment-console-400.md.
+	consoleURL := fmt.Sprintf("%s/console/#enroll=1&token=%s",
 		r.cfg.OperatorPublicURL(),
 		url.QueryEscape(token))
 
@@ -198,18 +205,19 @@ func (r *passkeyRegistrar) Register(ctx context.Context, userID, cliSessionID st
 		return sseCtx.Err()
 	}
 
-	// 6. Open the browser. On failure, cancel the SSE monitor and return
-	// an error with a safe fallback instruction. The token is NOT included
-	// in the error message — the user is directed to the console URL
-	// generally, and the token remains only in the URL fragment.
+	// 6. Open the browser. On failure, print a warning and fall through to
+	// the TUI — the SSE monitor is already running and will catch the
+	// passkey registration event when the user opens the URL manually.
+	// The full URL (with token) is displayed by the TUI's View().
 	if openErr := r.browser(consoleURL); openErr != nil {
-		cancel()
-		return fmt.Errorf("%w: could not open browser automatically (%v). Open this URL manually: %s/console",
-			constants.ErrPasskeyRegistrationFailed, openErr, r.cfg.OperatorPublicURL())
+		fmt.Fprintf(os.Stderr, "Warning: could not open browser automatically (%v).\n", openErr)
+		fmt.Fprintln(os.Stderr, "Open the Console URL below in a browser to complete passkey registration.")
 	}
 
 	// 7. Run the TUI. Blocks until passkeyRegisteredMsg, enrollErrMsg, or
-	// user cancellation (q/ctrl+c).
+	// user cancellation (q/ctrl+c). The TUI displays the full console URL
+	// (including the one-time token in the fragment) so the user can open
+	// it manually if the browser did not launch.
 	finalModel, err := p.Run()
 	if err != nil {
 		cancel()

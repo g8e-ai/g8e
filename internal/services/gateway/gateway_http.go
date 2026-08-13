@@ -110,9 +110,15 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	// from any one. PKIControllerDeps is first in the struct.
 	responder := deps.PKIControllerDeps.Responder
 
-	// Initialize enrollment token service (shared dependency, not a controller)
-	enrollmentTokenSvc := NewEnrollmentTokenService(deps.BootstrapControllerDeps.DocStore, deps.Logger)
-	deps.EnrollmentTokenControllerDeps.EnrollmentTokenSvc = enrollmentTokenSvc
+	// Initialize enrollment token service (shared dependency, not a controller).
+	// If the caller already provided one (e.g., GatewayModeService shares the
+	// same instance with the passkey handler), reuse it instead of creating a
+	// second service backed by the same store.
+	enrollmentTokenSvc := deps.EnrollmentTokenControllerDeps.EnrollmentTokenSvc
+	if enrollmentTokenSvc == nil {
+		enrollmentTokenSvc = NewEnrollmentTokenService(deps.BootstrapControllerDeps.DocStore, deps.Logger)
+		deps.EnrollmentTokenControllerDeps.EnrollmentTokenSvc = enrollmentTokenSvc
+	}
 
 	// Initialize CLI recovery service (shared dependency, not a controller)
 	cliRecoverySvc := NewCLIRecoveryService(deps.BootstrapControllerDeps.DocStore, deps.Logger)

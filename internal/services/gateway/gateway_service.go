@@ -73,6 +73,7 @@ type GatewayModeService struct {
 	pki                     *PKIAuthority
 	reg                     *RegistrationService
 	passkey                 *PasskeyHandler
+	enrollmentTokenSvc      *EnrollmentTokenService
 	userSvc                 *UserService
 	cliSessionSvc           *CLISessionService
 	operatorSessionSvc      *OperatorSessionService
@@ -253,11 +254,13 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	}
 
 	passkeyOrchestrator := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, wsHandler, logger)
+	enrollmentTokenSvc := NewEnrollmentTokenService(stores.DocStore, logger)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
-		Service:       passkey,
-		WebSessionSvc: webSessionSvc,
-		Responder:     res,
-		Orchestrator:  passkeyOrchestrator,
+		Service:            passkey,
+		WebSessionSvc:      webSessionSvc,
+		EnrollmentTokenSvc: enrollmentTokenSvc,
+		Responder:          res,
+		Orchestrator:       passkeyOrchestrator,
 	})
 
 	ls := &GatewayModeService{
@@ -278,6 +281,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		pki:                     pki,
 		reg:                     reg,
 		passkey:                 passkeyHandler,
+		enrollmentTokenSvc:      enrollmentTokenSvc,
 		userSvc:                 userSvc,
 		cliSessionSvc:           cliSessionSvc,
 		operatorSessionSvc:      operatorSessionSvc,
@@ -503,9 +507,10 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Responder:     ls.responder,
 		},
 		EnrollmentTokenControllerDeps: EnrollmentTokenControllerDeps{
-			Cfg:       cfg,
-			Logger:    logger,
-			Responder: ls.responder,
+			Cfg:                cfg,
+			Logger:             logger,
+			EnrollmentTokenSvc: ls.enrollmentTokenSvc,
+			Responder:          ls.responder,
 		},
 		UserControllerDeps: UserControllerDeps{
 			Cfg:       cfg,

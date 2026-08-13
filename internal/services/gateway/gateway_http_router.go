@@ -85,6 +85,12 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	jitCfg := passkeyHandlerConfig{source: sourceJWT, enforceFirstCredentialOnly: true, requireAuthenticatedUser: true, enforceSessionUserBinding: true}
 	browserBootstrapRegisterCfg := passkeyHandlerConfig{source: sourceBrowserBootstrap, enforceFirstCredentialOnly: true, createWebSession: true, setCookie: true, createUserOnBootstrap: true}
 	browserBootstrapAuthCfg := passkeyHandlerConfig{source: sourceBrowserBootstrap, createWebSession: true, setCookie: true}
+	// CLI-initiated enrollment: the enrollment token is the single
+	// authorization primitive. No enforceFirstCredentialOnly (the token
+	// already vouches for the user), no createUserOnBootstrap (the user
+	// exists — the CLI created it via `auth enroll`), no
+	// requireAuthenticatedUser (the token is the credential).
+	enrollmentRegisterCfg := passkeyHandlerConfig{source: sourceEnrollmentToken, requireEnrollmentToken: true, createWebSession: true, setCookie: true}
 
 	// JIT passkey bootstrap: allow first-credential registration via JWT
 	// This unblocks OIDC/JIT users who have zero credentials and cannot reach RouteAuthWebSession routes
@@ -108,6 +114,17 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.Handle(constants.APIPaths.AuthPasskeysConsoleRegisterVerify, passkeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysConsoleAuthenticateChallenge, passkeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysConsoleAuthenticateVerify, passkeyMux)
+
+	// CLI-initiated enrollment routes (public, no auth required — the
+	// enrollment token is the credential). These are separate from the
+	// console bootstrap routes above so the two ceremonies do not share
+	// a config or a JS code path. See plan
+	// passkey-enrollment-console-400.md.
+	enrollmentMux := http.NewServeMux()
+	enrollmentMux.HandleFunc(constants.APIPaths.AuthPasskeysEnrollmentRegisterChallenge, h.passkeyController.registerChallenge(enrollmentRegisterCfg))
+	enrollmentMux.HandleFunc(constants.APIPaths.AuthPasskeysEnrollmentRegisterVerify, h.passkeyController.registerVerify(enrollmentRegisterCfg))
+	mux.Handle(constants.APIPaths.AuthPasskeysEnrollmentRegisterChallenge, enrollmentMux)
+	mux.Handle(constants.APIPaths.AuthPasskeysEnrollmentRegisterVerify, enrollmentMux)
 
 	// mTLS-only routes (merged from buildRouter)
 	mux.HandleFunc(constants.APIPaths.DataSettings, h.dataController.handleDataSettings)

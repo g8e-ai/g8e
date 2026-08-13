@@ -319,6 +319,16 @@ func TestRouteAuthRegistry_PasskeyRoutes(t *testing.T) {
 		assert.Equal(t, RouteAuthNone, registry.AuthMode(path), "console path %s should be RouteAuthNone", path)
 	}
 
+	// Enrollment-token passkey routes are public — the enrollment token is
+	// the credential (same model as AuthEnrollmentTokenValidate).
+	enrollmentPaths := []string{
+		constants.APIPaths.AuthPasskeysEnrollmentRegisterChallenge,
+		constants.APIPaths.AuthPasskeysEnrollmentRegisterVerify,
+	}
+	for _, path := range enrollmentPaths {
+		assert.Equal(t, RouteAuthNone, registry.AuthMode(path), "enrollment path %s should be RouteAuthNone", path)
+	}
+
 	// mTLS-protected passkey sub-paths must be RouteAuthMTLS (exact path overrides prefix)
 	mtlsPaths := []string{
 		constants.APIPaths.AuthPasskeysCLIStatus,

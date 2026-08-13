@@ -89,11 +89,11 @@ func (h *routingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 }
 
-// TestRegister_BrowserOpenFailure_NoTokenInError verifies that when the browser
-// fails to open, the returned error does NOT contain the enrollment token. The
-// error should direct the user to the console URL generally, with the token
-// remaining only in the URL fragment (which is not included in the error).
-func TestRegister_BrowserOpenFailure_NoTokenInError(t *testing.T) {
+// TestRegister_BrowserOpenFailure_ContinuesToTUI verifies that when the
+// browser fails to open, the registrar does NOT abort. Instead it falls
+// through to the TUI so the user can see the console URL and open it
+// manually. The enrollment token must not leak in any error output.
+func TestRegister_BrowserOpenFailure_ContinuesToTUI(t *testing.T) {
 	fileSvc, cfg := newAuthTestEnv(t)
 	writeTestCLICert(t, fileSvc, cfg)
 
@@ -134,22 +134,26 @@ func TestRegister_BrowserOpenFailure_NoTokenInError(t *testing.T) {
 		Browser: failBrowser,
 		Timeout: 5 * time.Second,
 	})
-	// Inject a mock program so Run doesn't block on a real terminal. The
-	// program should never be called because the browser error returns first.
+	// Inject a mock program whose Run returns a cancelled model (simulating
+	// the user pressing q after seeing the URL). The program IS called now
+	// because browser failure is no longer fatal. Use runFn so the factory's
+	// overwrite of prog.final doesn't clobber our error model.
 	prog := newMockProgram(enrollModel{}, nil)
+	prog.runFn = func() (tea.Model, error) {
+		return enrollModel{err: context.Canceled}, nil
+	}
 	r.programFactory = func(m enrollModel) programRunner {
 		prog.final = m
 		return prog
 	}
 
 	err := r.Register(context.Background(), "test-user", "test-session")
+	// User cancellation is expected (the mock program returns context.Canceled).
 	require.Error(t, err)
 
 	// The error must NOT contain the token value.
 	assert.NotContains(t, err.Error(), "SECRET-TOKEN-VALUE",
-		"browser-open error must not leak the enrollment token")
-	// The error should mention the console URL generally.
-	assert.Contains(t, err.Error(), "/console")
+		"enrollment token must not leak in error output")
 
 	// The browser should have been called (ready signal fired first).
 	select {
@@ -159,9 +163,10 @@ func TestRegister_BrowserOpenFailure_NoTokenInError(t *testing.T) {
 		t.Fatal("browser was not called within timeout — SSE ready signal may not have fired")
 	}
 
-	// The program Run should NOT have been called (browser error returns first).
-	assert.Equal(t, int32(0), atomic.LoadInt32(&prog.runCalled),
-		"program Run should not be called when browser open fails")
+	// The TUI program should have been called (browser failure no longer
+	// aborts before the TUI runs).
+	assert.Equal(t, int32(1), atomic.LoadInt32(&prog.runCalled),
+		"TUI program should be called even when browser fails to open")
 }
 
 // TestRegister_SSEReadyBeforeBrowserLaunch verifies that the SSE connection is

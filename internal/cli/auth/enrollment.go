@@ -268,8 +268,7 @@ func (c *EnrollmentCoordinator) Enroll(ctx context.Context, opts EnrollmentOptio
 			c.out("Reusing existing CLI identity (user %s, session %s).", result.UserID, result.CLISessionID)
 		}
 	case LocalStatePartial, LocalStateCorrupt:
-		c.out("Local identity is %s; using human-approved recovery flow.", local.State)
-		artifacts, err = c.handleRecovery(ctx, opts)
+		artifacts, err = c.handlePartialOrCorrupt(ctx, local, opts)
 	default:
 		return nil, fmt.Errorf("%w: unknown local state %d", constants.ErrInternal, local.State)
 	}
@@ -330,6 +329,25 @@ func (c *EnrollmentCoordinator) handleAbsent(ctx context.Context, _ LocalIdentit
 		return c.handleBootstrap(ctx, opts)
 	}
 	c.out("Gateway already bootstrapped; creating CLI recovery request.")
+	return c.handleRecovery(ctx, opts)
+}
+
+// handlePartialOrCorrupt handles the LocalStatePartial and
+// LocalStateCorrupt cases. It checks whether the gateway has been
+// bootstrapped: if not, it bootstraps (the gateway's recovery endpoint
+// rejects unbootstrapped gateways with 403, so we must not attempt
+// recovery); if so, it creates a CLI recovery request and waits for
+// human approval, just like handleAbsent on a bootstrapped gateway.
+func (c *EnrollmentCoordinator) handlePartialOrCorrupt(ctx context.Context, local LocalIdentity, opts EnrollmentOptions) (EnrollmentArtifacts, error) {
+	bootstrapped, err := c.gateway.CheckBootstrapStatus(ctx, "")
+	if err != nil {
+		return EnrollmentArtifacts{}, fmt.Errorf("%w: check bootstrap status: %w", constants.ErrEnrollmentFailed, err)
+	}
+	if !bootstrapped {
+		c.out("Gateway not bootstrapped; performing initial CLI bootstrap despite %s local state.", local.State)
+		return c.handleBootstrap(ctx, opts)
+	}
+	c.out("Local identity is %s; using human-approved recovery flow.", local.State)
 	return c.handleRecovery(ctx, opts)
 }
 

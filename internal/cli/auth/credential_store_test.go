@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -247,4 +248,26 @@ func TestCredentialStore_ClearRetainsTrustBundle(t *testing.T) {
 
 	// Calling Clear a second time when files are already gone is idempotent and succeeds.
 	require.NoError(t, store.Clear(context.Background()))
+}
+
+// TestCredentialStore_InspectBundleOnlyIsAbsent verifies that a trust
+// bundle written by `gw start` (with no CLI identity artifacts present)
+// does not promote the local identity state from Absent to Partial. The
+// trust bundle is a shared gateway artifact (§4.3) and is not part of the
+// CLI identity set. Without this, `auth enroll` on a freshly-started but
+// unbootstrapped gateway would route to the recovery endpoint and receive
+// a 403 ("CLI recovery only available after bootstrap").
+func TestCredentialStore_InspectBundleOnlyIsAbsent(t *testing.T) {
+	t.Parallel()
+	fileSvc, cfg := newAuthTestEnv(t)
+	store := NewCredentialStore(fileSvc, cfg)
+
+	// Write only the trust bundle — no credentials, cert, or key.
+	bundlePEM := testutil.GenerateTestCA(t, "test-root-ca")
+	require.NoError(t, WriteTrustBundleFS(fileSvc, cfg, []byte(bundlePEM), constants.PermFilePublic))
+
+	inspection, err := store.Inspect(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, LocalStateAbsent, inspection.State,
+		"trust bundle alone must not promote absent identity to partial")
 }

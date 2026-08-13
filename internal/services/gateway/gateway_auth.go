@@ -107,6 +107,10 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	// Passkey console routes (public, no mTLS for browser access)
 	r.addPrefix(constants.APIPaths.AuthPasskeysConsolePrefix, RouteAuthNone)
 
+	// CLI-initiated enrollment passkey routes (public — the enrollment
+	// token is the credential, same model as AuthEnrollmentTokenValidate).
+	r.addPrefix(constants.APIPaths.AuthPasskeysEnrollmentPrefix, RouteAuthNone)
+
 	// --- RouteAuthDual: SSE consumer endpoints (mTLS for CLI/operator, web session cookie for browser) ---
 	r.addExact(constants.APIPaths.SSEStream, RouteAuthDual)
 	r.addExact(constants.APIPaths.SSEEvents, RouteAuthDual)

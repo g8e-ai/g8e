@@ -99,6 +99,9 @@ var APIPaths = struct {
 	AuthPasskeysConsoleAuthenticateChallenge string `json:"auth_passkeys_console_authenticate_challenge"`
 	AuthPasskeysConsoleAuthenticateVerify    string `json:"auth_passkeys_console_authenticate_verify"`
 	AuthPasskeysConsolePrefix                string `json:"auth_passkeys_console_prefix"`
+	AuthPasskeysEnrollmentRegisterChallenge  string `json:"auth_passkeys_enrollment_register_challenge"`
+	AuthPasskeysEnrollmentRegisterVerify     string `json:"auth_passkeys_enrollment_register_verify"`
+	AuthPasskeysEnrollmentPrefix             string `json:"auth_passkeys_enrollment_prefix"`
 	AuthSessionsMe                           string `json:"auth_sessions_me"`
 	AuthEnrollmentTokenGenerate              string `json:"auth_enrollment_token_generate"`
 	AuthEnrollmentTokenValidate              string `json:"auth_enrollment_token_validate"`
@@ -232,6 +235,9 @@ var APIPaths = struct {
 	AuthPasskeysConsoleAuthenticateChallenge: "/api/v1/auth/passkeys/console/authenticate/challenge",
 	AuthPasskeysConsoleAuthenticateVerify:    "/api/v1/auth/passkeys/console/authenticate/verify",
 	AuthPasskeysConsolePrefix:                "/api/v1/auth/passkeys/console/",
+	AuthPasskeysEnrollmentRegisterChallenge:  "/api/v1/auth/passkeys/enrollment/register/challenge",
+	AuthPasskeysEnrollmentRegisterVerify:     "/api/v1/auth/passkeys/enrollment/register/verify",
+	AuthPasskeysEnrollmentPrefix:             "/api/v1/auth/passkeys/enrollment/",
 	AuthSessionsMe:                           "/api/v1/auth/sessions/me",
 	AuthEnrollmentTokenGenerate:              "/api/v1/auth/enrollment-token/generate",
 	AuthEnrollmentTokenValidate:              "/api/v1/auth/enrollment-token/validate",

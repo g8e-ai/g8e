@@ -86,8 +86,10 @@ type stagedIdentity struct {
 //
 // A complete identity requires all four to be present, parseable, and
 // mutually consistent (the CLI key's public key matches the CLI cert's
-// public key). Any missing or unparseable artifact is partial; a present-
-// but-mismatched cert/key pair is corrupt.
+// public key). Any missing or unparseable identity artifact is partial;
+// a present-but-mismatched cert/key pair is corrupt. The trust bundle is
+// a shared gateway artifact (§4.3) and alone does not promote an absent
+// identity to partial — `gw start` may write it before any CLI enrollment.
 func (s *CredentialStore) Inspect(ctx context.Context) (LocalIdentity, error) {
 	out := LocalIdentity{State: LocalStateAbsent}
 
@@ -101,14 +103,25 @@ func (s *CredentialStore) Inspect(ctx context.Context) (LocalIdentity, error) {
 	bundlePresent := bundle != nil
 	bundleCorrupt := bundleErr != nil
 
-	// If nothing is present, the state is cleanly absent.
-	if !credPresent && !cliCertPresent && !cliKeyPresent && !bundlePresent {
+	// The trust bundle is a shared gateway artifact (§4.3: it survives
+	// logout/Clear and may be written by `gw start` independently of any
+	// CLI enrollment). Its presence alone must not promote a cleanly-
+	// absent CLI identity to partial. Only the three CLI identity
+	// artifacts (credentials JSON, CLI cert, CLI key) determine whether
+	// an identity exists.
+	identityPresent := credPresent || cliCertPresent || cliKeyPresent
+
+	// If no CLI identity artifacts are present, the identity is cleanly
+	// absent regardless of the trust bundle.
+	if !identityPresent {
 		return out, nil
 	}
 
-	// Any corrupt artifact (present but unparseable) makes the whole set
-	// corrupt. Partial (some present, all parseable but incomplete) is
-	// distinct: the files are individually valid but the set is not.
+	// Any corrupt identity artifact (present but unparseable) makes the
+	// whole set corrupt. A corrupt trust bundle also makes the set
+	// corrupt, since the CLI cannot validate the gateway without it.
+	// Partial (some present, all parseable but incomplete) is distinct:
+	// the files are individually valid but the set is not.
 	if credCorrupt || cliCertCorrupt || cliKeyCorrupt || bundleCorrupt {
 		out.State = LocalStateCorrupt
 		out.Credentials = creds // may be nil
