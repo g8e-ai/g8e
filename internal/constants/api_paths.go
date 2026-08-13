@@ -166,12 +166,12 @@ var APIPaths = struct {
 	GovernanceSignersByID:   "/api/v1/governance/signers/",
 	GovernanceSignersPrefix: "/api/v1/governance/signers/",
 	// Operator routes
-	Operators:       "/api/v1/operators",
-	OperatorsByID:   "/api/v1/operators/",
-	OperatorsBind:   "/api/v1/operators/bind",
-	OperatorsUnbind: "/api/v1/operators/unbind",
-	OperatorsTarget: "/api/v1/operators/target",
-	OperatorsReauth: "/api/v1/operators/reauth",
+	Operators:        "/api/v1/operators",
+	OperatorsByID:    "/api/v1/operators/",
+	OperatorsBind:    "/api/v1/operators/bind",
+	OperatorsUnbind:  "/api/v1/operators/unbind",
+	OperatorsTarget:  "/api/v1/operators/target",
+	OperatorsReauth:  "/api/v1/operators/reauth",
 	OperatorsSession: "/api/v1/operators/session/",
 	// Intent routes
 	GrantIntent:  "/api/v1/operators/{operator_id}/intents/grant",

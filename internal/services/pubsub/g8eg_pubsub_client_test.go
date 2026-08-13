@@ -14,6 +14,7 @@
 package pubsub
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -518,4 +519,93 @@ func TestWaitForSubscribedACK(t *testing.T) {
 		assert.Error(t, err) //nolint:testifylint,require-error // in http handler
 		assert.Contains(t, err.Error(), "connection error")
 	})
+}
+
+// TestSubscribe_EmitsConnectedLogLine asserts that Subscribe emits the
+// "operator pub/sub WebSocket connected" log marker after a successful dial
+// and before the subscription message is sent. This is the stable connectivity
+// marker the Tier 3 E2E suite greps for (R4); it must be distinct from the
+// pre-dial "Dialing Operator pub/sub WebSocket" line and the per-subscription
+// "operator pub/sub subscription confirmed" line.
+func TestSubscribe_EmitsConnectedLogLine(t *testing.T) {
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logBuf, nil))
+
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upgrader := websocket.Upgrader{}
+		conn, err := upgrader.Upgrade(w, r, nil)
+		assert.NoError(t, err)
+		defer conn.Close()
+
+		for {
+			_, data, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			var msg pubsubv1.PubSubMessage
+			if err := proto.Unmarshal(data, &msg); err != nil {
+				continue
+			}
+			if msg.Action == "subscribe" {
+				ack := pubsubv1.PubSubEvent{Type: "subscribed", Channel: msg.Channel}
+				ackBytes, _ := proto.Marshal(&ack)
+				conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+			}
+		}
+	}))
+	defer server.Close()
+
+	wsURL := httpsToWss(server.URL)
+	serverTLSCfg := newTestCertsTLSConfigForServer(t, server)
+	client, err := NewOperatorPubSubClient(wsURL, "", logger, serverTLSCfg)
+	require.NoError(t, err)
+
+	ch, err := client.Subscribe(context.Background(), "test-channel")
+	require.NoError(t, err)
+	assert.NotNil(t, ch)
+	client.Close()
+
+	logOutput := logBuf.String()
+	assert.Contains(t, logOutput, "operator pub/sub WebSocket connected")
+	assert.Contains(t, logOutput, "channel=test-channel")
+	assert.Contains(t, logOutput, "tls_enabled=true")
+	// The connected marker must be distinct from the pre-dial and
+	// subscription-confirmed markers.
+	assert.Contains(t, logOutput, "Dialing Operator pub/sub WebSocket")
+	assert.Contains(t, logOutput, "operator pub/sub subscription confirmed")
+}
+
+// TestConnectPubWs_EmitsConnectedLogLine asserts that connectPubWs emits the
+// "operator pub/sub WebSocket connected" log marker with direction=publish
+// after a successful dial. This is the publish-path counterpart to the
+// subscribe-path marker and is the second stable connectivity marker the
+// Tier 3 E2E suite greps for (R4).
+func TestConnectPubWs_EmitsConnectedLogLine(t *testing.T) {
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logBuf, nil))
+
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upgrader := websocket.Upgrader{}
+		conn, err := upgrader.Upgrade(w, r, nil)
+		assert.NoError(t, err)
+		defer conn.Close()
+		<-time.After(1 * time.Second)
+	}))
+	defer server.Close()
+
+	wsURL := httpsToWss(server.URL)
+	serverTLSCfg := newTestCertsTLSConfigForServer(t, server)
+	client, err := NewOperatorPubSubClient(wsURL, "", logger, serverTLSCfg)
+	require.NoError(t, err)
+
+	client.mu.Lock()
+	err = client.connectPubWs()
+	client.mu.Unlock()
+	require.NoError(t, err)
+	client.Close()
+
+	logOutput := logBuf.String()
+	assert.Contains(t, logOutput, "operator pub/sub WebSocket connected")
+	assert.Contains(t, logOutput, "direction=publish")
+	assert.Contains(t, logOutput, "tls_enabled=true")
 }

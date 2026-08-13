@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -116,17 +117,6 @@ func setupSharedE2EFixture(composeFile string) (*DockerE2EFixture, error) {
 		fmt.Sprintf("G8E_PREFIX=%s", containerPrefix),
 	}
 
-	// Spin up docker-compose with unique project name and env
-	log.Printf("E2E: Starting docker-compose (project: %s)", projectName)
-	upCmd := exec.Command("docker", "compose", "-p", projectName, "-f", composePath, "up", "-d", "--build")
-	upCmd.Dir = repoRoot
-	upCmd.Env = append(os.Environ(), composeEnv...)
-	upOutput, err := upCmd.CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("docker compose up failed: %w\nOutput: %s", err, string(upOutput))
-	}
-	log.Printf("E2E: Docker compose started: %s", string(upOutput))
-
 	httpURL := fmt.Sprintf("http://localhost:%d", httpPort)
 	httpsURL := fmt.Sprintf("https://localhost:%d", httpsPort)
 
@@ -141,30 +131,27 @@ func setupSharedE2EFixture(composeFile string) (*DockerE2EFixture, error) {
 		HTTPSPort:       httpsPort,
 	}
 
-	// Wait for health endpoint
-	log.Printf("E2E: Waiting for gateway health at %s...", httpURL)
-	client := &http.Client{Timeout: 2 * time.Second}
-	deadline := time.Now().Add(120 * time.Second)
-	healthy := false
-	for time.Now().Before(deadline) {
-		resp, err := client.Get(httpURL + "/api/v1/health")
-		if err == nil {
-			ok := resp.StatusCode == http.StatusOK
-			resp.Body.Close()
-			if ok {
-				healthy = true
-				break
-			}
+	// Spin up docker-compose with `--wait`, which blocks until every service
+	// with a healthcheck reaches `healthy` (and services without one reach
+	// `running`). Docker performs the readiness wait natively — there is no
+	// Go-side health polling. The gateway's compose healthcheck hits
+	// /api/v1/health, and the operator's `depends_on: condition:
+	// service_healthy` ensures it only starts once the gateway is healthy.
+	// `--wait-timeout` caps the total wait at 120s; on timeout or healthcheck
+	// failure `up` exits non-zero, we tear down any partial stack, and R1's
+	// fail-fast turns the returned error into a fatal suite exit.
+	log.Printf("E2E: Starting docker-compose (project: %s), waiting for services to be healthy", projectName)
+	upCmd := exec.Command("docker", "compose", "-p", projectName, "-f", composePath, "up", "-d", "--build", "--wait", "--wait-timeout", "120")
+	upCmd.Dir = repoRoot
+	upCmd.Env = append(os.Environ(), composeEnv...)
+	upOutput, err := upCmd.CombinedOutput()
+	if err != nil {
+		if tdErr := fixture.teardown(); tdErr != nil {
+			log.Printf("E2E: teardown after compose-up failure also failed: %v", tdErr)
 		}
-		time.Sleep(2 * time.Second)
+		return nil, fmt.Errorf("docker compose up failed (services did not become healthy within 120s): %w\nOutput: %s", err, string(upOutput))
 	}
-	if !healthy {
-		if err := fixture.teardown(); err != nil {
-			log.Printf("E2E: teardown after health-wait failure also failed: %v", err)
-		}
-		return nil, fmt.Errorf("gateway did not become healthy within 120s")
-	}
-	log.Printf("E2E: Gateway is healthy")
+	log.Printf("E2E: Docker compose stack is healthy: %s", string(upOutput))
 
 	return fixture, nil
 }
@@ -412,27 +399,50 @@ func (f *DockerE2EFixture) RestartOperator(t *testing.T) {
 	}, 120*time.Second, 2*time.Second, "Operator did not re-authenticate within 120s after restart")
 }
 
-// GetOperatorSessionID returns the G8E_OPERATOR_SESSION_ID environment variable
-// from the operator container.
+// operatorSessionIDRe matches the slog-rendered structured field from the
+// "Enrollment successful" log line (internal/cli/serve/cert.go:247), which
+// logs operator_session_id as a key-value pair rendered as
+// "  - operator_session_id: <uuid>". This is the authoritative source for
+// the session ID: the operator sets it in its own process env via os.Setenv
+// (internal/cli/serve/operator.go:250), which is NOT visible to `docker exec
+// ... printenv` (a new process does not inherit the operator process's
+// runtime os.Setenv, only the container's env metadata set by compose).
+var operatorSessionIDRe = regexp.MustCompile(`operator_session_id:\s*([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})`)
+
+// GetOperatorSessionID extracts the operator session ID from the operator's
+// bootstrap logs. The session ID is logged as a structured field on the
+// "Enrollment successful" line during automatic enrollment. Uses windowed
+// logs (since the container's current start) so a restart cannot surface a
+// stale session ID from a previous start.
 func (f *DockerE2EFixture) GetOperatorSessionID(t *testing.T) string {
 	t.Helper()
 
-	opContainerName := f.ContainerPrefix + "-operator"
-	cmd := exec.Command("docker", "exec", opContainerName, "printenv", string(constants.EnvVar.OperatorSessionID))
-	output, err := cmd.CombinedOutput()
-	require.NoError(t, err, "Failed to get operator session ID from container env: %s", string(output))
-	sessionID := strings.TrimSpace(string(output))
-	require.NotEmpty(t, sessionID, "Operator session ID env var is empty")
+	startedAt := f.OperatorStartedAt(t)
+	logs := f.OperatorLogsSince(t, startedAt)
+	m := operatorSessionIDRe.FindStringSubmatch(logs)
+	require.Len(t, m, 2, "Operator logs since %s do not contain an operator_session_id; logs:\n%s", startedAt, logs)
+	sessionID := strings.TrimSpace(m[1])
+	require.NotEmpty(t, sessionID, "Operator session ID parsed from logs is empty")
 	return sessionID
 }
 
-// GetOperatorBySession queries the gateway's GET /api/v1/operators/session/{id} endpoint
-// and returns the operator document.
+// GetOperatorBySession queries the gateway's GET /api/v1/operators/session/{id}
+// endpoint and returns the operator document. The session-lookup route is
+// registered on the full HTTPS handler (gateway_http_router.go:137), not the
+// HTTP-only bootstrap router (buildHTTPRouter), so this helper hits the HTTPS
+// port. The route defaults to RouteAuthMTLS (fail-closed for any path not
+// explicitly public), so the client must present a valid client certificate —
+// this helper uses the operator's own enrolled cert via operatorMTLSConfig.
 func (f *DockerE2EFixture) GetOperatorBySession(t *testing.T, sessionID string) *models.OperatorDocumentGo {
 	t.Helper()
 
-	client := &http.Client{Timeout: 5 * time.Second}
-	reqURL := f.GatewayHTTPURL + constants.APIPaths.OperatorsSession + sessionID
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: f.operatorMTLSConfig(t),
+		},
+	}
+	reqURL := f.GatewayHTTPSURL + constants.APIPaths.OperatorsSession + sessionID
 	resp, err := client.Get(reqURL)
 	require.NoError(t, err, "Failed to query operator session")
 	defer resp.Body.Close()
@@ -447,9 +457,14 @@ func (f *DockerE2EFixture) GetOperatorBySession(t *testing.T, sessionID string) 
 	return opResp.Operator
 }
 
-// DialGatewayMTLS completes a real mTLS TLS handshake against the gateway's HTTPS port
-// using the operator's enrolled certificate and key read from the operator container.
-func (f *DockerE2EFixture) DialGatewayMTLS(t *testing.T) {
+// operatorMTLSConfig builds a *tls.Config using the operator's enrolled
+// certificate and key (read from the operator container) and the gateway's CA
+// bundle (fetched from the well-known PKI endpoint). The returned config
+// presents the operator cert as the client certificate and verifies the
+// gateway's server cert against the CA bundle via VerifyConnection. This is
+// the exact identity the operator uses to communicate with the gateway, so
+// requests made with this config are authenticated as the enrolled operator.
+func (f *DockerE2EFixture) operatorMTLSConfig(t *testing.T) *tls.Config {
 	t.Helper()
 
 	opContainerName := f.ContainerPrefix + "-operator"
@@ -471,7 +486,7 @@ func (f *DockerE2EFixture) DialGatewayMTLS(t *testing.T) {
 	caCertPool := x509.NewCertPool()
 	require.True(t, caCertPool.AppendCertsFromPEM([]byte(caBundlePEM)), "Failed to parse CA bundle into cert pool")
 
-	tlsConfig := &tls.Config{
+	return &tls.Config{
 		Certificates:       []tls.Certificate{cliCert},
 		RootCAs:            caCertPool,
 		InsecureSkipVerify: true, // Verification handled via VerifyConnection against CA bundle
@@ -489,6 +504,14 @@ func (f *DockerE2EFixture) DialGatewayMTLS(t *testing.T) {
 			return nil
 		},
 	}
+}
+
+// DialGatewayMTLS completes a real mTLS TLS handshake against the gateway's HTTPS port
+// using the operator's enrolled certificate and key read from the operator container.
+func (f *DockerE2EFixture) DialGatewayMTLS(t *testing.T) {
+	t.Helper()
+
+	tlsConfig := f.operatorMTLSConfig(t)
 
 	addr := fmt.Sprintf("127.0.0.1:%d", f.HTTPSPort)
 	conn, err := tls.Dial("tcp", addr, tlsConfig)
