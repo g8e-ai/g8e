@@ -24,9 +24,9 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
-	"log/slog"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -53,8 +53,8 @@ import (
 //
 // The client is safe for concurrent use (it holds no mutable state).
 type EnrollmentClient struct {
-	httpClient       *http.Client
-	cfg              *config.Config
+	httpClient        *http.Client
+	cfg               *config.Config
 	systemFingerprint func() (string, error)
 }
 
@@ -70,8 +70,8 @@ func NewEnrollmentClient(cfg *config.Config, systemFingerprint func() (string, e
 		systemFingerprint = defaultSystemFingerprint
 	}
 	return &EnrollmentClient{
-		httpClient:       &http.Client{Timeout: httpTimeout},
-		cfg:              cfg,
+		httpClient:        &http.Client{Timeout: httpTimeout},
+		cfg:               cfg,
 		systemFingerprint: systemFingerprint,
 	}
 }
@@ -127,16 +127,16 @@ func (c *EnrollmentClient) Bootstrap(ctx context.Context, cliCSR string, cliKey 
 	}
 
 	artifacts := EnrollmentArtifacts{
-		Source:             EnrollmentSourceBootstrap,
-		CLISessionID:       resp.CLISessionID,
-		UserID:             resp.UserID,
-		OperatorSessionID:  resp.OperatorSessionID,
-		OperatorID:         resp.OperatorID,
-		CLICertPEM:         resp.CLICert,
-		CLICertChainPEM:    resp.CLICertChain,
-		CLIKey:             cliKey,
-		TrustBundlePEM:     resp.HubTrustBundle,
-		OperatorCertPEM:    resp.OperatorCert,
+		Source:               EnrollmentSourceBootstrap,
+		CLISessionID:         resp.CLISessionID,
+		UserID:               resp.UserID,
+		OperatorSessionID:    resp.OperatorSessionID,
+		OperatorID:           resp.OperatorID,
+		CLICertPEM:           resp.CLICert,
+		CLICertChainPEM:      resp.CLICertChain,
+		CLIKey:               cliKey,
+		TrustBundlePEM:       resp.HubTrustBundle,
+		OperatorCertPEM:      resp.OperatorCert,
 		OperatorCertChainPEM: resp.OperatorCertChain,
 	}
 

@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-08-10
+Last Updated: 2026-08-12
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -87,6 +87,51 @@ Helpers: `failingFileSvcFactory(err)` returns a factory that always errors. `pan
 - **`configLoaderFor(cfg)`**: Returns a config loader closure that always returns the given `cfg`.
 - **`mustRel(t, fileSvc, absPath)`**: Converts an absolute `.g8e/` path to a relative path, failing the test on error.
 - **`newAuthTestEnv(t)`**: Returns `(fileSvc, cfg)` with auth-specific fixture setup (temp-rooted `fileSvc` with runtime tree created, minimal config with `ProjectRoot`/`RuntimeDir`/`Paths.Host` set).
+
+---
+
+## CLI Enrollment Coordinator Tests
+
+The `EnrollmentCoordinator` (`internal/cli/auth/enrollment.go`) owns the CLI enrollment state machine. It is unit-tested in `internal/cli/auth/enrollment_coordinator_test.go` with injected mocks for `EnrollmentGateway`, `SystemTrustInstaller`, `BrowserOpener`, and `PasskeyRegistrar`. The command adapter layer (`internal/cli/cmd`) is tested in `auth_enroll_test.go` via a swappable `enrollCoordinatorFactory` package-level var that returns an `Enroller` interface.
+
+### Coordinator-Level Tests (`internal/cli/auth/enrollment_coordinator_test.go`)
+
+Full state machine coverage:
+- Healthy reuse (no rotation) — `LocalStateComplete` + `RotateCLI=false` → no gateway calls
+- Partial → recovery — `LocalStatePartial` → `CreateRecoveryRequest` called, `Bootstrap` not called
+- Expired → rotation — expiring CLI cert → `Rotate` called
+- Absent → bootstrap — `LocalStateAbsent` → `Bootstrap` called
+- `--no-system-trust` skip — `SystemTrustInstaller.Install` not called, `PasskeyRegistrar.Register` still called
+- System trust failure stops before browser — `SystemTrustInstaller` returns error → `BrowserOpener`/`PasskeyRegistrar` not called
+- `--rotate-cli` forces rotation — healthy identity + `RotateCLI=true` → `Rotate` called
+
+### CredentialStore Tests (`internal/cli/auth/credential_store_test.go`)
+
+5 tests exercising `CredentialStore` directly:
+- `TestCredentialStore_InterruptedCommitRetry` — cancelled-context Commit fails, second Stage+Commit succeeds, no orphaned tmp files
+- `TestCredentialStore_RollbackWritesNoCanonicalFiles` — Rollback writes no canonical files; `Rollback(nil)` is a safe no-op
+- `TestCredentialStore_CommittedFilePermissions` — CLI cert, CLI key, credentials JSON all have 0600 mode after Commit
+- `TestCredentialStore_ConcurrentStageCommitNoTornState` — two concurrent Stage+Commit sequences leave a complete, consistent identity (race-clean under `-race`)
+- `TestCredentialStore_ClearRetainsTrustBundle` — Clear removes local credentials but retains the runtime trust bundle (§4.3 ownership)
+
+### Command-Layer Tests (`internal/cli/cmd/auth_enroll_test.go`)
+
+Tests inject a `mockEnroller` via `withMockEnroller` helper + `noopCheckOperatorRunning` stub:
+- `TestEnrollCmd_OptionPropagation` — defaults, `--no-system-trust`, `--rotate-cli`, both flags
+- `TestEnrollCmd_CoordinatorErrorPropagates` — command surfaces `ErrSystemTrustInstallFailed`
+- `TestEnrollCmd_HealthyReusedIdentityNoRotate` — Reused=true, RotateCLI=false
+- `TestEnrollCmd_RotateCLIFlagForcesRotation` — `--rotate-cli` wiring
+- `TestEnrollCmd_NoSystemTrustFlagWired` — `--no-system-trust` wiring
+- `TestEnrollCmd_SystemTrustInstalledOutput` — browser-restart guidance printed
+- `TestLogoutCmd_OSRootCARetained` — OS root CA retained on logout
+- `TestMCPStdio_DoesNotInvokeEnrollment` — stdio never calls the coordinator factory
+
+### Gateway-Side Recovery/Rotation Tests (`internal/services/gateway/`)
+
+- `cli_recovery_controller_test.go` — recovery request, status, approve, complete (proof-of-possession, token expiry, replay)
+- `cli_recovery_service_test.go` — token hashing, atomic state transitions, cleanup
+- `cli_rotation_controller_test.go` — mTLS rotation, session replacement, cert revocation
+- `gateway_http_test.go` / `gateway_auth_test.go` — route removal assertions (`TestRemovedCLIEnrollRoute`, `TestRouteAuthRegistry_RotationAndRemovedEnroll`)
 
 ---
 
@@ -219,7 +264,7 @@ Each consensus member signs with its own distinct key derived from `member_seeds
 6. Session ID validated against database
 
 **Key details**:
-- MCP routes are on HTTPS port (8443) only; HTTP port (8080) serves bootstrap endpoints (`/bootstrap`, `/enroll`, `/.well-known/g8e/pki/*`), the console SPA, browser-facing passkey endpoints, and health checks
+- MCP routes are on HTTPS port (8443) only; HTTP port (8080) serves bootstrap endpoints (`/bootstrap`, `/.well-known/g8e/pki/*`), CLI recovery discovery (`/api/v1/auth/cli/recovery/{request,status,complete}`), deploy scripts, node binary download, and health checks. The old `handleCLIEnrollment` route (`/api/v1/auth/cli/enroll`) and per-platform trust-install script routes (`/web-cert.sh`, `/web-cert.ps1`, `/.well-known/g8e/pki/trust-windows`) were removed in v1.7.2; CLI enrollment is now driven client-side by the `EnrollmentCoordinator`.
 - `ExtractOperatorSessionID` in `protocol/workload_identity.go` parses the SPIFFE URI (path segment 6)
 - Tests include wait logic for operator session persistence before authenticated calls
 

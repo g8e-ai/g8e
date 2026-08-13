@@ -71,9 +71,6 @@ func NewCredentialStore(fileSvc fs.RuntimeFileService, cfg *config.Config) *Cred
 // hold the store lock between Stage and Commit.
 type stagedIdentity struct {
 	artifacts EnrollmentArtifacts
-	// stagedFileRel is the relative path of the staged credentials file
-	// (written last during Commit). Empty until Commit writes it.
-	stagedCredsRel string
 }
 
 // Inspect examines all managed artifacts as a complete set and returns a

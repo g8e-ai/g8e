@@ -129,7 +129,9 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │       └── gateway.GatewayWebSocketHandler
 ├── gateway.UserService
 │   └── gateway.DocumentStoreService (from Stores [SHARED])
-├── gateway.CLISessionService
+├── gateway.CLISessionService (CLI session persistence; used by recovery/rotation controllers for session replacement and by L3 notary for mTLS session verification)
+│   └── gateway.DocumentStoreService (from Stores [SHARED])
+├── gateway.CLIRecoveryService (human-approved CLI recovery request lifecycle; token hashing, atomic state transitions, proof-of-possession verification)
 │   └── gateway.DocumentStoreService (from Stores [SHARED])
 ├── gateway.OperatorSessionService
 │   └── gateway.DocumentStoreService (from Stores [SHARED])
@@ -178,7 +180,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   │   ├── gateway.SignerStoreService (from Stores [SHARED])
 │   │   └── response.Writer
-│   ├── gateway.BootstrapController (bootstrap, CLI enrollment, device enrollment, bootstrap status)
+│   ├── gateway.BootstrapController (bootstrap, local bootstrap with URL, bootstrap status, device enrollment)
 │   │   ├── gateway.UserService [SHARED]
 │   │   ├── gateway.PKIAuthority [SHARED]
 │   │   ├── gateway.CLISessionService [SHARED]
@@ -186,6 +188,18 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   │   ├── response.Writer
 │   │   └── actuatorKeyReader (fileActuatorKeyReader, reads actuator public key from disk)
+│   ├── gateway.CLIRecoveryController (human-approved CLI recovery: request, status, browser approval, complete)
+│   │   ├── gateway.CLISessionService [SHARED]
+│   │   ├── gateway.PKIAuthority [SHARED]
+│   │   ├── gateway.UserService [SHARED]
+│   │   ├── gateway.WebSessionService [SHARED]
+│   │   ├── gateway.CLIRecoveryService
+│   │   └── response.Writer
+│   ├── gateway.CLIRotationController (mTLS-protected CLI certificate rotation)
+│   │   ├── gateway.CLISessionService [SHARED]
+│   │   ├── gateway.PKIAuthority [SHARED]
+│   │   ├── gateway.UserService [SHARED]
+│   │   └── response.Writer
 │   ├── gateway.EnrollmentTokenController (enrollment token generate, validate)
 │   │   ├── gateway.EnrollmentTokenService (created in HTTPHandler constructor, manages enrollment token lifecycle with TTL-based cleanup)
 │   │   ├── response.Writer
@@ -336,7 +350,7 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 ### Transport & Protocol Layer
 - `pubsub.OperatorPubSubService` is the dispatcher for outbound mode (WebSocket pub/sub).
 - `mcp.GatewayService` handles MCP/A2A protocol translation and downstream dispatch (gateway mode only; shared between HTTP ingress and OperatorPubSubService egress).
-- `gateway.HTTPHandler` is a router and middleware shell for gateway mode. It holds router infrastructure (rate limiting, CORS, path traversal guard), cross-cutting infrastructure (`responder`, `authMiddleware`), and 16 controller fields: `PKIController`, `AuditController`, `DataController`, `SignerController`, `BootstrapController`, `EnrollmentTokenController`, `UserController`, `SessionController`, `AdminController`, `OperatorController`, `SSEController`, `HealthController`, `GovernanceController`, `MCPController`, `PubSubController`, `PasskeyController`. All HTTP endpoint logic lives on controllers. Dependencies are injected via `HTTPHandlerDependencies`, composed of per-controller `Deps` structs.
+- `gateway.HTTPHandler` is a router and middleware shell for gateway mode. It holds router infrastructure (rate limiting, CORS, path traversal guard), cross-cutting infrastructure (`responder`, `authMiddleware`), and 18 controller fields: `PKIController`, `AuditController`, `DataController`, `SignerController`, `BootstrapController`, `CLIRecoveryController`, `CLIRotationController`, `EnrollmentTokenController`, `UserController`, `SessionController`, `AdminController`, `OperatorController`, `SSEController`, `HealthController`, `GovernanceController`, `MCPController`, `PubSubController`, `PasskeyController`. All HTTP endpoint logic lives on controllers. Dependencies are injected via `HTTPHandlerDependencies`, composed of per-controller `Deps` structs.
 - `gateway.GatewayWebSocketHandler` is the in-process pub/sub broker for gateway mode.
 - `gateway.PKIAuthority` manages PKI hierarchy and certificate lifecycle for gateway mode.
 - `network.Detector` detects host IP addresses and DNS names to configure TLS certificate identities dynamically during boot and renewal.
@@ -346,8 +360,8 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - `gateway_pubsub.go` defines `GatewayWebSocketHandler` for WebSocket-based publish/subscribe channels, including subscriber management and in-process handlers for governance command processing and SSE streaming.
 
 ### Gateway HTTP Dual-Router Architecture
-- **`buildPublicRouter`** (HTTPS port): Full API surface with mTLS middleware via `auth.Middleware`. Routes include governance envelopes, audit, PKI management, user management, MCP/A2A ingress, SSE, pub/sub, console SPA, passkey endpoints, and approval UI. WebSessionAuth-protected routes bypass mTLS and use cookie-based auth with their own middleware. The landing page (`/`) redirects to `/console/`.
-- **`buildHTTPRouter`** (HTTP port): Bootstrap-only surface for CA discovery, deploy scripts, CLI enrollment, and state endpoint. All other paths redirect to HTTPS. Wrapped with rate limiting and path traversal guard.
+- **`buildPublicRouter`** (HTTPS port): Full API surface with mTLS middleware via `auth.Middleware`. Routes include governance envelopes, audit, PKI management, user management, MCP/A2A ingress, SSE, pub/sub, console SPA, passkey endpoints, approval UI, CLI recovery (request/status/approve/complete), and CLI rotation (`/api/v1/auth/cli/rotate`, mTLS-only). WebSessionAuth-protected routes bypass mTLS and use cookie-based auth with their own middleware. The landing page (`/`) redirects to `/console/`.
+- **`buildHTTPRouter`** (HTTP port): Bootstrap-only surface for CA discovery, deploy scripts (Linux/Windows), node binary download, CLI recovery discovery (request/status/complete — approve is HTTPS-only), and state endpoint. All other paths redirect to HTTPS. Wrapped with rate limiting and path traversal guard. (The old `handleCLIEnrollment` route and per-platform trust-install script routes were removed in v1.7.2.)
 - **`RouteAuthRegistry`** classifies every route by its authentication mode (`RouteAuthNone`, `RouteAuthMTLS`, `RouteAuthWebSession`, `RouteAuthDual`). Exact paths are matched with highest priority, then prefix matches. Unknown routes default to `RouteAuthMTLS` (fail-closed). When JWKS is enabled, MCP/A2A and JIT passkey routes are reclassified to `RouteAuthNone` (JWT middleware handles auth).
 - **`PrivilegedRouteRegistry`** blocks app certificates from governance envelope submission and query endpoints. Only operator and CLI auth are accepted on these routes.
 - **`gateway_http_middleware.go`**: `rateLimitMiddleware` applies per-IP token bucket rate limiting with 5-minute stale entry cleanup. `pathTraversalGuard` rejects requests containing `..` path segments before ServeMux normalization.
@@ -358,11 +372,13 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - **`gateway/console/`**: Embedded Console SPA (`console.go` exposes `Handler` serving the static filesystem from `static/`).
 
 ### HTTP Controller Decomposition
-- **`gateway.PKIController`** (`pki_controller.go`): PKI enrollment, CSR signing, CA bundle, trust scripts (Linux/macOS/Windows), deploy scripts, certificate revocation, app enrollment.
+- **`gateway.PKIController`** (`pki_controller.go`): PKI enrollment, CSR signing, CA bundle discovery, CRL, deploy scripts (Linux/Windows), node binary download, certificate revocation, app/device enrollment. (The old per-platform trust-install script routes `/web-cert.sh`, `/web-cert.ps1`, `/.well-known/g8e/pki/trust-windows` were removed in v1.7.2; OS trust installation is now performed client-side by the `EnrollmentCoordinator` via `platform.SystemTrustInstaller`.)
 - **`gateway.AuditController`** (`audit_controller.go`): Audit receipts, audit events, audit summary, audit report. 4 dependencies (cfg, logger, auditStore, responder).
 - **`gateway.DataController`** (`data_controller.go`): Data DB, KV store, blob storage, SSE events, pub/sub publish. 7 dependencies (cfg, logger, docStore, kvStore, sseStore, blobStore, pubsub, responder).
 - **`gateway.SignerController`** (`signer_controller.go`): Governance trusted signers. 5 dependencies (cfg, logger, docStore, signerStore, responder).
-- **`gateway.BootstrapController`** (`bootstrap_controller.go`): Local bootstrap with URL, bootstrap status, CLI enrollment, device enrollment. 9 dependencies (cfg, logger, docStore, userSvc, pki, cliSessionSvc, operatorSessionSvc, responder, actuatorKeyReader).
+- **`gateway.BootstrapController`** (`bootstrap_controller.go`): Local bootstrap with URL, bootstrap status, device enrollment. CLI enrollment is no longer handled here — it is owned by the client-side `EnrollmentCoordinator` (CLI auth package) which drives the bootstrap, recovery, and rotation gateway endpoints. 9 dependencies (cfg, logger, docStore, userSvc, pki, cliSessionSvc, operatorSessionSvc, responder, actuatorKeyReader).
+- **`gateway.CLIRecoveryController`** (`cli_recovery_controller.go`): Human-approved CLI recovery flow — request creation (public, CSR is proof-of-possession anchor), status polling (public, opaque token is lookup key), browser approval/denial (web-session protected, existing user authorizes new CLI), and proof-of-possession-gated completion (public, requires token + CSR private-key signature over request ID). Issues a new CLI certificate bound to a new CLI session. Auth classification: request/status/complete = `RouteAuthNone`, approve = `RouteAuthWebSession`. 9 dependencies (cfg, logger, recoverySvc, userSvc, pki, cliSessionSvc, operatorSessionSvc, docStore, responder).
+- **`gateway.CLIRotationController`** (`cli_rotation_controller.go`): mTLS-protected CLI certificate rotation. Identity (user ID + active CLI session ID) is derived strictly from the verified mTLS certificate URI SAN — request body fields are NOT trusted for identity. Single transactional replacement: new cert is signed BEFORE old session is deactivated, old cert is revoked AFTER session replacement commits. Auth classification: `RouteAuthMTLS` (registered on `buildPublicRouter` only, never on plain HTTP). 7 dependencies (cfg, logger, cliSessionSvc, pki, userSvc, responder, + cert revocation via PKI).
 - **`gateway.EnrollmentTokenController`** (`enrollment_token_controller.go`): Enrollment token generation (mTLS-protected) and validation (public). 4 dependencies (cfg, logger, enrollmentTokenSvc, responder).
 - **`gateway.UserController`** (`user_controller.go`): User creation (mTLS-protected), user me (web session). 4 dependencies (cfg, logger, userSvc, responder).
 - **`gateway.SessionController`** (`session_controller.go`): Logout (clear cookie + delete web session), web session info. 4 dependencies (logger, docStore, responder, crossOrigin).
@@ -476,6 +492,55 @@ The reporting system operates as a self-contained, offline verification utility 
 - **`internal/cli/cmd/gwstdout.go`**: `printNextSteps` outputs guidance after the gateway starts, including CA trust instructions, CLI enrollment, operator deployment, and Console UI access.
 - **`internal/services/gateway/cli_cert.go`**: `ExtractUserIDFromCert` extracts the user ID from a CLI mTLS certificate's SPIFFE URI SAN.
 - **Test Coverage**: `cert_test.go` covers `PerformAutomaticEnrollment` (6 tests), `RenewOperatorCertificate` (9 tests), `RunClientCertRenewalLoop` (1 test) with hermetic `httptest.Server` and real certificate generation. `operator_test.go` covers extracted helpers at 100%. `gateway_test.go` covers gateway boot sequence. `internal/cli/serve` overall at 49.6% coverage.
+
+## CLI Auth Package (Enrollment Coordinator)
+
+**`internal/cli/auth/`** - CLI enrollment state machine, credential storage, and mTLS client construction. This package is the single owner of local CLI enrollment state transitions. The command layer (`internal/cli/cmd`) constructs an `EnrollmentCoordinator` via the package-level `enrollCoordinatorFactory` var (swappable for tests) and calls `Enroll` — it does not duplicate the state machine, inspect individual credential files, or branch on `runtime.GOOS`.
+
+### Caller Graph
+
+```text
+cmd.authEnrollCmd / cmd.enrollDemoHost / cmd.launchAgentWithGovernance
+  └── enrollCoordinatorFactory (package-level var, test-swappable)
+      └── auth.NewEnrollmentCoordinator(deps)
+          ├── EnrollmentGateway (interface; *EnrollmentClient in production)
+          │   └── HTTP I/O only: Bootstrap, CreateRecoveryRequest, RecoveryStatus,
+          │       CompleteRecovery, Rotate, CheckBootstrapStatus
+          ├── *CredentialStore
+          │   └── Inspect / Stage / Commit / Rollback / Clear (file I/O only)
+          ├── KeyProvider (interface; FileKeyProvider in production)
+          │   └── GenerateCLIKeyAndCSR (file-backed EC P-256 on all platforms)
+          ├── SystemTrustInstaller (interface; *platform.SystemTrustInstaller in production)
+          │   └── EnsureSystemTrust (sudo/exec, OS trust store)
+          ├── BrowserOpener (interface; defaultBrowserOpener in production)
+          │   └── Open (recovery approval URL only)
+          ├── PasskeyRegistrar (interface; *defaultPasskeyRegistrar in production)
+          │   └── Register (browser passkey ceremony + SSE wait)
+          └── fs.RuntimeFileService + *config.Config
+```
+
+### Components
+
+- **`enrollment.go`** — `EnrollmentCoordinator` owns the §3 enrollment state machine. It is the single place that decides whether to bootstrap, recover, rotate, or reuse the local CLI identity. The coordinator never writes to stdout/stderr directly (all progress goes through `OutputFunc`), never opens a browser except via `BrowserOpener` (recovery approval) or `PasskeyRegistrar` (passkey ceremony), and never invokes sudo or mutates an OS certificate store except via `SystemTrustInstaller`. `Enroll(ctx, EnrollmentOptions)` is the single entry point. `EnrollmentCoordinatorDeps` holds injectable dependencies; nil fields get production defaults. The `Enroller` interface (satisfied by `*EnrollmentCoordinator`) allows the command layer's `enrollCoordinatorFactory` to return an interface for test mocking.
+- **`enrollment_types.go`** — `EnrollmentArtifacts` (typed result from gateway transport), `LocalIdentity` (classified local state: absent/complete/partial/corrupt), `EnrollmentOptions` (`NoSystemTrust`, `RotateCLI`), `OutputFunc` type.
+- **`enrollment_client.go`** — `EnrollmentClient` is the gateway enrollment transport. It performs ONLY HTTP I/O and response validation: receives a `context.Context`, returns typed `EnrollmentArtifacts`, writes no files, performs no UI/platform work, never opens a browser. Satisfies the `EnrollmentGateway` interface. Replaces the old `BootstrapWithURL`/`CLIEnroll`/`ReEnroll`/`EnrollWithGateway` transport slices.
+- **`credential_store.go`** — `CredentialStore` is the coordinator's typed API over local CLI identity files. `Inspect` classifies local state as absent/complete/partial/corrupt by examining ALL managed artifacts as a set. `Stage`/`Commit` write a new complete identity atomically (credentials written LAST so partial commits are detected as partial/corrupt by the next `Inspect`). `Rollback` releases staged state without writing canonical files. `Clear` removes local CLI credential material for logout/recovery but does NOT remove the shared OS root CA (§4.3 ownership policy). Safe for concurrent use via `sync.Mutex` (enrollment lock).
+- **`key_provider.go`** — `FileKeyProvider` implements `KeyProvider` with file-backed EC P-256 keys on all platforms (the `--tpm` flag was removed in v1.7.2). The `KeyProvider` interface is the extension point if non-exportable platform keys (TPM/CNG) are added later.
+- **`passkey_enrollment.go`** — `passkeyRegistrar` runs the browser-based passkey registration ceremony. Prepares the SSE listener before browser launch, uses a correct cursor strategy (`since_id=0` for live-only events), filters events by type/user/session, surfaces browser-open errors, and propagates context cancellation. `defaultPasskeyRegistrar` wraps it and satisfies the `PasskeyRegistrar` interface.
+- **`trust_bundle.go`** — `ReadTrustBundle` loads the gateway root CA bundle from the local trust store (used by mTLS client construction and system trust installation).
+- **`tls.go`** — `BuildMTLSClient` constructs an `*http.Client` with TLS 1.3 + mTLS from the local CLI certificate and trust bundle. Uses `tls.LoadX509KeyPair` directly (correct for file-backed keys on all platforms post-Section-7).
+- **`client.go`** — `LoadCredentials` loads the local CLI credentials JSON. Used by operator/MCP/audit/approve/serve callers (credential consumers, not enrollment).
+- **`windows_crypto.go`** / **`windows_crypto_stub.go`** — Windows CNG key handling (build-tagged). The stub is used on non-Windows platforms.
+- **`approval_sse.go`** — SSE client for CLI consumption of gateway approval events (used by `auth approve` command).
+- **`agent_enroll.go`** — `EnrollAgent` helper for `mcp agent run` enrollment path.
+
+### Test Coverage
+
+- `enrollment_coordinator_test.go` — Full state machine coverage: healthy reuse (no rotation), partial→recovery, expired→rotation, absent→bootstrap, `--no-system-trust` skip, system trust failure stops before browser, `--rotate-cli` forces rotation, concurrent enrollment safety.
+- `credential_store_test.go` — 5 tests: interrupted-commit retry, rollback writes no canonical files, committed file permissions (0600), concurrent Stage+Commit no torn state (race-clean), Clear retains trust bundle.
+- `enrollment_client_test.go` / `client_test.go` — Transport and credential loading tests with hermetic `httptest.Server`.
+- `passkey_enrollment_registrar_test.go` / `passkey_enrollment_sse_test.go` / `passkey_enrollment_test.go` — Passkey ceremony SSE listener, event filtering, browser-open error surfacing, context cancellation.
+- `cert_test.go` / `csr_test.go` / `fingerprint_test.go` / `mtls_client_test.go` — Certificate, CSR, fingerprint, and mTLS client construction tests.
 
 ## CLI Platform & Stream Packages
 

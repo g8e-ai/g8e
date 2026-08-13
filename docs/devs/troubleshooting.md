@@ -1,7 +1,7 @@
 # Developer Troubleshooting
 
-Last Updated: 2026-07-28
-Version: v1.6.6
+Last Updated: 2026-08-12
+Version: v1.7.2
 
 This page covers common setup failures, runtime friction, and operational
 caveats for contributors working on g8e from a fresh checkout. The platform
@@ -206,7 +206,44 @@ If authentication fails, check the following:
 - Ensure the gateway is running via `./g8e gw status`.
 - Verify the external IP displayed during gateway start matches your network interface.
 - For passkey authentication, ensure your hardware security key or platform authenticator is available.
-- For certificate-based authentication, ensure `.g8e/cli.crt` and `.g8e/cli.key` exist. The `auth enroll` command generates these files via CSR-based enrollment with the gateway CA. On Windows, enrollment uses the Windows Certificate Store automatically.
+- For certificate-based authentication, ensure `.g8e/cli.crt` and `.g8e/cli.key` exist. The `auth enroll` command generates these files via the `EnrollmentCoordinator`, which drives CSR-based enrollment with the gateway CA. On all platforms (including Windows), CLI keys are file-backed EC P-256; the `--tpm` flag was removed in v1.7.2.
+
+### CLI recovery (new CLI against an existing gateway)
+
+If you are enrolling a new CLI against an already-bootstrapped gateway
+(e.g. a second workstation, or replacing a lost CLI), `auth enroll`
+detects that the gateway is already bootstrapped and uses the
+**recovery flow** instead of bootstrap. The recovery flow requires a
+one-time human approval from an existing enrolled user:
+
+1. The new CLI posts a CSR to the gateway and receives an opaque
+   one-time token plus a browser approval URL.
+2. An existing user opens the approval URL in their browser and
+   approves (or denies) the request via the console.
+3. The new CLI completes the recovery by proving possession of the CSR
+   private key (signing the request ID) and receives a new CLI
+   certificate.
+
+If recovery fails:
+- The token expires after a bounded TTL. If the approving user does not
+  act in time, re-run `auth enroll` to get a fresh token.
+- The opaque token is only returned once. If you lose it, re-run
+  `auth enroll`.
+- The approving user must have an active web session (cookie-based
+  auth). If approval fails with 401, the approving user should
+  re-authenticate in their browser.
+- Recovery is not available on an unbootstrapped gateway. Use the
+  bootstrap endpoint instead.
+
+### `--no-system-trust` flag
+
+`--no-system-trust` skips the OS trust store installation step. It is
+an **administrator-managed trust opt-out**, not a headless or passkey
+bypass. Use it only when an administrator has already installed the
+gateway root CA into the OS trust store. The passkey ceremony still
+runs. If you use `--no-system-trust` without pre-installing the root
+CA, browser-based WebAuthn will fail because the browser will not
+trust the gateway's TLS certificate.
 
 ### Browser CA trust and WebAuthn failures
 
@@ -226,19 +263,34 @@ platform CA. Firefox and other browser-private trust stores may require
 separate handling. This is the most common cause of console access
 failures on fresh setups.
 
-### Certificate expiry
+### Certificate expiry and rotation
 
 Leaf certificates (operator, CLI, app) have a 7-day validity period. If
 authentication fails with a certificate-related error, the CLI certificate
-may have expired. Re-enroll to obtain a fresh certificate:
+may have expired. The `EnrollmentCoordinator` automatically detects
+expiring CLI certificates (within 24 hours of expiry) and rotates them
+via the mTLS-protected rotation endpoint (`/api/v1/auth/cli/rotate`).
+Rotation is a single transactional replacement: the new certificate is
+signed before the old session is deactivated, and the old certificate is
+revoked after the session replacement commits.
+
+To force rotation of a healthy CLI certificate (e.g. after a key
+compromise concern), use the `--rotate-cli` flag:
 
 ```bash
-./g8e auth enroll
+./g8e auth enroll --rotate-cli
+```
+
+If the CLI certificate has already expired and rotation is not possible,
+re-enroll from scratch:
+
+```bash
+./g8e auth logout && ./g8e auth enroll
 ```
 
 The gateway serving certificate has a 90-day validity period and is
-auto-rotated by the PKI authority. Operator and CLI certificates require
-manual re-enrollment after expiry.
+auto-rotated by the PKI authority. Operator certificates require manual
+re-enrollment after expiry.
 
 ### g8e.local DNS resolution
 
@@ -509,6 +561,14 @@ to obtain fresh credentials:
 ./g8e auth logout && ./g8e auth enroll
 ```
 
+Note: `auth logout` removes local CLI credential material (CLI cert,
+CLI key, credentials JSON) but does **not** remove the shared OS root
+CA. This is intentional — the OS root CA is a shared system resource
+that may be trusted by other applications. If the root CA itself is
+stale (PKI was regenerated), remove it manually from the OS trust
+store before re-enrolling, or use `auth enroll` which will reinstall
+the correct root CA.
+
 ## Cloudflare tunnel issues
 
 When exposing the gateway via a Cloudflare tunnel, additional failure
@@ -605,13 +665,17 @@ differentiation.
 
 ## Windows-specific issues
 
-### CLI enrollment and the Windows Certificate Store
+### CLI enrollment and file-backed keys
 
-On Windows, `g8e auth enroll` uses the Windows Certificate Store for CLI
-session enrollment. The signed certificate is imported to
-`Cert:\CurrentUser\My` for Windows Hello native API access. This is
-distinct from the browser-based WebAuthn passkey flow, which uses a
-cookie-based web session.
+On all platforms (including Windows), `g8e auth enroll` uses file-backed
+EC P-256 keys for the CLI identity. The `--tpm` flag was removed in
+v1.7.2. The `EnrollmentCoordinator` handles the full enrollment state
+machine (bootstrap, recovery, rotation, reuse) and installs the gateway
+root CA into the OS trust store before opening the browser for the
+passkey ceremony. On Windows, trust installation uses the Windows
+Certificate Store via PowerShell. This is distinct from the
+browser-based WebAuthn passkey flow, which uses a cookie-based web
+session.
 
 ### Keystore file-based fallback
 

@@ -230,8 +230,8 @@ func TestSecurityPKIEnrollCmd_API_MissingCertInResponse(t *testing.T) {
 
 	enroller := &mockRemoteOperatorEnroller{
 		artifacts: auth.EnrollmentArtifacts{
-			Source:         auth.EnrollmentSourceRemoteOperator,
-			OperatorID:     "op-nocert",
+			Source:          auth.EnrollmentSourceRemoteOperator,
+			OperatorID:      "op-nocert",
 			OperatorCertPEM: "",
 		},
 	}
