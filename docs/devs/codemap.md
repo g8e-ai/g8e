@@ -638,7 +638,7 @@ The following packages are test-only and are not part of the production dependen
 **`test/e2e/harness.go`** - Docker-based E2E test fixture (build tag: `e2e`)
 - `DockerE2EFixture` spins up docker-compose, allocates host ports, waits for gateway health, and tears down on cleanup
 - Tests only what is observable from outside containers: HTTP health, CA bundle discovery, port reachability, and mTLS handshake over network
-- Supports `G8E_E2E_SKIP_DOCKER` environment variable to skip when Docker is unavailable
+- E2E tests require Docker — there is no opt-out. A fixture-setup failure exits non-zero with a `FATAL` message so a broken Docker environment can never produce a green build with zero tests run
 
 **`test/integration_helper.go`** - Shared integration test helpers (build tag: `integration` or `e2e`)
 - `NewLiveOperatorHTTPClient` creates an mTLS API client against a running g8e platform

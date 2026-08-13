@@ -276,7 +276,7 @@ Key fixture methods: `NewGatewayFixture`, `EnrollClientIdentity`, `CreateMTLSCli
 
 ### Docker E2E Fixture (Tier 3)
 
-`TestMain` in `test/e2e/main_test.go` spins up a single Docker Compose stack (gateway + operator) once for all E2E tests, then tears it down after `m.Run()`. The shared fixture is stored in the package-level `sharedFixture` variable. Tests that require Docker check for nil and skip if unavailable; tests that do not require Docker (e.g. MCP config output) run regardless. Set `G8E_E2E_SKIP_DOCKER=1` to skip Docker setup entirely while still running non-Docker E2E tests.
+`TestMain` in `test/e2e/main_test.go` spins up a single Docker Compose stack (gateway + operator) once for all E2E tests, then tears it down after `m.Run()`. The shared fixture is stored in the package-level `sharedFixture` variable. Tests that require Docker check for nil and skip if unavailable; tests that do not require Docker (e.g. MCP config output) run regardless. E2E tests are Tier 3 and require Docker — there is no opt-out. A fixture-setup failure exits non-zero with a `FATAL: E2E fixture setup failed` message so a broken Docker environment can never produce a green build with zero tests run. On any non-zero exit, container logs and compose state are captured to a temp dir before teardown.
 
 The Dockerfile uses a BuildKit cache mount (`--mount=type=cache,target=/root/.cache/go-build`) to preserve the Go build cache across Docker image rebuilds. The harness sets `DOCKER_BUILDKIT=1` to enable this. First run after code changes rebuilds from scratch (~100s); subsequent runs with warm cache complete in ~25s.
 

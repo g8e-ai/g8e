@@ -139,6 +139,11 @@ func (c *OperatorPubSubClient) Subscribe(ctx context.Context, channel string) (<
 		return nil, fmt.Errorf("%w (http_status=%d): %v", constants.ErrPubSubConnect, statusCode, err)
 	}
 
+	c.logger.Info("operator pub/sub WebSocket connected",
+		"url", wsURL,
+		"channel", channel,
+		"tls_enabled", c.tlsConfig != nil)
+
 	subMsg := pubsubv1.PubSubMessage{
 		Action:  constants.PubSubActionSubscribe,
 		Channel: channel,
@@ -279,6 +284,10 @@ func (c *OperatorPubSubClient) connectPubWs() error {
 		}
 		return fmt.Errorf("%w: %v", constants.ErrPubSubPublishConnect, err)
 	}
+	c.logger.Info("operator pub/sub WebSocket connected",
+		"url", wsURL,
+		"direction", "publish",
+		"tls_enabled", c.tlsConfig != nil)
 	c.pubWs = ws
 	return nil
 }

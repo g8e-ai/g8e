@@ -393,3 +393,65 @@ func TestOperatorController_HandleReauth(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
 }
+
+func TestOperatorController_HandleGetOperatorBySession(t *testing.T) {
+	infra := setupTestInfrastructure(t, false)
+	controller := newOperatorController(OperatorControllerDeps{Cfg: infra.Cfg, Logger: infra.Logger, Reg: infra.Reg, Auth: infra.Auth, Responder: infra.Responder})
+
+	t.Run("Wrong method returns 405", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/session/sess-123", nil)
+		w := httptest.NewRecorder()
+
+		controller.handleGetOperatorBySession(w, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	})
+
+	t.Run("Empty session ID returns 400", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.OperatorsSession, nil)
+		w := httptest.NewRecorder()
+
+		controller.handleGetOperatorBySession(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("Invalid session ID returns 401", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.OperatorsSession+"nonexistent-session", nil)
+		w := httptest.NewRecorder()
+
+		controller.handleGetOperatorBySession(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	t.Run("Valid session ID returns 200 with operator document", func(t *testing.T) {
+		operatorSessionID := "sess-valid-456"
+		opDoc := map[string]interface{}{
+			"id":                  "op-456",
+			"operator_session_id": operatorSessionID,
+			"status":              marshaler.Status(constants.OperatorStatusActive),
+			"user_id":             "user-456",
+			"organization_id":     "org-456",
+		}
+		opBytes, err := json.Marshal(opDoc)
+		require.NoError(t, err)
+		require.NoError(t, infra.Stores.DocStore.DocSet(string(constants.CollectionOperators), "op-456", opBytes))
+
+		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.OperatorsSession+operatorSessionID, nil)
+		w := httptest.NewRecorder()
+
+		controller.handleGetOperatorBySession(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp models.OperatorResponse
+		err = json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp.Success)
+		require.NotNil(t, resp.Operator)
+		assert.Equal(t, "op-456", resp.Operator.ID)
+		assert.Equal(t, operatorSessionID, resp.Operator.OperatorSessionID)
+		assert.Equal(t, constants.OperatorStatusActive, resp.Operator.Status)
+	})
+}

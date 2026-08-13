@@ -16,10 +16,7 @@
 package e2e
 
 import (
-	"fmt"
-	"net"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -44,12 +41,9 @@ func TestDockerGateway_Health(t *testing.T) {
 		t.Logf("CA bundle retrieved successfully (length: %d)", len(bundle))
 	})
 
-	t.Run("HTTPS port reachable (no mTLS)", func(t *testing.T) {
-		// TCP dial to verify port is reachable (we don't have mTLS certs for this test)
-		conn, err := net.DialTimeout("tcp", fmt.Sprintf("localhost:%d", f.HTTPSPort), 5*time.Second)
-		require.NoError(t, err, "HTTPS port not reachable")
-		conn.Close()
-		t.Log("HTTPS port is reachable")
+	t.Run("enrolled operator cert completes mTLS handshake", func(t *testing.T) {
+		f.DialGatewayMTLS(t)
+		t.Log("mTLS handshake succeeded with enrolled operator certificate")
 	})
 
 	t.Run("operator container connected", func(t *testing.T) {

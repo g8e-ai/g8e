@@ -16,6 +16,8 @@
 package e2e
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -32,11 +34,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 )
 
 // DockerE2EFixture spins up docker-compose, waits for health, and tears down on cleanup.
-// It tests ONLY what is observable from outside the container — HTTP health, CA bundle
-// discovery, and port reachability. mTLS protocol tests belong in tier 2.
+// It tests black-box observable gateway and operator behaviors — HTTP health, CA bundle
+// discovery, operator liveness, and external mTLS handshakes using enrolled client credentials.
 type DockerE2EFixture struct {
 	GatewayHTTPURL  string // http://localhost:<httpPort>
 	GatewayHTTPSURL string // https://localhost:<httpsPort> (no client cert for these tests)
@@ -191,10 +194,6 @@ func (f *DockerE2EFixture) teardown() error {
 func NewDockerE2EFixture(t *testing.T, composeFile string) *DockerE2EFixture {
 	t.Helper()
 
-	if os.Getenv("G8E_E2E_SKIP_DOCKER") == "1" {
-		t.Skip("Skipping Docker E2E tests (G8E_E2E_SKIP_DOCKER=1)")
-	}
-
 	fixture, err := setupSharedE2EFixture(composeFile)
 	if err != nil {
 		t.Fatalf("Failed to set up Docker E2E fixture: %v", err)
@@ -292,6 +291,11 @@ func (f *DockerE2EFixture) GetCABundle(t *testing.T) string {
 // authentication success in logs. It waits for the operator to complete bootstrap
 // authentication before asserting, since the operator may still be enrolling
 // when the gateway first becomes healthy.
+//
+// Log windowing: uses `docker logs --since <container.StartedAt>` so only logs
+// from the current container start are examined. After a restart, StartedAt
+// updates to the new start time, excluding pre-restart stale log lines that
+// would otherwise produce a false-positive match.
 func (f *DockerE2EFixture) CheckOperatorContainer(t *testing.T) {
 	t.Helper()
 
@@ -304,9 +308,15 @@ func (f *DockerE2EFixture) CheckOperatorContainer(t *testing.T) {
 	status := strings.TrimSpace(string(output))
 	require.Equal(t, "running", status, "Operator container is not running")
 
-	// Wait for operator to complete bootstrap authentication
+	// Get the container's start time for log windowing. This ensures we only
+	// look at logs from the current container start, never stale logs from a
+	// previous start (e.g. after a restart).
+	startedAt := f.OperatorStartedAt(t)
+
+	// Wait for operator to complete bootstrap authentication, using only
+	// logs from the current container start.
 	require.Eventually(t, func() bool {
-		logsCmd := exec.Command("docker", "logs", opContainerName)
+		logsCmd := exec.Command("docker", "logs", "--since", startedAt, opContainerName)
 		logsOutput, err := logsCmd.CombinedOutput()
 		if err != nil {
 			return false
@@ -315,9 +325,24 @@ func (f *DockerE2EFixture) CheckOperatorContainer(t *testing.T) {
 	}, 120*time.Second, 2*time.Second, "Operator logs do not contain authentication success marker")
 }
 
+// OperatorStartedAt returns the container's State.StartedAt timestamp (RFC3339)
+// for use as a `docker logs --since` argument. This is the canonical way to
+// window logs to the current container start.
+func (f *DockerE2EFixture) OperatorStartedAt(t *testing.T) string {
+	t.Helper()
+
+	opContainerName := f.ContainerPrefix + "-operator"
+	cmd := exec.Command("docker", "inspect", "-f", "{{.State.StartedAt}}", opContainerName)
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "Failed to inspect operator container start time")
+	return strings.TrimSpace(string(output))
+}
+
 // OperatorLogs returns the combined stdout/stderr logs of the operator container.
 // This is a black-box observation helper — it only reads container logs, never
 // accesses files inside the container or opens mTLS connections from the test process.
+// Returns the FULL log buffer including pre-restart lines; for windowed access
+// after a restart, use OperatorLogsSince.
 func (f *DockerE2EFixture) OperatorLogs(t *testing.T) string {
 	t.Helper()
 
@@ -328,10 +353,25 @@ func (f *DockerE2EFixture) OperatorLogs(t *testing.T) string {
 	return string(logsOutput)
 }
 
-// RestartOperator restarts the operator container and waits for it to become
-// healthy again by polling the gateway health endpoint. This is a black-box
-// helper — it uses `docker restart` and HTTP health checks only, no in-container
-// file access or mTLS from the test process.
+// OperatorLogsSince returns the operator container logs since the given
+// timestamp (RFC3339 format, as returned by OperatorStartedAt). Use this after
+// a restart to examine only post-restart logs, avoiding stale pre-restart
+// lines that would produce false-positive matches.
+func (f *DockerE2EFixture) OperatorLogsSince(t *testing.T, sinceTS string) string {
+	t.Helper()
+
+	opContainerName := f.ContainerPrefix + "-operator"
+	logsCmd := exec.Command("docker", "logs", "--since", sinceTS, opContainerName)
+	logsOutput, err := logsCmd.CombinedOutput()
+	require.NoError(t, err, "Failed to get operator logs since %s", sinceTS)
+	return string(logsOutput)
+}
+
+// RestartOperator restarts the operator container and waits for it to
+// re-authenticate. Log windowing uses the post-restart container StartedAt
+// timestamp so the re-auth assertion cannot be satisfied by pre-restart
+// stale log lines. This is a black-box helper — it uses `docker restart`,
+// HTTP health checks, and windowed log inspection only.
 func (f *DockerE2EFixture) RestartOperator(t *testing.T) {
 	t.Helper()
 
@@ -342,7 +382,14 @@ func (f *DockerE2EFixture) RestartOperator(t *testing.T) {
 	restartOutput, err := restartCmd.CombinedOutput()
 	require.NoError(t, err, "Failed to restart operator container: %s", string(restartOutput))
 
-	// Wait for operator to re-authenticate by checking logs for the auth success marker
+	// Capture the post-restart start time for log windowing. All subsequent
+	// log checks use --since this timestamp, so pre-restart "Authentication
+	// successful" lines cannot satisfy the re-auth assertion.
+	startedAt := f.OperatorStartedAt(t)
+	t.Logf("Operator restarted at %s, waiting for re-authentication", startedAt)
+
+	// Wait for operator to re-authenticate by checking windowed logs for the
+	// auth success marker.
 	client := &http.Client{Timeout: 2 * time.Second}
 	require.Eventually(t, func() bool {
 		// Verify gateway is still healthy
@@ -355,12 +402,100 @@ func (f *DockerE2EFixture) RestartOperator(t *testing.T) {
 			return false
 		}
 
-		// Check operator logs for re-authentication
-		logsCmd := exec.Command("docker", "logs", "--since", "10s", opContainerName)
+		// Check windowed operator logs for re-authentication
+		logsCmd := exec.Command("docker", "logs", "--since", startedAt, opContainerName)
 		logsOutput, err := logsCmd.CombinedOutput()
 		if err != nil {
 			return false
 		}
 		return strings.Contains(string(logsOutput), "Authentication successful")
 	}, 120*time.Second, 2*time.Second, "Operator did not re-authenticate within 120s after restart")
+}
+
+// GetOperatorSessionID returns the G8E_OPERATOR_SESSION_ID environment variable
+// from the operator container.
+func (f *DockerE2EFixture) GetOperatorSessionID(t *testing.T) string {
+	t.Helper()
+
+	opContainerName := f.ContainerPrefix + "-operator"
+	cmd := exec.Command("docker", "exec", opContainerName, "printenv", string(constants.EnvVar.OperatorSessionID))
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "Failed to get operator session ID from container env: %s", string(output))
+	sessionID := strings.TrimSpace(string(output))
+	require.NotEmpty(t, sessionID, "Operator session ID env var is empty")
+	return sessionID
+}
+
+// GetOperatorBySession queries the gateway's GET /api/v1/operators/session/{id} endpoint
+// and returns the operator document.
+func (f *DockerE2EFixture) GetOperatorBySession(t *testing.T, sessionID string) *models.OperatorDocumentGo {
+	t.Helper()
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	reqURL := f.GatewayHTTPURL + constants.APIPaths.OperatorsSession + sessionID
+	resp, err := client.Get(reqURL)
+	require.NoError(t, err, "Failed to query operator session")
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode, "GET /api/v1/operators/session/%s returned unexpected status", sessionID)
+
+	var opResp models.OperatorResponse
+	err = json.NewDecoder(resp.Body).Decode(&opResp)
+	require.NoError(t, err, "Failed to decode operator response")
+	require.True(t, opResp.Success, "Gateway returned success=false for operator session lookup")
+	require.NotNil(t, opResp.Operator, "Gateway returned nil operator for session lookup")
+
+	return opResp.Operator
+}
+
+// DialGatewayMTLS completes a real mTLS TLS handshake against the gateway's HTTPS port
+// using the operator's enrolled certificate and key read from the operator container.
+func (f *DockerE2EFixture) DialGatewayMTLS(t *testing.T) {
+	t.Helper()
+
+	opContainerName := f.ContainerPrefix + "-operator"
+
+	// Read operator's enrolled cert and key from container
+	certCmd := exec.Command("docker", "exec", opContainerName, "cat", constants.ContainerOperatorCert)
+	certPEM, err := certCmd.CombinedOutput()
+	require.NoError(t, err, "Failed to read operator cert from container: %s", string(certPEM))
+
+	keyCmd := exec.Command("docker", "exec", opContainerName, "cat", constants.ContainerOperatorKey)
+	keyPEM, err := keyCmd.CombinedOutput()
+	require.NoError(t, err, "Failed to read operator key from container: %s", string(keyPEM))
+
+	cliCert, err := tls.X509KeyPair(certPEM, keyPEM)
+	require.NoError(t, err, "Failed to parse operator X509 key pair")
+
+	// Read gateway CA bundle from well-known endpoint
+	caBundlePEM := f.GetCABundle(t)
+	caCertPool := x509.NewCertPool()
+	require.True(t, caCertPool.AppendCertsFromPEM([]byte(caBundlePEM)), "Failed to parse CA bundle into cert pool")
+
+	tlsConfig := &tls.Config{
+		Certificates:       []tls.Certificate{cliCert},
+		RootCAs:            caCertPool,
+		InsecureSkipVerify: true, // Verification handled via VerifyConnection against CA bundle
+		VerifyConnection: func(cs tls.ConnectionState) error {
+			if len(cs.PeerCertificates) == 0 {
+				return fmt.Errorf("no peer certificates returned by gateway")
+			}
+			opts := x509.VerifyOptions{
+				Roots: caCertPool,
+			}
+			_, err := cs.PeerCertificates[0].Verify(opts)
+			if err != nil {
+				return fmt.Errorf("gateway certificate failed verification against CA bundle: %w", err)
+			}
+			return nil
+		},
+	}
+
+	addr := fmt.Sprintf("127.0.0.1:%d", f.HTTPSPort)
+	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	require.NoError(t, err, "mTLS handshake against gateway HTTPS port failed")
+	defer conn.Close()
+
+	state := conn.ConnectionState()
+	require.True(t, state.HandshakeComplete, "TLS handshake did not complete")
+	require.NotEmpty(t, state.PeerCertificates, "No peer certificates received from gateway")
 }

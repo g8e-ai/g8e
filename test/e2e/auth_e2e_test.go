@@ -52,8 +52,9 @@ func TestDockerGateway_Auth(t *testing.T) {
 		// Wait for the operator to complete bootstrap authentication, since it may
 		// still be enrolling when the gateway first becomes healthy.
 		opContainerName := f.ContainerPrefix + "-operator"
+		startedAt := f.OperatorStartedAt(t)
 		require.Eventually(t, func() bool {
-			logsCmd := exec.Command("docker", "logs", opContainerName)
+			logsCmd := exec.Command("docker", "logs", "--since", startedAt, opContainerName)
 			logsOutput, err := logsCmd.CombinedOutput()
 			if err != nil {
 				return false
@@ -69,24 +70,79 @@ func TestDockerGateway_Auth(t *testing.T) {
 		// needing a fresh bootstrap.
 		f.RestartOperator(t)
 
-		// Verify the operator re-authenticated (not bootstrapped) after restart
-		logs := f.OperatorLogs(t)
-		require.Contains(t, logs, "Authentication successful",
+		// Verify the operator re-authenticated after restart using windowed logs.
+		// OperatorLogsSince uses the post-restart StartedAt timestamp, so this
+		// assertion can only be satisfied by a post-restart auth success line —
+		// not a stale pre-restart line.
+		startedAt := f.OperatorStartedAt(t)
+		recentLogs := f.OperatorLogsSince(t, startedAt)
+		require.Contains(t, recentLogs, "Authentication successful",
 			"Operator did not re-authenticate after restart — persisted identity may be lost")
-
-		// Verify the operator did NOT go through bootstrap after restart
-		// (bootstrap would indicate the enrolled identity was not persisted)
-		recentLogs := extractRecentLogs(logs, "Authentication successful")
-		require.NotEmpty(t, recentLogs, "No authentication success found in post-restart logs")
 	})
 }
 
-// extractRecentLogs returns the portion of logs from the first occurrence of the
-// marker onward, helping isolate post-restart log output.
-func extractRecentLogs(logs, marker string) string {
-	idx := strings.LastIndex(logs, marker)
-	if idx < 0 {
-		return ""
+// TestDockerGateway_RestartLogWindowing verifies that log-windowing after a
+// restart excludes pre-restart stale lines. This is a regression test for the
+// bug where CheckOperatorContainer grepped the full log buffer, causing
+// post-restart assertions to match pre-restart "Authentication successful"
+// lines and return true before the operator actually re-authenticated.
+//
+// The test captures a specific pre-restart log line before restarting, then
+// verifies after restart that: (1) the full log buffer still contains that
+// line (proving it existed pre-restart), and (2) the windowed log buffer
+// (--since the post-restart StartedAt) does NOT contain it (proving the
+// windowing fix excludes stale lines). This approach is timing-independent:
+// it does not rely on re-auth being slow, only on docker logs --since
+// correctly filtering by timestamp. Finally, it waits for genuine
+// re-authentication via CheckOperatorContainer, which uses the same windowed
+// approach.
+func TestDockerGateway_RestartLogWindowing(t *testing.T) {
+	if sharedFixture == nil {
+		t.Skip("Docker E2E fixture not available")
 	}
-	return logs[idx:]
+	f := sharedFixture
+
+	// Ensure the operator is initially authenticated.
+	f.CheckOperatorContainer(t)
+
+	opContainerName := f.ContainerPrefix + "-operator"
+
+	// Capture a pre-restart log line to use as a stale-line probe. The first
+	// non-empty line includes a timestamp unique to the pre-restart start, so
+	// it cannot appear in post-restart logs. This is the marker we will verify
+	// is excluded from windowed logs after restart.
+	preRestartLogs := f.OperatorLogs(t)
+	preRestartLines := strings.Split(strings.TrimSpace(preRestartLogs), "\n")
+	require.NotEmpty(t, preRestartLines, "Operator should have pre-restart logs")
+	preRestartMarker := strings.TrimSpace(preRestartLines[0])
+	require.NotEmpty(t, preRestartMarker, "First pre-restart log line should not be empty")
+
+	// Restart the operator.
+	t.Logf("Restarting operator for log-windowing regression test: %s", opContainerName)
+	restartCmd := exec.Command("docker", "restart", opContainerName)
+	restartOutput, err := restartCmd.CombinedOutput()
+	require.NoError(t, err, "Failed to restart operator: %s", string(restartOutput))
+
+	// Capture the post-restart start time for log windowing.
+	startedAt := f.OperatorStartedAt(t)
+
+	// 1. The FULL log buffer still contains the pre-restart line (stale).
+	//    This is the source of the bug: without windowing, post-restart
+	//    assertions would match this line.
+	fullLogs := f.OperatorLogs(t)
+	require.Contains(t, fullLogs, preRestartMarker,
+		"Pre-restart log line should be present in full log buffer — this is the bug source")
+
+	// 2. The WINDOWED log buffer (--since startedAt) must NOT contain the
+	//    pre-restart line. This proves the windowing fix works: post-restart
+	//    log checks cannot be satisfied by stale pre-restart lines, regardless
+	//    of how fast re-auth completes.
+	windowedLogs := f.OperatorLogsSince(t, startedAt)
+	require.NotContains(t, windowedLogs, preRestartMarker,
+		"Post-restart windowed logs must not contain pre-restart lines — windowing fix is broken")
+
+	// Now wait for real re-authentication using the windowed approach, proving
+	// the fix works: CheckOperatorContainer uses --since StartedAt and will only
+	// return once the operator genuinely re-authenticates after the restart.
+	f.CheckOperatorContainer(t)
 }

@@ -177,6 +177,11 @@ type OperatorSlotResponse struct {
 	Operators []OperatorDocumentGo `json:"operators"`
 }
 
+type OperatorResponse struct {
+	Success  bool                `json:"success"`
+	Operator *OperatorDocumentGo `json:"operator,omitempty"`
+}
+
 type TerminateOperatorRequest struct {
 	OperatorID string `json:"operator_id"`
 	UserID     string `json:"user_id"`

@@ -19,6 +19,7 @@
   "operators_unbind": "/api/v1/operators/unbind",
   "operators_target": "/api/v1/operators/target",
   "operators_reauth": "/api/v1/operators/reauth",
+  "operators_session": "/api/v1/operators/session/",
   "grant_intent": "/api/v1/operators/{operator_id}/intents/grant",
   "revoke_intent": "/api/v1/operators/{operator_id}/intents/revoke",
   "data_settings": "/api/v1/data/settings",
