@@ -91,9 +91,10 @@ This ensures that sensitive session identifiers are never exposed in browser his
 
 By default, `auth enroll` installs the gateway Root CA into the OS trust store **before** opening the browser for the passkey ceremony. This ensures the browser recognizes the gateway's TLS certificate during the WebAuthn flow.
 
+- Before installation, the coordinator checks for **stale g8e Root CA anchors** from previous gateway instances (e.g., after `gw clean` regenerated the CA). If stale anchors are found, the user is prompted to confirm removal. Declining aborts enrollment before browser launch.
 - If system trust installation fails, the coordinator **stops before launching the browser**. The user sees the error and guidance to restart the browser after manually installing the Root CA.
 - Use `--no-system-trust` only when an administrator has already installed the Root CA on the host. This is an administrator-managed trust opt-out — it does **not** skip the passkey step, and it does **not** enable headless enrollment.
-- After trust installation, **restart any already-running browser** so the new trust anchor is recognized.
+- After trust installation or stale anchor removal, **close all open browser windows** before clicking the enrollment link so the browser opens a fresh session that recognizes the new trust anchor.
 - Firefox and other browsers with private trust stores may require separate handling even after OS trust is installed.
 
 **CLI Recovery Flow (One-Time Human Approval):**

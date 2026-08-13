@@ -14,9 +14,12 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -58,14 +61,27 @@ var enrollCoordinatorFactory = newDefaultEnrollmentCoordinator
 // newDefaultEnrollmentCoordinator is the production coordinator factory. It
 // injects production defaults (real gateway client, file-backed key provider,
 // real system-trust installer, real browser opener, hardened passkey
-// registrar) and an OutputFunc that writes to the provided output sink.
+// registrar, stdin-reading confirm function) and an OutputFunc that writes to
+// the provided output sink.
 func newDefaultEnrollmentCoordinator(out auth.OutputFunc, fileSvc fs.RuntimeFileService, cfg *config.Config) Enroller {
 	return auth.NewEnrollmentCoordinator(auth.EnrollmentCoordinatorDeps{
 		FileSvc: fileSvc,
 		Cfg:     cfg,
 		Out:     out,
+		Confirm: stdinConfirm,
 		Logger:  slog.Default(),
 	})
+}
+
+// stdinConfirm prints the prompt to stdout and reads a y/N response from
+// stdin. Returns true only for "y" or "Y". Used by the coordinator to confirm
+// stale trust anchor removal before proceeding.
+func stdinConfirm(prompt string) bool {
+	fmt.Print(prompt)
+	reader := bufio.NewReader(os.Stdin)
+	response, _ := reader.ReadString('\n')
+	response = strings.TrimSpace(response)
+	return response == "y" || response == "Y"
 }
 
 func enrollCmd() *cobra.Command {
@@ -137,7 +153,7 @@ The Gateway must already be running (use './g8e gw start' first).`,
 			cmd.Printf("User ID: %s\n", result.UserID)
 			cmd.Printf("CLI Session ID: %s\n", result.CLISessionID)
 			if result.SystemTrustInstalled {
-				cmd.Println("System trust: installed gateway root CA. Restart any open browsers so they pick up the new trust anchor.")
+				cmd.Println("System trust: installed gateway root CA. Close all open browser windows before clicking the enrollment link.")
 			}
 			return nil
 		},

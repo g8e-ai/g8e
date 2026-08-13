@@ -122,7 +122,7 @@ Tests inject a `mockEnroller` via `withMockEnroller` helper + `noopCheckOperator
 - `TestEnrollCmd_HealthyReusedIdentityNoRotate` — Reused=true, RotateCLI=false
 - `TestEnrollCmd_RotateCLIFlagForcesRotation` — `--rotate-cli` wiring
 - `TestEnrollCmd_NoSystemTrustFlagWired` — `--no-system-trust` wiring
-- `TestEnrollCmd_SystemTrustInstalledOutput` — browser-restart guidance printed
+- `TestEnrollCmd_SystemTrustInstalledOutput` — browser-close guidance printed
 - `TestLogoutCmd_OSRootCARetained` — OS root CA retained on logout
 - `TestMCPStdio_DoesNotInvokeEnrollment` — stdio never calls the coordinator factory
 

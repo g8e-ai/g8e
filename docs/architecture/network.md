@@ -97,7 +97,7 @@ Since the Governance Gateway acts as a self-signed CA, clients must explicitly t
 
 If automatic OS trust installation fails, `auth enroll` stops before opening the browser and returns actionable remediation. Use `--no-system-trust` only when an administrator has already installed the Root CA on the host; it does not skip the passkey ceremony.
 
-After installing the Root CA, restart any browser that was already running so the new trust anchor is recognized. Firefox and other browser-private trust stores may require separate handling.
+After installing the Root CA (or removing stale anchors from a previous gateway instance), close all open browser windows before clicking the enrollment link so the new trust anchor is recognized. Firefox and other browser-private trust stores may require separate handling.
 
 ### CLI Recovery and Rotation Routes
 

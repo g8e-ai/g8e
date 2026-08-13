@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 )
@@ -157,4 +158,83 @@ func wrapElevation(err error) error {
 		return nil
 	}
 	return fmt.Errorf("%w: %w", constants.ErrSystemTrustInstallFailed, err)
+}
+
+// listStaleAnchorsPlatform enumerates g8e-root-*.crt files in the managed CA
+// directory, parses each certificate's fingerprint, and returns those that do
+// not match currentFingerprint. Works for both Debian and RHEL families since
+// both use the g8e-root-<fingerprint>.crt naming convention.
+func (i *SystemTrustInstaller) listStaleAnchorsPlatform(ctx context.Context, currentFingerprint string) ([]StaleAnchor, error) {
+	family := detectLinuxFamily(i.runner, ctx)
+	if family == linuxFamilyUnknown {
+		return nil, fmt.Errorf("%w: neither update-ca-certificates nor trust found on PATH", constants.ErrSystemTrustUnsupported)
+	}
+
+	dir := managedDir(family)
+	out, err := i.runner.Run(ctx, nil, "ls", dir)
+	if err != nil {
+		// Directory does not exist or is empty — no stale anchors.
+		return []StaleAnchor{}, nil
+	}
+
+	var stale []StaleAnchor
+	for _, name := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		name = strings.TrimSpace(name)
+		if name == "" || !strings.HasPrefix(name, linuxManagedPrefix) || !strings.HasSuffix(name, ".crt") {
+			continue
+		}
+		filePath := filepath.Join(dir, name)
+		certPEM, err := i.runner.Run(ctx, nil, "cat", filePath)
+		if err != nil {
+			continue // skip unreadable files
+		}
+		certs, parseErr := parseBundleCerts(certPEM)
+		if parseErr != nil || len(certs) == 0 {
+			continue // skip unparseable files
+		}
+		cert := certs[0]
+		fp := certFingerprint(cert)
+		if fp == currentFingerprint {
+			continue // active anchor — not stale
+		}
+		stale = append(stale, StaleAnchor{
+			Fingerprint: fp,
+			CommonName:  cert.Subject.CommonName,
+			Handle:      filePath,
+		})
+	}
+	if stale == nil {
+		return []StaleAnchor{}, nil
+	}
+	return stale, nil
+}
+
+// removeStaleAnchorsPlatform removes each stale anchor file via sudo rm, then
+// refreshes the trust bundle with the family-appropriate tool.
+func (i *SystemTrustInstaller) removeStaleAnchorsPlatform(ctx context.Context, anchors []StaleAnchor) error {
+	if len(anchors) == 0 {
+		return nil
+	}
+	family := detectLinuxFamily(i.runner, ctx)
+	if family == linuxFamilyUnknown {
+		return fmt.Errorf("%w: neither update-ca-certificates nor trust found on PATH", constants.ErrSystemTrustUnsupported)
+	}
+
+	for _, a := range anchors {
+		if _, err := i.runner.Run(ctx, nil, "sudo", "rm", "-f", a.Handle); err != nil {
+			return wrapElevation(err)
+		}
+	}
+
+	switch family {
+	case linuxFamilyDebian:
+		if _, err := i.runner.Run(ctx, nil, "sudo", "update-ca-certificates", "--fresh"); err != nil {
+			return wrapElevation(err)
+		}
+	case linuxFamilyRHEL:
+		if _, err := i.runner.Run(ctx, nil, "sudo", "update-ca-trust", "extract"); err != nil {
+			return wrapElevation(err)
+		}
+	}
+	return nil
 }

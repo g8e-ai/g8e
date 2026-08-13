@@ -70,3 +70,69 @@ func (i *SystemTrustInstaller) installPlatform(ctx context.Context, root *x509.C
 	}
 	return nil
 }
+
+// listStaleAnchorsPlatform enumerates certificates in LocalMachine\Root whose
+// subject CN matches g8eRootCommonName and whose SHA-256 fingerprint does not
+// match currentFingerprint. Returns the SHA-1 thumbprint as the Handle for
+// later removal via certutil -delstore.
+func (i *SystemTrustInstaller) listStaleAnchorsPlatform(ctx context.Context, currentFingerprint string) ([]StaleAnchor, error) {
+	// Use [char]10 instead of backtick-n to avoid Go raw-string conflicts.
+	psScript := "$store = New-Object System.Security.Cryptography.X509Certificates.X509Store(\"Root\",\"LocalMachine\")\n" +
+		"$store.Open(\"ReadOnly\")\n" +
+		"$lines = @()\n" +
+		"foreach ($c in $store.Certificates) {\n" +
+		"  $cn = $c.Subject\n" +
+		"  if ($cn -like \"*CN=g8e Root CA*\") {\n" +
+		"    $sha256 = $c.GetCertHashString(\"SHA256\")\n" +
+		"    $sha1 = $c.GetCertHashString(\"SHA1\")\n" +
+		"    $lines += \"$sha256|$sha1|$cn\"\n" +
+		"  }\n" +
+		"}\n" +
+		"$store.Close()\n" +
+		"Write-Output ($lines -join [char]10)"
+
+	out, err := i.runner.Run(ctx, nil, "powershell", "-NoProfile", "-Command", psScript)
+	if err != nil {
+		return nil, fmt.Errorf("%w: enumerate LocalMachine\\Root for stale anchors failed: %w", constants.ErrSystemTrustInstallFailed, err)
+	}
+
+	var stale []StaleAnchor
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "|", 3)
+		if len(parts) < 2 {
+			continue
+		}
+		sha256, sha1 := parts[0], parts[1]
+		cn := ""
+		if len(parts) >= 3 {
+			cn = parts[2]
+		}
+		if sha256 == currentFingerprint {
+			continue // active anchor
+		}
+		stale = append(stale, StaleAnchor{
+			Fingerprint: sha256,
+			CommonName:  cn,
+			Handle:      sha1, // certutil -delstore uses SHA-1 thumbprint
+		})
+	}
+	if stale == nil {
+		return []StaleAnchor{}, nil
+	}
+	return stale, nil
+}
+
+// removeStaleAnchorsPlatform removes each stale anchor from LocalMachine\Root
+// via certutil -delstore, which requires elevation.
+func (i *SystemTrustInstaller) removeStaleAnchorsPlatform(ctx context.Context, anchors []StaleAnchor) error {
+	for _, a := range anchors {
+		if _, err := i.runner.Run(ctx, nil, "certutil", "-delstore", "Root", a.Handle); err != nil {
+			return fmt.Errorf("%w: %w", constants.ErrSystemTrustInstallFailed, err)
+		}
+	}
+	return nil
+}

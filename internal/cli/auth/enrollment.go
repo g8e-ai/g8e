@@ -16,6 +16,7 @@ package auth
 import (
 	"context"
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -61,11 +62,20 @@ type KeyProvider interface {
 }
 
 // SystemTrustInstaller installs the gateway root CA anchor into the host OS
-// trust store. The concrete *platform.SystemTrustInstaller satisfies this
-// interface; tests inject a mock to avoid sudo/exec.
+// trust store and manages stale g8e anchors from previous gateway instances.
+// The concrete *platform.SystemTrustInstaller satisfies this interface; tests
+// inject a mock to avoid sudo/exec.
 type SystemTrustInstaller interface {
 	EnsureSystemTrust(ctx context.Context, bundlePEM []byte) (platform.SystemTrustResult, error)
+	ListStaleAnchors(ctx context.Context, currentFingerprint string) ([]platform.StaleAnchor, error)
+	RemoveStaleAnchors(ctx context.Context, anchors []platform.StaleAnchor) error
 }
+
+// ConfirmFunc prompts the user with a yes/no question and returns true if the
+// user confirms. The command layer injects a stdin-reading implementation;
+// tests inject a deterministic stub. Returning false aborts the operation
+// that requested confirmation.
+type ConfirmFunc func(prompt string) bool
 
 // BrowserOpener opens a URL in the user's default browser. Used by the
 // coordinator to open the recovery approval URL. The passkey registrar
@@ -107,6 +117,7 @@ type EnrollmentCoordinator struct {
 	trust   SystemTrustInstaller
 	browser BrowserOpener
 	passkey PasskeyRegistrar
+	confirm ConfirmFunc
 	fileSvc fs.RuntimeFileService
 	cfg     *config.Config
 	clock   func() time.Time
@@ -124,6 +135,7 @@ type EnrollmentCoordinatorDeps struct {
 	Trust   SystemTrustInstaller
 	Browser BrowserOpener
 	Passkey PasskeyRegistrar
+	Confirm ConfirmFunc
 	FileSvc fs.RuntimeFileService
 	Cfg     *config.Config
 	Clock   func() time.Time
@@ -139,6 +151,8 @@ type EnrollmentCoordinatorDeps struct {
 //   - Trust: a new *platform.SystemTrustInstaller (real os/exec).
 //   - Browser: a defaultBrowserOpener wrapping platform.OpenBrowser.
 //   - Passkey: a defaultPasskeyRegistrar wrapping the hardened passkeyRegistrar.
+//   - Confirm: an auto-confirm stub (always returns true). The interactive
+//     `auth enroll` command overrides this with a stdin-reading impl.
 //   - Clock: time.Now.
 //   - Logger: slog.Default().
 //   - Out: a no-op writer (the command layer should always supply this).
@@ -175,6 +189,14 @@ func NewEnrollmentCoordinator(deps EnrollmentCoordinatorDeps) *EnrollmentCoordin
 			registrar: newPasskeyRegistrar(deps.FileSvc, deps.Cfg, PasskeyRegistrarOptions{}),
 		}
 	}
+	confirm := deps.Confirm
+	if confirm == nil {
+		// Default: auto-confirm. The interactive `auth enroll` command layer
+		// overrides this with a stdin-reading implementation. Internal callers
+		// (e.g., mcp agent run) that don't supply a ConfirmFunc get the
+		// auto-confirm default so they don't block on missing stdin.
+		confirm = func(string) bool { return true }
+	}
 	clock := deps.Clock
 	if clock == nil {
 		clock = time.Now
@@ -194,6 +216,7 @@ func NewEnrollmentCoordinator(deps EnrollmentCoordinatorDeps) *EnrollmentCoordin
 		trust:   trust,
 		browser: browser,
 		passkey: passkey,
+		confirm: confirm,
 		fileSvc: deps.FileSvc,
 		cfg:     deps.Cfg,
 		clock:   clock,
@@ -464,6 +487,11 @@ func recoveryStateDone(state models.CLIRecoveryState) (bool, error) {
 //     run the passkey ceremony and still fail on runtime mTLS/trust-bundle
 //     errors (those are checked earlier by Inspect/Stage).
 //   - Already-trusted roots must not cause a privilege prompt.
+//   - Stale g8e root anchors from previous gateway instances are detected
+//     before installation. The user is prompted to confirm removal; declining
+//     aborts enrollment before browser launch. After removal or new
+//     installation, the user is directed to close all browser windows so
+//     the trust store change is picked up before the passkey ceremony.
 //
 // For a reused identity, the bundle comes from the local trust bundle on
 // disk. For a new enrollment, it comes from the artifacts.
@@ -485,6 +513,49 @@ func (c *EnrollmentCoordinator) ensureSystemTrust(ctx context.Context, artifacts
 		bundlePEM = []byte(artifacts.TrustBundlePEM)
 	}
 
+	// Extract the current root fingerprint for stale-anchor detection. We
+	// parse the bundle here rather than relying on EnsureSystemTrust's result
+	// because we need the fingerprint BEFORE installation to filter the stale
+	// list (the active anchor must not be listed as stale).
+	currentFingerprint, err := currentRootFingerprint(bundlePEM, c.clock)
+	if err != nil {
+		return false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInvalidAnchor, err)
+	}
+
+	// Detect stale g8e root anchors from previous gateway instances. These
+	// would cause the browser to see multiple g8e Root CAs, only one of which
+	// is valid for the current gateway's TLS certificate. We prompt the user
+	// before removing them.
+	staleAnchors, err := c.trust.ListStaleAnchors(ctx, currentFingerprint)
+	if err != nil {
+		// Stale-anchor enumeration is best-effort on unsupported platforms
+		// (stub returns ErrSystemTrustUnsupported). Don't abort enrollment
+		// on platforms where we can't enumerate; just proceed to install.
+		if !errors.Is(err, constants.ErrSystemTrustUnsupported) {
+			c.out("Warning: could not check for stale trust anchors (%v). Proceeding with installation.", err)
+		}
+		staleAnchors = nil
+	}
+
+	staleRemoved := false
+	if len(staleAnchors) > 0 {
+		c.out("Found %d stale g8e root CA anchor(s) from a previous gateway instance:", len(staleAnchors))
+		for i, a := range staleAnchors {
+			c.out("  %d. %s (fingerprint %s)", i+1, a.CommonName, a.Fingerprint)
+		}
+		prompt := fmt.Sprintf("Remove these %d stale anchor(s) before installing the new root CA? [y/N]: ", len(staleAnchors))
+		if !c.confirm(prompt) {
+			c.out("Stale anchor removal declined. Aborting enrollment before browser launch.")
+			return false, constants.ErrSystemTrustStaleRemovalDenied
+		}
+		c.out("Removing stale anchors...")
+		if err := c.trust.RemoveStaleAnchors(ctx, staleAnchors); err != nil {
+			return false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInstallFailed, err)
+		}
+		c.out("Stale anchors removed.")
+		staleRemoved = true
+	}
+
 	result, err := c.trust.EnsureSystemTrust(ctx, bundlePEM)
 	if err != nil {
 		return false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInstallFailed, err)
@@ -493,16 +564,39 @@ func (c *EnrollmentCoordinator) ensureSystemTrust(ctx context.Context, artifacts
 	switch result.Status {
 	case platform.SystemTrustInstalled:
 		c.out("System trust: installed gateway root CA (fingerprint %s).", result.Fingerprint)
-		// Browser-restart note: already-running browsers may cache trust
-		// state and not recognize the newly installed root. Per §6.5.
-		c.out("Note: if your browser is already open, restart it so it picks up the new trust anchor.")
+		// A new root was installed (and possibly stale anchors removed).
+		// Browsers cache trust state and will not recognize the new anchor
+		// until restarted. Direct the user to close all browser windows so
+		// the passkey ceremony opens a fresh browser session that trusts
+		// the new CA.
+		c.out("IMPORTANT: close all open browser windows now, then click the enrollment link below to open a fresh session that trusts the new root CA.")
 		return true, nil
 	case platform.SystemTrustAlreadyTrusted:
 		c.out("System trust: gateway root CA already trusted (fingerprint %s).", result.Fingerprint)
-		return false, nil
+		if staleRemoved {
+			// Stale anchors were removed even though the current root was
+			// already trusted. Browsers may still cache the stale anchors;
+			// direct the user to close all browser windows.
+			c.out("IMPORTANT: close all open browser windows now, then click the enrollment link below to open a fresh session.")
+		}
+		return staleRemoved, nil
 	default:
 		return false, nil
 	}
+}
+
+// currentRootFingerprint extracts the SHA-256 fingerprint of the primary
+// self-signed root anchor from the bundle. Used for stale-anchor filtering
+// before EnsureSystemTrust runs.
+func currentRootFingerprint(bundlePEM []byte, now func() time.Time) (string, error) {
+	roots, err := platform.ExtractRootAnchors(bundlePEM, now)
+	if err != nil {
+		return "", err
+	}
+	if len(roots) == 0 {
+		return "", constants.ErrSystemTrustInvalidAnchor
+	}
+	return platform.CertFingerprint(roots[0]), nil
 }
 
 // runPasskeyCeremony runs the browser-based passkey registration. It uses

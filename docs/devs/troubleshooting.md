@@ -256,12 +256,12 @@ before opening the browser and returns actionable remediation. Use
 `--no-system-trust` only when an administrator has already installed the
 Root CA on the host; it does not skip the passkey ceremony.
 
-After installing the Root CA, **restart any browser that was already
-running**. Browsers cache certificate trust state, and WebAuthn
-registration will fail if the browser does not yet recognize the new
-platform CA. Firefox and other browser-private trust stores may require
-separate handling. This is the most common cause of console access
-failures on fresh setups.
+After installing the Root CA (or removing stale anchors), **close all
+open browser windows** before clicking the enrollment link. Browsers
+cache certificate trust state, and WebAuthn registration will fail if
+the browser does not yet recognize the new platform CA. Firefox and
+other browser-private trust stores may require separate handling. This
+is the most common cause of console access failures on fresh setups.
 
 ### Certificate expiry and rotation
 
@@ -327,7 +327,7 @@ the CLI reports the failure and the transaction must be resubmitted.
 
 Common causes of approval failures:
 - The user did not complete the passkey ceremony in time.
-- The browser was not restarted after the Root CA was installed by `auth enroll`.
+- The browser was not restarted after the Root CA was installed by `auth enroll` (close all browser windows and click the enrollment link to open a fresh session).
 - The SSE stream was not accessible due to network or authentication issues.
 - The gateway posture was changed to `notary` without a configured L3 notary.
 

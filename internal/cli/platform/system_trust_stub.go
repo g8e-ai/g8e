@@ -30,3 +30,11 @@ func (i *SystemTrustInstaller) isTrustedPlatform(ctx context.Context, root *x509
 func (i *SystemTrustInstaller) installPlatform(ctx context.Context, root *x509.Certificate, fingerprint string) error {
 	return constants.ErrSystemTrustUnsupported
 }
+
+func (i *SystemTrustInstaller) listStaleAnchorsPlatform(ctx context.Context, currentFingerprint string) ([]StaleAnchor, error) {
+	return nil, constants.ErrSystemTrustUnsupported
+}
+
+func (i *SystemTrustInstaller) removeStaleAnchorsPlatform(ctx context.Context, anchors []StaleAnchor) error {
+	return constants.ErrSystemTrustUnsupported
+}

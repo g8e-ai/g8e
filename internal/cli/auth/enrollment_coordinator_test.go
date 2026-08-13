@@ -125,11 +125,16 @@ func (p *mockKeyProvider) GenerateCLIKeyAndCSR(ctx context.Context, commonName s
 
 // mockTrustInstaller records calls and returns configurable results.
 type mockTrustInstaller struct {
-	mu            sync.Mutex
-	calls         int
-	result        platform.SystemTrustResult
-	err           error
-	lastBundlePEM []byte
+	mu               sync.Mutex
+	calls            int
+	result           platform.SystemTrustResult
+	err              error
+	lastBundlePEM    []byte
+	staleAnchors     []platform.StaleAnchor
+	staleErr         error
+	staleListCalls   int
+	removeErr        error
+	staleRemoveCalls int
 }
 
 func (m *mockTrustInstaller) EnsureSystemTrust(ctx context.Context, bundlePEM []byte) (platform.SystemTrustResult, error) {
@@ -138,6 +143,20 @@ func (m *mockTrustInstaller) EnsureSystemTrust(ctx context.Context, bundlePEM []
 	m.lastBundlePEM = bundlePEM
 	m.mu.Unlock()
 	return m.result, m.err
+}
+
+func (m *mockTrustInstaller) ListStaleAnchors(ctx context.Context, currentFingerprint string) ([]platform.StaleAnchor, error) {
+	m.mu.Lock()
+	m.staleListCalls++
+	m.mu.Unlock()
+	return m.staleAnchors, m.staleErr
+}
+
+func (m *mockTrustInstaller) RemoveStaleAnchors(ctx context.Context, anchors []platform.StaleAnchor) error {
+	m.mu.Lock()
+	m.staleRemoveCalls++
+	m.mu.Unlock()
+	return m.removeErr
 }
 
 // mockBrowserOpener records calls and returns a configurable error.
@@ -172,6 +191,22 @@ func (m *mockPasskeyRegistrar) Register(ctx context.Context, userID, cliSessionI
 	m.lastSessionID = cliSessionID
 	m.mu.Unlock()
 	return m.err
+}
+
+// mockConfirm records the prompt and returns a configurable bool.
+type mockConfirm struct {
+	mu         sync.Mutex
+	calls      int
+	lastPrompt string
+	result     bool
+}
+
+func (m *mockConfirm) confirm(prompt string) bool {
+	m.mu.Lock()
+	m.calls++
+	m.lastPrompt = prompt
+	m.mu.Unlock()
+	return m.result
 }
 
 // outputRecorder captures coordinator progress output for assertion.
@@ -320,6 +355,7 @@ func setupCoordinatorTest(t *testing.T) (*EnrollmentCoordinator, *mockGateway, *
 		Trust:   trust,
 		Browser: browser,
 		Passkey: passkey,
+		Confirm: func(string) bool { return true },
 		FileSvc: fileSvc,
 		Cfg:     cfg,
 		Clock:   time.Now,
@@ -766,7 +802,7 @@ func TestEnroll_SystemTrustAlreadyTrusted_NoPrivilegePrompt(t *testing.T) {
 	assert.True(t, recorder.contains("already trusted"))
 }
 
-func TestEnroll_SystemTrustInstalled_PrintsBrowserRestartNote(t *testing.T) {
+func TestEnroll_SystemTrustInstalled_PrintsBrowserCloseNote(t *testing.T) {
 	t.Parallel()
 	coord, gw, keys, trust, _, _, recorder, _, _ := setupCoordinatorTest(t)
 
@@ -779,7 +815,7 @@ func TestEnroll_SystemTrustInstalled_PrintsBrowserRestartNote(t *testing.T) {
 	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
 	require.NoError(t, err)
 	assert.True(t, result.SystemTrustInstalled)
-	assert.True(t, recorder.contains("restart"))
+	assert.True(t, recorder.contains("close all open browser windows"))
 }
 
 // --- SkipPasskey tests ---
@@ -957,6 +993,177 @@ func TestEnroll_StageValidationFailure_RollsBackAndReturnsError(t *testing.T) {
 	creds, err := LoadCredentials(fileSvc, cfg)
 	require.NoError(t, err)
 	assert.Nil(t, creds, "no credentials should be written after Stage failure")
+}
+
+// --- Stale trust anchor tests ---
+
+// TestEnroll_StaleAnchors_Confirmed_RemovesAndInstalls verifies that when
+// stale g8e root anchors are found, the coordinator prompts the user, removes
+// them on confirmation, then installs the new root and prints the browser-
+// close directive.
+func TestEnroll_StaleAnchors_Confirmed_RemovesAndInstalls(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, trust, _, passkey, recorder, _, _ := setupCoordinatorTest(t)
+
+	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
+	gw.bootstrapStatus = false
+	gw.bootstrapArtifacts = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	trust.staleAnchors = []platform.StaleAnchor{
+		{Fingerprint: "stale-fp-1", CommonName: "g8e Root CA", Handle: "/path/stale1"},
+		{Fingerprint: "stale-fp-2", CommonName: "g8e Root CA", Handle: "/path/stale2"},
+	}
+	trust.result = platform.SystemTrustResult{Status: platform.SystemTrustInstalled, Fingerprint: "new-fp"}
+
+	confirmCalled := false
+	coord.confirm = func(prompt string) bool {
+		confirmCalled = true
+		assert.Contains(t, prompt, "2 stale")
+		return true
+	}
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+	assert.True(t, result.SystemTrustInstalled)
+	assert.True(t, confirmCalled, "confirm should be called when stale anchors exist")
+	assert.Equal(t, 1, trust.staleListCalls, "ListStaleAnchors should be called once")
+	assert.Equal(t, 1, trust.staleRemoveCalls, "RemoveStaleAnchors should be called once")
+	assert.Equal(t, 1, passkey.calls, "passkey should run after stale removal + install")
+	assert.True(t, recorder.contains("stale"))
+	assert.True(t, recorder.contains("close all open browser windows"))
+}
+
+// TestEnroll_StaleAnchors_Declined_AbortsBeforeInstall verifies that when
+// the user declines stale anchor removal, enrollment aborts with
+// ErrSystemTrustStaleRemovalDenied before installing the new root or
+// launching the browser.
+func TestEnroll_StaleAnchors_Declined_AbortsBeforeInstall(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, trust, _, passkey, _, _, _ := setupCoordinatorTest(t)
+
+	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
+	gw.bootstrapStatus = false
+	gw.bootstrapArtifacts = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	trust.staleAnchors = []platform.StaleAnchor{
+		{Fingerprint: "stale-fp-1", CommonName: "g8e Root CA", Handle: "/path/stale1"},
+	}
+	trust.result = platform.SystemTrustResult{Status: platform.SystemTrustInstalled, Fingerprint: "new-fp"}
+
+	coord.confirm = func(prompt string) bool { return false }
+
+	_, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrSystemTrustStaleRemovalDenied)
+	assert.Equal(t, 0, trust.staleRemoveCalls, "RemoveStaleAnchors must not be called when declined")
+	assert.Equal(t, 0, passkey.calls, "passkey must not run when user declines stale removal")
+}
+
+// TestEnroll_StaleAnchors_None_NoPrompt verifies that when no stale anchors
+// are found, the confirm function is NOT called and enrollment proceeds
+// normally.
+func TestEnroll_StaleAnchors_None_NoPrompt(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, trust, _, passkey, _, _, _ := setupCoordinatorTest(t)
+
+	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
+	gw.bootstrapStatus = false
+	gw.bootstrapArtifacts = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	trust.staleAnchors = nil
+	trust.result = platform.SystemTrustResult{Status: platform.SystemTrustInstalled, Fingerprint: "new-fp"}
+
+	confirmCalled := false
+	coord.confirm = func(prompt string) bool {
+		confirmCalled = true
+		return true
+	}
+
+	_, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+	assert.False(t, confirmCalled, "confirm should not be called when no stale anchors")
+	assert.Equal(t, 0, trust.staleRemoveCalls, "RemoveStaleAnchors should not be called")
+	assert.Equal(t, 1, passkey.calls, "passkey should run normally")
+}
+
+// TestEnroll_StaleAnchors_RemovalError_Aborts verifies that a removal error
+// aborts enrollment with ErrSystemTrustInstallFailed before the passkey
+// ceremony.
+func TestEnroll_StaleAnchors_RemovalError_Aborts(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, trust, _, passkey, _, _, _ := setupCoordinatorTest(t)
+
+	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
+	gw.bootstrapStatus = false
+	gw.bootstrapArtifacts = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	trust.staleAnchors = []platform.StaleAnchor{
+		{Fingerprint: "stale-fp-1", CommonName: "g8e Root CA", Handle: "/path/stale1"},
+	}
+	trust.removeErr = constants.ErrSystemTrustInstallFailed
+
+	coord.confirm = func(prompt string) bool { return true }
+
+	_, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrSystemTrustInstallFailed)
+	assert.Equal(t, 0, passkey.calls, "passkey must not run after stale removal failure")
+}
+
+// TestEnroll_StaleAnchors_ListError_ProceedsAsBestEffort verifies that when
+// ListStaleAnchors returns a non-unsupported error, enrollment proceeds
+// (best-effort) rather than aborting — stale detection is a safety improvement,
+// not a gate.
+func TestEnroll_StaleAnchors_ListError_ProceedsAsBestEffort(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, trust, _, passkey, recorder, _, _ := setupCoordinatorTest(t)
+
+	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
+	gw.bootstrapStatus = false
+	gw.bootstrapArtifacts = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	trust.staleErr = errors.New("enumeration failed")
+	trust.result = platform.SystemTrustResult{Status: platform.SystemTrustInstalled, Fingerprint: "new-fp"}
+
+	confirmCalled := false
+	coord.confirm = func(prompt string) bool {
+		confirmCalled = true
+		return true
+	}
+
+	_, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+	assert.False(t, confirmCalled, "confirm should not be called when list errored")
+	assert.True(t, recorder.contains("could not check for stale"))
+	assert.Equal(t, 1, passkey.calls, "passkey should run despite stale list error")
+}
+
+// TestEnroll_StaleAnchors_Unsupported_SkipsDetection verifies that on
+// platforms where stale detection is unsupported (stub returns
+// ErrSystemTrustUnsupported), enrollment proceeds without warning or
+// prompting.
+func TestEnroll_StaleAnchors_Unsupported_SkipsDetection(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, trust, _, passkey, recorder, _, _ := setupCoordinatorTest(t)
+
+	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
+	gw.bootstrapStatus = false
+	gw.bootstrapArtifacts = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	trust.staleErr = constants.ErrSystemTrustUnsupported
+	trust.result = platform.SystemTrustResult{Status: platform.SystemTrustInstalled, Fingerprint: "new-fp"}
+
+	confirmCalled := false
+	coord.confirm = func(prompt string) bool {
+		confirmCalled = true
+		return true
+	}
+
+	_, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+	assert.False(t, confirmCalled, "confirm should not be called on unsupported platform")
+	assert.False(t, recorder.contains("could not check for stale"), "no warning on unsupported platform")
+	assert.Equal(t, 1, passkey.calls)
 }
 
 // --- Helpers ---

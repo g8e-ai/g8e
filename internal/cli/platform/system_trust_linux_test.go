@@ -342,3 +342,198 @@ func TestLinux_EnsureSystemTrust_ConcurrentCalls(t *testing.T) {
 	wg.Wait()
 	// All calls should succeed; the test verifies no panic/deadlock under concurrency
 }
+
+// --- Stale anchor enumeration/removal tests ---
+
+func TestLinux_ListStaleAnchors_NoStaleAnchors(t *testing.T) {
+	t.Parallel()
+	bundle, rootCert := testBundle(t)
+	fp := certFingerprint(rootCert)
+
+	r := newFakeRunner()
+	r.setResponse("update-ca-certificates", []byte("usage"), nil)
+	// ls returns only the current anchor file
+	r.setResponse("ls", []byte("g8e-root-"+fp+".crt"), nil)
+	// cat returns the current root PEM
+	currentRootPEM := bundle[:strings.Index(bundle, "-----END CERTIFICATE-----\n")+len("-----END CERTIFICATE-----\n")]
+	r.setResponse("cat", []byte(currentRootPEM), nil)
+
+	installer := &SystemTrustInstaller{runner: r, now: time.Now}
+	stale, err := installer.ListStaleAnchors(context.Background(), fp)
+	require.NoError(t, err)
+	assert.Empty(t, stale, "current anchor should not be listed as stale")
+}
+
+func TestLinux_ListStaleAnchors_FindsStale(t *testing.T) {
+	t.Parallel()
+	bundle, rootCert := testBundle(t)
+	currentFP := certFingerprint(rootCert)
+
+	// Generate a stale CA with a different fingerprint.
+	stalePEM, _ := testCA(t, "g8e Root CA")
+	staleCert := mustParse(t, stalePEM)
+	staleFP := certFingerprint(staleCert)
+
+	r := newFakeRunner()
+	r.setResponse("update-ca-certificates", []byte("usage"), nil)
+	// ls returns both the current and stale anchor files
+	r.setResponse("ls", []byte("g8e-root-"+currentFP+".crt\ng8e-root-"+staleFP+".crt"), nil)
+	// cat returns the stale PEM for the stale file, current PEM for the current file.
+	// The fakeRunner returns the same response for all "cat" calls, so we need
+	// a different approach: use a custom runner that returns different output
+	// based on the file path argument.
+	r2 := &staleListRunner{
+		fakeRunner: *newFakeRunner(),
+		currentFP:  currentFP,
+		currentPEM: bundle[:strings.Index(bundle, "-----END CERTIFICATE-----\n")+len("-----END CERTIFICATE-----\n")],
+		staleFP:    staleFP,
+		stalePEM:   stalePEM,
+	}
+	r2.setResponse("update-ca-certificates", []byte("usage"), nil)
+
+	installer := &SystemTrustInstaller{runner: r2, now: time.Now}
+	stale, err := installer.ListStaleAnchors(context.Background(), currentFP)
+	require.NoError(t, err)
+	require.Len(t, stale, 1)
+	assert.Equal(t, staleFP, stale[0].Fingerprint)
+	assert.Equal(t, "g8e Root CA", stale[0].CommonName)
+	assert.Contains(t, stale[0].Handle, staleFP)
+}
+
+func TestLinux_ListStaleAnchors_EmptyDir(t *testing.T) {
+	t.Parallel()
+	r := newFakeRunner()
+	r.setResponse("update-ca-certificates", []byte("usage"), nil)
+	r.setResponse("ls", []byte(""), nil)
+
+	installer := &SystemTrustInstaller{runner: r, now: time.Now}
+	stale, err := installer.ListStaleAnchors(context.Background(), "any-fp")
+	require.NoError(t, err)
+	assert.Empty(t, stale)
+}
+
+func TestLinux_ListStaleAnchors_DirNotFound(t *testing.T) {
+	t.Parallel()
+	r := newFakeRunner()
+	r.setResponse("update-ca-certificates", []byte("usage"), nil)
+	r.setResponse("ls", nil, &fakeErr{msg: "no such directory"})
+
+	installer := &SystemTrustInstaller{runner: r, now: time.Now}
+	stale, err := installer.ListStaleAnchors(context.Background(), "any-fp")
+	require.NoError(t, err)
+	assert.Empty(t, stale, "missing directory should yield no stale anchors")
+}
+
+func TestLinux_RemoveStaleAnchors_Debian(t *testing.T) {
+	t.Parallel()
+	anchors := []StaleAnchor{
+		{Fingerprint: "stale-1", CommonName: "g8e Root CA", Handle: "/usr/local/share/ca-certificates/g8e-root-stale-1.crt"},
+		{Fingerprint: "stale-2", CommonName: "g8e Root CA", Handle: "/usr/local/share/ca-certificates/g8e-root-stale-2.crt"},
+	}
+
+	r := newFakeRunner()
+	r.setResponse("update-ca-certificates", []byte("usage"), nil)
+	r.setResponse("sudo", []byte(""), nil)
+
+	installer := &SystemTrustInstaller{runner: r, now: time.Now}
+	err := installer.RemoveStaleAnchors(context.Background(), anchors)
+	require.NoError(t, err)
+
+	// Verify sudo rm was called for each anchor + update-ca-certificates --fresh
+	var sudoCalls []fakeCall
+	for i := 0; i < r.callCount(); i++ {
+		c := r.call(i)
+		if c.name == "sudo" {
+			sudoCalls = append(sudoCalls, c)
+		}
+	}
+	require.Len(t, sudoCalls, 3, "expected 2 rm + 1 update-ca-certificates")
+	assert.Equal(t, "rm", sudoCalls[0].args[0])
+	assert.Equal(t, "-f", sudoCalls[0].args[1])
+	assert.Contains(t, sudoCalls[0].args[2], "stale-1")
+	assert.Equal(t, "rm", sudoCalls[1].args[0])
+	assert.Equal(t, "-f", sudoCalls[1].args[1])
+	assert.Contains(t, sudoCalls[1].args[2], "stale-2")
+	assert.Equal(t, "update-ca-certificates", sudoCalls[2].args[0])
+	assert.Equal(t, "--fresh", sudoCalls[2].args[1])
+}
+
+func TestLinux_RemoveStaleAnchors_RHEL(t *testing.T) {
+	t.Parallel()
+	anchors := []StaleAnchor{
+		{Fingerprint: "stale-1", CommonName: "g8e Root CA", Handle: "/etc/pki/ca-trust/source/anchors/g8e-root-stale-1.crt"},
+	}
+
+	r := newFakeRunner()
+	r.setResponse("update-ca-certificates", nil, &fakeErr{msg: "not found"})
+	r.setResponse("trust", []byte(""), nil)
+	r.setResponse("sudo", []byte(""), nil)
+
+	installer := &SystemTrustInstaller{runner: r, now: time.Now}
+	err := installer.RemoveStaleAnchors(context.Background(), anchors)
+	require.NoError(t, err)
+
+	var sudoCalls []fakeCall
+	for i := 0; i < r.callCount(); i++ {
+		c := r.call(i)
+		if c.name == "sudo" {
+			sudoCalls = append(sudoCalls, c)
+		}
+	}
+	require.Len(t, sudoCalls, 2, "expected 1 rm + 1 update-ca-trust")
+	assert.Equal(t, "rm", sudoCalls[0].args[0])
+	assert.Equal(t, "update-ca-trust", sudoCalls[1].args[0])
+	assert.Equal(t, "extract", sudoCalls[1].args[1])
+}
+
+func TestLinux_RemoveStaleAnchors_Empty_NoOp(t *testing.T) {
+	t.Parallel()
+	r := newFakeRunner()
+	r.setResponse("update-ca-certificates", []byte("usage"), nil)
+
+	installer := &SystemTrustInstaller{runner: r, now: time.Now}
+	err := installer.RemoveStaleAnchors(context.Background(), nil)
+	require.NoError(t, err)
+	assert.Equal(t, 0, r.callCount(), "no commands should run for empty anchor list")
+}
+
+func TestLinux_RemoveStaleAnchors_SudoFails(t *testing.T) {
+	t.Parallel()
+	anchors := []StaleAnchor{
+		{Fingerprint: "stale-1", CommonName: "g8e Root CA", Handle: "/path/stale-1.crt"},
+	}
+
+	r := newFakeRunner()
+	r.setResponse("update-ca-certificates", []byte("usage"), nil)
+	r.setResponse("sudo", nil, &fakeErr{msg: "sudo: command not found"})
+
+	installer := &SystemTrustInstaller{runner: r, now: time.Now}
+	err := installer.RemoveStaleAnchors(context.Background(), anchors)
+	require.Error(t, err)
+}
+
+// staleListRunner is a fakeRunner that returns different cat output depending
+// on the file path argument. This lets us simulate multiple g8e-root-*.crt
+// files with different PEM contents.
+type staleListRunner struct {
+	fakeRunner
+	currentFP  string
+	currentPEM string
+	staleFP    string
+	stalePEM   string
+}
+
+func (r *staleListRunner) Run(ctx context.Context, env map[string]string, name string, args ...string) ([]byte, error) {
+	if name == "cat" && len(args) > 0 {
+		switch {
+		case strings.Contains(args[0], r.staleFP):
+			return []byte(r.stalePEM), nil
+		case strings.Contains(args[0], r.currentFP):
+			return []byte(r.currentPEM), nil
+		}
+	}
+	if name == "ls" {
+		return []byte("g8e-root-" + r.currentFP + ".crt\ng8e-root-" + r.staleFP + ".crt"), nil
+	}
+	return r.fakeRunner.Run(ctx, env, name, args...)
+}

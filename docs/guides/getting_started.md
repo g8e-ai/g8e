@@ -273,7 +273,7 @@ After the gateway is running (locally or in Docker), authenticate the CLI to boo
 ./g8e auth enroll
 ```
 
-The `auth enroll` command installs the gateway Root CA into the OS trust store before opening the browser for the passkey ceremony. If trust installation fails, the browser does not open — resolve the trust issue and re-run. Use `--no-system-trust` only if an administrator has already installed the Root CA. After trust installation, restart any already-running browser so the new trust anchor is recognized.
+The `auth enroll` command installs the gateway Root CA into the OS trust store before opening the browser for the passkey ceremony. Before installation, it checks for stale g8e Root CA anchors from previous gateway instances and prompts for removal if found. If trust installation fails, the browser does not open — resolve the trust issue and re-run. Use `--no-system-trust` only if an administrator has already installed the Root CA. After trust installation or stale anchor removal, close all open browser windows before clicking the enrollment link so the browser opens a fresh session that recognizes the new trust anchor.
 
 For Docker demos where HTTP and HTTPS are mapped to different host ports, use the split endpoint flags:
 

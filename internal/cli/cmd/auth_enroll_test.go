@@ -435,7 +435,7 @@ func TestEnrollCmd_SystemTrustInstalledOutput(t *testing.T) {
 	})
 
 	assert.Contains(t, buf.String(), "System trust: installed gateway root CA")
-	assert.Contains(t, buf.String(), "Restart any open browsers")
+	assert.Contains(t, buf.String(), "Close all open browser windows")
 }
 
 // TestLogoutCmd_OSRootCARetained verifies that logout removes local CLI

@@ -46,6 +46,29 @@ type SystemTrustResult struct {
 	Fingerprint string // hex-encoded SHA-256 of the installed root anchor DER
 }
 
+// StaleAnchor describes a g8e root CA found in the OS trust store that does
+// not match the current gateway's root CA fingerprint. These are orphaned
+// anchors left behind by a previous gateway instance (e.g., after `gw clean`
+// regenerated the CA). The coordinator prompts the user before removing them.
+type StaleAnchor struct {
+	// Fingerprint is the hex-encoded SHA-256 of the stale anchor's DER.
+	Fingerprint string
+
+	// CommonName is the certificate's subject CN, for display.
+	CommonName string
+
+	// Handle is the platform-specific identifier used for removal:
+	//   - Linux (Debian/RHEL): the managed file path
+	//   - Windows: the SHA-1 thumbprint (certutil -delstore)
+	//   - Darwin: the SHA-1 hash (security delete-certificate -Z)
+	Handle string
+}
+
+// g8eRootCommonName is the subject CN used by all gateway root CAs. It is
+// the cross-platform filter for identifying g8e-managed anchors in trust
+// stores that do not use a filename prefix (Windows, Darwin).
+const g8eRootCommonName = "g8e Root CA"
+
 // commandRunner executes an external command with context, returning combined
 // stdout/stderr. It is the injection point for unit tests so they never invoke
 // sudo, security, certutil, or other real system commands. The optional env
@@ -129,6 +152,22 @@ func (i *SystemTrustInstaller) EnsureSystemTrust(ctx context.Context, bundlePEM 
 		return SystemTrustResult{}, err
 	}
 	return SystemTrustResult{Status: SystemTrustInstalled, Fingerprint: fingerprint}, nil
+}
+
+// ListStaleAnchors enumerates g8e root CA anchors in the OS trust store that
+// do not match currentFingerprint. These are orphaned anchors from previous
+// gateway instances. Returns an empty slice (not nil) when no stale anchors
+// are found. The current fingerprint is excluded so the active gateway's root
+// is never listed as stale.
+func (i *SystemTrustInstaller) ListStaleAnchors(ctx context.Context, currentFingerprint string) ([]StaleAnchor, error) {
+	return i.listStaleAnchorsPlatform(ctx, currentFingerprint)
+}
+
+// RemoveStaleAnchors removes the given stale anchors from the OS trust store
+// and refreshes the trust bundle. Requires elevation on all platforms. An
+// error from any anchor removal aborts the operation.
+func (i *SystemTrustInstaller) RemoveStaleAnchors(ctx context.Context, anchors []StaleAnchor) error {
+	return i.removeStaleAnchorsPlatform(ctx, anchors)
 }
 
 // ExtractRootAnchors parses every PEM certificate in bundlePEM, rejects
