@@ -289,7 +289,7 @@ func TestGatewaySettingsCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 
 func TestGatewayCleanCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
-	cmd := gatewayCleanCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+	cmd := gatewayCleanCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory), defaultTrustInstallerFactory)
 	cmd.Flags().Set("force", "true")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -298,6 +298,29 @@ func TestGatewayCleanCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
 	assert.ErrorIs(t, err, errFactory)
+}
+
+// TestGatewayCleanCmdWithConfig_TrustInstallerFactoryError verifies that a
+// trustInstallerFactory failure is surfaced as a warning (best-effort OS
+// cleanup) and does NOT abort the runtime wipe — the runtime wipe is the
+// destructive primary action. The fileSvc factory succeeds so pm.Clean runs.
+func TestGatewayCleanCmdWithConfig_TrustInstallerFactoryError(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	cmd := gatewayCleanCmdWithConfig(
+		configLoaderFor(cfg),
+		fileSvcFactoryFor(fileSvc),
+		func() (systemTrustCleaner, error) {
+			return nil, errFactory
+		},
+	)
+	cmd.Flags().Set("force", "true")
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.NoError(t, err, "trust factory failure is best-effort and must not abort the runtime wipe")
+	assert.Contains(t, buf.String(), "could not initialize OS trust cleaner")
+	assert.Contains(t, buf.String(), "Clean complete")
 }
 
 // --- Vault commands (session 17) ---

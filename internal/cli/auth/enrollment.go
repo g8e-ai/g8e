@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -84,7 +85,12 @@ type KeyProvider interface {
 // The concrete *platform.SystemTrustInstaller satisfies this interface; tests
 // inject a mock to avoid sudo/exec.
 type SystemTrustInstaller interface {
-	EnsureSystemTrust(ctx context.Context, bundlePEM []byte) (platform.SystemTrustResult, error)
+	// IsTrusted reports whether the OS trust store already contains a root
+	// anchor with the given SHA-256 fingerprint. Reads only.
+	IsTrusted(ctx context.Context, fingerprint string) (bool, error)
+	// InstallRoot writes the root anchor into the OS trust store. Writes
+	// only; the caller checks IsTrusted first.
+	InstallRoot(ctx context.Context, root *x509.Certificate, fingerprint string) error
 	ListStaleAnchors(ctx context.Context, currentFingerprint string) ([]platform.StaleAnchor, error)
 	RemoveStaleAnchors(ctx context.Context, anchors []platform.StaleAnchor) error
 }
@@ -392,9 +398,9 @@ func (c *EnrollmentCoordinator) Enroll(ctx context.Context, opts EnrollmentOptio
 		c.out("%s complete (user %s, session %s).", artifacts.Source, result.UserID, result.CLISessionID)
 	}
 
-	// 3. Ensure system trust (local CLI paths only, unless --no-system-trust).
+	// 3. Install system trust (local CLI paths only, unless --no-system-trust).
 	if result.Source.IsLocalCLI() || result.Reused {
-		installed, terr := c.ensureSystemTrust(ctx, artifacts, result.Reused, local, opts, liveFingerprint, liveBundle, discoveryReachable)
+		installed, terr := c.installSystemTrust(ctx, artifacts, result.Reused, local, opts, liveFingerprint, liveBundle, discoveryReachable)
 		if terr != nil {
 			return nil, terr
 		}
@@ -552,9 +558,12 @@ func recoveryStateDone(state models.CLIRecoveryState) (bool, error) {
 	}
 }
 
-// ensureSystemTrust installs the gateway root CA into the OS trust store
+// installSystemTrust installs the gateway root CA into the OS trust store
 // after the runtime bundle is valid and committed, and before the passkey
-// ceremony. Per §6.5:
+// ceremony. It is an explicit composition of single-purpose platform methods
+// (ExtractRootAnchors, verifyRootUsable, IsTrusted, InstallRoot,
+// ListStaleAnchors, RemoveStaleAnchors) — there is no multi-purpose
+// EnsureSystemTrust. Per §6.5:
 //   - Default: any installation error aborts before browser launch.
 //   - --no-system-trust: skip the INSTALLER after an admin notice, but
 //     still run stale-anchor detection (the user may have stale anchors
@@ -580,34 +589,35 @@ func recoveryStateDone(state models.CLIRecoveryState) (bool, error) {
 //
 // liveBundle is the live gateway CA bundle PEM (from DiscoverGatewayCA).
 // On the reused-identity path, when discovery succeeded, the live bundle
-// is used as the bundlePEM for EnsureSystemTrust so the install check
-// compares against the live root, not the (possibly stale) local one. On
-// the new-enrollment paths, the artifacts' bundle IS the live bundle, so
-// liveBundle is not used.
+// is used as the bundlePEM so the install check compares against the live
+// root, not the (possibly stale) local one. On the new-enrollment paths,
+// the artifacts' bundle IS the live bundle, so liveBundle is not used.
 //
 // For a reused identity with discovery unreachable, the bundle comes from
 // the local trust bundle on disk (the pre-discovery behavior). For a new
 // enrollment, it comes from the artifacts.
-func (c *EnrollmentCoordinator) ensureSystemTrust(ctx context.Context, artifacts EnrollmentArtifacts, reused bool, local LocalIdentity, opts EnrollmentOptions, liveFingerprint string, liveBundle []byte, discoveryReachable bool) (bool, error) {
-	// R5: surface a diagnosable error when discovery is unreachable AND
+//
+// The return value is a simple bool (installed? yes/no).
+func (c *EnrollmentCoordinator) installSystemTrust(ctx context.Context, artifacts EnrollmentArtifacts, reused bool, local LocalIdentity, opts EnrollmentOptions, liveFingerprint string, liveBundle []byte, discoveryReachable bool) (bool, error) {
+	// Step 1: Resolve the bundle PEM. On the reused-identity path, prefer
+	// the live bundle (when discovery succeeded) so the install check
+	// compares against the live root, not the stale local one. On the
+	// new-enrollment paths, the artifacts' bundle IS the live bundle.
+	//
+	// R5: surface a diagnosable warning when discovery is unreachable AND
 	// reuse is attempted. The local bundle may be stale (e.g., after
 	// `gw clean`); without discovery we cannot tell. Print a clear
 	// diagnostic before the passkey ceremony so a subsequent TLS failure
 	// has prior context. Do NOT abort — the user may be intentionally
 	// offline, or the gateway may be reachable only on the HTTPS port.
-	if reused && !discoveryReachable {
-		c.out("Warning: could not reach the gateway discovery endpoint to verify the local trust bundle is current. If the gateway's PKI has been regenerated (e.g., after `gw clean`), the local identity may be stale and the passkey ceremony will fail with a TLS error. Use --endpoint <host> if the gateway is on a remote host.")
-	}
-
-	// Determine the bundle PEM to install. On the reused-identity path,
-	// prefer the live bundle (when discovery succeeded) so the install
-	// check compares against the live root, not the stale local one. On
-	// the new-enrollment paths, the artifacts' bundle IS the live bundle.
 	var bundlePEM []byte
 	if reused {
 		if discoveryReachable && len(liveBundle) > 0 {
 			bundlePEM = liveBundle
 		} else {
+			if !discoveryReachable {
+				c.out("Warning: could not reach the gateway discovery endpoint to verify the local trust bundle is current. If the gateway's PKI has been regenerated (e.g., after `gw clean`), the local identity may be stale and the passkey ceremony will fail with a TLS error. Use --endpoint <host> if the gateway is on a remote host.")
+			}
 			if local.TrustBundle == nil || len(local.TrustBundle.PEM) == 0 {
 				// A reused identity with no trust bundle is inconsistent — Inspect
 				// should have classified it as partial. This is a defensive guard.
@@ -619,46 +629,45 @@ func (c *EnrollmentCoordinator) ensureSystemTrust(ctx context.Context, artifacts
 		bundlePEM = []byte(artifacts.TrustBundlePEM)
 	}
 
-	// Extract the live root fingerprint for stale-anchor detection. We
-	// parse the bundle here rather than relying on EnsureSystemTrust's
-	// result because we need the fingerprint BEFORE installation to filter
-	// the stale list (the active anchor must not be listed as stale).
-	//
-	// Prefer the live fingerprint from discovery (the source of truth).
-	// When discovery was unreachable, fall back to the bundle's own
-	// fingerprint — this preserves the pre-discovery behavior but cannot
-	// detect a stale bundle (the local bundle and the OS store are stale
-	// in lockstep, so they agree with each other). The R5 warning above
-	// surfaces this condition to the user.
-	keepFingerprint := liveFingerprint
-	if keepFingerprint == "" {
-		fp, fpErr := currentRootFingerprint(bundlePEM, c.clock)
-		if fpErr != nil {
-			return false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInvalidAnchor, fpErr)
-		}
-		keepFingerprint = fp
+	// Step 2: Extract root anchors + primary fingerprint via the pure
+	// platform helpers. This is the KEEP fingerprint — it MUST come from
+	// the live bundle when discovery succeeded; the R5 warning above fires
+	// when it cannot.
+	rootAnchors, err := platform.ExtractRootAnchors(bundlePEM, c.clock)
+	if err != nil {
+		return false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInvalidAnchor, err)
+	}
+	if len(rootAnchors) == 0 {
+		return false, constants.ErrSystemTrustInvalidAnchor
+	}
+	if vErr := platform.VerifyRootUsable(rootAnchors, bundlePEM, c.clock); vErr != nil {
+		return false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInvalidAnchor, vErr)
+	}
+	primary := rootAnchors[0]
+	keepFingerprint := platform.CertFingerprint(primary)
+	// Prefer the live fingerprint from discovery (the source of truth) over
+	// the bundle's own fingerprint. When discovery was unreachable,
+	// keepFingerprint stays as the bundle's own fingerprint — this preserves
+	// the pre-discovery behavior but cannot detect a stale bundle (the local
+	// bundle and the OS store are stale in lockstep, so they agree with each
+	// other). The R5 warning above surfaces this condition to the user.
+	if liveFingerprint != "" {
+		keepFingerprint = liveFingerprint
 	}
 
-	// Detect stale g8e root anchors from previous gateway instances. These
-	// would cause the browser to see multiple g8e Root CAs, only one of which
-	// is valid for the current gateway's TLS certificate. We prompt the user
-	// before removing them.
-	//
-	// Stale detection runs even under --no-system-trust (C4): the user may
-	// have pre-installed trust manually but still have stale anchors from a
-	// previous gateway that break the browser. Only the installation step
-	// is skipped below.
+	// Step 3: ListStaleAnchors. Best-effort: ErrSystemTrustUnsupported is a
+	// no-op; other errors print a warning and proceed.
 	staleAnchors, err := c.trust.ListStaleAnchors(ctx, keepFingerprint)
 	if err != nil {
-		// Stale-anchor enumeration is best-effort on unsupported platforms
-		// (stub returns ErrSystemTrustUnsupported). Don't abort enrollment
-		// on platforms where we can't enumerate; just proceed to install.
 		if !errors.Is(err, constants.ErrSystemTrustUnsupported) {
 			c.out("Warning: could not check for stale trust anchors (%v). Proceeding with installation.", err)
 		}
 		staleAnchors = nil
 	}
 
+	// Step 4: If stale anchors found, print them, prompt via c.confirm, on
+	// decline return ErrSystemTrustStaleRemovalDenied, on confirm
+	// RemoveStaleAnchors.
 	staleRemoved := false
 	if len(staleAnchors) > 0 {
 		c.out("Found %d stale g8e root CA anchor(s) from a previous gateway instance:", len(staleAnchors))
@@ -678,62 +687,50 @@ func (c *EnrollmentCoordinator) ensureSystemTrust(ctx context.Context, artifacts
 		staleRemoved = true
 	}
 
-	// --no-system-trust: skip only the installation step. Stale detection
-	// above still ran (C4). The administrator must have pre-installed the
-	// gateway root CA.
+	// Step 5: If --no-system-trust, print the skip notice and return (stale
+	// removal above still ran).
 	if opts.NoSystemTrust {
 		c.out("System trust installation skipped (--no-system-trust). The administrator must have pre-installed the gateway root CA.")
 		if staleRemoved {
-			// Stale anchors were removed even though installation was
-			// skipped. Browsers may still cache the stale anchors; direct
-			// the user to close all browser windows.
 			c.out("IMPORTANT: close all open browser windows now, then click the enrollment link below to open a fresh session.")
 		}
-		// SystemTrustInstalled is false — no root CA was installed.
 		return false, nil
 	}
 
-	result, err := c.trust.EnsureSystemTrust(ctx, bundlePEM)
+	// Step 6: IsTrusted. If ErrSystemTrustUnsupported, warn and return
+	// (do not fail enrollment on a platform we cannot query). If trusted
+	// AND no stale removal happened, print "already trusted" and return.
+	// If trusted AND stale removal happened, print the browser-restart
+	// notice and return.
+	trusted, err := c.trust.IsTrusted(ctx, keepFingerprint)
 	if err != nil {
+		if errors.Is(err, constants.ErrSystemTrustUnsupported) {
+			c.out("Warning: OS trust store query is unsupported on this platform (%v). Skipping system trust installation.", err)
+			return false, nil
+		}
 		return false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInstallFailed, err)
 	}
-
-	switch result.Status {
-	case platform.SystemTrustInstalled:
-		c.out("System trust: installed gateway root CA (fingerprint %s).", result.Fingerprint)
-		// A new root was installed (and possibly stale anchors removed).
-		// Browsers cache trust state and will not recognize the new anchor
-		// until restarted. Direct the user to close all browser windows so
-		// the passkey ceremony opens a fresh browser session that trusts
-		// the new CA.
-		c.out("IMPORTANT: close all open browser windows now, then click the enrollment link below to open a fresh session that trusts the new root CA.")
-		return true, nil
-	case platform.SystemTrustAlreadyTrusted:
-		c.out("System trust: gateway root CA already trusted (fingerprint %s).", result.Fingerprint)
+	if trusted {
+		c.out("System trust: gateway root CA already trusted (fingerprint %s).", keepFingerprint)
 		if staleRemoved {
-			// Stale anchors were removed even though the current root was
-			// already trusted. Browsers may still cache the stale anchors;
-			// direct the user to close all browser windows.
 			c.out("IMPORTANT: close all open browser windows now, then click the enrollment link below to open a fresh session.")
 		}
 		return staleRemoved, nil
-	default:
-		return false, nil
 	}
-}
 
-// currentRootFingerprint extracts the SHA-256 fingerprint of the primary
-// self-signed root anchor from the bundle. Used for stale-anchor filtering
-// before EnsureSystemTrust runs.
-func currentRootFingerprint(bundlePEM []byte, now func() time.Time) (string, error) {
-	roots, err := platform.ExtractRootAnchors(bundlePEM, now)
-	if err != nil {
-		return "", err
+	// Step 7: InstallRoot. If ErrSystemTrustUnsupported, warn and return.
+	// On success print "installed" + browser-restart notice. On any other
+	// error return wrapped ErrSystemTrustInstallFailed.
+	if err := c.trust.InstallRoot(ctx, primary, keepFingerprint); err != nil {
+		if errors.Is(err, constants.ErrSystemTrustUnsupported) {
+			c.out("Warning: OS trust store installation is unsupported on this platform (%v). Skipping system trust installation.", err)
+			return false, nil
+		}
+		return false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInstallFailed, err)
 	}
-	if len(roots) == 0 {
-		return "", constants.ErrSystemTrustInvalidAnchor
-	}
-	return platform.CertFingerprint(roots[0]), nil
+	c.out("System trust: installed gateway root CA (fingerprint %s).", keepFingerprint)
+	c.out("IMPORTANT: close all open browser windows now, then click the enrollment link below to open a fresh session that trusts the new root CA.")
+	return true, nil
 }
 
 // runPasskeyCeremony runs the browser-based passkey registration. It uses

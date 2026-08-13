@@ -41,14 +41,14 @@ type TrustBundle struct {
 	RootAnchors []*x509.Certificate
 
 	// PrimaryRootFingerprint is the SHA-256 fingerprint (hex) of the first
-	// root anchor, used as the idempotency key for EnsureSystemTrust.
+	// root anchor, used as the idempotency key for IsTrusted/InstallRoot.
 	PrimaryRootFingerprint string
 }
 
 // ParseTrustBundle parses PEM bundle bytes into a TrustBundle, extracting
 // root anchors and computing the primary root fingerprint. It rejects
 // empty, malformed, or expired input via the shared platform helpers so
-// the validation rules are identical to EnsureSystemTrust.
+// the validation rules are identical to ExtractRootAnchors/InstallRoot.
 //
 // now is injectable for tests; pass time.Now in production.
 func ParseTrustBundle(bundlePEM []byte, now time.Time) (*TrustBundle, error) {

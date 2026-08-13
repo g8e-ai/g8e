@@ -148,10 +148,14 @@ func (p *mockKeyProvider) GenerateCLIKeyAndCSR(ctx context.Context, commonName s
 // mockTrustInstaller records calls and returns configurable results.
 type mockTrustInstaller struct {
 	mu                   sync.Mutex
-	calls                int
-	result               platform.SystemTrustResult
-	err                  error
-	lastBundlePEM        []byte
+	isTrusted            bool
+	isTrustedErr         error
+	isTrustedCalls       int
+	lastTrustedFP        string
+	installErr           error
+	installCalls         int
+	lastInstallRoot      *x509.Certificate
+	lastInstallFP        string
 	staleAnchors         []platform.StaleAnchor
 	staleErr             error
 	staleListCalls       int
@@ -160,12 +164,21 @@ type mockTrustInstaller struct {
 	staleRemoveCalls     int
 }
 
-func (m *mockTrustInstaller) EnsureSystemTrust(ctx context.Context, bundlePEM []byte) (platform.SystemTrustResult, error) {
+func (m *mockTrustInstaller) IsTrusted(ctx context.Context, fingerprint string) (bool, error) {
 	m.mu.Lock()
-	m.calls++
-	m.lastBundlePEM = bundlePEM
+	m.isTrustedCalls++
+	m.lastTrustedFP = fingerprint
 	m.mu.Unlock()
-	return m.result, m.err
+	return m.isTrusted, m.isTrustedErr
+}
+
+func (m *mockTrustInstaller) InstallRoot(ctx context.Context, root *x509.Certificate, fingerprint string) error {
+	m.mu.Lock()
+	m.installCalls++
+	m.lastInstallRoot = root
+	m.lastInstallFP = fingerprint
+	m.mu.Unlock()
+	return m.installErr
 }
 
 func (m *mockTrustInstaller) ListStaleAnchors(ctx context.Context, currentFingerprint string) ([]platform.StaleAnchor, error) {
@@ -263,15 +276,12 @@ func (r *outputRecorder) contains(substr string) bool {
 // containing the root CA + a leaf cert (so verifyRootUsable passes).
 func buildTestArtifacts(t *testing.T, source EnrollmentSource) EnrollmentArtifacts {
 	t.Helper()
-	caPEM := testutil.GenerateTestCA(t, "test-root-ca")
-	rootCert := testutil.ParseTestCert(t, caPEM)
-	// Parse the CA key from the PEM — GenerateTestCA doesn't return it,
-	// so re-derive by generating a fresh CA with the same approach.
-	// Instead, use GenerateTestSignedCert which needs the parent key.
-	// Since GenerateTestCA doesn't expose the key, build the CA manually.
+	// Build the CA manually so we have the key for signing leaf certs.
+	// Use caCert.Raw (the original DER) for the bundle PEM so the
+	// fingerprint is stable — re-encoding via CreateCertificate would
+	// produce a different DER (ECDSA signatures are non-deterministic).
 	caKey, caCert := generateTestCAWithKey(t, "test-root-ca")
-	_ = caPEM
-	_ = rootCert
+	caPEM := pemEncode("CERTIFICATE", caCert.Raw)
 
 	// CLI cert signed by the root CA.
 	cliCertPEM, cliKey := testutil.GenerateTestSignedCert(t, "g8e-cli-test", caCert, caKey)
@@ -334,7 +344,11 @@ func writeCompleteIdentityWithExpiry(t *testing.T, fileSvc fs.RuntimeFileService
 	caKey, caCert := generateTestCAWithKeyAndExpiry(t, "test-root-ca", time.Now().Add(365*24*time.Hour))
 	cliCertPEM, cliKey := testutil.GenerateTestSignedCertWithExpiry(t, "g8e-cli-test", caCert, caKey, certNotAfter)
 	leafPEM, _ := testutil.GenerateTestSignedCert(t, "test-leaf", caCert, caKey)
-	bundlePEM := testutil.GenerateTestCA(t, "test-root-ca") + leafPEM
+	// Use caCert.Raw (the original DER) for the bundle PEM so the root
+	// anchor matches the CA that signed the leaf — re-encoding via
+	// GenerateTestCA would produce a different CA (non-deterministic
+	// ECDSA signature) and verifyRootUsable would reject the bundle.
+	bundlePEM := pemEncode("CERTIFICATE", caCert.Raw) + leafPEM
 
 	// Write CLI cert + key.
 	certRel, err := fileSvc.RelFromAbs(cfg.CLICertFile())
@@ -361,9 +375,12 @@ func writeCompleteIdentityWithExpiry(t *testing.T, fileSvc fs.RuntimeFileService
 // writeCompleteIdentityWithBundleFP writes a complete, valid CLI identity
 // to disk (like writeCompleteIdentityWithExpiry) but uses the SAME CA for
 // both the trust bundle and the CLI cert signing, and returns the bundle's
-// primary root fingerprint. This lets tests inject a matching (healthy) or
-// mismatching (stale) live fingerprint via mockGateway.DiscoverGatewayCA.
-func writeCompleteIdentityWithBundleFP(t *testing.T, fileSvc fs.RuntimeFileService, cfg *config.Config, certNotAfter time.Time) (userID, cliSessionID, bundleRootFP string) {
+// primary root fingerprint and PEM. This lets tests inject a matching
+// (healthy) or mismatching (stale) live fingerprint via
+// mockGateway.DiscoverGatewayCA, and use the valid PEM as the live
+// discovery bundle (installSystemTrust parses the live bundle via
+// ExtractRootAnchors, so it must be valid PEM, not a placeholder string).
+func writeCompleteIdentityWithBundleFP(t *testing.T, fileSvc fs.RuntimeFileService, cfg *config.Config, certNotAfter time.Time) (userID, cliSessionID, bundleRootFP, bundlePEM string) {
 	t.Helper()
 	caKey, caCert := generateTestCAWithKeyAndExpiry(t, "test-root-ca", time.Now().Add(365*24*time.Hour))
 	cliCertPEM, cliKey := testutil.GenerateTestSignedCertWithExpiry(t, "g8e-cli-test", caCert, caKey, certNotAfter)
@@ -375,7 +392,7 @@ func writeCompleteIdentityWithBundleFP(t *testing.T, fileSvc fs.RuntimeFileServi
 	// which would produce a different DER (ECDSA signatures are
 	// non-deterministic) and thus a different fingerprint.
 	caPEM := pemEncode("CERTIFICATE", caCert.Raw)
-	bundlePEM := caPEM + leafPEM
+	bundlePEM = caPEM + leafPEM
 	bundleRootFP = platform.CertFingerprint(caCert)
 
 	// Write CLI cert + key.
@@ -397,7 +414,7 @@ func writeCompleteIdentityWithBundleFP(t *testing.T, fileSvc fs.RuntimeFileServi
 	cliSessionID = "cli-session-existing"
 	creds := &Credentials{UserID: userID, CLISessionID: cliSessionID}
 	require.NoError(t, SaveCredentials(fileSvc, cfg, creds))
-	return userID, cliSessionID, bundleRootFP
+	return userID, cliSessionID, bundleRootFP, bundlePEM
 }
 
 // setupCoordinatorTest builds a coordinator with all mocks injected and a
@@ -452,9 +469,10 @@ func TestEnroll_AbsentUnbootstrapped_PerformsBootstrap(t *testing.T) {
 	assert.Equal(t, 0, gw.recoveryRequestCalls, "recovery should not be called")
 	assert.Equal(t, 0, gw.rotateCalls, "rotation should not be called")
 
-	// System trust should be installed.
-	assert.Equal(t, 1, trust.calls)
-	assert.True(t, result.SystemTrustInstalled || true, "trust result depends on mock")
+	// System trust should be installed (IsTrusted returns false, InstallRoot runs).
+	assert.Equal(t, 1, trust.isTrustedCalls)
+	assert.Equal(t, 1, trust.installCalls)
+	assert.True(t, result.SystemTrustInstalled)
 
 	// Passkey ceremony should run.
 	assert.Equal(t, 1, passkey.calls)
@@ -498,7 +516,8 @@ func TestEnroll_AbsentBootstrapped_PerformsRecovery(t *testing.T) {
 	assert.Contains(t, browser.urls[0], "recovery")
 
 	// System trust + passkey.
-	assert.Equal(t, 1, trust.calls)
+	assert.Equal(t, 1, trust.isTrustedCalls)
+	assert.Equal(t, 1, trust.installCalls)
 	assert.Equal(t, 1, passkey.calls)
 
 	// Credentials committed.
@@ -513,9 +532,11 @@ func TestEnroll_CompleteHealthy_ReusesIdentity(t *testing.T) {
 	t.Parallel()
 	coord, gw, _, trust, browser, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
 
-	userID, cliSessionID, bundleFP := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	userID, cliSessionID, bundleFP, liveBundlePEM := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
 	// Inject a matching live fingerprint so the bundle is NOT stale.
-	gw.discoveryBundlePEM = []byte("live-bundle")
+	// Use the valid bundle PEM — installSystemTrust parses the live bundle
+	// via ExtractRootAnchors, so it must be valid PEM.
+	gw.discoveryBundlePEM = []byte(liveBundlePEM)
 	gw.discoveryFingerprint = bundleFP
 
 	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
@@ -533,7 +554,8 @@ func TestEnroll_CompleteHealthy_ReusesIdentity(t *testing.T) {
 	assert.Equal(t, 1, gw.discoveryCalls, "DiscoverGatewayCA should be called once")
 
 	// System trust should still be checked (from live bundle).
-	assert.Equal(t, 1, trust.calls)
+	assert.Equal(t, 1, trust.isTrustedCalls)
+	assert.Equal(t, 1, trust.installCalls)
 
 	// Passkey should run.
 	assert.Equal(t, 1, passkey.calls)
@@ -550,7 +572,7 @@ func TestEnroll_CompleteExpiring_RotatesOnce(t *testing.T) {
 	coord, gw, keys, trust, _, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
 
 	// Write a complete identity with a cert expiring within rotationThreshold.
-	_, _, bundleFP := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(1*time.Hour))
+	_, _, bundleFP, _ := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(1*time.Hour))
 	gw.discoveryFingerprint = bundleFP
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceRotation)
@@ -567,7 +589,8 @@ func TestEnroll_CompleteExpiring_RotatesOnce(t *testing.T) {
 	assert.Equal(t, 1, gw.rotateCalls, "rotation should be called exactly once")
 
 	// System trust + passkey.
-	assert.Equal(t, 1, trust.calls)
+	assert.Equal(t, 1, trust.isTrustedCalls)
+	assert.Equal(t, 1, trust.installCalls)
 	assert.Equal(t, 1, passkey.calls)
 
 	// New credentials committed.
@@ -583,7 +606,7 @@ func TestEnroll_CompleteExplicitRotate_RotatesOnce(t *testing.T) {
 	coord, gw, keys, _, _, _, _, fileSvc, cfg := setupCoordinatorTest(t)
 
 	// Write a healthy, non-expiring identity.
-	_, _, bundleFP := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	_, _, bundleFP, _ := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
 	gw.discoveryFingerprint = bundleFP
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceRotation)
@@ -602,7 +625,7 @@ func TestEnroll_CompleteExpired_UsesRecoveryNotRotation(t *testing.T) {
 	coord, gw, keys, _, browser, _, recorder, fileSvc, cfg := setupCoordinatorTest(t)
 
 	// Write a complete identity with an already-expired cert.
-	_, _, bundleFP := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(-time.Hour))
+	_, _, bundleFP, _ := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(-time.Hour))
 	gw.discoveryFingerprint = bundleFP
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
@@ -827,8 +850,9 @@ func TestEnroll_NoSystemTrust_SkipsInstaller(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, result.SystemTrustInstalled)
 	// C4: stale detection still runs under --no-system-trust; only
-	// installation (EnsureSystemTrust) is skipped.
-	assert.Equal(t, 0, trust.calls, "EnsureSystemTrust should not be called")
+	// installation (IsTrusted + InstallRoot) is skipped.
+	assert.Equal(t, 0, trust.isTrustedCalls, "IsTrusted should not be called")
+	assert.Equal(t, 0, trust.installCalls, "InstallRoot should not be called")
 	assert.Equal(t, 1, trust.staleListCalls, "ListStaleAnchors should still run under --no-system-trust")
 	assert.Equal(t, 1, passkey.calls, "passkey should still run")
 	assert.True(t, recorder.contains("--no-system-trust"))
@@ -838,15 +862,16 @@ func TestEnroll_NoSystemTrust_ReusedIdentity_SkipsInstaller(t *testing.T) {
 	t.Parallel()
 	coord, gw, _, trust, _, passkey, _, fileSvc, cfg := setupCoordinatorTest(t)
 
-	_, _, bundleFP := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	_, _, bundleFP, _ := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
 	gw.discoveryFingerprint = bundleFP
 
 	result, err := coord.Enroll(context.Background(), EnrollmentOptions{NoSystemTrust: true})
 	require.NoError(t, err)
 	assert.True(t, result.Reused)
 	// C4: stale detection still runs under --no-system-trust; only
-	// installation (EnsureSystemTrust) is skipped.
-	assert.Equal(t, 0, trust.calls, "EnsureSystemTrust should not be called")
+	// installation (IsTrusted + InstallRoot) is skipped.
+	assert.Equal(t, 0, trust.isTrustedCalls, "IsTrusted should not be called")
+	assert.Equal(t, 0, trust.installCalls, "InstallRoot should not be called")
 	assert.Equal(t, 1, trust.staleListCalls, "ListStaleAnchors should still run under --no-system-trust")
 	assert.Equal(t, 1, passkey.calls)
 }
@@ -859,7 +884,7 @@ func TestEnroll_SystemTrustFailure_AbortsBeforePasskey(t *testing.T) {
 	gw.bootstrapStatus = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
-	trust.err = constants.ErrSystemTrustInstallFailed
+	trust.installErr = constants.ErrSystemTrustInstallFailed
 
 	_, err := coord.Enroll(context.Background(), EnrollmentOptions{})
 	require.Error(t, err)
@@ -875,7 +900,7 @@ func TestEnroll_SystemTrustAlreadyTrusted_NoPrivilegePrompt(t *testing.T) {
 	gw.bootstrapStatus = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
-	trust.result = platform.SystemTrustResult{Status: platform.SystemTrustAlreadyTrusted, Fingerprint: "abc123"}
+	trust.isTrusted = true
 
 	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
 	require.NoError(t, err)
@@ -886,13 +911,13 @@ func TestEnroll_SystemTrustAlreadyTrusted_NoPrivilegePrompt(t *testing.T) {
 
 func TestEnroll_SystemTrustInstalled_PrintsBrowserCloseNote(t *testing.T) {
 	t.Parallel()
-	coord, gw, keys, trust, _, _, recorder, _, _ := setupCoordinatorTest(t)
+	coord, gw, keys, _, _, _, recorder, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
 	gw.bootstrapStatus = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
-	trust.result = platform.SystemTrustResult{Status: platform.SystemTrustInstalled, Fingerprint: "abc123"}
+	// IsTrusted returns false (default), InstallRoot succeeds (default) → installed.
 
 	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
 	require.NoError(t, err)
@@ -957,7 +982,7 @@ func TestEnroll_RotationError_ReturnsError(t *testing.T) {
 	t.Parallel()
 	coord, gw, keys, _, _, _, _, fileSvc, cfg := setupCoordinatorTest(t)
 
-	_, _, bundleFP := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(1*time.Hour))
+	_, _, bundleFP, _ := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(1*time.Hour))
 	gw.discoveryFingerprint = bundleFP
 	gw.rotateErr = constants.ErrEnrollmentFailed
 	keys.csr, keys.key = "test-csr", nil
@@ -1015,7 +1040,7 @@ func TestEnroll_TransportMethods_NoHiddenFileWrites(t *testing.T) {
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
-	trust.result = platform.SystemTrustResult{Status: platform.SystemTrustAlreadyTrusted}
+	trust.isTrusted = true
 	passkey.err = nil
 
 	// Snapshot file state before enrollment.
@@ -1096,7 +1121,7 @@ func TestEnroll_StaleAnchors_Confirmed_RemovesAndInstalls(t *testing.T) {
 		{Fingerprint: "stale-fp-1", CommonName: "g8e Root CA", Handle: "/path/stale1"},
 		{Fingerprint: "stale-fp-2", CommonName: "g8e Root CA", Handle: "/path/stale2"},
 	}
-	trust.result = platform.SystemTrustResult{Status: platform.SystemTrustInstalled, Fingerprint: "new-fp"}
+	// IsTrusted returns false (default), InstallRoot succeeds (default) → installed.
 
 	confirmCalled := false
 	coord.confirm = func(prompt string) bool {
@@ -1131,7 +1156,6 @@ func TestEnroll_StaleAnchors_Declined_AbortsBeforeInstall(t *testing.T) {
 	trust.staleAnchors = []platform.StaleAnchor{
 		{Fingerprint: "stale-fp-1", CommonName: "g8e Root CA", Handle: "/path/stale1"},
 	}
-	trust.result = platform.SystemTrustResult{Status: platform.SystemTrustInstalled, Fingerprint: "new-fp"}
 
 	coord.confirm = func(prompt string) bool { return false }
 
@@ -1154,7 +1178,7 @@ func TestEnroll_StaleAnchors_None_NoPrompt(t *testing.T) {
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
 	trust.staleAnchors = nil
-	trust.result = platform.SystemTrustResult{Status: platform.SystemTrustInstalled, Fingerprint: "new-fp"}
+	// IsTrusted returns false (default), InstallRoot succeeds (default) → installed.
 
 	confirmCalled := false
 	coord.confirm = func(prompt string) bool {
@@ -1206,7 +1230,7 @@ func TestEnroll_StaleAnchors_ListError_ProceedsAsBestEffort(t *testing.T) {
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
 	trust.staleErr = errors.New("enumeration failed")
-	trust.result = platform.SystemTrustResult{Status: platform.SystemTrustInstalled, Fingerprint: "new-fp"}
+	// IsTrusted returns false (default), InstallRoot succeeds (default) → installed.
 
 	confirmCalled := false
 	coord.confirm = func(prompt string) bool {
@@ -1234,7 +1258,7 @@ func TestEnroll_StaleAnchors_Unsupported_SkipsDetection(t *testing.T) {
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
 	trust.staleErr = constants.ErrSystemTrustUnsupported
-	trust.result = platform.SystemTrustResult{Status: platform.SystemTrustInstalled, Fingerprint: "new-fp"}
+	// IsTrusted returns false (default), InstallRoot succeeds (default) → installed.
 
 	confirmCalled := false
 	coord.confirm = func(prompt string) bool {
@@ -1246,6 +1270,54 @@ func TestEnroll_StaleAnchors_Unsupported_SkipsDetection(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, confirmCalled, "confirm should not be called on unsupported platform")
 	assert.False(t, recorder.contains("could not check for stale"), "no warning on unsupported platform")
+	assert.Equal(t, 1, passkey.calls)
+}
+
+// TestInstallSystemTrust_UnsupportedPlatformWarns verifies that when
+// IsTrusted and InstallRoot return ErrSystemTrustUnsupported (stub
+// platform), installSystemTrust prints a warning and proceeds without
+// failing enrollment. The passkey ceremony still runs.
+func TestInstallSystemTrust_UnsupportedPlatformWarns(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, trust, _, passkey, recorder, _, _ := setupCoordinatorTest(t)
+
+	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
+	gw.bootstrapStatus = false
+	gw.bootstrapArtifacts = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	trust.isTrustedErr = constants.ErrSystemTrustUnsupported
+	trust.installErr = constants.ErrSystemTrustUnsupported
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err, "unsupported platform must not fail enrollment")
+	assert.False(t, result.SystemTrustInstalled, "nothing installed on unsupported platform")
+	assert.Equal(t, 1, trust.isTrustedCalls, "IsTrusted should be called once")
+	assert.Equal(t, 0, trust.installCalls, "InstallRoot should NOT be called when IsTrusted returns unsupported")
+	assert.True(t, recorder.contains("unsupported"), "should print unsupported warning")
+	assert.Equal(t, 1, passkey.calls, "passkey should still run")
+}
+
+// TestInstallSystemTrust_InstallRootUnsupportedWarns verifies that when
+// IsTrusted succeeds (returns false) but InstallRoot returns
+// ErrSystemTrustUnsupported, installSystemTrust prints a warning and
+// proceeds without failing enrollment.
+func TestInstallSystemTrust_InstallRootUnsupportedWarns(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, trust, _, passkey, recorder, _, _ := setupCoordinatorTest(t)
+
+	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
+	gw.bootstrapStatus = false
+	gw.bootstrapArtifacts = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	trust.isTrusted = false
+	trust.installErr = constants.ErrSystemTrustUnsupported
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err, "unsupported InstallRoot must not fail enrollment")
+	assert.False(t, result.SystemTrustInstalled)
+	assert.Equal(t, 1, trust.isTrustedCalls)
+	assert.Equal(t, 1, trust.installCalls, "InstallRoot should be called (IsTrusted succeeded)")
+	assert.True(t, recorder.contains("unsupported"))
 	assert.Equal(t, 1, passkey.calls)
 }
 
@@ -1301,16 +1373,18 @@ func TestEnroll_ReusedIdentity_StaleBundle_RoutesToRecovery(t *testing.T) {
 
 // TestEnroll_ReusedIdentity_HealthyBundle_ReusesWithLiveFingerprint
 // verifies that when the live fingerprint matches the local bundle, the
-// reuse branch is taken AND ensureSystemTrust is called with the LIVE
-// fingerprint (not the local bundle's fingerprint) for stale-anchor
-// detection.
+// reuse branch is taken AND installSystemTrust uses the LIVE fingerprint
+// (not the local bundle's fingerprint) for stale-anchor detection and
+// IsTrusted/InstallRoot.
 func TestEnroll_ReusedIdentity_HealthyBundle_ReusesWithLiveFingerprint(t *testing.T) {
 	t.Parallel()
 	coord, gw, _, trust, _, passkey, _, fileSvc, cfg := setupCoordinatorTest(t)
 
-	_, _, bundleFP := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	_, _, bundleFP, liveBundlePEM := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
 	gw.discoveryFingerprint = bundleFP
-	gw.discoveryBundlePEM = []byte("live-bundle-matching-fp")
+	// Use the valid bundle PEM — installSystemTrust parses the live bundle
+	// via ExtractRootAnchors, so it must be valid PEM.
+	gw.discoveryBundlePEM = []byte(liveBundlePEM)
 
 	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
 	require.NoError(t, err)
@@ -1320,10 +1394,14 @@ func TestEnroll_ReusedIdentity_HealthyBundle_ReusesWithLiveFingerprint(t *testin
 	assert.Equal(t, 1, trust.staleListCalls)
 	assert.Equal(t, bundleFP, trust.lastStaleFingerprint, "ListStaleAnchors should receive the live fingerprint")
 
-	// EnsureSystemTrust should be called with the LIVE bundle (not the
-	// local bundle).
-	assert.Equal(t, 1, trust.calls)
-	assert.Equal(t, []byte("live-bundle-matching-fp"), trust.lastBundlePEM, "EnsureSystemTrust should receive the live bundle")
+	// IsTrusted + InstallRoot should be called with the LIVE fingerprint
+	// (not the local bundle's fingerprint). The live bundle was parsed by
+	// ExtractRootAnchors to obtain the root cert, and keepFingerprint was
+	// set to the live fingerprint from discovery.
+	assert.Equal(t, 1, trust.isTrustedCalls, "IsTrusted should be called once")
+	assert.Equal(t, 1, trust.installCalls, "InstallRoot should be called once")
+	assert.Equal(t, bundleFP, trust.lastTrustedFP, "IsTrusted should receive the live fingerprint")
+	assert.Equal(t, bundleFP, trust.lastInstallFP, "InstallRoot should receive the live fingerprint")
 
 	assert.Equal(t, 1, passkey.calls)
 }
@@ -1351,6 +1429,48 @@ func TestEnroll_ReusedIdentity_DiscoveryUnreachable_WarnsAndProceeds(t *testing.
 	assert.Equal(t, 1, passkey.calls)
 }
 
+// TestEnroll_StaleAnchorNotDetectedWhenDiscoveryFails is the R5 regression
+// guard. On the pre-fix code, when discovery was unreachable on the reuse
+// path, ensureSystemTrust fell back to the local (possibly stale) trust
+// bundle fingerprint for ListStaleAnchors, so the old OS anchor matched
+// the "keep" fingerprint and was NOT reported as stale. EnsureSystemTrust
+// then reported "already trusted" with the stale fingerprint, and the
+// passkey ceremony proceeded against a root the browser did not trust.
+//
+// After R2, installSystemTrust surfaces a diagnosable R5 warning when
+// discovery is unreachable AND reuse is attempted, BEFORE bundle
+// resolution. This test asserts the warning IS printed — it would have
+// failed on the old ensureSystemTrust which did not print a warning in
+// the unreachable-reuse path.
+func TestEnroll_StaleAnchorNotDetectedWhenDiscoveryFails(t *testing.T) {
+	t.Parallel()
+	coord, gw, _, trust, _, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
+
+	_, _, localFP, _ := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	// Discovery is unreachable — the coordinator cannot obtain the live
+	// fingerprint, so it falls back to the local bundle.
+	gw.discoveryErr = constants.ErrServiceUnavailable
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+	assert.True(t, result.Reused, "should proceed with reuse when discovery is unreachable")
+
+	// R5 warning MUST be printed — this is the regression assertion.
+	assert.True(t, recorder.contains("could not reach the gateway discovery endpoint"),
+		"R5 warning must be printed when discovery is unreachable on the reuse path")
+
+	// ListStaleAnchors is called with the LOCAL fingerprint (the only one
+	// available when discovery fails). This means a stale OS anchor
+	// matching the local fingerprint would NOT be detected — the R5
+	// warning is the user's only signal that something may be wrong.
+	assert.Equal(t, 1, trust.staleListCalls)
+	assert.Equal(t, localFP, trust.lastStaleFingerprint,
+		"ListStaleAnchors should receive the local fingerprint when discovery is unreachable")
+
+	// Passkey should still run (best-effort, user may be intentionally offline).
+	assert.Equal(t, 1, passkey.calls)
+}
+
 // TestEnroll_ReusedIdentity_StaleBundle_DetectsStaleOSAnchors verifies
 // that when the local bundle is stale (OLD_FP) and the live fingerprint is
 // NEW_FP, ListStaleAnchors is called with NEW_FP (not OLD_FP), the stale
@@ -1360,7 +1480,7 @@ func TestEnroll_ReusedIdentity_StaleBundle_DetectsStaleOSAnchors(t *testing.T) {
 	t.Parallel()
 	coord, gw, keys, trust, browser, _, recorder, fileSvc, cfg := setupCoordinatorTest(t)
 
-	_, _, oldFP := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	_, _, oldFP, _ := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
 
 	// Live fingerprint is different — bundle is stale.
 	newFP := "new-live-fp"
@@ -1371,7 +1491,7 @@ func TestEnroll_ReusedIdentity_StaleBundle_DetectsStaleOSAnchors(t *testing.T) {
 	trust.staleAnchors = []platform.StaleAnchor{
 		{Fingerprint: oldFP, CommonName: "g8e Root CA", Handle: "/path/old"},
 	}
-	trust.result = platform.SystemTrustResult{Status: platform.SystemTrustInstalled, Fingerprint: newFP}
+	// IsTrusted returns false (default), InstallRoot succeeds (default) → installed.
 
 	// Configure recovery flow.
 	artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
@@ -1411,7 +1531,7 @@ func TestEnroll_ReusedIdentity_StaleBundle_DetectsStaleOSAnchors(t *testing.T) {
 
 // TestEnroll_NoSystemTrust_StillRunsStaleDetection verifies that
 // --no-system-trust still runs stale-anchor detection (ListStaleAnchors +
-// RemoveStaleAnchors) but skips EnsureSystemTrust. This is the C4
+// RemoveStaleAnchors) but skips IsTrusted + InstallRoot. This is the C4
 // behavior change: the user may have stale anchors that break the browser
 // even if the CLI skips installation.
 func TestEnroll_NoSystemTrust_StillRunsStaleDetection(t *testing.T) {
@@ -1442,7 +1562,8 @@ func TestEnroll_NoSystemTrust_StillRunsStaleDetection(t *testing.T) {
 	assert.Equal(t, 1, trust.staleRemoveCalls, "RemoveStaleAnchors should run under --no-system-trust")
 
 	// Installation should be skipped.
-	assert.Equal(t, 0, trust.calls, "EnsureSystemTrust should NOT be called under --no-system-trust")
+	assert.Equal(t, 0, trust.isTrustedCalls, "IsTrusted should NOT be called under --no-system-trust")
+	assert.Equal(t, 0, trust.installCalls, "InstallRoot should NOT be called under --no-system-trust")
 
 	// Passkey should still run.
 	assert.Equal(t, 1, passkey.calls)

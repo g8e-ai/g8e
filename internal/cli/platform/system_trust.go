@@ -28,24 +28,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// SystemTrustStatus describes the outcome of an EnsureSystemTrust call.
-type SystemTrustStatus int
-
-const (
-	// SystemTrustInstalled means the root anchor was newly installed into the
-	// OS trust store during this call.
-	SystemTrustInstalled SystemTrustStatus = iota
-	// SystemTrustAlreadyTrusted means the root anchor was already present in
-	// the OS trust store; no installation or privilege prompt was performed.
-	SystemTrustAlreadyTrusted
-)
-
-// SystemTrustResult is the return value of EnsureSystemTrust.
-type SystemTrustResult struct {
-	Status      SystemTrustStatus
-	Fingerprint string // hex-encoded SHA-256 of the installed root anchor DER
-}
-
 // StaleAnchor describes a g8e root CA found in the OS trust store that does
 // not match the current gateway's root CA fingerprint. These are orphaned
 // anchors left behind by a previous gateway instance (e.g., after `gw clean`
@@ -96,9 +78,14 @@ func (execRunner) Run(ctx context.Context, env map[string]string, name string, a
 }
 
 // SystemTrustInstaller installs a gateway root CA anchor into the host OS
-// trust store. The shared EnsureSystemTrust method parses the full runtime
-// bundle, extracts root anchors, verifies the chain, and delegates the actual
-// trust-store mutation to platform-specific methods.
+// trust store and manages stale g8e anchors from previous gateway instances.
+// The installer exposes single-purpose methods: IsTrusted reads the trust
+// store, InstallRoot writes to it, and ListStaleAnchors/RemoveStaleAnchors
+// enumerate and remove orphaned anchors. Bundle parsing, root extraction, and
+// chain verification (ExtractRootAnchors, verifyRootUsable) are package-level
+// helpers — the coordinator calls them directly to obtain the root +
+// fingerprint, then calls IsTrusted/InstallRoot/ListStaleAnchors/
+// RemoveStaleAnchors as needed.
 type SystemTrustInstaller struct {
 	runner commandRunner
 	// now is injectable for expiry checks in tests.
@@ -114,44 +101,20 @@ func NewSystemTrustInstaller() *SystemTrustInstaller {
 	}
 }
 
-// EnsureSystemTrust parses the full runtime trust bundle, extracts the
-// self-signed root anchor(s), verifies the root is usable for the gateway
-// certificate chain, and installs the root into the OS trust store if it is
-// not already present. It returns a result indicating whether a new
-// installation occurred or the root was already trusted, along with the
-// SHA-256 fingerprint of the primary root anchor.
-//
-// Only self-signed root anchors are passed to the platform trust store.
-// Intermediates remain in the runtime bundle for CLI mTLS but are never
-// installed as OS trust anchors.
-func (i *SystemTrustInstaller) EnsureSystemTrust(ctx context.Context, bundlePEM []byte) (SystemTrustResult, error) {
-	rootAnchors, err := extractRootAnchors(bundlePEM, i.now)
-	if err != nil {
-		return SystemTrustResult{}, err
-	}
-	if len(rootAnchors) == 0 {
-		return SystemTrustResult{}, constants.ErrSystemTrustInvalidAnchor
-	}
+// IsTrusted reports whether the OS trust store already contains a root anchor
+// with the given SHA-256 fingerprint. It reads only — it never installs,
+// removes, or prompts. The platform-specific implementations ignore the root
+// certificate argument and compare fingerprints only; the parameter is kept
+// for future per-cert inspection without changing the call site.
+func (i *SystemTrustInstaller) IsTrusted(ctx context.Context, fingerprint string) (bool, error) {
+	return i.isTrustedPlatform(ctx, nil, fingerprint)
+}
 
-	if err := verifyRootUsable(rootAnchors, bundlePEM, i.now); err != nil {
-		return SystemTrustResult{}, fmt.Errorf("%w: %w", constants.ErrSystemTrustInvalidAnchor, err)
-	}
-
-	primary := rootAnchors[0]
-	fingerprint := certFingerprint(primary)
-
-	trusted, err := i.isTrustedPlatform(ctx, primary, fingerprint)
-	if err != nil {
-		return SystemTrustResult{}, err
-	}
-	if trusted {
-		return SystemTrustResult{Status: SystemTrustAlreadyTrusted, Fingerprint: fingerprint}, nil
-	}
-
-	if err := i.installPlatform(ctx, primary, fingerprint); err != nil {
-		return SystemTrustResult{}, err
-	}
-	return SystemTrustResult{Status: SystemTrustInstalled, Fingerprint: fingerprint}, nil
+// InstallRoot writes the root anchor into the OS trust store. It writes only —
+// it does not check whether the anchor is already trusted (the caller decides
+// via IsTrusted first). Requires elevation on all platforms.
+func (i *SystemTrustInstaller) InstallRoot(ctx context.Context, root *x509.Certificate, fingerprint string) error {
+	return i.installPlatform(ctx, root, fingerprint)
 }
 
 // ListStaleAnchors enumerates g8e root CA anchors in the OS trust store that
@@ -206,6 +169,14 @@ func extractRootAnchors(bundlePEM []byte, now func() time.Time) ([]*x509.Certifi
 		roots = append(roots, cert)
 	}
 	return roots, nil
+}
+
+// VerifyRootUsable confirms that at least one non-root certificate in the
+// bundle chains to one of the provided root anchors. This prevents installing
+// an unrelated or stale root as a trust anchor. Exported so the enrollment
+// coordinator can run the chain check before calling IsTrusted/InstallRoot.
+func VerifyRootUsable(roots []*x509.Certificate, bundlePEM []byte, now func() time.Time) error {
+	return verifyRootUsable(roots, bundlePEM, now)
 }
 
 // verifyRootUsable confirms that at least one non-root certificate in the

@@ -17,6 +17,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -868,12 +869,29 @@ certificates and keys are preserved. Use --force to skip the confirmation prompt
 }
 
 func gatewayCleanCmd() *cobra.Command {
-	return gatewayCleanCmdWithConfig(loadConfig, newFileSvc)
+	return gatewayCleanCmdWithConfig(loadConfig, newFileSvc, defaultTrustInstallerFactory)
+}
+
+// systemTrustCleaner is the subset of platform.SystemTrustInstaller used by
+// `gw clean` to remove g8e root CA anchors from the OS trust store before
+// wiping the runtime directory. Defining it in the cmd package lets Tier 1
+// tests inject a mock without touching the real OS trust store.
+type systemTrustCleaner interface {
+	ListStaleAnchors(ctx context.Context, currentFingerprint string) ([]platform.StaleAnchor, error)
+	RemoveStaleAnchors(ctx context.Context, anchors []platform.StaleAnchor) error
+}
+
+// defaultTrustInstallerFactory returns the production SystemTrustInstaller.
+// It is the default injected into gatewayCleanCmdWithConfig; tests pass a
+// mock factory instead.
+func defaultTrustInstallerFactory() (systemTrustCleaner, error) {
+	return platform.NewSystemTrustInstaller(), nil
 }
 
 func gatewayCleanCmdWithConfig(
 	configLoader func(string) (*config.Config, error),
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
+	trustInstallerFactory func() (systemTrustCleaner, error),
 ) *cobra.Command {
 	var force bool
 
@@ -897,6 +915,7 @@ Use --force to skip the confirmation prompt.`,
 				cmd.Println("  2. Completely delete the entire runtime directory")
 				cmd.Println("  3. Delete all SQLite databases, bootstrap secrets, logs, AND TLS/PKI certificates/keys")
 				cmd.Println("  4. All trust routes and credentials will be permanently destroyed")
+				cmd.Println("  5. Remove g8e root CA anchors from the OS trust store")
 				cmd.Println()
 				cmd.Println("IMPORTANT: Your CLI credentials will become invalid after this operation.")
 				cmd.Println("You will need to run './g8e auth enroll' again after restarting the gateway.")
@@ -917,6 +936,34 @@ Use --force to skip the confirmation prompt.`,
 			pm, err := platform.NewProcessManager(fileSvc)
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+			}
+
+			// Remove g8e root CA anchors from the OS trust store BEFORE
+			// wiping the runtime directory. An empty keep-fingerprint lists
+			// every g8e anchor (after clean there is no "current" one). This
+			// runs before the runtime wipe so that, if OS cleanup fails with
+			// an elevation error, the user can retry while the runtime state
+			// is still intact. Best-effort: on ErrSystemTrustUnsupported
+			// (stub platform) or any trust-store error, proceed with the
+			// runtime wipe (the runtime wipe is the destructive primary
+			// action). Log the error for visibility.
+			trustCleaner, terr := trustInstallerFactory()
+			if terr != nil {
+				cmd.Println(fmt.Sprintf("Warning: could not initialize OS trust cleaner (%v). Proceeding with runtime wipe.", terr))
+			} else {
+				anchors, lerr := trustCleaner.ListStaleAnchors(context.Background(), "")
+				if lerr != nil {
+					if !errors.Is(lerr, constants.ErrSystemTrustUnsupported) {
+						cmd.Println(fmt.Sprintf("Warning: could not enumerate OS trust anchors (%v). Proceeding with runtime wipe.", lerr))
+					}
+				} else if len(anchors) > 0 {
+					cmd.Println(fmt.Sprintf("Removing %d g8e root CA anchor(s) from the OS trust store...", len(anchors)))
+					if rerr := trustCleaner.RemoveStaleAnchors(context.Background(), anchors); rerr != nil {
+						cmd.Println(fmt.Sprintf("Warning: could not remove all OS trust anchors (%v). Proceeding with runtime wipe. You may need to remove them manually.", rerr))
+					} else {
+						cmd.Println("OS trust anchors removed.")
+					}
+				}
 			}
 
 			if err := pm.Clean(); err != nil {

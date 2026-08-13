@@ -199,7 +199,7 @@ type EnrollmentArtifacts struct {
 
 	// TrustBundlePEM is the full gateway runtime trust bundle PEM. Used by
 	// CredentialStore to refresh the local runtime bundle and by
-	// EnsureSystemTrust to extract root anchors for OS installation.
+	// ExtractRootAnchors/InstallRoot to install root anchors for OS trust.
 	TrustBundlePEM string
 
 	// OperatorCertPEM is the operator certificate PEM, when the enrollment

@@ -511,7 +511,7 @@ cmd.authEnrollCmd / cmd.enrollDemoHost / cmd.launchAgentWithGovernance
           ├── KeyProvider (interface; FileKeyProvider in production)
           │   └── GenerateCLIKeyAndCSR (file-backed EC P-256 on all platforms)
           ├── SystemTrustInstaller (interface; *platform.SystemTrustInstaller in production)
-          │   └── EnsureSystemTrust (sudo/exec, OS trust store)
+          │   └── IsTrusted / InstallRoot / ListStaleAnchors / RemoveStaleAnchors (sudo/exec, OS trust store)
           ├── BrowserOpener (interface; defaultBrowserOpener in production)
           │   └── Open (recovery approval URL only)
           ├── PasskeyRegistrar (interface; *defaultPasskeyRegistrar in production)

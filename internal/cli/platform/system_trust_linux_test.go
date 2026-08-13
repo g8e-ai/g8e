@@ -178,7 +178,7 @@ func TestLinux_IsTrustedRHEL_DifferentCert(t *testing.T) {
 	assert.False(t, trusted)
 }
 
-func TestLinux_EnsureSystemTrust_AlreadyTrusted_Debian(t *testing.T) {
+func TestLinux_IsTrusted_AlreadyTrusted_Debian(t *testing.T) {
 	t.Parallel()
 	bundle, rootCert := testBundle(t)
 	fp := certFingerprint(rootCert)
@@ -190,35 +190,30 @@ func TestLinux_EnsureSystemTrust_AlreadyTrusted_Debian(t *testing.T) {
 	r.setResponse("cat", []byte(bundle[:strings.Index(bundle, "-----END CERTIFICATE-----\n")+len("-----END CERTIFICATE-----\n")]), nil)
 
 	installer := &SystemTrustInstaller{runner: r, now: time.Now}
-	result, err := installer.EnsureSystemTrust(context.Background(), []byte(bundle))
+	trusted, err := installer.IsTrusted(context.Background(), fp)
 	require.NoError(t, err)
-	assert.Equal(t, SystemTrustAlreadyTrusted, result.Status)
-	assert.Equal(t, fp, result.Fingerprint)
-	// No sudo calls should have been made
+	assert.True(t, trusted)
+	// No sudo calls should have been made — IsTrusted is read-only.
 	for i := 0; i < r.callCount(); i++ {
 		c := r.call(i)
-		assert.NotEqual(t, "sudo", c.name, "no sudo should be invoked when already trusted")
+		assert.NotEqual(t, "sudo", c.name, "no sudo should be invoked by IsTrusted")
 	}
 }
 
-func TestLinux_EnsureSystemTrust_Install_Debian(t *testing.T) {
+func TestLinux_InstallRoot_Debian(t *testing.T) {
 	t.Parallel()
-	bundle, rootCert := testBundle(t)
+	_, rootCert := testBundle(t)
 	fp := certFingerprint(rootCert)
 
 	r := newFakeRunner()
 	// detectLinuxFamily: update-ca-certificates --help succeeds
 	r.setResponse("update-ca-certificates", []byte("usage"), nil)
-	// isTrustedDebian: cat fails (not present)
-	r.setResponse("cat", nil, &fakeErr{msg: "no such file"})
 	// sudo cp succeeds
 	r.setResponse("sudo", []byte(""), nil)
 
 	installer := &SystemTrustInstaller{runner: r, now: time.Now}
-	result, err := installer.EnsureSystemTrust(context.Background(), []byte(bundle))
+	err := installer.InstallRoot(context.Background(), rootCert, fp)
 	require.NoError(t, err)
-	assert.Equal(t, SystemTrustInstalled, result.Status)
-	assert.Equal(t, fp, result.Fingerprint)
 
 	// Verify sudo was called with cp and update-ca-certificates (argument arrays, no shell)
 	var sudoCalls []fakeCall
@@ -236,25 +231,21 @@ func TestLinux_EnsureSystemTrust_Install_Debian(t *testing.T) {
 	assert.Equal(t, "update-ca-certificates", sudoCalls[1].args[0])
 }
 
-func TestLinux_EnsureSystemTrust_Install_RHEL(t *testing.T) {
+func TestLinux_InstallRoot_RHEL(t *testing.T) {
 	t.Parallel()
-	bundle, rootCert := testBundle(t)
+	_, rootCert := testBundle(t)
 	fp := certFingerprint(rootCert)
 
 	r := newFakeRunner()
 	// detectLinuxFamily: update-ca-certificates fails, trust list succeeds
 	r.setResponse("update-ca-certificates", nil, &fakeErr{msg: "not found"})
 	r.setResponse("trust", []byte(""), nil)
-	// isTrustedRHEL: trust list returns empty (not present)
-	// Already set above with empty output — no root match
 	// sudo cp + sudo update-ca-trust succeed
 	r.setResponse("sudo", []byte(""), nil)
 
 	installer := &SystemTrustInstaller{runner: r, now: time.Now}
-	result, err := installer.EnsureSystemTrust(context.Background(), []byte(bundle))
+	err := installer.InstallRoot(context.Background(), rootCert, fp)
 	require.NoError(t, err)
-	assert.Equal(t, SystemTrustInstalled, result.Status)
-	assert.Equal(t, fp, result.Fingerprint)
 
 	var sudoCalls []fakeCall
 	for i := 0; i < r.callCount(); i++ {
@@ -270,42 +261,40 @@ func TestLinux_EnsureSystemTrust_Install_RHEL(t *testing.T) {
 	assert.Equal(t, "extract", sudoCalls[1].args[1])
 }
 
-func TestLinux_EnsureSystemTrust_MissingTool(t *testing.T) {
+func TestLinux_InstallRoot_MissingTool(t *testing.T) {
 	t.Parallel()
-	bundle, _ := testBundle(t)
+	_, rootCert := testBundle(t)
 
 	r := newFakeRunner()
 	// Neither tool found
 	installer := &SystemTrustInstaller{runner: r, now: time.Now}
-	_, err := installer.EnsureSystemTrust(context.Background(), []byte(bundle))
+	err := installer.InstallRoot(context.Background(), rootCert, "any-fp")
 	require.Error(t, err)
 }
 
-func TestLinux_EnsureSystemTrust_SudoFails(t *testing.T) {
+func TestLinux_InstallRoot_SudoFails(t *testing.T) {
 	t.Parallel()
-	bundle, _ := testBundle(t)
+	_, rootCert := testBundle(t)
 
 	r := newFakeRunner()
 	r.setResponse("update-ca-certificates", []byte("usage"), nil)
-	r.setResponse("cat", nil, &fakeErr{msg: "no such file"})
 	r.setResponse("sudo", nil, &fakeErr{msg: "sudo: command not found"})
 
 	installer := &SystemTrustInstaller{runner: r, now: time.Now}
-	_, err := installer.EnsureSystemTrust(context.Background(), []byte(bundle))
+	err := installer.InstallRoot(context.Background(), rootCert, "any-fp")
 	require.Error(t, err)
 }
 
-func TestLinux_EnsureSystemTrust_NoShellInjection(t *testing.T) {
+func TestLinux_InstallRoot_NoShellInjection(t *testing.T) {
 	t.Parallel()
-	bundle, _ := testBundle(t)
+	_, rootCert := testBundle(t)
 
 	r := newFakeRunner()
 	r.setResponse("update-ca-certificates", []byte("usage"), nil)
-	r.setResponse("cat", nil, &fakeErr{msg: "no such file"})
 	r.setResponse("sudo", []byte(""), nil)
 
 	installer := &SystemTrustInstaller{runner: r, now: time.Now}
-	_, err := installer.EnsureSystemTrust(context.Background(), []byte(bundle))
+	err := installer.InstallRoot(context.Background(), rootCert, "any-fp")
 	require.NoError(t, err)
 
 	// Verify no call uses sh -c or shell interpolation
@@ -319,13 +308,12 @@ func TestLinux_EnsureSystemTrust_NoShellInjection(t *testing.T) {
 	}
 }
 
-func TestLinux_EnsureSystemTrust_ConcurrentCalls(t *testing.T) {
+func TestLinux_InstallRoot_ConcurrentCalls(t *testing.T) {
 	t.Parallel()
-	bundle, _ := testBundle(t)
+	_, rootCert := testBundle(t)
 
 	r := newFakeRunner()
 	r.setResponse("update-ca-certificates", []byte("usage"), nil)
-	r.setResponse("cat", nil, &fakeErr{msg: "no such file"})
 	r.setResponse("sudo", []byte(""), nil)
 
 	installer := &SystemTrustInstaller{runner: r, now: time.Now}
@@ -335,7 +323,7 @@ func TestLinux_EnsureSystemTrust_ConcurrentCalls(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := installer.EnsureSystemTrust(context.Background(), []byte(bundle))
+			err := installer.InstallRoot(context.Background(), rootCert, "any-fp")
 			assert.NoError(t, err)
 		}()
 	}

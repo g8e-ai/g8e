@@ -14,7 +14,6 @@
 package platform
 
 import (
-	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -238,13 +237,6 @@ func TestVerifyRootUsable_UnrelatedRoot(t *testing.T) {
 	hubPEM, _ := testSignedCA(t, "hub-unrelated", root2Cert, root2Key)
 	bundle := root2PEM + hubPEM
 	err := verifyRootUsable([]*x509.Certificate{mustParse(t, root1PEM)}, []byte(bundle), time.Now)
-	require.Error(t, err)
-}
-
-func TestEnsureSystemTrust_EmptyBundle(t *testing.T) {
-	t.Parallel()
-	installer := &SystemTrustInstaller{runner: &fakeRunner{}, now: time.Now}
-	_, err := installer.EnsureSystemTrust(context.Background(), nil)
 	require.Error(t, err)
 }
 

@@ -30,6 +30,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // DockerE2EFixture spins up docker-compose, waits for health, and tears down on cleanup.
@@ -154,7 +156,9 @@ func setupSharedE2EFixture(composeFile string) (*DockerE2EFixture, error) {
 		time.Sleep(2 * time.Second)
 	}
 	if !healthy {
-		fixture.teardown()
+		if err := fixture.teardown(); err != nil {
+			log.Printf("E2E: teardown after health-wait failure also failed: %v", err)
+		}
 		return nil, fmt.Errorf("gateway did not become healthy within 120s")
 	}
 	log.Printf("E2E: Gateway is healthy")
@@ -196,13 +200,62 @@ func NewDockerE2EFixture(t *testing.T, composeFile string) *DockerE2EFixture {
 		t.Fatalf("Failed to set up Docker E2E fixture: %v", err)
 	}
 
+	// Teardown cleanup: stops and removes the compose stack.
 	t.Cleanup(func() {
 		if err := fixture.teardown(); err != nil {
 			t.Logf("Warning: failed to stop docker-compose: %v", err)
 		}
 	})
 
+	// Failure-capture cleanup: registered AFTER teardown so it runs FIRST
+	// (t.Cleanup is LIFO), while the containers are still up. Only captures
+	// when the test actually failed, avoiding diagnostic noise on success.
+	t.Cleanup(func() {
+		if t.Failed() {
+			fixture.captureDiagnostics(t.Logf)
+		}
+	})
+
 	return fixture
+}
+
+// captureDiagnostics collects gateway/operator container logs and the compose
+// ps state into files under a fresh temp dir, then logs the dir path via msg.
+// Containers must still be up when called — invoke before teardown. msg is
+// log.Printf for the TestMain path (no *testing.T available) and t.Logf for
+// the per-test path. Purely diagnostic; changes no assertions.
+func (f *DockerE2EFixture) captureDiagnostics(msg func(format string, args ...any)) {
+	dir, err := os.MkdirTemp("", "g8e-e2e-diag-*")
+	if err != nil {
+		msg("E2E: failed to create diagnostics dir: %v", err)
+		return
+	}
+
+	gatewayContainer := f.ContainerPrefix + "-gateway"
+	operatorContainer := f.ContainerPrefix + "-operator"
+
+	captures := []struct {
+		name string
+		cmd  *exec.Cmd
+	}{
+		{"gateway.log", exec.Command("docker", "logs", gatewayContainer)},
+		{"operator.log", exec.Command("docker", "logs", operatorContainer)},
+		{"compose-ps.txt", exec.Command("docker", "compose", "-p", f.ProjectName, "-f", f.ComposeFile, "ps")},
+	}
+
+	for _, c := range captures {
+		out, runErr := c.cmd.CombinedOutput()
+		path := filepath.Join(dir, c.name)
+		if writeErr := os.WriteFile(path, out, constants.PermFilePublic); writeErr != nil {
+			msg("E2E: failed to write %s: %v", c.name, writeErr)
+			continue
+		}
+		if runErr != nil {
+			msg("E2E: captured %s (command exited with error, see file)", c.name)
+		}
+	}
+
+	msg("E2E: failure diagnostics written to %s", dir)
 }
 
 // GetHealth returns the health status from the gateway.
