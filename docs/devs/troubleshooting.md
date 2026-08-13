@@ -1,6 +1,6 @@
 # Developer Troubleshooting
 
-Last Updated: 2026-08-12
+Last Updated: 2026-08-13
 Version: v1.7.2
 
 This page covers common setup failures, runtime friction, and operational
@@ -237,13 +237,21 @@ If recovery fails:
 
 ### `--no-system-trust` flag
 
-`--no-system-trust` skips the OS trust store installation step. It is
+`--no-system-trust` skips the OS trust store **installation** step. It is
 an **administrator-managed trust opt-out**, not a headless or passkey
 bypass. Use it only when an administrator has already installed the
 gateway root CA into the OS trust store. The passkey ceremony still
 runs. If you use `--no-system-trust` without pre-installing the root
 CA, browser-based WebAuthn will fail because the browser will not
 trust the gateway's TLS certificate.
+
+As of v1.7.2, **stale-anchor detection still runs under
+`--no-system-trust`** — only the installation step is skipped. The user
+may have stale g8e root anchors from a previous gateway instance (e.g.,
+after `gw clean`) that break the browser even when the CLI skips
+installation. When stale anchors are found, the removal prompt fires;
+on confirmation the stale anchors are removed and the browser-close
+directive is printed, but no new anchor is installed.
 
 ### Browser CA trust and WebAuthn failures
 
@@ -553,9 +561,50 @@ tunnel-specific configuration.
 
 ## Stale trust bundle after PKI regeneration
 
-If authentication fails after the gateway PKI is regenerated, the local
-trust bundle and client certificates may be stale. Log out and re-enroll
-to obtain fresh credentials:
+If the gateway PKI is regenerated (`gw clean`, PKI rotation, or gateway
+migration to a new host with a fresh CA) while a workstation holds a
+complete CLI identity from the old gateway, the local trust bundle and
+OS trust store are both stale in lockstep. Re-running `auth enroll`
+previously failed with a raw TLS error during the passkey ceremony:
+
+```
+tls: failed to verify certificate: x509: certificate signed by unknown
+  authority (possibly because of "x509: ECDSA verification failure"
+  while trying to verify candidate authority certificate "g8e Root CA")
+```
+
+…with no diagnosable cause, because the coordinator trusted the local
+bundle as the source of truth and the OS store matched it.
+
+As of v1.7.2, `auth enroll` now fetches the **live** gateway root CA
+from the unauthenticated discovery endpoint
+(`GET /.well-known/g8e/pki/ca-bundle` on the plain-HTTP port) before
+the reuse decision. When the live root fingerprint does not match the
+local bundle, the coordinator automatically:
+
+1. Prints `Local trust bundle does not match the live gateway root CA;
+   using recovery flow.`
+2. Routes to the **recovery flow** (human-approved, plain-HTTP,
+   token-scoped), which issues a fresh CLI certificate signed by the
+   new CA. Rotation is impossible here because the old CLI cert cannot
+   authenticate to the new gateway via mTLS.
+3. Detects the stale OS root anchor using the **live** fingerprint
+   (not the stale local one), prompts for removal, and reinstalls the
+   new root CA.
+
+So in the common case you no longer need to log out first — just
+re-run `auth enroll` and approve the recovery in the browser:
+
+```bash
+./g8e auth enroll
+```
+
+If the discovery endpoint is unreachable (e.g., the gateway is only
+reachable on the HTTPS port, or you are intentionally offline), the
+coordinator prints a diagnostic warning naming the `gw clean` scenario
+and the `--endpoint` flag, then proceeds. If the bundle is in fact
+stale, the subsequent mTLS call surfaces a TLS error — but with prior
+context. In that case, fall back to the manual flow:
 
 ```bash
 ./g8e auth logout && ./g8e auth enroll
@@ -565,9 +614,10 @@ Note: `auth logout` removes local CLI credential material (CLI cert,
 CLI key, credentials JSON) but does **not** remove the shared OS root
 CA. This is intentional — the OS root CA is a shared system resource
 that may be trusted by other applications. If the root CA itself is
-stale (PKI was regenerated), remove it manually from the OS trust
-store before re-enrolling, or use `auth enroll` which will reinstall
-the correct root CA.
+stale (PKI was regenerated) and the automatic recovery routing did not
+remove it, remove it manually from the OS trust store before
+re-enrolling, or rely on `auth enroll` which will detect the stale
+anchor via the live fingerprint and prompt for removal.
 
 ## Cloudflare tunnel issues
 

@@ -63,6 +63,12 @@ type mockGateway struct {
 	rotateArtifact           EnrollmentArtifacts
 	rotateErr                error
 	rotateCalls              int
+
+	// DiscoverGatewayCA mock fields.
+	discoveryBundlePEM   []byte
+	discoveryFingerprint string
+	discoveryErr         error
+	discoveryCalls       int
 }
 
 func (m *mockGateway) CheckBootstrapStatus(ctx context.Context, baseURL string) (bool, error) {
@@ -112,6 +118,22 @@ func (m *mockGateway) Rotate(ctx context.Context, fileSvc fs.RuntimeFileService,
 	return m.rotateArtifact, m.rotateErr
 }
 
+// DiscoverGatewayCA returns the configured mock discovery response. By
+// default (zero-value mockGateway), discoveryErr is nil and
+// discoveryFingerprint is empty, which the coordinator treats as
+// "discovery unreachable" (discoveryReachable = false). Tests that want
+// to simulate a reachable gateway with a specific live fingerprint must
+// set both discoveryBundlePEM and discoveryFingerprint.
+func (m *mockGateway) DiscoverGatewayCA(ctx context.Context) ([]byte, string, error) {
+	m.mu.Lock()
+	m.discoveryCalls++
+	m.mu.Unlock()
+	if m.discoveryErr != nil {
+		return nil, "", m.discoveryErr
+	}
+	return m.discoveryBundlePEM, m.discoveryFingerprint, nil
+}
+
 // mockKeyProvider returns a pre-generated CSR + key.
 type mockKeyProvider struct {
 	csr string
@@ -125,16 +147,17 @@ func (p *mockKeyProvider) GenerateCLIKeyAndCSR(ctx context.Context, commonName s
 
 // mockTrustInstaller records calls and returns configurable results.
 type mockTrustInstaller struct {
-	mu               sync.Mutex
-	calls            int
-	result           platform.SystemTrustResult
-	err              error
-	lastBundlePEM    []byte
-	staleAnchors     []platform.StaleAnchor
-	staleErr         error
-	staleListCalls   int
-	removeErr        error
-	staleRemoveCalls int
+	mu                   sync.Mutex
+	calls                int
+	result               platform.SystemTrustResult
+	err                  error
+	lastBundlePEM        []byte
+	staleAnchors         []platform.StaleAnchor
+	staleErr             error
+	staleListCalls       int
+	lastStaleFingerprint string
+	removeErr            error
+	staleRemoveCalls     int
 }
 
 func (m *mockTrustInstaller) EnsureSystemTrust(ctx context.Context, bundlePEM []byte) (platform.SystemTrustResult, error) {
@@ -148,6 +171,7 @@ func (m *mockTrustInstaller) EnsureSystemTrust(ctx context.Context, bundlePEM []
 func (m *mockTrustInstaller) ListStaleAnchors(ctx context.Context, currentFingerprint string) ([]platform.StaleAnchor, error) {
 	m.mu.Lock()
 	m.staleListCalls++
+	m.lastStaleFingerprint = currentFingerprint
 	m.mu.Unlock()
 	return m.staleAnchors, m.staleErr
 }
@@ -334,6 +358,48 @@ func writeCompleteIdentityWithExpiry(t *testing.T, fileSvc fs.RuntimeFileService
 	return userID, cliSessionID
 }
 
+// writeCompleteIdentityWithBundleFP writes a complete, valid CLI identity
+// to disk (like writeCompleteIdentityWithExpiry) but uses the SAME CA for
+// both the trust bundle and the CLI cert signing, and returns the bundle's
+// primary root fingerprint. This lets tests inject a matching (healthy) or
+// mismatching (stale) live fingerprint via mockGateway.DiscoverGatewayCA.
+func writeCompleteIdentityWithBundleFP(t *testing.T, fileSvc fs.RuntimeFileService, cfg *config.Config, certNotAfter time.Time) (userID, cliSessionID, bundleRootFP string) {
+	t.Helper()
+	caKey, caCert := generateTestCAWithKeyAndExpiry(t, "test-root-ca", time.Now().Add(365*24*time.Hour))
+	cliCertPEM, cliKey := testutil.GenerateTestSignedCertWithExpiry(t, "g8e-cli-test", caCert, caKey, certNotAfter)
+	leafPEM, _ := testutil.GenerateTestSignedCert(t, "test-leaf", caCert, caKey)
+
+	// Encode the CA cert as PEM for the bundle — uses the SAME CA that
+	// signed the CLI cert, so the fingerprint is consistent. Use caCert.Raw
+	// (the original DER) rather than re-encoding via CreateCertificate,
+	// which would produce a different DER (ECDSA signatures are
+	// non-deterministic) and thus a different fingerprint.
+	caPEM := pemEncode("CERTIFICATE", caCert.Raw)
+	bundlePEM := caPEM + leafPEM
+	bundleRootFP = platform.CertFingerprint(caCert)
+
+	// Write CLI cert + key.
+	certRel, err := fileSvc.RelFromAbs(cfg.CLICertFile())
+	require.NoError(t, err)
+	keyRel, err := fileSvc.RelFromAbs(cfg.CLIKeyFile())
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte(cliCertPEM), constants.PermFilePrivate))
+	keyDER, err := x509.MarshalECPrivateKey(cliKey)
+	require.NoError(t, err)
+	keyPEM := pemEncode("EC PRIVATE KEY", keyDER)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), keyRel, []byte(keyPEM), constants.PermFilePrivate))
+
+	// Write trust bundle.
+	require.NoError(t, WriteTrustBundleFS(fileSvc, cfg, []byte(bundlePEM), constants.PermFilePublic))
+
+	// Write credentials JSON LAST.
+	userID = "user-existing"
+	cliSessionID = "cli-session-existing"
+	creds := &Credentials{UserID: userID, CLISessionID: cliSessionID}
+	require.NoError(t, SaveCredentials(fileSvc, cfg, creds))
+	return userID, cliSessionID, bundleRootFP
+}
+
 // setupCoordinatorTest builds a coordinator with all mocks injected and a
 // fresh temp-rooted fileSvc/cfg. Returns the coordinator, the mocks, and
 // the output recorder so individual tests can configure responses.
@@ -447,7 +513,10 @@ func TestEnroll_CompleteHealthy_ReusesIdentity(t *testing.T) {
 	t.Parallel()
 	coord, gw, _, trust, browser, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
 
-	userID, cliSessionID := writeCompleteIdentity(t, fileSvc, cfg)
+	userID, cliSessionID, bundleFP := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	// Inject a matching live fingerprint so the bundle is NOT stale.
+	gw.discoveryBundlePEM = []byte("live-bundle")
+	gw.discoveryFingerprint = bundleFP
 
 	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
 	require.NoError(t, err)
@@ -460,7 +529,10 @@ func TestEnroll_CompleteHealthy_ReusesIdentity(t *testing.T) {
 	assert.Equal(t, 0, gw.recoveryRequestCalls)
 	assert.Equal(t, 0, gw.rotateCalls)
 
-	// System trust should still be checked (from local bundle).
+	// Discovery should have been called once.
+	assert.Equal(t, 1, gw.discoveryCalls, "DiscoverGatewayCA should be called once")
+
+	// System trust should still be checked (from live bundle).
 	assert.Equal(t, 1, trust.calls)
 
 	// Passkey should run.
@@ -478,7 +550,8 @@ func TestEnroll_CompleteExpiring_RotatesOnce(t *testing.T) {
 	coord, gw, keys, trust, _, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
 
 	// Write a complete identity with a cert expiring within rotationThreshold.
-	writeCompleteIdentityWithExpiry(t, fileSvc, cfg, time.Now().Add(1*time.Hour))
+	_, _, bundleFP := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(1*time.Hour))
+	gw.discoveryFingerprint = bundleFP
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceRotation)
 	gw.rotateArtifact = artifacts
@@ -510,7 +583,8 @@ func TestEnroll_CompleteExplicitRotate_RotatesOnce(t *testing.T) {
 	coord, gw, keys, _, _, _, _, fileSvc, cfg := setupCoordinatorTest(t)
 
 	// Write a healthy, non-expiring identity.
-	writeCompleteIdentity(t, fileSvc, cfg)
+	_, _, bundleFP := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	gw.discoveryFingerprint = bundleFP
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceRotation)
 	gw.rotateArtifact = artifacts
@@ -528,7 +602,8 @@ func TestEnroll_CompleteExpired_UsesRecoveryNotRotation(t *testing.T) {
 	coord, gw, keys, _, browser, _, recorder, fileSvc, cfg := setupCoordinatorTest(t)
 
 	// Write a complete identity with an already-expired cert.
-	writeCompleteIdentityWithExpiry(t, fileSvc, cfg, time.Now().Add(-time.Hour))
+	_, _, bundleFP := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(-time.Hour))
+	gw.discoveryFingerprint = bundleFP
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
 	gw.recoveryRequestID = "req-exp"
@@ -751,21 +826,28 @@ func TestEnroll_NoSystemTrust_SkipsInstaller(t *testing.T) {
 	result, err := coord.Enroll(context.Background(), EnrollmentOptions{NoSystemTrust: true})
 	require.NoError(t, err)
 	assert.False(t, result.SystemTrustInstalled)
-	assert.Equal(t, 0, trust.calls, "trust installer should not be called")
+	// C4: stale detection still runs under --no-system-trust; only
+	// installation (EnsureSystemTrust) is skipped.
+	assert.Equal(t, 0, trust.calls, "EnsureSystemTrust should not be called")
+	assert.Equal(t, 1, trust.staleListCalls, "ListStaleAnchors should still run under --no-system-trust")
 	assert.Equal(t, 1, passkey.calls, "passkey should still run")
 	assert.True(t, recorder.contains("--no-system-trust"))
 }
 
 func TestEnroll_NoSystemTrust_ReusedIdentity_SkipsInstaller(t *testing.T) {
 	t.Parallel()
-	coord, _, _, trust, _, passkey, _, fileSvc, cfg := setupCoordinatorTest(t)
+	coord, gw, _, trust, _, passkey, _, fileSvc, cfg := setupCoordinatorTest(t)
 
-	writeCompleteIdentity(t, fileSvc, cfg)
+	_, _, bundleFP := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	gw.discoveryFingerprint = bundleFP
 
 	result, err := coord.Enroll(context.Background(), EnrollmentOptions{NoSystemTrust: true})
 	require.NoError(t, err)
 	assert.True(t, result.Reused)
-	assert.Equal(t, 0, trust.calls)
+	// C4: stale detection still runs under --no-system-trust; only
+	// installation (EnsureSystemTrust) is skipped.
+	assert.Equal(t, 0, trust.calls, "EnsureSystemTrust should not be called")
+	assert.Equal(t, 1, trust.staleListCalls, "ListStaleAnchors should still run under --no-system-trust")
 	assert.Equal(t, 1, passkey.calls)
 }
 
@@ -875,7 +957,8 @@ func TestEnroll_RotationError_ReturnsError(t *testing.T) {
 	t.Parallel()
 	coord, gw, keys, _, _, _, _, fileSvc, cfg := setupCoordinatorTest(t)
 
-	writeCompleteIdentityWithExpiry(t, fileSvc, cfg, time.Now().Add(1*time.Hour))
+	_, _, bundleFP := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(1*time.Hour))
+	gw.discoveryFingerprint = bundleFP
 	gw.rotateErr = constants.ErrEnrollmentFailed
 	keys.csr, keys.key = "test-csr", nil
 
@@ -1164,6 +1247,240 @@ func TestEnroll_StaleAnchors_Unsupported_SkipsDetection(t *testing.T) {
 	assert.False(t, confirmCalled, "confirm should not be called on unsupported platform")
 	assert.False(t, recorder.contains("could not check for stale"), "no warning on unsupported platform")
 	assert.Equal(t, 1, passkey.calls)
+}
+
+// --- Stale trust bundle on reused identity tests (R1/R2/R3/R5) ---
+
+// TestEnroll_ReusedIdentity_StaleBundle_RoutesToRecovery is the failing
+// test that confirms the root cause: a complete local identity whose
+// trust bundle root fingerprint does NOT match the live gateway root CA
+// must NOT take the reuse branch. Instead, it routes through recovery
+// (human-approved, plain-HTTP, token-scoped), which issues a fresh cert
+// signed by the new CA. This fails on the pre-fix code (which takes the
+// reuse branch and never calls discovery).
+func TestEnroll_ReusedIdentity_StaleBundle_RoutesToRecovery(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, _, browser, _, recorder, fileSvc, cfg := setupCoordinatorTest(t)
+
+	// Write a complete identity with a known bundle root fingerprint.
+	writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+
+	// Inject a MISMATCHING live fingerprint — simulates `gw clean`
+	// regenerating the gateway PKI.
+	gw.discoveryFingerprint = "different-live-fp"
+	gw.discoveryBundlePEM = []byte("live-bundle")
+
+	// Configure recovery flow.
+	artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
+	gw.recoveryRequestID = "req-stale"
+	gw.recoveryToken = "token-stale"
+	gw.recoveryApprovalURL = "https://example.com/console#recovery=token-stale"
+	gw.recoveryStates = []models.CLIRecoveryState{models.CLIRecoveryStateApproved}
+	gw.recoveryCompleteArtifact = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, EnrollmentSourceRecovery, result.Source)
+	assert.False(t, result.Reused, "must NOT reuse when bundle is stale")
+
+	// Discovery should have been called.
+	assert.Equal(t, 1, gw.discoveryCalls)
+	// Recovery should be called, not rotation or bootstrap.
+	assert.Equal(t, 1, gw.recoveryRequestCalls)
+	assert.Equal(t, 1, gw.recoveryCompleteCalls)
+	assert.Equal(t, 0, gw.rotateCalls, "rotation must not be called — stale cert can't authenticate via mTLS")
+	assert.Equal(t, 0, gw.bootstrapCalls)
+
+	// Browser should open for recovery approval.
+	assert.Equal(t, 1, browser.calls)
+
+	assert.True(t, recorder.contains("does not match the live gateway"))
+	assert.True(t, recorder.contains("recovery"))
+}
+
+// TestEnroll_ReusedIdentity_HealthyBundle_ReusesWithLiveFingerprint
+// verifies that when the live fingerprint matches the local bundle, the
+// reuse branch is taken AND ensureSystemTrust is called with the LIVE
+// fingerprint (not the local bundle's fingerprint) for stale-anchor
+// detection.
+func TestEnroll_ReusedIdentity_HealthyBundle_ReusesWithLiveFingerprint(t *testing.T) {
+	t.Parallel()
+	coord, gw, _, trust, _, passkey, _, fileSvc, cfg := setupCoordinatorTest(t)
+
+	_, _, bundleFP := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	gw.discoveryFingerprint = bundleFP
+	gw.discoveryBundlePEM = []byte("live-bundle-matching-fp")
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+	assert.True(t, result.Reused)
+
+	// ListStaleAnchors must be called with the LIVE fingerprint.
+	assert.Equal(t, 1, trust.staleListCalls)
+	assert.Equal(t, bundleFP, trust.lastStaleFingerprint, "ListStaleAnchors should receive the live fingerprint")
+
+	// EnsureSystemTrust should be called with the LIVE bundle (not the
+	// local bundle).
+	assert.Equal(t, 1, trust.calls)
+	assert.Equal(t, []byte("live-bundle-matching-fp"), trust.lastBundlePEM, "EnsureSystemTrust should receive the live bundle")
+
+	assert.Equal(t, 1, passkey.calls)
+}
+
+// TestEnroll_ReusedIdentity_DiscoveryUnreachable_WarnsAndProceeds
+// verifies that when DiscoverGatewayCA returns a network error, the
+// coordinator prints a diagnostic warning and proceeds to reuse (does
+// NOT abort). The user may be intentionally offline.
+func TestEnroll_ReusedIdentity_DiscoveryUnreachable_WarnsAndProceeds(t *testing.T) {
+	t.Parallel()
+	coord, gw, _, _, _, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
+
+	writeCompleteIdentity(t, fileSvc, cfg)
+	gw.discoveryErr = constants.ErrServiceUnavailable
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+	assert.True(t, result.Reused, "should proceed with reuse when discovery is unreachable")
+
+	// Should print the diagnostic warning.
+	assert.True(t, recorder.contains("could not reach the gateway discovery endpoint"),
+		"should print discovery-unreachable warning")
+
+	// Passkey should still run.
+	assert.Equal(t, 1, passkey.calls)
+}
+
+// TestEnroll_ReusedIdentity_StaleBundle_DetectsStaleOSAnchors verifies
+// that when the local bundle is stale (OLD_FP) and the live fingerprint is
+// NEW_FP, ListStaleAnchors is called with NEW_FP (not OLD_FP), the stale
+// anchor OLD_FP is listed, the user is prompted, and on confirmation
+// RemoveStaleAnchors is called before recovery runs.
+func TestEnroll_ReusedIdentity_StaleBundle_DetectsStaleOSAnchors(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, trust, browser, _, recorder, fileSvc, cfg := setupCoordinatorTest(t)
+
+	_, _, oldFP := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+
+	// Live fingerprint is different — bundle is stale.
+	newFP := "new-live-fp"
+	gw.discoveryFingerprint = newFP
+	gw.discoveryBundlePEM = []byte("live-bundle-new-fp")
+
+	// The OS store has the OLD root anchor — it should be detected as stale.
+	trust.staleAnchors = []platform.StaleAnchor{
+		{Fingerprint: oldFP, CommonName: "g8e Root CA", Handle: "/path/old"},
+	}
+	trust.result = platform.SystemTrustResult{Status: platform.SystemTrustInstalled, Fingerprint: newFP}
+
+	// Configure recovery flow.
+	artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
+	gw.recoveryRequestID = "req-stale-os"
+	gw.recoveryToken = "token-stale-os"
+	gw.recoveryApprovalURL = "https://example.com/console#recovery=token-stale-os"
+	gw.recoveryStates = []models.CLIRecoveryState{models.CLIRecoveryStateApproved}
+	gw.recoveryCompleteArtifact = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+
+	confirmCalled := false
+	coord.confirm = func(prompt string) bool {
+		confirmCalled = true
+		assert.Contains(t, prompt, "1 stale")
+		return true
+	}
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, EnrollmentSourceRecovery, result.Source)
+
+	// ListStaleAnchors must be called with the LIVE fingerprint (NEW_FP).
+	assert.Equal(t, 1, trust.staleListCalls)
+	assert.Equal(t, newFP, trust.lastStaleFingerprint,
+		"ListStaleAnchors should receive the LIVE fingerprint, not the stale local one")
+
+	// The stale anchor should be removed.
+	assert.True(t, confirmCalled, "user should be prompted about stale anchors")
+	assert.Equal(t, 1, trust.staleRemoveCalls, "RemoveStaleAnchors should be called")
+
+	// Recovery should run.
+	assert.Equal(t, 1, gw.recoveryRequestCalls)
+	assert.Equal(t, 1, browser.calls)
+
+	assert.True(t, recorder.contains("does not match the live gateway"))
+}
+
+// TestEnroll_NoSystemTrust_StillRunsStaleDetection verifies that
+// --no-system-trust still runs stale-anchor detection (ListStaleAnchors +
+// RemoveStaleAnchors) but skips EnsureSystemTrust. This is the C4
+// behavior change: the user may have stale anchors that break the browser
+// even if the CLI skips installation.
+func TestEnroll_NoSystemTrust_StillRunsStaleDetection(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, trust, _, passkey, recorder, _, _ := setupCoordinatorTest(t)
+
+	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
+	gw.bootstrapStatus = false
+	gw.bootstrapArtifacts = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	trust.staleAnchors = []platform.StaleAnchor{
+		{Fingerprint: "stale-fp-1", CommonName: "g8e Root CA", Handle: "/path/stale1"},
+	}
+
+	confirmCalled := false
+	coord.confirm = func(prompt string) bool {
+		confirmCalled = true
+		return true
+	}
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{NoSystemTrust: true})
+	require.NoError(t, err)
+	assert.False(t, result.SystemTrustInstalled)
+
+	// Stale detection should run.
+	assert.Equal(t, 1, trust.staleListCalls, "ListStaleAnchors should run under --no-system-trust")
+	assert.True(t, confirmCalled, "user should be prompted about stale anchors")
+	assert.Equal(t, 1, trust.staleRemoveCalls, "RemoveStaleAnchors should run under --no-system-trust")
+
+	// Installation should be skipped.
+	assert.Equal(t, 0, trust.calls, "EnsureSystemTrust should NOT be called under --no-system-trust")
+
+	// Passkey should still run.
+	assert.Equal(t, 1, passkey.calls)
+	assert.True(t, recorder.contains("--no-system-trust"))
+}
+
+// TestEnroll_Bootstrap_DiscoveryMatchesArtifacts is a regression guard
+// for the new-enrollment paths: on bootstrap, ListStaleAnchors should use
+// the live fingerprint (from the artifacts, which equal the discovery
+// bundle). The bootstrap path receives a fresh bundle from the gateway, so
+// the stale-anchor detection is already correct — this test ensures it
+// stays correct after the R3 refactor.
+func TestEnroll_Bootstrap_DiscoveryMatchesArtifacts(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, trust, _, _, _, _, _ := setupCoordinatorTest(t)
+
+	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
+	gw.bootstrapStatus = false
+	gw.bootstrapArtifacts = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+
+	// Compute the fingerprint of the artifacts' bundle root.
+	bundle, err := ParseTrustBundle([]byte(artifacts.TrustBundlePEM), time.Now())
+	require.NoError(t, err)
+	require.NotEmpty(t, bundle.PrimaryRootFingerprint)
+
+	// Inject a matching live fingerprint.
+	gw.discoveryFingerprint = bundle.PrimaryRootFingerprint
+	gw.discoveryBundlePEM = []byte(artifacts.TrustBundlePEM)
+
+	_, err = coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+
+	// ListStaleAnchors should use the live fingerprint (which equals the
+	// artifacts' bundle root fingerprint on the bootstrap path).
+	assert.Equal(t, 1, trust.staleListCalls)
+	assert.Equal(t, bundle.PrimaryRootFingerprint, trust.lastStaleFingerprint,
+		"ListStaleAnchors should use the live fingerprint on bootstrap")
 }
 
 // --- Helpers ---

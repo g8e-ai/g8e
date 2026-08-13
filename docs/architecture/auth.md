@@ -1,6 +1,6 @@
 # Authentication & Authorization
 
-Last Updated: 2026-08-12
+Last Updated: 2026-08-13
 Version: v1.7.2
 
 This document explains how to authenticate and authorize actions in the g8e platform. The platform is built as a zero-trust execution environment where every action is verified before execution.
@@ -32,11 +32,11 @@ The CLI uses mTLS certificates for authentication. When you run `g8e auth enroll
 
 **Enrollment State Machine:**
 
-The `EnrollmentCoordinator` classifies the local CLI identity on disk into one of four states and takes the appropriate action:
+The `EnrollmentCoordinator` classifies the local CLI identity on disk into one of four states and takes the appropriate action. `CredentialStore.Inspect` classifies state purely by **local file consistency** — it never contacts the gateway, so a `Complete` identity with a stale trust bundle (e.g., from a previous gateway instance after `gw clean`) is indistinguishable from a healthy one. The coordinator layers a live-gateway liveness check on top (see "Live Gateway CA Discovery" below) before deciding which branch to take.
 
 | State | Condition | Coordinator Action |
 |------|-----------|-------------------|
-| **Complete** | CLI cert, CLI key, and credentials JSON all present and valid | **Reuse** — no new certificate is issued. The existing identity is used as-is. |
+| **Complete** | CLI cert, CLI key, and credentials JSON all present and valid | **Reuse** — no new certificate is issued. The existing identity is used as-is. Routed to **Recovery** instead when the local trust bundle is stale against the live gateway (see "Stale Trust Bundle on Reused Identity" below). |
 | **Absent** | No local credentials found | **Bootstrap** — CLI connects over plain HTTP, Gateway bootstraps itself, then runs the passkey ceremony. |
 | **Partial** | Some credential files present but others missing | **Recovery** — initiates the one-time human-approved recovery flow (see below). Does NOT silently overwrite. |
 | **Corrupt** | Credential files present but fail validation (e.g., expired cert, key mismatch) | **Recovery** or **Rotation** depending on the nature of the corruption. |
@@ -50,15 +50,29 @@ Healthy `auth enroll` runs with a complete identity do not rotate credentials un
 | **First-time setup** | Gateway never bootstrapped | CLI connects over plain HTTP to the gateway HTTP port, Gateway bootstraps itself |
 | **New CLI on existing gateway** | Gateway exists, no local credentials | CLI bootstraps, generates an enrollment token, opens browser for passkey ceremony |
 | **Recovery (partial/corrupt)** | Some credentials missing or invalid | One-time human-approved recovery flow via console SPA (see below) |
+| **Recovery (stale bundle)** | Credentials complete but local trust bundle does not match the live gateway root CA (e.g., after `gw clean` regenerated the gateway PKI) | One-time human-approved recovery flow — the old CLI cert cannot authenticate to the new gateway via mTLS, so rotation is impossible. Recovery issues a fresh cert signed by the new CA. |
 | **Rotation** | Credentials valid but `--rotate-cli` flag used, or cert near expiry | mTLS-protected rotation: one replacement certificate per run |
-| **Reuse** | Credentials complete and valid | No action needed — existing identity reused |
+| **Reuse** | Credentials complete and valid, and the local trust bundle matches the live gateway root CA | No new certificate issued — existing identity reused. The local trust bundle is refreshed from the live gateway if intermediates differ but the root is unchanged. |
 
 **Two-Phase Enrollment & Split Endpoint Flags:**
 
 Enrollment involves two phases that use different ports and protocols:
 
-1. **Discovery/bootstrap phase** (plain HTTP): CA bundle fetch, bootstrap status check, CSR trust bundle retrieval
+1. **Discovery/bootstrap phase** (plain HTTP): CA bundle fetch, live gateway CA discovery, bootstrap status check, CSR trust bundle retrieval
 2. **mTLS API phase** (HTTPS): Enrollment token generation, CSR submission, SSE stream, API client operations
+
+**Live Gateway CA Discovery:**
+
+Before the state-machine switch, the coordinator fetches the live gateway root CA bundle from the unauthenticated discovery surface (`GET /.well-known/g8e/pki/ca-bundle` on the plain-HTTP port, `RouteAuthNone`) and derives its SHA-256 fingerprint locally. This is a single best-effort round-trip:
+
+- **On success**, the live fingerprint is compared against `local.TrustBundle.PrimaryRootFingerprint`. A mismatch sets `LocalIdentity.BundleStale = true`, which routes a `Complete` identity to **Recovery** instead of Reuse (the old CLI cert was issued by the old CA and cannot authenticate to the new gateway via mTLS, so rotation is impossible). The live fingerprint is also threaded into `ensureSystemTrust` as the source of truth for stale-anchor detection (see "System Trust Installation" below).
+- **On network failure**, the coordinator cannot determine whether the bundle is stale. It prints a diagnostic warning naming the `gw clean` scenario and the `--endpoint` flag, then proceeds to the existing state machine — it does NOT abort, so the air-gapped/offline case still works. If the bundle is in fact stale, the subsequent mTLS call surfaces a TLS error, but with prior context.
+- Discovery runs unconditionally at the top of `Enroll` (one cheap round-trip) so the live fingerprint is available for all paths, but only the complete-reuse path uses `BundleStale` for routing. The new-enrollment paths (bootstrap/recovery/rotation) receive a fresh bundle in their artifacts, so discovery is redundant for routing but still supplies the live fingerprint for stale-anchor detection.
+- No fingerprint pin is applied — the live bundle IS the source of truth for the pin, so pinning against the local bundle would be circular.
+
+**Stale Trust Bundle on Reused Identity:**
+
+When the gateway PKI is regenerated (`gw clean`, PKI rotation, gateway migration to a new host with a fresh CA) and a workstation holds a `Complete` identity from the old gateway, the local trust bundle and the OS trust store are both stale in lockstep. Without the discovery step, the coordinator would trust the local bundle as the source of truth, see that the OS store matches it, conclude "already trusted," and then fail the passkey ceremony's mTLS call with a raw `x509: certificate signed by unknown authority` error — with no diagnosable cause. The discovery step surfaces this condition before any mTLS call and routes to Recovery, which issues a fresh cert signed by the new CA over plain HTTP (no mTLS required).
 
 By default, the CLI connects to `g8e.local` (or the machine IP fallback) on the default ports (HTTP 8080, HTTPS 8443). When the gateway's HTTP and HTTPS ports are mapped to different host ports, as in Docker demos, use the split endpoint flags:
 
@@ -91,9 +105,10 @@ This ensures that sensitive session identifiers are never exposed in browser his
 
 By default, `auth enroll` installs the gateway Root CA into the OS trust store **before** opening the browser for the passkey ceremony. This ensures the browser recognizes the gateway's TLS certificate during the WebAuthn flow.
 
-- Before installation, the coordinator checks for **stale g8e Root CA anchors** from previous gateway instances (e.g., after `gw clean` regenerated the CA). If stale anchors are found, the user is prompted to confirm removal. Declining aborts enrollment before browser launch.
+- Before installation, the coordinator checks for **stale g8e Root CA anchors** from previous gateway instances (e.g., after `gw clean` regenerated the CA). The "active" fingerprint used to filter the stale list is the **live gateway root fingerprint** from the discovery step (see "Live Gateway CA Discovery" above) — NOT the local bundle's fingerprint. Using the local bundle as the source of truth was the original bug on the reused-identity path: the local bundle and the OS store are stale in lockstep, so they agreed with each other and the detector saw nothing wrong. On the new-enrollment paths (bootstrap/recovery/rotation), the artifacts' bundle IS the live bundle, so the behavior is unchanged. When discovery was unreachable, the coordinator falls back to the bundle's own fingerprint (preserving the pre-discovery behavior) after printing the diagnostic warning.
+- If stale anchors are found, the user is prompted to confirm removal. Declining aborts enrollment before browser launch.
 - If system trust installation fails, the coordinator **stops before launching the browser**. The user sees the error and guidance to restart the browser after manually installing the Root CA.
-- Use `--no-system-trust` only when an administrator has already installed the Root CA on the host. This is an administrator-managed trust opt-out — it does **not** skip the passkey step, and it does **not** enable headless enrollment.
+- Use `--no-system-trust` only when an administrator has already installed the Root CA on the host. This is an administrator-managed trust opt-out — it does **not** skip the passkey step, and it does **not** enable headless enrollment. Stale-anchor detection **still runs** under `--no-system-trust` (the user may have stale anchors from a previous gateway that break the browser even when the CLI skips installation); only the installation step is skipped. When stale anchors are removed under `--no-system-trust`, the browser-close directive is printed.
 - After trust installation or stale anchor removal, **close all open browser windows** before clicking the enrollment link so the browser opens a fresh session that recognizes the new trust anchor.
 - Firefox and other browsers with private trust stores may require separate handling even after OS trust is installed.
 
@@ -364,9 +379,9 @@ The vault is required. On first run, the gateway auto-initializes a new vault wi
 
 ### 6.1.1 Recovering a CLI
 
-If your local CLI credentials are partial or corrupt (e.g., files were accidentally deleted, cert expired):
+If your local CLI credentials are partial, corrupt, or the local trust bundle is stale against the live gateway (e.g., files were accidentally deleted, cert expired, or the gateway PKI was regenerated via `gw clean`):
 
-1. Run `g8e auth enroll` — the coordinator detects the partial/corrupt state
+1. Run `g8e auth enroll` — the coordinator detects the partial/corrupt/stale-bundle state
 2. The coordinator initiates the recovery flow and opens the browser
 3. An authenticated user approves the recovery in the console SPA
 4. The coordinator receives a new CLI certificate and commits it atomically
@@ -384,9 +399,9 @@ To manually rotate your CLI certificate (e.g., before expiry):
 
 **CLI:**
 - Your enrolled certificate handles authentication automatically
-- Run `g8e auth enroll` again — if your identity is complete and valid, it is reused without rotation
+- Run `g8e auth enroll` again — if your identity is complete and valid, and the local trust bundle matches the live gateway root CA, it is reused without rotation
 - Run `g8e auth enroll --rotate-cli` to force certificate rotation
-- If credentials are partial or corrupt, the coordinator automatically initiates the recovery flow
+- If credentials are partial or corrupt, or the local trust bundle is stale against the live gateway (e.g., after `gw clean`), the coordinator automatically initiates the recovery flow
 
 **Browser:**
 - Navigate to `https://<gateway-ip>:8443/console/`

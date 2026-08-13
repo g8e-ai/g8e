@@ -132,6 +132,16 @@ func TestBuildMTLSClient_ValidCertsAndBundle(t *testing.T) {
 	assert.NotContains(t, tlsConfig.CurvePreferences, tls.X25519,
 		"CLI mTLS must not use X25519 (excluded from Go's FIPS TLS mode)")
 	assert.Contains(t, tlsConfig.CurvePreferences, tls.X25519MLKEM768)
+
+	// The mTLS transport must use the IPv4-only dialer so `localhost`
+	// resolves to 127.0.0.1 on Windows (where the OS resolver returns ::1
+	// first and the IDE port-forward only listens on IPv4). A non-nil
+	// DialContext that rejects a literal IPv6 address proves the IPv4
+	// dialer is wired in.
+	require.NotNil(t, transport.DialContext, "BuildMTLSClient transport must set an IPv4 DialContext")
+	_, dialErr := transport.DialContext(context.Background(), "tcp", "[::1]:8443")
+	assert.Error(t, dialErr, "BuildMTLSClient dialer must reject literal IPv6 addresses (IPv4 only)")
+	assert.Contains(t, dialErr.Error(), "ipv4 dial: resolve")
 }
 
 func TestBuildMTLSClient_ZeroTimeoutForSSEStreaming(t *testing.T) {

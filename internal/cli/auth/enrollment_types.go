@@ -77,6 +77,13 @@ func (s LocalEnrollmentState) String() string {
 // on disk, produced by CredentialStore.Inspect. It carries the parsed
 // artifacts needed by the state machine and the rotation/reuse decision —
 // never raw file bytes.
+//
+// State reflects LOCAL file consistency only. It does NOT reflect whether
+// the local trust bundle matches the LIVE gateway root CA — that is a
+// coordinator-level concern (the coordinator compares
+// TrustBundle.PrimaryRootFingerprint against the live fingerprint from
+// EnrollmentGateway.DiscoverGatewayCA and sets BundleStale accordingly).
+// Inspect has no gateway access and must not perform network I/O.
 type LocalIdentity struct {
 	State LocalEnrollmentState
 
@@ -110,6 +117,20 @@ type LocalIdentity struct {
 	// An expired cert cannot be used for mTLS rotation; the coordinator
 	// routes through recovery instead.
 	CertExpired bool
+
+	// BundleStale reports whether the local trust bundle's primary root
+	// fingerprint does NOT match the live gateway root CA fingerprint
+	// (e.g., after `gw clean` regenerated the gateway PKI). Set by the
+	// coordinator AFTER comparing TrustBundle.PrimaryRootFingerprint to
+	// the live fingerprint returned by DiscoverGatewayCA. Inspect does
+	// NOT set this — it has no gateway access.
+	//
+	// When true on a LocalStateComplete identity, the local CLI cert was
+	// issued by the old CA and cannot authenticate to the new gateway via
+	// mTLS, so rotation is impossible. The coordinator routes through
+	// recovery (human-approved, plain-HTTP, token-scoped), which issues a
+	// fresh cert signed by the new CA.
+	BundleStale bool
 }
 
 // NeedsRotation reports whether the coordinator should perform an mTLS CLI

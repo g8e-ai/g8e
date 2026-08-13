@@ -14,6 +14,7 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"errors"
@@ -47,6 +48,23 @@ type EnrollmentGateway interface {
 	CompleteRecovery(ctx context.Context, requestID, token string, cliCSR string, cliKey *ecdsa.PrivateKey, caFingerprint, baseURL string) (EnrollmentArtifacts, error)
 	Rotate(ctx context.Context, fileSvc fs.RuntimeFileService, cliCSR string, cliKey *ecdsa.PrivateKey, caFingerprint string) (EnrollmentArtifacts, error)
 	CheckBootstrapStatus(ctx context.Context, baseURL string) (bool, error)
+
+	// DiscoverGatewayCA fetches the live gateway root CA bundle from the
+	// unauthenticated discovery surface (plain-HTTP
+	// /.well-known/g8e/pki/ca-bundle). It returns the PEM bundle and the
+	// SHA-256 fingerprint of the primary root anchor. The coordinator uses
+	// this BEFORE the reuse decision to detect a stale local trust bundle
+	// (e.g., after `gw clean` regenerated the gateway PKI).
+	//
+	// The call is best-effort: a network failure returns a non-nil err and
+	// empty bundle/fingerprint. The coordinator decides whether to abort;
+	// discovery failure on a complete-reuse identity prints a diagnostic
+	// warning and proceeds (the user may be intentionally offline).
+	//
+	// No fingerprint pin is applied — the live bundle IS the source of
+	// truth for the pin, so pinning against the local bundle would be
+	// circular.
+	DiscoverGatewayCA(ctx context.Context) (bundlePEM []byte, fingerprint string, err error)
 }
 
 // KeyProvider generates CLI key pairs and CSRs. Section 7 will replace the
@@ -267,6 +285,33 @@ func (c *EnrollmentCoordinator) Enroll(ctx context.Context, opts EnrollmentOptio
 	}
 	c.out("Local identity state: %s", local.State)
 
+	// Discover the live gateway root CA before the state-machine switch.
+	// This is best-effort: on network failure we fall through to the
+	// existing state machine (offline reuse, absent identity → bootstrap
+	// will fail with a clear network error, etc.). We do NOT abort
+	// enrollment on discovery failure — that would break the
+	// air-gapped/offline case. The BundleStale flag is only meaningful on
+	// the complete-reuse path; the new-enrollment paths (bootstrap/
+	// recovery/rotation) receive a fresh bundle in their artifacts.
+	//
+	// Per Open Question 2: run discovery unconditionally at the top of
+	// Enroll (one cheap round-trip, best-effort) so the live fingerprint
+	// is available for all paths, but only the complete-reuse path uses
+	// it for routing. This keeps the state machine simple and avoids a
+	// per-branch discovery call.
+	liveBundle, liveFingerprint, discoveryErr := c.gateway.DiscoverGatewayCA(ctx)
+	discoveryReachable := discoveryErr == nil && liveFingerprint != ""
+
+	// Classify the local identity against the live gateway. Only meaningful
+	// when the local identity is complete (has a trust bundle with a
+	// primary root fingerprint) AND discovery succeeded.
+	if local.State == LocalStateComplete && discoveryReachable {
+		if local.TrustBundle != nil && local.TrustBundle.PrimaryRootFingerprint != "" &&
+			local.TrustBundle.PrimaryRootFingerprint != liveFingerprint {
+			local.BundleStale = true
+		}
+	}
+
 	result := &EnrollmentResult{}
 
 	// 1. Credential-preparation: bootstrap, recovery, rotation, or reuse.
@@ -280,6 +325,17 @@ func (c *EnrollmentCoordinator) Enroll(ctx context.Context, opts EnrollmentOptio
 			// mTLS, so rotation is impossible. Route through recovery.
 			c.out("CLI certificate has expired; using recovery flow.")
 			artifacts, err = c.handleRecovery(ctx, opts)
+		} else if local.BundleStale {
+			// Complete-but-stale-bundle: the local CLI cert was issued by
+			// the old gateway CA and cannot authenticate to the new
+			// gateway via mTLS, so rotation is impossible (rotation uses
+			// mTLS). The only valid path is recovery (human-approved,
+			// plain-HTTP, token-scoped), which issues a fresh cert signed
+			// by the new CA. This mirrors the CertExpired → recovery
+			// routing: a stale bundle is functionally equivalent to an
+			// expired cert for mTLS purposes.
+			c.out("Local trust bundle does not match the live gateway root CA; using recovery flow.")
+			artifacts, err = c.handleRecovery(ctx, opts)
 		} else if local.NeedsRotation() || opts.RotateCLI {
 			artifacts, err = c.handleRotation(ctx, opts)
 		} else {
@@ -289,6 +345,23 @@ func (c *EnrollmentCoordinator) Enroll(ctx context.Context, opts EnrollmentOptio
 			result.UserID = local.Credentials.UserID
 			result.CLISessionID = local.Credentials.CLISessionID
 			c.out("Reusing existing CLI identity (user %s, session %s).", result.UserID, result.CLISessionID)
+
+			// R4: refresh the local trust bundle from the live gateway
+			// bundle when they differ in non-root content (e.g.,
+			// intermediates rotated but root unchanged). The root
+			// fingerprint already matched (BundleStale is false), so this
+			// is a minor hardening — the local bundle is still usable for
+			// mTLS, but refreshing keeps intermediates current. Best-effort:
+			// a write failure is logged but does not abort enrollment.
+			if discoveryReachable && len(liveBundle) > 0 && local.TrustBundle != nil {
+				if !bytes.Equal(local.TrustBundle.PEM, liveBundle) {
+					if wErr := WriteTrustBundleToDisk(ctx, c.fileSvc, c.cfg, liveBundle); wErr != nil {
+						c.out("Warning: could not refresh local trust bundle from gateway (%v). Proceeding with the existing bundle.", wErr)
+					} else {
+						c.out("Refreshed local trust bundle from gateway (intermediate certificates updated).")
+					}
+				}
+			}
 		}
 	case LocalStatePartial, LocalStateCorrupt:
 		artifacts, err = c.handlePartialOrCorrupt(ctx, local, opts)
@@ -321,7 +394,7 @@ func (c *EnrollmentCoordinator) Enroll(ctx context.Context, opts EnrollmentOptio
 
 	// 3. Ensure system trust (local CLI paths only, unless --no-system-trust).
 	if result.Source.IsLocalCLI() || result.Reused {
-		installed, terr := c.ensureSystemTrust(ctx, artifacts, result.Reused, local, opts)
+		installed, terr := c.ensureSystemTrust(ctx, artifacts, result.Reused, local, opts, liveFingerprint, liveBundle, discoveryReachable)
 		if terr != nil {
 			return nil, terr
 		}
@@ -483,9 +556,12 @@ func recoveryStateDone(state models.CLIRecoveryState) (bool, error) {
 // after the runtime bundle is valid and committed, and before the passkey
 // ceremony. Per §6.5:
 //   - Default: any installation error aborts before browser launch.
-//   - --no-system-trust: skip the installer after an admin notice; still
-//     run the passkey ceremony and still fail on runtime mTLS/trust-bundle
-//     errors (those are checked earlier by Inspect/Stage).
+//   - --no-system-trust: skip the INSTALLER after an admin notice, but
+//     still run stale-anchor detection (the user may have stale anchors
+//     from a previous gateway that break the browser even when the CLI
+//     skips installation). Only the installation step is skipped; the
+//     removal prompt still fires. Documented in the --no-system-trust
+//     flag help and the troubleshooting guide.
 //   - Already-trusted roots must not cause a privilege prompt.
 //   - Stale g8e root anchors from previous gateway instances are detected
 //     before installation. The user is prompted to confirm removal; declining
@@ -493,40 +569,86 @@ func recoveryStateDone(state models.CLIRecoveryState) (bool, error) {
 //     installation, the user is directed to close all browser windows so
 //     the trust store change is picked up before the passkey ceremony.
 //
-// For a reused identity, the bundle comes from the local trust bundle on
-// disk. For a new enrollment, it comes from the artifacts.
-func (c *EnrollmentCoordinator) ensureSystemTrust(ctx context.Context, artifacts EnrollmentArtifacts, reused bool, local LocalIdentity, opts EnrollmentOptions) (bool, error) {
-	if opts.NoSystemTrust {
-		c.out("System trust installation skipped (--no-system-trust). The administrator must have pre-installed the gateway root CA.")
-		return false, nil
+// liveFingerprint is the SHA-256 fingerprint of the LIVE gateway root CA
+// (from DiscoverGatewayCA). It MUST come from the live gateway, not the
+// local bundle — otherwise the stale-anchor detector would compare the
+// stale local bundle against itself and see nothing wrong (the original
+// §6.5 bug on the reused-identity path). When discovery was unreachable,
+// liveFingerprint is empty and the coordinator falls back to the bundle's
+// own fingerprint (preserving the pre-discovery behavior) after printing a
+// diagnostic warning via the caller.
+//
+// liveBundle is the live gateway CA bundle PEM (from DiscoverGatewayCA).
+// On the reused-identity path, when discovery succeeded, the live bundle
+// is used as the bundlePEM for EnsureSystemTrust so the install check
+// compares against the live root, not the (possibly stale) local one. On
+// the new-enrollment paths, the artifacts' bundle IS the live bundle, so
+// liveBundle is not used.
+//
+// For a reused identity with discovery unreachable, the bundle comes from
+// the local trust bundle on disk (the pre-discovery behavior). For a new
+// enrollment, it comes from the artifacts.
+func (c *EnrollmentCoordinator) ensureSystemTrust(ctx context.Context, artifacts EnrollmentArtifacts, reused bool, local LocalIdentity, opts EnrollmentOptions, liveFingerprint string, liveBundle []byte, discoveryReachable bool) (bool, error) {
+	// R5: surface a diagnosable error when discovery is unreachable AND
+	// reuse is attempted. The local bundle may be stale (e.g., after
+	// `gw clean`); without discovery we cannot tell. Print a clear
+	// diagnostic before the passkey ceremony so a subsequent TLS failure
+	// has prior context. Do NOT abort — the user may be intentionally
+	// offline, or the gateway may be reachable only on the HTTPS port.
+	if reused && !discoveryReachable {
+		c.out("Warning: could not reach the gateway discovery endpoint to verify the local trust bundle is current. If the gateway's PKI has been regenerated (e.g., after `gw clean`), the local identity may be stale and the passkey ceremony will fail with a TLS error. Use --endpoint <host> if the gateway is on a remote host.")
 	}
 
+	// Determine the bundle PEM to install. On the reused-identity path,
+	// prefer the live bundle (when discovery succeeded) so the install
+	// check compares against the live root, not the stale local one. On
+	// the new-enrollment paths, the artifacts' bundle IS the live bundle.
 	var bundlePEM []byte
 	if reused {
-		if local.TrustBundle == nil || len(local.TrustBundle.PEM) == 0 {
-			// A reused identity with no trust bundle is inconsistent — Inspect
-			// should have classified it as partial. This is a defensive guard.
-			return false, fmt.Errorf("%w: reused identity has no trust bundle", constants.ErrEnrollmentFailed)
+		if discoveryReachable && len(liveBundle) > 0 {
+			bundlePEM = liveBundle
+		} else {
+			if local.TrustBundle == nil || len(local.TrustBundle.PEM) == 0 {
+				// A reused identity with no trust bundle is inconsistent — Inspect
+				// should have classified it as partial. This is a defensive guard.
+				return false, fmt.Errorf("%w: reused identity has no trust bundle", constants.ErrEnrollmentFailed)
+			}
+			bundlePEM = local.TrustBundle.PEM
 		}
-		bundlePEM = local.TrustBundle.PEM
 	} else {
 		bundlePEM = []byte(artifacts.TrustBundlePEM)
 	}
 
-	// Extract the current root fingerprint for stale-anchor detection. We
-	// parse the bundle here rather than relying on EnsureSystemTrust's result
-	// because we need the fingerprint BEFORE installation to filter the stale
-	// list (the active anchor must not be listed as stale).
-	currentFingerprint, err := currentRootFingerprint(bundlePEM, c.clock)
-	if err != nil {
-		return false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInvalidAnchor, err)
+	// Extract the live root fingerprint for stale-anchor detection. We
+	// parse the bundle here rather than relying on EnsureSystemTrust's
+	// result because we need the fingerprint BEFORE installation to filter
+	// the stale list (the active anchor must not be listed as stale).
+	//
+	// Prefer the live fingerprint from discovery (the source of truth).
+	// When discovery was unreachable, fall back to the bundle's own
+	// fingerprint — this preserves the pre-discovery behavior but cannot
+	// detect a stale bundle (the local bundle and the OS store are stale
+	// in lockstep, so they agree with each other). The R5 warning above
+	// surfaces this condition to the user.
+	keepFingerprint := liveFingerprint
+	if keepFingerprint == "" {
+		fp, fpErr := currentRootFingerprint(bundlePEM, c.clock)
+		if fpErr != nil {
+			return false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInvalidAnchor, fpErr)
+		}
+		keepFingerprint = fp
 	}
 
 	// Detect stale g8e root anchors from previous gateway instances. These
 	// would cause the browser to see multiple g8e Root CAs, only one of which
 	// is valid for the current gateway's TLS certificate. We prompt the user
 	// before removing them.
-	staleAnchors, err := c.trust.ListStaleAnchors(ctx, currentFingerprint)
+	//
+	// Stale detection runs even under --no-system-trust (C4): the user may
+	// have pre-installed trust manually but still have stale anchors from a
+	// previous gateway that break the browser. Only the installation step
+	// is skipped below.
+	staleAnchors, err := c.trust.ListStaleAnchors(ctx, keepFingerprint)
 	if err != nil {
 		// Stale-anchor enumeration is best-effort on unsupported platforms
 		// (stub returns ErrSystemTrustUnsupported). Don't abort enrollment
@@ -554,6 +676,21 @@ func (c *EnrollmentCoordinator) ensureSystemTrust(ctx context.Context, artifacts
 		}
 		c.out("Stale anchors removed.")
 		staleRemoved = true
+	}
+
+	// --no-system-trust: skip only the installation step. Stale detection
+	// above still ran (C4). The administrator must have pre-installed the
+	// gateway root CA.
+	if opts.NoSystemTrust {
+		c.out("System trust installation skipped (--no-system-trust). The administrator must have pre-installed the gateway root CA.")
+		if staleRemoved {
+			// Stale anchors were removed even though installation was
+			// skipped. Browsers may still cache the stale anchors; direct
+			// the user to close all browser windows.
+			c.out("IMPORTANT: close all open browser windows now, then click the enrollment link below to open a fresh session.")
+		}
+		// SystemTrustInstalled is false — no root CA was installed.
+		return false, nil
 	}
 
 	result, err := c.trust.EnsureSystemTrust(ctx, bundlePEM)

@@ -59,6 +59,12 @@ func printNextSteps(cmd *cobra.Command, _ governance.GovernancePosture, external
 	cmd.Println("     browser; pass `--no-system-trust` to skip that step (an administrator")
 	cmd.Println("     must pre-install trust in that case).")
 	cmd.Println()
+	cmd.Println("     `auth enroll` verifies the local identity against the live gateway")
+	cmd.Println("     before reuse: if the gateway's PKI has been regenerated (e.g., after")
+	cmd.Println("     `gw clean`), the local identity is stale and enrollment automatically")
+	cmd.Println("     routes through the human-approved recovery flow to obtain a fresh")
+	cmd.Println("     certificate signed by the new CA.")
+	cmd.Println()
 
 	// CLI section
 	cmd.Println("  ===")

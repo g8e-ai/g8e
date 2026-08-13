@@ -29,8 +29,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/certs"
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/httpclient"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/auth"
 	"github.com/g8e-ai/g8e/internal/services/fs"
@@ -70,7 +73,7 @@ func NewEnrollmentClient(cfg *config.Config, systemFingerprint func() (string, e
 		systemFingerprint = defaultSystemFingerprint
 	}
 	return &EnrollmentClient{
-		httpClient:        &http.Client{Timeout: httpTimeout},
+		httpClient:        &http.Client{Timeout: httpTimeout, Transport: httpclient.NewIPv4Transport(nil)},
 		cfg:               cfg,
 		systemFingerprint: systemFingerprint,
 	}
@@ -423,6 +426,44 @@ func (c *EnrollmentClient) CheckBootstrapStatus(ctx context.Context, baseURL str
 		return false, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
 	return status.Bootstrapped, nil
+}
+
+// DiscoverGatewayCA fetches the live gateway root CA bundle from the
+// unauthenticated discovery surface (plain-HTTP
+// /.well-known/g8e/pki/ca-bundle). It returns the raw PEM bundle and the
+// SHA-256 fingerprint of the primary root anchor (the first self-signed CA
+// in the bundle).
+//
+// The call is best-effort: a network failure returns a non-nil err and
+// empty bundle/fingerprint. The coordinator decides whether to abort. No
+// fingerprint pin is applied — the live bundle IS the source of truth for
+// the pin, so pinning against the local bundle would be circular.
+//
+// See EnrollmentGateway.DiscoverGatewayCA for the contract.
+func (c *EnrollmentClient) DiscoverGatewayCA(ctx context.Context) ([]byte, string, error) {
+	discoveryURL := c.cfg.OperatorDiscoveryURL()
+	caURL := discoveryURL + constants.APIPaths.WellKnownPKICABundle
+
+	// Use the IPv4-only transport so `localhost` resolves to 127.0.0.1 on
+	// Windows (where the OS resolver returns ::1 first and the IDE's
+	// port-forward only listens on IPv4). The discovery surface is plain
+	// HTTP, so no TLS config is needed.
+	bundlePEM, err := certs.FetchTrustBundleWithClient(ctx, caURL, "", &http.Client{
+		Timeout:   15 * time.Second,
+		Transport: httpclient.NewIPv4Transport(nil),
+	})
+	if err != nil {
+		return nil, "", err
+	}
+
+	roots, err := platform.ExtractRootAnchors(bundlePEM, time.Now)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: %w", constants.ErrSystemTrustInvalidAnchor, err)
+	}
+	if len(roots) == 0 {
+		return nil, "", constants.ErrSystemTrustInvalidAnchor
+	}
+	return bundlePEM, platform.CertFingerprint(roots[0]), nil
 }
 
 // postJSON is the centralized HTTP POST + JSON decode + status check

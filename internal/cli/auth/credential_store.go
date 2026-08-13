@@ -74,9 +74,19 @@ type stagedIdentity struct {
 }
 
 // Inspect examines all managed artifacts as a complete set and returns a
-// LocalIdentity classification. It never writes files and never opens a
-// browser. It is the single source of truth for the coordinator's state-
-// machine decision.
+// LocalIdentity classification. It never writes files, never opens a
+// browser, and never performs network I/O. It is the single source of
+// truth for the coordinator's state-machine decision.
+//
+// The classification reflects LOCAL file consistency only. It does NOT
+// verify that the local trust bundle matches the LIVE gateway root CA —
+// that is a coordinator-level concern (the coordinator compares
+// TrustBundle.PrimaryRootFingerprint against the live fingerprint from
+// EnrollmentGateway.DiscoverGatewayCA and sets LocalIdentity.BundleStale).
+// A LocalStateComplete identity with a stale bundle (e.g., after `gw
+// clean` regenerated the gateway PKI) is indistinguishable from a healthy
+// one through Inspect alone; the coordinator layer must add the liveness
+// check on top.
 //
 // The managed artifact set is:
 //   - credentials JSON (cfg.CredentialsFile)
