@@ -119,8 +119,8 @@ func TestDispatchResult_ToResponse(t *testing.T) {
 	t.Run("with result envelope", func(t *testing.T) {
 		env := &commonv1.GovernanceEnvelope{
 			EventType:  "FS_READ",
-			ActionType:  string(constants.ActionTypeFsRead),
-			Payload:     []byte("result-payload-bytes"),
+			ActionType: string(constants.ActionTypeFsRead),
+			Payload:    []byte("result-payload-bytes"),
 		}
 		result := &DispatchResult{
 			TransactionID:  "tx-abc-123",
@@ -250,7 +250,7 @@ func TestDispatchService_Dispatch_Success(t *testing.T) {
 		resultEnv := &commonv1.GovernanceEnvelope{
 			Id:         cmdEnv.Id,
 			EventType:  cmdEnv.EventType,
-			ActionType:  cmdEnv.ActionType,
+			ActionType: cmdEnv.ActionType,
 			Timestamp:  timestamppb.Now(),
 		}
 		resultWire, err := protojson.Marshal(resultEnv)

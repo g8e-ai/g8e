@@ -54,7 +54,7 @@ type DispatchRequest struct {
 
 // DispatchResult is the output of a successful command dispatch.
 type DispatchResult struct {
-	TransactionID string
+	TransactionID  string
 	ResultEnvelope *commonv1.GovernanceEnvelope
 }
 
@@ -74,10 +74,10 @@ type operatorSessionValidator interface {
 // Under DoctrinePosture (the docker-compose default), no L2 votes or L3 proofs
 // are required for read-only commands.
 type DispatchService struct {
-	logger          *slog.Logger
-	pubsub          *GatewayWebSocketHandler
+	logger            *slog.Logger
+	pubsub            *GatewayWebSocketHandler
 	stateRootProvider governance.StateRootProvider
-	auth            operatorSessionValidator
+	auth              operatorSessionValidator
 }
 
 // NewDispatchService creates a DispatchService wired to the gateway's in-process
@@ -200,8 +200,8 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 // dispatchResultTracker is a concurrency-safe tracker for in-flight dispatches.
 // Currently unused but reserved for the production long-lived results listener.
 type dispatchResultTracker struct {
-	mu       sync.Mutex
-	pending  map[string]chan *commonv1.GovernanceEnvelope
+	mu      sync.Mutex
+	pending map[string]chan *commonv1.GovernanceEnvelope
 }
 
 func newDispatchResultTracker() *dispatchResultTracker {

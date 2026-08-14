@@ -29,14 +29,14 @@ var APIPaths = struct {
 	GovernanceSignersByID   string `json:"governance_signers_by_id"`
 	GovernanceSignersPrefix string `json:"governance_signers_prefix"`
 	// Operator routes
-	Operators          string `json:"operators"`
-	OperatorsByID      string `json:"operators_by_id"`
-	OperatorsBind      string `json:"operators_bind"`
-	OperatorsUnbind    string `json:"operators_unbind"`
-	OperatorsTarget    string `json:"operators_target"`
-	OperatorsReauth    string `json:"operators_reauth"`
-	OperatorsSession   string `json:"operators_session"`
-	OperatorsCommands  string `json:"operators_commands"`
+	Operators         string `json:"operators"`
+	OperatorsByID     string `json:"operators_by_id"`
+	OperatorsBind     string `json:"operators_bind"`
+	OperatorsUnbind   string `json:"operators_unbind"`
+	OperatorsTarget   string `json:"operators_target"`
+	OperatorsReauth   string `json:"operators_reauth"`
+	OperatorsSession  string `json:"operators_session"`
+	OperatorsCommands string `json:"operators_commands"`
 	// Intent routes
 	GrantIntent  string `json:"grant_intent"`
 	RevokeIntent string `json:"revoke_intent"`
@@ -167,11 +167,11 @@ var APIPaths = struct {
 	GovernanceSignersByID:   "/api/v1/governance/signers/",
 	GovernanceSignersPrefix: "/api/v1/governance/signers/",
 	// Operator routes
-	Operators:        "/api/v1/operators",
-	OperatorsByID:    "/api/v1/operators/",
-	OperatorsBind:    "/api/v1/operators/bind",
-	OperatorsUnbind:  "/api/v1/operators/unbind",
-	OperatorsTarget:  "/api/v1/operators/target",
+	Operators:         "/api/v1/operators",
+	OperatorsByID:     "/api/v1/operators/",
+	OperatorsBind:     "/api/v1/operators/bind",
+	OperatorsUnbind:   "/api/v1/operators/unbind",
+	OperatorsTarget:   "/api/v1/operators/target",
 	OperatorsReauth:   "/api/v1/operators/reauth",
 	OperatorsSession:  "/api/v1/operators/session/",
 	OperatorsCommands: "/api/v1/operators/commands",

@@ -38,9 +38,9 @@ import (
 // the cost of one HTTP round-trip per command. A background refresh goroutine
 // with a short TTL is a production optimization.
 type RemoteStateRootProvider struct {
-	client  *http.Client
+	client   *http.Client
 	stateURL string
-	logger  *slog.Logger
+	logger   *slog.Logger
 }
 
 // NewRemoteStateRootProvider creates a RemoteStateRootProvider that fetches
