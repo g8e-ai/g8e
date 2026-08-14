@@ -72,9 +72,9 @@ func (i *SystemTrustInstaller) installPlatform(ctx context.Context, root *x509.C
 }
 
 // listStaleAnchorsPlatform enumerates certificates in LocalMachine\Root whose
-// subject CN matches g8eRootCommonName and whose SHA-256 fingerprint does not
-// match currentFingerprint. Returns the SHA-1 thumbprint as the Handle for
-// later removal via certutil -delstore.
+// subject CN matches constants.RootCACommonName and whose SHA-256 fingerprint
+// does not match currentFingerprint. Returns the SHA-1 thumbprint as the
+// Handle for later removal via certutil -delstore.
 func (i *SystemTrustInstaller) listStaleAnchorsPlatform(ctx context.Context, currentFingerprint string) ([]StaleAnchor, error) {
 	// Use [char]10 instead of backtick-n to avoid Go raw-string conflicts.
 	psScript := "$store = New-Object System.Security.Cryptography.X509Certificates.X509Store(\"Root\",\"LocalMachine\")\n" +
@@ -82,7 +82,7 @@ func (i *SystemTrustInstaller) listStaleAnchorsPlatform(ctx context.Context, cur
 		"$lines = @()\n" +
 		"foreach ($c in $store.Certificates) {\n" +
 		"  $cn = $c.Subject\n" +
-		"  if ($cn -like \"*CN=g8e Root CA*\") {\n" +
+		"  if ($cn -like \"*CN=" + constants.RootCACommonName + "*\") {\n" +
 		"    $sha256 = $c.GetCertHashString(\"SHA256\")\n" +
 		"    $sha1 = $c.GetCertHashString(\"SHA1\")\n" +
 		"    $lines += \"$sha256|$sha1|$cn\"\n" +
