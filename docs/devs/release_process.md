@@ -6,15 +6,37 @@ The protocol (Go + Python) and the platform binary share the same version number
 
 > **`make release` handles version syncing, tagging, and pushing.** It does NOT build binaries, run lint or tests, or create GitHub releases; CI and GitHub Actions workflows handle those. Release prep changes are committed and opened as a PR; after merge, pull main and run `make release` to tag and push. See [Release Workflow](#release-workflow).
 
+## Separation of Duties
+
+Release work is split between the **agent** (PR prep) and the **release owner** (merge, CI gate, tag/push). The agent never runs `make release` and never edits the Python package files.
+
+**Agent (PR prep, on a feature branch):**
+1. Inventory the changes since the previous release tag
+2. Reconcile documentation with the code changes
+3. Write `docs/release_notes/vX.Y.x/vX.Y.Z.md`
+4. Set `VERSION` to `vX.Y.Z` and add the `CHANGELOG.md` row
+5. Run the read-only [Verification](#verification) checks (steps 1-3, 5-7; step 4 is expected to show the previous Python version — see its note)
+6. Stop. The agent does NOT commit, push, open the PR, run `make release`, or edit the Python package files. Hand the prepared working tree back to the release owner.
+
+**Release owner (commits, merges, tags, pushes):**
+1. Review the prepared changes, then `git add`, `git commit`, `git push`, and open the PR on GitHub
+2. Merge the PR on GitHub
+3. Wait for CI on `main` to pass (lint, tests, version sync checks)
+4. `git checkout main && git pull` locally
+5. Run `make release` — this syncs `protocol/python/pyproject.toml` and `protocol/python/g8e/__init__.py` from `VERSION`, then creates and pushes the `vX.Y.Z` and `protocol/vX.Y.Z` tags
+6. GitHub Actions workflows create the GitHub release, build and sign binaries, and publish the Python package to PyPI
+
+The Python package files (`pyproject.toml`, `__init__.py`) are **only** touched by `make release`. During PR prep they still carry the previous version; that is expected and correct. CI's version sync check is satisfied once `make release` runs on the merged `main` branch.
+
 ## How to Use This Document
 
 1. **Inventory the changes**: Diff the release range and categorize every change (see [Change Inventory](#change-inventory)). This is the most important step; everything else depends on it.
 2. **Update documentation to match the code**: For every doc in scope, do a full review of the entire doc against the current code. Fix inaccuracies, document missing features, remove stale references, and bump the `Version:`/`Last Updated:` headers in the same pass (see [Documentation Reconciliation](#documentation-reconciliation)). This is where the real work is.
 3. **Write release notes**: Create `docs/release_notes/vX.Y.x/vX.Y.Z.md` from the change inventory (see [Release Notes](#release-notes)). The CHANGELOG entry is a summary of this.
-4. **Bump version files**: Set `VERSION`, sync Python files, add CHANGELOG row (see [Version-Bearing Files](#version-bearing-files)). This is mechanical.
+4. **Bump version files**: Set `VERSION` and add the CHANGELOG row (see [Version-Bearing Files](#version-bearing-files)). This is mechanical. The Python package files (`pyproject.toml`, `__init__.py`) are synced from `VERSION` by `make release` — do not edit them by hand.
 5. **Run [Verification](#verification)** to catch any missed files — including docs modified in step 2 that didn't get their headers bumped.
-6. **Commit and open a PR**: CI runs lint, tests, and version sync checks. Review, approve, and merge the PR on GitHub.
-7. **After merge, pull main and run `make release`** to tag and push; GitHub Actions workflows create the release and upload assets (see [Release Workflow](#release-workflow)).
+6. **Hand the prepared working tree back to the release owner.** The agent stops here — it does NOT commit, push, open a PR, run `make release`, or edit the Python package files. See [Separation of Duties](#separation-of-duties).
+7. **Release owner**: commit, push, open and merge the PR; after CI on `main` passes, pull main and run `make release` to tag and push; GitHub Actions workflows create the release and upload assets (see [Release Workflow](#release-workflow)).
 
 ---
 
@@ -368,16 +390,16 @@ The following doc directories intentionally do **not** carry release `Version:` 
 - [ ] **2. Reconcile documentation**: For every doc in scope (touched by a code change, or referencing a renamed/removed/changed identifier), do a full review of the entire doc against the current code. Fix inaccuracies, document missing features, remove stale references, and bump the `Version:`/`Last Updated:` headers in the same pass (see [Documentation Reconciliation](#documentation-reconciliation))
 - [ ] **3. Write release notes**: Create `docs/release_notes/vX.Y.x/vX.Y.Z.md` from the change inventory
 - [ ] **4. `VERSION`**: Set to `vX.Y.Z`
-- [ ] **5. Sync Python files**: Run `make release` to auto-sync `pyproject.toml` + `__init__.py` from `VERSION` (it will sync and exit due to dirty working tree), or update both files manually
-- [ ] **6. `CHANGELOG.md`**: Add a table row to the major-version section (no `v` prefix in version column)
-- [ ] **7. Documentation headers (verify)**: Confirm that every doc modified in step 2 carries the new `Version:`/`Last Updated:` headers, and that no doc *not* modified in step 2 was bumped. Use `git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/` to identify the modified set. Do not blanket-bump all headers.
-- [ ] **8. Run [Verification](#verification)** to catch any missed files
-- [ ] **9. Commit and open PR**: `git add -A && git commit -m "release: vX.Y.Z"`, push, and open a PR on GitHub. CI runs lint, tests, and version sync checks.
-- [ ] **10. Merge and release**: After the PR is merged, pull main and run `make release` to tag and push; GitHub Actions workflows create the release and upload assets
+- [ ] **5. `CHANGELOG.md`**: Add a table row to the major-version section (no `v` prefix in version column)
+- [ ] **6. Documentation headers (verify)**: Confirm that every doc modified in step 2 carries the new `Version:`/`Last Updated:` headers, and that no doc *not* modified in step 2 was bumped. Use `git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/` to identify the modified set. Do not blanket-bump all headers.
+- [ ] **7. Run [Verification](#verification)** to catch any missed files
+- [ ] **8. Hand off**: The agent stops here. It does NOT `git add`, `git commit`, `git push`, open a PR, run `make release`, or edit the Python package files. The prepared working tree is handed back to the release owner.
+- [ ] **9. Release owner commits and opens PR**: `git add -A && git commit -m "release: vX.Y.Z"`, push, and open a PR on GitHub. CI runs lint, tests, and version sync checks.
+- [ ] **10. Release owner merges and releases**: After the PR is merged and CI on `main` passes, the release owner pulls main and runs `make release` to sync the Python package files, tag, and push; GitHub Actions workflows create the release and upload assets.
 
-**Only 2 files need manual version edits** (VERSION + CHANGELOG). The Python package files are auto-synced. Everything else is content-driven work: inventory, docs, and release notes.
+**Only 2 files need manual version edits** (VERSION + CHANGELOG), and those edits are made by the agent during PR prep. The Python package files are synced by `make release`, which the release owner runs after merge — the agent never edits them. Everything else is content-driven work: inventory, docs, and release notes.
 
-> **Workflow note:** All release prep (steps 1-9) happens on a feature branch and is merged via PR. Tagging and pushing (step 10) happens on the merged main branch via `make release`; GitHub Actions workflows handle release creation and asset uploads.
+> **Workflow note:** All release prep (steps 1-8) happens on a feature branch. The agent does steps 1-7 and stops; it does not commit, push, or open the PR. The release owner does steps 9-10 (commit, push, open PR, merge, wait for CI, pull main, run `make release`). GitHub Actions workflows handle release creation and asset uploads.
 
 ---
 
@@ -399,10 +421,15 @@ head -n 20 CHANGELOG.md
 # 3. Verify release notes file exists
 ls "docs/release_notes/${RELEASE_VERSION%.*}.x/${RELEASE_VERSION}.md"
 
-# 4. Verify Python package version matches VERSION (make release should have synced these)
+# 4. Verify Python package version matches VERSION. NOTE: the Python files are
+#    synced by `make release`, which the release owner runs AFTER the PR merges.
+#    During PR prep they will still show the PREVIOUS version — that is expected
+#    and correct. Do not edit them by hand. CI's version sync check is satisfied
+#    once `make release` runs on the merged main branch.
 grep -n '^version' protocol/python/pyproject.toml
 grep -n '__version__' protocol/python/g8e/__init__.py
-# Both should show X.Y.Z matching RELEASE_NUM
+# During PR prep: both show the previous version (expected). After `make release`
+# on merged main: both show X.Y.Z matching RELEASE_NUM.
 
 # 5. Find any doc version header (plain, bold, or "Document Version") NOT on the new
 #    version; should return nothing for docs modified in this release. Docs NOT modified
@@ -424,7 +451,7 @@ grep -rniE '^(\*\*)?last updated:' docs/ protocol/docs/ --include='*.md' --exclu
 grep -rnE 'OldName|old_command|OLD_CONSTANT' docs/ protocol/docs/ --include='*.md'
 ```
 
-If step 4 shows a mismatch, run `make release` again to re-sync. Steps 5 and 6 will show old versions/dates for docs not modified in this release; that is expected and correct. Only investigate results for docs that *were* modified in this release (per the git diff). Step 7 should return nothing; if it finds stale references, fix them before committing.
+If step 4 shows the previous version during PR prep, that is expected — the Python files are synced by `make release` after merge, not during PR prep. Do not run `make release` or edit the Python files to "fix" the mismatch; the release owner handles that on merged main. Steps 5 and 6 will show old versions/dates for docs not modified in this release; that is expected and correct. Only investigate results for docs that *were* modified in this release (per the git diff). Step 7 should return nothing; if it finds stale references, fix them before committing.
 
 ---
 
@@ -434,7 +461,7 @@ The `make release` target handles version syncing, tagging, and pushing in a sin
 
 ### `make release`: Tag and Push
 
-> **Run this on the merged main branch**, not on a feature branch. The tags must point at the merge commit on main.
+> **Run this on the merged main branch**, not on a feature branch. The tags must point at the merge commit on main. **`make release` is run by the release owner, not by the agent preparing the PR.** The agent's work ends at opening the PR; the release owner merges, waits for CI on main to pass, pulls main locally, and then runs `make release`.
 
 1. Syncs `protocol/python/pyproject.toml` and `protocol/python/g8e/__init__.py` from `VERSION` (if already in sync, no changes are made)
 2. Verifies working tree is clean (fails if Python files were out of sync; commit synced files and go through the PR process first)
@@ -464,8 +491,8 @@ For critical security issues or production bugs:
 
 1. Apply the minimal fix necessary to the appropriate branch
 2. Inventory the changes and reconcile documentation for the touched areas
-3. Set `VERSION`, sync Python files, update `CHANGELOG.md` and release notes
-4. Commit, open a PR, merge, then pull main and run `make release` to tag and push; GitHub Actions workflows create the release
+3. Set `VERSION`, update `CHANGELOG.md`, and write release notes (the Python package files are synced by `make release` — do not edit them)
+4. Commit and open a PR. After merge, the release owner waits for CI on main to pass, pulls main locally, and runs `make release` to sync the Python files, tag, and push; GitHub Actions workflows create the release and upload assets
 
 ---
 
@@ -473,12 +500,12 @@ For critical security issues or production bugs:
 
 The only git operations not automated by `make release` are:
 
-- Staging and committing the release-prep changes (`git add`, `git commit`)
-- Pushing the branch and opening a PR (`git push`, GitHub PR)
-- Merging the PR on GitHub
-- Pulling main after merge (`git checkout main && git pull`)
+- Staging and committing the release-prep changes (`git add`, `git commit`) — release owner
+- Pushing the branch and opening a PR (`git push`, GitHub PR) — release owner
+- Merging the PR on GitHub — release owner
+- Pulling main after merge (`git checkout main && git pull`) — release owner
 
-`make release` handles tag creation and tag pushing automatically; run it on the merged main branch. GitHub Actions workflows handle release creation and asset uploads.
+`make release` handles tag creation and tag pushing automatically; the release owner runs it on the merged main branch after CI passes. GitHub Actions workflows handle release creation and asset uploads. The agent does not run `git commit`, `git push`, `make release`, or any other mutating git/make command — it prepares the working tree and hands it back.
 
 ---
 
