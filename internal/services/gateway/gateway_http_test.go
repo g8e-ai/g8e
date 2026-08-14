@@ -289,6 +289,11 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config, *TestInfr
 			Auth:      infra.Auth,
 			Responder: infra.Responder,
 		},
+		DispatchControllerDeps: DispatchControllerDeps{
+			DispatchSvc: NewDispatchService(infra.Logger, infra.Pubsub, infra.Stores.StateRootSvc, infra.Auth),
+			Responder:   infra.Responder,
+			Logger:      infra.Logger,
+		},
 		SSEControllerDeps: SSEControllerDeps{
 			Cfg:       infra.Cfg,
 			Logger:    infra.Logger,
@@ -717,6 +722,97 @@ func TestBuildPublicRouter(t *testing.T) {
 		assert.NotEqual(t, http.StatusNotFound, rr.Code, "Path %s should be registered", path)
 		assert.Contains(t, rr.Body.String(), constants.ErrMTLSCertRequired.Error(), "Path %s should be mTLS-gated", path)
 	}
+}
+
+// TestRemovedTrustScriptRoutes verifies that the deprecated trust-script endpoints
+// (/web-cert.sh, /web-cert.ps1, /.well-known/g8e/pki/trust-windows) no longer serve
+// scripts on the public HTTPS router, while the raw CA bundle discovery endpoint
+// still serves the full bundle. This is a regression guard for the Section 10
+// breaking removal of script-based trust installation.
+func TestRemovedTrustScriptRoutes(t *testing.T) {
+	h, _, _ := setupTestHTTPHandler(t)
+	router := h.buildPublicRouter()
+
+	// /web-cert.sh and /web-cert.ps1 are no longer registered and no longer
+	// classified as RouteAuthNone, so they fail-closed to mTLS (401) rather
+	// than serving a script. Either way, they must not return 200 with a
+	// script content type or body.
+	scriptPaths := []string{
+		"/web-cert.sh",
+		"/web-cert.ps1",
+	}
+	for _, path := range scriptPaths {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+
+		assert.NotEqual(t, http.StatusOK, rr.Code, "%s must not serve a script (status)", path)
+		ct := rr.Header().Get("Content-Type")
+		assert.NotEqual(t, "application/x-sh", ct, "%s must not return x-sh content type", path)
+		assert.NotEqual(t, "application/x-powershell", ct, "%s must not return x-powershell content type", path)
+		body := rr.Body.String()
+		assert.NotContains(t, body, "update-ca-certificates", "%s must not serve a trust script", path)
+		assert.NotContains(t, body, "LocalMachine", "%s must not serve a trust script", path)
+	}
+
+	// /.well-known/g8e/pki/trust-windows falls under the public PKI prefix
+	// (RouteAuthNone) so it reaches the mux, but the handler is gone → 404.
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/pki/trust-windows", nil)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusNotFound, rr.Code, "trust-windows alias must no longer be registered")
+	assert.NotEqual(t, "application/x-powershell", rr.Header().Get("Content-Type"))
+
+	// The raw CA bundle discovery endpoint must still serve the full bundle.
+	req = httptest.NewRequest(http.MethodGet, constants.APIPaths.WellKnownPKICABundle, nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code, "ca-bundle must still be served")
+	assert.Equal(t, "application/x-pem-file", rr.Header().Get("Content-Type"))
+	assert.NotEmpty(t, rr.Body.Bytes(), "ca-bundle must return a non-empty PEM bundle")
+}
+
+// TestRemovedCLIEnrollRoute verifies that the deprecated
+// POST /api/v1/auth/cli/enroll endpoint (handleCLIEnrollment) no longer
+// issues credentials on either the public HTTPS router or the plain HTTP
+// router. The handler was removed in 5f; the path must never return 200 with
+// a certificate. It fail-closes to mTLS auth rejection (401) on the public
+// router and is not registered on the plain HTTP router (404).
+func TestRemovedCLIEnrollRoute(t *testing.T) {
+	h, _, _ := setupTestHTTPHandler(t)
+
+	enrollBody := `{"cli_csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\n-----END CERTIFICATE REQUEST-----\n"}`
+
+	// Public HTTPS router: the path is no longer explicitly classified and
+	// the handler is gone, so it fail-closes to RouteAuthMTLS → 401 (never
+	// 200 with a cert).
+	//
+	// The path is inlined as a literal because the
+	// constants.APIPaths.AuthCLIEnroll constant was deleted in Section 9
+	// (handleCLIEnrollment removal). These tests assert the route's
+	// absence, so a literal is intentional and avoids reintroducing a
+	// constant for a removed endpoint.
+	publicRouter := h.buildPublicRouter()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/enroll", bytes.NewReader([]byte(enrollBody)))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	publicRouter.ServeHTTP(rr, req)
+	assert.NotEqual(t, http.StatusOK, rr.Code, "enroll must not return 200 on public router")
+	assert.NotContains(t, rr.Body.String(), "cli_cert", "enroll must not issue a CLI certificate on public router")
+	assert.NotContains(t, rr.Body.String(), "BEGIN CERTIFICATE", "enroll must not return any certificate on public router")
+
+	// Plain HTTP router: the handler was never registered here either, so
+	// the path is a 404 (or fail-closed). Either way, never 200 with a cert.
+	// Literal path: see note above (AuthCLIEnroll constant removed in
+	// Section 9).
+	httpRouter := h.buildHTTPRouter()
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/enroll", bytes.NewReader([]byte(enrollBody)))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	httpRouter.ServeHTTP(rr, req)
+	assert.NotEqual(t, http.StatusOK, rr.Code, "enroll must not return 200 on plain HTTP router")
+	assert.NotContains(t, rr.Body.String(), "cli_cert", "enroll must not issue a CLI certificate on plain HTTP router")
+	assert.NotContains(t, rr.Body.String(), "BEGIN CERTIFICATE", "enroll must not return any certificate on plain HTTP router")
 }
 
 type errorReader struct{}

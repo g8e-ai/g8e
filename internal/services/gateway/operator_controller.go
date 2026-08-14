@@ -15,8 +15,10 @@ package gateway
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -240,6 +242,7 @@ func (c *OperatorController) handleReauth(w http.ResponseWriter, r *http.Request
 		"operator_session_id":        op.OperatorSessionID,
 		"operator_id":                op.ID,
 		"user_id":                    op.UserID,
+		"posture":                    string(c.cfg.Gateway.Posture),
 	}
 
 	// Return response in format expected by Operator (AuthServicesResponse)
@@ -249,5 +252,32 @@ func (c *OperatorController) handleReauth(w http.ResponseWriter, r *http.Request
 		"operator_id":         op.ID,
 		"user_id":             op.UserID,
 		"config":              bootstrapConfig,
+	})
+}
+
+// GET /api/v1/operators/session/{id}
+func (c *OperatorController) handleGetOperatorBySession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	sessionID := strings.TrimPrefix(r.URL.Path, constants.APIPaths.OperatorsSession)
+	if sessionID == "" {
+		c.responder.Error(w, http.StatusBadRequest, "session_id required")
+		return
+	}
+	op, err := c.auth.ValidateOperatorSession(sessionID)
+	if err != nil {
+		var authErr *AuthError
+		if errors.As(err, &authErr) {
+			c.responder.Error(w, authErr.Status, authErr.Message)
+			return
+		}
+		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.responder.JSON(w, http.StatusOK, models.OperatorResponse{
+		Success:  true,
+		Operator: op,
 	})
 }

@@ -43,6 +43,7 @@ type Client struct {
 	headers     map[string]string
 	client      *http.Client
 	lastEventID int64
+	onConnect   func() // called once per successful HTTP connection (status 200)
 }
 
 // NewClient creates an SSE client. The http.Client should be configured with
@@ -64,6 +65,15 @@ func NewClient(url string, httpClient *http.Client) *Client {
 // is not safe for concurrent access.
 func (c *Client) SetHeader(key, value string) {
 	c.headers[key] = value
+}
+
+// SetOnConnect sets a callback invoked once per successful HTTP connection
+// (after the response status is verified as 200). Callers can use this to
+// signal readiness before performing dependent actions (e.g., opening a
+// browser only after the SSE listener is established). Must be called before
+// Run or ConnectOnce. The callback must not block.
+func (c *Client) SetOnConnect(fn func()) {
+	c.onConnect = fn
 }
 
 // Run connects to the SSE stream and calls handler for each event.
@@ -150,6 +160,13 @@ func (c *Client) ConnectOnce(ctx context.Context, handler EventHandler) error {
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("sse client: SSE returned %d", resp.StatusCode)
+	}
+
+	// Signal readiness so callers that depend on the listener being
+	// established (e.g., the passkey registrar opening a browser) can
+	// proceed. Called once per successful connection, including reconnects.
+	if c.onConnect != nil {
+		c.onConnect()
 	}
 
 	// Close the response body when the context is cancelled to unblock

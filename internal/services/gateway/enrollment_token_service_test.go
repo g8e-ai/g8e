@@ -122,6 +122,36 @@ func TestEnrollmentToken_GenerateTokenShortCLISessionIDDoesNotPanic(t *testing.T
 	assert.Equal(t, "", token2.CLISessionID)
 }
 
+func TestEnrollmentToken_ValidateTokenDoesNotConsume(t *testing.T) {
+	svc := newTestEnrollmentTokenService(t)
+
+	token, err := svc.GenerateToken("user-validate", "cli-validate")
+	require.NoError(t, err)
+
+	// ValidateToken must succeed and NOT mark the token consumed.
+	got, err := svc.ValidateToken(token.Token)
+	require.NoError(t, err)
+	assert.Equal(t, "user-validate", got.UserID)
+	assert.Equal(t, "cli-validate", got.CLISessionID)
+	assert.False(t, got.Consumed)
+
+	// A second ValidateToken on the same token still succeeds — the
+	// token remains unconsumed and reusable for the verify step.
+	got2, err := svc.ValidateToken(token.Token)
+	require.NoError(t, err)
+	assert.False(t, got2.Consumed)
+
+	// ValidateAndConsumeToken must still work afterwards (the
+	// non-consuming validate did not consume it).
+	consumed, err := svc.ValidateAndConsumeToken(token.Token)
+	require.NoError(t, err)
+	assert.True(t, consumed.Consumed)
+
+	// Now ValidateToken must reject it as consumed.
+	_, err = svc.ValidateToken(token.Token)
+	assert.True(t, errors.Is(err, constants.ErrEnrollmentTokenConsumed))
+}
+
 func TestEnrollmentToken_CleanupExpiredTokens(t *testing.T) {
 	svc := newTestEnrollmentTokenService(t)
 

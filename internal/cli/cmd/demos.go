@@ -1194,10 +1194,11 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool) error {
 // enrollDemoHost performs inline host-CLI enrollment against the demo gateway
 // for notary demos (dhs, fedramp). It points the CLI config at the demo
 // gateway's HTTP/HTTPS ports, waits for the gateway to become healthy, runs
-// performEnroll in-process (which opens a browser for passkey registration),
-// loads the resulting credentials, and returns the host user identity. The
-// endpoint overrides are cleared on return so subsequent operations in the
-// same process are unaffected.
+// the EnrollmentCoordinator in-process (which installs the demo gateway root
+// into OS trust BEFORE opening the browser for passkey registration), loads
+// the resulting credentials, and returns the host user identity. The endpoint
+// overrides are cleared on return so subsequent operations in the same process
+// are unaffected.
 func enrollDemoHost(cmd *cobra.Command, org, demoDir string) (hostIdentity, error) {
 	httpPort := demoHTTPPort(org)
 	httpsPort := demoHTTPSPort(org)
@@ -1233,7 +1234,17 @@ func enrollDemoHost(cmd *cobra.Command, org, demoDir string) (hostIdentity, erro
 	cmd.Printf("  This demo requires real human WebAuthn approvals.\n")
 	cmd.Printf("  Enrolling a passkey now (opens your browser)...\n\n")
 
-	if err := performEnroll(cmd, fileSvc, cfg, false); err != nil {
+	// Use the shared enrollment coordinator with system trust installation
+	// enabled by default (the demo gateway root must be trusted before the
+	// browser opens so the passkey ceremony can reach the console). The
+	// coordinator owns the state machine: bootstrap, recovery, rotation, or
+	// reuse. The demo-rooted fileSvc/cfg keep demo credentials isolated.
+	coordinator := enrollCoordinatorFactory(func(format string, args ...any) {
+		cmd.Printf(format+"\n", args...)
+	}, fileSvc, cfg)
+	if _, err := coordinator.Enroll(cmd.Context(), auth.EnrollmentOptions{
+		NoSystemTrust: false, // demo flow installs the demo gateway root
+	}); err != nil {
 		return hostIdentity{}, fmt.Errorf("demos run: enroll: %w", err)
 	}
 

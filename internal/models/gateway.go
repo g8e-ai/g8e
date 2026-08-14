@@ -411,6 +411,7 @@ type DeviceEnrollmentResponse struct {
 	CLICert           string `json:"cli_cert"`
 	CLICertChain      string `json:"cli_cert_chain"`
 	UserID            string `json:"user_id"`
+	Posture           string `json:"posture,omitempty"`
 	ActuatorKeyID     string `json:"actuator_key_id,omitempty"`
 	ActuatorPubKey    string `json:"actuator_pub_key,omitempty"`
 	Error             string `json:"error,omitempty"`

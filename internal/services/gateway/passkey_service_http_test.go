@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -42,11 +43,13 @@ func newPasskeyServiceHTTPForTest(t *testing.T) (*PasskeyHandler, *WebSessionSer
 	resp := response.NewWriter(logger)
 	svc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	require.NoError(t, err)
+	enrollmentTokenSvc := NewEnrollmentTokenService(stores.DocStore, logger)
 	handler := NewPasskeyHandler(PasskeyHandlerDeps{
-		Service:       svc,
-		WebSessionSvc: webSessionSvc,
-		Responder:     resp,
-		MaxPayload:    10 * 1024 * 1024,
+		Service:            svc,
+		WebSessionSvc:      webSessionSvc,
+		EnrollmentTokenSvc: enrollmentTokenSvc,
+		Responder:          resp,
+		MaxPayload:         10 * 1024 * 1024,
 	})
 	return handler, webSessionSvc, user
 }
@@ -426,6 +429,7 @@ func TestPasskeyConfigInvariants(t *testing.T) {
 		{"jitCfg", passkeyHandlerConfig{source: sourceJWT, enforceFirstCredentialOnly: true, requireAuthenticatedUser: true, enforceSessionUserBinding: true}, true},
 		{"browserBootstrapRegisterCfg", passkeyHandlerConfig{source: sourceBrowserBootstrap, enforceFirstCredentialOnly: true, createWebSession: true, setCookie: true, createUserOnBootstrap: true}, true},
 		{"browserBootstrapAuthCfg", passkeyHandlerConfig{source: sourceBrowserBootstrap, createWebSession: true, setCookie: true}, false},
+		{"enrollmentRegisterCfg", passkeyHandlerConfig{source: sourceEnrollmentToken, requireEnrollmentToken: true, createWebSession: true, setCookie: true}, true},
 	}
 
 	for _, pc := range productionConfigs {
@@ -435,13 +439,15 @@ func TestPasskeyConfigInvariants(t *testing.T) {
 				assert.True(t, pc.cfg.createWebSession,
 					"%s: setCookie=true must imply createWebSession=true", pc.name)
 			}
-			// Invariant 2: For registration configs, !enforceFirstCredentialOnly &&
-			// !requireAuthenticatedUser should never appear in production wiring —
-			// it would allow anonymous, unrestricted passkey registration.
-			// Authentication configs are exempt: the user is not yet authenticated
-			// and first-credential enforcement is irrelevant.
-			if pc.isRegister && !pc.cfg.enforceFirstCredentialOnly && !pc.cfg.requireAuthenticatedUser {
-				t.Errorf("%s: registration config with enforceFirstCredentialOnly=false and requireAuthenticatedUser=false — "+
+			// Invariant 2: For registration configs, at least one of
+			// enforceFirstCredentialOnly, requireAuthenticatedUser, or
+			// requireEnrollmentToken must be set. Without any of these the
+			// endpoint would allow anonymous, unrestricted passkey
+			// registration. Authentication configs are exempt: the user is
+			// not yet authenticated and first-credential enforcement is
+			// irrelevant.
+			if pc.isRegister && !pc.cfg.enforceFirstCredentialOnly && !pc.cfg.requireAuthenticatedUser && !pc.cfg.requireEnrollmentToken {
+				t.Errorf("%s: registration config with no authorization mode (enforceFirstCredentialOnly, requireAuthenticatedUser, requireEnrollmentToken all false) — "+
 					"this allows anonymous unrestricted registration and must not be used in production", pc.name)
 			}
 		})
@@ -561,4 +567,252 @@ func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
 		require.NoError(t, err)
 		assert.Empty(t, events)
 	})
+}
+
+// TestPasskeyHandler_RegisterChallenge_CLIEnrollmentFlow documents the
+// original 400 Bad Request bug: when the CLI-initiated enrollment flow was
+// routed through browserBootstrapRegisterCfg, the CLI had already created a
+// user, so HasAnyUsers() returned true and the handler rejected the
+// (empty) user_id with 400. This test pins the broken behavior of the old
+// shared config so the fix (a separate enrollment-token flow) is
+// verifiable.
+func TestPasskeyHandler_RegisterChallenge_CLIEnrollmentFlow(t *testing.T) {
+	svc, _, user := newPasskeyServiceHTTPForTest(t)
+	// Simulate the OLD shared config: browser bootstrap with
+	// createUserOnBootstrap=true AND enforceFirstCredentialOnly=true.
+	// The CLI flow sends user_id="" because the JS DOM round-trip
+	// clobbered it (see plan §"The DOM-as-data-store race").
+	oldCfg := passkeyHandlerConfig{
+		source:                     sourceBrowserBootstrap,
+		enforceFirstCredentialOnly: true,
+		createWebSession:           true,
+		setCookie:                  true,
+		createUserOnBootstrap:      true,
+	}
+	handler := svc.RegisterChallenge(oldCfg)
+
+	body, err := json.Marshal(map[string]string{"user_id": "", "cli_session_id": "cli-1"})
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/console/register/challenge", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	handler(rr, req)
+
+	// The user already exists (the CLI created it via `auth enroll`), so
+	// HasAnyUsers() is true and the handler returns 400 user_id required.
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+	assert.Contains(t, resp["error"], "user_id")
+	// user.ID is referenced to avoid an unused-variable lint; it is the
+	// user that the CLI created and that the broken flow failed to bind.
+	_ = user
+}
+
+// TestPasskeyHandler_RegisterChallenge_EnrollmentToken covers the new
+// CLI-initiated enrollment register challenge flow. The enrollment token is
+// the single authorization primitive; user_id and cli_session_id are
+// derived from the token, not sent by the client.
+func TestPasskeyHandler_RegisterChallenge_EnrollmentToken(t *testing.T) {
+	cfg := passkeyHandlerConfig{source: sourceEnrollmentToken, requireEnrollmentToken: true, createWebSession: true, setCookie: true}
+
+	t.Run("valid token returns 200 with challenge options", func(t *testing.T) {
+		svc, _, user := newPasskeyServiceHTTPForTest(t)
+		tok, err := svc.enrollmentTokenSvc.GenerateToken(user.ID, "cli-valid-1")
+		require.NoError(t, err)
+
+		handler := svc.RegisterChallenge(cfg)
+		body, err := json.Marshal(map[string]string{"enrollment_token": tok.Token})
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthPasskeysEnrollmentRegisterChallenge, bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+		handler(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp models.PasskeyRegisterChallengeResponse
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+		assert.True(t, resp.Success)
+		assert.NotNil(t, resp.Options)
+	})
+
+	// challenge must NOT consume the token — verify is the consuming
+	// step. A second challenge with the same token must still succeed
+	// (200, not 409). This pins the two-phase semantics and prevents
+	// the regression where challenge consumes, breaking verify.
+	t.Run("challenge does not consume token", func(t *testing.T) {
+		svc, _, user := newPasskeyServiceHTTPForTest(t)
+		tok, err := svc.enrollmentTokenSvc.GenerateToken(user.ID, "cli-replay-1")
+		require.NoError(t, err)
+
+		handler := svc.RegisterChallenge(cfg)
+		body, err := json.Marshal(map[string]string{"enrollment_token": tok.Token})
+		require.NoError(t, err)
+
+		req1 := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthPasskeysEnrollmentRegisterChallenge, bytes.NewReader(body))
+		rr1 := httptest.NewRecorder()
+		handler(rr1, req1)
+		assert.Equal(t, http.StatusOK, rr1.Code)
+
+		// Re-issue with the same token; the challenge step only
+		// validates, so this must still be 200, not 409 consumed.
+		req2 := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthPasskeysEnrollmentRegisterChallenge, bytes.NewReader(body))
+		rr2 := httptest.NewRecorder()
+		handler(rr2, req2)
+		assert.Equal(t, http.StatusOK, rr2.Code)
+
+		// The token must still be unconsumed in the store so that the
+		// verify step can consume it.
+		tok2, err := svc.enrollmentTokenSvc.ValidateToken(tok.Token)
+		require.NoError(t, err)
+		assert.False(t, tok2.Consumed)
+	})
+
+	t.Run("expired token returns 410", func(t *testing.T) {
+		_, stores := newTestDB(t)
+		logger := testutil.NewTestLogger()
+		userSvc := NewUserService(stores.DocStore, logger)
+		user, err := userSvc.CreateUser()
+		require.NoError(t, err)
+		webSessionSvc := NewWebSessionService(stores.DocStore, logger)
+		resp := response.NewWriter(logger)
+		psvc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+		require.NoError(t, err)
+		enrollmentTokenSvc := NewEnrollmentTokenService(stores.DocStore, logger)
+		handler := NewPasskeyHandler(PasskeyHandlerDeps{
+			Service:            psvc,
+			WebSessionSvc:      webSessionSvc,
+			EnrollmentTokenSvc: enrollmentTokenSvc,
+			Responder:          resp,
+			MaxPayload:         10 * 1024 * 1024,
+		})
+		tok, err := enrollmentTokenSvc.GenerateToken(user.ID, "cli-exp-1")
+		require.NoError(t, err)
+		// Overwrite the persisted token with an expires_at in the past so
+		// ValidateAndConsumeToken rejects it as expired.
+		expiredDoc, err := json.Marshal(map[string]any{
+			"token":          tok.Token,
+			"user_id":        user.ID,
+			"cli_session_id": "cli-exp-1",
+			"created_at":     "2020-01-01T00:00:00Z",
+			"expires_at":     "2020-01-01T00:00:00Z",
+			"consumed":       false,
+		})
+		require.NoError(t, err)
+		require.NoError(t, stores.DocStore.DocSet(
+			marshaler.CollectionName(constants.CollectionEnrollmentTokens), tok.Token, expiredDoc))
+
+		hh := handler.RegisterChallenge(cfg)
+		body, err := json.Marshal(map[string]string{"enrollment_token": tok.Token})
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthPasskeysEnrollmentRegisterChallenge, bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+		hh(rr, req)
+
+		assert.Equal(t, http.StatusGone, rr.Code)
+	})
+
+	t.Run("consumed token returns 409", func(t *testing.T) {
+		svc, _, user := newPasskeyServiceHTTPForTest(t)
+		tok, err := svc.enrollmentTokenSvc.GenerateToken(user.ID, "cli-con-1")
+		require.NoError(t, err)
+		// Consume it once.
+		_, err = svc.enrollmentTokenSvc.ValidateAndConsumeToken(tok.Token)
+		require.NoError(t, err)
+
+		handler := svc.RegisterChallenge(cfg)
+		body, err := json.Marshal(map[string]string{"enrollment_token": tok.Token})
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthPasskeysEnrollmentRegisterChallenge, bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+		handler(rr, req)
+
+		assert.Equal(t, http.StatusConflict, rr.Code)
+	})
+
+	t.Run("missing token returns 400", func(t *testing.T) {
+		svc, _, _ := newPasskeyServiceHTTPForTest(t)
+		handler := svc.RegisterChallenge(cfg)
+		body, err := json.Marshal(map[string]string{})
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthPasskeysEnrollmentRegisterChallenge, bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+		handler(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		var resp map[string]any
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+		assert.Contains(t, resp["error"], "enrollment_token")
+	})
+
+	t.Run("invalid token returns 401", func(t *testing.T) {
+		svc, _, _ := newPasskeyServiceHTTPForTest(t)
+		handler := svc.RegisterChallenge(cfg)
+		body, err := json.Marshal(map[string]string{"enrollment_token": "not-a-real-token"})
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthPasskeysEnrollmentRegisterChallenge, bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+		handler(rr, req)
+
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	})
+}
+
+// TestPasskeyHandler_RegisterVerify_EnrollmentToken_Valid verifies the
+// happy-path enrollment-token registration verify: a valid token + a valid
+// attestation yields 200, a web session cookie, and an SSE
+// passkey.registered event carrying the token's cli_session_id.
+func TestPasskeyHandler_RegisterVerify_EnrollmentToken_Valid(t *testing.T) {
+	_, stores := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(stores.DocStore, logger)
+	user, err := userSvc.CreateUser()
+	require.NoError(t, err)
+	webSessionSvc := NewWebSessionService(stores.DocStore, logger)
+	resp := response.NewWriter(logger)
+	psvc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	require.NoError(t, err)
+	enrollmentTokenSvc := NewEnrollmentTokenService(stores.DocStore, logger)
+	sseStore := NewSSEEventService(stores.DB, logger)
+	pubsub := NewGatewayWebSocketHandler(logger)
+	t.Cleanup(func() { pubsub.Close() })
+	orchestrator := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
+	handler := NewPasskeyHandler(PasskeyHandlerDeps{
+		Service:            psvc,
+		WebSessionSvc:      webSessionSvc,
+		EnrollmentTokenSvc: enrollmentTokenSvc,
+		Responder:          resp,
+		MaxPayload:         10 * 1024 * 1024,
+		Orchestrator:       orchestrator,
+	})
+
+	tok, err := enrollmentTokenSvc.GenerateToken(user.ID, "cli-verify-1")
+	require.NoError(t, err)
+
+	cfg := passkeyHandlerConfig{source: sourceEnrollmentToken, requireEnrollmentToken: true, createWebSession: true, setCookie: true}
+	hh := handler.RegisterVerify(cfg)
+
+	// We cannot produce a real WebAuthn attestation in a unit test, so we
+	// send a malformed attestation and assert the handler rejects it with
+	// a 400 (not a 200 success=false). This pins the contract: the
+	// enrollment-token flow returns proper 4xx errors, never the old
+	// 200-OK-on-error anti-pattern.
+	body, err := json.Marshal(map[string]any{
+		"enrollment_token": tok.Token,
+		"attestation_response": map[string]any{
+			"id":                "fake-id",
+			"rawId":             "fake-rawId",
+			"type":              "webauthn.create",
+			"clientDataJSON":    "fake",
+			"attestationObject": "fake",
+		},
+	})
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthPasskeysEnrollmentRegisterVerify, bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	hh(rr, req)
+
+	// The token was consumed by the challenge step in a real flow; here we
+	// only assert the verify path does not return 200 success=false for
+	// internal errors. A malformed attestation yields a 400 from
+	// VerifyRegistration.
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }

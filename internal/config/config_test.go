@@ -14,6 +14,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -37,6 +38,7 @@ func TestLoad_Defaults(t *testing.T) {
 
 	cfg, err := Load(LoadOptions{
 		OperatorEndpoint: constants.DefaultEndpoint,
+		Posture:          PostureDoctrine,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
@@ -44,8 +46,8 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, constants.ComponentNameG8EO, cfg.ComponentName)
 	assert.Equal(t, "g8e", cfg.ProjectID)
 	assert.Equal(t, 25, cfg.MaxConcurrentTasks)
-	// Outbound mode defaults to notary posture since L3Notary is nil
-	assert.Equal(t, PostureNotary, cfg.Posture)
+	// The operator uses the gateway-provided posture; it has no default of its own.
+	assert.Equal(t, PostureDoctrine, cfg.Posture)
 	assert.Equal(t, 2048, cfg.MaxMemoryMB)
 	assert.Equal(t, 30*time.Second, cfg.HeartbeatInterval)
 	assert.Equal(t, int64(1024), cfg.ExecutionVaultMaxSizeMB)
@@ -56,12 +58,25 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, wantWorkDir, cfg.WorkDir)
 }
 
+// TestLoad_NoPosture_FailsClosed verifies that the operator does not invent a
+// posture when the gateway did not send one. The operator has no posture of its
+// own and must fail closed rather than defaulting to a local posture.
+func TestLoad_NoPosture_FailsClosed(t *testing.T) {
+	cfg, err := Load(LoadOptions{
+		OperatorEndpoint: constants.DefaultEndpoint,
+	})
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.True(t, errors.Is(err, constants.ErrPostureRequired), "expected ErrPostureRequired, got: %v", err)
+}
+
 func TestLoad_WorkDir_Flag(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	cfg, err := Load(LoadOptions{
 		OperatorEndpoint: constants.DefaultEndpoint,
 		WorkDir:          tmpDir,
+		Posture:          PostureDoctrine,
 	})
 	require.NoError(t, err)
 
@@ -71,6 +86,7 @@ func TestLoad_WorkDir_Flag(t *testing.T) {
 func TestLoad_FieldPassthrough(t *testing.T) {
 	cfg, err := Load(LoadOptions{
 		OperatorEndpoint: constants.DefaultEndpoint,
+		Posture:          PostureDoctrine,
 	})
 	require.NoError(t, err)
 
@@ -81,6 +97,7 @@ func TestLoad_HTTPPortOverride(t *testing.T) {
 	cfg, err := Load(LoadOptions{
 		OperatorEndpoint: constants.DefaultEndpoint,
 		HTTPPort:         constants.Ports.OperatorHttps,
+		Posture:          PostureDoctrine,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, constants.Ports.OperatorHttps, cfg.HTTPPort)
@@ -118,6 +135,7 @@ func TestLoad_TLSServerName(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg, err := Load(LoadOptions{
 				OperatorEndpoint: tt.endpoint,
+				Posture:          PostureDoctrine,
 			})
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantServerName, cfg.TLSServerName)
@@ -304,6 +322,7 @@ func TestLoadGateway_RejectsPortZeroInProduction(t *testing.T) {
 func TestLoad_HeartbeatIntervalDefault(t *testing.T) {
 	cfg, err := Load(LoadOptions{
 		OperatorEndpoint: constants.DefaultEndpoint,
+		Posture:          PostureDoctrine,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 30*time.Second, cfg.HeartbeatInterval)
@@ -313,6 +332,7 @@ func TestLoad_HeartbeatIntervalOverride(t *testing.T) {
 	cfg, err := Load(LoadOptions{
 		OperatorEndpoint:  constants.DefaultEndpoint,
 		HeartbeatInterval: 90 * time.Second,
+		Posture:           PostureDoctrine,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 90*time.Second, cfg.HeartbeatInterval)
@@ -322,6 +342,7 @@ func TestLoad_HeartbeatIntervalZeroUsesDefault(t *testing.T) {
 	cfg, err := Load(LoadOptions{
 		OperatorEndpoint:  constants.DefaultEndpoint,
 		HeartbeatInterval: 0,
+		Posture:           PostureDoctrine,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 30*time.Second, cfg.HeartbeatInterval)

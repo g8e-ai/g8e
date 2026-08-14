@@ -72,9 +72,11 @@ COPY --from=builder /build/docs/reference /docs/reference
 # Expose default ports (can be overridden at runtime)
 EXPOSE 8080 8443
 
-# Health check - use HTTP endpoint
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/api/v1/health || exit 1
+# No image-level HEALTHCHECK: the same image runs as both gateway (HTTP server
+# on 8080) and operator (outbound WebSocket client that listens on nothing).
+# A healthcheck baked into the image would always fail for the operator.
+# Healthchecks are declared per-service in docker-compose.yml, where each
+# service can express its own liveness signal.
 
 # Set entrypoint
 # The same binary can run in gateway mode (doctrine) or operator mode (standard)

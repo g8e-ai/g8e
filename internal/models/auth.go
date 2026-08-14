@@ -177,6 +177,11 @@ type OperatorSlotResponse struct {
 	Operators []OperatorDocumentGo `json:"operators"`
 }
 
+type OperatorResponse struct {
+	Success  bool                `json:"success"`
+	Operator *OperatorDocumentGo `json:"operator,omitempty"`
+}
+
 type TerminateOperatorRequest struct {
 	OperatorID string `json:"operator_id"`
 	UserID     string `json:"user_id"`
@@ -540,4 +545,109 @@ type EnrollmentToken struct {
 	ExpiresAt    time.Time  `json:"expires_at"`            // Token expiration (5 minutes)
 	Consumed     bool       `json:"consumed"`              // Whether the token has been used
 	ConsumedAt   *time.Time `json:"consumed_at,omitempty"` // When the token was consumed
+}
+
+// CLIRecoveryState represents the lifecycle state of a CLI recovery request.
+type CLIRecoveryState string
+
+const (
+	CLIRecoveryStatePending   CLIRecoveryState = "pending"
+	CLIRecoveryStateApproved  CLIRecoveryState = "approved"
+	CLIRecoveryStateCompleted CLIRecoveryState = "completed"
+	CLIRecoveryStateDenied    CLIRecoveryState = "denied"
+	CLIRecoveryStateExpired   CLIRecoveryState = "expired"
+)
+
+// CLIRecoveryRequest is the persisted state of a CLI recovery request.
+// The gateway stores a hash of the opaque token (never the raw token),
+// the CSR public-key fingerprint for proof-of-possession at completion,
+// and the approving user ID after the browser approval step.
+type CLIRecoveryRequest struct {
+	ID                string           `json:"request_id"`                   // Request ID (UUID)
+	TokenHash         string           `json:"token_hash"`                   // SHA-256 hash of the opaque token (hex)
+	CLICSRPEM         string           `json:"cli_csr_pem"`                  // CSR submitted by the new CLI
+	CSRFingerprint    string           `json:"csr_fingerprint"`              // SHA-256 of the CSR public key (hex)
+	SystemFingerprint string           `json:"system_fingerprint,omitempty"` // OS fingerprint metadata
+	LocalOSUser       *LocalOSUser     `json:"local_os_user,omitempty"`      // OS user metadata
+	State             CLIRecoveryState `json:"state"`                        // pending/approved/completed/denied/expired
+	ApprovingUserID   string           `json:"approving_user_id,omitempty"`  // User who approved (set on approval)
+	CreatedAt         time.Time        `json:"created_at"`                   // Request creation timestamp
+	ExpiresAt         time.Time        `json:"expires_at"`                   // Request expiration
+	ApprovedAt        *time.Time       `json:"approved_at,omitempty"`        // When approved
+	CompletedAt       *time.Time       `json:"completed_at,omitempty"`       // When completed
+	DeniedAt          *time.Time       `json:"denied_at,omitempty"`          // When denied
+}
+
+// CLIRecoveryRequestRequest is the wire request for POST /api/v1/auth/cli/recovery/request.
+type CLIRecoveryRequestRequest struct {
+	CLICSRPEM         string       `json:"cli_csr_pem"`
+	SystemFingerprint string       `json:"system_fingerprint,omitempty"`
+	LocalOSUser       *LocalOSUser `json:"local_os_user,omitempty"`
+}
+
+// CLIRecoveryRequestResponse is the wire response for POST /api/v1/auth/cli/recovery/request.
+type CLIRecoveryRequestResponse struct {
+	Success     bool      `json:"success"`
+	RequestID   string    `json:"request_id"`
+	Token       string    `json:"token"`        // Opaque one-time token (only returned once)
+	ApprovalURL string    `json:"approval_url"` // Console URL for browser approval
+	ExpiresAt   time.Time `json:"expires_at"`
+}
+
+// CLIRecoveryStatusRequest is the wire request for GET /api/v1/auth/cli/recovery/status.
+// The token is passed as a query parameter.
+type CLIRecoveryStatusResponse struct {
+	Success bool             `json:"success"`
+	State   CLIRecoveryState `json:"state"`
+}
+
+// CLIRecoveryApproveRequest is the wire request for POST /api/v1/auth/cli/recovery/approve.
+// This is called from the browser console by an authenticated user.
+type CLIRecoveryApproveRequest struct {
+	Token   string `json:"token"`   // The opaque token from the URL fragment
+	Approve bool   `json:"approve"` // true to approve, false to deny
+}
+
+// CLIRecoveryApproveResponse is the wire response for POST /api/v1/auth/cli/recovery/approve.
+type CLIRecoveryApproveResponse struct {
+	Success bool             `json:"success"`
+	State   CLIRecoveryState `json:"state"`
+}
+
+// CLIRecoveryCompleteRequest is the wire request for POST /api/v1/auth/cli/recovery/complete.
+// The CLI polls this endpoint with the opaque token and a proof-of-possession signature
+// over the request ID using the CSR private key.
+type CLIRecoveryCompleteRequest struct {
+	Token     string `json:"token"`     // Opaque one-time token
+	Signature string `json:"signature"` // Base64-encoded signature over the request ID using the CSR private key
+}
+
+// CLIRecoveryCompleteResponse is the wire response for POST /api/v1/auth/cli/recovery/complete.
+// Only returned after successful approval + proof-of-possession verification.
+type CLIRecoveryCompleteResponse struct {
+	Success           bool   `json:"success"`
+	CLISessionID      string `json:"cli_session_id"`
+	CLICert           string `json:"cli_cert"`
+	CLICertChain      string `json:"cli_cert_chain"`
+	HubTrustBundle    string `json:"hub_trust_bundle"`
+	UserID            string `json:"user_id"`
+	OperatorSessionID string `json:"operator_session_id,omitempty"`
+	OperatorID        string `json:"operator_id,omitempty"`
+}
+
+// CLIRotationRequest is the wire request for POST /api/v1/auth/cli/rotate.
+// This is an mTLS-protected endpoint; the current user and CLI session are
+// derived from the authenticated certificate context.
+type CLIRotationRequest struct {
+	CLICSRPEM string `json:"cli_csr_pem"`
+}
+
+// CLIRotationResponse is the wire response for POST /api/v1/auth/cli/rotate.
+type CLIRotationResponse struct {
+	Success        bool   `json:"success"`
+	CLISessionID   string `json:"cli_session_id"`
+	CLICert        string `json:"cli_cert"`
+	CLICertChain   string `json:"cli_cert_chain"`
+	HubTrustBundle string `json:"hub_trust_bundle"`
+	UserID         string `json:"user_id"`
 }

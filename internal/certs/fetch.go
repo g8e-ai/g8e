@@ -37,8 +37,26 @@ import (
 //
 // The optional caFingerprint parameter enables OOB pinning verification. If provided,
 // the fetched CA bundle's SHA-256 fingerprint must match the expected value.
+//
+// FetchTrustBundle uses a default 15s-timeout HTTP client with Go's default
+// dialer. Callers that need a custom transport (e.g. the CLI's IPv4-only
+// dialer to force `localhost` to resolve to 127.0.0.1 on Windows) should use
+// FetchTrustBundleWithClient instead.
 func FetchTrustBundle(ctx context.Context, caURL string, caFingerprint string) ([]byte, error) {
-	client := &http.Client{Timeout: 15 * time.Second}
+	return FetchTrustBundleWithClient(ctx, caURL, caFingerprint, &http.Client{Timeout: 15 * time.Second})
+}
+
+// FetchTrustBundleWithClient is FetchTrustBundle with a caller-supplied
+// *http.Client. The client's transport (and thus its DialContext) governs
+// how the CA URL is dialed. This is the variant the CLI uses so the
+// discovery fetch goes through the IPv4-only dialer, matching the rest of
+// the CLI auth path. The original FetchTrustBundle is preserved for
+// backward compatibility with gateway-side and other callers that do not
+// need IPv4 restriction.
+func FetchTrustBundleWithClient(ctx context.Context, caURL string, caFingerprint string, client *http.Client) ([]byte, error) {
+	if client == nil {
+		return nil, fmt.Errorf("%w: fetch trust bundle: nil client", constants.ErrHTTPRequestCreateFailed)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, caURL, nil)
 	if err != nil {

@@ -23,6 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/certs"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/httpclient"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
@@ -45,14 +46,12 @@ func BuildMTLSClient(fileSvc fs.RuntimeFileService, cfg *config.Config, timeout 
 	}
 
 	return &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				Certificates:     []tls.Certificate{cliCert},
-				RootCAs:          caPool,
-				MinVersion:       tls.VersionTLS13,
-				CurvePreferences: certs.FIPSCurvePreferences(),
-			},
-		},
+		Transport: httpclient.NewIPv4Transport(&tls.Config{
+			Certificates:     []tls.Certificate{cliCert},
+			RootCAs:          caPool,
+			MinVersion:       tls.VersionTLS13,
+			CurvePreferences: certs.FIPSCurvePreferences(),
+		}),
 		Timeout: timeout,
 	}, nil
 }

@@ -158,6 +158,64 @@ func GenerateTestCertificate(t *testing.T, commonName string) (certPEM string, k
 	return certPEM, keyPEM
 }
 
+// GenerateTestSignedCert generates a leaf certificate signed by the given parent
+// CA certificate/key and returns the cert PEM and the leaf's ECDSA private key.
+// The leaf has client+server auth key usages and is NOT a CA. Use this with
+// GenerateTestCA to build a root + leaf pair where the leaf chains to the root.
+func GenerateTestSignedCert(t *testing.T, commonName string, parent *x509.Certificate, parentKey *ecdsa.PrivateKey) (certPEM string, key *ecdsa.PrivateKey) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	require.NoError(t, err)
+	tmpl := x509.Certificate{
+		SerialNumber: serial,
+		Subject:      pkix.Name{CommonName: commonName},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, &tmpl, parent, &key.PublicKey, parentKey)
+	require.NoError(t, err)
+	certPEM = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
+	return certPEM, key
+}
+
+// GenerateTestSignedCertWithExpiry generates a leaf certificate signed by the
+// given parent CA with a custom NotAfter. Returns the cert PEM and the leaf's
+// ECDSA private key. Use this to test expiry-based rotation/recovery decisions.
+func GenerateTestSignedCertWithExpiry(t *testing.T, commonName string, parent *x509.Certificate, parentKey *ecdsa.PrivateKey, notAfter time.Time) (certPEM string, key *ecdsa.PrivateKey) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	require.NoError(t, err)
+	tmpl := x509.Certificate{
+		SerialNumber: serial,
+		Subject:      pkix.Name{CommonName: commonName},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     notAfter,
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, &tmpl, parent, &key.PublicKey, parentKey)
+	require.NoError(t, err)
+	certPEM = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
+	return certPEM, key
+}
+
+// ParseTestCert decodes a PEM-encoded certificate and returns the parsed
+// x509.Certificate. Fails the test on decode/parse error.
+func ParseTestCert(t *testing.T, pemStr string) *x509.Certificate {
+	t.Helper()
+	block, _ := pem.Decode([]byte(pemStr))
+	require.NotNil(t, block, "failed to decode PEM")
+	cert, err := x509.ParseCertificate(block.Bytes)
+	require.NoError(t, err)
+	return cert
+}
+
 // GenerateTestECPrivateKey generates a minimal valid EC private key PEM.
 func GenerateTestECPrivateKey(t *testing.T) string {
 	t.Helper()

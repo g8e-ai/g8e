@@ -14,11 +14,19 @@
 package auth
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+// programSender is the interface for sending messages to a bubbletea program.
+// *tea.Program implements this via its Send method. Tests use a channel-based
+// mock to verify message delivery without running a real terminal program.
+type programSender interface {
+	Send(msg tea.Msg)
+}
 
 type passkeyRegisteredMsg struct{}
 
@@ -38,7 +46,10 @@ func tickCmd() tea.Cmd {
 
 // enrollModel is a minimal bubbletea model for the passkey enrollment waiting UX.
 // It displays a spinner, the console URL, and exits when a passkey.registered
-// event is received or the user cancels.
+// event is received, an error occurs, or the user cancels.
+//
+// On user cancellation (q/ctrl+c), the model exits with context.Canceled so
+// the registrar can cancel the SSE context and clean up the stream.
 type enrollModel struct {
 	consoleURL string
 	done       bool
@@ -68,6 +79,7 @@ func (m enrollModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		key := msg.String()
 		if key == "q" || key == "ctrl+c" {
+			m.err = context.Canceled
 			return m, tea.Quit
 		}
 	}

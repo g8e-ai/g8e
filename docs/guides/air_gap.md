@@ -5,8 +5,8 @@ parent: Guides
 
 # Air-Gap Architecture
 
-Last Updated: 2026-08-07
-Version: v1.7.0
+Last Updated: 2026-08-14
+Version: v1.7.2
 
 The g8e platform operates in environments without internet connectivity. The platform supports air-gapped deployments with zero runtime external network dependencies, using the g8e Gateway, the g8e Operator, and fully vendored Go dependencies in the root `vendor/` directory. The platform supports both binary deployment and containerized deployment via Docker.
 
@@ -30,7 +30,7 @@ In an air-gapped deployment, the g8e Gateway operates as the central Policy Deci
 
 The gateway exposes two logical communication surfaces:
 
-- **HTTP (port 8080)**: Serves health checks, local trust bundles, bootstrap CA trust scripts, device and app enrollment, deploy scripts, and binary downloads. Unregistered paths return 404.
+- **HTTP (port 8080)**: Serves health checks, local trust bundles, CA discovery, CLI recovery request/status/complete (token-scoped), device and app enrollment, deploy scripts, and binary downloads. Unregistered paths return 404. The old trust-script routes (`/web-cert.sh`, `/web-cert.ps1`, `/.well-known/g8e/pki/trust-windows`) are removed; OS trust installation is handled by `auth enroll` directly.
 - **HTTPS (port 8443)**: Receives governance envelope mutation payloads, handles persistence, runs WebSocket pub/sub and SSE event streaming, serves MCP and A2A ingress, provides WebAuthn passkey authentication, and hosts the browser management console.
 
 Surfaces with conflicting TLS client-authentication requirements do not share a network port. The initialization sequence validates port isolation and fails if configurations overlap.

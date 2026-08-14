@@ -9,13 +9,12 @@ The protocol (Go + Python) and the platform binary share the same version number
 ## How to Use This Document
 
 1. **Inventory the changes**: Diff the release range and categorize every change (see [Change Inventory](#change-inventory)). This is the most important step; everything else depends on it.
-2. **Update documentation to match the code**: Review every doc area against the change inventory. Fix inaccuracies, document missing features, remove stale references (see [Documentation Reconciliation](#documentation-reconciliation)). This is where the real work is.
+2. **Update documentation to match the code**: For every doc in scope, do a full review of the entire doc against the current code. Fix inaccuracies, document missing features, remove stale references, and bump the `Version:`/`Last Updated:` headers in the same pass (see [Documentation Reconciliation](#documentation-reconciliation)). This is where the real work is.
 3. **Write release notes**: Create `docs/release_notes/vX.Y.x/vX.Y.Z.md` from the change inventory (see [Release Notes](#release-notes)). The CHANGELOG entry is a summary of this.
 4. **Bump version files**: Set `VERSION`, sync Python files, add CHANGELOG row (see [Version-Bearing Files](#version-bearing-files)). This is mechanical.
-5. **Update doc headers**: Bump `Version:` / `Last Updated:` headers **only** in docs you actually modified in step 2 (see [Documentation Headers](#documentation-headers)).
-6. **Run [Verification](#verification)** to catch any missed files.
-7. **Commit and open a PR**: CI runs lint, tests, and version sync checks. Review, approve, and merge the PR on GitHub.
-8. **After merge, pull main and run `make release`** to tag and push; GitHub Actions workflows create the release and upload assets (see [Release Workflow](#release-workflow)).
+5. **Run [Verification](#verification)** to catch any missed files — including docs modified in step 2 that didn't get their headers bumped.
+6. **Commit and open a PR**: CI runs lint, tests, and version sync checks. Review, approve, and merge the PR on GitHub.
+7. **After merge, pull main and run `make release`** to tag and push; GitHub Actions workflows create the release and upload assets (see [Release Workflow](#release-workflow)).
 
 ---
 
@@ -117,13 +116,15 @@ Review the following documentation areas against the change inventory. For each 
 
 ### How to Reconcile
 
-For each stale reference or missing feature found in the change inventory:
+For each doc that falls in scope (any doc touched by a code change in the release, or any doc that references an identifier that was renamed, removed, or changed), do a **full review of the entire doc against the current code** — not just the specific stale reference that flagged it. Read the whole file, verify every claim, command, path, signature, and behavior description against the actual source, and update everything that is inaccurate or missing. The version header bump is part of this review, not a separate mechanical step: a doc whose content was reviewed and updated gets its `Version:` and `Last Updated:` headers bumped in the same pass.
 
 1. Open the doc file
-2. Find the stale or missing section
-3. Update the prose to match the current code; use exact names, paths, and signatures from the actual source files
-4. Update the `Version:` and `Last Updated:` headers on that file (see [Documentation Headers](#documentation-headers))
+2. Read the entire doc end to end, checking every statement against the current code
+3. Update all inaccurate or missing prose to match the current code; use exact names, paths, and signatures from the actual source files
+4. Bump the `Version:` and `Last Updated:` headers on that file as part of the same edit (see [Documentation Headers](#documentation-headers)) — a reviewed-and-updated doc must carry the new version stamp
 5. Record the doc as modified; you'll need this list for verification
+
+A doc that was flagged as in scope but, on full review, turns out to already be accurate (nothing to fix) does **not** get a version bump and is not recorded as modified — the header reflects the last time a human changed the content, not the last time a human read it.
 
 ---
 
@@ -364,12 +365,12 @@ The following doc directories intentionally do **not** carry release `Version:` 
 `make release` handles version syncing, tagging, and pushing (see [Release Workflow](#release-workflow)). The following must still be done manually:
 
 - [ ] **1. Inventory changes**: Diff the release range and categorize every change (see [Change Inventory](#change-inventory))
-- [ ] **2. Reconcile documentation**: Review all doc areas against the change inventory. Fix inaccuracies, document missing features, remove stale references (see [Documentation Reconciliation](#documentation-reconciliation))
+- [ ] **2. Reconcile documentation**: For every doc in scope (touched by a code change, or referencing a renamed/removed/changed identifier), do a full review of the entire doc against the current code. Fix inaccuracies, document missing features, remove stale references, and bump the `Version:`/`Last Updated:` headers in the same pass (see [Documentation Reconciliation](#documentation-reconciliation))
 - [ ] **3. Write release notes**: Create `docs/release_notes/vX.Y.x/vX.Y.Z.md` from the change inventory
 - [ ] **4. `VERSION`**: Set to `vX.Y.Z`
 - [ ] **5. Sync Python files**: Run `make release` to auto-sync `pyproject.toml` + `__init__.py` from `VERSION` (it will sync and exit due to dirty working tree), or update both files manually
 - [ ] **6. `CHANGELOG.md`**: Add a table row to the major-version section (no `v` prefix in version column)
-- [ ] **7. Documentation headers**: Update version/date headers **only** in docs that were actually modified in step 2 (use `git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/` to identify them). Do not blanket-bump all headers.
+- [ ] **7. Documentation headers (verify)**: Confirm that every doc modified in step 2 carries the new `Version:`/`Last Updated:` headers, and that no doc *not* modified in step 2 was bumped. Use `git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/` to identify the modified set. Do not blanket-bump all headers.
 - [ ] **8. Run [Verification](#verification)** to catch any missed files
 - [ ] **9. Commit and open PR**: `git add -A && git commit -m "release: vX.Y.Z"`, push, and open a PR on GitHub. CI runs lint, tests, and version sync checks.
 - [ ] **10. Merge and release**: After the PR is merged, pull main and run `make release` to tag and push; GitHub Actions workflows create the release and upload assets

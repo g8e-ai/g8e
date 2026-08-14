@@ -17,12 +17,6 @@
 package auth
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
 	"fmt"
 	"os"
 	"os/exec"
@@ -35,52 +29,17 @@ import (
 // environment variable, avoiding command injection from string interpolation.
 const envCertPath = "G8E_CERT_PATH"
 
-// GenerateWindowsCSR generates a CSR with an ECDSA P-256 key on Windows.
-// If useTPM is true, the caller requests TPM-backed key generation; TPM support
-// is not yet implemented and a software-backed key is used in its place.
-func GenerateWindowsCSR(commonName string, useTPM bool) (string, *ecdsa.PrivateKey, error) {
-	return generateECDSACSR(commonName)
-}
-
-// generateECDSACSR generates a CSR with an ECDSA P-256 key, Client Auth + Server Auth EKU.
-func generateECDSACSR(commonName string) (string, *ecdsa.PrivateKey, error) {
-	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return "", nil, fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
-	}
-
-	template := x509.CertificateRequest{
-		Subject: pkix.Name{
-			CommonName:   commonName,
-			Organization: []string{"g8e"},
-		},
-		SignatureAlgorithm: x509.ECDSAWithSHA256,
-		DNSNames:           []string{"localhost", "g8e.local"},
-		ExtraExtensions: []pkix.Extension{
-			{
-				Id:       []int{2, 5, 29, 37},
-				Critical: false,
-				Value:    []byte{0x30, 0x14, 0x06, 0x08, 0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x02, 0x06, 0x08, 0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x01},
-			},
-		},
-	}
-
-	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &template, privKey)
-	if err != nil {
-		return "", nil, fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
-	}
-
-	csrPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "CERTIFICATE REQUEST",
-		Bytes: csrBytes,
-	})
-
-	return string(csrPEM), privKey, nil
-}
-
-// ImportCertificateToWindowsStore imports a signed certificate into the Windows Personal store.
+// ImportCertificateToWindowsStore imports a signed certificate into the
+// Windows CurrentUser Personal ("My") store. It does NOT remove any
+// existing certificates — old certs are left in place until they expire
+// naturally or are removed by an explicit, verified replacement flow.
+// The previous implementation deleted every cert whose subject contained
+// "g8e", which could remove unrelated or still-valid certificates.
+//
+// The system Root trust store (handled by SystemTrustInstaller) is
+// separate from this Personal client certificate store and is never
+// touched here.
 func ImportCertificateToWindowsStore(certPEM string) error {
-	// Create a temporary file for the certificate
 	tmpDir, err := os.MkdirTemp("", constants.WindowsTempCertImportPrefix)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrWindowsTempDirCreate, err)
@@ -98,16 +57,6 @@ func ImportCertificateToWindowsStore(certPEM string) error {
 		$certPath = $env:G8E_CERT_PATH
 		$store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My", "CurrentUser")
 		$store.Open("ReadWrite")
-		
-		# Remove existing g8e certificates
-		$certs = $store.Certificates
-		foreach ($cert in $certs) {
-			if ($cert.Subject -like "*g8e*") {
-				$store.Remove($cert)
-			}
-		}
-		
-		# Import new certificate
 		$cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($certPath)
 		$store.Add($cert)
 		$store.Close()

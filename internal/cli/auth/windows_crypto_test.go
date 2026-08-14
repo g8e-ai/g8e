@@ -20,26 +20,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-func TestGenerateWindowsCSR(t *testing.T) {
-	tests := []struct {
-		name       string
-		commonName string
-		useTPM     bool
-	}{
-		{name: "software-backed", commonName: "test-g8e-windows", useTPM: false},
-		{name: "tpm-requested-fallback", commonName: "test-g8e-windows-tpm", useTPM: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			csr, privKey, err := GenerateWindowsCSR(tt.commonName, tt.useTPM)
-			require.NoError(t, err)
-			assert.NotEmpty(t, csr)
-			assert.NotNil(t, privKey)
-			assert.Contains(t, csr, "CERTIFICATE REQUEST")
-		})
-	}
+// TestImportCertificateToWindowsStore_InvalidPEM verifies that importing
+// invalid PEM data returns an error. The full import path requires
+// PowerShell and the .NET X509Store, so only the error path is unit-tested.
+func TestImportCertificateToWindowsStore_InvalidPEM(t *testing.T) {
+	err := ImportCertificateToWindowsStore("not-a-cert")
+	assert.Error(t, err)
 }

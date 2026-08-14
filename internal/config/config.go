@@ -536,14 +536,16 @@ func Load(opts LoadOptions) (*Config, error) {
 		Term:  opts.Term,
 		TZ:    opts.TZ,
 
-		// Governance posture - default to notary for outbound mode (L1/L2/L3 strictly enforced)
+		// Governance posture - the operator has no posture of its own; it uses
+		// the gateway's posture, received at enrollment and passed via LoadOptions.
+		// Fail closed when no posture was supplied: the operator must not invent one.
 		Posture: opts.Posture,
 
 		// Lattice adapter (nil when disabled)
 		Lattice: opts.Lattice,
 	}
 	if cfg.Posture == "" {
-		cfg.Posture = PostureNotary
+		return nil, fmt.Errorf("config: %w", constants.ErrPostureRequired)
 	}
 
 	// Default PKIDir to .g8e/pki if not explicitly set

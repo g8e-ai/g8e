@@ -152,42 +152,21 @@ Return centralized error constants from `internal/constants/errors.go` for known
 
 ## Dependency Construction Model
 
-`mcp.GatewayService` uses a **single-phase construction model**: all dependencies
-are passed to `NewGatewayService` via the `Dependencies` struct and are immutable
-after construction. There is no `SetRuntimeDeps`, no `atomic.Pointer`, and no
-`runtimeReady()` gate.
+`mcp.GatewayService` uses a **single-phase construction model**: all dependencies are passed to `NewGatewayService` via the `Dependencies` struct and are immutable after construction. There is no `SetRuntimeDeps`, no `atomic.Pointer`, and no `runtimeReady()` gate.
 
-**Construction-phase** (`Dependencies` struct, immutable after `NewGatewayService`):
-`Logger`, `Responder`, `SuspendedStore`, `ScrubbingService`, `ThreatScanner`,
-`MaxPayloadBytes`, `Posture`, `A2ADownstreamURL`, `PublicBaseURL`, `AuditStore`,
-`FieldPathRegistryFactory`, `EnvProc`, `StateRootProvider`, `SigningKey`, `KeyID`,
-`DownstreamURL`, `DBService`, `SessionValidator`, `AuditLogger`,
-`L2ConsensusDeliberator`.
+**Construction-phase** (`Dependencies` struct, immutable after `NewGatewayService`): `Logger`, `Responder`, `SuspendedStore`, `ScrubbingService`, `ThreatScanner`, `MaxPayloadBytes`, `Posture`, `A2ADownstreamURL`, `PublicBaseURL`, `AuditStore`, `FieldPathRegistryFactory`, `EnvProc`, `StateRootProvider`, `SigningKey`, `KeyID`, `DownstreamURL`, `DBService`, `SessionValidator`, `AuditLogger`, `L2ConsensusDeliberator`.
 
-**Lazy forwarding adapters** break the circular dependency between
-`mcp.GatewayService` (needs `EnvProc` / `SessionValidator`) and
-`OperatorPubSubService` (needs `mcpGateway` for egress):
+**Lazy forwarding adapters** break the circular dependency between `mcp.GatewayService` (needs `EnvProc` / `SessionValidator`) and `OperatorPubSubService` (needs `mcpGateway` for egress):
 
-- `pubsub.GatewayEnvProcAdapter` — implements `governance.EnvelopeProcessor`,
-  delegates to `OperatorPubSubService` once it is constructed. The adapter is
-  pre-allocated in `GatewayModeService.build()` and passed to
-  `NewGatewayService` as `EnvProc`. `NewGatewayOperatorPubSubService` calls
-  `adapter.SetTarget(rs)` to wire the real target. Before `SetTarget` is called,
-  `ProcessEnvelope` returns `constants.ErrGatewayNotReady` (fail-closed).
-- `pubsub.GatewaySessionValidatorAdapter` — same pattern for
-  `mcp.SessionValidator`.
+- `pubsub.GatewayEnvProcAdapter` — implements `governance.EnvelopeProcessor`, delegates to `OperatorPubSubService` once it is constructed. The adapter is pre-allocated in `GatewayModeService.build()` and passed to `NewGatewayService` as `EnvProc`. `NewGatewayOperatorPubSubService` calls `adapter.SetTarget(rs)` to wire the real target. Before `SetTarget` is called, `ProcessEnvelope` returns `constants.ErrGatewayNotReady` (fail-closed).
+- `pubsub.GatewaySessionValidatorAdapter` — same pattern for `mcp.SessionValidator`.
 
-**Narrow setters for genuinely late-bound deps** (no circular dependency, no
-`atomic.Pointer`, no `runtimeReady()` guard — the fields are nil-checked at their
-call sites):
+**Narrow setters for genuinely late-bound deps** (no circular dependency, no `atomic.Pointer`, no `runtimeReady()` guard — the fields are nil-checked at their call sites):
 
-- `SetAuditLogger` — `AuditStore` comes from `CommandServiceConfig.AuditStore`,
-  configured in `serve/gateway.go` after `GatewayModeService` exists.
-- `SetL2ConsensusDeliberator` — the deliberator requires `GatewayModeService` to
-  exist for `ConsensusBootstrap`.
+- `SetAuditLogger` — `AuditStore` comes from `CommandServiceConfig.AuditStore`, configured in `serve/gateway.go` after `GatewayModeService` exists.
+- `SetL2ConsensusDeliberator` — the deliberator requires `GatewayModeService` to exist for `ConsensusBootstrap`.
 
-These two setters are the only post-construction mutators on `mcp.GatewayService`.
-All other dependencies are construction-phase only.
+These two setters are the only post-construction mutators on `mcp.GatewayService`. All other dependencies are construction-phase only.
 
 ## Constants & Doctrines
 

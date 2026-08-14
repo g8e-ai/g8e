@@ -26,6 +26,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/certs"
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/httpclient"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/paths"
 
@@ -259,9 +260,30 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		return fmt.Errorf("%w: %w", constants.ErrPubSubActuator, err)
 	}
 
-	// Create governance dependencies for transaction verification
-	// Use CanonicalDBService for canonical state root calculation (same schema as gateway mode)
-	stateRootProvider := vs.gatewayDB.GetStateRootSvc()
+	// Create governance dependencies for transaction verification.
+	// The gateway owns the state Merkle root; operators are leaves in the
+	// gateway's Merkle tree. When the operator is configured to talk to a
+	// gateway (OperatorEndpoint is set), it fetches the gateway's state root
+	// via the /api/v1/state endpoint and uses it for L4Warden verification
+	// instead of computing its own local root. In standalone mode (no
+	// gateway endpoint), fall back to the local StateRootService.
+	var stateRootProvider governance.StateRootProvider
+	if vs.config.Endpoint != "" {
+		httpClient, err := httpclient.NewWithTLSConfigAndServerName(vs.tlsConfig, vs.config.TLSServerName)
+		if err != nil {
+			return fmt.Errorf("g8eo: failed to create state root HTTP client: %w", err)
+		}
+		hostname := vs.config.Endpoint
+		if vs.config.TLSServerName != "" {
+			hostname = vs.config.TLSServerName
+		}
+		baseURL := fmt.Sprintf("https://%s:%d", hostname, vs.config.HTTPSPort)
+		stateRootProvider = governance.NewRemoteStateRootProvider(httpClient, baseURL, vs.logger)
+		vs.logger.Info("Using remote (gateway) state root provider", "state_url", baseURL+constants.APIPaths.State)
+	} else {
+		stateRootProvider = vs.gatewayDB.GetStateRootSvc()
+		vs.logger.Info("Using local state root provider (standalone mode)")
+	}
 	transactionAudit := &auditStoreTransactionStore{store: auditStore}
 	// L3Notary for outbound mode: CLI-based approval via suspended transactions
 	// Mutations requiring L3 are suspended and must be approved via CLI command

@@ -57,9 +57,18 @@ func dockerExecOperator(t *testing.T, container string, args ...string) string {
 // parseJSONFromOutput decodes the first JSON document found in CLI output.
 func parseJSONFromOutput(t *testing.T, output string, target interface{}) {
 	t.Helper()
-	start := strings.Index(output, "{")
-	if start < 0 {
-		start = strings.Index(output, "[")
+	objStart := strings.Index(output, "{")
+	arrStart := strings.Index(output, "[")
+	var start int
+	switch {
+	case objStart < 0 && arrStart < 0:
+		start = -1
+	case objStart < 0:
+		start = arrStart
+	case arrStart < 0:
+		start = objStart
+	default:
+		start = min(objStart, arrStart)
 	}
 	require.GreaterOrEqual(t, start, 0, "output contains no JSON document: %s", output)
 	require.NoError(t, json.NewDecoder(strings.NewReader(output[start:])).Decode(target))

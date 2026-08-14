@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-08-10
+Last Updated: 2026-08-14
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -87,6 +87,64 @@ Helpers: `failingFileSvcFactory(err)` returns a factory that always errors. `pan
 - **`configLoaderFor(cfg)`**: Returns a config loader closure that always returns the given `cfg`.
 - **`mustRel(t, fileSvc, absPath)`**: Converts an absolute `.g8e/` path to a relative path, failing the test on error.
 - **`newAuthTestEnv(t)`**: Returns `(fileSvc, cfg)` with auth-specific fixture setup (temp-rooted `fileSvc` with runtime tree created, minimal config with `ProjectRoot`/`RuntimeDir`/`Paths.Host` set).
+
+---
+
+## CLI Enrollment Coordinator Tests
+
+The `EnrollmentCoordinator` (`internal/cli/auth/enrollment.go`) owns the CLI enrollment state machine. It is unit-tested in `internal/cli/auth/enrollment_coordinator_test.go` with injected mocks for `EnrollmentGateway`, `SystemTrustInstaller`, `BrowserOpener`, and `PasskeyRegistrar`. The command adapter layer (`internal/cli/cmd`) is tested in `auth_enroll_test.go` via a swappable `enrollCoordinatorFactory` package-level var that returns an `Enroller` interface.
+
+### Coordinator-Level Tests (`internal/cli/auth/enrollment_coordinator_test.go`)
+
+Full state machine coverage:
+- Healthy reuse (no rotation) — `LocalStateComplete` + `RotateCLI=false` → no gateway calls
+- Partial → recovery — `LocalStatePartial` → `CreateRecoveryRequest` called, `Bootstrap` not called
+- Expired → rotation — expiring CLI cert → `Rotate` called
+- Absent → bootstrap — `LocalStateAbsent` → `Bootstrap` called
+- `--no-system-trust` skip — `SystemTrustInstaller.Install` not called, `PasskeyRegistrar.Register` still called
+- System trust failure stops before browser — `SystemTrustInstaller` returns error → `BrowserOpener`/`PasskeyRegistrar` not called
+- `--rotate-cli` forces rotation — healthy identity + `RotateCLI=true` → `Rotate` called
+
+### CredentialStore Tests (`internal/cli/auth/credential_store_test.go`)
+
+5 tests exercising `CredentialStore` directly:
+- `TestCredentialStore_InterruptedCommitRetry` — cancelled-context Commit fails, second Stage+Commit succeeds, no orphaned tmp files
+- `TestCredentialStore_RollbackWritesNoCanonicalFiles` — Rollback writes no canonical files; `Rollback(nil)` is a safe no-op
+- `TestCredentialStore_CommittedFilePermissions` — CLI cert, CLI key, credentials JSON all have 0600 mode after Commit
+- `TestCredentialStore_ConcurrentStageCommitNoTornState` — two concurrent Stage+Commit sequences leave a complete, consistent identity (race-clean under `-race`)
+- `TestCredentialStore_ClearRetainsTrustBundle` — Clear removes local credentials but retains the runtime trust bundle (§4.3 ownership)
+
+### Command-Layer Tests (`internal/cli/cmd/auth_enroll_test.go`)
+
+Tests inject a `mockEnroller` via `withMockEnroller` helper + `noopCheckOperatorRunning` stub:
+- `TestEnrollCmd_OptionPropagation` — defaults, `--no-system-trust`, `--rotate-cli`, both flags
+- `TestEnrollCmd_CoordinatorErrorPropagates` — command surfaces `ErrSystemTrustInstallFailed`
+- `TestEnrollCmd_HealthyReusedIdentityNoRotate` — Reused=true, RotateCLI=false
+- `TestEnrollCmd_RotateCLIFlagForcesRotation` — `--rotate-cli` wiring
+- `TestEnrollCmd_NoSystemTrustFlagWired` — `--no-system-trust` wiring
+- `TestEnrollCmd_SystemTrustInstalledOutput` — browser-close guidance printed
+- `TestLogoutCmd_OSRootCARetained` — OS root CA retained on logout
+- `TestMCPStdio_DoesNotInvokeEnrollment` — stdio never calls the coordinator factory
+
+### Gateway-Side Recovery/Rotation Tests (`internal/services/gateway/`)
+
+- `cli_recovery_controller_test.go` — recovery request, status, approve, complete (proof-of-possession, token expiry, replay)
+- `cli_recovery_service_test.go` — token hashing, atomic state transitions, cleanup
+- `cli_rotation_controller_test.go` — mTLS rotation, session replacement, cert revocation
+- `cli_session_service_test.go` — CLI session creation, replacement, deactivation, lookup by mTLS certificate
+- `dispatch_service_test.go` / `dispatch_service_integration_test.go` — `DispatchController` request validation, governance pipeline routing, dispatch response shape; integration variant uses a real gateway fixture
+- `operator_controller_test.go` — operator list, bind/unbind, target context, reauth, session lookup (`GET /api/v1/operators/session/{id}`)
+- `gateway_http_test.go` / `gateway_auth_test.go` — route removal assertions (`TestRemovedCLIEnrollRoute`, `TestRouteAuthRegistry_RotationAndRemovedEnroll`)
+
+### Governance Tests (`internal/services/governance/`)
+
+- `remote_state_root_provider_test.go` — `RemoteStateRootProvider` fetches the gateway state Merkle root from `/api/v1/state` over mTLS; covers success, HTTP error, malformed response, and network failure paths
+
+### E2E Tests (`test/e2e/`)
+
+- `command_roundtrip_e2e_test.go` — end-to-end operator command dispatch via `POST /api/v1/operators/commands`: CLI enrolls, submits a command, operator receives and executes it, result is recorded
+- `operator_registry_e2e_test.go` — operator registration, listing, and session lookup over the Docker Compose stack
+- `pubsub_heartbeat_e2e_test.go` — operator heartbeat liveness via the pub/sub channel; verifies the gateway detects operator presence and absence
 
 ---
 
@@ -219,7 +277,7 @@ Each consensus member signs with its own distinct key derived from `member_seeds
 6. Session ID validated against database
 
 **Key details**:
-- MCP routes are on HTTPS port (8443) only; HTTP port (8080) serves bootstrap endpoints (`/bootstrap`, `/enroll`, `/.well-known/g8e/pki/*`), the console SPA, browser-facing passkey endpoints, and health checks
+- MCP routes are on HTTPS port (8443) only; HTTP port (8080) serves bootstrap endpoints (`/bootstrap`, `/.well-known/g8e/pki/*`), CLI recovery discovery (`/api/v1/auth/cli/recovery/{request,status,complete}`), deploy scripts, node binary download, and health checks. The old `handleCLIEnrollment` route (`/api/v1/auth/cli/enroll`) and per-platform trust-install script routes (`/web-cert.sh`, `/web-cert.ps1`, `/.well-known/g8e/pki/trust-windows`) were removed in v1.7.2; CLI enrollment is now driven client-side by the `EnrollmentCoordinator`.
 - `ExtractOperatorSessionID` in `protocol/workload_identity.go` parses the SPIFFE URI (path segment 6)
 - Tests include wait logic for operator session persistence before authenticated calls
 
@@ -231,7 +289,7 @@ Key fixture methods: `NewGatewayFixture`, `EnrollClientIdentity`, `CreateMTLSCli
 
 ### Docker E2E Fixture (Tier 3)
 
-`TestMain` in `test/e2e/main_test.go` spins up a single Docker Compose stack (gateway + operator) once for all E2E tests, then tears it down after `m.Run()`. The shared fixture is stored in the package-level `sharedFixture` variable. Tests that require Docker check for nil and skip if unavailable; tests that do not require Docker (e.g. MCP config output) run regardless. Set `G8E_E2E_SKIP_DOCKER=1` to skip Docker setup entirely while still running non-Docker E2E tests.
+`TestMain` in `test/e2e/main_test.go` spins up a single Docker Compose stack (gateway + operator) once for all E2E tests, then tears it down after `m.Run()`. The shared fixture is stored in the package-level `sharedFixture` variable. Tests that require Docker check for nil and skip if unavailable; tests that do not require Docker (e.g. MCP config output) run regardless. E2E tests are Tier 3 and require Docker — there is no opt-out. A fixture-setup failure exits non-zero with a `FATAL: E2E fixture setup failed` message so a broken Docker environment can never produce a green build with zero tests run. On any non-zero exit, container logs and compose state are captured to a temp dir before teardown.
 
 The Dockerfile uses a BuildKit cache mount (`--mount=type=cache,target=/root/.cache/go-build`) to preserve the Go build cache across Docker image rebuilds. The harness sets `DOCKER_BUILDKIT=1` to enable this. First run after code changes rebuilds from scratch (~100s); subsequent runs with warm cache complete in ~25s.
 

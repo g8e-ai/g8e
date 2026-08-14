@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect an Existing Frontend to g8e Gateway
 
-Last Updated: 2026-08-07
-Version: v1.7.0
+Last Updated: 2026-08-14
+Version: v1.7.2
 
 ---
 
@@ -170,16 +170,15 @@ On app mount, check auth state:
 
 ### Enrollment Token Flow (CLI-Initiated Registration)
 
-When the CLI initiates a passkey enrollment from the terminal, it opens the browser with `#register=1&token=<token>`. Your frontend must:
+When the CLI initiates a passkey enrollment from the terminal, it opens the browser with `#enroll=1&token=<token>`. Your frontend must:
 
 1. Read the token from the URL hash (`window.location.hash`).
-2. POST to `/api/v1/auth/enrollment-token/validate` with the `token` in the JSON body.
-3. On success, receive `user_id` and `cli_session_id` from the gateway.
-4. Populate hidden form fields with the returned `user_id` and `cli_session_id`.
-5. Auto-trigger the passkey registration flow.
-6. Immediately clear the token from the URL via `history.replaceState`.
+2. Immediately clear the token from the URL via `history.replaceState`.
+3. POST the token to `/api/v1/auth/passkeys/enrollment/register/challenge` with `{ enrollment_token: <token> }` in the JSON body. The gateway validates the token and derives `user_id` and `cli_session_id` from it — there is no separate `/enrollment-token/validate` round-trip, and the token-derived identifiers never need to touch the DOM.
+4. Perform the WebAuthn ceremony with the challenge response (`navigator.credentials.create`).
+5. POST the attestation plus token to `/api/v1/auth/passkeys/enrollment/register/verify` with `{ enrollment_token: <token>, attestation_response: { ...encodedFields } }`. The verify step consumes the token (one-time-use) and sets a web session cookie.
 
-Handle error responses:
+Handle error responses (both challenge and verify endpoints):
 - **`410 Gone`**: Token has expired (5-minute TTL).
 - **`409 Conflict`**: Token has already been used (one-time-use).
 - **`401 Unauthorized`**: Invalid token.
@@ -238,7 +237,7 @@ When user clicks "Approve" on a transaction:
 On app load, check `window.location.hash` for:
 
 - **`#approve={txHash}`**: If user is logged in, auto-trigger the approval flow for this transaction. If not logged in, store it and trigger after login.
-- **`#register=1&token={enrollmentToken}`**: Validate the enrollment token, then auto-trigger passkey registration.
+- **`#enroll=1&token={enrollmentToken}`**: Post the token to the enrollment register endpoints to validate and auto-trigger passkey registration.
 
 After processing, clean the URL with `history.replaceState`.
 
@@ -290,7 +289,7 @@ Then manually verify in the browser:
 - [ ] **Authenticated API calls**: Confirm `GET /api/v1/users/me` returns user data (not 401) after login.
 - [ ] **SSE stream**: Connect to the SSE stream and confirm live events appear.
 - [ ] **Approvals**: If a suspended transaction exists, confirm the approval flow triggers WebAuthn and the transaction is approved.
-- [ ] **Enrollment token**: Navigate to `#register=1&token={token}` and confirm the token is validated and registration auto-triggers.
+- [ ] **Enrollment token**: Navigate to `#enroll=1&token={token}` and confirm the token is validated and registration auto-triggers.
 - [ ] **URL hash approval**: Navigate to `#approve={txHash}` and confirm auto-approval flow triggers.
 - [ ] **Logout**: Sign out and confirm redirect to login page and cookie cleared.
 
@@ -334,11 +333,11 @@ Then run `g8e gui enroll --origin https://your-app.example.com` to verify.
 
 ### Enrollment Token Errors
 
-**Symptom**: Registration via `#register=1&token={token}` fails.
+**Symptom**: Registration via `#enroll=1&token={token}` fails.
 
 **Cause**: Token expired (5-minute TTL), already used (one-time-use), or invalid.
 
-**Fix**: Generate a new enrollment token from the CLI (`g8e auth enroll` or `g8e passkey bootstrap`). Handle 410 (expired), 409 (already used), and 401 (invalid) with specific user-facing error messages.
+**Fix**: Generate a new enrollment token from the CLI (`g8e auth enroll`). Handle 410 (expired), 409 (already used), and 401 (invalid) with specific user-facing error messages.
 
 ---
 

@@ -122,26 +122,6 @@
                 }
             }
         },
-        "/.well-known/g8e/pki/trust-windows": {
-            "get": {
-                "description": "Returns the Windows CA trust script (alias endpoint)",
-                "produces": [
-                    "text/plain"
-                ],
-                "tags": [
-                    "bootstrap"
-                ],
-                "summary": "Web cert trust script (Windows alias)",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/approvals": {
             "get": {
                 "description": "Lists suspended transactions pending L3 passkey approval for the authenticated user.",
@@ -382,7 +362,7 @@
         },
         "/api/v1/auth/passkeys/register/challenge": {
             "post": {
-                "description": "Generates a WebAuthn registration challenge. Config-driven trust posture:\nmTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), or console (public, may auto-create user).",
+                "description": "Generates a WebAuthn registration challenge. Config-driven trust posture:\nmTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), console (public, may auto-create user),\nor enrollment-token (public, token-gated — the CLI enrollment flow).",
                 "consumes": [
                     "application/json"
                 ],
@@ -405,7 +385,7 @@
         },
         "/api/v1/auth/passkeys/register/verify": {
             "post": {
-                "description": "Verifies a WebAuthn attestation response and stores the credential. Config-driven trust posture:\nmTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), or console (public, may mint web session + cookie).",
+                "description": "Verifies a WebAuthn attestation response and stores the credential. Config-driven trust posture:\nmTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), console (public, may mint web session + cookie),\nor enrollment-token (public, token-gated — the CLI enrollment flow).",
                 "consumes": [
                     "application/json"
                 ],
@@ -1030,46 +1010,6 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/models.StateResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/web-cert.ps1": {
-            "get": {
-                "description": "Returns the Windows CA trust script for remote workstations",
-                "produces": [
-                    "text/plain"
-                ],
-                "tags": [
-                    "bootstrap"
-                ],
-                "summary": "Web cert trust script (Windows)",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
-        "/web-cert.sh": {
-            "get": {
-                "description": "Returns a combined Linux/macOS CA trust script for remote workstations",
-                "produces": [
-                    "text/plain"
-                ],
-                "tags": [
-                    "bootstrap"
-                ],
-                "summary": "Web cert trust script (Linux/macOS)",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "string"
                         }
                     }
                 }

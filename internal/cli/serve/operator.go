@@ -50,6 +50,8 @@ type ServeOperatorOptions struct {
 	NoGit             bool
 	HeartbeatInterval time.Duration
 
+	Posture string
+
 	LatticeEndpoint       string
 	LatticeClientID       string
 	LatticeClientSecret   string
@@ -180,7 +182,7 @@ func buildOperatorLoadOptions(opts ServeOperatorOptions, operatorEndpoint, effec
 		Lang:                  os.Getenv(string(constants.EnvVar.Lang)),
 		Term:                  os.Getenv(string(constants.EnvVar.Term)),
 		TZ:                    os.Getenv(string(constants.EnvVar.TZ)),
-		Posture:               "",
+		Posture:               config.GatewayPosture(opts.Posture),
 
 		Lattice: latticeCfg,
 	}
@@ -240,7 +242,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 
 	if opts.Endpoint != "" {
 		logger.Info("Performing automatic enrollment with Gateway", "endpoint", opts.Endpoint)
-		sessionID, err := PerformAutomaticEnrollment(context.Background(), opts.Endpoint, fileSvc, logger)
+		sessionID, posture, err := PerformAutomaticEnrollment(context.Background(), opts.Endpoint, fileSvc, logger)
 		if err != nil {
 			logger.Error("Automatic enrollment failed", string(constants.ConnectionStateError), err)
 			fmt.Fprintf(os.Stderr, "Automatic enrollment failed: %v\n", err)
@@ -248,6 +250,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 			os.Exit(constants.ExitConfigError)
 		}
 		os.Setenv(string(constants.EnvVar.OperatorSessionID), sessionID)
+		opts.Posture = posture
 
 		privateKey = fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiFileOperatorKey))
 		clientCert = fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert))

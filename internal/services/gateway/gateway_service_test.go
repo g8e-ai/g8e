@@ -47,9 +47,7 @@ func newTestGatewayService(t *testing.T, opts testGatewayOpts) *GatewayModeServi
 	cfg.Gateway.SecretsDir = fileSvc.Resolve(constants.SecretsDirname)
 	cfg.Gateway.VaultDir = fileSvc.Resolve(constants.VaultDirname)
 	cfg.Gateway.HTTPPort = opts.httpPort
-	if opts.posture != "" {
-		cfg.Gateway.Posture = opts.posture
-	}
+	cfg.Gateway.Posture = opts.posture
 
 	ls, err := NewGatewayModeService(cfg, fileSvc, logger)
 	require.NoError(t, err)

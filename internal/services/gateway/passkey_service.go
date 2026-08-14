@@ -296,32 +296,35 @@ func NewPasskeyService(docStore *DocumentStoreService, logger *slog.Logger, cfg 
 // SSE, WebSocket) to PasskeyOrchestrator. HTTP-layer concerns only.
 type PasskeyHandler struct {
 	*PasskeyService
-	webSessionSvc *WebSessionService
-	responder     *response.Writer
-	maxPayload    int64
-	orchestrator  *PasskeyOrchestrator
-	crossOrigin   bool
+	webSessionSvc      *WebSessionService
+	enrollmentTokenSvc *EnrollmentTokenService
+	responder          *response.Writer
+	maxPayload         int64
+	orchestrator       *PasskeyOrchestrator
+	crossOrigin        bool
 }
 
 // PasskeyHandlerDeps groups all dependencies for NewPasskeyHandler.
 type PasskeyHandlerDeps struct {
-	Service       *PasskeyService
-	WebSessionSvc *WebSessionService
-	Responder     *response.Writer
-	MaxPayload    int64
-	Orchestrator  *PasskeyOrchestrator
-	CrossOrigin   bool
+	Service            *PasskeyService
+	WebSessionSvc      *WebSessionService
+	EnrollmentTokenSvc *EnrollmentTokenService
+	Responder          *response.Writer
+	MaxPayload         int64
+	Orchestrator       *PasskeyOrchestrator
+	CrossOrigin        bool
 }
 
 // NewPasskeyHandler creates a new PasskeyHandler with all dependencies wired.
 func NewPasskeyHandler(deps PasskeyHandlerDeps) *PasskeyHandler {
 	return &PasskeyHandler{
-		PasskeyService: deps.Service,
-		webSessionSvc:  deps.WebSessionSvc,
-		responder:      deps.Responder,
-		maxPayload:     deps.MaxPayload,
-		orchestrator:   deps.Orchestrator,
-		crossOrigin:    deps.CrossOrigin,
+		PasskeyService:     deps.Service,
+		webSessionSvc:      deps.WebSessionSvc,
+		enrollmentTokenSvc: deps.EnrollmentTokenSvc,
+		responder:          deps.Responder,
+		maxPayload:         deps.MaxPayload,
+		orchestrator:       deps.Orchestrator,
+		crossOrigin:        deps.CrossOrigin,
 	}
 }
 

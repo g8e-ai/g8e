@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-08-07
-Version: v1.7.0
+Last Updated: 2026-08-14
+Version: v1.7.2
 
 The g8e Protocol platform is implemented as a single static binary that operates in two modes:
 
@@ -114,7 +114,7 @@ By passing `--posture doctrine`, `--posture consensus`, or `--posture notary`, t
 
 The Governance Gateway exposes two logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port. See [Network Architecture](./network.md) for detailed port topology, authentication requirements, and port constraints.
 
-**HTTP Port (8080)**: Plain HTTP for bootstrap enrollment and PKI discovery endpoints only. This port serves the platform trust scripts (e.g., `/web-cert.sh`, `/web-cert.ps1`) required for self-signed CA trust. No MCP routes are available on this port.
+**HTTP Port (8080)**: Plain HTTP for bootstrap enrollment and PKI discovery endpoints only. This port serves CA bundle and fingerprint discovery, CLI recovery request/status/complete (token-scoped, no mTLS required), deploy scripts, and node binary distribution. The old trust-script routes (`/web-cert.sh`, `/web-cert.ps1`, `/.well-known/g8e/pki/trust-windows`) and `handleCLIEnrollment` (`/api/v1/auth/cli/enroll`) are **removed**. OS trust installation is handled by `auth enroll` directly, not by HTTP-served scripts. No MCP routes are available on this port.
 
 **HTTPS Port (8443)**: mTLS for all routes including API, public, enrollment, and MCP endpoints. MCP endpoints require mTLS authentication (or JWT when JWKS is configured). The public HTTPS router also serves Swagger UI at `/swagger/*` and the OpenAPI specification at `/swagger/doc.json`, providing interactive API documentation.
 
@@ -136,7 +136,7 @@ The gateway builds two distinct HTTP routers, one per protocol surface. The rout
 
 ### Bootstrap HTTP Router
 
-Served on the HTTP port (8080), this router handles only bootstrap and PKI discovery endpoints. It registers health, state, bootstrap enrollment, CLI and device enrollment, PKI apps enrollment, CSR signing, CA bundle and fingerprint discovery, trust script download (Linux and Windows), node binary download, and deploy script routes. A catch-all handler redirects all non-bootstrap requests to HTTPS, validating the Host header against localhost, loopback, RFC 1918 private IPs, and configured endpoints before reflecting it into the redirect target. Unrecognized hosts fall back to a safe default to prevent open-redirect abuse. The router is wrapped with path traversal guard and rate limiting middleware.
+Served on the HTTP port (8080), this router handles only bootstrap and PKI discovery endpoints. It registers health, state, bootstrap enrollment, CLI and device enrollment, PKI apps enrollment, CSR signing, CA bundle and fingerprint discovery, CLI recovery request/status/complete (token-scoped, reachable without trusted TLS), node binary download, and deploy script routes. The CLI recovery **approve** endpoint is intentionally NOT registered here — approval requires a web-session cookie, which is only set over HTTPS. The CLI rotation endpoint is also NOT registered here — rotation requires mTLS, which the plain HTTP router does not provide. A catch-all handler redirects all non-bootstrap requests to HTTPS, validating the Host header against localhost, loopback, RFC 1918 private IPs, and configured endpoints before reflecting it into the redirect target. Unrecognized hosts fall back to a safe default to prevent open-redirect abuse. The router is wrapped with path traversal guard and rate limiting middleware.
 
 ### Public HTTPS Router
 
@@ -144,7 +144,7 @@ Served on the HTTPS port (8443), this router handles all API, MCP, passkey, cons
 
 The public HTTPS router registers the following route categories:
 
-**Public Routes (no authentication)**: Health, state, Swagger UI (`/swagger/`, `/swagger/index.html`, `/swagger/doc.json`), CA bundle and fingerprint discovery, CRL, console SPA (`/console/`), landing page, logout, bootstrap enrollment, PKI devices enrollment, CSR signing, enrollment token validation, and the OOB approval page redirect.
+**Public Routes (no authentication)**: Health, state, Swagger UI (`/swagger/`, `/swagger/index.html`, `/swagger/doc.json`), CA bundle and fingerprint discovery, CRL, console SPA (`/console/`), landing page, logout, bootstrap enrollment, PKI devices enrollment, CSR signing, enrollment token validation, OOB approval page redirect, and CLI recovery request/status/complete (token-scoped — the opaque recovery token provides the authorization context, no mTLS or cookie required).
 
 **MCP/A2A Routes**: Registered on the public mux. When JWKS is configured, MCP routes are wrapped with JWT auth middleware; otherwise they rely on mTLS via the outer auth middleware. Registered paths include `/mcp` (unified MCP JSON-RPC endpoint) and `/api/v1/a2a/call` (A2A endpoint).
 
@@ -152,9 +152,9 @@ The public HTTPS router registers the following route categories:
 
 **JIT Passkey Routes (JWT-authenticated)**: When JWKS is configured, `/api/v1/auth/passkeys/jit-register/challenge` and `/api/v1/auth/passkeys/jit-register/verify` allow OIDC/JIT users with zero credentials to register their first passkey. These routes are wrapped with JWT auth middleware.
 
-**mTLS-Only Routes**: Data settings, blob store, operator management (list, terminate, bind, unbind, target, reauth), governance signers, app policies, app revocation, consensus management (list, delete), consensus deliberate, governance envelopes (rate-limited), audit receipts, events, export, summary, and report, SSE push, database, KV store, pub/sub publish and stream, PKI management (apps enrollment, apps delegated, certificates revoke, revocation bundle), user management, passkey CLI status, and enrollment token generation.
+**mTLS-Only Routes**: Data settings, blob store, operator management (list, terminate, bind, unbind, target, reauth), governance signers, app policies, app revocation, consensus management (list, delete), consensus deliberate, governance envelopes (rate-limited), audit receipts, events, export, summary, and report, SSE push, database, KV store, pub/sub publish and stream, PKI management (apps enrollment, apps delegated, certificates revoke, revocation bundle), user management, passkey CLI status, enrollment token generation, and CLI rotation (`/api/v1/auth/cli/rotate` — the caller's identity is derived from the verified mTLS certificate URI SAN, not request body fields; one replacement certificate per run).
 
-**WebSession-Protected Routes**: Browser-facing routes under `/api/v1/users/`, `/api/v1/auth/sessions/`, `/api/v1/approvals`, `/api/v1/auth/passkeys` require a valid web session cookie. These include user profile (`/api/v1/users/me`), web session info (`/api/v1/auth/sessions/me`), OOB approval actions and listing, and passkey credential listing and revocation.
+**WebSession-Protected Routes**: Browser-facing routes under `/api/v1/users/`, `/api/v1/auth/sessions/`, `/api/v1/approvals`, `/api/v1/auth/passkeys` require a valid web session cookie. These include user profile (`/api/v1/users/me`), web session info (`/api/v1/auth/sessions/me`), OOB approval actions and listing, passkey credential listing and revocation, and CLI recovery approval (`/api/v1/auth/cli/recovery/approve` — an authenticated existing user approves a recovery request via the console SPA).
 
 **Dual-Auth Routes**: SSE stream (`/api/v1/sse/stream`) and SSE events (`/api/v1/sse/events`) accept either mTLS or web session cookie authentication.
 
@@ -163,6 +163,36 @@ The public HTTPS router registers the following route categories:
 ### Route Authentication Classification
 
 Routes are classified by authentication mode: public (no auth), mTLS required, web session required, or dual authentication (mTLS or web session). Exact path matches take priority over prefix matches. Unregistered routes default to mTLS required to enforce fail-closed security.
+
+**CLI Enrollment Route Classification:** The old `handleCLIEnrollment` route (`/api/v1/auth/cli/enroll`) is **removed**. Its replacements are classified as follows:
+
+| Route | Auth Mode | Router |
+|------|-----------|--------|
+| `/api/v1/auth/cli/recovery/request` | `RouteAuthNone` (token-scoped) | HTTP + HTTPS |
+| `/api/v1/auth/cli/recovery/status` | `RouteAuthNone` (token-scoped) | HTTP + HTTPS |
+| `/api/v1/auth/cli/recovery/approve` | `RouteAuthWebSession` | HTTPS only |
+| `/api/v1/auth/cli/recovery/complete` | `RouteAuthNone` (token-scoped) | HTTP + HTTPS |
+| `/api/v1/auth/cli/rotate` | `RouteAuthMTLS` | HTTPS only |
+
+The recovery request, status, and complete endpoints are public (token-scoped) because the opaque recovery token and proof-of-possession signature provide the authorization context. The approve endpoint requires a web session cookie (browser console only). The rotation endpoint requires mTLS — the caller's identity is derived from the verified CLI certificate. Rotation is never registered on the plain HTTP router.
+
+**Passkey Enrollment Route Classification:** CLI-initiated passkey enrollment uses dedicated endpoints, separate from the console bootstrap and JIT flows. The enrollment token is generated by the CLI via the mTLS-protected `/api/v1/auth/enrollment-token/generate` endpoint and passed to the browser via the `#enroll=1&token=...` URL fragment.
+
+| Route | Auth Mode | Router |
+|------|-----------|--------|
+| `/api/v1/auth/passkeys/enrollment/register/challenge` | `RouteAuthNone` (enrollment token) | HTTPS only |
+| `/api/v1/auth/passkeys/enrollment/register/verify` | `RouteAuthNone` (enrollment token) | HTTPS only |
+
+The gateway derives `user_id` and `cli_session_id` from the token; neither is sent in the request body. The challenge step validates the one-time enrollment token and returns a WebAuthn registration challenge. The verify step consumes the token (one-time) and verifies the attestation, then sets a web session cookie. Both endpoints are HTTPS-only; they are never registered on the plain HTTP router.
+
+**Operator Dispatch Route Classification:** Operator command dispatch and session lookup use mTLS-only endpoints registered on the HTTPS router.
+
+| Route | Auth Mode | Router |
+|------|-----------|--------|
+| `/api/v1/operators/commands` | `RouteAuthMTLS` | HTTPS only |
+| `/api/v1/operators/session/{id}` | `RouteAuthMTLS` | HTTPS only |
+
+The dispatch endpoint accepts a typed `OperatorCommandRequest`, routes it through the governance pipeline, and returns a `DispatchResponse` with the dispatch ID and result. The session lookup endpoint resolves an operator by session ID. Both require mTLS — the caller's identity is derived from the verified client certificate.
 
 ### Privileged Route Control
 
@@ -375,23 +405,19 @@ The Governance Gateway (g8eg) provides JWT authentication and Just-In-Time (JIT)
 ### 4-Step JWT Flow
 The JWT authentication logic is implemented in the gateway auth middleware.
 
-**Step 1: Inbound HTTP Handshake and JWT Verification**
-The Governance Gateway (g8eg) intercepts inbound `Authorization: Bearer <JWT>` tokens on public MCP endpoints before routing to downstream execution logic. The middleware cryptographically verifies the JWT signature using JWKS, validates `exp`, `nbf`, `iss`, and `aud` claims, and extracts identity claims (`sub`, `tenant_id`, `roles`).
+**Step 1: Inbound HTTP Handshake and JWT Verification** The Governance Gateway (g8eg) intercepts inbound `Authorization: Bearer <JWT>` tokens on public MCP endpoints before routing to downstream execution logic. The middleware cryptographically verifies the JWT signature using JWKS, validates `exp`, `nbf`, `iss`, and `aud` claims, and extracts identity claims (`sub`, `tenant_id`, `roles`).
 
-**Step 2: Edge Validation and JIT Account Management**
-Following successful token validation, the Governance Gateway (g8eg) ensures the user exists locally and maps their roles:
+**Step 2: Edge Validation and JIT Account Management** Following successful token validation, the Governance Gateway (g8eg) ensures the user exists locally and maps their roles:
 - **JIT Provisioning**: Checks the SQLite `users` collection for the `sub` (User ID). If the user does not exist, provisions the user account subject to platform owner authorization.
 - **Persona Mapping**: Loads declarative Persona definitions (e.g., `security-analyst`, `admin`) from the `personas` collection in the document store. Evaluates the JWT `roles` against these persona definitions to determine the active `binding_persona`.
 - **Context Injection**: Stores the resolved `binding_persona` and `tenant_id` into the request context.
 
-**Step 3: Enriched Pub/Sub Handoff (GovernanceEnvelope)**
-The Governance Gateway (g8eg) strips the heavy JWT and injects the evaluated security requirements directly into the canonical mutation envelope before passing it to the pub/sub broker:
+**Step 3: Enriched Pub/Sub Handoff (GovernanceEnvelope)** The Governance Gateway (g8eg) strips the heavy JWT and injects the evaluated security requirements directly into the canonical mutation envelope before passing it to the pub/sub broker:
 - The `GovernanceEnvelope` carries `tenant_id` and `binding_persona` as typed fields.
 - The pub/sub payload is strictly a canonical `GovernanceEnvelope` carrying typed payloads (e.g., `McpCallRequested`) alongside the validated security metadata.
 - The heavy JWT is discarded, reducing payload size.
 
-**Step 4: Native Execution and Data Scrubbing (Governed Operator)**
-When the outbound Governed Operator (g8eo) pulls the message off the pub/sub queue, it acts natively on the injected security metadata without second-guessing the Governance Gateway (g8eg):
+**Step 4: Native Execution and Data Scrubbing (Governed Operator)** When the outbound Governed Operator (g8eo) pulls the message off the pub/sub queue, it acts natively on the injected security metadata without second-guessing the Governance Gateway (g8eg):
 - The Governed Operator (g8eo) decodes the `GovernanceEnvelope` and extracts `tenant_id` and `binding_persona`.
 - These fields propagate into the execution context.
 - Native tool isolation applies column masks or data redaction (e.g., stripping `password_hash`, masking emails) directly based on the Persona before returning results.

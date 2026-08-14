@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -246,85 +245,4 @@ func TestCheckCertExpiry_InvalidFile(t *testing.T) {
 	expiring, err := CheckCertExpiry(fileSvc, certRel)
 	require.Error(t, err)
 	assert.False(t, expiring)
-}
-
-func TestAutoRenewCertificate_NotExpiring(t *testing.T) {
-	t.Parallel()
-	fileSvc := newAuthTestFileSvc(t)
-	runtimeDir := fileSvc.Resolve("")
-	cfg := &config.Config{
-		ProjectRoot: runtimeDir,
-		RuntimeDir:  runtimeDir,
-		Paths:       &config.PathsConfig{},
-	}
-
-	// Create a valid certificate that is not expiring
-	certFile := cfg.CLICertFile()
-	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
-	certRel, err := fileSvc.RelFromAbs(certFile)
-	require.NoError(t, err)
-	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte(certPEM), constants.PermFilePrivate))
-
-	err = AutoRenewCertificate(fileSvc, cfg, "cli", "")
-	require.NoError(t, err)
-}
-
-func TestAutoRenewCertificate_UnknownCertType(t *testing.T) {
-	t.Parallel()
-	fileSvc := newAuthTestFileSvc(t)
-	runtimeDir := fileSvc.Resolve("")
-	cfg := &config.Config{
-		ProjectRoot: runtimeDir,
-		RuntimeDir:  runtimeDir,
-	}
-
-	err := AutoRenewCertificate(fileSvc, cfg, "unknown-type", "")
-	require.Error(t, err)
-	assert.Error(t, err)
-}
-
-func TestAutoRenewCertificate_ExpiringCert(t *testing.T) {
-	t.Parallel()
-
-	// Create a certificate that expires in 12 hours (within renewal threshold)
-	fileSvc := newAuthTestFileSvc(t)
-	runtimeDir := fileSvc.Resolve("")
-	cfg := &config.Config{
-		ProjectRoot: runtimeDir,
-		RuntimeDir:  runtimeDir,
-		Paths:       &config.PathsConfig{},
-	}
-
-	// This test would require generating a short-lived cert and actually calling ReEnroll
-	// Since ReEnroll requires a real server, we test the error path
-	certFile := cfg.CLICertFile()
-	certRel, err := fileSvc.RelFromAbs(certFile)
-	require.NoError(t, err)
-	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte("not a valid cert"), constants.PermFilePrivate))
-
-	err = AutoRenewCertificate(fileSvc, cfg, "cli", "")
-	require.Error(t, err)
-	assert.Error(t, err)
-}
-
-func TestAutoRenewCertificate_OperatorType(t *testing.T) {
-	t.Parallel()
-
-	fileSvc := newAuthTestFileSvc(t)
-	runtimeDir := fileSvc.Resolve("")
-	cfg := &config.Config{
-		ProjectRoot: runtimeDir,
-		RuntimeDir:  runtimeDir,
-		Paths:       &config.PathsConfig{},
-	}
-
-	// Create a valid certificate that's not expiring
-	certFile := cfg.OperatorCertFile()
-	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
-	certRel, err := fileSvc.RelFromAbs(certFile)
-	require.NoError(t, err)
-	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, []byte(certPEM), constants.PermFilePrivate))
-
-	err = AutoRenewCertificate(fileSvc, cfg, "operator", "")
-	require.NoError(t, err)
 }
