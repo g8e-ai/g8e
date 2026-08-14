@@ -258,7 +258,9 @@ func NewOperatorPubSubService(c CommandServiceConfig, govDeps GovernanceDeps) (*
 	// Mutations requiring L3 will fail-closed at TransactionVerifier if L3Notary is nil
 
 	// Initialize governance services after trusted signers are loaded
-	rs.initializeGovernance(c, govDeps)
+	if err := rs.initializeGovernance(c, govDeps); err != nil {
+		return nil, err
+	}
 
 	c.Logger.Info("g8e connectivity initialized")
 	if c.Config.OperatorID != "" {
@@ -312,7 +314,7 @@ func NewGatewayOperatorPubSubService(c GatewayCommandServiceConfig) (*OperatorPu
 	return rs, nil
 }
 
-func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, govDeps GovernanceDeps) {
+func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, govDeps GovernanceDeps) error {
 	// Initialize L5Actuator with trusted nodes and audit store
 	// ScrubbingService handles data scrubbing/rehydration at the execution boundary
 	rs.actuator = &governance.L5Actuator{
@@ -328,13 +330,15 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, go
 
 	// Initialize TransactionVerifier for strict pre-dispatch verification
 	knownActionTypes := constants.AllActionTypes
-	// Use Gateway.Posture for gateway mode, Config.Posture for outbound mode
+	// Use Gateway.Posture for gateway mode, Config.Posture for outbound mode.
+	// The operator has no posture of its own; Config.Posture is the gateway's
+	// posture received at enrollment. Fail closed when neither is set.
 	posture := string(c.Config.Gateway.Posture)
 	if posture == "" {
 		posture = string(c.Config.Posture)
 	}
 	if posture == "" {
-		posture = "notary" // Default to notary for outbound mode since L3Notary is nil
+		return fmt.Errorf("pubsub_commands: %w", constants.ErrPostureRequired)
 	}
 	// Default to NewL1Doctrine if not provided (outbound mode may not configure doctrine)
 	doctrine := govDeps.Doctrine
@@ -366,6 +370,7 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, go
 	c.Logger.Info("governance services initialized",
 		"signer_store", signerStoreType,
 		"transaction_verifier", l4wardenType)
+	return nil
 }
 
 func (rs *OperatorPubSubService) buildHandlers() {

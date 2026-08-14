@@ -720,19 +720,6 @@ paths:
       summary: Get PKI fingerprint
       tags:
       - pki
-  /.well-known/g8e/pki/trust-windows:
-    get:
-      description: Returns the Windows CA trust script (alias endpoint)
-      produces:
-      - text/plain
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: string
-      summary: Web cert trust script (Windows alias)
-      tags:
-      - bootstrap
   /api/v1/approvals:
     get:
       description: Lists suspended transactions pending L3 passkey approval for the
@@ -929,7 +916,8 @@ paths:
       - application/json
       description: |-
         Generates a WebAuthn registration challenge. Config-driven trust posture:
-        mTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), or console (public, may auto-create user).
+        mTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), console (public, may auto-create user),
+        or enrollment-token (public, token-gated — the CLI enrollment flow).
       produces:
       - application/json
       responses:
@@ -946,7 +934,8 @@ paths:
       - application/json
       description: |-
         Verifies a WebAuthn attestation response and stores the credential. Config-driven trust posture:
-        mTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), or console (public, may mint web session + cookie).
+        mTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), console (public, may mint web session + cookie),
+        or enrollment-token (public, token-gated — the CLI enrollment flow).
       produces:
       - application/json
       responses:
@@ -1355,32 +1344,6 @@ paths:
       summary: State root
       tags:
       - state
-  /web-cert.ps1:
-    get:
-      description: Returns the Windows CA trust script for remote workstations
-      produces:
-      - text/plain
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: string
-      summary: Web cert trust script (Windows)
-      tags:
-      - bootstrap
-  /web-cert.sh:
-    get:
-      description: Returns a combined Linux/macOS CA trust script for remote workstations
-      produces:
-      - text/plain
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: string
-      summary: Web cert trust script (Linux/macOS)
-      tags:
-      - bootstrap
   /ws/v1/pubsub:
     get:
       description: |-

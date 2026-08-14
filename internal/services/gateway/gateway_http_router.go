@@ -43,7 +43,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 		http.ServeFile(w, r, paths.SwaggerFilePath)
 	})
 
-	// Bootstrap routes (CA discovery, trust scripts) - now on public HTTPS
+	// Bootstrap routes (CA discovery) - now on public HTTPS
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
 	mux.HandleFunc(constants.APIPaths.PKICRL, h.pkiController.handlePKIRevocationBundle)
@@ -58,10 +58,22 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthLogout, h.sessionController.handlePublicAuthLogout)
 	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.bootstrapController.handleLocalBootstrapWithURL)
 	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.bootstrapController.handleBootstrapStatus)
-	mux.HandleFunc(constants.APIPaths.AuthCLIEnroll, h.bootstrapController.handleCLIEnrollment)
 	mux.HandleFunc(constants.APIPaths.AuthDeviceEnroll, h.bootstrapController.handleDeviceEnrollment)
 	mux.HandleFunc(constants.APIPaths.PKIAppsEnroll, h.pkiController.handlePKIAppsEnroll)
 	mux.HandleFunc(constants.APIPaths.PKIDevicesEnroll, h.pkiController.handlePKIDevicesEnroll)
+
+	// CLI recovery flow — request/status/complete are public (token-scoped);
+	// approve is web-session protected (browser console only).
+	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryRequest, h.cliRecoveryController.handleRecoveryRequest)
+	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryStatus, h.cliRecoveryController.handleRecoveryStatus)
+	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryApprove, h.cliRecoveryController.handleRecoveryApprove)
+	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryComplete, h.cliRecoveryController.handleRecoveryComplete)
+
+	// CLI rotation — mTLS-protected; the caller's identity is derived from
+	// the verified CLI certificate. NOT registered on buildHTTPRouter
+	// (plain HTTP) because rotation requires mTLS, which the plain router
+	// does not provide.
+	mux.HandleFunc(constants.APIPaths.AuthCLIRotate, h.cliRotationController.handleRotate)
 
 	// Enrollment token validation (public — the token itself is the credential)
 	mux.HandleFunc(constants.APIPaths.AuthEnrollmentTokenValidate, h.enrollmentTokenController.handleEnrollmentTokenValidate)
@@ -73,6 +85,12 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	jitCfg := passkeyHandlerConfig{source: sourceJWT, enforceFirstCredentialOnly: true, requireAuthenticatedUser: true, enforceSessionUserBinding: true}
 	browserBootstrapRegisterCfg := passkeyHandlerConfig{source: sourceBrowserBootstrap, enforceFirstCredentialOnly: true, createWebSession: true, setCookie: true, createUserOnBootstrap: true}
 	browserBootstrapAuthCfg := passkeyHandlerConfig{source: sourceBrowserBootstrap, createWebSession: true, setCookie: true}
+	// CLI-initiated enrollment: the enrollment token is the single
+	// authorization primitive. No enforceFirstCredentialOnly (the token
+	// already vouches for the user), no createUserOnBootstrap (the user
+	// exists — the CLI created it via `auth enroll`), no
+	// requireAuthenticatedUser (the token is the credential).
+	enrollmentRegisterCfg := passkeyHandlerConfig{source: sourceEnrollmentToken, requireEnrollmentToken: true, createWebSession: true, setCookie: true}
 
 	// JIT passkey bootstrap: allow first-credential registration via JWT
 	// This unblocks OIDC/JIT users who have zero credentials and cannot reach RouteAuthWebSession routes
@@ -97,6 +115,17 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.Handle(constants.APIPaths.AuthPasskeysConsoleAuthenticateChallenge, passkeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysConsoleAuthenticateVerify, passkeyMux)
 
+	// CLI-initiated enrollment routes (public, no auth required — the
+	// enrollment token is the credential). These are separate from the
+	// console bootstrap routes above so the two ceremonies do not share
+	// a config or a JS code path. See plan
+	// passkey-enrollment-console-400.md.
+	enrollmentMux := http.NewServeMux()
+	enrollmentMux.HandleFunc(constants.APIPaths.AuthPasskeysEnrollmentRegisterChallenge, h.passkeyController.registerChallenge(enrollmentRegisterCfg))
+	enrollmentMux.HandleFunc(constants.APIPaths.AuthPasskeysEnrollmentRegisterVerify, h.passkeyController.registerVerify(enrollmentRegisterCfg))
+	mux.Handle(constants.APIPaths.AuthPasskeysEnrollmentRegisterChallenge, enrollmentMux)
+	mux.Handle(constants.APIPaths.AuthPasskeysEnrollmentRegisterVerify, enrollmentMux)
+
 	// mTLS-only routes (merged from buildRouter)
 	mux.HandleFunc(constants.APIPaths.DataSettings, h.dataController.handleDataSettings)
 	mux.HandleFunc(constants.APIPaths.Operators, h.operatorController.handleListOperators)
@@ -105,6 +134,8 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.OperatorsUnbind, h.operatorController.handleUnbindOperators)
 	mux.HandleFunc(constants.APIPaths.OperatorsTarget, h.operatorController.handleSetTargetContext)
 	mux.HandleFunc(constants.APIPaths.OperatorsReauth, h.operatorController.handleReauth)
+	mux.Handle(constants.APIPaths.OperatorsSession, http.HandlerFunc(h.operatorController.handleGetOperatorBySession))
+	mux.HandleFunc(constants.APIPaths.OperatorsCommands, h.dispatchController.HandleDispatch)
 	mux.HandleFunc(constants.APIPaths.GovernanceSigners, h.signerController.handleGovernanceSigners)
 	mux.Handle(constants.APIPaths.GovernanceSignersByID, http.HandlerFunc(h.signerController.handleGovernanceSignerByID))
 	mux.Handle(constants.APIPaths.AdminAppPoliciesBySigner, http.HandlerFunc(h.adminController.handleAppPolicySigner))
@@ -201,16 +232,20 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	// Bootstrap routes - plain HTTP for initial CA discovery and bootstrap
 	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.bootstrapController.handleLocalBootstrapWithURL)
 	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.bootstrapController.handleBootstrapStatus)
-	mux.HandleFunc(constants.APIPaths.AuthCLIEnroll, h.bootstrapController.handleCLIEnrollment)
 	mux.HandleFunc(constants.APIPaths.AuthDeviceEnroll, h.bootstrapController.handleDeviceEnrollment)
 	mux.HandleFunc(constants.APIPaths.PKIAppsEnroll, h.pkiController.handlePKIAppsEnroll)
 	mux.HandleFunc(constants.APIPaths.PKICSRSign, h.pkiController.handlePKICSRSign)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
 
-	mux.HandleFunc(constants.APIPaths.WebCertLinux, h.pkiController.handleTrustScriptLinux)
-	mux.HandleFunc(constants.APIPaths.WebCertWindows, h.pkiController.handleTrustScriptWindows)
-	mux.HandleFunc("/.well-known/g8e/pki/trust-windows", h.pkiController.handleTrustScriptWindowsAlias)
+	// CLI recovery discovery surface — request/status/complete are reachable
+	// over plain HTTP so a new CLI without trusted TLS can initiate recovery.
+	// The approve endpoint is intentionally NOT registered here: approval
+	// requires a web-session cookie, which is only set over HTTPS.
+	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryRequest, h.cliRecoveryController.handleRecoveryRequest)
+	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryStatus, h.cliRecoveryController.handleRecoveryStatus)
+	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryComplete, h.cliRecoveryController.handleRecoveryComplete)
+
 	mux.HandleFunc("/.well-known/g8e/bin/", h.pkiController.handleNodeBinaryDownload)
 	mux.HandleFunc(constants.APIPaths.DeployScriptLinux, h.pkiController.handleDeployScriptLinux)
 	mux.HandleFunc(constants.APIPaths.DeployScriptWindows, h.pkiController.handleDeployScriptWindows)

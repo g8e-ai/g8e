@@ -47,6 +47,23 @@ func (m *mockProgramSender) waitForMsg(timeout time.Duration) (tea.Msg, bool) {
 	}
 }
 
+// passkeyRegisteredEnvelope builds an SSEPushPayload JSON envelope with the
+// given user ID, CLI session ID, and inner event type. Used by SSE monitor
+// tests to construct event data that matches the registrar's filtering logic.
+func passkeyRegisteredEnvelope(t *testing.T, userID, cliSessionID string) string {
+	t.Helper()
+	innerJSON, err := json.Marshal(map[string]string{"type": "passkey.registered"})
+	require.NoError(t, err)
+	envelope := models.SSEPushPayload{
+		UserID:       userID,
+		CliSessionID: cliSessionID,
+		Event:        innerJSON,
+	}
+	b, err := json.Marshal(envelope)
+	require.NoError(t, err)
+	return string(b)
+}
+
 func TestMonitorPasskeyRegistration_SSEEventTriggersRegisteredMsg(t *testing.T) {
 	fileSvc, cfg := newAuthTestEnv(t)
 	writeTestCLICert(t, fileSvc, cfg)
@@ -56,13 +73,14 @@ func TestMonitorPasskeyRegistration_SSEEventTriggersRegisteredMsg(t *testing.T) 
 		w.WriteHeader(http.StatusOK)
 		flusher, ok := w.(http.Flusher)
 		require.True(t, ok, "ResponseWriter must support flushing")
-		fmt.Fprintf(w, "event: passkey.registered\ndata: {}\n\n")
+		fmt.Fprintf(w, "event: passkey.registered\ndata: %s\n\n",
+			passkeyRegisteredEnvelope(t, "test-user", "test-session"))
 		flusher.Flush()
 		<-r.Context().Done()
 	}
 	server := startTLSEnrollServer(t, cfg, handler)
 
-	sseURL := fmt.Sprintf("%s/sse?since_id=1", server.URL)
+	sseURL := fmt.Sprintf("%s/sse?since_id=0", server.URL)
 	httpClient, err := BuildMTLSClient(fileSvc, cfg, 0)
 	require.NoError(t, err)
 	sseClient := sse.NewClient(sseURL, httpClient)
@@ -71,8 +89,9 @@ func TestMonitorPasskeyRegistration_SSEEventTriggersRegisteredMsg(t *testing.T) 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
 	sender := newMockProgramSender()
-	go monitorPasskeyRegistration(ctx, sseClient, sender)
+	go r.monitorPasskeyRegistration(ctx, sseClient, sender, "test-user", "test-session", cancel)
 
 	msg, ok := sender.waitForMsg(3 * time.Second)
 	require.True(t, ok, "expected passkeyRegisteredMsg within timeout")
@@ -93,23 +112,16 @@ func TestMonitorPasskeyRegistration_NoEventHeaderExtractsTypeFromPayload(t *test
 		w.WriteHeader(http.StatusOK)
 		flusher, ok := w.(http.Flusher)
 		require.True(t, ok, "ResponseWriter must support flushing")
-		// Build an SSEPushPayload envelope wrapping an inner event with
-		// type "passkey.registered" but send it without the event: header.
-		innerJSON, err := json.Marshal(map[string]string{"type": "passkey.registered"})
-		require.NoError(t, err)
-		envelope := models.SSEPushPayload{
-			CliSessionID: "test-session",
-			Event:        innerJSON,
-		}
-		envelopeJSON, err := json.Marshal(envelope)
-		require.NoError(t, err)
-		fmt.Fprintf(w, "data: %s\n\n", string(envelopeJSON))
+		// Send the envelope without the event: header so the monitor
+		// must extract the type from the inner Event.type field.
+		fmt.Fprintf(w, "data: %s\n\n",
+			passkeyRegisteredEnvelope(t, "test-user", "test-session"))
 		flusher.Flush()
 		<-r.Context().Done()
 	}
 	server := startTLSEnrollServer(t, cfg, handler)
 
-	sseURL := fmt.Sprintf("%s/sse?since_id=1", server.URL)
+	sseURL := fmt.Sprintf("%s/sse?since_id=0", server.URL)
 	httpClient, err := BuildMTLSClient(fileSvc, cfg, 0)
 	require.NoError(t, err)
 	sseClient := sse.NewClient(sseURL, httpClient)
@@ -118,8 +130,9 @@ func TestMonitorPasskeyRegistration_NoEventHeaderExtractsTypeFromPayload(t *test
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
 	sender := newMockProgramSender()
-	go monitorPasskeyRegistration(ctx, sseClient, sender)
+	go r.monitorPasskeyRegistration(ctx, sseClient, sender, "test-user", "test-session", cancel)
 
 	msg, ok := sender.waitForMsg(3 * time.Second)
 	require.True(t, ok, "expected passkeyRegisteredMsg within timeout")
@@ -138,7 +151,7 @@ func TestMonitorPasskeyRegistration_TimeoutSendsEnrollErrMsg(t *testing.T) {
 	}
 	server := startTLSEnrollServer(t, cfg, handler)
 
-	sseURL := fmt.Sprintf("%s/sse?since_id=1", server.URL)
+	sseURL := fmt.Sprintf("%s/sse?since_id=0", server.URL)
 	httpClient, err := BuildMTLSClient(fileSvc, cfg, 0)
 	require.NoError(t, err)
 	sseClient := sse.NewClient(sseURL, httpClient)
@@ -147,8 +160,9 @@ func TestMonitorPasskeyRegistration_TimeoutSendsEnrollErrMsg(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
 	sender := newMockProgramSender()
-	go monitorPasskeyRegistration(ctx, sseClient, sender)
+	go r.monitorPasskeyRegistration(ctx, sseClient, sender, "test-user", "test-session", cancel)
 
 	msg, ok := sender.waitForMsg(3 * time.Second)
 	require.True(t, ok, "expected enrollErrMsg within timeout")
@@ -172,7 +186,7 @@ func TestMonitorPasskeyRegistration_SSEStreamClosedSendsEnrollErrMsg(t *testing.
 
 	server := startTLSEnrollServer(t, cfg, handler)
 
-	sseURL := fmt.Sprintf("%s/sse?since_id=1", server.URL)
+	sseURL := fmt.Sprintf("%s/sse?since_id=0", server.URL)
 	httpClient, err := BuildMTLSClient(fileSvc, cfg, 0)
 	require.NoError(t, err)
 	sseClient := sse.NewClient(sseURL, httpClient)
@@ -183,8 +197,9 @@ func TestMonitorPasskeyRegistration_SSEStreamClosedSendsEnrollErrMsg(t *testing.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
 	sender := newMockProgramSender()
-	go monitorPasskeyRegistration(ctx, sseClient, sender)
+	go r.monitorPasskeyRegistration(ctx, sseClient, sender, "test-user", "test-session", cancel)
 
 	msg, ok := sender.waitForMsg(5 * time.Second)
 	require.True(t, ok, "expected enrollErrMsg within timeout after SSE stream closed")
@@ -205,7 +220,11 @@ func TestGenerateEnrollmentToken_NetworkErrorReturnsErrHTTPRequestExecuteFailed(
 	})
 	cfg.Paths.Host = "https://127.0.0.1:1"
 
-	_, err := generateEnrollmentToken(fileSvc, cfg, "test-user", "test-session")
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	mtlsClient, err := BuildMTLSClient(fileSvc, cfg, 0)
+	require.NoError(t, err)
+
+	_, err = r.generateEnrollmentToken(context.Background(), mtlsClient, "test-session")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrHTTPRequestExecuteFailed)
 }

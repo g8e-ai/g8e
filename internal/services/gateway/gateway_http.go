@@ -43,11 +43,14 @@ type HTTPHandlerDependencies struct {
 	DataControllerDeps            DataControllerDeps
 	SignerControllerDeps          SignerControllerDeps
 	BootstrapControllerDeps       BootstrapControllerDeps
+	CLIRecoveryControllerDeps     CLIRecoveryControllerDeps
+	CLIRotationControllerDeps     CLIRotationControllerDeps
 	EnrollmentTokenControllerDeps EnrollmentTokenControllerDeps
 	UserControllerDeps            UserControllerDeps
 	SessionControllerDeps         SessionControllerDeps
 	AdminControllerDeps           AdminControllerDeps
 	OperatorControllerDeps        OperatorControllerDeps
+	DispatchControllerDeps        DispatchControllerDeps
 	SSEControllerDeps             SSEControllerDeps
 	HealthControllerDeps          HealthControllerDeps
 	GovernanceControllerDeps      GovernanceControllerDeps
@@ -71,11 +74,14 @@ type HTTPHandler struct {
 	dataController            *DataController
 	signerController          *SignerController
 	bootstrapController       *BootstrapController
+	cliRecoveryController     *CLIRecoveryController
+	cliRotationController     *CLIRotationController
 	enrollmentTokenController *EnrollmentTokenController
 	userController            *UserController
 	sessionController         *SessionController
 	adminController           *AdminController
 	operatorController        *OperatorController
+	dispatchController        *DispatchController
 	sseController             *SSEController
 	healthController          *HealthController
 	governanceController      *GovernanceController
@@ -106,9 +112,65 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	// from any one. PKIControllerDeps is first in the struct.
 	responder := deps.PKIControllerDeps.Responder
 
-	// Initialize enrollment token service (shared dependency, not a controller)
-	enrollmentTokenSvc := NewEnrollmentTokenService(deps.BootstrapControllerDeps.DocStore, deps.Logger)
-	deps.EnrollmentTokenControllerDeps.EnrollmentTokenSvc = enrollmentTokenSvc
+	// Initialize enrollment token service (shared dependency, not a controller).
+	// If the caller already provided one (e.g., GatewayModeService shares the
+	// same instance with the passkey handler), reuse it instead of creating a
+	// second service backed by the same store.
+	enrollmentTokenSvc := deps.EnrollmentTokenControllerDeps.EnrollmentTokenSvc
+	if enrollmentTokenSvc == nil {
+		enrollmentTokenSvc = NewEnrollmentTokenService(deps.BootstrapControllerDeps.DocStore, deps.Logger)
+		deps.EnrollmentTokenControllerDeps.EnrollmentTokenSvc = enrollmentTokenSvc
+	}
+
+	// Initialize CLI recovery service (shared dependency, not a controller)
+	cliRecoverySvc := NewCLIRecoveryService(deps.BootstrapControllerDeps.DocStore, deps.Logger)
+	deps.CLIRecoveryControllerDeps.RecoverySvc = cliRecoverySvc
+	if deps.CLIRecoveryControllerDeps.Cfg == nil {
+		deps.CLIRecoveryControllerDeps.Cfg = deps.Cfg
+	}
+	if deps.CLIRecoveryControllerDeps.Logger == nil {
+		deps.CLIRecoveryControllerDeps.Logger = deps.Logger
+	}
+	if deps.CLIRecoveryControllerDeps.UserSvc == nil {
+		deps.CLIRecoveryControllerDeps.UserSvc = deps.BootstrapControllerDeps.UserSvc
+	}
+	if deps.CLIRecoveryControllerDeps.PKI == nil {
+		deps.CLIRecoveryControllerDeps.PKI = deps.BootstrapControllerDeps.PKI
+	}
+	if deps.CLIRecoveryControllerDeps.CLISessionSvc == nil {
+		deps.CLIRecoveryControllerDeps.CLISessionSvc = deps.BootstrapControllerDeps.CLISessionSvc
+	}
+	if deps.CLIRecoveryControllerDeps.OperatorSessionSvc == nil {
+		deps.CLIRecoveryControllerDeps.OperatorSessionSvc = deps.BootstrapControllerDeps.OperatorSessionSvc
+	}
+	if deps.CLIRecoveryControllerDeps.DocStore == nil {
+		deps.CLIRecoveryControllerDeps.DocStore = deps.BootstrapControllerDeps.DocStore
+	}
+	if deps.CLIRecoveryControllerDeps.Responder == nil {
+		deps.CLIRecoveryControllerDeps.Responder = responder
+	}
+
+	// CLIRotationController shares the same shared services as recovery
+	// (PKI, CLISessionSvc, UserSvc). Defaults are filled from the
+	// bootstrap deps so callers only need to set overrides.
+	if deps.CLIRotationControllerDeps.Cfg == nil {
+		deps.CLIRotationControllerDeps.Cfg = deps.Cfg
+	}
+	if deps.CLIRotationControllerDeps.Logger == nil {
+		deps.CLIRotationControllerDeps.Logger = deps.Logger
+	}
+	if deps.CLIRotationControllerDeps.PKI == nil {
+		deps.CLIRotationControllerDeps.PKI = deps.BootstrapControllerDeps.PKI
+	}
+	if deps.CLIRotationControllerDeps.CLISessionSvc == nil {
+		deps.CLIRotationControllerDeps.CLISessionSvc = deps.BootstrapControllerDeps.CLISessionSvc
+	}
+	if deps.CLIRotationControllerDeps.UserSvc == nil {
+		deps.CLIRotationControllerDeps.UserSvc = deps.BootstrapControllerDeps.UserSvc
+	}
+	if deps.CLIRotationControllerDeps.Responder == nil {
+		deps.CLIRotationControllerDeps.Responder = responder
+	}
 
 	h := &HTTPHandler{
 		cfg:                       deps.Cfg,
@@ -120,11 +182,14 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 		dataController:            newDataController(deps.DataControllerDeps),
 		signerController:          newSignerController(deps.SignerControllerDeps),
 		bootstrapController:       newBootstrapController(deps.BootstrapControllerDeps),
+		cliRecoveryController:     newCLIRecoveryController(deps.CLIRecoveryControllerDeps),
+		cliRotationController:     newCLIRotationController(deps.CLIRotationControllerDeps),
 		enrollmentTokenController: newEnrollmentTokenController(deps.EnrollmentTokenControllerDeps),
 		userController:            newUserController(deps.UserControllerDeps),
 		sessionController:         newSessionController(deps.SessionControllerDeps),
 		adminController:           newAdminController(deps.AdminControllerDeps),
 		operatorController:        newOperatorController(deps.OperatorControllerDeps),
+		dispatchController:        newDispatchController(deps.DispatchControllerDeps),
 		sseController:             newSSEController(deps.SSEControllerDeps),
 		healthController:          newHealthController(deps.HealthControllerDeps),
 		governanceController:      newGovernanceController(deps.GovernanceControllerDeps),

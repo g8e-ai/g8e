@@ -129,7 +129,9 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │       └── gateway.GatewayWebSocketHandler
 ├── gateway.UserService
 │   └── gateway.DocumentStoreService (from Stores [SHARED])
-├── gateway.CLISessionService
+├── gateway.CLISessionService (CLI session persistence; used by recovery/rotation controllers for session replacement and by L3 notary for mTLS session verification)
+│   └── gateway.DocumentStoreService (from Stores [SHARED])
+├── gateway.CLIRecoveryService (human-approved CLI recovery request lifecycle; token hashing, atomic state transitions, proof-of-possession verification)
 │   └── gateway.DocumentStoreService (from Stores [SHARED])
 ├── gateway.OperatorSessionService
 │   └── gateway.DocumentStoreService (from Stores [SHARED])
@@ -159,7 +161,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   ├── consensus.ConsensusService (injected at construction time; nil = not configured for posture)
 │   │   ├── governance.EnvelopeProcessor (injected at construction time; nil = not configured for posture)
 │   │   └── response.Writer
-│   ├── gateway.PKIController (PKI enrollment, CSR signing, trust scripts, deploy scripts)
+│   ├── gateway.PKIController (PKI enrollment, CSR signing, CA bundle discovery, deploy scripts)
 │   │   ├── gateway.PKIAuthority [SHARED]
 │   │   ├── gateway.AppEnrollmentService [SHARED]
 │   │   ├── gateway.RegistrationService [SHARED]
@@ -178,7 +180,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   │   ├── gateway.SignerStoreService (from Stores [SHARED])
 │   │   └── response.Writer
-│   ├── gateway.BootstrapController (bootstrap, CLI enrollment, device enrollment, bootstrap status)
+│   ├── gateway.BootstrapController (bootstrap, local bootstrap with URL, bootstrap status, device enrollment)
 │   │   ├── gateway.UserService [SHARED]
 │   │   ├── gateway.PKIAuthority [SHARED]
 │   │   ├── gateway.CLISessionService [SHARED]
@@ -186,6 +188,18 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   │   ├── response.Writer
 │   │   └── actuatorKeyReader (fileActuatorKeyReader, reads actuator public key from disk)
+│   ├── gateway.CLIRecoveryController (human-approved CLI recovery: request, status, browser approval, complete)
+│   │   ├── gateway.CLISessionService [SHARED]
+│   │   ├── gateway.PKIAuthority [SHARED]
+│   │   ├── gateway.UserService [SHARED]
+│   │   ├── gateway.WebSessionService [SHARED]
+│   │   ├── gateway.CLIRecoveryService
+│   │   └── response.Writer
+│   ├── gateway.CLIRotationController (mTLS-protected CLI certificate rotation)
+│   │   ├── gateway.CLISessionService [SHARED]
+│   │   ├── gateway.PKIAuthority [SHARED]
+│   │   ├── gateway.UserService [SHARED]
+│   │   └── response.Writer
 │   ├── gateway.EnrollmentTokenController (enrollment token generate, validate)
 │   │   ├── gateway.EnrollmentTokenService (created in HTTPHandler constructor, manages enrollment token lifecycle with TTL-based cleanup)
 │   │   ├── response.Writer
@@ -212,9 +226,12 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   │   ├── gateway.StateRootService (from Stores [SHARED])
 │   │   └── response.Writer
-│   ├── gateway.OperatorController (operator list, terminate, bind/unbind, target context, reauth)
+│   ├── gateway.OperatorController (operator list, terminate, bind/unbind, target context, reauth, session lookup)
 │   │   ├── gateway.RegistrationService [SHARED]
 │   │   ├── gateway.AuthService [SHARED]
+│   │   └── response.Writer
+│   ├── gateway.DispatchController (mTLS-protected operator command dispatch)
+│   │   ├── gateway.GatewayService [SHARED]
 │   │   └── response.Writer
 │   └── response.Writer
 ├── http.Server (HTTPS port, mTLS-enforced public router)
@@ -256,8 +273,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 ### Mode Bifurcation
 - **Mode-specific services**: `G8eoService` (outbound mode only), `GatewayModeService` (gateway mode only), `mcp.GatewayService` (gateway-only; `MCPGateway` is in `GatewayCommandServiceConfig` and wired via `NewGatewayOperatorPubSubService`; not present in outbound mode's `CommandServiceConfig`)
 - **Shared services**: `CanonicalDBService` (used in both modes for state root calculation - full service in gateway mode, state root calculation only in outbound mode)
-- **Governance dependencies**: `FieldReader`, `ConsensusPolicyStore`, `ReplayStore`, `StateRootProvider`, `TransactionAudit`, `L3Notary`, `SignerStore`, and `Doctrine` are consolidated in `pubsub.GovernanceDeps`, passed as a separate parameter to `NewOperatorPubSubService` and embedded via the `GovDeps` field in `GatewayCommandServiceConfig`.
-  In outbound mode, `ConsensusPolicyStore` and `FieldReader` are nil (feature not configured); call sites nil-check with fail-closed behavior. In gateway mode, all fields are populated via `GetGovernanceDeps`.
+- **Governance dependencies**: `FieldReader`, `ConsensusPolicyStore`, `ReplayStore`, `StateRootProvider`, `TransactionAudit`, `L3Notary`, `SignerStore`, and `Doctrine` are consolidated in `pubsub.GovernanceDeps`, passed as a separate parameter to `NewOperatorPubSubService` and embedded via the `GovDeps` field in `GatewayCommandServiceConfig`. In outbound mode, `ConsensusPolicyStore` and `FieldReader` are nil (feature not configured); call sites nil-check with fail-closed behavior. In gateway mode, all fields are populated via `GetGovernanceDeps`.
 
 ### Data Handling Convergence
 - **`gateway.CanonicalDBService`** is the canonical SQLite root for gateway mode; it contains only lifecycle code (Open, Close, GetVault, schema/migrations, maintenance loop). Domain logic lives in dedicated service fields. In outbound mode, it is used only for state root calculation and provides the shared vault instance.
@@ -310,6 +326,7 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - `gateway.AppPolicyStoreService` implements: `governance.AppPolicyStore` (gateway mode dedicated implementation).
 - `gateway.ReplayStoreService` implements: `governance.ReplayStore` (gateway mode dedicated implementation).
 - `gateway.StateRootService` implements: `governance.StateRootProvider` (gateway mode dedicated implementation).
+- `governance.RemoteStateRootProvider` implements: `governance.StateRootProvider` (outbound mode; fetches the gateway's state Merkle root from `/api/v1/state` over mTLS — the operator is a leaf in the gateway's Merkle tree and has no independent state root).
 - `gateway.DocumentStoreService` implements: `governance.TransactionAuditStore` (gateway mode dedicated implementation).
 - `gateway.EncryptedKVAdapter` implements: `storage.TokenStore` (outbound mode).
 - `storage.SuspendedTransactionService` implements: `storage.SuspendedTransactionStore` (used in both gateway and outbound modes).
@@ -336,18 +353,17 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 ### Transport & Protocol Layer
 - `pubsub.OperatorPubSubService` is the dispatcher for outbound mode (WebSocket pub/sub).
 - `mcp.GatewayService` handles MCP/A2A protocol translation and downstream dispatch (gateway mode only; shared between HTTP ingress and OperatorPubSubService egress).
-- `gateway.HTTPHandler` is a router and middleware shell for gateway mode. It holds router infrastructure (rate limiting, CORS, path traversal guard), cross-cutting infrastructure (`responder`, `authMiddleware`), and 16 controller fields: `PKIController`, `AuditController`, `DataController`, `SignerController`, `BootstrapController`, `EnrollmentTokenController`, `UserController`, `SessionController`, `AdminController`, `OperatorController`, `SSEController`, `HealthController`, `GovernanceController`, `MCPController`, `PubSubController`, `PasskeyController`. All HTTP endpoint logic lives on controllers. Dependencies are injected via `HTTPHandlerDependencies`, composed of per-controller `Deps` structs.
+- `gateway.HTTPHandler` is a router and middleware shell for gateway mode. It holds router infrastructure (rate limiting, CORS, path traversal guard), cross-cutting infrastructure (`responder`, `authMiddleware`), and 19 controller fields: `PKIController`, `AuditController`, `DataController`, `SignerController`, `BootstrapController`, `CLIRecoveryController`, `CLIRotationController`, `EnrollmentTokenController`, `UserController`, `SessionController`, `AdminController`, `OperatorController`, `DispatchController`, `SSEController`, `HealthController`, `GovernanceController`, `MCPController`, `PubSubController`, `PasskeyController`. All HTTP endpoint logic lives on controllers. Dependencies are injected via `HTTPHandlerDependencies`, composed of per-controller `Deps` structs.
 - `gateway.GatewayWebSocketHandler` is the in-process pub/sub broker for gateway mode.
 - `gateway.PKIAuthority` manages PKI hierarchy and certificate lifecycle for gateway mode.
 - `network.Detector` detects host IP addresses and DNS names to configure TLS certificate identities dynamically during boot and renewal.
-- The synchronous envelope-processing endpoint at `/api/v1/governance/envelopes` and all governance logic live on `GovernanceController` in `governance_controller.go`. `GovernanceController` receives `consensus.ConsensusService` and `governance.EnvelopeProcessor` as constructor arguments. A nil value means the feature is not configured for the current posture (e.g. doctrine mode has no consensus).
-  Handlers check for nil and return 503 ("not configured for this posture"), not "not yet wired during boot."
+- The synchronous envelope-processing endpoint at `/api/v1/governance/envelopes` and all governance logic live on `GovernanceController` in `governance_controller.go`. `GovernanceController` receives `consensus.ConsensusService` and `governance.EnvelopeProcessor` as constructor arguments. A nil value means the feature is not configured for the current posture (e.g. doctrine mode has no consensus). Handlers check for nil and return 503 ("not configured for this posture"), not "not yet wired during boot."
 - `gateway_db.go` embeds the SQLite schema from `db/schema.sql` for database initialization. `gateway_certs.go` defines certificate validity periods and common names for all g8e CAs (root, intermediate, serving, leaf, peer).
 - `gateway_pubsub.go` defines `GatewayWebSocketHandler` for WebSocket-based publish/subscribe channels, including subscriber management and in-process handlers for governance command processing and SSE streaming.
 
 ### Gateway HTTP Dual-Router Architecture
-- **`buildPublicRouter`** (HTTPS port): Full API surface with mTLS middleware via `auth.Middleware`. Routes include governance envelopes, audit, PKI management, user management, MCP/A2A ingress, SSE, pub/sub, console SPA, passkey endpoints, and approval UI. WebSessionAuth-protected routes bypass mTLS and use cookie-based auth with their own middleware. The landing page (`/`) redirects to `/console/`.
-- **`buildHTTPRouter`** (HTTP port): Bootstrap-only surface for CA discovery, trust scripts, deploy scripts, CLI enrollment, and state endpoint. All other paths redirect to HTTPS. Wrapped with rate limiting and path traversal guard.
+- **`buildPublicRouter`** (HTTPS port): Full API surface with mTLS middleware via `auth.Middleware`. Routes include governance envelopes, audit, PKI management, user management, MCP/A2A ingress, SSE, pub/sub, console SPA, passkey endpoints, approval UI, CLI recovery (request/status/approve/complete), and CLI rotation (`/api/v1/auth/cli/rotate`, mTLS-only). WebSessionAuth-protected routes bypass mTLS and use cookie-based auth with their own middleware. The landing page (`/`) redirects to `/console/`.
+- **`buildHTTPRouter`** (HTTP port): Bootstrap-only surface for CA discovery, deploy scripts (Linux/Windows), node binary download, CLI recovery discovery (request/status/complete — approve is HTTPS-only), and state endpoint. All other paths redirect to HTTPS. Wrapped with rate limiting and path traversal guard. (The old `handleCLIEnrollment` route and per-platform trust-install script routes were removed in v1.7.2.)
 - **`RouteAuthRegistry`** classifies every route by its authentication mode (`RouteAuthNone`, `RouteAuthMTLS`, `RouteAuthWebSession`, `RouteAuthDual`). Exact paths are matched with highest priority, then prefix matches. Unknown routes default to `RouteAuthMTLS` (fail-closed). When JWKS is enabled, MCP/A2A and JIT passkey routes are reclassified to `RouteAuthNone` (JWT middleware handles auth).
 - **`PrivilegedRouteRegistry`** blocks app certificates from governance envelope submission and query endpoints. Only operator and CLI auth are accepted on these routes.
 - **`gateway_http_middleware.go`**: `rateLimitMiddleware` applies per-IP token bucket rate limiting with 5-minute stale entry cleanup. `pathTraversalGuard` rejects requests containing `..` path segments before ServeMux normalization.
@@ -358,16 +374,19 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - **`gateway/console/`**: Embedded Console SPA (`console.go` exposes `Handler` serving the static filesystem from `static/`).
 
 ### HTTP Controller Decomposition
-- **`gateway.PKIController`** (`pki_controller.go`): PKI enrollment, CSR signing, CA bundle, trust scripts (Linux/macOS/Windows), deploy scripts, certificate revocation, app enrollment.
+- **`gateway.PKIController`** (`pki_controller.go`): PKI enrollment, CSR signing, CA bundle discovery, CRL, deploy scripts (Linux/Windows), node binary download, certificate revocation, app/device enrollment. (The old per-platform trust-install script routes `/web-cert.sh`, `/web-cert.ps1`, `/.well-known/g8e/pki/trust-windows` were removed in v1.7.2; OS trust installation is now performed client-side by the `EnrollmentCoordinator` via `platform.SystemTrustInstaller`.)
 - **`gateway.AuditController`** (`audit_controller.go`): Audit receipts, audit events, audit summary, audit report. 4 dependencies (cfg, logger, auditStore, responder).
 - **`gateway.DataController`** (`data_controller.go`): Data DB, KV store, blob storage, SSE events, pub/sub publish. 7 dependencies (cfg, logger, docStore, kvStore, sseStore, blobStore, pubsub, responder).
 - **`gateway.SignerController`** (`signer_controller.go`): Governance trusted signers. 5 dependencies (cfg, logger, docStore, signerStore, responder).
-- **`gateway.BootstrapController`** (`bootstrap_controller.go`): Local bootstrap with URL, bootstrap status, CLI enrollment, device enrollment. 9 dependencies (cfg, logger, docStore, userSvc, pki, cliSessionSvc, operatorSessionSvc, responder, actuatorKeyReader).
+- **`gateway.BootstrapController`** (`bootstrap_controller.go`): Local bootstrap with URL, bootstrap status, device enrollment. CLI enrollment is no longer handled here — it is owned by the client-side `EnrollmentCoordinator` (CLI auth package) which drives the bootstrap, recovery, and rotation gateway endpoints. 9 dependencies (cfg, logger, docStore, userSvc, pki, cliSessionSvc, operatorSessionSvc, responder, actuatorKeyReader).
+- **`gateway.CLIRecoveryController`** (`cli_recovery_controller.go`): Human-approved CLI recovery flow — request creation (public, CSR is proof-of-possession anchor), status polling (public, opaque token is lookup key), browser approval/denial (web-session protected, existing user authorizes new CLI), and proof-of-possession-gated completion (public, requires token + CSR private-key signature over request ID). Issues a new CLI certificate bound to a new CLI session. Auth classification: request/status/complete = `RouteAuthNone`, approve = `RouteAuthWebSession`. 9 dependencies (cfg, logger, recoverySvc, userSvc, pki, cliSessionSvc, operatorSessionSvc, docStore, responder).
+- **`gateway.CLIRotationController`** (`cli_rotation_controller.go`): mTLS-protected CLI certificate rotation. Identity (user ID + active CLI session ID) is derived strictly from the verified mTLS certificate URI SAN — request body fields are NOT trusted for identity. Single transactional replacement: new cert is signed BEFORE old session is deactivated, old cert is revoked AFTER session replacement commits. Auth classification: `RouteAuthMTLS` (registered on `buildPublicRouter` only, never on plain HTTP). 7 dependencies (cfg, logger, cliSessionSvc, pki, userSvc, responder, + cert revocation via PKI).
 - **`gateway.EnrollmentTokenController`** (`enrollment_token_controller.go`): Enrollment token generation (mTLS-protected) and validation (public). 4 dependencies (cfg, logger, enrollmentTokenSvc, responder).
 - **`gateway.UserController`** (`user_controller.go`): User creation (mTLS-protected), user me (web session). 4 dependencies (cfg, logger, userSvc, responder).
 - **`gateway.SessionController`** (`session_controller.go`): Logout (clear cookie + delete web session), web session info. 4 dependencies (logger, docStore, responder, crossOrigin).
 - **`gateway.AdminController`** (`admin_controller.go`): App policy management by signer, app revocation, consensus CRUD.
-- **`gateway.OperatorController`** (`operator_controller.go`): Operator list, terminate, bind/unbind operators, set target context, reauth.
+- **`gateway.OperatorController`** (`operator_controller.go`): Operator list, terminate, bind/unbind operators, set target context, reauth, operator session lookup (`GET /api/v1/operators/session/{id}`).
+- **`gateway.DispatchController`** (`dispatch_service.go`): mTLS-protected operator command dispatch (`POST /api/v1/operators/commands`). Accepts a typed `OperatorCommandRequest`, routes it through the governance pipeline, and returns a `DispatchResponse` with the dispatch ID and result. Auth classification: `RouteAuthMTLS`.
 - **`gateway.SSEController`** (`sse_controller.go`): SSE event push, poll, and stream endpoints. Includes `authorizeSSERoute` for dual-auth (mTLS or web session) authorization. Heartbeat interval defaults to 30s.
 - **`gateway.HealthController`** (`health_controller.go`): Health check, bootstrap health, state endpoint, and landing page.
 - **`gateway.GovernanceController`** (`governance_controller.go`): Governance envelope submission, consensus deliberation. Both `consensus.ConsensusService` and `governance.EnvelopeProcessor` are injected at construction time. A nil value means the feature is not configured for the current posture (e.g. doctrine mode has no consensus). Handlers check for nil and return 503 ("not configured for this posture").
@@ -391,8 +410,7 @@ The `g8e` binary (`internal/cli/cmd/main.go`) registers the following subcommand
   - **`security`**: Security validation checks. Subcommands: `validate`, `pki` (with `enroll` subcommand).
   - **`tunnel`**: Manage Cloudflare Tunnel for public gateway access. Subcommands: `create`, `run`, `status`.
 - **`auth`**: Authentication and session management. Subcommands: `enroll` (CSR-based enrollment with passkey registration), `logout`, `approve` (interactive OOB approval of suspended transactions via passkey).
-- **`mcp`**: MCP protocol operations. Subcommands: `stdio` (run g8e as an MCP server over stdio), `agent` (agent integration commands for AI coding tools). `agent` subcommands: `list` (list supported agent binaries), `show` (print MCP client configuration for a specific agent), `run` (launch an agent with g8e MCP configuration and native tools disabled).
-  The `run` subcommand includes `verifyToolInterception` pre-launch config verification via `--verify` flag, enabled by default. Supported agents: Claude Code, OpenAI Codex, Goose, Gemini CLI.
+- **`mcp`**: MCP protocol operations. Subcommands: `stdio` (run g8e as an MCP server over stdio), `agent` (agent integration commands for AI coding tools). `agent` subcommands: `list` (list supported agent binaries), `show` (print MCP client configuration for a specific agent), `run` (launch an agent with g8e MCP configuration and native tools disabled). The `run` subcommand includes `verifyToolInterception` pre-launch config verification via `--verify` flag, enabled by default. Supported agents: Claude Code, OpenAI Codex, Goose, Gemini CLI.
 - **`operator`**: Manage Operator instances. Subcommands: `list`, `start`, `cp`, `scp`, `deploy`, `stream`.
 - **`vault`**: Encryption vault management. Subcommands: `init`, `unlock`, `rekey`, `status`, `reset`, `export`, `import`.
 - **`test`**: Run test suites. Subcommands: `unit`, `integration`, `e2e`, `coverage`, `lint`, `chaos`, `summary`.
@@ -442,8 +460,7 @@ The reporting system operates as a self-contained, offline verification utility 
 
 - **`ksi.go`**: Typed KSI model with `KSI`, `KSIMethod`, `KSIResult`, `KSIResultSet`, `KSICatalog`, `Evidence`, `AutomatedMethod` structs. Typed enums for `KSICategory`, `KSIStatus`, `CertificationClass`, `ValidationCycle`, `EvidenceType`. No raw maps. Catalog loaded from `docs/reference/ksi-catalog.json` (31 KSIs across 10 categories, seeded from CR26 reference).
 - **`ksi_test.go`**: 11 unit tests covering catalog loading, validation (7 edge cases), lookup, class filtering, staleness detection (6 scenarios), JSON round-trip, error paths.
-- **`ksi_evaluator.go`**: `KSIEvaluator` struct with `RegisterMethods`, `RegisterDefaultMethods`, `Evaluate` methods. Derives binary KSI status from live g8e state via `EvaluatorDeps` (audit store, ledger, commitment ledger). Enforces minimum method counts per certification class (fail-closed for Class C: at least 2).
-  `DefaultMethods` provides 8 reusable method closures bound to automatable KSIs.
+- **`ksi_evaluator.go`**: `KSIEvaluator` struct with `RegisterMethods`, `RegisterDefaultMethods`, `Evaluate` methods. Derives binary KSI status from live g8e state via `EvaluatorDeps` (audit store, ledger, commitment ledger). Enforces minimum method counts per certification class (fail-closed for Class C: at least 2). `DefaultMethods` provides 8 reusable method closures bound to automatable KSIs.
 - **`ksi_evaluator_test.go`**: 17 unit tests covering method registration, evaluation (all-satisfied, insufficient methods, stale, method error, nil deps, empty stores, class thresholds, context cancellation), result set helpers, default method correctness, full integration.
 - **`ksi_evaluator_integration_test.go`**: 2 integration tests (build tag: `integration`) against real `SQLAuditStore` + `GitLedgerService` + `CommitmentLedger` using the shipped catalog. `TestKSIEvaluator_Integration_SeededEvidenceSatisfiesAutomatableKSIs` seeds full evidence chain and asserts all 10 automatable KSIs satisfied. `TestKSIEvaluator_Integration_EmptyStoresFailClosed` asserts all KSIs fail-closed on empty stores.
 - **`oscal.go`**: `OSCALExporter` struct with `GenerateComponentDefinition` and `GenerateAssessmentResults` methods. Typed OSCAL structs for `component-definition` and `assessment-results` models. Evidence anchors link to receipt IDs, ledger commit hashes, and LFAA execution IDs. No `map[string]interface{}`.
@@ -460,22 +477,67 @@ The reporting system operates as a self-contained, offline verification utility 
 
 ## CLI Serve Layer (Operator & Gateway Boot)
 
-- **`internal/cli/serve/cert.go`**: PKI enrollment and certificate lifecycle: `PerformAutomaticEnrollment` (initial enrollment via CSR + trust bundle fetch, returns session ID instead of calling `os.Setenv` internally), `RenewOperatorCertificate` (re-enrollment for expiring certs, decomposed into 5 testable units), `RunClientCertRenewalLoop` (periodic renewal check). `CertPaths` struct decouples path configuration from `paths.Infra`.
-  HTTP client uses 15s timeout. Error wrapping standardized with `ErrEmptyTrustBundle`, `ErrCAParseFailed`, `ErrMissingRequiredField`.
+- **`internal/cli/serve/cert.go`**: PKI enrollment and certificate lifecycle: `PerformAutomaticEnrollment` (initial enrollment via CSR + trust bundle fetch, returns session ID instead of calling `os.Setenv` internally), `RenewOperatorCertificate` (re-enrollment for expiring certs, decomposed into 5 testable units), `RunClientCertRenewalLoop` (periodic renewal check). `CertPaths` struct decouples path configuration from `paths.Infra`. HTTP client uses 15s timeout. Error wrapping standardized with `ErrEmptyTrustBundle`, `ErrCAParseFailed`, `ErrMissingRequiredField`.
 - **`internal/cli/serve/operator.go`**: Operator boot sequence: `RunOperator` orchestrates config loading, trust bundle setup, enrollment, and signal handling. Path resolution, cert loading, and load option helpers are extracted for testability.
-- **`internal/cli/serve/gateway.go`**: Gateway boot sequence: `RunGateway` orchestrates config loading, `GatewayModeService` construction, in-process execution service initialization, consensus bootstrap (policy seeding, key loading via `BootstrapConsensus` with `FileKeyProvider`, `NewLocalDeliberator` for L2 consensus), in-process `OperatorPubSubService` construction via `NewGatewayOperatorPubSubService` with `GatewayCommandServiceConfig`.
-  `SetConsensusService` wires the consensus service after construction. Graceful shutdown uses a 30-second timeout.
-  `ExportActuatorPublicKey` writes the actuator public key to the PKI directory for receipt verification by external harnesses.
+- **`internal/cli/serve/gateway.go`**: Gateway boot sequence: `RunGateway` orchestrates config loading, `GatewayModeService` construction, in-process execution service initialization, consensus bootstrap (policy seeding, key loading via `BootstrapConsensus` with `FileKeyProvider`, `NewLocalDeliberator` for L2 consensus), in-process `OperatorPubSubService` construction via `NewGatewayOperatorPubSubService` with `GatewayCommandServiceConfig`. `SetConsensusService` wires the consensus service after construction. Graceful shutdown uses a 30-second timeout. `ExportActuatorPublicKey` writes the actuator public key to the PKI directory for receipt verification by external harnesses.
 - **`internal/cli/serve/logger.go`**: Logger configuration: `ConfigureLogger` and `ConfigureLoggerWithOutput` produce `slog.Logger` instances with operator-friendly formatting and configurable log levels.
 - **`internal/cli/serve/version.go`**: `VersionInfo` struct holds build-time metadata (version, build ID, build time, platform) set via ldflags.
 - **`internal/cli/cmd/version.go`**: `versionCmd` implements the `g8e version` subcommand. With `--fips`, queries the native `crypto/fips140` package to report FIPS 140-3 module status and exits non-zero if approved mode is not active. Used by `make verify-fips` and the `Dockerfile.fips` build-time self-check.
 - **`internal/certs/embed.go`**: Injectable TLS primitives replacing package-level globals. `TrustStore` holds the CA trust bundle, `ClientIdentity` holds the mTLS client certificate, and `TLSConfig` combines them into a `*tls.Config` (TLS 1.3 minimum). `FIPSCurvePreferences` returns the FIPS 140-3 compliant TLS key agreement curve set (`X25519MLKEM768`, `P-384`, `P-256`), excluding X25519. Returns a fresh slice on each call to prevent mutation of shared state.
-- **`internal/cli/cmd/gateway.go`**: Gateway CLI command tree. `gatewayStartCmd` launches the gateway as a background process via `pm.StartOperator` (`ProcessManager.StartOperator`), resolving configuration from CLI flags and environment variables. With `--follow` flag, runs in foreground by calling `serve.RunGateway` directly.
-  With `--interactive`/`-i` flag, launches the onboarding wizard (`internal/cli/wizard`) before startup; the wizard result is merged into resolved flags via `applyWizardConfig`. `gatewaySettingsCmd`, `gatewayResetCmd`, and `gatewayCleanCmd` manage gateway state over mTLS.
+- **`internal/cli/cmd/gateway.go`**: Gateway CLI command tree. `gatewayStartCmd` launches the gateway as a background process via `pm.StartOperator` (`ProcessManager.StartOperator`), resolving configuration from CLI flags and environment variables. With `--follow` flag, runs in foreground by calling `serve.RunGateway` directly. With `--interactive`/`-i` flag, launches the onboarding wizard (`internal/cli/wizard`) before startup; the wizard result is merged into resolved flags via `applyWizardConfig`. `gatewaySettingsCmd`, `gatewayResetCmd`, and `gatewayCleanCmd` manage gateway state over mTLS.
 - **`internal/cli/cmd/tui.go`**: `tuiCmd` launches the Tactical Governance Console (TUI). Loads config, checks operator status, loads credentials, builds an mTLS client, and constructs an SSE stream URL using the CLI session ID for real-time updates.
 - **`internal/cli/cmd/gwstdout.go`**: `printNextSteps` outputs guidance after the gateway starts, including CA trust instructions, CLI enrollment, operator deployment, and Console UI access.
 - **`internal/services/gateway/cli_cert.go`**: `ExtractUserIDFromCert` extracts the user ID from a CLI mTLS certificate's SPIFFE URI SAN.
 - **Test Coverage**: `cert_test.go` covers `PerformAutomaticEnrollment` (6 tests), `RenewOperatorCertificate` (9 tests), `RunClientCertRenewalLoop` (1 test) with hermetic `httptest.Server` and real certificate generation. `operator_test.go` covers extracted helpers at 100%. `gateway_test.go` covers gateway boot sequence. `internal/cli/serve` overall at 49.6% coverage.
+
+## CLI Auth Package (Enrollment Coordinator)
+
+**`internal/cli/auth/`** - CLI enrollment state machine, credential storage, and mTLS client construction. This package is the single owner of local CLI enrollment state transitions. The command layer (`internal/cli/cmd`) constructs an `EnrollmentCoordinator` via the package-level `enrollCoordinatorFactory` var (swappable for tests) and calls `Enroll` — it does not duplicate the state machine, inspect individual credential files, or branch on `runtime.GOOS`.
+
+### Caller Graph
+
+```text
+cmd.authEnrollCmd / cmd.enrollDemoHost / cmd.launchAgentWithGovernance
+  └── enrollCoordinatorFactory (package-level var, test-swappable)
+      └── auth.NewEnrollmentCoordinator(deps)
+          ├── EnrollmentGateway (interface; *EnrollmentClient in production)
+          │   └── HTTP I/O only: Bootstrap, CreateRecoveryRequest, RecoveryStatus,
+          │       CompleteRecovery, Rotate, CheckBootstrapStatus
+          ├── *CredentialStore
+          │   └── Inspect / Stage / Commit / Rollback / Clear (file I/O only)
+          ├── KeyProvider (interface; FileKeyProvider in production)
+          │   └── GenerateCLIKeyAndCSR (file-backed EC P-256 on all platforms)
+          ├── SystemTrustInstaller (interface; *platform.SystemTrustInstaller in production)
+          │   └── IsTrusted / InstallRoot / ListStaleAnchors / RemoveStaleAnchors (sudo/exec, OS trust store)
+          ├── BrowserOpener (interface; defaultBrowserOpener in production)
+          │   └── Open (recovery approval URL only)
+          ├── PasskeyRegistrar (interface; *defaultPasskeyRegistrar in production)
+          │   └── Register (browser passkey ceremony + SSE wait)
+          └── fs.RuntimeFileService + *config.Config
+```
+
+### Components
+
+- **`enrollment.go`** — `EnrollmentCoordinator` owns the §3 enrollment state machine. It is the single place that decides whether to bootstrap, recover, rotate, or reuse the local CLI identity. The coordinator never writes to stdout/stderr directly (all progress goes through `OutputFunc`), never opens a browser except via `BrowserOpener` (recovery approval) or `PasskeyRegistrar` (passkey ceremony), and never invokes sudo or mutates an OS certificate store except via `SystemTrustInstaller`. `Enroll(ctx, EnrollmentOptions)` is the single entry point. `EnrollmentCoordinatorDeps` holds injectable dependencies; nil fields get production defaults. The `Enroller` interface (satisfied by `*EnrollmentCoordinator`) allows the command layer's `enrollCoordinatorFactory` to return an interface for test mocking.
+- **`enrollment_types.go`** — `EnrollmentArtifacts` (typed result from gateway transport), `LocalIdentity` (classified local state: absent/complete/partial/corrupt), `EnrollmentOptions` (`NoSystemTrust`, `RotateCLI`), `OutputFunc` type.
+- **`enrollment_client.go`** — `EnrollmentClient` is the gateway enrollment transport. It performs ONLY HTTP I/O and response validation: receives a `context.Context`, returns typed `EnrollmentArtifacts`, writes no files, performs no UI/platform work, never opens a browser. Satisfies the `EnrollmentGateway` interface. Replaces the old `BootstrapWithURL`/`CLIEnroll`/`ReEnroll`/`EnrollWithGateway` transport slices.
+- **`credential_store.go`** — `CredentialStore` is the coordinator's typed API over local CLI identity files. `Inspect` classifies local state as absent/complete/partial/corrupt by examining ALL managed artifacts as a set. `Stage`/`Commit` write a new complete identity atomically (credentials written LAST so partial commits are detected as partial/corrupt by the next `Inspect`). `Rollback` releases staged state without writing canonical files. `Clear` removes local CLI credential material for logout/recovery but does NOT remove the shared OS root CA (§4.3 ownership policy). Safe for concurrent use via `sync.Mutex` (enrollment lock).
+- **`key_provider.go`** — `FileKeyProvider` implements `KeyProvider` with file-backed EC P-256 keys on all platforms (the `--tpm` flag was removed in v1.7.2). The `KeyProvider` interface is the extension point if non-exportable platform keys (TPM/CNG) are added later.
+- **`passkey_enrollment.go`** — `passkeyRegistrar` runs the browser-based passkey registration ceremony. Prepares the SSE listener before browser launch, uses a correct cursor strategy (`since_id=0` for live-only events), filters events by type/user/session, surfaces browser-open errors, and propagates context cancellation. `defaultPasskeyRegistrar` wraps it and satisfies the `PasskeyRegistrar` interface.
+- **`trust_bundle.go`** — `ReadTrustBundle` loads the gateway root CA bundle from the local trust store (used by mTLS client construction and system trust installation).
+- **`tls.go`** — `BuildMTLSClient` constructs an `*http.Client` with TLS 1.3 + mTLS from the local CLI certificate and trust bundle. Uses `tls.LoadX509KeyPair` directly (correct for file-backed keys on all platforms post-Section-7).
+- **`client.go`** — `LoadCredentials` loads the local CLI credentials JSON. Used by operator/MCP/audit/approve/serve callers (credential consumers, not enrollment).
+- **`windows_crypto.go`** / **`windows_crypto_stub.go`** — Windows CNG key handling (build-tagged). The stub is used on non-Windows platforms.
+- **`approval_sse.go`** — SSE client for CLI consumption of gateway approval events (used by `auth approve` command).
+- **`agent_enroll.go`** — `EnrollAgent` helper for `mcp agent run` enrollment path.
+
+### Test Coverage
+
+- `enrollment_coordinator_test.go` — Full state machine coverage: healthy reuse (no rotation), partial→recovery, expired→rotation, absent→bootstrap, `--no-system-trust` skip, system trust failure stops before browser, `--rotate-cli` forces rotation, concurrent enrollment safety.
+- `credential_store_test.go` — 5 tests: interrupted-commit retry, rollback writes no canonical files, committed file permissions (0600), concurrent Stage+Commit no torn state (race-clean), Clear retains trust bundle.
+- `enrollment_client_test.go` / `client_test.go` — Transport and credential loading tests with hermetic `httptest.Server`.
+- `passkey_enrollment_registrar_test.go` / `passkey_enrollment_sse_test.go` / `passkey_enrollment_test.go` — Passkey ceremony SSE listener, event filtering, browser-open error surfacing, context cancellation.
+- `cert_test.go` / `csr_test.go` / `fingerprint_test.go` / `mtls_client_test.go` — Certificate, CSR, fingerprint, and mTLS client construction tests.
 
 ## CLI Platform & Stream Packages
 
@@ -485,9 +547,7 @@ The reporting system operates as a self-contained, offline verification utility 
 
 ## CLI Wizard Package
 
-- **`internal/cli/wizard/`**: Interactive onboarding wizard for `g8e gw start --interactive`/`-i`. Bubble Tea TUI with 4-step flow: Network & Identity → Security & Governance Posture → Agent Tooling & Routing → Review & Confirm. Uses `charmbracelet/bubbles` `textinput` for URL/string fields and arrow-key navigation for choices/toggles.
-  Produces a focused `Config` (wizard-owned fields only); the `cmd` package owns conversion and merging via `wizardConfigFromFlags`/`applyWizardConfig`.
-  Files: `model.go` (state struct, `NewModel`), `update.go` (message routing, per-step key handling), `view.go` (lipgloss rendering per step), `steps.go` (step enum, ordering), `validate.go` (URL, origin, consensus, passkey validators), `styles.go` (color palette matching `tui/styles.go`), `run.go` (`Run` entry point, `Config`/`Options`/`Result` types), `messages.go` (custom message types).
+- **`internal/cli/wizard/`**: Interactive onboarding wizard for `g8e gw start --interactive`/`-i`. Bubble Tea TUI with 4-step flow: Network & Identity → Security & Governance Posture → Agent Tooling & Routing → Review & Confirm. Uses `charmbracelet/bubbles` `textinput` for URL/string fields and arrow-key navigation for choices/toggles. Produces a focused `Config` (wizard-owned fields only); the `cmd` package owns conversion and merging via `wizardConfigFromFlags`/`applyWizardConfig`. Files: `model.go` (state struct, `NewModel`), `update.go` (message routing, per-step key handling), `view.go` (lipgloss rendering per step), `steps.go` (step enum, ordering), `validate.go` (URL, origin, consensus, passkey validators), `styles.go` (color palette matching `tui/styles.go`), `run.go` (`Run` entry point, `Config`/`Options`/`Result` types), `messages.go` (custom message types).
 
 ## Runtime File Service
 
@@ -573,7 +633,7 @@ The following packages are test-only and are not part of the production dependen
 **`test/e2e/harness.go`** - Docker-based E2E test fixture (build tag: `e2e`)
 - `DockerE2EFixture` spins up docker-compose, allocates host ports, waits for gateway health, and tears down on cleanup
 - Tests only what is observable from outside containers: HTTP health, CA bundle discovery, port reachability, and mTLS handshake over network
-- Supports `G8E_E2E_SKIP_DOCKER` environment variable to skip when Docker is unavailable
+- E2E tests require Docker — there is no opt-out. A fixture-setup failure exits non-zero with a `FATAL` message so a broken Docker environment can never produce a green build with zero tests run
 
 **`test/integration_helper.go`** - Shared integration test helpers (build tag: `integration` or `e2e`)
 - `NewLiveOperatorHTTPClient` creates an mTLS API client against a running g8e platform
@@ -613,8 +673,7 @@ The following packages are test-only and are not part of the production dependen
 ## Agent Harness & Demos
 
 **`internal/tools/agent_harness/`** - Reference client for real governance envelope submission
-- `client/client.go` - mTLS client: `StateRoot`, `RegisterSigner`, `MCPToolsCall`, `MCPToolsList`, `WaitForHumanApproval` (uses `constants.APIPaths.*`). When `CLIAuth` is configured, builds a second `http.Client` using the host CLI cert so notary-scenario submits and the SSE approval subscription authenticate as the host user; internal routing helpers dispatch requests through the appropriate client.
-  `WaitForHumanApproval` subscribes to the gateway's SSE stream for `approval.completed` events matching the transaction hash, blocks until a human completes the WebAuthn passkey ceremony in their browser, and verifies the approval status via the CLI-cert status endpoint.
+- `client/client.go` - mTLS client: `StateRoot`, `RegisterSigner`, `MCPToolsCall`, `MCPToolsList`, `WaitForHumanApproval` (uses `constants.APIPaths.*`). When `CLIAuth` is configured, builds a second `http.Client` using the host CLI cert so notary-scenario submits and the SSE approval subscription authenticate as the host user; internal routing helpers dispatch requests through the appropriate client. `WaitForHumanApproval` subscribes to the gateway's SSE stream for `approval.completed` events matching the transaction hash, blocks until a human completes the WebAuthn passkey ceremony in their browser, and verifies the approval status via the CLI-cert status endpoint.
 - `client/client_test.go` - Client unit tests (includes `TestClient_WaitForHumanApproval_Success`, `TestClient_WaitForHumanApproval_TimeoutNoMatchingEvent`, `TestClient_WaitForHumanApproval_StatusEndpointError`)
 - `client/envelope.go` - `SubmitMaximal`: builds real `GovernanceEnvelope` with L1/L2/L3, submits over mTLS. `Ensemble`/`NewEnsemble`/`NewEnsembleFromSeed`/`NewEnsembleFromMemberSeeds` remain as conformance testing infrastructure.
 - `client/envelope_test.go` - Envelope construction and submission tests (includes `TestSubmitMaximal`, `TestSubmitMaximal_WithL2`, ensemble tests)
@@ -663,20 +722,15 @@ The following packages are test-only and are not part of the production dependen
 **`demos/finance/`** - Financial data governance demo
 
 **CLI Demo Scenario Files** (`internal/cli/cmd/`):
-- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, pull, export, import, images, scenarios). Contains `harnessConfig` struct (connection params + `UseRun` + `ExtraFlags` map for conditionally-present flags emitted sorted), `defaultHarnessConfig` (seeds `cli-cert`/`cli-key`/`cli-ca` extra flags), `defaultGovernedHarnessConfig` (wraps `defaultHarnessConfig` with governance posture overrides).
-  `harnessRun` builds docker compose exec/run commands for demo scenarios, `switchDemoPosture` is the shared posture switch helper, and `runTwoLayerScenario` is a reusable orchestrator.
-  The host CLI user identity is threaded through the scenario runners so the harness submit binds to the browser approver. `enrollDemoHost` roots the fileSvc at the demo directory so demo credentials are isolated from the developer's local `<cwd>/.g8e/`. `waitForDemoGateway` is a package-level var so tests can swap it.
-  Verbose-aware print helpers (`demoPrintln`/`demoPrintf`) suppress output unless `-v`/`--verbose` is set. `scenarioCounts` map (healthcare: 4, finance: 1, dhs: 5, fedramp: 5, frontend: 1) and `printDemoEndpoints` (prints available endpoints per org) support listing.
+- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, pull, export, import, images, scenarios). Contains `harnessConfig` struct (connection params + `UseRun` + `ExtraFlags` map for conditionally-present flags emitted sorted), `defaultHarnessConfig` (seeds `cli-cert`/`cli-key`/`cli-ca` extra flags), `defaultGovernedHarnessConfig` (wraps `defaultHarnessConfig` with governance posture overrides). `harnessRun` builds docker compose exec/run commands for demo scenarios, `switchDemoPosture` is the shared posture switch helper, and `runTwoLayerScenario` is a reusable orchestrator. The host CLI user identity is threaded through the scenario runners so the harness submit binds to the browser approver. `enrollDemoHost` roots the fileSvc at the demo directory so demo credentials are isolated from the developer's local `<cwd>/.g8e/`. `waitForDemoGateway` is a package-level var so tests can swap it. Verbose-aware print helpers (`demoPrintln`/`demoPrintf`) suppress output unless `-v`/`--verbose` is set. `scenarioCounts` map (healthcare: 4, finance: 1, dhs: 5, fedramp: 5, frontend: 1) and `printDemoEndpoints` (prints available endpoints per org) support listing.
 - `demo_finance.go` - Finance demo scenario (uses `runTwoLayerScenario` with `harnessRun`)
 - `demo_healthcare.go` - Healthcare demo scenarios (4 scenarios, each calls `harnessRun`)
 - `demo_dhs.go` - DHS demo scenarios (5 scenarios, each calls `dhsHarnessRun` → `harnessRun`). `defaultDHSHarnessConfig` threads the host CLI identity into `ExtraFlags` (`approval-url`, `user-id`, `cli-session-id`). Contains `dhsHarnessConfig`, `dhsHarnessRun`, `dhsScenarioStep`, `extractFirstTxHash`, `switchDHSPosture` helpers.
 - `demo_fedramp.go` - FedRAMP demo scenarios (5 scenarios, each calls `harnessRun`). `defaultFedRAMPHarnessConfig` threads the host CLI identity into `ExtraFlags` (`approval-url`, `user-id`, `cli-session-id`). Contains `defaultFedRAMPHarnessConfig`, `fedrampHarnessRun`, `switchFedRAMPPosture` helpers (delegates to shared `switchDemoPosture`).
 - `demo_frontend.go` - Frontend demo scenario (1 scenario: third-party frontend enrollment via `runFrontendScenario`).
-- `scenarios_run.go` - `demos scenarios run` subcommand and `runAgentHarness` execution logic. Contains flag definitions (including `--cli-cert`/`--cli-key`/`--cli-ca` for the host CLI mTLS material used by notary submits), `applyAgentHarnessFlags` (populates `cfg.CLIAuth` from the CLI flags), `selectAgentHarnessScenarios`, `needsGovKit`, `setupGovKit`, `printAgentHarnessSummary`, `failedScenariosError` helper.
-  `setupGovKit` passes `GovKit` with `{OperatorID, OperatorSessionID, UserID}` for human browser approval via `WaitForHumanApproval`. `failedScenariosError` collects failed scenario names and returns a formatted error when any `Result.OK` is false.
+- `scenarios_run.go` - `demos scenarios run` subcommand and `runAgentHarness` execution logic. Contains flag definitions (including `--cli-cert`/`--cli-key`/`--cli-ca` for the host CLI mTLS material used by notary submits), `applyAgentHarnessFlags` (populates `cfg.CLIAuth` from the CLI flags), `selectAgentHarnessScenarios`, `needsGovKit`, `setupGovKit`, `printAgentHarnessSummary`, `failedScenariosError` helper. `setupGovKit` passes `GovKit` with `{OperatorID, OperatorSessionID, UserID}` for human browser approval via `WaitForHumanApproval`. `failedScenariosError` collects failed scenario names and returns a formatted error when any `Result.OK` is false.
 - `scenarios_run_test.go` - Tests for `failedScenariosError` helper: all-OK (nil), all-failed (error with all names), mixed (error with only failed names), empty results (nil), single failed (error).
-- `demos_test.go` - Tests for demo CLI commands, `scenarioCounts`, `printDemoEndpoints`, `harnessRun`/`defaultHarnessConfig` unit tests, and source-file assertions (`TestDemoScenarioFilesCallHarnessRun`, `TestNoGatewayBypassInDemoFiles`, `TestNoSqliteBackdoorInScenarioFiles`, `TestNoCopyPasteInScenarioFiles`).
-  Also tests `TestDemoPrintln`, `TestDemosPullCmd`, `TestCheckDockerAvailable`, `TestToDockerPath`, `TestDefaultHarnessConfig`, `TestHarnessRun`.
+- `demos_test.go` - Tests for demo CLI commands, `scenarioCounts`, `printDemoEndpoints`, `harnessRun`/`defaultHarnessConfig` unit tests, and source-file assertions (`TestDemoScenarioFilesCallHarnessRun`, `TestNoGatewayBypassInDemoFiles`, `TestNoSqliteBackdoorInScenarioFiles`, `TestNoCopyPasteInScenarioFiles`). Also tests `TestDemoPrintln`, `TestDemosPullCmd`, `TestCheckDockerAvailable`, `TestToDockerPath`, `TestDefaultHarnessConfig`, `TestHarnessRun`.
 - `demos_helpers_test.go` - Shared test helpers for demo command tests.
 - `demos_integration_test.go` - Integration tests for demo CLI commands.
 - `demos_docker_error_paths_test.go` - Docker error path tests for demo commands.

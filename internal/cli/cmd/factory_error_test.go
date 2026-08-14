@@ -15,6 +15,8 @@ package cmd
 
 import (
 	"bytes"
+	"context"
+	"crypto/ecdsa"
 	"errors"
 	"testing"
 
@@ -287,7 +289,7 @@ func TestGatewaySettingsCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 
 func TestGatewayCleanCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
-	cmd := gatewayCleanCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+	cmd := gatewayCleanCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory), defaultTrustInstallerFactory)
 	cmd.Flags().Set("force", "true")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -296,6 +298,29 @@ func TestGatewayCleanCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
 	assert.ErrorIs(t, err, errFactory)
+}
+
+// TestGatewayCleanCmdWithConfig_TrustInstallerFactoryError verifies that a
+// trustInstallerFactory failure is surfaced as a warning (best-effort OS
+// cleanup) and does NOT abort the runtime wipe — the runtime wipe is the
+// destructive primary action. The fileSvc factory succeeds so pm.Clean runs.
+func TestGatewayCleanCmdWithConfig_TrustInstallerFactoryError(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	cmd := gatewayCleanCmdWithConfig(
+		configLoaderFor(cfg),
+		fileSvcFactoryFor(fileSvc),
+		func() (systemTrustCleaner, error) {
+			return nil, errFactory
+		},
+	)
+	cmd.Flags().Set("force", "true")
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.NoError(t, err, "trust factory failure is best-effort and must not abort the runtime wipe")
+	assert.Contains(t, buf.String(), "could not initialize OS trust cleaner")
+	assert.Contains(t, buf.String(), "Clean complete")
 }
 
 // --- Vault commands (session 17) ---
@@ -434,7 +459,7 @@ func TestSecurityValidateCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 
 func TestSecurityPKIEnrollCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
-	cmd := securityPKIEnrollCmdWithConfig(configLoaderFor(cfg), panickingEnrollFunc(), failingFileSvcFactory(errFactory))
+	cmd := securityPKIEnrollCmdWithConfig(configLoaderFor(cfg), panickingRemoteOperatorEnrollerFactory(), failingFileSvcFactory(errFactory))
 	cmd.Flags().StringP("endpoint", "e", "localhost:8080", "Gateway endpoint")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -511,9 +536,17 @@ func TestComplianceOverlayCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	assert.ErrorIs(t, err, errFactory)
 }
 
-// panickingEnrollFunc returns an enrollFunc that panics if called.
-func panickingEnrollFunc() enrollFunc {
-	return func(*config.Config, string, string, string, string) (*auth.RegistrationResponse, error) {
-		panic("enroll should not be called when fileSvcFactory fails")
+// panickingRemoteOperatorEnrollerFactory returns a remoteOperatorEnroller
+// factory whose enroller panics if called. Used to assert that enrollment is
+// not attempted when an earlier dependency (e.g. fileSvcFactory) fails.
+func panickingRemoteOperatorEnrollerFactory() func(*config.Config) remoteOperatorEnroller {
+	return func(*config.Config) remoteOperatorEnroller {
+		return &panickingRemoteOperatorEnroller{}
 	}
+}
+
+type panickingRemoteOperatorEnroller struct{}
+
+func (p *panickingRemoteOperatorEnroller) EnrollRemoteOperator(_ context.Context, _, _ string, _ *ecdsa.PrivateKey, _ string, _ *ecdsa.PrivateKey, _ string) (auth.EnrollmentArtifacts, error) {
+	panic("enroll should not be called when fileSvcFactory fails")
 }

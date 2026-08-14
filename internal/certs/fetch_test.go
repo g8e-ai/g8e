@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -100,4 +101,34 @@ func TestFetchTrustBundle_InvalidURL(t *testing.T) {
 	pem, err := FetchTrustBundle(context.Background(), "://invalid-url", "")
 	require.Error(t, err)
 	assert.Nil(t, pem)
+}
+
+// TestFetchTrustBundleWithClient_UsesProvidedClient confirms the variant
+// uses the caller-supplied *http.Client (and its transport) instead of
+// constructing a default one. This is what lets the CLI route the discovery
+// CA fetch through its IPv4-only transport.
+func TestFetchTrustBundleWithClient_UsesProvidedClient(t *testing.T) {
+	caBytes := generateTestCAPEM(t)
+
+	called := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called++
+		w.WriteHeader(http.StatusOK)
+		w.Write(caBytes) //nolint:errcheck
+	}))
+	defer srv.Close()
+
+	customClient := &http.Client{Timeout: 5 * time.Second}
+	pem, err := FetchTrustBundleWithClient(context.Background(), srv.URL+"/.well-known/g8e/pki/ca-bundle", "", customClient)
+	require.NoError(t, err)
+	assert.Equal(t, caBytes, pem)
+	assert.Equal(t, 1, called, "provided client must be used for the fetch")
+}
+
+// TestFetchTrustBundleWithClient_NilClientReturnsError confirms a nil
+// client is rejected rather than panicking.
+func TestFetchTrustBundleWithClient_NilClientReturnsError(t *testing.T) {
+	_, err := FetchTrustBundleWithClient(context.Background(), "https://127.0.0.1:1/x", "", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "nil client")
 }

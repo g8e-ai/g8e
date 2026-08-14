@@ -202,7 +202,7 @@ for the specified certification class and print the KSIResultSet as JSON.`,
 				return fmt.Errorf("compliance: marshal KSI result set: %w", err)
 			}
 
-			cmd.Println(string(output))
+			fmt.Fprintln(cmd.OutOrStdout(), string(output))
 			return nil
 		},
 	}
@@ -397,7 +397,7 @@ Without --ksi, prints all snapshots as a JSON array.`,
 				if err != nil {
 					return fmt.Errorf("compliance: marshal KSI history: %w", err)
 				}
-				cmd.Println(string(output))
+				fmt.Fprintln(cmd.OutOrStdout(), string(output))
 				return nil
 			}
 
@@ -406,14 +406,14 @@ Without --ksi, prints all snapshots as a JSON array.`,
 				return err
 			}
 			if len(snapshots) == 0 {
-				cmd.Println("[]")
+				fmt.Fprintln(cmd.OutOrStdout(), "[]")
 				return nil
 			}
 			output, err := json.MarshalIndent(snapshots, "", "  ")
 			if err != nil {
 				return fmt.Errorf("compliance: marshal KSI history: %w", err)
 			}
-			cmd.Println(string(output))
+			fmt.Fprintln(cmd.OutOrStdout(), string(output))
 			return nil
 		},
 	}
@@ -482,7 +482,7 @@ custom overlay directory (default: docs/reference/).`,
 			}
 
 			if len(overlayCat.Overlays) == 0 {
-				cmd.Println("[]")
+				fmt.Fprintln(cmd.OutOrStdout(), "[]")
 				return nil
 			}
 
@@ -503,7 +503,7 @@ custom overlay directory (default: docs/reference/).`,
 			if err != nil {
 				return fmt.Errorf("compliance: marshal overlay catalog: %w", err)
 			}
-			cmd.Println(string(output))
+			fmt.Fprintln(cmd.OutOrStdout(), string(output))
 			return nil
 		},
 	}

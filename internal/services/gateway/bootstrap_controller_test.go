@@ -230,119 +230,6 @@ func TestHandleBootstrapStatus(t *testing.T) {
 	})
 }
 
-func TestHandleCLIEnrollment(t *testing.T) {
-	t.Run("Success - CLI enrollment after bootstrap", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
-		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
-		require.NoError(t, err)
-		require.NotNil(t, bootstrapUser)
-
-		cliCSR := testutil.GenerateTestCSRP256(t, "test-cli")
-		body := map[string]string{
-			"cli_csr_pem":        cliCSR,
-			"system_fingerprint": "test-fp",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/enroll", bytes.NewReader(b))
-		rr := httptest.NewRecorder()
-
-		c.handleCLIEnrollment(rr, req)
-
-		assert.Equal(t, http.StatusCreated, rr.Code)
-		var resp map[string]interface{}
-		err = json.Unmarshal(rr.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		assert.True(t, resp["success"].(bool))
-		assert.NotEmpty(t, resp["cli_cert"])
-		assert.NotEmpty(t, resp["cli_cert_chain"])
-		assert.NotEmpty(t, resp["cli_session_id"])
-		assert.NotEmpty(t, resp["user_id"])
-		assert.NotEmpty(t, resp["hub_trust_bundle"])
-		assert.NotEmpty(t, resp["operator_session_id"])
-		assert.NotEmpty(t, resp["operator_id"])
-	})
-
-	t.Run("Failure - Rejected when not bootstrapped", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
-
-		cliCSR := testutil.GenerateTestCSRP256(t, "test-cli")
-		body := map[string]string{
-			"cli_csr_pem":        cliCSR,
-			"system_fingerprint": "test-fp",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/enroll", bytes.NewReader(b))
-		req.RemoteAddr = "127.0.0.1:12345"
-		rr := httptest.NewRecorder()
-
-		c.handleCLIEnrollment(rr, req)
-
-		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), constants.ErrCLIEnrollmentAfterBootstrap.Error())
-	})
-
-	t.Run("Failure - Rejected when bootstrap user disabled", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
-		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
-		require.NoError(t, err)
-		c.userSvc.Disable(bootstrapUser.ID, "retired", "actor", "op")
-
-		cliCSR := testutil.GenerateTestCSRP256(t, "test-cli")
-		body := map[string]string{
-			"cli_csr_pem":        cliCSR,
-			"system_fingerprint": "test-fp",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/enroll", bytes.NewReader(b))
-		req.RemoteAddr = "127.0.0.1:12345"
-		rr := httptest.NewRecorder()
-
-		c.handleCLIEnrollment(rr, req)
-
-		assert.Equal(t, http.StatusConflict, rr.Code)
-		assert.Contains(t, rr.Body.String(), constants.ErrBootstrapUserDisabledEnroll.Error())
-	})
-
-	t.Run("Failure - Missing cli_csr_pem", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
-		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
-		require.NoError(t, err)
-		require.NotNil(t, bootstrapUser)
-
-		body := map[string]string{
-			"system_fingerprint": "test-fp",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/enroll", bytes.NewReader(b))
-		req.RemoteAddr = "127.0.0.1:12345"
-		rr := httptest.NewRecorder()
-
-		c.handleCLIEnrollment(rr, req)
-
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), constants.ErrCLICSRRequired.Error())
-	})
-
-	t.Run("Failure - Method not allowed", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
-		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
-		require.NoError(t, err)
-		require.NotNil(t, bootstrapUser)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/cli/enroll", nil)
-		req.RemoteAddr = "127.0.0.1:12345"
-		rr := httptest.NewRecorder()
-
-		c.handleCLIEnrollment(rr, req)
-
-		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
-	})
-}
-
 func TestHandleDeviceEnrollment(t *testing.T) {
 	t.Run("Failure - method not allowed", func(t *testing.T) {
 		c, _ := setupTestBootstrapController(t)
@@ -478,7 +365,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 	})
 
 	t.Run("Success - initial bootstrap", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
+		c, cfg := setupTestBootstrapController(t)
 
 		c.actuatorKeyReader = &mockActuatorKeyReader{
 			keyID:     "act-123",
@@ -507,6 +394,10 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 		assert.NotEmpty(t, resp.CLICert)
 		assert.Equal(t, "act-123", resp.ActuatorKeyID)
 		assert.Equal(t, "pub-123", resp.ActuatorPubKey)
+		// The gateway owns the posture and must send it to the operator at
+		// enrollment so the operator can run L4 posture-gated checks against
+		// the gateway's posture rather than inventing its own.
+		assert.Equal(t, string(cfg.Gateway.Posture), resp.Posture)
 
 		user, err := c.userSvc.GetByID(resp.UserID)
 		require.NoError(t, err)

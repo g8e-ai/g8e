@@ -193,7 +193,11 @@ This command is launched automatically by 'g8e mcp agent run'. When invoked
 directly (e.g. from an IDE MCP config), credentials resolve in order:
   1. CLI flags (--client-cert/--client-key, --app-cert/--app-key, --ca-bundle, --gateway-url)
   2. G8E_* environment variables (injected by 'agent run')
-  3. Enrolled CLI credentials on disk (bootstrapping enrollment if needed)
+  3. Enrolled CLI credentials on disk
+
+This command is a credential CONSUMER, not an enrollment UI. It does NOT enroll,
+open a browser, install OS trust, or run a passkey ceremony. If credentials are
+absent, run 'g8e auth enroll' or 'g8e mcp agent run' first to obtain them.
 
 Cert and key must be supplied as a pair per tier; supplying only one half fails closed.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -1449,19 +1453,29 @@ func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, 
 		return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 	}
 
-	creds, err := ensureCLIAuth(fileSvc, cfg)
+	// Use the shared interactive enrollment coordinator. mcp agent run is an
+	// interactive user-facing caller, so it uses the same trust and passkey
+	// policy as `auth enroll`. The coordinator inspects local state and
+	// bootstraps, recovers, rotates, or reuses as needed. If a passkey
+	// already exists, the coordinator's passkey ceremony is still run (it
+	// is idempotent for an existing passkey); if no passkey exists, the
+	// browser ceremony runs after system trust is installed.
+	fmt.Fprintf(os.Stderr, "[g8e] Ensuring CLI credentials and passkey...\n")
+	coordinator := enrollCoordinatorFactory(func(format string, args ...any) {
+		fmt.Fprintf(os.Stderr, format+"\n", args...)
+	}, fileSvc, cfg)
+	enrollResult, err := coordinator.Enroll(context.Background(), auth.EnrollmentOptions{})
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
+	}
+	if enrollResult.UserID == "" || enrollResult.CLISessionID == "" {
+		return fmt.Errorf("%w: enrollment returned empty identity", constants.ErrEnrollmentFailed)
 	}
 
 	// Enroll the agent as an external app for audit trail attribution
 	appID, appCert, appKey, err := auth.EnrollAgentApp(fileSvc, cfg, strings.ToLower(agentID))
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
-	}
-
-	if err := ensurePasskeyRegistration(fileSvc, cfg, creds); err != nil {
-		return err
 	}
 
 	_, cleanup, launchArgs, err := prepareAgentLaunch(agentID, verify)
@@ -1473,38 +1487,6 @@ func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, 
 	}
 
 	return launchAgentProcess(agentID, extraArgs, launchArgs, cfg, appID, appCert, appKey)
-}
-
-// ensureCLIAuth loads existing CLI credentials or auto-enrolls if none exist.
-func ensureCLIAuth(fileSvc fs.RuntimeFileService, cfg *config.Config) (*auth.Credentials, error) {
-	creds, err := auth.LoadCredentials(fileSvc, cfg)
-	if err != nil || creds == nil {
-		fmt.Fprintf(os.Stderr, "[g8e] No CLI credentials found, enrolling...\n")
-		if err := auth.EnrollCLI(fileSvc, cfg, false); err != nil {
-			return nil, fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
-		}
-		fmt.Fprintf(os.Stderr, "[g8e] CLI enrolled successfully\n")
-		creds, err = auth.LoadCredentials(fileSvc, cfg)
-		if err != nil || creds == nil {
-			return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
-		}
-	}
-	return creds, nil
-}
-
-// ensurePasskeyRegistration verifies a passkey is registered and auto-registers if missing.
-func ensurePasskeyRegistration(fileSvc fs.RuntimeFileService, cfg *config.Config, creds *auth.Credentials) error {
-	hasPasskey, err := auth.VerifyPasskeyRegistration(fileSvc, cfg, creds.UserID, creds.CLISessionID)
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrNoPasskeysRegistered, err)
-	}
-	if !hasPasskey {
-		fmt.Fprintf(os.Stderr, "[g8e] No passkey registered, starting passkey enrollment...\n")
-		if err := auth.RegisterPasskeyViaBrowser(fileSvc, cfg, creds.UserID, creds.CLISessionID); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrPasskeyRegistrationFailed, err)
-		}
-	}
-	return nil
 }
 
 // prepareAgentLaunch validates the agent binary, writes the agent config, computes launch

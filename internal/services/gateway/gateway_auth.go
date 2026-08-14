@@ -81,11 +81,6 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addPrefix(constants.APIPaths.WellKnownPKIPrefix, RouteAuthNone)
 	r.addPrefix(constants.APIPaths.WellKnownBinPrefix, RouteAuthNone)
 
-	// Web cert trust script endpoints (public for remote workstations)
-	r.addExact(constants.APIPaths.WebCertLinux, RouteAuthNone)
-	r.addExact(constants.APIPaths.WebCertWindows, RouteAuthNone)
-	r.addExact(constants.APIPaths.WellKnownTrustWindows, RouteAuthNone)
-
 	// Deploy script endpoints (public for initial deployment)
 	r.addExact(constants.APIPaths.DeployScriptLinux, RouteAuthNone)
 	r.addExact(constants.APIPaths.DeployScriptWindows, RouteAuthNone)
@@ -99,11 +94,22 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addExact(constants.APIPaths.AuthEnrollmentTokenValidate, RouteAuthNone)
 	r.addPrefix(constants.APIPaths.ApprovePage, RouteAuthNone)
 
+	// CLI recovery discovery surface — public, token-scoped.
+	// The opaque token (looked up via its hash) and proof-of-possession
+	// signature provide the authorization context; no mTLS or cookie required.
+	r.addExact(constants.APIPaths.AuthCLIRecoveryRequest, RouteAuthNone)
+	r.addExact(constants.APIPaths.AuthCLIRecoveryStatus, RouteAuthNone)
+	r.addExact(constants.APIPaths.AuthCLIRecoveryComplete, RouteAuthNone)
+
 	// Console SPA (public, no auth required)
 	r.addPrefix(constants.APIPaths.ConsolePrefix, RouteAuthNone)
 
 	// Passkey console routes (public, no mTLS for browser access)
 	r.addPrefix(constants.APIPaths.AuthPasskeysConsolePrefix, RouteAuthNone)
+
+	// CLI-initiated enrollment passkey routes (public — the enrollment
+	// token is the credential, same model as AuthEnrollmentTokenValidate).
+	r.addPrefix(constants.APIPaths.AuthPasskeysEnrollmentPrefix, RouteAuthNone)
 
 	// --- RouteAuthDual: SSE consumer endpoints (mTLS for CLI/operator, web session cookie for browser) ---
 	r.addExact(constants.APIPaths.SSEStream, RouteAuthDual)
@@ -115,12 +121,21 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addPrefix(constants.APIPaths.Approvals, RouteAuthWebSession)
 	r.addPrefix(constants.APIPaths.AuthPasskeys, RouteAuthWebSession)
 
+	// CLI recovery approval — browser console, authenticated existing user.
+	r.addExact(constants.APIPaths.AuthCLIRecoveryApprove, RouteAuthWebSession)
+
 	// --- RouteAuthMTLS: mTLS-protected sub-paths under WebSession prefixes ---
 	// These exact paths must be checked before the WebSession prefix matches.
 	r.addExact(constants.APIPaths.AuthPasskeysCLIStatus, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.ApprovalsCLIStatus, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.ApprovalsCLIList, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.AuthEnrollmentTokenGenerate, RouteAuthMTLS)
+
+	// CLI rotation — mTLS only. The caller's identity (user ID + active CLI
+	// session ID) is derived from the verified CLI certificate URI SAN.
+	// The fail-closed default already covers this path, but the explicit
+	// classification documents the requirement and is asserted by tests.
+	r.addExact(constants.APIPaths.AuthCLIRotate, RouteAuthMTLS)
 
 	// JIT passkey routes: RouteAuthNone when JWKS is enabled (JWT middleware handles auth),
 	// RouteAuthMTLS when JWKS is disabled (not accessible without mTLS).

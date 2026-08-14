@@ -16,6 +16,7 @@
 package e2e
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"testing"
@@ -32,21 +33,30 @@ var sharedFixture *DockerE2EFixture
 // Docker fixture check sharedFixture for nil and skip if unavailable.
 // Tests that do not require Docker (e.g. MCP config output tests) run
 // regardless.
+//
+// Failure semantics: E2E tests are Tier 3 and require Docker — there is no
+// opt-out. A fixture-setup failure is a hard error: the suite exits non-zero
+// with a FATAL message so a broken Docker environment can never produce a
+// green build with zero tests run. On any non-zero exit, container logs and
+// compose state are captured to a temp dir before teardown so CI failures
+// are diagnosable without a local reproduce.
 func TestMain(m *testing.M) {
-	if os.Getenv("G8E_E2E_SKIP_DOCKER") == "1" {
-		log.Println("E2E: Skipping Docker setup (G8E_E2E_SKIP_DOCKER=1)")
-		os.Exit(m.Run())
-	}
-
 	fixture, err := setupSharedE2EFixture("docker-compose.yml")
 	if err != nil {
-		log.Printf("E2E: Docker setup failed: %v — Docker tests will be skipped\n", err)
-		sharedFixture = nil
-		os.Exit(m.Run())
+		// Setup failure: fail loudly. Do not run the suite, since every
+		// Docker test would otherwise t.Skip and the run would exit 0.
+		fmt.Fprintf(os.Stderr, "FATAL: E2E fixture setup failed — Docker tests cannot run: %v\n", err)
+		os.Exit(1)
 	}
 
 	sharedFixture = fixture
 	code := m.Run()
+
+	// Capture diagnostics before teardown while the containers are still up.
+	// Any non-zero exit (test failure or panic) triggers capture.
+	if code != 0 {
+		sharedFixture.captureDiagnostics(log.Printf)
+	}
 
 	if err := sharedFixture.teardown(); err != nil {
 		log.Printf("E2E: Warning: teardown failed: %v\n", err)

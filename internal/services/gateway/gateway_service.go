@@ -73,6 +73,7 @@ type GatewayModeService struct {
 	pki                     *PKIAuthority
 	reg                     *RegistrationService
 	passkey                 *PasskeyHandler
+	enrollmentTokenSvc      *EnrollmentTokenService
 	userSvc                 *UserService
 	cliSessionSvc           *CLISessionService
 	operatorSessionSvc      *OperatorSessionService
@@ -82,6 +83,7 @@ type GatewayModeService struct {
 	envProcAdapter          *pubsub.GatewayEnvProcAdapter
 	sessionValidatorAdapter *pubsub.GatewaySessionValidatorAdapter
 	consensusSvc            *consensus.ConsensusService
+	dispatchSvc             *DispatchService
 	responder               *response.Writer
 	server                  *http.Server
 	publicServer            *http.Server
@@ -253,11 +255,13 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	}
 
 	passkeyOrchestrator := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, wsHandler, logger)
+	enrollmentTokenSvc := NewEnrollmentTokenService(stores.DocStore, logger)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
-		Service:       passkey,
-		WebSessionSvc: webSessionSvc,
-		Responder:     res,
-		Orchestrator:  passkeyOrchestrator,
+		Service:            passkey,
+		WebSessionSvc:      webSessionSvc,
+		EnrollmentTokenSvc: enrollmentTokenSvc,
+		Responder:          res,
+		Orchestrator:       passkeyOrchestrator,
 	})
 
 	ls := &GatewayModeService{
@@ -278,6 +282,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		pki:                     pki,
 		reg:                     reg,
 		passkey:                 passkeyHandler,
+		enrollmentTokenSvc:      enrollmentTokenSvc,
 		userSvc:                 userSvc,
 		cliSessionSvc:           cliSessionSvc,
 		operatorSessionSvc:      operatorSessionSvc,
@@ -287,6 +292,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		mcpGateway:              mcpGateway,
 		envProcAdapter:          envProcAdapter,
 		sessionValidatorAdapter: sessionValidatorAdapter,
+		dispatchSvc:             NewDispatchService(logger, wsHandler, stores.StateRootSvc, auth),
 		responder:               res,
 	}
 
@@ -484,10 +490,29 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Responder:          ls.responder,
 			ActuatorKeyReader:  &fileActuatorKeyReader{path: paths.Infra.ActuatorPubJSONPath},
 		},
+		CLIRecoveryControllerDeps: CLIRecoveryControllerDeps{
+			Cfg:                cfg,
+			Logger:             logger,
+			UserSvc:            userSvc,
+			PKI:                pki,
+			CLISessionSvc:      cliSessionSvc,
+			OperatorSessionSvc: operatorSessionSvc,
+			DocStore:           ls.docStore,
+			Responder:          ls.responder,
+		},
+		CLIRotationControllerDeps: CLIRotationControllerDeps{
+			Cfg:           cfg,
+			Logger:        logger,
+			PKI:           pki,
+			CLISessionSvc: cliSessionSvc,
+			UserSvc:       userSvc,
+			Responder:     ls.responder,
+		},
 		EnrollmentTokenControllerDeps: EnrollmentTokenControllerDeps{
-			Cfg:       cfg,
-			Logger:    logger,
-			Responder: ls.responder,
+			Cfg:                cfg,
+			Logger:             logger,
+			EnrollmentTokenSvc: ls.enrollmentTokenSvc,
+			Responder:          ls.responder,
 		},
 		UserControllerDeps: UserControllerDeps{
 			Cfg:       cfg,
@@ -516,6 +541,11 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Reg:       reg,
 			Auth:      auth,
 			Responder: ls.responder,
+		},
+		DispatchControllerDeps: DispatchControllerDeps{
+			DispatchSvc: ls.dispatchSvc,
+			Responder:   ls.responder,
+			Logger:      logger,
 		},
 		SSEControllerDeps: SSEControllerDeps{
 			Cfg:       cfg,
@@ -678,6 +708,12 @@ func (ls *GatewayModeService) GetMCPGateway() *mcp.GatewayService {
 // GetGatewayWebSocketHandler returns the pub/sub websocket handler.
 func (ls *GatewayModeService) GetGatewayWebSocketHandler() *GatewayWebSocketHandler {
 	return ls.pubsub
+}
+
+// GetDispatchService returns the command dispatch service for sending signed
+// commands to operators over the WS pub/sub cmd channel.
+func (ls *GatewayModeService) GetDispatchService() *DispatchService {
+	return ls.dispatchSvc
 }
 
 // GetHTTPPort returns the actual HTTP port the server is listening on.

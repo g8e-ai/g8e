@@ -393,3 +393,122 @@ func TestOperatorController_HandleReauth(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
 }
+
+// TestHandleReauth_ResponseContainsGatewayPosture verifies that the reauth
+// response includes the gateway's posture in the bootstrap config. The operator
+// has no posture of its own and must receive the gateway's posture at reauth to
+// run L4 posture-gated checks against the gateway's policy decision.
+func TestHandleReauth_ResponseContainsGatewayPosture(t *testing.T) {
+	_, stores := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(stores.DocStore, logger)
+	personaSvc := NewPersonaService(stores.DocStore, logger)
+	res := response.NewWriter(logger)
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	reg := &RegistrationService{}
+	cfg := &config.Config{Gateway: config.GatewayConfig{MaxPayloadBytes: 1024, Posture: config.PostureDoctrine}}
+	controller := newOperatorController(OperatorControllerDeps{Cfg: cfg, Logger: logger, Reg: reg, Auth: auth, Responder: res})
+
+	operatorSessionID := "test-session-posture"
+	opDoc := map[string]interface{}{
+		"id":                  "op-posture",
+		"operator_session_id": operatorSessionID,
+		"status":              marshaler.Status(constants.OperatorStatusActive),
+		"user_id":             "user-posture",
+		"organization_id":     "org-posture",
+	}
+	opBytes, err := json.Marshal(opDoc)
+	require.NoError(t, err)
+	require.NoError(t, stores.DocStore.DocSet("operators", "op-posture", opBytes))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/reauth", strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
+
+	wid := protocol.NewWorkloadIdentity()
+	opURI, err := wid.OperatorSPIFFEURL("org-posture", "op-posture", operatorSessionID)
+	require.NoError(t, err)
+
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{
+			{URIs: []*url.URL{opURI}},
+		},
+	}
+
+	ctx := context.WithValue(req.Context(), constants.ContextKeyOperatorSessionID, operatorSessionID)
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	controller.handleReauth(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp struct {
+		Success bool                   `json:"success"`
+		Config  map[string]interface{} `json:"config"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.True(t, resp.Success)
+	assert.Equal(t, string(config.PostureDoctrine), resp.Config["posture"],
+		"reauth response must propagate the gateway's posture to the operator")
+}
+
+func TestOperatorController_HandleGetOperatorBySession(t *testing.T) {
+	infra := setupTestInfrastructure(t, false)
+	controller := newOperatorController(OperatorControllerDeps{Cfg: infra.Cfg, Logger: infra.Logger, Reg: infra.Reg, Auth: infra.Auth, Responder: infra.Responder})
+
+	t.Run("Wrong method returns 405", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/session/sess-123", nil)
+		w := httptest.NewRecorder()
+
+		controller.handleGetOperatorBySession(w, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	})
+
+	t.Run("Empty session ID returns 400", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.OperatorsSession, nil)
+		w := httptest.NewRecorder()
+
+		controller.handleGetOperatorBySession(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("Invalid session ID returns 401", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.OperatorsSession+"nonexistent-session", nil)
+		w := httptest.NewRecorder()
+
+		controller.handleGetOperatorBySession(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	t.Run("Valid session ID returns 200 with operator document", func(t *testing.T) {
+		operatorSessionID := "sess-valid-456"
+		opDoc := map[string]interface{}{
+			"id":                  "op-456",
+			"operator_session_id": operatorSessionID,
+			"status":              marshaler.Status(constants.OperatorStatusActive),
+			"user_id":             "user-456",
+			"organization_id":     "org-456",
+		}
+		opBytes, err := json.Marshal(opDoc)
+		require.NoError(t, err)
+		require.NoError(t, infra.Stores.DocStore.DocSet(string(constants.CollectionOperators), "op-456", opBytes))
+
+		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.OperatorsSession+operatorSessionID, nil)
+		w := httptest.NewRecorder()
+
+		controller.handleGetOperatorBySession(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp models.OperatorResponse
+		err = json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp.Success)
+		require.NotNil(t, resp.Operator)
+		assert.Equal(t, "op-456", resp.Operator.ID)
+		assert.Equal(t, operatorSessionID, resp.Operator.OperatorSessionID)
+		assert.Equal(t, constants.OperatorStatusActive, resp.Operator.Status)
+	})
+}

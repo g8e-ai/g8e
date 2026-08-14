@@ -244,7 +244,7 @@ func TestPerformAutomaticEnrollment(t *testing.T) {
 
 			constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-			_, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", fileSvc, testLogger())
+			_, _, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", fileSvc, testLogger())
 
 			if tt.wantErr != nil {
 				require.Error(t, err)
@@ -310,7 +310,7 @@ func TestPerformAutomaticEnrollment_ActuatorPublicKeySaved(t *testing.T) {
 
 	constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-	sessionID, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", fileSvc, testLogger())
+	sessionID, _, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", fileSvc, testLogger())
 	require.NoError(t, err)
 	assert.Equal(t, "sess-001", sessionID)
 
@@ -740,7 +740,7 @@ func TestPerformAutomaticEnrollment_HubTrustBundleOverwritesCAFile(t *testing.T)
 
 	constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-	_, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", fileSvc, testLogger())
+	_, _, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", fileSvc, testLogger())
 	require.NoError(t, err)
 
 	caBundleRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
@@ -786,7 +786,7 @@ func TestPerformAutomaticEnrollment_CertChainAppendedToOperatorCert(t *testing.T
 
 	constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-	_, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", fileSvc, testLogger())
+	_, _, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", fileSvc, testLogger())
 	require.NoError(t, err)
 
 	opCertRel := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert)
@@ -826,7 +826,7 @@ func TestPerformAutomaticEnrollment_MalformedJSONResponse(t *testing.T) {
 
 	constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-	_, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", fileSvc, testLogger())
+	_, _, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", fileSvc, testLogger())
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrResponseParseFailed))
 }

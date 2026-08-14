@@ -15,6 +15,7 @@ package cmd
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"crypto/x509"
 	"errors"
 	"fmt"
@@ -264,18 +265,25 @@ func securityPKICmd() *cobra.Command {
 	return cmd
 }
 
-// enrollFunc is the signature for gateway enrollment, injectable for testing.
-type enrollFunc func(cfg *config.Config, gatewayEndpoint, operatorCSR, cliCSR, caFingerprint string) (*auth.RegistrationResponse, error)
+// remoteOperatorEnroller is the subset of auth.EnrollmentClient used by
+// `security pki enroll`. Injectable for tests.
+type remoteOperatorEnroller interface {
+	EnrollRemoteOperator(ctx context.Context, gatewayEndpoint, operatorCSR string, operatorKey *ecdsa.PrivateKey, cliCSR string, cliKey *ecdsa.PrivateKey, caFingerprint string) (auth.EnrollmentArtifacts, error)
+}
 
-func defaultEnrollFunc(cfg *config.Config, gatewayEndpoint, operatorCSR, cliCSR, caFingerprint string) (*auth.RegistrationResponse, error) {
-	return auth.EnrollWithGateway(cfg, gatewayEndpoint, operatorCSR, cliCSR, caFingerprint)
+// defaultRemoteOperatorEnroller builds the production enrollment client for
+// `security pki enroll`. The client uses plain HTTP (no mTLS) and performs no
+// OS trust installation or passkey registration — `security pki enroll` is a
+// headless operator-only enrollment path.
+func defaultRemoteOperatorEnroller(cfg *config.Config) remoteOperatorEnroller {
+	return auth.NewEnrollmentClient(cfg, nil)
 }
 
 func securityPKIEnrollCmd() *cobra.Command {
-	return securityPKIEnrollCmdWithConfig(loadConfig, defaultEnrollFunc, newFileSvc)
+	return securityPKIEnrollCmdWithConfig(loadConfig, defaultRemoteOperatorEnroller, newFileSvc)
 }
 
-func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, error), enroll enrollFunc, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
+func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, error), enrollerFactory func(*config.Config) remoteOperatorEnroller, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var outputDir string
 
 	cmd := &cobra.Command{
@@ -319,12 +327,17 @@ func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, e
 			// Append default HTTP port
 			gatewayEndpoint := fmt.Sprintf("%s:%d", endpoint, constants.Ports.OperatorHttp)
 			cmd.Printf("Enrolling with Gateway at %s...\n", gatewayEndpoint)
-			regResp, err := enroll(cfg, gatewayEndpoint, opCSR, "", "")
+			enroller := enrollerFactory(cfg)
+			// security pki enroll is a headless operator-only path: no CLI CSR,
+			// no OS trust installation, no passkey ceremony. The enrollment
+			// client validates the operator cert and (when present) the trust
+			// bundle / CA fingerprint pin.
+			artifacts, err := enroller.EnrollRemoteOperator(ctx, gatewayEndpoint, opCSR, opKey, "", nil, "")
 			if err != nil {
 				return fmt.Errorf("security: enroll: %w", err)
 			}
 
-			if regResp.OperatorCert == "" {
+			if artifacts.OperatorCertPEM == "" {
 				return fmt.Errorf("security: enroll: %w", constants.ErrMissingCertificate)
 			}
 
@@ -351,11 +364,11 @@ func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, e
 				if err != nil {
 					return fmt.Errorf("security: save cert and key: %w: %w", constants.ErrCertSaveFailed, err)
 				}
-				if err := auth.SaveCertAndKey(fileSvc, regResp.OperatorCert, regResp.OperatorCertChain, opKey, certRel, keyRel); err != nil {
+				if err := auth.SaveCertAndKey(fileSvc, artifacts.OperatorCertPEM, artifacts.OperatorCertChainPEM, opKey, certRel, keyRel); err != nil {
 					return fmt.Errorf("security: save cert and key: %w", err)
 				}
 			} else {
-				certBytes, keyBytes, err := certutil.EncodeCertAndKey(regResp.OperatorCert, regResp.OperatorCertChain, opKey)
+				certBytes, keyBytes, err := certutil.EncodeCertAndKey(artifacts.OperatorCertPEM, artifacts.OperatorCertChainPEM, opKey)
 				if err != nil {
 					return fmt.Errorf("security: save cert and key: %w: %w", constants.ErrCertSaveFailed, err)
 				}
@@ -369,16 +382,16 @@ func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, e
 
 			if outputDir == "" {
 				chainRelPath := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorChain)
-				if err := fileSvc.WriteFile(ctx, chainRelPath, []byte(regResp.OperatorCertChain), constants.PermFilePrivate); err != nil {
+				if err := fileSvc.WriteFile(ctx, chainRelPath, []byte(artifacts.OperatorCertChainPEM), constants.PermFilePrivate); err != nil {
 					return fmt.Errorf("security: save chain: %w: %w", constants.ErrChainSaveFailed, err)
 				}
 			} else {
-				if err := os.WriteFile(chainPath, []byte(regResp.OperatorCertChain), constants.PermFilePrivate); err != nil {
+				if err := os.WriteFile(chainPath, []byte(artifacts.OperatorCertChainPEM), constants.PermFilePrivate); err != nil {
 					return fmt.Errorf("security: save chain: %w: %w", constants.ErrChainSaveFailed, err)
 				}
 			}
 
-			if regResp.HubTrustBundle != "" {
+			if artifacts.TrustBundlePEM != "" {
 				trustDir := filepath.Join(pkiDir, constants.PkiSubdirTrust)
 				if outputDir == "" {
 					trustRelDir := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust)
@@ -386,7 +399,7 @@ func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, e
 						return fmt.Errorf("security: create trust dir: %w: %w", constants.ErrDirCreateFailed, err)
 					}
 					bundleRelPath := filepath.Join(trustRelDir, constants.PkiFileGatewayBundle)
-					if err := fileSvc.WriteFile(ctx, bundleRelPath, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
+					if err := fileSvc.WriteFile(ctx, bundleRelPath, []byte(artifacts.TrustBundlePEM), constants.PermFilePublic); err != nil {
 						return fmt.Errorf("security: save trust bundle: %w: %w", constants.ErrTrustSaveFailed, err)
 					}
 				} else {
@@ -394,18 +407,18 @@ func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, e
 						return fmt.Errorf("security: create trust dir: %w: %w", constants.ErrDirCreateFailed, err)
 					}
 					bundlePath := filepath.Join(trustDir, constants.PkiFileGatewayBundle)
-					if err := os.WriteFile(bundlePath, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
+					if err := os.WriteFile(bundlePath, []byte(artifacts.TrustBundlePEM), constants.PermFilePublic); err != nil {
 						return fmt.Errorf("security: save trust bundle: %w: %w", constants.ErrTrustSaveFailed, err)
 					}
 				}
 			}
 
 			cmd.Printf("\nEnrollment complete\n")
-			cmd.Printf("Operator ID: %s\n", regResp.OperatorID)
-			cmd.Printf("Operator Session ID: %s\n", regResp.OperatorSessionID)
+			cmd.Printf("Operator ID: %s\n", artifacts.OperatorID)
+			cmd.Printf("Operator Session ID: %s\n", artifacts.OperatorSessionID)
 			cmd.Printf("Certificate saved to: %s\n", certPath)
 			cmd.Printf("Key saved to: %s\n", keyPath)
-			if regResp.HubTrustBundle != "" {
+			if artifacts.TrustBundlePEM != "" {
 				cmd.Printf("Trust bundle saved to: %s\n", filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle))
 			}
 

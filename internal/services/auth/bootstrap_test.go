@@ -29,6 +29,7 @@ import (
 	"crypto/tls"
 
 	"github.com/g8e-ai/g8e/internal/certs"
+	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/exitcode"
 	"github.com/g8e-ai/g8e/internal/httpclient"
@@ -313,6 +314,59 @@ func TestApplyBootstrapConfig_AppliesAllFields(t *testing.T) {
 	assert.Equal(t, 60, int(cfg.HeartbeatInterval.Seconds()))
 	assert.Equal(t, "op-applied", cfg.OperatorID)
 	assert.Equal(t, "sess-applied", cfg.OperatorSessionId)
+}
+
+// TestApplyBootstrapConfig_AppliesGatewayPosture verifies that the posture
+// received from the gateway (via enrollment/reauth) is applied to the operator's
+// config. The operator has no posture of its own; it must use the gateway's.
+func TestApplyBootstrapConfig_AppliesGatewayPosture(t *testing.T) {
+	t.Parallel()
+	cfg := testutil.NewTestConfig(t)
+	originalPosture := cfg.Posture
+	logger := testutil.NewTestLogger()
+
+	svc, err := NewBootstrapService(cfg, logger, newTestTLSConfig(t))
+	require.NoError(t, err)
+
+	bootCfg := &BootstrapConfig{
+		OperatorID:        "op-posture",
+		OperatorSessionId: "sess-posture",
+		Posture:           string(config.PostureDoctrine),
+	}
+
+	err = svc.ApplyBootstrapConfig(bootCfg)
+	require.NoError(t, err)
+
+	assert.Equal(t, config.PostureDoctrine, cfg.Posture,
+		"ApplyBootstrapConfig must apply the gateway-provided posture")
+	assert.NotEqual(t, originalPosture, cfg.Posture,
+		"posture must change from the original to the gateway-provided value")
+}
+
+// TestApplyBootstrapConfig_EmptyPostureNotOverridden verifies that an empty
+// posture in the bootstrap config does not override the existing config posture.
+// This prevents a reauth with no posture field from wiping out a previously
+// received posture.
+func TestApplyBootstrapConfig_EmptyPostureNotOverridden(t *testing.T) {
+	t.Parallel()
+	cfg := testutil.NewTestConfig(t)
+	originalPosture := cfg.Posture
+	logger := testutil.NewTestLogger()
+
+	svc, err := NewBootstrapService(cfg, logger, newTestTLSConfig(t))
+	require.NoError(t, err)
+
+	bootCfg := &BootstrapConfig{
+		OperatorID:        "op-no-posture",
+		OperatorSessionId: "sess-no-posture",
+		Posture:           "",
+	}
+
+	err = svc.ApplyBootstrapConfig(bootCfg)
+	require.NoError(t, err)
+
+	assert.Equal(t, originalPosture, cfg.Posture,
+		"empty posture in bootstrap config must not override existing config posture")
 }
 
 func TestApplyBootstrapConfig_ZeroValuesNotOverridden(t *testing.T) {

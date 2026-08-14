@@ -130,6 +130,10 @@ footer { text-align: center; padding: 16px; color: var(--muted); font-size: 0.75
 var user = null, passkeys = [], approvals = [], health = null, bootstrapped = false;
 var auditEs = null, auditConnected = false, auditEvents = [], auditAutoScroll = true, auditFilter = '', auditMaxEvents = 500;
 var auditReconnectAttempt = 0, auditSeenIds = new Set(), auditOpenTimeout = null;
+// pendingRecoveryToken holds an opaque CLI recovery token read from the URL
+// fragment (#recovery=<token>) awaiting browser approval by an authenticated
+// existing user. It is kept only in memory after the fragment is cleared.
+var pendingRecoveryToken = null, recoveryState = null, recoveryResolved = false;
 
 function b64urlToBuf(s) {
   s = s.replace(/-/g,'+').replace(/_/g,'/');
@@ -159,7 +163,6 @@ function showMsg(cls, text) {
 async function api(path, opts) {
   opts = opts || {};
   var r = await fetch(path, Object.assign({ credentials: 'same-origin' }, opts));
-  if (r.status === 401) { user = null; render(); return null; }
   return r;
 }
 async function loadState() {
@@ -197,19 +200,30 @@ async function loadState() {
   } catch (e) { user = null; }
 }
 
-async function registerPasskey() {
-  var uidEl = document.getElementById('regUserId');
-  var unameEl = document.getElementById('regUserName');
-  var uid = uidEl ? uidEl.value.trim() : '';
-  var uname = unameEl ? unameEl.value.trim() : '';
-
-  var cliSid = document.getElementById('regCliSessionId');
-  var cliSessionId = cliSid ? cliSid.value : 'browser';
+// registerPasskey performs the WebAuthn registration ceremony for the
+// console bootstrap and authenticated-console flows (NOT the CLI enrollment
+// flow — see registerPasskeyEnrollment). Token-derived values (userId,
+// cliSessionId) and the user-entered display name are passed as parameters,
+// never read from the DOM inside this function — the DOM is rebuilt by
+// render() on any state change, so hidden inputs are an unreliable data
+// store. Each call site reads its own local input at click time and passes
+// the value in. The bootstrap flow calls registerPasskey('', '', uname)
+// (empty user ID triggers auto-create); the authenticated "Register New
+// Passkey" flow calls registerPasskey(user.id, '', uname).
+async function registerPasskey(userId, cliSessionId, displayName) {
+  var uid = userId || '';
+  var uname = (displayName || '').trim();
+  var cliSid = cliSessionId || 'browser';
 
   var cr = await fetch('/api/v1/auth/passkeys/console/register/challenge', {
     method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ user_id: uid, user_name: uname || uid, cli_session_id: cliSessionId })
+    body: JSON.stringify({ user_id: uid, user_name: uname || uid, cli_session_id: cliSid })
   });
+  if (!cr.ok) {
+    var ed = await cr.json().catch(function() { return {error: cr.statusText}; });
+    showMsg('error', ed.error || 'Challenge failed (HTTP ' + cr.status + ')');
+    return;
+  }
   var cd = await cr.json();
   if (!cd.success) { showMsg('error', cd.error || 'Challenge failed'); return; }
   if (cd.user_id) uid = cd.user_id;
@@ -225,7 +239,7 @@ async function registerPasskey() {
   var vr = await fetch('/api/v1/auth/passkeys/console/register/verify', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({
-      user_id: uid, cli_session_id: cliSessionId,
+      user_id: uid, cli_session_id: cliSid,
       attestation_response: {
         id: cred.id, rawId: bufToB64url(cred.rawId),
         clientDataJSON: bufToB64url(cred.response.clientDataJSON),
@@ -234,6 +248,82 @@ async function registerPasskey() {
       }
     })
   });
+  if (!vr.ok) {
+    var ved = await vr.json().catch(function() { return {error: vr.statusText}; });
+    showMsg('error', ved.error || 'Registration failed (HTTP ' + vr.status + ')');
+    return;
+  }
+  var vd = await vr.json();
+  if (vd.success) { await loadState(); render(); }
+  else showMsg('error', vd.error || 'Registration failed');
+}
+
+// registerPasskeyEnrollment performs the CLI-initiated WebAuthn registration
+// ceremony. It is intentionally separate from registerPasskey (the console
+// bootstrap / authenticated flows) to mirror the Go-side split: a dedicated
+// enrollment endpoint, a dedicated handler config, and a dedicated source.
+// The enrollment token is the single authorization primitive — the gateway
+// derives user_id and cli_session_id from it, so neither is sent in the
+// request body. The token is presented to BOTH the challenge and verify
+// endpoints; the challenge step only validates it, the verify step consumes
+// it (one-time). On success the verify response sets a web session cookie,
+// after which loadState()+render() refresh the UI into the authenticated
+// view. The cli_session_id carried by the token flows into the
+// passkey.registered SSE event, which the waiting CLI monitor receives.
+async function registerPasskeyEnrollment(enrollmentToken) {
+  if (!enrollmentToken) { showMsg('error', 'Missing enrollment token.'); return; }
+
+  var cr = await fetch('/api/v1/auth/passkeys/enrollment/register/challenge', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ enrollment_token: enrollmentToken })
+  });
+  if (!cr.ok) {
+    var ed = await cr.json().catch(function() { return {error: cr.statusText}; });
+    var msg = cr.status === 410 ? 'This enrollment link has expired.'
+              : cr.status === 409 ? 'This enrollment link has already been used.'
+              : cr.status === 401 ? 'Invalid enrollment link.'
+              : (ed.error || 'Challenge failed (HTTP ' + cr.status + ')');
+    showMsg('error', msg);
+    return;
+  }
+  var cd = await cr.json();
+  if (!cd.success) { showMsg('error', cd.error || 'Challenge failed'); return; }
+
+  var pk = cd.options.publicKey;
+  pk.challenge = b64urlToBuf(pk.challenge);
+  pk.user.id = b64urlToBuf(pk.user.id);
+  if (pk.excludeCredentials) pk.excludeCredentials.forEach(function(c) { c.id = b64urlToBuf(c.id); });
+
+  showMsg('info', 'Follow your browser prompt to register your passkey...');
+  var cred;
+  try {
+    cred = await navigator.credentials.create({ publicKey: pk });
+  } catch (e) {
+    showMsg('error', 'Passkey creation was cancelled or failed.');
+    return;
+  }
+
+  var vr = await fetch('/api/v1/auth/passkeys/enrollment/register/verify', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      enrollment_token: enrollmentToken,
+      attestation_response: {
+        id: cred.id, rawId: bufToB64url(cred.rawId),
+        clientDataJSON: bufToB64url(cred.response.clientDataJSON),
+        attestationObject: bufToB64url(cred.response.attestationObject),
+        transports: cred.response.getTransports ? cred.response.getTransports() : []
+      }
+    })
+  });
+  if (!vr.ok) {
+    var ved = await vr.json().catch(function() { return {error: vr.statusText}; });
+    var vmsg = vr.status === 410 ? 'This enrollment link has expired.'
+               : vr.status === 409 ? 'This enrollment link has already been used.'
+               : vr.status === 401 ? 'Invalid enrollment link.'
+               : (ved.error || 'Registration failed (HTTP ' + vr.status + ')');
+    showMsg('error', vmsg);
+    return;
+  }
   var vd = await vr.json();
   if (vd.success) { await loadState(); render(); }
   else showMsg('error', vd.error || 'Registration failed');
@@ -248,6 +338,11 @@ async function authenticatePasskey() {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ user_id: uid })
   });
+  if (!cr.ok) {
+    var ced = await cr.json().catch(function() { return {error: cr.statusText}; });
+    showMsg('error', ced.error || 'Challenge failed (HTTP ' + cr.status + ')');
+    return;
+  }
   var cd = await cr.json();
   if (!cd.success) {
     if (cd.needs_setup) {
@@ -283,9 +378,17 @@ async function authenticatePasskey() {
       }
     })
   });
+  if (!vr.ok) {
+    var ved = await vr.json().catch(function() { return {error: vr.statusText}; });
+    showMsg('error', ved.error || 'Authentication failed (HTTP ' + vr.status + ')');
+    return;
+  }
   var vd = await vr.json();
   if (vd.success) {
     await loadState();
+    // Refresh recovery status now that the user is authenticated, in case the
+    // state changed while the sign-in ceremony was in progress.
+    if (pendingRecoveryToken) await loadRecoveryStatus(pendingRecoveryToken);
     render();
     var params = new URLSearchParams(location.hash.slice(1));
     var txHash = params.get('approve');
@@ -319,6 +422,125 @@ async function approveTransaction(txHash) {
   });
   if (vr && vr.ok) { showMsg('success', 'Transaction approved!'); await loadState(); render(); }
   else { var ed = vr ? await vr.json() : {}; showMsg('error', ed.error || 'Approval failed'); }
+}
+
+// ---- CLI Recovery Approval ----
+// The recovery approval flow is intentionally SEPARATE from normal passkey
+// registration so an existing user understands exactly what they are
+// authorizing: a brand-new CLI is requesting enrollment credentials for this
+// gateway, gated by a one-time human approval.
+
+// loadRecoveryStatus fetches the current lifecycle state of the pending
+// recovery request. The status endpoint is public (the opaque token is the
+// lookup key), so only the state is returned — no CSR/identity details.
+async function loadRecoveryStatus(token) {
+  try {
+    var r = await fetch('/api/v1/auth/cli/recovery/status?token=' + encodeURIComponent(token),
+      { credentials: 'same-origin' });
+    if (!r.ok) {
+      // 404 = not found, 410 = expired, 409 = consumed. Map to a terminal
+      // recovery state so the UI shows a clear, final message.
+      recoveryState = r.status === 404 ? 'not_found'
+                    : r.status === 410 ? 'expired'
+                    : r.status === 409 ? 'consumed'
+                    : 'error';
+      recoveryResolved = true;
+      return;
+    }
+    var d = await r.json();
+    recoveryState = d.state;
+    // Terminal states — no approval action is possible.
+    if (recoveryState === 'completed' || recoveryState === 'denied' || recoveryState === 'expired') {
+      recoveryResolved = true;
+    }
+  } catch (e) {
+    recoveryState = 'error';
+    recoveryResolved = true;
+  }
+}
+
+// approveRecovery posts the approve/deny decision to the recovery approve
+// endpoint. This requires an authenticated web session (RouteAuthWebSession);
+// if the session has lapsed, the api() helper sets user=null and re-renders,
+// which surfaces the sign-in prompt again.
+async function approveRecovery(token, approve) {
+  var btnApprove = document.getElementById('recApproveBtn');
+  var btnDeny = document.getElementById('recDenyBtn');
+  if (btnApprove) btnApprove.disabled = true;
+  if (btnDeny) btnDeny.disabled = true;
+  showRecMsg('info', approve ? 'Approving CLI recovery...' : 'Denying CLI recovery...');
+  var r = await api('/api/v1/auth/cli/recovery/approve', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ token: token, approve: approve })
+  });
+  if (r.status === 401) { user = null; if (btnApprove) btnApprove.disabled = false; if (btnDeny) btnDeny.disabled = false; render(); return; }
+  var d = await r.json().catch(function() { return {}; });
+  if (r.ok && d.success) {
+    recoveryState = d.state;
+    recoveryResolved = true;
+    showRecMsg('success', approve
+      ? 'CLI recovery approved. The new CLI can now complete enrollment.'
+      : 'CLI recovery denied.');
+  } else {
+    showRecMsg('error', d.error || 'Recovery approval failed.');
+    if (btnApprove) btnApprove.disabled = false;
+    if (btnDeny) btnDeny.disabled = false;
+  }
+  render();
+}
+
+// showRecMsg displays a message inside the recovery card's dedicated
+// message element (#recMsg), avoiding conflicts with other #msg elements
+// elsewhere on the page.
+function showRecMsg(cls, text) {
+  var m = document.getElementById('recMsg'); if (!m) return;
+  m.className = 'msg msg-' + cls; m.textContent = text; m.style.display = 'block';
+}
+
+// recoveryStateLabel maps a recovery state to a human-readable label.
+function recoveryStateLabel(s) {
+  switch (s) {
+    case 'pending':   return 'Pending — awaiting your approval';
+    case 'approved':  return 'Approved — the new CLI may now complete enrollment';
+    case 'completed': return 'Completed — the new CLI has finished enrollment';
+    case 'denied':    return 'Denied — you rejected this request';
+    case 'expired':   return 'Expired — this request timed out';
+    case 'not_found': return 'Not found — this recovery link is invalid';
+    case 'consumed':  return 'Already used — this recovery link was completed';
+    case 'error':     return 'Error — could not reach the gateway';
+    default:          return s || 'Unknown';
+  }
+}
+
+// renderRecoveryCard builds the CLI recovery approval card. It is rendered at
+// the TOP of the main area, above all other cards, so the approver sees it
+// first. Only rendered when pendingRecoveryToken is set and the user is
+// authenticated.
+function renderRecoveryCard() {
+  var card = el('div', {className:'card', style:'border-color:var(--warning)'},
+    el('h2', null, 'CLI Recovery Approval'),
+    el('p', {style:'color:var(--text);font-size:0.9rem;margin-bottom:10px'},
+      'A new CLI is requesting enrollment access to this gateway. Approving ' +
+      'allows the new CLI to complete enrollment and obtain CLI credentials. ' +
+      'Only approve if you initiated this recovery.'),
+    el('div', {style:'color:var(--muted);font-size:0.8rem;margin-bottom:12px'},
+      'State: ' + recoveryStateLabel(recoveryState))
+  );
+  if (!recoveryResolved && recoveryState === 'pending') {
+    card.appendChild(el('div', {className:'row'},
+      el('button', {className:'btn btn-primary', id:'recApproveBtn',
+        onclick: function() { approveRecovery(pendingRecoveryToken, true); }},
+        'Approve'),
+      el('button', {className:'btn btn-danger', id:'recDenyBtn',
+        onclick: function() { approveRecovery(pendingRecoveryToken, false); }},
+        'Deny')
+    ));
+  } else if (recoveryResolved) {
+    card.appendChild(el('p', {style:'color:var(--muted);font-size:0.8rem'},
+      'No further action is required for this request.'));
+  }
+  card.appendChild(el('div', {id:'recMsg'}));
+  return card;
 }
 
 async function revokePasskey(credId) {
@@ -500,14 +722,24 @@ function render() {
 
   if (!user) {
     ud.textContent = '';
+    if (pendingRecoveryToken) {
+      m.appendChild(el('div', {className:'card', style:'border-color:var(--warning)'},
+        el('h2', null, 'CLI Recovery Approval'),
+        el('p', {style:'color:var(--text);font-size:0.9rem;margin-bottom:10px'},
+          'A new CLI is requesting enrollment access to this gateway. ' +
+          'Sign in with your passkey below to review and approve or deny the request.')
+      ));
+    }
     if (!bootstrapped) {
       m.appendChild(el('div', {className:'card'},
         el('h2', null, 'Enroll Passkey'),
         el('p', {style:'color:var(--muted);font-size:0.85rem;margin-bottom:12px'},
           'No passkey is registered yet. You must enroll a passkey to use the console.'),
-        el('input', {className:'input', id:'regUserId', type:'hidden'}),
         el('input', {className:'input', id:'regUserName', placeholder:'Display Name (optional)', type:'text'}),
-        el('button', {className:'btn btn-primary', onclick: registerPasskey}, 'Enroll Passkey'),
+        el('button', {className:'btn btn-primary', onclick: function() {
+          var ne = document.getElementById('regUserName');
+          registerPasskey('', '', ne ? ne.value : '');
+        }}, 'Enroll Passkey'),
         el('div', {id:'msg'})
       ));
     } else {
@@ -526,7 +758,11 @@ function render() {
         el('h2', null, 'Register New Passkey'),
         el('input', {className:'input', id:'regUserId', placeholder:'User ID', type:'text'}),
         el('input', {className:'input', id:'regUserName', placeholder:'Display Name (optional)', type:'text'}),
-        el('button', {className:'btn btn-primary', onclick: registerPasskey}, 'Register')
+        el('button', {className:'btn btn-primary', onclick: function() {
+          var uidEl = document.getElementById('regUserId');
+          var ne = document.getElementById('regUserName');
+          registerPasskey(uidEl ? uidEl.value.trim() : '', '', ne ? ne.value : '');
+        }}, 'Register')
       ));
     }
     return;
@@ -534,6 +770,8 @@ function render() {
 
   ud.textContent = (user.email || user.name || user.id || 'User');
   var v = health ? (health.version || '') : '';
+
+  if (pendingRecoveryToken) m.appendChild(renderRecoveryCard());
 
   m.appendChild(el('div', {className:'row'},
     el('div', {className:'stat'}, el('div', {className:'num', style:'color:var(--accent)'}, '' + passkeys.length), el('div', {className:'label'}, 'Passkeys')),
@@ -556,12 +794,10 @@ function render() {
     document.getElementById('regSection2').style.display = 'block';
   }}, '+ Register New Passkey'));
   pkCard.appendChild(el('div', {id:'regSection2', style:'display:none;margin-top:12px'},
-    el('input', {className:'input', id:'regUserId2', placeholder:'User ID', type:'text', value: user.id || ''}),
     el('input', {className:'input', id:'regUserName2', placeholder:'Display Name (optional)', type:'text'}),
     el('button', {className:'btn btn-primary', onclick: function() {
-      document.getElementById('regUserId').value = document.getElementById('regUserId2').value;
-      document.getElementById('regUserName').value = document.getElementById('regUserName2').value;
-      registerPasskey();
+      var ne = document.getElementById('regUserName2');
+      registerPasskey(user.id, '', ne ? ne.value : '');
     }}, 'Register')
   ));
   m.appendChild(pkCard);
@@ -627,35 +863,34 @@ function render() {
 
 (async function() {
   var hashParams = new URLSearchParams(location.hash.slice(1));
-  var registerMode = hashParams.get('register');
+  var enrollMode = hashParams.get('enroll');
   var hashToken = hashParams.get('token');
+  var recoveryToken = hashParams.get('recovery');
+
+  // CLI recovery approval: the opaque token arrives in the URL fragment so it
+  // never reaches server-side access logs. Clear the fragment immediately
+  // after reading it, then keep the token only in memory.
+  if (recoveryToken) {
+    pendingRecoveryToken = recoveryToken;
+    history.replaceState(null, '', location.pathname + location.search);
+    // Load the recovery status up front so the card can show the current
+    // state regardless of whether the user is already authenticated.
+    await loadRecoveryStatus(recoveryToken);
+  }
 
   await loadState();
   render();
 
-  if (registerMode === '1' && hashToken) {
+  // CLI-initiated passkey enrollment: the opaque enrollment token arrives in
+  // the URL fragment (#enroll=1&token=...) so it never reaches server-side
+  // access logs. Clear the fragment immediately after reading it, then hand
+  // the token directly to registerPasskeyEnrollment. The enrollment
+  // endpoints validate + consume the token themselves, so there is no
+  // separate /enrollment-token/validate round-trip and no hidden DOM inputs
+  // — the token-derived user_id / cli_session_id never touch the DOM.
+  if (enrollMode === '1' && hashToken) {
     history.replaceState(null, '', location.pathname + location.search);
-    var tr = await fetch('/api/v1/auth/enrollment-token/validate', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ token: hashToken })
-    });
-    if (!tr.ok) {
-      var msg = tr.status === 410 ? 'This registration link has expired.'
-              : tr.status === 409 ? 'This registration link has already been used.'
-              : 'Invalid registration link.';
-      showMsg('error', msg);
-      return;
-    }
-    var td = await tr.json();
-    var regUidEl = document.getElementById('regUserId');
-    if (regUidEl) regUidEl.value = td.user_id;
-    var regSidEl = document.getElementById('regCliSessionId');
-    if (!regSidEl) {
-      regSidEl = el('input', {type:'hidden', id:'regCliSessionId'});
-      document.body.appendChild(regSidEl);
-    }
-    regSidEl.value = td.cli_session_id;
-    registerPasskey();
+    registerPasskeyEnrollment(hashToken);
     return;
   }
 

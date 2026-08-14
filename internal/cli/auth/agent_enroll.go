@@ -16,14 +16,11 @@ package auth
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"net/http"
-	"os"
-	"runtime"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -32,76 +29,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/protocol"
 )
-
-// EnrollCLI performs idempotent first-time CLI session enrollment. It bootstraps
-// the gateway if it has never been bootstrapped, or enrolls a new CLI identity if
-// the gateway is already running. On Windows, it uses the Windows Certificate
-// Store for key generation and imports the signed cert for Windows Hello native
-// API access. It does NOT handle re-enrollment of existing credentials — that
-// is the re-enrollment path's responsibility.
-func EnrollCLI(fileSvc fs.RuntimeFileService, cfg *config.Config, useTPM bool) error {
-	bootstrapped, err := CheckBootstrapStatus(cfg, "")
-	if err != nil {
-		return fmt.Errorf("check bootstrap status: %w", err)
-	}
-
-	hostname, err := os.Hostname()
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrNetworkGetHostname, err)
-	}
-
-	var cliCSR string
-	var cliKey *ecdsa.PrivateKey
-	if runtime.GOOS == "windows" {
-		cliCSR, cliKey, err = GenerateWindowsCSR(fmt.Sprintf("g8e-cli-%s", hostname), useTPM)
-	} else {
-		cliCSR, cliKey, err = GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
-	}
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
-	}
-
-	var regResp *RegistrationResponse
-	if !bootstrapped {
-		regResp, err = BootstrapWithURL(cfg, "", cliCSR, "", "")
-	} else {
-		regResp, err = CLIEnroll(cfg, cliCSR, "")
-	}
-	if err != nil {
-		return err
-	}
-	if regResp.CLISessionID == "" || regResp.CLICert == "" {
-		return constants.ErrMissingRequiredField
-	}
-
-	cliCertRel, err := fileSvc.RelFromAbs(cfg.CLICertFile())
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
-	}
-	cliKeyRel, err := fileSvc.RelFromAbs(cfg.CLIKeyFile())
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
-	}
-	if err := SaveCertAndKey(fileSvc, regResp.CLICert, regResp.CLICertChain, cliKey, cliCertRel, cliKeyRel); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
-	}
-	if runtime.GOOS == "windows" {
-		if importErr := ImportCertificateToWindowsStore(regResp.CLICert); importErr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to import CLI cert to Windows Certificate Store: %v\n", importErr)
-		}
-	}
-	if regResp.HubTrustBundle != "" {
-		if err := WriteTrustBundleFS(fileSvc, cfg, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
-		}
-	}
-	return SaveCredentials(fileSvc, cfg, &Credentials{
-		OperatorSessionID: regResp.OperatorSessionID,
-		UserID:            regResp.UserID,
-		OperatorID:        regResp.OperatorID,
-		CLISessionID:      regResp.CLISessionID,
-	})
-}
 
 // EnrollAgentApp enrolls an agent as an external app with the gateway using the delegated credential model.
 // It requires an authenticated human CLI session (mTLS) and issues a short-lived cert that carries

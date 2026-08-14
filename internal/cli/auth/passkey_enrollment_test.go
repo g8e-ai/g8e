@@ -3,6 +3,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -25,7 +26,11 @@ func TestGenerateEnrollmentToken_Success(t *testing.T) {
 	}
 	startTLSEnrollServer(t, cfg, handler)
 
-	token, err := generateEnrollmentToken(fileSvc, cfg, "test-user", "test-session")
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	mtlsClient, err := BuildMTLSClient(fileSvc, cfg, 0)
+	require.NoError(t, err)
+
+	token, err := r.generateEnrollmentToken(context.Background(), mtlsClient, "test-session")
 	require.NoError(t, err)
 	assert.Equal(t, "abc123", token)
 }
@@ -39,7 +44,11 @@ func TestGenerateEnrollmentToken_NonCreatedStatusReturnsError(t *testing.T) {
 	}
 	startTLSEnrollServer(t, cfg, handler)
 
-	_, err := generateEnrollmentToken(fileSvc, cfg, "test-user", "test-session")
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	mtlsClient, err := BuildMTLSClient(fileSvc, cfg, 0)
+	require.NoError(t, err)
+
+	_, err = r.generateEnrollmentToken(context.Background(), mtlsClient, "test-session")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "enrollment token generation failed")
 }
@@ -55,7 +64,11 @@ func TestGenerateEnrollmentToken_EmptyTokenReturnsErrEnrollmentTokenGenerationFa
 	}
 	startTLSEnrollServer(t, cfg, handler)
 
-	_, err := generateEnrollmentToken(fileSvc, cfg, "test-user", "test-session")
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	mtlsClient, err := BuildMTLSClient(fileSvc, cfg, 0)
+	require.NoError(t, err)
+
+	_, err = r.generateEnrollmentToken(context.Background(), mtlsClient, "test-session")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrEnrollmentTokenGenerationFailed)
 }
@@ -71,7 +84,11 @@ func TestGenerateEnrollmentToken_InvalidJSONReturnsErrInvalidJSONResponse(t *tes
 	}
 	startTLSEnrollServer(t, cfg, handler)
 
-	_, err := generateEnrollmentToken(fileSvc, cfg, "test-user", "test-session")
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
+	mtlsClient, err := BuildMTLSClient(fileSvc, cfg, 0)
+	require.NoError(t, err)
+
+	_, err = r.generateEnrollmentToken(context.Background(), mtlsClient, "test-session")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrInvalidJSONResponse)
 }
@@ -87,7 +104,7 @@ func TestVerifyPasskeyRegistration_HasCredentials(t *testing.T) {
 	}
 	startTLSEnrollServer(t, cfg, handler)
 
-	hasPasskey, err := VerifyPasskeyRegistration(fileSvc, cfg, "test-user", "test-session")
+	hasPasskey, err := VerifyPasskeyRegistration(context.Background(), fileSvc, cfg, "test-session")
 	require.NoError(t, err)
 	assert.True(t, hasPasskey)
 }
@@ -103,7 +120,7 @@ func TestVerifyPasskeyRegistration_NoCredentials(t *testing.T) {
 	}
 	startTLSEnrollServer(t, cfg, handler)
 
-	hasPasskey, err := VerifyPasskeyRegistration(fileSvc, cfg, "test-user", "test-session")
+	hasPasskey, err := VerifyPasskeyRegistration(context.Background(), fileSvc, cfg, "test-session")
 	require.NoError(t, err)
 	assert.False(t, hasPasskey)
 }
@@ -117,7 +134,7 @@ func TestVerifyPasskeyRegistration_UnauthorizedReturnsErrPasskeyStatusUnauthoriz
 	}
 	startTLSEnrollServer(t, cfg, handler)
 
-	hasPasskey, err := VerifyPasskeyRegistration(fileSvc, cfg, "test-user", "test-session")
+	hasPasskey, err := VerifyPasskeyRegistration(context.Background(), fileSvc, cfg, "test-session")
 	require.Error(t, err)
 	assert.False(t, hasPasskey)
 	assert.ErrorIs(t, err, constants.ErrPasskeyStatusUnauthorized)
@@ -132,7 +149,7 @@ func TestVerifyPasskeyRegistration_ServerErrorReturnsErrHTTPStatusError(t *testi
 	}
 	startTLSEnrollServer(t, cfg, handler)
 
-	hasPasskey, err := VerifyPasskeyRegistration(fileSvc, cfg, "test-user", "test-session")
+	hasPasskey, err := VerifyPasskeyRegistration(context.Background(), fileSvc, cfg, "test-session")
 	require.Error(t, err)
 	assert.False(t, hasPasskey)
 	assert.ErrorIs(t, err, constants.ErrHTTPStatusError)
@@ -149,7 +166,7 @@ func TestVerifyPasskeyRegistration_InvalidJSONReturnsErrInvalidJSONResponse(t *t
 	}
 	startTLSEnrollServer(t, cfg, handler)
 
-	hasPasskey, err := VerifyPasskeyRegistration(fileSvc, cfg, "test-user", "test-session")
+	hasPasskey, err := VerifyPasskeyRegistration(context.Background(), fileSvc, cfg, "test-session")
 	require.Error(t, err)
 	assert.False(t, hasPasskey)
 	assert.ErrorIs(t, err, constants.ErrInvalidJSONResponse)

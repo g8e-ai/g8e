@@ -45,4 +45,5 @@ const (
 	CollectionAppPolicies           CollectionName = "app_policies"
 	CollectionConsensus             CollectionName = "consensus"
 	CollectionEnrollmentTokens      CollectionName = "enrollment_tokens"
+	CollectionCLIRecoveryRequests   CollectionName = "cli_recovery_requests"
 )

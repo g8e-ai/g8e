@@ -31,12 +31,14 @@ type passkeyRequestSource int
 const (
 	sourceJWT passkeyRequestSource = iota
 	sourceBrowserBootstrap
+	sourceEnrollmentToken
 )
 
 type passkeyHandlerConfig struct {
 	source                     passkeyRequestSource
 	enforceFirstCredentialOnly bool
 	requireAuthenticatedUser   bool
+	requireEnrollmentToken     bool
 	enforceSessionUserBinding  bool
 	createWebSession           bool
 	setCookie                  bool
@@ -81,7 +83,8 @@ func (h *PasskeyHandler) enforceFirstCred(r *http.Request, userID string, cfg pa
 
 // @Summary		Generate WebAuthn registration challenge
 // @Description	Generates a WebAuthn registration challenge. Config-driven trust posture:
-// @Description	mTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), or console (public, may auto-create user).
+// @Description	mTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), console (public, may auto-create user),
+// @Description	or enrollment-token (public, token-gated — the CLI enrollment flow).
 // @Tags			passkey
 // @Accept			json
 // @Produce		json
@@ -101,12 +104,62 @@ func (h *PasskeyHandler) RegisterChallenge(cfg passkeyHandlerConfig) http.Handle
 		}
 
 		var req struct {
-			UserID       string `json:"user_id"`
-			UserName     string `json:"user_name"`
-			CLISessionID string `json:"cli_session_id"`
+			UserID          string `json:"user_id"`
+			UserName        string `json:"user_name"`
+			CLISessionID    string `json:"cli_session_id"`
+			EnrollmentToken string `json:"enrollment_token"`
 		}
 		if err := json.Unmarshal(body, &req); err != nil {
 			h.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
+			return
+		}
+
+		// Enrollment-token flow: the token is the single authorization
+		// primitive. The challenge step only VALIDATES the token (does
+		// not consume it) so the same token can be presented again at
+		// verify; the verify step consumes it. This makes the token
+		// reusable across challenge retries until the ceremony either
+		// completes (verify consumes) or expires. No HasAnyUsers /
+		// CreateUser / enforceFirstCred branches run for this flow.
+		if cfg.requireEnrollmentToken {
+			if req.EnrollmentToken == "" {
+				h.responder.Error(w, http.StatusBadRequest, "enrollment_token required")
+				return
+			}
+			if h.enrollmentTokenSvc == nil {
+				h.logger.Error("Enrollment-token register flow requested but EnrollmentTokenSvc is not wired")
+				h.responder.Error(w, http.StatusInternalServerError, "enrollment token service unavailable")
+				return
+			}
+			tok, err := h.enrollmentTokenSvc.ValidateToken(req.EnrollmentToken)
+			if err != nil {
+				h.logger.Warn("Enrollment-token register challenge rejected", "error", err)
+				switch {
+				case errors.Is(err, constants.ErrEnrollmentTokenExpired):
+					h.responder.Error(w, http.StatusGone, err.Error())
+				case errors.Is(err, constants.ErrEnrollmentTokenConsumed):
+					h.responder.Error(w, http.StatusConflict, err.Error())
+				case errors.Is(err, constants.ErrEnrollmentTokenInvalid):
+					h.responder.Error(w, http.StatusUnauthorized, err.Error())
+				default:
+					h.responder.Error(w, http.StatusInternalServerError, err.Error())
+				}
+				return
+			}
+			req.UserID = tok.UserID
+			req.CLISessionID = tok.CLISessionID
+			req.EnrollmentToken = ""
+
+			options, err := h.GenerateRegistrationChallenge(req.UserID, req.UserName)
+			if err != nil {
+				h.logger.Warn("Passkey register challenge failed (enrollment-token flow)", "error", err, "userID", req.UserID)
+				h.responder.Error(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			h.responder.JSON(w, http.StatusOK, models.PasskeyRegisterChallengeResponse{
+				Success: true,
+				Options: options,
+			})
 			return
 		}
 
@@ -129,10 +182,6 @@ func (h *PasskeyHandler) RegisterChallenge(cfg passkeyHandlerConfig) http.Handle
 			hasUsers, err := h.userStore.HasAnyUsers()
 			if err != nil {
 				h.logger.Error("Failed to check for existing users during bootstrap", "error", err)
-				if cfg.source == sourceBrowserBootstrap {
-					h.responder.JSON(w, http.StatusOK, models.PasskeyRegisterChallengeResponse{Success: false})
-					return
-				}
 				h.responder.Error(w, http.StatusInternalServerError, "failed to check bootstrap status")
 				return
 			}
@@ -143,10 +192,6 @@ func (h *PasskeyHandler) RegisterChallenge(cfg passkeyHandlerConfig) http.Handle
 			newUser, err := h.userStore.CreateUser()
 			if err != nil {
 				h.logger.Error("Failed to create user during bootstrap", "error", err)
-				if cfg.source == sourceBrowserBootstrap {
-					h.responder.JSON(w, http.StatusOK, models.PasskeyRegisterChallengeResponse{Success: false})
-					return
-				}
 				h.responder.Error(w, http.StatusInternalServerError, "failed to create user")
 				return
 			}
@@ -166,6 +211,11 @@ func (h *PasskeyHandler) RegisterChallenge(cfg passkeyHandlerConfig) http.Handle
 		if err != nil {
 			h.logger.Warn("Passkey register challenge failed", "error", err, "userID", req.UserID)
 			if cfg.source == sourceBrowserBootstrap {
+				// Browser bootstrap returns a 200 with success=false only for
+				// expected WebAuthn failures (BeginRegistration errors the
+				// browser should display). Internal server errors are not
+				// swallowed here because GenerateRegistrationChallenge only
+				// returns errors from BeginRegistration or session storage.
 				h.responder.JSON(w, http.StatusOK, models.PasskeyRegisterChallengeResponse{Success: false})
 				return
 			}
@@ -183,7 +233,8 @@ func (h *PasskeyHandler) RegisterChallenge(cfg passkeyHandlerConfig) http.Handle
 
 // @Summary		Verify WebAuthn registration
 // @Description	Verifies a WebAuthn attestation response and stores the credential. Config-driven trust posture:
-// @Description	mTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), or console (public, may mint web session + cookie).
+// @Description	mTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), console (public, may mint web session + cookie),
+// @Description	or enrollment-token (public, token-gated — the CLI enrollment flow).
 // @Tags			passkey
 // @Accept			json
 // @Produce		json
@@ -205,10 +256,83 @@ func (h *PasskeyHandler) RegisterVerify(cfg passkeyHandlerConfig) http.HandlerFu
 		var req struct {
 			UserID              string                              `json:"user_id"`
 			CLISessionID        string                              `json:"cli_session_id"`
+			EnrollmentToken     string                              `json:"enrollment_token"`
 			AttestationResponse *models.WebAuthnAttestationResponse `json:"attestation_response"`
 		}
 		if err := json.Unmarshal(body, &req); err != nil {
 			h.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
+			return
+		}
+
+		// Enrollment-token flow: the token is the single authorization
+		// primitive. The verify step is the CONSUMING step — it validates
+		// and atomically consumes the token, then derives user_id and
+		// cli_session_id from it. The challenge step only validated the
+		// token, so it is still unconsumed here. No enforceFirstCred
+		// branch runs; the token already vouches for the user.
+		if cfg.requireEnrollmentToken {
+			if req.EnrollmentToken == "" {
+				h.responder.Error(w, http.StatusBadRequest, "enrollment_token required")
+				return
+			}
+			if h.enrollmentTokenSvc == nil {
+				h.logger.Error("Enrollment-token verify flow requested but EnrollmentTokenSvc is not wired")
+				h.responder.Error(w, http.StatusInternalServerError, "enrollment token service unavailable")
+				return
+			}
+			tok, err := h.enrollmentTokenSvc.ValidateAndConsumeToken(req.EnrollmentToken)
+			if err != nil {
+				h.logger.Warn("Enrollment-token register verify rejected", "error", err)
+				switch {
+				case errors.Is(err, constants.ErrEnrollmentTokenExpired):
+					h.responder.Error(w, http.StatusGone, err.Error())
+				case errors.Is(err, constants.ErrEnrollmentTokenConsumed):
+					h.responder.Error(w, http.StatusConflict, err.Error())
+				case errors.Is(err, constants.ErrEnrollmentTokenInvalid):
+					h.responder.Error(w, http.StatusUnauthorized, err.Error())
+				default:
+					h.responder.Error(w, http.StatusInternalServerError, err.Error())
+				}
+				return
+			}
+			req.UserID = tok.UserID
+			req.CLISessionID = tok.CLISessionID
+			req.EnrollmentToken = ""
+
+			responseJSON, err := json.Marshal(req.AttestationResponse)
+			if err != nil {
+				h.logger.Warn("Failed to marshal attestation response (enrollment-token flow)", "error", err, "userID", req.UserID)
+				h.responder.Error(w, http.StatusBadRequest, "failed to marshal attestation response")
+				return
+			}
+
+			cred, err := h.VerifyRegistration(req.UserID, responseJSON)
+			if err != nil {
+				h.logger.Warn("Passkey register verify failed (enrollment-token flow)", "error", err, "userID", req.UserID)
+				h.responder.Error(w, http.StatusBadRequest, err.Error())
+				return
+			}
+
+			if cfg.createWebSession {
+				webSession, err := h.webSessionSvc.CreateWebSession(req.UserID)
+				if err != nil {
+					h.logger.Error("Failed to create web session after enrollment registration", "error", err, "userID", req.UserID)
+					h.responder.Error(w, http.StatusInternalServerError, "registration succeeded but web session creation failed")
+					return
+				}
+				if cfg.setCookie {
+					h.setWebSessionCookie(w, webSession)
+				}
+			}
+
+			h.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
+				Success:    true,
+				Credential: cred,
+			})
+
+			if req.CLISessionID != "" && h.orchestrator != nil {
+				h.orchestrator.EmitPasskeyRegisteredSSE(req.UserID, req.CLISessionID)
+			}
 			return
 		}
 

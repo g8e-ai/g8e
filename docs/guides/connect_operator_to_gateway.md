@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-08-07
-Version: v1.7.0
+Last Updated: 2026-08-14
+Version: v1.7.2
 
 ---
 
@@ -330,7 +330,13 @@ When the mTLS certificate expires, re-authenticate using:
 ./g8e auth enroll
 ```
 
-This command automatically checks certificate expiry and performs auto-renewal if needed. For remote device enrollment, use CSR-based enrollment:
+The enrollment coordinator checks the local credential state. If credentials are complete and valid, they are reused without rotation. If credentials are partial or corrupt, the coordinator initiates the one-time human-approved recovery flow. To force certificate rotation (e.g., before expiry), use:
+
+```bash
+./g8e auth enroll --rotate-cli
+```
+
+Rotation is mTLS-protected — the caller's identity is derived from the existing CLI certificate. Only one replacement certificate is issued per run. For remote device enrollment, use CSR-based enrollment:
 
 ```bash
 ./g8e gw security pki enroll -e <gateway-ip>
@@ -338,7 +344,7 @@ This command automatically checks certificate expiry and performs auto-renewal i
 
 **Windows Enrollment:**
 
-On Windows, `./g8e auth enroll` generates the CLI key in the Windows Certificate Store and imports the signed certificate for Windows Hello native API access. Use the `--tpm` flag to request TPM-backed key generation via Windows Hello for Business.
+On Windows, `./g8e auth enroll` imports the signed CLI certificate into the Windows Certificate Store for Windows Hello native API access. CLI keys are file-backed ECDSA P-256 on all platforms.
 
 ---
 

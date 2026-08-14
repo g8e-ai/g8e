@@ -29,12 +29,14 @@ var APIPaths = struct {
 	GovernanceSignersByID   string `json:"governance_signers_by_id"`
 	GovernanceSignersPrefix string `json:"governance_signers_prefix"`
 	// Operator routes
-	Operators       string `json:"operators"`
-	OperatorsByID   string `json:"operators_by_id"`
-	OperatorsBind   string `json:"operators_bind"`
-	OperatorsUnbind string `json:"operators_unbind"`
-	OperatorsTarget string `json:"operators_target"`
-	OperatorsReauth string `json:"operators_reauth"`
+	Operators         string `json:"operators"`
+	OperatorsByID     string `json:"operators_by_id"`
+	OperatorsBind     string `json:"operators_bind"`
+	OperatorsUnbind   string `json:"operators_unbind"`
+	OperatorsTarget   string `json:"operators_target"`
+	OperatorsReauth   string `json:"operators_reauth"`
+	OperatorsSession  string `json:"operators_session"`
+	OperatorsCommands string `json:"operators_commands"`
 	// Intent routes
 	GrantIntent  string `json:"grant_intent"`
 	RevokeIntent string `json:"revoke_intent"`
@@ -81,8 +83,12 @@ var APIPaths = struct {
 	AuthLogout                               string `json:"auth_logout"`
 	AuthBootstrap                            string `json:"auth_bootstrap"`
 	AuthBootstrapStatus                      string `json:"auth_bootstrap_status"`
-	AuthCLIEnroll                            string `json:"auth_cli_enroll"`
 	AuthDeviceEnroll                         string `json:"auth_device_enroll"`
+	AuthCLIRecoveryRequest                   string `json:"auth_cli_recovery_request"`
+	AuthCLIRecoveryStatus                    string `json:"auth_cli_recovery_status"`
+	AuthCLIRecoveryApprove                   string `json:"auth_cli_recovery_approve"`
+	AuthCLIRecoveryComplete                  string `json:"auth_cli_recovery_complete"`
+	AuthCLIRotate                            string `json:"auth_cli_rotate"`
 	AuthPasskeys                             string `json:"auth_passkeys"`
 	AuthPasskeysByID                         string `json:"auth_passkeys_by_id"`
 	AuthPasskeysJITRegisterChallenge         string `json:"auth_passkeys_jit_register_challenge"`
@@ -95,6 +101,9 @@ var APIPaths = struct {
 	AuthPasskeysConsoleAuthenticateChallenge string `json:"auth_passkeys_console_authenticate_challenge"`
 	AuthPasskeysConsoleAuthenticateVerify    string `json:"auth_passkeys_console_authenticate_verify"`
 	AuthPasskeysConsolePrefix                string `json:"auth_passkeys_console_prefix"`
+	AuthPasskeysEnrollmentRegisterChallenge  string `json:"auth_passkeys_enrollment_register_challenge"`
+	AuthPasskeysEnrollmentRegisterVerify     string `json:"auth_passkeys_enrollment_register_verify"`
+	AuthPasskeysEnrollmentPrefix             string `json:"auth_passkeys_enrollment_prefix"`
 	AuthSessionsMe                           string `json:"auth_sessions_me"`
 	AuthEnrollmentTokenGenerate              string `json:"auth_enrollment_token_generate"`
 	AuthEnrollmentTokenValidate              string `json:"auth_enrollment_token_validate"`
@@ -121,10 +130,6 @@ var APIPaths = struct {
 	WellKnownPKIFingerprint string `json:"well_known_pki_fingerprint"`
 	WellKnownBinPrefix      string `json:"well_known_bin_prefix"`
 	WellKnownPKIPrefix      string `json:"well_known_pki_prefix"`
-	WellKnownTrustWindows   string `json:"well_known_trust_windows"`
-	// Web cert trust scripts (for remote workstations)
-	WebCertLinux   string `json:"web_cert_linux"`
-	WebCertWindows string `json:"web_cert_windows"`
 	// Deploy scripts
 	DeployScriptLinux   string `json:"deploy_script_linux"`
 	DeployScriptWindows string `json:"deploy_script_windows"`
@@ -162,12 +167,14 @@ var APIPaths = struct {
 	GovernanceSignersByID:   "/api/v1/governance/signers/",
 	GovernanceSignersPrefix: "/api/v1/governance/signers/",
 	// Operator routes
-	Operators:       "/api/v1/operators",
-	OperatorsByID:   "/api/v1/operators/",
-	OperatorsBind:   "/api/v1/operators/bind",
-	OperatorsUnbind: "/api/v1/operators/unbind",
-	OperatorsTarget: "/api/v1/operators/target",
-	OperatorsReauth: "/api/v1/operators/reauth",
+	Operators:         "/api/v1/operators",
+	OperatorsByID:     "/api/v1/operators/",
+	OperatorsBind:     "/api/v1/operators/bind",
+	OperatorsUnbind:   "/api/v1/operators/unbind",
+	OperatorsTarget:   "/api/v1/operators/target",
+	OperatorsReauth:   "/api/v1/operators/reauth",
+	OperatorsSession:  "/api/v1/operators/session/",
+	OperatorsCommands: "/api/v1/operators/commands",
 	// Intent routes
 	GrantIntent:  "/api/v1/operators/{operator_id}/intents/grant",
 	RevokeIntent: "/api/v1/operators/{operator_id}/intents/revoke",
@@ -214,8 +221,12 @@ var APIPaths = struct {
 	AuthLogout:                               "/api/v1/auth/logout",
 	AuthBootstrap:                            "/api/v1/auth/bootstrap",
 	AuthBootstrapStatus:                      "/api/v1/auth/bootstrap/status",
-	AuthCLIEnroll:                            "/api/v1/auth/cli/enroll",
 	AuthDeviceEnroll:                         "/api/v1/auth/device/enroll",
+	AuthCLIRecoveryRequest:                   "/api/v1/auth/cli/recovery/request",
+	AuthCLIRecoveryStatus:                    "/api/v1/auth/cli/recovery/status",
+	AuthCLIRecoveryApprove:                   "/api/v1/auth/cli/recovery/approve",
+	AuthCLIRecoveryComplete:                  "/api/v1/auth/cli/recovery/complete",
+	AuthCLIRotate:                            "/api/v1/auth/cli/rotate",
 	AuthPasskeys:                             "/api/v1/auth/passkeys",
 	AuthPasskeysByID:                         "/api/v1/auth/passkeys/",
 	AuthPasskeysJITRegisterChallenge:         "/api/v1/auth/passkeys/jit-register/challenge",
@@ -228,6 +239,9 @@ var APIPaths = struct {
 	AuthPasskeysConsoleAuthenticateChallenge: "/api/v1/auth/passkeys/console/authenticate/challenge",
 	AuthPasskeysConsoleAuthenticateVerify:    "/api/v1/auth/passkeys/console/authenticate/verify",
 	AuthPasskeysConsolePrefix:                "/api/v1/auth/passkeys/console/",
+	AuthPasskeysEnrollmentRegisterChallenge:  "/api/v1/auth/passkeys/enrollment/register/challenge",
+	AuthPasskeysEnrollmentRegisterVerify:     "/api/v1/auth/passkeys/enrollment/register/verify",
+	AuthPasskeysEnrollmentPrefix:             "/api/v1/auth/passkeys/enrollment/",
 	AuthSessionsMe:                           "/api/v1/auth/sessions/me",
 	AuthEnrollmentTokenGenerate:              "/api/v1/auth/enrollment-token/generate",
 	AuthEnrollmentTokenValidate:              "/api/v1/auth/enrollment-token/validate",
@@ -254,10 +268,6 @@ var APIPaths = struct {
 	WellKnownPKIFingerprint: "/.well-known/g8e/pki/fingerprint",
 	WellKnownBinPrefix:      "/.well-known/g8e/bin/",
 	WellKnownPKIPrefix:      "/.well-known/g8e/pki/",
-	WellKnownTrustWindows:   "/.well-known/g8e/pki/trust-windows",
-	// Web cert trust scripts (for remote workstations)
-	WebCertLinux:   "/web-cert.sh",
-	WebCertWindows: "/web-cert.ps1",
 	// Deploy scripts
 	DeployScriptLinux:   "/" + DeployScriptFilenameLinux,
 	DeployScriptWindows: "/" + DeployScriptFilenameWindows,

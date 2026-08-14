@@ -319,6 +319,16 @@ func TestRouteAuthRegistry_PasskeyRoutes(t *testing.T) {
 		assert.Equal(t, RouteAuthNone, registry.AuthMode(path), "console path %s should be RouteAuthNone", path)
 	}
 
+	// Enrollment-token passkey routes are public — the enrollment token is
+	// the credential (same model as AuthEnrollmentTokenValidate).
+	enrollmentPaths := []string{
+		constants.APIPaths.AuthPasskeysEnrollmentRegisterChallenge,
+		constants.APIPaths.AuthPasskeysEnrollmentRegisterVerify,
+	}
+	for _, path := range enrollmentPaths {
+		assert.Equal(t, RouteAuthNone, registry.AuthMode(path), "enrollment path %s should be RouteAuthNone", path)
+	}
+
 	// mTLS-protected passkey sub-paths must be RouteAuthMTLS (exact path overrides prefix)
 	mtlsPaths := []string{
 		constants.APIPaths.AuthPasskeysCLIStatus,
@@ -336,6 +346,31 @@ func TestRouteAuthRegistry_PasskeyRoutes(t *testing.T) {
 	}
 }
 
+// TestRouteAuthRegistry_RemovedTrustScriptPaths verifies that the deprecated
+// trust-script paths are no longer classified as RouteAuthNone. /web-cert.sh and
+// /web-cert.ps1 were exact RouteAuthNone entries that have been removed; they must
+// now fail-closed to RouteAuthMTLS. The /.well-known/g8e/pki/ prefix remains
+// RouteAuthNone so that ca-bundle and fingerprint discovery still work, but the
+// removed trust-windows handler is simply no longer registered (asserted at the
+// router level in gateway_http_test.go).
+func TestRouteAuthRegistry_RemovedTrustScriptPaths(t *testing.T) {
+
+	registry := NewRouteAuthRegistry(false)
+
+	// Removed exact RouteAuthNone entries must default to RouteAuthMTLS.
+	removedExactPaths := []string{
+		"/web-cert.sh",
+		"/web-cert.ps1",
+	}
+	for _, path := range removedExactPaths {
+		assert.Equal(t, RouteAuthMTLS, registry.AuthMode(path), "removed path %s should default to RouteAuthMTLS (fail-closed)", path)
+	}
+
+	// The PKI well-known prefix must remain RouteAuthNone so CA discovery works.
+	assert.Equal(t, RouteAuthNone, registry.AuthMode(constants.APIPaths.WellKnownPKICABundle), "ca-bundle must remain RouteAuthNone")
+	assert.Equal(t, RouteAuthNone, registry.AuthMode(constants.APIPaths.WellKnownPKIFingerprint), "fingerprint must remain RouteAuthNone")
+}
+
 func TestRouteAuthRegistry_SSEDualAuth(t *testing.T) {
 
 	registry := NewRouteAuthRegistry(false)
@@ -343,6 +378,40 @@ func TestRouteAuthRegistry_SSEDualAuth(t *testing.T) {
 	// SSE stream and events endpoints must be classified as RouteAuthDual
 	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.SSEStream), "SSE stream must be RouteAuthDual")
 	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.SSEEvents), "SSE events must be RouteAuthDual")
+}
+
+// TestRouteAuthRegistry_RotationAndRemovedEnroll verifies that the CLI
+// rotation route is explicitly classified as RouteAuthMTLS, and that the
+// deprecated CLI enroll route (handleCLIEnrollment was removed in 5f) is no
+// longer explicitly classified — it must fail-closed to the default
+// RouteAuthMTLS so an unregistered, unauthenticated enrollment endpoint can
+// never issue credentials.
+func TestRouteAuthRegistry_RotationAndRemovedEnroll(t *testing.T) {
+
+	registry := NewRouteAuthRegistry(false)
+
+	// Rotation must be explicitly RouteAuthMTLS — the caller's identity is
+	// derived from the verified mTLS certificate URI SAN.
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.APIPaths.AuthCLIRotate),
+		"CLI rotation must be RouteAuthMTLS (mTLS-derived identity)")
+
+	// The deprecated enroll route must NOT be explicitly classified. It
+	// relies on the fail-closed default (RouteAuthMTLS), and the handler is
+	// no longer registered on either router (asserted in
+	// TestRemovedCLIEnrollRoute). An explicit classification would be
+	// misleading now that the handler is gone.
+	//
+	// We cannot assert "absence of classification" directly through the
+	// public API, but we can confirm the fail-closed default still applies:
+	// the path must resolve to RouteAuthMTLS, never RouteAuthNone.
+	//
+	// The path is inlined as a literal because the
+	// constants.APIPaths.AuthCLIEnroll constant was deleted in Section 9
+	// (handleCLIEnrollment removal). This assertion verifies the removed
+	// route fail-closes via the registry default, so a literal preserves
+	// the intent without reintroducing a constant for a removed endpoint.
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode("/api/v1/auth/cli/enroll"),
+		"removed CLI enroll route must fail-closed to RouteAuthMTLS, never RouteAuthNone")
 }
 
 func TestAuthService_Middleware_DualAuthDispatch(t *testing.T) {

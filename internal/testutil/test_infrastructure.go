@@ -103,11 +103,16 @@ func NewTestConfig(t *testing.T) *config.Config {
 		MaxConcurrentTasks: 25,
 		MaxMemoryMB:        2048,
 		HeartbeatInterval:  30 * time.Second,
+		// Tests use a mock L3Notary, so NotaryPosture mirrors the prior default
+		// behavior. The operator has no posture of its own; this represents the
+		// gateway-provided posture that the operator would receive at enrollment.
+		Posture: config.PostureNotary,
 		Gateway: config.GatewayConfig{
 			MaxPayloadBytes: 10 * 1024 * 1024,
 			CertMode:        "localhost",
 			PasskeyRpID:     "localhost",
 			PasskeyRpName:   "g8e",
+			Posture:         config.PostureNotary,
 		},
 		WorkDir:                     workDir,
 		PKIDir:                      pkiDir,

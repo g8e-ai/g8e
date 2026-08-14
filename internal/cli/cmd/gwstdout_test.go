@@ -50,20 +50,21 @@ func TestPrintNextSteps_DoctrinePosture(t *testing.T) {
 	// Next Steps with GUI section
 	assert.Contains(t, out, "Next Steps:")
 	assert.Contains(t, out, "GUI")
-	assert.Contains(t, out, "1. Trust the gateway CA for HTTPS")
-	assert.Contains(t, out, "Linux/macOS")
-	assert.Contains(t, out, "curl -fsSL http://192.168.1.100:8080/web-cert.sh | sh")
-	assert.Contains(t, out, "Windows")
-	assert.Contains(t, out, "irm http://192.168.1.100:8080/web-cert.ps1 | iex")
-	assert.Contains(t, out, "2. Close all web browser windows on the remote workstation")
+	assert.Contains(t, out, "1. Enroll your CLI identity and register a passkey")
+	assert.Contains(t, out, bin+" auth enroll -e 192.168.1.100")
+	assert.Contains(t, out, "`auth enroll` performs the human passkey ceremony")
+	// Built-in OS trust installation is mentioned, including the
+	// --no-system-trust opt-out (administrator-managed trust).
+	assert.Contains(t, out, "installs the gateway root CA into the OS trust store")
+	assert.Contains(t, out, "--no-system-trust")
 
 	// CLI section
 	assert.Contains(t, out, "CLI")
-	assert.Contains(t, out, "3. Enroll your passkey")
+	assert.Contains(t, out, "2. Enroll your passkey")
 	assert.Contains(t, out, bin+" auth enroll")
 
-	// Operators (step 4)
-	assert.Contains(t, out, "4. Operators:")
+	// Operators (step 3)
+	assert.Contains(t, out, "3. Operators:")
 	assert.Contains(t, out, "Local Host:")
 	assert.Contains(t, out, bin+" operator deploy --hosts <host1,host2>")
 	assert.Contains(t, out, bin+" operator stream --hosts <host1,host2>")
@@ -76,6 +77,11 @@ func TestPrintNextSteps_DoctrinePosture(t *testing.T) {
 	assert.NotContains(t, out, "Governance posture:")
 	assert.NotContains(t, out, constants.DeployScriptFilenameLinux)
 	assert.NotContains(t, out, constants.DeployScriptFilenameWindows)
+	// Trust-script references must be gone
+	assert.NotContains(t, out, "web-cert.sh")
+	assert.NotContains(t, out, "web-cert.ps1")
+	assert.NotContains(t, out, "Trust the gateway CA")
+	assert.NotContains(t, out, "Close all web browser")
 }
 
 func TestPrintNextSteps_ConsensusPosture(t *testing.T) {
@@ -88,12 +94,12 @@ func TestPrintNextSteps_ConsensusPosture(t *testing.T) {
 	out := buf.String()
 
 	// All postures now produce the same output (no posture-specific steps)
-	assert.Contains(t, out, "1. Trust the gateway CA")
-	assert.Contains(t, out, "3. Enroll your passkey")
-	assert.Contains(t, out, "4. Operators:")
+	assert.Contains(t, out, "1. Enroll your CLI identity")
+	assert.Contains(t, out, "2. Enroll your passkey")
+	assert.Contains(t, out, "3. Operators:")
 
 	// External IP interpolated correctly
-	assert.Contains(t, out, "http://10.0.0.50:8080/web-cert.sh")
+	assert.Contains(t, out, "auth enroll -e 10.0.0.50")
 
 	// No posture-specific text
 	assert.NotContains(t, out, "Configure L2 Consensus")
@@ -111,12 +117,12 @@ func TestPrintNextSteps_NotaryPosture(t *testing.T) {
 	out := buf.String()
 
 	// All postures now produce the same output (no posture-specific steps)
-	assert.Contains(t, out, "1. Trust the gateway CA")
-	assert.Contains(t, out, "3. Enroll your passkey")
-	assert.Contains(t, out, "4. Operators:")
+	assert.Contains(t, out, "1. Enroll your CLI identity")
+	assert.Contains(t, out, "2. Enroll your passkey")
+	assert.Contains(t, out, "3. Operators:")
 
 	// External IP interpolated correctly
-	assert.Contains(t, out, "http://172.16.0.1:8080/web-cert.sh")
+	assert.Contains(t, out, "auth enroll -e 172.16.0.1")
 
 	// No posture-specific text
 	assert.NotContains(t, out, "Configure L2 Consensus")
@@ -127,7 +133,7 @@ func TestPrintNextSteps_NotaryPosture(t *testing.T) {
 
 func TestPrintNextSteps_StepNumberingPerPosture(t *testing.T) {
 	// All three postures produce the same step numbering:
-	// 1=Web cert, 2=Close browser, 3=Enroll, 4=Remote operators
+	// 1=Enroll CLI/passkey (GUI), 2=Enroll passkey (CLI), 3=Operators
 	postures := []struct {
 		name    string
 		posture governance.GovernancePosture
@@ -143,11 +149,10 @@ func TestPrintNextSteps_StepNumberingPerPosture(t *testing.T) {
 			printNextSteps(cmd, p.posture, "127.0.0.1", "")
 			out := buf.String()
 
-			// Verify step numbering is sequential: 1, 2, 3, 4
-			assert.Contains(t, out, "  1. Trust the gateway CA")
-			assert.Contains(t, out, "  2. Close all web browser")
-			assert.Contains(t, out, "  3. Enroll your passkey")
-			assert.Contains(t, out, "  4. Operators:")
+			// Verify step numbering is sequential: 1, 2, 3
+			assert.Contains(t, out, "  1. Enroll your CLI identity")
+			assert.Contains(t, out, "  2. Enroll your passkey")
+			assert.Contains(t, out, "  3. Operators:")
 		})
 	}
 }
@@ -166,9 +171,8 @@ func TestPrintNextSteps_ExternalIPInterpolation(t *testing.T) {
 			printNextSteps(cmd, &governance.DoctrinePosture{}, ip, "")
 			out := buf.String()
 
-			// The IP should appear in web-cert URL and operator start -e
-			assert.Contains(t, out, "http://"+ip+":8080/web-cert.sh")
-			assert.Contains(t, out, "http://"+ip+":8080/web-cert.ps1")
+			// The IP should appear in auth enroll -e and operator start -e
+			assert.Contains(t, out, "auth enroll -e "+ip)
 			assert.Contains(t, out, "operator start -e "+ip)
 		})
 	}
@@ -182,13 +186,16 @@ func TestPrintNextSteps_PortInterpolation(t *testing.T) {
 	httpPort := constants.Ports.OperatorHttp
 	httpsPort := constants.Ports.OperatorHttps
 
-	// HTTP port should appear in web-cert URLs
-	assert.Contains(t, out, "localhost:"+itoa(httpPort)+"/web-cert.sh")
-	assert.Contains(t, out, "localhost:"+itoa(httpPort)+"/web-cert.ps1")
+	// HTTP port should appear in the MCP HTTP endpoint line
+	assert.Contains(t, out, "http://127.0.0.1:"+itoa(httpPort))
 
 	// HTTPS port should appear in the endpoints section
 	assert.Contains(t, out, "localhost:"+itoa(httpsPort))
 	assert.Contains(t, out, "/console/")
+
+	// Trust-script URLs must not appear
+	assert.NotContains(t, out, "/web-cert.sh")
+	assert.NotContains(t, out, "/web-cert.ps1")
 }
 
 func TestPrintNextSteps_BinaryNameInterpolation(t *testing.T) {
@@ -217,8 +224,7 @@ func TestPrintNextSteps_AllPosturesContainCommonSections(t *testing.T) {
 	commonSubstrings := []string{
 		"Next Steps:",
 		"Endpoints:",
-		"Trust the gateway CA",
-		"Close all web browser windows",
+		"Enroll your CLI identity",
 		"Enroll your passkey",
 		"auth enroll",
 		"Operators",
