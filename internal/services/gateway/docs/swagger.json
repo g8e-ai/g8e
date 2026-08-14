@@ -362,7 +362,7 @@
         },
         "/api/v1/auth/passkeys/register/challenge": {
             "post": {
-                "description": "Generates a WebAuthn registration challenge. Config-driven trust posture:\nmTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), or console (public, may auto-create user).",
+                "description": "Generates a WebAuthn registration challenge. Config-driven trust posture:\nmTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), console (public, may auto-create user),\nor enrollment-token (public, token-gated — the CLI enrollment flow).",
                 "consumes": [
                     "application/json"
                 ],
@@ -385,7 +385,7 @@
         },
         "/api/v1/auth/passkeys/register/verify": {
             "post": {
-                "description": "Verifies a WebAuthn attestation response and stores the credential. Config-driven trust posture:\nmTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), or console (public, may mint web session + cookie).",
+                "description": "Verifies a WebAuthn attestation response and stores the credential. Config-driven trust posture:\nmTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), console (public, may mint web session + cookie),\nor enrollment-token (public, token-gated — the CLI enrollment flow).",
                 "consumes": [
                     "application/json"
                 ],

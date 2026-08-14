@@ -46,11 +46,6 @@ type StaleAnchor struct {
 	Handle string
 }
 
-// g8eRootCommonName is the subject CN used by all gateway root CAs. It is
-// the cross-platform filter for identifying g8e-managed anchors in trust
-// stores that do not use a filename prefix (Windows, Darwin).
-const g8eRootCommonName = "g8e Root CA"
-
 // commandRunner executes an external command with context, returning combined
 // stdout/stderr. It is the injection point for unit tests so they never invoke
 // sudo, security, certutil, or other real system commands. The optional env

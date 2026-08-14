@@ -916,7 +916,8 @@ paths:
       - application/json
       description: |-
         Generates a WebAuthn registration challenge. Config-driven trust posture:
-        mTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), or console (public, may auto-create user).
+        mTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), console (public, may auto-create user),
+        or enrollment-token (public, token-gated — the CLI enrollment flow).
       produces:
       - application/json
       responses:
@@ -933,7 +934,8 @@ paths:
       - application/json
       description: |-
         Verifies a WebAuthn attestation response and stores the credential. Config-driven trust posture:
-        mTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), or console (public, may mint web session + cookie).
+        mTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), console (public, may mint web session + cookie),
+        or enrollment-token (public, token-gated — the CLI enrollment flow).
       produces:
       - application/json
       responses:

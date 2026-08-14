@@ -257,7 +257,7 @@ func (r *DispatchResult) ToResponse() DispatchResponse {
 		TransactionID: r.TransactionID,
 	}
 	if r.ResultEnvelope != nil {
-		resp.EventType = string(r.ResultEnvelope.EventType)
+		resp.EventType = r.ResultEnvelope.EventType
 		resp.ActionType = r.ResultEnvelope.ActionType
 		resp.ResultPayload = r.ResultEnvelope.Payload
 	}

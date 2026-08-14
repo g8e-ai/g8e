@@ -186,7 +186,10 @@ func TestNewIPv4Transport_RejectsIPv6OnlyHost(t *testing.T) {
 	require.NoError(t, err)
 
 	client := &http.Client{Transport: NewIPv4Transport(nil), Timeout: 5 * time.Second}
-	_, err = client.Get(fmt.Sprintf("http://localhost:%s/", port))
+	resp, err := client.Get(fmt.Sprintf("http://localhost:%s/", port))
+	if resp != nil {
+		resp.Body.Close()
+	}
 	require.Error(t, err, "IPv4 transport must not reach an IPv6-only listener")
 }
 
