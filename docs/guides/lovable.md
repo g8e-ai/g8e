@@ -5,8 +5,8 @@ parent: Guides
 
 # Lovable Frontend Integration
 
-Last Updated: 2026-08-07
-Version: v1.7.0
+Last Updated: 2026-08-14
+Version: v1.7.2
 
 ---
 
@@ -285,7 +285,7 @@ When user clicks "Approve" on a transaction:
 On app load, check `window.location.hash` for:
 
 - `#approve={txHash}` - if user is logged in, auto-trigger the approval flow for this transaction. If not logged in, store it and trigger after login.
-- `#register=1&token={enrollmentToken}` - validate the enrollment token via `POST /api/v1/auth/enrollment-token/validate`, then auto-trigger passkey registration with the returned user ID and CLI session ID.
+- `#enroll=1&token={enrollmentToken}` - post the token to the enrollment register endpoints (`/api/v1/auth/passkeys/enrollment/register/challenge` then `/verify`), which validate the token and auto-trigger passkey registration. The gateway derives the user ID and CLI session ID from the token.
 
 After processing, clean the URL with `history.replaceState`.
 

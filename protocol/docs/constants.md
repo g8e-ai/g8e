@@ -84,7 +84,7 @@ HTTP route paths for the Gateway REST API, defined as a struct `APIPaths` with J
 - MCP: `MCPEndpoint` (`/mcp`)
 - A2A: `A2ACall` (`/api/v1/a2a/call`), `A2APrefix` (`/api/v1/a2a/`)
 - Governance: `GovernanceEnvelopes`, `GovernanceSigners`, `GovernanceSignersByID`, `GovernanceSignersPrefix`
-- Operator: `Operators`, `OperatorsByID`, `OperatorsBind`, `OperatorsUnbind`, `OperatorsTarget`, `OperatorsReauth`, `GrantIntent`, `RevokeIntent`
+- Operator: `Operators`, `OperatorsByID`, `OperatorsBind`, `OperatorsUnbind`, `OperatorsTarget`, `OperatorsReauth`, `OperatorsSession`, `OperatorsCommands`, `GrantIntent`, `RevokeIntent`
 - Data: `DataSettings`, `DataDB`, `DataBlobs`, `DataPrefix`, `DataItems`, `DataBlobsPrefix`, `QueryPrefix` (`/_query`)
 - KV: `KV` (`/api/v1/kv/`), `KVPrefix` (`/api/v1/kv/`)
 - PubSub: `PubSubPublish`, `PubSubStream`, `PubSubWebSocket` (`/ws/pubsub`)
@@ -92,7 +92,7 @@ HTTP route paths for the Gateway REST API, defined as a struct `APIPaths` with J
 - PKI: `PKICSRSign`, `PKIDevicesEnroll`, `PKIAppsEnroll`, `PKIAppsDelegated`, `PKICertificatesRevoke`, `PKIRevocationBundle`, `PKICRL`, `PKICABundle`, `PKIFingerprint`
 - Audit: `AuditReceipts`, `AuditReceiptsExport`, `AuditEvents`, `AuditSummary`, `AuditReport`, `AuditStream`
 - User: `Users`, `UsersMe`
-- Auth: `AuthLogout`, `AuthBootstrap`, `AuthBootstrapStatus`, `AuthCLIRecoveryRequest`, `AuthCLIRecoveryStatus`, `AuthCLIRecoveryApprove`, `AuthCLIRecoveryComplete`, `AuthCLIRotate`, `AuthDeviceEnroll`, `AuthPasskeys`, `AuthPasskeysByID`, `AuthPasskeysJITRegisterChallenge`, `AuthPasskeysJITRegisterVerify`, `AuthPasskeysJITPrefix`, `AuthPasskeysPrefix`, `AuthPasskeysCLIStatus`, `AuthPasskeysConsoleRegisterChallenge`, `AuthPasskeysConsoleRegisterVerify`, `AuthPasskeysConsoleAuthenticateChallenge`, `AuthPasskeysConsoleAuthenticateVerify`, `AuthPasskeysConsolePrefix`, `AuthSessionsMe`, `AuthEnrollmentTokenGenerate`, `AuthEnrollmentTokenValidate`
+- Auth: `AuthLogout`, `AuthBootstrap`, `AuthBootstrapStatus`, `AuthCLIRecoveryRequest`, `AuthCLIRecoveryStatus`, `AuthCLIRecoveryApprove`, `AuthCLIRecoveryComplete`, `AuthCLIRotate`, `AuthDeviceEnroll`, `AuthPasskeys`, `AuthPasskeysByID`, `AuthPasskeysJITRegisterChallenge`, `AuthPasskeysJITRegisterVerify`, `AuthPasskeysJITPrefix`, `AuthPasskeysPrefix`, `AuthPasskeysCLIStatus`, `AuthPasskeysConsoleRegisterChallenge`, `AuthPasskeysConsoleRegisterVerify`, `AuthPasskeysConsoleAuthenticateChallenge`, `AuthPasskeysConsoleAuthenticateVerify`, `AuthPasskeysConsolePrefix`, `AuthPasskeysEnrollmentRegisterChallenge`, `AuthPasskeysEnrollmentRegisterVerify`, `AuthPasskeysEnrollmentPrefix`, `AuthSessionsMe`, `AuthEnrollmentTokenGenerate`, `AuthEnrollmentTokenValidate`
 - Approval: `Approvals`, `ApprovalsByID`, `ApprovalsPrefix`, `ApprovePage`, `ApprovePagePrefix`, `ApprovalsCLIStatus`, `ApprovalsCLIList`
 - Admin: `AdminAppPoliciesBySigner`, `AdminAppsRevoke`, `AdminAppPoliciesPrefix`, `AdminConsensus`, `AdminConsensusByID`, `AdminConsensusPrefix`
 - Consensus: `ConsensusDeliberate` (`/consensus/v1/deliberate`)

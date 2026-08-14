@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-08-12
+Last Updated: 2026-08-14
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -131,7 +131,20 @@ Tests inject a `mockEnroller` via `withMockEnroller` helper + `noopCheckOperator
 - `cli_recovery_controller_test.go` — recovery request, status, approve, complete (proof-of-possession, token expiry, replay)
 - `cli_recovery_service_test.go` — token hashing, atomic state transitions, cleanup
 - `cli_rotation_controller_test.go` — mTLS rotation, session replacement, cert revocation
+- `cli_session_service_test.go` — CLI session creation, replacement, deactivation, lookup by mTLS certificate
+- `dispatch_service_test.go` / `dispatch_service_integration_test.go` — `DispatchController` request validation, governance pipeline routing, dispatch response shape; integration variant uses a real gateway fixture
+- `operator_controller_test.go` — operator list, bind/unbind, target context, reauth, session lookup (`GET /api/v1/operators/session/{id}`)
 - `gateway_http_test.go` / `gateway_auth_test.go` — route removal assertions (`TestRemovedCLIEnrollRoute`, `TestRouteAuthRegistry_RotationAndRemovedEnroll`)
+
+### Governance Tests (`internal/services/governance/`)
+
+- `remote_state_root_provider_test.go` — `RemoteStateRootProvider` fetches the gateway state Merkle root from `/api/v1/state` over mTLS; covers success, HTTP error, malformed response, and network failure paths
+
+### E2E Tests (`test/e2e/`)
+
+- `command_roundtrip_e2e_test.go` — end-to-end operator command dispatch via `POST /api/v1/operators/commands`: CLI enrolls, submits a command, operator receives and executes it, result is recorded
+- `operator_registry_e2e_test.go` — operator registration, listing, and session lookup over the Docker Compose stack
+- `pubsub_heartbeat_e2e_test.go` — operator heartbeat liveness via the pub/sub channel; verifies the gateway detects operator presence and absence
 
 ---
 

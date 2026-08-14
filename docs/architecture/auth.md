@@ -1,6 +1,6 @@
 # Authentication & Authorization
 
-Last Updated: 2026-08-13
+Last Updated: 2026-08-14
 Version: v1.7.2
 
 This document explains how to authenticate and authorize actions in the g8e platform. The platform is built as a zero-trust execution environment where every action is verified before execution.
@@ -91,13 +91,14 @@ The `--endpoint` flag (`-e`) sets the HTTP discovery endpoint (host or host:port
 To prevent exposing raw session identifiers in browser history, referrer headers, and screen-share surfaces, the enrollment process uses a one-time enrollment token:
 
 1. CLI generates a one-time enrollment token via the mTLS endpoint `/api/v1/auth/enrollment-token/generate`
-2. CLI opens the browser with `#register=1&token=<token>` (no raw `user_id` or `cli_session_id` in the URL)
-3. The Console SPA reads the token from the URL hash and POSTs it to the public endpoint `/api/v1/auth/enrollment-token/validate`
-4. Gateway validates the token and returns the associated `user_id` and `cli_session_id`
-5. SPA populates the hidden form fields and calls `registerPasskey()`
-6. SPA immediately clears the token from the URL via `history.replaceState`
-7. Token is one-time-use with a 5-minute TTL
-8. Expired tokens are cleaned up periodically by the gateway
+2. CLI opens the browser with `#enroll=1&token=<token>` (no raw `user_id` or `cli_session_id` in the URL)
+3. The Console SPA reads the token from the URL hash and immediately clears it via `history.replaceState`
+4. SPA posts the token directly to `/api/v1/auth/passkeys/enrollment/register/challenge` — the gateway validates the token and derives `user_id` and `cli_session_id` from it; there is no separate `/enrollment-token/validate` round-trip and the token-derived identifiers never touch the DOM
+5. SPA performs the WebAuthn ceremony with the challenge response
+6. SPA posts the attestation plus token to `/api/v1/auth/passkeys/enrollment/register/verify` — the verify step consumes the token (one-time-use) and sets a web session cookie
+7. The `cli_session_id` carried by the token flows into the `passkey.registered` SSE event, which the waiting CLI monitor receives
+8. Token is one-time-use with a 5-minute TTL
+9. Expired tokens are cleaned up periodically by the gateway
 
 This ensures that sensitive session identifiers are never exposed in browser history or referrer headers, while maintaining the security of the enrollment flow.
 

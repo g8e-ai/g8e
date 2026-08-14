@@ -1,6 +1,6 @@
 # Developer Troubleshooting
 
-Last Updated: 2026-08-13
+Last Updated: 2026-08-14
 Version: v1.7.2
 
 This page covers common setup failures, runtime friction, and operational
