@@ -289,6 +289,11 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config, *TestInfr
 			Auth:      infra.Auth,
 			Responder: infra.Responder,
 		},
+		DispatchControllerDeps: DispatchControllerDeps{
+			DispatchSvc: NewDispatchService(infra.Logger, infra.Pubsub, infra.Stores.StateRootSvc, infra.Auth),
+			Responder:   infra.Responder,
+			Logger:      infra.Logger,
+		},
 		SSEControllerDeps: SSEControllerDeps{
 			Cfg:       infra.Cfg,
 			Logger:    infra.Logger,

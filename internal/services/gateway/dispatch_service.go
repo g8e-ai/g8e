@@ -238,11 +238,15 @@ func (t *dispatchResultTracker) route(txID string, env *commonv1.GovernanceEnvel
 }
 
 // DispatchResponse is the typed JSON response for POST /api/v1/operators/commands.
+// ResultPayload carries the operator's proto-marshaled result payload (e.g.
+// FsReadResult) so the caller can inspect the execution outcome. It is
+// base64-encoded in JSON per protojson/encoding/json conventions for []byte.
 type DispatchResponse struct {
 	Success       bool   `json:"success"`
 	TransactionID string `json:"transaction_id"`
 	EventType     string `json:"event_type,omitempty"`
 	ActionType    string `json:"action_type,omitempty"`
+	ResultPayload []byte `json:"result_payload,omitempty"`
 	Error         string `json:"error,omitempty"`
 }
 
@@ -255,6 +259,7 @@ func (r *DispatchResult) ToResponse() DispatchResponse {
 	if r.ResultEnvelope != nil {
 		resp.EventType = string(r.ResultEnvelope.EventType)
 		resp.ActionType = r.ResultEnvelope.ActionType
+		resp.ResultPayload = r.ResultEnvelope.Payload
 	}
 	return resp
 }

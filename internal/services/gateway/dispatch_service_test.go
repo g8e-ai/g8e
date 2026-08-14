@@ -120,6 +120,7 @@ func TestDispatchResult_ToResponse(t *testing.T) {
 		env := &commonv1.GovernanceEnvelope{
 			EventType:  "FS_READ",
 			ActionType:  string(constants.ActionTypeFsRead),
+			Payload:     []byte("result-payload-bytes"),
 		}
 		result := &DispatchResult{
 			TransactionID:  "tx-abc-123",
@@ -130,6 +131,7 @@ func TestDispatchResult_ToResponse(t *testing.T) {
 		assert.Equal(t, "tx-abc-123", resp.TransactionID)
 		assert.Equal(t, "FS_READ", resp.EventType)
 		assert.Equal(t, string(constants.ActionTypeFsRead), resp.ActionType)
+		assert.Equal(t, []byte("result-payload-bytes"), resp.ResultPayload)
 		assert.Empty(t, resp.Error)
 	})
 
@@ -142,6 +144,7 @@ func TestDispatchResult_ToResponse(t *testing.T) {
 		assert.Equal(t, "tx-abc-123", resp.TransactionID)
 		assert.Empty(t, resp.EventType)
 		assert.Empty(t, resp.ActionType)
+		assert.Empty(t, resp.ResultPayload)
 	})
 }
 
