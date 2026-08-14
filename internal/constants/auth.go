@@ -57,6 +57,14 @@ const (
 	LeafTypeCLI = "cli"
 )
 
+// PKI common-name constants define the subject CNs for the g8e CA hierarchy.
+// These are the SSOT for CN matching across gateway certificate generation,
+// OS trust-store installation, and stale-anchor enumeration.
+const (
+	// RootCACommonName is the subject CN of the g8e self-signed root CA anchor.
+	RootCACommonName = "g8e Root CA"
+)
+
 // HTTP header constants.
 const (
 	HeaderAccept                        = "Accept"

@@ -187,8 +187,8 @@ func TestGatewayCleanCmd_RemovesOSTrustAnchors(t *testing.T) {
 	fileSvc, cfg := newCmdTestEnv(t)
 	mock := &mockTrustCleaner{
 		anchors: []platform.StaleAnchor{
-			{Fingerprint: "stale-fp-1", CommonName: "g8e Root CA", Handle: "/path/stale1"},
-			{Fingerprint: "stale-fp-2", CommonName: "g8e Root CA", Handle: "/path/stale2"},
+			{Fingerprint: "stale-fp-1", CommonName: constants.RootCACommonName, Handle: "/path/stale1"},
+			{Fingerprint: "stale-fp-2", CommonName: constants.RootCACommonName, Handle: "/path/stale2"},
 		},
 	}
 	cmd := gatewayCleanCmdWithConfig(

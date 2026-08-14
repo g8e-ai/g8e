@@ -1118,8 +1118,8 @@ func TestEnroll_StaleAnchors_Confirmed_RemovesAndInstalls(t *testing.T) {
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
 	trust.staleAnchors = []platform.StaleAnchor{
-		{Fingerprint: "stale-fp-1", CommonName: "g8e Root CA", Handle: "/path/stale1"},
-		{Fingerprint: "stale-fp-2", CommonName: "g8e Root CA", Handle: "/path/stale2"},
+		{Fingerprint: "stale-fp-1", CommonName: constants.RootCACommonName, Handle: "/path/stale1"},
+		{Fingerprint: "stale-fp-2", CommonName: constants.RootCACommonName, Handle: "/path/stale2"},
 	}
 	// IsTrusted returns false (default), InstallRoot succeeds (default) → installed.
 
@@ -1154,7 +1154,7 @@ func TestEnroll_StaleAnchors_Declined_AbortsBeforeInstall(t *testing.T) {
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
 	trust.staleAnchors = []platform.StaleAnchor{
-		{Fingerprint: "stale-fp-1", CommonName: "g8e Root CA", Handle: "/path/stale1"},
+		{Fingerprint: "stale-fp-1", CommonName: constants.RootCACommonName, Handle: "/path/stale1"},
 	}
 
 	coord.confirm = func(prompt string) bool { return false }
@@ -1205,7 +1205,7 @@ func TestEnroll_StaleAnchors_RemovalError_Aborts(t *testing.T) {
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
 	trust.staleAnchors = []platform.StaleAnchor{
-		{Fingerprint: "stale-fp-1", CommonName: "g8e Root CA", Handle: "/path/stale1"},
+		{Fingerprint: "stale-fp-1", CommonName: constants.RootCACommonName, Handle: "/path/stale1"},
 	}
 	trust.removeErr = constants.ErrSystemTrustInstallFailed
 
@@ -1489,7 +1489,7 @@ func TestEnroll_ReusedIdentity_StaleBundle_DetectsStaleOSAnchors(t *testing.T) {
 
 	// The OS store has the OLD root anchor — it should be detected as stale.
 	trust.staleAnchors = []platform.StaleAnchor{
-		{Fingerprint: oldFP, CommonName: "g8e Root CA", Handle: "/path/old"},
+		{Fingerprint: oldFP, CommonName: constants.RootCACommonName, Handle: "/path/old"},
 	}
 	// IsTrusted returns false (default), InstallRoot succeeds (default) → installed.
 
@@ -1543,7 +1543,7 @@ func TestEnroll_NoSystemTrust_StillRunsStaleDetection(t *testing.T) {
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
 	trust.staleAnchors = []platform.StaleAnchor{
-		{Fingerprint: "stale-fp-1", CommonName: "g8e Root CA", Handle: "/path/stale1"},
+		{Fingerprint: "stale-fp-1", CommonName: constants.RootCACommonName, Handle: "/path/stale1"},
 	}
 
 	confirmCalled := false

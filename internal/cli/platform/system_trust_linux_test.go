@@ -25,6 +25,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // fakeRunner is a test commandRunner that records calls and returns scripted
@@ -358,7 +360,7 @@ func TestLinux_ListStaleAnchors_FindsStale(t *testing.T) {
 	currentFP := certFingerprint(rootCert)
 
 	// Generate a stale CA with a different fingerprint.
-	stalePEM, _ := testCA(t, "g8e Root CA")
+	stalePEM, _ := testCA(t, constants.RootCACommonName)
 	staleCert := mustParse(t, stalePEM)
 	staleFP := certFingerprint(staleCert)
 
@@ -384,7 +386,7 @@ func TestLinux_ListStaleAnchors_FindsStale(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, stale, 1)
 	assert.Equal(t, staleFP, stale[0].Fingerprint)
-	assert.Equal(t, "g8e Root CA", stale[0].CommonName)
+	assert.Equal(t, constants.RootCACommonName, stale[0].CommonName)
 	assert.Contains(t, stale[0].Handle, staleFP)
 }
 
@@ -415,8 +417,8 @@ func TestLinux_ListStaleAnchors_DirNotFound(t *testing.T) {
 func TestLinux_RemoveStaleAnchors_Debian(t *testing.T) {
 	t.Parallel()
 	anchors := []StaleAnchor{
-		{Fingerprint: "stale-1", CommonName: "g8e Root CA", Handle: "/usr/local/share/ca-certificates/g8e-root-stale-1.crt"},
-		{Fingerprint: "stale-2", CommonName: "g8e Root CA", Handle: "/usr/local/share/ca-certificates/g8e-root-stale-2.crt"},
+		{Fingerprint: "stale-1", CommonName: constants.RootCACommonName, Handle: "/usr/local/share/ca-certificates/g8e-root-stale-1.crt"},
+		{Fingerprint: "stale-2", CommonName: constants.RootCACommonName, Handle: "/usr/local/share/ca-certificates/g8e-root-stale-2.crt"},
 	}
 
 	r := newFakeRunner()
@@ -449,7 +451,7 @@ func TestLinux_RemoveStaleAnchors_Debian(t *testing.T) {
 func TestLinux_RemoveStaleAnchors_RHEL(t *testing.T) {
 	t.Parallel()
 	anchors := []StaleAnchor{
-		{Fingerprint: "stale-1", CommonName: "g8e Root CA", Handle: "/etc/pki/ca-trust/source/anchors/g8e-root-stale-1.crt"},
+		{Fingerprint: "stale-1", CommonName: constants.RootCACommonName, Handle: "/etc/pki/ca-trust/source/anchors/g8e-root-stale-1.crt"},
 	}
 
 	r := newFakeRunner()
@@ -488,7 +490,7 @@ func TestLinux_RemoveStaleAnchors_Empty_NoOp(t *testing.T) {
 func TestLinux_RemoveStaleAnchors_SudoFails(t *testing.T) {
 	t.Parallel()
 	anchors := []StaleAnchor{
-		{Fingerprint: "stale-1", CommonName: "g8e Root CA", Handle: "/path/stale-1.crt"},
+		{Fingerprint: "stale-1", CommonName: constants.RootCACommonName, Handle: "/path/stale-1.crt"},
 	}
 
 	r := newFakeRunner()
