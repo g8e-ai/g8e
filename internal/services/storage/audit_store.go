@@ -214,14 +214,6 @@ func (ass *SQLAuditStore) initDatabase() error {
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreInitSchemaFailed, err)
 	}
 
-	// Migration: rename commitment_ledger column for naming consistency.
-	// SQLite is case-insensitive for column names, so this is cosmetic.
-	// On new databases the column is already lowercase (no-op).
-	// On existing databases the column was mixed-case and gets renamed.
-	if _, err := db.Exec(`ALTER TABLE commitment_ledger RENAME COLUMN "Actuator_intent_signature_digest" TO "actuator_intent_signature_digest"`); err != nil {
-		ass.logger.Debug("commitment_ledger column rename skipped (already migrated or table empty)", string(constants.ConnectionStateError), err)
-	}
-
 	ass.db = db
 
 	ass.logger.Info("Database schema initialized")
