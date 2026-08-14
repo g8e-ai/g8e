@@ -46,7 +46,6 @@ const (
 	leafCertValidityDays     = 7  // 7-day TTL for operator/cli leaf certificates
 	peerCertValidityDays     = 90 // 90-day TTL for gateway peer certificates
 
-	rootCommonName        = "g8e Root CA"
 	hubCommonName         = "g8e Hub Intermediate CA"
 	operatorCommonName    = "g8e Operator Intermediate CA"
 	gatewayPeerCommonName = "g8e Gateway Peer Intermediate CA"
@@ -899,7 +898,7 @@ func (pki *PKIAuthority) generateRootCA(certPath string) error {
 	template := &x509.Certificate{
 		SerialNumber: serial,
 		Subject: pkix.Name{
-			CommonName:   rootCommonName,
+			CommonName:   constants.RootCACommonName,
 			Organization: []string{"g8e"},
 			Country:      []string{"US"},
 		},

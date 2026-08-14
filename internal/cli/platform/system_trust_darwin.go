@@ -64,12 +64,12 @@ func (i *SystemTrustInstaller) installPlatform(ctx context.Context, root *x509.C
 }
 
 // listStaleAnchorsPlatform enumerates certificates in the system keychain
-// whose subject CN matches g8eRootCommonName and whose SHA-256 fingerprint
-// does not match currentFingerprint. Uses `security find-certificate -Z` to
-// obtain the SHA-1 hash for later removal.
+// whose subject CN matches constants.RootCACommonName and whose SHA-256
+// fingerprint does not match currentFingerprint. Uses `security
+// find-certificate -Z` to obtain the SHA-1 hash for later removal.
 func (i *SystemTrustInstaller) listStaleAnchorsPlatform(ctx context.Context, currentFingerprint string) ([]StaleAnchor, error) {
 	// -Z prints the SHA-1 hash; -c matches by CN; -a returns all matches.
-	out, err := i.runner.Run(ctx, nil, "security", "find-certificate", "-c", g8eRootCommonName, "-a", "-Z", darwinSystemKeychain)
+	out, err := i.runner.Run(ctx, nil, "security", "find-certificate", "-c", constants.RootCACommonName, "-a", "-Z", darwinSystemKeychain)
 	if err != nil {
 		// No matches or keychain unreadable — no stale anchors.
 		return []StaleAnchor{}, nil
@@ -98,7 +98,7 @@ func (i *SystemTrustInstaller) listStaleAnchorsPlatform(ctx context.Context, cur
 			continue
 		}
 		for _, cert := range certs {
-			if cert.Subject.CommonName != g8eRootCommonName {
+			if cert.Subject.CommonName != constants.RootCACommonName {
 				continue
 			}
 			fp := certFingerprint(cert)
