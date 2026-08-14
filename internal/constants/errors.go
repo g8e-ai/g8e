@@ -812,6 +812,7 @@ var (
 	// State root service errors
 	ErrStateRootCalculate        = errors.New("state root calculation failed")
 	ErrStateRootPersist          = errors.New("state root persistence failed")
+	ErrStateRootFetch            = errors.New("failed to fetch state root from gateway")
 	ErrStateRootScanDocuments    = errors.New("failed to scan documents row")
 	ErrStateRootHashDocuments    = errors.New("failed to hash documents table")
 	ErrStateRootScanKVStore      = errors.New("failed to scan kv_store row")

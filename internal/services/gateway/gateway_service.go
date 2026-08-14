@@ -83,6 +83,7 @@ type GatewayModeService struct {
 	envProcAdapter          *pubsub.GatewayEnvProcAdapter
 	sessionValidatorAdapter *pubsub.GatewaySessionValidatorAdapter
 	consensusSvc            *consensus.ConsensusService
+	dispatchSvc             *DispatchService
 	responder               *response.Writer
 	server                  *http.Server
 	publicServer            *http.Server
@@ -291,6 +292,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		mcpGateway:              mcpGateway,
 		envProcAdapter:          envProcAdapter,
 		sessionValidatorAdapter: sessionValidatorAdapter,
+		dispatchSvc:             NewDispatchService(logger, wsHandler, stores.StateRootSvc, auth),
 		responder:               res,
 	}
 
@@ -540,6 +542,11 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Auth:      auth,
 			Responder: ls.responder,
 		},
+		DispatchControllerDeps: DispatchControllerDeps{
+			DispatchSvc: ls.dispatchSvc,
+			Responder:   ls.responder,
+			Logger:      logger,
+		},
 		SSEControllerDeps: SSEControllerDeps{
 			Cfg:       cfg,
 			Logger:    logger,
@@ -701,6 +708,12 @@ func (ls *GatewayModeService) GetMCPGateway() *mcp.GatewayService {
 // GetGatewayWebSocketHandler returns the pub/sub websocket handler.
 func (ls *GatewayModeService) GetGatewayWebSocketHandler() *GatewayWebSocketHandler {
 	return ls.pubsub
+}
+
+// GetDispatchService returns the command dispatch service for sending signed
+// commands to operators over the WS pub/sub cmd channel.
+func (ls *GatewayModeService) GetDispatchService() *DispatchService {
+	return ls.dispatchSvc
 }
 
 // GetHTTPPort returns the actual HTTP port the server is listening on.

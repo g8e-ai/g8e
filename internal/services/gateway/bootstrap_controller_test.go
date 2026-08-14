@@ -365,7 +365,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 	})
 
 	t.Run("Success - initial bootstrap", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
+		c, cfg := setupTestBootstrapController(t)
 
 		c.actuatorKeyReader = &mockActuatorKeyReader{
 			keyID:     "act-123",
@@ -394,6 +394,10 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 		assert.NotEmpty(t, resp.CLICert)
 		assert.Equal(t, "act-123", resp.ActuatorKeyID)
 		assert.Equal(t, "pub-123", resp.ActuatorPubKey)
+		// The gateway owns the posture and must send it to the operator at
+		// enrollment so the operator can run L4 posture-gated checks against
+		// the gateway's posture rather than inventing its own.
+		assert.Equal(t, string(cfg.Gateway.Posture), resp.Posture)
 
 		user, err := c.userSvc.GetByID(resp.UserID)
 		require.NoError(t, err)

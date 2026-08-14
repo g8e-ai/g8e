@@ -135,6 +135,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.OperatorsTarget, h.operatorController.handleSetTargetContext)
 	mux.HandleFunc(constants.APIPaths.OperatorsReauth, h.operatorController.handleReauth)
 	mux.Handle(constants.APIPaths.OperatorsSession, http.HandlerFunc(h.operatorController.handleGetOperatorBySession))
+	mux.HandleFunc(constants.APIPaths.OperatorsCommands, h.dispatchController.HandleDispatch)
 	mux.HandleFunc(constants.APIPaths.GovernanceSigners, h.signerController.handleGovernanceSigners)
 	mux.Handle(constants.APIPaths.GovernanceSignersByID, http.HandlerFunc(h.signerController.handleGovernanceSignerByID))
 	mux.Handle(constants.APIPaths.AdminAppPoliciesBySigner, http.HandlerFunc(h.adminController.handleAppPolicySigner))
