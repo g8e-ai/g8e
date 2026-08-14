@@ -53,6 +53,8 @@ type BootstrapConfig struct {
 
 	OperatorSessionId string `json:"operator_session_id"`
 
+	Posture string `json:"posture"`
+
 	OperatorCert    string `json:"operator_cert"`
 	OperatorCertKey string `json:"operator_cert_key"`
 }
@@ -292,6 +294,10 @@ func (bs *BootstrapService) ApplyBootstrapConfig(bootstrapConfig *BootstrapConfi
 	}
 	if bootstrapConfig.OperatorSessionId != "" {
 		bs.config.OperatorSessionId = bootstrapConfig.OperatorSessionId
+	}
+
+	if bootstrapConfig.Posture != "" {
+		bs.config.Posture = config.GatewayPosture(bootstrapConfig.Posture)
 	}
 
 	if bootstrapConfig.HeartbeatIntervalSeconds > 0 {

@@ -496,6 +496,7 @@ func (c *BootstrapController) handleDeviceEnrollment(w http.ResponseWriter, r *h
 		CLICert:           cliCertPEM,
 		CLICertChain:      cliCertChainPEM,
 		UserID:            user.ID,
+		Posture:           string(c.cfg.Gateway.Posture),
 	}
 
 	// Include Actuator public key so the operator can populate its trusted_signers directory.

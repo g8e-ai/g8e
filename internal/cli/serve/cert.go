@@ -90,22 +90,23 @@ func GenerateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 
 // PerformAutomaticEnrollment handles automatic enrollment with a Gateway when -e flag is provided.
 // It fetches the trust bundle, generates a CSR, enrolls with the Gateway, and saves certificates.
-// Returns the operator session ID so the caller can set it at the top level.
-func PerformAutomaticEnrollment(ctx context.Context, gatewayIP string, fileSvc fs.RuntimeFileService, logger *slog.Logger) (sessionID string, err error) {
+// Returns the operator session ID and the gateway's governance posture so the caller can set
+// them at the top level. The operator has no posture of its own; it always uses the gateway's.
+func PerformAutomaticEnrollment(ctx context.Context, gatewayIP string, fileSvc fs.RuntimeFileService, logger *slog.Logger) (sessionID, posture string, err error) {
 	// Create PKI trust directory
 	if err := fileSvc.MkdirAll(ctx, filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust), constants.PermDirPrivate); err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
+		return "", "", fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 	}
 
 	// Remove any stale certs so enrollment always issues fresh ones tied to
 	// the current gateway PKI (e.g. after gateway restart/regen).
 	opKeyRelPath := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorKey)
 	if err := fileSvc.Remove(ctx, opKeyRelPath); err != nil {
-		return "", fmt.Errorf("enrollment: remove stale operator key: %w", err)
+		return "", "", fmt.Errorf("enrollment: remove stale operator key: %w", err)
 	}
 	opCertRelPath := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert)
 	if err := fileSvc.Remove(ctx, opCertRelPath); err != nil {
-		return "", fmt.Errorf("enrollment: remove stale operator cert: %w", err)
+		return "", "", fmt.Errorf("enrollment: remove stale operator cert: %w", err)
 	}
 
 	// Fetch trust bundle from Gateway HTTP endpoint
@@ -113,36 +114,36 @@ func PerformAutomaticEnrollment(ctx context.Context, gatewayIP string, fileSvc f
 	logger.Info("Fetching trust bundle from Gateway", "url", trustURL)
 	trustBundle, err := certs.FetchTrustBundle(ctx, trustURL, "")
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
+		return "", "", fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
 	}
 
 	// Save trust bundle
 	caBundleRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
 	if err := fileSvc.WriteFile(ctx, caBundleRelPath, trustBundle, constants.PermFilePublic); err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
+		return "", "", fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 	}
 	logger.Info("Trust bundle saved", "path", fileSvc.Resolve(caBundleRelPath))
 
 	// Generate system fingerprint for enrollment
 	systemFp, err := auth.GenerateSystemFingerprint(logger)
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrValidationFailed, err)
+		return "", "", fmt.Errorf("%w: %w", constants.ErrValidationFailed, err)
 	}
 
 	// Generate CSR for enrollment
 	hostname, err := os.Hostname()
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrNetworkGetHostname, err)
+		return "", "", fmt.Errorf("%w: %w", constants.ErrNetworkGetHostname, err)
 	}
 	opCSR, opKey, err := GenerateCSR(hostname)
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
+		return "", "", fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
 	// Generate CLI CSR (required by device enrollment endpoint even for operator-only deployment)
 	cliCSR, _, err := GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
+		return "", "", fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
 	// Enroll with Gateway
@@ -159,48 +160,48 @@ func PerformAutomaticEnrollment(ctx context.Context, gatewayIP string, fileSvc f
 	}
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrRequestMarshalFailed, err)
+		return "", "", fmt.Errorf("%w: %w", constants.ErrRequestMarshalFailed, err)
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, enrollURL, bytes.NewReader(bodyBytes))
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrInternal, err)
+		return "", "", fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrInternal, err)
+		return "", "", fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrInternal, err)
+		return "", "", fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return "", fmt.Errorf("%w: HTTP %d: %s", constants.ErrHTTPStatusError, resp.StatusCode, string(respBody))
+		return "", "", fmt.Errorf("%w: HTTP %d: %s", constants.ErrHTTPStatusError, resp.StatusCode, string(respBody))
 	}
 
 	var enrollResp models.DeviceEnrollmentResponse
 	if err := json.Unmarshal(respBody, &enrollResp); err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrResponseParseFailed, err)
+		return "", "", fmt.Errorf("%w: %w", constants.ErrResponseParseFailed, err)
 	}
 
 	if enrollResp.Error != "" {
-		return "", fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, enrollResp.Error)
+		return "", "", fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, enrollResp.Error)
 	}
 
 	if enrollResp.OperatorCert == "" {
-		return "", fmt.Errorf("%w: operator certificate", constants.ErrMissingCertificate)
+		return "", "", fmt.Errorf("%w: operator certificate", constants.ErrMissingCertificate)
 	}
 
 	// Save operator private key
 	keyBytes, err := x509.MarshalECPrivateKey(opKey)
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrKeyParseFailed, err)
+		return "", "", fmt.Errorf("%w: %w", constants.ErrKeyParseFailed, err)
 	}
 	keyPEM := pem.EncodeToMemory(&pem.Block{
 		Type:  "EC PRIVATE KEY",
@@ -208,7 +209,7 @@ func PerformAutomaticEnrollment(ctx context.Context, gatewayIP string, fileSvc f
 	})
 	logger.Info("Saving operator private key", "path", fileSvc.Resolve(opKeyRelPath))
 	if err := fileSvc.WriteFile(ctx, opKeyRelPath, keyPEM, constants.PermFilePrivate); err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrKeyWriteFailed, err)
+		return "", "", fmt.Errorf("%w: %w", constants.ErrKeyWriteFailed, err)
 	}
 	logger.Info("Operator private key saved successfully")
 
@@ -219,14 +220,14 @@ func PerformAutomaticEnrollment(ctx context.Context, gatewayIP string, fileSvc f
 	}
 	logger.Info("Saving operator certificate", "path", fileSvc.Resolve(opCertRelPath))
 	if err := fileSvc.WriteFile(ctx, opCertRelPath, []byte(certContent), constants.PermFilePrivate); err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+		return "", "", fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 	logger.Info("Operator certificate saved successfully")
 
 	// Update trust bundle if Gateway returned a new one
 	if enrollResp.HubTrustBundle != "" {
 		if err := fileSvc.WriteFile(ctx, caBundleRelPath, []byte(enrollResp.HubTrustBundle), constants.PermFilePublic); err != nil {
-			return "", fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
+			return "", "", fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 		}
 		logger.Info("Updated trust bundle from Gateway")
 	}
@@ -235,18 +236,18 @@ func PerformAutomaticEnrollment(ctx context.Context, gatewayIP string, fileSvc f
 	if enrollResp.ActuatorKeyID != "" && enrollResp.ActuatorPubKey != "" {
 		trustedSignersRelPath := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrustedSigners)
 		if err := fileSvc.MkdirAll(ctx, trustedSignersRelPath, constants.PermDirPrivate); err != nil {
-			return "", fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
+			return "", "", fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
 		signerRelPath := filepath.Join(trustedSignersRelPath, enrollResp.ActuatorKeyID+constants.PublicKeySuffix)
 		if err := fileSvc.WriteFile(ctx, signerRelPath, []byte(enrollResp.ActuatorPubKey), constants.PermFilePrivate); err != nil {
-			return "", fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+			return "", "", fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 		}
 		logger.Info("Actuator public key saved", "path", fileSvc.Resolve(signerRelPath))
 	}
 
 	logger.Info("Enrollment successful", "operator_id", enrollResp.OperatorID, "operator_session_id", enrollResp.OperatorSessionID)
 
-	return enrollResp.OperatorSessionID, nil
+	return enrollResp.OperatorSessionID, enrollResp.Posture, nil
 }
 
 // checkCertExpiry parses the cert file and returns true if it is expiring within 24h.

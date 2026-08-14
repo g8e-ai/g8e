@@ -242,6 +242,7 @@ func (c *OperatorController) handleReauth(w http.ResponseWriter, r *http.Request
 		"operator_session_id":        op.OperatorSessionID,
 		"operator_id":                op.ID,
 		"user_id":                    op.UserID,
+		"posture":                    string(c.cfg.Gateway.Posture),
 	}
 
 	// Return response in format expected by Operator (AuthServicesResponse)
