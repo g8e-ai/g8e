@@ -124,8 +124,7 @@ After the Lovable AI agent generates the app, verify:
 
 > **Paste everything below this line into your Lovable AI agent.**
 >
-> The content below describes **what is required** for the integration to work.
-> Let Lovable generate the implementation code. Do not attempt to paste code from this document; paste the requirements and let Lovable build the app.
+> The content below describes **what is required** for the integration to work. Let Lovable generate the implementation code. Do not attempt to paste code from this document; paste the requirements and let Lovable build the app.
 
 ### Project Overview
 

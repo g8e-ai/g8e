@@ -405,23 +405,19 @@ The Governance Gateway (g8eg) provides JWT authentication and Just-In-Time (JIT)
 ### 4-Step JWT Flow
 The JWT authentication logic is implemented in the gateway auth middleware.
 
-**Step 1: Inbound HTTP Handshake and JWT Verification**
-The Governance Gateway (g8eg) intercepts inbound `Authorization: Bearer <JWT>` tokens on public MCP endpoints before routing to downstream execution logic. The middleware cryptographically verifies the JWT signature using JWKS, validates `exp`, `nbf`, `iss`, and `aud` claims, and extracts identity claims (`sub`, `tenant_id`, `roles`).
+**Step 1: Inbound HTTP Handshake and JWT Verification** The Governance Gateway (g8eg) intercepts inbound `Authorization: Bearer <JWT>` tokens on public MCP endpoints before routing to downstream execution logic. The middleware cryptographically verifies the JWT signature using JWKS, validates `exp`, `nbf`, `iss`, and `aud` claims, and extracts identity claims (`sub`, `tenant_id`, `roles`).
 
-**Step 2: Edge Validation and JIT Account Management**
-Following successful token validation, the Governance Gateway (g8eg) ensures the user exists locally and maps their roles:
+**Step 2: Edge Validation and JIT Account Management** Following successful token validation, the Governance Gateway (g8eg) ensures the user exists locally and maps their roles:
 - **JIT Provisioning**: Checks the SQLite `users` collection for the `sub` (User ID). If the user does not exist, provisions the user account subject to platform owner authorization.
 - **Persona Mapping**: Loads declarative Persona definitions (e.g., `security-analyst`, `admin`) from the `personas` collection in the document store. Evaluates the JWT `roles` against these persona definitions to determine the active `binding_persona`.
 - **Context Injection**: Stores the resolved `binding_persona` and `tenant_id` into the request context.
 
-**Step 3: Enriched Pub/Sub Handoff (GovernanceEnvelope)**
-The Governance Gateway (g8eg) strips the heavy JWT and injects the evaluated security requirements directly into the canonical mutation envelope before passing it to the pub/sub broker:
+**Step 3: Enriched Pub/Sub Handoff (GovernanceEnvelope)** The Governance Gateway (g8eg) strips the heavy JWT and injects the evaluated security requirements directly into the canonical mutation envelope before passing it to the pub/sub broker:
 - The `GovernanceEnvelope` carries `tenant_id` and `binding_persona` as typed fields.
 - The pub/sub payload is strictly a canonical `GovernanceEnvelope` carrying typed payloads (e.g., `McpCallRequested`) alongside the validated security metadata.
 - The heavy JWT is discarded, reducing payload size.
 
-**Step 4: Native Execution and Data Scrubbing (Governed Operator)**
-When the outbound Governed Operator (g8eo) pulls the message off the pub/sub queue, it acts natively on the injected security metadata without second-guessing the Governance Gateway (g8eg):
+**Step 4: Native Execution and Data Scrubbing (Governed Operator)** When the outbound Governed Operator (g8eo) pulls the message off the pub/sub queue, it acts natively on the injected security metadata without second-guessing the Governance Gateway (g8eg):
 - The Governed Operator (g8eo) decodes the `GovernanceEnvelope` and extracts `tenant_id` and `binding_persona`.
 - These fields propagate into the execution context.
 - Native tool isolation applies column masks or data redaction (e.g., stripping `password_hash`, masking emails) directly based on the Persona before returning results.

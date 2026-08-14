@@ -426,13 +426,9 @@ All authentication to the Gateway uses CSR-based enrollment. The first human to 
 
 #### Enrollment Flow
 
-1. **Client generates key pair and CSR**: The entity (device, app, or user) creates a
-   private key and a Certificate Signing Request (CSR) that states the desired identity
-   (e.g., `spiffe://g8e.local/app/etl-service`)
-2. **Gateway validates and signs**: The Gateway (acting as CA) issues a signed mTLS
-   certificate with a SPIFFE URI SAN
-3. **Client receives certificate**: The client gets `client.crt` (signed by the Gateway's CA)
-   and uses it with its private key for all subsequent authentication
+1. **Client generates key pair and CSR**: The entity (device, app, or user) creates a private key and a Certificate Signing Request (CSR) that states the desired identity (e.g., `spiffe://g8e.local/app/etl-service`)
+2. **Gateway validates and signs**: The Gateway (acting as CA) issues a signed mTLS certificate with a SPIFFE URI SAN
+3. **Client receives certificate**: The client gets `client.crt` (signed by the Gateway's CA) and uses it with its private key for all subsequent authentication
 4. **Short-lived by design**: Leaf certificates expire after 7 days, limiting the lifetime of a compromised key
 5. **Certificate renewal**: Clients must re-enroll before certificate expiry. The enrollment coordinator reuses valid credentials without rotation; use `--rotate-cli` to force rotation. Partial or corrupt credentials trigger the one-time human-approved recovery flow.
 
