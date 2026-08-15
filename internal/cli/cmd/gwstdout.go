@@ -10,8 +10,13 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/network"
 )
 
-// printNextSteps outputs guidance after the gateway starts.
-func printNextSteps(cmd *cobra.Command, _ governance.GovernancePosture, externalIP, hostname string) {
+// printNextSteps outputs guidance after the gateway starts. The passkey
+// enrollment guidance is posture-aware: only the notary posture requires a
+// human-registered passkey (L3 proof is enforced). Doctrine and consensus
+// postures do not require a passkey at startup — the gateway is ready to use,
+// and the user can optionally enroll a passkey if they later restart in notary
+// mode.
+func printNextSteps(cmd *cobra.Command, posture governance.GovernancePosture, externalIP, hostname string) {
 	bin := getBinaryName()
 	httpPort := constants.Ports.OperatorHttp
 	httpsPort := constants.Ports.OperatorHttps
@@ -34,10 +39,19 @@ func printNextSteps(cmd *cobra.Command, _ governance.GovernancePosture, external
 	cmd.Println()
 	cmd.Println("The g8e Gateway is online as a stateless relay.")
 	cmd.Println()
-	cmd.Println("Passkey Enrollment: Pending")
-	cmd.Println()
-	cmd.Println("Proof of human presence required.")
-	cmd.Println()
+
+	if posture != nil && posture.RequiresL3Proof() {
+		cmd.Println("Passkey Enrollment: Required")
+		cmd.Println()
+		cmd.Println("Proof of human presence required for notary posture (L3 enforced).")
+		cmd.Println()
+	} else {
+		cmd.Println("Passkey Enrollment: Optional")
+		cmd.Println()
+		cmd.Printf("No passkey required for %s posture (L3 audited, not enforced).\n", posture.Name())
+		cmd.Println("Enroll a passkey if you plan to restart in notary mode (L3 enforced).")
+		cmd.Println()
+	}
 
 	// Next Steps
 	cmd.Println("Next Steps:")
@@ -48,8 +62,13 @@ func printNextSteps(cmd *cobra.Command, _ governance.GovernancePosture, external
 	cmd.Println("  GUI")
 	cmd.Println("  ===")
 	cmd.Println()
-	cmd.Println("  1. Enroll your CLI identity and register a passkey from a workstation")
-	cmd.Println("     that can reach this gateway:")
+	if posture != nil && posture.RequiresL3Proof() {
+		cmd.Println("  1. Enroll your CLI identity and register a passkey from a workstation")
+		cmd.Println("     that can reach this gateway:")
+	} else {
+		cmd.Println("  1. Enroll your CLI identity from a workstation that can reach this")
+		cmd.Println("     gateway (passkey enrollment is optional for this posture):")
+	}
 	cmd.Println()
 	cmd.Printf("       %s auth enroll -e %s\n", bin, externalIP)
 	cmd.Println()
@@ -71,7 +90,11 @@ func printNextSteps(cmd *cobra.Command, _ governance.GovernancePosture, external
 	cmd.Println("  CLI")
 	cmd.Println("  ===")
 	cmd.Println()
-	cmd.Println("  2. Enroll your passkey (in this terminal):")
+	if posture != nil && posture.RequiresL3Proof() {
+		cmd.Println("  2. Enroll your passkey (in this terminal):")
+	} else {
+		cmd.Println("  2. Enroll a passkey (optional, in this terminal):")
+	}
 	cmd.Printf("       %s auth enroll\n", bin)
 	cmd.Println()
 

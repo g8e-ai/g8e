@@ -714,7 +714,11 @@ missing, the gateway defaults to 'doctrine' posture.`,
 			postureObj, _ := governance.ParseGovernancePosture(currentPosture)
 			cmd.Printf("Governance mode: %s\n", postureObj.Description())
 			cmd.Printf("\nConsole UI: %s/console/ (WebAuthn/passkey dashboard)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
-			cmd.Printf("\nNext step: Run '%s auth enroll' to authenticate\n", getBinaryName())
+			if postureObj.RequiresL3Proof() {
+				cmd.Printf("\nNext step: Run '%s auth enroll' to register a passkey (required for notary posture)\n", getBinaryName())
+			} else {
+				cmd.Printf("\nNext step: Run '%s auth enroll' to authenticate (passkey optional for %s posture)\n", getBinaryName(), postureObj.Name())
+			}
 			return nil
 		},
 	}

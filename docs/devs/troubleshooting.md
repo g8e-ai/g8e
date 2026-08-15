@@ -174,13 +174,13 @@ If recovery fails:
 
 `--no-system-trust` skips the OS trust store **installation** step. It is an **administrator-managed trust opt-out**, not a headless or passkey bypass. Use it only when an administrator has already installed the gateway root CA into the OS trust store. The passkey ceremony still runs. If you use `--no-system-trust` without pre-installing the root CA, browser-based WebAuthn will fail because the browser will not trust the gateway's TLS certificate.
 
-As of v1.7.2, **stale-anchor detection still runs under `--no-system-trust`** — only the installation step is skipped. The user may have stale g8e root anchors from a previous gateway instance (e.g., after `gw clean`) that break the browser even when the CLI skips installation. When stale anchors are found, the removal prompt fires; on confirmation the stale anchors are removed and the browser-close directive is printed, but no new anchor is installed.
+As of v1.7.2, **stale-anchor detection still runs under `--no-system-trust`** — only the installation step is skipped. The user may have stale g8e root anchors from a previous gateway instance (e.g., after `gw clean`) that break the browser even when the CLI skips installation. When stale anchors are found, the removal prompt fires; on confirmation the stale anchors are removed and the blocking browser-restart gate fires (the user must close all browser windows and press Enter before the passkey ceremony), but no new anchor is installed.
 
 ### Browser CA trust and WebAuthn failures
 
 The gateway uses self-signed certificates. Browser-based WebAuthn registration and console access require the platform Root CA to be trusted by the operating system. The `auth enroll` command installs the Root CA into the OS trust store before opening the browser for the passkey ceremony. If automatic OS trust installation fails, `auth enroll` stops before opening the browser and returns actionable remediation. Use `--no-system-trust` only when an administrator has already installed the Root CA on the host; it does not skip the passkey ceremony.
 
-After installing the Root CA (or removing stale anchors), **close all open browser windows** before clicking the enrollment link. Browsers cache certificate trust state, and WebAuthn registration will fail if the browser does not yet recognize the new platform CA. Firefox and other browser-private trust stores may require separate handling. This is the most common cause of console access failures on fresh setups.
+After installing the Root CA (or removing stale anchors), `auth enroll` **blocks until the user closes all open browser windows and presses Enter**. Browsers cache certificate trust state, and WebAuthn registration will fail if the browser does not yet recognize the new platform CA. The blocking prompt ensures the browser restart happens before the passkey ceremony opens a fresh browser session. Firefox and other browser-private trust stores may require separate handling. This is the most common cause of console access failures on fresh setups.
 
 ### Certificate expiry and rotation
 
@@ -221,7 +221,7 @@ The CLI SSE client in `internal/cli/auth/approval_sse.go` waits for `approval.co
 
 Common causes of approval failures:
 - The user did not complete the passkey ceremony in time.
-- The browser was not restarted after the Root CA was installed by `auth enroll` (close all browser windows and click the enrollment link to open a fresh session).
+- The browser was not restarted after the Root CA was installed by `auth enroll` (`auth enroll` now blocks until the user closes all browser windows and presses Enter, but if the user dismissed the prompt or restarted into a stale browser session, the WebAuthn ceremony will fail with a TLS error).
 - The SSE stream was not accessible due to network or authentication issues.
 - The gateway posture was changed to `notary` without a configured L3 notary.
 

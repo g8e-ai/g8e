@@ -101,6 +101,15 @@ type SystemTrustInstaller interface {
 // that requested confirmation.
 type ConfirmFunc func(prompt string) bool
 
+// ContinueFunc prompts the user to press Enter to continue and returns true
+// when the user has done so. The command layer injects a stdin-reading
+// implementation; tests inject a deterministic stub. Returning false aborts
+// the operation that requested the continue. This is a separate type from
+// ConfirmFunc because it encodes a different user intent (Enter-to-continue
+// versus y/N confirmation); keeping them distinct lets tests inject one stub
+// per dependency and assert on each prompt independently.
+type ContinueFunc func(prompt string) bool
+
 // BrowserOpener opens a URL in the user's default browser. Used by the
 // coordinator to open the recovery approval URL. The passkey registrar
 // manages its own browser launch (Section 8 will harden that path).
@@ -135,36 +144,38 @@ type PasskeyRegistrar interface {
 // invokes sudo or mutates an OS certificate store except via
 // SystemTrustInstaller.
 type EnrollmentCoordinator struct {
-	gateway EnrollmentGateway
-	store   *CredentialStore
-	keys    KeyProvider
-	trust   SystemTrustInstaller
-	browser BrowserOpener
-	passkey PasskeyRegistrar
-	confirm ConfirmFunc
-	fileSvc fs.RuntimeFileService
-	cfg     *config.Config
-	clock   func() time.Time
-	logger  *slog.Logger
-	out     OutputFunc
+	gateway  EnrollmentGateway
+	store    *CredentialStore
+	keys     KeyProvider
+	trust    SystemTrustInstaller
+	browser  BrowserOpener
+	passkey  PasskeyRegistrar
+	confirm  ConfirmFunc
+	continueFn ContinueFunc
+	fileSvc  fs.RuntimeFileService
+	cfg      *config.Config
+	clock    func() time.Time
+	logger   *slog.Logger
+	out      OutputFunc
 }
 
 // EnrollmentCoordinatorDeps holds the injectable dependencies for an
 // EnrollmentCoordinator. Fields left nil get production defaults. Tests
 // populate the fields they need to control.
 type EnrollmentCoordinatorDeps struct {
-	Gateway EnrollmentGateway
-	Store   *CredentialStore
-	Keys    KeyProvider
-	Trust   SystemTrustInstaller
-	Browser BrowserOpener
-	Passkey PasskeyRegistrar
-	Confirm ConfirmFunc
-	FileSvc fs.RuntimeFileService
-	Cfg     *config.Config
-	Clock   func() time.Time
-	Logger  *slog.Logger
-	Out     OutputFunc
+	Gateway  EnrollmentGateway
+	Store    *CredentialStore
+	Keys     KeyProvider
+	Trust    SystemTrustInstaller
+	Browser  BrowserOpener
+	Passkey  PasskeyRegistrar
+	Confirm  ConfirmFunc
+	Continue ContinueFunc
+	FileSvc  fs.RuntimeFileService
+	Cfg      *config.Config
+	Clock    func() time.Time
+	Logger   *slog.Logger
+	Out      OutputFunc
 }
 
 // NewEnrollmentCoordinator constructs a coordinator from the given deps.
@@ -176,6 +187,8 @@ type EnrollmentCoordinatorDeps struct {
 //   - Browser: a defaultBrowserOpener wrapping platform.OpenBrowser.
 //   - Passkey: a defaultPasskeyRegistrar wrapping the hardened passkeyRegistrar.
 //   - Confirm: an auto-confirm stub (always returns true). The interactive
+//     `auth enroll` command overrides this with a stdin-reading impl.
+//   - Continue: an auto-continue stub (always returns true). The interactive
 //     `auth enroll` command overrides this with a stdin-reading impl.
 //   - Clock: time.Now.
 //   - Logger: slog.Default().
@@ -210,7 +223,7 @@ func NewEnrollmentCoordinator(deps EnrollmentCoordinatorDeps) *EnrollmentCoordin
 	passkey := deps.Passkey
 	if passkey == nil {
 		passkey = &defaultPasskeyRegistrar{
-			registrar: newPasskeyRegistrar(deps.FileSvc, deps.Cfg, PasskeyRegistrarOptions{}),
+			registrar: newPasskeyRegistrar(deps.FileSvc, deps.Cfg, PasskeyRegistrarOptions{Out: deps.Out}),
 		}
 	}
 	confirm := deps.Confirm
@@ -220,6 +233,14 @@ func NewEnrollmentCoordinator(deps EnrollmentCoordinatorDeps) *EnrollmentCoordin
 		// (e.g., mcp agent run) that don't supply a ConfirmFunc get the
 		// auto-confirm default so they don't block on missing stdin.
 		confirm = func(string) bool { return true }
+	}
+	continueFn := deps.Continue
+	if continueFn == nil {
+		// Default: auto-continue. The interactive `auth enroll` command layer
+		// overrides this with a stdin-reading implementation. Internal callers
+		// (e.g., mcp agent run, demos) that don't supply a ContinueFunc get
+		// the auto-continue default so they don't block on missing stdin.
+		continueFn = func(string) bool { return true }
 	}
 	clock := deps.Clock
 	if clock == nil {
@@ -234,18 +255,19 @@ func NewEnrollmentCoordinator(deps EnrollmentCoordinatorDeps) *EnrollmentCoordin
 		out = func(string, ...any) {} // no-op default; command layer should supply
 	}
 	return &EnrollmentCoordinator{
-		gateway: gateway,
-		store:   store,
-		keys:    keys,
-		trust:   trust,
-		browser: browser,
-		passkey: passkey,
-		confirm: confirm,
-		fileSvc: deps.FileSvc,
-		cfg:     deps.Cfg,
-		clock:   clock,
-		logger:  logger,
-		out:     out,
+		gateway:   gateway,
+		store:     store,
+		keys:      keys,
+		trust:     trust,
+		browser:   browser,
+		passkey:   passkey,
+		confirm:   confirm,
+		continueFn: continueFn,
+		fileSvc:   deps.FileSvc,
+		cfg:       deps.Cfg,
+		clock:     clock,
+		logger:    logger,
+		out:       out,
 	}
 }
 
@@ -400,11 +422,30 @@ func (c *EnrollmentCoordinator) Enroll(ctx context.Context, opts EnrollmentOptio
 
 	// 3. Install system trust (local CLI paths only, unless --no-system-trust).
 	if result.Source.IsLocalCLI() || result.Reused {
-		installed, terr := c.installSystemTrust(ctx, artifacts, result.Reused, local, opts, liveFingerprint, liveBundle, discoveryReachable)
+		browserRestartNeeded, installed, terr := c.installSystemTrust(ctx, artifacts, result.Reused, local, opts, liveFingerprint, liveBundle, discoveryReachable)
 		if terr != nil {
 			return nil, terr
 		}
 		result.SystemTrustInstalled = installed
+
+		// 3b. Blocking browser-restart gate. The trust store changed (a new
+		// root was installed or stale anchors were removed), so the user MUST
+		// close all open browser windows before the passkey ceremony opens a
+		// fresh browser session that recognizes the new trust anchor. The
+		// gate is skipped when SkipPasskey is set: those callers (mcp agent
+		// run, demos) inject an auto-continue ContinueFunc and open no
+		// browser themselves, so the "close all open browser windows" line
+		// would pollute their non-interactive output streams with no
+		// actionable consequence.
+		if browserRestartNeeded && !opts.SkipPasskey {
+			c.out("The gateway root CA was installed (or stale anchors were removed).")
+			c.out("Browsers cache certificate trust state. You MUST close all open browser windows now,")
+			c.out("then press Enter to continue. The passkey enrollment URL will be displayed next.")
+			if !c.continueFn("Press Enter to continue after closing all browser windows...") {
+				c.out("Browser restart declined. Aborting enrollment before passkey ceremony.")
+				return nil, constants.ErrBrowserRestartDeclined
+			}
+		}
 	}
 
 	// 4. Passkey ceremony (unless suppressed by an internal caller).
@@ -575,8 +616,10 @@ func recoveryStateDone(state models.CLIRecoveryState) (bool, error) {
 //   - Stale g8e root anchors from previous gateway instances are detected
 //     before installation. The user is prompted to confirm removal; declining
 //     aborts enrollment before browser launch. After removal or new
-//     installation, the user is directed to close all browser windows so
-//     the trust store change is picked up before the passkey ceremony.
+//     installation, the browserRestartNeeded return value is true so the
+//     caller can gate the passkey ceremony behind a blocking browser-restart
+//     prompt (the user must close all browser windows so the trust store
+//     change is picked up before the passkey ceremony).
 //
 // liveFingerprint is the SHA-256 fingerprint of the LIVE gateway root CA
 // (from DiscoverGatewayCA). It MUST come from the live gateway, not the
@@ -597,8 +640,17 @@ func recoveryStateDone(state models.CLIRecoveryState) (bool, error) {
 // the local trust bundle on disk (the pre-discovery behavior). For a new
 // enrollment, it comes from the artifacts.
 //
-// The return value is a simple bool (installed? yes/no).
-func (c *EnrollmentCoordinator) installSystemTrust(ctx context.Context, artifacts EnrollmentArtifacts, reused bool, local LocalIdentity, opts EnrollmentOptions, liveFingerprint string, liveBundle []byte, discoveryReachable bool) (bool, error) {
+// The return values are browserRestartNeeded (true when any trust-store
+// mutation happened this run: a new root was installed OR stale anchors were
+// removed, including under --no-system-trust) and installed (true only when a
+// new root was newly installed this run). The caller acts on
+// browserRestartNeeded to gate the passkey ceremony behind a blocking
+// browser-restart prompt; installed populates result.SystemTrustInstalled for
+// the final summary. browserRestartNeeded is false when the root was already
+// trusted and no stale anchors were removed, when the platform is
+// unsupported, or when --no-system-trust was used and no stale anchors were
+// found.
+func (c *EnrollmentCoordinator) installSystemTrust(ctx context.Context, artifacts EnrollmentArtifacts, reused bool, local LocalIdentity, opts EnrollmentOptions, liveFingerprint string, liveBundle []byte, discoveryReachable bool) (browserRestartNeeded bool, installed bool, err error) {
 	// Step 1: Resolve the bundle PEM. On the reused-identity path, prefer
 	// the live bundle (when discovery succeeded) so the install check
 	// compares against the live root, not the stale local one. On the
@@ -621,7 +673,7 @@ func (c *EnrollmentCoordinator) installSystemTrust(ctx context.Context, artifact
 			if local.TrustBundle == nil || len(local.TrustBundle.PEM) == 0 {
 				// A reused identity with no trust bundle is inconsistent — Inspect
 				// should have classified it as partial. This is a defensive guard.
-				return false, fmt.Errorf("%w: reused identity has no trust bundle", constants.ErrEnrollmentFailed)
+				return false, false, fmt.Errorf("%w: reused identity has no trust bundle", constants.ErrEnrollmentFailed)
 			}
 			bundlePEM = local.TrustBundle.PEM
 		}
@@ -635,13 +687,13 @@ func (c *EnrollmentCoordinator) installSystemTrust(ctx context.Context, artifact
 	// when it cannot.
 	rootAnchors, err := platform.ExtractRootAnchors(bundlePEM, c.clock)
 	if err != nil {
-		return false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInvalidAnchor, err)
+		return false, false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInvalidAnchor, err)
 	}
 	if len(rootAnchors) == 0 {
-		return false, constants.ErrSystemTrustInvalidAnchor
+		return false, false, constants.ErrSystemTrustInvalidAnchor
 	}
 	if vErr := platform.VerifyRootUsable(rootAnchors, bundlePEM, c.clock); vErr != nil {
-		return false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInvalidAnchor, vErr)
+		return false, false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInvalidAnchor, vErr)
 	}
 	primary := rootAnchors[0]
 	keepFingerprint := platform.CertFingerprint(primary)
@@ -677,24 +729,27 @@ func (c *EnrollmentCoordinator) installSystemTrust(ctx context.Context, artifact
 		prompt := fmt.Sprintf("Remove these %d stale anchor(s) before installing the new root CA? [y/N]: ", len(staleAnchors))
 		if !c.confirm(prompt) {
 			c.out("Stale anchor removal declined. Aborting enrollment before browser launch.")
-			return false, constants.ErrSystemTrustStaleRemovalDenied
+			return false, false, constants.ErrSystemTrustStaleRemovalDenied
 		}
 		c.out("Removing stale anchors...")
 		if err := c.trust.RemoveStaleAnchors(ctx, staleAnchors); err != nil {
-			return false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInstallFailed, err)
+			return false, false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInstallFailed, err)
 		}
 		c.out("Stale anchors removed.")
 		staleRemoved = true
 	}
 
 	// Step 5: If --no-system-trust, print the skip notice and return (stale
-	// removal above still ran).
+	// removal above still ran). browserRestartNeeded reflects whether the
+	// trust store changed (stale anchors removed); installed is false because
+	// no new root was installed. This fixes the pre-cleanup bug where this
+	// path returned false even when stale anchors were removed, so the caller
+	// could not tell a browser restart was needed. The browser-restart
+	// guidance is handled by the caller's blocking gate, not here, so it can
+	// be suppressed when SkipPasskey is true.
 	if opts.NoSystemTrust {
 		c.out("System trust installation skipped (--no-system-trust). The administrator must have pre-installed the gateway root CA.")
-		if staleRemoved {
-			c.out("IMPORTANT: close all open browser windows now, then click the enrollment link below to open a fresh session.")
-		}
-		return false, nil
+		return staleRemoved, false, nil
 	}
 
 	// Step 6: IsTrusted. If ErrSystemTrustUnsupported, warn and return
@@ -706,16 +761,13 @@ func (c *EnrollmentCoordinator) installSystemTrust(ctx context.Context, artifact
 	if err != nil {
 		if errors.Is(err, constants.ErrSystemTrustUnsupported) {
 			c.out("Warning: OS trust store query is unsupported on this platform (%v). Skipping system trust installation.", err)
-			return false, nil
+			return false, false, nil
 		}
-		return false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInstallFailed, err)
+		return false, false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInstallFailed, err)
 	}
 	if trusted {
 		c.out("System trust: gateway root CA already trusted (fingerprint %s).", keepFingerprint)
-		if staleRemoved {
-			c.out("IMPORTANT: close all open browser windows now, then click the enrollment link below to open a fresh session.")
-		}
-		return staleRemoved, nil
+		return staleRemoved, false, nil
 	}
 
 	// Step 7: InstallRoot. If ErrSystemTrustUnsupported, warn and return.
@@ -724,13 +776,12 @@ func (c *EnrollmentCoordinator) installSystemTrust(ctx context.Context, artifact
 	if err := c.trust.InstallRoot(ctx, primary, keepFingerprint); err != nil {
 		if errors.Is(err, constants.ErrSystemTrustUnsupported) {
 			c.out("Warning: OS trust store installation is unsupported on this platform (%v). Skipping system trust installation.", err)
-			return false, nil
+			return false, false, nil
 		}
-		return false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInstallFailed, err)
+		return false, false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInstallFailed, err)
 	}
 	c.out("System trust: installed gateway root CA (fingerprint %s).", keepFingerprint)
-	c.out("IMPORTANT: close all open browser windows now, then click the enrollment link below to open a fresh session that trusts the new root CA.")
-	return true, nil
+	return true, true, nil
 }
 
 // runPasskeyCeremony runs the browser-based passkey registration. It uses

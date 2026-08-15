@@ -20,7 +20,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -51,6 +50,14 @@ type PasskeyRegistrarOptions struct {
 	// Browser is an injectable browser-open function for tests. If nil,
 	// platform.OpenBrowser is used.
 	Browser func(string) error
+
+	// Out is the user-facing output sink. The registrar routes its progress
+	// lines (the clickable enrollment URL and the browser-open-failure
+	// warning) through Out rather than writing to os.Stderr directly, so the
+	// coordinator's "no direct stdout/stderr writes" invariant holds and the
+	// output is testable from the coordinator layer. Defaults to a no-op
+	// stub when nil, mirroring the coordinator's own OutputFunc default.
+	Out OutputFunc
 }
 
 // passkeyRegistrar is the hardened implementation of the PasskeyRegistrar
@@ -63,6 +70,7 @@ type passkeyRegistrar struct {
 	cfg            *config.Config
 	timeout        time.Duration
 	browser        func(string) error
+	out            OutputFunc
 	programFactory func(enrollModel) programRunner
 }
 
@@ -87,11 +95,16 @@ func newPasskeyRegistrar(fileSvc fs.RuntimeFileService, cfg *config.Config, opts
 	if browser == nil {
 		browser = platform.OpenBrowser
 	}
+	out := opts.Out
+	if out == nil {
+		out = func(string, ...any) {} // no-op default; coordinator wires its own
+	}
 	r := &passkeyRegistrar{
 		fileSvc: fileSvc,
 		cfg:     cfg,
 		timeout: timeout,
 		browser: browser,
+		out:     out,
 	}
 	r.programFactory = func(m enrollModel) programRunner { return tea.NewProgram(m) }
 	return r
@@ -205,13 +218,26 @@ func (r *passkeyRegistrar) Register(ctx context.Context, userID, cliSessionID st
 		return sseCtx.Err()
 	}
 
-	// 6. Open the browser. On failure, print a warning and fall through to
-	// the TUI — the SSE monitor is already running and will catch the
-	// passkey registration event when the user opens the URL manually.
-	// The full URL (with token) is displayed by the TUI's View().
+	// 6. Print the clickable enrollment URL via Out BEFORE opening the
+	// browser, so the URL is in the terminal scrollback regardless of TUI
+	// rendering behavior (no-TTY over SSH, TUI rendering failure, etc.).
+	// The insertion point is load-bearing: this fires AFTER the SSE
+	// ready-gate has fired (lines 193-206), so the user cannot click the
+	// URL before the SSE listener is connected. The TUI program was
+	// constructed at line 182 but construction does not render — View()
+	// only paints once p.Run() is called at line 221 — so this print does
+	// not conflict with the TUI. The URL is prefixed so it is grep-able in
+	// scrollback and unambiguous in test assertions.
+	r.out("Passkey enrollment URL: %s", consoleURL)
+
+	// Open the browser. On failure, print a warning via Out and fall
+	// through to the TUI — the SSE monitor is already running and will
+	// catch the passkey registration event when the user opens the URL
+	// manually. The URL was already printed above, so the user has it
+	// regardless of browser-open success.
 	if openErr := r.browser(consoleURL); openErr != nil {
-		fmt.Fprintf(os.Stderr, "Warning: could not open browser automatically (%v).\n", openErr)
-		fmt.Fprintln(os.Stderr, "Open the Console URL below in a browser to complete passkey registration.")
+		r.out("Warning: could not open browser automatically (%v).", openErr)
+		r.out("Open the enrollment URL above in a browser to complete passkey registration.")
 	}
 
 	// 7. Run the TUI. Blocks until passkeyRegisteredMsg, enrollErrMsg, or
@@ -324,17 +350,6 @@ func VerifyPasskeyRegistration(ctx context.Context, fileSvc fs.RuntimeFileServic
 	}
 
 	return len(result.Credentials) > 0, nil
-}
-
-// RegisterPasskeyViaBrowser performs the browser-based passkey registration
-// ceremony. It is a convenience wrapper around passkeyRegistrar.Register for
-// callers that have not yet been migrated to the EnrollmentCoordinator
-// (Section 9 will migrate them).
-//
-// Deprecated: Use EnrollmentCoordinator.Enroll instead.
-func RegisterPasskeyViaBrowser(ctx context.Context, fileSvc fs.RuntimeFileService, cfg *config.Config, userID, cliSessionID string) error {
-	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{})
-	return r.Register(ctx, userID, cliSessionID)
 }
 
 // monitorPasskeyRegistration runs the SSE client and sends messages to the

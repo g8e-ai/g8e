@@ -61,14 +61,15 @@ var enrollCoordinatorFactory = newDefaultEnrollmentCoordinator
 // newDefaultEnrollmentCoordinator is the production coordinator factory. It
 // injects production defaults (real gateway client, file-backed key provider,
 // real system-trust installer, real browser opener, hardened passkey
-// registrar, stdin-reading confirm function) and an OutputFunc that writes to
-// the provided output sink.
+// registrar, stdin-reading confirm and continue functions) and an OutputFunc
+// that writes to the provided output sink.
 func newDefaultEnrollmentCoordinator(out auth.OutputFunc, fileSvc fs.RuntimeFileService, cfg *config.Config) Enroller {
 	return auth.NewEnrollmentCoordinator(auth.EnrollmentCoordinatorDeps{
 		FileSvc: fileSvc,
 		Cfg:     cfg,
 		Out:     out,
 		Confirm: stdinConfirm,
+		Continue: stdinContinue,
 		Logger:  slog.Default(),
 	})
 }
@@ -82,6 +83,19 @@ func stdinConfirm(prompt string) bool {
 	response, _ := reader.ReadString('\n')
 	response = strings.TrimSpace(response)
 	return response == "y" || response == "Y"
+}
+
+// stdinContinue prints the prompt to stdout and blocks until the user presses
+// Enter. Returns true on Enter (the user confirmed they closed their browser),
+// false on read error. Used by the coordinator to gate the passkey ceremony
+// behind a blocking browser-restart prompt after the trust store changed.
+func stdinContinue(prompt string) bool {
+	fmt.Print(prompt)
+	reader := bufio.NewReader(os.Stdin)
+	if _, err := reader.ReadString('\n'); err != nil {
+		return false
+	}
+	return true
 }
 
 func enrollCmd() *cobra.Command {
@@ -153,7 +167,7 @@ The Gateway must already be running (use './g8e gw start' first).`,
 			cmd.Printf("User ID: %s\n", result.UserID)
 			cmd.Printf("CLI Session ID: %s\n", result.CLISessionID)
 			if result.SystemTrustInstalled {
-				cmd.Println("System trust: installed gateway root CA. Close all open browser windows before clicking the enrollment link.")
+				cmd.Println("System trust: installed gateway root CA.")
 			}
 			return nil
 		},
