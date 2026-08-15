@@ -144,19 +144,19 @@ type PasskeyRegistrar interface {
 // invokes sudo or mutates an OS certificate store except via
 // SystemTrustInstaller.
 type EnrollmentCoordinator struct {
-	gateway  EnrollmentGateway
-	store    *CredentialStore
-	keys     KeyProvider
-	trust    SystemTrustInstaller
-	browser  BrowserOpener
-	passkey  PasskeyRegistrar
-	confirm  ConfirmFunc
+	gateway    EnrollmentGateway
+	store      *CredentialStore
+	keys       KeyProvider
+	trust      SystemTrustInstaller
+	browser    BrowserOpener
+	passkey    PasskeyRegistrar
+	confirm    ConfirmFunc
 	continueFn ContinueFunc
-	fileSvc  fs.RuntimeFileService
-	cfg      *config.Config
-	clock    func() time.Time
-	logger   *slog.Logger
-	out      OutputFunc
+	fileSvc    fs.RuntimeFileService
+	cfg        *config.Config
+	clock      func() time.Time
+	logger     *slog.Logger
+	out        OutputFunc
 }
 
 // EnrollmentCoordinatorDeps holds the injectable dependencies for an
@@ -255,19 +255,19 @@ func NewEnrollmentCoordinator(deps EnrollmentCoordinatorDeps) *EnrollmentCoordin
 		out = func(string, ...any) {} // no-op default; command layer should supply
 	}
 	return &EnrollmentCoordinator{
-		gateway:   gateway,
-		store:     store,
-		keys:      keys,
-		trust:     trust,
-		browser:   browser,
-		passkey:   passkey,
-		confirm:   confirm,
+		gateway:    gateway,
+		store:      store,
+		keys:       keys,
+		trust:      trust,
+		browser:    browser,
+		passkey:    passkey,
+		confirm:    confirm,
 		continueFn: continueFn,
-		fileSvc:   deps.FileSvc,
-		cfg:       deps.Cfg,
-		clock:     clock,
-		logger:    logger,
-		out:       out,
+		fileSvc:    deps.FileSvc,
+		cfg:        deps.Cfg,
+		clock:      clock,
+		logger:     logger,
+		out:        out,
 	}
 }
 

@@ -502,7 +502,7 @@ var (
 	ErrSystemTrustDelegated          = errors.New("browser trust explicitly delegated to the administrator")
 	ErrSystemTrustNoChainToAnchor    = errors.New("no certificate in the bundle chains to the identified root anchor")
 	ErrSystemTrustStaleRemovalDenied = errors.New("user declined removal of stale trust anchors")
-	ErrBrowserRestartDeclined       = errors.New("user declined to restart browser before passkey ceremony")
+	ErrBrowserRestartDeclined        = errors.New("user declined to restart browser before passkey ceremony")
 
 	// Data command errors
 	ErrCollectionRequired         = errors.New("collection required")
@@ -1043,9 +1043,6 @@ var (
 	ErrHarnessNoScenarios       = errors.New("no scenarios selected")
 	ErrHarnessGovKitNotInit     = errors.New("gov kit not initialized (call SetGovKit)")
 	ErrHarnessGovKitMissingSign = errors.New("gov kit not initialized (need ensemble + principal)")
-
-	// Demo errors
-	ErrDemoGatewayPortMissing = errors.New("demo gateway port not configured for org")
 
 	// Browser errors
 	ErrBrowserURLEmpty = errors.New("browser URL cannot be empty")

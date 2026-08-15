@@ -101,13 +101,13 @@ The scenarios that exercise real L1 enforcement:
 make build && cp g8e demos/bin/g8e
 
 g8e demos start dhs
-g8e demos run dhs        # enrolls a passkey inline, then runs all five scenarios
+g8e demos run dhs        # enrolls a passkey inline (for scenario 2), then runs all five scenarios
 g8e demos run dhs 2      # run a single scenario
 g8e audit receipts       # inspect the audit trail / ledger
 g8e demos clean dhs
 ```
 
-`g8e demos run` enrolls a host CLI session and registers a WebAuthn passkey in-process before running scenarios. A browser window opens automatically for the passkey ceremony — no separate terminal or manual `auth enroll` step is required. The enrolled identity is threaded into the harness so the suspended transaction and the browser approver share the same user identity.
+`g8e demos run` enrolls a host CLI session and registers a WebAuthn passkey in-process before running scenarios. The gateway starts in consensus posture, where passkey enrollment is optional (L3 is audited, not enforced). The passkey is enrolled inline because scenario 2 restarts the gateway in notary posture, which requires a real human WebAuthn approval for the cross-domain release. A browser window opens automatically for the passkey ceremony — no separate terminal or manual `auth enroll` step is required. The enrolled identity is threaded into the harness so the suspended transaction and the browser approver share the same user identity.
 
 ## Scenarios
 

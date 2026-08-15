@@ -374,7 +374,7 @@ func TestHealthcareScenarioPostureDeclarations(t *testing.T) {
 			continue
 		}
 		if sc.RequiresPosture != Doctrine {
-			t.Errorf("healthcare scenario %q should declare RequiresPosture=Doctrine (the demo runner never calls switchDemoPosture and the gateway boots in doctrine), got %q",
+			t.Errorf("healthcare scenario %q should declare RequiresPosture=Doctrine (the gateway boots in doctrine posture for healthcare scenarios), got %q",
 				sc.Name, sc.RequiresPosture)
 		}
 	}

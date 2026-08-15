@@ -65,12 +65,12 @@ var enrollCoordinatorFactory = newDefaultEnrollmentCoordinator
 // that writes to the provided output sink.
 func newDefaultEnrollmentCoordinator(out auth.OutputFunc, fileSvc fs.RuntimeFileService, cfg *config.Config) Enroller {
 	return auth.NewEnrollmentCoordinator(auth.EnrollmentCoordinatorDeps{
-		FileSvc: fileSvc,
-		Cfg:     cfg,
-		Out:     out,
-		Confirm: stdinConfirm,
+		FileSvc:  fileSvc,
+		Cfg:      cfg,
+		Out:      out,
+		Confirm:  stdinConfirm,
 		Continue: stdinContinue,
-		Logger:  slog.Default(),
+		Logger:   slog.Default(),
 	})
 }
 
