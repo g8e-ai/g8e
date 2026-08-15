@@ -961,10 +961,13 @@ func getSupportedAgents() []agentInfo {
 // ─── agent run ──────────────────────────────────────────────────────────────
 
 func agentRunCmd() *cobra.Command {
-	return agentRunCmdWithConfig(newFileSvc)
+	return agentRunCmdWithConfig(newFileSvc, newDefaultEnrollmentCoordinator)
 }
 
-func agentRunCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
+func agentRunCmdWithConfig(
+	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
+	enrollerFactory enrollerFactory,
+) *cobra.Command {
 	var downstreamURL string
 	var verify bool
 
@@ -1041,7 +1044,7 @@ the gateway and use 'g8e mcp stdio'.`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runMCPAgentRun(args, downstreamURL, verify, fileSvcFactory)
+			return runMCPAgentRun(args, downstreamURL, verify, fileSvcFactory, enrollerFactory)
 		},
 	}
 
@@ -1438,7 +1441,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 // then launches the requested agent with 'g8e mcp stdio' as its sole MCP server.
 // The authenticated CLI session is propagated to the stdio subprocess via G8E_*
 // environment variables so it never needs to re-read credentials from disk.
-func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) error {
+func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error), enrollerFactory enrollerFactory) error {
 	if err := startGatewayIfNeeded(fileSvcFactory); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrGatewayNotReady, err)
 	}
@@ -1461,7 +1464,7 @@ func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, 
 	// is idempotent for an existing passkey); if no passkey exists, the
 	// browser ceremony runs after system trust is installed.
 	fmt.Fprintf(os.Stderr, "[g8e] Ensuring CLI credentials and passkey...\n")
-	coordinator := enrollCoordinatorFactory(func(format string, args ...any) {
+	coordinator := enrollerFactory(func(format string, args ...any) {
 		fmt.Fprintf(os.Stderr, format+"\n", args...)
 	}, fileSvc, cfg)
 	enrollResult, err := coordinator.Enroll(context.Background(), auth.EnrollmentOptions{})
@@ -1754,7 +1757,7 @@ func verifyGeminiInterception(configPath string) error {
 	return nil
 }
 
-func runMCPAgentRun(args []string, downstreamURL string, verify bool, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) error {
+func runMCPAgentRun(args []string, downstreamURL string, verify bool, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error), enrollerFactory enrollerFactory) error {
 	if downstreamURL == "" && len(args) == 0 {
 		return fmt.Errorf("specify an agent name or MCP server\n\nLaunch an agent with governance:\n  g8e mcp agent run claude\n\nWrap an MCP server subprocess:\n  g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /\n\nWrap an HTTP MCP server:\n  g8e mcp agent run --url http://localhost:3000")
 	}
@@ -1764,7 +1767,7 @@ func runMCPAgentRun(args []string, downstreamURL string, verify bool, fileSvcFac
 		firstArg := strings.ToLower(args[0])
 		for _, a := range getSupportedAgents() {
 			if strings.ToLower(a.ID) == firstArg {
-				return launchAgentWithGovernance(a.ID, args[1:], verify, fileSvcFactory)
+				return launchAgentWithGovernance(a.ID, args[1:], verify, fileSvcFactory, enrollerFactory)
 			}
 		}
 	}

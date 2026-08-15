@@ -408,7 +408,7 @@ func TestVaultImportCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 func TestEnrollCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 	stubCheckOperatorRunning := func(*config.Config) error { return nil }
-	cmd := enrollCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory), stubCheckOperatorRunning)
+	cmd := enrollCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory), stubCheckOperatorRunning, newDefaultEnrollmentCoordinator)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

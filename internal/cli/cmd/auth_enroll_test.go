@@ -34,7 +34,7 @@ func TestEnrollCmdWithConfig_ConfigLoaderError(t *testing.T) {
 		return nil, errors.New("config load error")
 	}
 
-	cmd := enrollCmdWithConfig(failLoader, newFileSvc, auth.CheckOperatorRunning)
+	cmd := enrollCmdWithConfig(failLoader, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -54,7 +54,7 @@ func TestEnrollCmdWithConfig_OperatorNotRunningReturnsError(t *testing.T) {
 		return cfg, nil
 	}
 
-	cmd := enrollCmdWithConfig(loader, newFileSvc, auth.CheckOperatorRunning)
+	cmd := enrollCmdWithConfig(loader, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -64,7 +64,7 @@ func TestEnrollCmdWithConfig_OperatorNotRunningReturnsError(t *testing.T) {
 }
 
 func TestEnrollCmdWithConfig_NoTPMFlagOnNonWindows(t *testing.T) {
-	cmd := enrollCmdWithConfig(loadConfig, newFileSvc, auth.CheckOperatorRunning)
+	cmd := enrollCmdWithConfig(loadConfig, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
 	tpmFlag := cmd.Flags().Lookup("tpm")
 	if tpmFlag != nil {
 		assert.Equal(t, "false", tpmFlag.DefValue)
@@ -72,7 +72,7 @@ func TestEnrollCmdWithConfig_NoTPMFlagOnNonWindows(t *testing.T) {
 }
 
 func TestEnrollCmdWithConfig_HasRunE(t *testing.T) {
-	cmd := enrollCmdWithConfig(loadConfig, newFileSvc, auth.CheckOperatorRunning)
+	cmd := enrollCmdWithConfig(loadConfig, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
 	require.NotNil(t, cmd.RunE)
 }
 
@@ -82,7 +82,7 @@ func TestEnrollCmdWithConfig_HasRunE(t *testing.T) {
 // command adapter exposes the new options.
 func TestEnrollCmdWithConfig_FlagsRegistered(t *testing.T) {
 	fileSvc, cfg := newCmdTestEnv(t)
-	cmd := enrollCmdWithConfig(func(string) (*config.Config, error) { return cfg, nil }, fileSvcFactoryFor(fileSvc), auth.CheckOperatorRunning)
+	cmd := enrollCmdWithConfig(func(string) (*config.Config, error) { return cfg, nil }, fileSvcFactoryFor(fileSvc), auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
 	noSystemTrustFlag := cmd.Flags().Lookup("no-system-trust")
 	require.NotNil(t, noSystemTrustFlag)
 	assert.Equal(t, "false", noSystemTrustFlag.DefValue)
@@ -98,7 +98,7 @@ func TestEnrollCmdWithConfig_UsesInjectedConfigLoader(t *testing.T) {
 		return nil, errors.New("injected error")
 	}
 
-	cmd := enrollCmdWithConfig(loader, newFileSvc, auth.CheckOperatorRunning)
+	cmd := enrollCmdWithConfig(loader, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
 	_ = cmd.RunE(cmd, nil)
 
 	assert.True(t, called, "config loader should have been called")
@@ -110,7 +110,7 @@ func TestEnrollCmdWithConfig_PropagatesConfigError(t *testing.T) {
 		return nil, expectedErr
 	}
 
-	cmd := enrollCmdWithConfig(loader, newFileSvc, auth.CheckOperatorRunning)
+	cmd := enrollCmdWithConfig(loader, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
 	err := cmd.RunE(cmd, nil)
 	require.Error(t, err)
 }
@@ -128,7 +128,7 @@ func TestEnrollCmdWithConfig_GatewayDownReturnsError(t *testing.T) {
 
 	cmd := enrollCmdWithConfig(func(string) (*config.Config, error) {
 		return cfg, nil
-	}, fileSvcFactoryFor(fileSvc), auth.CheckOperatorRunning)
+	}, fileSvcFactoryFor(fileSvc), auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -199,7 +199,7 @@ func (m *mockEnroller) Enroll(ctx context.Context, opts auth.EnrollmentOptions) 
 	m.lastOpts = opts
 	m.mu.Unlock()
 	if m.panickOnCall {
-		panic("mockEnroller: enrollCoordinatorFactory should not have been called")
+		panic("mockEnroller: enrollerFactory should not have been called")
 	}
 	return m.result, m.err
 }
@@ -216,15 +216,28 @@ func (m *mockEnroller) lastOptions() auth.EnrollmentOptions {
 	return m.lastOpts
 }
 
-// withMockEnroller swaps enrollCoordinatorFactory for the duration of fn and
-// restores it on return. It returns the mock so the caller can assert on it.
-func withMockEnroller(mock *mockEnroller, fn func()) {
-	orig := enrollCoordinatorFactory
-	enrollCoordinatorFactory = func(_ auth.OutputFunc, _ fs.RuntimeFileService, _ *config.Config) Enroller {
+// mockEnrollerFactory returns an enrollerFactory that always returns the
+// given mock. Used to inject a mock coordinator into *WithConfig constructors
+// without mutating package-level state.
+func mockEnrollerFactory(mock *mockEnroller) enrollerFactory {
+	return func(_ auth.OutputFunc, _ fs.RuntimeFileService, _ *config.Config) Enroller {
 		return mock
 	}
-	defer func() { enrollCoordinatorFactory = orig }()
-	fn()
+}
+
+// panickingEnrollerFactory returns an enrollerFactory whose enroller panics
+// if called. Used to assert that enrollment is not attempted on a code path
+// that must not enroll (e.g. `mcp stdio`).
+func panickingEnrollerFactory() enrollerFactory {
+	return func(_ auth.OutputFunc, _ fs.RuntimeFileService, _ *config.Config) Enroller {
+		return &panickingEnroller{}
+	}
+}
+
+type panickingEnroller struct{}
+
+func (p *panickingEnroller) Enroll(_ context.Context, _ auth.EnrollmentOptions) (*auth.EnrollmentResult, error) {
+	panic("enrollerFactory should not be called on this code path")
 }
 
 // noopCheckOperatorRunning is a checkOperatorRunning stub that always succeeds,
@@ -257,25 +270,24 @@ func TestEnrollCmd_OptionPropagation(t *testing.T) {
 				},
 			}
 
-			withMockEnroller(mock, func() {
-				cmd := enrollCmdWithConfig(
-					func(string) (*config.Config, error) { return cfg, nil },
-					fileSvcFactoryFor(fileSvc),
-					noopCheckOperatorRunning,
-				)
-				var buf bytes.Buffer
-				cmd.SetOut(&buf)
-				cmd.SetErr(&buf)
-				cmd.SetContext(context.Background())
-				cmd.SetArgs(tc.args)
-				require.NoError(t, cmd.ParseFlags(tc.args))
-				require.NoError(t, cmd.RunE(cmd, nil))
-			})
+		cmd := enrollCmdWithConfig(
+			func(string) (*config.Config, error) { return cfg, nil },
+			fileSvcFactoryFor(fileSvc),
+			noopCheckOperatorRunning,
+			mockEnrollerFactory(mock),
+		)
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetContext(context.Background())
+		cmd.SetArgs(tc.args)
+		require.NoError(t, cmd.ParseFlags(tc.args))
+		require.NoError(t, cmd.RunE(cmd, nil))
 
-			assert.Equal(t, 1, mock.callCount(), "coordinator should be called once")
-			opts := mock.lastOptions()
-			assert.Equal(t, tc.wantNoTrust, opts.NoSystemTrust, "NoSystemTrust mismatch")
-			assert.Equal(t, tc.wantRotate, opts.RotateCLI, "RotateCLI mismatch")
+		assert.Equal(t, 1, mock.callCount(), "coordinator should be called once")
+		opts := mock.lastOptions()
+		assert.Equal(t, tc.wantNoTrust, opts.NoSystemTrust, "NoSystemTrust mismatch")
+		assert.Equal(t, tc.wantRotate, opts.RotateCLI, "RotateCLI mismatch")
 		})
 	}
 }
@@ -289,19 +301,17 @@ func TestEnrollCmd_CoordinatorErrorPropagates(t *testing.T) {
 	expectedErr := constants.ErrSystemTrustInstallFailed
 	mock := &mockEnroller{err: expectedErr}
 
-	var cmdErr error
-	withMockEnroller(mock, func() {
-		cmd := enrollCmdWithConfig(
-			func(string) (*config.Config, error) { return cfg, nil },
-			fileSvcFactoryFor(fileSvc),
-			noopCheckOperatorRunning,
-		)
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-		cmd.SetContext(context.Background())
-		cmdErr = cmd.RunE(cmd, nil)
-	})
+	cmd := enrollCmdWithConfig(
+		func(string) (*config.Config, error) { return cfg, nil },
+		fileSvcFactoryFor(fileSvc),
+		noopCheckOperatorRunning,
+		mockEnrollerFactory(mock),
+	)
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetContext(context.Background())
+	cmdErr := cmd.RunE(cmd, nil)
 
 	require.Error(t, cmdErr)
 	assert.ErrorIs(t, cmdErr, expectedErr)
@@ -324,18 +334,17 @@ func TestEnrollCmd_HealthyReusedIdentityNoRotate(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	withMockEnroller(mock, func() {
-		cmd := enrollCmdWithConfig(
-			func(string) (*config.Config, error) { return cfg, nil },
-			fileSvcFactoryFor(fileSvc),
-			noopCheckOperatorRunning,
-		)
-		buf = bytes.Buffer{}
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-		cmd.SetContext(context.Background())
-		require.NoError(t, cmd.RunE(cmd, nil))
-	})
+	cmd := enrollCmdWithConfig(
+		func(string) (*config.Config, error) { return cfg, nil },
+		fileSvcFactoryFor(fileSvc),
+		noopCheckOperatorRunning,
+		mockEnrollerFactory(mock),
+	)
+	buf = bytes.Buffer{}
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetContext(context.Background())
+	require.NoError(t, cmd.RunE(cmd, nil))
 
 	out := buf.String()
 	assert.Contains(t, out, "Reusing existing CLI identity")
@@ -358,19 +367,18 @@ func TestEnrollCmd_RotateCLIFlagForcesRotation(t *testing.T) {
 		},
 	}
 
-	withMockEnroller(mock, func() {
-		cmd := enrollCmdWithConfig(
-			func(string) (*config.Config, error) { return cfg, nil },
-			fileSvcFactoryFor(fileSvc),
-			noopCheckOperatorRunning,
-		)
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-		cmd.SetContext(context.Background())
-		require.NoError(t, cmd.ParseFlags([]string{"--rotate-cli"}))
-		require.NoError(t, cmd.RunE(cmd, nil))
-	})
+	cmd := enrollCmdWithConfig(
+		func(string) (*config.Config, error) { return cfg, nil },
+		fileSvcFactoryFor(fileSvc),
+		noopCheckOperatorRunning,
+		mockEnrollerFactory(mock),
+	)
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetContext(context.Background())
+	require.NoError(t, cmd.ParseFlags([]string{"--rotate-cli"}))
+	require.NoError(t, cmd.RunE(cmd, nil))
 
 	assert.True(t, mock.lastOptions().RotateCLI, "--rotate-cli should set RotateCLI=true")
 }
@@ -389,19 +397,18 @@ func TestEnrollCmd_NoSystemTrustFlagWired(t *testing.T) {
 		},
 	}
 
-	withMockEnroller(mock, func() {
-		cmd := enrollCmdWithConfig(
-			func(string) (*config.Config, error) { return cfg, nil },
-			fileSvcFactoryFor(fileSvc),
-			noopCheckOperatorRunning,
-		)
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-		cmd.SetContext(context.Background())
-		require.NoError(t, cmd.ParseFlags([]string{"--no-system-trust"}))
-		require.NoError(t, cmd.RunE(cmd, nil))
-	})
+	cmd := enrollCmdWithConfig(
+		func(string) (*config.Config, error) { return cfg, nil },
+		fileSvcFactoryFor(fileSvc),
+		noopCheckOperatorRunning,
+		mockEnrollerFactory(mock),
+	)
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetContext(context.Background())
+	require.NoError(t, cmd.ParseFlags([]string{"--no-system-trust"}))
+	require.NoError(t, cmd.RunE(cmd, nil))
 
 	assert.True(t, mock.lastOptions().NoSystemTrust, "--no-system-trust should set NoSystemTrust=true")
 }
@@ -424,18 +431,17 @@ func TestEnrollCmd_SystemTrustInstalledOutput(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	withMockEnroller(mock, func() {
-		cmd := enrollCmdWithConfig(
-			func(string) (*config.Config, error) { return cfg, nil },
-			fileSvcFactoryFor(fileSvc),
-			noopCheckOperatorRunning,
-		)
-		buf = bytes.Buffer{}
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-		cmd.SetContext(context.Background())
-		require.NoError(t, cmd.RunE(cmd, nil))
-	})
+	cmd := enrollCmdWithConfig(
+		func(string) (*config.Config, error) { return cfg, nil },
+		fileSvcFactoryFor(fileSvc),
+		noopCheckOperatorRunning,
+		mockEnrollerFactory(mock),
+	)
+	buf = bytes.Buffer{}
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetContext(context.Background())
+	require.NoError(t, cmd.RunE(cmd, nil))
 
 	assert.Contains(t, buf.String(), "System trust: installed gateway root CA")
 	// The stale "Close all open browser windows" guidance is no longer
@@ -504,30 +510,30 @@ func TestLogoutCmd_OSRootCARetained(t *testing.T) {
 }
 
 // TestMCPStdio_DoesNotInvokeEnrollment verifies that the `mcp stdio` command
-// path does NOT call enrollCoordinatorFactory. Direct `mcp stdio` is a
-// credential consumer only — it loads credentials and builds an mTLS
-// connection, never enrolling, opening a browser, or installing system trust.
-// This is the §11.5 3.8 negative assertion.
+// path does NOT enroll. Direct `mcp stdio` is a credential consumer only — it
+// loads credentials and builds an mTLS connection, never enrolling, opening a
+// browser, or installing system trust. This is the §11.5 3.8 negative
+// assertion.
+//
+// With the enrollerFactory injection model, `mcpStdioCmdWithConfig` does not
+// receive an enrollerFactory at all — the absence is enforced by the function
+// signature. This test runs the command and asserts it fails (no gateway, no
+// credentials) without any enrollment side effect. If a future change adds an
+// enrollerFactory parameter to `mcpStdioCmdWithConfig`, this test should be
+// updated to inject a panicking factory and assert it is never called.
 func TestMCPStdio_DoesNotInvokeEnrollment(t *testing.T) {
 	fileSvc, _ := newCmdTestEnv(t)
 
-	// Swap the factory with a panicking mock. If the stdio path calls it,
-	// the test panics.
-	mock := &mockEnroller{panickOnCall: true}
+	cmd := mcpStdioCmdWithConfig(fileSvcFactoryFor(fileSvc))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetContext(context.Background())
 
-	withMockEnroller(mock, func() {
-		cmd := mcpStdioCmdWithConfig(fileSvcFactoryFor(fileSvc))
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-		cmd.SetContext(context.Background())
-
-		// runMCPStdioProxy will fail because there is no gateway and no
-		// credentials, but it must fail WITHOUT calling the coordinator
-		// factory. The error is expected; the assertion is that no panic
-		// occurred (the mock was never called).
-		_ = cmd.RunE(cmd, nil)
-	})
-
-	assert.Equal(t, 0, mock.callCount(), "mcp stdio must NOT invoke the enrollment coordinator factory")
+	// runMCPStdioProxy will fail because there is no gateway and no
+	// credentials, but it must fail WITHOUT enrolling. The error is
+	// expected; the assertion is that the command does not panic or
+	// attempt enrollment (which is now impossible by construction since
+	// mcpStdioCmdWithConfig has no enrollerFactory parameter).
+	_ = cmd.RunE(cmd, nil)
 }

@@ -168,6 +168,8 @@ Return centralized error constants from `internal/constants/errors.go` for known
 
 These two setters are the only post-construction mutators on `mcp.GatewayService`. All other dependencies are construction-phase only.
 
+**`GatewayModeService.SetConsensusService`** is a narrow setter on `GatewayModeService` (not `mcp.GatewayService`) for a genuinely late-bound dependency: `ConsensusService` is built between `NewGatewayModeService` and `Start` because it reads from the DB the constructor opens (via `ConsensusBootstrap`). The `consensusSvc` field is an `atomic.Pointer[consensus.ConsensusService]`; `SetConsensusService` calls `Store`, and the `GovernanceController` (which captures `&ls.consensusSvc` at construction time) calls `Load` on the request path. The `atomic.Pointer` provides the memory ordering guarantees that a raw `**T` lacks — the cell is read on the request path and written during boot, so unsynchronized aliasing is a data race under `-race`. A `Load` returning nil means consensus is not configured for the current posture (e.g. doctrine mode); `handleConsensusDeliberate` returns 503 in that case.
+
 ## Constants & Doctrines
 
 Go constants in `internal/constants/` are SSOT. JSON files in `protocol/constants/` are reference documentation and external protocol definitions.
