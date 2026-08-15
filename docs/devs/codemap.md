@@ -711,7 +711,7 @@ The following packages are test-only and are not part of the production dependen
 - `verify_ops.py` - Demo artifact for verifying cloud service operation results
 
 **`demos/healthcare/`** - Healthcare analytics demo with Metabase integration
-- `pa_api_server.py` - Prior authorization API server mock
+- `paop.sh` - PA operation wrapper (governed run_shell_command bridge, equivalent of dhs dataop / fedramp cloudop)
 - `setup_metabase.py` - Metabase initialization and dashboard setup
 - `init.sql` - Database schema initialization for healthcare data
 

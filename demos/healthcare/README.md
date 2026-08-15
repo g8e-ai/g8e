@@ -23,7 +23,7 @@ g8e sits in front of the entire PA system. Every request — whether it comes fr
 
 The demo demonstrates:
 
-- **FHIR R4 PA submission** through the g8e gateway with real doctrine enforcement
+- **Governed PA operations** via native gateway tools (`run_shell_command` driving the `paop` wrapper) with real doctrine enforcement on every request
 - **11 PHI/HIPAA doctrine rules** evaluated on every request
 - **Gold card auto-approval** (HB 3134 §6) for providers with historic approval rate ≥ 90%
 - **SLA breach tracking** with day-5 alerts and day-7 breach flags for mandatory DCBS/OHA reporting
@@ -32,11 +32,11 @@ The demo demonstrates:
 
 The three core demonstration narratives:
 
-1. **Authorized FHIR flow** — An AI agent on `net_internal` submits a PA request through the gateway to `healthcare-pa-api`. g8e validates the request, the gold carding rules engine auto-approves if the provider qualifies, and the compliance dashboard reflects the decision.
+1. **Authorized PA flow** — An AI agent on `net_internal` submits a PA request through the gateway via the native `run_shell_command` tool driving the `paop` wrapper. g8e validates the request against all 11 PHI/HIPAA doctrine rules, the gold carding narrative is carried by the tool arguments, and the compliance dashboard reflects the decision.
 
-2. **SLA enforcement** — The `healthcare-pa-worker` tracks days elapsed per request. PA-2026-0044 in the seed data is already in `SLA_BREACHED` state with `reportable_to_oha: true`, demonstrating the alert and reporting path. PA-2026-0041 is at day 6 with a day-5 alert threshold already triggered.
+2. **SLA enforcement** — The PA-2026-0044 seed record in `init.sql` is already in `SLA_BREACHED` state with `reportable_to_oha: true`, demonstrating the alert and reporting path. PA-2026-0041 is at day 6 with a day-5 alert threshold already triggered.
 
-3. **Bad actor blocked** — A container on `net_untrusted` has no route to `net_secure`. Attempts to reach the PA API directly, exfiltrate PHI, or tamper with FHIR resources are blocked at the gateway and logged in the audit trail.
+3. **Bad actor blocked** — A container on `net_untrusted` has no route to `net_internal`. Attempts to reach the gateway directly, exfiltrate PHI, or tamper with FHIR resources are blocked at the network layer and the gateway doctrine engine.
 
 ---
 
@@ -58,17 +58,12 @@ The three core demonstration narratives:
 │  net_internal  10.22.0.0/24                                 │
 │    healthcare-gateway   10.22.0.10                          │
 │    healthcare-operator  10.22.0.20                          │
-│    healthcare-pa-api 10.22.0.30  (FHIR API bridge)          │
 │    healthcare-agent      (dynamic)                           │
 └───────────────────────────┬─────────────────────────────────┘
                             │ operator tunnel only
 ┌───────────────────────────▼─────────────────────────────────┐
 │  net_secure  10.23.0.0/24                                   │
 │    healthcare-operator  10.23.0.20                          │
-│    healthcare-pa-api 10.23.0.30                              │
-│    healthcare-exemption-rules 10.23.0.40                     │
-│    healthcare-pa-worker 10.23.0.50                           │
-│    healthcare-message-broker 10.23.0.60  :15673 (RabbitMQ UI)│
 │    healthcare-reporting-db 10.23.0.70  :5433 (Postgres)     │
 │    healthcare-compliance-ui 10.23.0.80                      │
 └─────────────────────────────────────────────────────────────┘
@@ -91,7 +86,6 @@ Traffic entering from `net_untrusted` has no route into `net_perimeter`. The gat
 | Gateway HTTPS | 8444 |
 | Console | https://localhost:8444/console/ |
 | Compliance Dashboard (Metabase) | 3001 |
-| RabbitMQ Management | 15673 |
 | Reporting DB (Postgres) | 5433 |
 
 This demo uses offset ports to allow simultaneous operation with other demos:
@@ -101,7 +95,6 @@ This demo uses offset ports to allow simultaneous operation with other demos:
 | Gateway HTTP | 8081 | 8080 | 8082 |
 | Gateway HTTPS | 8444 | 8443 | 8445 |
 | Demo UI / Metabase | 3001 | 3000 | 3002 |
-| RabbitMQ Management | 15673 | — | — |
 | Postgres | 5433 | — | — |
 
 ---
@@ -114,7 +107,7 @@ This demo uses offset ports to allow simultaneous operation with other demos:
 **Networks:** `net_perimeter` (10.21.0.10), `net_internal` (10.22.0.10)  
 **Ports:** `8081` (HTTP), `8444` (HTTPS)
 
-The security enforcement plane. All inbound requests pass through the gateway's doctrine engine before reaching any PA service. Loaded with `phi_hipaa_doctrine.json` containing 11 detection rules. Runs in doctrine posture — L1 doctrine rules are enforced on every request. Configuration is applied via command-line flags in `compose.yml` rather than the reference `config/gateway.yml` file.
+The security enforcement plane. All inbound requests pass through the gateway's doctrine engine. Loaded with `phi_hipaa_doctrine.json` containing 11 detection rules. Runs in doctrine posture — L1 doctrine rules are enforced on every request. The `paop` wrapper script is mounted at `/usr/local/bin/paop` for governed PA operations via `run_shell_command`. Configuration is applied via command-line flags in `compose.yml` rather than the reference `config/gateway.yml` file.
 
 ### g8e Operator — `healthcare-operator`
 
@@ -122,42 +115,6 @@ The security enforcement plane. All inbound requests pass through the gateway's 
 **Networks:** `net_internal` (10.22.0.20), `net_secure` (10.23.0.20)
 
 The trust anchor on `net_secure`. Enrolls with the gateway over mTLS, receives an identity certificate, and provides the operator session for governed requests. The operator's certificate file at `/root/.g8e/pki/operator.crt` serves as the health check signal for dependent services. Configuration is applied via command-line flags in `compose.yml` rather than the reference `config/operator.yml` file.
-
-### PA Submission Service — `healthcare-pa-api`
-
-**Compose service:** `pa-submission-service`  
-**Networks:** `net_internal` (10.22.0.30), `net_secure` (10.23.0.30)  
-**Image:** `python:3.11-slim`  
-**Regulatory mapping:** HB 3134 — 2027 API Mandate
-
-The FHIR R4-compliant PA submission endpoint. Bridges `net_internal` so the gateway can reach it; the secure-side address is used by `healthcare-exemption-rules` and `healthcare-pa-worker`. Seed data from `target-data/` is mounted read-only at `/var/g8e/target`. Accepts `QUEUE_HOST` and `DB_HOST` for downstream routing. The server exposes an MCP JSON-RPC endpoint (`tools/call submit_pa`) for governed submissions. The direct FHIR endpoint (`/fhir/ClaimResponse`) is disabled by default (returns 403) — use the governed MCP path through the gateway, or restart with `--allow-legacy` to enable the bypass.
-
-### Provider Exemption Rules Engine — `healthcare-exemption-rules`
-
-**Compose service:** `provider-exemption-rules`  
-**Networks:** `net_secure` (10.23.0.40)  
-**Image:** `node:20-alpine`  
-**Regulatory mapping:** HB 3134 — Gold Carding
-
-Evaluates provider NPI against historic approval rates stored in `healthcare-reporting-db`. If `historic_approval_rate >= EXEMPTION_THRESHOLD_PERCENTAGE / 100` (default: 0.90), the request is auto-approved without manual review. See PA-2026-0043 in `pa_requests.json` for the auto-approved case (Dr. Priya Nair, 96% rate).
-
-### PA Processing Worker — `healthcare-pa-worker`
-
-**Compose service:** `pa-processing-worker`  
-**Networks:** `net_secure` (10.23.0.50)  
-**Image:** `python:3.11-slim`  
-**Regulatory mapping:** 2026 CCO Medicaid Rule — 7-day SLA
-
-Consumes from `healthcare-message-broker`, tracks `days_elapsed` per request. Triggers an alert when `days_elapsed >= SLA_ALERT_THRESHOLD_DAYS` (default: 5) and marks the request `SLA_BREACHED` at `SLA_TIMEOUT_DAYS` (default: 7). Breached requests set `reportable_to_oha: true` for inclusion in DCBS/OHA annual reports.
-
-### Message Broker — `healthcare-message-broker`
-
-**Compose service:** `message-broker`  
-**Networks:** `net_secure` (10.23.0.60)  
-**Image:** `rabbitmq:3-management`  
-**Ports:** `15673` (RabbitMQ Management UI)
-
-Async queue for PA requests submitted to `healthcare-pa-api`. Decouples submission from processing, enabling the worker to enforce SLA tracking independently of submission throughput. Default credentials: `guest` / `guest`.
 
 ### Reporting DB — `healthcare-reporting-db`
 
@@ -197,14 +154,14 @@ One-shot service that configures the Metabase admin account, database connection
 **Compose service:** `agent-runtime`  
 **Networks:** `net_internal`
 
-Simulates an authorized payer system or clinical AI agent submitting PA requests via FHIR through the gateway. Sits on `net_internal` — it must go through the gateway to reach any PA service on `net_secure`.
+Simulates an authorized payer system or clinical AI agent submitting PA requests through the gateway via native `run_shell_command` tools. Sits on `net_internal` — it must go through the gateway to reach any service on `net_secure`.
 
 ### Bad Actor — `healthcare-bad-actor`
 
 **Compose service:** `bad-actor`  
 **Networks:** `net_untrusted`
 
-Simulates an unauthorized party attempting to exfiltrate PHI or bypass the PA workflow. Isolated to `net_untrusted` with no route to any other network segment. Attempts to reach `healthcare-pa-api` (10.22.0.30) or `healthcare-reporting-db` (10.23.0.70) directly will fail at the network layer before reaching any g8e enforcement point.
+Simulates an unauthorized party attempting to exfiltrate PHI or bypass the PA workflow. Isolated to `net_untrusted` with no route to any other network segment. Attempts to reach the gateway (10.22.0.10) or `healthcare-reporting-db` (10.23.0.70) directly will fail at the network layer before reaching any g8e enforcement point.
 
 ### Observability — `healthcare-observability`
 
@@ -237,6 +194,8 @@ All rules live in `doctrine/phi_hipaa_doctrine.json`. The doctrine is a bind mou
 
 ## Seed Data
 
+The `target-data/` files are narrative reference data documenting the PA request cases referenced by the demo scenarios. They are not consumed by any running service — the compliance dashboard reads from `init.sql` seed data in Postgres. They are kept as documentation of the PA request states the scenarios prove.
+
 ### `target-data/ehr_records.json`
 
 Three patient EHR records (PAT-001 through PAT-003) with names and SSNs redacted. Includes active prescriptions, diagnosis, and two pending PHI disclosure requests (PA-001, PA-002) without patient consent — these are the records the bad actor scenario targets.
@@ -268,7 +227,7 @@ PostgreSQL schema and seed data for `healthcare-reporting-db`. Creates the `pa_r
 make build
 ```
 
-This builds the g8e binary and copies it to `demos/bin/g8e`. The `demos/Dockerfile` copies the binary into a Debian-based image at `/g8e`. Docker Compose automatically builds images for the `gateway`, `operator`, and `agent-runtime` services on first `docker compose up`.
+This builds the g8e binary and copies it to `demos/bin/g8e` for host-side CLI use. The demo containers build from the repo-root `Dockerfile` (via `context: ../..` in `compose.yml`), which produces a FIPS 140-3 approved-mode image containing the full g8e binary, `docs/reference/`, and `protocol/constants/`. Docker Compose automatically builds images for the `gateway`, `operator`, and `agent-runtime` services on first `docker compose up`.
 
 ---
 
@@ -309,12 +268,10 @@ docker compose ps
 Expected healthy sequence (takes ~60s on first pull):
 
 1. `reporting-db` → healthy
-2. `message-broker` → healthy
-3. `gateway` → healthy
-4. `operator` → healthy (operator cert written)
-5. `pa-submission-service`, `provider-exemption-rules`, `pa-processing-worker` → running
-6. `compliance-dashboard` → running
-7. `metabase-setup` → runs once, configures Metabase, exits 0
+2. `gateway` → healthy
+3. `operator` → healthy (operator cert written)
+4. `compliance-dashboard` → running
+5. `metabase-setup` → runs once, configures Metabase, exits 0
 
 Check gateway and operator logs to confirm enrollment completed:
 
@@ -335,11 +292,11 @@ Look for operator enrollment confirmation in the gateway log and the identity ce
 g8e demos run healthcare 1
 ```
 
-**Proves**: An authorized agent on `net_internal` submits a FHIR ClaimResponse through the g8e gateway. Every request passes through the doctrine engine (11 PHI/HIPAA rules) before reaching the PA API backend.
+**Proves**: An authorized agent on `net_internal` submits a PA request through the g8e gateway via the native `run_shell_command` tool driving the `paop` wrapper. Every request passes through the doctrine engine (11 PHI/HIPAA rules) before execution.
 
 The scenario runs a 3-step flow:
 1. **Gateway health check** — confirms the g8e gateway is live
-2. **FHIR PA submission** — submits a governed MCP `tools/call submit_pa` request through the gateway via the agent runtime
+2. **PA submission** — submits a governed `run_shell_command` request driving `paop submit` through the gateway via the agent runtime
 3. **Audit trail inspection** — verifies doctrine enforcement in the observability logs
 
 For manual exploration:
@@ -360,14 +317,7 @@ g8e demos run healthcare 2
 
 **Proves**: Providers whose historic approval rate meets or exceeds the plan threshold (90%) are auto-approved without manual review. PA-2026-0043 (Dr. Priya Nair, 96%) is the proof case.
 
-PA-2026-0043 in `pa_requests.json` demonstrates the gold card path: Dr. Priya Nair has a 96% historic approval rate, the `healthcare-exemption-rules` engine evaluates against the 90% threshold, and the request resolves to `AUTO_APPROVED` with zero human review time. This is the path that makes HB 3134's efficiency argument — gold-carding eliminates the SLA clock entirely for qualifying providers.
-
-To inspect the exemption rules engine configuration:
-
-```bash
-docker compose exec provider-exemption-rules env | grep EXEMPTION
-# EXEMPTION_THRESHOLD_PERCENTAGE=90
-```
+PA-2026-0043 demonstrates the gold card path: Dr. Priya Nair has a 96% historic approval rate, the exemption narrative evaluates against the 90% threshold, and the request resolves to `AUTO_APPROVED` with zero human review time. This is the path that makes HB 3134's efficiency argument — gold-carding eliminates the SLA clock entirely for qualifying providers.
 
 ### Scenario 3 — SLA Breach and OHA Reporting (2026 CCO Medicaid Rule)
 
@@ -377,15 +327,7 @@ g8e demos run healthcare 3
 
 **Proves**: The PA worker tracks days-elapsed per request and flags breaches for mandatory DCBS/OHA annual reporting. PA-2026-0044 (Dr. James O'Brien, 10 days) is the proof case.
 
-PA-2026-0044 is already in `SLA_BREACHED` state in the seed data, with `reportable_to_oha: true`. To observe the worker's SLA configuration:
-
-```bash
-docker compose exec pa-processing-worker env | grep SLA
-# SLA_TIMEOUT_DAYS=7
-# SLA_ALERT_THRESHOLD_DAYS=5
-```
-
-The compliance summary in `pa_requests.json` reflects `sla_breached: 1` — this record would appear in the DCBS March 1 filing. Navigate to the Metabase dashboard to build the denial rate and median decision time queries against `healthcare-reporting-db`.
+PA-2026-0044 is already in `SLA_BREACHED` state in the `init.sql` seed data, with `reportable_to_oha: true`. The SLA configuration (7-day timeout, 5-day alert) is documented in the narrative and reflected in the seed data. Navigate to the Metabase dashboard to build the denial rate and median decision time queries against `healthcare-reporting-db`.
 
 ### Scenario 4 — Bad Actor PHI Exfiltration Blocked
 
@@ -396,7 +338,7 @@ g8e demos run healthcare 4
 **Proves**: Two-layer defense — Layer 1: network isolation (bad-actor on `net_untrusted` has no route to `net_internal`/`net_secure`). Layer 2: doctrine enforcement (`phi_exfil_attempt` at confidence 0.95).
 
 The scenario runs a 2-layer test:
-1. **Network isolation** — verifies that the bad-actor container on `net_untrusted` cannot reach `healthcare-pa-api` on `net_internal`
+1. **Network isolation** — verifies that the bad-actor container on `net_untrusted` cannot reach the gateway on `net_internal`
 2. **Doctrine enforcement** — submits a PHI exfiltration payload through the governed endpoint; the gateway blocks it at confidence ≥ 0.95
 
 For manual exploration:
@@ -404,7 +346,7 @@ For manual exploration:
 ```bash
 # Test network isolation from bad-actor container
 docker compose exec -T bad-actor sh -c \
-  "wget -qO- -T 5 http://10.22.0.30:8000/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_internal'"
+  "wget -qO- -T 5 http://10.22.0.10:8080/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_internal'"
 
 # View doctrine enforcement in audit trail
 docker compose logs observability --tail 20
@@ -455,12 +397,6 @@ SELECT
 FROM pa_requests;
 ```
 
-### RabbitMQ Management UI — `http://localhost:15673`
-
-Default credentials: `guest` / `guest`
-
-Navigate to the **Queues** tab to see the `pa_requests` queue. Watch message rates under a simulated load. The **Connections** tab shows which services (`healthcare-pa-api`, `healthcare-pa-worker`) are connected.
-
 ### Postgres (direct) — `localhost:5433`
 
 ```bash
@@ -486,8 +422,6 @@ This tails the gateway's operator audit log in real time. Each governed request 
 ```bash
 docker compose logs -f gateway
 docker compose logs -f operator
-docker compose logs -f pa-submission-service
-docker compose logs -f pa-processing-worker
 ```
 
 ---
@@ -496,10 +430,12 @@ docker compose logs -f pa-processing-worker
 
 ### Gateway Posture: Doctrine
 
-The gateway runs in `--posture doctrine` mode with `--mcp-downstream-url http://healthcare-pa-api:8000`, meaning:
+The gateway runs in doctrine posture, meaning:
 - L1 Doctrine validation is **enforced** (fail-closed)
 - L2 Consensus signatures are **not required**
 - L3 Notary proofs are audited but not required
+
+Healthcare scenarios use native gateway tools (`run_shell_command` driving the `paop` wrapper) governed by the doctrine engine, consistent with the fedramp (`cloudop`) and dhs (`dataop`) demos. No downstream MCP server is involved — the governance proof happens at the gateway layer.
 
 ### Data Sovereignty
 
@@ -518,7 +454,7 @@ demos/healthcare/
 ├── compose.yml                          # Full environment definition
 ├── README.md                            # This file
 ├── init.sql                             # PostgreSQL schema + seed data for reporting DB
-├── pa_api_server.py                     # FHIR R4 PA API server (MCP JSON-RPC + legacy FHIR)
+├── paop.sh                              # PA operation wrapper (governed run_shell_command bridge)
 ├── setup_metabase.py                    # One-shot Metabase configuration (run by metabase-setup service)
 ├── config/
 │   ├── gateway.yml                      # g8e gateway config reference (not used in compose.yml)
@@ -526,8 +462,8 @@ demos/healthcare/
 ├── doctrine/
 │   └── phi_hipaa_doctrine.json          # 11 detection rules (PHI, HIPAA, PA-specific)
 └── target-data/
-    ├── ehr_records.json                  # 3 patient EHR records + 2 PHI disclosure requests
-    └── pa_requests.json                  # PA queue with 4 requests covering all states
+    ├── ehr_records.json                  # 3 patient EHR records + 2 PHI disclosure requests (narrative reference)
+    └── pa_requests.json                  # PA queue with 4 requests covering all states (narrative reference)
 ```
 
 ---
@@ -586,14 +522,6 @@ docker compose run --rm metabase-setup python /app/setup_metabase.py
 ```
 
 Or create the queries manually through the Metabase UI using the SQL provided in the Viewing Results section.
-
-### RabbitMQ management UI unreachable
-
-The management plugin port is `15673` on the host (mapped from `15672` inside the container). Confirm:
-
-```bash
-docker compose ps message-broker
-```
 
 ### Doctrine not loading
 

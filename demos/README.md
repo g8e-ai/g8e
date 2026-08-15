@@ -13,10 +13,10 @@ demos/
 │   ├── compose.yml             # builds from repo-root Dockerfile (context: ../..)
 │   ├── config/
 │   ├── doctrine/               # PHI/HIPAA scrub patterns
-│   ├── target-data/            # Simulated EHR/PA records
+│   ├── target-data/            # Simulated EHR/PA records (narrative reference)
 │   ├── README.md               # Healthcare-specific documentation
 │   ├── init.sql                # PostgreSQL schema for reporting-db
-│   ├── pa_api_server.py        # FHIR R4 PA submission API server
+│   ├── paop.sh                 # PA operation wrapper (governed run_shell_command bridge)
 │   └── setup_metabase.py       # Metabase compliance dashboard setup script
 ├── finance/                    # Finance/trading demo
 │   ├── compose.yml             # builds from repo-root Dockerfile (context: ../..)
@@ -77,7 +77,7 @@ Each org deploys five isolated networks:
 
 \† Gateway appears on net_secure only in the `dhs` and `fedramp` demos, where it needs direct access to the actuator boundary.
 
-The `healthcare` demo adds PA workflow services on net_secure (provider-exemption-rules, pa-processing-worker, message-broker, reporting-db) plus pa-submission-service which bridges net_internal and net_secure so the gateway can enforce PHI doctrine on inbound FHIR requests. A Metabase compliance dashboard runs on net_perimeter (with a net_secure leg to reach reporting-db), and a one-shot metabase-setup service on net_perimeter configures it on startup.
+The `healthcare` demo runs a reporting-db (Postgres) on net_secure for compliance metrics, a Metabase compliance dashboard on net_perimeter (with a net_secure leg to reach reporting-db), and a one-shot metabase-setup service on net_perimeter that configures it on startup. Healthcare scenarios use native gateway tools (`run_shell_command` driving the `paop.sh` wrapper) governed by the PHI/HIPAA doctrine engine, consistent with the fedramp (`cloudop`) and dhs (`dataop`) demos — no downstream MCP server is involved.
 
 The `dhs` demo deploys a real `agent-coalition` container (the exec target for `g8e demos run`) on net_internal, a real `datasvc` Python HTTP actuator on net_secure, display-only source connectors on net_internal and net_untrusted, and a partner fusion-COP plus a severable coalition datalink on net_perimeter, modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries. The `agent-coalition` container is a real g8e binary that submits genuine `GovernanceEnvelope`s when driven by the CLI. The display connectors are Alpine echo loops for narrative only.
 
@@ -281,7 +281,7 @@ Each org uses different host ports to allow simultaneous deployment:
 
 | Org | HTTP Port | HTTPS Port | Additional Ports |
 |---|---|---|---|
-| healthcare | 8081 | 8444 | Metabase: 3001, RabbitMQ Mgmt: 15673, PostgreSQL: 5433 |
+| healthcare | 8081 | 8444 | Metabase: 3001, PostgreSQL: 5433 |
 | finance | 8082 | 8445 | Demo UI: 3002 |
 | dhs | 8087 | 8450 | |
 | fedramp | 8088 | 8451 | FIPS 140-3 approved mode is the default for all orgs (single Dockerfile) |
