@@ -252,9 +252,13 @@ func (pm *ProcessManager) copyBinaryToBinDir() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", constants.ErrBinaryCopyFailed, err)
 	}
-	defer dest.Close()
 
 	if _, err := io.Copy(dest, src); err != nil {
+		_ = dest.Close()
+		return "", fmt.Errorf("%w: %w", constants.ErrBinaryCopyFailed, err)
+	}
+
+	if err := dest.Close(); err != nil {
 		return "", fmt.Errorf("%w: %w", constants.ErrBinaryCopyFailed, err)
 	}
 
