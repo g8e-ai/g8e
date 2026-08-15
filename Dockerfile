@@ -17,7 +17,7 @@
 # =============================================================================
 
 # Stage 1: Build
-FROM golang:1.26.5 AS builder
+FROM golang:1.26.6 AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \

@@ -106,20 +106,39 @@ jobs:
             source testenv/bin/activate
           fi
           python -m pip install --upgrade pip
-          # Retry pip install to handle PyPI CDN propagation delay
-          MAX_RETRIES=6
-          for i in $(seq 1 $MAX_RETRIES); do
-            if pip install g8e==${{ needs.release.outputs.version }}; then
+          # Poll the PyPI JSON API (not pip's CDN-cached index) until the version
+          # is published. pip's index can lag the API by minutes on some CDN
+          # edges (notably macOS), causing spurious "No matching distribution"
+          # failures even after a successful upload. The JSON API is the source
+          # of truth for what has been accepted by PyPI.
+          VERSION=${{ needs.release.outputs.version }}
+          MAX_ATTEMPTS=12
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            if python -c "
+          import json, sys, urllib.request
+          url = 'https://pypi.org/pypi/g8e/json'
+          with urllib.request.urlopen(url, timeout=15) as resp:
+            data = json.load(resp)
+          if '${VERSION}' in data.get('releases', {}):
+              files = data['releases']['${VERSION}']
+              if files:
+                  print('Version ${VERSION} published: ' + ', '.join(f['filename'] for f in files))
+                  sys.exit(0)
+          sys.exit(1)
+          "; then
               break
             fi
-            if [ $i -eq $MAX_RETRIES ]; then
-              echo "Failed to install g8e==${{ needs.release.outputs.version }} after $MAX_RETRIES attempts"
+            if [ $i -eq $MAX_ATTEMPTS ]; then
+              echo "g8e==${VERSION} not found on PyPI after $MAX_ATTEMPTS attempts"
               exit 1
             fi
-            echo "PyPI not yet propagated (attempt $i/$MAX_RETRIES), retrying in 15s..."
+            echo "PyPI API does not list ${VERSION} yet (attempt $i/$MAX_ATTEMPTS), retrying in 15s..."
             sleep 15
           done
-          python -c "import g8e; print(f'g8e version: {g8e.__version__}'); assert g8e.__version__ == '${{ needs.release.outputs.version }}'"
+          # Version is confirmed published; install it. Use --no-cache-dir to
+          # avoid any stale CDN-cached "not found" responses from earlier polls.
+          pip install --no-cache-dir g8e==${VERSION}
+          python -c "import g8e; print(f'g8e version: {g8e.__version__}'); assert g8e.__version__ == '${VERSION}'"
           echo "Fresh PyPI install verified successfully"
 
       - name: Verify imports work
