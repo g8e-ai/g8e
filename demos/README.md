@@ -68,7 +68,7 @@ Each org deploys five isolated networks:
 | Service class | untrusted | perimeter | internal | secure | mgmt |
 |---|:---:|:---:|:---:|:---:|:---:|
 | External requestor / bad actor sim | ✓ | | | | |
-| Demo UI / Notary approval UI | | ✓ | | | |
+| Demo UI | | ✓ | | | |
 | Gateway | | ✓ | ✓ | ✓† | |
 | AI agent runtime | | | ✓ | | |
 | Operator | | | ✓* | ✓ | |
@@ -83,7 +83,7 @@ The `healthcare` demo adds PA workflow services on net_secure (provider-exemptio
 
 The `dhs` demo deploys a real `agent-coalition` container (the exec target for `g8e demos run`) on net_internal, a real `datasvc` Python HTTP actuator on net_secure, display-only source connectors on net_internal and net_untrusted, and a partner fusion-COP plus a severable coalition datalink on net_perimeter, modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries. The `agent-coalition` container is a real g8e binary that submits genuine `GovernanceEnvelope`s when driven by the CLI. The display connectors are Alpine echo loops for narrative only.
 
-The `fedramp` demo deploys a real `agent-runtime` container (the exec target for `g8e demos run`) on net_internal, a real `cloudsvc` Python HTTP actuator on net_secure, a `bad-actor` on net_untrusted, and an `observability` container on net_mgmt. The `agent-runtime` container is a real g8e binary that submits genuine `GovernanceEnvelope`s driving cloud resource operations (provision, configure, destroy, revert) through the `cloudop.sh` wrapper when driven by the CLI. The gateway runs in consensus posture by default and switches to notary posture for scenario 3 (resource destruction requiring authorizing official approval).
+The `fedramp` demo deploys a real `agent-runtime` container (the exec target for `g8e demos run`) on net_internal, a real `cloudsvc` Python HTTP actuator on net_secure, a `bad-actor` on net_untrusted, and an `observability` container on net_mgmt. The `agent-runtime` container is a real g8e binary that submits genuine `GovernanceEnvelope`s driving cloud resource operations (provision, configure, destroy, revert) through the `cloudop.sh` wrapper when driven by the CLI.
 
 The `frontend` demo deploys a nginx-served static HTML app on net_perimeter for WebAuthn passkey enrollment and SSE event streaming. No target system or bad actor container. The gateway runs in doctrine posture with CORS and passkey RP origins pre-configured for the frontend origin.
 
@@ -96,7 +96,7 @@ Each org demonstrates different compliance requirements and use cases:
 | Doctrine content | PHI scrub patterns, PA workflow gates | Tx limits, dual-control triggers | USPER PII minimization, cross-domain release, sovereign destruction | CR-26 audit integrity, AC-2 access control, SI-4 privilege escalation, SC-8 cross-domain, CM-7 config management | Unauthorized API access, CORS origin spoofing, session hijacking |
 | Target data content | Simulated EHR / PA records | Simulated ledger / positions | Mock multi-source coalition feeds + sovereign manifest | Cloud resources (VMs, DBs, IAM) and KSI control categories | None (frontend enrollment demo) |
 | Gateway posture | doctrine | doctrine | consensus | consensus | doctrine |
-| Agent principal type | Clinical AI agent | Algorithmic trading agent | Coalition source connectors + predictive-analytics agent | FedRAMP cloud service operator + authorizing official | Browser-based frontend app (WebAuthn + SSE) |
+| Agent principal type | Clinical AI agent | Algorithmic trading agent | Coalition source connectors + predictive-analytics agent | FedRAMP cloud service operator | Browser-based frontend app (WebAuthn + SSE) |
 | Target system mock | EHR / PA processor | Trade execution API | Sovereign data vault + partner fusion COP | Sovereign cloud service (provision, configure, destroy, revert) | None (nginx-served static HTML) |
 | Demo narrative | PHI scrub + PA approval flow | Unauthorized trade blocked | Sovereign coalition data plane: govern ingest, release, use, destruction | Sovereign cloud governance: provision, destroy, revert, audit integrity | Third-party frontend enrollment with CORS and passkey authentication |
 
@@ -197,17 +197,15 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 
 **DHS Persistent Sovereign Capability Demo Scenarios:**
 - `g8e demos run dhs 1` - Sovereign Multi-Source Ingest (chain-of-custody) (LOE 1)
-- `g8e demos run dhs 2` - Cross-Domain Release requires Notary authority (LOE 1 & 2)
-- `g8e demos run dhs 3` - Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
-- `g8e demos run dhs 4` - Governed Predictive Cueing (LOE 3 & 4)
-- `g8e demos run dhs 5` - Sovereign Destruction + tamper-proof audit (LOE 2)
+- `g8e demos run dhs 2` - Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
+- `g8e demos run dhs 3` - Governed Predictive Cueing (LOE 3 & 4)
+- `g8e demos run dhs 4` - Sovereign Destruction + tamper-proof audit (LOE 2)
 
 **FedRAMP Sovereign Cloud Governance Demo Scenarios:**
 - `g8e demos run fedramp 1` - Governed Cloud Resource Provisioning
 - `g8e demos run fedramp 2` - Unauthorized Audit Trail Destruction Blocked (CR-26)
-- `g8e demos run fedramp 3` - Resource Destruction Requires Authorizing Official (L3)
-- `g8e demos run fedramp 4` - Governed Configuration Revert (CM-7)
-- `g8e demos run fedramp 5` - Gateway Audit Vault Destruction Blocked (CR-26)
+- `g8e demos run fedramp 3` - Governed Configuration Revert (CM-7)
+- `g8e demos run fedramp 4` - Gateway Audit Vault Destruction Blocked (CR-26)
 
 **Frontend Demo Scenarios:**
 - `g8e demos run frontend 1` - Third-Party Frontend Enrollment
