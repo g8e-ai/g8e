@@ -270,24 +270,24 @@ func TestEnrollCmd_OptionPropagation(t *testing.T) {
 				},
 			}
 
-		cmd := enrollCmdWithConfig(
-			func(string) (*config.Config, error) { return cfg, nil },
-			fileSvcFactoryFor(fileSvc),
-			noopCheckOperatorRunning,
-			mockEnrollerFactory(mock),
-		)
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-		cmd.SetContext(context.Background())
-		cmd.SetArgs(tc.args)
-		require.NoError(t, cmd.ParseFlags(tc.args))
-		require.NoError(t, cmd.RunE(cmd, nil))
+			cmd := enrollCmdWithConfig(
+				func(string) (*config.Config, error) { return cfg, nil },
+				fileSvcFactoryFor(fileSvc),
+				noopCheckOperatorRunning,
+				mockEnrollerFactory(mock),
+			)
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+			cmd.SetContext(context.Background())
+			cmd.SetArgs(tc.args)
+			require.NoError(t, cmd.ParseFlags(tc.args))
+			require.NoError(t, cmd.RunE(cmd, nil))
 
-		assert.Equal(t, 1, mock.callCount(), "coordinator should be called once")
-		opts := mock.lastOptions()
-		assert.Equal(t, tc.wantNoTrust, opts.NoSystemTrust, "NoSystemTrust mismatch")
-		assert.Equal(t, tc.wantRotate, opts.RotateCLI, "RotateCLI mismatch")
+			assert.Equal(t, 1, mock.callCount(), "coordinator should be called once")
+			opts := mock.lastOptions()
+			assert.Equal(t, tc.wantNoTrust, opts.NoSystemTrust, "NoSystemTrust mismatch")
+			assert.Equal(t, tc.wantRotate, opts.RotateCLI, "RotateCLI mismatch")
 		})
 	}
 }

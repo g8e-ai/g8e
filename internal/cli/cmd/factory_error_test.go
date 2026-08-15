@@ -505,7 +505,7 @@ func TestAgentRunCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	origConfigLoad := configLoad
 	configLoad = func(string) (*config.Config, error) { return cfg, nil }
 	t.Cleanup(func() { configLoad = origConfigLoad })
-	cmd := agentRunCmdWithConfig(failingFileSvcFactory(errFactory))
+	cmd := agentRunCmdWithConfig(failingFileSvcFactory(errFactory), panickingEnrollerFactory())
 	err := cmd.RunE(cmd, []string{"claude"})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrFileServiceInit)

@@ -92,7 +92,7 @@ Helpers: `failingFileSvcFactory(err)` returns a factory that always errors. `pan
 
 ## CLI Enrollment Coordinator Tests
 
-The `EnrollmentCoordinator` (`internal/cli/auth/enrollment.go`) owns the CLI enrollment state machine. It is unit-tested in `internal/cli/auth/enrollment_coordinator_test.go` with injected mocks for `EnrollmentGateway`, `SystemTrustInstaller`, `BrowserOpener`, and `PasskeyRegistrar`. The command adapter layer (`internal/cli/cmd`) is tested in `auth_enroll_test.go` via a swappable `enrollCoordinatorFactory` package-level var that returns an `Enroller` interface.
+The `EnrollmentCoordinator` (`internal/cli/auth/enrollment.go`) owns the CLI enrollment state machine. It is unit-tested in `internal/cli/auth/enrollment_coordinator_test.go` with injected mocks for `EnrollmentGateway`, `SystemTrustInstaller`, `BrowserOpener`, and `PasskeyRegistrar`. The command adapter layer (`internal/cli/cmd`) is tested in `auth_enroll_test.go` via the `enrollerFactory` parameter injected through the `*WithConfig` command constructors; tests pass `mockEnrollerFactory(mock)` to inject a `mockEnroller` that returns canned `EnrollmentResult`s without network I/O.
 
 ### Coordinator-Level Tests (`internal/cli/auth/enrollment_coordinator_test.go`)
 
@@ -116,7 +116,7 @@ Full state machine coverage:
 
 ### Command-Layer Tests (`internal/cli/cmd/auth_enroll_test.go`)
 
-Tests inject a `mockEnroller` via `withMockEnroller` helper + `noopCheckOperatorRunning` stub:
+Tests inject a `mockEnroller` via `mockEnrollerFactory(mock)` + `noopCheckOperatorRunning` stub:
 - `TestEnrollCmd_OptionPropagation` — defaults, `--no-system-trust`, `--rotate-cli`, both flags
 - `TestEnrollCmd_CoordinatorErrorPropagates` — command surfaces `ErrSystemTrustInstallFailed`
 - `TestEnrollCmd_HealthyReusedIdentityNoRotate` — Reused=true, RotateCLI=false

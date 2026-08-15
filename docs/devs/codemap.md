@@ -492,13 +492,13 @@ The reporting system operates as a self-contained, offline verification utility 
 
 ## CLI Auth Package (Enrollment Coordinator)
 
-**`internal/cli/auth/`** - CLI enrollment state machine, credential storage, and mTLS client construction. This package is the single owner of local CLI enrollment state transitions. The command layer (`internal/cli/cmd`) constructs an `EnrollmentCoordinator` via the package-level `enrollCoordinatorFactory` var (swappable for tests) and calls `Enroll` — it does not duplicate the state machine, inspect individual credential files, or branch on `runtime.GOOS`.
+**`internal/cli/auth/`** - CLI enrollment state machine, credential storage, and mTLS client construction. This package is the single owner of local CLI enrollment state transitions. The command layer (`internal/cli/cmd`) constructs an `EnrollmentCoordinator` via the `enrollerFactory` parameter injected through the `*WithConfig` command constructors (production wires `newDefaultEnrollmentCoordinator`; tests wire a stub) and calls `Enroll` — it does not duplicate the state machine, inspect individual credential files, or branch on `runtime.GOOS`.
 
 ### Caller Graph
 
 ```text
-cmd.authEnrollCmd / cmd.launchAgentWithGovernance
-  └── enrollCoordinatorFactory (package-level var, test-swappable)
+cmd.enrollCmdWithConfig / cmd.agentRunCmdWithConfig
+  └── enrollerFactory (injected parameter; newDefaultEnrollmentCoordinator in production)
       └── auth.NewEnrollmentCoordinator(deps)
           ├── EnrollmentGateway (interface; *EnrollmentClient in production)
           │   └── HTTP I/O only: Bootstrap, CreateRecoveryRequest, RecoveryStatus,
@@ -518,7 +518,7 @@ cmd.authEnrollCmd / cmd.launchAgentWithGovernance
 
 ### Components
 
-- **`enrollment.go`** — `EnrollmentCoordinator` owns the §3 enrollment state machine. It is the single place that decides whether to bootstrap, recover, rotate, or reuse the local CLI identity. The coordinator never writes to stdout/stderr directly (all progress goes through `OutputFunc`), never opens a browser except via `BrowserOpener` (recovery approval) or `PasskeyRegistrar` (passkey ceremony), and never invokes sudo or mutates an OS certificate store except via `SystemTrustInstaller`. `Enroll(ctx, EnrollmentOptions)` is the single entry point. `EnrollmentCoordinatorDeps` holds injectable dependencies; nil fields get production defaults. The `Enroller` interface (satisfied by `*EnrollmentCoordinator`) allows the command layer's `enrollCoordinatorFactory` to return an interface for test mocking.
+- **`enrollment.go`** — `EnrollmentCoordinator` owns the §3 enrollment state machine. It is the single place that decides whether to bootstrap, recover, rotate, or reuse the local CLI identity. The coordinator never writes to stdout/stderr directly (all progress goes through `OutputFunc`), never opens a browser except via `BrowserOpener` (recovery approval) or `PasskeyRegistrar` (passkey ceremony), and never invokes sudo or mutates an OS certificate store except via `SystemTrustInstaller`. `Enroll(ctx, EnrollmentOptions)` is the single entry point. `EnrollmentCoordinatorDeps` holds injectable dependencies; nil fields get production defaults. The `Enroller` interface (satisfied by `*EnrollmentCoordinator`) allows the command layer's `enrollerFactory` parameter to return an interface for test mocking.
 - **`enrollment_types.go`** — `EnrollmentArtifacts` (typed result from gateway transport), `LocalIdentity` (classified local state: absent/complete/partial/corrupt), `EnrollmentOptions` (`NoSystemTrust`, `RotateCLI`), `OutputFunc` type.
 - **`enrollment_client.go`** — `EnrollmentClient` is the gateway enrollment transport. It performs ONLY HTTP I/O and response validation: receives a `context.Context`, returns typed `EnrollmentArtifacts`, writes no files, performs no UI/platform work, never opens a browser. Satisfies the `EnrollmentGateway` interface. Replaces the old `BootstrapWithURL`/`CLIEnroll`/`ReEnroll`/`EnrollWithGateway` transport slices.
 - **`credential_store.go`** — `CredentialStore` is the coordinator's typed API over local CLI identity files. `Inspect` classifies local state as absent/complete/partial/corrupt by examining ALL managed artifacts as a set. `Stage`/`Commit` write a new complete identity atomically (credentials written LAST so partial commits are detected as partial/corrupt by the next `Inspect`). `Rollback` releases staged state without writing canonical files. `Clear` removes local CLI credential material for logout/recovery but does NOT remove the shared OS root CA (§4.3 ownership policy). Safe for concurrent use via `sync.Mutex` (enrollment lock).
