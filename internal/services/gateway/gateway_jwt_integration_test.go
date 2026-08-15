@@ -176,18 +176,21 @@ func TestGateway_JWTIntegration(t *testing.T) {
 		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
+		AuditStore:       mcp.NoopAuditEventRecorder{},
 		EnvProc:          mockEnvProc,
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)
 	}
 
+	passkeyOrchestrator, err := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, pubsub, logger)
+	require.NoError(t, err)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:       passkey,
 		WebSessionSvc: webSessionSvc,
 		Responder:     resp,
 		MaxPayload:    cfg.Gateway.MaxPayloadBytes,
-		Orchestrator:  NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, pubsub, logger),
+		Orchestrator:  passkeyOrchestrator,
 	})
 
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
@@ -413,18 +416,21 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
+		AuditStore:       mcp.NoopAuditEventRecorder{},
 		EnvProc:          mockEnvProc,
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)
 	}
 
+	passkeyOrchestrator, err := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, pubsub, logger)
+	require.NoError(t, err)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:       passkey,
 		WebSessionSvc: webSessionSvc,
 		Responder:     resp,
 		MaxPayload:    cfg.Gateway.MaxPayloadBytes,
-		Orchestrator:  NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, pubsub, logger),
+		Orchestrator:  passkeyOrchestrator,
 	})
 
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
@@ -665,18 +671,21 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
+		AuditStore:       mcp.NoopAuditEventRecorder{},
 		EnvProc:          mockEnvProc,
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)
 	}
 
+	passkeyOrchestrator, err := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, pubsub, logger)
+	require.NoError(t, err)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:       passkey,
 		WebSessionSvc: webSessionSvc,
 		Responder:     resp,
 		MaxPayload:    cfg.Gateway.MaxPayloadBytes,
-		Orchestrator:  NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, pubsub, logger),
+		Orchestrator:  passkeyOrchestrator,
 	})
 
 	h, err := newHTTPHandler(HTTPHandlerDependencies{

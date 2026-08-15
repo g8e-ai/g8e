@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
@@ -64,11 +65,27 @@ func (s *stubSuspendedTransactionStore) GetExpiredSuspendedTransactions(_ contex
 	return nil, nil
 }
 
+// newTestOrchestratorDeps creates a minimal SSEStore and PubSub pair for tests
+// that need the dependencies wired but do not exercise SSE behavior. The
+// PasskeyOrchestrator constructor rejects nil SSE/pubsub (a wiring bug, not a
+// no-op condition), so every test must wire real instances.
+func newTestOrchestratorDeps(t *testing.T) (*SSEEventService, *GatewayWebSocketHandler) {
+	t.Helper()
+	_, stores := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	sseStore := NewSSEEventService(stores.DB, logger)
+	pubsub := NewGatewayWebSocketHandler(logger)
+	t.Cleanup(func() { pubsub.Close() })
+	return sseStore, pubsub
+}
+
 func TestPasskeyOrchestrator_GetSuspendedTransaction(t *testing.T) {
 	t.Run("delegates to MCPServiceProvider", func(t *testing.T) {
 		expectedTx := &models.SuspendedTransaction{TransactionHash: "tx-123", UserID: "u-1"}
 		mock := &mockMCPServiceProvider{suspendedTx: expectedTx, found: true}
-		o := NewPasskeyOrchestrator(mock, nil, nil, nil, testutil.NewTestLogger())
+		sseStore, pubsub := newTestOrchestratorDeps(t)
+		o, err := NewPasskeyOrchestrator(mock, nil, sseStore, pubsub, testutil.NewTestLogger())
+		require.NoError(t, err)
 
 		tx, found, err := o.GetSuspendedTransaction(context.Background(), "tx-123")
 		require.NoError(t, err)
@@ -78,7 +95,9 @@ func TestPasskeyOrchestrator_GetSuspendedTransaction(t *testing.T) {
 
 	t.Run("returns not-found when MCPServiceProvider returns not found", func(t *testing.T) {
 		mock := &mockMCPServiceProvider{suspendedTx: nil, found: false}
-		o := NewPasskeyOrchestrator(mock, nil, nil, nil, testutil.NewTestLogger())
+		sseStore, pubsub := newTestOrchestratorDeps(t)
+		o, err := NewPasskeyOrchestrator(mock, nil, sseStore, pubsub, testutil.NewTestLogger())
+		require.NoError(t, err)
 
 		tx, found, err := o.GetSuspendedTransaction(context.Background(), "missing")
 		require.NoError(t, err)
@@ -91,7 +110,9 @@ func TestPasskeyOrchestrator_ResumeWithL3Proof(t *testing.T) {
 	t.Run("delegates to MCPServiceProvider", func(t *testing.T) {
 		expectedReceipt := &operatorv1.ActionReceipt{TransactionHash: "tx-123"}
 		mock := &mockMCPServiceProvider{receipt: expectedReceipt}
-		o := NewPasskeyOrchestrator(mock, nil, nil, nil, testutil.NewTestLogger())
+		sseStore, pubsub := newTestOrchestratorDeps(t)
+		o, err := NewPasskeyOrchestrator(mock, nil, sseStore, pubsub, testutil.NewTestLogger())
+		require.NoError(t, err)
 
 		proof := &commonv1.L3Proof{CredentialId: "cred-1"}
 		receipt, err := o.ResumeWithL3Proof(context.Background(), "tx-123", "u-1", proof)
@@ -101,10 +122,12 @@ func TestPasskeyOrchestrator_ResumeWithL3Proof(t *testing.T) {
 
 	t.Run("returns error from MCPServiceProvider", func(t *testing.T) {
 		mock := &mockMCPServiceProvider{err: assert.AnError}
-		o := NewPasskeyOrchestrator(mock, nil, nil, nil, testutil.NewTestLogger())
+		sseStore, pubsub := newTestOrchestratorDeps(t)
+		o, err := NewPasskeyOrchestrator(mock, nil, sseStore, pubsub, testutil.NewTestLogger())
+		require.NoError(t, err)
 
 		proof := &commonv1.L3Proof{CredentialId: "cred-1"}
-		_, err := o.ResumeWithL3Proof(context.Background(), "tx-123", "u-1", proof)
+		_, err = o.ResumeWithL3Proof(context.Background(), "tx-123", "u-1", proof)
 		assert.Error(t, err)
 	})
 }
@@ -116,7 +139,9 @@ func TestPasskeyOrchestrator_ListSuspendedTransactions(t *testing.T) {
 			{TransactionHash: "tx-2", UserID: "u-1"},
 		}
 		store := &stubSuspendedTransactionStore{txs: expectedTxs}
-		o := NewPasskeyOrchestrator(nil, store, nil, nil, testutil.NewTestLogger())
+		sseStore, pubsub := newTestOrchestratorDeps(t)
+		o, err := NewPasskeyOrchestrator(nil, store, sseStore, pubsub, testutil.NewTestLogger())
+		require.NoError(t, err)
 
 		txs, err := o.ListSuspendedTransactions(context.Background(), "u-1")
 		require.NoError(t, err)
@@ -125,15 +150,19 @@ func TestPasskeyOrchestrator_ListSuspendedTransactions(t *testing.T) {
 
 	t.Run("returns error from store", func(t *testing.T) {
 		store := &stubSuspendedTransactionStore{listErr: assert.AnError}
-		o := NewPasskeyOrchestrator(nil, store, nil, nil, testutil.NewTestLogger())
+		sseStore, pubsub := newTestOrchestratorDeps(t)
+		o, err := NewPasskeyOrchestrator(nil, store, sseStore, pubsub, testutil.NewTestLogger())
+		require.NoError(t, err)
 
-		_, err := o.ListSuspendedTransactions(context.Background(), "u-1")
+		_, err = o.ListSuspendedTransactions(context.Background(), "u-1")
 		assert.Error(t, err)
 	})
 
 	t.Run("returns empty list when no transactions", func(t *testing.T) {
 		store := &stubSuspendedTransactionStore{txs: nil}
-		o := NewPasskeyOrchestrator(nil, store, nil, nil, testutil.NewTestLogger())
+		sseStore, pubsub := newTestOrchestratorDeps(t)
+		o, err := NewPasskeyOrchestrator(nil, store, sseStore, pubsub, testutil.NewTestLogger())
+		require.NoError(t, err)
 
 		txs, err := o.ListSuspendedTransactions(context.Background(), "u-empty")
 		require.NoError(t, err)
@@ -141,42 +170,44 @@ func TestPasskeyOrchestrator_ListSuspendedTransactions(t *testing.T) {
 	})
 }
 
-func TestPasskeyOrchestrator_EmitApprovalCompletedSSE_NoOpGuards(t *testing.T) {
-	t.Run("no-ops when sseStore is nil", func(t *testing.T) {
-		_, stores := newTestDB(t)
-		logger := testutil.NewTestLogger()
-		pubsub := NewGatewayWebSocketHandler(logger)
-		t.Cleanup(func() { pubsub.Close() })
-		sseStore := NewSSEEventService(stores.DB, logger)
-		o := NewPasskeyOrchestrator(nil, nil, nil, pubsub, logger)
+func TestNewPasskeyOrchestrator_NilSSEDependencies_ReturnsError(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	_, stores := newTestDB(t)
+	sseStore := NewSSEEventService(stores.DB, logger)
+	pubsub := NewGatewayWebSocketHandler(logger)
+	t.Cleanup(func() { pubsub.Close() })
 
-		o.EmitApprovalCompletedSSE("u-1", "cli-1", "tx-1")
-
-		events, err := sseStore.SSEEventsListSince(SSERoute{UserID: "u-1", CLISessionID: "cli-1"}, 0, 10)
-		require.NoError(t, err)
-		assert.Empty(t, events)
+	t.Run("rejects nil sseStore", func(t *testing.T) {
+		o, err := NewPasskeyOrchestrator(nil, nil, nil, pubsub, logger)
+		require.Error(t, err)
+		require.Nil(t, o)
+		require.ErrorIs(t, err, constants.ErrPasskeySSEDependenciesRequired)
 	})
 
-	t.Run("no-ops when pubsub is nil", func(t *testing.T) {
-		_, stores := newTestDB(t)
-		logger := testutil.NewTestLogger()
-		sseStore := NewSSEEventService(stores.DB, logger)
-		o := NewPasskeyOrchestrator(nil, nil, sseStore, nil, logger)
-
-		o.EmitApprovalCompletedSSE("u-1", "cli-1", "tx-1")
-
-		events, err := sseStore.SSEEventsListSince(SSERoute{UserID: "u-1", CLISessionID: "cli-1"}, 0, 10)
-		require.NoError(t, err)
-		assert.Empty(t, events)
+	t.Run("rejects nil pubsub", func(t *testing.T) {
+		o, err := NewPasskeyOrchestrator(nil, nil, sseStore, nil, logger)
+		require.Error(t, err)
+		require.Nil(t, o)
+		require.ErrorIs(t, err, constants.ErrPasskeySSEDependenciesRequired)
 	})
 
+	t.Run("rejects both nil", func(t *testing.T) {
+		o, err := NewPasskeyOrchestrator(nil, nil, nil, nil, logger)
+		require.Error(t, err)
+		require.Nil(t, o)
+		require.ErrorIs(t, err, constants.ErrPasskeySSEDependenciesRequired)
+	})
+}
+
+func TestPasskeyOrchestrator_EmitApprovalCompletedSSE_ParameterGuards(t *testing.T) {
 	t.Run("no-ops when userID is empty", func(t *testing.T) {
 		_, stores := newTestDB(t)
 		logger := testutil.NewTestLogger()
 		sseStore := NewSSEEventService(stores.DB, logger)
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
-		o := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
+		o, err := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
+		require.NoError(t, err)
 
 		o.EmitApprovalCompletedSSE("", "cli-1", "tx-1")
 
@@ -184,31 +215,17 @@ func TestPasskeyOrchestrator_EmitApprovalCompletedSSE_NoOpGuards(t *testing.T) {
 		require.NoError(t, err)
 		assert.Empty(t, events)
 	})
-}
 
-func TestPasskeyOrchestrator_EmitPasskeyRegisteredSSE_NoOpGuards(t *testing.T) {
-	t.Run("no-ops when sseStore is nil", func(t *testing.T) {
+	t.Run("no-ops when cliSessionID is empty", func(t *testing.T) {
 		_, stores := newTestDB(t)
 		logger := testutil.NewTestLogger()
+		sseStore := NewSSEEventService(stores.DB, logger)
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
-		sseStore := NewSSEEventService(stores.DB, logger)
-		o := NewPasskeyOrchestrator(nil, nil, nil, pubsub, logger)
-
-		o.EmitPasskeyRegisteredSSE("u-1", "cli-1")
-
-		events, err := sseStore.SSEEventsListSince(SSERoute{UserID: "u-1", CLISessionID: "cli-1"}, 0, 10)
+		o, err := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
 		require.NoError(t, err)
-		assert.Empty(t, events)
-	})
 
-	t.Run("no-ops when pubsub is nil", func(t *testing.T) {
-		_, stores := newTestDB(t)
-		logger := testutil.NewTestLogger()
-		sseStore := NewSSEEventService(stores.DB, logger)
-		o := NewPasskeyOrchestrator(nil, nil, sseStore, nil, logger)
-
-		o.EmitPasskeyRegisteredSSE("u-1", "cli-1")
+		o.EmitApprovalCompletedSSE("u-1", "", "tx-1")
 
 		events, err := sseStore.SSEEventsListSince(SSERoute{UserID: "u-1", CLISessionID: "cli-1"}, 0, 10)
 		require.NoError(t, err)

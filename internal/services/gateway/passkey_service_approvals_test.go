@@ -433,7 +433,8 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 		sseStore := NewSSEEventService(stores.DB, logger)
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
-		orchestrator := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
+		orchestrator, err := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
+		require.NoError(t, err)
 		handler := NewPasskeyHandler(PasskeyHandlerDeps{
 			Service:       svc,
 			WebSessionSvc: webSessionSvc,
@@ -504,7 +505,8 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 		sseStore := NewSSEEventService(stores.DB, logger)
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
-		orchestrator := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
+		orchestrator, err := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
+		require.NoError(t, err)
 		handler := NewPasskeyHandler(PasskeyHandlerDeps{
 			Service:       svc,
 			WebSessionSvc: webSessionSvc,
@@ -549,7 +551,8 @@ func TestHandleApprovalVerify_SSE_EmittedToApproverWhenSuspendedTxUserIDEmpty(t 
 		receipt: &operatorv1.ActionReceipt{TransactionHash: txHash, Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED},
 	}
 
-	orchestrator := NewPasskeyOrchestrator(mockMCP, nil, sseStore, pubsub, logger)
+	orchestrator, err := NewPasskeyOrchestrator(mockMCP, nil, sseStore, pubsub, logger)
+	require.NoError(t, err)
 	handler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:       svc,
 		WebSessionSvc: webSessionSvc,

@@ -210,6 +210,7 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config, *TestInfr
 		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(infra.Cfg.Gateway.Posture),
+		AuditStore:       mcp.NoopAuditEventRecorder{},
 	})
 	require.NoError(t, err, "failed to create MCP gateway")
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
@@ -338,6 +339,7 @@ func setupTestGatewayService(t *testing.T) (*GatewayModeService, *config.Config)
 		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(infra.Cfg.Gateway.Posture),
+		AuditStore:       mcp.NoopAuditEventRecorder{},
 	})
 	require.NoError(t, err, "failed to create MCP gateway")
 
@@ -1229,6 +1231,7 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 			ThreatScanner:    governance.NewL1Doctrine(),
 			MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 			Posture:          string(infra.Cfg.Gateway.Posture),
+			AuditStore:       mcp.NoopAuditEventRecorder{},
 		})
 		require.NoError(t, err)
 
@@ -1374,6 +1377,7 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 			ThreatScanner:    governance.NewL1Doctrine(),
 			MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 			Posture:          string(infra.Cfg.Gateway.Posture),
+			AuditStore:       mcp.NoopAuditEventRecorder{},
 		})
 		require.NoError(t, err)
 
@@ -1519,6 +1523,7 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 			ThreatScanner:    governance.NewL1Doctrine(),
 			MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 			Posture:          string(infra.Cfg.Gateway.Posture),
+			AuditStore:       mcp.NoopAuditEventRecorder{},
 		})
 		require.NoError(t, err)
 
@@ -1669,6 +1674,7 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 			ThreatScanner:    governance.NewL1Doctrine(),
 			MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 			Posture:          string(infra.Cfg.Gateway.Posture),
+			AuditStore:       mcp.NoopAuditEventRecorder{},
 		})
 		require.NoError(t, err)
 
@@ -1822,6 +1828,7 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 			ThreatScanner:    governance.NewL1Doctrine(),
 			MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
 			Posture:          string(infra.Cfg.Gateway.Posture),
+			AuditStore:       mcp.NoopAuditEventRecorder{},
 		})
 		require.NoError(t, err)
 

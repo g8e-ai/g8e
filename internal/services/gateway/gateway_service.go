@@ -255,7 +255,10 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		return nil, fmt.Errorf("gateway: failed to initialize MCP gateway: %w", err)
 	}
 
-	passkeyOrchestrator := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, wsHandler, logger)
+	passkeyOrchestrator, err := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, wsHandler, logger)
+	if err != nil {
+		return nil, fmt.Errorf("gateway: failed to initialize passkey orchestrator: %w", err)
+	}
 	enrollmentTokenSvc := NewEnrollmentTokenService(stores.DocStore, logger)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:            passkey,

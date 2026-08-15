@@ -517,7 +517,8 @@ func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
 		sseStore := NewSSEEventService(stores.DB, logger)
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
-		orchestrator := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
+		orchestrator, err := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
+		require.NoError(t, err)
 		handler := NewPasskeyHandler(PasskeyHandlerDeps{
 			Service:       svc,
 			WebSessionSvc: webSessionSvc,
@@ -774,7 +775,8 @@ func TestPasskeyHandler_RegisterVerify_EnrollmentToken_Valid(t *testing.T) {
 	sseStore := NewSSEEventService(stores.DB, logger)
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
-	orchestrator := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
+	orchestrator, err := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
+	require.NoError(t, err)
 	handler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:            psvc,
 		WebSessionSvc:      webSessionSvc,
