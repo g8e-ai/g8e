@@ -19,20 +19,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
-	"github.com/g8e-ai/g8e/internal/cli/auth"
-	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/scenarios"
@@ -64,16 +60,6 @@ func demoPrintf(format string, a ...any) {
 // demoStep, etc.) can emit TUI events without threading an emitter through
 // every function signature.
 var demoEmitter DemoEmitter
-
-// hostIdentity carries the host CLI user identity needed to bind the harness
-// transaction-submit identity to the browser approver identity. UserID scopes
-// the SSE approval subscription; CLISessionID is sent as X-CLI-Session-ID on
-// the notary submit so handleCLIAuth stamps the host user onto the suspended
-// transaction.
-type hostIdentity struct {
-	UserID       string
-	CLISessionID string
-}
 
 // DemoEmitter translates demo scenario events into TUI messages.
 // When --tui is not active, demoEmitter is nil and all methods are no-ops.
@@ -598,63 +584,6 @@ func printDemoEndpoints(cmd *cobra.Command, org string) {
 	}
 }
 
-// demoHTTPPorts maps each demo org to its Docker-published HTTP port.
-var demoHTTPPorts = map[string]string{
-	constants.DemosOrgHealthcare: "8081",
-	constants.DemosOrgFinance:    "8082",
-	constants.DemosOrgDHS:        "8087",
-	constants.DemosOrgFedRAMP:    "8088",
-	constants.DemosOrgFrontend:   "8083",
-}
-
-// demoHTTPSPorts maps each demo org to its Docker-published HTTPS port.
-var demoHTTPSPorts = map[string]string{
-	constants.DemosOrgHealthcare: "8444",
-	constants.DemosOrgFinance:    "8445",
-	constants.DemosOrgDHS:        "8450",
-	constants.DemosOrgFedRAMP:    "8451",
-	constants.DemosOrgFrontend:   "8446",
-}
-
-// demoHTTPPort returns the Docker-published HTTP port for the given demo org.
-// Returns empty string for unknown orgs.
-func demoHTTPPort(org string) string {
-	return demoHTTPPorts[org]
-}
-
-// demoHTTPSPort returns the Docker-published HTTPS port for the given demo org.
-// This is the port used for mTLS API calls including `g8e auth enroll`.
-// Returns empty string for unknown orgs.
-func demoHTTPSPort(org string) string {
-	return demoHTTPSPorts[org]
-}
-
-// switchDemoPosture restarts the gateway container with the specified posture.
-// It sets the G8E_GATEWAY_POSTURE environment variable and recreates the container,
-// then polls the health endpoint until the gateway is live or the 90s timeout expires.
-func switchDemoPosture(demoDir, posture, httpPort string) error {
-	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
-
-	if err := exec.Command("docker", "compose", "-f", composePath, "stop", "gateway").Run(); err != nil {
-		return fmt.Errorf("stop gateway: %w", err)
-	}
-
-	cmd := exec.Command("docker", "compose", "-f", composePath, "up", "-d", "--force-recreate", "--no-deps", "gateway")
-	cmd.Env = append(os.Environ(), "G8E_GATEWAY_POSTURE="+posture)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("restart gateway with posture %s: %w", posture, err)
-	}
-
-	for i := 0; i < 30; i++ {
-		time.Sleep(3 * time.Second)
-		if err := exec.Command("curl", "-sf", "http://localhost:"+httpPort+"/api/v1/health").Run(); err == nil {
-			demoPrintf("  Gateway is live in %s posture.\n", posture)
-			return nil
-		}
-	}
-	return fmt.Errorf("gateway did not become healthy in %s posture after 90s", posture)
-}
-
 func demosStopCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stop <org>",
@@ -1070,8 +999,8 @@ func runDemosReset(cmd *cobra.Command, args []string) error {
 var scenarioCounts = map[string]int{
 	constants.DemosOrgHealthcare: 4,
 	constants.DemosOrgFinance:    1,
-	constants.DemosOrgDHS:        5,
-	constants.DemosOrgFedRAMP:    5,
+	constants.DemosOrgDHS:        4,
+	constants.DemosOrgFedRAMP:    4,
 	constants.DemosOrgFrontend:   1,
 }
 
@@ -1091,18 +1020,16 @@ Available scenarios:
     4 - Bad Actor PHI Exfiltration Blocked
   finance: 1
     1 - Unauthorized Trade Blocked
-  dhs: 1-5
+  dhs: 1-4
     1 - Sovereign Multi-Source Ingest (chain-of-custody) (LOE 1)
-    2 - Cross-Domain Release requires Notary authority (LOE 1 & 2)
-    3 - Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
-    4 - Governed Predictive Cueing (LOE 3 & 4)
-    5 - Sovereign Destruction + tamper-proof audit (LOE 2)
-  fedramp: 1-5
+    2 - Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
+    3 - Governed Predictive Cueing (LOE 3 & 4)
+    4 - Sovereign Destruction + tamper-proof audit (LOE 2)
+  fedramp: 1-4
     1 - Governed Cloud Resource Provisioning
     2 - Unauthorized Audit Trail Destruction Blocked (CR-26)
-    3 - Resource Destruction Requires Authorizing Official (L3)
-    4 - Governed Configuration Revert (CM-7)
-    5 - Gateway Audit Vault Destruction Blocked (CR-26)
+    3 - Governed Configuration Revert (CM-7)
+    4 - Gateway Audit Vault Destruction Blocked (CR-26)
   frontend: 1
     1 - Third-Party Frontend Enrollment`,
 		Args: cobra.RangeArgs(1, 2),
@@ -1154,119 +1081,15 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool) error {
 		}
 	}
 
-	// Demos with notary scenarios require a real human WebAuthn approval.
-	// Enroll the host CLI session inline (in-process) so the demo runner has
-	// direct access to the resulting user_id and cli_session_id, which are
-	// threaded into the harness so the suspended transaction is tagged with
-	// the same user_id as the browser approver. This replaces the old
-	// "print a prompt and wait for Enter" flow that required a separate
-	// terminal and produced a disjoint user identity.
-	var hostID hostIdentity
-
-	if org == constants.DemosOrgDHS || org == constants.DemosOrgFedRAMP {
-		id, err := enrollDemoHost(cmd, org, demoDir)
-		if err != nil {
-			return err
-		}
-		hostID = id
-
-		// Set HOST_G8E_PKI so docker compose can resolve the bind-mount
-		// for the agent container. The PKI dir is rooted at the demo
-		// directory's .g8e/ tree (IQ5 option a) so demo credentials are
-		// isolated from the developer's local <cwd>/.g8e/ state.
-		hostPKI := filepath.Join(demoDir, constants.RuntimeDirname, constants.PkiDirname)
-		if err := os.Setenv("HOST_G8E_PKI", hostPKI); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrInternal, err)
-		}
-	}
-
 	if useTUI {
-		return runDemosWithTUI(cmd, org, demoDir, args, hostID)
+		return runDemosWithTUI(cmd, org, demoDir, args)
 	}
 
 	if len(args) >= 2 {
-		return runScenario(org, demoDir, args[1], hostID) //nolint:gosec // length checked above
+		return runScenario(org, demoDir, args[1]) //nolint:gosec // length checked above
 	}
 
-	return runAllScenarios(cmd, org, demoDir, hostID)
-}
-
-// enrollDemoHost performs inline host-CLI enrollment against the demo gateway
-// for notary demos (dhs, fedramp). It points the CLI config at the demo
-// gateway's HTTP/HTTPS ports, waits for the gateway to become healthy, runs
-// the EnrollmentCoordinator in-process (which installs the demo gateway root
-// into OS trust BEFORE opening the browser for passkey registration), loads
-// the resulting credentials, and returns the host user identity. The endpoint
-// overrides are cleared on return so subsequent operations in the same process
-// are unaffected.
-func enrollDemoHost(cmd *cobra.Command, org, demoDir string) (hostIdentity, error) {
-	httpPort := demoHTTPPort(org)
-	httpsPort := demoHTTPSPort(org)
-	if httpPort == "" || httpsPort == "" {
-		return hostIdentity{}, fmt.Errorf("demos run: %s: %w", org, constants.ErrDemoGatewayPortMissing)
-	}
-
-	// Point the CLI at the demo gateway for the enrollment call, then clear
-	// the overrides so subsequent operations in the same process are
-	// unaffected. Restore even on enrollment error so a failure does not
-	// poison the process-wide config.
-	config.SetHTTPEndpointOverride(fmt.Sprintf("localhost:%s", httpPort))
-	config.SetHTTPSEndpointOverride(fmt.Sprintf("localhost:%s", httpsPort))
-	defer config.SetEndpointOverride("")
-
-	if err := waitForDemoGateway(httpPort); err != nil {
-		return hostIdentity{}, fmt.Errorf("demos run: enroll: %w", err)
-	}
-
-	// Root the fileSvc at the demo directory so demo credentials are
-	// isolated in demos/<org>/.g8e/ and do not clobber the developer's
-	// local <cwd>/.g8e/ state (IQ5 option a).
-	fileSvc, err := newFileSvc(demoDir, slog.Default())
-	if err != nil {
-		return hostIdentity{}, fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
-	}
-	cfg, err := loadConfig(demoDir)
-	if err != nil {
-		return hostIdentity{}, err
-	}
-
-	cmd.Printf("\n%s\n  Passkey enrollment required\n%s\n", strings.Repeat("─", 60), strings.Repeat("─", 60))
-	cmd.Printf("  This demo requires real human WebAuthn approvals.\n")
-	cmd.Printf("  Enrolling a passkey now (opens your browser)...\n\n")
-
-	// Use the shared enrollment coordinator with system trust installation
-	// enabled by default (the demo gateway root must be trusted before the
-	// browser opens so the passkey ceremony can reach the console). The
-	// coordinator owns the state machine: bootstrap, recovery, rotation, or
-	// reuse. The demo-rooted fileSvc/cfg keep demo credentials isolated.
-	coordinator := enrollCoordinatorFactory(func(format string, args ...any) {
-		cmd.Printf(format+"\n", args...)
-	}, fileSvc, cfg)
-	if _, err := coordinator.Enroll(cmd.Context(), auth.EnrollmentOptions{
-		NoSystemTrust: false, // demo flow installs the demo gateway root
-	}); err != nil {
-		return hostIdentity{}, fmt.Errorf("demos run: enroll: %w", err)
-	}
-
-	creds, err := auth.LoadCredentials(fileSvc, cfg)
-	if err != nil || creds == nil {
-		return hostIdentity{}, fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
-	}
-	return hostIdentity{UserID: creds.UserID, CLISessionID: creds.CLISessionID}, nil
-}
-
-// waitForDemoGateway polls the demo gateway HTTP health endpoint until it
-// responds or the 90s timeout expires. The gateway may have just been started
-// by runDemosStart and enrollment requires it to be reachable. It is a
-// package-level var so tests can swap it for a no-op.
-var waitForDemoGateway = func(httpPort string) error {
-	for i := 0; i < 30; i++ {
-		if err := exec.Command("curl", "-sf", "http://localhost:"+httpPort+"/api/v1/health").Run(); err == nil {
-			return nil
-		}
-		time.Sleep(3 * time.Second)
-	}
-	return fmt.Errorf("gateway did not become healthy on port %s after 90s", httpPort)
+	return runAllScenarios(cmd, org, demoDir)
 }
 
 // runDemosWithTUI launches the bubbletea TUI, sets the package-level
@@ -1274,7 +1097,7 @@ var waitForDemoGateway = func(httpPort string) error {
 // in a goroutine, and then waits for the user to quit the TUI. After the TUI
 // exits, it waits up to 5 seconds for the scenario goroutine to finish so
 // errors are not silently lost.
-func runDemosWithTUI(cmd *cobra.Command, org, demoDir string, args []string, hostID hostIdentity) error {
+func runDemosWithTUI(cmd *cobra.Command, org, demoDir string, args []string) error {
 	m := tui.NewModel(tui.Options{
 		Version:  "tactical",
 		NodeName: "tactical-edge-01",
@@ -1288,9 +1111,9 @@ func runDemosWithTUI(cmd *cobra.Command, org, demoDir string, args []string, hos
 	scenarioErrCh := make(chan error, 1)
 	go func() {
 		if len(args) >= 2 {
-			scenarioErrCh <- runScenario(org, demoDir, args[1], hostID)
+			scenarioErrCh <- runScenario(org, demoDir, args[1])
 		} else {
-			scenarioErrCh <- runAllScenarios(cmd, org, demoDir, hostID)
+			scenarioErrCh <- runAllScenarios(cmd, org, demoDir)
 		}
 	}()
 
@@ -1316,7 +1139,7 @@ func isDemoRunning(demoDir, composePath string) bool {
 	return len(strings.TrimSpace(string(output))) > 0
 }
 
-func runAllScenarios(cmd *cobra.Command, org, demoDir string, hostID hostIdentity) error {
+func runAllScenarios(cmd *cobra.Command, org, demoDir string) error {
 	count, ok := scenarioCounts[org]
 	if !ok {
 		return fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
@@ -1329,7 +1152,7 @@ func runAllScenarios(cmd *cobra.Command, org, demoDir string, hostID hostIdentit
 
 	for i := 1; i <= count; i++ {
 		scenarioNum := fmt.Sprintf("%d", i)
-		result, err := runScenarioWithResult(org, demoDir, scenarioNum, hostID)
+		result, err := runScenarioWithResult(org, demoDir, scenarioNum)
 		if err != nil {
 			return err
 		}
@@ -1388,21 +1211,21 @@ type scenarioResult struct {
 	metrics string
 }
 
-func runScenario(org, demoDir, scenario string, hostID hostIdentity) error {
-	_, err := runScenarioWithResult(org, demoDir, scenario, hostID)
+func runScenario(org, demoDir, scenario string) error {
+	_, err := runScenarioWithResult(org, demoDir, scenario)
 	return err
 }
 
-func runScenarioWithResult(org, demoDir, scenario string, hostID hostIdentity) (scenarioResult, error) {
+func runScenarioWithResult(org, demoDir, scenario string) (scenarioResult, error) {
 	switch org {
 	case constants.DemosOrgHealthcare:
 		return runHealthcareScenario(demoDir, scenario)
 	case constants.DemosOrgFinance:
 		return runFinanceScenario(demoDir, scenario)
 	case constants.DemosOrgDHS:
-		return runDHSScenario(demoDir, scenario, hostID)
+		return runDHSScenario(demoDir, scenario)
 	case constants.DemosOrgFedRAMP:
-		return runFedRAMPScenario(demoDir, scenario, hostID)
+		return runFedRAMPScenario(demoDir, scenario)
 	case constants.DemosOrgFrontend:
 		return runFrontendScenario(demoDir, scenario)
 	default:
@@ -1470,9 +1293,19 @@ func demoStep(demoDir, label string, fatal bool, args ...string) error {
 
 // demoStepHTTP runs a curl command that writes the HTTP status code to stdout
 // (via -o /dev/null -w "%{http_code}") and validates the response against the
-// expected status code. Unlike demoStep, this checks the actual HTTP response
-// status, not just the curl exit code.
+// single expected status code. Unlike demoStep, this checks the actual HTTP
+// response status, not just the curl exit code.
 func demoStepHTTP(demoDir, label string, expectedCode string, args ...string) error {
+	return demoStepHTTPAny(demoDir, label, []string{expectedCode}, args...)
+}
+
+// demoStepHTTPAny runs a curl command that writes the HTTP status code to stdout
+// (via -o /dev/null -w "%{http_code}") and validates the response against any
+// of the expected status codes. Use for endpoints whose correct behavior spans
+// multiple codes (e.g. a passkey challenge endpoint that returns 200 for a
+// valid body but 400 for a malformed one — both prove the endpoint is
+// reachable and enforcing input validation).
+func demoStepHTTPAny(demoDir, label string, expectedCodes []string, args ...string) error {
 	if demoVerbose {
 		fmt.Printf("  $ %s\n", strings.Join(args, " "))
 	}
@@ -1490,12 +1323,14 @@ func demoStepHTTP(demoDir, label string, expectedCode string, args ...string) er
 	}
 	actual := strings.TrimSpace(stdout.String())
 	if demoVerbose {
-		fmt.Printf("  HTTP status: %s (expected: %s)\n\n", actual, expectedCode)
+		fmt.Printf("  HTTP status: %s (expected one of: %s)\n\n", actual, strings.Join(expectedCodes, ", "))
 	}
-	if actual != expectedCode {
-		return fmt.Errorf("%s: expected HTTP %s, got %s", label, expectedCode, actual)
+	for _, code := range expectedCodes {
+		if actual == code {
+			return nil
+		}
 	}
-	return nil
+	return fmt.Errorf("%s: expected HTTP %s, got %s", label, strings.Join(expectedCodes, " or "), actual)
 }
 
 // demoScenarioStep prints the step description, runs the command via demoStep,
@@ -1530,9 +1365,9 @@ type twoLayerScenarioConfig struct {
 	passMessage       string
 }
 
-// harnessConfig holds the parameters for building a docker compose exec/run
-// command for a demos scenarios run. Centralising these in a struct
-// avoids positional-argument drift as flags are added across demos.
+// harnessConfig holds the fixed connection parameters for building a docker
+// compose exec/run command for a demos scenarios run. Centralising these in a
+// struct avoids positional-argument drift across demos.
 type harnessConfig struct {
 	Container string
 	MTLSURL   string
@@ -1540,13 +1375,7 @@ type harnessConfig struct {
 	CertPath  string
 	KeyPath   string
 	CAPath    string
-	Posture   string
 	UseRun    bool // true for `docker compose run --rm`, false for `exec`
-
-	// ExtraFlags holds optional flags emitted as --<key> <value> after the
-	// fixed args. Keys are sorted for deterministic output. Use this for
-	// flags that are conditionally present (cli-cert, approval-url, etc).
-	ExtraFlags map[string]string
 }
 
 // defaultHarnessConfig returns the config matching the standard demo topology:
@@ -1559,18 +1388,12 @@ func defaultHarnessConfig(container string) harnessConfig {
 		CertPath:  constants.ContainerOperatorCert,
 		KeyPath:   constants.ContainerOperatorKey,
 		CAPath:    constants.ContainerCABundle,
-		ExtraFlags: map[string]string{
-			"cli-cert": "/host-creds/" + constants.CliCertFilename,
-			"cli-key":  "/host-creds/" + constants.CliKeyFilename,
-			"cli-ca":   "/host-creds/" + constants.PkiFileGatewayBundle,
-		},
 	}
 }
 
 // harnessRun builds the docker compose command for a demos scenarios run.
 // Uses exec by default (long-running sleep-infinity container with a fixed IP).
 // When cfg.UseRun is true, uses `docker compose run --rm` instead.
-// ExtraFlags keys are sorted for deterministic output.
 func harnessRun(scenario string, cfg harnessConfig) []string {
 	var cmd []string
 	if cfg.UseRun {
@@ -1584,16 +1407,8 @@ func harnessRun(scenario string, cfg harnessConfig) []string {
 		"--cert", cfg.CertPath,
 		"--key", cfg.KeyPath,
 		"--ca", cfg.CAPath,
+		scenario,
 	)
-	keys := make([]string, 0, len(cfg.ExtraFlags))
-	for k := range cfg.ExtraFlags {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		cmd = append(cmd, "--"+k, cfg.ExtraFlags[k])
-	}
-	cmd = append(cmd, scenario)
 	return cmd
 }
 

@@ -246,6 +246,24 @@ func (m *mockConfirm) confirm(prompt string) bool {
 	return m.result
 }
 
+// mockContinue records the prompt and returns a configurable bool. It is the
+// ContinueFunc equivalent of mockConfirm — a separate type so tests can
+// inject one stub per dependency and assert on each prompt independently.
+type mockContinue struct {
+	mu         sync.Mutex
+	calls      int
+	lastPrompt string
+	result     bool
+}
+
+func (m *mockContinue) continueFn(prompt string) bool {
+	m.mu.Lock()
+	m.calls++
+	m.lastPrompt = prompt
+	m.mu.Unlock()
+	return m.result
+}
+
 // outputRecorder captures coordinator progress output for assertion.
 type outputRecorder struct {
 	mu    sync.Mutex
@@ -1602,6 +1620,181 @@ func TestEnroll_Bootstrap_DiscoveryMatchesArtifacts(t *testing.T) {
 	assert.Equal(t, 1, trust.staleListCalls)
 	assert.Equal(t, bundle.PrimaryRootFingerprint, trust.lastStaleFingerprint,
 		"ListStaleAnchors should use the live fingerprint on bootstrap")
+}
+
+// --- Browser-restart gate tests ---
+
+// TestEnroll_BrowserRestartGate_Continue_ProceedsToPasskey verifies that when
+// installSystemTrust reports browserRestartNeeded=true and the user presses
+// Enter (continueFn returns true), the passkey ceremony runs.
+func TestEnroll_BrowserRestartGate_Continue_ProceedsToPasskey(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, _, _, passkey, recorder, _, _ := setupCoordinatorTest(t)
+
+	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
+	gw.bootstrapStatus = false
+	gw.bootstrapArtifacts = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	// IsTrusted returns false (default), InstallRoot succeeds (default) →
+	// browserRestartNeeded=true, installed=true.
+
+	continueCalled := false
+	coord.continueFn = func(prompt string) bool {
+		continueCalled = true
+		assert.Contains(t, prompt, "Press Enter to continue")
+		return true
+	}
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+	assert.True(t, result.SystemTrustInstalled)
+	assert.True(t, continueCalled, "continueFn should be called when browserRestartNeeded is true")
+	assert.Equal(t, 1, passkey.calls, "passkey ceremony should run after continue")
+	assert.True(t, recorder.contains("close all open browser windows"))
+}
+
+// TestEnroll_BrowserRestartGate_Decline_AbortsBeforePasskey verifies that when
+// installSystemTrust reports browserRestartNeeded=true and the user declines
+// (continueFn returns false), Enroll returns ErrBrowserRestartDeclined and the
+// passkey ceremony does NOT run.
+func TestEnroll_BrowserRestartGate_Decline_AbortsBeforePasskey(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, _, _, passkey, recorder, _, _ := setupCoordinatorTest(t)
+
+	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
+	gw.bootstrapStatus = false
+	gw.bootstrapArtifacts = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	// IsTrusted returns false (default), InstallRoot succeeds (default) →
+	// browserRestartNeeded=true.
+
+	coord.continueFn = func(prompt string) bool { return false }
+
+	_, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrBrowserRestartDeclined)
+	assert.Equal(t, 0, passkey.calls, "passkey must NOT run when user declines browser restart")
+	assert.True(t, recorder.contains("Browser restart declined"))
+}
+
+// TestEnroll_NoBrowserRestartPrompt_WhenTrustUnchanged verifies that when
+// installSystemTrust reports browserRestartNeeded=false (root already trusted,
+// no stale anchors removed), the continue prompt is NOT called and the passkey
+// ceremony runs directly.
+func TestEnroll_NoBrowserRestartPrompt_WhenTrustUnchanged(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, trust, _, passkey, _, _, _ := setupCoordinatorTest(t)
+
+	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
+	gw.bootstrapStatus = false
+	gw.bootstrapArtifacts = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	trust.isTrusted = true // root already trusted → browserRestartNeeded=false
+
+	continueCalled := false
+	coord.continueFn = func(prompt string) bool {
+		continueCalled = true
+		return true
+	}
+
+	_, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+	assert.False(t, continueCalled, "continueFn should NOT be called when trust is unchanged")
+	assert.Equal(t, 1, passkey.calls, "passkey ceremony should run")
+}
+
+// TestEnroll_NoBrowserRestartPrompt_WhenSkipPasskey verifies that when
+// browserRestartNeeded=true but opts.SkipPasskey=true, the continue prompt is
+// NOT called. SkipPasskey callers (mcp agent run, demos) inject an
+// auto-continue ContinueFunc and open no browser themselves, so the
+// "close all open browser windows" line would pollute their non-interactive
+// output streams with no actionable consequence.
+func TestEnroll_NoBrowserRestartPrompt_WhenSkipPasskey(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, _, _, passkey, recorder, _, _ := setupCoordinatorTest(t)
+
+	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
+	gw.bootstrapStatus = false
+	gw.bootstrapArtifacts = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	// IsTrusted returns false (default), InstallRoot succeeds (default) →
+	// browserRestartNeeded=true.
+
+	continueCalled := false
+	coord.continueFn = func(prompt string) bool {
+		continueCalled = true
+		return true
+	}
+
+	_, err := coord.Enroll(context.Background(), EnrollmentOptions{SkipPasskey: true})
+	require.NoError(t, err)
+	assert.False(t, continueCalled, "continueFn should NOT be called when SkipPasskey is true")
+	assert.Equal(t, 0, passkey.calls, "passkey should be suppressed")
+	assert.False(t, recorder.contains("close all open browser windows"),
+		"browser-restart guidance should not pollute output when SkipPasskey is true")
+}
+
+// TestEnroll_NoBrowserRestartPrompt_WhenNoSystemTrustAndNoStaleAnchors
+// verifies that when --no-system-trust is used and no stale anchors are found,
+// installSystemTrust returns browserRestartNeeded=false and the continue
+// prompt is NOT called. This guards the --no-system-trust + no-stale-anchors
+// return path.
+func TestEnroll_NoBrowserRestartPrompt_WhenNoSystemTrustAndNoStaleAnchors(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, trust, _, passkey, _, _, _ := setupCoordinatorTest(t)
+
+	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
+	gw.bootstrapStatus = false
+	gw.bootstrapArtifacts = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	trust.staleAnchors = nil // no stale anchors → browserRestartNeeded=false
+
+	continueCalled := false
+	coord.continueFn = func(prompt string) bool {
+		continueCalled = true
+		return true
+	}
+
+	_, err := coord.Enroll(context.Background(), EnrollmentOptions{NoSystemTrust: true})
+	require.NoError(t, err)
+	assert.False(t, continueCalled, "continueFn should NOT be called when --no-system-trust and no stale anchors")
+	assert.Equal(t, 1, passkey.calls, "passkey ceremony should run")
+}
+
+// TestEnroll_BrowserRestartPrompt_WhenNoSystemTrustButStaleAnchorsRemoved is
+// the regression test for the line-697 bug: when --no-system-trust is used and
+// stale anchors ARE found and removed, installSystemTrust must return
+// browserRestartNeeded=true (the trust store changed). The pre-cleanup code
+// returned false on this path, so the caller could not tell a browser restart
+// was needed. After the fix, the continue prompt fires.
+func TestEnroll_BrowserRestartPrompt_WhenNoSystemTrustButStaleAnchorsRemoved(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, trust, _, passkey, _, _, _ := setupCoordinatorTest(t)
+
+	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
+	gw.bootstrapStatus = false
+	gw.bootstrapArtifacts = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	trust.staleAnchors = []platform.StaleAnchor{
+		{Fingerprint: "stale-fp-1", CommonName: constants.RootCACommonName, Handle: "/path/stale1"},
+	}
+	// --no-system-trust + stale anchors removed → browserRestartNeeded=true
+	// (the bug fix), installed=false.
+
+	coord.confirm = func(prompt string) bool { return true }
+
+	continueCalled := false
+	coord.continueFn = func(prompt string) bool {
+		continueCalled = true
+		return true
+	}
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{NoSystemTrust: true})
+	require.NoError(t, err)
+	assert.False(t, result.SystemTrustInstalled, "no new root installed under --no-system-trust")
+	assert.True(t, continueCalled, "continueFn SHOULD be called when stale anchors are removed under --no-system-trust")
+	assert.Equal(t, 1, trust.staleRemoveCalls, "stale anchors should be removed")
+	assert.Equal(t, 1, passkey.calls, "passkey ceremony should run after continue")
 }
 
 // --- Helpers ---

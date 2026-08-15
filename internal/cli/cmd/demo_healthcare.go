@@ -33,10 +33,10 @@ func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln("  Scenario 1 — Authorized Agent Submits a FHIR PA Request")
 		demoPrintln(strings.Repeat("─", 60))
 		demoPrintln()
-		demoPrintln("  PROVES: An authorized agent on net_internal submits a FHIR")
-		demoPrintln("          ClaimResponse through the g8e gateway. Every request")
-		demoPrintln("          passes through the doctrine engine before reaching")
-		demoPrintln("          the PA API backend.")
+		demoPrintln("  PROVES: An authorized agent on net_internal submits a PA")
+		demoPrintln("          request through the g8e gateway via the native")
+		demoPrintln("          run_shell_command tool driving the paop wrapper.")
+		demoPrintln("          Every request passes through the doctrine engine")
 		demoPrintln()
 
 		demoPrintln("  ── Step 1: Confirm g8e gateway is live ──────────────────────")
@@ -49,8 +49,8 @@ func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
 			hasErrors = true
 		}
 
-		demoPrintln("  ── Step 2: Submit FHIR PA request through the gateway ───────")
-		demoPrintln("  Request path: agent-runtime → gateway (g8e.local:8443) [Governed MCP Tools Call]")
+		demoPrintln("  ── Step 2: Submit PA request through the gateway ───────────")
+		demoPrintln("  Request path: agent-runtime → gateway (g8e.local:8443) [Governed run_shell_command]")
 		demoPrintln()
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.PublicURL = "http://g8e.local:8081"
@@ -73,7 +73,7 @@ func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
 			result.status = "FAIL"
 			fmt.Println("  [FAIL] Scenario 1 — One or more steps failed.")
 		} else {
-			fmt.Println("  [PASS] Scenario 1 — FHIR PA request received and queued.")
+			fmt.Println("  [PASS] Scenario 1 — PA request submitted through governed native tool.")
 			fmt.Println("         Doctrine engine evaluated the payload against all 11 PHI/HIPAA rules.")
 		}
 
@@ -105,8 +105,9 @@ func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
 
 		demoPrintln("  ── Step 2: Submit gold-card PA through the gateway ───────────")
 		demoPrintln("  PA-2026-0043 (Dr. Priya Nair, 96% historic approval rate) is submitted")
-		demoPrintln("  through the governed endpoint. The exemption engine evaluates the")
-		demoPrintln("  provider against the 90% threshold (HB 3134 §6).")
+		demoPrintln("  through the governed endpoint via the native run_shell_command tool.")
+		demoPrintln("  The exemption narrative evaluates the provider against the 90%")
+		demoPrintln("  threshold (HB 3134 §6).")
 		demoPrintln()
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.PublicURL = "http://g8e.local:8081"
@@ -145,9 +146,9 @@ func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln("  Scenario 3 — SLA Breach and OHA Reporting (2026 CCO Medicaid Rule)")
 		demoPrintln(strings.Repeat("─", 60))
 		demoPrintln()
-		demoPrintln("  PROVES: The PA worker tracks days-elapsed per request and flags")
-		demoPrintln("          breaches for mandatory DCBS/OHA annual reporting.")
-		demoPrintln("          PA-2026-0044 (Dr. James O'Brien, 10 days) is the proof case.")
+		demoPrintln("  PROVES: The SLA tracking narrative flags breaches for mandatory")
+		demoPrintln("          DCBS/OHA annual reporting. PA-2026-0044 (Dr. James")
+		demoPrintln("          O'Brien, 10 days) is the proof case.")
 		demoPrintln()
 
 		demoPrintln("  ── Step 1: Confirm g8e gateway is live ──────────────────────")
@@ -162,8 +163,9 @@ func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
 
 		demoPrintln("  ── Step 2: Query SLA-breach status through the gateway ──────")
 		demoPrintln("  PA-2026-0044 (Dr. James O'Brien, 10 days elapsed) is queried through")
-		demoPrintln("  the governed endpoint. The SLA worker tracks days-elapsed per request")
-		demoPrintln("  and flags breaches for mandatory DCBS/OHA annual reporting.")
+		demoPrintln("  the governed endpoint via the native run_shell_command tool. The SLA")
+		demoPrintln("  narrative tracks days-elapsed per request and flags breaches for")
+		demoPrintln("  mandatory DCBS/OHA annual reporting.")
 		demoPrintln()
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.PublicURL = "http://g8e.local:8081"
@@ -214,12 +216,12 @@ func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln()
 
 		demoPrintln("  ── Layer 1: Network isolation ────────────────────────────────")
-		demoPrintln("  bad-actor (net_untrusted) → PA API (net_internal) — should timeout")
+		demoPrintln("  bad-actor (net_untrusted) → gateway (net_internal) — should timeout")
 		demoPrintln()
 		if err := demoStep(demoDir, "network isolation",
 			false,
 			"docker", "compose", "exec", "-T", "bad-actor",
-			"sh", "-c", "wget -qO- -T 5 http://10.22.0.30:8000/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_internal (production network policy)'",
+			"sh", "-c", "wget -qO- -T 5 http://10.22.0.10:8080/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_internal (production network policy)'",
 		); err != nil {
 			fmt.Println("  (network isolation check failed)")
 			hasErrors = true
@@ -227,7 +229,7 @@ func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
 
 		demoPrintln("  ── Layer 2: g8e doctrine enforcement ─────────────────────────")
 		demoPrintln("  Submit a PHI exfiltration attempt through the production-ready")
-		demoPrintln("  governed endpoint (mTLS + Protocol Envelopes):")
+		demoPrintln("  governed native tool endpoint (mTLS + Protocol Envelopes):")
 		demoPrintln()
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.PublicURL = "http://g8e.local:8081"

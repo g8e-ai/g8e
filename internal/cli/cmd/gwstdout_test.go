@@ -44,13 +44,15 @@ func TestPrintNextSteps_DoctrinePosture(t *testing.T) {
 	// Status section
 	assert.Contains(t, out, "Gateway Status: Online")
 	assert.Contains(t, out, "The g8e Gateway is online as a stateless relay.")
-	assert.Contains(t, out, "Passkey Enrollment: Pending")
-	assert.Contains(t, out, "Proof of human presence required.")
+	assert.Contains(t, out, "Passkey Enrollment: Optional")
+	assert.Contains(t, out, "No passkey required for doctrine posture (L3 audited, not enforced).")
+	assert.Contains(t, out, "Enroll a passkey if you plan to restart in notary mode (L3 enforced).")
 
 	// Next Steps with GUI section
 	assert.Contains(t, out, "Next Steps:")
 	assert.Contains(t, out, "GUI")
-	assert.Contains(t, out, "1. Enroll your CLI identity and register a passkey")
+	assert.Contains(t, out, "1. Enroll your CLI identity from a workstation that can reach this")
+	assert.Contains(t, out, "(passkey enrollment is optional for this posture)")
 	assert.Contains(t, out, bin+" auth enroll -e 192.168.1.100")
 	assert.Contains(t, out, "`auth enroll` performs the human passkey ceremony")
 	// Built-in OS trust installation is mentioned, including the
@@ -60,7 +62,7 @@ func TestPrintNextSteps_DoctrinePosture(t *testing.T) {
 
 	// CLI section
 	assert.Contains(t, out, "CLI")
-	assert.Contains(t, out, "2. Enroll your passkey")
+	assert.Contains(t, out, "2. Enroll a passkey (optional, in this terminal)")
 	assert.Contains(t, out, bin+" auth enroll")
 
 	// Operators (step 3)
@@ -93,15 +95,17 @@ func TestPrintNextSteps_ConsensusPosture(t *testing.T) {
 
 	out := buf.String()
 
-	// All postures now produce the same output (no posture-specific steps)
+	// Consensus does not require L3 proof — passkey is optional
+	assert.Contains(t, out, "Passkey Enrollment: Optional")
+	assert.Contains(t, out, "No passkey required for consensus posture (L3 audited, not enforced).")
 	assert.Contains(t, out, "1. Enroll your CLI identity")
-	assert.Contains(t, out, "2. Enroll your passkey")
+	assert.Contains(t, out, "2. Enroll a passkey (optional, in this terminal)")
 	assert.Contains(t, out, "3. Operators:")
 
 	// External IP interpolated correctly
 	assert.Contains(t, out, "auth enroll -e 10.0.0.50")
 
-	// No posture-specific text
+	// No posture-specific text from the old posture-specific output
 	assert.NotContains(t, out, "Configure L2 Consensus")
 	assert.NotContains(t, out, "Connect AI agents")
 	assert.NotContains(t, out, "Manage & Monitor")
@@ -116,24 +120,26 @@ func TestPrintNextSteps_NotaryPosture(t *testing.T) {
 
 	out := buf.String()
 
-	// All postures now produce the same output (no posture-specific steps)
-	assert.Contains(t, out, "1. Enroll your CLI identity")
-	assert.Contains(t, out, "2. Enroll your passkey")
+	// Notary requires L3 proof — passkey is required
+	assert.Contains(t, out, "Passkey Enrollment: Required")
+	assert.Contains(t, out, "Proof of human presence required for notary posture (L3 enforced).")
+	assert.Contains(t, out, "1. Enroll your CLI identity and register a passkey")
+	assert.Contains(t, out, "2. Enroll your passkey (in this terminal)")
 	assert.Contains(t, out, "3. Operators:")
 
 	// External IP interpolated correctly
 	assert.Contains(t, out, "auth enroll -e 172.16.0.1")
 
-	// No posture-specific text
+	// No posture-specific text from the old posture-specific output
 	assert.NotContains(t, out, "Configure L2 Consensus")
-	assert.NotContains(t, out, "WebAuthn/passkey ceremony")
 	assert.NotContains(t, out, "Connect AI agents")
 	assert.NotContains(t, out, "Manage & Monitor")
 }
 
 func TestPrintNextSteps_StepNumberingPerPosture(t *testing.T) {
-	// All three postures produce the same step numbering:
-	// 1=Enroll CLI/passkey (GUI), 2=Enroll passkey (CLI), 3=Operators
+	// All three postures produce the same step numbering (1, 2, 3), but the
+	// passkey wording differs: notary says "Enroll your passkey", doctrine and
+	// consensus say "Enroll a passkey (optional, ...)".
 	postures := []struct {
 		name    string
 		posture governance.GovernancePosture
@@ -151,7 +157,8 @@ func TestPrintNextSteps_StepNumberingPerPosture(t *testing.T) {
 
 			// Verify step numbering is sequential: 1, 2, 3
 			assert.Contains(t, out, "  1. Enroll your CLI identity")
-			assert.Contains(t, out, "  2. Enroll your passkey")
+			assert.Contains(t, out, "  2. Enroll")
+			assert.Contains(t, out, "passkey")
 			assert.Contains(t, out, "  3. Operators:")
 		})
 	}
@@ -225,7 +232,6 @@ func TestPrintNextSteps_AllPosturesContainCommonSections(t *testing.T) {
 		"Next Steps:",
 		"Endpoints:",
 		"Enroll your CLI identity",
-		"Enroll your passkey",
 		"auth enroll",
 		"Operators",
 		"Gateway Status: Online",

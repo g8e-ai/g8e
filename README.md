@@ -247,7 +247,7 @@ L4 Warden and L5 Actuator layers are always active in all configurations. See [G
 
 The g8e platform is designed for environments requiring zero trust architecture as defined in NIST 800-207. It aligns with NIST AI RMF, CMMC, FedRAMP, ISO 42001, and SOC 2 requirements. The LFAA ledger provides a continuous evidence trail for these frameworks. See [Compliance Alignment](docs/reference/compliance-alignment.md) for detailed mapping.
 
-g8e uses the Go Cryptographic Module v1.0.0 (CMVP Cert #5247, CAVP A6650) in FIPS 140-3 approved mode. FIPS mode is activated at build time via `GOFIPS140=v1.0.0` (`make build-fips` or `Dockerfile.fips`); the binary enters approved mode by default and is verifiable at runtime via `g8e version --fips`. The compliance claim is restricted to linux/amd64 on Debian GNU/Linux 12 (vendor-affirmed operating environment). See [FIPS 140-3 Compliance](docs/reference/fips140-3.md) for the validated boundary, excluded algorithms, and operating environment matrix.
+g8e uses the Go Cryptographic Module v1.0.0 (CMVP Cert #5247, CAVP A6650) in FIPS 140-3 approved mode. FIPS mode is activated at build time via `GOFIPS140=v1.0.0` (`make build-fips` or the `Dockerfile` builder stage); the binary enters approved mode by default and is verifiable at runtime via `g8e version --fips`. The compliance claim is restricted to linux/amd64 on Debian GNU/Linux 12 (vendor-affirmed operating environment). See [FIPS 140-3 Compliance](docs/reference/fips140-3.md) for the validated boundary, excluded algorithms, and operating environment matrix.
 
 ## Contributing
 

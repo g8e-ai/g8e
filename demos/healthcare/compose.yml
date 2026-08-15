@@ -31,13 +31,12 @@ volumes:
   gateway_state:
   operator_state:
   pa_db_data:
-  rabbitmq_data:
   metabase_data:
 
 services:
   gateway:
     build:
-      context: ..
+      context: ../..
       dockerfile: Dockerfile
     container_name: healthcare-gateway
     networks:
@@ -48,6 +47,7 @@ services:
     volumes:
       - gateway_state:/root/.g8e
       - ./doctrine:/etc/g8e/doctrine:ro
+      - ./paop.sh:/usr/local/bin/paop:ro
     ports:
       - "8081:8080"
       - "8444:8443"
@@ -58,11 +58,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["gw", "start", "-f", "--mcp-downstream-url", "http://healthcare-pa-api:8000", "--doctrine-dir", "/etc/g8e/doctrine", "--passkey-rp-origin", "http://localhost:8081", "--passkey-rp-origin", "https://localhost:8444"]
+    command: ["gw", "start", "-f", "--doctrine-dir", "/etc/g8e/doctrine", "--passkey-rp-origin", "http://localhost:8081", "--passkey-rp-origin", "https://localhost:8444"]
 
   operator:
     build:
-      context: ..
+      context: ../..
       dockerfile: Dockerfile
     container_name: healthcare-operator
     networks:
@@ -74,6 +74,7 @@ services:
       - "g8e.local:10.22.0.10"
     volumes:
       - operator_state:/root/.g8e
+      - ./paop.sh:/usr/local/bin/paop:ro
     depends_on:
       gateway:
         condition: service_healthy
@@ -85,84 +86,6 @@ services:
       retries: 5
       start_period: 30s
     command: ["operator", "start", "-e", "g8e.local"]
-
-  # HB 3134 (2027 API Mandate): FHIR R4-compliant PA submission endpoint replacing fax-based workflows.
-  # Bridges net_internal so the g8e gateway can enforce PHI doctrine on inbound requests.
-  pa-submission-service:
-    image: python@sha256:b27df5841f3355e9473f9a516d38a6783b6c8dfeacaf2d14a240f443b368ddb6
-    container_name: healthcare-pa-api
-    networks:
-      net_internal:
-        ipv4_address: 10.22.0.30
-      net_secure:
-        ipv4_address: 10.23.0.30
-    environment:
-      - QUEUE_HOST=message-broker
-      - DB_HOST=reporting-db
-      - FHIR_VERSION=R4
-    volumes:
-      - ./target-data:/var/g8e/target:ro
-      - ./pa_api_server.py:/app/pa_api_server.py:ro
-    depends_on:
-      operator:
-        condition: service_healthy
-      message-broker:
-        condition: service_healthy
-    command: ["python", "/app/pa_api_server.py"]
-
-  # HB 3134 (Provider Exemptions / Gold Carding): auto-approves requests from providers whose
-  # historic approval rate meets or exceeds EXEMPTION_THRESHOLD_PERCENTAGE.
-  provider-exemption-rules:
-    image: node@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293
-    container_name: healthcare-exemption-rules
-    networks:
-      net_secure:
-        ipv4_address: 10.23.0.40
-    environment:
-      - DB_HOST=reporting-db
-      - EXEMPTION_THRESHOLD_PERCENTAGE=90
-    depends_on:
-      reporting-db:
-        condition: service_healthy
-    command: ["sh", "-c", "while true; do sleep 3600; done"]
-
-  # 2026 CCO Medicaid Rule: tracks days-elapsed per request; alerts reviewers at day 5 to
-  # prevent breach of the 7-day maximum turnaround SLA.
-  pa-processing-worker:
-    image: python@sha256:b27df5841f3355e9473f9a516d38a6783b6c8dfeacaf2d14a240f443b368ddb6
-    container_name: healthcare-pa-worker
-    networks:
-      net_secure:
-        ipv4_address: 10.23.0.50
-    environment:
-      - SLA_TIMEOUT_DAYS=7
-      - SLA_ALERT_THRESHOLD_DAYS=5
-      - QUEUE_HOST=message-broker
-      - DB_HOST=reporting-db
-    depends_on:
-      message-broker:
-        condition: service_healthy
-      reporting-db:
-        condition: service_healthy
-    command: ["python", "-c", "import time; [time.sleep(3600) for _ in iter(int, 1)]"]
-
-  # Async queue for PA requests; navigate to localhost:15673 to watch request throughput.
-  message-broker:
-    image: rabbitmq@sha256:e582c0bc7766f3342496d8485efb5a1df782b5ce3886ad017e2eaae442311f69
-    container_name: healthcare-message-broker
-    networks:
-      net_secure:
-        ipv4_address: 10.23.0.60
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    ports:
-      - "15673:15672"
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
 
   # Stores compliance metrics for mandatory DCBS/OHA annual reporting (March 1 & 31 deadlines).
   reporting-db:
@@ -232,18 +155,16 @@ services:
         condition: service_healthy
     command: ["sh", "-c", "python /app/setup_metabase.py"]
 
-  # Authorized AI agent simulating a payer system submitting PA requests via FHIR through the g8e gateway.
+  # Authorized AI agent simulating a payer system submitting PA requests through the g8e gateway.
   agent-runtime:
     build:
-      context: ..
+      context: ../..
       dockerfile: Dockerfile
     container_name: healthcare-agent
     networks:
       net_internal:
     extra_hosts:
       - "g8e.local:10.22.0.10"
-    environment:
-      - G8E_GATEWAY_URL=https://g8e.local:8443/mcp
     volumes:
       - operator_state:/root/.g8e:ro
     depends_on:

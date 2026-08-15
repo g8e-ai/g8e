@@ -5,8 +5,8 @@ parent: Guides
 
 # Air-Gap Architecture
 
-Last Updated: 2026-08-14
-Version: v1.7.2
+Last Updated: 2026-08-15
+Version: v1.7.4
 
 The g8e platform operates in environments without internet connectivity. The platform supports air-gapped deployments with zero runtime external network dependencies, using the g8e Gateway, the g8e Operator, and fully vendored Go dependencies in the root `vendor/` directory. The platform supports both binary deployment and containerized deployment via Docker.
 
@@ -106,7 +106,7 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 2. **Package Runtime Configurations**: Archive the build artifacts and the protocol schemas:
    - The compiled `bin/g8e` binary.
    - The protocol configuration files under the `protocol/` directory.
-3. **Optional Container Build**: For containerized deployments, use the demo configurations in `demos/healthcare`, `demos/finance`, `demos/dhs`, `demos/fedramp`, or `demos/frontend` as reference. The `demos/Dockerfile` copies the pre-built binary into a minimal image; no compilation happens inside the container. The root `docker-compose.yml` defines both `g8e-gateway` and `g8e-operator` services using the root `Dockerfile` (which compiles from source using vendored modules) with different command-line flags.
+3. **Optional Container Build**: For containerized deployments, use the demo configurations in `demos/healthcare`, `demos/finance`, `demos/dhs`, `demos/fedramp`, or `demos/frontend` as reference. Demos build from the repo-root `Dockerfile` via `context: ../..` (the same production image, always-FIPS, compiles from source using vendored modules in-container). The root `docker-compose.yml` defines both `g8e-gateway` and `g8e-operator` services using the same root `Dockerfile` with different command-line flags.
 4. **Pre-Pull Docker Images (Containerized Deployments)**: For air-gapped Docker deployments, pre-pull all external images on the connected host:
    ```bash
    g8e demos pull

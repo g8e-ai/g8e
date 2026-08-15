@@ -21,29 +21,13 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// defaultFedRAMPHarnessConfig returns the config matching the FedRAMP compose
-// topology. ApprovalURL is the host-reachable HTTPS/console surface (compose
-// maps 8451 -> 8443) so the human approval link printed by the harness is
-// openable from the host browser; PublicURL stays container-internal for the
-// SSE/status dial.
-func defaultFedRAMPHarnessConfig(hostID hostIdentity) harnessConfig {
-	cfg := defaultHarnessConfig("agent-runtime")
-	cfg.ExtraFlags["approval-url"] = "https://localhost:8451"
-	if hostID.UserID != "" {
-		cfg.ExtraFlags["user-id"] = hostID.UserID
-	}
-	if hostID.CLISessionID != "" {
-		cfg.ExtraFlags["cli-session-id"] = hostID.CLISessionID
-	}
-	return cfg
+// defaultFedRAMPHarnessConfig returns the config matching the FedRAMP compose topology.
+func defaultFedRAMPHarnessConfig() harnessConfig {
+	return defaultHarnessConfig("agent-runtime")
 }
 
-func switchFedRAMPPosture(demoDir, posture string) error {
-	return switchDemoPosture(demoDir, posture, "8088")
-}
-
-func runFedRAMPScenario(demoDir, scenario string, hostID hostIdentity) (scenarioResult, error) {
-	hcfg := defaultFedRAMPHarnessConfig(hostID)
+func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
+	hcfg := defaultFedRAMPHarnessConfig()
 	var result scenarioResult
 	var hasErrors bool
 
@@ -65,10 +49,6 @@ func runFedRAMPScenario(demoDir, scenario string, hostID hostIdentity) (scenario
 		demoPrintln("          met and verified. The provision is executed and a signed")
 		demoPrintln("          receipt is written to the hash-chained ledger.")
 		demoPrintln()
-
-		if err := switchFedRAMPPosture(demoDir, "consensus"); err != nil {
-			fmt.Printf("  [WARNING] Failed to set consensus posture: %v\n", err)
-		}
 
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "fedramp-provision", "doctrine check")
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 1 started: Governed Cloud Resource Provisioning")
@@ -141,10 +121,6 @@ func runFedRAMPScenario(demoDir, scenario string, hostID hostIdentity) (scenario
 		demoPrintln("          The audit trail remains tamper-evident and intact.")
 		demoPrintln()
 
-		if err := switchFedRAMPPosture(demoDir, "doctrine"); err != nil {
-			fmt.Printf("  [WARNING] Failed to set doctrine posture: %v\n", err)
-		}
-
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 2 started: Unauthorized Audit Trail Destruction Blocked")
 
 		if !demoScenarioStep(demoDir, "Step 1: Confirm the governance gateway is live (doctrine)",
@@ -183,97 +159,12 @@ func runFedRAMPScenario(demoDir, scenario string, hostID hostIdentity) (scenario
 
 	case "3":
 		result.number = "3"
-		result.name = "Resource Destruction Gated on Authorizing Official Approval (L3)"
-		result.status = "PASS"
-		result.metrics = "Notary posture // L3 human WebAuthn approval -> L5 actuator records DESTROY"
-
-		demoPrintf("\n%s\n", strings.Repeat("-", 60))
-		demoPrintln("  Scenario 3 — Resource Destruction Requires Authorizing Official (L3)")
-		demoPrintln(strings.Repeat("-", 60))
-		demoPrintln()
-		demoPrintln("  PROVES: A resource destruction is submitted with L2 consensus")
-		demoPrintln("          and requires human WebAuthn L3 approval. Under notary posture")
-		demoPrintln("          the Gateway suspends the transaction and waits for a human")
-		demoPrintln("          to approve via browser with their passkey.")
-		demoPrintln()
-
-		demoEmitter.Ledger(tui.LevelInfo, "Scenario 3 started: Resource Destruction Requires Authorizing Official")
-
-		demoPrintln("  -- Step 1: Restart gateway in notary posture --")
-		demoPrintln("  Switching from consensus -> notary (L1/L2/L3 strictly enforced):")
-		demoPrintln()
-		if err := switchFedRAMPPosture(demoDir, "notary"); err != nil {
-			fmt.Printf("  [WARNING] Failed to switch to notary posture: %v\n", err)
-			fmt.Println("  Continuing — the gateway may already be in notary mode.")
-		}
-
-		if !demoScenarioStep(demoDir, "Step 2: Confirm gateway is live (notary posture)",
-			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"}) {
-			hasErrors = true
-		}
-
-		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "fedramp-escalate", "doctrine check")
-		demoPrintln("  -- Step 3: Submit fedramp-escalate via agent (L2 + human WebAuthn L3) --")
-		demoPrintln("  Operator requests destruction of fedramp-vm-classified-01 (FIPS-199-HIGH).")
-		demoPrintln("  Under notary posture, the gateway requires L3 authorization.")
-		demoPrintln("  The harness will prompt you to approve in your browser with your passkey:")
-		demoPrintln()
-		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "fedramp-escalate", "doctrine admitted")
-		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "fedramp-escalate", "consensus quorum")
-		demoEmitter.Ledger(tui.LevelInfo, "L1 doctrine admitted envelope for fedramp-escalate")
-		notaryCfg := hcfg
-		notaryCfg.Posture = "notary"
-		if err := demoStep(demoDir, "fedramp-escalate via agent (notary WebAuthn L3)",
-			false,
-			harnessRun("fedramp-escalate", notaryCfg)...,
-		); err != nil {
-			fmt.Println("  (fedramp-escalate harness scenario failed)")
-			fmt.Println()
-			hasErrors = true
-		}
-
-		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "fedramp-escalate", "quorum met (3/5)")
-		demoEmitter.Pipeline(tui.StageL3, tui.StatusPassed, "fedramp-escalate", "human WebAuthn L3 proof verified")
-		demoEmitter.Ledger(tui.LevelInfo, "L3 notary: human WebAuthn approval verified via browser")
-
-		// Step 4: Verify the DESTROY was executed by the L5 actuator
-		demoEmitter.Pipeline(tui.StageL5, tui.StatusActive, "fedramp-escalate", "actuator executing")
-		if !demoScenarioStep(demoDir, "Step 4: Verify the Sovereign Cloud Service recorded the DESTROY",
-			[]string{"docker", "compose", "exec", "-T", "cloudsvc",
-				"python", constants.ContainerVerifyOpsPy, "DESTROY"}) {
-			hasErrors = true
-		}
-
-		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "fedramp-escalate", "DESTROY recorded")
-		demoEmitter.Ledger(tui.LevelInfo, "L5 actuator recorded DESTROY — signed receipt in hash-chained ledger")
-
-		demoPrintln("  -- Step 5: Restore gateway to consensus posture --")
-		if err := switchFedRAMPPosture(demoDir, "consensus"); err != nil {
-			fmt.Printf("  [WARNING] Failed to restore consensus posture: %v\n", err)
-		}
-
-		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
-
-		if hasErrors {
-			result.status = "FAIL"
-			fmt.Println("  [FAIL] Scenario 3 — One or more steps failed.")
-			demoEmitter.Ledger(tui.LevelCritical, "Scenario 3 FAILED — one or more steps failed")
-		} else {
-			fmt.Println("  [PASS] Scenario 3 — Resource destruction governed by L3 notary authorization.")
-			fmt.Println("         L1 doctrine admitted; L2 consensus quorum met;")
-			fmt.Println("         L3 notary verified human WebAuthn approval via browser.")
-			fmt.Println("         L5 actuator recorded the DESTROY after authorization.")
-			demoEmitter.Ledger(tui.LevelInfo, "Scenario 3 PASSED — Resource destruction governed by L3 notary authorization")
-		}
-
-	case "4":
-		result.number = "4"
 		result.name = "Governed Configuration Revert under L2 Consensus"
 		result.status = "PASS"
 		result.metrics = "L2 quorum admits revert // L5 actuator records REVERT // CM-7 rollback"
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
-		demoPrintln("  Scenario 4 — Governed Configuration Revert (CM-7)")
+		demoPrintln("  Scenario 3 — Governed Configuration Revert (CM-7)")
 		demoPrintln(strings.Repeat("-", 60))
 		demoPrintln()
 		demoPrintln("  PROVES: A configuration revert on fedramp-iam-roles-01 is")
@@ -283,11 +174,7 @@ func runFedRAMPScenario(demoDir, scenario string, hostID hostIdentity) (scenario
 		demoPrintln("          through the full L1/L2/L3 pipeline with signed receipts.")
 		demoPrintln()
 
-		if err := switchFedRAMPPosture(demoDir, "consensus"); err != nil {
-			fmt.Printf("  [WARNING] Failed to set consensus posture: %v\n", err)
-		}
-
-		demoEmitter.Ledger(tui.LevelInfo, "Scenario 4 started: Governed Configuration Revert")
+		demoEmitter.Ledger(tui.LevelInfo, "Scenario 3 started: Governed Configuration Revert")
 
 		if !demoScenarioStep(demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
 			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"}) {
@@ -330,23 +217,23 @@ func runFedRAMPScenario(demoDir, scenario string, hostID hostIdentity) (scenario
 
 		if hasErrors {
 			result.status = "FAIL"
-			fmt.Println("  [FAIL] Scenario 4 — One or more steps failed.")
-			demoEmitter.Ledger(tui.LevelCritical, "Scenario 4 FAILED — one or more steps failed")
+			fmt.Println("  [FAIL] Scenario 3 — One or more steps failed.")
+			demoEmitter.Ledger(tui.LevelCritical, "Scenario 3 FAILED — one or more steps failed")
 		} else {
-			fmt.Println("  [PASS] Scenario 4 — Configuration revert governed by L2 consensus.")
+			fmt.Println("  [PASS] Scenario 3 — Configuration revert governed by L2 consensus.")
 			fmt.Println("         L1 doctrine admitted; L2 consensus quorum met and verified.")
 			fmt.Println("         REVERT operation recorded by the L5 actuator.")
-			demoEmitter.Ledger(tui.LevelInfo, "Scenario 4 PASSED — Configuration revert governed by L2 consensus")
+			demoEmitter.Ledger(tui.LevelInfo, "Scenario 3 PASSED — Configuration revert governed by L2 consensus")
 		}
 
-	case "5":
-		result.number = "5"
+	case "4":
+		result.number = "4"
 		result.name = "Gateway Audit Vault Destruction Blocked + Governed Destruction"
 		result.status = "PASS"
 		result.metrics = "L1 blocks vault wipe // L1+L2 admit governed destroy -> receipt"
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
-		demoPrintln("  Scenario 5 — Gateway Audit Vault Destruction Blocked (CR-26)")
+		demoPrintln("  Scenario 4 — Gateway Audit Vault Destruction Blocked (CR-26)")
 		demoPrintln(strings.Repeat("-", 60))
 		demoPrintln()
 		demoPrintln("  PROVES: A compromised operator tries to wipe the gateway audit")
@@ -355,11 +242,7 @@ func runFedRAMPScenario(demoDir, scenario string, hostID hostIdentity) (scenario
 		demoPrintln("          The audit vault remains tamper-evident and intact.")
 		demoPrintln()
 
-		if err := switchFedRAMPPosture(demoDir, "doctrine"); err != nil {
-			fmt.Printf("  [WARNING] Failed to set doctrine posture: %v\n", err)
-		}
-
-		demoEmitter.Ledger(tui.LevelInfo, "Scenario 5 started: Gateway Audit Vault Destruction Blocked")
+		demoEmitter.Ledger(tui.LevelInfo, "Scenario 4 started: Gateway Audit Vault Destruction Blocked")
 
 		if !demoScenarioStep(demoDir, "Step 1: Confirm the governance gateway is live (doctrine)",
 			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"}) {
@@ -386,17 +269,17 @@ func runFedRAMPScenario(demoDir, scenario string, hostID hostIdentity) (scenario
 
 		if hasErrors {
 			result.status = "FAIL"
-			fmt.Println("  [FAIL] Scenario 5 — One or more steps failed.")
-			demoEmitter.Ledger(tui.LevelCritical, "Scenario 5 FAILED — one or more steps failed")
+			fmt.Println("  [FAIL] Scenario 4 — One or more steps failed.")
+			demoEmitter.Ledger(tui.LevelCritical, "Scenario 4 FAILED — one or more steps failed")
 		} else {
-			fmt.Println("  [PASS] Scenario 5 — Audit vault destruction blocked by L1 doctrine.")
+			fmt.Println("  [PASS] Scenario 4 — Audit vault destruction blocked by L1 doctrine.")
 			fmt.Println("         CR-26 audit integrity rule fired at admission.")
 			fmt.Println("         The audit vault is tamper-evident and intact.")
-			demoEmitter.Ledger(tui.LevelInfo, "Scenario 5 PASSED — Audit vault destruction blocked by L1 doctrine")
+			demoEmitter.Ledger(tui.LevelInfo, "Scenario 4 PASSED — Audit vault destruction blocked by L1 doctrine")
 		}
 
 	default:
-		return scenarioResult{}, fmt.Errorf("invalid scenario number for fedramp: %q (valid: 1-5)", scenario)
+		return scenarioResult{}, fmt.Errorf("invalid scenario number for fedramp: %q (valid: 1-4)", scenario)
 	}
 	return result, nil
 }

@@ -377,11 +377,12 @@ const (
 
 // File permission modes (octal).
 const (
-	PermDirPrivate   = 0700 // rwx------
-	PermDirStandard  = 0755 // rwxr-xr-x
-	PermFilePrivate  = 0600 // rw-------
-	PermFilePublic   = 0644 // rw-r--r--
-	PermFileReadOnly = 0400 // r--------
+	PermDirPrivate     = 0700 // rwx------
+	PermDirStandard    = 0755 // rwxr-xr-x
+	PermFilePrivate    = 0600 // rw-------
+	PermFilePublic     = 0644 // rw-r--r--
+	PermFileReadOnly   = 0400 // r--------
+	PermFileExecutable = 0755 // rwxr-xr-x
 )
 
 // Test-specific constants for isolated test environments.

@@ -94,6 +94,7 @@ func TestEnsureDirectories(t *testing.T) {
 		{fileSvc.Resolve(constants.DataDirname), constants.PermDirStandard},
 		{fileSvc.Resolve(constants.LogDirname), constants.PermDirStandard},
 		{fileSvc.Resolve(constants.PidDirname), constants.PermDirStandard},
+		{fileSvc.Resolve(constants.BinDirname), constants.PermDirStandard},
 	}
 	for _, d := range dirs {
 		info, err := os.Stat(d.path)
@@ -431,7 +432,7 @@ func TestGetLogPath(t *testing.T) {
 	}
 }
 
-func TestGetOperatorNodeBinary(t *testing.T) {
+func TestCopyBinaryToBinDir_CopiesExecutableToBinDir(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newPlatformTestFileSvc(t, tmpDir)
 	pm, err := NewProcessManager(fileSvc)
@@ -439,18 +440,40 @@ func TestGetOperatorNodeBinary(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	binPath, err := pm.getOperatorBinary()
+	binPath, err := pm.copyBinaryToBinDir()
 	if err != nil {
-		t.Errorf("getOperatorBinary failed: %v", err)
+		t.Fatalf("copyBinaryToBinDir failed: %v", err)
 	}
 
-	// During test execution, os.Executable() returns the test binary path
-	// Just verify the path is not empty and is absolute
 	if binPath == "" {
 		t.Error("expected non-empty binary path")
 	}
 	if !filepath.IsAbs(binPath) {
 		t.Errorf("expected absolute path, got %s", binPath)
+	}
+
+	// Verify the binary was copied to .g8e/bin/<name>
+	expectedName := constants.BinaryImageName
+	if runtime.GOOS == "windows" {
+		expectedName = constants.BinaryImageNameWindows
+	}
+	expectedPath := filepath.Join(tmpDir, constants.RuntimeDirname, constants.BinDirname, expectedName)
+	if binPath != expectedPath {
+		t.Errorf("expected bin path %s, got %s", expectedPath, binPath)
+	}
+
+	// Verify the file exists and is executable
+	info, err := os.Stat(binPath)
+	if err != nil {
+		t.Fatalf("copied binary not found: %v", err)
+	}
+	if info.Size() == 0 {
+		t.Error("copied binary is empty")
+	}
+	if runtime.GOOS != "windows" {
+		if info.Mode().Perm() != constants.PermFileExecutable {
+			t.Errorf("copied binary has permissions %o, expected %o", info.Mode().Perm(), constants.PermFileExecutable)
+		}
 	}
 }
 
@@ -773,7 +796,7 @@ func TestIsProcessRunningNegativePID(t *testing.T) {
 	}
 }
 
-func TestGetOperatorNodeBinaryPath(t *testing.T) {
+func TestCopyBinaryToBinDir_SkipsWhenIdentical(t *testing.T) {
 	tmpDir := testutil.TempDir(t)
 	fileSvc := newPlatformTestFileSvc(t, tmpDir)
 	pm, err := NewProcessManager(fileSvc)
@@ -781,18 +804,35 @@ func TestGetOperatorNodeBinaryPath(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	binPath, err := pm.getOperatorBinary()
+	// First copy creates the binary
+	firstPath, err := pm.copyBinaryToBinDir()
 	if err != nil {
-		t.Errorf("getOperatorBinary failed: %v", err)
+		t.Fatalf("first copyBinaryToBinDir failed: %v", err)
 	}
 
-	// During test execution, os.Executable() returns the test binary path
-	// Just verify the path is not empty and is absolute
-	if binPath == "" {
-		t.Error("expected non-empty binary path")
+	firstInfo, err := os.Stat(firstPath)
+	if err != nil {
+		t.Fatalf("stat first copy failed: %v", err)
 	}
-	if !filepath.IsAbs(binPath) {
-		t.Errorf("expected absolute path, got %s", binPath)
+
+	// Second call should skip the copy (same size and modtime)
+	secondPath, err := pm.copyBinaryToBinDir()
+	if err != nil {
+		t.Fatalf("second copyBinaryToBinDir failed: %v", err)
+	}
+
+	if firstPath != secondPath {
+		t.Errorf("expected same path both calls, got %s then %s", firstPath, secondPath)
+	}
+
+	secondInfo, err := os.Stat(secondPath)
+	if err != nil {
+		t.Fatalf("stat second copy failed: %v", err)
+	}
+
+	// Modtime should be unchanged (not rewritten)
+	if !firstInfo.ModTime().Equal(secondInfo.ModTime()) {
+		t.Errorf("modtime changed between calls: %v -> %v", firstInfo.ModTime(), secondInfo.ModTime())
 	}
 }
 

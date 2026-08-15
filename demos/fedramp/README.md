@@ -8,10 +8,9 @@ It maps to FedRAMP CR26 Key Security Indicators (KSI) for access control (AC), a
 
 g8e does **not** manage cloud resources directly. It provides the governance layer that a cloud service operator's existing automation calls through:
 
-- **Sovereign control**: every cloud operation is admitted only after L1 doctrine, L2 consensus, and (where required) L3 notary approval.
+- **Sovereign control**: every cloud operation is admitted only after L1 doctrine and L2 consensus.
 - **Provable auditability**: every provision, destroy, revert, and denied attempt lands in a hash-chained Git ledger and SQLite audit vault.
 - **Tamper-evident evidence**: audit trail wipe attempts are rejected at L1 admission before reaching the actuator.
-- **Human-in-the-loop destruction**: resource destruction requires out-of-band authorizing official approval via WebAuthn passkey.
 
 ## What is real vs. display
 
@@ -19,7 +18,7 @@ This demo uses **real g8e enforcement**, no mock/fake doctrine, no fake MCP call
 
 | Component | Type | Description |
 |---|---|---|
-| **gateway** | REAL | g8e binary in `consensus` posture (notary for scenario 3) |
+| **gateway** | REAL | g8e binary in `consensus` posture |
 | **operator** | REAL | g8e binary with `--execution-vault`, executes governed `run_shell_command` calls |
 | **agent-runtime** | REAL | g8e binary running `demos scenarios run` that submits genuine `GovernanceEnvelope`s |
 | **cloudsvc** | REAL | Python HTTP server (the L5 actuator), records governed cloud operations to `operations.jsonl` |
@@ -34,11 +33,11 @@ The cloud resources are **synthetic**; the point is to demonstrate how g8e gover
 
 | KSI category | KSI IDs | Demonstrated by |
 |---|---|---|
-| AC | KSI-IAM-05, KSI-IAM-07 | Scenario 1 (governed provisioning), Scenario 2 (unauthorized destruction blocked), Scenario 3 (destruction requires authorizing official) |
-| AU | KSI-MLA-07 | Scenario 2 (audit trail destruction blocked), Scenario 5 (audit vault wipe blocked), every scenario (signed receipts to hash-chained ledger) |
-| CM | KSI-CMT-01, KSI-SVC-04 | Scenario 1 (governed provisioning), Scenario 4 (governed configuration revert) |
+| AC | KSI-IAM-05, KSI-IAM-07 | Scenario 1 (governed provisioning), Scenario 2 (unauthorized destruction blocked) |
+| AU | KSI-MLA-07 | Scenario 2 (audit trail destruction blocked), Scenario 4 (audit vault wipe blocked), every scenario (signed receipts to hash-chained ledger) |
+| CM | KSI-CMT-01, KSI-SVC-04 | Scenario 1 (governed provisioning), Scenario 3 (governed configuration revert) |
 | SC | KSI-SVC-03, KSI-CNA-01 | Scenario 2 (cross-domain destruction blocked), mTLS identity required for all submissions |
-| SI | KSI-IAM-05 | Scenario 3 (privilege escalation detection via notary gating), integrity monitoring via hash-chained ledger |
+| SI | KSI-IAM-05 | integrity monitoring via hash-chained ledger |
 | CR | KSI-MLA-07 | CR-26 audit trail integrity, tamper-evident ledger across all scenarios |
 
 The category-level grouping in `target-data/ksi_categories.json` coexists with the typed per-KSI catalog at `docs/reference/ksi-catalog.json`. The category file provides demo grouping; the typed catalog is the source of truth for individual KSI IDs, automated methods, and evidence anchors.
@@ -60,7 +59,7 @@ The operator holds the execution vault on net_secure. The agent-runtime holds en
 The gateway runs in **consensus** posture; L2 BFT consensus is enforced as a fail-closed gate. Under consensus:
 - **L1 doctrine** is enforced at admission (compiled-in threat detectors block dangerous commands).
 - **L2 consensus** is enforced: ensemble Ed25519 votes must meet quorum for the transaction to be admitted.
-- **L3 notary** proofs are attached to envelopes and audited in the receipt. Scenario 3 dynamically restarts the gateway in notary posture for the resource destruction flow.
+- **L3 notary** proofs are attached to envelopes and audited in the receipt, but do not gate admission.
 
 ### Tribunal bootstrap
 
@@ -74,9 +73,8 @@ This makes the 2-of-3 quorum a real BFT quorum: each member signs with its own k
 |---|---|---|---|
 | **Phase 1** | doctrine | L1 doctrine enforcement, L5 actuator execution, signed receipts | Complete |
 | **Phase 2** | consensus | L2 BFT consensus as a fail-closed gate (quorum required) | **Active** |
-| **Phase 3** | notary | L3 notary suspend/approve flow for resource destruction | **Active** (scenario 3) |
 
-Scenario 3 dynamically restarts the gateway in notary posture, runs the escalate scenario, and restores consensus posture afterward. All other scenarios run under consensus.
+All scenarios run under consensus posture; the gateway is not restarted mid-demo.
 
 ## Port mappings
 
@@ -93,7 +91,6 @@ L1 doctrine is **compiled-in** threat detectors enforced by the Gateway at admis
 The scenarios that exercise real L1 enforcement:
 - **fedramp-deny**: `rm -rf /var/cloudsvc` is rejected at L1 admission (the `destroy_rm_rf_system_dirs` detector fires)
 - **fedramp-evidence-block**: `rm -rf /root/.g8e/data` is rejected at L1 admission (the `destroy_rm_rf_system_dirs` detector fires)
-- **fedramp-escalate**: L3 notary suspend/approve flow gates resource destruction
 
 ## Quick start
 
@@ -102,39 +99,51 @@ The scenarios that exercise real L1 enforcement:
 make build
 
 g8e demos start fedramp
-g8e demos run fedramp        # enrolls a passkey inline, then runs all five scenarios
+g8e demos run fedramp        # runs all four scenarios
 g8e demos run fedramp 3      # run a single scenario
 g8e audit receipts           # inspect the audit trail / ledger
 g8e demos clean fedramp
 ```
 
-`g8e demos run` enrolls a host CLI session and registers a WebAuthn passkey in-process before running scenarios. A browser window opens automatically for the passkey ceremony — no separate terminal or manual `auth enroll` step is required. The enrolled identity is threaded into the harness so the suspended transaction and the browser approver share the same user identity.
+`g8e demos run` runs every scenario end-to-end with no human interaction. The gateway boots in consensus posture and stays there for the whole run; no posture switching, no host-CLI enrollment, no passkey ceremony. Notary scenarios (`fedramp-escalate`) remain in the harness registry for manual testing via `g8e demos scenarios run fedramp-escalate` against a manually-started demo with a manually-enrolled passkey, but the automated `demos run` orchestration excludes them.
 
 ## FIPS 140-3 mode
 
-A FIPS-compliant compose variant is available at `compose.fips.yml`. It builds all g8e containers from `Dockerfile.fips` using the Go Cryptographic Module v1.0.0 (CMVP Cert #5247) with `GOFIPS140=v1.0.0` set at build time. The runtime image is `debian:12-slim` (vendor-affirmed OE).
+The standard `./g8e demos start fedramp` invocation already builds with FIPS 140-3 approved mode enabled. The repo-root `Dockerfile` sets `GOFIPS140=v1.0.0` in the builder stage, linking the Go Cryptographic Module v1.0.0 (CMVP Cert #5247) into the binary. The runtime image is pinned to Debian GNU/Linux 12 (vendor-affirmed OE per CMVP Cert #5247 Table 3). There is no separate FIPS compose variant or FIPS Dockerfile — every demo and production deployment gets a FIPS-capable binary by default.
 
 ```bash
-# start the FIPS-mode demo
-docker compose -f compose.fips.yml up -d
+# start the demo (FIPS approved mode is active by default)
+g8e demos start fedramp
 
 # verify FIPS mode is active in the gateway container
-docker exec g8e-fedramp-fips-gateway /g8e version --fips
+docker exec g8e-fedramp-gateway /g8e version --fips
 
-# run scenarios against the FIPS-mode gateway (ports 8089/8452)
+# run scenarios
 g8e demos run fedramp
-
-# teardown
-docker compose -f compose.fips.yml down -v
 ```
 
-The FIPS variant uses different host ports (8089/8452) and separate named volumes to avoid conflicts with the standard demo. All scenarios run identically under FIPS mode; the governance pipeline, PKI, and TLS stack use only FIPS-validated algorithms.
+Approved mode is active but enforcement is OFF by default. This is the common production posture: non-approved primitives such as Ed25519 (consensus signing, actuator receipts, PKI) and ChaCha20-Poly1305 (SSH streaming) still work. Operators who need strict enforcement — rejecting non-approved primitives at runtime — set `GODEBUG=fips140=only` in the container environment. Add it to the `environment:` block of the relevant service in `compose.yml`:
+
+```yaml
+environment:
+  - GODEBUG=fips140=only
+  - G8E_GATEWAY_POSTURE=${G8E_GATEWAY_POSTURE:-consensus}
+```
+
+Then rebuild and restart:
+
+```bash
+GODEBUG=fips140=only docker exec g8e-fedramp-gateway /g8e version --fips
+# reports "FIPS 140-3 mode: enabled", "FIPS enforcement: enabled", exits 0
+```
+
+All scenarios run identically under approved mode; the governance pipeline, PKI, and TLS stack use FIPS-validated algorithms for their validated operations.
 
 See [FIPS 140-3 Compliance](../../docs/reference/fips140-3.md) for the validated boundary, OE matrix, and build/runtime activation details.
 
 ## Scenarios
 
-All scenarios run via `demos scenarios run`, a real g8e binary that submits genuine `GovernanceEnvelope`s over mTLS to the gateway. Scenarios use `MCPToolsCall` (Path A): the harness calls the MCP `tools/call` endpoint, the gateway builds the `GovernanceEnvelope` internally, runs L2 consensus deliberation via `LocalDeliberator`, and suspends transactions requiring L3 notary approval. For notary scenarios, the harness waits for human browser approval via `WaitForHumanApproval`, which subscribes to the gateway's SSE stream for `approval.completed` events and prints the approval URL for the human to complete the WebAuthn passkey ceremony in their browser. The gateway performs full real WebAuthn verification — no mock L3 bypass exists. The operator executes admitted commands via `run_shell_command`, driving the `cloudsvc` actuator through the `cloudop` wrapper.
+All scenarios run via `demos scenarios run`, a real g8e binary that submits genuine `GovernanceEnvelope`s over mTLS to the gateway. Scenarios use `MCPToolsCall` (Path A): the harness calls the MCP `tools/call` endpoint, the gateway builds the `GovernanceEnvelope` internally, runs L2 consensus deliberation via `LocalDeliberator`, and admits or rejects the envelope at L1/L2. The operator executes admitted commands via `run_shell_command`, driving the `cloudsvc` actuator through the `cloudop` wrapper.
 
 ### 1: Governed Cloud Resource Provisioning (AC, CM, AU)
 **Scenario `fedramp-provision`**: A cloud operations agent submits a `GovernanceEnvelope` wrapping a `run_shell_command` that drives the Sovereign Cloud Service (L5 actuator). L1 doctrine admits the envelope; L2 consensus quorum is met and verified. The provision is executed and a signed receipt is written to the hash-chained ledger. The `cloudsvc` records a `PROVISION` operation.
@@ -142,20 +151,17 @@ All scenarios run via `demos scenarios run`, a real g8e binary that submits genu
 ### 2: Unauthorized Audit Trail Destruction Blocked (AC, SC)
 **Scenario `fedramp-deny`**: A compromised operator tries to destroy the cloud operations ledger with `rm -rf /var/cloudsvc`. L1 doctrine rejects it at admission (the `destroy_rm_rf_system_dirs` detector fires). Even with valid L2 and L3 proofs attached, L1 is the hard gate and runs first. Nothing reaches the actuator.
 
-### 3: Resource Destruction Requires Authorizing Official (SI, AC, AU)
-**Scenario `fedramp-escalate`**: The gateway is restarted in **notary** posture. A resource destruction is submitted with L2 consensus only. Under notary posture the Gateway suspends the transaction pending an out-of-band L3 principal (authorizing official) approval. The harness prints the approval URL and subscribes to the gateway's SSE stream for the `approval.completed` event. The human completes the WebAuthn passkey ceremony in their browser (using the passkey enrolled inline at the start of `demos run`). Once approved, the destruction executes on the L5 actuator (cloudsvc records a `DESTROY` operation). The gateway is then restored to consensus posture.
-
-### 4: Governed Configuration Revert (CM, AU)
+### 3: Governed Configuration Revert (CM, AU)
 **Scenario `fedramp-revert`**: A configuration revert is submitted to roll back a resource to its prior version. L1 doctrine admits the envelope; L2 consensus quorum is met. The revert is executed and the `cloudsvc` records a `REVERT` operation with the prior state hash. The revert appears in the ledger as an evidenced, attributed action.
 
-### 5: Gateway Audit Vault Destruction Blocked (AU)
+### 4: Gateway Audit Vault Destruction Blocked (AU)
 **Scenario `fedramp-evidence-block`**: A compromised operator tries to wipe the gateway audit vault with `rm -rf /root/.g8e/data`. L1 doctrine rejects it at admission (the `destroy_rm_rf_system_dirs` detector fires). Even with valid L2 and L3 proofs, L1 runs first. The audit vault is tamper-evident.
 
 ## Evidence export
 
 After all scenarios, `g8e audit export` produces a single evidence bundle with all receipts. The bundle is tagged to CR26 KSI categories from `ksi_categories.json`. `g8e audit receipts` shows the full hash-chained ledger. Tampering with any record in a copy causes chain verification to fail.
 
-The demo also emits a machine-readable KSI result artifact via `g8e compliance ksi --class C`, which evaluates KSIs against the live audit state and produces a binary result set. This step runs automatically after all five scenarios complete — the demo orchestrator executes `g8e compliance ksi --class C --catalog /docs/reference/ksi-catalog.json` inside the gateway container, then verifies the snapshots via `verify_ops.py --ksi-result`. Snapshots are persisted to `/root/.g8e/data/compliance/ksi-history/` inside the gateway container. OSCAL `component-definition` and `assessment-results` artifacts are generated via `g8e compliance export --format oscal --class C`.
+The demo also emits a machine-readable KSI result artifact via `g8e compliance ksi --class C`, which evaluates KSIs against the live audit state and produces a binary result set. This step runs automatically after all four scenarios complete — the demo orchestrator executes `g8e compliance ksi --class C --catalog /docs/reference/ksi-catalog.json` inside the gateway container, then verifies the snapshots via `verify_ops.py --ksi-result`. Snapshots are persisted to `/root/.g8e/data/compliance/ksi-history/` inside the gateway container. OSCAL `component-definition` and `assessment-results` artifacts are generated via `g8e compliance export --format oscal --class C`.
 
 ## License
 

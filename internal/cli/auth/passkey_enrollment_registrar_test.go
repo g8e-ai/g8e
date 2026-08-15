@@ -538,3 +538,163 @@ func TestRegister_ContextCancelledBeforeEnrollment(t *testing.T) {
 	err := r.Register(ctx, "test-user", "test-session")
 	require.Error(t, err)
 }
+
+// TestPasskeyRegistrar_Out_EmitsURLBeforeBrowser verifies that the Out
+// callback fires with the console URL (prefixed "Passkey enrollment URL:")
+// AFTER the SSE ready-gate has fired and BEFORE r.browser() is called. This
+// is the load-bearing ordering constraint: printing the URL earlier would let
+// the user click it before the SSE listener is connected, reintroducing the
+// event-loss race the ready-gate was built to prevent.
+func TestPasskeyRegistrar_Out_EmitsURLBeforeBrowser(t *testing.T) {
+	fileSvc, cfg := newAuthTestEnv(t)
+	writeTestCLICert(t, fileSvc, cfg)
+
+	rh := &routingHandler{routes: map[string]http.HandlerFunc{}}
+	rh.routes[constants.APIPaths.AuthEnrollmentTokenGenerate] = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]string{"token": "test-token-url"})
+	}
+	rh.routes[constants.APIPaths.SSEStream] = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher, ok := w.(http.Flusher)
+		require.True(t, ok)
+		flusher.Flush()
+		<-r.Context().Done()
+	}
+	startTLSEnrollServer(t, cfg, rh.ServeHTTP)
+
+	var outMu sync.Mutex
+	var outLines []string
+	outFunc := func(format string, args ...any) {
+		outMu.Lock()
+		outLines = append(outLines, fmt.Sprintf(format, args...))
+		outMu.Unlock()
+	}
+
+	browserCalled := make(chan struct{}, 1)
+	browser := func(url string) error {
+		select {
+		case browserCalled <- struct{}{}:
+		default:
+		}
+		return fmt.Errorf("test browser: stop")
+	}
+
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{
+		Browser: browser,
+		Out:     outFunc,
+		Timeout: 5 * time.Second,
+	})
+	r.programFactory = func(m enrollModel) programRunner {
+		return newMockProgram(m, nil)
+	}
+
+	_ = r.Register(context.Background(), "test-user", "test-session")
+
+	// The browser must have been called (so we know the URL print happened
+	// before it).
+	select {
+	case <-browserCalled:
+	case <-time.After(3 * time.Second):
+		t.Fatal("browser was not called within timeout")
+	}
+
+	// The Out callback should have emitted the URL line.
+	outMu.Lock()
+	defer outMu.Unlock()
+	require.NotEmpty(t, outLines, "Out should have emitted at least the URL line")
+	var urlLine string
+	for _, l := range outLines {
+		if strings.Contains(l, "Passkey enrollment URL:") {
+			urlLine = l
+			break
+		}
+	}
+	require.NotEmpty(t, urlLine, "Out should emit the 'Passkey enrollment URL:' line")
+	assert.Contains(t, urlLine, "test-token-url", "URL line should contain the enrollment token")
+}
+
+// TestPasskeyRegistrar_Out_EmitsBrowserErrorOnOpenFailure verifies that when
+// r.browser() returns an error, the Out callback emits the warning, and the
+// URL was already emitted (so the user has it regardless of browser-open
+// success).
+func TestPasskeyRegistrar_Out_EmitsBrowserErrorOnOpenFailure(t *testing.T) {
+	fileSvc, cfg := newAuthTestEnv(t)
+	writeTestCLICert(t, fileSvc, cfg)
+
+	rh := &routingHandler{routes: map[string]http.HandlerFunc{}}
+	rh.routes[constants.APIPaths.AuthEnrollmentTokenGenerate] = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]string{"token": "test-token-err"})
+	}
+	rh.routes[constants.APIPaths.SSEStream] = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher, ok := w.(http.Flusher)
+		require.True(t, ok)
+		flusher.Flush()
+		<-r.Context().Done()
+	}
+	startTLSEnrollServer(t, cfg, rh.ServeHTTP)
+
+	var outMu sync.Mutex
+	var outLines []string
+	outFunc := func(format string, args ...any) {
+		outMu.Lock()
+		outLines = append(outLines, fmt.Sprintf(format, args...))
+		outMu.Unlock()
+	}
+
+	failBrowser := func(url string) error {
+		return fmt.Errorf("no display available")
+	}
+
+	r := newPasskeyRegistrar(fileSvc, cfg, PasskeyRegistrarOptions{
+		Browser: failBrowser,
+		Out:     outFunc,
+		Timeout: 5 * time.Second,
+	})
+	prog := newMockProgram(enrollModel{}, nil)
+	prog.runFn = func() (tea.Model, error) {
+		return enrollModel{err: context.Canceled}, nil
+	}
+	r.programFactory = func(m enrollModel) programRunner {
+		prog.final = m
+		return prog
+	}
+
+	_ = r.Register(context.Background(), "test-user", "test-session")
+
+	outMu.Lock()
+	defer outMu.Unlock()
+
+	// The URL line should be present (emitted before the browser call).
+	var hasURL, hasWarning bool
+	for _, l := range outLines {
+		if strings.Contains(l, "Passkey enrollment URL:") {
+			hasURL = true
+		}
+		if strings.Contains(l, "could not open browser automatically") {
+			hasWarning = true
+		}
+	}
+	assert.True(t, hasURL, "Out should emit the URL line before the browser call")
+	assert.True(t, hasWarning, "Out should emit the browser-open-failure warning")
+
+	// The URL line should appear BEFORE the warning line (so the user has
+	// the URL regardless of browser-open success).
+	urlIdx, warnIdx := -1, -1
+	for i, l := range outLines {
+		if strings.Contains(l, "Passkey enrollment URL:") && urlIdx == -1 {
+			urlIdx = i
+		}
+		if strings.Contains(l, "could not open browser automatically") && warnIdx == -1 {
+			warnIdx = i
+		}
+	}
+	assert.True(t, urlIdx >= 0 && warnIdx >= 0 && urlIdx < warnIdx,
+		"URL line should appear before the browser-error warning (got urlIdx=%d, warnIdx=%d)", urlIdx, warnIdx)
+}

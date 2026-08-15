@@ -88,7 +88,7 @@ func runVersion(w io.Writer, vi serve.VersionInfo, fips bool) error {
 		fmt.Fprintln(w)
 		fmt.Fprint(w, "FIPS 140-3 approved mode is NOT active. Build with GOFIPS140=v1.0.0 to link\n")
 		fmt.Fprint(w, "the Go Cryptographic Module (CMVP Cert #5247) and enable approved mode by\n")
-		fmt.Fprint(w, "default (e.g. `make build-fips` or the Dockerfile.fips builder stage).\n")
+		fmt.Fprint(w, "default (e.g. `make build-fips` or the Dockerfile builder stage).\n")
 		return fmt.Errorf("fips 140-3 mode is not active")
 	}
 	if !enforced {
