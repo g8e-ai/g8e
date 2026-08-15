@@ -362,20 +362,20 @@ Each demo spins up a full isolated stack via Docker Compose:
 - **Target system**, mock EHR/trading/classified-doc API on `net_secure`
 - **Observability**, log aggregator and audit viewer on `net_mgmt`
 
-All g8e services (gateway, operator, agent runtime) use `demos/Dockerfile`, which copies a pre-built binary from `demos/bin/g8e` into the image. Run `make build` first to compile the binary and copy it to `demos/bin/g8e`. Auxiliary services (target systems, sensors, bad actors, observability) use Alpine, Python, Nginx, or other base images.
+All g8e services (gateway, operator, agent runtime) build from the repo-root `Dockerfile` (the same production image, always-FIPS) via `context: ../..` in each demo's `compose.yml`. The image compiles from source in-container, so no pre-built binary is required for Docker Compose builds. Auxiliary services (target systems, sensors, bad actors, observability) use Alpine, Python, Nginx, or other base images.
 
 The DHS and FedRAMP demos additionally deploy real agent runtime containers, Python HTTP actuators on the secure network, and display-only source connectors modeling sovereignty boundaries.
 
 All demos use the `/api/v1/health` endpoint for gateway health checks.
 
-The `g8e` demos CLI checks for a local binary at `demos/bin/g8e` and prints a warning if it is not found. This binary is required for Docker Compose builds, which copy it into the image via `demos/Dockerfile`.
+The `g8e` demos CLI checks for a local binary at `demos/bin/g8e` and prints a warning if it is not found. This binary is not required for Docker Compose builds (demos compile from source via the repo-root `Dockerfile`), but the CLI uses it for host-side demo orchestration when present.
 
 ### Prerequisites for demos
 
 - Docker 24.0+ with Docker Compose v2
-- Go 1.26+ (or a pre-built `g8e` binary) to produce `demos/bin/g8e`
+- Go 1.26+ (only needed for host-side `make build`; Docker Compose builds compile from source in-container)
 
-Run `make build` first to compile the binary and copy it to `demos/bin/g8e`. Docker Compose copies this binary into each g8e service container via `demos/Dockerfile`.
+Run `make build` to compile the binary and copy it to `demos/bin/g8e` for host-side demo orchestration. Docker Compose builds do not require this binary — demos build from the repo-root `Dockerfile` via `context: ../..`.
 
 ### Run a demo
 

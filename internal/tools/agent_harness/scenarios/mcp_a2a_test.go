@@ -6,6 +6,8 @@ package scenarios
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
 )
 
@@ -388,4 +390,13 @@ func TestA2AScenarioRunNotNil(t *testing.T) {
 			t.Errorf("A2A scenario %q should have non-nil Run function", sc.Name)
 		}
 	}
+}
+
+func TestPaopArgs(t *testing.T) {
+	got := paopArgs("submit", "PA-2026-0045", "ClaimResponse", "preauthorization")
+	assert.Contains(t, got, "paop", "paopArgs should contain 'paop' command")
+	assert.Contains(t, got, "submit", "paopArgs should contain the action 'submit'")
+	assert.Contains(t, got, "PA-2026-0045", "paopArgs should contain the request ID")
+	assert.Contains(t, got, "ClaimResponse", "paopArgs should contain the resource type")
+	assert.Contains(t, got, "preauthorization", "paopArgs should contain the detail")
 }

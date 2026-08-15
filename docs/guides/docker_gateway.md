@@ -88,7 +88,7 @@ cd demos/healthcare
 docker compose up -d
 ```
 
-Each demo uses its own `compose.yml` file with isolated networks, volumes, and doctrine bind mounts. Demos use a separate `demos/Dockerfile` that copies a pre-built binary into a minimal Debian image without compilation. Run `make build` first to produce the binary. See [demos/README.md](../../demos/README.md) for the full demo environment guide.
+Each demo uses its own `compose.yml` file with isolated networks, volumes, and doctrine bind mounts. Demos build from the repo-root `Dockerfile` (the same production image, always-FIPS) via `context: ../..` in each compose `build` stanza; the image compiles from source in-container, so no pre-built binary is required. See [demos/README.md](../../demos/README.md) for the full demo environment guide.
 
 ### Consensus Bootstrap Files
 
