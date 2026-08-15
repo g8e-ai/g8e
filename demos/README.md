@@ -8,10 +8,9 @@ This directory contains Docker Compose demo environments for org-specific g8e de
 demos/
 ├── bin/                        # built g8e binary, used by g8e demos CLI commands
 │   └── g8e
-├── Dockerfile                  # Shared image build for all orgs; copies bin/g8e into a minimal Debian image
 ├── images.json                 # Pinned sha256 digests for all external Docker images (air-gapped manifest)
 ├── healthcare/                # Healthcare/PHI demo
-│   ├── compose.yml
+│   ├── compose.yml             # builds from repo-root Dockerfile (context: ../..)
 │   ├── config/
 │   ├── doctrine/               # PHI/HIPAA scrub patterns
 │   ├── target-data/            # Simulated EHR/PA records
@@ -20,13 +19,13 @@ demos/
 │   ├── pa_api_server.py        # FHIR R4 PA submission API server
 │   └── setup_metabase.py       # Metabase compliance dashboard setup script
 ├── finance/                    # Finance/trading demo
-│   ├── compose.yml
+│   ├── compose.yml             # builds from repo-root Dockerfile (context: ../..)
 │   ├── config/
 │   ├── doctrine/               # Trading controls and dual-control triggers
 │   ├── target-data/            # Simulated ledger/positions
 │   └── README.md               # Finance-specific documentation
 ├── dhs/                        # DHS persistent sovereign capability demo
-│   ├── compose.yml
+│   ├── compose.yml             # builds from repo-root Dockerfile (context: ../..)
 │   ├── config/                 # Gateway/operator config, consensus-bootstrap.json, ensemble-seed.hex
 │   ├── doctrine/               # Sovereign data-handling L1 rules (USPER PII, cross-domain release, destruction)
 │   ├── target-data/            # Mock multi-source coalition feeds + sovereign manifest
@@ -35,8 +34,7 @@ demos/
 │   ├── verify_ops.py           # Verifies datasvc recorded governed operations
 │   └── README.md               # DHS-specific documentation and LOE mapping
 ├── fedramp/                    # FedRAMP sovereign cloud governance demo
-│   ├── compose.yml
-│   ├── compose.fips.yml        # FIPS variant (uses Dockerfile.fips, ports 8089/8452)
+│   ├── compose.yml             # builds from repo-root Dockerfile (context: ../..)
 │   ├── config/                 # Gateway/operator config, consensus-bootstrap.json, ensemble-seed.hex
 │   ├── doctrine/               # FedRAMP L1 rules (CR-26, AC-2, SI-4, SC-8, CM-7)
 │   ├── target-data/            # Cloud resources and KSI control categories
@@ -45,7 +43,7 @@ demos/
 │   ├── verify_ops.py           # Verifies cloudsvc recorded governed operations
 │   └── README.md               # FedRAMP-specific documentation
 ├── frontend/                   # Frontend enrollment demo
-│   ├── compose.yml
+│   ├── compose.yml             # builds from repo-root Dockerfile (context: ../..)
 │   ├── config/
 │   ├── doctrine/               # Frontend security rules (API access, CORS spoofing, session hijacking)
 │   ├── app/                    # Single-file HTML frontend app served by nginx
@@ -115,7 +113,7 @@ From the repository root:
 make build
 ```
 
-`make build` automatically copies the binary to `demos/bin/g8e`.
+`make build` automatically copies the binary to `demos/bin/g8e`. Demo compose files build the g8e container image from the repo-root `Dockerfile` (via `context: ../..`), which compiles the binary inside the container with FIPS 140-3 approved mode enabled (`GOFIPS140=v1.0.0`). The `demos/bin/g8e` binary is not used by the container image — it is consumed only by `g8e demos` CLI commands that run on the host.
 
 ### Using the g8e CLI (recommended)
 
@@ -265,7 +263,7 @@ Then:
 cd demos/neworg && docker compose up
 ```
 
-The `demos/Dockerfile` is shared across all org directories. It copies the pre-built binary from `demos/bin/g8e` into a minimal Debian image; no compilation happens inside the container. Run `make build` first to produce the binary.
+Demo compose files build from the repo-root `Dockerfile` via `context: ../..`. There is no demo-specific Dockerfile; demos use the same production image that ships to deployment. Run `make build` first to produce the host-side `demos/bin/g8e` binary used by `g8e demos` CLI commands (the container image builds its own binary from source).
 
 ## Invariants
 
@@ -275,7 +273,7 @@ The following must hold in every org environment:
 2. No named volume is shared with write access between services. Each service owns its own writable volume; read-only mounts are permitted for agent credential sharing (`operator_state:ro` on agent-runtime/agent-coalition) and observability audit tailing (`gateway_state:ro`, `operator_state:ro`).
 3. No PKI material is pre-distributed via filesystem. Identity propagates through enrollment over mTLS.
 4. Doctrine is a bind mount, not baked into an image. Org behavior is data, not code.
-5. The `demos/Dockerfile` is the only build artifact shared across org directories. Each compose file references `build: context: ..` to copy the pre-built binary from `demos/bin/g8e` into the container. No compilation happens inside the container. All agent containers (`agent-runtime` / `agent-coalition`) use the same image with `entrypoint: ["sh", "-c", "sleep infinity"]` for exec-based scenarios run invocation.
+5. The repo-root `Dockerfile` is the only build artifact shared across org directories. Each compose file references `build: context: ../..` to build the production image (with FIPS 140-3 approved mode) from the repo root. All agent containers (`agent-runtime` / `agent-coalition`) use the same image with `entrypoint: ["sh", "-c", "sleep infinity"]` for exec-based scenarios run invocation.
 
 ## Port Mappings
 
@@ -286,9 +284,10 @@ Each org uses different host ports to allow simultaneous deployment:
 | healthcare | 8081 | 8444 | Metabase: 3001, RabbitMQ Mgmt: 15673, PostgreSQL: 5433 |
 | finance | 8082 | 8445 | Demo UI: 3002 |
 | dhs | 8087 | 8450 | |
-| fedramp | 8088 | 8451 | |
-| fedramp (FIPS) | 8089 | 8452 | Uses `compose.fips.yml` and `Dockerfile.fips`; invoke manually with `docker compose -f compose.fips.yml` |
+| fedramp | 8088 | 8451 | FIPS 140-3 approved mode is the default for all orgs (single Dockerfile) |
 | frontend | 8083 | 8446 | Frontend App: 3003 |
+
+All demo images build with FIPS 140-3 approved mode enabled (`GOFIPS140=v1.0.0` in the Dockerfile builder stage). Enforcement is off by default; set `GODEBUG=fips140=only` in a service's `environment:` block to reject non-approved primitives at runtime. See [FIPS 140-3 Compliance](../docs/reference/fips140-3.md) for details.
 
 ## PKI and Enrollment
 
@@ -397,7 +396,7 @@ g8e demos import /tmp/g8e-images
 
 ### Step 5: Build and Run (Air-Gapped Machine)
 
-The build uses vendored Go modules and does not require network access. The demos Dockerfile copies the pre-built binary into the container without compilation:
+The build uses vendored Go modules and does not require network access. The repo-root Dockerfile compiles the binary inside the container from vendored sources:
 
 ```bash
 make build

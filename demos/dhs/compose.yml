@@ -60,7 +60,7 @@ services:
 
   gateway:
     build:
-      context: ..
+      context: ../..
       dockerfile: Dockerfile
     container_name: dhs-gateway
     networks:
@@ -92,7 +92,7 @@ services:
 
   operator:
     build:
-      context: ..
+      context: ../..
       dockerfile: Dockerfile
     container_name: dhs-operator
     networks:
@@ -125,7 +125,7 @@ services:
 
   agent-coalition:
     build:
-      context: ..
+      context: ../..
       dockerfile: Dockerfile
     container_name: dhs-agent-coalition
     networks:

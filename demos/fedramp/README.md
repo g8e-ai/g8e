@@ -109,23 +109,35 @@ g8e demos clean fedramp
 
 ## FIPS 140-3 mode
 
-A FIPS-compliant compose variant is available at `compose.fips.yml`. It builds all g8e containers from `Dockerfile.fips` using the Go Cryptographic Module v1.0.0 (CMVP Cert #5247) with `GOFIPS140=v1.0.0` set at build time. The runtime image is `debian:12-slim` (vendor-affirmed OE).
+The standard `./g8e demos start fedramp` invocation already builds with FIPS 140-3 approved mode enabled. The repo-root `Dockerfile` sets `GOFIPS140=v1.0.0` in the builder stage, linking the Go Cryptographic Module v1.0.0 (CMVP Cert #5247) into the binary. The runtime image is pinned to Debian GNU/Linux 12 (vendor-affirmed OE per CMVP Cert #5247 Table 3). There is no separate FIPS compose variant or FIPS Dockerfile — every demo and production deployment gets a FIPS-capable binary by default.
 
 ```bash
-# start the FIPS-mode demo
-docker compose -f compose.fips.yml up -d
+# start the demo (FIPS approved mode is active by default)
+g8e demos start fedramp
 
 # verify FIPS mode is active in the gateway container
-docker exec g8e-fedramp-fips-gateway /g8e version --fips
+docker exec g8e-fedramp-gateway /g8e version --fips
 
-# run scenarios against the FIPS-mode gateway (ports 8089/8452)
+# run scenarios
 g8e demos run fedramp
-
-# teardown
-docker compose -f compose.fips.yml down -v
 ```
 
-The FIPS variant uses different host ports (8089/8452) and separate named volumes to avoid conflicts with the standard demo. All scenarios run identically under FIPS mode; the governance pipeline, PKI, and TLS stack use only FIPS-validated algorithms.
+Approved mode is active but enforcement is OFF by default. This is the common production posture: non-approved primitives such as Ed25519 (consensus signing, actuator receipts, PKI) and ChaCha20-Poly1305 (SSH streaming) still work. Operators who need strict enforcement — rejecting non-approved primitives at runtime — set `GODEBUG=fips140=only` in the container environment. Add it to the `environment:` block of the relevant service in `compose.yml`:
+
+```yaml
+environment:
+  - GODEBUG=fips140=only
+  - G8E_GATEWAY_POSTURE=${G8E_GATEWAY_POSTURE:-consensus}
+```
+
+Then rebuild and restart:
+
+```bash
+GODEBUG=fips140=only docker exec g8e-fedramp-gateway /g8e version --fips
+# reports "FIPS 140-3 mode: enabled", "FIPS enforcement: enabled", exits 0
+```
+
+All scenarios run identically under approved mode; the governance pipeline, PKI, and TLS stack use FIPS-validated algorithms for their validated operations.
 
 See [FIPS 140-3 Compliance](../../docs/reference/fips140-3.md) for the validated boundary, OE matrix, and build/runtime activation details.
 

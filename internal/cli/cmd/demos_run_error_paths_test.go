@@ -393,5 +393,3 @@ func TestRunDemosRun_MissingComposeFileReturnsNotFound(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrNotFound)
 	assert.Contains(t, err.Error(), "compose.yml")
 }
-
-
