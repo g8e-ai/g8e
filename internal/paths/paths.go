@@ -92,6 +92,9 @@ var Infra struct {
 	OperatorPostureFile string
 	OperatorPIDFile     string
 
+	// Binary paths
+	BinDir string
+
 	// Storage DB paths
 	ExecutionVaultDBPath string
 	ReplayStoreDBPath    string
@@ -164,6 +167,8 @@ var Infra struct {
 	OperatorPostureFile string
 	OperatorPIDFile     string
 
+	BinDir string
+
 	ExecutionVaultDBPath string
 	ReplayStoreDBPath    string
 	LedgerDir            string
@@ -228,6 +233,7 @@ var Infra struct {
 	PidDir:              constants.RuntimeDirname + "/" + constants.PidDirname,
 	OperatorPostureFile: constants.RuntimeDirname + "/" + constants.PidDirname + "/" + constants.OperatorPostureFilename,
 	OperatorPIDFile:     constants.RuntimeDirname + "/" + constants.PidDirname + "/" + constants.OperatorPIDFilename,
+	BinDir:              constants.RuntimeDirname + "/" + constants.BinDirname,
 
 	ExecutionVaultDBPath: constants.RuntimeDirname + "/" + constants.DataDirname + "/" + constants.ExecutionVaultDBFilename,
 	ReplayStoreDBPath:    constants.RuntimeDirname + "/" + constants.DataDirname + "/" + constants.ReplayStoreDBFilename,
@@ -329,6 +335,7 @@ func InitWithBase(baseDir string) error {
 	Infra.PidDir = pathutil.SafeJoin(Infra.RuntimeDir, constants.PidDirname)
 	Infra.OperatorPostureFile = pathutil.SafeJoin(Infra.PidDir, constants.OperatorPostureFilename)
 	Infra.OperatorPIDFile = pathutil.SafeJoin(Infra.PidDir, constants.OperatorPIDFilename)
+	Infra.BinDir = pathutil.SafeJoin(Infra.RuntimeDir, constants.BinDirname)
 
 	Infra.ExecutionVaultDBPath = pathutil.SafeJoin(Infra.DataDir, constants.ExecutionVaultDBFilename)
 	Infra.ReplayStoreDBPath = pathutil.SafeJoin(Infra.DataDir, constants.ReplayStoreDBFilename)

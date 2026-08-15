@@ -296,6 +296,7 @@ func TestCreateRuntimeTree_CreatesAllDirectories(t *testing.T) {
 		paths.Infra.LedgerFilesDir,
 		paths.Infra.LogDir,
 		paths.Infra.PidDir,
+		paths.Infra.BinDir,
 		paths.Infra.ProtocolDir,
 		paths.Infra.DocsDir,
 	}

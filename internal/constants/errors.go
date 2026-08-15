@@ -145,6 +145,8 @@ var (
 	ErrProcessInterrupted      = errors.New("process interrupted")
 	ErrProcessSigKillTimeout   = errors.New("process did not exit after SIGKILL")
 	ErrProcessForceKillTimeout = errors.New("process did not exit after force kill")
+	ErrBinaryResolveFailed     = errors.New("failed to resolve operator binary")
+	ErrBinaryCopyFailed        = errors.New("failed to copy operator binary")
 
 	// File system errors
 	ErrPathNotFound         = errors.New("path not found")

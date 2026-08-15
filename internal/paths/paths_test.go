@@ -625,6 +625,7 @@ func TestInfraDefaults_BeforeInit(t *testing.T) {
 		PidDir                           string
 		OperatorPostureFile              string
 		OperatorPIDFile                  string
+		BinDir                           string
 		ExecutionVaultDBPath             string
 		ReplayStoreDBPath                string
 		LedgerDir                        string
