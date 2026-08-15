@@ -59,6 +59,7 @@ func (fs *localFS) CreateRuntimeTree(ctx context.Context) error {
 		{filepath.Join(fs.runtimeDir, constants.DataDirname, constants.LedgerDirname, constants.FilesDirname), constants.PermDirStandard},
 		{filepath.Join(fs.runtimeDir, constants.LogDirname), constants.PermDirStandard},
 		{filepath.Join(fs.runtimeDir, constants.PidDirname), constants.PermDirStandard},
+		{filepath.Join(fs.runtimeDir, constants.BinDirname), constants.PermDirStandard},
 		{filepath.Join(fs.runtimeDir, constants.ProtocolDirname), constants.PermDirStandard},
 		{filepath.Join(fs.runtimeDir, constants.DocsDirname), constants.PermDirStandard},
 	}

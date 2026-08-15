@@ -243,7 +243,7 @@ Filesystem paths for Operator data, certificates, ledger, system paths, and conf
 - SSH config: `SshConfigFilename`, `SshDirname`, `SshConfigBasename`, `SshKnownHostsBasename`, `SshKeyEd25519`, `SshKeyECDSA`, `SshKeyRSA`
 - Agent config directories: `AgentConfigDirGemini`, `AgentConfigDirGoose`
 - Agent config files: `AgentConfigFileMCP`, `AgentConfigFileSettings`, `AgentConfigFileGooseYAML`
-- File permission modes: `PermDirPrivate` (0700), `PermDirStandard` (0755), `PermFilePrivate` (0600), `PermFilePublic` (0644), `PermFileReadOnly` (0400)
+- File permission modes: `PermDirPrivate` (0700), `PermDirStandard` (0755), `PermFilePrivate` (0600), `PermFilePublic` (0644), `PermFileReadOnly` (0400), `PermFileExecutable` (0755)
 - Filesystem listing limits: `FsListMaxDepth` (3), `FsListDefaultDepth` (0), `FsListMaxEntries` (500), `FsListDefaultEntries` (100), `FsListBatchSize` (100)
 - Grep limits: `FsGrepDefaultMaxMatches` (100), `FsGrepMaxMatches` (500), `FsGrepScannerInitialBufSize` (64 KiB), `FsGrepScannerMaxBufSize` (1 MiB)
 - Execution limits: `ExecutionMaxStreamSize` (10 MB), `ExecutionMaxLines` (50), `ExecutionPreviewLength` (300), `FileEditMaxSize` (50 MB)

@@ -8,25 +8,24 @@ This directory contains Docker Compose demo environments for org-specific g8e de
 demos/
 ├── bin/                        # built g8e binary, used by g8e demos CLI commands
 │   └── g8e
-├── Dockerfile                  # Shared image build for all orgs; copies bin/g8e into a minimal Debian image
 ├── images.json                 # Pinned sha256 digests for all external Docker images (air-gapped manifest)
 ├── healthcare/                # Healthcare/PHI demo
-│   ├── compose.yml
+│   ├── compose.yml             # builds from repo-root Dockerfile (context: ../..)
 │   ├── config/
 │   ├── doctrine/               # PHI/HIPAA scrub patterns
-│   ├── target-data/            # Simulated EHR/PA records
+│   ├── target-data/            # Simulated EHR/PA records (narrative reference)
 │   ├── README.md               # Healthcare-specific documentation
 │   ├── init.sql                # PostgreSQL schema for reporting-db
-│   ├── pa_api_server.py        # FHIR R4 PA submission API server
+│   ├── paop.sh                 # PA operation wrapper (governed run_shell_command bridge)
 │   └── setup_metabase.py       # Metabase compliance dashboard setup script
 ├── finance/                    # Finance/trading demo
-│   ├── compose.yml
+│   ├── compose.yml             # builds from repo-root Dockerfile (context: ../..)
 │   ├── config/
 │   ├── doctrine/               # Trading controls and dual-control triggers
 │   ├── target-data/            # Simulated ledger/positions
 │   └── README.md               # Finance-specific documentation
 ├── dhs/                        # DHS persistent sovereign capability demo
-│   ├── compose.yml
+│   ├── compose.yml             # builds from repo-root Dockerfile (context: ../..)
 │   ├── config/                 # Gateway/operator config, consensus-bootstrap.json, ensemble-seed.hex
 │   ├── doctrine/               # Sovereign data-handling L1 rules (USPER PII, cross-domain release, destruction)
 │   ├── target-data/            # Mock multi-source coalition feeds + sovereign manifest
@@ -35,8 +34,7 @@ demos/
 │   ├── verify_ops.py           # Verifies datasvc recorded governed operations
 │   └── README.md               # DHS-specific documentation and LOE mapping
 ├── fedramp/                    # FedRAMP sovereign cloud governance demo
-│   ├── compose.yml
-│   ├── compose.fips.yml        # FIPS variant (uses Dockerfile.fips, ports 8089/8452)
+│   ├── compose.yml             # builds from repo-root Dockerfile (context: ../..)
 │   ├── config/                 # Gateway/operator config, consensus-bootstrap.json, ensemble-seed.hex
 │   ├── doctrine/               # FedRAMP L1 rules (CR-26, AC-2, SI-4, SC-8, CM-7)
 │   ├── target-data/            # Cloud resources and KSI control categories
@@ -45,7 +43,7 @@ demos/
 │   ├── verify_ops.py           # Verifies cloudsvc recorded governed operations
 │   └── README.md               # FedRAMP-specific documentation
 ├── frontend/                   # Frontend enrollment demo
-│   ├── compose.yml
+│   ├── compose.yml             # builds from repo-root Dockerfile (context: ../..)
 │   ├── config/
 │   ├── doctrine/               # Frontend security rules (API access, CORS spoofing, session hijacking)
 │   ├── app/                    # Single-file HTML frontend app served by nginx
@@ -68,7 +66,7 @@ Each org deploys five isolated networks:
 | Service class | untrusted | perimeter | internal | secure | mgmt |
 |---|:---:|:---:|:---:|:---:|:---:|
 | External requestor / bad actor sim | ✓ | | | | |
-| Demo UI / Notary approval UI | | ✓ | | | |
+| Demo UI | | ✓ | | | |
 | Gateway | | ✓ | ✓ | ✓† | |
 | AI agent runtime | | | ✓ | | |
 | Operator | | | ✓* | ✓ | |
@@ -79,11 +77,11 @@ Each org deploys five isolated networks:
 
 \† Gateway appears on net_secure only in the `dhs` and `fedramp` demos, where it needs direct access to the actuator boundary.
 
-The `healthcare` demo adds PA workflow services on net_secure (provider-exemption-rules, pa-processing-worker, message-broker, reporting-db) plus pa-submission-service which bridges net_internal and net_secure so the gateway can enforce PHI doctrine on inbound FHIR requests. A Metabase compliance dashboard runs on net_perimeter (with a net_secure leg to reach reporting-db), and a one-shot metabase-setup service on net_perimeter configures it on startup.
+The `healthcare` demo runs a reporting-db (Postgres) on net_secure for compliance metrics, a Metabase compliance dashboard on net_perimeter (with a net_secure leg to reach reporting-db), and a one-shot metabase-setup service on net_perimeter that configures it on startup. Healthcare scenarios use native gateway tools (`run_shell_command` driving the `paop.sh` wrapper) governed by the PHI/HIPAA doctrine engine, consistent with the fedramp (`cloudop`) and dhs (`dataop`) demos — no downstream MCP server is involved.
 
 The `dhs` demo deploys a real `agent-coalition` container (the exec target for `g8e demos run`) on net_internal, a real `datasvc` Python HTTP actuator on net_secure, display-only source connectors on net_internal and net_untrusted, and a partner fusion-COP plus a severable coalition datalink on net_perimeter, modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries. The `agent-coalition` container is a real g8e binary that submits genuine `GovernanceEnvelope`s when driven by the CLI. The display connectors are Alpine echo loops for narrative only.
 
-The `fedramp` demo deploys a real `agent-runtime` container (the exec target for `g8e demos run`) on net_internal, a real `cloudsvc` Python HTTP actuator on net_secure, a `bad-actor` on net_untrusted, and an `observability` container on net_mgmt. The `agent-runtime` container is a real g8e binary that submits genuine `GovernanceEnvelope`s driving cloud resource operations (provision, configure, destroy, revert) through the `cloudop.sh` wrapper when driven by the CLI. The gateway runs in consensus posture by default and switches to notary posture for scenario 3 (resource destruction requiring authorizing official approval).
+The `fedramp` demo deploys a real `agent-runtime` container (the exec target for `g8e demos run`) on net_internal, a real `cloudsvc` Python HTTP actuator on net_secure, a `bad-actor` on net_untrusted, and an `observability` container on net_mgmt. The `agent-runtime` container is a real g8e binary that submits genuine `GovernanceEnvelope`s driving cloud resource operations (provision, configure, destroy, revert) through the `cloudop.sh` wrapper when driven by the CLI.
 
 The `frontend` demo deploys a nginx-served static HTML app on net_perimeter for WebAuthn passkey enrollment and SSE event streaming. No target system or bad actor container. The gateway runs in doctrine posture with CORS and passkey RP origins pre-configured for the frontend origin.
 
@@ -96,7 +94,7 @@ Each org demonstrates different compliance requirements and use cases:
 | Doctrine content | PHI scrub patterns, PA workflow gates | Tx limits, dual-control triggers | USPER PII minimization, cross-domain release, sovereign destruction | CR-26 audit integrity, AC-2 access control, SI-4 privilege escalation, SC-8 cross-domain, CM-7 config management | Unauthorized API access, CORS origin spoofing, session hijacking |
 | Target data content | Simulated EHR / PA records | Simulated ledger / positions | Mock multi-source coalition feeds + sovereign manifest | Cloud resources (VMs, DBs, IAM) and KSI control categories | None (frontend enrollment demo) |
 | Gateway posture | doctrine | doctrine | consensus | consensus | doctrine |
-| Agent principal type | Clinical AI agent | Algorithmic trading agent | Coalition source connectors + predictive-analytics agent | FedRAMP cloud service operator + authorizing official | Browser-based frontend app (WebAuthn + SSE) |
+| Agent principal type | Clinical AI agent | Algorithmic trading agent | Coalition source connectors + predictive-analytics agent | FedRAMP cloud service operator | Browser-based frontend app (WebAuthn + SSE) |
 | Target system mock | EHR / PA processor | Trade execution API | Sovereign data vault + partner fusion COP | Sovereign cloud service (provision, configure, destroy, revert) | None (nginx-served static HTML) |
 | Demo narrative | PHI scrub + PA approval flow | Unauthorized trade blocked | Sovereign coalition data plane: govern ingest, release, use, destruction | Sovereign cloud governance: provision, destroy, revert, audit integrity | Third-party frontend enrollment with CORS and passkey authentication |
 
@@ -115,7 +113,7 @@ From the repository root:
 make build
 ```
 
-`make build` automatically copies the binary to `demos/bin/g8e`.
+`make build` automatically copies the binary to `demos/bin/g8e`. Demo compose files build the g8e container image from the repo-root `Dockerfile` (via `context: ../..`), which compiles the binary inside the container with FIPS 140-3 approved mode enabled (`GOFIPS140=v1.0.0`). The `demos/bin/g8e` binary is not used by the container image — it is consumed only by `g8e demos` CLI commands that run on the host.
 
 ### Using the g8e CLI (recommended)
 
@@ -197,17 +195,15 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 
 **DHS Persistent Sovereign Capability Demo Scenarios:**
 - `g8e demos run dhs 1` - Sovereign Multi-Source Ingest (chain-of-custody) (LOE 1)
-- `g8e demos run dhs 2` - Cross-Domain Release requires Notary authority (LOE 1 & 2)
-- `g8e demos run dhs 3` - Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
-- `g8e demos run dhs 4` - Governed Predictive Cueing (LOE 3 & 4)
-- `g8e demos run dhs 5` - Sovereign Destruction + tamper-proof audit (LOE 2)
+- `g8e demos run dhs 2` - Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
+- `g8e demos run dhs 3` - Governed Predictive Cueing (LOE 3 & 4)
+- `g8e demos run dhs 4` - Sovereign Destruction + tamper-proof audit (LOE 2)
 
 **FedRAMP Sovereign Cloud Governance Demo Scenarios:**
 - `g8e demos run fedramp 1` - Governed Cloud Resource Provisioning
 - `g8e demos run fedramp 2` - Unauthorized Audit Trail Destruction Blocked (CR-26)
-- `g8e demos run fedramp 3` - Resource Destruction Requires Authorizing Official (L3)
-- `g8e demos run fedramp 4` - Governed Configuration Revert (CM-7)
-- `g8e demos run fedramp 5` - Gateway Audit Vault Destruction Blocked (CR-26)
+- `g8e demos run fedramp 3` - Governed Configuration Revert (CM-7)
+- `g8e demos run fedramp 4` - Gateway Audit Vault Destruction Blocked (CR-26)
 
 **Frontend Demo Scenarios:**
 - `g8e demos run frontend 1` - Third-Party Frontend Enrollment
@@ -267,7 +263,7 @@ Then:
 cd demos/neworg && docker compose up
 ```
 
-The `demos/Dockerfile` is shared across all org directories. It copies the pre-built binary from `demos/bin/g8e` into a minimal Debian image; no compilation happens inside the container. Run `make build` first to produce the binary.
+Demo compose files build from the repo-root `Dockerfile` via `context: ../..`. There is no demo-specific Dockerfile; demos use the same production image that ships to deployment. Run `make build` first to produce the host-side `demos/bin/g8e` binary used by `g8e demos` CLI commands (the container image builds its own binary from source).
 
 ## Invariants
 
@@ -277,7 +273,7 @@ The following must hold in every org environment:
 2. No named volume is shared with write access between services. Each service owns its own writable volume; read-only mounts are permitted for agent credential sharing (`operator_state:ro` on agent-runtime/agent-coalition) and observability audit tailing (`gateway_state:ro`, `operator_state:ro`).
 3. No PKI material is pre-distributed via filesystem. Identity propagates through enrollment over mTLS.
 4. Doctrine is a bind mount, not baked into an image. Org behavior is data, not code.
-5. The `demos/Dockerfile` is the only build artifact shared across org directories. Each compose file references `build: context: ..` to copy the pre-built binary from `demos/bin/g8e` into the container. No compilation happens inside the container. All agent containers (`agent-runtime` / `agent-coalition`) use the same image with `entrypoint: ["sh", "-c", "sleep infinity"]` for exec-based scenarios run invocation.
+5. The repo-root `Dockerfile` is the only build artifact shared across org directories. Each compose file references `build: context: ../..` to build the production image (with FIPS 140-3 approved mode) from the repo root. All agent containers (`agent-runtime` / `agent-coalition`) use the same image with `entrypoint: ["sh", "-c", "sleep infinity"]` for exec-based scenarios run invocation.
 
 ## Port Mappings
 
@@ -285,12 +281,13 @@ Each org uses different host ports to allow simultaneous deployment:
 
 | Org | HTTP Port | HTTPS Port | Additional Ports |
 |---|---|---|---|
-| healthcare | 8081 | 8444 | Metabase: 3001, RabbitMQ Mgmt: 15673, PostgreSQL: 5433 |
+| healthcare | 8081 | 8444 | Metabase: 3001, PostgreSQL: 5433 |
 | finance | 8082 | 8445 | Demo UI: 3002 |
 | dhs | 8087 | 8450 | |
-| fedramp | 8088 | 8451 | |
-| fedramp (FIPS) | 8089 | 8452 | Uses `compose.fips.yml` and `Dockerfile.fips`; invoke manually with `docker compose -f compose.fips.yml` |
+| fedramp | 8088 | 8451 | FIPS 140-3 approved mode is the default for all orgs (single Dockerfile) |
 | frontend | 8083 | 8446 | Frontend App: 3003 |
+
+All demo images build with FIPS 140-3 approved mode enabled (`GOFIPS140=v1.0.0` in the Dockerfile builder stage). Enforcement is off by default; set `GODEBUG=fips140=only` in a service's `environment:` block to reject non-approved primitives at runtime. See [FIPS 140-3 Compliance](../docs/reference/fips140-3.md) for details.
 
 ## PKI and Enrollment
 
@@ -399,7 +396,7 @@ g8e demos import /tmp/g8e-images
 
 ### Step 5: Build and Run (Air-Gapped Machine)
 
-The build uses vendored Go modules and does not require network access. The demos Dockerfile copies the pre-built binary into the container without compilation:
+The build uses vendored Go modules and does not require network access. The repo-root Dockerfile compiles the binary inside the container from vendored sources:
 
 ```bash
 make build

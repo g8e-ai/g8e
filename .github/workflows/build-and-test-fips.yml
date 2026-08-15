@@ -18,7 +18,7 @@ on:
       - 'go.sum'
       - 'vendor/**'
       - 'Makefile'
-      - 'Dockerfile.fips'
+      - 'Dockerfile'
       - '.github/workflows/build-and-test-fips.yml'
   pull_request:
     branches: [ main ]
@@ -28,7 +28,7 @@ on:
       - 'go.sum'
       - 'vendor/**'
       - 'Makefile'
-      - 'Dockerfile.fips'
+      - 'Dockerfile'
       - '.github/workflows/build-and-test-fips.yml'
   workflow_dispatch:
 

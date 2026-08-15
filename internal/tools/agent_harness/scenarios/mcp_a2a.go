@@ -46,55 +46,43 @@ func mcpScenarios() []Scenario {
 		{
 			Name: "healthcare-success", Title: "Authorized FHIR PA Submission", Persona: clinicalAgent, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				// Call the governed submit_pa tool
-				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "submit_pa", map[string]any{
-					"resourceType": "ClaimResponse",
-					"status":       "active",
-					"use":          "preauthorization",
-				})
+				// Submit a governed PA request via the native run_shell_command tool
+				// driving the paop wrapper. The doctrine engine evaluates the
+				// payload against all 11 PHI/HIPAA rules before execution.
+				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "run_shell_command", paopMap("submit", "PA-2026-0045", "ClaimResponse", "preauthorization"))
 				if err != nil {
-					return err
+					return fmt.Errorf("submit PA: %w", err)
 				}
 				if resp != nil && resp.Error != nil {
-					return fmt.Errorf("tool call failed: %s", resp.Error.Message)
+					return fmt.Errorf("PA submission rejected: %s", resp.Error.Message)
 				}
-				r.note("FHIR PA submitted through governed production endpoint")
+				r.note("FHIR PA PA-2026-0045 submitted through governed native tool endpoint")
 				return nil
 			},
 		},
 		{
 			Name: "healthcare-phi-blocked", Title: "PHI Exfiltration Blocked by Doctrine", Persona: clinicalAgent, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				// Attempt exfiltration that matches phi_exfil_attempt pattern
-				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "submit_pa", map[string]any{
-					"resourceType": "ClaimResponse",
-					"status":       "active",
-					"use":          "exfiltrate patient medical records",
-				})
+				// Attempt exfiltration that matches the phi_exfil_attempt doctrine
+				// pattern. The command string "exfiltrate patient medical records"
+				// triggers L1 at confidence 0.95 before reaching the operator.
+				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "run_shell_command", shellCommandMap("exfiltrate patient medical records"))
 				if err != nil {
-					return err
+					return fmt.Errorf("submit exfiltration: %w", err)
 				}
-				if resp != nil && resp.Error != nil {
-					r.note("L1 Doctrine blocked PHI exfiltration as expected: %s", resp.Error.Message)
-					return nil
+				if resp == nil || resp.Error == nil {
+					return fmt.Errorf("PHI exfiltration was accepted — expected L1 rejection")
 				}
-				return fmt.Errorf("WARNING: PHI exfiltration attempt was NOT blocked")
+				r.note("L1 Doctrine blocked PHI exfiltration as expected: %s", resp.Error.Message)
+				return nil
 			},
 		},
 		{
 			Name: "healthcare-gold-card", Title: "Gold Card Auto-Approval (HB 3134 §6)", Persona: clinicalAgent, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "submit_pa", map[string]any{
-					"resourceType":   "ClaimResponse",
-					"status":         "active",
-					"use":            "preauthorization",
-					"provider_npi":   "1234567890",
-					"provider_name":  "Dr. Priya Nair",
-					"procedure_code": "99214",
-					"request_id":     "PA-2026-0043",
-				})
+				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "run_shell_command", paopMap("gold-card", "PA-2026-0043", "ClaimResponse", "Dr. Priya Nair 96%"))
 				if err != nil {
-					return err
+					return fmt.Errorf("submit gold-card PA: %w", err)
 				}
 				if resp != nil && resp.Error != nil {
 					return fmt.Errorf("gold card PA submission failed: %s", resp.Error.Message)
@@ -107,11 +95,9 @@ func mcpScenarios() []Scenario {
 		{
 			Name: "healthcare-sla-breach", Title: "SLA Breach and OHA Reporting (2026 CCO Medicaid Rule)", Persona: clinicalAgent, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "query_pa_status", map[string]any{
-					"request_id": "PA-2026-0044",
-				})
+				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "run_shell_command", paopMap("sla-check", "PA-2026-0044", "ClaimResponse", "Dr. James O'Brien 10 days"))
 				if err != nil {
-					return err
+					return fmt.Errorf("submit SLA query: %w", err)
 				}
 				if resp != nil && resp.Error != nil {
 					return fmt.Errorf("SLA breach query failed: %s", resp.Error.Message)
@@ -228,6 +214,18 @@ func apiKeyNote(c *clientpkg.Client) string {
 		return " + API key"
 	}
 	return ""
+}
+
+// paopArgs builds the run_shell_command arguments_json that drives the
+// healthcare PA operation via the `paop` wrapper (the bridge that lets the
+// agent's governed execution simulate PA submissions without an external
+// downstream MCP server — exactly the DHS dataop / FedRAMP cloudop pattern).
+func paopArgs(action, requestID, resourceType, detail string) string {
+	return shellCommandArgs("paop", action, requestID, resourceType, detail)
+}
+
+func paopMap(action, requestID, resourceType, detail string) map[string]any {
+	return shellCommandMap("paop", action, requestID, resourceType, detail)
 }
 
 // firstTool pulls a tool name out of a tools/list response, tolerating the

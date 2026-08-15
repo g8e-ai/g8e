@@ -34,7 +34,7 @@ volumes:
 services:
   gateway:
     build:
-      context: ..
+      context: ../..
       dockerfile: Dockerfile
     container_name: frontend-gateway
     networks:
@@ -64,7 +64,7 @@ services:
 
   operator:
     build:
-      context: ..
+      context: ../..
       dockerfile: Dockerfile
     container_name: frontend-operator
     networks:

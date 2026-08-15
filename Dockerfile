@@ -13,10 +13,25 @@
 
 # =============================================================================
 # Multi-stage Dockerfile for g8e Gateway
-# Modern, minimal, and secure container image
+# Modern, minimal, and secure container image.
+#
+# This Dockerfile always builds with FIPS 140-3 approved mode enabled. The Go
+# Cryptographic Module v1.0.0 (CMVP Cert #5247, CAVP A6650) is linked in at
+# build time via GOFIPS140, and the binary enters approved mode on startup
+# without any runtime env var. Enforcement is a RUNTIME setting, off by default:
+# non-approved primitives (Ed25519 for consensus/receipts/PKI, ChaCha20-Poly1305
+# for SSH streaming) still work. Operators who need strict enforcement set
+# GODEBUG=fips140=only in the container environment (see `make verify-fips`).
+#
+# The FIPS 140-3 compliance claim is restricted to linux/amd64, which is the
+# tested operating environment for CMVP Cert #5247. This Dockerfile hardcodes
+# GOOS=linux GOARCH=amd64, so the restriction is satisfied. Do not build it for
+# other architectures under a FIPS compliance claim.
+#
+# Verify the deployed binary with:  g8e version --fips
 # =============================================================================
 
-# Stage 1: Build
+# Stage 1: Build (FIPS module linked in here)
 FROM golang:1.26.6 AS builder
 
 # Install build dependencies
@@ -36,6 +51,14 @@ ENV GOFLAGS=-mod=vendor
 # Copy entire source code
 COPY . .
 
+# Build the binary with the Go Cryptographic Module v1.0.0 linked in and FIPS
+# 140-3 approved mode enabled by default. GOFIPS140 is set ONLY in the builder
+# stage — it is a build-time toolchain setting, not a runtime control. The
+# binary enters approved mode on startup without any runtime env var.
+# CGO_ENABLED=0 is intentional: the Go FIPS module is pure Go and does not
+# require CGO.
+ENV GOFIPS140=v1.0.0
+
 # Build the binary
 # Use build flags from Makefile for consistency
 RUN --mount=type=cache,target=/root/.cache/go-build \
@@ -45,14 +68,35 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     -o /build/g8e \
     ./cmd/g8e
 
-# Verify the binary
+# Verify the binary built.
 RUN /build/g8e --help
+
+# Verify FIPS 140-3 approved mode is active via the native crypto/fips140 module
+# API. This is the same self-check operators run in production
+# (`g8e version --fips`); it inspects module state, not env vars. It exits 0
+# with a warning when enforcement is off — that is the expected posture, not a
+# failure.
+RUN /build/g8e version --fips
 
 # =============================================================================
 # Stage 2: Runtime
 # The compiled binary is statically linked (CGO_ENABLED=0) and has zero runtime
 # dependencies. The packages below are container conveniences only (health-check
 # curl, CA certs for outbound TLS) — they are NOT required by the binary itself.
+# GOFIPS140 is deliberately NOT set here: the binary already entered approved
+# mode at build time and needs no runtime env var.
+#
+# OE MATRIX (CMVP Cert #5247, Go Cryptographic Module v1.0.0):
+# - Tested OE: Alpine Linux 3.20 on Intel x86-64 (Dell PowerEdge R660, Xeon
+#   Silver 4410Y), Podman 4 on RHEL (Table 2).
+# - Vendor-Affirmed OEs (Table 3): Debian GNU/Linux 12, Ubuntu 22.04, Ubuntu
+#   24.04, and others.
+# - Vendor-Affirmed platforms (Table 4): Linux 3.10+ on x86-64 and ARMv7/8/9.
+#
+# This image is pinned to Debian GNU/Linux 12 (Bookworm) via digest, a
+# vendor-affirmed OE. The slim variant reduces attack surface. Do not change to
+# a different OS or version without confirming it is a tested or
+# vendor-affirmed OE for the applicable CMVP certificate.
 FROM debian@sha256:30482e873082e906a4908c10529180aefb6f77620aea7404b909829fadc5d168
 
 # Install container utilities (not binary dependencies)

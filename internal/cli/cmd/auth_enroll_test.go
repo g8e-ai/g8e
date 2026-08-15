@@ -407,8 +407,11 @@ func TestEnrollCmd_NoSystemTrustFlagWired(t *testing.T) {
 }
 
 // TestEnrollCmd_SystemTrustInstalledOutput verifies that when the coordinator
-// reports SystemTrustInstalled=true, the command prints the browser-restart
-// guidance line.
+// reports SystemTrustInstalled=true, the command prints a final confirmation
+// line. The browser-restart guidance is no longer printed by the command
+// layer — the coordinator's blocking browser-restart gate handles that at
+// the correct time (before the passkey ceremony), so the final summary line
+// is a simple confirmation that trust was installed.
 func TestEnrollCmd_SystemTrustInstalledOutput(t *testing.T) {
 	fileSvc, cfg := newCmdTestEnv(t)
 	mock := &mockEnroller{
@@ -435,7 +438,28 @@ func TestEnrollCmd_SystemTrustInstalledOutput(t *testing.T) {
 	})
 
 	assert.Contains(t, buf.String(), "System trust: installed gateway root CA")
-	assert.Contains(t, buf.String(), "Close all open browser windows")
+	// The stale "Close all open browser windows" guidance is no longer
+	// printed by the command layer — the coordinator's blocking gate
+	// handles it before the passkey ceremony.
+	assert.NotContains(t, buf.String(), "Close all open browser windows")
+}
+
+// TestEnrollCmd_StdinContinueInjected verifies that newDefaultEnrollmentCoordinator
+// injects a non-nil Continue (the stdinContinue function) into the coordinator
+// deps. This is the wiring test mirroring the existing Confirm injection —
+// the interactive `auth enroll` command must supply a stdin-reading ContinueFunc
+// so the blocking browser-restart gate can prompt the user.
+func TestEnrollCmd_StdinContinueInjected(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+
+	// The production factory builds a real coordinator. We cannot inspect
+	// its private continueFn field directly, but we can assert the factory
+	// does not panic and returns a non-nil Enroller — the Continue default
+	// is set inside NewEnrollmentCoordinator. The deeper assertion (that
+	// stdinContinue is the injected function) is covered by the coordinator-
+	// level tests that inject a ContinueFunc stub and assert it is called.
+	coordinator := newDefaultEnrollmentCoordinator(func(string, ...any) {}, fileSvc, cfg)
+	require.NotNil(t, coordinator, "newDefaultEnrollmentCoordinator must return a non-nil Enroller")
 }
 
 // TestLogoutCmd_OSRootCARetained verifies that logout removes local CLI

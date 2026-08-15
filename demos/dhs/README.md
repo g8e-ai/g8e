@@ -19,7 +19,7 @@ This demo uses **real g8e enforcement**, no mock/fake doctrine, no fake MCP call
 
 | Component | Type | Description |
 |---|---|---|
-| **gateway** | REAL | g8e binary in `consensus` posture (notary for scenario 2) |
+| **gateway** | REAL | g8e binary in `consensus` posture |
 | **operator** | REAL | g8e binary with `--execution-vault`, executes governed `run_shell_command` calls |
 | **agent-coalition** | REAL | g8e binary running `demos scenarios run` that submits genuine `GovernanceEnvelope`s |
 | **datasvc** | REAL | Python HTTP server (the L5 actuator), records governed data operations to `operations.jsonl` |
@@ -27,7 +27,7 @@ This demo uses **real g8e enforcement**, no mock/fake doctrine, no fake MCP call
 | **verify_ops.py** | REAL | Python script that queries datasvc to prove L5 actuation occurred |
 | connector-dhs/mil/ic/partner | DISPLAY | Alpine echo loops, narrative only, no g8e identity |
 | fusion-cop | DISPLAY | Alpine echo loop, represents the partner prime's COP product |
-| coalition-datalink | DISPLAY | Alpine echo loop, severed in Scenario 3 to simulate comms denial |
+| coalition-datalink | DISPLAY | Alpine echo loop, severed in Scenario 2 to simulate comms denial |
 | analyst-partner | DISPLAY | Alpine echo loop, represents a partner-nation analyst |
 | bad-actor | DISPLAY | Alpine echo loop, represents an adversary on the untrusted network |
 | observability | DISPLAY | Alpine log tailer, read-only audit trail viewer |
@@ -38,10 +38,10 @@ The data is **synthetic / mock-generated**; the point is to demonstrate how g8e 
 
 | LOE | Title | Demonstrated by |
 |---|---|---|
-| LOE 1 | Persistent Data Collection & Coverage | Scenario 1 (multi-source ingest, NIPR/SIPR/Mission-Partner/partner-nation), Scenario 2 (secure cross-domain sharing) |
-| LOE 2 | Sovereign Data Handling, Resilience & Continuity | Scenario 2 (sovereign release control), Scenario 3 (disconnected ops), Scenario 5 (governed destruction) |
-| LOE 3 | Activity Characterization & Decision Support | Scenario 4 (governed cueing with data lineage) |
-| LOE 4 | AI-Enhanced Decision Support & Predictive Analytics | Scenario 4 (privacy-gated predictive model, authority-bound cues) |
+| LOE 1 | Persistent Data Collection & Coverage | Scenario 1 (multi-source ingest, NIPR/SIPR/Mission-Partner/partner-nation) |
+| LOE 2 | Sovereign Data Handling, Resilience & Continuity | Scenario 2 (disconnected ops), Scenario 4 (governed destruction) |
+| LOE 3 | Activity Characterization & Decision Support | Scenario 3 (governed cueing with data lineage) |
+| LOE 4 | AI-Enhanced Decision Support & Predictive Analytics | Scenario 3 (privacy-gated predictive model, authority-bound cues) |
 
 ## Network topology
 
@@ -60,7 +60,7 @@ The operator holds the execution vault on net_secure. Source connectors hold enr
 The gateway currently runs in **consensus** posture; L2 BFT consensus is enforced as a fail-closed gate. Under consensus:
 - **L1 doctrine** is enforced at admission (compiled-in threat detectors block dangerous commands).
 - **L2 consensus** is enforced: ensemble Ed25519 votes must meet quorum for the transaction to be admitted.
-- **L3 notary** proofs are **attached to envelopes and audited in the receipt**, but do **not** gate admission (deferred to Phase 3).
+- **L3 notary** proofs are attached to envelopes and audited in the receipt, but do not gate admission.
 - The operator executes admitted commands via `run_shell_command`, driving the `datasvc` actuator.
 - Signed receipts are written to the hash-chained ledger for every admitted operation.
 
@@ -74,9 +74,8 @@ The gateway boots with `--posture consensus --consensus-id dhs-consensus --conse
 |---|---|---|---|
 | **Phase 1** | doctrine | L1 doctrine enforcement, L5 actuator execution, signed receipts, disconnected ops | Complete |
 | **Phase 2** | consensus | L2 BFT consensus as a fail-closed gate (quorum required) | **Active** |
-| **Phase 3** | notary | L3 notary suspend/approve flow for cross-domain release | **Active** (scenario 2) |
 
-Scenario 2 dynamically restarts the gateway in notary posture, runs the release scenario, and restores consensus posture afterward. All other scenarios run under consensus.
+All scenarios run under consensus posture; the gateway is not restarted mid-demo.
 
 ## Port mappings
 
@@ -92,7 +91,6 @@ L1 doctrine is **compiled-in** threat detectors enforced by the Gateway at admis
 
 The scenarios that exercise real L1 enforcement:
 - **dhs-evidence-block**: `rm -rf /var/log/g8e` is rejected at L1 admission
-- **dhs-release**: L3 notary suspend/approve flow gates cross-domain release
 
 ## Quick start
 
@@ -101,31 +99,28 @@ The scenarios that exercise real L1 enforcement:
 make build && cp g8e demos/bin/g8e
 
 g8e demos start dhs
-g8e demos run dhs        # enrolls a passkey inline, then runs all five scenarios
+g8e demos run dhs        # runs all four scenarios
 g8e demos run dhs 2      # run a single scenario
 g8e audit receipts       # inspect the audit trail / ledger
 g8e demos clean dhs
 ```
 
-`g8e demos run` enrolls a host CLI session and registers a WebAuthn passkey in-process before running scenarios. A browser window opens automatically for the passkey ceremony — no separate terminal or manual `auth enroll` step is required. The enrolled identity is threaded into the harness so the suspended transaction and the browser approver share the same user identity.
+`g8e demos run` runs every scenario end-to-end with no human interaction. The gateway boots in consensus posture and stays there for the whole run; no posture switching, no host-CLI enrollment, no passkey ceremony. Notary scenarios (`dhs-release`) remain in the harness registry for manual testing via `g8e demos scenarios run dhs-release` against a manually-started demo with a manually-enrolled passkey, but the automated `demos run` orchestration excludes them.
 
 ## Scenarios
 
-All scenarios run via `demos scenarios run`, a real g8e binary that submits genuine `GovernanceEnvelope`s over mTLS to the gateway. Scenarios use `MCPToolsCall` (Path A): the harness calls the MCP `tools/call` endpoint, the gateway builds the `GovernanceEnvelope` internally, runs L2 consensus deliberation via `LocalDeliberator`, and suspends transactions requiring L3 notary approval. For notary scenarios, the harness waits for human browser approval via `WaitForHumanApproval`, which subscribes to the gateway's SSE stream for `approval.completed` events and prints the approval URL for the human to complete the WebAuthn passkey ceremony in their browser. The gateway performs full real WebAuthn verification — no mock L3 bypass exists. The operator executes admitted commands via `run_shell_command`, driving the `datasvc` actuator through the `dataop` wrapper.
+All scenarios run via `demos scenarios run`, a real g8e binary that submits genuine `GovernanceEnvelope`s over mTLS to the gateway. Scenarios use `MCPToolsCall` (Path A): the harness calls the MCP `tools/call` endpoint, the gateway builds the `GovernanceEnvelope` internally, runs L2 consensus deliberation via `LocalDeliberator`, and admits or rejects the envelope at L1/L2. The operator executes admitted commands via `run_shell_command`, driving the `datasvc` actuator through the `dataop` wrapper.
 
 ### 1: Sovereign Multi-Source Ingest (chain-of-custody) (LOE 1)
 **Scenario `dhs-ingest`**: A coalition source connector submits a `GovernanceEnvelope` wrapping a `run_shell_command` that drives the Sovereign Data Service (L5 actuator). L1 doctrine admits the envelope; L2 consensus quorum is met and verified. The ingest is executed and a signed receipt is written to the hash-chained ledger. The `datasvc` records an `INGEST` operation.
 
-### 2: Cross-Domain Release requires Notary authority (LOE 1 & 2)
-**Scenario `dhs-release`**: The gateway is restarted in **notary** posture. A cross-domain release is submitted with L2 consensus only. Under notary posture the Gateway suspends the transaction pending an out-of-band L3 principal (release authority) approval. The harness prints the approval URL and subscribes to the gateway's SSE stream for the `approval.completed` event. The human completes the WebAuthn passkey ceremony in their browser (using the passkey enrolled inline at the start of `demos run`). Once approved, the release executes on the L5 actuator (datasvc records a `RELEASE` operation). The gateway is then restored to consensus posture.
-
-### 3: Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
+### 2: Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
 The Mission Partner datalink is severed (docker network disconnect). Governance continues locally; a `dhs-ingest` scenario runs through the gateway with the datalink down. Every decision is committed to the Git-backed ledger and SQLite audit vault on the operator. The datalink is restored afterward. No cloud required.
 
-### 4: Governed Predictive Cueing (LOE 3 & 4)
+### 3: Governed Predictive Cueing (LOE 3 & 4)
 **Scenario `dhs-cue`**: An authorized interdiction cue with L2 ensemble quorum (decision=true) is admitted and executed by the L5 actuator. The `datasvc` records a `CUE` operation.
 
-### 5: Sovereign Destruction + tamper-proof audit (LOE 2)
+### 4: Sovereign Destruction + tamper-proof audit (LOE 2)
 **Scenario `dhs-evidence-block`**: A compromised connector tries to wipe the audit trail with `rm -rf /var/log/g8e`; L1 doctrine rejects it at admission (the data-destruction threat detector fires). Even with valid L2 + L3 proofs attached, L1 is the hard gate and runs first.
 **Scenario `dhs-purge`**: A governed retention purge is admitted by L1 doctrine with L2 consensus quorum met, and the L5 actuator records a `PURGE` operation with a cryptographic destruction receipt written to the ledger.
 
@@ -134,11 +129,11 @@ The Mission Partner datalink is severed (docker network disconnect). Governance 
 | Rubric criterion | Where it shows up |
 |---|---|
 | Multi-source Data Integration | Scenario 1 |
-| System Interoperability (NIPR/SIPR/Mission Partner/partner-nation) | Scenarios 1 & 2 |
-| Privacy & Civil-Liberties Compliance | Scenarios 1, 4, 5 |
-| Data Sovereignty & Control | Scenarios 2, 3, 5 |
-| System Resilience & Scalability | Scenario 3 |
-| Decision Support & Predictive Analytics | Scenario 4 |
+| System Interoperability (NIPR/SIPR/Mission Partner/partner-nation) | Scenario 1 |
+| Privacy & Civil-Liberties Compliance | Scenarios 1, 3, 4 |
+| Data Sovereignty & Control | Scenarios 2, 4 |
+| System Resilience & Scalability | Scenario 2 |
+| Decision Support & Predictive Analytics | Scenario 3 |
 | Auditability / Legal & Policy Adherence | every scenario (signed receipts → ledger) |
 
 ## License

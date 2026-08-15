@@ -10,10 +10,8 @@ import json
 import os
 import sys
 
-LOG_PATH = os.environ.get("CLOUDSVC_LOG", "/var/cloudsvc/operations.jsonl")
-KSI_RESULT_PATH = os.environ.get(
-    "KSI_RESULT_PATH", "/root/.g8e/data/compliance/ksi-history"
-)
+LOG_PATH = "/var/cloudsvc/operations.jsonl"
+KSI_RESULT_PATH = "/root/.g8e/data/compliance/ksi-history"
 
 
 def verify_operations(wanted):

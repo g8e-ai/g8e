@@ -426,27 +426,6 @@ func TestRunAgentHarness_ConfigLoadError(t *testing.T) {
 	})
 }
 
-// ─── switchDemoPosture error path ────────────────────────────────────────────
-
-func TestSwitchDHSPosture_ErrorPath(t *testing.T) {
-	t.Run("returns error when docker compose file does not exist", func(t *testing.T) {
-		tempDir := testutil.TempDir(t)
-		err := switchDHSPosture(tempDir, "consensus")
-		require.Error(t, err)
-		// Docker will fail because the compose file doesn't exist
-		assert.Contains(t, err.Error(), "stop gateway")
-	})
-}
-
-func TestSwitchFedRAMPPosture_ErrorPath(t *testing.T) {
-	t.Run("returns error when docker compose file does not exist", func(t *testing.T) {
-		tempDir := testutil.TempDir(t)
-		err := switchFedRAMPPosture(tempDir, "consensus")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "stop gateway")
-	})
-}
-
 // ─── printMCPConfigLocal with valid config ───────────────────────────────────
 
 func TestPrintMCPConfigLocal_WithValidCerts(t *testing.T) {

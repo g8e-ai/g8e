@@ -3,7 +3,7 @@ name: g8e-fedramp
 services:
   gateway:
     build:
-      context: ..
+      context: ../..
       dockerfile: Dockerfile
     container_name: g8e-fedramp-gateway
     hostname: gateway
@@ -36,7 +36,7 @@ services:
 
   operator:
     build:
-      context: ..
+      context: ../..
       dockerfile: Dockerfile
     container_name: g8e-fedramp-operator
     hostname: operator
@@ -64,7 +64,7 @@ services:
 
   agent-runtime:
     build:
-      context: ..
+      context: ../..
       dockerfile: Dockerfile
     container_name: g8e-fedramp-agent
     hostname: agent-runtime
@@ -73,7 +73,6 @@ services:
       - fedramp-operator-state:/root/.g8e:ro
       - ./config/ensemble-seed.hex:/etc/g8e/ensemble-seed.hex:ro
       - ./config/consensus-bootstrap.json:/etc/g8e/consensus-bootstrap.json:ro
-      - ${HOST_G8E_PKI:-/dev/null}:/host-creds:ro
     networks:
       net_internal:
         ipv4_address: 10.72.0.30
@@ -94,6 +93,7 @@ services:
     command: ["python", "/app/cloudsvc.py"]
     volumes:
       - fedramp-cloudsvc-data:/var/cloudsvc
+      - fedramp-gateway-state:/root/.g8e:ro
       - ./cloudsvc.py:/app/cloudsvc.py:ro
       - ./verify_ops.py:/app/verify_ops.py:ro
     networks:

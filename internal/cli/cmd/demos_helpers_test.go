@@ -66,50 +66,6 @@ func TestTitleCase_EmptyStringReturnsEmpty(t *testing.T) {
 	assert.Equal(t, "", titleCase(""))
 }
 
-func TestDemoHTTPPort_AllKnownOrgs(t *testing.T) {
-	tests := []struct {
-		org      string
-		expected string
-	}{
-		{constants.DemosOrgHealthcare, "8081"},
-		{constants.DemosOrgFinance, "8082"},
-		{constants.DemosOrgDHS, "8087"},
-		{constants.DemosOrgFedRAMP, "8088"},
-		{constants.DemosOrgFrontend, "8083"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.org, func(t *testing.T) {
-			assert.Equal(t, tt.expected, demoHTTPPort(tt.org))
-		})
-	}
-}
-
-func TestDemoHTTPPort_UnknownOrgReturnsEmpty(t *testing.T) {
-	assert.Equal(t, "", demoHTTPPort("unknown-org"))
-}
-
-func TestDemoHTTPSPort_AllKnownOrgs(t *testing.T) {
-	tests := []struct {
-		org      string
-		expected string
-	}{
-		{constants.DemosOrgHealthcare, "8444"},
-		{constants.DemosOrgFinance, "8445"},
-		{constants.DemosOrgDHS, "8450"},
-		{constants.DemosOrgFedRAMP, "8451"},
-		{constants.DemosOrgFrontend, "8446"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.org, func(t *testing.T) {
-			assert.Equal(t, tt.expected, demoHTTPSPort(tt.org))
-		})
-	}
-}
-
-func TestDemoHTTPSPort_UnknownOrgReturnsEmpty(t *testing.T) {
-	assert.Equal(t, "", demoHTTPSPort("unknown-org"))
-}
-
 func TestBuildScpArgs_AllFlagsEnabled(t *testing.T) {
 	args := buildScpArgs(2222, "/home/user/.ssh/id_rsa", true, true, true, true, "/src/file", "user@host:/dst")
 	assert.Contains(t, args, "-P")
@@ -236,23 +192,6 @@ func TestHarnessRun_RunMode(t *testing.T) {
 	assert.Equal(t, "demos", args[7])
 	assert.Equal(t, "scenarios", args[8])
 	assert.Equal(t, "run", args[9])
-}
-
-func TestHarnessRun_WithoutExtraFlags(t *testing.T) {
-	cfg := harnessConfig{
-		Container: "operator",
-		MTLSURL:   "https://g8e.local:8443",
-		PublicURL: "http://g8e.local:8080",
-		CertPath:  "/certs/operator.pem",
-		KeyPath:   "/certs/operator-key.pem",
-		CAPath:    "/certs/ca-bundle.pem",
-	}
-	args := harnessRun("test_scenario", cfg)
-
-	assert.NotContains(t, args, "--ensemble")
-	assert.NotContains(t, args, "--l3-mode")
-	assert.NotContains(t, args, "--consensus-seed")
-	assert.NotContains(t, args, "--consensus-id")
 }
 
 func TestDefaultHarnessConfig_ReturnsExpectedDefaults(t *testing.T) {
@@ -477,14 +416,14 @@ func TestPrintResultsTable_OutputContainsAllRows(t *testing.T) {
 }
 
 func TestRunScenarioWithResult_UnknownOrgReturnsNotFound(t *testing.T) {
-	_, err := runScenarioWithResult("unknown-org", "/tmp", "1", hostIdentity{})
+	_, err := runScenarioWithResult("unknown-org", "/tmp", "1")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrNotFound))
 }
 
 func TestRunAllScenarios_UnknownOrgReturnsNotFound(t *testing.T) {
 	cmd := &cobra.Command{}
-	err := runAllScenarios(cmd, "unknown-org", "/tmp", hostIdentity{})
+	err := runAllScenarios(cmd, "unknown-org", "/tmp")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrNotFound))
 }
