@@ -93,6 +93,7 @@ services:
     command: ["python", "/app/cloudsvc.py"]
     volumes:
       - fedramp-cloudsvc-data:/var/cloudsvc
+      - fedramp-gateway-state:/root/.g8e:ro
       - ./cloudsvc.py:/app/cloudsvc.py:ro
       - ./verify_ops.py:/app/verify_ops.py:ro
     networks:
