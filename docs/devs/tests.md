@@ -414,4 +414,4 @@ CI does **not** run Tier 3 Docker E2E tests.
 - Copy protocol constants and doctrine files into package (`protocol/constants/*.json` and `protocol/constants/doctrine/` into `g8e/_data/`)
 - `twine check` on built dist
 - Package includes `py.typed` PEP 561 marker for type checker support
-- Post-publish `verify-install` job: fresh `pip install g8e==<version>` from PyPI on ubuntu/macos/windows with import verification
+- Post-publish `verify-install` job: polls the PyPI JSON API (`https://pypi.org/pypi/g8e/json`) until the version appears in `releases`, then fresh `pip install --no-cache-dir g8e==<version>` on ubuntu/macos/windows with import verification. Polling the API (rather than pip's CDN-cached index) avoids spurious "No matching distribution" failures when a CDN edge has not yet propagated the new version.
