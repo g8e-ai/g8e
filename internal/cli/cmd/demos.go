@@ -1293,9 +1293,19 @@ func demoStep(demoDir, label string, fatal bool, args ...string) error {
 
 // demoStepHTTP runs a curl command that writes the HTTP status code to stdout
 // (via -o /dev/null -w "%{http_code}") and validates the response against the
-// expected status code. Unlike demoStep, this checks the actual HTTP response
-// status, not just the curl exit code.
+// single expected status code. Unlike demoStep, this checks the actual HTTP
+// response status, not just the curl exit code.
 func demoStepHTTP(demoDir, label string, expectedCode string, args ...string) error {
+	return demoStepHTTPAny(demoDir, label, []string{expectedCode}, args...)
+}
+
+// demoStepHTTPAny runs a curl command that writes the HTTP status code to stdout
+// (via -o /dev/null -w "%{http_code}") and validates the response against any
+// of the expected status codes. Use for endpoints whose correct behavior spans
+// multiple codes (e.g. a passkey challenge endpoint that returns 200 for a
+// valid body but 400 for a malformed one — both prove the endpoint is
+// reachable and enforcing input validation).
+func demoStepHTTPAny(demoDir, label string, expectedCodes []string, args ...string) error {
 	if demoVerbose {
 		fmt.Printf("  $ %s\n", strings.Join(args, " "))
 	}
@@ -1313,12 +1323,14 @@ func demoStepHTTP(demoDir, label string, expectedCode string, args ...string) er
 	}
 	actual := strings.TrimSpace(stdout.String())
 	if demoVerbose {
-		fmt.Printf("  HTTP status: %s (expected: %s)\n\n", actual, expectedCode)
+		fmt.Printf("  HTTP status: %s (expected one of: %s)\n\n", actual, strings.Join(expectedCodes, ", "))
 	}
-	if actual != expectedCode {
-		return fmt.Errorf("%s: expected HTTP %s, got %s", label, expectedCode, actual)
+	for _, code := range expectedCodes {
+		if actual == code {
+			return nil
+		}
 	}
-	return nil
+	return fmt.Errorf("%s: expected HTTP %s, got %s", label, strings.Join(expectedCodes, " or "), actual)
 }
 
 // demoScenarioStep prints the step description, runs the command via demoStep,

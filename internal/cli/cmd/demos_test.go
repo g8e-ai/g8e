@@ -561,6 +561,38 @@ func TestDemoStepHTTP(t *testing.T) {
 	})
 }
 
+func TestDemoStepHTTPAny(t *testing.T) {
+	t.Run("demoStepHTTPAny function exists", func(t *testing.T) {
+		assert.NotNil(t, demoStepHTTPAny)
+	})
+
+	t.Run("passes when status matches any expected code", func(t *testing.T) {
+		dir := t.TempDir()
+		err := demoStepHTTPAny(dir, "passkey challenge", []string{"200", "400"},
+			"echo", "400",
+		)
+		assert.NoError(t, err)
+	})
+
+	t.Run("returns error when status matches no expected code", func(t *testing.T) {
+		dir := t.TempDir()
+		err := demoStepHTTPAny(dir, "passkey challenge", []string{"200", "400"},
+			"echo", "500",
+		)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected HTTP 200 or 400")
+		assert.Contains(t, err.Error(), "got 500")
+	})
+
+	t.Run("returns error when command fails", func(t *testing.T) {
+		err := demoStepHTTPAny(t.TempDir(), "failing command", []string{"200"},
+			"false",
+		)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failing command")
+	})
+}
+
 func TestHealthcareScenarioDescriptions(t *testing.T) {
 	t.Run("scenario descriptions are documented in run command", func(t *testing.T) {
 		cmd := demosRunCmd()
