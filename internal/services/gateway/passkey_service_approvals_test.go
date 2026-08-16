@@ -430,7 +430,7 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 		resp := response.NewWriter(logger)
 		svc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 		require.NoError(t, err)
-		sseStore := NewSSEEventService(stores.DB, logger)
+		sseStore := stores.SSEStore
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
 		orchestrator, err := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
@@ -488,7 +488,7 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 			handler.orchestrator.EmitApprovalCompletedSSE(userID, "cli-no-sse-1", txHash)
 		}
 
-		sseStore := NewSSEEventService(stores.DB, logger)
+		sseStore := stores.SSEStore
 		route := SSERoute{UserID: userID, CLISessionID: "cli-no-sse-1"}
 		events, err := sseStore.SSEEventsListSince(route, 0, 10)
 		require.NoError(t, err)
@@ -502,7 +502,7 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 		resp := response.NewWriter(logger)
 		svc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 		require.NoError(t, err)
-		sseStore := NewSSEEventService(stores.DB, logger)
+		sseStore := stores.SSEStore
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
 		orchestrator, err := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
@@ -530,7 +530,7 @@ func TestHandleApprovalVerify_SSE_EmittedToApproverWhenSuspendedTxUserIDEmpty(t 
 	resp := response.NewWriter(logger)
 	svc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	require.NoError(t, err)
-	sseStore := NewSSEEventService(stores.DB, logger)
+	sseStore := stores.SSEStore
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 

@@ -73,7 +73,7 @@ func newTestOrchestratorDeps(t *testing.T) (*SSEEventService, *GatewayWebSocketH
 	t.Helper()
 	_, stores := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	sseStore := NewSSEEventService(stores.DB, logger)
+	sseStore := stores.SSEStore
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 	return sseStore, pubsub
@@ -173,7 +173,7 @@ func TestPasskeyOrchestrator_ListSuspendedTransactions(t *testing.T) {
 func TestNewPasskeyOrchestrator_NilSSEDependencies_ReturnsError(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	_, stores := newTestDB(t)
-	sseStore := NewSSEEventService(stores.DB, logger)
+	sseStore := stores.SSEStore
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
@@ -203,7 +203,7 @@ func TestPasskeyOrchestrator_EmitApprovalCompletedSSE_ParameterGuards(t *testing
 	t.Run("no-ops when userID is empty", func(t *testing.T) {
 		_, stores := newTestDB(t)
 		logger := testutil.NewTestLogger()
-		sseStore := NewSSEEventService(stores.DB, logger)
+		sseStore := stores.SSEStore
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
 		o, err := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
@@ -219,7 +219,7 @@ func TestPasskeyOrchestrator_EmitApprovalCompletedSSE_ParameterGuards(t *testing
 	t.Run("no-ops when cliSessionID is empty", func(t *testing.T) {
 		_, stores := newTestDB(t)
 		logger := testutil.NewTestLogger()
-		sseStore := NewSSEEventService(stores.DB, logger)
+		sseStore := stores.SSEStore
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
 		o, err := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
