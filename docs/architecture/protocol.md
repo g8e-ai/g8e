@@ -4,8 +4,8 @@ title: g8e Protocol Library
 
 # g8e Protocol Library
 
-Last Updated: 2026-08-07
-Version: v1.7.0
+Last Updated: 2026-08-16
+Version: v1.7.5
 
 The g8e Protocol Library is the canonical wire contract for all mutations in the g8e zero-trust execution platform. It provides schema definitions, JSON constant registries, JSON model schemas, Pydantic models, dynamic enum generation, SPIFFE workload identity helpers, and example programs for building compatible clients and services. Every mutation passing through the platform flows through a 5-layer interlock sequence:
 
@@ -53,12 +53,12 @@ The protocol publishes as two independent packages: a Go module sharing the plat
 
 ### Go Requirements & Installation
 
-The Go protocol package requires Go 1.26 or later. Direct dependencies include `google.golang.org/grpc v1.83.0` and `google.golang.org/protobuf v1.36.11`. Transitive dependencies are vendored in the root vendor directory.
+The Go protocol package requires Go 1.26.6 or later. Direct dependencies include `google.golang.org/grpc v1.83.0` and `google.golang.org/protobuf v1.36.11`; remaining dependencies are managed through the root `go.mod`.
 
 Install or update the Go module using standard Go tooling:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.7.0
+go get github.com/g8e-ai/g8e@v1.7.5
 ```
 
 To fetch the latest release:
@@ -103,7 +103,7 @@ Protocol development uses standard Make targets defined in the protocol build co
 - `make fmt`: Formats source files using standard formatting rules.
 - `make vet`: Executes Go static analysis checks.
 - `make lint`: Runs configured linter checks across the package.
-- `make openapi`: Generates OpenAPI specifications from protobuf definitions.
+- `make openapi`: Stub target that prints setup instructions for OpenAPI generation from protobuf; use `make proto` to regenerate protobuf artifacts.
 
 ---
 
@@ -122,7 +122,7 @@ pip install g8e
 To pin a specific release version:
 
 ```bash
-pip install g8e==1.7.0
+pip install g8e==1.7.5
 ```
 
 ### Python Package Overview
@@ -195,12 +195,13 @@ Example Model Context Protocol (MCP) server configurations demonstrate deploymen
 
 Protobuf code generation is managed with `buf`. Generation behavior is configured in the root code generation configuration file `buf.gen.yaml`.
 
-Install buf and compile schemas using standard commands from the repository root:
+Compile schemas from the repository root using the Buf-based `proto` target:
 
 ```bash
-make buf-install
-buf generate
+make proto
 ```
+
+`make proto` installs the Buf CLI if it is not present and then runs `buf generate protocol/proto` to produce the Go and Markdown artifacts.
 
 Code generation produces Go structs, gRPC stubs, and Markdown API reference documentation in target protocol directories. Module configuration resides in the protobuf schema root.
 
@@ -216,7 +217,7 @@ The protocol packages and platform binary share a single version number tracked 
 - **MINOR**: Backward-compatible new protocol features.
 - **PATCH**: Backward-compatible bug fixes and minor updates.
 
-Version strings use a `v` prefix (`v1.7.0`) in tags, repository version files, and documentation headers. Python distribution files omit the prefix (`1.7.0`).
+Version strings use a `v` prefix (`v1.7.5`) in tags, repository version files, and documentation headers. Python distribution files omit the prefix (`1.7.5`).
 
 ### Release Workflow
 

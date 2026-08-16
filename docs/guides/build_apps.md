@@ -358,7 +358,7 @@ The design patterns documented in the [Building an Agentic System](#building-an-
 
 ## Building an Agentic System
 
-This section documents the practical steps for building a g8e-compliant agentic ensemble. For the architecture-level overview of the ensemble topology, intent-to-execution pipeline, persona system, and hash-chained ledger context model, see [AI Agents in a g8e-Compatible Agentic Ensemble](../architecture/agents.md). For the consensus signature verification and quorum policy details, see [Consensus Architecture](../architecture/consensus.md).
+This section documents the practical steps for building a g8e-compliant agentic ensemble. For the architecture-level overview of the g8e governance boundary and the agent client surface, see [AI Agents and the g8e Governance Boundary](../architecture/agents.md). For the consensus signature verification and quorum policy details, see [Consensus Architecture](../architecture/consensus.md).
 
 A g8e-compliant agentic system is an L2 consensus producer. It consumes the Gateway's protocol surface (MCP tool calls, A2A messaging, governance envelope submission) and produces typed, signed `GovernanceEnvelope` transactions. It has no privileged Gateway role: it is a client that produces consensus signatures.
 
@@ -382,7 +382,7 @@ The layers are:
 - **Defense Layer**: A coordinator orchestrates risk sub-agents that classify shell command risk, file operation risk, and failure recoverability into consolidated pre-execution verdicts.
 - **Utility Layer**: Support agents generate case titles, extract durable user preferences for cross-conversation memory, and evaluate benchmark performance.
 
-See [AI Agents in a g8e-Compatible Agentic Ensemble](../architecture/agents.md) for the full persona catalog and ensemble topology.
+See [AI Agents and the g8e Governance Boundary](../architecture/agents.md) for the platform boundary and client surface that constrains every g8e-compatible ensemble.
 
 ### Consensus Cascade
 

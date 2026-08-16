@@ -4,10 +4,10 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-08-07
-Version: v1.7.0
+Last Updated: 2026-08-16
+Version: v1.7.5
 
-The **Governed Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions with L1-L3 proofs attached from the Gateway (PDP), re-verifies those proofs locally, then enforces L4 Warden and L5 Actuator gates, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
+The **Governed Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions with L2-L3 proofs and L1 validation results attached from the Gateway (PDP), re-verifies the L2 and L3 proofs and re-runs L1 doctrine validation locally, then enforces L4 Warden and L5 Actuator gates, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
 The reference implementation of a g8e-compliant Policy Execution Point (PEP) is the `g8e` binary. The same binary operates in two modes:
 
@@ -28,26 +28,31 @@ The Operator is the only component capable of mutating the host. It executes rem
 
 ## 2. 5-Layer Verification Sequence
 
-When a command targets an Operator, the Gateway (PDP) first processes L1-L3 (Doctrine, Consensus, Notary) and attaches the resulting proofs to the `GovernanceEnvelope`. The Operator (PEP) then runs L4-L5 locally, re-verifying all L1-L3 proofs against its own state before executing. The full pipeline is fail-closed at every layer:
+When a command targets an Operator, the Gateway (PDP) first processes L1-L3 (Doctrine, Consensus, Notary) and attaches the resulting proofs to the `GovernanceEnvelope`. The Operator (PEP) then runs L4-L5 locally, re-running L1 doctrine validation and re-verifying the L2 and L3 proofs against its own state before executing. The full pipeline is fail-closed at every layer:
 
 ### L1: Doctrine (Technical Bedrock) - Gateway (PDP)
-The **L1Doctrine** layer runs on the Gateway as a policy decision. It provides foundational hard gates, blocking malicious strings at the schema level and executing real-time MITRE ATT&CK heuristics to detect threats like reverse shells, privilege escalation, and destructive disk operations. L1 is the first line of defense and cannot be bypassed. The Operator re-verifies L1 results from the attached envelope proofs.
+The L1 Doctrine layer runs on the Gateway as a policy decision. It provides foundational hard gates, blocking malicious strings at the schema level and executing real-time MITRE ATT&CK heuristics to detect threats like reverse shells, privilege escalation, and destructive disk operations. L1 is the first line of defense and cannot be bypassed. The Operator re-runs L1 doctrine validation on the decoded payload using its local doctrine rules.
 
 ### L2: Consensus - Gateway (PDP)
-The **L2Consensus** layer runs on the Gateway as a policy decision. The Consensus evaluates the transaction and produces Ed25519 signed votes. The Operator re-verifies these L2 signatures against its locally trusted signer store, ensuring that no single upstream agent can unilaterally mutate the host. See [Consensus](./consensus.md) for consensus configuration and setup.
+The L2 Consensus layer runs on the Gateway as a policy decision. The Consensus evaluates the transaction and produces Ed25519 signed votes. The Operator re-verifies these L2 signatures against its locally trusted signer store, ensuring that no single upstream agent can unilaterally mutate the host. See [Consensus](./consensus.md) for consensus configuration and setup.
 
 ### L3: Notary (Authorization) - Gateway (PDP)
-The **L3Notary** layer runs on the Gateway as a policy decision. It enforces human-in-the-loop authorization. In gateway mode, passkey (WebAuthn) authorization is required for all sessions. CLI callers additionally undergo mTLS session verification including certificate fingerprint matching, session validity, and revocation checks. In operator (outbound) mode, the Notary validates suspended transaction approval, mTLS certificate fingerprint matching, and Ed25519 signatures over the transaction hash. Passkey authentication is not available in outbound mode. Mutations are blocked until a valid L3 proof is presented. Non-mutation actions (as classified by the action type's intrinsic mutation property) do not require L3 proof. L3 approval notifications use Server-Sent Events (SSE) for real-time delivery: the Gateway emits an `approval.completed` event scoped to the submitting user when a passkey approval is verified, and CLI clients subscribe to the SSE stream rather than polling. See [SSE Streaming](./sse.md) for the full SSE architecture.
+The L3 Notary layer runs on the Gateway as a policy decision. It enforces human-in-the-loop authorization.
+
+- **Gateway mode**: Passkey (WebAuthn) authorization is required for all sessions. CLI callers also undergo mTLS session verification, including certificate fingerprint matching, session validity, and revocation checks.
+- **Outbound mode**: The Notary validates suspended transaction approval, mTLS certificate fingerprint matching, and Ed25519 signatures over the transaction hash. Passkey authentication is not available in outbound mode.
+- **Mutation gating**: Mutations are blocked until a valid L3 proof is presented. Non-mutation actions (as classified by the action type's intrinsic mutation property) do not require L3 proof.
+- **Real-time notifications**: L3 approval notifications use Server-Sent Events (SSE). The Gateway emits an `approval.completed` event scoped to the submitting user when a passkey approval is verified, and CLI clients subscribe to the SSE stream rather than polling. See [SSE Streaming](./sse.md) for the full SSE architecture.
 
 ### L4: Warden (Pre-dispatch Gate) - Operator (PEP)
-The **L4Warden** runs on the Operator substrate as the final verification gate before execution. It enforces:
+The L4 Warden runs on the Operator substrate as the final verification gate before execution. It enforces:
 1. **Integrity**: Validates that the transaction ID, transaction hash, and computed hash of the canonical fields all match.
 2. **Freshness**: Enforces `expires_at` and checks for replay attacks via a local replay protection store.
-3. **State Binding**: Validates that the state Merkle root matches the host's current ledger root.
-4. **Quorum**: Confirms that L1, L2, and L3 proofs meet the current **Governance Posture** (`doctrine`, `consensus`, or `notary`).
+3. **State Binding**: Validates that the state Merkle root matches the current authoritative state root (gateway state root in outbound mode, local ledger root in standalone mode).
+4. **Quorum**: Verifies that L2 consensus votes reach the required quorum and that any required L3 proof is valid for the current **Governance Posture** (`doctrine`, `consensus`, or `notary`).
 
 ### L5: Actuator (Execution Boundary) - Operator (PEP)
-The **L5Actuator** runs on the Operator substrate as the singular execution boundary permitted to mutate host state. It dispatches verified payloads to internal handlers (shell, file edit, etc.) and uses a **dual-receipt model** with **JIT capability minting**:
+The L5 Actuator runs on the Operator substrate as the singular execution boundary permitted to mutate host state. It dispatches verified payloads to internal handlers (shell, file edit, etc.) and uses a **dual-receipt model** with **JIT capability minting**:
 1. **Pre-execution**: Signs an execution receipt with status EXECUTING and commits it to the local audit vault.
 2. **Rehydration**: Restores sensitive data (PII, credentials) that was scrubbed upstream by the **Sovereign Execution Boundary**, using local tokens.
 3. **JIT Capability Minting**: Mints a scoped, single-action, self-dissolving capability token bound to the transaction hash and action type, enforcing zero standing privileges. The capability is injected into the execution context for downstream handlers.
@@ -182,13 +187,13 @@ Configure your AI client to connect to the Gateway's universal HTTP MCP endpoint
 
 Execute a benign diagnostic command via your MCP client to verify the verification sequence, such as a `db_discover_topology` or `sys_oom_detect` tool call.
 
-The Operator will:
-1. Translate the request into a GovernanceEnvelope
-2. Enforce L1 (Technical Bedrock) checks
-3. Verify L2 (Consensus) signatures if in consensus/notary mode
-4. Require L3 (Notary) approval if in notary mode
-5. Execute through the Actuator boundary
-6. Emit a signed ActionReceipt
+The Operator:
+1. Translates the request into a GovernanceEnvelope
+2. Enforces L1 (Technical Bedrock) checks
+3. Verifies L2 (Consensus) signatures if in consensus/notary mode
+4. Requires L3 (Notary) approval if in notary mode
+5. Executes through the Actuator boundary
+6. Emits a signed ActionReceipt
 
 ### 5. Review Audit Trail
 
@@ -196,7 +201,7 @@ Query the audit vault to verify governance enforcement:
 
 - `g8e audit receipts` - List signed receipts (auto-discovers session from credentials)
 - `g8e audit events --limit 100` - Query raw audit events with an optional session filter
-- `g8e audit report` - Generate a compliance report (JSON and Markdown)
+- `g8e audit report` - Generate a compliance report (JSON)
 - `g8e audit export --out receipts.json` - Export the full receipts bundle for archival
 - `g8e audit summary` - Aggregate summary by event type and receipt status
 
@@ -249,4 +254,4 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 - [Storage Architecture](./storage.md) for audit vault and ledger internals
 - [Consensus](./consensus.md) for consensus configuration and consensus setup
 - [Encryption](./encryption.md) for encryption at rest details
-- [Lattice Adapter](../../internal/adapters/lattice/README.md) for Anduril Lattice COP integration
+- Lattice Adapter for Anduril Lattice COP integration

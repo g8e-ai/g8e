@@ -220,7 +220,7 @@ If you only need the g8e wire protocol for your own client or service, consume t
 **Go module** (requires Go 1.26+):
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.6.10
+go get github.com/g8e-ai/g8e@v1.7.5
 ```
 
 **Python package** (requires Python 3.10+):
@@ -239,7 +239,7 @@ The gateway supports three posture configurations:
 | --- | --- | --- | --- |
 | `doctrine` | enforced | audited | audited |
 | `consensus` | enforced | enforced | audited |
-| `notary` | enforced | enforced | enforced |
+| `notary` | enforced | enforced | enforced (mutations only) |
 
 L4 Warden and L5 Actuator layers are always active in all configurations. See [Governance Postures](docs/guides/getting_started.md#governance-postures) for setup details.
 
