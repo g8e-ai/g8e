@@ -593,7 +593,7 @@ Test helpers (per-package, build-tagged `integration` or test-only):
 - `NewTestFileSvc` in `internal/services/storage/storagetest/helpers.go` - Exported test fileSvc for storagetest consumers
 - `newAuthTestFileSvc` in `internal/cli/auth/client_test.go` - Auth client test fileSvc
 - `newPlatformTestFileSvc` in `internal/cli/platform/process_test.go` - Platform test fileSvc
-- `newCmdTestFileSvc` in `internal/cli/cmd/vault_test.go` - CLI command test fileSvc (uses CWD as base)
+- `newCmdTestEnv` in `internal/cli/cmd/testenv_test.go` - CLI command test env (temp-rooted fileSvc + aligned cfg); vault tests route through it plus `fileSvcFactoryFor` injection into the `*WithConfig` command variants
 - `newTestFileSvc` in `internal/cli/serve/test_setup_test.go` - Serve test fileSvc
 
 ## Test Infrastructure (Not Production)
