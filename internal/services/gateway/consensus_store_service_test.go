@@ -29,7 +29,7 @@ import (
 
 func TestConsensusStoreService_AddConsensus(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	consensusSvc := NewConsensusStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
+	consensusSvc := infra.Stores.ConsensusStore
 
 	// Generate test signers
 	pubKey1, _, err := ed25519.GenerateKey(nil)
@@ -253,7 +253,7 @@ func TestConsensusStoreService_AddConsensus(t *testing.T) {
 
 func TestConsensusStoreService_GetConsensus(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	consensusSvc := NewConsensusStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
+	consensusSvc := infra.Stores.ConsensusStore
 
 	// Create a test signer
 	pubKey, _, err := ed25519.GenerateKey(nil)
@@ -298,7 +298,7 @@ func TestConsensusStoreService_GetConsensus(t *testing.T) {
 
 func TestConsensusStoreService_ListConsensus(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	consensusSvc := NewConsensusStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
+	consensusSvc := infra.Stores.ConsensusStore
 
 	// Create test signers
 	pubKey1, _, err := ed25519.GenerateKey(nil)
@@ -366,7 +366,7 @@ func TestConsensusStoreService_ListConsensus(t *testing.T) {
 
 func TestConsensusStoreService_DeleteConsensus(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	consensusSvc := NewConsensusStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
+	consensusSvc := infra.Stores.ConsensusStore
 
 	// Create a test signer
 	pubKey, _, err := ed25519.GenerateKey(nil)
@@ -410,7 +410,7 @@ func TestConsensusStoreService_DeleteConsensus(t *testing.T) {
 
 func TestConsensusStoreService_UpdateDisableConsensus(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	consensusSvc := NewConsensusStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
+	consensusSvc := infra.Stores.ConsensusStore
 
 	pubKey, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -450,7 +450,7 @@ func TestConsensusStoreService_UpdateDisableConsensus(t *testing.T) {
 
 func TestConsensusStoreService_AddConsensus_AlreadyExists(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	consensusSvc := NewConsensusStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
+	consensusSvc := infra.Stores.ConsensusStore
 
 	pubKey, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -483,7 +483,7 @@ func TestConsensusStoreService_AddConsensus_AlreadyExists(t *testing.T) {
 
 func TestConsensusStoreService_GetConsensusPolicy(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	consensusSvc := NewConsensusStoreService(infra.Stores.DB, infra.Logger, infra.Stores.DocStore, infra.Stores.SignerStore)
+	consensusSvc := infra.Stores.ConsensusStore
 
 	pubKey, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)

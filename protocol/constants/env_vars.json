@@ -32,37 +32,37 @@
       "description": "In-memory operator session ID set by deploy script after enrollment; never persisted to config"
     },
     "ClientCert": {
-      "_go_const": "envG8EClientCert",
+      "_go_const": "EnvVar.ClientCert",
       "value": "G8E_CLIENT_CERT",
       "description": "Path to the operator client certificate for MCP stdio connections"
     },
     "ClientKey": {
-      "_go_const": "envG8EClientKey",
+      "_go_const": "EnvVar.ClientKey",
       "value": "G8E_CLIENT_KEY",
       "description": "Path to the operator client key for MCP stdio connections"
     },
     "CABundle": {
-      "_go_const": "envG8ECABundle",
+      "_go_const": "EnvVar.CABundle",
       "value": "G8E_CA_BUNDLE",
       "description": "Path to the CA trust bundle for MCP stdio connections"
     },
     "GatewayURL": {
-      "_go_const": "envG8EGatewayURL",
+      "_go_const": "EnvVar.GatewayURL",
       "value": "G8E_GATEWAY_URL",
       "description": "Override for the gateway URL used by MCP stdio; defaults to https://g8e.local:8443/mcp"
     },
     "AppID": {
-      "_go_const": "envG8EAppID",
+      "_go_const": "EnvVar.AppID",
       "value": "G8E_APP_ID",
       "description": "Application SPIFFE ID for delegated agent runs"
     },
     "AppCert": {
-      "_go_const": "envG8EAppCert",
+      "_go_const": "EnvVar.AppCert",
       "value": "G8E_APP_CERT",
       "description": "Path to the delegated application certificate for agent runs"
     },
     "AppKey": {
-      "_go_const": "envG8EAppKey",
+      "_go_const": "EnvVar.AppKey",
       "value": "G8E_APP_KEY",
       "description": "Path to the delegated application key for agent runs"
     },

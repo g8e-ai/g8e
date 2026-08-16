@@ -18,7 +18,6 @@ package gateway
 import (
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,7 +25,7 @@ import (
 func newStateRootService(t *testing.T) *StateRootService {
 	t.Helper()
 	_, stores := newTestDB(t)
-	return NewStateRootService(stores.DB, testutil.NewTestLogger())
+	return stores.StateRootSvc
 }
 
 func TestStateRootService_GetCurrentStateRoot(t *testing.T) {
@@ -45,7 +44,7 @@ func TestStateRootService_GetCurrentStateRoot(t *testing.T) {
 
 func TestStateRootService_InvalidateCache(t *testing.T) {
 	_, stores := newTestDB(t)
-	svc := NewStateRootService(stores.DB, testutil.NewTestLogger())
+	svc := stores.StateRootSvc
 
 	// Get initial state root
 	root1, err := svc.GetCurrentStateRoot()
@@ -68,7 +67,7 @@ func TestStateRootService_InvalidateCache(t *testing.T) {
 
 func TestStateRootService_StateChangeDetection(t *testing.T) {
 	_, stores := newTestDB(t)
-	svc := NewStateRootService(stores.DB, testutil.NewTestLogger())
+	svc := stores.StateRootSvc
 
 	// Get initial state root
 	root1, err := svc.GetCurrentStateRoot()
@@ -114,10 +113,10 @@ func TestStateRootService_CachingBehavior(t *testing.T) {
 
 func TestStateRootService_StateVersionMissing(t *testing.T) {
 	_, stores := newTestDB(t)
-	svc := NewStateRootService(stores.DB, testutil.NewTestLogger())
+	svc := stores.StateRootSvc
 
 	// Delete the state_version table — GetCurrentStateRoot should now return an error
-	_, err := stores.DB.Exec("DROP TABLE IF EXISTS state_version")
+	_, err := svc.db.Exec("DROP TABLE IF EXISTS state_version")
 	require.NoError(t, err)
 
 	_, err = svc.GetCurrentStateRoot()
@@ -132,7 +131,7 @@ func TestStateRootService_StateVersionMissing(t *testing.T) {
 // state root mismatches.
 func TestStateRootService_NoCacheLeakOnDocumentWrite(t *testing.T) {
 	_, stores := newTestDB(t)
-	svc := NewStateRootService(stores.DB, testutil.NewTestLogger())
+	svc := stores.StateRootSvc
 
 	// Get initial state root
 	root1, err := svc.GetCurrentStateRoot()

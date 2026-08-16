@@ -593,11 +593,14 @@ func (s *PasskeyService) revokeCredential(userID, credentialID string) (found bo
 	return true, len(newCreds), nil
 }
 
-// VerifyL3Proof verifies a WebAuthn assertion against a registered passkey.
-// The challenge is the transaction_hash.
-// The cliSessionID parameter is ignored for web sessions (WebAuthn) but is required
-// for interface compatibility with CLI mTLS-based L3 verification.
-func (s *PasskeyService) VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+// VerifyPasskeyProof verifies a WebAuthn assertion against a registered passkey.
+// The challenge is the transaction_hash. This is the passkey-domain primitive
+// composed by the governance gateway L3 notary (via governance.PasskeyVerifier);
+// it intentionally does not implement governance.L3Notary so the passkey domain
+// is not coupled to the governance interface shape.
+// The cliSessionID parameter is ignored for web sessions (WebAuthn) but is
+// accepted so the composing notary can forward it without a separate adapter.
+func (s *PasskeyService) VerifyPasskeyProof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	if userID == "" {
 		return false, constants.ErrUserIDRequired
 	}

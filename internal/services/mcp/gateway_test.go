@@ -1207,6 +1207,7 @@ func TestGatewayService_NewGatewayService(t *testing.T) {
 			Responder:       response.NewWriter(slog.Default()),
 			SuspendedStore:  &fakeSuspendedStore{},
 			MaxPayloadBytes: 10 * 1024 * 1024,
+			AuditStore:      noopAuditEventRecorder{},
 		}
 
 		g, err := NewGatewayService(deps)
@@ -1228,6 +1229,7 @@ func TestGatewayService_NewGatewayService(t *testing.T) {
 			Logger:          slog.Default(),
 			Responder:       response.NewWriter(slog.Default()),
 			MaxPayloadBytes: 10 * 1024 * 1024,
+			AuditStore:      noopAuditEventRecorder{},
 		}
 
 		g, err := NewGatewayService(deps)
@@ -1243,6 +1245,7 @@ func TestGatewayService_NewGatewayService(t *testing.T) {
 			Logger:          slog.Default(),
 			Responder:       response.NewWriter(slog.Default()),
 			MaxPayloadBytes: 10 * 1024 * 1024,
+			AuditStore:      noopAuditEventRecorder{},
 			FieldPathRegistryFactory: func(*slog.Logger) (*FieldPathRegistry, error) {
 				return nil, factoryErr
 			},
@@ -1256,23 +1259,21 @@ func TestGatewayService_NewGatewayService(t *testing.T) {
 	})
 }
 
-func TestGatewayService_AuditStore_DefaultIsNoOp(t *testing.T) {
+func TestGatewayService_NilAuditStore_ReturnsError(t *testing.T) {
 	t.Parallel()
 	deps := Dependencies{
 		Logger:          slog.Default(),
 		Responder:       response.NewWriter(slog.Default()),
 		SuspendedStore:  &fakeSuspendedStore{},
 		MaxPayloadBytes: 10 * 1024 * 1024,
+		// AuditStore intentionally omitted — a missing audit store is a wiring
+		// bug, not a no-op condition. NewGatewayService must fail closed.
 	}
 
 	g, err := NewGatewayService(deps)
-	require.NoError(t, err)
-
-	_, err = g.auditStore.RecordEvent(&storage.Event{
-		OperatorSessionID: "test-session",
-		Type:              "test",
-	})
-	require.NoError(t, err, "noopAuditEventRecorder should never error")
+	require.Error(t, err)
+	require.Nil(t, g)
+	require.ErrorIs(t, err, constants.ErrAuditStoreRequired)
 }
 
 func TestGatewayService_AuditStore_InjectedRecorderReceivesEvents(t *testing.T) {

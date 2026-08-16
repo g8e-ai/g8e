@@ -1254,13 +1254,13 @@ func TestAgentLaunchArgs(t *testing.T) {
 
 func TestRunMCPAgentRun_NoArgs(t *testing.T) {
 	t.Run("returns error when no args and no url", func(t *testing.T) {
-		err := runMCPAgentRun(nil, "", false, newFileSvc)
+		err := runMCPAgentRun(nil, "", false, newFileSvc, panickingEnrollerFactory())
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "specify an agent name")
 	})
 
 	t.Run("returns error for unknown agent", func(t *testing.T) {
-		err := runMCPAgentRun([]string{"unknown-agent-xyz"}, "", false, newFileSvc)
+		err := runMCPAgentRun([]string{"unknown-agent-xyz"}, "", false, newFileSvc, panickingEnrollerFactory())
 		require.Error(t, err)
 	})
 
@@ -1268,7 +1268,7 @@ func TestRunMCPAgentRun_NoArgs(t *testing.T) {
 		// Devin is now a local CLI agent and goes through launchAgentWithGovernance.
 		// We can't test the full launch path here (requires gateway), but we verify
 		// it does NOT return the old cloud-based error.
-		err := runMCPAgentRun([]string{"devin"}, "", false, newFileSvc)
+		err := runMCPAgentRun([]string{"devin"}, "", false, newFileSvc, panickingEnrollerFactory())
 		require.Error(t, err)
 		assert.NotContains(t, err.Error(), "cloud-based agent")
 	})
@@ -1338,8 +1338,8 @@ func TestHttpMCPProxy(t *testing.T) {
 func TestMcpStdioCmd_FlagsRegistered(t *testing.T) {
 	cmd := mcpStdioCmd()
 	expectedFlags := []string{
-		flagClientCert, flagClientKey, flagCABundle,
-		flagGatewayURL, flagAppCert, flagAppKey,
+		constants.Flag.ClientCert, constants.Flag.ClientKey, constants.Flag.CABundle,
+		constants.Flag.GatewayURL, constants.Flag.AppCert, constants.Flag.AppKey,
 	}
 	for _, name := range expectedFlags {
 		f := cmd.Flags().Lookup(name)

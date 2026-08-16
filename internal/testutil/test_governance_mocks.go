@@ -100,6 +100,13 @@ func (m *MockL3Notary) VerifyL3Proof(ctx context.Context, userID, transactionHas
 	return true, nil
 }
 
+// VerifyPasskeyProof delegates to VerifyL3Proof so this mock also satisfies
+// governance.PasskeyVerifier for tests that wire it as the passkey delegate of
+// NewGatewayL3Notary.
+func (m *MockL3Notary) VerifyPasskeyProof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+	return m.VerifyL3Proof(ctx, userID, transactionHash, cliSessionID, proof)
+}
+
 // L3Notary is now a unified interface in the governance package.
 // These mocks are kept here for internal testutil usage but implement the governance.L3Notary interface.
 
@@ -110,6 +117,13 @@ type ConfigurableMockL3Notary struct {
 
 func (m *ConfigurableMockL3Notary) VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	return m.ShouldPass, nil
+}
+
+// VerifyPasskeyProof delegates to VerifyL3Proof so this mock also satisfies
+// governance.PasskeyVerifier for tests that wire it as the passkey delegate of
+// NewGatewayL3Notary.
+func (m *ConfigurableMockL3Notary) VerifyPasskeyProof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+	return m.VerifyL3Proof(ctx, userID, transactionHash, cliSessionID, proof)
 }
 
 // NewConfigurableMockL3Notary creates a mock with the given pass behavior.
@@ -125,6 +139,12 @@ type SlowMockL3Notary struct {
 func (m *SlowMockL3Notary) VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	time.Sleep(m.Delay)
 	return true, nil
+}
+
+// VerifyPasskeyProof delegates to VerifyL3Proof so this mock also satisfies
+// governance.PasskeyVerifier.
+func (m *SlowMockL3Notary) VerifyPasskeyProof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+	return m.VerifyL3Proof(ctx, userID, transactionHash, cliSessionID, proof)
 }
 
 // NewSlowMockL3Notary creates a mock with the given delay.

@@ -16,6 +16,7 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -37,15 +38,22 @@ type PasskeyOrchestrator struct {
 	logger         *slog.Logger
 }
 
-// NewPasskeyOrchestrator creates a new PasskeyOrchestrator with all dependencies wired.
-func NewPasskeyOrchestrator(mcpSvc MCPServiceProvider, suspendedStore storage.SuspendedTransactionStore, sseStore *SSEEventService, pubsub *GatewayWebSocketHandler, logger *slog.Logger) *PasskeyOrchestrator {
+// NewPasskeyOrchestrator creates a new PasskeyOrchestrator with all dependencies
+// wired. SSEStore and PubSub are required: a nil SSE/pubsub dependency in a
+// posture that requires passkey ceremonies is a wiring bug, not a no-op
+// condition. Returns constants.ErrPasskeySSEDependenciesRequired when either
+// is nil.
+func NewPasskeyOrchestrator(mcpSvc MCPServiceProvider, suspendedStore storage.SuspendedTransactionStore, sseStore *SSEEventService, pubsub *GatewayWebSocketHandler, logger *slog.Logger) (*PasskeyOrchestrator, error) {
+	if sseStore == nil || pubsub == nil {
+		return nil, fmt.Errorf("passkey orchestrator: %w", constants.ErrPasskeySSEDependenciesRequired)
+	}
 	return &PasskeyOrchestrator{
 		mcpSvc:         mcpSvc,
 		suspendedStore: suspendedStore,
 		sseStore:       sseStore,
 		pubsub:         pubsub,
 		logger:         logger,
-	}
+	}, nil
 }
 
 // GetSuspendedTransaction retrieves a suspended transaction by hash from the MCP gateway.
@@ -67,7 +75,7 @@ func (o *PasskeyOrchestrator) ListSuspendedTransactions(ctx context.Context, use
 // the specific CLI session that submitted the transaction, so the waiting CLI
 // client receives real-time notification without polling.
 func (o *PasskeyOrchestrator) EmitApprovalCompletedSSE(userID, cliSessionID, txHash string) {
-	if o.sseStore == nil || o.pubsub == nil || userID == "" || cliSessionID == "" {
+	if userID == "" || cliSessionID == "" {
 		o.logger.Warn("approval: skipping SSE emission due to missing parameters", "user_id", userID, "cli_session_id", cliSessionID, "tx_hash", txHash)
 		return
 	}
@@ -117,10 +125,6 @@ func (o *PasskeyOrchestrator) EmitApprovalCompletedSSE(userID, cliSessionID, txH
 // CLI session so the waiting CLI client receives real-time notification. Uses the
 // models.SSEPushPayload wire format for compatibility with the SSE stream handler.
 func (o *PasskeyOrchestrator) EmitPasskeyRegisteredSSE(userID, cliSessionID string) {
-	if o.sseStore == nil || o.pubsub == nil {
-		return
-	}
-
 	eventPayload, err := json.Marshal(passkeyRegisteredEvent{
 		Type:         "passkey.registered",
 		UserID:       userID,

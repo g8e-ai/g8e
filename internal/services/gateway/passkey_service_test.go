@@ -96,7 +96,7 @@ func TestPasskeyServiceVerifyL3ProofRejectsMissingInputs(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ok, err := svc.VerifyL3Proof(context.Background(), tc.userID, tc.transactionHash, "", tc.proof)
+			ok, err := svc.VerifyPasskeyProof(context.Background(), tc.userID, tc.transactionHash, "", tc.proof)
 			require.Error(t, err)
 			assert.False(t, ok)
 		})
@@ -106,7 +106,7 @@ func TestPasskeyServiceVerifyL3ProofRejectsMissingInputs(t *testing.T) {
 func TestPasskeyServiceVerifyL3ProofRejectsUsersWithoutPasskeys(t *testing.T) {
 	svc, user := newPasskeyServiceForTest(t)
 
-	ok, err := svc.VerifyL3Proof(context.Background(), user.ID, strings.Repeat("a", 64), "", &commonv1.L3Proof{
+	ok, err := svc.VerifyPasskeyProof(context.Background(), user.ID, strings.Repeat("a", 64), "", &commonv1.L3Proof{
 		CredentialId:      base64.RawURLEncoding.EncodeToString([]byte("credential-id-123456")),
 		ClientDataJson:    base64.RawURLEncoding.EncodeToString([]byte(`{"type":"webauthn.get"}`)),
 		AuthenticatorData: base64.RawURLEncoding.EncodeToString([]byte(strings.Repeat("a", 37))),
@@ -124,7 +124,7 @@ func TestPasskeyServiceVerifyL3ProofRejectsUnregisteredCredential(t *testing.T) 
 	err := svc.addCredential(user.ID, testCredential("real-credential-id"))
 	require.NoError(t, err)
 
-	ok, err := svc.VerifyL3Proof(context.Background(), user.ID, "tx-hash", "", &commonv1.L3Proof{
+	ok, err := svc.VerifyPasskeyProof(context.Background(), user.ID, "tx-hash", "", &commonv1.L3Proof{
 		CredentialId:      base64.RawURLEncoding.EncodeToString([]byte("wrong-credential-id")),
 		ClientDataJson:    base64.RawURLEncoding.EncodeToString([]byte(`{"type":"webauthn.get","challenge":"dngtZWFzaA"}`)),
 		AuthenticatorData: base64.RawURLEncoding.EncodeToString([]byte(strings.Repeat("a", 37))),
@@ -151,7 +151,7 @@ func TestPasskeyServiceVerifyL3ProofRejectsMismatchedChallenge(t *testing.T) {
 	clientData := fmt.Sprintf(`{"type":"webauthn.get","challenge":"%s","origin":"localhost"}`,
 		base64.RawURLEncoding.EncodeToString([]byte(txHash1)))
 
-	ok, err := svc.VerifyL3Proof(context.Background(), user.ID, txHash2, "", &commonv1.L3Proof{
+	ok, err := svc.VerifyPasskeyProof(context.Background(), user.ID, txHash2, "", &commonv1.L3Proof{
 		CredentialId:      base64.RawURLEncoding.EncodeToString(credID),
 		ClientDataJson:    base64.RawURLEncoding.EncodeToString([]byte(clientData)),
 		AuthenticatorData: base64.RawURLEncoding.EncodeToString([]byte(strings.Repeat("a", 37))),

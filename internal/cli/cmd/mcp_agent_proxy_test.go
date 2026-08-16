@@ -94,13 +94,13 @@ func TestAgentLaunchArgs_IsCaseInsensitive(t *testing.T) {
 }
 
 func TestRunMCPAgentRun_NoArgsReturnsError(t *testing.T) {
-	err := runMCPAgentRun(nil, "", false, newFileSvc)
+	err := runMCPAgentRun(nil, "", false, newFileSvc, panickingEnrollerFactory())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "specify an agent name")
 }
 
 func TestRunMCPAgentRun_UnknownAgentReturnsError(t *testing.T) {
-	err := runMCPAgentRun([]string{"unknown-agent"}, "", false, newFileSvc)
+	err := runMCPAgentRun([]string{"unknown-agent"}, "", false, newFileSvc, panickingEnrollerFactory())
 	require.Error(t, err)
 }
 

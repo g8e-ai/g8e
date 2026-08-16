@@ -148,7 +148,7 @@ Return centralized error constants from `internal/constants/errors.go` for known
 - `internal/tools/agent_harness/` - Agent test harness with scenario runner (`client/`, `config/`, `scenarios/`) for MCP/A2A gateway integration tests
 - `test/` - Root-level E2E and integration tests (gateway, MCP, consensus, native tool registry, A2A)
 - Production gateway mode wires `DocumentStoreService` as `TransactionAuditStore`
-- Production outbound mode uses `auditStoreTransactionStore` adapter in `g8eo.go`
+- Production outbound mode wires `storage.SQLAuditStore` directly as `TransactionAuditStore` via its native `DocSet` method (no adapter)
 
 ## Dependency Construction Model
 
@@ -156,7 +156,7 @@ Return centralized error constants from `internal/constants/errors.go` for known
 
 **Construction-phase** (`Dependencies` struct, immutable after `NewGatewayService`): `Logger`, `Responder`, `SuspendedStore`, `ScrubbingService`, `ThreatScanner`, `MaxPayloadBytes`, `Posture`, `A2ADownstreamURL`, `PublicBaseURL`, `AuditStore`, `FieldPathRegistryFactory`, `EnvProc`, `StateRootProvider`, `SigningKey`, `KeyID`, `DownstreamURL`, `DBService`, `SessionValidator`, `AuditLogger`, `L2ConsensusDeliberator`.
 
-**Lazy forwarding adapters** break the circular dependency between `mcp.GatewayService` (needs `EnvProc` / `SessionValidator`) and `OperatorPubSubService` (needs `mcpGateway` for egress):
+**Lazy forwarding adapters** break the circular dependency between `mcp.GatewayService` (needs `EnvProc` / `SessionValidator`) and `OperatorPubSubService` (needs `mcpGateway` for egress). Each adapter's target field is an `atomic.Pointer[OperatorPubSubService]`; `SetTarget` calls `Store` (during boot) and the request-path method calls `Load`. The `atomic.Pointer` provides the memory ordering guarantees a raw pointer lacks — the target is read on the request path and written during boot, so unsynchronized aliasing is a data race under `-race`. A `Load` returning nil means the real target is not yet wired; the adapter returns `constants.ErrGatewayNotReady` (fail-closed) in that case.
 
 - `pubsub.GatewayEnvProcAdapter` — implements `governance.EnvelopeProcessor`, delegates to `OperatorPubSubService` once it is constructed. The adapter is pre-allocated in `GatewayModeService.build()` and passed to `NewGatewayService` as `EnvProc`. `NewGatewayOperatorPubSubService` calls `adapter.SetTarget(rs)` to wire the real target. Before `SetTarget` is called, `ProcessEnvelope` returns `constants.ErrGatewayNotReady` (fail-closed).
 - `pubsub.GatewaySessionValidatorAdapter` — same pattern for `mcp.SessionValidator`.
@@ -167,6 +167,8 @@ Return centralized error constants from `internal/constants/errors.go` for known
 - `SetL2ConsensusDeliberator` — the deliberator requires `GatewayModeService` to exist for `ConsensusBootstrap`.
 
 These two setters are the only post-construction mutators on `mcp.GatewayService`. All other dependencies are construction-phase only.
+
+**`GatewayModeService.SetConsensusService`** is a narrow setter on `GatewayModeService` (not `mcp.GatewayService`) for a genuinely late-bound dependency: `ConsensusService` is built between `NewGatewayModeService` and `Start` because it reads from the DB the constructor opens (via `ConsensusBootstrap`). The `consensusSvc` field is an `atomic.Pointer[consensus.ConsensusService]`; `SetConsensusService` calls `Store`, and the `GovernanceController` (which captures `&ls.consensusSvc` at construction time) calls `Load` on the request path. The `atomic.Pointer` provides the memory ordering guarantees that a raw `**T` lacks — the cell is read on the request path and written during boot, so unsynchronized aliasing is a data race under `-race`. A `Load` returning nil means consensus is not configured for the current posture (e.g. doctrine mode); `handleConsensusDeliberate` returns 503 in that case.
 
 ## Constants & Doctrines
 

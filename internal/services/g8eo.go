@@ -15,7 +15,6 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -27,7 +26,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/httpclient"
-	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/paths"
 
 	"github.com/g8e-ai/g8e/internal/services/auth"
@@ -284,7 +282,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		stateRootProvider = vs.gatewayDB.GetStateRootSvc()
 		vs.logger.Info("Using local state root provider (standalone mode)")
 	}
-	transactionAudit := &auditStoreTransactionStore{store: auditStore}
+	transactionAudit := auditStore
 	// L3Notary for outbound mode: CLI-based approval via suspended transactions
 	// Mutations requiring L3 are suspended and must be approved via CLI command
 	cliL3Notary := governance.NewOutboundL3Notary(vs.suspendedTxStore, vs.logger)
@@ -333,6 +331,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		TransactionAudit:  transactionAudit,
 		SignerStore:       signerStore,
 		L3Notary:          cliL3Notary,
+		Doctrine:          governance.NewL1Doctrine(),
 	}
 
 	vs.pubSubCommands, err = pubsub.NewOperatorPubSubService(psConfig, govDeps)
@@ -482,20 +481,6 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 	vs.running = false
 	vs.logger.Info("g8e Operator stopped")
 	return nil
-}
-
-// auditStoreTransactionStore wraps SQLAuditStore to implement governance.TransactionAuditStore.
-type auditStoreTransactionStore struct {
-	store *storage.SQLAuditStore
-}
-
-func (a *auditStoreTransactionStore) DocSet(collection, id string, data json.RawMessage) error {
-	var receipt models.ActionReceiptRecord
-	if err := json.Unmarshal(data, &receipt); err != nil {
-		return fmt.Errorf("%w: auditStoreTransactionStore: failed to decode action receipt record: %w", constants.ErrInvalidJSONBody, err)
-	}
-	// Record directly in receipts table via transaction-native API
-	return a.store.RecordActionReceipt(&receipt)
 }
 
 // printOperatorStartupBanner prints the Operator startup banner to stdout

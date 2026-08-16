@@ -53,8 +53,7 @@ have the required metadata fields for Go and Python code generation.
   `field_paths.json`, which uses `allowed_paths`/`forbidden_paths`).
 - **Event namespace convention**: All event values follow `g8e.v1.*` and
   contain dots.
-- **Go naming conventions**: `_go_const` values follow PascalCase (with a
-  relaxed allowance for lowercase-prefixed names like `envG8EClientCert` and
+- **Go naming conventions**: `_go_const` values follow PascalCase (with
   dot notation for nested constants like `Ports.OperatorHttp`). Event
   constants are prefixed with `Event`, header constants with `Header`, and
   collection constants with `Collection`.

@@ -408,7 +408,7 @@ func TestVaultImportCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 func TestEnrollCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 	stubCheckOperatorRunning := func(*config.Config) error { return nil }
-	cmd := enrollCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory), stubCheckOperatorRunning)
+	cmd := enrollCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory), stubCheckOperatorRunning, newDefaultEnrollmentCoordinator)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -505,7 +505,7 @@ func TestAgentRunCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	origConfigLoad := configLoad
 	configLoad = func(string) (*config.Config, error) { return cfg, nil }
 	t.Cleanup(func() { configLoad = origConfigLoad })
-	cmd := agentRunCmdWithConfig(failingFileSvcFactory(errFactory))
+	cmd := agentRunCmdWithConfig(failingFileSvcFactory(errFactory), panickingEnrollerFactory())
 	err := cmd.RunE(cmd, []string{"claude"})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrFileServiceInit)

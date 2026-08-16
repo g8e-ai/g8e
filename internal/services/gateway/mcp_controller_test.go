@@ -36,8 +36,9 @@ func newTestMCPController(t *testing.T) *MCPController {
 	logger := testutil.NewTestLogger()
 	resp := response.NewWriter(logger)
 	g, err := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:    logger,
-		Responder: resp,
+		Logger:     logger,
+		Responder:  resp,
+		AuditStore: mcp.NoopAuditEventRecorder{},
 	})
 	require.NoError(t, err)
 	return newMCPController(MCPControllerDeps{MCPGateway: g})

@@ -354,6 +354,7 @@ var (
 	ErrAuditStoreEncryptFailed            = errors.New("failed to encrypt content")
 	ErrAuditStoreVaultLocked              = errors.New("vault is locked, cannot decrypt content")
 	ErrAuditStoreDecryptFailed            = errors.New("failed to decrypt content")
+	ErrAuditStoreRequired                 = errors.New("audit store is required: AuditStore must be wired at construction, not defaulted to a no-op")
 
 	// Execution vault errors
 	ErrExecutionVaultVaultLocked   = errors.New("execution vault: vault is locked, cannot encrypt/decrypt content")
@@ -452,10 +453,11 @@ var (
 	ErrSQLiteDecompressGzipRead = errors.New("gzip read failed")
 
 	// Passkey bootstrap errors
-	ErrPasskeyRegistrationTimedOut = errors.New("passkey registration timed out")
-	ErrPasskeyRegistrationFailed   = errors.New("passkey registration failed")
-	ErrPasskeyStatusUnauthorized   = errors.New("passkey status endpoint returned unauthorized")
-	ErrPasskeySSEStreamClosed      = errors.New("SSE stream closed unexpectedly")
+	ErrPasskeyRegistrationTimedOut    = errors.New("passkey registration timed out")
+	ErrPasskeyRegistrationFailed      = errors.New("passkey registration failed")
+	ErrPasskeyStatusUnauthorized      = errors.New("passkey status endpoint returned unauthorized")
+	ErrPasskeySSEStreamClosed         = errors.New("SSE stream closed unexpectedly")
+	ErrPasskeySSEDependenciesRequired = errors.New("passkey orchestrator: SSEStore and PubSub are required at construction, not nil")
 
 	// Enrollment token errors
 	ErrEnrollmentTokenGenerationFailed  = errors.New("enrollment token generation failed")

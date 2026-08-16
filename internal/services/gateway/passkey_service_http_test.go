@@ -514,10 +514,11 @@ func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
 		resp := response.NewWriter(logger)
 		svc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 		require.NoError(t, err)
-		sseStore := NewSSEEventService(stores.DB, logger)
+		sseStore := stores.SSEStore
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
-		orchestrator := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
+		orchestrator, err := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
+		require.NoError(t, err)
 		handler := NewPasskeyHandler(PasskeyHandlerDeps{
 			Service:       svc,
 			WebSessionSvc: webSessionSvc,
@@ -561,7 +562,7 @@ func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
 			handler.orchestrator.EmitPasskeyRegisteredSSE(userID, cliSessionID)
 		}
 
-		sseStore := NewSSEEventService(stores.DB, logger)
+		sseStore := stores.SSEStore
 		route := SSERoute{UserID: userID, CLISessionID: cliSessionID}
 		events, err := sseStore.SSEEventsListSince(route, 0, 10)
 		require.NoError(t, err)
@@ -771,10 +772,11 @@ func TestPasskeyHandler_RegisterVerify_EnrollmentToken_Valid(t *testing.T) {
 	psvc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	require.NoError(t, err)
 	enrollmentTokenSvc := NewEnrollmentTokenService(stores.DocStore, logger)
-	sseStore := NewSSEEventService(stores.DB, logger)
+	sseStore := stores.SSEStore
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
-	orchestrator := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
+	orchestrator, err := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
+	require.NoError(t, err)
 	handler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:            psvc,
 		WebSessionSvc:      webSessionSvc,

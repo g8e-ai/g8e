@@ -16,6 +16,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -621,6 +622,23 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 		"status", record.Status)
 
 	return nil
+}
+
+// DocSet implements governance.TransactionAuditStore for outbound mode. The
+// outbound-mode L5Actuator persists signed ActionReceipt records via this
+// method; the data payload is a JSON-encoded models.ActionReceiptRecord that
+// is decoded and recorded in the receipts table via the transaction-native
+// RecordActionReceipt API. The collection and id parameters are ignored —
+// the receipts table is keyed by transaction_id embedded in the record.
+func (ass *SQLAuditStore) DocSet(collection, id string, data json.RawMessage) error {
+	if ass == nil || ass.db == nil {
+		return constants.ErrAuditStoreDisabled
+	}
+	var receipt models.ActionReceiptRecord
+	if err := json.Unmarshal(data, &receipt); err != nil {
+		return fmt.Errorf("%w: SQLAuditStore.DocSet: failed to decode action receipt record: %w", constants.ErrInvalidJSONBody, err)
+	}
+	return ass.RecordActionReceipt(&receipt)
 }
 
 // GetActionReceipt retrieves a single action receipt by transaction ID.

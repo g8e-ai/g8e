@@ -158,16 +158,27 @@ type ThreatScanner interface {
 }
 
 // AuditEventRecorder records audit events. Implemented by storage.SQLAuditStore
-// in production and by noopAuditEventRecorder when no audit store is configured.
+// in production. NewGatewayService rejects a nil AuditStore at construction
+// (constants.ErrAuditStoreRequired) — a missing audit store is a wiring bug
+// and fail-open on a security control, not a no-op condition. The
+// noopAuditEventRecorder type is retained for test helpers that construct
+// GatewayService structs directly (bypassing the constructor).
 type AuditEventRecorder interface {
 	RecordEvent(event *storage.Event) (int64, error)
 }
 
-// noopAuditEventRecorder is a no-op implementation of AuditEventRecorder.
-// It is used when no audit store is wired, eliminating nil checks at call sites.
-type noopAuditEventRecorder struct{}
+// NoopAuditEventRecorder is a no-op implementation of AuditEventRecorder,
+// retained for test helpers that construct GatewayService via NewGatewayService
+// or directly. NewGatewayService never defaults to this type; a nil AuditStore
+// is a construction error (constants.ErrAuditStoreRequired). Tests that do not
+// exercise audit recording pass NoopAuditEventRecorder{} explicitly.
+type NoopAuditEventRecorder struct{}
 
-func (noopAuditEventRecorder) RecordEvent(*storage.Event) (int64, error) { return 0, nil }
+func (NoopAuditEventRecorder) RecordEvent(*storage.Event) (int64, error) { return 0, nil }
+
+// noopAuditEventRecorder is an alias retained for existing in-package test
+// helpers that construct GatewayService structs directly.
+type noopAuditEventRecorder = NoopAuditEventRecorder
 
 // Dependencies groups all dependencies for NewGatewayService.
 type Dependencies struct {
@@ -182,7 +193,8 @@ type Dependencies struct {
 	PublicBaseURL    string // Public base URL for approval links
 
 	// AuditStore records audit events for suspended transactions and downstream
-	// MCP calls. When nil, a no-op recorder is used (events are silently dropped).
+	// MCP calls. Required: NewGatewayService returns constants.ErrAuditStoreRequired
+	// when nil — a missing audit store is a wiring bug, not a no-op condition.
 	AuditStore AuditEventRecorder
 
 	// FieldPathRegistryFactory overrides the default NewFieldPathRegistry constructor.
@@ -212,6 +224,10 @@ func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 		return nil, fmt.Errorf("gateway: invalid posture '%s': must be one of doctrine, consensus, or notary: %w", deps.Posture, constants.ErrGatewayInvalidPosture)
 	}
 
+	if deps.AuditStore == nil {
+		return nil, fmt.Errorf("gateway: %w", constants.ErrAuditStoreRequired)
+	}
+
 	registryFactory := deps.FieldPathRegistryFactory
 	if registryFactory == nil {
 		registryFactory = NewFieldPathRegistry
@@ -226,17 +242,12 @@ func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 		return nil, fmt.Errorf("gateway: %w", constants.ErrInternal)
 	}
 
-	auditStore := deps.AuditStore
-	if auditStore == nil {
-		auditStore = noopAuditEventRecorder{}
-	}
-
 	g := &GatewayService{
 		logger:                 deps.Logger,
 		responder:              deps.Responder,
 		suspendedStore:         deps.SuspendedStore,
 		fieldPathRegistry:      fieldPathRegistry,
-		auditStore:             auditStore,
+		auditStore:             deps.AuditStore,
 		nativeToolHandler:      nativeToolHandler,
 		scrubbingService:       deps.ScrubbingService,
 		threatScanner:          deps.ThreatScanner,

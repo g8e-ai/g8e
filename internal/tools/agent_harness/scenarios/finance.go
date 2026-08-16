@@ -17,9 +17,9 @@ func financeScenarios() []Scenario {
 		{
 			Name: "finance-unauthorized-trade", Title: "Unauthorized trade blocked by L1 doctrine", Persona: financeAgent, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				resp, err := c.MCPToolsCall(ctx, financeAgent, "fs_write", map[string]any{
-					"path":    "/var/g8e/target/unauthorized_trade_execution.log",
-					"content": "EXECUTE unauthorized trade order for insider MNPI position",
+				resp, err := c.MCPToolsCall(ctx, financeAgent, "fs_write", clientpkg.FSWriteArgs{
+					Path:    "/var/g8e/target/unauthorized_trade_execution.log",
+					Content: "EXECUTE unauthorized trade order for insider MNPI position",
 				})
 				if err != nil {
 					return err

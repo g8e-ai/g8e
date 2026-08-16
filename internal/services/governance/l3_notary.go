@@ -38,6 +38,31 @@ type L3Notary interface {
 	VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error)
 }
 
+// PasskeyVerifier verifies a WebAuthn passkey assertion bound to a transaction
+// hash. It is the passkey-domain primitive composed by the gateway L3 notary;
+// implementers need not implement L3Notary. Decoupling the passkey domain from
+// the L3Notary interface shape means changes to L3Notary no longer ripple into
+// passkey domain code.
+type PasskeyVerifier interface {
+	// VerifyPasskeyProof verifies a WebAuthn assertion against a registered
+	// passkey. The challenge is the transaction hash. The cliSessionID parameter
+	// is ignored for web sessions but is part of the primitive signature so the
+	// composing notary can forward it without a separate adapter.
+	VerifyPasskeyProof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error)
+}
+
+// passkeyL3Notary adapts a PasskeyVerifier to the L3Notary interface. It is
+// the bridge between the passkey domain primitive and the governance L3 layer;
+// the gateway notary composes this so PasskeyService itself never implements
+// L3Notary.
+type passkeyL3Notary struct {
+	verifier PasskeyVerifier
+}
+
+func (n *passkeyL3Notary) VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+	return n.verifier.VerifyPasskeyProof(ctx, userID, transactionHash, cliSessionID, proof)
+}
+
 // CLISessionVerifier performs CLI session-specific verification including user active
 // status, session validity, and certificate revocation. Returns nil if verification passes.
 // Returns constants.ErrCLISessionDenied for denials (revoked certs, inactive sessions) and
@@ -74,11 +99,13 @@ func NewOutboundL3Notary(suspendedStore storage.SuspendedTransactionStore, logge
 
 // NewGatewayL3Notary creates a unified L3 notary that requires passkey authorization
 // for all proofs (browser and CLI). CLI callers additionally present mTLS fields for
-// transport-layer authentication.
-func NewGatewayL3Notary(cliVerifier CLISessionVerifier, passkeyVerifier L3Notary, logger *slog.Logger) L3Notary {
+// transport-layer authentication. The passkeyVerifier is the passkey-domain primitive
+// (e.g. gateway.PasskeyService); it is wrapped in a passkeyL3Notary so it need not
+// implement L3Notary itself.
+func NewGatewayL3Notary(cliVerifier CLISessionVerifier, passkeyVerifier PasskeyVerifier, logger *slog.Logger) L3Notary {
 	return &gatewayNotary{
 		cliVerifier:     cliVerifier,
-		passkeyVerifier: passkeyVerifier,
+		passkeyVerifier: &passkeyL3Notary{verifier: passkeyVerifier},
 		logger:          logger,
 	}
 }

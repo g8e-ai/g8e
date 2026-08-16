@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync/atomic"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -31,32 +32,34 @@ import (
 )
 
 // GovernanceController handles governance envelope submission and consensus
-// deliberation endpoints. Consensus is wired via a pointer-to-pointer
-// (**consensus.ConsensusService) so it can be set after HTTP handler
-// construction via SetConsensusService — the ConsensusService is built
-// between NewGatewayModeService and Start because it reads from the DB that
-// the constructor opens. A nil value (or nil dereference) means the feature
-// is not configured for the current posture (e.g. doctrine mode has no
-// consensus service). EnvProc is injected at construction time; a nil value
-// means envelope submission is not enabled.
+// deliberation endpoints. Consensus is wired via an atomic.Pointer so it can
+// be set after HTTP handler construction via SetConsensusService — the
+// ConsensusService is built between NewGatewayModeService and Start because
+// it reads from the DB that the constructor opens. The controller holds a
+// *atomic.Pointer[consensus.ConsensusService] and calls Load() on the request
+// path, which provides the memory ordering guarantees that a raw **T lacks.
+// A nil value means the feature is not configured for the current posture
+// (e.g. doctrine mode has no consensus service). EnvProc is injected at
+// construction time; a nil value means envelope submission is not enabled.
 type GovernanceController struct {
 	cfg       *config.Config
 	logger    *slog.Logger
 	responder *response.Writer
-	consensus **consensus.ConsensusService
+	consensus *atomic.Pointer[consensus.ConsensusService]
 	envProc   governance.EnvelopeProcessor
 }
 
 // GovernanceControllerDeps groups all dependencies for GovernanceController.
-// Consensus is a pointer-to-pointer so the consensus service can be wired
-// after HTTP handler construction (via SetConsensusService on
-// GatewayModeService). It may be nil if the gateway posture does not require
-// L2 consensus. EnvProc may be nil if envelope submission is not enabled.
+// Consensus is a *atomic.Pointer[consensus.ConsensusService] so the consensus
+// service can be wired after HTTP handler construction (via SetConsensusService
+// on GatewayModeService, which calls Store). It may hold a nil value if the
+// gateway posture does not require L2 consensus. EnvProc may be nil if
+// envelope submission is not enabled.
 type GovernanceControllerDeps struct {
 	Cfg       *config.Config
 	Logger    *slog.Logger
 	Responder *response.Writer
-	Consensus **consensus.ConsensusService
+	Consensus *atomic.Pointer[consensus.ConsensusService]
 	EnvProc   governance.EnvelopeProcessor
 }
 
@@ -73,11 +76,12 @@ func newGovernanceController(d GovernanceControllerDeps) *GovernanceController {
 // handleConsensusDeliberate is the HTTP handler for the consensus deliberate
 // endpoint. If consensus is not configured for the current posture, returns 503.
 func (c *GovernanceController) handleConsensusDeliberate(w http.ResponseWriter, r *http.Request) {
-	if c.consensus == nil || *c.consensus == nil {
+	svc := c.consensus.Load()
+	if svc == nil {
 		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrConsensusNotConfigured.Error())
 		return
 	}
-	(*c.consensus).HandleDeliberate(w, r)
+	svc.HandleDeliberate(w, r)
 }
 
 // verifyEnvelopeIdentityBinding enforces transport-to-envelope identity binding

@@ -31,6 +31,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -82,7 +83,7 @@ type GatewayModeService struct {
 	mcpGateway              *mcp.GatewayService
 	envProcAdapter          *pubsub.GatewayEnvProcAdapter
 	sessionValidatorAdapter *pubsub.GatewaySessionValidatorAdapter
-	consensusSvc            *consensus.ConsensusService
+	consensusSvc            atomic.Pointer[consensus.ConsensusService]
 	dispatchSvc             *DispatchService
 	responder               *response.Writer
 	server                  *http.Server
@@ -254,7 +255,10 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		return nil, fmt.Errorf("gateway: failed to initialize MCP gateway: %w", err)
 	}
 
-	passkeyOrchestrator := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, wsHandler, logger)
+	passkeyOrchestrator, err := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, wsHandler, logger)
+	if err != nil {
+		return nil, fmt.Errorf("gateway: failed to initialize passkey orchestrator: %w", err)
+	}
 	enrollmentTokenSvc := NewEnrollmentTokenService(stores.DocStore, logger)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:            passkey,
@@ -300,7 +304,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	// servers now, with consensusSvc nil (wired later via SetConsensusService
 	// before Start) and envProc as the lazy envProcAdapter (wired by
 	// NewGatewayOperatorPubSubService). The handler reads these at request
-	// time, so nil-at-construction is safe.
+	// time via the atomic.Pointer, so nil-at-construction is safe.
 	if err := ls.initHTTPHandler(); err != nil {
 		return nil, fmt.Errorf("gateway: initialize HTTP handler: %w", err)
 	}
@@ -406,18 +410,28 @@ func detectBasicNonLoopbackIPv4Addresses() []net.IP {
 // current posture, e.g. doctrine mode). The consensus service is constructed
 // between NewGatewayModeService and Start because it reads from the DB that
 // the constructor opens (via ConsensusBootstrap). The HTTP handler built in
-// the constructor captures a pointer to ls.consensusSvc, so setting this
-// field before Start() is observed by the GovernanceController at request
-// time without rebuilding the handler.
+// the constructor captures a pointer to ls.consensusSvc (an atomic.Pointer),
+// so storing a value before Start() is observed by the GovernanceController
+// at request time without rebuilding the handler. The atomic.Pointer provides
+// the memory ordering guarantees that a raw **T lacks.
 func (ls *GatewayModeService) SetConsensusService(svc *consensus.ConsensusService) {
-	ls.consensusSvc = svc
+	ls.consensusSvc.Store(svc)
+}
+
+// LoadConsensusService returns the currently wired consensus service, or nil
+// if consensus is not configured for the current posture. Thread-safe; use
+// this accessor instead of touching the atomic.Pointer directly from outside
+// the package.
+func (ls *GatewayModeService) LoadConsensusService() *consensus.ConsensusService {
+	return ls.consensusSvc.Load()
 }
 
 // initHTTPHandler is the internal constructor for the HTTP handler and
 // servers. Called once by NewGatewayModeService. Reads ls.consensusSvc (set
 // via SetConsensusService before Start) and ls.envProcAdapter (lazy adapter
 // wired by NewGatewayOperatorPubSubService) at request time, so nil values at
-// construction time are safe.
+// construction time are safe. The GovernanceController captures a pointer to
+// ls.consensusSvc (an atomic.Pointer) and calls Load() on the request path.
 func (ls *GatewayModeService) initHTTPHandler() error {
 	cfg := ls.cfg
 	logger := ls.logger

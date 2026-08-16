@@ -37,6 +37,12 @@ type Enroller interface {
 	Enroll(ctx context.Context, opts auth.EnrollmentOptions) (*auth.EnrollmentResult, error)
 }
 
+// enrollerFactory builds an Enroller from an output function, file service,
+// and config. It is injected through *WithConfig constructors (mirroring
+// fileSvcFactory) so production wires newDefaultEnrollmentCoordinator and
+// tests wire a stub — no package-level mutable state.
+type enrollerFactory func(out auth.OutputFunc, fileSvc fs.RuntimeFileService, cfg *config.Config) Enroller
+
 func authCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "auth",
@@ -52,11 +58,6 @@ func authCmd() *cobra.Command {
 
 	return cmd
 }
-
-// enrollCoordinatorFactory builds an Enroller from an output function, file
-// service, and config. It is a package-level var so tests can swap it for a
-// mock coordinator that avoids network I/O, sudo, and browser launches.
-var enrollCoordinatorFactory = newDefaultEnrollmentCoordinator
 
 // newDefaultEnrollmentCoordinator is the production coordinator factory. It
 // injects production defaults (real gateway client, file-backed key provider,
@@ -99,13 +100,14 @@ func stdinContinue(prompt string) bool {
 }
 
 func enrollCmd() *cobra.Command {
-	return enrollCmdWithConfig(loadConfig, newFileSvc, auth.CheckOperatorRunning)
+	return enrollCmdWithConfig(loadConfig, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
 }
 
 func enrollCmdWithConfig(
 	configLoader func(string) (*config.Config, error),
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 	checkOperatorRunning func(*config.Config) error,
+	enrollerFactory enrollerFactory,
 ) *cobra.Command {
 	var (
 		noSystemTrust bool
@@ -145,7 +147,7 @@ The Gateway must already be running (use './g8e gw start' first).`,
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
-			coordinator := enrollCoordinatorFactory(func(format string, args ...any) {
+			coordinator := enrollerFactory(func(format string, args ...any) {
 				cmd.Printf(format+"\n", args...)
 			}, fileSvc, cfg)
 			result, err := coordinator.Enroll(cmd.Context(), auth.EnrollmentOptions{

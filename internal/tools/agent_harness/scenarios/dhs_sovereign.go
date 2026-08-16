@@ -58,7 +58,7 @@ func dataopArgs(op, recordID, detail string) string {
 	return shellCommandArgs("dataop", op, DHSSovereignArgs.DataSvcEndpoint, recordID, detail)
 }
 
-func dataopMap(op, recordID, detail string) map[string]any {
+func dataopMap(op, recordID, detail string) clientpkg.ShellCommandArgs {
 	return shellCommandMap("dataop", op, DHSSovereignArgs.DataSvcEndpoint, recordID, detail)
 }
 

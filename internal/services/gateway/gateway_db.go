@@ -53,7 +53,6 @@ var gatewaySchema string
 // need specific stores. CanonicalDBService retains a private reference for
 // lifecycle management (maintenance, close).
 type Stores struct {
-	DB             *sqliteutil.DB
 	DocStore       *DocumentStoreService
 	AppPolicyStore *AppPolicyStoreService
 	SignerStore    *SignerStoreService
@@ -217,7 +216,6 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 
 	// Initialize extracted services with the same db connection
 	stores := &Stores{
-		DB:           db,
 		DocStore:     NewDocumentStoreService(db, logger),
 		StateRootSvc: NewStateRootService(db, logger),
 		ReplayStore:  NewReplayStoreService(db, logger),
@@ -335,11 +333,6 @@ func (s *CanonicalDBService) GetSecretManager() *SecretManager {
 
 func (s *CanonicalDBService) GetVault() *vault.Vault {
 	return s.vault
-}
-
-// GetDB returns the underlying SQLite database handle.
-func (s *CanonicalDBService) GetDB() *sqliteutil.DB {
-	return s.stores.DB
 }
 
 // GetDocStore returns the document store service.

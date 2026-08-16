@@ -9,12 +9,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
 )
 
 func TestShellCommandArgs_BuildsValidJSON(t *testing.T) {
 	got := shellCommandArgs("cloudop", "provision", "10.73.0.50:9100", "vm-01", "MODERATE")
 
-	var cmd shellCommandJSON
+	var cmd clientpkg.ShellCommandArgs
 	require.NoError(t, json.Unmarshal([]byte(got), &cmd))
 
 	assert.Equal(t, "cloudop", cmd.Command)
@@ -25,7 +27,7 @@ func TestShellCommandArgs_BuildsValidJSON(t *testing.T) {
 func TestShellCommandArgs_NoArgs(t *testing.T) {
 	got := shellCommandArgs("ping")
 
-	var cmd shellCommandJSON
+	var cmd clientpkg.ShellCommandArgs
 	require.NoError(t, json.Unmarshal([]byte(got), &cmd))
 
 	assert.Equal(t, "ping", cmd.Command)
@@ -36,30 +38,34 @@ func TestShellCommandArgs_NoArgs(t *testing.T) {
 func TestShellCommandArgs_SpecialCharsEscaped(t *testing.T) {
 	got := shellCommandArgs("echo", "hello \"world\"")
 
-	var cmd shellCommandJSON
+	var cmd clientpkg.ShellCommandArgs
 	require.NoError(t, json.Unmarshal([]byte(got), &cmd))
 
 	assert.Equal(t, "hello \"world\"", cmd.Args[0])
 }
 
-func TestShellCommandMap_BuildsValidMap(t *testing.T) {
+func TestShellCommandMap_BuildsTypedArgs(t *testing.T) {
 	got := shellCommandMap("cloudop", "provision", "10.73.0.50:9100", "vm-01", "MODERATE")
 
-	assert.Equal(t, "cloudop", got["command"])
-	assert.Equal(t, 10, got["timeout"])
+	assert.Equal(t, "cloudop", got.Command)
+	assert.Equal(t, 10, got.Timeout)
+	assert.Equal(t, []string{"provision", "10.73.0.50:9100", "vm-01", "MODERATE"}, got.Args)
 
-	args, ok := got["args"].([]string)
-	require.True(t, ok, "args should be []string")
-	assert.Equal(t, []string{"provision", "10.73.0.50:9100", "vm-01", "MODERATE"}, args)
+	// Verify it satisfies ToolArgs and serializes to the same JSON-RPC shape as
+	// the previous map[string]any representation.
+	var _ clientpkg.ToolArgs = got
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	var asMap map[string]any
+	require.NoError(t, json.Unmarshal(b, &asMap))
+	assert.Equal(t, "cloudop", asMap["command"])
+	assert.Equal(t, float64(10), asMap["timeout"])
 }
 
 func TestShellCommandMap_NoArgs(t *testing.T) {
 	got := shellCommandMap("ping")
 
-	assert.Equal(t, "ping", got["command"])
-	assert.Equal(t, 10, got["timeout"])
-
-	args, ok := got["args"].([]string)
-	require.True(t, ok, "args should be []string")
-	assert.Empty(t, args)
+	assert.Equal(t, "ping", got.Command)
+	assert.Equal(t, 10, got.Timeout)
+	assert.Empty(t, got.Args)
 }

@@ -21,6 +21,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
 )
 
@@ -100,35 +103,71 @@ func TestMCPToolsList(t *testing.T) {
 	}
 }
 
+func TestMCPToolsCall_TypedArgs_SerializeToSameJSONRPCShape(t *testing.T) {
+	var capturedParams map[string]any
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/mcp" {
+			t.Errorf("expected path /mcp, got %s", r.URL.Path)
+		}
+		var req JSONRPCRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		if req.Method != "tools/call" {
+			t.Errorf("expected method tools/call, got %s", req.Method)
+		}
+		capturedParams, _ = req.Params.(map[string]any)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"status":"ok"}}`))
+	})
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	cfg := config.Config{MTLSBaseURL: srv.URL, Auth: config.Auth{}}
+	c, err := New(cfg)
+	require.NoError(t, err)
+
+	args := ShellCommandArgs{Command: "dataop", Args: []string{"ingest", "TRK-001"}, Timeout: 10}
+	_, err = c.MCPToolsCall(context.Background(), Persona{ID: "test"}, "run_shell_command", args)
+	require.NoError(t, err)
+
+	require.NotNil(t, capturedParams, "params should be a map")
+	assert.Equal(t, "run_shell_command", capturedParams["name"])
+
+	argsMap, ok := capturedParams["arguments"].(map[string]any)
+	require.True(t, ok, "arguments should be a JSON object")
+	assert.Equal(t, "dataop", argsMap["command"])
+	assert.Equal(t, []any{"ingest", "TRK-001"}, argsMap["args"])
+	assert.Equal(t, float64(10), argsMap["timeout"])
+}
+
 func TestMCPToolsCall(t *testing.T) {
 	tests := []struct {
 		name    string
 		tool    string
-		args    map[string]any
+		args    ToolArgs
 		wantErr bool
 	}{
 		{
 			name:    "successful call",
-			tool:    "test-tool",
-			args:    map[string]any{"arg1": "value1"},
+			tool:    "fs_list",
+			args:    FSPathArgs{Path: "."},
 			wantErr: false,
 		},
 		{
 			name:    "call with no args",
-			tool:    "test-tool",
-			args:    map[string]any{},
+			tool:    "fs_list",
+			args:    FSPathArgs{},
 			wantErr: false,
 		},
 		{
 			name:    "call with nil args",
-			tool:    "test-tool",
+			tool:    "fs_list",
 			args:    nil,
 			wantErr: false,
 		},
 		{
-			name:    "call with complex args",
-			tool:    "complex-tool",
-			args:    map[string]any{"nested": map[string]any{"key": "value"}},
+			name:    "call with multi-field args",
+			tool:    "fs_grep",
+			args:    FSGrepArgs{Path: ".", Pattern: "TODO"},
 			wantErr: false,
 		},
 	}

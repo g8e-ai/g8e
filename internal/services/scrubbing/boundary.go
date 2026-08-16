@@ -578,7 +578,10 @@ func (s *ScrubbingService) ScrubMap(data map[string]interface{}) map[string]inte
 	return result
 }
 
-// scrubSlice scrubs all elements in a slice
+// scrubSlice scrubs all elements in a slice. Uses []interface{} because this is
+// a boundary-layer helper for ScrubMap that walks arbitrary JSON arrays from
+// external sources (cloud AI, command outputs) where the schema is unknown by
+// design. See the ScrubMap NOTE for the full rationale.
 func (s *ScrubbingService) scrubSlice(data []interface{}) []interface{} {
 	result := make([]interface{}, len(data))
 	for i, item := range data {
@@ -932,6 +935,10 @@ func (s *ScrubbingService) RehydrateText(ctx context.Context, input string) stri
 }
 
 // RehydratePayload recursively rehydrates all string values in a JSON payload.
+// Uses interface{} internally because the payload is arbitrary JSON from
+// external sources (cloud AI responses, governed MCP payloads) where the schema
+// is unknown by design. This is the same schema-less passthrough exception as
+// ScrubMap; a typed model cannot represent an externally-defined JSON shape.
 func (s *ScrubbingService) RehydratePayload(ctx context.Context, payload []byte) ([]byte, error) {
 	if len(payload) == 0 {
 		return payload, nil
@@ -948,6 +955,11 @@ func (s *ScrubbingService) RehydratePayload(ctx context.Context, payload []byte)
 	return json.Marshal(rehydrated)
 }
 
+// rehydrateValueRecursive walks an arbitrary JSON value tree (decoded via
+// json.Unmarshal into interface{}) and rehydrates every string leaf. Uses
+// interface{} and map[string]interface{} because the value tree comes from
+// external JSON with no known schema. See the ScrubMap NOTE for the full
+// rationale.
 func (s *ScrubbingService) rehydrateValueRecursive(ctx context.Context, val interface{}) interface{} {
 	switch v := val.(type) {
 	case string:

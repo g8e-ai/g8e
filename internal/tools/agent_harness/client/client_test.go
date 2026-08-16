@@ -1039,7 +1039,7 @@ func TestMCPToolsCallWithCLI_RoutesThroughCLI(t *testing.T) {
 	assert.NotNil(t, c.cliHTTP, "cliHTTP must be non-nil for MCPToolsCallWithCLI to route through it")
 
 	ctx := context.Background()
-	_, err = c.MCPToolsCallWithCLI(ctx, Persona{ID: "test"}, "fs_list", map[string]any{"path": "."})
+	_, err = c.MCPToolsCallWithCLI(ctx, Persona{ID: "test"}, "fs_list", FSPathArgs{Path: "."})
 	require.NoError(t, err)
 	assert.True(t, sawRequest, "server should have received the request")
 }
@@ -1064,7 +1064,7 @@ func TestMCPToolsCallWithCLI_FallsBackToDoWhenNoCLIHTTP(t *testing.T) {
 	assert.Nil(t, c.cliHTTP, "cliHTTP should be nil — fallback to do() expected")
 
 	ctx := context.Background()
-	_, err = c.MCPToolsCallWithCLI(ctx, Persona{ID: "test"}, "fs_list", map[string]any{"path": "."})
+	_, err = c.MCPToolsCallWithCLI(ctx, Persona{ID: "test"}, "fs_list", FSPathArgs{Path: "."})
 	require.NoError(t, err)
 	assert.True(t, sawRequest, "server should have received the fallback request")
 }

@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // SysInfoTool provides system information including hostname, OS version, kernel, uptime, and load average.
@@ -97,7 +99,7 @@ func getKernelVersion(ctx context.Context) string {
 		return "unknown"
 	}
 
-	data, err := os.ReadFile("/proc/version")
+	data, err := os.ReadFile(constants.PathProcVersion)
 	if err == nil {
 		fields := strings.Fields(string(data))
 		if len(fields) >= 3 {
@@ -120,7 +122,7 @@ func getOSVersion(ctx context.Context) string {
 		return "unknown"
 	}
 
-	data, err := os.ReadFile("/etc/os-release")
+	data, err := os.ReadFile(constants.PathEtcOSRelease)
 	if err != nil {
 		return "unknown"
 	}
@@ -142,7 +144,7 @@ func getUptime(ctx context.Context) string {
 		return "unknown"
 	}
 
-	data, err := os.ReadFile("/proc/uptime")
+	data, err := os.ReadFile(constants.PathProcUptime)
 	if err != nil {
 		return "unknown"
 	}
@@ -170,7 +172,7 @@ func getLoadAverage(ctx context.Context) string {
 		return "unknown"
 	}
 
-	data, err := os.ReadFile("/proc/loadavg")
+	data, err := os.ReadFile(constants.PathProcLoadAvg)
 	if err != nil {
 		return "unknown"
 	}

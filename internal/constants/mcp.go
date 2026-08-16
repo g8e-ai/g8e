@@ -52,4 +52,18 @@ const (
 
 	// SSHProxyAddrLabel is the network address label for proxy connections
 	SSHProxyAddrLabel = "proxy"
+
+	// MCPTransportStdio is the transport type string for stdio MCP transport.
+	MCPTransportStdio = "stdio"
+
+	// MCPServerNameG8E is the MCP server name key used in agent config files
+	// (mcpServers map key, Goose extension name).
+	MCPServerNameG8E = "g8e"
+
+	// MCPG8EDescription is the human-readable description for the g8e MCP server
+	// entry in agent extension configs.
+	MCPG8EDescription = "g8e governance gateway"
+
+	// GooseExtTimeout is the timeout in seconds for the g8e Goose extension entry.
+	GooseExtTimeout = 300
 )
