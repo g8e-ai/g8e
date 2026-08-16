@@ -251,7 +251,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── scrubbing.ScrubbingService
 │   ├── mcp.FieldPathRegistry
 │   ├── mcp.NativeToolHandler
-│   ├── mcp.AuditEventRecorder (interface; storage.SQLAuditStore in production via Stores.AuditStore, noopAuditEventRecorder when not wired)
+│   ├── mcp.AuditEventRecorder (interface; storage.SQLAuditStore in production via Stores.AuditStore, NoopAuditEventRecorder for test helpers; NewGatewayService returns constants.ErrAuditStoreRequired when not wired)
 │   ├── governance.EnvelopeProcessor (via pubsub.GatewayEnvProcAdapter lazy wrapper; target backed by atomic.Pointer, SetTarget=Store / ProcessEnvelope=Load)
 │   ├── mcp.SessionValidator (via pubsub.GatewaySessionValidatorAdapter lazy wrapper; target backed by atomic.Pointer, SetTarget=Store / ValidateSession=Load)
 │   ├── StateRootProvider (gateway.StateRootService)
@@ -344,7 +344,7 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - **`passkey_service_approvals_test.go`**: Tests all handlers on `*PasskeyHandler` with mocked dependencies.
 - **`passkey_service_http_test.go`**: Tests for the 7 passkey HTTP handlers on `*PasskeyHandler`.
 - **`passkey_orchestrator_test.go`**: Unit tests for `PasskeyOrchestrator` delegation and no-op guard behavior.
-- **`passkey_service_test.go`**: Tests for `PasskeyService` domain logic, including `VerifyL3Proof` WebAuthn assertion verification.
+- **`passkey_service_test.go`**: Tests for `PasskeyService` domain logic, including `VerifyPasskeyProof` WebAuthn assertion verification.
 - **`internal/models/auth.go`**: `PasskeyCredential.Validate()` performs on-disk schema validation before persistence.
 
 ### Transport & Protocol Layer

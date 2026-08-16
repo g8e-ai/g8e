@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-08-15
+Last Updated: 2026-08-16
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
