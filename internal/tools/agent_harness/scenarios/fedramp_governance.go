@@ -59,7 +59,7 @@ func cloudopArgs(action, resourceID, detail string) string {
 	return shellCommandArgs("cloudop", action, FedRAMPArgs.CloudSvcEndpoint, resourceID, detail)
 }
 
-func cloudopMap(action, resourceID, detail string) map[string]any {
+func cloudopMap(action, resourceID, detail string) clientpkg.ShellCommandArgs {
 	return shellCommandMap("cloudop", action, FedRAMPArgs.CloudSvcEndpoint, resourceID, detail)
 }
 

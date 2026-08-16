@@ -37,7 +37,7 @@ func mcpScenarios() []Scenario {
 				}
 				tool := firstTool(list, "fs_list")
 				r.note("discovered tool %q from tools/list", tool)
-				if _, err := c.MCPToolsCall(ctx, claudeDesktop, tool, map[string]any{"path": "."}); err != nil {
+				if _, err := c.MCPToolsCall(ctx, claudeDesktop, tool, clientpkg.FSPathArgs{Path: "."}); err != nil {
 					return err
 				}
 				return nil
@@ -123,10 +123,10 @@ func mcpScenarios() []Scenario {
 					return err
 				}
 				// Chained tool calls (read → grep) like a real coding agent.
-				if _, err := c.MCPToolsCall(ctx, cursor, "fs_read", map[string]any{"path": "/etc/hostname"}); err != nil {
+				if _, err := c.MCPToolsCall(ctx, cursor, "fs_read", clientpkg.FSPathArgs{Path: "/etc/hostname"}); err != nil {
 					return err
 				}
-				if _, err := c.MCPToolsCall(ctx, cursor, "fs_grep", map[string]any{"path": ".", "pattern": "TODO"}); err != nil {
+				if _, err := c.MCPToolsCall(ctx, cursor, "fs_grep", clientpkg.FSGrepArgs{Path: ".", Pattern: "TODO"}); err != nil {
 					return err
 				}
 				r.note("exercised resources/list+read, prompts/list+get, and a read→grep chain")
@@ -137,13 +137,13 @@ func mcpScenarios() []Scenario {
 			Name: "mcp-secured", Title: "MCP with simple security (mTLS/API key + L1 gate)", Persona: enterpriseTool, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				// (a) an authenticated, benign call that should pass L1.
-				if _, err := c.MCPToolsCall(ctx, enterpriseTool, "fs_list", map[string]any{"path": "/tmp"}); err != nil {
+				if _, err := c.MCPToolsCall(ctx, enterpriseTool, "fs_list", clientpkg.FSPathArgs{Path: "/tmp"}); err != nil {
 					return err
 				}
 				r.note("authenticated benign call submitted (transport: mTLS%s)", apiKeyNote(c))
 				// (b) a forbidden command that L1 Doctrine must hard-gate even
 				// before consensus/notary. This is the 'security' the demo proves.
-				resp, err := c.MCPToolsCall(ctx, enterpriseTool, "execute_bash", map[string]any{"command": "sudo rm -rf /"})
+				resp, err := c.MCPToolsCall(ctx, enterpriseTool, "execute_bash", clientpkg.ExecuteBashArgs{Command: "sudo rm -rf /"})
 				if err != nil {
 					return err
 				}
@@ -224,7 +224,7 @@ func paopArgs(action, requestID, resourceType, detail string) string {
 	return shellCommandArgs("paop", action, requestID, resourceType, detail)
 }
 
-func paopMap(action, requestID, resourceType, detail string) map[string]any {
+func paopMap(action, requestID, resourceType, detail string) clientpkg.ShellCommandArgs {
 	return shellCommandMap("paop", action, requestID, resourceType, detail)
 }
 

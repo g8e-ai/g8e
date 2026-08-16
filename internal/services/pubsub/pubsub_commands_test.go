@@ -78,6 +78,7 @@ func TestNewOperatorPubSubService_StartsWithoutTrustedSignersButRejectsL2(t *tes
 		StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 		TransactionAudit:  &testutil.MockTransactionAudit{},
 		L3Notary:          &testutil.MockL3Notary{},
+		Doctrine:          governance.NewL1Doctrine(),
 	})
 	require.NoError(t, err)
 	require.NotNil(t, svc.l4warden)

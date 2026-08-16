@@ -320,6 +320,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 			ConsensusPolicyStore: govDeps.ConsensusPolicyStore,
 			L3Notary:             RejectingL3Notary{},
 			FieldReader:          govDeps.FieldReader,
+			Doctrine:             govDeps.Doctrine,
 		},
 		MCPGateway:              mcpGateway,
 		L2ConsensusDeliberator:  l2Deliberator,

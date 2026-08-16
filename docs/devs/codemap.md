@@ -25,7 +25,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   │   ├── governance.StateRootProvider (gateway.StateRootService via Stores) [SHARED]
 │   │   ├── governance.SignerStore (governance.FilesystemSignerStore)
 │   │   ├── governance.L2ConsensusPolicyStore (via GovernanceDeps.ConsensusPolicyStore; nil in outbound mode with fail-closed nil-check, gateway.ConsensusStoreService in gateway mode)
-│   │   ├── governance.L1Doctrine (from GovernanceDeps.Doctrine in gateway mode; defaults to NewL1Doctrine() at pubsub_commands.go call site when nil in outbound mode)
+│   │   ├── governance.L1Doctrine (from GovernanceDeps.Doctrine; wired as governance.NewL1Doctrine() in the outbound-mode GovernanceDeps construction in g8eo.go and in gateway-mode wiring; nil Doctrine is a wiring bug and L4Warden fail-closes with ErrTxDoctrineMissing rather than defaulting at the call site)
 │   │   └── governance.L3Notary (governance.outboundNotary implementation)
 │   │       └── storage.SuspendedTransactionService
 │   ├── governance.L5Actuator
@@ -679,7 +679,7 @@ The following packages are test-only and are not part of the production dependen
 - `client/envelope_test.go` - Envelope construction and submission tests (includes `TestSubmitMaximal`, `TestSubmitMaximal_WithL2`, ensemble tests)
 - `client/audit.go` - `AuditReceipts`, `ExportReceipts`, `DiscoverOperator` (parses cert SAN for offline session discovery)
 - `client/audit_test.go` - Audit client tests
-- `client/protocols.go` - JSON-RPC request/response types and A2A protobuf envelope encoding for MCP/A2A protocol ingress. `rpcWithCLI`/`MCPToolsCallWithCLI` route notary-scenario submits through the CLI-cert TLS client so `handleCLIAuth` stamps the host user's identity onto the suspended transaction.
+- `client/protocols.go` - JSON-RPC request/response types and A2A protobuf envelope encoding for MCP/A2A protocol ingress. `MCPToolsCall`/`MCPToolsCallWithCLI` accept a typed `ToolArgs` value (`ShellCommandArgs`, `FSPathArgs`, `FSGrepArgs`, `FSWriteArgs`, `ExecuteBashArgs`) that the client marshals under the JSON-RPC `arguments` key, replacing the previous `map[string]any` parameter. `rpcWithCLI`/`MCPToolsCallWithCLI` route notary-scenario submits through the CLI-cert TLS client so `handleCLIAuth` stamps the host user's identity onto the suspended transaction.
 - `client/protocols_test.go` - Protocol encoding/decoding tests
 - `client/mtls_test.go` - mTLS client setup and certificate verification tests
 - `config/config.go` - Harness configuration: operator auth material (`Auth`), host CLI mTLS material (`CLIAuth`, defaults to `Auth` when unset), gateway URL, posture selection, passkey RP settings (`PasskeyRpID`, `PasskeyRpOrigin`)
@@ -693,10 +693,10 @@ The following packages are test-only and are not part of the production dependen
 - `scenarios/finance_test.go` - Finance scenario tests
 - `scenarios/fedramp_governance.go` - FedRAMP sovereign cloud governance scenarios: `fedramp-provision` (consensus: governed cloud resource provisioning), `fedramp-deny` (doctrine: audit trail destruction blocked by L1), `fedramp-escalate` (notary: resource destruction gated on authorizing official approval), `fedramp-revert` (consensus: governed configuration revert), `fedramp-evidence-block` (doctrine: audit vault wipe rejected by L1)
 - `scenarios/fedramp_governance_test.go` - FedRAMP scenario tests
-- `scenarios/shell_command.go` - Shared `shellCommandArgs` helper (returns JSON string for `SubmitMaximal`) and `shellCommandMap` helper (returns `map[string]any` for `MCPToolsCall`), using typed `shellCommandJSON` struct.
-- `scenarios/shell_command_test.go` - Tests for `shellCommandArgs` and `shellCommandMap`: valid JSON construction, no-args case, special character escaping, map field verification.
-- `scenarios/fs_list.go` - Shared `fsListArgs` helper (returns JSON string for `SubmitMaximal`) and `fsListMap` helper (returns `map[string]any` for `MCPToolsCall`), using typed `fsListJSON` struct.
-- `scenarios/fs_list_test.go` - Tests for `fsListArgs` and `fsListMap`: valid JSON construction, special character escaping, map field verification.
+- `scenarios/shell_command.go` - Shared `shellCommandArgs` helper (returns JSON string for `SubmitMaximal`) and `shellCommandMap` helper (returns `client.ShellCommandArgs` for `MCPToolsCall`), both backed by the typed `client.ShellCommandArgs` struct.
+- `scenarios/shell_command_test.go` - Tests for `shellCommandArgs` and `shellCommandMap`: valid JSON construction, no-args case, special character escaping, typed-args field verification.
+- `scenarios/fs_list.go` - Shared `fsListArgs` helper (returns JSON string for `SubmitMaximal`) and `fsListMap` helper (returns `client.FSPathArgs` for `MCPToolsCall`), both backed by the typed `client.FSPathArgs` struct.
+- `scenarios/fs_list_test.go` - Tests for `fsListArgs` and `fsListMap`: valid JSON construction, special character escaping, typed-args field verification.
 - `scenarios/scenario.go` - Scenario registry, `Execute`, `Posture` types
 - `scenarios/scenario_test.go` - Scenario registry and execution tests
 

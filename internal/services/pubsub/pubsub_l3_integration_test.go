@@ -79,6 +79,7 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 		TransactionAudit:     &testutil.MockTransactionAudit{},
 		SignerStore:          signerStore,
 		ConsensusPolicyStore: testConsensusStore(),
+		Doctrine:             governance.NewL1Doctrine(),
 	})
 	if err != nil {
 		t.Fatalf("failed to create command service: %v", err)
@@ -204,6 +205,7 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 		TransactionAudit:     &testutil.MockTransactionAudit{},
 		SignerStore:          signerStore,
 		ConsensusPolicyStore: testConsensusStore(),
+		Doctrine:             governance.NewL1Doctrine(),
 	})
 	if err != nil {
 		t.Fatalf("failed to create command service: %v", err)
@@ -330,6 +332,7 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 		TransactionAudit:     &testutil.MockTransactionAudit{},
 		SignerStore:          signerStore,
 		ConsensusPolicyStore: testConsensusStore(),
+		Doctrine:             governance.NewL1Doctrine(),
 	})
 	if err != nil {
 		t.Fatalf("failed to create command service: %v", err)

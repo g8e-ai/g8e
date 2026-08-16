@@ -69,13 +69,61 @@ func (c *Client) rpcWithCLI(ctx context.Context, p Persona, path, method string,
 
 // ---- MCP --------------------------------------------------------------------
 
+// ToolArgs is the typed argument payload for an MCP tools/call invocation.
+// Each implementation is a JSON-serializable struct matching a tool's
+// argument schema. The harness client marshals the value under the
+// "arguments" key of the JSON-RPC params, mirroring the wire shape that
+// loose map[string]any values produced previously.
+type ToolArgs interface {
+	isToolArgs()
+}
+
+// ShellCommandArgs are the arguments for the run_shell_command tool.
+type ShellCommandArgs struct {
+	Command string   `json:"command"`
+	Args    []string `json:"args"`
+	Timeout int      `json:"timeout"`
+}
+
+func (ShellCommandArgs) isToolArgs() {}
+
+// FSPathArgs are the arguments for path-only filesystem tools (fs_list, fs_read).
+type FSPathArgs struct {
+	Path string `json:"path"`
+}
+
+func (FSPathArgs) isToolArgs() {}
+
+// FSGrepArgs are the arguments for the fs_grep tool.
+type FSGrepArgs struct {
+	Path    string `json:"path"`
+	Pattern string `json:"pattern"`
+}
+
+func (FSGrepArgs) isToolArgs() {}
+
+// FSWriteArgs are the arguments for the fs_write tool.
+type FSWriteArgs struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
+func (FSWriteArgs) isToolArgs() {}
+
+// ExecuteBashArgs are the arguments for the execute_bash tool.
+type ExecuteBashArgs struct {
+	Command string `json:"command"`
+}
+
+func (ExecuteBashArgs) isToolArgs() {}
+
 func (c *Client) MCPToolsList(ctx context.Context, p Persona) (*JSONRPCResponse, error) {
 	return c.rpc(ctx, p, "/mcp", "tools/list", map[string]any{})
 }
 
 // MCPToolsCall invokes a tool. The Gateway wraps this into a governed MCP_CALL
 // envelope, runs the interlock sequence, and dispatches to the real Operator.
-func (c *Client) MCPToolsCall(ctx context.Context, p Persona, tool string, args map[string]any) (*JSONRPCResponse, error) {
+func (c *Client) MCPToolsCall(ctx context.Context, p Persona, tool string, args ToolArgs) (*JSONRPCResponse, error) {
 	return c.rpc(ctx, p, "/mcp", "tools/call", map[string]any{
 		"name":      tool,
 		"arguments": args,
@@ -85,7 +133,7 @@ func (c *Client) MCPToolsCall(ctx context.Context, p Persona, tool string, args 
 // MCPToolsCallWithCLI is like MCPToolsCall but routes through the CLI-cert
 // TLS client so the gateway's handleCLIAuth stamps the host user's identity
 // onto the suspended transaction. Use this for notary-scenario submits.
-func (c *Client) MCPToolsCallWithCLI(ctx context.Context, p Persona, tool string, args map[string]any) (*JSONRPCResponse, error) {
+func (c *Client) MCPToolsCallWithCLI(ctx context.Context, p Persona, tool string, args ToolArgs) (*JSONRPCResponse, error) {
 	return c.rpcWithCLI(ctx, p, "/mcp", "tools/call", map[string]any{
 		"name":      tool,
 		"arguments": args,
