@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect an Existing Frontend to g8e Gateway
 
-Last Updated: 2026-08-14
-Version: v1.7.2
+Last Updated: 2026-08-16
+Version: v1.7.5
 
 ---
 
@@ -36,7 +36,7 @@ Start the gateway with CORS and passkey RP flags matching your frontend origin:
 
 `g8e gw start --passkey-rp-id example.com --passkey-rp-name "g8e Console" --passkey-rp-origin https://your-app.example.com --cors-origin https://your-app.example.com`
 
-Or via environment variables: `G8E_PASSKEY_RP_ID`, `G8E_PASSKEY_RP_NAME`, `G8E_PASSKEY_RP_ORIGINS` (comma-separated), and `G8E_ALLOWED_ORIGINS` (comma-separated).
+Or via environment variables: `G8E_PASSKEY_RP_ID`, `G8E_PASSKEY_RP_NAME`, `G8E_PASSKEY_RP_ORIGINS` (comma-separated), `G8E_ALLOWED_ORIGINS` (comma-separated), and `G8E_PUBLIC_BASE_URL`.
 
 Key flags:
 

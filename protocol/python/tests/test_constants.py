@@ -132,14 +132,11 @@ class TestComponentName:
     def test_client_value(self):
         assert ComponentName.CLIENT == "client"
 
-    def test_g8ee_value(self):
-        assert ComponentName.G8EE == "g8ee"
-
     def test_g8eo_value(self):
         assert ComponentName.G8EO == "g8eo"
 
-    def test_operator_alias_equals_g8eo(self):
-        assert ComponentName.OPERATOR == ComponentName.G8EO
+    def test_g8eo_gateway_value(self):
+        assert ComponentName.G8EO_GATEWAY == "g8eo-gateway"
 
 
 class TestHttpHeaderConstants:

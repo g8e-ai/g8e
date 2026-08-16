@@ -5,8 +5,8 @@ parent: Guides
 
 # Air-Gap Architecture
 
-Last Updated: 2026-08-15
-Version: v1.7.4
+Last Updated: 2026-08-16
+Version: v1.7.5
 
 The g8e platform operates in environments without internet connectivity. The platform supports air-gapped deployments with zero runtime external network dependencies, using the g8e Gateway, the g8e Operator, and fully vendored Go dependencies in the root `vendor/` directory. The platform supports both binary deployment and containerized deployment via Docker.
 
@@ -30,7 +30,7 @@ In an air-gapped deployment, the g8e Gateway operates as the central Policy Deci
 
 The gateway exposes two logical communication surfaces:
 
-- **HTTP (port 8080)**: Serves health checks, local trust bundles, CA discovery, CLI recovery request/status/complete (token-scoped), device and app enrollment, deploy scripts, and binary downloads. Unregistered paths return 404. The old trust-script routes (`/web-cert.sh`, `/web-cert.ps1`, `/.well-known/g8e/pki/trust-windows`) are removed; OS trust installation is handled by `auth enroll` directly.
+- **HTTP (port 8080)**: Serves health checks, local trust bundles, CA discovery, CLI recovery request/status/complete (token-scoped), device and app enrollment, deploy scripts, and binary downloads. Unregistered paths redirect to the HTTPS port. OS trust installation is handled by `auth enroll` directly.
 - **HTTPS (port 8443)**: Receives governance envelope mutation payloads, handles persistence, runs WebSocket pub/sub and SSE event streaming, serves MCP and A2A ingress, provides WebAuthn passkey authentication, and hosts the browser management console.
 
 Surfaces with conflicting TLS client-authentication requirements do not share a network port. The initialization sequence validates port isolation and fails if configurations overlap.
@@ -75,15 +75,15 @@ Verified operations are logged to a host-local ledger, and the Operator exposes 
 To ensure a self-contained installation, the build process packages all required components offline:
 
 - **Go Dependencies**: The core platform compiles into a single statically-linked g8e binary. All Go dependencies are vendored into the root `vendor/` directory. The build uses `-mod=vendor` and sets `GOFLAGS=-mod=vendor` in the Dockerfile, ensuring no network access is needed during compilation. Run `go mod vendor` on a connected host to populate or refresh this directory.
-- **Protocol Library (Go)**: The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Since all dependencies are vendored, `go get github.com/g8e-ai/g8e@v1.6.10` works offline once the vendor directory is populated. No additional downloads are required.
+- **Protocol Library (Go)**: The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Since all dependencies are vendored, `go get github.com/g8e-ai/g8e@v1.7.5` works offline once the vendor directory is populated. No additional downloads are required.
 - **Protocol Library (Python)**: The `g8e` Python package is published to PyPI. For air-gapped environments, download the wheel on a connected host and transfer it:
 
   ```bash
   # On connected host:
-  pip download g8e==1.6.10 -d /tmp/g8e-python-pkg
+  pip download g8e==1.7.5 -d /tmp/g8e-python-pkg
 
   # Transfer /tmp/g8e-python-pkg/ to the air-gapped host, then:
-  pip install --no-index --find-links /tmp/g8e-python-pkg g8e==1.6.10
+  pip install --no-index --find-links /tmp/g8e-python-pkg g8e==1.7.5
   ```
 
   The package includes bundled JSON protocol constants. Set `G8E_PROTOCOL_DIR` if the constants directory is in a non-default location. See the [Protocol Library documentation](../architecture/protocol.md) for details.
@@ -104,7 +104,7 @@ Implementing an air-gapped deployment requires a connected staging host to resol
    make build
    ```
 2. **Package Runtime Configurations**: Archive the build artifacts and the protocol schemas:
-   - The compiled `bin/g8e` binary.
+   - The compiled `g8e` binary (produced at `bin/g8e-<os>-<arch>` with a root copy at `./g8e`).
    - The protocol configuration files under the `protocol/` directory.
 3. **Optional Container Build**: For containerized deployments, use the demo configurations in `demos/healthcare`, `demos/finance`, `demos/dhs`, `demos/fedramp`, or `demos/frontend` as reference. Demos build from the repo-root `Dockerfile` via `context: ../..` (the same production image, always-FIPS, compiles from source using vendored modules in-container). The root `docker-compose.yml` defines both `g8e-gateway` and `g8e-operator` services using the same root `Dockerfile` with different command-line flags.
 4. **Pre-Pull Docker Images (Containerized Deployments)**: For air-gapped Docker deployments, pre-pull all external images on the connected host:

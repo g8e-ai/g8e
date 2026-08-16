@@ -4,8 +4,8 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 2026-07-29
-Version: v1.6.6
+Last Updated: 2026-08-16
+Version: v1.7.5
 
 Core terminology for the g8e protocol, Governance Gateway, Governed Operator, and ecosystem integration (MCP, A2A). Terms are organized alphabetically.
 
@@ -82,7 +82,7 @@ A gateway instance in a federated deployment that can communicate with other gat
 
 ## Governance Gateway
 
-The central coordinator that admits transactions, manages PKI, enforces the 5-layer governance pipeline, and brokers pub/sub channels to operators. The Gateway is an Operator with additional gateway services; its in-process Operator runs L1-L5 locally for operations on the gateway host. Serves as the Policy Decision Point (PDP). Formerly referred to as "g8e Gateway."
+The central coordinator that admits transactions, manages PKI, enforces the 5-layer governance pipeline, and brokers pub/sub channels to operators. The Gateway is an Operator with additional gateway services; its in-process Operator runs L1-L5 locally for operations on the gateway host. Serves as the Policy Decision Point (PDP).
 
 ---
 
@@ -98,7 +98,7 @@ The posture is set at startup and affects whether L2 signatures and L3 proofs ar
 
 ## Governed Operator
 
-A single static binary deployed on target hosts. It requires no installation, opens no inbound ports, and initiates an outbound-only mTLS tunnel to the Governance Gateway. The operator pulls work from a unique pub/sub channel, re-verifies every proof locally against its own state, and is the only component authorized to mutate the host. Each remote Governed Operator runs L1-L5 locally for operations on its own host. Serves as the Policy Execution Point (PEP) and MCP server. Formerly referred to as "g8e Operator."
+A single static binary deployed on target hosts. It requires no installation, opens no inbound ports, and initiates an outbound-only mTLS tunnel to the Governance Gateway. The operator pulls work from a unique pub/sub channel, re-verifies every proof locally against its own state, and is the only component authorized to mutate the host. Each remote Governed Operator runs L1-L5 locally for operations on its own host. Serves as the Policy Execution Point (PEP) and MCP server.
 
 ---
 
@@ -131,17 +131,16 @@ The second layer of g8e governance (Consensus). A multi-agent consensus system w
 
 ## L3 Notary (L3Notary)
 
-The third layer of g8e governance (Authorization), focusing on human oversight. Every state-changing mutation requires explicit human authorization. The L3 notary uses a layered authorization model with three implementations:
+The third layer of g8e governance (Authorization), focusing on human oversight. Every state-changing mutation requires explicit human authorization. The L3 notary uses a layered authorization model with two implementations:
 - **Gateway Notary**: The unified notary for gateway mode. Layer 1 requires passkey (WebAuthn) authorization for all callers; proofs without a `credential_id` are rejected. Layer 2 performs CLI mTLS session verification (user match, session validity, certificate fingerprint match) when the proof includes an `mtls_cert_fingerprint` (CLI callers). Browser-only proofs skip Layer 2.
 - **Outbound Notary**: The notary for outbound mode. Performs suspended transaction lookup and Ed25519 signature verification over the transaction hash. The signature is verified against the `ApprovalPublicKey` stored on the suspended transaction.
-- **Demo Notary**: The notary for demo environments where WebAuthn passkey enrollment is not available (e.g., headless Docker containers). Accepts any non-nil proof, allowing the harness mock L3 mode to satisfy notary posture without a browser. Gated by the `G8E_L3_MOCK` environment variable and must never be used in production.
-The CLI approval flow opens a browser to the console SPA for WebAuthn ceremony and subscribes to the gateway's SSE stream for the `approval.completed` event, then verifies the approval status via the mTLS endpoint (`/api/v1/approvals/status/{tx_hash}`). CLI credentials (mTLS) are required for L3 approval flows. The L4 Warden verifies L3 proofs before allowing execution to proceed. L3 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, notary).
+The CLI approval flow opens a browser to the console SPA for WebAuthn ceremony and subscribes to the gateway's SSE stream for the `approval.completed` event, then verifies the approval status via the mTLS endpoint (`/api/v1/approvals/status/{tx_hash}`). CLI credentials (mTLS) are required for L3 approval flows. The L4 Warden verifies L3 proofs before allowing execution to proceed. L3 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, notary). The mock L3 notary bypass (`G8E_L3_MOCK`) was removed in v1.6.7; the gateway always requires real WebAuthn proof for L3 notary approval.
 
 ---
 
 ## L4 Warden (L4Warden)
 
-The fail-closed transaction verification gate in the Governance Gateway that enforces L1/L2/L3 governance before any execution. The Warden performs:
+The fail-closed transaction verification gate that enforces L1/L2/L3 governance before any execution. The Warden runs in the Governance Gateway's in-process Operator and in each remote Governed Operator's outbound mode, ensuring every execution context re-verifies proofs locally. The Warden performs:
 - Envelope integrity and decoding validation
 - Typed payload validation and action type matching
 - L1 forbidden pattern validation via L1Doctrine
@@ -228,7 +227,7 @@ A separate Merkle root commitment computed over observed-tier KV and blob entrie
 
 ## Scrubbed Vault
 
-The local SQLite database on the Governed Operator managed by the **Sovereign Execution Boundary**. It stores command outputs where sensitive data (credentials, PII, network identifiers) has been replaced with safe placeholders like `{{UEI_N}}`. This ensures that raw sensitive data never leaves the sovereign host.
+A vault mode (`VaultModeScrubbed`) on the Governed Operator indicating that command outputs stored in the Execution Vault have been processed by the **Sovereign Execution Boundary** before persistence. Sensitive data (credentials, PII, network identifiers) is replaced with safe placeholders like `{{UEI_N}}` in-memory before the scrubbed output is written to the encrypted Execution Vault. This ensures that raw sensitive data never leaves the sovereign host. The counterpart mode is `VaultModeRaw`, which stores unscrubbed output.
 
 ---
 

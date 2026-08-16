@@ -621,7 +621,7 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 - **Anduril Lattice gRPC adapter** with OAuth2 client credentials authentication, gRPC retry with status code classification, and heartbeat interval validation
 - **MCP tool interception verification** (`--verify` flag) ensuring agent tool-disabling configurations are correctly applied before agent launch
 - **MCP gateway output scrubbing** preventing sensitive data leakage in downstream MCP audit logs
-- **Agent support consolidation** to 4 supported agents (Claude Code, Codex, Goose, Gemini CLI) reducing attack surface
+- **Agent support** for 5 agents (Claude Code, Codex, Goose, Gemini CLI, Devin CLI) with per-agent MCP config wiring; 4 of 5 (claude, codex, goose, gemini) support native tool disabling for full governance interception
 - **Governance interface extraction** separating verification concerns (replay store, signer store, consensus store, app policy store, state root provider) into dedicated files
 - **Protocol wire-format documentation** for EventType, AgentMode, and SessionEventWire ensuring consumer compatibility
 - **Cross-language governance hash parity** ensuring Go and Python produce identical transaction hash digests through aligned canonicalization logic
@@ -730,7 +730,7 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 | **L3 Approval Pipeline Tests** | `internal/services/governance/l3_approval_pipeline_integration_test.go` | Full CLI to browser to approval pipeline |
 | **Reporting Verification Tests** | `internal/services/reporting/verification_test.go` | Commitment chain, merkle root, receipt cross-link |
 | **Integration Tests** | `test/*_test.go` | End-to-end security flows |
-| **Compliance Tests** | `internal/services/compliance/*_test.go` | KSI model, evaluator, OSCAL exporter, history store, overlay loader (89.4% coverage) |
+| **Compliance Tests** | `internal/services/compliance/*_test.go` | KSI model, evaluator, OSCAL exporter, history store, overlay loader (89.7% coverage) |
 
 ---
 
@@ -776,7 +776,7 @@ For specific compliance questions or audit support, contact:
 | 1.7.2 | 2026-08-14 | Lateralus Labs | Updated platform version to v1.7.2; added EnrollmentCoordinator state machine, human-approved CLI recovery flow, and mTLS-protected CLI certificate rotation endpoint to Current Strengths; noted removal of the --tpm flag (file-backed EC P-256 keys on all platforms); verified all evidence paths against live codebase |
 | 1.7.3 | 2026-08-14 | Lateralus Labs | Updated platform version to v1.7.3; noted RootCACommonName constant centralization (internal refactor, no on-wire or trust-store behavior change); verified all evidence paths against live codebase |
 | 1.7.4 | 2026-08-15 | Lateralus Labs | Updated platform version to v1.7.4; noted passkey enrollment is required only for notary posture (optional for doctrine and consensus); noted single always-FIPS Dockerfile consolidation and demo orchestration simplification; verified all evidence paths against live codebase |
-| 1.7.5 | 2026-08-16 | Lateralus Labs | Updated platform version to v1.7.5; added audit store hard dependency for MCP gateway, passkey proof verification decoupling from L3 notary interface, and atomic.Pointer adoption for late-bound consensus service to Current Strengths; added typed audit response models to Current Strengths; verified all evidence paths against live codebase |
+| 1.7.5 | 2026-08-16 | Lateralus Labs | Updated platform version to v1.7.5; added audit store hard dependency for MCP gateway, passkey proof verification decoupling from L3 notary interface, and atomic.Pointer adoption for late-bound consensus service to Current Strengths; added typed audit response models to Current Strengths; corrected agent support count from 4 to 5 to reflect Devin CLI addition in v1.6.7; verified all evidence paths against live codebase |
 
 ---
 

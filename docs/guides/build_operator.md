@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Operator
 
-Last Updated: 2026-08-07
-Version: v1.7.0
+Last Updated: 2026-08-16
+Version: v1.7.5
 
 ---
 
@@ -59,7 +59,7 @@ Running the binary with no arguments launches the Tactical Governance Console (T
 
 ### Prerequisites
 
-- **Go 1.26.5+**, required for building the reference operator.
+- **Go 1.26.6+**, required for building the reference operator.
 - **Make**, required to run build targets.
 
 > **Don't have `make` or `go` installed?** Run the setup script for your platform to detect and install them automatically:
@@ -95,7 +95,9 @@ The Makefile provides several build targets:
 - `make build-windows-docker`, Builds the g8e binary for Windows (amd64, arm64) inside a Docker container.
 - `make build-darwin-docker`, Builds the g8e binary for Darwin (amd64, arm64) inside a Docker container.
 - `make build-all-docker`, Builds all platform binaries using Docker.
-- `make clean`, Removes compiled binaries and test artifacts.
+- `make build-fips`, Builds the g8e binary with FIPS 140-3 approved mode (linux/amd64, GOFIPS140 v1.0.0).
+- `make verify-fips`, Builds the FIPS variant and runs the `g8e version --fips` self-check.
+- `make clean`, Removes compiled binaries, test artifacts, and `.g8e/` runtime state.
 
 ### Cross-Compilation
 
@@ -145,7 +147,7 @@ Custom operator implementations need the g8e Protocol Library for protobuf schem
 The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.6.10
+go get github.com/g8e-ai/g8e@v1.7.5
 ```
 
 The Go module provides protobuf types for governance envelopes, operator service definitions, and SPIFFE workload identity helpers for mTLS identity binding. Import the common and operator protocol packages for envelope construction and verification, and the root protocol package for SPIFFE URI SAN generation and validation.
@@ -157,7 +159,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For operator-side tooling, testing, or Python-based actuator services that need to consume protocol constants:
 
 ```bash
-pip install g8e==1.6.10
+pip install g8e==1.7.5
 ```
 
 The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
