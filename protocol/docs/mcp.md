@@ -4,8 +4,8 @@ title: MCP Protocol
 
 # MCP Protocol
 
-Last Updated: 2026-08-07
-Version: v1.7.0
+Last Updated: 2026-08-16
+Version: v1.7.5
 
 The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer governance verification sequence (L1Doctrine/L2Consensus/L3Notary/L4Warden/L5Actuator), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
@@ -55,7 +55,7 @@ The gateway handles certain tools locally without downstream proxy:
   - `net_dns_resolve`: Performs DNS resolution (dig/nslookup equivalent) for network debugging
   - `tls_cert_inspect`: Parses TLS certificates, verifies chains, and checks expiration (critical for PKI debugging)
   - `sys_env_vars`: Reads environment variables for configuration debugging
-  - `fs_file_checksum`: Computes SHA256/MD5 checksums for file integrity verification
+  - `fs_file_checksum`: Computes SHA256 checksums for file integrity verification
   - `sys_service_status`: Checks systemd service status (operator, gateway, etc.)
   - `sys_container_status`: Checks container health status (podman)
   - `fs_disk_usage`: Provides df-style free space reporting for mounted filesystems
@@ -67,7 +67,7 @@ The gateway handles certain tools locally without downstream proxy:
   - `run_shell_command`: Executes shell commands with denylist enforcement for dangerous operations and timeout limits. Supports multi-host execution via SSH with optional `hostnames` parameter (defaults to localhost)
   - `net_ssh_known_hosts`: Lists known hosts from SSH config and known_hosts files based on OS type
   - `operator_deploy`: Deploys the g8e operator to a list of remote hosts via SSH
-  - `read_file`: Reads file contents with path validation and size limits
+  - `read_file`: Reads file contents, ignoring .gitignore patterns, with optional `offset` and `limit` line parameters and blocking sensitive system files and SSH private keys
 
 ---
 
@@ -166,6 +166,7 @@ g8e mcp agent show <agent>
 Replace `<agent>` with one of the supported agents:
 - `claude` - Anthropic Claude Code
 - `codex` - OpenAI Codex AI coding assistant
+- `devin` - Devin CLI local coding agent
 - `goose` - Goose AI coding assistant
 - `gemini` - Google Gemini CLI
 

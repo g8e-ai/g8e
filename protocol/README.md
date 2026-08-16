@@ -6,7 +6,7 @@ Protocol library for the g8e zero-trust execution platform. Provides protobuf sc
 
 ### Go
 
-The Go module is part of the root module `github.com/g8e-ai/g8e` and requires Go 1.26.5. It depends on `google.golang.org/grpc` and `google.golang.org/protobuf`. Install with `go get github.com/g8e-ai/g8e`.
+The Go module is part of the root module `github.com/g8e-ai/g8e` and requires Go 1.26.6. It depends on `google.golang.org/grpc` and `google.golang.org/protobuf`. Install the module with `go get github.com/g8e-ai/g8e` and import the protocol package as `github.com/g8e-ai/g8e/protocol` or the generated protobuf packages under `github.com/g8e-ai/g8e/protocol/proto/...`.
 
 ### Python
 
@@ -123,7 +123,7 @@ The `models/` directory contains JSON Schema files that define the structure for
 
 - `account_lock.json`, `agent_activity_metadata.json`, `app_policy.json`, `approval.json`, `auth_admin_audit.json`, `bound_session.json`
 - `case.json`, `chat_message.json`, `cli_session.json`, `console_audit.json`, `conversation.json`, `conversation_message.json`
-- `enrollment_token.json`, `execution_result.json`, `file_edit.json`, `fs_grep.json`, `fs_list.json`
+- `consensus.json`, `enrollment_token.json`, `execution_result.json`, `file_edit.json`, `fs_grep.json`, `fs_list.json`
 - `errors.py`: Python enums for error categories (`ErrorCategory`), severities (`ErrorSeverity`), command categories (`CommandCategory`), and error codes (`ErrorCode`)
 - `governance.json`
 - `heartbeat.json`, `investigation.json`, `local_os_user.json`, `login_audit.json`, `memory.json`

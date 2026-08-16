@@ -4,8 +4,8 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-08-07
-Version: v1.7.0
+Last Updated: 2026-08-16
+Version: v1.7.5
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -377,8 +377,8 @@ The g8e Gateway runs with three posture options:
 ### Port Configuration
 
 The g8e Gateway exposes two logical protocol surfaces in a consolidated 2-port configuration:
-- **HTTP port 8080**: Bootstrap and MCP routes for initial setup and stdio-based AI IDE connections
-- **HTTPS port 8443**: mTLS API and public surface for secure client communication
+- **HTTP port 8080**: Bootstrap, CLI recovery discovery, deploy scripts, node binary download, health checks, and a catch-all redirect to HTTPS
+- **HTTPS port 8443**: mTLS API and public surface, including MCP/A2A ingress, SSE, console, and authenticated API routes
 
 See [Network Architecture](../../docs/architecture/network.md) for detailed port topology, authentication requirements, and port constraints.
 
@@ -504,7 +504,7 @@ All tests follow a Tier 1 philosophy where possible (no external network/DB requ
 
 ---
 
-## Example GovernanceEnvelope with MCP Payloads
+## Example GovernanceEnvelope with an MCP Tool Call
 
 ### Example 1: MCP File Read Tool Call
 
@@ -575,118 +575,6 @@ The `payload` field contains base64-encoded protobuf bytes of `McpCallRequested`
 - `tool_name`: "fs_read"
 - `arguments_json`: "{\"path\":\"/home/user/readme.md\"}"
 - `execution_id`: "exec-2035"
-
-### Example 2: MCP Resource Read Under Doctrine (Non-Mutation)
-
-```json
-{
-  "id": "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
-  "timestamp": "2026-06-02T18:28:00Z",
-  "expiresAt": "2026-06-02T18:33:00Z",
-  "sourceComponent": "COMPONENT_AGENT",
-  "operatorId": "op-prod-67890",
-  "operatorSessionId": "sess-def-012",
-  "eventType": "g8e.v1.operator.mcp.resource.read.requested",
-  "payload": "CgZxdWVyeRIXZXhlYy1idWlsZC0zNDU2EgoJCXNFTEVDVCBjb3VudCgqKSBGUk9NIHVzZXJzGgZzY3J1Yg==",
-  "intentData": {
-    "tool": "postgres_query",
-    "query": "SELECT count(*) FROM users",
-    "reason": "Check user count for health check"
-  },
-  "actionType": "MCP_RESOURCE_READ",
-  "targetResource": "postgres://prod-db.internal/users",
-  "stateMerkleRoot": "def456abc123def456abc123def456abc123def456abc123def456abc123def4",
-  "nonce": "nonce-1717358880000-def456",
-  "transactionHash": "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
-  "protocolVersion": "1.0",
-  "governance": {
-    "l1": {
-      "validated": true,
-      "violations": []
-    },
-    "l2": {
-      "consensusSetId": "consensus-prod-def456",
-      "votes": [
-        {
-          "signerKeyId": "agent-ensemble-1",
-          "consensusSignature": "5c6d7e8f0a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2...d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
-          "decision": true
-        }
-      ]
-    },
-    "l3": {
-      "proof": null
-    }
-  },
-  "caseId": "",
-  "taskId": "task-health-345",
-  "systemFingerprint": "fp-linux-amd64-def456",
-  "tenantId": "tenant-prod-xyz"
-}
-```
-
-This example shows a non-mutation read under doctrine posture. L3 is not required for non-mutations under any posture, so no proof is carried. L3 is satisfied only by a verified proof; there is no bypass field.
-
-### Example 3: MCP Resource List Call
-
-```json
-{
-  "id": "c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-  "timestamp": "2026-06-02T18:29:00Z",
-  "expiresAt": "2026-06-02T18:34:00Z",
-  "sourceComponent": "COMPONENT_CLIENT",
-  "operatorId": "op-prod-11111",
-  "operatorSessionId": "sess-ghi-345",
-  "webSessionId": "web-jkl-678",
-  "eventType": "g8e.v1.operator.mcp.resources.list.requested",
-  "payload": "CgZleGVjLTQ1NjcG",
-  "intentData": {
-    "operation": "list_resources",
-    "reason": "Discover available MCP resources"
-  },
-  "actionType": "MCP_RESOURCE_LIST",
-  "targetResource": "*",
-  "stateMerkleRoot": "efg789abc123efg789abc123efg789abc123efg789abc123efg789abc123efg7",
-  "nonce": "nonce-1717358940000-efg789",
-  "transactionHash": "c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-  "protocolVersion": "1.0",
-  "governance": {
-    "l1": {
-      "validated": true,
-      "violations": []
-    },
-    "l2": {
-      "consensusSetId": "consensus-prod-efg789",
-      "votes": [
-        {
-          "signerKeyId": "agent-ensemble-1",
-          "consensusSignature": "6d7e8f0a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2...e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-          "decision": true
-        },
-        {
-          "signerKeyId": "agent-ensemble-2",
-          "consensusSignature": "7e8f0a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2...f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5",
-          "decision": true
-        }
-      ]
-    },
-    "l3": {
-      "proof": {
-        "clientDataJSON": "{\"challenge\":\"c3d4e5f6\",\"origin\":\"https://g8e.ai\",\"type\":\"webauthn.get\"}",
-        "authenticatorData": "SZYN5YgOjGh0NBcPZHZgW4_krrmihjLHmVzzuoMdl2NFAAAAAQ",
-        "signature": "MEYCIQCd4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2IhAOf6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-        "credentialId": "def456abc123def456abc123def456abc123def456abc123def456abc123def4"
-      }
-    }
-  },
-  "caseId": "case-discovery-789",
-  "taskId": "task-resources-456",
-  "systemFingerprint": "fp-linux-amd64-efg789",
-  "tenantId": "tenant-prod-xyz"
-}
-```
-
-This example demonstrates a resource discovery operation using the `McpResourceListRequested` payload type.
 
 ---
 

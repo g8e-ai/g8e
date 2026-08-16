@@ -14,6 +14,10 @@
 package main
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"time"
@@ -29,7 +33,24 @@ import (
 )
 
 func main() {
-	// Create a governance envelope for a command execution
+	// Operator Ed25519 key used for the CLI/mTLS L3 notary proof.
+	_, opPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		log.Fatalf("Failed to generate operator key: %v", err)
+	}
+
+	// L2 consensus signer key. signer_key_id in production maps to a
+	// TrustedSigner record; here we use a descriptive test ID.
+	_, l2Priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		log.Fatalf("Failed to generate L2 signer key: %v", err)
+	}
+
+	// mTLS certificate fingerprint: raw SHA-256 hex, no prefixes or colons.
+	mtlsHash := sha256.Sum256([]byte("mock-cli-cert"))
+	mtlsFingerprint := hex.EncodeToString(mtlsHash[:])
+
+	// Create a governance envelope for a command execution.
 	envelope := &commonv1.GovernanceEnvelope{
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().Add(5 * time.Minute)),
@@ -37,6 +58,8 @@ func main() {
 		OperatorId:        "op-456",
 		OperatorSessionId: "session-789",
 		CliSessionId:      "cli-123",
+		RequestorUserId:   "user-abc",
+		ActingAppId:       "app-cursor",
 		EventType:         "g8e.v1.operator.command.requested",
 		ActionType:        "EXECUTE_BASH",
 		TargetResource:    "/home/user",
@@ -49,8 +72,6 @@ func main() {
 		SystemFingerprint: "fp-123",
 		TenantId:          "tenant-xyz",
 		BindingPersona:    "default",
-		RequestorUserId:   "user-abc",
-		ActingAppId:       "app-cursor",
 		IntentData: &structpb.Struct{
 			Fields: map[string]*structpb.Value{
 				"goal":         structpb.NewStringValue("Inspect filesystem"),
@@ -67,34 +88,34 @@ func main() {
 				ConsensusSetId: "consensus-1",
 				Votes: []*commonv1.L2Vote{
 					{
-						SignerKeyId:        "key-123",
-						ConsensusSignature: "sig-abc",
+						SignerKeyId:        "l2-signer-1",
+						ConsensusSignature: "", // filled in after transaction hash is computed
 						Decision:           true,
 					},
 				},
 			},
 			L3: &commonv1.L3Metadata{
 				Proof: &commonv1.L3Proof{
-					MtlsCertFingerprint: "sha256:ab:cd:ef:01:23:45:67:89:ab:cd:ef:01:23:45:67:89:ab:cd:ef:01:23:45:67:89:ab:cd:ef:01:23:45:67:89",
-					CliSignature:        "ed25519:9f3a2b1c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a",
+					MtlsCertFingerprint: mtlsFingerprint,
+					CliSignature:        "", // filled in after transaction hash is computed
 				},
 			},
 		},
 	}
 
-	// Create the command payload
+	// Create the command payload.
 	cmd := &operatorv1.CommandRequested{
 		Command:          "ls -la",
 		ExecutionId:      "exec-123",
 		Justification:    "List directory contents",
-		VaultMode:        "scrub",
+		VaultMode:        "scrubbed",
 		TimeoutSeconds:   30,
 		Intent:           "Inspect filesystem",
 		Environment:      map[string]string{"PATH": "/usr/bin"},
 		WorkingDirectory: "/home/user",
 	}
 
-	// Serialize command to bytes for the envelope payload
+	// Serialize command to bytes for the envelope payload.
 	cmdBytes, err := proto.Marshal(cmd)
 	if err != nil {
 		log.Fatalf("Failed to marshal command: %v", err)
@@ -107,10 +128,21 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to compute transaction hash: %v", err)
 	}
+
+	// L2 consensus signature is over "<transaction_hash>|<decision>".
+	l2Payload := fmt.Sprintf("%s|true", txHash)
+	l2Sig := ed25519.Sign(l2Priv, []byte(l2Payload))
+	envelope.Governance.L2.Votes[0].ConsensusSignature = hex.EncodeToString(l2Sig)
+
+	// L3 CLI signature is the operator's Ed25519 signature over the transaction hash.
+	cliSig := ed25519.Sign(opPriv, []byte(txHash))
+	envelope.Governance.L3.Proof.CliSignature = hex.EncodeToString(cliSig)
+
+	// Id and TransactionHash must match the canonical hash.
 	envelope.Id = txHash
 	envelope.TransactionHash = txHash
 
-	// Convert envelope to protojson (canonical wire format)
+	// Convert envelope to protojson (canonical wire format).
 	envelopeJSON, err := (protojson.MarshalOptions{Multiline: false}).Marshal(envelope)
 	if err != nil {
 		log.Fatalf("Failed to marshal envelope to JSON: %v", err)
@@ -123,13 +155,13 @@ func main() {
 	}
 	fmt.Println(string(pretty))
 
-	// Parse back from JSON
+	// Parse back from JSON.
 	parsedEnvelope := &commonv1.GovernanceEnvelope{}
 	if err := protojson.Unmarshal(envelopeJSON, parsedEnvelope); err != nil {
 		log.Fatalf("Failed to unmarshal envelope from JSON: %v", err)
 	}
 
-	// Parse command payload
+	// Parse command payload.
 	parsedCmd := &operatorv1.CommandRequested{}
 	if err := proto.Unmarshal(parsedEnvelope.Payload, parsedCmd); err != nil {
 		log.Fatalf("Failed to unmarshal command payload: %v", err)
