@@ -333,6 +333,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		TransactionAudit:  transactionAudit,
 		SignerStore:       signerStore,
 		L3Notary:          cliL3Notary,
+		Doctrine:          governance.NewL1Doctrine(),
 	}
 
 	vs.pubSubCommands, err = pubsub.NewOperatorPubSubService(psConfig, govDeps)
