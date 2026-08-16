@@ -174,7 +174,7 @@ When the CLI initiates a passkey enrollment from the terminal, it opens the brow
 
 1. Read the token from the URL hash (`window.location.hash`).
 2. Immediately clear the token from the URL via `history.replaceState`.
-3. POST the token to `/api/v1/auth/passkeys/enrollment/register/challenge` with `{ enrollment_token: <token> }` in the JSON body. The gateway validates the token and derives `user_id` and `cli_session_id` from it — there is no separate `/enrollment-token/validate` round-trip, and the token-derived identifiers never need to touch the DOM.
+3. POST the token to `/api/v1/auth/passkeys/enrollment/register/challenge` with `{ enrollment_token: <token> }` in the JSON body. The gateway validates the token and derives `user_id` and `cli_session_id` from it; there is no separate `/enrollment-token/validate` round-trip, and the token-derived identifiers never need to touch the DOM.
 4. Perform the WebAuthn ceremony with the challenge response (`navigator.credentials.create`).
 5. POST the attestation plus token to `/api/v1/auth/passkeys/enrollment/register/verify` with `{ enrollment_token: <token>, attestation_response: { ...encodedFields } }`. The verify step consumes the token (one-time-use) and sets a web session cookie.
 

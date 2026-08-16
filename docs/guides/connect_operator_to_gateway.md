@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-08-14
-Version: v1.7.2
+Last Updated: 2026-08-16
+Version: v1.7.5
 
 ---
 
@@ -71,7 +71,7 @@ The gateway provides CLI commands to deploy and manage operators on remote hosts
 ./g8e operator deploy --hosts <host1,host2> --background
 ```
 
-This command copies the operator binary to remote hosts via SCP, makes it executable via SSH, and optionally starts the operator in the background. Requires `./g8e auth enroll` first. Additional flags include `-P` for SSH port and `-i` for SSH identity file.
+This command copies the operator binary to remote hosts via SCP, makes it executable via SSH, and optionally starts the gateway in the background on each remote host. Requires `./g8e auth enroll` first. Additional flags include `-P` for SSH port and `-i` for SSH identity file.
 
 **Stream operator binary to remote hosts:**
 
@@ -214,7 +214,7 @@ curl -X POST http://localhost:8080/mcp \
 ./g8e mcp agent show <agent>
 ```
 
-Replace `<agent>` with a supported agent (claude, codex, gemini, goose). This displays configurations side-by-side for different transport modes (g8e.local mTLS, IP Address mTLS, Stdio Transport).
+Replace `<agent>` with a supported agent (claude, codex, devin, gemini, goose). This displays configurations side-by-side for different transport modes (g8e.local mTLS, IP Address mTLS, Stdio Transport).
 
 **Launch an agent with g8e governance:**
 
@@ -267,7 +267,7 @@ Operators and CLI clients connecting to the g8e Gateway can use the g8e Protocol
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.6.10
+go get github.com/g8e-ai/g8e@v1.7.5
 ```
 
 The module provides protobuf types for governance envelopes, operator messages, and common protocol structures. It also includes SPIFFE workload identity helpers for generating operator, CLI, and gateway identities used in mTLS enrollment.
@@ -279,7 +279,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For operator-side tooling or Python-based services:
 
 ```bash
-pip install g8e==1.6.10
+pip install g8e==1.7.5
 ```
 
 Provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
@@ -336,7 +336,7 @@ The enrollment coordinator checks the local credential state. If credentials are
 ./g8e auth enroll --rotate-cli
 ```
 
-Rotation is mTLS-protected — the caller's identity is derived from the existing CLI certificate. Only one replacement certificate is issued per run. For remote device enrollment, use CSR-based enrollment:
+Rotation is mTLS-protected: the caller's identity is derived from the existing CLI certificate. Only one replacement certificate is issued per run. For remote device enrollment, use CSR-based enrollment:
 
 ```bash
 ./g8e gw security pki enroll -e <gateway-ip>
