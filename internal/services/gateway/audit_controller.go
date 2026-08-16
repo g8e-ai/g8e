@@ -175,11 +175,31 @@ func (c *AuditController) handleAuditEvents(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	c.responder.JSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
-		"events":  events,
-		"count":   len(events),
+	eventRows := make([]models.AuditEventRow, len(events))
+	for i, e := range events {
+		eventRows[i] = toAuditEventRow(e)
+	}
+
+	c.responder.JSON(w, http.StatusOK, models.AuditEventsResponse{
+		Success: true,
+		Events:  eventRows,
+		Count:   len(eventRows),
 	})
+}
+
+// toAuditEventRow converts a storage.Event to the API-facing AuditEventRow.
+func toAuditEventRow(e *storage.Event) models.AuditEventRow {
+	if e == nil {
+		return models.AuditEventRow{}
+	}
+	return models.AuditEventRow{
+		ID:                e.ID,
+		OperatorSessionID: e.OperatorSessionID,
+		Timestamp:         e.Timestamp.Format(time.RFC3339),
+		Type:              string(e.Type),
+		CommandRaw:        e.CommandRaw,
+		CommandExitCode:   e.CommandExitCode,
+	}
 }
 
 const maxAuditQueryLimit = 10000
@@ -217,13 +237,13 @@ func (c *AuditController) handleAuditSummary(w http.ResponseWriter, r *http.Requ
 		receiptSummary[key]++
 	}
 
-	c.responder.JSON(w, http.StatusOK, map[string]interface{}{
-		"success":          true,
-		"events_summary":   eventSummary,
-		"events_total":     len(events),
-		"receipts_summary": receiptSummary,
-		"receipts_total":   len(receipts),
-		"total_records":    len(events) + len(receipts),
+	c.responder.JSON(w, http.StatusOK, models.AuditSummaryResponse{
+		Success:         true,
+		EventsSummary:   eventSummary,
+		EventsTotal:     len(events),
+		ReceiptsSummary: receiptSummary,
+		ReceiptsTotal:   len(receipts),
+		TotalRecords:    len(events) + len(receipts),
 	})
 }
 
@@ -250,18 +270,40 @@ func (c *AuditController) handleAuditReport(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Build comprehensive report
-	report := map[string]interface{}{
-		"generated_at":        time.Now().Format(time.RFC3339),
-		"operator_session_id": operatorSessionID,
-		"events":              events,
-		"events_count":        len(events),
-		"receipts":            receipts,
-		"receipts_count":      len(receipts),
-		"total_records":       len(events) + len(receipts),
+	eventRows := make([]json.RawMessage, len(events))
+	for i, e := range events {
+		data, err := json.Marshal(toAuditEventRow(e))
+		if err != nil {
+			c.logger.Error("audit_controller: handleAuditReport: marshal event", string(constants.ConnectionStateError), err)
+			eventRows[i] = json.RawMessage("null")
+			continue
+		}
+		eventRows[i] = data
 	}
 
-	c.responder.JSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
-		"report":  report,
+	receiptRows := make([]json.RawMessage, len(receipts))
+	for i, r := range receipts {
+		data, err := json.Marshal(r)
+		if err != nil {
+			c.logger.Error("audit_controller: handleAuditReport: marshal receipt", string(constants.ConnectionStateError), err)
+			receiptRows[i] = json.RawMessage("null")
+			continue
+		}
+		receiptRows[i] = data
+	}
+
+	report := models.AuditReportData{
+		GeneratedAt:       time.Now().Format(time.RFC3339),
+		OperatorSessionID: operatorSessionID,
+		Events:            eventRows,
+		EventsCount:       len(events),
+		Receipts:          receiptRows,
+		ReceiptsCount:     len(receipts),
+		TotalRecords:      len(events) + len(receipts),
+	}
+
+	c.responder.JSON(w, http.StatusOK, models.AuditReportResponse{
+		Success: true,
+		Report:  report,
 	})
 }

@@ -119,6 +119,10 @@ func mcpScenarios() []Scenario {
 				if _, err := c.MCPPromptsList(ctx, cursor); err != nil {
 					return err
 				}
+				// MCPPromptsGet accepts schema-less map[string]any arguments because
+				// prompt argument shapes vary per prompt definition on the server
+				// (see protocols.go). The map literal here is the required input
+				// shape for that schema-less API, not a known-shape model.
 				if _, err := c.MCPPromptsGet(ctx, cursor, "summarize", map[string]any{"target": "."}); err != nil {
 					return err
 				}
@@ -163,6 +167,10 @@ func a2aScenarios() []Scenario {
 		{
 			Name: "a2a-plain", Title: "Plain A2A skill invocation", Persona: a2aPeer, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
+				// A2ACall accepts schema-less map[string]any payloads because skill
+				// payload shapes vary per skill definition on the server (see
+				// protocols.go). The map literal here is the required input shape
+				// for that schema-less API, not a known-shape model.
 				_, err := c.A2ACall(ctx, a2aPeer, "list_directory",
 					map[string]any{"path": "."}, uuid.NewString())
 				return err
@@ -171,12 +179,14 @@ func a2aScenarios() []Scenario {
 		{
 			Name: "a2a-secured", Title: "A2A with simple security (mTLS + L1 skill gate)", Persona: a2aSecure, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
+				// A2ACall payload: schema-less map[string]any per A2ACall API (see protocols.go).
 				if _, err := c.A2ACall(ctx, a2aSecure, "read_file",
 					map[string]any{"path": "/etc/hostname"}, uuid.NewString()); err != nil {
 					return err
 				}
 				r.note("authenticated A2A skill submitted (transport: mTLS%s)", apiKeyNote(c))
 				// skill_name carries L1 forbidden patterns (sudo, su); this must be gated.
+				// A2ACall payload: schema-less map[string]any per A2ACall API (see protocols.go).
 				resp, err := c.A2ACall(ctx, a2aSecure, "sudo",
 					map[string]any{"cmd": "cat /etc/shadow"}, uuid.NewString())
 				if err != nil {
@@ -195,7 +205,11 @@ func a2aScenarios() []Scenario {
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				// Same skill, but the task payload is a marshaled A2ACallRequested
 				// (typed, schema-checked, deterministic) rather than loose JSON.
-				inner, _ := json.Marshal(map[string]any{"path": ".", "recursive": false})
+				// listDirectoryPayload captures the known shape of the list_directory
+				// skill payload; unlike A2ACall (which takes schema-less
+				// map[string]any), A2ACallProto accepts a JSON string we construct
+				// from a typed struct.
+				inner, _ := json.Marshal(listDirectoryPayload{Path: ".", Recursive: false})
 				_, err := c.A2ACallProto(ctx, a2aProto, "list_directory", string(inner), uuid.NewString())
 				if err != nil {
 					return err
@@ -226,6 +240,16 @@ func paopArgs(action, requestID, resourceType, detail string) string {
 
 func paopMap(action, requestID, resourceType, detail string) clientpkg.ShellCommandArgs {
 	return shellCommandMap("paop", action, requestID, resourceType, detail)
+}
+
+// listDirectoryPayload is the typed A2A skill payload for the list_directory
+// skill, marshaled as the A2ACallRequested payload_json in the protobuf
+// scenario. A2ACallProto accepts a JSON string rather than the schema-less
+// map[string]any that A2ACall uses, so the call site constructs a typed struct
+// and marshals it directly.
+type listDirectoryPayload struct {
+	Path      string `json:"path"`
+	Recursive bool   `json:"recursive"`
 }
 
 // firstTool pulls a tool name out of a tools/list response, tolerating the
