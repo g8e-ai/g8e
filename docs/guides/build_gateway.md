@@ -6,7 +6,7 @@ parent: Guides
 # Build a g8e Gateway
 
 Last Updated: 2026-08-16
-Version: v1.7.5
+Version: v1.7.6
 
 ---
 

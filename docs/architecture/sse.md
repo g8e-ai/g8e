@@ -5,7 +5,7 @@ title: SSE Streaming
 # SSE Streaming
 
 Last Updated: 2026-08-16
-Version: v1.7.0
+Version: v1.7.6
 
 The Governance Gateway provides a Server-Sent Events (SSE) streaming infrastructure that enables real-time event delivery from app workloads to browser and CLI clients. g8e-compatible agentic ensembles publish typed events, including AI chat and lifecycle events, for downstream consumption. The gateway also produces SSE events internally for platform workflows such as passkey registration and L3 transaction approval.
 

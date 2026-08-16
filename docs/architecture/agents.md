@@ -6,7 +6,7 @@ parent: Architecture
 # AI Agents and the g8e Governance Boundary
 
 Last Updated: 2026-08-16
-Version: v1.7.5
+Version: v1.7.6
 
 ## Overview
 

@@ -5,7 +5,7 @@ title: g8e Protocol Library
 # g8e Protocol Library
 
 Last Updated: 2026-08-16
-Version: v1.7.5
+Version: v1.7.6
 
 The g8e Protocol Library is the canonical wire contract for all mutations in the g8e zero-trust execution platform. It provides schema definitions, JSON constant registries, JSON model schemas, Pydantic models, dynamic enum generation, SPIFFE workload identity helpers, and example programs for building compatible clients and services. Every mutation passing through the platform flows through a 5-layer interlock sequence:
 
