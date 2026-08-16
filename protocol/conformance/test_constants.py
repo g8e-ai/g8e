@@ -478,14 +478,8 @@ class TestGoConstNamingConventions:
         )
 
     def test_go_consts_are_pascalcase(self):
-        """All _go_const values must be valid PascalCase identifiers.
-
-        Some naming conventions use a lowercase prefix (e.g. ``envG8EClientCert``
-        for environment variable constants). These are allowed.
-        """
+        """All _go_const values must be valid PascalCase identifiers."""
         pascal_re = re.compile(r"^[A-Z][A-Za-z0-9.]*$")
-        # Allow lowercase-prefixed names like envG8EClientCert
-        relaxed_re = re.compile(r"^[a-z]+[A-Z][A-Za-z0-9.]*$")
 
         for filename in sorted(FILES_WITH_GO_CONST):
             data = _load_json(filename)
@@ -498,7 +492,7 @@ class TestGoConstNamingConventions:
                         continue  # Empty _go_const is allowed (intentionally unmapped)
                     # Allow dot notation for nested constants (e.g. "Ports.OperatorHttp")
                     base_name = go_const.split(".")[-1]
-                    assert pascal_re.match(base_name) or relaxed_re.match(base_name), (
+                    assert pascal_re.match(base_name), (
                         f"{filename}/{key}: _go_const '{go_const}' is not PascalCase"
                     )
 

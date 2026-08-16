@@ -40,6 +40,13 @@ var EnvVar = struct {
 	LatticeSandboxesToken EnvVarKey
 	LatticeEntityName     EnvVarKey
 	LatticePostureFloor   EnvVarKey
+	ClientCert            EnvVarKey
+	ClientKey             EnvVarKey
+	CABundle              EnvVarKey
+	GatewayURL            EnvVarKey
+	AppID                 EnvVarKey
+	AppCert               EnvVarKey
+	AppKey                EnvVarKey
 }{
 	ConsensusID:           EnvVarKey("G8E_CONSENSUS_ID"),
 	ConsensusURL:          EnvVarKey("G8E_CONSENSUS_URL"),
@@ -63,4 +70,11 @@ var EnvVar = struct {
 	LatticeSandboxesToken: EnvVarKey("SANDBOXES_TOKEN"),
 	LatticeEntityName:     EnvVarKey("LATTICE_ENTITY_NAME"),
 	LatticePostureFloor:   EnvVarKey("LATTICE_POSTURE_FLOOR"),
+	ClientCert:            EnvVarKey("G8E_CLIENT_CERT"),
+	ClientKey:             EnvVarKey("G8E_CLIENT_KEY"),
+	CABundle:              EnvVarKey("G8E_CA_BUNDLE"),
+	GatewayURL:            EnvVarKey("G8E_GATEWAY_URL"),
+	AppID:                 EnvVarKey("G8E_APP_ID"),
+	AppCert:               EnvVarKey("G8E_APP_CERT"),
+	AppKey:                EnvVarKey("G8E_APP_KEY"),
 }

@@ -63,10 +63,10 @@ func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 			RuntimeDir:  filepath.Dir(certPath),
 		}
 		// Set env to point to non-existent CA bundle
-		t.Setenv(envG8ECABundle, filepath.Join(tempDir, "nonexistent-ca.pem"))
+		t.Setenv(string(constants.EnvVar.CABundle), filepath.Join(tempDir, "nonexistent-ca.pem"))
 		// Also set cert/key env to the generated test certs
-		t.Setenv(envG8EClientCert, certPath)
-		t.Setenv(envG8EClientKey, keyPath)
+		t.Setenv(string(constants.EnvVar.ClientCert), certPath)
+		t.Setenv(string(constants.EnvVar.ClientKey), keyPath)
 
 		_, err = buildGatewayConn(fileSvc, cfg, stdioCredentialFlags{})
 		require.Error(t, err)
@@ -79,10 +79,10 @@ func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
 		require.NoError(t, err)
 
-		t.Setenv(envG8EClientCert, certPath)
-		t.Setenv(envG8EClientKey, keyPath)
-		t.Setenv(envG8ECABundle, caPath)
-		t.Setenv(envG8EGatewayURL, "https://127.0.0.1:9999/mcp")
+		t.Setenv(string(constants.EnvVar.ClientCert), certPath)
+		t.Setenv(string(constants.EnvVar.ClientKey), keyPath)
+		t.Setenv(string(constants.EnvVar.CABundle), caPath)
+		t.Setenv(string(constants.EnvVar.GatewayURL), "https://127.0.0.1:9999/mcp")
 
 		cfg := &config.Config{
 			ProjectRoot: tempDir,
@@ -539,9 +539,9 @@ func TestBuildGatewayConn_FlagResolution(t *testing.T) {
 		require.NoError(t, err)
 
 		// Set env to wrong values, flags to correct values
-		t.Setenv(envG8EClientCert, "/nonexistent/env-cert.crt")
-		t.Setenv(envG8EClientKey, "/nonexistent/env-key.key")
-		t.Setenv(envG8ECABundle, caPath)
+		t.Setenv(string(constants.EnvVar.ClientCert), "/nonexistent/env-cert.crt")
+		t.Setenv(string(constants.EnvVar.ClientKey), "/nonexistent/env-key.key")
+		t.Setenv(string(constants.EnvVar.CABundle), caPath)
 
 		cfg := &config.Config{
 			ProjectRoot: tempDir,

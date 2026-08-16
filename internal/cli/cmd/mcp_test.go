@@ -1338,8 +1338,8 @@ func TestHttpMCPProxy(t *testing.T) {
 func TestMcpStdioCmd_FlagsRegistered(t *testing.T) {
 	cmd := mcpStdioCmd()
 	expectedFlags := []string{
-		flagClientCert, flagClientKey, flagCABundle,
-		flagGatewayURL, flagAppCert, flagAppKey,
+		constants.Flag.ClientCert, constants.Flag.ClientKey, constants.Flag.CABundle,
+		constants.Flag.GatewayURL, constants.Flag.AppCert, constants.Flag.AppKey,
 	}
 	for _, name := range expectedFlags {
 		f := cmd.Flags().Lookup(name)
