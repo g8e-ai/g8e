@@ -340,13 +340,6 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, go
 	if posture == "" {
 		return fmt.Errorf("pubsub_commands: %w", constants.ErrPostureRequired)
 	}
-	// Default to NewL1Doctrine if not provided (outbound mode may not configure doctrine)
-	doctrine := govDeps.Doctrine
-	if doctrine == nil {
-		doctrine = governance.NewL1Doctrine()
-		c.Logger.Warn("No L1Doctrine provided; using default doctrine")
-	}
-
 	rs.l4warden = governance.NewL4Warden(
 		c.Logger,
 		govDeps.ReplayStore,
@@ -354,7 +347,7 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, go
 		rs.signerStore,
 		govDeps.ConsensusPolicyStore,
 		govDeps.L3Notary,
-		doctrine,
+		govDeps.Doctrine,
 		knownActionTypes,
 		posture,
 		nil, // Clock defaults to RealClock

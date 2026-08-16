@@ -69,53 +69,147 @@ func (c *Client) rpcWithCLI(ctx context.Context, p Persona, path, method string,
 
 // ---- MCP --------------------------------------------------------------------
 
+// ToolArgs is the typed argument payload for an MCP tools/call invocation.
+// Each implementation is a JSON-serializable struct matching a tool's
+// argument schema. The harness client marshals the value under the
+// "arguments" key of the JSON-RPC params, mirroring the wire shape that
+// loose map[string]any values produced previously.
+type ToolArgs interface {
+	isToolArgs()
+}
+
+// ShellCommandArgs are the arguments for the run_shell_command tool.
+type ShellCommandArgs struct {
+	Command string   `json:"command"`
+	Args    []string `json:"args"`
+	Timeout int      `json:"timeout"`
+}
+
+func (ShellCommandArgs) isToolArgs() {}
+
+// FSPathArgs are the arguments for path-only filesystem tools (fs_list, fs_read).
+type FSPathArgs struct {
+	Path string `json:"path"`
+}
+
+func (FSPathArgs) isToolArgs() {}
+
+// FSGrepArgs are the arguments for the fs_grep tool.
+type FSGrepArgs struct {
+	Path    string `json:"path"`
+	Pattern string `json:"pattern"`
+}
+
+func (FSGrepArgs) isToolArgs() {}
+
+// FSWriteArgs are the arguments for the fs_write tool.
+type FSWriteArgs struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
+func (FSWriteArgs) isToolArgs() {}
+
+// ExecuteBashArgs are the arguments for the execute_bash tool.
+type ExecuteBashArgs struct {
+	Command string `json:"command"`
+}
+
+func (ExecuteBashArgs) isToolArgs() {}
+
+// ---- MCP params envelopes ---------------------------------------------------
+
+// toolsCallParams is the JSON-RPC params envelope for tools/call.
+type toolsCallParams struct {
+	Name      string   `json:"name"`
+	Arguments ToolArgs `json:"arguments"`
+}
+
+// resourcesReadParams is the JSON-RPC params envelope for resources/read.
+type resourcesReadParams struct {
+	URI string `json:"uri"`
+}
+
+// promptsGetParams is the JSON-RPC params envelope for prompts/get. Arguments
+// holds the schema-less prompt arguments whose shape varies per prompt name.
+type promptsGetParams struct {
+	Name      string `json:"name"`
+	Arguments any    `json:"arguments"`
+}
+
 func (c *Client) MCPToolsList(ctx context.Context, p Persona) (*JSONRPCResponse, error) {
-	return c.rpc(ctx, p, "/mcp", "tools/list", map[string]any{})
+	return c.rpc(ctx, p, "/mcp", "tools/list", struct{}{})
 }
 
 // MCPToolsCall invokes a tool. The Gateway wraps this into a governed MCP_CALL
 // envelope, runs the interlock sequence, and dispatches to the real Operator.
-func (c *Client) MCPToolsCall(ctx context.Context, p Persona, tool string, args map[string]any) (*JSONRPCResponse, error) {
-	return c.rpc(ctx, p, "/mcp", "tools/call", map[string]any{
-		"name":      tool,
-		"arguments": args,
+func (c *Client) MCPToolsCall(ctx context.Context, p Persona, tool string, args ToolArgs) (*JSONRPCResponse, error) {
+	return c.rpc(ctx, p, "/mcp", "tools/call", toolsCallParams{
+		Name:      tool,
+		Arguments: args,
 	})
 }
 
 // MCPToolsCallWithCLI is like MCPToolsCall but routes through the CLI-cert
 // TLS client so the gateway's handleCLIAuth stamps the host user's identity
 // onto the suspended transaction. Use this for notary-scenario submits.
-func (c *Client) MCPToolsCallWithCLI(ctx context.Context, p Persona, tool string, args map[string]any) (*JSONRPCResponse, error) {
-	return c.rpcWithCLI(ctx, p, "/mcp", "tools/call", map[string]any{
-		"name":      tool,
-		"arguments": args,
+func (c *Client) MCPToolsCallWithCLI(ctx context.Context, p Persona, tool string, args ToolArgs) (*JSONRPCResponse, error) {
+	return c.rpcWithCLI(ctx, p, "/mcp", "tools/call", toolsCallParams{
+		Name:      tool,
+		Arguments: args,
 	})
 }
 
 func (c *Client) MCPResourcesList(ctx context.Context, p Persona) (*JSONRPCResponse, error) {
-	return c.rpc(ctx, p, "/mcp", "resources/list", map[string]any{})
+	return c.rpc(ctx, p, "/mcp", "resources/list", struct{}{})
 }
 
 func (c *Client) MCPResourcesRead(ctx context.Context, p Persona, uri string) (*JSONRPCResponse, error) {
-	return c.rpc(ctx, p, "/mcp", "resources/read", map[string]any{"uri": uri})
+	return c.rpc(ctx, p, "/mcp", "resources/read", resourcesReadParams{URI: uri})
 }
 
 func (c *Client) MCPPromptsList(ctx context.Context, p Persona) (*JSONRPCResponse, error) {
-	return c.rpc(ctx, p, "/mcp", "prompts/list", map[string]any{})
+	return c.rpc(ctx, p, "/mcp", "prompts/list", struct{}{})
 }
 
+// MCPPromptsGet invokes a named prompt. args is a schema-less map because
+// prompt arguments vary by prompt definition — the harness client forwards
+// the caller-supplied map verbatim without interpreting its shape.
 func (c *Client) MCPPromptsGet(ctx context.Context, p Persona, name string, args map[string]any) (*JSONRPCResponse, error) {
-	return c.rpc(ctx, p, "/mcp", "prompts/get", map[string]any{"name": name, "arguments": args})
+	return c.rpc(ctx, p, "/mcp", "prompts/get", promptsGetParams{
+		Name:      name,
+		Arguments: args,
+	})
 }
 
 // ---- A2A --------------------------------------------------------------------
 
-// A2ACall invokes an A2A skill with a plain JSON payload.
+// a2aCallParams is the JSON-RPC params envelope for a2a/call with a JSON payload.
+type a2aCallParams struct {
+	SkillName   string `json:"skill_name"`
+	Payload     any    `json:"payload"`
+	ExecutionID string `json:"execution_id"`
+}
+
+// a2aCallProtoParams is the JSON-RPC params envelope for a2a/call with a
+// base64-encoded protobuf payload.
+type a2aCallProtoParams struct {
+	SkillName   string `json:"skill_name"`
+	ExecutionID string `json:"execution_id"`
+	Encoding    string `json:"encoding"`
+	ContentType string `json:"content_type"`
+	PayloadB64  string `json:"payload_b64"`
+}
+
+// A2ACall invokes an A2A skill with a plain JSON payload. payload is a
+// schema-less map because skill payloads vary by skill definition — the
+// harness client forwards the caller-supplied map verbatim without
+// interpreting its shape.
 func (c *Client) A2ACall(ctx context.Context, p Persona, skill string, payload map[string]any, execID string) (*JSONRPCResponse, error) {
-	return c.rpc(ctx, p, "/api/a2a/v1/call", "a2a/call", map[string]any{
-		"skill_name":   skill,
-		"payload":      payload,
-		"execution_id": execID,
+	return c.rpc(ctx, p, "/api/a2a/v1/call", "a2a/call", a2aCallParams{
+		SkillName:   skill,
+		Payload:     payload,
+		ExecutionID: execID,
 	})
 }
 
@@ -134,16 +228,23 @@ func (c *Client) A2ACallProto(ctx context.Context, p Persona, skill string, payl
 	if err != nil {
 		return nil, fmt.Errorf("marshal A2ACallRequested: %w", err)
 	}
-	return c.rpc(ctx, p, "/api/a2a/v1/call", "a2a/call", map[string]any{
-		"skill_name":   skill,
-		"execution_id": execID,
-		"encoding":     "protobuf",
-		"content_type": "application/x-protobuf;type=g8e.operator.v1.A2ACallRequested",
-		"payload_b64":  base64.StdEncoding.EncodeToString(raw),
+	return c.rpc(ctx, p, "/api/a2a/v1/call", "a2a/call", a2aCallProtoParams{
+		SkillName:   skill,
+		ExecutionID: execID,
+		Encoding:    "protobuf",
+		ContentType: "application/x-protobuf;type=g8e.operator.v1.A2ACallRequested",
+		PayloadB64:  base64.StdEncoding.EncodeToString(raw),
 	})
 }
 
 // ---- helpers ----------------------------------------------------------------
+
+// suspensionErrorData is the structured error data payload returned by the
+// Gateway when a mutation needs a human notary. The Gateway may include
+// additional fields; only ApprovalURL is consumed here.
+type suspensionErrorData struct {
+	ApprovalURL string `json:"approval_url"`
+}
 
 // Suspended reports whether a JSON-RPC response is an L3 suspension and returns
 // the transaction hash to approve. The Gateway returns an approval URL of the
@@ -155,12 +256,10 @@ func Suspended(resp *JSONRPCResponse) (txHash string, yes bool) {
 
 	// First, try to parse structured error data for approval_url field
 	if resp.Error != nil && len(resp.Error.Data) > 0 {
-		var errData map[string]any
+		var errData suspensionErrorData
 		if json.Unmarshal(resp.Error.Data, &errData) == nil {
-			if approvalURL, ok := errData["approval_url"].(string); ok {
-				if hash := extractHashFromURL(approvalURL); hash != "" {
-					return hash, true
-				}
+			if hash := extractHashFromURL(errData.ApprovalURL); hash != "" {
+				return hash, true
 			}
 		}
 	}

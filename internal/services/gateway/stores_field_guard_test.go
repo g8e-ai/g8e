@@ -116,3 +116,73 @@ func fieldName(field *ast.Field) string {
 	// Embedded field — use the type expression as the name.
 	return "<embedded>"
 }
+
+// TestStoresDoesNotExportRawDB is a lint guard asserting that the Stores
+// aggregation struct does not expose a raw *sqliteutil.DB handle. The Stores
+// struct exists to give consumers typed store services; a raw DB field lets
+// callers bypass every store and defeats the repository pattern (Smell 7 in
+// the codemap remediation plan). Consumers needing direct DB access during
+// construction (NewConsensusStoreService, NewStateRootService) are constructed
+// inside OpenCanonicalDBService where the DB is already in scope. This test
+// prevents regressions where the DB field is re-added to Stores.
+func TestStoresDoesNotExportRawDB(t *testing.T) {
+	dir := "." // test runs with package directory as cwd
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read package dir: %v", err)
+	}
+
+	fset := token.NewFileSet()
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+
+		file, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.ParseComments)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+
+		for _, decl := range file.Decls {
+			genDecl, ok := decl.(*ast.GenDecl)
+			if !ok {
+				continue
+			}
+			for _, spec := range genDecl.Specs {
+				ts, ok := spec.(*ast.TypeSpec)
+				if !ok || ts.Name.Name != "Stores" {
+					continue
+				}
+				st, ok := ts.Type.(*ast.StructType)
+				if !ok {
+					continue
+				}
+				for _, field := range st.Fields.List {
+					if isSqliteutilDBPtr(field.Type) {
+						pos := fset.Position(field.Pos())
+						t.Errorf("%s: Stores declares raw *sqliteutil.DB field %q — "+
+							"Stores must only expose typed store services; "+
+							"construct raw-DB consumers inside OpenCanonicalDBService "+
+							"instead of leaking the DB handle (see codemap remediation plan, Smell 7)",
+							pos, fieldName(field))
+					}
+				}
+			}
+		}
+	}
+}
+
+// isSqliteutilDBPtr reports whether expr is the type *sqliteutil.DB.
+func isSqliteutilDBPtr(expr ast.Expr) bool {
+	star, ok := expr.(*ast.StarExpr)
+	if !ok {
+		return false
+	}
+	sel, ok := star.X.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	id, ok := sel.X.(*ast.Ident)
+	return ok && id.Name == "sqliteutil" && sel.Sel.Name == "DB"
+}

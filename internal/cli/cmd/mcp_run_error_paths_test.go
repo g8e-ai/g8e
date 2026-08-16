@@ -63,10 +63,10 @@ func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 			RuntimeDir:  filepath.Dir(certPath),
 		}
 		// Set env to point to non-existent CA bundle
-		t.Setenv(envG8ECABundle, filepath.Join(tempDir, "nonexistent-ca.pem"))
+		t.Setenv(string(constants.EnvVar.CABundle), filepath.Join(tempDir, "nonexistent-ca.pem"))
 		// Also set cert/key env to the generated test certs
-		t.Setenv(envG8EClientCert, certPath)
-		t.Setenv(envG8EClientKey, keyPath)
+		t.Setenv(string(constants.EnvVar.ClientCert), certPath)
+		t.Setenv(string(constants.EnvVar.ClientKey), keyPath)
 
 		_, err = buildGatewayConn(fileSvc, cfg, stdioCredentialFlags{})
 		require.Error(t, err)
@@ -79,10 +79,10 @@ func TestBuildGatewayConn_ErrorPaths(t *testing.T) {
 		fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
 		require.NoError(t, err)
 
-		t.Setenv(envG8EClientCert, certPath)
-		t.Setenv(envG8EClientKey, keyPath)
-		t.Setenv(envG8ECABundle, caPath)
-		t.Setenv(envG8EGatewayURL, "https://127.0.0.1:9999/mcp")
+		t.Setenv(string(constants.EnvVar.ClientCert), certPath)
+		t.Setenv(string(constants.EnvVar.ClientKey), keyPath)
+		t.Setenv(string(constants.EnvVar.CABundle), caPath)
+		t.Setenv(string(constants.EnvVar.GatewayURL), "https://127.0.0.1:9999/mcp")
 
 		cfg := &config.Config{
 			ProjectRoot: tempDir,
@@ -146,7 +146,7 @@ func TestLaunchAgentWithGovernance_ConfigLoadError(t *testing.T) {
 		}
 		t.Cleanup(func() { configLoad = originalLoad })
 
-		err := launchAgentWithGovernance("claude", nil, false, newFileSvc)
+		err := launchAgentWithGovernance("claude", nil, false, newFileSvc, panickingEnrollerFactory())
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrGatewayNotReady)
 	})
@@ -177,7 +177,7 @@ func TestProxySessionToGateway_ConnectionRefused(t *testing.T) {
 
 func TestRunMCPAgentRun_SubprocessStartFailure(t *testing.T) {
 	t.Run("returns ErrProcessStartFailed for non-existent command", func(t *testing.T) {
-		err := runMCPAgentRun([]string{"nonexistent-command-xyz-12345"}, "", false, newFileSvc)
+		err := runMCPAgentRun([]string{"nonexistent-command-xyz-12345"}, "", false, newFileSvc, panickingEnrollerFactory())
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrProcessStartFailed)
 	})
@@ -209,7 +209,7 @@ func TestRunMCPAgentRun_HTTPProxyEmptyStdin(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL, false, newFileSvc)
+		err = runMCPAgentRun(nil, server.URL, false, newFileSvc, panickingEnrollerFactory())
 		require.NoError(t, err)
 	})
 }
@@ -245,7 +245,7 @@ func TestRunMCPAgentRun_HTTPProxyL1Blocked(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL, false, newFileSvc)
+		err = runMCPAgentRun(nil, server.URL, false, newFileSvc, panickingEnrollerFactory())
 		require.NoError(t, err)
 	})
 }
@@ -275,7 +275,7 @@ func TestRunMCPAgentRun_HTTPProxyNotificationDropped(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL, false, newFileSvc)
+		err = runMCPAgentRun(nil, server.URL, false, newFileSvc, panickingEnrollerFactory())
 		require.NoError(t, err)
 	})
 }
@@ -304,7 +304,7 @@ func TestRunMCPAgentRun_HTTPProxyParseError(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL, false, newFileSvc)
+		err = runMCPAgentRun(nil, server.URL, false, newFileSvc, panickingEnrollerFactory())
 		require.NoError(t, err)
 	})
 }
@@ -333,7 +333,7 @@ func TestRunMCPAgentRun_HTTPProxyEmptyLines(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL, false, newFileSvc)
+		err = runMCPAgentRun(nil, server.URL, false, newFileSvc, panickingEnrollerFactory())
 		require.NoError(t, err)
 	})
 }
@@ -362,7 +362,7 @@ func TestRunMCPAgentRun_HTTPProxyInitializeFallback(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL, false, newFileSvc)
+		err = runMCPAgentRun(nil, server.URL, false, newFileSvc, panickingEnrollerFactory())
 		require.NoError(t, err)
 	})
 }
@@ -391,7 +391,7 @@ func TestRunMCPAgentRun_HTTPProxyDownstreamError(t *testing.T) {
 		os.Stdin = r
 		t.Cleanup(func() { os.Stdin = originalStdin })
 
-		err = runMCPAgentRun(nil, server.URL, false, newFileSvc)
+		err = runMCPAgentRun(nil, server.URL, false, newFileSvc, panickingEnrollerFactory())
 		require.NoError(t, err)
 	})
 }
@@ -539,9 +539,9 @@ func TestBuildGatewayConn_FlagResolution(t *testing.T) {
 		require.NoError(t, err)
 
 		// Set env to wrong values, flags to correct values
-		t.Setenv(envG8EClientCert, "/nonexistent/env-cert.crt")
-		t.Setenv(envG8EClientKey, "/nonexistent/env-key.key")
-		t.Setenv(envG8ECABundle, caPath)
+		t.Setenv(string(constants.EnvVar.ClientCert), "/nonexistent/env-cert.crt")
+		t.Setenv(string(constants.EnvVar.ClientKey), "/nonexistent/env-key.key")
+		t.Setenv(string(constants.EnvVar.CABundle), caPath)
 
 		cfg := &config.Config{
 			ProjectRoot: tempDir,

@@ -78,6 +78,7 @@ func TestNewOperatorPubSubService_StartsWithoutTrustedSignersButRejectsL2(t *tes
 		StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 		TransactionAudit:  &testutil.MockTransactionAudit{},
 		L3Notary:          &testutil.MockL3Notary{},
+		Doctrine:          governance.NewL1Doctrine(),
 	})
 	require.NoError(t, err)
 	require.NotNil(t, svc.l4warden)
@@ -1377,4 +1378,30 @@ func TestNewOperatorPubSubService_NilOptionalGovDeps_PreservedAsNil(t *testing.T
 	require.NoError(t, err)
 	require.NotNil(t, svc)
 	assert.NotNil(t, svc.l4warden, "l4warden must be initialized even with nil consensus policy store")
+}
+
+// TestNewOperatorPubSubService_NilDoctrine_NotDefaultedAtCallSite verifies that
+// a nil Doctrine in GovernanceDeps is NOT silently replaced with NewL1Doctrine()
+// at the call site. The doctrine default belongs in the mode's dependency wiring
+// (g8eo.go for outbound mode), not in initializeGovernance. A nil doctrine here
+// is a wiring bug; L4Warden fail-closes at verification time with
+// ErrTxDoctrineMissing rather than silently running with a default doctrine.
+func TestNewOperatorPubSubService_NilDoctrine_NotDefaultedAtCallSite(t *testing.T) {
+	t.Parallel()
+	cfg := testutil.NewTestConfig(t)
+	svc, err := NewOperatorPubSubService(CommandServiceConfig{
+		Config:       cfg,
+		Logger:       testutil.NewTestLogger(),
+		PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
+	}, GovernanceDeps{
+		ReplayStore:       &testutil.MockReplayStore{},
+		StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+		TransactionAudit:  &testutil.MockTransactionAudit{},
+		L3Notary:          &testutil.MockL3Notary{},
+		// Doctrine intentionally left nil — must not be defaulted at the call site.
+	})
+	require.NoError(t, err)
+	require.NotNil(t, svc)
+	require.NotNil(t, svc.l4warden, "l4warden must be initialized")
+	assert.Nil(t, svc.l4warden.Doctrine(), "nil Doctrine must not be defaulted at the call site; wire it in the mode's dependency wiring instead")
 }

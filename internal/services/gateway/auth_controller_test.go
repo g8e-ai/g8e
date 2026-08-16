@@ -120,10 +120,12 @@ func setupTestPasskeyService(t *testing.T) (*PasskeyHandler, *UserService, stora
 		ThreatScanner:    governance.NewL1Doctrine(),
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
+		AuditStore:       mcp.NoopAuditEventRecorder{},
 	})
 	require.NoError(t, err)
 
-	orchestrator := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, nil, nil, logger)
+	orchestrator, err := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, NewGatewayWebSocketHandler(logger), logger)
+	require.NoError(t, err)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:       passkey,
 		WebSessionSvc: webSessionSvc,

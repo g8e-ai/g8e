@@ -51,29 +51,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/network"
 )
 
-// G8E environment variables injected by 'agent run' and consumed by 'mcp stdio'.
-// Identity is carried in the delegated cert's URI SANs — no session header env vars.
-const (
-	envG8EClientCert = "G8E_CLIENT_CERT"
-	envG8EClientKey  = "G8E_CLIENT_KEY"
-	envG8ECABundle   = "G8E_CA_BUNDLE"
-	envG8EGatewayURL = "G8E_GATEWAY_URL"
-	envG8EAppID      = "G8E_APP_ID"
-	envG8EAppCert    = "G8E_APP_CERT"
-	envG8EAppKey     = "G8E_APP_KEY"
-)
-
-// CLI flag names for 'mcp stdio' credential overrides. Registered on the stdio
-// subcommand, not as root persistent flags — see plan: replace-env-vars-with-global-flags.
-const (
-	flagClientCert = "client-cert"
-	flagClientKey  = "client-key"
-	flagCABundle   = "ca-bundle"
-	flagGatewayURL = "gateway-url"
-	flagAppCert    = "app-cert"
-	flagAppKey     = "app-key"
-)
-
 // nativeToolsToDisable lists built-in tools that Claude Code and Codex must
 // disable via --disallowed-tools to force all I/O through g8e's MCP gateway.
 // Other agents use different mechanisms:
@@ -204,12 +181,12 @@ Cert and key must be supplied as a pair per tier; supplying only one half fails 
 			return runMCPStdioProxy(cmd, args, fileSvcFactory)
 		},
 	}
-	cmd.Flags().String(flagClientCert, "", "Path to CLI client certificate (mTLS)")
-	cmd.Flags().String(flagClientKey, "", "Path to CLI client key (mTLS)")
-	cmd.Flags().String(flagCABundle, "", "Path to gateway CA bundle PEM")
-	cmd.Flags().String(flagGatewayURL, "", "Gateway MCP endpoint URL (https only, e.g. https://g8e.local:8443/mcp)")
-	cmd.Flags().String(flagAppCert, "", "Path to delegated app certificate (requires --app-key)")
-	cmd.Flags().String(flagAppKey, "", "Path to delegated app key (requires --app-cert)")
+	cmd.Flags().String(constants.Flag.ClientCert, "", "Path to CLI client certificate (mTLS)")
+	cmd.Flags().String(constants.Flag.ClientKey, "", "Path to CLI client key (mTLS)")
+	cmd.Flags().String(constants.Flag.CABundle, "", "Path to gateway CA bundle PEM")
+	cmd.Flags().String(constants.Flag.GatewayURL, "", "Gateway MCP endpoint URL (https only, e.g. https://g8e.local:8443/mcp)")
+	cmd.Flags().String(constants.Flag.AppCert, "", "Path to delegated app certificate (requires --app-key)")
+	cmd.Flags().String(constants.Flag.AppKey, "", "Path to delegated app key (requires --app-cert)")
 	return cmd
 }
 
@@ -300,23 +277,23 @@ type stdioCredentialFlags struct {
 func parseStdioCredentialFlags(cmd *cobra.Command) (stdioCredentialFlags, error) {
 	var f stdioCredentialFlags
 	var err error
-	if f.ClientCert, err = cmd.Flags().GetString(flagClientCert); err != nil {
-		return f, fmt.Errorf("mcp: get %s flag: %w", flagClientCert, err)
+	if f.ClientCert, err = cmd.Flags().GetString(constants.Flag.ClientCert); err != nil {
+		return f, fmt.Errorf("mcp: get %s flag: %w", constants.Flag.ClientCert, err)
 	}
-	if f.ClientKey, err = cmd.Flags().GetString(flagClientKey); err != nil {
-		return f, fmt.Errorf("mcp: get %s flag: %w", flagClientKey, err)
+	if f.ClientKey, err = cmd.Flags().GetString(constants.Flag.ClientKey); err != nil {
+		return f, fmt.Errorf("mcp: get %s flag: %w", constants.Flag.ClientKey, err)
 	}
-	if f.CABundle, err = cmd.Flags().GetString(flagCABundle); err != nil {
-		return f, fmt.Errorf("mcp: get %s flag: %w", flagCABundle, err)
+	if f.CABundle, err = cmd.Flags().GetString(constants.Flag.CABundle); err != nil {
+		return f, fmt.Errorf("mcp: get %s flag: %w", constants.Flag.CABundle, err)
 	}
-	if f.GatewayURL, err = cmd.Flags().GetString(flagGatewayURL); err != nil {
-		return f, fmt.Errorf("mcp: get %s flag: %w", flagGatewayURL, err)
+	if f.GatewayURL, err = cmd.Flags().GetString(constants.Flag.GatewayURL); err != nil {
+		return f, fmt.Errorf("mcp: get %s flag: %w", constants.Flag.GatewayURL, err)
 	}
-	if f.AppCert, err = cmd.Flags().GetString(flagAppCert); err != nil {
-		return f, fmt.Errorf("mcp: get %s flag: %w", flagAppCert, err)
+	if f.AppCert, err = cmd.Flags().GetString(constants.Flag.AppCert); err != nil {
+		return f, fmt.Errorf("mcp: get %s flag: %w", constants.Flag.AppCert, err)
 	}
-	if f.AppKey, err = cmd.Flags().GetString(flagAppKey); err != nil {
-		return f, fmt.Errorf("mcp: get %s flag: %w", flagAppKey, err)
+	if f.AppKey, err = cmd.Flags().GetString(constants.Flag.AppKey); err != nil {
+		return f, fmt.Errorf("mcp: get %s flag: %w", constants.Flag.AppKey, err)
 	}
 	return f, nil
 }
@@ -361,9 +338,9 @@ func isCLICredentialTier(tierName string) bool {
 func buildGatewayConn(fileSvc fs.RuntimeFileService, cfg *config.Config, flags stdioCredentialFlags) (*gatewayConn, error) {
 	certFile, keyFile, tierName, err := resolveCredentialPair([]struct{ cert, key, name string }{
 		{flags.AppCert, flags.AppKey, "app flags"},
-		{os.Getenv(envG8EAppCert), os.Getenv(envG8EAppKey), "app env"},
+		{os.Getenv(string(constants.EnvVar.AppCert)), os.Getenv(string(constants.EnvVar.AppKey)), "app env"},
 		{flags.ClientCert, flags.ClientKey, "client flags"},
-		{os.Getenv(envG8EClientCert), os.Getenv(envG8EClientKey), "client env"},
+		{os.Getenv(string(constants.EnvVar.ClientCert)), os.Getenv(string(constants.EnvVar.ClientKey)), "client env"},
 		{cfg.CLICertFile(), cfg.CLIKeyFile(), "CLI disk"},
 	})
 	if err != nil {
@@ -373,7 +350,7 @@ func buildGatewayConn(fileSvc fs.RuntimeFileService, cfg *config.Config, flags s
 	var caBundleBytes []byte
 	caPath := flags.CABundle
 	if caPath == "" {
-		caPath = os.Getenv(envG8ECABundle)
+		caPath = os.Getenv(string(constants.EnvVar.CABundle))
 	}
 	if caPath != "" {
 		caBundleBytes, err = readCABundle(fileSvc, caPath)
@@ -386,7 +363,7 @@ func buildGatewayConn(fileSvc fs.RuntimeFileService, cfg *config.Config, flags s
 
 	gatewayURL := flags.GatewayURL
 	if gatewayURL == "" {
-		gatewayURL = os.Getenv(envG8EGatewayURL)
+		gatewayURL = os.Getenv(string(constants.EnvVar.GatewayURL))
 	}
 	if gatewayURL == "" {
 		gatewayURL = fmt.Sprintf("https://%s:%d/mcp", constants.GatewayInternalHostname, constants.Ports.OperatorHttps)
@@ -961,10 +938,13 @@ func getSupportedAgents() []agentInfo {
 // ─── agent run ──────────────────────────────────────────────────────────────
 
 func agentRunCmd() *cobra.Command {
-	return agentRunCmdWithConfig(newFileSvc)
+	return agentRunCmdWithConfig(newFileSvc, newDefaultEnrollmentCoordinator)
 }
 
-func agentRunCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
+func agentRunCmdWithConfig(
+	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
+	enrollerFactory enrollerFactory,
+) *cobra.Command {
 	var downstreamURL string
 	var verify bool
 
@@ -1041,7 +1021,7 @@ the gateway and use 'g8e mcp stdio'.`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runMCPAgentRun(args, downstreamURL, verify, fileSvcFactory)
+			return runMCPAgentRun(args, downstreamURL, verify, fileSvcFactory, enrollerFactory)
 		},
 	}
 
@@ -1369,19 +1349,22 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		// extensions (including the developer extension that provides shell/file
 		// tools), and --with-extension on the command line loads g8e as the
 		// sole MCP server for the session.
-		g8eExt := map[string]any{
-			"enabled": true,
-			"config": map[string]any{
-				"type":        "stdio",
-				"name":        "g8e",
-				"cmd":         binaryPath,
-				"args":        []string{"mcp", "stdio"},
-				"description": "g8e governance gateway",
-				"timeout":     300,
+		g8eExt := gooseExtension{
+			Enabled: true,
+			Config: gooseExtConfig{
+				Type:        constants.MCPTransportStdio,
+				Name:        constants.MCPServerNameG8E,
+				Cmd:         binaryPath,
+				Args:        []string{"mcp", "stdio"},
+				Description: constants.MCPG8EDescription,
+				Timeout:     constants.GooseExtTimeout,
 			},
 		}
 
-		// Read existing config if present, preserving all fields (provider, etc.)
+		// rawConfig preserves all unknown Goose config fields (provider, etc.)
+		// during the read-modify-write cycle. gooseConfig only models the
+		// extensions map, so schema-less passthrough is required to avoid
+		// dropping fields on re-marshal.
 		var rawConfig map[string]any
 		if existingData, err := os.ReadFile(agentPaths.GooseYAMLConfigPath); err == nil {
 			if err := yaml.Unmarshal(existingData, &rawConfig); err != nil {
@@ -1392,12 +1375,14 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 			rawConfig = make(map[string]any)
 		}
 
-		// Get or create extensions map and add g8e
+		// extMap is the extensions sub-map from rawConfig; kept as
+		// map[string]any to preserve unknown extension entries from other
+		// tools during re-marshal.
 		extMap, _ := rawConfig["extensions"].(map[string]any)
 		if extMap == nil {
 			extMap = make(map[string]any)
 		}
-		extMap["g8e"] = g8eExt
+		extMap[constants.MCPServerNameG8E] = g8eExt
 		rawConfig["extensions"] = extMap
 
 		configYAML, err := yaml.Marshal(rawConfig)
@@ -1438,7 +1423,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 // then launches the requested agent with 'g8e mcp stdio' as its sole MCP server.
 // The authenticated CLI session is propagated to the stdio subprocess via G8E_*
 // environment variables so it never needs to re-read credentials from disk.
-func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) error {
+func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error), enrollerFactory enrollerFactory) error {
 	if err := startGatewayIfNeeded(fileSvcFactory); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrGatewayNotReady, err)
 	}
@@ -1461,7 +1446,7 @@ func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, 
 	// is idempotent for an existing passkey); if no passkey exists, the
 	// browser ceremony runs after system trust is installed.
 	fmt.Fprintf(os.Stderr, "[g8e] Ensuring CLI credentials and passkey...\n")
-	coordinator := enrollCoordinatorFactory(func(format string, args ...any) {
+	coordinator := enrollerFactory(func(format string, args ...any) {
 		fmt.Fprintf(os.Stderr, format+"\n", args...)
 	}, fileSvc, cfg)
 	enrollResult, err := coordinator.Enroll(context.Background(), auth.EnrollmentOptions{})
@@ -1550,13 +1535,13 @@ func launchAgentProcess(agentID string, extraArgs, launchArgs []string, cfg *con
 	// The stdio proxy will automatically fall back to IP if g8e.local DNS fails.
 	gatewayURL := fmt.Sprintf("https://%s:%d/mcp", constants.GatewayInternalHostname, constants.Ports.OperatorHttps)
 	agentCmd.Env = append(os.Environ(),
-		envG8EClientCert+"="+cfg.CLICertFile(),
-		envG8EClientKey+"="+cfg.CLIKeyFile(),
-		envG8ECABundle+"="+cfg.ResolvedTrustBundlePath(),
-		envG8EGatewayURL+"="+gatewayURL,
-		envG8EAppID+"="+appID,
-		envG8EAppCert+"="+appCert,
-		envG8EAppKey+"="+appKey,
+		string(constants.EnvVar.ClientCert)+"="+cfg.CLICertFile(),
+		string(constants.EnvVar.ClientKey)+"="+cfg.CLIKeyFile(),
+		string(constants.EnvVar.CABundle)+"="+cfg.ResolvedTrustBundlePath(),
+		string(constants.EnvVar.GatewayURL)+"="+gatewayURL,
+		string(constants.EnvVar.AppID)+"="+appID,
+		string(constants.EnvVar.AppCert)+"="+appCert,
+		string(constants.EnvVar.AppKey)+"="+appKey,
 	)
 
 	return agentCmd.Run()
@@ -1754,7 +1739,7 @@ func verifyGeminiInterception(configPath string) error {
 	return nil
 }
 
-func runMCPAgentRun(args []string, downstreamURL string, verify bool, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) error {
+func runMCPAgentRun(args []string, downstreamURL string, verify bool, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error), enrollerFactory enrollerFactory) error {
 	if downstreamURL == "" && len(args) == 0 {
 		return fmt.Errorf("specify an agent name or MCP server\n\nLaunch an agent with governance:\n  g8e mcp agent run claude\n\nWrap an MCP server subprocess:\n  g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /\n\nWrap an HTTP MCP server:\n  g8e mcp agent run --url http://localhost:3000")
 	}
@@ -1764,7 +1749,7 @@ func runMCPAgentRun(args []string, downstreamURL string, verify bool, fileSvcFac
 		firstArg := strings.ToLower(args[0])
 		for _, a := range getSupportedAgents() {
 			if strings.ToLower(a.ID) == firstArg {
-				return launchAgentWithGovernance(a.ID, args[1:], verify, fileSvcFactory)
+				return launchAgentWithGovernance(a.ID, args[1:], verify, fileSvcFactory, enrollerFactory)
 			}
 		}
 	}
