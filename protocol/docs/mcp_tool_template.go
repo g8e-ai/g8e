@@ -17,20 +17,24 @@
 //
 // USAGE:
 // 1. Copy this file to internal/services/mcp/your_tool_name.go
-// 2. Replace YOUR_TOOL_NAME with your tool name (snake_case)
+// 2. Replace your_tool_name with your tool name (snake_case)
 // 3. Replace YourTool with your tool name (PascalCase)
-// 4. Implement the Execute() method
-// 5. Keep YourToolRequest and YourToolResult structs in this file (not models.go)
-// 6. Add your tool to the tools list in RegisterNativeTools() in native_tool_registry.go
-// 7. Create a test file internal/services/mcp/your_tool_name_test.go
-// 8. Done! No init() function needed
+// 4. Replace YourToolRequest/YourToolResult fields with your inputs/outputs
+// 5. Implement the Execute() method; validate user input and respect ctx.Err()
+// 6. Keep YourToolRequest and YourToolResult in this file (not models.go)
+// 7. Add input validation helpers to validation.go for user-facing inputs
+// 8. Add your tool to the tools list in RegisterNativeTools() in native_tool_registry.go
+// 9. Create a test file internal/services/mcp/your_tool_name_test.go
+// 10. Done! No init() function needed
 //
 // CONVENTIONS (see docs/devs/devs.md):
 // - Three import blocks: standard library, external, internal
-// - Wrap errors with context: fmt.Errorf("your_tool_name: action: %w", err)
-// - Return Go error for programming errors (unmarshal, marshal failures)
-// - Return CallToolResult{IsError: true, ...} for operational errors (tool ran but failed)
+// - Wrap errors with context: fmt.Errorf("your_tool_name: %w: %w", constants.Err..., err)
+// - Use constants from internal/constants/errors.go for known failure modes
+// - Return Go errors for programming failures (unmarshal, marshal)
+// - Return CallToolResult{IsError: true, ...} for operational failures (tool ran but action failed)
 // - Use context.Context for cancellation; check ctx.Err() in long-running loops
+// - Define filepaths in internal/constants/paths.go; use RuntimeFileService for .g8e/ I/O
 
 package mcp
 
@@ -38,6 +42,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // YourToolRequest represents the input for your tool.
@@ -55,20 +61,20 @@ type YourToolResult struct {
 	Error   string `json:"error,omitempty"`
 }
 
-// YourTool implements a custom native tool
+// YourTool implements a custom native tool.
 type YourTool struct{}
 
-// Name returns the tool identifier
+// Name returns the tool identifier.
 func (t *YourTool) Name() string {
 	return "your_tool_name"
 }
 
-// Description returns a human-readable description
+// Description returns a human-readable description.
 func (t *YourTool) Description() string {
 	return "Brief description of what your tool does"
 }
 
-// InputSchema returns the JSON Schema for tool validation
+// InputSchema returns the JSON Schema for tool validation.
 func (t *YourTool) InputSchema() *InputSchema {
 	return &InputSchema{
 		Type: "object",
@@ -81,11 +87,6 @@ func (t *YourTool) InputSchema() *InputSchema {
 				Type:        "integer",
 				Description: "Description of param2 (optional)",
 			},
-			"mode": {
-				Type:        "string",
-				Description: "Operating mode (optional, enum example)",
-				Enum:        []string{"fast", "thorough"},
-			},
 		},
 		Required: []string{"param1"},
 	}
@@ -97,15 +98,15 @@ func (t *YourTool) InputSchema() *InputSchema {
 func (t *YourTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
 	var req YourToolRequest
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("your_tool_name: unmarshal arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("your_tool_name: %w: %w", constants.ErrMCPUnmarshalArguments, err)
 	}
 
-	// Validate required fields
+	// Validate required fields (replace with helpers in validation.go for user input).
 	if req.Param1 == "" {
 		return CallToolResult{}, fmt.Errorf("your_tool_name: param1 is required")
 	}
 
-	// Check context for cancellation
+	// Check context for cancellation.
 	if err := ctx.Err(); err != nil {
 		return CallToolResult{}, err
 	}
@@ -118,14 +119,16 @@ func (t *YourTool) Execute(ctx context.Context, args json.RawMessage) (CallToolR
 	}
 
 	// Example: operational error (tool ran but action failed)
-	// Return IsError=true so the client sees the error in the tool result,
-	// not as a JSON-RPC error.
+	// The IsError flag tells the client the error is in the result, not a JSON-RPC error.
 	//
-	// result = YourToolResult{
+	// result := YourToolResult{
 	// 	Success: false,
 	// 	Error:   "resource not found",
 	// }
-	// resultJSON, _ := json.Marshal(result)
+	// resultJSON, err := json.Marshal(result)
+	// if err != nil {
+	// 	return CallToolResult{}, fmt.Errorf("your_tool_name: %w: %w", constants.ErrMCPMarshalResult, err)
+	// }
 	// return CallToolResult{
 	// 	IsError: true,
 	// 	Content: []TextContent{
@@ -139,7 +142,7 @@ func (t *YourTool) Execute(ctx context.Context, args json.RawMessage) (CallToolR
 	// Marshal result to JSON
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("your_tool_name: marshal result: %w", err)
+		return CallToolResult{}, fmt.Errorf("your_tool_name: %w: %w", constants.ErrMCPMarshalResult, err)
 	}
 
 	// Return result

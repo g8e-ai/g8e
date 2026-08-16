@@ -78,16 +78,20 @@ def main():
     print()
 
     # Validate model
+    # RequestContext enforces session identity for CLIENT source: it must have
+    # either web_session_id or cli_session_id (not both) and a user_id. An empty
+    # string is treated as missing, so this raises "Context must have either
+    # web_session_id or cli_session_id for CLIENT source".
     print("Model Validation:")
     try:
         invalid_context = RequestContext(
-            web_session_id="",  # Invalid: empty string
+            web_session_id="",  # Empty string is falsy, treated as missing
             user_id="user-123",
             source_component=ComponentName.CLIENT,
         )
-        print("  ERROR: Should have failed validation with empty web_session_id")
+        print("  ERROR: Should have failed validation with missing session id")
     except ValueError as e:
-        print(f"  ✓ Validation error caught: {e}")
+        print(f"  Validation error caught: {e}")
     print()
 
 

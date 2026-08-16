@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-08-14
-Version: v1.7.2
+Last Updated: 2026-08-16
+Version: v1.7.6
 
 ---
 
@@ -63,7 +63,7 @@ Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2 con
 
 #### Consensus Mode
 
-Enforces L1 and L2 (multi-model Byzantine consensus). L3 notary signature is audited but not required.
+Enforces L1 and L2 (multi-signature Byzantine consensus). L3 notary signature is audited but not required.
 
 ```bash
 ./g8e gw start --posture consensus
@@ -84,12 +84,12 @@ The g8e Gateway exposes two consolidated protocol surfaces. Each surface serves 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
 | **HTTP Surface** | 8080 (HTTP) | None | Health checks, bootstrap enrollment, CLI recovery request/status/complete (token-scoped), PKI discovery endpoints, deploy scripts |
-| **HTTPS Surface** | 8443 (TLS) | mTLS (app-layer) + URI SAN | Governance envelopes, MCP/A2A APIs, document store, WebSocket pub/sub, console SPA |
+| **HTTPS Surface** | 8443 (TLS) | Per-route: public, mTLS, web session, or dual | Governance envelopes, MCP/A2A APIs, document store, WebSocket pub/sub, console SPA |
 
 ### Port Separation
 
 The g8e Gateway enforces strict port separation for security:
-- **HTTP Surface**: Plain HTTP for health checks, bootstrap enrollment, CLI recovery request/status/complete (token-scoped), PKI discovery, and deploy scripts. The old trust-script routes and `handleCLIEnrollment` are removed. No MCP, A2A, governance, or mutation endpoints are exposed on this surface.
+- **HTTP Surface**: Plain HTTP for health checks, bootstrap enrollment, CLI recovery request/status/complete (token-scoped), PKI discovery, and deploy scripts. No MCP, A2A, governance, or mutation endpoints are exposed on this surface.
 - **HTTPS Surface**: TLS-protected surface for all governance, MCP, A2A, document store, WebSocket, and console routes. Every route is classified into one of four auth modes: public (no auth), mTLS (client certificate required), web session (cookie-based browser auth), and dual (mTLS preferred, cookie fallback).
 
 Public routes (health, console SPA, bootstrap, passkey console, approval page) bypass mTLS. mTLS routes require a valid client certificate. Web session routes validate a session cookie. Dual routes try mTLS first and fall back to cookie auth.
@@ -363,7 +363,7 @@ Applications connecting to the g8e Gateway can use the g8e Protocol Library to c
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.6.10
+go get github.com/g8e-ai/g8e@v1.7.5
 ```
 
 The Go module provides types for envelope construction, receipt parsing, and SPIFFE workload identity.
@@ -371,7 +371,7 @@ The Go module provides types for envelope construction, receipt parsing, and SPI
 ### Python Package
 
 ```bash
-pip install g8e==1.6.10
+pip install g8e==1.7.5
 ```
 
 The Python package provides constants and models for gateway communication. Requires Python 3.10+.

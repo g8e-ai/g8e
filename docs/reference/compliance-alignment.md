@@ -1,8 +1,8 @@
 # Compliance Alignment Report
 
-**Document Version:** 1.7.1  
-**Last Updated:** 2026-08-10  
-**Platform:** g8e v1.7.1  
+**Document Version:** 1.7.6  
+**Last Updated:** 2026-08-16  
+**Platform:** g8e v1.7.5  
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -621,7 +621,7 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 - **Anduril Lattice gRPC adapter** with OAuth2 client credentials authentication, gRPC retry with status code classification, and heartbeat interval validation
 - **MCP tool interception verification** (`--verify` flag) ensuring agent tool-disabling configurations are correctly applied before agent launch
 - **MCP gateway output scrubbing** preventing sensitive data leakage in downstream MCP audit logs
-- **Agent support consolidation** to 4 supported agents (Claude Code, Codex, Goose, Gemini CLI) reducing attack surface
+- **Agent support** for 5 agents (Claude Code, Codex, Goose, Gemini CLI, Devin CLI) with per-agent MCP config wiring; 4 of 5 (claude, codex, goose, gemini) support native tool disabling for full governance interception
 - **Governance interface extraction** separating verification concerns (replay store, signer store, consensus store, app policy store, state root provider) into dedicated files
 - **Protocol wire-format documentation** for EventType, AgentMode, and SessionEventWire ensuring consumer compatibility
 - **Cross-language governance hash parity** ensuring Go and Python produce identical transaction hash digests through aligned canonicalization logic
@@ -647,6 +647,16 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 - **Dead code removal** (107 unreachable functions removed from production and test code)
 - **FedRAMP sovereign cloud governance demo** demonstrating compliance posture for federal workloads
 - **FedRAMP 20x (CR26) alignment** with typed KSI model, OSCAL evidence export, historical metrics retention, and COSAiS overlay ingestion for Class C certification
+- **EnrollmentCoordinator** replacing the scattered CLI enrollment transport (`BootstrapWithURL`/`CLIEnroll`/`ReEnroll`/`EnrollWithGateway`/`AutoRenewCertificate`) with a single state machine owning the enrollment lifecycle
+- **Human-approved CLI recovery flow** for new CLIs against an existing gateway, using a one-time browser approval and opaque proof-of-possession token
+- **mTLS-protected CLI certificate rotation endpoint** enabling in-band certificate renewal without re-enrollment
+- **OS trust-store installation before browser launch** during `auth enroll`, with a blocking browser-restart gate after trust-store changes
+- **Posture-aware passkey enrollment** requiring passkeys only for notary posture (optional for doctrine and consensus)
+- **Audit store hard dependency** for the MCP gateway, making audit recording a construction-time requirement rather than a late-bound optional
+- **Passkey proof verification decoupling** from the L3 notary interface, separating proof verification from notary authorization logic
+- **Atomic pointer adoption** for the late-bound consensus service, replacing unsafe `**T` pointers with `atomic.Pointer` for thread-safe dependency wiring
+- **Typed audit response models** narrowing HTTP audit payload shapes to typed structs instead of raw maps
+- **RootCACommonName constant centralization** extracting the root-CA subject common name into a single typed constant across gateway certificate generation, OS trust-store installation, and stale-anchor enumeration
 
 ### Planned Enhancements
 
@@ -720,7 +730,7 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 | **L3 Approval Pipeline Tests** | `internal/services/governance/l3_approval_pipeline_integration_test.go` | Full CLI to browser to approval pipeline |
 | **Reporting Verification Tests** | `internal/services/reporting/verification_test.go` | Commitment chain, merkle root, receipt cross-link |
 | **Integration Tests** | `test/*_test.go` | End-to-end security flows |
-| **Compliance Tests** | `internal/services/compliance/*_test.go` | KSI model, evaluator, OSCAL exporter, history store, overlay loader (89.4% coverage) |
+| **Compliance Tests** | `internal/services/compliance/*_test.go` | KSI model, evaluator, OSCAL exporter, history store, overlay loader (89.7% coverage) |
 
 ---
 
@@ -760,8 +770,13 @@ For specific compliance questions or audit support, contact:
 | 1.5.0 | 2026-07-13 | Lateralus Labs | Updated platform version to v1.5.0; added unified Go module, Cosign/sigstore artifact signing, Gitleaks secret scanning, Go-licenses compliance, cross-OS CI matrix, Python protocol conformance suite (151 tests), Go performance benchmarks, and smoke test scripts to current strengths |
 | 1.5.1 | 2026-07-14 | Lateralus Labs | Updated platform version to v1.5.1; added NIST SP 800-63B-4 alignment section; updated NIST SP 800-53 to Rev 5.2.0 with new controls SA-15(13), SA-24, SI-02(07); updated PCI DSS to v4.0.1; added ISO 27001 Amendment 1:2024 reference; corrected ZIG pillars to match DoW seven-pillar framework; added NIST SP 800-207A reference; updated DoD to DoW naming; added RuntimeFileService to current strengths; verified all evidence paths against live codebase |
 | 1.5.8 | 2026-07-19 | Lateralus Labs | Updated platform version to v1.5.8; added interactive gateway onboarding wizard, Anduril Lattice gRPC adapter, MCP tool interception verification, MCP gateway output scrubbing, agent support consolidation, governance interface extraction, and protocol wire-format documentation to current strengths; corrected Python protocol test suite (151 tests) and conformance suite (330 tests) counts; updated test coverage to 75.9%; added receipt signature verification known limitation; verified all evidence paths against live codebase |
-| 1.6.8 | 2026-07-31 | Lateralus Labs | Updated platform version to v1.6.6; added cross-language governance hash parity, enrollment token TOCTOU fix, SSE resilience improvements, governance JSON schema, gateway HTTP handler decomposition, CanonicalDBService Stores struct extraction, L2 consensus interface decoupling, AuthController decomposition, PasskeyOrchestrator extraction, L1 doctrine threat detector expansion, MCP gateway ThreatScanner interface, L5 Actuator decomposition with fail-closed rehydration, MCP gateway AuditEventRecorder interface, error sentinel migration, ScrubbingService constructor fail-closed, "Tribunal" to "Consensus" rename, DBController split, L2 consensus logic extraction, configurable doctrine directory, gateway construction refactor to InitHTTPHandler(), dead code removal (107 functions), and FedRAMP sovereign cloud governance demo to current strengths; updated Python protocol conformance suite count from 330 to 420; added encryption, consensus, and storage architecture docs to evidence repository; added L2 Consensus Policy Store and MCP Gateway ThreatScanner to code evidence; verified all evidence paths against live codebase |
+| 1.6.8 | 2026-07-31 | Lateralus Labs | Updated platform version to v1.6.8; added cross-language governance hash parity, enrollment token TOCTOU fix, SSE resilience improvements, governance JSON schema, gateway HTTP handler decomposition, CanonicalDBService Stores struct extraction, L2 consensus interface decoupling, AuthController decomposition, PasskeyOrchestrator extraction, L1 doctrine threat detector expansion, MCP gateway ThreatScanner interface, L5 Actuator decomposition with fail-closed rehydration, MCP gateway AuditEventRecorder interface, error sentinel migration, ScrubbingService constructor fail-closed, "Tribunal" to "Consensus" rename, DBController split, L2 consensus logic extraction, configurable doctrine directory, gateway construction refactor to InitHTTPHandler(), dead code removal (107 functions), and FedRAMP sovereign cloud governance demo to current strengths; updated Python protocol conformance suite count from 330 to 420; added encryption, consensus, and storage architecture docs to evidence repository; added L2 Consensus Policy Store and MCP Gateway ThreatScanner to code evidence; verified all evidence paths against live codebase |
 | 1.7.0 | 2026-08-02 | Lateralus Labs | Added FedRAMP 20x (CR26) alignment section with Certification Classes A-D, typed KSI model (31 KSIs), OSCAL evidence export, historical metrics retention, COSAiS overlay alignment, and doctrine KSI linkage; updated AU-10 non-repudiation claim to reference KSI-MLA-07; added compliance package code evidence and test evidence entries |
+| 1.7.1 | 2026-08-10 | Lateralus Labs | Updated platform version to v1.7.1; updated Current Strengths gateway construction entry to reflect single-phase construction with lazy forwarding adapters and per-controller dependency injection (replacing the prior two-phase InitHTTPHandler pattern); verified all evidence paths against live codebase |
+| 1.7.2 | 2026-08-14 | Lateralus Labs | Updated platform version to v1.7.2; added EnrollmentCoordinator state machine, human-approved CLI recovery flow, and mTLS-protected CLI certificate rotation endpoint to Current Strengths; noted removal of the --tpm flag (file-backed EC P-256 keys on all platforms); verified all evidence paths against live codebase |
+| 1.7.3 | 2026-08-14 | Lateralus Labs | Updated platform version to v1.7.3; noted RootCACommonName constant centralization (internal refactor, no on-wire or trust-store behavior change); verified all evidence paths against live codebase |
+| 1.7.4 | 2026-08-15 | Lateralus Labs | Updated platform version to v1.7.4; noted passkey enrollment is required only for notary posture (optional for doctrine and consensus); noted single always-FIPS Dockerfile consolidation and demo orchestration simplification; verified all evidence paths against live codebase |
+| 1.7.5 | 2026-08-16 | Lateralus Labs | Updated platform version to v1.7.5; added audit store hard dependency for MCP gateway, passkey proof verification decoupling from L3 notary interface, and atomic.Pointer adoption for late-bound consensus service to Current Strengths; added typed audit response models to Current Strengths; corrected agent support count from 4 to 5 to reflect Devin CLI addition in v1.6.7; verified all evidence paths against live codebase |
 
 ---
 

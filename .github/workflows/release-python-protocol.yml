@@ -135,9 +135,25 @@ jobs:
             echo "PyPI API does not list ${VERSION} yet (attempt $i/$MAX_ATTEMPTS), retrying in 15s..."
             sleep 15
           done
-          # Version is confirmed published; install it. Use --no-cache-dir to
-          # avoid any stale CDN-cached "not found" responses from earlier polls.
-          pip install --no-cache-dir g8e==${VERSION}
+          # Install directly from the artifact URL reported by the PyPI JSON
+          # API. The JSON API is the source of truth; pip's simple index is
+          # still CDN-cached and can lag behind, so using the canonical file
+          # URL bypasses the stale listing while still resolving dependencies
+          # from PyPI.
+          ARTIFACT_URL=$(python -c "
+          import json, urllib.request, sys
+          url = 'https://pypi.org/pypi/g8e/json'
+          data = json.loads(urllib.request.urlopen(url, timeout=15).read())
+          files = data.get('releases', {}).get('${VERSION}', [])
+          if not files:
+              sys.exit(1)
+          for f in files:
+              if f['filename'].endswith('-py3-none-any.whl'):
+                  print(f['url'])
+                  sys.exit(0)
+          print(files[0]['url'])
+          ")
+          pip install --no-cache-dir "g8e @ ${ARTIFACT_URL}"
           python -c "import g8e; print(f'g8e version: {g8e.__version__}'); assert g8e.__version__ == '${VERSION}'"
           echo "Fresh PyPI install verified successfully"
 

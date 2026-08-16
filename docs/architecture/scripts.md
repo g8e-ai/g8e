@@ -1,9 +1,9 @@
 # g8e Scripts
 
-Last Updated: 2026-08-07
-Version: v1.7.0
+Last Updated: 2026-08-16
+Version: v1.7.6
 
-g8e provides platform-specific bootstrap scripts for local development, gateway-served deploy scripts for remote operator installation, smoke test scripts that verify SDK importability in clean environments, and a CI guard script that validates doctrine detector coverage of finalized COSAiS overlays. The `g8e demos` CLI also supports air-gapped image export and import for demo environments.
+g8e provides platform-specific bootstrap scripts for local development, gateway-served deploy scripts for remote operator installation, smoke test scripts that verify SDK importability in clean environments, and a CI guard script that validates doctrine detector coverage of finalized COSAiS overlays. The `g8e demos` CLI also supports air-gapped image pull, export, import, and listing for demo environments.
 
 ## Overview
 
@@ -89,7 +89,7 @@ The `g8e demos` CLI provides `pull`, `export`, `import`, and `images` commands f
 
 ### Usage
 
-On a connected machine, pull and export images with `g8e demos pull` and `g8e demos export /tmp/g8e-images`. Transfer the export directory to the air-gapped machine, then run `g8e demos import /tmp/g8e-images`. List all images in the manifest with `g8e demos images`.
+On a connected machine, pull images with `g8e demos pull` and save them with `g8e demos export [output-dir]` (it defaults to `demos/images-export/`). Transfer the export directory to the air-gapped machine, then load the images with `g8e demos import [input-dir]` (it defaults to `demos/images-export/`). List all images in the manifest with `g8e demos images`.
 
 See [Demos README](../../demos/README.md#air-gapped-deployment) for the full air-gapped deployment workflow.
 

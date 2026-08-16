@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect an Existing Frontend to g8e Gateway
 
-Last Updated: 2026-08-14
-Version: v1.7.2
+Last Updated: 2026-08-16
+Version: v1.7.6
 
 ---
 
@@ -36,7 +36,7 @@ Start the gateway with CORS and passkey RP flags matching your frontend origin:
 
 `g8e gw start --passkey-rp-id example.com --passkey-rp-name "g8e Console" --passkey-rp-origin https://your-app.example.com --cors-origin https://your-app.example.com`
 
-Or via environment variables: `G8E_PASSKEY_RP_ID`, `G8E_PASSKEY_RP_NAME`, `G8E_PASSKEY_RP_ORIGINS` (comma-separated), and `G8E_ALLOWED_ORIGINS` (comma-separated).
+Or via environment variables: `G8E_PASSKEY_RP_ID`, `G8E_PASSKEY_RP_NAME`, `G8E_PASSKEY_RP_ORIGINS` (comma-separated), `G8E_ALLOWED_ORIGINS` (comma-separated), and `G8E_PUBLIC_BASE_URL`.
 
 Key flags:
 
@@ -174,7 +174,7 @@ When the CLI initiates a passkey enrollment from the terminal, it opens the brow
 
 1. Read the token from the URL hash (`window.location.hash`).
 2. Immediately clear the token from the URL via `history.replaceState`.
-3. POST the token to `/api/v1/auth/passkeys/enrollment/register/challenge` with `{ enrollment_token: <token> }` in the JSON body. The gateway validates the token and derives `user_id` and `cli_session_id` from it — there is no separate `/enrollment-token/validate` round-trip, and the token-derived identifiers never need to touch the DOM.
+3. POST the token to `/api/v1/auth/passkeys/enrollment/register/challenge` with `{ enrollment_token: <token> }` in the JSON body. The gateway validates the token and derives `user_id` and `cli_session_id` from it; there is no separate `/enrollment-token/validate` round-trip, and the token-derived identifiers never need to touch the DOM.
 4. Perform the WebAuthn ceremony with the challenge response (`navigator.credentials.create`).
 5. POST the attestation plus token to `/api/v1/auth/passkeys/enrollment/register/verify` with `{ enrollment_token: <token>, attestation_response: { ...encodedFields } }`. The verify step consumes the token (one-time-use) and sets a web session cookie.
 

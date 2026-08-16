@@ -56,57 +56,65 @@ func main() {
 
 	// Validate identities
 	if wid.MatchesOperator(operatorSPIFFE, orgID, operatorID, sessionID) {
-		fmt.Println("✓ Operator identity valid")
+		fmt.Println("OK: Operator identity valid")
 	}
 
 	if wid.MatchesCLI(cliSPIFFE, userID, sessionID) {
-		fmt.Println("✓ CLI identity valid")
+		fmt.Println("OK: CLI identity valid")
 	}
 
 	if wid.MatchesCLISessionOnly(cliSPIFFE, sessionID) {
-		fmt.Println("✓ CLI session-only match valid")
+		fmt.Println("OK: CLI session-only match valid")
 	}
 
 	if wid.MatchesApp(appSPIFFE, operatorID) {
-		fmt.Println("✓ App identity valid")
+		fmt.Println("OK: App identity valid")
+	}
+
+	if wid.IsAppSAN(appSPIFFE) {
+		fmt.Println("OK: App SAN workload identity recognized")
 	}
 
 	if wid.MatchesHub(hubSPIFFE) {
-		fmt.Println("✓ Hub identity valid")
+		fmt.Println("OK: Hub identity valid")
 	}
 
 	if wid.MatchesGatewayPeer(gatewaySPIFFE, gatewayID) {
-		fmt.Println("✓ Gateway peer identity valid")
+		fmt.Println("OK: Gateway peer identity valid")
+	}
+
+	if wid.IsUserSAN(userSPIFFE) {
+		fmt.Println("OK: User SAN workload identity recognized")
 	}
 
 	// Extract session ID from CLI SPIFFE ID
 	extractedSession, ok := wid.ExtractCLISessionID(cliSPIFFE)
 	if ok {
-		fmt.Printf("✓ Extracted CLI session ID: %s\n", extractedSession)
+		fmt.Printf("OK: Extracted CLI session ID: %s\n", extractedSession)
 	}
 
 	// Extract user ID from CLI SPIFFE ID
 	extractedUser, ok := wid.ExtractUserID(cliSPIFFE)
 	if ok {
-		fmt.Printf("✓ Extracted user ID: %s\n", extractedUser)
+		fmt.Printf("OK: Extracted user ID: %s\n", extractedUser)
 	}
 
 	// Extract user ID from User SAN SPIFFE ID
 	extractedUserFromSAN, ok := wid.ExtractUserIDFromUserSAN(userSPIFFE)
 	if ok {
-		fmt.Printf("✓ Extracted user ID from SAN: %s\n", extractedUserFromSAN)
+		fmt.Printf("OK: Extracted user ID from SAN: %s\n", extractedUserFromSAN)
 	}
 
 	// Extract operator session ID from Operator SPIFFE ID
 	extractedOpSession, ok := wid.ExtractOperatorSessionID(operatorSPIFFE)
 	if ok {
-		fmt.Printf("✓ Extracted operator session ID: %s\n", extractedOpSession)
+		fmt.Printf("OK: Extracted operator session ID: %s\n", extractedOpSession)
 	}
 
 	// Extract gateway ID from Gateway Peer SPIFFE ID
 	extractedGatewayID, ok := wid.ExtractGatewayID(gatewaySPIFFE)
 	if ok {
-		fmt.Printf("✓ Extracted gateway ID: %s\n", extractedGatewayID)
+		fmt.Printf("OK: Extracted gateway ID: %s\n", extractedGatewayID)
 	}
 
 	// Parse SPIFFE URLs

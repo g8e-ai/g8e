@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e-Compatible Frontend
 
-Last Updated: 2026-08-14
-Version: v1.7.2
+Last Updated: 2026-08-16
+Version: v1.7.6
 
 ---
 
@@ -238,7 +238,7 @@ When the CLI initiates a passkey enrollment from the terminal, it generates a on
 
 1. Read the token from the URL hash (`window.location.hash`).
 2. Immediately clear the token from the URL via `history.replaceState`.
-3. POST the token to `/api/v1/auth/passkeys/enrollment/register/challenge` with JSON body `{ enrollment_token: <token> }`. The gateway validates the token and derives `user_id` and `cli_session_id` from it — there is no separate `/enrollment-token/validate` round-trip, and the token-derived identifiers never need to touch the DOM.
+3. POST the token to `/api/v1/auth/passkeys/enrollment/register/challenge` with JSON body `{ enrollment_token: <token> }`. The gateway validates the token and derives `user_id` and `cli_session_id` from it; there is no separate `/enrollment-token/validate` round-trip, and the token-derived identifiers never need to touch the DOM.
 4. Perform the WebAuthn ceremony with the challenge response (`navigator.credentials.create`).
 5. POST the attestation plus token to `/api/v1/auth/passkeys/enrollment/register/verify` with JSON body `{ enrollment_token: <token>, attestation_response: { ...encodedFields } }`. The verify step consumes the token (one-time-use) and sets a web session cookie.
 
@@ -268,7 +268,7 @@ Handle error responses (both challenge and verify endpoints):
 
 ### Reconnection
 
-- Auto-reconnect 3 seconds after disconnection.
+- Auto-reconnect after disconnection using exponential backoff: approximately 1 second on the first attempt, doubling each retry, capped at 30 seconds, with up to 500ms of jitter. Reset the backoff counter on successful connection.
 
 ### Polling Fallback
 
@@ -276,7 +276,7 @@ If `EventSource` does not send cookies cross-origin, fall back to polling `GET /
 
 ### WebSocket Note
 
-The gateway also exposes a WebSocket pub/sub endpoint at `/ws/pubsub`, but it requires mTLS authentication and is not available to browser clients. Use SSE for all browser-based real-time telemetry.
+The gateway also exposes a WebSocket pub/sub endpoint at `/api/v1/pubsub/stream`, but it requires mTLS authentication and is not available to browser clients. Use SSE for all browser-based real-time telemetry.
 
 ---
 
@@ -351,7 +351,7 @@ After authentication, show:
 - Auto-scroll checkbox
 - Clear button
 - Event count display
-- Auto-reconnect on disconnect (3 second delay)
+- Auto-reconnect on disconnect (exponential backoff, capped at 30 seconds)
 
 **Account Card:**
 

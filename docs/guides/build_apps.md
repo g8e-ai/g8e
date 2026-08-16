@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-08-14
-Version: v1.7.2
+Last Updated: 2026-08-16
+Version: v1.7.6
 
 ---
 
@@ -82,7 +82,7 @@ Applications constructing `GovernanceEnvelope` transactions or parsing `ActionRe
 The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.6.10
+go get github.com/g8e-ai/g8e@v1.7.5
 ```
 
 The Go package provides protobuf message types for governance envelopes, governance metadata (L1, L2, L3), and all typed payload messages for first-class operations. It also provides SPIFFE workload identity helpers for URI SAN generation and validation.
@@ -94,7 +94,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 Install from PyPI:
 
 ```bash
-pip install g8e==1.6.10
+pip install g8e==1.7.5
 ```
 
 The package provides runtime loaders for JSON protocol constants, dynamic enum generation from those constants, and Pydantic v2 models for protocol data structures including request contexts, platform settings, SSE event wire models, and `GovernanceEnvelope` with deterministic transaction hash generation.
@@ -113,7 +113,11 @@ Generate an mTLS client certificate from the Gateway via CSR-based enrollment:
 ./g8e auth enroll
 ```
 
-This generates a local keypair, submits a CSR to the Gateway CA, and stores the signed certificate in `.g8e/cli.crt` with the private key in `.g8e/cli.key`. The command installs the gateway Root CA into the OS trust store before opening the browser for the passkey ceremony. Before installation, it checks for stale g8e Root CA anchors from previous gateway instances and prompts for removal if found. Use `--no-system-trust` only if an administrator has already installed the Root CA. After trust installation or stale anchor removal, close all open browser windows before clicking the enrollment link. On Windows, the signed certificate is imported into the Windows Certificate Store for Windows Hello native API access. CLI keys are file-backed ECDSA P-256 on all platforms. The Gateway must be running before enrollment (`./g8e gw start`).
+This generates a local keypair, submits a CSR to the Gateway CA, and stores the signed certificate in `.g8e/cli.crt` with the private key in `.g8e/cli.key`. CLI keys are file-backed ECDSA P-256 on all platforms. The Gateway must be running before enrollment (`./g8e gw start`).
+
+The command installs the gateway Root CA into the OS trust store before opening the browser for the passkey ceremony. Before installation, it checks for stale g8e Root CA anchors from previous gateway instances and prompts for removal if found. Use `--no-system-trust` only if an administrator has already installed the Root CA. After trust installation or stale anchor removal, close all open browser windows before clicking the enrollment link.
+
+On Windows, the signed certificate is imported into the Windows Certificate Store for Windows Hello native API access.
 
 ### Step 2: Fetch State Root
 
@@ -358,7 +362,7 @@ The design patterns documented in the [Building an Agentic System](#building-an-
 
 ## Building an Agentic System
 
-This section documents the practical steps for building a g8e-compliant agentic ensemble. For the architecture-level overview of the ensemble topology, intent-to-execution pipeline, persona system, and hash-chained ledger context model, see [AI Agents in a g8e-Compatible Agentic Ensemble](../architecture/agents.md). For the consensus signature verification and quorum policy details, see [Consensus Architecture](../architecture/consensus.md).
+This section documents the practical steps for building a g8e-compliant agentic ensemble. For the architecture-level overview of the g8e governance boundary and the agent client surface, see [AI Agents and the g8e Governance Boundary](../architecture/agents.md). For the consensus signature verification and quorum policy details, see [Consensus Architecture](../architecture/consensus.md).
 
 A g8e-compliant agentic system is an L2 consensus producer. It consumes the Gateway's protocol surface (MCP tool calls, A2A messaging, governance envelope submission) and produces typed, signed `GovernanceEnvelope` transactions. It has no privileged Gateway role: it is a client that produces consensus signatures.
 
@@ -382,7 +386,7 @@ The layers are:
 - **Defense Layer**: A coordinator orchestrates risk sub-agents that classify shell command risk, file operation risk, and failure recoverability into consolidated pre-execution verdicts.
 - **Utility Layer**: Support agents generate case titles, extract durable user preferences for cross-conversation memory, and evaluate benchmark performance.
 
-See [AI Agents in a g8e-Compatible Agentic Ensemble](../architecture/agents.md) for the full persona catalog and ensemble topology.
+See [AI Agents and the g8e Governance Boundary](../architecture/agents.md) for the platform boundary and client surface that constrains every g8e-compatible ensemble.
 
 ### Consensus Cascade
 
@@ -408,7 +412,7 @@ The invariant is that the agent reconstructs its prompt from references and summ
 
 ### Data Sovereignty
 
-Sentinel mode is the privacy-preserving default for cloud-model operation. Sensitive categories (API keys, tokens, passwords, private keys, OAuth secrets, credit cards, SSNs) are scrubbed before LLM delivery and before result publication back to the ensemble. Operational data (IPs, hostnames, file paths, URLs without embedded credentials, AWS ARNs) is preserved for troubleshooting. Raw host evidence stays in the Operator Raw Vault and is never AI-readable; AI-facing history comes from scrubbed vaults or typed result payloads.
+Scrubbing is the privacy-preserving default for cloud-model operation. Sensitive categories (API keys, tokens, passwords, private keys, OAuth secrets, credit cards, SSNs) are scrubbed before LLM delivery and before result publication back to the ensemble. Operational data (IPs, hostnames, file paths, URLs without embedded credentials, AWS ARNs) is preserved for troubleshooting. Raw host evidence stays in the Operator Raw Vault and is never AI-readable; AI-facing history comes from scrubbed vaults or typed result payloads.
 
 ### Building Your Own
 

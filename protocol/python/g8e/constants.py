@@ -115,48 +115,59 @@ def kv_session_type(name: str) -> str:
     """Get the wire value for a session type."""
     return KV["session_types"][name]["value"]
 
-# Helper to get Component names (formerly ComponentName enum)
+# Component names — mirrors internal/constants/status.go ComponentName and
+# protocol/constants/status.json component_name category.
 class ComponentName(StrEnum):
     CLIENT = "client"
-    G8EE = "g8ee"
     G8EO = "g8eo"
-    OPERATOR = "g8eo" # Alias
+    G8EO_GATEWAY = "g8eo-gateway"
 
-# Headers from g8ee/app/constants/headers.py
+# HTTP header constants — mirrors internal/constants/auth.go Header* and
+# protocol/constants/headers.json. Values must match the Go SSOT exactly.
 HTTP_ACCEL_BUFFERING_HEADER = "X-Accel-Buffering"
 HTTP_ACCEPT_HEADER = "Accept"
 HTTP_ACCEPT_LANGUAGE_HEADER = "Accept-Language"
-HTTP_ACCESS_CONTROL_ALLOW_CREDENTIALS = "Access-Control-Allow-Credentials"
-HTTP_ACCESS_CONTROL_ALLOW_ORIGIN = "Access-Control-Allow-Origin"
-HTTP_ACCESS_CONTROL_REQUEST_HEADERS = "Access-Control-Request-Headers"
-HTTP_ACCESS_CONTROL_REQUEST_METHOD = "Access-Control-Request-Method"
-HTTP_API_KEY_HEADER = "X-API-Key"
+HTTP_ACCESS_CONTROL_ALLOW_CREDENTIALS_HEADER = "Access-Control-Allow-Credentials"
+HTTP_ACCESS_CONTROL_ALLOW_HEADERS_HEADER = "Access-Control-Allow-Headers"
+HTTP_ACCESS_CONTROL_ALLOW_METHODS_HEADER = "Access-Control-Allow-Methods"
+HTTP_ACCESS_CONTROL_ALLOW_ORIGIN_HEADER = "Access-Control-Allow-Origin"
+HTTP_ACCESS_CONTROL_MAX_AGE_HEADER = "Access-Control-Max-Age"
+HTTP_ACCESS_CONTROL_REQUEST_HEADERS_HEADER = "Access-Control-Request-Headers"
+HTTP_ACCESS_CONTROL_REQUEST_METHOD_HEADER = "Access-Control-Request-Method"
 HTTP_AUTHORIZATION_HEADER = "Authorization"
-HTTP_BEARER_PREFIX = "Bearer"
+HTTP_BEARER_PREFIX = "Bearer "
 HTTP_CACHE_CONTROL_HEADER = "Cache-Control"
+HTTP_CONNECTION_HEADER = "Connection"
+HTTP_CONTENT_DISPOSITION_HEADER = "Content-Disposition"
 HTTP_CONTENT_LANGUAGE_HEADER = "Content-Language"
+HTTP_CONTENT_LENGTH_HEADER = "Content-Length"
+HTTP_CONTENT_SECURITY_POLICY_HEADER = "Content-Security-Policy"
 HTTP_CONTENT_TYPE_HEADER = "Content-Type"
 HTTP_COOKIE_HEADER = "Cookie"
-HTTP_FORWARDED_FOR_HEADER = "X-Forwarded-For"
 HTTP_LAST_EVENT_ID_HEADER = "Last-Event-ID"
 HTTP_PRAGMA_HEADER = "Pragma"
 HTTP_REQUESTED_WITH_HEADER = "X-Requested-With"
 HTTP_SET_COOKIE_HEADER = "Set-Cookie"
 HTTP_USER_AGENT_HEADER = "User-Agent"
-HTTP_G8E_CLIENT_HEADER = "X-G8E-Client"
-HTTP_G8E_OPERATOR_STATUS_HEADER = "X-G8E-Operator-Status"
-HTTP_G8E_SYSTEM_FINGERPRINT_HEADER = "X-G8E-System-Fingerprint"
-HTTP_G8E_SERVICE_HEADER = "X-G8E-Service"
+HTTP_VARY_HEADER = "Vary"
+HTTP_X_CONTENT_TYPE_OPTIONS_HEADER = "X-Content-Type-Options"
+HTTP_X_FORWARDED_FOR_HEADER = "X-Forwarded-For"
+HTTP_X_FORWARDED_HOST_HEADER = "X-Forwarded-Host"
+HTTP_X_FORWARDED_PROTO_HEADER = "X-Forwarded-Proto"
+HTTP_X_FRAME_OPTIONS_HEADER = "X-Frame-Options"
+HTTP_X_REQUEST_TIMESTAMP_HEADER = "X-Request-Timestamp"
 
-# Session Headers
+# g8e-specific headers
+HTTP_G8E_SYSTEM_FINGERPRINT_HEADER = "X-G8E-System-Fingerprint"
+
+# Session headers
 WEB_SESSION_ID_HEADER = "X-G8E-Web-Session-ID"
 CLI_SESSION_ID_HEADER = "X-G8E-CLI-Session-ID"
 OPERATOR_ID_HEADER = "X-G8E-Operator-ID"
-OPERATOR_API_KEY_HEADER = "X-G8E-Operator-API-Key"
+OPERATOR_SESSION_ID_HEADER = "X-G8E-Operator-Session-ID"
 
-# Context Headers
+# Context headers
 PROXY_ORGANIZATION_ID_HEADER = "X-Proxy-Organization-Id"
-PROXY_USER_EMAIL_HEADER = "X-Proxy-User-Email"
 PROXY_USER_ID_HEADER = "X-Proxy-User-Id"
 CASE_ID_HEADER = "X-G8E-Case-ID"
 USER_ID_HEADER = "X-G8E-User-ID"
@@ -164,5 +175,6 @@ ORGANIZATION_ID_HEADER = "X-G8E-Organization-ID"
 INVESTIGATION_ID_HEADER = "X-G8E-Investigation-ID"
 TASK_ID_HEADER = "X-G8E-Task-ID"
 BOUND_OPERATORS_HEADER = "X-G8E-Bound-Operators"
-EXECUTION_ID_HEADER = "X-G8E-Request-ID"
+EXECUTION_ID_HEADER = "X-G8E-Execution-ID"
+REQUEST_ID_HEADER = "X-G8E-Request-ID"
 COMPONENT_NAME_HEADER = "X-G8E-Source-Component"

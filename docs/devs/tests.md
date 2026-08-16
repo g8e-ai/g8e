@@ -107,12 +107,13 @@ Full state machine coverage:
 
 ### CredentialStore Tests (`internal/cli/auth/credential_store_test.go`)
 
-5 tests exercising `CredentialStore` directly:
+6 tests exercising `CredentialStore` directly:
 - `TestCredentialStore_InterruptedCommitRetry` — cancelled-context Commit fails, second Stage+Commit succeeds, no orphaned tmp files
 - `TestCredentialStore_RollbackWritesNoCanonicalFiles` — Rollback writes no canonical files; `Rollback(nil)` is a safe no-op
 - `TestCredentialStore_CommittedFilePermissions` — CLI cert, CLI key, credentials JSON all have 0600 mode after Commit
 - `TestCredentialStore_ConcurrentStageCommitNoTornState` — two concurrent Stage+Commit sequences leave a complete, consistent identity (race-clean under `-race`)
 - `TestCredentialStore_ClearRetainsTrustBundle` — Clear removes local credentials but retains the runtime trust bundle (§4.3 ownership)
+- `TestCredentialStore_InspectBundleOnlyIsAbsent` — `Inspect` with only a trust bundle present does not promote local identity from `Absent` to `Partial`
 
 ### Command-Layer Tests (`internal/cli/cmd/auth_enroll_test.go`)
 
@@ -123,6 +124,7 @@ Tests inject a `mockEnroller` via `mockEnrollerFactory(mock)` + `noopCheckOperat
 - `TestEnrollCmd_RotateCLIFlagForcesRotation` — `--rotate-cli` wiring
 - `TestEnrollCmd_NoSystemTrustFlagWired` — `--no-system-trust` wiring
 - `TestEnrollCmd_SystemTrustInstalledOutput` — browser-close guidance printed
+- `TestEnrollCmd_StdinContinueInjected` — interactive `auth enroll` supplies a stdin-reading `ContinueFunc` for the browser-restart gate
 - `TestLogoutCmd_OSRootCARetained` — OS root CA retained on logout
 - `TestMCPStdio_DoesNotInvokeEnrollment` — stdio never calls the coordinator factory
 
@@ -224,7 +226,7 @@ make test-docker       # Tier 3 (e2e build tag, requires Docker)
 make test-coverage     # Coverage with -coverprofile and -covermode=atomic
 make test-airgap       # Verify vendored build works without network access
 make ci                # Full CI pipeline (proto, swagger, lint, vulncheck, tests)
-make lint              # golangci-lint + lint-no-embedded-newlines + vulncheck + validate-doctrines + swagger-generate
+make lint              # golangci-lint + lint-no-embedded-newlines + vulncheck + validate-doctrines + validate-cosais + swagger-generate
 ```
 
 ### Workflow
@@ -254,9 +256,9 @@ make test-docker
 
 The demo scenarios tool (`g8e demos scenarios run`) impersonates arbitrary AI tools against a **REAL** g8e Gateway and Operator. The only fiction is the client identity; the Gateway and Operator are real infrastructure.
 
-**28 scenarios total**: 7 MCP + 3 A2A + 6 governance + 6 DHS + 1 finance + 5 FedRAMP.
+**26 scenarios total**: 7 MCP + 3 A2A + 5 governance + 5 DHS + 1 finance + 5 FedRAMP.
 
-The interactive demo runner (`g8e demos run <org> [scenario]`) provides 16 platform demos across 5 environments: healthcare (4), finance (1), dhs (5), fedramp (5), frontend (1). These drive the real Gateway and Operator with posture switching. For notary demos (dhs, fedramp), `demos run` enrolls a host CLI session and registers a WebAuthn passkey inline before running scenarios. A browser window opens automatically for the passkey ceremony, with no separate terminal or manual `auth enroll` step. The enrolled `user_id` and `cli_session_id` are threaded into the harness so the suspended transaction and the browser approver share the same user identity.
+The interactive demo runner (`g8e demos run <org> [scenario]`) provides 14 numbered platform demos across 5 environments: healthcare (4), finance (1), dhs (4), fedramp (4), frontend (1). These drive the real Gateway and Operator with posture switching. For notary demos (dhs, fedramp), `demos run` enrolls a host CLI session and registers a WebAuthn passkey inline before running scenarios. A browser window opens automatically for the passkey ceremony, with no separate terminal or manual `auth enroll` step. The enrolled `user_id` and `cli_session_id` are threaded into the harness so the suspended transaction and the browser approver share the same user identity.
 
 **Testing postures**:
 - **Doctrine**: L1 enforced, L2/L3 audited
@@ -320,7 +322,7 @@ From `protocol/constants/ports.json`:
 
 ### Python Test Suite
 
-The Python protocol package (`protocol/python/`) includes a pytest suite in `protocol/python/tests/` with 151 tests across 4 files:
+The Python protocol package (`protocol/python/`) includes a pytest suite in `protocol/python/tests/` with 122 test functions across 4 files:
 
 - `test_constants.py`: Constant dict loading, value integrity, and namespace conventions
 - `test_enums.py`: Enum generation, name conversion helpers, and dynamic attribute access
@@ -338,7 +340,7 @@ CI runs pytest on a Python 3.10-3.14 matrix (`python-tests` job).
 
 ### Protocol Conformance Suite
 
-The conformance suite in `protocol/conformance/` contains 420 tests across 3 files that enforce parity between Go constants, Python runtime values, and canonical JSON in `protocol/constants/`:
+The conformance suite in `protocol/conformance/` contains 92 test functions across 3 files that enforce parity between Go constants, Python runtime values, and canonical JSON in `protocol/constants/`:
 
 - `test_constants.py`: JSON file structure, `_go_const`/`_python_const` presence, value uniqueness, Go naming conventions, Python-JSON parity, event value namespace conventions
 - `test_models.py`: Model schema integrity, field parity between Python Pydantic models and JSON schemas, serialization round-trips, validation rules

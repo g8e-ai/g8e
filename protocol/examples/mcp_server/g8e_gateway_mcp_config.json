@@ -1,5 +1,4 @@
 {
-  "_comment": "This is an example template. The canonical schema is defined in internal/services/mcp/config.go. Use the unified /mcp endpoint on port 8443 (constants.Ports.OperatorHttps). TLS cert paths may be specified directly or via environment variable names (clientCertificateEnv, clientKeyEnv, caCertificateEnv).",
   "mcpServers": {
     "g8e-gateway": {
       "transport": {

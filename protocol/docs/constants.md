@@ -2,7 +2,7 @@
 
 ## Overview
 
-The g8e constants system maintains canonical constant definitions across the platform. Constants are defined in Go source files in `internal/constants/` and referenced by JSON schemas in `protocol/constants/` for protocol documentation and external consumers. The Go source files serve as the authoritative registry for internal usage, while the JSON files provide the single source of truth (SSOT) for protocol-level constants consumed by SDKs and external integrations.
+The g8e constants system maintains canonical constant definitions across the platform. Go source files in `internal/constants/` are the single source of truth (SSOT) for the platform. JSON schemas in `protocol/constants/` provide protocol-level reference documentation and external protocol definitions for SDKs and other consumers.
 
 ## Constant Categories
 
@@ -18,7 +18,7 @@ Canonical collection names for the operator embedded SQLite database, typed as `
 - `CollectionPasskeyChallenges`, `CollectionPersonas`, `CollectionAgentActivityMetadata`
 - `CollectionReputationState`, `CollectionReputationCommitments`, `CollectionStakeResolutions`
 - `CollectionRevokedCertificates`, `CollectionTrustedSigners`, `CollectionAppPolicies`
-- `CollectionConsensus`, `CollectionEnrollmentTokens`
+- `CollectionConsensus`, `CollectionEnrollmentTokens`, `CollectionCLIRecoveryRequests`
 
 ### Event Types (`events.go`)
 
@@ -91,12 +91,13 @@ HTTP route paths for the Gateway REST API, defined as a struct `APIPaths` with J
 - SSE: `SSEPush`, `SSEEvents`, `SSEStream`
 - PKI: `PKICSRSign`, `PKIDevicesEnroll`, `PKIAppsEnroll`, `PKIAppsDelegated`, `PKICertificatesRevoke`, `PKIRevocationBundle`, `PKICRL`, `PKICABundle`, `PKIFingerprint`
 - Audit: `AuditReceipts`, `AuditReceiptsExport`, `AuditEvents`, `AuditSummary`, `AuditReport`, `AuditStream`
-- User: `Users`, `UsersMe`
-- Auth: `AuthLogout`, `AuthBootstrap`, `AuthBootstrapStatus`, `AuthCLIRecoveryRequest`, `AuthCLIRecoveryStatus`, `AuthCLIRecoveryApprove`, `AuthCLIRecoveryComplete`, `AuthCLIRotate`, `AuthDeviceEnroll`, `AuthPasskeys`, `AuthPasskeysByID`, `AuthPasskeysJITRegisterChallenge`, `AuthPasskeysJITRegisterVerify`, `AuthPasskeysJITPrefix`, `AuthPasskeysPrefix`, `AuthPasskeysCLIStatus`, `AuthPasskeysConsoleRegisterChallenge`, `AuthPasskeysConsoleRegisterVerify`, `AuthPasskeysConsoleAuthenticateChallenge`, `AuthPasskeysConsoleAuthenticateVerify`, `AuthPasskeysConsolePrefix`, `AuthPasskeysEnrollmentRegisterChallenge`, `AuthPasskeysEnrollmentRegisterVerify`, `AuthPasskeysEnrollmentPrefix`, `AuthSessionsMe`, `AuthEnrollmentTokenGenerate`, `AuthEnrollmentTokenValidate`
-- Approval: `Approvals`, `ApprovalsByID`, `ApprovalsPrefix`, `ApprovePage`, `ApprovePagePrefix`, `ApprovalsCLIStatus`, `ApprovalsCLIList`
+- User: `Users`, `UsersMe`, `UsersPrefix`
+- Auth: `AuthLogout`, `AuthBootstrap`, `AuthBootstrapStatus`, `AuthCLIRecoveryRequest`, `AuthCLIRecoveryStatus`, `AuthCLIRecoveryApprove`, `AuthCLIRecoveryComplete`, `AuthCLIRotate`, `AuthDeviceEnroll`, `AuthPasskeys`, `AuthPasskeysByID`, `AuthPasskeysJITRegisterChallenge`, `AuthPasskeysJITRegisterVerify`, `AuthPasskeysJITPrefix`, `AuthPasskeysPrefix`, `AuthPasskeysCLIStatus`, `AuthPasskeysConsoleRegisterChallenge`, `AuthPasskeysConsoleRegisterVerify`, `AuthPasskeysConsoleAuthenticateChallenge`, `AuthPasskeysConsoleAuthenticateVerify`, `AuthPasskeysConsolePrefix`, `AuthPasskeysEnrollmentRegisterChallenge`, `AuthPasskeysEnrollmentRegisterVerify`, `AuthPasskeysEnrollmentPrefix`, `AuthSessionsMe`, `AuthSessionsPrefix`, `AuthEnrollmentTokenGenerate`, `AuthEnrollmentTokenValidate`
+- Approval: `Approvals`, `ApprovalsByID`, `ApprovalsPrefix`, `ApprovePage`, `ApprovePagePrefix`, `ApprovalsVerifyAction`, `ApprovalsCLIStatus`, `ApprovalsCLIList`
 - Admin: `AdminAppPoliciesBySigner`, `AdminAppsRevoke`, `AdminAppPoliciesPrefix`, `AdminConsensus`, `AdminConsensusByID`, `AdminConsensusPrefix`
 - Consensus: `ConsensusDeliberate` (`/consensus/v1/deliberate`)
 - Well-known: `WellKnownPKICABundle`, `WellKnownPKIFingerprint`, `WellKnownBinPrefix`, `WellKnownPKIPrefix`
+- Console/WebSocket: `ConsolePrefix` (`/console/`), `WSPrefix` (`/ws/`)
 - Deploy scripts: `DeployScriptLinux` (`/g8e-deploy.sh`), `DeployScriptWindows` (`/g8e-deploy.ps1`)
 - Health: `Health` (`/api/v1/health`)
 - State: `State` (`/api/v1/state`)
@@ -174,6 +175,7 @@ Internal enumeration constants, each defined as a typed string:
 - `ComponentStatus`: `ComponentStatusActive`, `ComponentStatusError`, `ComponentStatusInactive`, `ComponentStatusMaintenance`, `ComponentStatusDegraded`
 - `InfrastructureStatus`: `InfrastructureStatusCritical`, `InfrastructureStatusDegraded`, `InfrastructureStatusHealthy`, `InfrastructureStatusStable`, `InfrastructureStatusUnknown`, `InfrastructureStatusOperational`, `InfrastructureStatusDown`
 - `AuthMethod`: `AuthMethodKvPubSub`, `AuthMethodSession`, `AuthMethodProxy`, `AuthMethodOperatorSession`, `AuthMethodTest`
+- `GatewayResponseStatus`: `GatewayResponseStatusSuspended`
 - `WorkflowType`: `WorkflowTypeG8eBound`, `WorkflowTypeG8eCloudBound`, `WorkflowTypeG8eNotBound`, `WorkflowTypeTriage`, `WorkflowTypeInvestigation`
 - `AITaskId`: `AITaskIDAgentContinue`, `AITaskIDChat`, `AITaskIDCommand`, `AITaskIDDirectCommand`, `AITaskIDFetchFileDiff`, `AITaskIDFetchFileHistory`, `AITaskIDFetchHistory`, `AITaskIDFetchLogs`, `AITaskIDFileEdit`, `AITaskIDFsList`, `AITaskIDFsRead`, `AITaskIDIntentGrant`, `AITaskIDIntentRevoke`, `AITaskIDPortCheck`, `AITaskIDRecursiveGrep`, `AITaskIDRestoreFile`, plus additional task ID aliases (`AITaskId*` casing) for chat, case, memory, command, command execution, direct command, intent grant, intent revoke, file edit, file operation, fs list, recursive grep, port check, agent continue, and investigation query
 - `ConsensusMember`: `ConsensusMemberAxiom`, `ConsensusMemberConcord`, `ConsensusMemberVariance`, `ConsensusMemberPragma`, `ConsensusMemberNemesis`
@@ -207,13 +209,16 @@ Additional constants in `auth.go`:
 - WebAuthn algorithms: `WebAuthnAlgES256` (-7), `WebAuthnAlgRS256` (-257)
 - WebAuthn types: `WebAuthnTypePublicKey`, `WebAuthnAttestationNone`, `WebAuthnResidentKeyRequired`, `WebAuthnUserVerificationRequired`
 - PKI leaf types: `LeafTypeOperator`, `LeafTypeApp`, `LeafTypeHub`, `LeafTypeCLI`
-- JSON-RPC 2.0: `JSONRPCVersion`, `JSONRPCFieldVersion`, `JSONRPCFieldMethod`, `JSONRPCFieldParams`, `JSONRPCFieldID`, `JSONRPCFieldResult`, `JSONRPCFieldError`, `JSONRPCFieldCode`, `JSONRPCFieldMessage`, `JSONRPCFieldData`, `JSONRPCErrorCodeInternal`
+- PKI common name: `RootCACommonName` (`g8e Root CA`)
+- JSON-RPC 2.0: `JSONRPCVersion`, `JSONRPCFieldVersion`, `JSONRPCFieldMethod`, `JSONRPCFieldParams`, `JSONRPCFieldID`, `JSONRPCFieldResult`, `JSONRPCFieldError`, `JSONRPCFieldCode`, `JSONRPCFieldMessage`, `JSONRPCFieldData`, `JSONRPCErrorCodeInternal`, `JSONRPCErrorCodeParseError` (-32700), `JSONRPCErrorMessageParseError` (`parse error`)
 - Header values: `HeaderValueNoSniff`, `HeaderValueDeny`, `HeaderValueCSPNone`, `HeaderValueKeepAlive`, `HeaderValueNoCache`, `HeaderValueTextEvent`, `HeaderValueApplicationJSON`, `HeaderValueXHTML`, `HeaderValueXML`, `HeaderValueOctetStream`, `HeaderValuePEM`, `HeaderValueCRL`, `HeaderValueShell`, `HeaderValuePowerShell`, `HeaderValueCORSPreflightMaxAge` (`3600`)
 - Context keys (typed `ContextKey`): `ContextKeyUserID`, `ContextKeyAppID`, `ContextKeyTenantID`, `ContextKeyBindingPersona`, `ContextKeyOperatorID`, `ContextKeyOperatorSessionID`, `ContextKeyCapability`, `ContextKeyWebSessionID`, `ContextKeyCLISessionID`
 - Auth error reasons (typed `AuthErrorReason`): `AuthErrorReasonTTLExceeded`, `AuthErrorReasonRetiredByRealLogin`, `AuthErrorReasonIdentityDisabled`, `AuthErrorReasonInvalidSession`, `AuthErrorReasonSessionExpired`, `AuthErrorReasonCertificateRevoked`, `AuthErrorReasonIdentityMismatch`, `AuthErrorReasonAppPolicyNotFound`, `AuthErrorReasonRateLimitExceeded`, `AuthErrorReasonPayloadTooLarge`, `AuthErrorReasonCollectionNotAllowed`, `AuthErrorReasonJWTInvalid`, `AuthErrorReasonJWTMissingSubject`
 - Session TTL: `WebSessionTTL` (24 hours), `WebSessionCookieName` (`g8e_web_session_cookie`)
 - App enrollment types: `AppTypeMCPClient`, `AppTypeA2AGateway`, `AppTypeCustom`, `AppTypeConsensusMember`
 - Certificate renewal: `AppCertMinValidity` (7 days)
+- Auth scheme and defaults: `BearerScheme` (`Bearer `), `DefaultTenantID` (`default`), `DefaultBindingPersona` (`default`)
+- L3 notary: `L3ApprovalWindow` (30 minutes)
 
 ### Action Types (`action_types.go`)
 
@@ -278,7 +283,7 @@ Windows process exit codes:
 
 ### Errors (`errors.go`)
 
-Platform error variables defined as `error` values using `errors.New()`. The file contains over 200 error variables covering standard platform errors, keystore errors, ledger errors, CLI approval errors, notary errors, CLI authentication errors, HTTP client errors, process manager errors, filesystem errors, FsGrep errors, pubsub client errors, execution service errors, MCP service errors, MCP registry errors, MCP validation errors, MCP OOM detection errors, MCP SSH known hosts errors, MCP git ops errors, MCP TLS cert inspect errors, run shell command errors, network identity detection errors, system utils errors, audit service errors, audit store errors, execution vault errors, pubsub service errors, scrubbing service errors, gateway service errors, gateway approval errors, MCP native handler errors, SQLite validation errors, SQLite utility errors, SQLite compression errors, passkey bootstrap errors, enrollment token errors, passkey credential validation errors, Windows-specific errors, data command errors, test command errors, and vault command/crypto errors.
+Platform error variables defined as `error` values using `errors.New()`. The file contains over 900 error variables covering standard platform errors, keystore errors, ledger errors, CLI approval errors, notary errors, CLI authentication errors, HTTP client errors, process manager errors, filesystem errors, FsGrep errors, pubsub client errors, execution service errors, MCP service errors, MCP registry errors, MCP validation errors, MCP OOM detection errors, MCP SSH known hosts errors, MCP git ops errors, MCP TLS cert inspect errors, run shell command errors, network identity detection errors, system utils errors, audit service errors, audit store errors, execution vault errors, pubsub service errors, scrubbing service errors, gateway service errors, gateway approval errors, MCP native handler errors, SQLite validation errors, SQLite utility errors, SQLite compression errors, passkey bootstrap errors, enrollment token errors, passkey credential validation errors, Windows-specific errors, data command errors, test command errors, and vault command/crypto errors.
 
 ### Environment Variables (`env_vars.go`)
 
@@ -290,6 +295,8 @@ Typed environment variable names, typed as `EnvVarKey` and grouped in a struct `
 - `PasskeyRpID` (`G8E_PASSKEY_RP_ID`), `PasskeyRpName` (`G8E_PASSKEY_RP_NAME`), `PasskeyRpOrigins` (`G8E_PASSKEY_RP_ORIGINS`)
 - `PublicBaseURL` (`G8E_PUBLIC_BASE_URL`), `AllowedOrigins` (`G8E_ALLOWED_ORIGINS`)
 - Lattice: `LatticeEndpoint` (`LATTICE_ENDPOINT`), `LatticeClientID` (`LATTICE_CLIENT_ID`), `LatticeClientSecret` (`LATTICE_CLIENT_SECRET`), `LatticeSandboxesToken` (`SANDBOXES_TOKEN`), `LatticeEntityName` (`LATTICE_ENTITY_NAME`), `LatticePostureFloor` (`LATTICE_POSTURE_FLOOR`)
+- Client/operator: `ClientCert` (`G8E_CLIENT_CERT`), `ClientKey` (`G8E_CLIENT_KEY`), `CABundle` (`G8E_CA_BUNDLE`), `GatewayURL` (`G8E_GATEWAY_URL`)
+- App: `AppID` (`G8E_APP_ID`), `AppCert` (`G8E_APP_CERT`), `AppKey` (`G8E_APP_KEY`)
 - `Shell` (`SHELL`), `Lang` (`LANG`), `Term` (`TERM`), `TZ` (`TZ`)
 
 ### Field Paths (`field_paths.go`)
@@ -309,7 +316,7 @@ Agent persona and triage classification constants:
 - `TriageIntent` (typed): `TriageIntentInformation`, `TriageIntentAction`, `TriageIntentUnknown`
 - `TriagePosture` (typed): `TriagePostureNormal`, `TriagePostureEscalated`, `TriagePostureAdversarial`, `TriagePostureConfused`
 - `AgentName` (typed): `AgentNameSage` (`sage`), `AgentNameDash` (`dash`)
-- `AgentBinary` (typed): `AgentBinaryClaude`, `AgentBinaryCodex`, `AgentBinaryGemini`, `AgentBinaryGoose`
+- `AgentBinary` (typed): `AgentBinaryClaude`, `AgentBinaryCodex`, `AgentBinaryDevin`, `AgentBinaryGemini`, `AgentBinaryGoose`
 
 ### RPC Errors (`rpc_errors.go`)
 
@@ -352,6 +359,7 @@ Service-level constants for MCP tool execution:
 - `DefaultHTTPTimeout` (10 seconds)
 - `SSHKeepaliveRequestType` (`keepalive@g8e`), `SSHKeepaliveInterval` (15 seconds), `SSHKeepaliveMaxMissed` (3)
 - `SSHMaxRetries` (3), `SSHCaptureMaxBytes` (64 KiB), `SSHPreflightVerifyCommand` (`true`), `SSHProxyAddrLabel` (`proxy`)
+- `MCPTransportStdio` (`stdio`), `MCPServerNameG8E` (`g8e`), `MCPG8EDescription` (`g8e governance gateway`), `GooseExtTimeout` (300)
 
 ### Network (`network.go`)
 
