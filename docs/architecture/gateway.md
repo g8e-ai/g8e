@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-08-14
-Version: v1.7.2
+Last Updated: 2026-08-16
+Version: v1.7.6
 
 The g8e Protocol platform is implemented as a single static binary that operates in two modes:
 
@@ -39,53 +39,7 @@ The g8e platform is built on the g8e Protocol. Conforming gateway and Operator i
 - **Governance Gateway** (PDP): The binary run in **Gateway mode** (`--posture doctrine`, `--posture consensus`, or `--posture notary`). It acts as the platform's backbone: protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority. The Gateway owns layers L1-L3 (Doctrine, Consensus, Notary) as policy decisions. An in-process Operator substrate (PEP) handles L4-L5 (Warden, Actuator) locally for operations targeting the gateway host itself.
 - **Governed Operator** (PEP): The binary run in **Standard Mode** (`operator start`). It acts as the sovereign tool execution boundary on a managed host, executing actions only after they carry a valid, signed gateway lease. Operators automatically serve as MCP servers, exposing tool capabilities through the gateway's unified MCP endpoint. Each remote Governed Operator handles L4-L5 (Warden, Actuator) locally for operations on its own host, re-verifying L1-L3 proofs from the Gateway before execution.
 
-```mermaid
-flowchart TD
-    subgraph Hub ["Governance Gateway (PDP)"]
-        direction TB
-        subgraph PDP_Layers ["Policy Decision Layers (L1-L3)"]
-            direction TB
-            L1["L1 Doctrine"]
-            L2["L2 Consensus"]
-            L3["L3 Notary"]
-            L1 --> L2 --> L3
-        end
-        subgraph GW_PEP ["In-Process Operator Substrate (PEP)"]
-            direction TB
-            L4["L4 Warden"]
-            L5["L5 Actuator"]
-            L4 --> L5
-        end
-        db[("SQLite / KV")]
-        ps[["Pub/Sub Broker"]]
-        ca["Root CA / PKI"]
-
-        L3 --> L4
-        L5 --- db
-        L5 --- ps
-        L5 --- ca
-    end
-
-    subgraph Apps ["Reference Applications"]
-        ensemble["g8e-compatible agentic ensemble"]
-    end
-
-    ensemble -- "mTLS JSON" --> L1
-
-    subgraph Host_A ["Managed Host A"]
-        subgraph Remote_Op ["Remote Governed Operator (PEP)"]
-            direction TB
-            RL4["L4 Warden"]
-            RL5["L5 Actuator"]
-            RL4 --> RL5
-        end
-        g8eoA["Governed Operator (PEP)"] --- LFAA_A["LFAA Ledger & Vault"]
-    end
-
-    ps -- "mTLS WSS (JSON)<br/>envelope w/ L1-L3 proofs" --> RL4
-```
-
-The Gateway (PDP) owns L1-L3 (Doctrine, Consensus, Notary) as policy decision layers. The in-process Operator substrate (PEP) handles L4-L5 (Warden, Actuator) for operations targeting the gateway host. Remote Governed Operators (PEP) receive envelopes with L1-L3 proofs attached and run L4-L5 locally, re-verifying all proofs against their own state before execution.
+The same five layers run on every conforming host. The gateway applies L1–L3, then either its own in-process Operator or a remote Governed Operator applies L4–L5. Each remote operator re-verifies L1–L3 proofs from the gateway before execution.
 
 For a detailed view of the Gateway service stack and its relationship to the Operator substrate, see the [Gateway Service Stack Diagram](../diagrams/graph-gateway-services.md).
 
@@ -101,22 +55,22 @@ By passing `--posture doctrine`, `--posture consensus`, or `--posture notary`, t
     - **Consensus** (`--posture consensus`): L1 Doctrine / L2 Consensus enforced, L3 Notary audited.
     - **Notary** (`--posture notary`): L1 Doctrine / L2 Consensus / L3 Notary strictly enforced.
 - **Capabilities**:
-    - **Gateway API**: `POST /api/v1/governance/envelopes` is the only customer-facing mutation entry point.
-    - **Document Store**: JSON document CRUD on a Collection/ID pattern via `/api/v1/data/*`.
-    - **KV Store**: TTL-aware ephemeral state with `GLOB` pattern scanning via `/api/v1/kv/*`.
-    - **Blob Store**: Binary persistence for attachments and certificate material via `/api/v1/blobs/*`.
-    - **Pub/Sub Broker**: WebSocket fan-out via `/api/v1/pubsub/stream`. Mutation channels (`cmd:*`) are governed.
+    - **Gateway API**: The only customer-facing mutation entry point.
+    - **Document Store**: JSON document CRUD on a Collection/ID pattern.
+    - **KV Store**: TTL-aware ephemeral state with GLOB pattern scanning.
+    - **Blob Store**: Binary persistence for attachments and certificate material.
+    - **Pub/Sub Broker**: WebSocket fan-out with governed mutation channels.
     - **Root CA / PKI**: Issues mTLS certificates via CSR-based enrollment with SPIFFE URI SAN identity.
-    - **Audit Authority**: Append-only encrypted log of every event and signed `ActionReceipt`.
+    - **Audit Authority**: Append-only encrypted log of every event and signed ActionReceipt.
     - **Unified MCP Endpoint**: Single-URL JSON-RPC dispatch contract for MCP protocol communication.
 
 ### Port Topology
 
 The Governance Gateway exposes two logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port. See [Network Architecture](./network.md) for detailed port topology, authentication requirements, and port constraints.
 
-**HTTP Port (8080)**: Plain HTTP for bootstrap enrollment and PKI discovery endpoints only. This port serves CA bundle and fingerprint discovery, CLI recovery request/status/complete (token-scoped, no mTLS required), deploy scripts, and node binary distribution. The old trust-script routes (`/web-cert.sh`, `/web-cert.ps1`, `/.well-known/g8e/pki/trust-windows`) and `handleCLIEnrollment` (`/api/v1/auth/cli/enroll`) are **removed**. OS trust installation is handled by `auth enroll` directly, not by HTTP-served scripts. No MCP routes are available on this port.
+**HTTP Port (8080)**: Plain HTTP for bootstrap enrollment and PKI discovery endpoints only. This port serves CA bundle and fingerprint discovery, CLI recovery request/status/complete (token-scoped, no mTLS required), deploy scripts, and node binary distribution. Legacy trust scripts and the old CLI enrollment handler are removed; OS trust installation is handled by `auth enroll` directly. No MCP routes are available on this port.
 
-**HTTPS Port (8443)**: mTLS for all routes including API, public, enrollment, and MCP endpoints. MCP endpoints require mTLS authentication (or JWT when JWKS is configured). The public HTTPS router also serves Swagger UI at `/swagger/*` and the OpenAPI specification at `/swagger/doc.json`, providing interactive API documentation.
+**HTTPS Port (8443)**: mTLS for all routes including API, public, enrollment, and MCP endpoints. MCP endpoints require mTLS authentication (or JWT when JWKS is configured). The HTTPS router also serves the Swagger UI and OpenAPI specification; these documentation endpoints require the same mTLS client authentication as the rest of the API surface.
 
 ### Configuration Propagation
 
@@ -132,79 +86,19 @@ The `--doctrine-dir` flag (env: `G8E_DOCTRINE_DIR`) specifies a directory of JSO
 
 ## HTTP Router Architecture
 
-The gateway builds two distinct HTTP routers, one per protocol surface. The router layer holds middleware infrastructure (rate limiting, CORS, path traversal guard) and delegates all domain logic to dedicated controllers for PKI, data, auth, admin, operator, SSE, health, and governance. Late-bound dependencies (consensus service, envelope processor) are wired into the governance controller after initial construction, allowing the router to be built once at startup without rebuilds.
+The gateway exposes two logical HTTP surfaces.
 
-### Bootstrap HTTP Router
+- **HTTP surface (plain text)**: Used only for initial bootstrap, PKI discovery, CLI recovery request/status/complete, node binary download, deploy scripts, and a catch-all redirect to HTTPS. It does not serve mTLS or MCP routes.
+- **HTTPS surface (mTLS)**: Carries all API, console, passkey, MCP/A2A, and operator management traffic.
 
-Served on the HTTP port (8080), this router handles only bootstrap and PKI discovery endpoints. It registers health, state, bootstrap enrollment, CLI and device enrollment, PKI apps enrollment, CSR signing, CA bundle and fingerprint discovery, CLI recovery request/status/complete (token-scoped, reachable without trusted TLS), node binary download, and deploy script routes. The CLI recovery **approve** endpoint is intentionally NOT registered here — approval requires a web-session cookie, which is only set over HTTPS. The CLI rotation endpoint is also NOT registered here — rotation requires mTLS, which the plain HTTP router does not provide. A catch-all handler redirects all non-bootstrap requests to HTTPS, validating the Host header against localhost, loopback, RFC 1918 private IPs, and configured endpoints before reflecting it into the redirect target. Unrecognized hosts fall back to a safe default to prevent open-redirect abuse. The router is wrapped with path traversal guard and rate limiting middleware.
+The HTTPS router classifies each route into one of four auth modes:
 
-### Public HTTPS Router
+- **Public**: health, state, PKI discovery, landing, logout, console passkey registration, bootstrap enrollment, device/CSR enrollment, and token-scoped CLI recovery.
+- **mTLS only**: data, blob, and KV stores, operator management, governance, consensus, audit, pub/sub, SSE push, PKI management, passkey CLI status, enrollment token generation, and CLI rotation.
+- **Web session only**: user profile, approvals, passkey credential management, and CLI recovery approval.
+- **Dual**: SSE stream and event endpoints accept either a valid client certificate or a web-session cookie.
 
-Served on the HTTPS port (8443), this router handles all API, MCP, passkey, console, and management routes. It is wrapped with CORS, path traversal guard, and auth middleware at the outermost layer. The CORS middleware applies CORS headers based on configured `AllowedOrigins`, handling OPTIONS preflight requests and reflecting allowed origins. Every route is classified by its authentication requirements.
-
-The public HTTPS router registers the following route categories:
-
-**Public Routes (no authentication)**: Health, state, Swagger UI (`/swagger/`, `/swagger/index.html`, `/swagger/doc.json`), CA bundle and fingerprint discovery, CRL, console SPA (`/console/`), landing page, logout, bootstrap enrollment, PKI devices enrollment, CSR signing, enrollment token validation, OOB approval page redirect, and CLI recovery request/status/complete (token-scoped — the opaque recovery token provides the authorization context, no mTLS or cookie required).
-
-**MCP/A2A Routes**: Registered on the public mux. When JWKS is configured, MCP routes are wrapped with JWT auth middleware; otherwise they rely on mTLS via the outer auth middleware. Registered paths include `/mcp` (unified MCP JSON-RPC endpoint) and `/api/v1/a2a/call` (A2A endpoint).
-
-**Passkey Console Routes (public, no auth)**: Browser-facing passkey registration and authentication under `/api/v1/auth/passkeys/console/*`. The registration handler creates a user on first bootstrap, enforces first-credential-only registration, and creates a web session with a cookie. The authentication handler creates a web session with a cookie.
-
-**JIT Passkey Routes (JWT-authenticated)**: When JWKS is configured, `/api/v1/auth/passkeys/jit-register/challenge` and `/api/v1/auth/passkeys/jit-register/verify` allow OIDC/JIT users with zero credentials to register their first passkey. These routes are wrapped with JWT auth middleware.
-
-**mTLS-Only Routes**: Data settings, blob store, operator management (list, terminate, bind, unbind, target, reauth), governance signers, app policies, app revocation, consensus management (list, delete), consensus deliberate, governance envelopes (rate-limited), audit receipts, events, export, summary, and report, SSE push, database, KV store, pub/sub publish and stream, PKI management (apps enrollment, apps delegated, certificates revoke, revocation bundle), user management, passkey CLI status, enrollment token generation, and CLI rotation (`/api/v1/auth/cli/rotate` — the caller's identity is derived from the verified mTLS certificate URI SAN, not request body fields; one replacement certificate per run).
-
-**WebSession-Protected Routes**: Browser-facing routes under `/api/v1/users/`, `/api/v1/auth/sessions/`, `/api/v1/approvals`, `/api/v1/auth/passkeys` require a valid web session cookie. These include user profile (`/api/v1/users/me`), web session info (`/api/v1/auth/sessions/me`), OOB approval actions and listing, passkey credential listing and revocation, and CLI recovery approval (`/api/v1/auth/cli/recovery/approve` — an authenticated existing user approves a recovery request via the console SPA).
-
-**Dual-Auth Routes**: SSE stream (`/api/v1/sse/stream`) and SSE events (`/api/v1/sse/events`) accept either mTLS or web session cookie authentication.
-
-**CLI Approval Endpoints**: The `/api/v1/approvals/status/` and `/api/v1/approvals/pending` endpoints are exact mTLS paths, taking priority over the `/api/v1/approvals` web session prefix. They require mTLS authentication and are used by CLI clients for post-SSE verification of approval state and listing pending suspended transactions. The `/api/v1/approve/{txHash}` page route is public, redirecting to the console SPA with a URL-encoded approval hash fragment (`/console/#approve={url-encoded-txHash}`), enabling auto-trigger of the WebAuthn approval flow upon successful login.
-
-### Route Authentication Classification
-
-Routes are classified by authentication mode: public (no auth), mTLS required, web session required, or dual authentication (mTLS or web session). Exact path matches take priority over prefix matches. Unregistered routes default to mTLS required to enforce fail-closed security.
-
-**CLI Enrollment Route Classification:** The old `handleCLIEnrollment` route (`/api/v1/auth/cli/enroll`) is **removed**. Its replacements are classified as follows:
-
-| Route | Auth Mode | Router |
-|------|-----------|--------|
-| `/api/v1/auth/cli/recovery/request` | `RouteAuthNone` (token-scoped) | HTTP + HTTPS |
-| `/api/v1/auth/cli/recovery/status` | `RouteAuthNone` (token-scoped) | HTTP + HTTPS |
-| `/api/v1/auth/cli/recovery/approve` | `RouteAuthWebSession` | HTTPS only |
-| `/api/v1/auth/cli/recovery/complete` | `RouteAuthNone` (token-scoped) | HTTP + HTTPS |
-| `/api/v1/auth/cli/rotate` | `RouteAuthMTLS` | HTTPS only |
-
-The recovery request, status, and complete endpoints are public (token-scoped) because the opaque recovery token and proof-of-possession signature provide the authorization context. The approve endpoint requires a web session cookie (browser console only). The rotation endpoint requires mTLS — the caller's identity is derived from the verified CLI certificate. Rotation is never registered on the plain HTTP router.
-
-**Passkey Enrollment Route Classification:** CLI-initiated passkey enrollment uses dedicated endpoints, separate from the console bootstrap and JIT flows. The enrollment token is generated by the CLI via the mTLS-protected `/api/v1/auth/enrollment-token/generate` endpoint and passed to the browser via the `#enroll=1&token=...` URL fragment.
-
-| Route | Auth Mode | Router |
-|------|-----------|--------|
-| `/api/v1/auth/passkeys/enrollment/register/challenge` | `RouteAuthNone` (enrollment token) | HTTPS only |
-| `/api/v1/auth/passkeys/enrollment/register/verify` | `RouteAuthNone` (enrollment token) | HTTPS only |
-
-The gateway derives `user_id` and `cli_session_id` from the token; neither is sent in the request body. The challenge step validates the one-time enrollment token and returns a WebAuthn registration challenge. The verify step consumes the token (one-time) and verifies the attestation, then sets a web session cookie. Both endpoints are HTTPS-only; they are never registered on the plain HTTP router.
-
-**Operator Dispatch Route Classification:** Operator command dispatch and session lookup use mTLS-only endpoints registered on the HTTPS router.
-
-| Route | Auth Mode | Router |
-|------|-----------|--------|
-| `/api/v1/operators/commands` | `RouteAuthMTLS` | HTTPS only |
-| `/api/v1/operators/session/{id}` | `RouteAuthMTLS` | HTTPS only |
-
-The dispatch endpoint accepts a typed `OperatorCommandRequest`, routes it through the governance pipeline, and returns a `DispatchResponse` with the dispatch ID and result. The session lookup endpoint resolves an operator by session ID. Both require mTLS — the caller's identity is derived from the verified client certificate.
-
-### Privileged Route Control
-
-Privileged routes require operator or CLI identity. Application certificates are restricted from accessing governance envelope submission (`/api/v1/governance/envelopes`) and query endpoints (`/_query`) using path prefix verification.
-
-### Auth Middleware
-
-The auth middleware dispatches authentication checks based on the route's classified mode:
-1. **Public**: Direct execution without authentication.
-2. **mTLS**: Requires client certificate, verifies PKI revocation status, and extracts identity (operator session, CLI session, or application certificate). Application certificates are blocked from privileged routes.
-3. **Web Session**: Validates web session cookie and injects user context.
-4. **Dual**: Prefers mTLS when client certificate is present, falling back to web session cookie.
+Application certificates are blocked from privileged governance and query paths. Exact paths and auth mode assignments are part of the wire contract; see the [g8e Protocol specification](../../protocol/docs/spec.md) for the full list.
 
 ### Console SPA
 

@@ -1,5 +1,4 @@
 {
-  "_comment": "HTTP transport with env-var TLS paths. Same schema as g8e_gateway_mcp_config.json but references certificate paths via environment variable names instead of literal paths. Useful for containerized deployments where cert paths are injected at runtime. The canonical schema is defined in internal/services/mcp/config.go. Env var names match the g8e SSOT (protocol/constants/env_vars.json).",
   "mcpServers": {
     "g8e-gateway": {
       "transport": {

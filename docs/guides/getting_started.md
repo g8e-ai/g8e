@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-08-15
-Version: v1.7.4
+Last Updated: 2026-08-16
+Version: v1.7.6
 
 ---
 
@@ -38,7 +38,7 @@ Everything, including the Go compiler and build dependencies, runs inside the co
 
 | Requirement | Notes |
 |---|---|
-| Go | 1.26.5, required to build from source |
+| Go | 1.26.6, required to build from source |
 | Make | Any recent version, required to run build targets |
 | Git | Any recent version, required to clone the repository |
 | Python | 3.10+, optional, required only for protocol library development |
@@ -70,7 +70,7 @@ If you only need the g8e wire protocol, constants, models, enums, or protobuf de
 As of v1.5.0, the protocol is part of the root Go module. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.6.10
+go get github.com/g8e-ai/g8e@v1.7.5
 ```
 
 Import the protocol packages in your Go code:
@@ -95,7 +95,7 @@ pip install g8e
 Pinned to a specific version:
 
 ```bash
-pip install g8e==1.6.10
+pip install g8e==1.7.5
 ```
 
 The package provides:
@@ -273,7 +273,7 @@ After the gateway is running (locally or in Docker), authenticate the CLI to boo
 ./g8e auth enroll
 ```
 
-The `auth enroll` command installs the gateway Root CA into the OS trust store before opening the browser for the passkey ceremony. Before installation, it checks for stale g8e Root CA anchors from previous gateway instances and prompts for removal if found. If trust installation fails, the browser does not open — resolve the trust issue and re-run. Use `--no-system-trust` only if an administrator has already installed the Root CA. After trust installation or stale anchor removal, close all open browser windows before clicking the enrollment link so the browser opens a fresh session that recognizes the new trust anchor.
+The `auth enroll` command installs the gateway Root CA into the OS trust store before opening the browser for the passkey ceremony. Before installation, it checks for stale g8e Root CA anchors from previous gateway instances and prompts for removal if found. If trust installation fails, the browser does not open; resolve the trust issue and re-run. Use `--no-system-trust` only if an administrator has already installed the Root CA. After trust installation or stale anchor removal, close all open browser windows before clicking the enrollment link so the browser opens a fresh session that recognizes the new trust anchor.
 
 For Docker demos where HTTP and HTTPS are mapped to different host ports, use the split endpoint flags:
 
@@ -307,7 +307,7 @@ Both services use the root `Dockerfile` for image builds. The gateway exposes po
 
 ## MCP Agent Integration
 
-g8e integrates with popular AI agent binaries (Claude Code, Codex, Goose, Gemini CLI) to provide governed MCP tool access.
+g8e integrates with popular AI agent binaries (Claude Code, Codex, Devin CLI, Goose, Gemini CLI) to provide governed MCP tool access.
 
 ### Launch an agent with governance
 
@@ -343,11 +343,10 @@ The CLI displays configurations for `g8e.local` (mTLS), IP Address (mTLS), and S
 
 ## Industry Demos
 
-The `demos/` directory contains Docker Compose environments for six demo environments. Each demo is isolated with its own networks, volumes, and doctrine rules.
+The `demos/` directory contains Docker Compose environments for five demo environments. Each demo is isolated with its own networks, volumes, and doctrine rules.
 
 - **Healthcare**: HIPAA/PHI governance
 - **Finance**: trading controls
-- **Government**: CUI/CMMC handling
 - **DHS**: persistent sovereign capability with coalition data-plane governance, cross-domain release control, and cryptographically receipted destruction
 - **FedRAMP**: sovereign cloud governance with CR-26 audit integrity, access control, and cross-domain protection
 - **Frontend**: third-party frontend enrollment with CORS, passkey, and SSE protection
@@ -375,7 +374,7 @@ The `g8e` demos CLI checks for a local binary at `demos/bin/g8e` and prints a wa
 - Docker 24.0+ with Docker Compose v2
 - Go 1.26+ (only needed for host-side `make build`; Docker Compose builds compile from source in-container)
 
-Run `make build` to compile the binary and copy it to `demos/bin/g8e` for host-side demo orchestration. Docker Compose builds do not require this binary — demos build from the repo-root `Dockerfile` via `context: ../..`.
+Run `make build` to compile the binary and copy it to `demos/bin/g8e` for host-side demo orchestration. Docker Compose builds do not require this binary; demos build from the repo-root `Dockerfile` via `context: ../..`.
 
 ### Run a demo
 
@@ -430,15 +429,13 @@ docker compose down -v
 | healthcare | 4 | Bad actor PHI exfiltration blocked |
 | finance | 1 | Unauthorized trade blocked |
 | dhs | 1 | Sovereign multi-source ingest (chain-of-custody) |
-| dhs | 2 | Cross-domain release requires Notary authority |
-| dhs | 3 | Resilient disconnected operations / continuity of coverage |
-| dhs | 4 | Governed predictive cueing (quorum vs veto) |
-| dhs | 5 | Sovereign destruction + tamper-proof audit |
+| dhs | 2 | Resilient disconnected operations / continuity of coverage |
+| dhs | 3 | Governed predictive cueing (quorum vs veto) |
+| dhs | 4 | Sovereign destruction + tamper-proof audit |
 | fedramp | 1 | Governed cloud resource provisioning |
 | fedramp | 2 | Unauthorized audit trail destruction blocked |
-| fedramp | 3 | Resource destruction requires authorizing official |
-| fedramp | 4 | Governed configuration revert |
-| fedramp | 5 | Gateway audit vault destruction blocked |
+| fedramp | 3 | Governed configuration revert |
+| fedramp | 4 | Gateway audit vault destruction blocked |
 | frontend | 1 | Third-party frontend enrollment |
 
 ### Demo port mappings

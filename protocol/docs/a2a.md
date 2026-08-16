@@ -4,8 +4,8 @@ title: A2A Protocol
 
 # A2A Protocol
 
-Last Updated: 2026-08-07
-Version: v1.7.0
+Last Updated: 2026-08-16
+Version: v1.7.6
 
 The g8e Operator supports Agent-to-Agent (A2A) protocol integration. A2A agents submit HTTP/JSON skill invocation requests to the g8e Gateway, which encapsulates them in a governance envelope, executes the 5-layer verification sequence (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator), and dispatches verified payloads to a configured downstream A2A server.
 
@@ -70,25 +70,9 @@ A2A agents connect to the gateway via:
 
 ### Skill Invocation
 
-Invoke A2A skills via POST to `/api/v1/a2a/call` (registered in `internal/constants/api_paths.go`). The request is wrapped in a JSON-RPC 2.0 envelope:
+Invoke A2A skills via POST to `/api/v1/a2a/call` (registered in `internal/constants/api_paths.go`). The request is wrapped in a JSON-RPC 2.0 envelope. Its `params` object carries `skill_name`, a `payload` JSON object, and an optional `execution_id`.
 
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "a2a/call",
-  "params": {
-    "skill_name": "example_skill",
-    "payload": {
-      "param1": "value1",
-      "param2": "value2"
-    },
-    "execution_id": "optional_execution_id"
-  }
-}
-```
-
-A2A calls are also dispatched through the unified MCP endpoint at `/mcp` (`HandleMCP` in `internal/services/mcp/mcp_endpoint.go`), which routes the `a2a/call` method to the same `a2aCall` handler.
+A2A calls are also dispatched through the unified MCP endpoint at `/mcp` (`HandleMCP` in `internal/services/mcp/mcp_endpoint.go`), which routes the `a2a/call` method to the same A2A call handler.
 
 ### Skill Discovery
 
@@ -149,7 +133,7 @@ The g8e platform enforces security across five layers:
 
 ### L5 Actuator (Dispatch)
 
-- **Dispatch**: The Actuator egress handler `handleA2aCallRequestSync` in `internal/services/pubsub/pubsub_commands.go` unmarshals the `A2aCallRequested` payload and calls `DispatchToA2ADownstream` to forward the call to the configured downstream A2A server.
+- **Dispatch**: The A2A egress handler in `internal/services/pubsub/pubsub_commands.go` unmarshals the `A2aCallRequested` payload and calls `DispatchToA2ADownstream` to forward the call to the configured downstream A2A server.
 - **Downstream request**: The gateway sends an `A2ADownstreamRequest` (defined in `internal/services/mcp/models.go`) containing `skill_name` and `payload` as JSON to the downstream URL via HTTP POST with a 30-second timeout. The `execution_id` field is present in the struct but is not populated during downstream dispatch.
 - **Downstream response**: The gateway parses the response for `result`, `summary`, or `error` fields. If `summary` is present, it is used; otherwise `result` is used; otherwise the gateway returns "completed".
 - **Receipt bounding**: The receipt summary is truncated to `ReceiptSummaryMaxBytes` (4096 bytes, defined in `internal/constants/pubsub.go`) to prevent unbounded growth.
@@ -181,7 +165,7 @@ The g8e Gateway supports three governance postures (configured via CLI flags):
 
 | Posture | Configuration | Purpose |
 |---|---|---|
-| **PostureDoctrine** | `doctrine` | L1 enforced, L2/L3 signatures not required (default). |
+| **PostureDoctrine** | `doctrine` | L1 enforced, L2/L3 audited (default). |
 | **PostureConsensus** | `consensus` | L1/L2 enforced, L3 signature not required. |
 | **PostureNotary** | `notary` | L1/L2/L3 strictly enforced. |
 
@@ -194,7 +178,7 @@ The platform uses a consolidated 2-port gateway:
 | `8080` | HTTP (bootstrap, MCP, A2A) | Plain HTTP with loopback origin protection. |
 | `8443` | HTTPS (mTLS API, public) | mTLS (RequireAndVerifyClientCert). |
 
-> **FIPS 140-3**: In FIPS builds the HTTPS/mTLS port uses `certs.FIPSCurvePreferences()` (`X25519MLKEM768`, P-384, P-256) for TLS key agreement — X25519 is excluded. Ed25519-signed TLS certificates are rejected at load time (`ErrPKIEd25519CertRejected`); PKI certificates must use ECDSA P-256. Application-layer Ed25519 (consensus, receipts, notary) is unaffected. See [FIPS 140-3 Compliance](../../docs/reference/fips140-3.md).
+> **FIPS 140-3**: In FIPS builds the HTTPS/mTLS port uses `certs.FIPSCurvePreferences()` (`X25519MLKEM768`, P-384, P-256) for TLS key agreement; X25519 is excluded. Ed25519-signed TLS certificates are rejected at load time (`ErrPKIEd25519CertRejected`); PKI certificates must use ECDSA P-256. Application-layer Ed25519 (consensus, receipts, notary) is unaffected. See [FIPS 140-3 Compliance](../../docs/reference/fips140-3.md).
 
 ### CLI Configuration
 
@@ -242,11 +226,11 @@ Sessions are cryptographically bound to their authentication mechanism.
 | HTTP routing | `internal/services/gateway/gateway_http_router.go` |
 | A2A REST handler | `internal/services/mcp/gateway.go` (`HandleA2aCall`) |
 | Unified MCP/A2A dispatcher | `internal/services/mcp/mcp_endpoint.go` (`HandleMCP`) |
-| A2A call logic | `internal/services/mcp/gateway.go` (`a2aCall`) |
+| A2A call logic | `internal/services/mcp/gateway.go` |
 | Downstream dispatch | `internal/services/mcp/gateway.go` (`DispatchToA2ADownstream`) |
-| Actuator egress | `internal/services/pubsub/pubsub_commands.go` (`handleA2aCallRequestSync`) |
+| Actuator egress | `internal/services/pubsub/pubsub_commands.go` |
 | Response models | `internal/services/mcp/models.go` |
-| Envelope construction | `internal/services/mcp/gateway.go` (`processGatewayTransaction`) |
+| Envelope construction | `internal/services/mcp/gateway.go` |
 | L1 doctrine validation | `internal/services/governance/l1_doctrine.go` |
 | L2 consensus verification | `internal/services/governance/l2_consensus.go` |
 | Transaction verification | `internal/services/governance/l4_warden.go` |

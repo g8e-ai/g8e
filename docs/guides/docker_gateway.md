@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
-Last Updated: 2026-08-15
-Version: v1.7.4
+Last Updated: 2026-08-16
+Version: v1.7.6
 
 This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
 
@@ -118,11 +118,9 @@ When `member_seeds` is used, each member signs votes with its own distinct key, 
 
 If the agent does not mount `consensus-bootstrap.json`, votes are signed with a default key ID that does not match the gateway's registered members. The gateway rejects these votes, resulting in zero affirmative votes and quorum failure.
 
-### Posture Switching During Demos
+### Gateway Posture in Demos
 
-The DHS and FedRAMP demos dynamically switch the gateway's posture mid-scenario. The gateway container is stopped and recreated with a new `G8E_GATEWAY_POSTURE` environment variable, then the demo waits for the gateway to become healthy before continuing.
-
-This allows a single demo to test multiple posture modes (e.g., consensus, then notary, then consensus) without restarting the entire Docker Compose stack. Other services (operator, agent, actuators) remain running during the switch.
+The DHS and FedRAMP demos boot the gateway in `consensus` posture via the `G8E_GATEWAY_POSTURE` environment variable (default: `consensus`) and keep it there for the entire run. The gateway is not restarted or recreated mid-demo; all scenarios execute under the same posture. Notary-tier scenarios remain in the harness registry for manual testing against a separately started demo with a manually enrolled passkey, but the automated `g8e demos run` orchestration excludes them.
 
 ## Configuration
 
@@ -187,19 +185,22 @@ The `Dockerfile` employs a multi-stage build process:
 The image includes:
 - The `g8e` binary at `/g8e`.
 - Protocol constants at `/protocol/constants`.
+- Reference data at `/docs/reference` (KSI catalog and COSAiS overlays for the compliance CLI).
 - Required utilities including `curl`, `wget`, and `ca-certificates`.
+
+The build always links the Go Cryptographic Module v1.0.0 (CMVP Cert #5247) and enters FIPS 140-3 approved mode on startup. Enforcement is a runtime setting, off by default: non-approved primitives such as Ed25519 and ChaCha20-Poly1305 still work. Operators who need strict enforcement set `GODEBUG=fips140=only` in the container environment. The FIPS compliance claim is restricted to `linux/amd64`, which the Dockerfile hardcodes.
 
 The protocol constants are bundled from the `protocol/` directory. The Python package (`g8e`) is not included in the Docker image by default. If you need Python protocol access inside a container, install it separately:
 
 ```bash
-pip install g8e==1.6.10
+pip install g8e==1.7.5
 ```
 
 Or set `G8E_PROTOCOL_DIR=/protocol` to point the Python package at the bundled constants. See the [Protocol Library documentation](../architecture/protocol.md) for details.
 
 ### Health Monitoring
 
-The container defines a health check that queries the `/api/v1/health` endpoint. The `Dockerfile` uses `curl` for this check; the root `docker-compose.yml` overrides this with `wget`.
+The `Dockerfile` does not define an image-level health check. The same image runs as both the gateway (an HTTP server on port 8080) and the operator (an outbound client that listens on nothing), so a baked-in health check would always fail for the operator. Health checks are declared per-service in `docker-compose.yml`, where each service expresses its own liveness signal. The root compose file defines a `wget` probe against the `/api/v1/health` endpoint for the gateway service.
 
 ```bash
 docker inspect --format='{{.State.Health.Status}}' g8e-gateway

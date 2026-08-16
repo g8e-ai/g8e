@@ -206,7 +206,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.SessionController (logout, web session)
 │   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   │   ├── response.Writer
-│   ├── gateway.AdminController (app policies, consensuss, app revocation)
+│   ├── gateway.AdminController (app policies, consensus, app revocation)
 │   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   │   ├── gateway.SignerStoreService (from Stores [SHARED])
 │   │   ├── gateway.ConsensusStoreService (from Stores [SHARED])
@@ -387,6 +387,9 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - **`gateway.SSEController`** (`sse_controller.go`): SSE event push, poll, and stream endpoints. Includes `authorizeSSERoute` for dual-auth (mTLS or web session) authorization. Heartbeat interval defaults to 30s.
 - **`gateway.HealthController`** (`health_controller.go`): Health check, bootstrap health, state endpoint, and landing page.
 - **`gateway.GovernanceController`** (`governance_controller.go`): Governance envelope submission, consensus deliberation. `governance.EnvelopeProcessor` is injected at construction time; `consensus.ConsensusService` is injected as a `*atomic.Pointer[consensus.ConsensusService]` captured at construction time and loaded on the request path. A `Load` returning nil means the feature is not configured for the current posture (e.g. doctrine mode has no consensus); `handleConsensusDeliberate` returns 503 ("not configured for this posture") in that case.
+- **`gateway.MCPController`** (`mcp_controller.go`): MCP/A2A ingress endpoints. Thin wrapper around `mcp.GatewayService` that exposes HTTP-facing methods through the controller pattern so `HTTPHandler` does not retain the `GatewayService` directly.
+- **`gateway.PubSubController`** (`pubsub_controller.go`): PubSub WebSocket stream endpoint. Thin wrapper around `GatewayWebSocketHandler` that exposes its HTTP-facing method through the controller pattern.
+- **`gateway.PasskeyController`** (`passkey_controller.go`): Passkey registration, authentication, approval, and credential management endpoints. Thin wrapper around `PasskeyHandler` that exposes its HTTP-facing methods through the controller pattern.
 
   **Single-phase construction with narrow setter:** `GatewayModeService` constructs the HTTP handler in `NewGatewayModeService` (via `gatewayServiceBuilder.build()`). The `ConsensusService` is wired after construction via `SetConsensusService` (a narrow setter for a genuinely late-bound dependency — `ConsensusService` requires `GatewayModeService` to exist first for `ConsensusBootstrap`). The `consensusSvc` field on `GatewayModeService` is an `atomic.Pointer[consensus.ConsensusService]`; `initHTTPHandler` captures `&ls.consensusSvc` at construction time; `SetConsensusService` calls `Store`; the controller calls `Load` at request time. The `atomic.Pointer` provides the memory ordering guarantees a raw `**T` lacks (the cell is read on the request path and written during boot). Tests that bypass the constructor call `initHTTPHandler` directly (same package).
 
@@ -534,7 +537,7 @@ cmd.enrollCmdWithConfig / cmd.agentRunCmdWithConfig
 - `credential_store_test.go` — 5 tests: interrupted-commit retry, rollback writes no canonical files, committed file permissions (0600), concurrent Stage+Commit no torn state (race-clean), Clear retains trust bundle.
 - `enrollment_client_test.go` / `client_test.go` — Transport and credential loading tests with hermetic `httptest.Server`.
 - `passkey_enrollment_registrar_test.go` / `passkey_enrollment_sse_test.go` / `passkey_enrollment_test.go` — Passkey ceremony SSE listener, event filtering, browser-open error surfacing, context cancellation.
-- `cert_test.go` / `csr_test.go` / `fingerprint_test.go` / `mtls_client_test.go` — Certificate, CSR, fingerprint, and mTLS client construction tests.
+- `certificate_test.go` / `csr_test.go` / `fingerprint_test.go` / `mtls_client_test.go` — Certificate, CSR, fingerprint, and mTLS client construction tests.
 
 ## CLI Platform & Stream Packages
 
@@ -557,6 +560,7 @@ In test verification patterns, use `fileSvc.ReadFile` or `fileSvc.Stat` to inspe
 Interface methods:
 - `Resolve` - Converts a relative path to an absolute path within `.g8e/`
 - `Rel` - Converts an absolute `.g8e/` path back to a relative path
+- `RelFromAbs` - Converts an absolute `.g8e/` path to a relative path (equivalent to `Rel`; both forms reject paths outside the runtime directory)
 - `ReadFile` - Reads a file; returns `constants.ErrNotFound` if missing
 - `WriteFile` - Atomically writes a file with tmp+rename
 - `MkdirAll` - Creates a directory tree

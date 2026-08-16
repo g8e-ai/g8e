@@ -53,9 +53,8 @@ def main():
     # Use component enum
     print("Component Names:")
     print(f"  CLIENT: {ComponentName.CLIENT}")
-    print(f"  G8EE: {ComponentName.G8EE}")
     print(f"  G8EO: {ComponentName.G8EO}")
-    print(f"  OPERATOR (alias): {ComponentName.OPERATOR}")
+    print(f"  G8EO_GATEWAY: {ComponentName.G8EO_GATEWAY}")
     print()
 
     # Build HTTP headers using protocol constants

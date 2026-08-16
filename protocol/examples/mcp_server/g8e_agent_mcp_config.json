@@ -1,5 +1,4 @@
 {
-  "_comment": "Agent MCP config example. This is the format written by 'g8e mcp agent run <agent>' to agent-specific config files (e.g. ~/.cursor/mcp.json, ~/.codeium/windsurf/mcp_config.json, ~/.vscode/mcp.json). It uses the agentMCPConfig schema (internal/cli/cmd/mcp.go) which includes excludeTools to disable native agent tools, forcing all I/O through g8e's governed MCP tools so every action is audited at L1-L5. The g8e binary is launched as a subprocess via 'mcp stdio', which proxies to the running gateway over mTLS. For Claude and Codex, native tools are also disabled via CLI flags (--disallowed-tools). For other agents, governance is enforced by making g8e the only MCP server. Supported agents: claude, codex, cursor, devin, vscode, continue, aider, goose, gemini, codeium, tabby, generic.",
   "mcpServers": {
     "g8e": {
       "command": "/path/to/g8e",

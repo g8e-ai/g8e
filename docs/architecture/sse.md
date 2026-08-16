@@ -4,10 +4,10 @@ title: SSE Streaming
 
 # SSE Streaming
 
-Last Updated: 2026-08-07
-Version: v1.7.0
+Last Updated: 2026-08-16
+Version: v1.7.6
 
-The Governance Gateway provides a Server-Sent Events (SSE) streaming infrastructure that enables real-time event delivery from app workloads to browser and CLI clients. g8e-compatible agentic ensembles publish typed events, including audit events, for downstream consumption. The gateway also produces SSE events internally for platform workflows such as passkey registration and L3 transaction approval.
+The Governance Gateway provides a Server-Sent Events (SSE) streaming infrastructure that enables real-time event delivery from app workloads to browser and CLI clients. g8e-compatible agentic ensembles publish typed events, including AI chat and lifecycle events, for downstream consumption. The gateway also produces SSE events internally for platform workflows such as passkey registration and L3 transaction approval.
 
 ---
 
@@ -58,9 +58,9 @@ flowchart TD
 
 **Authentication**: mTLS with app workload identity. The caller certificate must have a SPIFFE URI SAN with an `/app/` prefix. Gateway and Operator identities are blocked from pushing.
 
-**Request**: The body must include `user_id` (required), exactly one of `web_session_id` or `cli_session_id` (required delivery target), and an `event` object containing a `type` string and payload data.
+**Request**: The body must include `user_id` (required), exactly one of `web_session_id` or `cli_session_id` (required delivery target), and an `event` object containing a `type` string and any payload fields.
 
-**Response**: Returns a success status and delivered count.
+**Response**: Returns a success status and a delivered count.
 
 **Authorization**: The app identity must be associated with the target session. Ownership is verified against bound Operator sessions before the event is persisted. If ownership verification fails, the handler returns a 403 Forbidden status and no event is stored.
 
@@ -96,20 +96,13 @@ The gateway produces SSE events directly, bypassing the push endpoint. These eve
 
 **Response**: A standard SSE stream (`text/event-stream`). The stream sets `Cache-Control: no-cache`, `Connection: keep-alive`, and `X-Accel-Buffering: no` headers.
 
-**Reconnection**: Clients can resume from a specific cursor using the `Last-Event-ID` header or the `since_id` parameter. A fresh connection without either replays the full backlog. Setting `since_id` to 0 explicitly skips replay and starts with live events only. The stream sends a heartbeat comment every 30 seconds to keep the connection alive. Replayed and live events are deduplicated so a client never receives the same event twice across a reconnect.
+**Reconnection**: Clients can resume from a specific cursor using the `Last-Event-ID` header or the `since_id` parameter. A fresh connection without either replays the full backlog. Setting `since_id` to 0 explicitly skips replay and starts with live events only. The stream sends a heartbeat comment every 30 seconds to keep the connection alive. Replayed and live events are deduplicated so a client never receives the same event twice across a reconnect. Replay is capped at 1000 rows; if the backlog exceeds the cap, the gateway emits a `truncated` sentinel so the client can reconnect with a higher cursor.
 
 ---
 
 ## Event Types
 
-The SSE system is generic and supports any event type. The protocol catalog defines audit event types (AI actions, command execution, MCP calls, user actions) and platform SSE lifecycle event types (connection established, opened, closed, failed, error, keepalive sent).
-
-Two gateway-produced event types are managed internally:
-
-- `approval.completed`: L3 transaction approval completed, scoped to `cli_session_id`
-- `passkey.registered`: Passkey enrollment completed, scoped to `cli_session_id`
-
-See the [Constants Reference](../../protocol/docs/constants.md) for the complete event type listing.
+The SSE system is generic and supports any producer-defined event type. The gateway extracts the inner `type` field for indexing and dispatch. The only gateway-defined SSE event type constant is `approval.completed`; `passkey.registered` is emitted by convention. See the [Constants Reference](../../protocol/docs/constants.md) for related platform constants.
 
 ---
 
@@ -138,13 +131,9 @@ The route is built entirely from auth context, not from URL parameters, so a cli
 
 ## Use Cases
 
-### Real-time Audit Streaming
+### Real-time AI Chat Streaming
 
-App workloads push audit events as they occur, enabling real-time audit log viewers in the web UI or CLI. Route to a specific `web_session_id` or `cli_session_id` for targeted delivery.
-
-### LLM Streaming
-
-g8e-compatible agentic ensembles stream LLM generation chunks to the browser by pushing events scoped to `web_session_id`. The browser SSE consumer renders chunks as they arrive.
+App workloads push chat and tool-lifecycle events as they occur, enabling real-time viewers in the web UI or CLI. Route to a specific `web_session_id` or `cli_session_id` for targeted delivery.
 
 ### L3 Approval Workflow
 
@@ -174,16 +163,6 @@ Three CLI consumers use this client:
 - **Approval wait**: Blocks until an `approval.completed` event with a matching transaction hash arrives, with a 3-minute timeout. Used by the `g8e approve` command and the MCP L3 approval flow.
 - **Passkey enrollment**: Waits for a `passkey.registered` event during interactive passkey enrollment, with a 5-minute timeout.
 - **TUI adapter**: Subscribes to the SSE stream and translates events into terminal UI messages for the dashboard view. Uses a fixed 3-second reconnection interval.
-
----
-
-## Best Practices
-
-1. **Event batching**: For high-frequency events, consider batching before pushing to reduce database load.
-2. **Error handling**: Implement retry logic for failed push operations.
-3. **Reconnection**: Clients should support automatic reconnection with `Last-Event-ID` header.
-4. **Event size**: Keep payloads under 1MB to avoid performance issues.
-5. **Monitoring**: Monitor event store size and growth rate.
 
 ---
 

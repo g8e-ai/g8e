@@ -23,8 +23,7 @@ Demonstrates the canonical governance envelope pattern:
 **Run:**
 
 ```bash
-cd protocol
-go run ./examples/governance_envelope/
+go run ./protocol/examples/governance_envelope/
 ```
 
 ## MCP Server Configurations
@@ -52,6 +51,5 @@ Demonstrates SPIFFE workload identity operations:
 **Run:**
 
 ```bash
-cd protocol
-go run ./examples/workload_identity/
+go run ./protocol/examples/workload_identity/
 ```

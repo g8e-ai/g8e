@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Gateway
 
-Last Updated: 2026-08-07
-Version: v1.7.0
+Last Updated: 2026-08-16
+Version: v1.7.6
 
 ---
 
@@ -22,7 +22,7 @@ The reference implementation is the g8e binary file running in gateway mode. The
 
 ### Prerequisites
 
-- **Go 1.26.5+** - Required for building the reference gateway.
+- **Go 1.26.6+** - Required for building the reference gateway.
 - **Make** - Required to run build targets.
 
 > **Don't have `make` or `go` installed?** Run the setup script for your platform to detect and install them automatically:
@@ -51,11 +51,13 @@ The Makefile provides several build targets:
 - `make build-windows` - Builds g8e binary file for Windows (amd64, arm64).
 - `make build-darwin` - Builds g8e binary file for Darwin (amd64, arm64).
 - `make build-compressed` - Builds g8e binary file then compresses with UPX (requires UPX installed).
+- `make build-fips` - Builds a FIPS 140-3 approved mode g8e binary for linux/amd64.
+- `make verify-fips` - Builds the FIPS variant and runs a self-check.
 - `make clean` - Removes compiled g8e binaries and test artifacts.
 
 ### Build in Docker (no local Go required)
 
-If Go 1.26+ is not installed locally, the binary can be compiled inside Docker. Requires Docker 24.0+.
+If a local Go toolchain is not available, the binary can be compiled inside Docker. Requires Docker 24.0+.
 
 ```bash
 make build-docker
@@ -95,7 +97,7 @@ For cross-compilation from Linux/macOS to Windows:
 
 ```bash
 GOOS=windows GOARCH=amd64 make build
-# Output: g8e (rename to g8e.exe on Windows)
+# Output: g8e.exe
 ```
 
 The Makefile also includes a dedicated Windows build target:
@@ -155,7 +157,7 @@ Custom gateway implementations need the g8e Protocol Library for protobuf schema
 The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.6.10
+go get github.com/g8e-ai/g8e@v1.7.5
 ```
 
 Import the protobuf types and SPIFFE workload identity helpers from the Go module. The package provides governance envelope definitions, the Operator gRPC service, pub/sub message types, and workload identity helpers for SPIFFE URI SAN generation and validation across all identity types (Operator, CLI, App, User, Hub, GatewayPeer).
@@ -167,7 +169,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For gateway-side tooling, testing, or Python-based services that need to consume protocol constants:
 
 ```bash
-pip install g8e==1.6.10
+pip install g8e==1.7.5
 ```
 
 The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.

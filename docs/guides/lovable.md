@@ -5,16 +5,16 @@ parent: Guides
 
 # Lovable Frontend Integration
 
-Last Updated: 2026-08-14
-Version: v1.7.2
+Last Updated: 2026-08-16
+Version: v1.7.6
 
 ---
 
 ## Overview
 
-[Lovable](https://lovable.dev) is an AI-powered frontend development platform that generates React + TypeScript + TailwindCSS applications from natural-language prompts. This guide provides detailed instructions for building a g8e Governance Console UI with Lovable, connecting it to a g8e Gateway backend via Cloudflare Tunnels.
+[Lovable](https://lovable.dev) is an AI-powered frontend development platform that generates React + TypeScript + TailwindCSS applications from natural-language prompts. This guide covers Lovable-specific configuration, the AI agent prompt, and component architecture for building a g8e Governance Console UI that connects to a g8e Gateway backend via Cloudflare Tunnels.
 
-This guide covers Lovable-specific configuration, the AI agent prompt, and component architecture. For the comprehensive guide on building a g8e-compatible frontend (enrollment commands, API reference, WebAuthn flow requirements, SSE streaming, API data types, UI/UX guidelines), see [Build a g8e-Compatible Frontend](./build_frontend.md).
+For the guide on building a g8e-compatible frontend (enrollment commands, API reference, WebAuthn flow requirements, SSE streaming, API data types, UI/UX guidelines), see [Build a g8e-Compatible Frontend](./build_frontend.md).
 
 ### Steps at a Glance
 
@@ -116,9 +116,7 @@ After the Lovable AI agent generates the app, verify:
 
 ---
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- BEGIN LOVABLE AI AGENT PROMPT                                    -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- BEGIN LOVABLE AI AGENT PROMPT -->
 
 ## Lovable AI Agent Prompt
 
@@ -211,7 +209,7 @@ On mount:
 
 1. Call `GET /api/v1/auth/bootstrap/status` to check if any passkey is registered
 2. Call `GET /api/v1/users/me` (with `credentials: 'include'`) to check if already logged in
-3. If logged in, call `GET /api/v1/auth/sessions/me` to get the web session ID (needed for SSE)
+3. If logged in, call `GET /api/v1/auth/sessions/me` to get the web session info (the web session ID is derived from the cookie by the gateway; do not pass it in SSE requests)
 
 ### 6.2 Login Page
 
@@ -435,6 +433,4 @@ src/
   main.tsx
 ```
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- END LOVABLE AI AGENT PROMPT                                      -->
-<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- END LOVABLE AI AGENT PROMPT -->

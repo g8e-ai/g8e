@@ -6,7 +6,7 @@ Protocol library for the g8e zero-trust execution platform. Provides protobuf sc
 
 ### Go
 
-The Go module is part of the root module `github.com/g8e-ai/g8e` and requires Go 1.26.5. It depends on `google.golang.org/grpc` and `google.golang.org/protobuf`. Install with `go get github.com/g8e-ai/g8e`.
+The Go module is part of the root module `github.com/g8e-ai/g8e` and requires Go 1.26.6. It depends on `google.golang.org/grpc` and `google.golang.org/protobuf`. Install the module with `go get github.com/g8e-ai/g8e` and import the protocol package as `github.com/g8e-ai/g8e/protocol` or the generated protobuf packages under `github.com/g8e-ai/g8e/protocol/proto/...`.
 
 ### Python
 
@@ -62,13 +62,13 @@ protocol/
   LICENSE                   Apache License 2.0
 ```
 
-The buf generation config resides at `buf.gen.yaml` in the repository root. It produces Go structs and gRPC service stubs into `protocol/proto`, and Markdown API documentation into `protocol/docs/reference/api`.
+The buf generation config (`buf.gen.yaml` at the repository root) produces Go structs and gRPC service stubs into `protocol/proto`, and Markdown API documentation into `protocol/docs/reference/api`. See [Development](#development) for regeneration instructions.
 
 ## Components
 
 ### Protobuf Schemas
 
-Schema definitions reside in `proto/` and are managed with [buf](https://buf.build). The buf configuration is in `proto/buf.yaml` (module: `buf.build/g8e/platform`). Code generation is configured in `buf.gen.yaml` at the repository root.
+Schema definitions reside in `proto/` and are managed with [buf](https://buf.build). The buf configuration is in `proto/buf.yaml` (module: `buf.build/g8e/platform`). Code generation is configured in `buf.gen.yaml` at the repository root; see the [Development](#development) section for regeneration instructions.
 
 - **proto/g8e/common/v1** (`common.proto`): Core governance types. Defines `GovernanceEnvelope`, `GovernanceMetadata`, `L1Metadata`, `L2Metadata` (with `L2Vote` and `consensus_set_id`), `L3Metadata` (with `L3Proof`), the `Component` enum, and the `forbidden_patterns` field option used by L1 Doctrine validation. The `GovernanceEnvelope` carries identity fields (`operator_id`, `operator_session_id`, `web_session_id`, `cli_session_id`, `requestor_user_id`, `acting_app_id`), intent fields (`event_type`, `payload`, `intent_data`, `action_type`, `target_resource`), state and replay protection fields (`state_merkle_root`, `nonce`, `transaction_hash`, `protocol_version`), governance proofs, and application context (`case_id`, `investigation_id`, `task_id`, `system_fingerprint`, `tenant_id`, `binding_persona`).
 - **proto/g8e/operator/v1** (`operator.proto`): Operator service definitions. Defines the `OperatorService` gRPC service with RPCs for `ExecuteCommand`, `CancelCommand`, `EditFile`, `ListFileSystem`, and `ReadFileSystem`. Defines the `ExecutionStatus`, `L2Status`, `L3Status`, and `HeartbeatType` enums. Contains request payload messages for command execution, file editing, filesystem operations (list, read, grep), heartbeats, port checks, log fetching, audit history and file diff retrieval, file restoration, direct command audit, certificate signing and revocation, device link management, operator binding and termination, target context setting, shutdown, eval answer submission, MCP tool dispatch and resource/prompt operations, A2A skill dispatch, and passkey/WebAuthn registration, authentication, and credential management. Contains result messages including `CommandResult`, `FsListResult`, `FsReadResult`, `FsGrepResult`, `FileEditResult`, `PortCheckResult`, `FetchLogsResult`, `FetchHistoryResult`, `FetchFileHistoryResult`, `FetchFileDiffResult`, `RestoreFileResult`, and `HeartbeatResult` with telemetry sub-messages (`SystemIdentity`, `NetworkInfo`, `PerformanceMetrics`, `OSDetails`, `UserDetails`, `DiskDetails`, `MemoryDetails`, `EnvironmentDetails`, `FingerprintDetails`, `CapabilityFlags`, `VersionInfo`, `UptimeInfo`). Defines the `ActionReceipt` and `CommitmentAttestation` signed proof structures.
@@ -87,7 +87,7 @@ The root Go package (`protocol`) provides SPIFFE workload identity generation an
 - **Hub**: `spiffe://g8e.local/hub/operator-listen`
 - **GatewayPeer**: `spiffe://g8e.local/gateway/<gateway_id>`
 
-Each identity type provides `SPIFFEID` and `SPIFFEURL` generation methods and `Matches*` validation methods. The `MatchesCLISessionOnly` method validates a CLI identity by session ID only, prior to loading user context. Extraction methods include `ExtractCLISessionID`, `ExtractUserID`, `ExtractUserIDFromUserSAN`, `ExtractOperatorSessionID`, and `ExtractGatewayID`.
+Each identity type provides `SPIFFEID` and `SPIFFEURL` generation methods and `Matches*` validation methods. The App and User types also provide `IsAppSAN` and `IsUserSAN` for prefix-based identity checks. The `MatchesCLISessionOnly` method validates a CLI identity by session ID only, prior to loading user context. Extraction methods include `ExtractCLISessionID`, `ExtractUserID`, `ExtractUserIDFromUserSAN`, `ExtractOperatorSessionID`, and `ExtractGatewayID`.
 
 ### Constants Registries
 
@@ -123,7 +123,7 @@ The `models/` directory contains JSON Schema files that define the structure for
 
 - `account_lock.json`, `agent_activity_metadata.json`, `app_policy.json`, `approval.json`, `auth_admin_audit.json`, `bound_session.json`
 - `case.json`, `chat_message.json`, `cli_session.json`, `console_audit.json`, `conversation.json`, `conversation_message.json`
-- `enrollment_token.json`, `execution_result.json`, `file_edit.json`, `fs_grep.json`, `fs_list.json`
+- `consensus.json`, `enrollment_token.json`, `execution_result.json`, `file_edit.json`, `fs_grep.json`, `fs_list.json`
 - `errors.py`: Python enums for error categories (`ErrorCategory`), severities (`ErrorSeverity`), command categories (`CommandCategory`), and error codes (`ErrorCode`)
 - `governance.json`
 - `heartbeat.json`, `investigation.json`, `local_os_user.json`, `login_audit.json`, `memory.json`

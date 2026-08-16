@@ -5,14 +5,14 @@ parent: Guides
 
 # Cloudflare Tunnel Integration
 
-Last Updated: 2026-08-07
-Version: v1.7.0
+Last Updated: 2026-08-16
+Version: v1.7.6
 
 ---
 
 ## Overview
 
-A Cloudflare Tunnel securely exposes the g8e Gateway's HTTPS console to the internet without opening firewall ports or managing public DNS records. The tunnel runs `cloudflared` as a sidecar process alongside the gateway. Cloudflare terminates TLS at the edge; the tunnel forwards traffic to the gateway's HTTPS listener on `localhost:8443`.
+A Cloudflare Tunnel securely exposes the g8e Gateway's HTTPS console to the internet without opening firewall ports or managing public DNS records. The tunnel runs `cloudflared` as a separate foreground process on the same host as the gateway. Cloudflare terminates TLS at the edge; the tunnel forwards traffic to the gateway's HTTPS listener on `localhost:8443`.
 
 For integrating a [Lovable](https://lovable.dev) frontend with the g8e Gateway, see the [Lovable Frontend Integration guide](./lovable.md).
 
@@ -73,7 +73,7 @@ This command:
 
 ### Origin TLS Verification
 
-By default, the generated config uses `noTLSVerify: true` because the gateway uses self-signed certificates from its internal PKI. This is safe because the connection is local (localhost). For stricter verification, pass `--ca-bundle` with the gateway's CA bundle path. The generated config then uses `originCaPool` and `originServerName` instead of `noTLSVerify`.
+By default, the generated config uses `noTLSVerify: true` because the gateway uses self-signed certificates from its internal PKI. This is safe because the connection is local (localhost). For stricter verification, pass `--ca-bundle` with the gateway's CA bundle path. The generated config then uses `originCaPool` instead of `noTLSVerify`. Pass `--origin-server-name` alongside `--ca-bundle` to set the TLS SNI value, which is written to the config as `originServerName` only when provided.
 
 ### Manual Alternative
 
@@ -190,7 +190,7 @@ curl -s https://console.g8e.ai/api/v1/health
 Expected response:
 
 ```json
-{"status":"ok","mode":"gateway","version":"v1.6.10","pid":12345,"governance_ready":true,"state_merkle_root":"..."}
+{"status":"ok","mode":"gateway","version":"v1.7.5","pid":12345,"governance_ready":true,"state_merkle_root":"..."}
 ```
 
 Open the console in a browser:

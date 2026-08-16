@@ -1,8 +1,11 @@
 """Dynamic enum generation from protocol constants.
 
-Generates Python ``StrEnum`` / ``IntEnum`` classes from the ``STATUS`` and
-``EVENTS`` dicts in :mod:`g8e.constants`, so downstream consumers (g8ee,
-evals, CLI) can use typed enums instead of raw string lookups.
+Generates Python ``StrEnum`` / ``IntEnum`` classes from the protocol
+constant dicts in :mod:`g8e.constants` — ``STATUS`` (one enum per
+category), ``EVENTS`` (the ``EventType`` enum), and the non-STATUS
+categories ``CHANNELS``, ``INTENTS``, ``PROMPTS``, ``COLLECTIONS``, and
+``KV`` — so downstream consumers (g8ee, evals, CLI) can use typed enums
+instead of raw string lookups.
 
 Categories whose values are integer-like produce ``IntEnum``; all others
 produce ``StrEnum``.
