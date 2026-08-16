@@ -263,6 +263,13 @@ func (m *mockL3Notary) VerifyL3Proof(_ context.Context, userID, transactionHash,
 	return m.result, m.err
 }
 
+// VerifyPasskeyProof delegates to VerifyL3Proof so mockL3Notary also satisfies
+// PasskeyVerifier for tests that wire it as the passkey delegate of
+// NewGatewayL3Notary.
+func (m *mockL3Notary) VerifyPasskeyProof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+	return m.VerifyL3Proof(ctx, userID, transactionHash, cliSessionID, proof)
+}
+
 func TestGatewayL3Notary_DispatchesToPasskeyVerifierForWebAuthnProofs(t *testing.T) {
 	t.Parallel()
 
@@ -494,4 +501,63 @@ func TestCompositionMatrix_GatewayNotary_NoMTLSFingerprintSkipsCLIVerifier(t *te
 	assert.True(t, allowed)
 	assert.True(t, passkeyMock.called, "gatewayNotary must invoke passkey verifier")
 	assert.False(t, cliVerifier.called, "gatewayNotary must NOT invoke CLI session verifier without mTLS fingerprint")
+}
+
+// mockPasskeyVerifier is a test double for the PasskeyVerifier interface,
+// distinct from mockL3Notary, used to verify the passkeyL3Notary adapter
+// delegates correctly.
+type mockPasskeyVerifier struct {
+	called       bool
+	calledUserID string
+	calledTxHash string
+	result       bool
+	err          error
+}
+
+func (m *mockPasskeyVerifier) VerifyPasskeyProof(_ context.Context, userID, transactionHash, _ string, _ *commonv1.L3Proof) (bool, error) {
+	m.called = true
+	m.calledUserID = userID
+	m.calledTxHash = transactionHash
+	return m.result, m.err
+}
+
+func TestPasskeyL3Notary_DelegatesToPasskeyVerifier(t *testing.T) {
+	t.Parallel()
+
+	verifier := &mockPasskeyVerifier{result: true}
+	notary := NewGatewayL3Notary(nil, verifier, slog.Default())
+
+	proof := &commonv1.L3Proof{
+		CredentialId:      "cred-id",
+		ClientDataJson:    "client-data",
+		AuthenticatorData: "auth-data",
+		Signature:         "sig",
+	}
+
+	allowed, err := notary.VerifyL3Proof(context.Background(), "user-1", "tx-hash-1", "session-1", proof)
+	require.NoError(t, err)
+	assert.True(t, allowed)
+	assert.True(t, verifier.called, "passkeyL3Notary must delegate to the PasskeyVerifier")
+	assert.Equal(t, "user-1", verifier.calledUserID)
+	assert.Equal(t, "tx-hash-1", verifier.calledTxHash)
+}
+
+func TestPasskeyL3Notary_PropagatesVerifierError(t *testing.T) {
+	t.Parallel()
+
+	expectedErr := errors.New("passkey verification failed")
+	verifier := &mockPasskeyVerifier{result: false, err: expectedErr}
+	notary := NewGatewayL3Notary(nil, verifier, slog.Default())
+
+	proof := &commonv1.L3Proof{
+		CredentialId:      "cred-id",
+		ClientDataJson:    "client-data",
+		AuthenticatorData: "auth-data",
+		Signature:         "sig",
+	}
+
+	allowed, err := notary.VerifyL3Proof(context.Background(), "user-1", "tx-hash-1", "session-1", proof)
+	assert.False(t, allowed)
+	assert.ErrorIs(t, err, expectedErr)
+	assert.True(t, verifier.called)
 }

@@ -239,7 +239,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   ├── gateway.PKIAuthority
 │   │   ├── gateway.UserService
 │   │   └── gateway.CLISessionService
-│   └── gateway.PasskeyService (as governance.L3Notary for WebAuthn proofs, domain logic only)
+│   └── gateway.PasskeyService (as governance.PasskeyVerifier for WebAuthn proofs, domain logic only; composed by governance.passkeyL3Notary which adapts it to governance.L3Notary)
 │       └── gateway.DocumentStoreService (from Stores [SHARED])
 ├── consensus.ConsensusService
 │   ├── governance.L1Doctrine
@@ -302,9 +302,9 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - **L1**: `governance.L1Doctrine` (technical bedrock validation, threat detection, forbidden pattern matching). Constructed via `NewL1DoctrineFromDir(doctrineDir)` which loads `*.json` doctrine files from the given directory and appends them to hardcoded MITRE detectors. Empty dir falls back to `NewL1Doctrine()`. The doctrine instance is shared between the MCP Gateway ThreatScanner and L4Warden via `GovernanceDeps.Doctrine` -> `NewL4Warden()`.
 - **L2**: `consensus.ConsensusService` (Consensus-based deliberation producing L2 votes via Ed25519 signatures; gateway delegates deliberation via `LocalDeliberator`). The `L2ConsensusPolicyStore` interface in `governance.L4Warden` loads consensus policy for quorum verification.
 - **L3**: `governance.L3Notary` - composable notary design with two production implementations sharing primitives:
-  - Gateway notary (via `governance.NewGatewayL3Notary`) - passkey authorization (`L3Notary` delegate) + optional CLI mTLS session verification (`CLISessionVerifier`). Does NOT access suspended transactions.
+  - Gateway notary (via `governance.NewGatewayL3Notary`) - passkey authorization (`PasskeyVerifier` delegate, wrapped by `governance.passkeyL3Notary` which adapts `PasskeyVerifier` to `L3Notary`) + optional CLI mTLS session verification (`CLISessionVerifier`). Does NOT access suspended transactions. The passkey domain (`gateway.PasskeyService`) implements `PasskeyVerifier`, not `L3Notary`, so changes to the `L3Notary` interface do not ripple into passkey domain code.
   - Outbound notary (via `governance.NewOutboundL3Notary`) - suspended transaction lookup + Ed25519 signature verification.
-  - **Composable primitives**: `CLISessionVerifier` interface (shared by the gateway notary); shared suspended transaction + signature verification logic used by the outbound notary.
+  - **Composable primitives**: `CLISessionVerifier` interface (shared by the gateway notary); `PasskeyVerifier` interface (passkey-domain primitive composed by the gateway notary via `passkeyL3Notary`); shared suspended transaction + signature verification logic used by the outbound notary.
 - **L4**: `governance.L4Warden` (pre-dispatch verification gating, validating signatures, replay prevention, expiry, nonces, and state Merkle root)
 - **L5**: `governance.L5Actuator` (isolated boundary tool dispatch via MCP/A2A, signed receipt production, audit logging). Does NOT re-verify L2/L3 proofs; trusts `VerifiedTransaction` from L4Warden. The L4->L5 separation is the defense-in-depth boundary: L4 verifies, L5 executes and records.
 
@@ -328,17 +328,17 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - `gateway.EncryptedKVAdapter` implements: `storage.TokenStore` (outbound mode).
 - `storage.SuspendedTransactionService` implements: `storage.SuspendedTransactionStore` (used in both gateway and outbound modes).
 - `governance.FilesystemSignerStore` implements: `governance.SignerStore` (used in outbound mode).
-- Gateway notary (via `NewGatewayL3Notary`) implements: `governance.L3Notary` (gateway mode with `CLISessionVerifier` and `L3Notary` passkey delegate; no suspended store dependency).
+- Gateway notary (via `NewGatewayL3Notary`) implements: `governance.L3Notary` (gateway mode with `CLISessionVerifier` and `PasskeyVerifier` delegate wrapped by `governance.passkeyL3Notary`; no suspended store dependency).
 - Outbound notary (via `NewOutboundL3Notary`) implements: `governance.L3Notary` (outbound mode for suspended transaction + signature verification only).
 - `gateway` CLI session verifier implements: `governance.CLISessionVerifier` (used in gateway mode for mTLS CLI session verification within the L3 notary).
 
 ### PasskeyService/PasskeyHandler Domain-HTTP Split
-- **`passkey_service.go`**: `PasskeyService` holds domain-only concerns (user store, session store, WebAuthn, relying party config). Public domain logic includes `VerifyL3Proof`, `GenerateRegistrationChallenge`, `VerifyRegistration`, `GenerateAuthenticationChallenge`, `VerifyAuthentication`, and `GenerateApprovalChallenge`. `VerifyL3Proof` stays on `PasskeyService` for L3 binding to transaction hash per architectural guardrails.
+- **`passkey_service.go`**: `PasskeyService` holds domain-only concerns (user store, session store, WebAuthn, relying party config). Public domain logic includes `VerifyPasskeyProof`, `GenerateRegistrationChallenge`, `VerifyRegistration`, `GenerateAuthenticationChallenge`, `VerifyAuthentication`, and `GenerateApprovalChallenge`. `VerifyPasskeyProof` is the passkey-domain primitive (`governance.PasskeyVerifier`) composed by the gateway L3 notary via `governance.passkeyL3Notary`; `PasskeyService` does not implement `governance.L3Notary`, keeping the passkey domain decoupled from the governance interface shape.
 - **`passkey_service_http.go`**: All passkey HTTP handlers live on `*PasskeyHandler` as 4 factory methods (`RegisterChallenge`, `RegisterVerify`, `AuthenticateChallenge`, `AuthenticateVerify`) plus 3 direct handlers (`ListCredentials`, `RevokeCredential`, `CLIStatus`). All 7 methods have Swagger annotations.
 - **`passkey_service_approvals.go`**: 6 approval handlers live on `*PasskeyHandler`. All business dependencies are encapsulated in `PasskeyOrchestrator` and accessed via the orchestrator field. No post-construction setters remain.
 - **`PasskeyOrchestrator`** (`passkey_orchestrator.go`): Encapsulates cross-cutting business concerns of the passkey approval flow: MCP service provision, suspended transaction management, SSE event publishing, and WebSocket broadcasting. Public methods: `GetSuspendedTransaction`, `ResumeWithL3Proof`, `ListSuspendedTransactions`, `EmitApprovalCompletedSSE`, `EmitPasskeyRegisteredSSE`. `NewPasskeyOrchestrator` rejects nil SSEStore or PubSub at construction with `constants.ErrPasskeySSEDependenciesRequired` — a nil SSE/pubsub dependency in a posture that requires passkey ceremonies is a wiring bug, not a no-op condition. SSE emission methods still guard empty `userID`/`cliSessionID` parameters (parameter validation, not dependency nil-checks).
 - **`PasskeyHandler`** struct embeds `*PasskeyService` and adds HTTP concerns plus a single `*PasskeyOrchestrator` field. The `NewPasskeyHandler` constructor wires all dependencies at construction time.
-- **`gateway_service.go`**: The `passkey` field is `*PasskeyHandler`. `GetGovernanceDeps` returns `*pubsub.GovernanceDeps`, consolidating all governance dependencies including `L3Notary` which wraps `PasskeyService` via `NewGatewayL3Notary`.
+- **`gateway_service.go`**: The `passkey` field is `*PasskeyHandler`. `GetGovernanceDeps` returns `*pubsub.GovernanceDeps`, consolidating all governance dependencies including `L3Notary` which composes `PasskeyService` (as `PasskeyVerifier`) via `NewGatewayL3Notary`.
 - **`gateway_http.go`**: `HTTPHandlerDeps.Passkey` and `HTTPHandler.passkey` are `*PasskeyHandler`. `GetPasskeyHandler` returns the handler.
 - **`gateway.auth_controller.go`**: `AuthController.passkey` field is `*PasskeyHandler`. See HTTP Controller Decomposition below for the current controller split.
 - **`passkey_service_approvals_test.go`**: Tests all handlers on `*PasskeyHandler` with mocked dependencies.
