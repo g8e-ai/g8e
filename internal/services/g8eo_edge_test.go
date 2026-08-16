@@ -12,52 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAuditStoreTransactionStore_DocSet_ValidRecord(t *testing.T) {
-	t.Parallel()
-
-	store := &auditStoreTransactionStore{store: nil}
-
-	receipt := models.ActionReceiptRecord{
-		TransactionID:   "tx-1",
-		TransactionHash: "hash-1",
-		OperatorID:      "op-1",
-		ActionType:      constants.ActionTypeFileEdit,
-		TargetResource:  "/test/file.txt",
-		Status:          2,
-		ResultSummary:   "success",
-	}
-
-	data, err := json.Marshal(&receipt)
-	require.NoError(t, err)
-
-	err = store.DocSet("receipts", "tx-1", data)
-	assert.NoError(t, err)
-}
-
-func TestAuditStoreTransactionStore_DocSet_InvalidJSON(t *testing.T) {
-	t.Parallel()
-
-	store := &auditStoreTransactionStore{store: nil}
-
-	err := store.DocSet("receipts", "tx-1", []byte("invalid json"))
-	assert.Error(t, err)
-}
-
-func TestAuditStoreTransactionStore_DocSet_NilStore(t *testing.T) {
-	t.Parallel()
-
-	store := &auditStoreTransactionStore{store: nil}
-
-	receipt := models.ActionReceiptRecord{
-		TransactionID: "tx-1",
-	}
-	data, err := json.Marshal(&receipt)
-	require.NoError(t, err)
-
-	err = store.DocSet("receipts", "tx-1", data)
-	assert.NoError(t, err)
-}
-
 func TestPrintOperatorStartupBanner(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)

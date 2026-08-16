@@ -18,8 +18,11 @@ import "encoding/json"
 //go:generate mockery --name TransactionAuditStore --output ./mocks --dir .
 
 // TransactionAuditStore defines the interface for persisting audit documents
-// to a document store. Implemented by DocumentStoreService (production) and
-// storagetest.TestSQLAuditStore (tests).
+// to a document store. Implemented natively by DocumentStoreService (gateway
+// mode, persists JSON documents) and storage.SQLAuditStore (outbound mode,
+// decodes the payload as an ActionReceiptRecord and records it in the receipts
+// table). storagetest.TestSQLAuditStore provides a no-op implementation for
+// tests. No adapter is required in either production mode.
 type TransactionAuditStore interface {
 	DocSet(collection, id string, data json.RawMessage) error
 }

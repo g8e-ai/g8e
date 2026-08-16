@@ -148,7 +148,7 @@ Return centralized error constants from `internal/constants/errors.go` for known
 - `internal/tools/agent_harness/` - Agent test harness with scenario runner (`client/`, `config/`, `scenarios/`) for MCP/A2A gateway integration tests
 - `test/` - Root-level E2E and integration tests (gateway, MCP, consensus, native tool registry, A2A)
 - Production gateway mode wires `DocumentStoreService` as `TransactionAuditStore`
-- Production outbound mode uses `auditStoreTransactionStore` adapter in `g8eo.go`
+- Production outbound mode wires `storage.SQLAuditStore` directly as `TransactionAuditStore` via its native `DocSet` method (no adapter)
 
 ## Dependency Construction Model
 

@@ -30,8 +30,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   │       └── storage.SuspendedTransactionService
 │   ├── governance.L5Actuator
 │   │   ├── execution.ExecutionService
-│   │   ├── storage.SQLAuditStore (from Stores.AuditStore) [SHARED]
-│   │   ├── governance.TransactionAuditStore (auditStoreTransactionStore wrapper)
+│   │   ├── storage.SQLAuditStore (from Stores.AuditStore) [SHARED] (also wired as governance.TransactionAuditStore via its native DocSet method; no adapter)
 │   │   ├── scrubbing.ScrubbingService
 │   │   └── governance.StateRootProvider
 │   │   (L5Actuator does NOT depend on L3Notary or SignerStore; it trusts
@@ -74,8 +73,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
         ├── gateway.KVStoreService
         ├── gateway.SSEEventService
         ├── gateway.BlobStoreService
-        ├── storage.SQLAuditStore
-        └── sqliteutil.DB (raw SQLite connection for consumers needing direct DB access)
+        └── storage.SQLAuditStore
 
 GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 ├── gateway.CanonicalDBService [SHARED] (lifecycle only: Open, Close, GetVault, schema/migrations, maintenance loop)
@@ -91,8 +89,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │       ├── gateway.KVStoreService
 │       ├── gateway.SSEEventService
 │       ├── gateway.BlobStoreService
-│       ├── storage.SQLAuditStore
-│       └── sqliteutil.DB (raw SQLite connection for consumers needing direct DB access)
+│       └── storage.SQLAuditStore
 ├── storage.SuspendedTransactionService (for L3 approval workflow)
 │   └── sqliteutil.DB
 ├── gateway.GatewayWebSocketHandler
@@ -285,7 +282,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - **`gateway.KVStoreService`** provides TTL-aware ephemeral state with GLOB pattern scanning for gateway mode. Callers access it directly via the `KVStore` field on `Stores` (returned by `OpenCanonicalDBService`) - no delegation wrappers.
 - **`gateway.SSEEventService`** provides Server-Sent Events fan-out for gateway mode. Callers access it directly via the `SSEStore` field on `Stores` (returned by `OpenCanonicalDBService`) - no delegation wrappers.
 - **`gateway.BlobStoreService`** provides binary persistence for attachments and certificate material for gateway mode. Callers access it directly via the `BlobStore` field on `Stores` (returned by `OpenCanonicalDBService`) - no delegation wrappers.
-- **`Stores.DB`** provides the raw `sqliteutil.DB` connection for consumers needing direct DB access (e.g., `NewConsensusStoreService`, `NewStateRootService`). Accessible via the `DB` field on `Stores` (returned by `OpenCanonicalDBService`).
+- **`gateway.ConsensusStoreService`** and **`gateway.StateRootService`** are constructed inside `OpenCanonicalDBService` (where the `sqliteutil.DB` is already in scope) and exposed only as typed `Stores` fields (`ConsensusStore`, `StateRootSvc`). Raw DB access is not exported from `Stores`; a lint guard test (`TestStoresDoesNotExportRawDB`) asserts the `Stores` struct declares no `*sqliteutil.DB` field.
 - **`gateway.Stores`** is an internal aggregation struct returned by `OpenCanonicalDBService` to bundle store initialization. Consumers do not retain the `*Stores` struct past initialization. `GatewayModeService` holds narrow individual store fields, `G8eoService` uses narrow accessors on `CanonicalDBService`, and `HTTPHandlerDependencies` distributes individual store references into per-controller `Deps` structs. A lint guard test (`TestStoresFieldNotLeakedPastGatewayDB`) asserts no production struct outside `gateway_db.go` declares a `*Stores` field.
 - **`storage.SuspendedTransactionService`** is the L3 approval workflow store used consistently in both gateway and outbound modes (implements `storage.SuspendedTransactionStore`). In both `GatewayModeService` and `G8eoService`, a single `*storage.SuspendedTransactionService` field serves both store operations and `Close` - no separate closer field.
 - **`mcp.NewGatewayService`** fails fast on construction errors: `FieldPathRegistry` initialization errors are returned (not silently logged), making governance system initialization failures fatal. The `Dependencies.FieldPathRegistryFactory` field allows tests to inject a failing factory.
