@@ -87,6 +87,7 @@ var APIPaths = struct {
 	AuthCLIRecoveryRequest                   string `json:"auth_cli_recovery_request"`
 	AuthCLIRecoveryStatus                    string `json:"auth_cli_recovery_status"`
 	AuthCLIRecoveryApprove                   string `json:"auth_cli_recovery_approve"`
+	AuthCLIRecoveryApproveCLI                string `json:"auth_cli_recovery_approve_cli"`
 	AuthCLIRecoveryComplete                  string `json:"auth_cli_recovery_complete"`
 	AuthCLIRotate                            string `json:"auth_cli_rotate"`
 	AuthPasskeys                             string `json:"auth_passkeys"`
@@ -225,6 +226,7 @@ var APIPaths = struct {
 	AuthCLIRecoveryRequest:                   "/api/v1/auth/cli/recovery/request",
 	AuthCLIRecoveryStatus:                    "/api/v1/auth/cli/recovery/status",
 	AuthCLIRecoveryApprove:                   "/api/v1/auth/cli/recovery/approve",
+	AuthCLIRecoveryApproveCLI:                "/api/v1/auth/cli/recovery/approve-cli",
 	AuthCLIRecoveryComplete:                  "/api/v1/auth/cli/recovery/complete",
 	AuthCLIRotate:                            "/api/v1/auth/cli/rotate",
 	AuthPasskeys:                             "/api/v1/auth/passkeys",

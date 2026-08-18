@@ -63,10 +63,12 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.PKIDevicesEnroll, h.pkiController.handlePKIDevicesEnroll)
 
 	// CLI recovery flow — request/status/complete are public (token-scoped);
-	// approve is web-session protected (browser console only).
+	// approve is web-session protected (browser console only);
+	// approve-cli is mTLS-protected (already-enrolled CLI, headless path).
 	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryRequest, h.cliRecoveryController.handleRecoveryRequest)
 	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryStatus, h.cliRecoveryController.handleRecoveryStatus)
 	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryApprove, h.cliRecoveryController.handleRecoveryApprove)
+	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryApproveCLI, h.cliRecoveryController.handleRecoveryApproveCLI)
 	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryComplete, h.cliRecoveryController.handleRecoveryComplete)
 
 	// CLI rotation — mTLS-protected; the caller's identity is derived from

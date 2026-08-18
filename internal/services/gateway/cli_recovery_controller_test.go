@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -34,6 +35,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 )
 
@@ -626,4 +628,357 @@ func recoveryStatus(t *testing.T, c *CLIRecoveryController, token string) models
 	var resp models.CLIRecoveryStatusResponse
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
 	return resp.State
+}
+
+// ---------------------------------------------------------------------------
+// handleRecoveryApproveCLI — mTLS recovery approval (headless path)
+// ---------------------------------------------------------------------------
+//
+// These tests exercise the full public router (auth middleware + handler) to
+// verify the mTLS recovery-approve endpoint. The approver identity is derived
+// from the verified CLI certificate URI SAN, stamped into the context by the
+// unified auth middleware's handleMTLSAuth → handleCLIAuth path.
+
+// seedCLIIdentityForRecoveryApprove creates an active user, persists a CLI
+// session document for that user, and builds a self-signed cert with a CLI
+// SPIFFE URI SAN matching the user ID + session ID. The cert is signed by the
+// gateway's PKI so VerifyCertificate (revocation check) passes. Returns the
+// user, CLI session ID, and the parsed certificate.
+func seedCLIIdentityForRecoveryApprove(t *testing.T, infra *TestInfrastructure) (*models.User, string, *x509.Certificate) {
+	t.Helper()
+	user, err := infra.UserSvc.CreateUser()
+	require.NoError(t, err)
+	require.NotNil(t, user)
+
+	cliSessionID := "cli-approve-recovery-" + user.ID
+	cliDoc := &models.CLISession{
+		ID:        cliSessionID,
+		UserID:    user.ID,
+		ExpiresAt: time.Now().Add(1 * time.Hour),
+		IsActive:  true,
+	}
+	cliBytes, err := json.Marshal(cliDoc)
+	require.NoError(t, err)
+	require.NoError(t, infra.Stores.DocStore.DocSet(
+		marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes,
+	))
+
+	// Sign a real CLI CSR through the gateway PKI so the cert chains to the
+	// gateway CA and VerifyCertificate's revocation check passes.
+	csrPEM, _, _ := generateTestCSR(t, "approve-recovery-cli")
+	certPEM, _, err := infra.PKI.SignCSR(csrPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID, "")
+	require.NoError(t, err)
+
+	block, _ := pem.Decode([]byte(certPEM))
+	require.NotNil(t, block)
+	cert, err := x509.ParseCertificate(block.Bytes)
+	require.NoError(t, err)
+
+	return user, cliSessionID, cert
+}
+
+// buildMTLSRecoveryApproveRequest builds a POST request to the mTLS
+// recovery-approve endpoint, stamped with the CLI mTLS cert and CLI session
+// header so the auth middleware's handleCLIAuth path validates the session and
+// stamps ContextKeyUserID.
+func buildMTLSRecoveryApproveRequest(t *testing.T, token string, approve bool, cliSessionID string, cert *x509.Certificate) *http.Request {
+	t.Helper()
+	body, err := json.Marshal(models.CLIRecoveryApproveRequest{Token: token, Approve: approve})
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthCLIRecoveryApproveCLI, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{cert},
+	}
+	return req
+}
+
+// TestHandleRecoveryApproveCLI_MTLSApprovesPendingRequest verifies that an
+// already-enrolled CLI can approve a pending recovery request via the mTLS
+// approve-cli endpoint. The approver user ID is derived from the verified CLI
+// certificate URI SAN by the unified auth middleware.
+func TestHandleRecoveryApproveCLI_MTLSApprovesPendingRequest(t *testing.T) {
+	h, _, infra := setupTestHTTPHandler(t)
+
+	// Seed the approver CLI identity.
+	approverUser, cliSessionID, cliCert := seedCLIIdentityForRecoveryApprove(t, infra)
+
+	// Create a pending recovery request via the controller's recovery service.
+	csrPEM, _, _ := generateTestCSR(t, "recovery-approve-cli-pending")
+	requestID, token, _, err := h.cliRecoveryController.recoverySvc.CreateRequest(csrPEM, "test-sys-fp", &models.LocalOSUser{Username: "bob"})
+	require.NoError(t, err)
+	require.NotEmpty(t, token)
+	require.NotEmpty(t, requestID)
+
+	// Approve via the mTLS endpoint through the full public router.
+	req := buildMTLSRecoveryApproveRequest(t, token, true, cliSessionID, cliCert)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	require.Equalf(t, http.StatusOK, rr.Code, "mTLS approve should succeed, body: %s", rr.Body.String())
+	var resp models.CLIRecoveryApproveResponse
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+	assert.True(t, resp.Success)
+	assert.Equal(t, models.CLIRecoveryStateApproved, resp.State)
+
+	// The recovery request must be bound to the mTLS-derived approver user ID.
+	storedReq, err := h.cliRecoveryController.recoverySvc.GetByToken(token)
+	require.NoError(t, err)
+	assert.Equal(t, models.CLIRecoveryStateApproved, storedReq.State)
+	assert.Equal(t, approverUser.ID, storedReq.ApprovingUserID)
+}
+
+// TestHandleRecoveryApproveCLI_RejectsRevokedCert verifies that the mTLS
+// middleware rejects a revoked CLI certificate before the handler runs. The
+// approver's CLI cert is revoked by serial before the call; VerifyCertificate
+// returns ErrMTLSCertRevoked and the middleware responds 401.
+func TestHandleRecoveryApproveCLI_RejectsRevokedCert(t *testing.T) {
+	h, _, infra := setupTestHTTPHandler(t)
+
+	_, cliSessionID, cliCert := seedCLIIdentityForRecoveryApprove(t, infra)
+
+	// Revoke the approver's CLI cert by serial.
+	err := infra.PKI.RevokeCertificate(cliCert.SerialNumber.String(), "test-revocation")
+	require.NoError(t, err)
+
+	// Create a pending recovery request.
+	csrPEM, _, _ := generateTestCSR(t, "recovery-approve-cli-revoked")
+	_, token, _, err := h.cliRecoveryController.recoverySvc.CreateRequest(csrPEM, "test-sys-fp", &models.LocalOSUser{Username: "bob"})
+	require.NoError(t, err)
+
+	req := buildMTLSRecoveryApproveRequest(t, token, true, cliSessionID, cliCert)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	assert.Contains(t, rr.Body.String(), constants.ErrMTLSCertRevoked.Error())
+}
+
+// TestHandleRecoveryApproveCLI_RejectsInactiveUser verifies that a disabled
+// approver user (cert still valid) is rejected with 403. The middleware's
+// getAndValidateUser catches the inactive user and returns 403 before the
+// handler runs; the handler's active-user check is defense-in-depth.
+func TestHandleRecoveryApproveCLI_RejectsInactiveUser(t *testing.T) {
+	h, _, infra := setupTestHTTPHandler(t)
+
+	approverUser, cliSessionID, cliCert := seedCLIIdentityForRecoveryApprove(t, infra)
+
+	// Create a pending recovery request.
+	csrPEM, _, _ := generateTestCSR(t, "recovery-approve-cli-inactive")
+	_, token, _, err := h.cliRecoveryController.recoverySvc.CreateRequest(csrPEM, "test-sys-fp", &models.LocalOSUser{Username: "bob"})
+	require.NoError(t, err)
+
+	// Disable the approver user (cert still valid, not revoked).
+	require.NoError(t, infra.UserSvc.Disable(approverUser.ID, "test-deactivation", "test-actor", "test-op"))
+
+	req := buildMTLSRecoveryApproveRequest(t, token, true, cliSessionID, cliCert)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusForbidden, rr.Code)
+}
+
+// TestHandleRecoveryApproveCLI_DenyViaMTLS verifies that an already-enrolled
+// CLI can deny a pending recovery request through the mTLS approve-cli
+// endpoint. The resulting request is bound to the mTLS-derived approver user
+// ID and transitions to CLIRecoveryStateDenied, which then blocks completion.
+func TestHandleRecoveryApproveCLI_DenyViaMTLS(t *testing.T) {
+	h, _, infra := setupTestHTTPHandler(t)
+
+	approverUser, cliSessionID, cliCert := seedCLIIdentityForRecoveryApprove(t, infra)
+
+	csrPEM, _, _ := generateTestCSR(t, "recovery-approve-cli-deny")
+	_, token, _, err := h.cliRecoveryController.recoverySvc.CreateRequest(csrPEM, "test-sys-fp", &models.LocalOSUser{Username: "bob"})
+	require.NoError(t, err)
+
+	req := buildMTLSRecoveryApproveRequest(t, token, false, cliSessionID, cliCert)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	require.Equalf(t, http.StatusOK, rr.Code, "mTLS deny should succeed, body: %s", rr.Body.String())
+	var resp models.CLIRecoveryApproveResponse
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+	assert.True(t, resp.Success)
+	assert.Equal(t, models.CLIRecoveryStateDenied, resp.State)
+
+	storedReq, err := h.cliRecoveryController.recoverySvc.GetByToken(token)
+	require.NoError(t, err)
+	assert.Equal(t, models.CLIRecoveryStateDenied, storedReq.State)
+	assert.Equal(t, approverUser.ID, storedReq.ApprovingUserID)
+}
+
+// TestHandleRecoveryApproveCLI_RequiresMTLSCert verifies the fail-closed
+// property of the RouteAuthMTLS classification: a request with no client
+// certificate is rejected by the unified auth middleware with 401 before the
+// handler runs. This confirms the approve-cli endpoint cannot be reached
+// without mTLS.
+func TestHandleRecoveryApproveCLI_RequiresMTLSCert(t *testing.T) {
+	h, _, _ := setupTestHTTPHandler(t)
+
+	body, err := json.Marshal(models.CLIRecoveryApproveRequest{Token: "some-token", Approve: true})
+	require.NoError(t, err)
+	// Plain request with no TLS state — middleware must reject.
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthCLIRecoveryApproveCLI, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	assert.Contains(t, rr.Body.String(), constants.ErrMTLSCertRequired.Error())
+}
+
+// TestHandleRecoveryApproveCLI_MethodNotAllowed verifies that a GET request
+// with a valid mTLS cert is rejected by the handler with 405 after the
+// middleware passes. This confirms the handler enforces POST-only.
+func TestHandleRecoveryApproveCLI_MethodNotAllowed(t *testing.T) {
+	h, _, infra := setupTestHTTPHandler(t)
+
+	_, cliSessionID, cliCert := seedCLIIdentityForRecoveryApprove(t, infra)
+
+	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.AuthCLIRecoveryApproveCLI, nil)
+	req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
+	req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{cliCert}}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+}
+
+// TestHandleRecoveryApproveCLI_MissingToken verifies that an authenticated
+// mTLS request with an empty token is rejected with 400.
+func TestHandleRecoveryApproveCLI_MissingToken(t *testing.T) {
+	h, _, infra := setupTestHTTPHandler(t)
+
+	_, cliSessionID, cliCert := seedCLIIdentityForRecoveryApprove(t, infra)
+
+	req := buildMTLSRecoveryApproveRequest(t, "", true, cliSessionID, cliCert)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Contains(t, rr.Body.String(), "token is required")
+}
+
+// TestHandleRecoveryApproveCLI_NotFound verifies that an authenticated mTLS
+// request for an unknown token is rejected with 404 via writeRecoveryError.
+func TestHandleRecoveryApproveCLI_NotFound(t *testing.T) {
+	h, _, infra := setupTestHTTPHandler(t)
+
+	_, cliSessionID, cliCert := seedCLIIdentityForRecoveryApprove(t, infra)
+
+	req := buildMTLSRecoveryApproveRequest(t, "nonexistent-token", true, cliSessionID, cliCert)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusNotFound, rr.Code)
+	assert.Contains(t, rr.Body.String(), constants.ErrCLIRecoveryRequestNotFound.Error())
+}
+
+// TestHandleRecoveryApproveCLI_AlreadyApproved verifies that a second mTLS
+// approval of the same token is rejected with 409 (consumed). This confirms
+// the one-time-use token property holds on the mTLS path just as on the
+// browser path.
+func TestHandleRecoveryApproveCLI_AlreadyApproved(t *testing.T) {
+	h, _, infra := setupTestHTTPHandler(t)
+
+	_, cliSessionID, cliCert := seedCLIIdentityForRecoveryApprove(t, infra)
+
+	csrPEM, _, _ := generateTestCSR(t, "recovery-approve-cli-consumed")
+	_, token, _, err := h.cliRecoveryController.recoverySvc.CreateRequest(csrPEM, "test-sys-fp", &models.LocalOSUser{Username: "bob"})
+	require.NoError(t, err)
+
+	// First approval succeeds.
+	first := buildMTLSRecoveryApproveRequest(t, token, true, cliSessionID, cliCert)
+	rr1 := httptest.NewRecorder()
+	h.ServeHTTP(rr1, first)
+	require.Equal(t, http.StatusOK, rr1.Code, "first approve should succeed, body: %s", rr1.Body.String())
+
+	// Second approval must fail with consumed.
+	second := buildMTLSRecoveryApproveRequest(t, token, true, cliSessionID, cliCert)
+	rr2 := httptest.NewRecorder()
+	h.ServeHTTP(rr2, second)
+
+	assert.Equal(t, http.StatusConflict, rr2.Code)
+	assert.Contains(t, rr2.Body.String(), constants.ErrCLIRecoveryRequestConsumed.Error())
+}
+
+// TestHandleRecoveryApproveCLI_FullLifecycle verifies the complete headless
+// recovery flow through the real public router: a new CLI creates a recovery
+// request (CSR), an already-enrolled CLI approves it via the mTLS approve-cli
+// endpoint, and the new CLI completes recovery with proof-of-possession. The
+// issued certificate must chain to the gateway CA, match the CSR key pair,
+// and the recovery request must be bound to the mTLS-derived approver user.
+// This is the end-to-end integration of the headless enrollment path.
+func TestHandleRecoveryApproveCLI_FullLifecycle(t *testing.T) {
+	h, _, infra := setupTestHTTPHandler(t)
+
+	approverUser, cliSessionID, cliCert := seedCLIIdentityForRecoveryApprove(t, infra)
+
+	// 1. New CLI creates a recovery request through the public request endpoint.
+	csrPEM, privKey, _ := generateTestCSR(t, "recovery-headless-lifecycle")
+	reqBody, err := json.Marshal(models.CLIRecoveryRequestRequest{
+		CLICSRPEM:         csrPEM,
+		SystemFingerprint: "headless-sys-fp",
+		LocalOSUser:       &models.LocalOSUser{Username: "alice"},
+	})
+	require.NoError(t, err)
+	createReq := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthCLIRecoveryRequest, bytes.NewReader(reqBody))
+	createReq.Header.Set("Content-Type", "application/json")
+	createRR := httptest.NewRecorder()
+	h.ServeHTTP(createRR, createReq)
+	require.Equalf(t, http.StatusCreated, createRR.Code, "recovery request should succeed, body: %s", createRR.Body.String())
+	var createResp models.CLIRecoveryRequestResponse
+	require.NoError(t, json.Unmarshal(createRR.Body.Bytes(), &createResp))
+	require.NotEmpty(t, createResp.Token)
+	require.NotEmpty(t, createResp.RequestID)
+
+	// 2. Already-enrolled CLI approves via the mTLS approve-cli endpoint.
+	approveReq := buildMTLSRecoveryApproveRequest(t, createResp.Token, true, cliSessionID, cliCert)
+	approveRR := httptest.NewRecorder()
+	h.ServeHTTP(approveRR, approveReq)
+	require.Equalf(t, http.StatusOK, approveRR.Code, "mTLS approve should succeed, body: %s", approveRR.Body.String())
+	var approveResp models.CLIRecoveryApproveResponse
+	require.NoError(t, json.Unmarshal(approveRR.Body.Bytes(), &approveResp))
+	assert.Equal(t, models.CLIRecoveryStateApproved, approveResp.State)
+
+	// The recovery request must be bound to the mTLS-derived approver user ID.
+	storedReq, err := h.cliRecoveryController.recoverySvc.GetByToken(createResp.Token)
+	require.NoError(t, err)
+	assert.Equal(t, approverUser.ID, storedReq.ApprovingUserID)
+
+	// 3. New CLI completes recovery with proof-of-possession over the request ID.
+	sig := signProofOfPossession(t, privKey, createResp.RequestID)
+	completeBody, err := json.Marshal(models.CLIRecoveryCompleteRequest{
+		Token:     createResp.Token,
+		Signature: base64.StdEncoding.EncodeToString(sig),
+	})
+	require.NoError(t, err)
+	completeReq := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthCLIRecoveryComplete, bytes.NewReader(completeBody))
+	completeReq.Header.Set("Content-Type", "application/json")
+	completeRR := httptest.NewRecorder()
+	h.ServeHTTP(completeRR, completeReq)
+	require.Equalf(t, http.StatusCreated, completeRR.Code, "recovery complete should succeed, body: %s", completeRR.Body.String())
+
+	var completeResp models.CLIRecoveryCompleteResponse
+	require.NoError(t, json.Unmarshal(completeRR.Body.Bytes(), &completeResp))
+	assert.True(t, completeResp.Success)
+	assert.NotEmpty(t, completeResp.CLICert)
+	assert.NotEmpty(t, completeResp.CLICertChain)
+	assert.NotEmpty(t, completeResp.CLISessionID)
+	assert.Equal(t, approverUser.ID, completeResp.UserID, "issued identity must bind to the approving user")
+
+	// 4. The issued certificate must parse, chain to the gateway CA, and match
+	// the CSR key pair.
+	block, _ := pem.Decode([]byte(completeResp.CLICert))
+	require.NotNil(t, block, "CLI cert must be valid PEM")
+	require.Equal(t, "CERTIFICATE", block.Type)
+	cert, err := x509.ParseCertificate(block.Bytes)
+	require.NoError(t, err)
+	certPubKey, ok := cert.PublicKey.(*ecdsa.PublicKey)
+	require.True(t, ok, "issued cert must use an ECDSA key")
+	assert.True(t, privKey.PublicKey.Equal(certPubKey), "issued cert public key must match CSR key pair")
+
+	// 5. Status is now completed and the token is consumed.
+	assert.Equal(t, models.CLIRecoveryStateCompleted, recoveryStatus(t, h.cliRecoveryController, createResp.Token))
 }

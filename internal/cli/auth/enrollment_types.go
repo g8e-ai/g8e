@@ -299,6 +299,17 @@ type EnrollmentOptions struct {
 	// CLI flag (per the fixed decision "no --skip-passkey"); it exists for
 	// internal callers that already hold a valid passkey (e.g., mcp agent
 	// run's ensure path when a passkey already exists). The command layer
-	// must never set this from a user flag.
+	// must never set this from a user flag. Headless implies SkipPasskey.
 	SkipPasskey bool
+
+	// Headless opts into a CLI-only identity: the passkey ceremony is
+	// skipped and recovery approval is delegated to an already-enrolled CLI
+	// via `g8e auth approve-recovery <token>` instead of opening a browser.
+	// The resulting identity is mTLS-only and cannot authenticate to the
+	// Console SPA. Headless implies SkipPasskey but also drives the
+	// recovery-branch output change (printing the approve-recovery command
+	// instead of opening a browser). Internal callers (mcp agent run,
+	// demos) set SkipPasskey directly and must NOT set Headless — Headless
+	// also changes recovery output, which those callers do not want.
+	Headless bool
 }

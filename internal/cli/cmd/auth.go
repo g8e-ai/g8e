@@ -54,6 +54,7 @@ func authCmd() *cobra.Command {
 		enrollCmd(),
 		logoutCmd(),
 		approveCmd(),
+		approveRecoveryCmd(),
 	)
 
 	return cmd
@@ -112,6 +113,7 @@ func enrollCmdWithConfig(
 	var (
 		noSystemTrust bool
 		rotateCLI     bool
+		headless      bool
 	)
 	cmd := &cobra.Command{
 		Use:   "enroll",
@@ -151,8 +153,9 @@ The Gateway must already be running (use './g8e gw start' first).`,
 				cmd.Printf(format+"\n", args...)
 			}, fileSvc, cfg)
 			result, err := coordinator.Enroll(cmd.Context(), auth.EnrollmentOptions{
-				NoSystemTrust: noSystemTrust,
+				NoSystemTrust: noSystemTrust || headless,
 				RotateCLI:     rotateCLI,
+				Headless:      headless,
 			})
 			if err != nil {
 				return err
@@ -179,6 +182,8 @@ The Gateway must already be running (use './g8e gw start' first).`,
 		"Skip OS trust installation (administrator must have pre-installed the gateway root CA). The passkey ceremony still runs.")
 	cmd.Flags().BoolVar(&rotateCLI, "rotate-cli", false,
 		"Force an mTLS CLI rotation even when the local identity is complete and not expiring.")
+	cmd.Flags().BoolVar(&headless, "headless", false,
+		"Enroll a CLI-only identity without a browser. Skips passkey registration and OS trust installation; recovery approval is delegated to an already-enrolled CLI via 'g8e auth approve-recovery <token>'. The resulting identity is mTLS-only and cannot authenticate to the Console SPA.")
 	return cmd
 }
 

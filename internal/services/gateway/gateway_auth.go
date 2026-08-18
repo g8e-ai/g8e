@@ -124,6 +124,11 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	// CLI recovery approval — browser console, authenticated existing user.
 	r.addExact(constants.APIPaths.AuthCLIRecoveryApprove, RouteAuthWebSession)
 
+	// CLI recovery approval — mTLS, already-enrolled CLI. The approver user
+	// ID is derived from the verified CLI certificate URI SAN by the unified
+	// auth middleware. This is the headless counterpart to the browser path.
+	r.addExact(constants.APIPaths.AuthCLIRecoveryApproveCLI, RouteAuthMTLS)
+
 	// --- RouteAuthMTLS: mTLS-protected sub-paths under WebSession prefixes ---
 	// These exact paths must be checked before the WebSession prefix matches.
 	r.addExact(constants.APIPaths.AuthPasskeysCLIStatus, RouteAuthMTLS)

@@ -959,6 +959,48 @@ func TestEnroll_SkipPasskey_SuppressesCeremony(t *testing.T) {
 	assert.Equal(t, 0, passkey.calls, "passkey should be suppressed")
 }
 
+// --- Headless tests ---
+
+// TestEnroll_Headless_RecoveryPrintsApproveRecoveryCommandAndDoesNotOpenBrowser
+// verifies the --headless recovery path: when Headless is set and the local
+// identity routes through handleRecovery, the coordinator prints the
+// `g8e auth approve-recovery <token>` command for an already-enrolled CLI to
+// run instead of opening a browser, and the passkey ceremony is suppressed.
+// The browser opener and passkey registrar must not be called.
+func TestEnroll_Headless_RecoveryPrintsApproveRecoveryCommandAndDoesNotOpenBrowser(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, _, browser, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
+
+	// Write only the credentials JSON (no cert/key/bundle) → partial local
+	// state, which routes Enroll into handlePartialOrCorrupt → handleRecovery
+	// on a bootstrapped gateway.
+	creds := &Credentials{UserID: "user-headless", CLISessionID: "cli-headless"}
+	require.NoError(t, SaveCredentials(fileSvc, cfg, creds))
+
+	gw.bootstrapStatus = true
+	gw.recoveryRequestID = "req-headless"
+	gw.recoveryToken = "token-headless"
+	gw.recoveryApprovalURL = "https://example.com/console#recovery=token-headless"
+	gw.recoveryStates = []models.CLIRecoveryState{models.CLIRecoveryStateApproved}
+	artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
+	gw.recoveryCompleteArtifact = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{SkipPasskey: true, Headless: true})
+	require.NoError(t, err)
+	assert.Equal(t, EnrollmentSourceRecovery, result.Source, "headless recovery should produce a recovery-source identity")
+	assert.Equal(t, 1, gw.recoveryRequestCalls, "CreateRecoveryRequest should be called once")
+	assert.Equal(t, 1, gw.recoveryCompleteCalls, "CompleteRecovery should be called once")
+	assert.Equal(t, 0, browser.calls, "browser must not be opened under --headless")
+	assert.Equal(t, 0, passkey.calls, "passkey ceremony must be suppressed under --headless")
+
+	// The output must contain the approve-recovery command with the token.
+	assert.True(t, recorder.contains("g8e auth approve-recovery token-headless"),
+		"headless output must print the approve-recovery command with the token; got: %v", recorder.lines)
+	assert.False(t, recorder.contains("Approval URL"),
+		"headless output must not print the browser Approval URL line")
+}
+
 // --- Error propagation tests ---
 
 func TestEnroll_BootstrapStatusError_ReturnsError(t *testing.T) {
