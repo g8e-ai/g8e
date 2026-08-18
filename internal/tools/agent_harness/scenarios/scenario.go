@@ -1,5 +1,9 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
-// Licensed under the Apache License, Version 2.0.
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
+//
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
 
 // Package scenarios is the heart of Agent Harness: an ordered, flexible registry of
 // impersonations. Each scenario wears a persona (some real-world AI tool) and

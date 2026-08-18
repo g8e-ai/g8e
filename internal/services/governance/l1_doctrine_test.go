@@ -1,15 +1,9 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
 
 package governance
 
@@ -1556,7 +1550,7 @@ func TestNewL1DoctrineFromDir_KSIControlOverlayProjection(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
-	docJSON := `{"source":"test_compliance","version":"1.0","last_updated":"2026-01-15","license":"Apache-2.0","doctrines":[
+	docJSON := `{"source":"test_compliance","version":"1.0","last_updated":"2026-01-15","license":"BUSL-1.1","doctrines":[
 		{"id":"ksi_test_detector","name":"KSI Test","category":"data_exfiltration","severity":"critical","pattern":"(?i)exfiltrate.*data","mitre_attack":"T1567","mitre_tactic":"Exfiltration","confidence":0.9,"enabled":true,"ksi_ids":["KSI-SVC-03","KSI-CNA-01"],"control_ids":["SC-8","SC-7"],"overlay_ids":["COSAiS-LLM-01"]}
 	]}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "compliance.json"), []byte(docJSON), 0o644))

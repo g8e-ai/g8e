@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-08-16
-Version: v1.7.6
+Last Updated: 2026-08-18
+Version: v1.7.7
 
 This document explains how to authenticate and authorize actions in the g8e platform. The platform is built as a zero-trust execution environment where every action is verified before execution.
 
@@ -48,8 +48,9 @@ Healthy `auth enroll` runs with a complete identity do not rotate credentials un
 |----------|----------------|--------------|
 | **First-time setup** | Gateway never bootstrapped | CLI connects over plain HTTP to the gateway HTTP port, the Gateway bootstraps itself. |
 | **New CLI on existing gateway** | Gateway exists, no local credentials | CLI bootstraps, generates an enrollment token, opens browser for passkey ceremony. |
-| **Recovery (partial/corrupt)** | Some credentials missing or invalid | One-time human-approved recovery flow via the Console SPA. |
+| **Recovery (partial/corrupt)** | Some credentials missing or invalid | One-time human-approved recovery flow via the Console SPA, or via the mTLS approve-cli endpoint under `--headless`. |
 | **Recovery (stale bundle)** | Credentials complete but local trust bundle does not match the live gateway root CA (for example after `gw clean` regenerated the gateway PKI) | One-time human-approved recovery flow - the old CLI cert cannot authenticate to the new gateway via mTLS, so rotation is impossible. Recovery issues a fresh cert signed by the new CA. |
+| **Headless** | `--headless` flag used on `auth enroll` (any of the above recovery scenarios, or bootstrap on a bootstrapped gateway) | CLI-only identity: passkey ceremony skipped, OS trust installation skipped, recovery approval delegated to an already-enrolled CLI via `g8e auth approve-recovery <token>` over the mTLS approve-cli endpoint. The resulting identity is mTLS-only and cannot authenticate to the Console SPA. See [Headless CLI Enrollment (mTLS-Only)](#headless-cli-enrollment-mtls-only). |
 | **Rotation** | Credentials valid but `--rotate-cli` flag used, or cert near expiry | mTLS-protected rotation: one replacement certificate per run. |
 | **Reuse** | Credentials complete and valid, and the local trust bundle matches the live gateway root CA | No new certificate is issued - existing identity is reused. The local trust bundle is refreshed from the live gateway if intermediates differ but the root is unchanged. |
 
@@ -119,11 +120,11 @@ When local credentials are partial or corrupt, the CLI initiates a recovery flow
 
 1. CLI sends a recovery request to `POST /api/v1/auth/cli/recovery/request` (public, token-scoped).
 2. Gateway creates a recovery record with an opaque token and bounded TTL.
-3. CLI opens the browser to the Console SPA with the token in the URL fragment (`#recovery=1&token=<token>`) - the token never appears in server logs, referrer headers, or browser history.
-4. An authenticated user (existing browser session) approves the recovery at `POST /api/v1/auth/cli/recovery/approve` (web-session protected).
+3. CLI opens the browser to the Console SPA with the token in the URL fragment (`#recovery=1&token=<token>`) - the token never appears in server logs, referrer headers, or browser history. Under `--headless`, this step is replaced: the CLI prints `g8e auth approve-recovery <token>` for an already-enrolled CLI to run instead of opening a browser (see [Headless CLI Enrollment (mTLS-Only)](#headless-cli-enrollment-mtls-only)).
+4. An authenticated user (existing browser session) approves the recovery at `POST /api/v1/auth/cli/recovery/approve` (web-session protected). Under `--headless`, an already-enrolled CLI approves via `POST /api/v1/auth/cli/recovery/approve-cli` (mTLS protected) using `g8e auth approve-recovery <token>`; the approver user ID is derived from the verified CLI certificate URI SAN by the unified auth middleware.
 5. CLI polls `GET /api/v1/auth/cli/recovery/status` until the recovery is approved or expires.
-6. On approval, CLI calls `POST /api/v1/auth/cli/recovery/complete` to receive a new CLI certificate.
-7. The recovery token is one-time-use; expired or replayed tokens are rejected.
+6. On approval, CLI calls `POST /api/v1/auth/cli/recovery/complete` to receive a new CLI certificate. Proof-of-possession of the CSR private key is required regardless of which approval path was used.
+7. The recovery token is one-time-use; expired or replayed tokens are rejected on both approval paths.
 
 The recovery flow is the only path for a CLI with partial or corrupt credentials. There is no silent overwrite or fallback to plain-HTTP enrollment.
 
@@ -144,6 +145,39 @@ When the `--rotate-cli` flag is used or the certificate is near expiry, the CLI 
 **Windows-Specific Behavior:**
 
 On Windows, the signed CLI certificate is imported into the Windows Certificate Store for Windows Hello native API access. CLI keys are file-backed ECDSA P-256 on all platforms. This is separate from browser-based WebAuthn passkeys.
+
+#### Headless CLI Enrollment (mTLS-Only)
+
+The `--headless` flag on `g8e auth enroll` opts into a CLI-only identity that completes enrollment without a browser. It is the user-facing counterpart to the internal `SkipPasskey` field: `--headless` sets `SkipPasskey: true` and additionally switches the recovery branch from the browser-approval path to the mTLS-approval path. Internal callers (`mcp agent run`, `demos`) set `SkipPasskey` directly and must NOT set `Headless`, because Headless also changes recovery output, which those callers do not want.
+
+**What `--headless` does:**
+
+- Skips the passkey ceremony (no WebAuthn registration).
+- Skips OS trust installation (no browser means no WebAuthn TLS trust is needed; the `--no-system-trust` behavior is implied). The CLI mTLS trust bundle is still installed from the recovery artifacts.
+- On the recovery branch (partial/corrupt local identity on a bootstrapped gateway), prints `g8e auth approve-recovery <token>` for an already-enrolled CLI to run instead of opening a browser, then continues polling `recovery/status` and completing recovery exactly as the browser path does.
+- On the bootstrap branch (unbootstrapped gateway), enrollment proceeds over plain HTTP with no approval needed and no passkey ceremony, producing a CLI-only identity.
+
+**The resulting identity is mTLS-only.** It can do everything the CLI could do before (MCP, A2A, governance, SSE, rotation) because mTLS is the CLI's primary auth factor. It cannot authenticate to the Console SPA because no browser passkey was registered. The user can register a browser passkey later from a browser if they want console access.
+
+**mTLS recovery approval endpoint:**
+
+The headless path adds a parallel recovery-approve endpoint that derives the approver identity from the verified mTLS CLI certificate instead of a browser cookie:
+
+- `POST /api/v1/auth/cli/recovery/approve-cli` - classified `RouteAuthMTLS`. The unified auth middleware (`handleMTLSAuth` → `handleCLIAuth`) verifies the CLI certificate URI SAN via `wid.MatchesCLI`, confirms the session is active, and stamps `ContextKeyUserID` / `ContextKeyCLISessionID` into the request context. The handler reads the approver user ID from the context (never from request body fields), verifies the user is active via `userSvc.GetByID` + `IsActive()`, and calls the same `recoverySvc.Approve(token, userID)` / `recoverySvc.Deny(token, userID)` transition as the browser path. The atomic state machine is unchanged.
+- The browser recovery-approve path (`POST /api/v1/auth/cli/recovery/approve`, `RouteAuthWebSession`) is unchanged. Users with a browser and a passkey still approve through the Console SPA.
+
+**`g8e auth approve-recovery <token>` CLI subcommand:**
+
+The CLI-side counterpart to the browser Console SPA approve action. It uses the local enrolled CLI identity (mTLS) to approve or deny a pending recovery request created by another CLI's `auth enroll --headless` run. It posts to the mTLS approve-cli endpoint with `Approve: true` (default) or `Approve: false` (`--deny`), then prints the resulting state.
+
+**Unchanged security properties:**
+
+- The recovery token remains one-time-use, opaque, and TTL-bounded. The mTLS approve endpoint consumes the same `recoverySvc.Approve(token, userID)` transition as the browser path.
+- Proof-of-possession on `recovery/complete` is unchanged: the new CLI must still sign the request ID with its CSR private key. Stealing the token alone is not sufficient to complete recovery.
+- The approver must be an active user with a valid, non-revoked CLI certificate. A revoked cert is rejected by the middleware's `VerifyCertificate` (401, `ErrMTLSCertRevoked`) before the handler runs; a deactivated user is rejected by the handler's active-user check (403).
+- Fail-closed: the mTLS approve endpoint is `RouteAuthMTLS`. Unknown routes default to `RouteAuthMTLS`. No auth-bypass path is introduced.
+
+This is distinct from the operator-side "Headless Enrollment" subsection in §1.5 (which covers `POST /api/v1/auth/device/enroll` for automated operator deployment); the two are cross-linked here but address different identity surfaces.
 
 ### 1.2 Browser Authentication (Passkeys)
 

@@ -1,15 +1,9 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
 
 package constants
 
@@ -87,6 +81,7 @@ var APIPaths = struct {
 	AuthCLIRecoveryRequest                   string `json:"auth_cli_recovery_request"`
 	AuthCLIRecoveryStatus                    string `json:"auth_cli_recovery_status"`
 	AuthCLIRecoveryApprove                   string `json:"auth_cli_recovery_approve"`
+	AuthCLIRecoveryApproveCLI                string `json:"auth_cli_recovery_approve_cli"`
 	AuthCLIRecoveryComplete                  string `json:"auth_cli_recovery_complete"`
 	AuthCLIRotate                            string `json:"auth_cli_rotate"`
 	AuthPasskeys                             string `json:"auth_passkeys"`
@@ -225,6 +220,7 @@ var APIPaths = struct {
 	AuthCLIRecoveryRequest:                   "/api/v1/auth/cli/recovery/request",
 	AuthCLIRecoveryStatus:                    "/api/v1/auth/cli/recovery/status",
 	AuthCLIRecoveryApprove:                   "/api/v1/auth/cli/recovery/approve",
+	AuthCLIRecoveryApproveCLI:                "/api/v1/auth/cli/recovery/approve-cli",
 	AuthCLIRecoveryComplete:                  "/api/v1/auth/cli/recovery/complete",
 	AuthCLIRotate:                            "/api/v1/auth/cli/rotate",
 	AuthPasskeys:                             "/api/v1/auth/passkeys",

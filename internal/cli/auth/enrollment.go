@@ -1,15 +1,9 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
 
 package auth
 
@@ -448,7 +442,11 @@ func (c *EnrollmentCoordinator) Enroll(ctx context.Context, opts EnrollmentOptio
 		}
 	}
 
-	// 4. Passkey ceremony (unless suppressed by an internal caller).
+	// 4. Passkey ceremony (unless suppressed by an internal caller or
+	// --headless, which opts into a CLI-only identity). Headless implies
+	// SkipPasskey; the OR keeps any explicit SkipPasskey from internal
+	// callers that also set Headless (none today, but defensive).
+	opts.SkipPasskey = opts.SkipPasskey || opts.Headless
 	if !opts.SkipPasskey {
 		if err := c.runPasskeyCeremony(ctx, result); err != nil {
 			return nil, err
@@ -508,8 +506,10 @@ func (c *EnrollmentCoordinator) handleBootstrap(ctx context.Context, opts Enroll
 }
 
 // handleRecovery creates a CLI recovery request, opens the browser for
-// human approval, polls until approved/denied/expired, then completes the
-// recovery with proof-of-possession to receive the issued CLI identity.
+// human approval (or, under --headless, prints the approve-recovery command
+// for an already-enrolled CLI to run), polls until approved/denied/expired,
+// then completes the recovery with proof-of-possession to receive the issued
+// CLI identity.
 func (c *EnrollmentCoordinator) handleRecovery(ctx context.Context, opts EnrollmentOptions) (EnrollmentArtifacts, error) {
 	csrPEM, cliKey, err := c.generateCLICSR(ctx)
 	if err != nil {
@@ -521,16 +521,25 @@ func (c *EnrollmentCoordinator) handleRecovery(ctx context.Context, opts Enrollm
 		return EnrollmentArtifacts{}, fmt.Errorf("%w: %w", constants.ErrCLIRecoveryRequestFailed, err)
 	}
 	c.out("Recovery request created (expires at %s).", expiresAt.Format(time.RFC3339))
-	c.out("Approval URL: %s", approvalURL)
 
-	// Open the browser for the user to approve with an existing passkey.
-	// A browser-open failure is not fatal — print the URL as a fallback so
-	// the user can navigate manually. Section 8 will harden this.
-	if openErr := c.browser.Open(approvalURL); openErr != nil {
-		c.out("Warning: could not open browser automatically (%v). Please open the approval URL manually.", openErr)
+	if opts.Headless {
+		// Headless path: do not open a browser. Print the approve-recovery
+		// command for an already-enrolled CLI to run via mTLS. The polling
+		// loop below waits for that approval to land.
+		c.out("From an already-enrolled CLI, run:")
+		c.out("  g8e auth approve-recovery %s", token)
+		c.out("Then wait for this command to complete.")
+	} else {
+		c.out("Approval URL: %s", approvalURL)
+		// Open the browser for the user to approve with an existing passkey.
+		// A browser-open failure is not fatal — print the URL as a fallback so
+		// the user can navigate manually. Section 8 will harden this.
+		if openErr := c.browser.Open(approvalURL); openErr != nil {
+			c.out("Warning: could not open browser automatically (%v). Please open the approval URL manually.", openErr)
+		}
+		c.out("Waiting for approval in the console...")
 	}
 
-	c.out("Waiting for approval in the console...")
 	if err := c.pollRecoveryApproval(ctx, token, ""); err != nil {
 		return EnrollmentArtifacts{}, err
 	}

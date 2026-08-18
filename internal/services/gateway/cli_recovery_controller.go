@@ -1,15 +1,9 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
 
 package gateway
 
@@ -45,18 +39,20 @@ type CLIRecoveryControllerDeps struct {
 }
 
 // CLIRecoveryController handles the human-approved CLI recovery flow:
-// request creation, status polling, browser approval/denial, and
+// request creation, status polling, browser and mTLS approval/denial, and
 // proof-of-possession-gated completion that issues a new CLI certificate.
 //
 // Auth classification (enforced by the unified auth middleware via
 // NewRouteAuthRegistry):
-//   - recovery request  (POST /api/v1/auth/cli/recovery/request):   RouteAuthNone
+//   - recovery request  (POST /api/v1/auth/cli/recovery/request):       RouteAuthNone
 //     (public discovery surface; the CSR is the proof-of-possession anchor)
-//   - recovery status   (GET  /api/v1/auth/cli/recovery/status):    RouteAuthNone
+//   - recovery status   (GET  /api/v1/auth/cli/recovery/status):        RouteAuthNone
 //     (public; the opaque token itself is the lookup key)
-//   - recovery approve  (POST /api/v1/auth/cli/recovery/approve):   RouteAuthWebSession
+//   - recovery approve  (POST /api/v1/auth/cli/recovery/approve):       RouteAuthWebSession
 //     (browser console; authenticated existing user authorizes the new CLI)
-//   - recovery complete (POST /api/v1/auth/cli/recovery/complete):  RouteAuthNone
+//   - recovery approve-cli (POST /api/v1/auth/cli/recovery/approve-cli): RouteAuthMTLS
+//     (already-enrolled CLI; approver user ID derived from mTLS cert URI SAN)
+//   - recovery complete (POST /api/v1/auth/cli/recovery/complete):      RouteAuthNone
 //     (public; requires both the opaque token AND a valid proof-of-possession
 //     signature over the request ID using the CSR private key)
 type CLIRecoveryController struct {
@@ -225,6 +221,82 @@ func (c *CLIRecoveryController) handleRecoveryApprove(w http.ResponseWriter, r *
 	}
 	if approvingUser == nil || !approvingUser.IsActive() {
 		c.logger.Warn("CLI recovery approve: approving user is not active", "user_id", userID)
+		c.responder.Error(w, http.StatusForbidden, "approving user is not active")
+		return
+	}
+
+	var state models.CLIRecoveryState
+	if req.Approve {
+		if err := c.recoverySvc.Approve(req.Token, userID); err != nil {
+			c.writeRecoveryError(w, err)
+			return
+		}
+		state = models.CLIRecoveryStateApproved
+	} else {
+		if err := c.recoverySvc.Deny(req.Token, userID); err != nil {
+			c.writeRecoveryError(w, err)
+			return
+		}
+		state = models.CLIRecoveryStateDenied
+	}
+
+	c.responder.JSON(w, http.StatusOK, models.CLIRecoveryApproveResponse{
+		Success: true,
+		State:   state,
+	})
+}
+
+// handleRecoveryApproveCLI is the mTLS counterpart to handleRecoveryApprove.
+// It is called by an already-enrolled CLI (via `g8e auth approve-recovery
+// <token>`) to approve or deny a pending recovery request created by another
+// CLI's `auth enroll --headless` run. The approver user ID is derived from the
+// verified CLI certificate URI SAN — stamped into the request context by the
+// unified auth middleware (handleMTLSAuth → handleCLIAuth). The request body
+// carries only the token and approve/deny flag; no identity fields.
+//
+// POST /api/v1/auth/cli/recovery/approve-cli  (RouteAuthMTLS)
+func (c *CLIRecoveryController) handleRecoveryApproveCLI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := readRequestBody(r, c.cfg.Gateway.MaxPayloadBytes)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	var req models.CLIRecoveryApproveRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
+		return
+	}
+
+	if req.Token == "" {
+		c.responder.Error(w, http.StatusBadRequest, "token is required")
+		return
+	}
+
+	// Identity comes from the mTLS context, never from the body. The unified
+	// auth middleware verified the CLI cert URI SAN via wid.MatchesCLI and
+	// confirmed the session is active before stamping ContextKeyUserID.
+	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
+	if !ok || userID == "" {
+		c.logger.Warn("CLI recovery approve-cli: missing authenticated user context")
+		c.responder.Error(w, http.StatusUnauthorized, constants.ErrMTLSCertRequired.Error())
+		return
+	}
+
+	// Verify the approving user is still active before binding the decision.
+	approvingUser, err := c.userSvc.GetByID(userID)
+	if err != nil {
+		c.logger.Error("CLI recovery approve-cli: failed to look up approving user", "error", err, "user_id", userID)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
+		return
+	}
+	if approvingUser == nil || !approvingUser.IsActive() {
+		c.logger.Warn("CLI recovery approve-cli: approving user is not active", "user_id", userID)
 		c.responder.Error(w, http.StatusForbidden, "approving user is not active")
 		return
 	}

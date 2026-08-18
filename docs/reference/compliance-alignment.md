@@ -1,7 +1,7 @@
 # Compliance Alignment Report
 
-**Document Version:** 1.7.6  
-**Last Updated:** 2026-08-16  
+**Document Version:** 1.7.7  
+**Last Updated:** 2026-08-18  
 **Platform:** g8e v1.7.5  
 **Maintained by:** Lateralus Labs, LLC.
 
@@ -146,7 +146,7 @@ ISO/IEC 27001:2022 (with Amendment 1:2024) is the current version of the standar
 
 #### A.17 Information Security Compliance
 - **A.17.1 Identification of applicable laws and requirements:** This compliance alignment document
-- **A.17.2 Intellectual property rights:** Apache 2.0 license
+- **A.17.2 Intellectual property rights:** Business Source License 1.1 (BSL 1.1), converts to Apache 2.0 on 2030-08-18
 - **A.17.3 Protection of records:** Audit store with git ledger
 - **A.17.4 Privacy and protection of PII:** Sovereign Execution Boundary with PII scrubbing
 - **A.17.5 Independent review:** Third-party security assessment (planned)
@@ -648,7 +648,7 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 - **FedRAMP sovereign cloud governance demo** demonstrating compliance posture for federal workloads
 - **FedRAMP 20x (CR26) alignment** with typed KSI model, OSCAL evidence export, historical metrics retention, and COSAiS overlay ingestion for Class C certification
 - **EnrollmentCoordinator** replacing the scattered CLI enrollment transport (`BootstrapWithURL`/`CLIEnroll`/`ReEnroll`/`EnrollWithGateway`/`AutoRenewCertificate`) with a single state machine owning the enrollment lifecycle
-- **Human-approved CLI recovery flow** for new CLIs against an existing gateway, using a one-time browser approval and opaque proof-of-possession token
+- **Human-approved CLI recovery flow** for new CLIs against an existing gateway, using a one-time approval (browser Console SPA or mTLS-enrolled CLI via `g8e auth approve-recovery`) and opaque proof-of-possession token
 - **mTLS-protected CLI certificate rotation endpoint** enabling in-band certificate renewal without re-enrollment
 - **OS trust-store installation before browser launch** during `auth enroll`, with a blocking browser-restart gate after trust-store changes
 - **Posture-aware passkey enrollment** requiring passkeys only for notary posture (optional for doctrine and consensus)

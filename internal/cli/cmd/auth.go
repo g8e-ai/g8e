@@ -1,15 +1,9 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
 
 package cmd
 
@@ -54,6 +48,7 @@ func authCmd() *cobra.Command {
 		enrollCmd(),
 		logoutCmd(),
 		approveCmd(),
+		approveRecoveryCmd(),
 	)
 
 	return cmd
@@ -112,6 +107,7 @@ func enrollCmdWithConfig(
 	var (
 		noSystemTrust bool
 		rotateCLI     bool
+		headless      bool
 	)
 	cmd := &cobra.Command{
 		Use:   "enroll",
@@ -151,8 +147,9 @@ The Gateway must already be running (use './g8e gw start' first).`,
 				cmd.Printf(format+"\n", args...)
 			}, fileSvc, cfg)
 			result, err := coordinator.Enroll(cmd.Context(), auth.EnrollmentOptions{
-				NoSystemTrust: noSystemTrust,
+				NoSystemTrust: noSystemTrust || headless,
 				RotateCLI:     rotateCLI,
+				Headless:      headless,
 			})
 			if err != nil {
 				return err
@@ -179,6 +176,8 @@ The Gateway must already be running (use './g8e gw start' first).`,
 		"Skip OS trust installation (administrator must have pre-installed the gateway root CA). The passkey ceremony still runs.")
 	cmd.Flags().BoolVar(&rotateCLI, "rotate-cli", false,
 		"Force an mTLS CLI rotation even when the local identity is complete and not expiring.")
+	cmd.Flags().BoolVar(&headless, "headless", false,
+		"Enroll a CLI-only identity without a browser. Skips passkey registration and OS trust installation; recovery approval is delegated to an already-enrolled CLI via 'g8e auth approve-recovery <token>'. The resulting identity is mTLS-only and cannot authenticate to the Console SPA.")
 	return cmd
 }
 

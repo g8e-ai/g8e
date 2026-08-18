@@ -2,7 +2,7 @@
   "source": "frontend_enrollment_demo",
   "version": "1.0.0",
   "last_updated": "2026-07-11",
-  "license": "Apache-2.0",
+  "license": "BUSL-1.1",
   "doctrines": [
     {
       "id": "unauthorized_api_access",

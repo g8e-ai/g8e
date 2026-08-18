@@ -59,7 +59,7 @@ protocol/
     mcp_tool_template.go     Native tool implementation template
     reference/api/           Generated Markdown API documentation from protobuf
   conformance/               Cross-language conformance tests (Python/Go parity)
-  LICENSE                   Apache License 2.0
+  LICENSE                   Business Source License 1.1 (BSL 1.1)
 ```
 
 The buf generation config (`buf.gen.yaml` at the repository root) produces Go structs and gRPC service stubs into `protocol/proto`, and Markdown API documentation into `protocol/docs/reference/api`. See [Development](#development) for regeneration instructions.
@@ -198,7 +198,7 @@ This package follows semantic versioning. Major version changes indicate breakin
 
 ## License
 
-Apache License 2.0. See `LICENSE` for details.
+Business Source License 1.1 (BSL 1.1). Converts to Apache 2.0 on 2030-08-18. See `LICENSE` for details.
 
 ## Contributing
 
