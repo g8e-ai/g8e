@@ -216,4 +216,4 @@ MCP tools compiled into the g8e binary that execute within the Operator's execut
 - Add tests for bug fixes and features
 - Commit prefixes: `g8e: fix the thing`
 
-**Contact:** danny@g8e.ai · **License:** Apache 2.0
+**Contact:** danny@g8e.ai · **License:** BSL 1.1 (converts to Apache 2.0 on 2030-08-18)

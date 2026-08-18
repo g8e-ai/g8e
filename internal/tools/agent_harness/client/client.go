@@ -1,5 +1,9 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
-// Licensed under the Apache License, Version 2.0.
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
+//
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
 
 // Package client is Agent Harness's thin, faithful client for a real g8e Gateway.
 // It speaks the actual wire surfaces (health/state-root, MCP & A2A JSON-RPC,

@@ -146,7 +146,7 @@ ISO/IEC 27001:2022 (with Amendment 1:2024) is the current version of the standar
 
 #### A.17 Information Security Compliance
 - **A.17.1 Identification of applicable laws and requirements:** This compliance alignment document
-- **A.17.2 Intellectual property rights:** Apache 2.0 license
+- **A.17.2 Intellectual property rights:** Business Source License 1.1 (BSL 1.1), converts to Apache 2.0 on 2030-08-18
 - **A.17.3 Protection of records:** Audit store with git ledger
 - **A.17.4 Privacy and protection of PII:** Sovereign Execution Boundary with PII scrubbing
 - **A.17.5 Independent review:** Third-party security assessment (planned)
