@@ -1,7 +1,7 @@
 # Developer Troubleshooting
 
-Last Updated: 2026-08-15
-Version: v1.7.4
+Last Updated: 2026-08-18
+Version: v1.7.7
 
 This page covers common setup failures, runtime friction, and operational caveats for contributors working on g8e from a fresh checkout. The platform runs host-native. For architecture-level context, see [Authentication & Authorization](../architecture/auth.md), [Encryption Architecture](../architecture/encryption.md), [Gateway Architecture](../architecture/gateway.md), [Governance](../architecture/governance.md), and [Network Architecture](../architecture/network.md).
 
@@ -158,17 +158,26 @@ If authentication fails, check the following:
 
 ### CLI recovery (new CLI against an existing gateway)
 
-If you are enrolling a new CLI against an already-bootstrapped gateway (e.g. a second workstation, or replacing a lost CLI), `auth enroll` detects that the gateway is already bootstrapped and uses the **recovery flow** instead of bootstrap. The recovery flow requires a one-time human approval from an existing enrolled user:
+If you are enrolling a new CLI against an already-bootstrapped gateway (e.g. a second workstation, or replacing a lost CLI), `auth enroll` detects that the gateway is already bootstrapped and uses the **recovery flow** instead of bootstrap. The recovery flow requires a one-time human approval from an existing enrolled user, via either a browser or an already-enrolled CLI:
 
 1. The new CLI posts a CSR to the gateway and receives an opaque one-time token plus a browser approval URL.
-2. An existing user opens the approval URL in their browser and approves (or denies) the request via the console.
+2. An existing user approves (or denies) the request via one of two paths:
+   - **Browser path (default):** open the approval URL in a browser and approve via the Console SPA (`POST /api/v1/auth/cli/recovery/approve`, web-session protected).
+   - **Headless path (`--headless`):** the new CLI prints `g8e auth approve-recovery <token>` for an already-enrolled CLI to run instead of opening a browser. The approver CLI posts to `POST /api/v1/auth/cli/recovery/approve-cli` (mTLS protected); the approver user ID is derived from the verified mTLS certificate URI SAN.
 3. The new CLI completes the recovery by proving possession of the CSR private key (signing the request ID) and receives a new CLI certificate.
 
 If recovery fails:
 - The token expires after a bounded TTL. If the approving user does not act in time, re-run `auth enroll` to get a fresh token.
 - The opaque token is only returned once. If you lose it, re-run `auth enroll`.
-- The approving user must have an active web session (cookie-based auth). If approval fails with 401, the approving user should re-authenticate in their browser.
+- On the browser path, the approving user must have an active web session (cookie-based auth). If approval fails with 401, the approving user should re-authenticate in their browser.
+- On the headless path, the approver CLI must hold a valid, non-revoked CLI certificate bound to an active user. A revoked cert is rejected by the mTLS middleware (401) before the handler runs; a deactivated user is rejected by the handler (403).
 - Recovery is not available on an unbootstrapped gateway. Use the bootstrap endpoint instead.
+
+### `--headless` flag
+
+`--headless` on `auth enroll` opts into a CLI-only identity that completes enrollment without a browser. It skips the passkey ceremony and OS trust installation (the `--no-system-trust` behavior is implied), and on the recovery branch it prints `g8e auth approve-recovery <token>` for an already-enrolled CLI to run instead of opening a browser. The resulting identity is mTLS-only: it can do everything the CLI could do before (MCP, A2A, governance, SSE, rotation) but cannot authenticate to the Console SPA because no browser passkey was registered. A browser passkey can be registered later from a browser if console access is desired.
+
+`--headless` is distinct from the internal `SkipPasskey` field used by `mcp agent run` and demos: those callers set `SkipPasskey` directly and must NOT set `Headless`, because `Headless` also changes recovery output (printing the approve-recovery command instead of opening a browser), which those callers do not want.
 
 ### `--no-system-trust` flag
 
