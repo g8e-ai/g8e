@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-08-16
+Last Updated: 2026-08-18
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -130,7 +130,7 @@ Tests inject a `mockEnroller` via `mockEnrollerFactory(mock)` + `noopCheckOperat
 
 ### Gateway-Side Recovery/Rotation Tests (`internal/services/gateway/`)
 
-- `cli_recovery_controller_test.go` — recovery request, status, approve, complete (proof-of-possession, token expiry, replay)
+- `cli_recovery_controller_test.go` — recovery request, status, browser approve, mTLS approve-cli (headless path: revoked cert rejection, inactive user rejection, one-time-use token, full lifecycle), complete (proof-of-possession, token expiry, replay)
 - `cli_recovery_service_test.go` — token hashing, atomic state transitions, cleanup
 - `cli_rotation_controller_test.go` — mTLS rotation, session replacement, cert revocation
 - `cli_session_service_test.go` — CLI session creation, replacement, deactivation, lookup by mTLS certificate

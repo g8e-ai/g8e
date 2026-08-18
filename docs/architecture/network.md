@@ -1,7 +1,7 @@
 # Network Architecture
 
-Last Updated: 2026-08-16
-Version: v1.7.6
+Last Updated: 2026-08-18
+Version: v1.7.7
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
 
@@ -105,10 +105,11 @@ The old `handleCLIEnrollment` endpoint (`/api/v1/auth/cli/enroll`) and the trust
 
 - `POST /api/v1/auth/cli/recovery/request` and `POST /api/v1/auth/cli/recovery/complete` are public discovery-surface routes; the CSR is the proof-of-possession anchor and the opaque token is the lookup key.
 - `GET /api/v1/auth/cli/recovery/status` is public for token-scoped polling.
-- `POST /api/v1/auth/cli/recovery/approve` is HTTPS-only and requires a browser web-session cookie so an existing user can authorize the new CLI.
+- `POST /api/v1/auth/cli/recovery/approve` is HTTPS-only and requires a browser web-session cookie so an existing user can authorize the new CLI via the Console SPA.
+- `POST /api/v1/auth/cli/recovery/approve-cli` is HTTPS-only and mTLS-only; it is the headless counterpart to the browser approve endpoint. An already-enrolled CLI authorizes the new CLI via `g8e auth approve-recovery <token>`, and the approver user ID is derived from the verified mTLS certificate URI SAN by the unified auth middleware. It is never registered on the plain HTTP router.
 - `POST /api/v1/auth/cli/rotate` is HTTPS-only and mTLS-only; it is never registered on the plain HTTP router. Identity is derived from the verified client certificate, and only one replacement is performed per run.
 
-The recovery request, status, and complete endpoints are reachable over both plain HTTP and HTTPS so a new CLI without trusted TLS can initiate recovery. The approve endpoint is HTTPS-only because it requires a web-session cookie, which is only set over TLS.
+The recovery request, status, and complete endpoints are reachable over both plain HTTP and HTTPS so a new CLI without trusted TLS can initiate recovery. The approve endpoint is HTTPS-only because it requires a web-session cookie, which is only set over TLS. The approve-cli endpoint is HTTPS-only and mTLS-only because the approver must already hold a valid CLI certificate.
 
 ### Passkey Enrollment Routes
 

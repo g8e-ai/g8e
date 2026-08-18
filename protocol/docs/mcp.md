@@ -518,7 +518,7 @@ All native tools must comply with the following requirements:
 
 The template file at `protocol/docs/mcp_tool_template.go` provides a complete starting point with:
 
-- Proper copyright header and Apache 2.0 license
+- Proper copyright header and BSL 1.1 license
 - Build tags to exclude the template from compilation (`//go:build ignore`)
 - Usage instructions in comments
 - Complete `NativeTool` interface implementation

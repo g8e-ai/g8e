@@ -153,4 +153,4 @@ g8e demos clean finance  # removes containers, volumes, and networks
 
 ## License
 
-Apache 2.0
+Business Source License 1.1 (BSL 1.1). Converts to Apache 2.0 on 2030-08-18.

@@ -1,15 +1,9 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
 
 package gateway
 
@@ -63,10 +57,12 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.PKIDevicesEnroll, h.pkiController.handlePKIDevicesEnroll)
 
 	// CLI recovery flow — request/status/complete are public (token-scoped);
-	// approve is web-session protected (browser console only).
+	// approve is web-session protected (browser console only);
+	// approve-cli is mTLS-protected (already-enrolled CLI, headless path).
 	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryRequest, h.cliRecoveryController.handleRecoveryRequest)
 	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryStatus, h.cliRecoveryController.handleRecoveryStatus)
 	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryApprove, h.cliRecoveryController.handleRecoveryApprove)
+	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryApproveCLI, h.cliRecoveryController.handleRecoveryApproveCLI)
 	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryComplete, h.cliRecoveryController.handleRecoveryComplete)
 
 	// CLI rotation — mTLS-protected; the caller's identity is derived from

@@ -227,8 +227,15 @@ jobs:
 
       - name: Check for forbidden licenses
         run: |
-          if grep -iE 'GPL|AGPL|LGPL|SSPL|BUSL' licenses.csv; then
+          # g8e itself is licensed under BSL 1.1 (BUSL-1.1); allow it for our own module.
+          # Forbid copyleft licenses (GPL/AGPL/LGPL/SSPL) and BUSL in dependencies.
+          if grep -iE 'GPL|AGPL|LGPL|SSPL' licenses.csv; then
             echo "ERROR: Forbidden copyleft license detected"
+            cat licenses.csv
+            exit 1
+          fi
+          if grep -i 'BUSL' licenses.csv | grep -v 'github.com/g8e-ai/g8e'; then
+            echo "ERROR: Forbidden BUSL license in dependency"
             cat licenses.csv
             exit 1
           fi

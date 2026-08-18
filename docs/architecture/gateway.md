@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-08-16
-Version: v1.7.6
+Last Updated: 2026-08-18
+Version: v1.7.7
 
 The g8e Protocol platform is implemented as a single static binary that operates in two modes:
 
@@ -94,8 +94,8 @@ The gateway exposes two logical HTTP surfaces.
 The HTTPS router classifies each route into one of four auth modes:
 
 - **Public**: health, state, PKI discovery, landing, logout, console passkey registration, bootstrap enrollment, device/CSR enrollment, and token-scoped CLI recovery.
-- **mTLS only**: data, blob, and KV stores, operator management, governance, consensus, audit, pub/sub, SSE push, PKI management, passkey CLI status, enrollment token generation, and CLI rotation.
-- **Web session only**: user profile, approvals, passkey credential management, and CLI recovery approval.
+- **mTLS only**: data, blob, and KV stores, operator management, governance, consensus, audit, pub/sub, SSE push, PKI management, passkey CLI status, enrollment token generation, CLI rotation, and CLI recovery approval via the headless `approve-cli` endpoint.
+- **Web session only**: user profile, approvals, passkey credential management, and CLI recovery approval via the browser Console SPA.
 - **Dual**: SSE stream and event endpoints accept either a valid client certificate or a web-session cookie.
 
 Application certificates are blocked from privileged governance and query paths. Exact paths and auth mode assignments are part of the wire contract; see the [g8e Protocol specification](../../protocol/docs/spec.md) for the full list.

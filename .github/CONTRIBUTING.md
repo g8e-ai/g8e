@@ -58,4 +58,4 @@ Please read the [Developer Guidelines](docs/devs/devs.md) before submitting patc
 
 ## Licensing
 
-Unless otherwise noted, the g8e source files are distributed under the Apache 2.0 license found in the LICENSE file. By contributing, you grant Lateralus Labs, LLC a license to use your work under these terms.
+Unless otherwise noted, the g8e source files are distributed under the Business Source License 1.1 (BSL 1.1) found in the LICENSE file. The license converts to Apache 2.0 on the Change Date (2030-08-18). By contributing, you grant Lateralus Labs, LLC a license to use your work under these terms.

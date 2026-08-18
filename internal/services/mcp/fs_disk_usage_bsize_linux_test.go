@@ -1,6 +1,9 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
-// Licensed under the Apache License, Version 2.0 (the "License").
-// See LICENSE for full text.
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
+//
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
 
 //go:build linux && (amd64 || arm64 || ppc64 || ppc64le || mips64 || mips64le || s390x || loong64)
 

@@ -1,15 +1,9 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
 
 package gateway
 
@@ -123,6 +117,11 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 
 	// CLI recovery approval — browser console, authenticated existing user.
 	r.addExact(constants.APIPaths.AuthCLIRecoveryApprove, RouteAuthWebSession)
+
+	// CLI recovery approval — mTLS, already-enrolled CLI. The approver user
+	// ID is derived from the verified CLI certificate URI SAN by the unified
+	// auth middleware. This is the headless counterpart to the browser path.
+	r.addExact(constants.APIPaths.AuthCLIRecoveryApproveCLI, RouteAuthMTLS)
 
 	// --- RouteAuthMTLS: mTLS-protected sub-paths under WebSession prefixes ---
 	// These exact paths must be checked before the WebSession prefix matches.

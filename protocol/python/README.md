@@ -70,7 +70,7 @@ This package follows semantic versioning. Major version changes indicate breakin
 
 ## License
 
-Apache License 2.0. See `protocol/LICENSE` for details.
+Business Source License 1.1 (BSL 1.1). Converts to Apache 2.0 on 2030-08-18. See `protocol/LICENSE` for details.
 
 ## Contributing
 
