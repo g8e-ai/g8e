@@ -444,9 +444,10 @@ func TestBootstrap_MutationWorksImmediatelyAfterConstruction(t *testing.T) {
 
 	assert.NotEmpty(t, result.LedgerHashAfter)
 
-	// Verify the file was mirrored
-	mirrored, err := os.ReadFile(result.LedgerPath)
-	require.NoError(t, err)
+	// Verify the file was mirrored. result.LedgerPath is a .g8e/ runtime
+	// ledger mirror path, so read it via fileSvc (rule 2) using the
+	// readLedgerFile helper from ledger_test.go.
+	mirrored := readLedgerFile(t, svc.fileSvc, result.LedgerPath)
 	assert.Equal(t, "immediate content", string(mirrored))
 }
 
@@ -530,11 +531,13 @@ func TestBootstrap_ConcurrentReadersAfterConstruction(t *testing.T) {
 // directory has the expected content.
 func TestBootstrap_GitignoreContent(t *testing.T) {
 	t.Parallel()
-	_, ledgerDir := setupBootstrapLedger(t)
+	svc, ledgerDir := setupBootstrapLedger(t)
 
 	gitignorePath := filepath.Join(ledgerDir, constants.FilesDirname, constants.GitignoreFilename)
-	content, err := os.ReadFile(gitignorePath)
-	require.NoError(t, err)
+	// gitignorePath is a .g8e/ runtime ledger path (under
+	// .g8e/data/ledger/files/.gitignore), so read it via fileSvc (rule 2)
+	// using the readLedgerFile helper from ledger_test.go.
+	content := readLedgerFile(t, svc.fileSvc, gitignorePath)
 	assert.Contains(t, string(content), "g8e Ledger")
 }
 
