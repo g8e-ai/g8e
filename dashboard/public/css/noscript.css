@@ -1,0 +1,6 @@
+/* Noscript fallback styles - loaded only when JavaScript is disabled */
+
+/* Hide elements that require JavaScript to function */
+.auth-prompt {
+    display: none !important;
+}

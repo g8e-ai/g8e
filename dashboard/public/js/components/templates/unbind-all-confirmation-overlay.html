@@ -1,0 +1,47 @@
+<div class="bind-all-overlay" id="unbind-all-overlay">
+    <div class="bind-all-modal">
+        <div class="bind-all-header">
+            <div class="bind-all-header-content">
+                <span class="material-symbols-outlined bind-all-icon unbind-all-icon">link_off</span>
+                <div class="bind-all-title-section">
+                    <h3 class="bind-all-title">Unbind All Operators</h3>
+                    <span class="bind-all-count" data-operator-count></span>
+                </div>
+            </div>
+            <button class="bind-all-close-btn" data-action="close">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        
+        <div class="bind-all-description unbind-all-description">
+            The following bound operators will be unbound from your current web session. 
+            They will remain active and can be rebound at any time.
+        </div>
+        
+        <div class="bind-all-operators-container">
+            <div class="bind-all-operators-header">
+                <span class="material-symbols-outlined">dns</span>
+                <span>Bound Operators</span>
+            </div>
+            <div class="bind-all-operators-list" data-operators-list>
+                <!-- Operators will be dynamically inserted here -->
+            </div>
+        </div>
+        
+        <div class="bind-all-actions">
+            <button class="bind-all-action-btn cancel-btn" data-action="cancel">
+                <span class="material-symbols-outlined">cancel</span>
+                <span>Cancel</span>
+            </button>
+            <button class="bind-all-action-btn confirm-btn unbind-all-confirm-btn" data-action="confirm">
+                <span class="material-symbols-outlined">link_off</span>
+                <span>Unbind All</span>
+            </button>
+        </div>
+        
+        <div class="bind-all-processing initially-hidden" data-processing-indicator>
+            <div class="spinner"></div>
+            <span>Unbinding operators...</span>
+        </div>
+    </div>
+</div>

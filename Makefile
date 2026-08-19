@@ -191,6 +191,15 @@ help:
 	@echo ""
 	@echo "Python Protocol:"
 	@echo "  python-build  Copy constants and build the Python protocol package"
+	@echo ""
+	@echo "Ensemble (g8ee):"
+	@echo "  ensemble-test   Run the ensemble pytest unit suite (requires protocol/python installed)"
+	@echo "  ensemble-lint   Run ruff + pyright on the ensemble"
+	@echo "  build-ensemble  Build the ensemble Docker image"
+	@echo ""
+	@echo "Dashboard (g8ed):"
+	@echo "  dashboard-test   Run the dashboard vitest suite (requires npm ci in dashboard/)"
+	@echo "  build-dashboard  Build the dashboard Docker image"
 
 .PHONY: python-build
 python-build:
@@ -578,6 +587,48 @@ demo-verify: build
 	echo "  All $(words $(DEMO_ORGS)) demos PASSED"; \
 	echo "========================================================"
 
+# =============================================================================
+# ENSEMBLE (g8ee) — Python first-party component
+# =============================================================================
+# The ensemble depends on the in-tree protocol/python package. Install it first:
+#   pip install -e protocol/python
+#   pip install -e 'ensemble[test]'
+
+.PHONY: ensemble-test
+ensemble-test:
+	@echo "Running ensemble (g8ee) pytest unit suite..."
+	@cd ensemble && python3 -m pytest tests/unit/ -q
+
+.PHONY: ensemble-lint
+ensemble-lint:
+	@echo "Running ruff on ensemble..."
+	@cd ensemble && ruff check app
+	@echo "Running pyright on ensemble..."
+	@cd ensemble && pyright app
+
+.PHONY: build-ensemble
+build-ensemble:
+	@echo "Building ensemble (g8ee) Docker image..."
+	@DOCKER_BUILDKIT=1 docker build -f ensemble/Dockerfile -t g8e-ensemble:$(VERSION) .
+	@echo "Ensemble image built: g8e-ensemble:$(VERSION)"
+
+# =============================================================================
+# DASHBOARD (g8ed) — Node.js first-party component
+# =============================================================================
+# The dashboard requires node_modules installed first:
+#   cd dashboard && npm ci
+
+.PHONY: dashboard-test
+dashboard-test:
+	@echo "Running dashboard (g8ed) vitest suite..."
+	@cd dashboard && npm test
+
+.PHONY: build-dashboard
+build-dashboard:
+	@echo "Building dashboard (g8ed) Docker image..."
+	@DOCKER_BUILDKIT=1 docker build -f dashboard/Dockerfile -t g8e-dashboard:$(VERSION) .
+	@echo "Dashboard image built: g8e-dashboard:$(VERSION)"
+
 # Coverage tests
 .PHONY: test-coverage
 test-coverage:
@@ -692,12 +743,20 @@ clean-harness:
 # CI/CD (LOCAL)
 # =============================================================================
 .PHONY: ci
-ci: ci-platform
+ci: ci-platform ci-ensemble ci-dashboard
 	@echo "CI complete."
 
 .PHONY: ci-platform
 ci-platform: _ci-verify-proto _ci-swagger _ci-lint _ci-vulncheck _ci-test
 	@echo "Platform CI complete."
+
+.PHONY: ci-ensemble
+ci-ensemble: ensemble-lint ensemble-test
+	@echo "Ensemble CI complete."
+
+.PHONY: ci-dashboard
+ci-dashboard: dashboard-test
+	@echo "Dashboard CI complete."
 
 .PHONY: _ci-verify-proto
 _ci-verify-proto:

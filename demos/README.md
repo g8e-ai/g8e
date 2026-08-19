@@ -42,13 +42,31 @@ demos/
 │   ├── cloudsvc.py             # Sovereign Cloud Service (L5 actuator, Python HTTP server)
 │   ├── verify_ops.py           # Verifies cloudsvc recorded governed operations
 │   └── README.md               # FedRAMP-specific documentation
-├── frontend/                   # Frontend enrollment demo
+├── frontend/                   # Frontend enrollment demo (minimal enrollment smoke test; distinct from dashboard/)
 │   ├── compose.yml             # builds from repo-root Dockerfile (context: ../..)
 │   ├── config/
 │   ├── doctrine/               # Frontend security rules (API access, CORS spoofing, session hijacking)
 │   ├── app/                    # Single-file HTML frontend app served by nginx
 │   └── README.md               # Frontend-specific documentation
 ```
+
+## Two Deployment Modes
+
+g8e ships two Docker Compose deployment modes that serve different purposes and must not be confused:
+
+- **Unified platform compose** — the repo-root `docker-compose.yml`. Brings up the whole platform end to end on a single `g8e-net` bridge network: gateway, operator, ensemble (g8ee), and dashboard (g8ed). Run with `docker compose up` from the repo root. This is the default way to run the complete product and is what the v2.0.0 reunification targets. See the [Unified Docker Stack guide](../docs/guides/unified_stack.md).
+- **Per-demo composes** — `demos/<org>/compose.yml`. Each demo is an org-specific, hermetically sealed deployment on five isolated networks (untrusted, perimeter, internal, secure, mgmt) that exercises a particular compliance scenario. They build the gateway/operator image from the repo-root `Dockerfile` via `context: ../..` and are driven by the `g8e demos` CLI. The per-demo composes do not include the ensemble or dashboard; they are a separate deployment mode focused on org-specific isolated-network scenarios.
+
+The two modes share the repo-root `Dockerfile` (the Go gateway/operator image) but are otherwise independent: the unified compose adds the ensemble and dashboard services and uses a single flat network, while the per-demo composes use isolated multi-network topologies and are scoped to a single org.
+
+## `demos/frontend/` vs `dashboard/`
+
+`demos/frontend/` and `dashboard/` are two different things and both ship in-tree:
+
+- `demos/frontend/` is a minimal enrollment smoke test: a single-file nginx-served HTML app that exercises WebAuthn passkey enrollment and SSE event streaming against the gateway on an isolated demo network. It exists to prove the enrollment and CORS path end to end.
+- `dashboard/` is the real product UI (g8ed): a Node.js 22 / Express app with EJS views, vitest tests, and its own `dashboard/Dockerfile`. It is a first-party component of the platform, reunited in v2.0.0, and runs as the `dashboard` service in the unified platform compose.
+
+Keep both. The demo proves a narrow protocol path; the dashboard is the operator-facing product.
 
 
 ## Network Topology
