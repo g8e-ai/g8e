@@ -69,22 +69,23 @@ func TestHandleMCP_InitializeHandshake(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var respBody map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &respBody)
+	var resp JSONRPCResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
+	require.Nil(t, resp.Error)
 
-	require.InEpsilon(t, float64(1), respBody["id"], 0.0)
-	result := respBody["result"].(map[string]interface{})
-	require.Equal(t, "2025-06-18", result["protocolVersion"])
-
-	caps := result["capabilities"].(map[string]interface{})
-	require.Contains(t, caps, "tools")
-	require.Contains(t, caps, "resources")
-	require.Contains(t, caps, "prompts")
-
-	serverInfo := result["serverInfo"].(map[string]interface{})
-	require.Equal(t, "g8e-gateway", serverInfo["name"])
-	require.Equal(t, "1.0", serverInfo["version"])
+	require.InEpsilon(t, float64(1), resp.ID, 0.0)
+	var result InitializeResult
+	err = json.Unmarshal(resp.Result, &result)
+	require.NoError(t, err)
+	require.Equal(t, "2025-06-18", result.ProtocolVersion)
+	require.Equal(t, ServerCapabilities{
+		Tools:     ToolsCapability{ListChanged: true},
+		Resources: ResourcesCapability{},
+		Prompts:   PromptsCapability{},
+	}, result.Capabilities)
+	require.Equal(t, "g8e-gateway", result.ServerInfo.Name)
+	require.Equal(t, "1.0", result.ServerInfo.Version)
 }
 
 func TestHandleMCP_InitializeEchoesProtocolVersion(t *testing.T) {
@@ -99,12 +100,15 @@ func TestHandleMCP_InitializeEchoesProtocolVersion(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var respBody map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &respBody)
+	var resp JSONRPCResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
+	require.Nil(t, resp.Error)
 
-	result := respBody["result"].(map[string]interface{})
-	require.Equal(t, "2024-11-05", result["protocolVersion"])
+	var result InitializeResult
+	err = json.Unmarshal(resp.Result, &result)
+	require.NoError(t, err)
+	require.Equal(t, "2024-11-05", result.ProtocolVersion)
 }
 
 func TestHandleMCP_InitializeDefaultsProtocolVersion(t *testing.T) {
@@ -119,13 +123,16 @@ func TestHandleMCP_InitializeDefaultsProtocolVersion(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var respBody map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &respBody)
+	var resp JSONRPCResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
+	require.Nil(t, resp.Error)
 
-	require.InEpsilon(t, float64(1), respBody["id"], 0.0)
-	result := respBody["result"].(map[string]interface{})
-	require.Equal(t, "2025-06-18", result["protocolVersion"])
+	require.InEpsilon(t, float64(1), resp.ID, 0.0)
+	var result InitializeResult
+	err = json.Unmarshal(resp.Result, &result)
+	require.NoError(t, err)
+	require.Equal(t, "2025-06-18", result.ProtocolVersion)
 }
 
 func TestHandleMCP_NotificationInitialized(t *testing.T) {
@@ -154,13 +161,14 @@ func TestHandleMCP_Ping(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var respBody map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &respBody)
+	var resp JSONRPCResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
+	require.Nil(t, resp.Error)
 
-	require.InEpsilon(t, float64(42), respBody["id"], 0.0)
-	require.NotNil(t, respBody["result"])
-	require.Empty(t, respBody["result"])
+	require.InEpsilon(t, float64(42), resp.ID, 0.0)
+	require.NotNil(t, resp.Result)
+	require.JSONEq(t, "{}", string(resp.Result))
 }
 
 func TestHandleMCP_IDEchoing(t *testing.T) {
@@ -185,11 +193,11 @@ func TestHandleMCP_IDEchoing(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, w.Code)
 
-		var respBody map[string]interface{}
-		err := json.Unmarshal(w.Body.Bytes(), &respBody)
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
 		require.NoError(t, err)
 
-		require.Equal(t, tc.expected, respBody["id"])
+		require.Equal(t, tc.expected, resp.ID)
 	}
 }
 
@@ -205,14 +213,13 @@ func TestHandleMCP_InvalidJSONRPCVersion(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var respBody map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &respBody)
+	var resp JSONRPCResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 
-	require.Contains(t, respBody, "error")
-	errObj := respBody["error"].(map[string]interface{})
-	require.InEpsilon(t, float64(-32600), errObj["code"], 0.0)
-	require.Contains(t, errObj["message"].(string), "jsonrpc version must be 2.0")
+	require.NotNil(t, resp.Error)
+	require.Equal(t, -32600, resp.Error.Code)
+	require.Contains(t, resp.Error.Message, "jsonrpc version must be 2.0")
 }
 
 func TestHandleMCP_MissingMethod(t *testing.T) {
@@ -227,14 +234,13 @@ func TestHandleMCP_MissingMethod(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var respBody map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &respBody)
+	var resp JSONRPCResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 
-	require.Contains(t, respBody, "error")
-	errObj := respBody["error"].(map[string]interface{})
-	require.InEpsilon(t, float64(-32600), errObj["code"], 0.0)
-	require.Contains(t, errObj["message"].(string), "method required")
+	require.NotNil(t, resp.Error)
+	require.Equal(t, -32600, resp.Error.Code)
+	require.Contains(t, resp.Error.Message, "method required")
 }
 
 func TestHandleMCP_UnknownMethod(t *testing.T) {
@@ -249,14 +255,13 @@ func TestHandleMCP_UnknownMethod(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var respBody map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &respBody)
+	var resp JSONRPCResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 
-	require.Contains(t, respBody, "error")
-	errObj := respBody["error"].(map[string]interface{})
-	require.InEpsilon(t, float64(-32601), errObj["code"], 0.0)
-	require.Contains(t, errObj["message"].(string), "method not found")
+	require.NotNil(t, resp.Error)
+	require.Equal(t, -32601, resp.Error.Code)
+	require.Contains(t, resp.Error.Message, "method not found")
 }
 
 func TestHandleMCP_BatchRequestRejected(t *testing.T) {
@@ -271,14 +276,13 @@ func TestHandleMCP_BatchRequestRejected(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var respBody map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &respBody)
+	var resp JSONRPCResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 
-	require.Contains(t, respBody, "error")
-	errObj := respBody["error"].(map[string]interface{})
-	require.InEpsilon(t, float64(-32600), errObj["code"], 0.0)
-	require.Contains(t, errObj["message"].(string), "batch requests are not supported")
+	require.NotNil(t, resp.Error)
+	require.Equal(t, -32600, resp.Error.Code)
+	require.Contains(t, resp.Error.Message, "batch requests are not supported")
 }
 
 func TestHandleMCP_GETMethodNotAllowed(t *testing.T) {
@@ -309,14 +313,13 @@ func TestHandleMCP_InvalidJSON(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var respBody map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &respBody)
+	var resp JSONRPCResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 
-	require.Contains(t, respBody, "error")
-	errObj := respBody["error"].(map[string]interface{})
-	require.InEpsilon(t, float64(constants.JSONRPCErrorCodeParseError), errObj["code"], 0.0)
-	require.Contains(t, errObj["message"].(string), constants.JSONRPCErrorMessageParseError)
+	require.NotNil(t, resp.Error)
+	require.Equal(t, constants.JSONRPCErrorCodeParseError, resp.Error.Code)
+	require.Contains(t, resp.Error.Message, constants.JSONRPCErrorMessageParseError)
 }
 
 func TestHandleMCP_ToolsList(t *testing.T) {
@@ -335,13 +338,16 @@ func TestHandleMCP_ToolsList(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var respBody map[string]interface{}
-	err = json.Unmarshal(w.Body.Bytes(), &respBody)
+	var resp JSONRPCResponse
+	err = json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
+	require.Nil(t, resp.Error)
 
-	require.InEpsilon(t, float64(1), respBody["id"], 0.0)
-	result := respBody["result"].(map[string]interface{})
-	require.Contains(t, result, "tools")
+	require.InEpsilon(t, float64(1), resp.ID, 0.0)
+	var result ToolsListResult
+	err = json.Unmarshal(resp.Result, &result)
+	require.NoError(t, err)
+	require.NotNil(t, result.Tools)
 }
 
 func TestHandleMCP_ResourcesList(t *testing.T) {
@@ -356,13 +362,16 @@ func TestHandleMCP_ResourcesList(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var respBody map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &respBody)
+	var resp JSONRPCResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
+	require.Nil(t, resp.Error)
 
-	require.InEpsilon(t, float64(1), respBody["id"], 0.0)
-	result := respBody["result"].(map[string]interface{})
-	require.Contains(t, result, "resources")
+	require.InEpsilon(t, float64(1), resp.ID, 0.0)
+	var result ResourcesListResult
+	err = json.Unmarshal(resp.Result, &result)
+	require.NoError(t, err)
+	require.NotNil(t, result.Resources)
 }
 
 func TestHandleMCP_PromptsList(t *testing.T) {
@@ -377,13 +386,16 @@ func TestHandleMCP_PromptsList(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var respBody map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &respBody)
+	var resp JSONRPCResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
+	require.Nil(t, resp.Error)
 
-	require.InEpsilon(t, float64(1), respBody["id"], 0.0)
-	result := respBody["result"].(map[string]interface{})
-	require.Contains(t, result, "prompts")
+	require.InEpsilon(t, float64(1), resp.ID, 0.0)
+	var result PromptsListResult
+	err = json.Unmarshal(resp.Result, &result)
+	require.NoError(t, err)
+	require.NotNil(t, result.Prompts)
 }
 
 func TestHandleMCP_ResourcesTemplatesList(t *testing.T) {
@@ -398,13 +410,14 @@ func TestHandleMCP_ResourcesTemplatesList(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var respBody map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &respBody)
+	var resp JSONRPCResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
+	require.Nil(t, resp.Error)
 
-	require.InEpsilon(t, float64(1), respBody["id"], 0.0)
-	result := respBody["result"].(map[string]interface{})
-	require.Contains(t, result, "resourceTemplates")
-	templates := result["resourceTemplates"].([]interface{})
-	require.Empty(t, templates)
+	require.InEpsilon(t, float64(1), resp.ID, 0.0)
+	var result resourceTemplatesList
+	err = json.Unmarshal(resp.Result, &result)
+	require.NoError(t, err)
+	require.Empty(t, result.ResourceTemplates)
 }
