@@ -4,7 +4,7 @@
 /**
  * g8edBPubSubClient — g8edB Pub/Sub WebSocket client.
  * 
- * Handles pub/sub messaging over WebSocket to g8edB ($DROPOPS_INTERNAL_PUBSUB_URL/ws/pubsub).
+ * Handles pub/sub messaging over WebSocket to g8edB ($G8E_INTERNAL_PUBSUB_URL/ws/pubsub).
  * Used by Auth Service (auth response channels) and any service needing real-time messaging.
  * 
  * Architecture (from docs/architecture/cases-and-chat-data-flows.md):

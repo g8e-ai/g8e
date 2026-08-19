@@ -401,7 +401,6 @@ export class OperatorDocument extends VSOIdentifiableModel {
             slot_number:               data.slot_number ?? null,
             operator_type:             data.operator_type || OperatorType.SYSTEM,
             cloud_subtype:             data.cloud_subtype ?? null,
-            is_drop_pod:               data.is_drop_pod ?? false,
             slot_cost:                 1,
             history_trail:             [new HistoryEntry({
                 timestamp:  _now,
@@ -440,7 +439,6 @@ export class OperatorDocument extends VSOIdentifiableModel {
             claimed:                   false,
             operator_type:             data.operatorType || OperatorType.SYSTEM,
             cloud_subtype:             data.cloudSubtype ?? null,
-            is_drop_pod:               data.isDropPod ?? false,
             slot_cost:                 1,
             system_info:               systemInfo,
             runtime_config:            {},
@@ -469,7 +467,6 @@ export class OperatorDocument extends VSOIdentifiableModel {
             slot_number:               data.slotNumber,
             operator_type:             data.operatorType || OperatorType.SYSTEM,
             cloud_subtype:             data.cloudSubtype ?? null,
-            is_drop_pod:               data.isDropPod ?? false,
             slot_cost:                 data.slotCost ?? 1,
             status:                    OperatorStatus.AVAILABLE,
             created_at:                _now,

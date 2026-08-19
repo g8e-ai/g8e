@@ -32,7 +32,7 @@ const TEST_TEMPLATE = `<div class="opdeploy">
     </div>
     <div class="opdeploy__footer">
         <span class="material-symbols-outlined opdeploy__footer-icon">info</span>
-        <span class="opdeploy__footer-text">Your drop-pod operator is already authenticated.</span>
+        <span class="opdeploy__footer-text">Click the bind icon in the Operator Panel to begin.</span>
     </div>
 </div>`;
 

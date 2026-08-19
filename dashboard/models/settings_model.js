@@ -464,13 +464,13 @@ export const USER_SETTINGS = Object.freeze([
         default: false,
     }),
     Object.freeze({
-        key: 'dropops_api_key',
+        key: 'g8e_api_key',
         section: 'validation',
-        label: 'DropOps API Key',
+        label: 'g8e API Key',
         description: 'API key for VSE external API authentication (optional).',
         type: 'password',
         secret: true,
-        placeholder: 'your-dropops-api-key-here',
+        placeholder: 'your-g8e-api-key-here',
         default: '',
     }),
 ]);
@@ -498,8 +498,8 @@ export const PLATFORM_SETTINGS = Object.freeze([
     Object.freeze({ key: 'app_url',                     default: 'https://localhost' }),
     Object.freeze({ key: 'allowed_origins',             default: 'https://localhost' }),
     Object.freeze({ key: 'setup_complete',                  default: false              }),
-    Object.freeze({ key: 'dropops_internal_http_url',   default: 'https://g8edb:9000' }),
-    Object.freeze({ key: 'dropops_internal_pubsub_url', default: 'wss://g8edb:9001' }),
+    Object.freeze({ key: 'g8e_internal_http_url',       default: 'https://g8edb:9000' }),
+    Object.freeze({ key: 'g8e_internal_pubsub_url',     default: 'wss://g8edb:9001' }),
     Object.freeze({ key: 'vse_url',                     default: 'https://vse'   }),
     Object.freeze({ key: 'docker_gid',                  default: '988'              }),
     Object.freeze({ key: 'https_port',                  default: '443'              }),
@@ -508,11 +508,10 @@ export const PLATFORM_SETTINGS = Object.freeze([
     Object.freeze({ key: 'ssl_dir',                     default: '/g8edb'       }),
     Object.freeze({ key: 'tls_cert_path',               default: ''                 }),
     Object.freeze({ key: 'tls_key_path',                default: ''                 }),
-    Object.freeze({ key: 'dropops_pubsub_ca_cert',      default: '/g8edb/ssl/ca.crt' }),
+    Object.freeze({ key: 'g8e_pubsub_ca_cert',          default: '/g8edb/ssl/ca.crt' }),
     Object.freeze({ key: 'upload_path',                 default: ''                 }),
     Object.freeze({ key: 'session_ttl',                 default: '28800'            }),
     Object.freeze({ key: 'absolute_session_timeout',    default: '86400'            }),
-    Object.freeze({ key: 'drop_pod_operator_endpoint',  default: 'dropops.local'    }),
     Object.freeze({ key: 'host_ips',                     default: ''                 }),
     Object.freeze({ key: 'docs_dir',                     default: '/docs'            }),
     Object.freeze({ key: 'readme_path',                  default: '/readme/README.md' }),
@@ -520,7 +519,6 @@ export const PLATFORM_SETTINGS = Object.freeze([
     Object.freeze({ key: 'g8edb_http_port',              default: '9000'            }),
     Object.freeze({ key: 'g8edb_wss_port',               default: '9001'            }),
     Object.freeze({ key: 'supervisor_port',              default: '443'             }),
-    Object.freeze({ key: 'drop_pod_operator_api_key',   default: '', secret: true  }),
 ]);
 
 // ---------------------------------------------------------------------------

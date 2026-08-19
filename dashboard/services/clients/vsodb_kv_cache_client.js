@@ -49,7 +49,7 @@ class KVOperationError extends Error {
 class KVCacheClient {
     /**
      * @param {object} config
-     * @param {string} config.listenUrl - Base URL of g8edB (e.g. $DROPOPS_INTERNAL_HTTP_URL)
+     * @param {string} config.listenUrl - Base URL of g8edB (e.g. $G8E_INTERNAL_HTTP_URL)
      * @param {string} [config.internalAuthToken] - Shared secret for g8edB authentication
      */
     constructor({ listenUrl, internalAuthToken = null } = {}) {

@@ -2,7 +2,7 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 import { logger } from '../../utils/logger.js';
-import { OperatorStatus, HistoryEventType, OperatorType, CloudOperatorSubtype } from '../../constants/operator.js';
+import { OperatorStatus, HistoryEventType, OperatorType } from '../../constants/operator.js';
 import { OperatorDocument, HistoryEntry, SystemInfo, CertInfo, OperatorRefreshKeyResponse, OperatorSlotCreationResponse } from '../../models/operator_model.js';
 import { now } from '../../models/base.js';
 import { SourceComponent } from '../../constants/ai.js';
@@ -29,21 +29,16 @@ export class OperatorSlotService {
         const createdSlotIds = [];
 
         if (existingCount < DEFAULT_OPERATOR_SLOTS) {
-            const hasDropPod = liveOperators.some(op => op.is_drop_pod === true);
             const slotsToCreate = DEFAULT_OPERATOR_SLOTS - existingCount;
-            let dropPodAssigned = hasDropPod;
             for (let i = 0; i < slotsToCreate; i++) {
                 const slotNumber = existingCount + i + 1;
-                const assignDropPod = !dropPodAssigned;
-                if (assignDropPod) dropPodAssigned = true;
                 const creationResponse = await this.createOperatorSlot({
                     userId,
                     organizationId,
                     slotNumber,
                     operatorType: OperatorType.CLOUD,
-                    cloudSubtype: assignDropPod ? CloudOperatorSubtype.DROP_POD : null,
+                    cloudSubtype: null,
                     namePrefix: 'operator',
-                    isDropPod: assignDropPod,
                 });
                 if (creationResponse.success && creationResponse.operator_id) {
                     createdSlotIds.push(creationResponse.operator_id);
@@ -105,7 +100,6 @@ export class OperatorSlotService {
             slotNumber,
             operatorType: oldOperator.operator_type || OperatorType.SYSTEM,
             cloudSubtype: oldOperator.cloud_subtype || null,
-            isDropPod: oldOperator.is_drop_pod ?? false,
             slotCost: oldOperator.slot_cost ?? 1,
             newApiKey,
             certInfo: newCertInfo,
@@ -132,7 +126,7 @@ export class OperatorSlotService {
     }
 
     async createOperatorSlot(params) {
-        const { userId, organizationId, slotNumber, operatorType, cloudSubtype, namePrefix, isDropPod } = params;
+        const { userId, organizationId, slotNumber, operatorType, cloudSubtype, namePrefix } = params;
         const operatorId = `${userId}_operator_${slotNumber}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
         const apiKey = this.generateOperatorApiKey(operatorId);
 
@@ -154,7 +148,6 @@ export class OperatorSlotService {
             slotNumber,
             operatorType,
             cloudSubtype,
-            isDropPod,
             operatorApiKey: apiKey,
             certInfo
         });

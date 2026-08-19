@@ -21,8 +21,8 @@ export const g8edEnvConfig = {
     ENABLE_FILE_LOGGING: process.env.ENABLE_FILE_LOGGING !== 'false',
 
     // g8edB Configuration
-    DROPOPS_INTERNAL_HTTP_URL: process.env.DROPOPS_INTERNAL_HTTP_URL || 'https://g8edb:8443',
-    DROPOPS_SESSION_ENCRYPTION_KEY: process.env.DROPOPS_SESSION_ENCRYPTION_KEY || null,
+    G8E_INTERNAL_HTTP_URL: process.env.G8E_INTERNAL_HTTP_URL || 'https://g8edb:8443',
+    G8E_SESSION_ENCRYPTION_KEY: process.env.G8E_SESSION_ENCRYPTION_KEY || null,
     g8edB_VOLUME_PATH: process.env.g8edB_VOLUME_PATH || '/g8edb',
 
     // Network Configuration

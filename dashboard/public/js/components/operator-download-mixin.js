@@ -246,9 +246,9 @@ export const OperatorDownloadMixin = {
         const logoMap = { mac: 'apple', linux: 'linux' };
         const logoName = logoMap[os];
 
-        const curlCommand = `curl -fsSL ${downloadUrl} -H "Authorization: Bearer $DROPOPS_DROP_KEY" -o ${filename} && chmod +x ${filename} && ./${filename}`;
-        const curlSudoCommand = `sudo curl -fsSL ${downloadUrl} -H "Authorization: Bearer $DROPOPS_DROP_KEY" -o ${filename} && sudo chmod +x ${filename} && sudo ./${filename}`;
-        const secureDownloadCommand = `curl -fsSL ${downloadUrl} -H "Authorization: Bearer $DROPOPS_DROP_KEY" -o ${filename} && curl -fsSL ${checksumUrl} -H "Authorization: Bearer $DROPOPS_DROP_KEY" -o ${filename}.sha256`;
+        const curlCommand = `curl -fsSL ${downloadUrl} -H "Authorization: Bearer $G8E_DROP_KEY" -o ${filename} && chmod +x ${filename} && ./${filename}`;
+        const curlSudoCommand = `sudo curl -fsSL ${downloadUrl} -H "Authorization: Bearer $G8E_DROP_KEY" -o ${filename} && sudo chmod +x ${filename} && sudo ./${filename}`;
+        const secureDownloadCommand = `curl -fsSL ${downloadUrl} -H "Authorization: Bearer $G8E_DROP_KEY" -o ${filename} && curl -fsSL ${checksumUrl} -H "Authorization: Bearer $G8E_DROP_KEY" -o ${filename}.sha256`;
         const verifyChecksumCommand = `sha256sum -c ${filename}.sha256`;
         const runCommand = `chmod +x ${filename} && ./${filename}${cloudFlag}`;
 
@@ -324,7 +324,7 @@ export const OperatorDownloadMixin = {
             };
         }
         if (secureEnvCopy) {
-            secureEnvCopy.onclick = () => this.copyCurlCommand('read -s DROPOPS_DROP_KEY && export DROPOPS_DROP_KEY', secureEnvCopy);
+            secureEnvCopy.onclick = () => this.copyCurlCommand('read -s G8E_DROP_KEY && export G8E_DROP_KEY', secureEnvCopy);
         }
         if (secureDownloadCopy) {
             secureDownloadCopy.onclick = () => this.copyCurlCommand(secureDownloadCommand, secureDownloadCopy);
@@ -347,7 +347,7 @@ export const OperatorDownloadMixin = {
         const apiKeyToggle = overlay.querySelector('#api-key-toggle');
 
         if (curlEnvCopy) {
-            curlEnvCopy.onclick = () => this.copyCurlCommand('read -s DROPOPS_DROP_KEY && export DROPOPS_DROP_KEY', curlEnvCopy);
+            curlEnvCopy.onclick = () => this.copyCurlCommand('read -s G8E_DROP_KEY && export G8E_DROP_KEY', curlEnvCopy);
         }
         if (curlCopy) {
             curlCopy.onclick = () => {

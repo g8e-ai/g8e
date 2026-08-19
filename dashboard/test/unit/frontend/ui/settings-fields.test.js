@@ -25,9 +25,9 @@ const MOCK_SETTINGS = [
         description: 'Passkey name.',
         type: 'text',
         secret: false,
-        placeholder: 'DropOps',
-        default: 'DropOps',
-        dbValue: 'DropOps',
+        placeholder: 'g8e',
+        default: 'g8e',
+        dbValue: 'g8e',
     },
     {
         key: 'provider',

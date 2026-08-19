@@ -190,16 +190,16 @@ export class OperatorAuthService {
                 statusCode: 403,
                 error: ApiKeyError.DOWNLOAD_ONLY,
                 code: ApiKeyError.DOWNLOAD_ONLY_CODE,
-                message: 'This is a DOWNLOAD-ONLY API key (DROPOPS_DROP_KEY). It can download the binary but cannot run operators. To run an operator, use an OPERATOR API key (DROPOPS_OPERATOR_API_KEY) from an Operator slot in the Operator Panel.',
+                message: 'This is a DOWNLOAD-ONLY API key (G8E_DROP_KEY). It can download the binary but cannot run operators. To run an operator, use an OPERATOR API key (G8E_OPERATOR_API_KEY) from an Operator slot in the Operator Panel.',
                 key_type: 'download',
                 help: {
                     steps: [
-                        'Visit the DropOps dashboard',
+                        'Visit the g8e dashboard',
                         'Open the Operator Panel',
                         'Click on an Available or Offline Operator slot',
                         'Copy an API key shown in the Operator details',
                     ],
-                    env_var: 'DROPOPS_OPERATOR_API_KEY',
+                    env_var: 'G8E_OPERATOR_API_KEY',
                 },
             };
         }

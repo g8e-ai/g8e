@@ -94,13 +94,13 @@ describe('MessageRenderer [FRONTEND - jsdom]', () => {
             expect(el.querySelector('.copy-response-btn')).toBeNull();
         });
 
-        it('.sender-label is DropOps for AI_PRIMARY', () => {
+        it('.sender-label is g8e for AI_PRIMARY', () => {
             const el = renderer.renderMessage({
                 content: 'AI.',
                 sender: EventType.EVENT_SOURCE_AI_PRIMARY,
                 timestamp: null,
             });
-            expect(el.querySelector('.sender-label').textContent).toBe('DropOps');
+            expect(el.querySelector('.sender-label').textContent).toBe('g8e');
         });
 
         it('.sender-label is You for USER_CHAT', () => {

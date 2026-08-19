@@ -9,7 +9,7 @@
  * for all HTTP calls to g8edB (Operator --listen mode).
  * 
  * Architecture (from docs/architecture/storage-data-flows.md):
- *   g8ed -> g8edB uses HTTP ($DROPOPS_INTERNAL_HTTP_URL) for KV, document store.
+ *   g8ed -> g8edB uses HTTP ($G8E_INTERNAL_HTTP_URL) for KV, document store.
  *   DB operations are never routed over WebSocket.
  */
 
@@ -28,7 +28,7 @@ class g8edBHttpError extends Error {
 class g8edBHttpClient {
     /**
      * @param {object} config
-     * @param {string} config.listenUrl - Base URL of g8edB (e.g. $DROPOPS_INTERNAL_HTTP_URL)
+     * @param {string} config.listenUrl - Base URL of g8edB (e.g. $G8E_INTERNAL_HTTP_URL)
      * @param {string} [config.component] - Client component name for log prefixes
      * @param {string} [config.internalAuthToken] - Shared secret for g8edB authentication
      */

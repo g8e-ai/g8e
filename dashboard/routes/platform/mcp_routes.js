@@ -10,7 +10,7 @@ import { MCPPaths } from '../../constants/api_paths.js';
 const MCP_SERVER_INFO = {
     protocolVersion: '2025-03-26',
     serverInfo: {
-        name: 'dropops',
+        name: 'g8e',
         version: '4.3.0',
     },
     capabilities: {

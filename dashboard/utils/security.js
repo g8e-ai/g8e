@@ -7,9 +7,9 @@
  * Helper functions for security-related operations like logging redaction,
  * CORS validation, etc. WebSession validation is handled by auth middleware.
  * 
- * ## DropOps Cloud Operator Security Model
+ * ## g8e Cloud Operator Security Model
  * 
- * The DropOps Cloud Operator for AWS implements a Just-In-Time (JIT) access
+ * The g8e Cloud Operator for AWS implements a Just-In-Time (JIT) access
  * model with Zero Standing Privileges:
  * 
  * ### Core Principles:
@@ -28,7 +28,7 @@
  * 
  * ### Security Boundaries:
  * - Blocks: AdministratorAccess, *Admin*, *FullAccess policies
- * - Scopes: WRITE actions to ManagedBy=DropOps tagged resources
+ * - Scopes: WRITE actions to ManagedBy=g8e tagged resources
  * - Restricts: IAM actions to operator's own role only
  * 
  * ### Available Intents:

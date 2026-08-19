@@ -265,11 +265,11 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             expect(entry.classList.contains('streaming')).toBe(false);
         });
 
-        it('shows sender label "DropOps"', () => {
+        it('shows sender label "g8e"', () => {
             terminal.appendAIResponse('<p>ok</p>');
 
             const sender = terminal.outputContainer.querySelector('.anchored-terminal__ai-response-sender');
-            expect(sender.textContent).toBe('DropOps');
+            expect(sender.textContent).toBe('g8e');
         });
 
         it('uses the provided timestamp', () => {
