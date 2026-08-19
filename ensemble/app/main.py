@@ -80,6 +80,7 @@ from .routers import chat_router, health_router
 from .routers.internal_router import router as internal_router
 from .middleware.exception_handlers import setup_exception_handlers
 from .services.cache.cache_aside import CacheAsideService
+from .errors import ConfigurationError
 from .services.infra.app_enrollment_service import AppEnrollmentService
 from .services.infra.settings_service import SettingsService
 from .services.service_factory import ServiceFactory
@@ -152,12 +153,18 @@ async def lifespan(app: FastAPI):
         setup_logging(settings, component_name="g8ee")
         logger.info("Bootstrap settings loaded")
 
-        # -- Phase 0.25: Self-enroll app identity with the gateway --
+        # -- Phase 0.25: Resolve app identity with the gateway --
         # The ensemble authenticates to the gateway exclusively via its mTLS
-        # app cert. Enrollment runs before the operator clients connect so the
-        # TLS config below points at the ensemble's own enrolled credentials.
+        # app cert. Try to load an existing valid cert from disk first; if
+        # none is available (missing, expired, or near-expiry), enroll with
+        # the gateway to obtain a fresh one. This runs before the operator
+        # clients connect so the TLS config below points at the ensemble's
+        # own enrolled credentials.
         enrollment_service = AppEnrollmentService()
-        app_identity = await enrollment_service.enroll_if_needed()
+        try:
+            app_identity = enrollment_service.load_identity()
+        except ConfigurationError:
+            app_identity = await enrollment_service.enroll()
         logger.info(
             "App identity ready (app_id=%s, cert=%s)",
             app_identity.app_id,

@@ -8,11 +8,9 @@
 """AppEnrollmentService - Self-enrollment for the g8ee app identity.
 
 The ensemble authenticates to the gateway exclusively via its mTLS app cert.
-This service runs at startup, before the operator clients connect, and ensures
-the ensemble has a valid app identity (cert, key, trust bundle) stored in its
-own runtime directory. If a valid, non-expired cert already exists, it is
-reused. Otherwise the service enrolls via the gateway's public HTTP bootstrap
-surface (`POST /api/v1/pki/apps/enroll`) and persists the credentials.
+This service runs at startup, before the operator clients connect, and
+establishes the ensemble's app identity (cert, key, trust bundle) stored in its
+own runtime directory.
 
 Per docs/g8e/guides/build_apps.md § Identity and Authentication, application
 identity is established via an mTLS client certificate with SPIFFE-style URI
@@ -20,8 +18,19 @@ SANs. The gateway acts as the CA; there are no invite codes, pre-shared keys,
 or manual approval steps. Starting the gateway is the platform owner's
 authorization.
 
-The enrollment is idempotent: on restart with an existing valid cert, the
-reuse path short-circuits and the ensemble proceeds directly to startup.
+Two explicit operations, no hidden fallbacks:
+
+- ``load_identity()`` — read path. Loads an existing cert/key pair from disk
+  and validates that the cert is not expired. Raises ``ConfigurationError`` if
+  the cert or key is missing, or if the cert is within the renewal threshold
+  of expiry. Does not touch the network.
+
+- ``enroll()`` — write path. Generates a CSR, enrolls with the gateway over
+  HTTP, persists the cert/key/trust-bundle to disk, and returns an
+  ``AppIdentity``. Always contacts the gateway; never reads cached state.
+
+The caller (``app.main.lifespan``) decides which to call. The service does not
+hide that decision behind an ``ensure*`` method.
 """
 
 from __future__ import annotations
@@ -100,34 +109,86 @@ class AppEnrollmentService:
             )
         return derived.rstrip("/")
 
-    def _existing_identity(self) -> tuple[str, str] | None:
-        """Return (cert_path, key_path) if both exist, else None."""
+    # ------------------------------------------------------------------
+    # Read path: load an existing identity from disk
+    # ------------------------------------------------------------------
+
+    def load_identity(self) -> AppIdentity:
+        """Load an existing app identity from disk and validate it.
+
+        Reads the cert and key from the ensemble's PKI tree, parses the cert
+        to check expiry, and extracts the SPIFFE app_id from the URI SAN.
+        Raises ``ConfigurationError`` if the cert or key file is missing, if
+        the cert cannot be parsed, if the cert is within the renewal
+        threshold of expiry, or if the cert has no SPIFFE URI SAN.
+
+        Does not touch the network.
+        """
         cert_path, key_path = get_app_cert_paths(self._app_name)
-        if Path(cert_path).exists() and Path(key_path).exists():
-            return cert_path, key_path
-        return None
+
+        if not Path(cert_path).exists():
+            raise ConfigurationError(
+                f"AppEnrollmentService: app cert not found at {cert_path}"
+            )
+        if not Path(key_path).exists():
+            raise ConfigurationError(
+                f"AppEnrollmentService: app key not found at {key_path}"
+            )
+
+        cert = self._load_cert(cert_path)
+        expiry = cert.not_valid_after_utc
+        remaining = expiry - datetime.now(UTC)
+        if remaining <= timedelta(days=_RENEWAL_THRESHOLD_DAYS):
+            raise ConfigurationError(
+                f"AppEnrollmentService: app cert at {cert_path} is within "
+                f"{_RENEWAL_THRESHOLD_DAYS} days of expiry "
+                f"(expires {expiry.isoformat()}, {remaining.days} days remaining)"
+            )
+
+        app_id = self._extract_app_id(cert)
+        ca_cert_path = PATHS["infra"]["ca_cert_path"]
+
+        logger.info(
+            "AppEnrollmentService: loaded existing app cert (cert=%s, app_id=%s, expires=%s)",
+            cert_path,
+            app_id,
+            expiry.isoformat(),
+        )
+        return AppIdentity(
+            app_id=app_id,
+            cert_path=cert_path,
+            key_path=key_path,
+            ca_cert_path=ca_cert_path,
+        )
 
     @staticmethod
-    def _cert_expiry(cert_path: str) -> datetime | None:
-        """Parse the not-after timestamp from a PEM cert. Returns None on failure."""
-        try:
-            with open(cert_path, "rb") as fh:
-                cert = x509.load_pem_x509_certificate(fh.read())
-        except Exception as exc:
-            logger.warning("Failed to parse existing app cert %s: %s", cert_path, exc)
-            return None
-        try:
-            return cert.not_valid_after_utc
-        except AttributeError:
-            # cryptography < 42.0 does not expose not_valid_after_utc.
-            return cert.not_valid_after.replace(tzinfo=UTC)
+    def _load_cert(cert_path: str) -> x509.Certificate:
+        """Load and parse a PEM cert from disk. Raises on any failure."""
+        with open(cert_path, "rb") as fh:
+            return x509.load_pem_x509_certificate(fh.read())
 
-    def _is_near_expiry(self, cert_path: str) -> bool:
-        """True if the cert expires within the renewal threshold."""
-        expiry = self._cert_expiry(cert_path)
-        if expiry is None:
-            return True
-        return expiry - datetime.now(UTC) <= timedelta(days=_RENEWAL_THRESHOLD_DAYS)
+    @staticmethod
+    def _extract_app_id(cert: x509.Certificate) -> str:
+        """Extract the SPIFFE app_id from the cert's URI SAN.
+
+        Raises ``ConfigurationError`` if the cert has no URI SAN.
+        """
+        try:
+            san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+        except x509.ExtensionNotFound as exc:
+            raise ConfigurationError(
+                "AppEnrollmentService: app cert has no SubjectAlternativeName extension"
+            ) from exc
+        uris = san.get_values_for_type(x509.UniformResourceIdentifier)
+        if not uris:
+            raise ConfigurationError(
+                "AppEnrollmentService: app cert has no URI SAN (SPIFFE app_id)"
+            )
+        return str(uris[0])
+
+    # ------------------------------------------------------------------
+    # Write path: enroll with the gateway
+    # ------------------------------------------------------------------
 
     def _generate_csr(self) -> tuple[str, str]:
         """Generate an ECDSA P-256 private key and CSR. Returns (csr_pem, key_pem)."""
@@ -216,33 +277,14 @@ class AppEnrollmentService:
             )
         return data
 
-    async def enroll_if_needed(self) -> AppIdentity:
-        """Ensure the ensemble has a valid app identity, enrolling if necessary.
+    async def enroll(self) -> AppIdentity:
+        """Enroll with the gateway and persist the resulting credentials.
 
-        Returns an `AppIdentity` pointing at the cert/key/ca paths to feed into
-        the `TLSConfig` constructed at Phase 0.5 of the lifespan. On failure,
-        raises `ConfigurationError` with a clear message — the ensemble fails
-        fast with no fallback to volume-mounting or ambient trust.
+        Generates a CSR, fetches the CA bundle, POSTs the enrollment request,
+        writes the cert/key/trust-bundle to disk, and returns an
+        ``AppIdentity``. Always contacts the gateway; never reads cached state.
+        Raises ``ConfigurationError`` on any failure.
         """
-        existing = self._existing_identity()
-        if existing is not None:
-            cert_path, key_path = existing
-            if not self._is_near_expiry(cert_path):
-                ca_cert_path = PATHS["infra"]["ca_cert_path"]
-                app_id = self._extract_app_id(cert_path)
-                logger.info(
-                    "AppEnrollmentService: reusing existing valid app cert (cert=%s, app_id=%s)",
-                    cert_path,
-                    app_id,
-                )
-                return AppIdentity(
-                    app_id=app_id,
-                    cert_path=cert_path,
-                    key_path=key_path,
-                    ca_cert_path=ca_cert_path,
-                )
-            logger.info("AppEnrollmentService: existing app cert is near expiry, re-enrolling")
-
         base_url = self._resolve_gateway_http_url()
         csr_pem, key_pem = self._generate_csr()
 
@@ -297,20 +339,3 @@ class AppEnrollmentService:
             key_path=key_path,
             ca_cert_path=ca_cert_path,
         )
-
-    @staticmethod
-    def _extract_app_id(cert_path: str) -> str:
-        """Best-effort extraction of the SPIFFE app_id from an existing cert."""
-        try:
-            with open(cert_path, "rb") as fh:
-                cert = x509.load_pem_x509_certificate(fh.read())
-        except Exception:
-            return ""
-        try:
-            san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
-        except x509.ExtensionNotFound:
-            return ""
-        uris = san.get_values_for_type(x509.UniformResourceIdentifier)
-        if uris:
-            return str(uris[0])
-        return ""

@@ -7,12 +7,19 @@
 
 """Tier 1 unit tests for AppEnrollmentService.
 
-Covers WS6 of the v2.0.0 ensemble app enrollment plan. The tests exercise the
-6-step enrollment flow (check existing -> fetch CA bundle -> generate CSR ->
-POST enroll -> write credentials -> return AppIdentity) and the reuse /
-re-enrollment / failure paths, with HTTP traffic intercepted at the httpx
-transport layer via `httpx.MockTransport` and filesystem state isolated to
-`tmp_path` via `G8E_PKI_DIR` + `reload_paths()`.
+Covers the two explicit operations:
+
+- ``load_identity()`` — read path: loads an existing cert/key pair from disk,
+  validates expiry, extracts the SPIFFE app_id from the URI SAN. Raises
+  ``ConfigurationError`` if missing, expired, near-expiry, or malformed.
+
+- ``enroll()`` — write path: generates a CSR, fetches the CA bundle, POSTs the
+  enrollment request to the gateway, writes credentials to disk, and returns
+  an ``AppIdentity``. Always contacts the gateway.
+
+HTTP traffic is intercepted at the httpx transport layer via
+``httpx.MockTransport`` and filesystem state is isolated to ``tmp_path`` via
+``G8E_PKI_DIR`` + ``reload_paths()``.
 
 The `g8e` protocol package must be installed (`pip install -e protocol/python`
 from the repo root) for the conftest import to succeed — see
@@ -68,21 +75,20 @@ def _isolate_pki_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
 def _self_signed_cert(
     not_after: _dt.datetime,
     app_name: str = "g8ee",
+    include_san: bool = True,
 ) -> tuple[str, str]:
     """Generate a self-signed ECDSA P-256 cert + key PEM pair.
 
     The cert is not a real gateway-signed app cert, but AppEnrollmentService
-    only parses the not-after timestamp and the SPIFFE URI SAN (best-effort) —
-    it does not verify the issuer chain on the reuse path. not_after must be
-    timezone-aware (UTC).
+    only parses the not-after timestamp and the SPIFFE URI SAN — it does not
+    verify the issuer chain on the reuse path. not_after must be
+    timezone-aware (UTC). When include_san is False, the cert is generated
+    without a SubjectAlternativeName extension.
     """
     key = ec.generate_private_key(ec.SECP256R1())
     subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, app_name)])
-    san = x509.SubjectAlternativeName(
-        [x509.UniformResourceIdentifier(f"spiffe://g8e.local/app/{app_name}")]
-    )
     not_before = not_after - _dt.timedelta(days=30)
-    cert = (
+    builder = (
         x509.CertificateBuilder()
         .subject_name(subject)
         .issuer_name(issuer)
@@ -90,9 +96,13 @@ def _self_signed_cert(
         .serial_number(x509.random_serial_number())
         .not_valid_before(not_before)
         .not_valid_after(not_after)
-        .add_extension(san, critical=False)
-        .sign(key, hashes.SHA256())
     )
+    if include_san:
+        san = x509.SubjectAlternativeName(
+            [x509.UniformResourceIdentifier(f"spiffe://g8e.local/app/{app_name}")]
+        )
+        builder = builder.add_extension(san, critical=False)
+    cert = builder.sign(key, hashes.SHA256())
     cert_pem = cert.public_bytes(serialization.Encoding.PEM).decode("utf-8")
     key_pem = key.private_bytes(
         encoding=serialization.Encoding.PEM,
@@ -157,12 +167,116 @@ def _enrollment_response(
 
 
 # ---------------------------------------------------------------------------
-# Tests: enroll_if_needed
+# Tests: load_identity (read path)
 # ---------------------------------------------------------------------------
 
 
-class TestEnrollIfNeededNoExistingCert:
-    """When no existing cert/key pair is present, the service enrolls."""
+class TestLoadIdentityValidCert:
+    """load_identity returns an AppIdentity when a valid cert exists on disk."""
+
+    def test_loads_existing_cert_without_http_calls(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
+
+        not_after = _dt.datetime.now(_dt.UTC) + _dt.timedelta(days=90)
+        cert_pem, key_pem = _self_signed_cert(not_after)
+        cert_path, key_path = _write_existing_identity(pki_dir, cert_pem, key_pem)
+
+        service = AppEnrollmentService()
+        identity = service.load_identity()
+
+        assert identity.cert_path == cert_path
+        assert identity.key_path == key_path
+        assert identity.ca_cert_path == str(pki_dir / "trust" / "hub-bundle.pem")
+        assert identity.app_id == "spiffe://g8e.local/app/g8ee"
+
+
+class TestLoadIdentityMissingCert:
+    """load_identity raises ConfigurationError when cert or key is missing."""
+
+    def test_raises_when_cert_missing(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        _isolate_pki_dir(monkeypatch, tmp_path)
+
+        service = AppEnrollmentService()
+        with pytest.raises(ConfigurationError, match="app cert not found"):
+            service.load_identity()
+
+    def test_raises_when_key_missing(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
+
+        not_after = _dt.datetime.now(_dt.UTC) + _dt.timedelta(days=90)
+        cert_pem, _key_pem = _self_signed_cert(not_after)
+        cert_path, _ = _write_existing_identity(pki_dir, cert_pem, "dummy")
+        # Overwrite key with nothing — delete it.
+        Path(cert_path).with_suffix(".key").unlink()
+
+        service = AppEnrollmentService()
+        with pytest.raises(ConfigurationError, match="app key not found"):
+            service.load_identity()
+
+
+class TestLoadIdentityNearExpiry:
+    """load_identity raises ConfigurationError when the cert is near expiry."""
+
+    def test_raises_when_cert_near_expiry(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
+
+        # Existing cert expires in 3 days — inside the 7-day threshold.
+        not_after = _dt.datetime.now(_dt.UTC) + _dt.timedelta(days=3)
+        cert_pem, key_pem = _self_signed_cert(not_after)
+        _write_existing_identity(pki_dir, cert_pem, key_pem)
+
+        service = AppEnrollmentService()
+        with pytest.raises(ConfigurationError, match="within 7 days of expiry"):
+            service.load_identity()
+
+
+class TestLoadIdentityMalformedCert:
+    """load_identity raises when the cert file cannot be parsed."""
+
+    def test_raises_on_unparseable_cert(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
+
+        _write_existing_identity(pki_dir, "not a cert", "not a key")
+
+        service = AppEnrollmentService()
+        with pytest.raises(Exception):
+            service.load_identity()
+
+
+class TestLoadIdentityNoSan:
+    """load_identity raises when the cert has no SPIFFE URI SAN."""
+
+    def test_raises_when_cert_has_no_san(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
+
+        not_after = _dt.datetime.now(_dt.UTC) + _dt.timedelta(days=90)
+        cert_pem, key_pem = _self_signed_cert(not_after, include_san=False)
+        _write_existing_identity(pki_dir, cert_pem, key_pem)
+
+        service = AppEnrollmentService()
+        with pytest.raises(ConfigurationError, match="no SubjectAlternativeName"):
+            service.load_identity()
+
+
+# ---------------------------------------------------------------------------
+# Tests: enroll (write path)
+# ---------------------------------------------------------------------------
+
+
+class TestEnrollNoExistingCert:
+    """enroll contacts the gateway and writes credentials."""
 
     pytestmark = pytest.mark.asyncio
 
@@ -185,7 +299,7 @@ class TestEnrollIfNeededNoExistingCert:
         _patch_httpx_with_mock_transport(monkeypatch, handler)
 
         service = AppEnrollmentService()
-        identity = await service.enroll_if_needed()
+        identity = await service.enroll()
 
         # AppIdentity points at the ensemble's own PKI tree.
         assert isinstance(identity, AppIdentity)
@@ -216,74 +330,8 @@ class TestEnrollIfNeededNoExistingCert:
         assert ca_on_disk == "FAKE-CA-BUNDLE-PEM"
 
 
-class TestEnrollIfNeededValidExistingCert:
-    """When a valid, non-near-expiry cert already exists, the service reuses it."""
-
-    pytestmark = pytest.mark.asyncio
-
-    async def test_reuses_existing_cert_without_http_calls(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
-        monkeypatch.setenv(EnvVar.GATEWAY_HTTP_URL, "http://g8e.local:8080")
-
-        # Existing cert expires well beyond the 7-day renewal threshold.
-        not_after = _dt.datetime.now(_dt.UTC) + _dt.timedelta(days=90)
-        cert_pem, key_pem = _self_signed_cert(not_after)
-        cert_path, key_path = _write_existing_identity(pki_dir, cert_pem, key_pem)
-
-        # If any HTTP call fires, the handler fails the test.
-        def handler(_request: httpx.Request) -> httpx.Response:
-            raise AssertionError("reuse path must not make HTTP calls")
-
-        _patch_httpx_with_mock_transport(monkeypatch, handler)
-
-        service = AppEnrollmentService()
-        identity = await service.enroll_if_needed()
-
-        assert identity.cert_path == cert_path
-        assert identity.key_path == key_path
-        assert identity.ca_cert_path == str(pki_dir / "trust" / "hub-bundle.pem")
-        # app_id is best-effort extracted from the SPIFFE URI SAN.
-        assert identity.app_id == "spiffe://g8e.local/app/g8ee"
-
-
-class TestEnrollIfNeededNearExpiry:
-    """When an existing cert is within the renewal threshold, the service re-enrolls."""
-
-    pytestmark = pytest.mark.asyncio
-
-    async def test_re_enrolls_when_cert_near_expiry(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
-        monkeypatch.setenv(EnvVar.GATEWAY_HTTP_URL, "http://g8e.local:8080")
-
-        # Existing cert expires in 3 days — inside the 7-day threshold.
-        not_after = _dt.datetime.now(_dt.UTC) + _dt.timedelta(days=3)
-        cert_pem, key_pem = _self_signed_cert(not_after)
-        _write_existing_identity(pki_dir, cert_pem, key_pem)
-
-        enrolled: list[bool] = []
-
-        def handler(request: httpx.Request) -> httpx.Response:
-            if request.url.path == "/.well-known/g8e/pki/ca-bundle":
-                return httpx.Response(200, text="CA-BUNDLE-PEM")
-            if request.url.path == "/api/v1/pki/apps/enroll":
-                enrolled.append(True)
-                return httpx.Response(200, json=_enrollment_response())
-            return httpx.Response(404)
-
-        _patch_httpx_with_mock_transport(monkeypatch, handler)
-
-        service = AppEnrollmentService()
-        await service.enroll_if_needed()
-
-        assert enrolled, "expected re-enrollment to fire for a near-expiry cert"
-
-
-class TestEnrollIfNeededFailures:
-    """Failure paths raise ConfigurationError with a clear message."""
+class TestEnrollFailures:
+    """enroll failure paths raise ConfigurationError with a clear message."""
 
     pytestmark = pytest.mark.asyncio
 
@@ -304,7 +352,7 @@ class TestEnrollIfNeededFailures:
 
         service = AppEnrollmentService()
         with pytest.raises(ConfigurationError, match="enrollment rejected"):
-            await service.enroll_if_needed()
+            await service.enroll()
 
     async def test_ca_bundle_fetch_failure_raises_configuration_error(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -320,7 +368,7 @@ class TestEnrollIfNeededFailures:
 
         service = AppEnrollmentService()
         with pytest.raises(ConfigurationError, match="failed to fetch CA bundle"):
-            await service.enroll_if_needed()
+            await service.enroll()
 
     async def test_enrollment_post_network_error_raises_configuration_error(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -338,7 +386,7 @@ class TestEnrollIfNeededFailures:
 
         service = AppEnrollmentService()
         with pytest.raises(ConfigurationError, match="enrollment POST"):
-            await service.enroll_if_needed()
+            await service.enroll()
 
 
 # ---------------------------------------------------------------------------

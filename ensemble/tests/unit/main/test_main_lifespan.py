@@ -35,10 +35,12 @@ _PATCHES = [
     "app.main.initialize_g8e_service",
     "app.main.setup_logging",
     "app.main.set_settings",
+    "app.main.AppEnrollmentService",
     "app.main.DBClient",
     "app.main.KVCacheClient",
     "app.main.PubSubClient",
     "app.main.BlobClient",
+    "app.main.GovernanceClient",
     "app.main.DBService",
     "app.main.KVService",
     "app.main.BlobService",
@@ -49,6 +51,8 @@ _PATCHES = [
 
 def _build_mocks():
     """Start all patches and return (mocks_dict, patches_list)."""
+    from app.services.infra.app_enrollment_service import AppIdentity
+
     patches = [patch(p) for p in _PATCHES]
     mocks = {}
     for p in patches:
@@ -58,6 +62,27 @@ def _build_mocks():
             mock_obj.return_value.connect = AsyncMock(return_value=True)
             mock_obj.return_value.close = AsyncMock()
         mocks[name] = mock_obj
+
+    # AppEnrollmentService.load_identity raises ConfigurationError (no cert
+    # on disk in the test env), so the lifespan falls through to enroll().
+    # Mock both paths: load_identity as a sync method that raises, enroll as
+    # an async method that returns an AppIdentity with the cert/key/ca paths
+    # that TLSConfig and the operator clients are built from.
+    from app.errors import ConfigurationError
+
+    app_identity = AppIdentity(
+        app_id="test-app-id",
+        cert_path="/tmp/test-app-cert.pem",
+        key_path="/tmp/test-app-key.pem",
+        ca_cert_path="/tmp/test-ca-bundle.pem",
+    )
+    mocks["AppEnrollmentService"].return_value.load_identity.side_effect = (
+        ConfigurationError("no existing cert")
+    )
+    mocks["AppEnrollmentService"].return_value.enroll = AsyncMock(
+        return_value=app_identity
+    )
+
     return mocks, patches
 
 
@@ -118,6 +143,11 @@ def _configure_factory(mocks):
 def mock_app():
     app = MagicMock(spec=FastAPI)
     app.state = MagicMock()
+    # internal_http_client is never assigned by lifespan (it lives inside
+    # ServiceFactory's AllServices). Set it to None so the shutdown path's
+    # getattr(state, "internal_http_client", None) returns None instead of
+    # an auto-created child MagicMock that can't be awaited.
+    app.state.internal_http_client = None
     return app
 
 
