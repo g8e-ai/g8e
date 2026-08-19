@@ -130,6 +130,7 @@ linters:
       - builtin$
       - examples$
       - vendor$
+      - node_modules
       - protocol/docs/mcp_tool_template\.go$
 issues:
   max-issues-per-linter: 0
@@ -145,4 +146,5 @@ formatters:
       - builtin$
       - examples$
       - vendor$
+      - node_modules
       - protocol/docs/mcp_tool_template\.go$
