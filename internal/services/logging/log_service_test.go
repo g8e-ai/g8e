@@ -24,14 +24,14 @@ import (
 // It records calls and returns canned responses. Methods not exercised by
 // LogService panic to catch unexpected usage.
 type stubFileSvc struct {
-	mkdirErr      error
-	openAppendErr error
+	mkdirErr       error
+	openAppendErr  error
 	openAppendFile *os.File
-	openReadErr   error
-	openReadFile  *os.File
-	fileExists    bool
-	fileExistsErr error
-	resolvePath   string
+	openReadErr    error
+	openReadFile   *os.File
+	fileExists     bool
+	fileExistsErr  error
+	resolvePath    string
 }
 
 func (s *stubFileSvc) MkdirAll(ctx context.Context, relPath string, mode os.FileMode) error {
@@ -73,8 +73,8 @@ func (s *stubFileSvc) OpenForRead(ctx context.Context, relPath string) (*os.File
 	return s.openReadFile, nil
 }
 
-func (s *stubFileSvc) Remove(ctx context.Context, relPath string) error              { panic("unexpected") }
-func (s *stubFileSvc) RemoveAll(ctx context.Context, relPath string) error           { panic("unexpected") }
+func (s *stubFileSvc) Remove(ctx context.Context, relPath string) error    { panic("unexpected") }
+func (s *stubFileSvc) RemoveAll(ctx context.Context, relPath string) error { panic("unexpected") }
 func (s *stubFileSvc) ReadDir(ctx context.Context, relPath string) ([]os.DirEntry, error) {
 	panic("unexpected")
 }

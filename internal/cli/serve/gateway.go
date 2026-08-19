@@ -90,7 +90,11 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	if err != nil {
 		return fmt.Errorf("gateway: configure logger: %w", err)
 	}
-	defer logHandle.Close()
+	defer func() {
+		if closeErr := logHandle.Close(); closeErr != nil {
+			logger.Error("gateway: close log handle", "error", closeErr)
+		}
+	}()
 
 	// Apply defaults for empty directory flags
 	if cfg.DataDir == "" {

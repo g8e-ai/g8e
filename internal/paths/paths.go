@@ -78,8 +78,8 @@ var Infra struct {
 	BootstrapDigestPath string
 
 	// Log paths
-	LogDir      string
-	G8eLogFile   string
+	LogDir     string
+	G8eLogFile string
 
 	// PID paths
 	PidDir              string
@@ -154,8 +154,8 @@ var Infra struct {
 	SessionEncKeyPath   string
 	BootstrapDigestPath string
 
-	LogDir      string
-	G8eLogFile   string
+	LogDir     string
+	G8eLogFile string
 
 	PidDir              string
 	OperatorPostureFile string
@@ -223,7 +223,7 @@ var Infra struct {
 	BootstrapDigestPath: constants.RuntimeDirname + "/" + constants.SecretsDirname + "/" + constants.SecretsFileBootstrapDigest,
 
 	LogDir:              constants.RuntimeDirname + "/" + constants.LogDirname,
-	G8eLogFile:           constants.RuntimeDirname + "/" + constants.LogDirname + "/" + constants.G8eLogFilename,
+	G8eLogFile:          constants.RuntimeDirname + "/" + constants.LogDirname + "/" + constants.G8eLogFilename,
 	PidDir:              constants.RuntimeDirname + "/" + constants.PidDirname,
 	OperatorPostureFile: constants.RuntimeDirname + "/" + constants.PidDirname + "/" + constants.OperatorPostureFilename,
 	OperatorPIDFile:     constants.RuntimeDirname + "/" + constants.PidDirname + "/" + constants.OperatorPIDFilename,
