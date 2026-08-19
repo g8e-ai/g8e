@@ -15,7 +15,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -1283,7 +1282,7 @@ func TestEnroll_StaleAnchors_ListError_ProceedsAsBestEffort(t *testing.T) {
 	gw.bootstrapStatus = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
-	trust.staleErr = errors.New("enumeration failed")
+	trust.staleErr = fmt.Errorf("enumeration failed")
 	// IsTrusted returns false (default), InstallRoot succeeds (default) → installed.
 
 	confirmCalled := false
@@ -1838,6 +1837,3 @@ func TestEnroll_BrowserRestartPrompt_WhenNoSystemTrustButStaleAnchorsRemoved(t *
 func pemEncode(blockType string, der []byte) string {
 	return string(pem.EncodeToMemory(&pem.Block{Type: blockType, Bytes: der}))
 }
-
-// Suppress unused import errors for packages used only in helpers.
-var _ = errors.Is

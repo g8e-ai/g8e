@@ -5,6 +5,12 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
+// os.Chdir is used for source-tree discovery (resolving internal/services/gateway/docs/,
+// cmd/g8e, and swagger spec paths via filepath.Abs against cwd), not .g8e/ runtime
+// state. This is a legitimate cwd usage — swagger init/serve/validate are developer
+// tooling commands that resolve source-tree paths relative to the working directory,
+// not through RuntimeFileService.
+
 package cmd
 
 import (

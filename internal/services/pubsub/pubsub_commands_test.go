@@ -427,7 +427,7 @@ func TestOperatorPubSubService_handleMcpCallRequestSync(t *testing.T) {
 		msg := &PubSubCommandMessage{
 			EventType: constants.Event.Operator.Mcp.CallRequested,
 			ID:        "msg-1",
-			Payload:   mustMarshalJSON(t, map[string]interface{}{"tool_name": "test"}),
+			Payload:   mustMarshalProto(t, &operatorv1.McpCallRequested{ToolName: "test"}),
 		}
 		_, err := f.Svc.handleMcpCallRequestSync(context.Background(), msg)
 		require.Error(t, err)
@@ -443,7 +443,7 @@ func TestOperatorPubSubService_handleA2aCallRequestSync(t *testing.T) {
 		msg := &PubSubCommandMessage{
 			EventType: constants.Event.Operator.A2a.CallRequested,
 			ID:        "msg-1",
-			Payload:   mustMarshalJSON(t, map[string]interface{}{"skill_name": "test"}),
+			Payload:   mustMarshalProto(t, &operatorv1.A2ACallRequested{SkillName: "test"}),
 		}
 		_, err := f.Svc.handleA2aCallRequestSync(context.Background(), msg)
 		require.Error(t, err)
