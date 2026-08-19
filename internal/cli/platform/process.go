@@ -565,19 +565,16 @@ func (pm *ProcessManager) Clean() error {
 	return nil
 }
 
-// TailLog prints a log file, optionally following new entries (like tail -f)
-func TailLog(logPath string, follow bool) error {
-	file, err := os.Open(logPath)
-	if err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
-	}
-	defer file.Close()
-
+// TailLog prints a log file, optionally following new entries (like tail -f).
+// The caller opens the file via the file service and passes the handle; the
+// nonexistent-file case is handled by the caller through LogFileExists /
+// OpenLogForRead returning constants.ErrNotFound.
+func TailLog(r io.ReadSeeker, follow bool) error {
 	// Print existing content
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
+	if _, err := r.Seek(0, io.SeekStart); err != nil {
 		return fmt.Errorf("%w: seek to start: %v", constants.ErrDirectoryRead, err)
 	}
-	if _, err := io.Copy(os.Stdout, file); err != nil {
+	if _, err := io.Copy(os.Stdout, r); err != nil {
 		return fmt.Errorf("%w: print content: %v", constants.ErrDirectoryRead, err)
 	}
 
@@ -586,7 +583,7 @@ func TailLog(logPath string, follow bool) error {
 	}
 
 	// Follow mode: seek to end and watch for new content
-	if _, err := file.Seek(0, io.SeekEnd); err != nil {
+	if _, err := r.Seek(0, io.SeekEnd); err != nil {
 		return fmt.Errorf("%w: seek to end: %v", constants.ErrDirectoryRead, err)
 	}
 
@@ -601,7 +598,7 @@ func TailLog(logPath string, follow bool) error {
 
 	go func() {
 		defer close(lineChan)
-		reader := bufio.NewReader(file)
+		reader := bufio.NewReader(r)
 		for {
 			select {
 			case <-done:
