@@ -26,8 +26,10 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/system"
 	"github.com/g8e-ai/g8e/internal/timesvc"
 	"github.com/g8e-ai/g8e/internal/uuid"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // HeartbeatService owns all heartbeat logic for the g8eo operator:
@@ -376,10 +378,14 @@ func (hs *HeartbeatService) SendAutomatic() error {
 	hashStr := hex.EncodeToString(hash[:])
 
 	env := &govpkg.GovernanceEnvelope{
-		Id:              uuid.NewString(),
-		TransactionHash: hashStr,
-		ActionType:      string(constants.ActionTypeHeartbeat),
-		Payload:         data,
+		Id:                uuid.NewString(),
+		Timestamp:         timestamppb.Now(),
+		SourceComponent:   commonv1.Component_COMPONENT_G8EO,
+		OperatorId:        hs.config.OperatorID,
+		OperatorSessionId: hs.config.OperatorSessionId,
+		TransactionHash:   hashStr,
+		ActionType:        string(constants.ActionTypeHeartbeat),
+		Payload:           data,
 	}
 
 	vt := &governance.VerifiedTransaction{

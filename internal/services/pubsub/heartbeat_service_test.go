@@ -11,6 +11,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -75,6 +76,22 @@ func (m *mockResultsPublisher) PublishExecutionStatus(ctx context.Context, statu
 func (m *mockResultsPublisher) PublishHeartbeat(ctx context.Context, heartbeat proto.Message) error {
 	m.publishHeartbeatCalled = true
 	return m.publishHeartbeatError
+}
+
+// capturingConsoleAuditStore records every receipt document passed to DocSet
+// so tests can assert on the ActionReceiptRecord fields derived from the
+// GovernanceEnvelope without requiring a real SQLite audit store. It is a
+// test-only implementation of governance.TransactionAuditStore.
+type capturingConsoleAuditStore struct {
+	mu      sync.Mutex
+	records [][]byte
+}
+
+func (c *capturingConsoleAuditStore) DocSet(_, _ string, data json.RawMessage) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.records = append(c.records, append([]byte(nil), data...))
+	return nil
 }
 
 func TestNewHeartbeatService(t *testing.T) {
@@ -531,6 +548,50 @@ func TestHeartbeatService_SendAutomatic(t *testing.T) {
 		err := svc.SendAutomatic()
 		assert.NoError(t, err)
 		// Should not panic, should log warning
+	})
+
+	t.Run("propagates operator identity onto the governance envelope", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc := NewHeartbeatService(cfg, logger, nil)
+		svc.SetContext(context.Background())
+
+		mockHandler := &mockExecutionHandler{
+			ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
+				return "heartbeat-receipt-id", nil
+			},
+		}
+		privKey := ed25519.NewKeyFromSeed(make([]byte, 32))
+		capture := &capturingConsoleAuditStore{}
+		mockActuator := &governance.L5Actuator{
+			Logger:            logger,
+			ConsoleAuditStore: capture,
+			ExecutionHandler:  mockHandler,
+			SigningKey:        privKey,
+			KeyID:             "test-key",
+		}
+		svc.SetActuator(mockActuator)
+
+		err := svc.SendAutomatic()
+		require.NoError(t, err)
+
+		capture.mu.Lock()
+		records := capture.records
+		capture.mu.Unlock()
+		require.NotEmpty(t, records, "actuator must log at least one receipt document")
+
+		var record models.ActionReceiptRecord
+		require.NoError(t, json.Unmarshal(records[0], &record))
+
+		// Regression: SendAutomatic previously built the GovernanceEnvelope with
+		// only Id/TransactionHash/ActionType/Payload, leaving OperatorId and
+		// OperatorSessionId empty. buildReceiptRecord reads those envelope
+		// fields directly, so an empty OperatorSessionId produced a receipt
+		// violating the receipts.operator_session_id FOREIGN KEY constraint.
+		assert.Equal(t, cfg.OperatorID, record.OperatorID, "envelope must carry OperatorId from config")
+		assert.Equal(t, cfg.OperatorSessionId, record.OperatorSessionID, "envelope must carry OperatorSessionId from config")
+		assert.Equal(t, constants.ActionTypeHeartbeat, record.ActionType, "envelope must carry the heartbeat action type")
 	})
 }
 

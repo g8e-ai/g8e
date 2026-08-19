@@ -322,6 +322,15 @@ func NewPasskeyHandler(deps PasskeyHandlerDeps) *PasskeyHandler {
 	}
 }
 
+// MaxPayloadBytes returns the configured maximum request payload size in
+// bytes. A zero value causes http.MaxBytesReader to reject every body on the
+// first read, breaking all body-reading passkey endpoints (register/auth
+// challenge and verify). Production wiring must set this to a non-zero value
+// (typically cfg.Gateway.MaxPayloadBytes).
+func (h *PasskeyHandler) MaxPayloadBytes() int64 {
+	return h.maxPayload
+}
+
 // ChallengeData stores a pending challenge for registration or authentication.
 type ChallengeData struct {
 	Challenge string `json:"challenge"`

@@ -259,6 +259,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		WebSessionSvc:      webSessionSvc,
 		EnrollmentTokenSvc: enrollmentTokenSvc,
 		Responder:          res,
+		MaxPayload:         cfg.Gateway.MaxPayloadBytes,
 		Orchestrator:       passkeyOrchestrator,
 	})
 
