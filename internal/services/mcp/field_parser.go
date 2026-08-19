@@ -107,6 +107,14 @@ func ConvertToFieldValue(val interface{}) FieldValue {
 }
 
 // convertToFieldValue converts an interface{} value to a typed FieldValue.
+// The []interface{} and map[string]interface{} type-switch cases walk arbitrary
+// JSON decoded via json.Unmarshal from external sources (document store fields,
+// cloud metadata, command outputs) where the schema is unknown by design. This
+// is the same schema-less passthrough exception as ScrubMap/scrubSlice/
+// RehydratePayload in internal/services/scrubbing/boundary.go: a typed model
+// cannot represent an externally-defined JSON shape, so rule 3's "no
+// map[string]interface{} for known shapes" does not apply here. The output is
+// the typed FieldValue, so callers receive a typed model regardless of input.
 func convertToFieldValue(val interface{}) FieldValue {
 	if val == nil {
 		return FieldValue{Null: true}

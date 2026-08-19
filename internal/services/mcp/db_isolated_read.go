@@ -51,10 +51,7 @@ func (t *DBIsolatedReadTool) InputSchema() *InputSchema {
 
 // Execute implements the tool logic.
 func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		DatabasePath string `json:"database_path"`
-		Query        string `json:"query"`
-	}
+	var req DBIsolatedReadRequest
 	if err := json.Unmarshal(args, &req); err != nil {
 		return CallToolResult{}, fmt.Errorf("%w: %w", constants.ErrMCPUnmarshalArguments, err)
 	}

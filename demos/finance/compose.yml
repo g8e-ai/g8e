@@ -145,4 +145,4 @@ services:
     volumes:
       - gateway_state:/data/gateway:ro
       - operator_state:/data/operator:ro
-    command: ["sh", "-c", "until [ -f /data/gateway/logs/operator.log ]; do sleep 2; done; tail -f /data/gateway/logs/operator.log"]
+    command: ["sh", "-c", "until [ -f /data/gateway/logs/g8e.log ]; do sleep 2; done; tail -f /data/gateway/logs/g8e.log"]

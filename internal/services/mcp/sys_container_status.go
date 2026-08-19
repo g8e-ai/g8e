@@ -90,9 +90,7 @@ func (t *SysContainerStatusTool) InputSchema() *InputSchema {
 
 // Execute implements the tool logic.
 func (t *SysContainerStatusTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		ContainerName string `json:"container_name"`
-	}
+	var req SysContainerStatusRequest
 	if err := json.Unmarshal(args, &req); err != nil {
 		return CallToolResult{}, fmt.Errorf("sys_container_status: unmarshal arguments: %w: %w", constants.ErrMCPUnmarshalArguments, err)
 	}

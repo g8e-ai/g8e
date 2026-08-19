@@ -49,9 +49,7 @@ func (t *SysOOMDetectTool) InputSchema() *InputSchema {
 
 // Execute implements the tool logic.
 func (t *SysOOMDetectTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		LogPath string `json:"log_path,omitempty"`
-	}
+	var req SysOOMDetectRequest
 	if err := json.Unmarshal(args, &req); err != nil {
 		return CallToolResult{}, fmt.Errorf("sys_oom_detect: %w", constants.ErrMCPUnmarshalArguments)
 	}

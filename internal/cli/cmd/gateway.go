@@ -750,13 +750,21 @@ output (like tail -f).`,
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
 
-			logPath := pm.GetLogPath()
-			if _, err := os.Stat(logPath); os.IsNotExist(err) {
-				cmd.Printf("No log file found at %s\n", logPath)
+			logSvc := pm.LogService()
+			exists, err := logSvc.LogFileExists(context.Background())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+			}
+			if !exists {
+				cmd.Printf("No log file found at %s\n", logSvc.LogFilePath())
 				return nil
 			}
-
-			return platform.TailLog(logPath, follow)
+			handle, err := logSvc.OpenLogForRead(context.Background())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+			}
+			defer handle.Close()
+			return platform.TailLog(handle, follow)
 		},
 	}
 

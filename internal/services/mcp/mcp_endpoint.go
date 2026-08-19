@@ -82,7 +82,7 @@ type initializeParams struct {
 //	@Tags			mcp
 //	@Accept			json
 //	@Produce		json
-//	@Success		200	{object}	map[string]interface{}
+//	@Success		200	{object}	response.JSONRPCResponse
 //	@Router			/mcp [post]
 func (g *GatewayService) HandleMCP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {

@@ -11,7 +11,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -107,7 +107,7 @@ func TestNativeToolHandler_HandleTool_Unit(t *testing.T) {
 			name:   "fail_tool",
 			schema: &InputSchema{Type: "object"},
 			executeFn: func(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-				return CallToolResult{}, errors.New("execution failed")
+				return CallToolResult{}, fmt.Errorf("execution failed")
 			},
 		}
 		require.NoError(t, registry.Register(mockTool))
@@ -458,12 +458,12 @@ func TestHandleDBIsolatedRead(t *testing.T) {
 			t.Fatalf("HandleTool failed: %v", err)
 		}
 
-		var readResult map[string]interface{}
+		var readResult DBIsolatedReadResult
 		if err := json.Unmarshal([]byte(result.Content[0].Text), &readResult); err != nil {
 			t.Fatalf("failed to unmarshal result: %v", err)
 		}
 
-		if readResult["error"] == nil {
+		if readResult.Error == "" {
 			t.Error("expected error field in result for non-SELECT query")
 		}
 	})
@@ -1474,9 +1474,9 @@ func TestHandleGitOps(t *testing.T) {
 			t.Fatalf("git commit failed: %v", err)
 		}
 
-		req := map[string]interface{}{
-			"operation": "status",
-			"repo_path": tmpDir,
+		req := GitOpsRequest{
+			Operation: "status",
+			RepoPath:  tmpDir,
 		}
 		reqJSON, _ := json.Marshal(req)
 
@@ -1489,12 +1489,12 @@ func TestHandleGitOps(t *testing.T) {
 			t.Error("expected content in result")
 		}
 
-		var status map[string]interface{}
+		var status gitStatusResult
 		if err := json.Unmarshal([]byte(result.Content[0].Text), &status); err != nil {
 			t.Fatalf("failed to unmarshal result: %v", err)
 		}
 
-		if _, ok := status["branch"]; !ok {
+		if status.Branch == "" {
 			t.Error("expected branch in result")
 		}
 	})
@@ -1537,10 +1537,10 @@ func TestHandleGitOps(t *testing.T) {
 			t.Fatalf("git commit failed: %v", err)
 		}
 
-		req := map[string]interface{}{
-			"operation": "log",
-			"repo_path": tmpDir,
-			"limit":     5,
+		req := GitOpsRequest{
+			Operation: "log",
+			RepoPath:  tmpDir,
+			Limit:     5,
 		}
 		reqJSON, _ := json.Marshal(req)
 
@@ -1549,21 +1549,21 @@ func TestHandleGitOps(t *testing.T) {
 			t.Fatalf("HandleTool failed: %v", err)
 		}
 
-		var log map[string]interface{}
-		if err := json.Unmarshal([]byte(result.Content[0].Text), &log); err != nil {
+		var logResult gitLogResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &logResult); err != nil {
 			t.Fatalf("failed to unmarshal result: %v", err)
 		}
 
-		if _, ok := log["commits"]; !ok {
+		if len(logResult.Commits) == 0 {
 			t.Error("expected commits in result")
 		}
 	})
 
 	t.Run("non-git repository", func(t *testing.T) {
 		tmpDir := testutil.TempDir(t)
-		req := map[string]interface{}{
-			"operation": "status",
-			"repo_path": tmpDir,
+		req := GitOpsRequest{
+			Operation: "status",
+			RepoPath:  tmpDir,
 		}
 		reqJSON, _ := json.Marshal(req)
 
@@ -1572,12 +1572,12 @@ func TestHandleGitOps(t *testing.T) {
 			t.Fatalf("HandleTool failed: %v", err)
 		}
 
-		var status map[string]interface{}
+		var status gitErrorResult
 		if err := json.Unmarshal([]byte(result.Content[0].Text), &status); err != nil {
 			t.Fatalf("failed to unmarshal result: %v", err)
 		}
 
-		if status["error"] == nil {
+		if status.Error == "" {
 			t.Error("expected error field for non-git repository")
 		}
 	})
@@ -1588,8 +1588,8 @@ func TestHandleCloudMetadata(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("detect provider", func(t *testing.T) {
-		req := map[string]interface{}{
-			"operation": "detect",
+		req := CloudMetadataRequest{
+			Operation: "detect",
 		}
 		reqJSON, _ := json.Marshal(req)
 
@@ -1598,19 +1598,19 @@ func TestHandleCloudMetadata(t *testing.T) {
 			t.Fatalf("HandleTool failed: %v", err)
 		}
 
-		var metadata map[string]interface{}
+		var metadata CloudMetadataDetectResult
 		if err := json.Unmarshal([]byte(result.Content[0].Text), &metadata); err != nil {
 			t.Fatalf("failed to unmarshal result: %v", err)
 		}
 
-		if _, ok := metadata["provider"]; !ok {
+		if metadata.Provider == "" {
 			t.Error("expected provider in result")
 		}
 	})
 
 	t.Run("all metadata", func(t *testing.T) {
-		req := map[string]interface{}{
-			"operation": "all",
+		req := CloudMetadataRequest{
+			Operation: "all",
 		}
 		reqJSON, _ := json.Marshal(req)
 
@@ -1619,12 +1619,12 @@ func TestHandleCloudMetadata(t *testing.T) {
 			t.Fatalf("HandleTool failed: %v", err)
 		}
 
-		var metadata map[string]interface{}
-		if err := json.Unmarshal([]byte(result.Content[0].Text), &metadata); err != nil {
+		var allMetadata CloudMetadataAllResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &allMetadata); err != nil {
 			t.Fatalf("failed to unmarshal result: %v", err)
 		}
 
-		if _, ok := metadata["provider"]; !ok {
+		if allMetadata.Provider == "" {
 			t.Error("expected provider in result")
 		}
 	})
@@ -1635,7 +1635,7 @@ func TestHandleSysInfo(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
-		req := map[string]interface{}{}
+		req := SysInfoRequest{}
 		reqJSON, _ := json.Marshal(req)
 
 		result, err := handler.HandleTool(context.Background(), "sys_info", reqJSON)
@@ -1643,12 +1643,12 @@ func TestHandleSysInfo(t *testing.T) {
 			t.Fatalf("HandleTool failed: %v", err)
 		}
 
-		var info map[string]interface{}
+		var info SysInfoResult
 		if err := json.Unmarshal([]byte(result.Content[0].Text), &info); err != nil {
 			t.Fatalf("failed to unmarshal result: %v", err)
 		}
 
-		if _, ok := info["hostname"]; !ok {
+		if info.Hostname == "" {
 			t.Error("expected hostname in result")
 		}
 	})
@@ -1659,8 +1659,8 @@ func TestHandleNetDNSResolve(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("valid hostname", func(t *testing.T) {
-		req := map[string]interface{}{
-			"hostname": "localhost",
+		req := NetDNSResolveRequest{
+			Hostname: "localhost",
 		}
 		reqJSON, _ := json.Marshal(req)
 
@@ -1680,7 +1680,7 @@ func TestHandleNetDNSResolve(t *testing.T) {
 	})
 
 	t.Run("missing hostname", func(t *testing.T) {
-		req := map[string]interface{}{}
+		req := NetDNSResolveRequest{}
 		reqJSON, _ := json.Marshal(req)
 
 		_, err := handler.HandleTool(context.Background(), "net_dns_resolve", reqJSON)
@@ -1695,7 +1695,7 @@ func TestHandleTLSCertInspect(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("missing cert path", func(t *testing.T) {
-		req := map[string]interface{}{}
+		req := TLSCertInspectRequest{}
 		reqJSON, _ := json.Marshal(req)
 
 		_, err := handler.HandleTool(context.Background(), "tls_cert_inspect", reqJSON)
@@ -1710,9 +1710,9 @@ func TestHandleSysEnvVars(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
-		req := map[string]interface{}{
-			"pattern":        "PATH",
-			"redact_secrets": true,
+		req := SysEnvVarsRequest{
+			Pattern:       "PATH",
+			RedactSecrets: true,
 		}
 		reqJSON, _ := json.Marshal(req)
 
@@ -1721,12 +1721,12 @@ func TestHandleSysEnvVars(t *testing.T) {
 			t.Fatalf("HandleTool failed: %v", err)
 		}
 
-		var env map[string]interface{}
+		var env SysEnvVarsResult
 		if err := json.Unmarshal([]byte(result.Content[0].Text), &env); err != nil {
 			t.Fatalf("failed to unmarshal result: %v", err)
 		}
 
-		if _, ok := env["variables"]; !ok {
+		if env.Variables == nil {
 			t.Error("expected variables in result")
 		}
 	})
@@ -1743,9 +1743,8 @@ func TestHandleFSFileChecksum(t *testing.T) {
 			t.Fatalf("failed to create test file: %v", err)
 		}
 
-		req := map[string]interface{}{
-			"file_path": testFile,
-			"algorithm": "sha256",
+		req := FSFileChecksumRequest{
+			FilePath: testFile,
 		}
 		reqJSON, _ := json.Marshal(req)
 
@@ -1754,18 +1753,18 @@ func TestHandleFSFileChecksum(t *testing.T) {
 			t.Fatalf("HandleTool failed: %v", err)
 		}
 
-		var checksum map[string]interface{}
+		var checksum FSFileChecksumResult
 		if err := json.Unmarshal([]byte(result.Content[0].Text), &checksum); err != nil {
 			t.Fatalf("failed to unmarshal result: %v", err)
 		}
 
-		if _, ok := checksum["checksum"]; !ok {
+		if checksum.Checksum == "" {
 			t.Error("expected checksum in result")
 		}
 	})
 
 	t.Run("missing file path", func(t *testing.T) {
-		req := map[string]interface{}{}
+		req := FSFileChecksumRequest{}
 		reqJSON, _ := json.Marshal(req)
 
 		_, err := handler.HandleTool(context.Background(), "fs_file_checksum", reqJSON)
@@ -1780,7 +1779,7 @@ func TestHandleSysServiceStatus(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("missing service name", func(t *testing.T) {
-		req := map[string]interface{}{}
+		req := SysServiceStatusRequest{}
 		reqJSON, _ := json.Marshal(req)
 
 		_, err := handler.HandleTool(context.Background(), "sys_service_status", reqJSON)
@@ -1795,7 +1794,7 @@ func TestHandleSysContainerStatus(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("missing container name", func(t *testing.T) {
-		req := map[string]interface{}{}
+		req := SysContainerStatusRequest{}
 		reqJSON, _ := json.Marshal(req)
 
 		_, err := handler.HandleTool(context.Background(), "sys_container_status", reqJSON)
@@ -1812,8 +1811,8 @@ func TestHandleFSDiskUsage(t *testing.T) {
 	t.Run("valid path", func(t *testing.T) {
 		tmpDir := testutil.TempDir(t)
 
-		req := map[string]interface{}{
-			"path": tmpDir,
+		req := FSDiskUsageRequest{
+			Path: tmpDir,
 		}
 		reqJSON, _ := json.Marshal(req)
 
@@ -1822,12 +1821,12 @@ func TestHandleFSDiskUsage(t *testing.T) {
 			t.Fatalf("HandleTool failed: %v", err)
 		}
 
-		var usage map[string]interface{}
+		var usage FSDiskUsageResult
 		if err := json.Unmarshal([]byte(result.Content[0].Text), &usage); err != nil {
 			t.Fatalf("failed to unmarshal result: %v", err)
 		}
 
-		if _, ok := usage["path"]; !ok {
+		if usage.Path == "" {
 			t.Error("expected path in result")
 		}
 	})
@@ -1836,7 +1835,7 @@ func TestHandleFSDiskUsage(t *testing.T) {
 		if runtime.GOOS != "linux" {
 			t.Skip("skipping on non-Linux - /proc/mounts not available")
 		}
-		req := map[string]interface{}{}
+		req := FSDiskUsageRequest{}
 		reqJSON, _ := json.Marshal(req)
 
 		result, err := handler.HandleTool(context.Background(), "fs_disk_usage", reqJSON)
@@ -1844,12 +1843,12 @@ func TestHandleFSDiskUsage(t *testing.T) {
 			t.Fatalf("HandleTool failed: %v", err)
 		}
 
-		var usage map[string]interface{}
+		var usage FSDiskUsageResult
 		if err := json.Unmarshal([]byte(result.Content[0].Text), &usage); err != nil {
 			t.Fatalf("failed to unmarshal result: %v", err)
 		}
 
-		if _, ok := usage["filesystems"]; !ok {
+		if len(usage.Filesystems) == 0 {
 			t.Error("expected filesystems in result")
 		}
 	})
@@ -1860,7 +1859,7 @@ func TestHandleSysTimeClock(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
-		req := map[string]interface{}{}
+		req := SysTimeClockRequest{}
 		reqJSON, _ := json.Marshal(req)
 
 		result, err := handler.HandleTool(context.Background(), "sys_time_clock", reqJSON)
@@ -1868,12 +1867,12 @@ func TestHandleSysTimeClock(t *testing.T) {
 			t.Fatalf("HandleTool failed: %v", err)
 		}
 
-		var time map[string]interface{}
-		if err := json.Unmarshal([]byte(result.Content[0].Text), &time); err != nil {
+		var timeResult SysTimeClockResult
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &timeResult); err != nil {
 			t.Fatalf("failed to unmarshal result: %v", err)
 		}
 
-		if _, ok := time["system_time"]; !ok {
+		if timeResult.SystemTime.UTC == "" {
 			t.Error("expected system_time in result")
 		}
 	})
@@ -1888,8 +1887,8 @@ func TestHandleProcTree(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("valid request", func(t *testing.T) {
-		req := map[string]interface{}{
-			"pid": 1,
+		req := ProcTreeRequest{
+			PID: 1,
 		}
 		reqJSON, _ := json.Marshal(req)
 
@@ -1898,18 +1897,18 @@ func TestHandleProcTree(t *testing.T) {
 			t.Fatalf("HandleTool failed: %v", err)
 		}
 
-		var tree map[string]interface{}
+		var tree processTreeResult
 		if err := json.Unmarshal([]byte(result.Content[0].Text), &tree); err != nil {
 			t.Fatalf("failed to unmarshal result: %v", err)
 		}
 
-		if _, ok := tree["root_pid"]; !ok {
+		if tree.RootPID == 0 {
 			t.Error("expected root_pid in result")
 		}
 	})
 
 	t.Run("missing pid (defaults to 1)", func(t *testing.T) {
-		req := map[string]interface{}{}
+		req := ProcTreeRequest{}
 		reqJSON, _ := json.Marshal(req)
 
 		result, err := handler.HandleTool(context.Background(), "proc_tree", reqJSON)
@@ -1917,12 +1916,12 @@ func TestHandleProcTree(t *testing.T) {
 			t.Fatalf("HandleTool failed: %v", err)
 		}
 
-		var tree map[string]interface{}
+		var tree processTreeResult
 		if err := json.Unmarshal([]byte(result.Content[0].Text), &tree); err != nil {
 			t.Fatalf("failed to unmarshal result: %v", err)
 		}
 
-		if _, ok := tree["root_pid"]; !ok {
+		if tree.RootPID == 0 {
 			t.Error("expected root_pid in result")
 		}
 	})

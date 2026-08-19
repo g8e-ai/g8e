@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/exitcode"
 	"github.com/g8e-ai/g8e/internal/services"
 	"github.com/g8e-ai/g8e/internal/services/fs"
+	"github.com/g8e-ai/g8e/internal/services/logging"
 )
 
 // ServeOperatorOptions holds the configuration for running the operator in standalone mode.
@@ -184,7 +185,7 @@ func buildOperatorLoadOptions(opts ServeOperatorOptions, operatorEndpoint, effec
 
 // RunOperator runs the operator in standalone mode with the given options.
 func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
-	logger, err := ConfigureLogger(opts.LogLevel)
+	logger, err := logging.NewStdoutLogger(opts.LogLevel)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid log level '%s': %v\n", opts.LogLevel, err)
 		os.Exit(constants.ExitConfigError)

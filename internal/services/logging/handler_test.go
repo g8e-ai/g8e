@@ -5,7 +5,7 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
-package serve
+package logging
 
 import (
 	"bytes"
@@ -53,7 +53,7 @@ func TestParseLogLevel(t *testing.T) {
 	}
 }
 
-func TestConfigureLogger(t *testing.T) {
+func TestNewStdoutLogger(t *testing.T) {
 	tests := []struct {
 		name     string
 		logLevel string
@@ -68,7 +68,7 @@ func TestConfigureLogger(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logger, err := ConfigureLogger(tt.logLevel)
+			logger, err := NewStdoutLogger(tt.logLevel)
 			if tt.wantErr {
 				require.Error(t, err)
 				assert.Nil(t, logger)
@@ -80,10 +80,10 @@ func TestConfigureLogger(t *testing.T) {
 	}
 }
 
-func TestOperatorHandler_Handle(t *testing.T) {
+func TestLogHandler_Handle(t *testing.T) {
 	t.Run("formats message with timestamp and level", func(t *testing.T) {
 		var buf bytes.Buffer
-		handler := newOperatorHandler(&buf, slog.LevelInfo)
+		handler := newLogHandler(&buf, slog.LevelInfo)
 
 		record := slog.NewRecord(time.Now(), slog.LevelInfo, "test message", 0)
 		err := handler.Handle(context.Background(), record)
@@ -97,7 +97,7 @@ func TestOperatorHandler_Handle(t *testing.T) {
 
 	t.Run("formats error level", func(t *testing.T) {
 		var buf bytes.Buffer
-		handler := newOperatorHandler(&buf, slog.LevelInfo)
+		handler := newLogHandler(&buf, slog.LevelInfo)
 
 		record := slog.NewRecord(time.Now(), slog.LevelError, "something failed", 0)
 		err := handler.Handle(context.Background(), record)
@@ -109,7 +109,7 @@ func TestOperatorHandler_Handle(t *testing.T) {
 
 	t.Run("formats debug level", func(t *testing.T) {
 		var buf bytes.Buffer
-		handler := newOperatorHandler(&buf, slog.LevelDebug)
+		handler := newLogHandler(&buf, slog.LevelDebug)
 
 		record := slog.NewRecord(time.Now(), slog.LevelDebug, "debug detail", 0)
 		err := handler.Handle(context.Background(), record)
@@ -121,7 +121,7 @@ func TestOperatorHandler_Handle(t *testing.T) {
 
 	t.Run("appends string and int attributes as indented lines", func(t *testing.T) {
 		var buf bytes.Buffer
-		handler := newOperatorHandler(&buf, slog.LevelInfo)
+		handler := newLogHandler(&buf, slog.LevelInfo)
 
 		record := slog.NewRecord(time.Now(), slog.LevelError, "error occurred", 0)
 		record.AddAttrs(
@@ -140,7 +140,7 @@ func TestOperatorHandler_Handle(t *testing.T) {
 
 	t.Run("filters records below handler level", func(t *testing.T) {
 		var buf bytes.Buffer
-		handler := newOperatorHandler(&buf, slog.LevelError)
+		handler := newLogHandler(&buf, slog.LevelError)
 
 		assert.False(t, handler.Enabled(context.Background(), slog.LevelInfo))
 		assert.False(t, handler.Enabled(context.Background(), slog.LevelDebug))
@@ -149,7 +149,7 @@ func TestOperatorHandler_Handle(t *testing.T) {
 
 	t.Run("logger respects level filter end-to-end", func(t *testing.T) {
 		var buf bytes.Buffer
-		handler := newOperatorHandler(&buf, slog.LevelError)
+		handler := newLogHandler(&buf, slog.LevelError)
 		logger := slog.New(handler)
 
 		logger.Info("should be filtered")
@@ -158,10 +158,10 @@ func TestOperatorHandler_Handle(t *testing.T) {
 	})
 }
 
-func TestOperatorHandler_WithAttrs(t *testing.T) {
+func TestLogHandler_WithAttrs(t *testing.T) {
 	t.Run("returns a new distinct handler instance", func(t *testing.T) {
 		var buf bytes.Buffer
-		handler := newOperatorHandler(&buf, slog.LevelDebug)
+		handler := newLogHandler(&buf, slog.LevelDebug)
 
 		newHandler := handler.WithAttrs([]slog.Attr{slog.String("svc", "g8eo")})
 		require.NotNil(t, newHandler)
@@ -170,7 +170,7 @@ func TestOperatorHandler_WithAttrs(t *testing.T) {
 
 	t.Run("pre-attached attrs appear in every record", func(t *testing.T) {
 		var buf bytes.Buffer
-		handler := newOperatorHandler(&buf, slog.LevelInfo)
+		handler := newLogHandler(&buf, slog.LevelInfo)
 		withAttrs := handler.WithAttrs([]slog.Attr{slog.String("component", "g8eo")})
 
 		record := slog.NewRecord(time.Now(), slog.LevelInfo, "started", 0)
@@ -183,7 +183,7 @@ func TestOperatorHandler_WithAttrs(t *testing.T) {
 
 	t.Run("original handler is not mutated", func(t *testing.T) {
 		var buf bytes.Buffer
-		handler := newOperatorHandler(&buf, slog.LevelInfo)
+		handler := newLogHandler(&buf, slog.LevelInfo)
 		_ = handler.WithAttrs([]slog.Attr{slog.String("key", "value")})
 
 		record := slog.NewRecord(time.Now(), slog.LevelInfo, "msg", 0)
@@ -195,16 +195,16 @@ func TestOperatorHandler_WithAttrs(t *testing.T) {
 
 	t.Run("empty attrs slice returns new handler without panicking", func(t *testing.T) {
 		var buf bytes.Buffer
-		handler := newOperatorHandler(&buf, slog.LevelInfo)
+		handler := newLogHandler(&buf, slog.LevelInfo)
 		newHandler := handler.WithAttrs([]slog.Attr{})
 		assert.NotNil(t, newHandler)
 	})
 }
 
-func TestOperatorHandler_WithGroup(t *testing.T) {
+func TestLogHandler_WithGroup(t *testing.T) {
 	t.Run("returns a new distinct handler instance", func(t *testing.T) {
 		var buf bytes.Buffer
-		handler := newOperatorHandler(&buf, slog.LevelInfo)
+		handler := newLogHandler(&buf, slog.LevelInfo)
 
 		grouped := handler.WithGroup("requests")
 		require.NotNil(t, grouped)
@@ -213,7 +213,7 @@ func TestOperatorHandler_WithGroup(t *testing.T) {
 
 	t.Run("original handler is not mutated", func(t *testing.T) {
 		var buf bytes.Buffer
-		handler := newOperatorHandler(&buf, slog.LevelInfo)
+		handler := newLogHandler(&buf, slog.LevelInfo)
 		_ = handler.WithGroup("requests")
 
 		assert.Empty(t, handler.groups)
@@ -221,19 +221,19 @@ func TestOperatorHandler_WithGroup(t *testing.T) {
 
 	t.Run("group name is stored on returned handler", func(t *testing.T) {
 		var buf bytes.Buffer
-		handler := newOperatorHandler(&buf, slog.LevelInfo)
+		handler := newLogHandler(&buf, slog.LevelInfo)
 
 		grouped := handler.WithGroup("audit")
-		oh, ok := grouped.(*operatorHandler)
+		lh, ok := grouped.(*logHandler)
 		require.True(t, ok)
-		assert.Equal(t, []string{"audit"}, oh.groups)
+		assert.Equal(t, []string{"audit"}, lh.groups)
 	})
 }
 
-func TestConfigureLoggerWithOutput(t *testing.T) {
+func TestNewLogger(t *testing.T) {
 	t.Run("writes to provided output", func(t *testing.T) {
 		var buf bytes.Buffer
-		logger, err := ConfigureLoggerWithOutput("info", &buf)
+		logger, err := NewLogger("info", &buf)
 		require.NoError(t, err)
 		require.NotNil(t, logger)
 
@@ -246,16 +246,16 @@ func TestConfigureLoggerWithOutput(t *testing.T) {
 
 	t.Run("invalid level returns error and nil logger", func(t *testing.T) {
 		var buf bytes.Buffer
-		logger, err := ConfigureLoggerWithOutput("trace", &buf)
+		logger, err := NewLogger("trace", &buf)
 
 		require.Error(t, err)
 		assert.Nil(t, logger)
-		assert.Contains(t, err.Error(), "logger: configure:")
+		assert.Contains(t, err.Error(), "logging: parse level:")
 	})
 
 	t.Run("debug level allows debug messages", func(t *testing.T) {
 		var buf bytes.Buffer
-		logger, err := ConfigureLoggerWithOutput("debug", &buf)
+		logger, err := NewLogger("debug", &buf)
 		require.NoError(t, err)
 
 		logger.Debug("debug msg")
@@ -265,7 +265,7 @@ func TestConfigureLoggerWithOutput(t *testing.T) {
 
 	t.Run("error level filters info and debug", func(t *testing.T) {
 		var buf bytes.Buffer
-		logger, err := ConfigureLoggerWithOutput("error", &buf)
+		logger, err := NewLogger("error", &buf)
 		require.NoError(t, err)
 
 		logger.Info("info msg")
@@ -283,9 +283,9 @@ func TestParseLogLevel_ErrorsIs(t *testing.T) {
 	assert.True(t, errors.Is(err, constants.ErrInvalidLogLevel), "error should wrap constants.ErrInvalidLogLevel")
 }
 
-func TestOperatorHandler_Handle_NoAttrs(t *testing.T) {
+func TestLogHandler_Handle_NoAttrs(t *testing.T) {
 	var buf bytes.Buffer
-	handler := newOperatorHandler(&buf, slog.LevelInfo)
+	handler := newLogHandler(&buf, slog.LevelInfo)
 
 	record := slog.NewRecord(time.Now(), slog.LevelInfo, "plain message", 0)
 	err := handler.Handle(context.Background(), record)
@@ -296,19 +296,19 @@ func TestOperatorHandler_Handle_NoAttrs(t *testing.T) {
 	assert.NotContains(t, output, "  - ")
 }
 
-func TestOperatorHandler_Handle_WriteError(t *testing.T) {
-	handler := newOperatorHandler(&failingWriter{}, slog.LevelInfo)
+func TestLogHandler_Handle_WriteError(t *testing.T) {
+	handler := newLogHandler(&failingWriter{}, slog.LevelInfo)
 
 	record := slog.NewRecord(time.Now(), slog.LevelInfo, "msg", 0)
 	err := handler.Handle(context.Background(), record)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "logger: write:")
+	assert.Contains(t, err.Error(), "logging: write:")
 }
 
-func TestOperatorHandler_Handle_VariousAttrTypes(t *testing.T) {
+func TestLogHandler_Handle_VariousAttrTypes(t *testing.T) {
 	var buf bytes.Buffer
-	handler := newOperatorHandler(&buf, slog.LevelInfo)
+	handler := newLogHandler(&buf, slog.LevelInfo)
 
 	record := slog.NewRecord(time.Now(), slog.LevelInfo, "multi attrs", 0)
 	record.AddAttrs(
@@ -330,9 +330,9 @@ func TestOperatorHandler_Handle_VariousAttrTypes(t *testing.T) {
 	assert.Contains(t, output, "val-42")
 }
 
-func TestOperatorHandler_Handle_PreAttachedAndRecordAttrs(t *testing.T) {
+func TestLogHandler_Handle_PreAttachedAndRecordAttrs(t *testing.T) {
 	var buf bytes.Buffer
-	handler := newOperatorHandler(&buf, slog.LevelInfo)
+	handler := newLogHandler(&buf, slog.LevelInfo)
 	withPre := handler.WithAttrs([]slog.Attr{slog.String("svc", "g8eo")})
 
 	record := slog.NewRecord(time.Now(), slog.LevelInfo, "combined", 0)
@@ -347,9 +347,9 @@ func TestOperatorHandler_Handle_PreAttachedAndRecordAttrs(t *testing.T) {
 	assert.Contains(t, output, "200")
 }
 
-func TestOperatorHandler_Handle_TimestampFormat(t *testing.T) {
+func TestLogHandler_Handle_TimestampFormat(t *testing.T) {
 	var buf bytes.Buffer
-	handler := newOperatorHandler(&buf, slog.LevelInfo)
+	handler := newLogHandler(&buf, slog.LevelInfo)
 
 	ts := time.Date(2026, 1, 15, 14, 30, 0, 0, time.UTC)
 	record := slog.NewRecord(ts, slog.LevelInfo, "ts test", 0)
@@ -361,17 +361,17 @@ func TestOperatorHandler_Handle_TimestampFormat(t *testing.T) {
 	require.NoError(t, parseErr, "timestamp should be RFC3339-parseable")
 }
 
-func TestOperatorHandler_Enabled_Boundary(t *testing.T) {
-	handler := newOperatorHandler(&bytes.Buffer{}, slog.LevelInfo)
+func TestLogHandler_Enabled_Boundary(t *testing.T) {
+	handler := newLogHandler(&bytes.Buffer{}, slog.LevelInfo)
 
 	assert.True(t, handler.Enabled(context.Background(), slog.LevelInfo))
 	assert.True(t, handler.Enabled(context.Background(), slog.LevelError))
 	assert.False(t, handler.Enabled(context.Background(), slog.LevelDebug))
 }
 
-func TestOperatorHandler_WithAttrs_Chaining(t *testing.T) {
+func TestLogHandler_WithAttrs_Chaining(t *testing.T) {
 	var buf bytes.Buffer
-	handler := newOperatorHandler(&buf, slog.LevelDebug)
+	handler := newLogHandler(&buf, slog.LevelDebug)
 
 	h1 := handler.WithAttrs([]slog.Attr{slog.String("a", "1")})
 	h2 := h1.WithAttrs([]slog.Attr{slog.String("b", "2")})
@@ -387,46 +387,46 @@ func TestOperatorHandler_WithAttrs_Chaining(t *testing.T) {
 	assert.Contains(t, output, "2")
 }
 
-func TestOperatorHandler_WithAttrs_PreservesLevelAndOutput(t *testing.T) {
+func TestLogHandler_WithAttrs_PreservesLevelAndOutput(t *testing.T) {
 	var buf bytes.Buffer
-	handler := newOperatorHandler(&buf, slog.LevelError)
+	handler := newLogHandler(&buf, slog.LevelError)
 	derived := handler.WithAttrs([]slog.Attr{slog.String("k", "v")})
 
-	oh, ok := derived.(*operatorHandler)
+	lh, ok := derived.(*logHandler)
 	require.True(t, ok)
-	assert.Equal(t, slog.LevelError, oh.level)
-	assert.Same(t, &buf, oh.output)
+	assert.Equal(t, slog.LevelError, lh.level)
+	assert.Same(t, &buf, lh.output)
 }
 
-func TestOperatorHandler_WithGroup_Chaining(t *testing.T) {
+func TestLogHandler_WithGroup_Chaining(t *testing.T) {
 	var buf bytes.Buffer
-	handler := newOperatorHandler(&buf, slog.LevelInfo)
+	handler := newLogHandler(&buf, slog.LevelInfo)
 
 	g1 := handler.WithGroup("outer")
 	g2 := g1.WithGroup("inner")
 
-	oh, ok := g2.(*operatorHandler)
+	lh, ok := g2.(*logHandler)
 	require.True(t, ok)
-	assert.Equal(t, []string{"outer", "inner"}, oh.groups)
+	assert.Equal(t, []string{"outer", "inner"}, lh.groups)
 }
 
-func TestOperatorHandler_WithGroup_PreservesLevelOutputAndAttrs(t *testing.T) {
+func TestLogHandler_WithGroup_PreservesLevelOutputAndAttrs(t *testing.T) {
 	var buf bytes.Buffer
-	handler := newOperatorHandler(&buf, slog.LevelDebug)
+	handler := newLogHandler(&buf, slog.LevelDebug)
 	withAttrs := handler.WithAttrs([]slog.Attr{slog.String("x", "y")})
 	grouped := withAttrs.WithGroup("grp")
 
-	oh, ok := grouped.(*operatorHandler)
+	lh, ok := grouped.(*logHandler)
 	require.True(t, ok)
-	assert.Equal(t, slog.LevelDebug, oh.level)
-	assert.Same(t, &buf, oh.output)
-	assert.Len(t, oh.attrs, 1)
-	assert.Equal(t, "x", oh.attrs[0].Key)
+	assert.Equal(t, slog.LevelDebug, lh.level)
+	assert.Same(t, &buf, lh.output)
+	assert.Len(t, lh.attrs, 1)
+	assert.Equal(t, "x", lh.attrs[0].Key)
 }
 
-func TestOperatorHandler_Handle_WithGroup(t *testing.T) {
+func TestLogHandler_Handle_WithGroup(t *testing.T) {
 	var buf bytes.Buffer
-	handler := newOperatorHandler(&buf, slog.LevelInfo)
+	handler := newLogHandler(&buf, slog.LevelInfo)
 	grouped := handler.WithGroup("requests")
 
 	record := slog.NewRecord(time.Now(), slog.LevelInfo, "incoming", 0)
@@ -439,9 +439,9 @@ func TestOperatorHandler_Handle_WithGroup(t *testing.T) {
 	assert.Contains(t, output, "GET")
 }
 
-func TestOperatorHandler_Handle_WithGroupChained(t *testing.T) {
+func TestLogHandler_Handle_WithGroupChained(t *testing.T) {
 	var buf bytes.Buffer
-	handler := newOperatorHandler(&buf, slog.LevelInfo)
+	handler := newLogHandler(&buf, slog.LevelInfo)
 	grouped := handler.WithGroup("svc").WithGroup("http")
 
 	record := slog.NewRecord(time.Now(), slog.LevelInfo, "req", 0)

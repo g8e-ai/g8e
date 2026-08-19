@@ -8,6 +8,7 @@
 package storage
 
 import (
+	"context"
 	"crypto/ed25519"
 	"fmt"
 	"os"
@@ -20,9 +21,22 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
+
+// readLedgerFile reads a file from the .g8e/ runtime ledger tree via fileSvc,
+// converting the absolute ledger path to a relative path. Used in tests that
+// verify mirror content written by the ledger service.
+func readLedgerFile(t *testing.T, fileSvc fs.RuntimeFileService, absPath string) []byte {
+	t.Helper()
+	relPath, err := fileSvc.Rel(absPath)
+	require.NoError(t, err)
+	content, err := fileSvc.ReadFile(context.Background(), relPath)
+	require.NoError(t, err)
+	return content
+}
 
 // setupTestLedger creates a test environment for GitLedgerService with encryption disabled.
 func setupTestLedger(t *testing.T) (*GitLedgerService, string) {
@@ -138,8 +152,7 @@ func TestLedgerService_MirrorFileWrite_NewFile(t *testing.T) {
 	assert.NotEmpty(t, result.DiffStat)
 
 	// Verify file was copied to ledger
-	mirrorContent, err := os.ReadFile(result.LedgerPath)
-	require.NoError(t, err)
+	mirrorContent := readLedgerFile(t, lms.fileSvc, result.LedgerPath)
 	assert.Equal(t, "Hello, World!", string(mirrorContent))
 }
 
@@ -174,8 +187,7 @@ func TestLedgerService_MirrorFileWrite_ExistingFile(t *testing.T) {
 	assert.NotEqual(t, result.LedgerHashBefore, result.LedgerHashAfter)
 
 	// Verify mirror reflects updated content
-	mirrorContent, err := os.ReadFile(result.LedgerPath)
-	require.NoError(t, err)
+	mirrorContent := readLedgerFile(t, lms.fileSvc, result.LedgerPath)
 	assert.Equal(t, "Modified content", string(mirrorContent))
 }
 
@@ -284,8 +296,7 @@ func TestLedgerService_MirrorFileCreate(t *testing.T) {
 	assert.Contains(t, result.DiffStat, "lines")
 
 	// Verify file was copied to ledger
-	mirrorContent, err := os.ReadFile(result.LedgerPath)
-	require.NoError(t, err)
+	mirrorContent := readLedgerFile(t, lms.fileSvc, result.LedgerPath)
 	assert.Equal(t, content, string(mirrorContent))
 }
 
@@ -340,8 +351,7 @@ func TestLedgerService_CopyToLedger(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify copy
-	dstContent, err := os.ReadFile(dstPath)
-	require.NoError(t, err)
+	dstContent := readLedgerFile(t, lms.fileSvc, dstPath)
 	assert.Equal(t, srcContent, string(dstContent))
 }
 
@@ -373,9 +383,9 @@ func TestLedgerService_SnapshotLedger(t *testing.T) {
 
 	// Make a change and take another snapshot
 	testFile := filepath.Join(ledgerDir, "files", "snapshot_test.txt")
-	os.MkdirAll(filepath.Dir(testFile), 0755)
-	err = os.WriteFile(testFile, []byte("snapshot test"), 0644)
+	testFileRel, err := lms.fileSvc.Rel(testFile)
 	require.NoError(t, err)
+	require.NoError(t, lms.fileSvc.WriteFile(context.Background(), testFileRel, []byte("snapshot test"), 0644))
 
 	hash2, err := lms.snapshotLedger(ledgerDir, "Test snapshot 2")
 	require.NoError(t, err)
@@ -400,9 +410,9 @@ func TestLedgerService_CalculateDiffStat(t *testing.T) {
 
 	// Create a file
 	testFile := filepath.Join(ledgerDir, "files", "diff_test.txt")
-	os.MkdirAll(filepath.Dir(testFile), 0755)
-	err = os.WriteFile(testFile, []byte("line 1\nline 2\nline 3\n"), 0644)
+	testFileRel, err := lms.fileSvc.Rel(testFile)
 	require.NoError(t, err)
+	require.NoError(t, lms.fileSvc.WriteFile(context.Background(), testFileRel, []byte("line 1\nline 2\nline 3\n"), 0644))
 
 	// Take another snapshot
 	hash2, err := lms.snapshotLedger(ledgerDir, "After adding file")
@@ -735,8 +745,7 @@ func TestLedgerService_LargeFile(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify file was mirrored correctly
-	mirrorContent, err := os.ReadFile(result.LedgerPath)
-	require.NoError(t, err)
+	mirrorContent := readLedgerFile(t, lms.fileSvc, result.LedgerPath)
 	assert.Len(t, mirrorContent, len(largeContent))
 	assert.Equal(t, largeContent, mirrorContent)
 }
@@ -757,8 +766,7 @@ func TestLedgerService_SpecialCharactersInPath(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify file was copied
-	mirrorContent, err := os.ReadFile(result.LedgerPath)
-	require.NoError(t, err)
+	mirrorContent := readLedgerFile(t, lms.fileSvc, result.LedgerPath)
 	assert.Equal(t, "special content", string(mirrorContent))
 }
 
@@ -779,8 +787,7 @@ func TestLedgerService_DeepNestedPath(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify nested structure was created in mirror
-	mirrorContent, err := os.ReadFile(result.LedgerPath)
-	require.NoError(t, err)
+	mirrorContent := readLedgerFile(t, lms.fileSvc, result.LedgerPath)
 	assert.Equal(t, "deep content", string(mirrorContent))
 }
 
@@ -802,8 +809,7 @@ func TestLedgerService_NodeBinaryFile(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify binary file was copied correctly
-	mirrorContent, err := os.ReadFile(result.LedgerPath)
-	require.NoError(t, err)
+	mirrorContent := readLedgerFile(t, lms.fileSvc, result.LedgerPath)
 	assert.Equal(t, binaryContent, mirrorContent)
 }
 

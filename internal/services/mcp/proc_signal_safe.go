@@ -51,10 +51,7 @@ func (t *ProcSignalSafeTool) InputSchema() *InputSchema {
 
 // Execute implements the tool logic.
 func (t *ProcSignalSafeTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		PID    int    `json:"pid"`
-		Signal string `json:"signal"`
-	}
+	var req ProcSignalSafeRequest
 	if err := json.Unmarshal(args, &req); err != nil {
 		return CallToolResult{}, fmt.Errorf("%w: %v", constants.ErrMCPUnmarshalArguments, err)
 	}

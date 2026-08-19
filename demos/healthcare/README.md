@@ -168,7 +168,7 @@ Simulates an unauthorized party attempting to exfiltrate PHI or bypass the PA wo
 **Compose service:** `observability`  
 **Networks:** `net_mgmt`
 
-Mounts `gateway_state` and `operator_state` volumes read-only. Tails the gateway's operator audit log at `/data/gateway/logs/operator.log` for out-of-band inspection of the enforcement record. Waits for the log file to appear before starting the tail.
+Mounts `gateway_state` and `operator_state` volumes read-only. Tails the gateway's platform log at `/data/gateway/logs/g8e.log` for out-of-band inspection of the enforcement record. Waits for the log file to appear before starting the tail.
 
 ---
 

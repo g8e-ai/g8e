@@ -68,7 +68,7 @@ func testUnitCmd() *cobra.Command {
 			}
 
 			testCmd := exec.Command("go", "test", testRace, "-count=1", "-timeout", "60s",
-				"./internal/...", "./pkg/...")
+				"./internal/...")
 			testCmd.Stdout = os.Stdout
 			testCmd.Stderr = os.Stderr
 
@@ -214,7 +214,7 @@ func testCoverageCmd() *cobra.Command {
 				testArgs = append(testArgs, pkg)
 			} else {
 				fmt.Println("Running coverage for all packages...")
-				testArgs = append(testArgs, "./internal/...", "./pkg/...")
+				testArgs = append(testArgs, "./internal/...")
 			}
 
 			testCmd := exec.Command("go", testArgs...)

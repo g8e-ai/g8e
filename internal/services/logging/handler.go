@@ -5,40 +5,23 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
-package serve
+// Package logging centralizes platform log file lifecycle and slog handler
+// configuration. The slog handler, level parsing, and logger constructors
+// live here so that LogService is the single owner of all logging concerns.
+package logging
 
 import (
 	"context"
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// ConfigureLogger returns a slog logger configured with operator-friendly formatting
-func ConfigureLogger(level string) (*slog.Logger, error) {
-	return ConfigureLoggerWithOutput(level, os.Stdout)
-}
-
-// ConfigureLoggerWithOutput returns a slog logger configured with operator-friendly formatting
-// that writes to the specified output writer
-func ConfigureLoggerWithOutput(level string, output io.Writer) (*slog.Logger, error) {
-	parsedLevel, err := parseLogLevel(level)
-	if err != nil {
-		return nil, fmt.Errorf("logger: configure: %w", err)
-	}
-
-	handler := newOperatorHandler(output, parsedLevel)
-	logger := slog.New(handler)
-
-	return logger, nil
-}
-
-// parseLogLevel validates and converts CLI input into slog levels
+// parseLogLevel validates and converts CLI input into slog levels.
 func parseLogLevel(level string) (slog.Level, error) {
 	switch strings.ToLower(strings.TrimSpace(level)) {
 	case "info":
@@ -52,26 +35,28 @@ func parseLogLevel(level string) (slog.Level, error) {
 	}
 }
 
-// operatorHandler is a custom slog.Handler for operator-friendly log formatting
-type operatorHandler struct {
+// logHandler is a custom slog.Handler for platform log formatting. It is not
+// operator-specific — it is the single slog handler used by both daemon-mode
+// logging (LogService) and CLI client logging (NewStdoutLogger).
+type logHandler struct {
 	level  slog.Level
 	output io.Writer
 	attrs  []slog.Attr
 	groups []string
 }
 
-func newOperatorHandler(output io.Writer, level slog.Level) *operatorHandler {
-	return &operatorHandler{
+func newLogHandler(output io.Writer, level slog.Level) *logHandler {
+	return &logHandler{
 		level:  level,
 		output: output,
 	}
 }
 
-func (h *operatorHandler) Enabled(_ context.Context, level slog.Level) bool {
+func (h *logHandler) Enabled(_ context.Context, level slog.Level) bool {
 	return level >= h.level
 }
 
-func (h *operatorHandler) Handle(_ context.Context, r slog.Record) error {
+func (h *logHandler) Handle(_ context.Context, r slog.Record) error {
 	timestamp := r.Time.In(time.Local).Format(time.RFC3339)
 	levelStr := strings.ToUpper(r.Level.String())
 
@@ -97,16 +82,16 @@ func (h *operatorHandler) Handle(_ context.Context, r slog.Record) error {
 	msg += "\n"
 	_, err := h.output.Write([]byte(msg))
 	if err != nil {
-		return fmt.Errorf("logger: write: %w", err)
+		return fmt.Errorf("logging: write: %w", err)
 	}
 	return nil
 }
 
-func (h *operatorHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+func (h *logHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	newAttrs := make([]slog.Attr, len(h.attrs), len(h.attrs)+len(attrs))
 	copy(newAttrs, h.attrs)
 	newAttrs = append(newAttrs, attrs...)
-	return &operatorHandler{
+	return &logHandler{
 		level:  h.level,
 		output: h.output,
 		attrs:  newAttrs,
@@ -114,11 +99,11 @@ func (h *operatorHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	}
 }
 
-func (h *operatorHandler) WithGroup(name string) slog.Handler {
+func (h *logHandler) WithGroup(name string) slog.Handler {
 	newGroups := make([]string, len(h.groups), len(h.groups)+1)
 	copy(newGroups, h.groups)
 	newGroups = append(newGroups, name)
-	return &operatorHandler{
+	return &logHandler{
 		level:  h.level,
 		output: h.output,
 		attrs:  h.attrs,

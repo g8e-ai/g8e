@@ -120,7 +120,7 @@ func TestInitWithBase(t *testing.T) {
 		{"SessionEncKeyPath", Infra.SessionEncKeyPath, pathutil.SafeJoin(Infra.SecretsDir, constants.SecretsFileSessionEncryptionKey)},
 		{"BootstrapDigestPath", Infra.BootstrapDigestPath, pathutil.SafeJoin(Infra.SecretsDir, constants.SecretsFileBootstrapDigest)},
 		{"LogDir", Infra.LogDir, pathutil.SafeJoin(Infra.RuntimeDir, constants.LogDirname)},
-		{"OperatorLogFile", Infra.OperatorLogFile, pathutil.SafeJoin(Infra.LogDir, constants.OperatorLogFilename)},
+		{"G8eLogFile", Infra.G8eLogFile, pathutil.SafeJoin(Infra.LogDir, constants.G8eLogFilename)},
 		{"ExecutionVaultDBPath", Infra.ExecutionVaultDBPath, pathutil.SafeJoin(Infra.DataDir, constants.ExecutionVaultDBFilename)},
 		{"ReplayStoreDBPath", Infra.ReplayStoreDBPath, pathutil.SafeJoin(Infra.DataDir, constants.ReplayStoreDBFilename)},
 		{"LedgerDir", Infra.LedgerDir, pathutil.SafeJoin(Infra.DataDir, constants.LedgerDirname)},
@@ -271,7 +271,7 @@ func TestInitWithBase_DerivedPathsPrefixedWithParent(t *testing.T) {
 		{"ClientOperatorCertPath", Infra.ClientOperatorCertPath, Infra.ClientPkiDir},
 		{"SessionEncKeyPath", Infra.SessionEncKeyPath, Infra.SecretsDir},
 		{"BootstrapDigestPath", Infra.BootstrapDigestPath, Infra.SecretsDir},
-		{"OperatorLogFile", Infra.OperatorLogFile, Infra.LogDir},
+		{"G8eLogFile", Infra.G8eLogFile, Infra.LogDir},
 		{"ExecutionVaultDBPath", Infra.ExecutionVaultDBPath, Infra.DataDir},
 		{"ReplayStoreDBPath", Infra.ReplayStoreDBPath, Infra.DataDir},
 		{"LedgerDir", Infra.LedgerDir, Infra.DataDir},
@@ -615,7 +615,7 @@ func TestInfraDefaults_BeforeInit(t *testing.T) {
 		SessionEncKeyPath                string
 		BootstrapDigestPath              string
 		LogDir                           string
-		OperatorLogFile                  string
+		G8eLogFile                       string
 		PidDir                           string
 		OperatorPostureFile              string
 		OperatorPIDFile                  string

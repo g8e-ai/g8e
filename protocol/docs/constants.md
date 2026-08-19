@@ -242,7 +242,7 @@ Filesystem paths for Operator data, certificates, ledger, system paths, and conf
 - Container paths: Docker exec paths for demo environments (`ContainerRootG8E`, `ContainerPKIDir`, `ContainerOperatorCert`, `ContainerOperatorKey`, `ContainerCABundle`, `ContainerDataDir`, `ContainerAuditVaultDB`, `ContainerExecutionVaultDB`, `ContainerLedgerFilesDir`, `ContainerDoctrineDir`, `ContainerEnsembleSeed`, and verification script paths)
 - Local binary names: `LocalBinaryName` (`./g8e`), `LocalBinaryNameWindows` (`./g8e.exe`), `BinaryImageName`, `BinaryImageNameWindows`
 - Deploy script filenames: `DeployScriptFilenameLinux` (`g8e-deploy.sh`), `DeployScriptFilenameWindows` (`g8e-deploy.ps1`)
-- Component filenames: `SwaggerFilename`, `ComplianceReportFilename`, `GatewayIDFilename`, `ActuatorPubJSONFilename`, `ActuatorPubPEMFilename`, `NetworkIdentityFilename`, `OperatorPIDFilename`, `OperatorPostureFilename`, `OperatorBinaryFilename`, `OperatorLogFilename`
+- Component filenames: `SwaggerFilename`, `ComplianceReportFilename`, `G8eLogFilename`, `GatewayIDFilename`, `ActuatorPubJSONFilename`, `ActuatorPubPEMFilename`, `NetworkIdentityFilename`, `OperatorPIDFilename`, `OperatorPostureFilename`, `OperatorBinaryFilename`
 - Runtime directories: `RuntimeDirname` (`.g8e`), `DataDirname`, `VaultDirname`, `SecretsDirname`, `LedgerDirname`, `PidDirname`, `DocsDirname`, `ProtocolDirname`, `ProtocolConstantsDirname`, `ProtocolModelsDirname`, `BinDirname`, `LogDirname`
 - Ledger directories: `FilesDirname`, `SessionsDirname`, `GitDirname`, `GitignoreFilename`, `GoModFilename`
 - SSH config: `SshConfigFilename`, `SshDirname`, `SshConfigBasename`, `SshKnownHostsBasename`, `SshKeyEd25519`, `SshKeyECDSA`, `SshKeyRSA`

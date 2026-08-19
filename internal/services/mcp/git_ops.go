@@ -154,12 +154,7 @@ func (t *GitOpsTool) InputSchema() *InputSchema {
 
 // Execute implements the tool logic.
 func (t *GitOpsTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		Operation string `json:"operation"`
-		RepoPath  string `json:"repo_path,omitempty"`
-		Limit     int    `json:"limit,omitempty"`
-		Ref       string `json:"ref,omitempty"`
-	}
+	var req GitOpsRequest
 	if err := json.Unmarshal(args, &req); err != nil {
 		return CallToolResult{}, fmt.Errorf("git_ops: invalid arguments: %w", err)
 	}

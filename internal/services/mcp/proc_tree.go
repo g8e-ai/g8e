@@ -57,10 +57,7 @@ func (t *ProcTreeTool) InputSchema() *InputSchema {
 
 // Execute implements the tool logic.
 func (t *ProcTreeTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		PID      int `json:"pid,omitempty"`
-		MaxDepth int `json:"max_depth,omitempty"`
-	}
+	var req ProcTreeRequest
 	if err := json.Unmarshal(args, &req); err != nil {
 		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
 	}

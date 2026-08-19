@@ -286,6 +286,7 @@ const (
 const (
 	SwaggerFilename          = "swagger.json"
 	ComplianceReportFilename = "compliance-report.json"
+	G8eLogFilename           = "g8e.log"
 
 	// Gateway-specific filenames
 	GatewayIDFilename       = "gateway-id"
@@ -297,7 +298,6 @@ const (
 	OperatorPIDFilename     = "operator.pid"
 	OperatorPostureFilename = "operator.posture"
 	OperatorBinaryFilename  = "g8e-operator"
-	OperatorLogFilename     = "operator.log"
 )
 
 // Runtime directory constants for the .g8e/ state tree.
