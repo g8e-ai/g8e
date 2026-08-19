@@ -158,6 +158,11 @@ services:
     environment:
       - GATEWAY_HEALTH_URL=http://g8edb:8080
       - GATEWAY_HEALTH_PATH=/api/v1/health
+      # Browser-facing gateway origin. The browser resolves this against its
+      # own host, so it must be the host-accessible address (not the docker
+      # internal service name). No fallback — the SPA host fails closed if
+      # this is unset.
+      - G8E_GATEWAY_URL=https://localhost:${G8E_HTTPS_PORT:-8443}
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
       interval: 10s

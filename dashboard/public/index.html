@@ -9,9 +9,11 @@
     <title>g8e</title>
     <base href="/">
 
-    <!-- Gateway origin for browser-direct WebAuthn + API calls. Override per
-         deployment via G8E_GATEWAY_URL at build/runtime if needed. -->
-    <script>window.G8E_GATEWAY_URL = window.G8E_GATEWAY_URL || "https://localhost:8443";</script>
+    <!-- Gateway origin for browser-direct WebAuthn + API calls. Served by the
+         SPA host from the G8E_GATEWAY_URL env var via /g8e-config.js. No
+         hardcoded fallback — fail-closed if unset. Must load before all other
+         scripts so window.G8E_GATEWAY_URL is available at init time. -->
+    <script src="/g8e-config.js"></script>
 
     <link rel="stylesheet" href="/css/fonts.css">
     <link rel="stylesheet" href="/css/main.css">

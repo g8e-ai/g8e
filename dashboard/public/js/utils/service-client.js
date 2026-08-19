@@ -8,7 +8,6 @@ import {
     RequestTimeout,
     RetryConfig,
     RequestPath,
-    GATEWAY_DEFAULT_URL,
     WEB_SESSION_ID_HEADER,
     BEARER_PREFIX,
     CONTENT_TYPE_JSON,
@@ -64,7 +63,10 @@ class ServiceClient {
 
     getServiceEndpoints(serviceName) {
         if (serviceName === ServiceName.GATEWAY) {
-            return [window.G8E_GATEWAY_URL ?? GATEWAY_DEFAULT_URL];
+            if (!window.G8E_GATEWAY_URL) {
+                throw new Error('Gateway origin not configured: window.G8E_GATEWAY_URL is unset (expected /g8e-config.js to set it from G8E_GATEWAY_URL)');
+            }
+            return [window.G8E_GATEWAY_URL];
         }
 
         if (serviceName === ServiceName.g8ed) {
@@ -121,7 +123,7 @@ class ServiceClient {
         devLogger.log('[ServiceClient] Service URLs:', {
             [ServiceName.VSE]: SERVICE_URLS[ServiceName.VSE],
             [ServiceName.g8ed]: window.location.origin,
-            [ServiceName.GATEWAY]: window.G8E_GATEWAY_URL ?? GATEWAY_DEFAULT_URL,
+            [ServiceName.GATEWAY]: window.G8E_GATEWAY_URL ?? '(unset — /g8e-config.js not loaded)',
         });
         this.configLoaded = true;
     }

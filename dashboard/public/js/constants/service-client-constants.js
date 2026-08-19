@@ -25,8 +25,6 @@ export const ServiceUrl = Object.freeze({
     VSE: 'https://vse',
 });
 
-export const GATEWAY_DEFAULT_URL = 'https://localhost:8443';
-
 export const RequestTimeout = Object.freeze({
     AUTH_MS:    30000,
     CASE_MS:    300000,
