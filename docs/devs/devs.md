@@ -92,7 +92,7 @@ Startup sequence: binary check/build â†’ root of trust generation (first boot) â
 - Use `TestPaths` for isolated test environments (base directory from a constant, all sub-paths from constants)
 - Reproduce bugs with failing tests before fixing
 - Tier 1 (Unit) tests: mocks and stubs, no external dependencies (no files, network, or DB)
-- Tier 2 (Integration) and Tier 3 (E2E) tests: real database, pub/sub, and LLM calls
+- Tier 2 (Integration) tests: real database, pub/sub, and local PKI. Tier 3 (E2E) tests: real Docker containers. Tier 4 (External) tests: real LLM providers and third-party APIs
 - Keep test infrastructure separated from production code
 - Run tests via `./g8e test` (unit, integration, e2e, coverage, lint, chaos, summary)
 - Document what the system does, not what it should do

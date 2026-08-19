@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-08-18
+Last Updated: 2026-08-19
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -194,13 +194,18 @@ The `adapterFixture` struct in `test/protocol_test_helpers_test.go` bundles a `G
 
 ## Reference
 
-### Test Architecture (3-Tier Model)
+### Test Architecture (4-Tier Model)
 
-| Tier | Name | Target Directory | Build Tag | External Deps | Execution Time |
+| Tier | Name | Target Directory | Build Tag / Marker | External Deps | Execution Time |
 | --- | --- | --- | --- | --- | --- |
 | **Tier 1** | **Unit Tests** | `internal/...` & `pkg/...` | *No tags* | None (stub-only, no files/network/DB) | < 10ms per test |
 | **Tier 2** | **In-Process Integration** | `internal/...` & `test/` | `//go:build integration` | On-disk SQLite, local PKI, local pubsub (gateway in-process) | < 2s per suite |
 | **Tier 3** | **Docker E2E** | `test/e2e/` | `//go:build e2e` | Docker containers (gateway + operator via docker-compose) | < 30s per suite |
+| **Tier 4** | **External** | `ensemble/tests/integration/` (and any future component tests with external deps) | `pytest.mark.ai_integration`, `pytest.mark.requires_web_search`, `pytest.mark.requires_api` | Real LLM providers, web search APIs, third-party services | seconds to minutes per test |
+
+### Tier 4 (External)
+
+Tier 4 covers tests that depend on resources outside the platform's own infrastructure: LLM provider APIs, web search APIs, and any third-party service. Tier 4 tests are gated on credentials and skip when the credentials are absent — they never fail CI for missing credentials, only for actual regressions when credentials are present. Tier 4 tests are not part of `make test` or `make ci`; they run via `make test-external` or explicitly via `pytest -m ai_integration`. Tier 2 (In-Process Integration) and Tier 3 (Docker E2E) do not make external calls; only Tier 4 does.
 
 ### CLI Test Commands
 

@@ -14,6 +14,8 @@ volumes:
     driver: local
   g8e-operator-data:
     driver: local
+  g8e-ensemble-data:
+    driver: local
 
 services:
   g8e-gateway:
@@ -100,35 +102,34 @@ services:
     ports:
       - "${G8E_ENSEMBLE_PORT:-8000}:8000"
     volumes:
-      # Mount the gateway's data volume read-only so the ensemble can read its
-      # issued app cert/key (pki/issued/apps/g8ee.crt, g8ee.key) and the trust
-      # bundle (pki/trust/g8eg-ca-bundle.pem) for mTLS to the gateway and
-      # operator. The gateway's working_dir is /root and paths.Init() sets
-      # RuntimeDir = /root/.g8e, so the gateway's runtime tree lives at
-      # /root/.g8e/ inside this volume. The ensemble's G8E_RUNTIME_DIR is
-      # set to /root/.g8e to align with this path.
-      - g8e-gateway-data:/root/.g8e:ro
+      # The ensemble has its own runtime volume. It self-enrolls via the
+      # gateway's public PKI app enrollment endpoint at startup and stores its
+      # enrolled cert/key/trust-bundle in its own runtime tree. No gateway
+      # volume is mounted — the ensemble is a proper enrolled app, not a
+      # volume-mount shortcut.
+      - g8e-ensemble-data:/root/.g8e
     environment:
-      - G8E_GATEWAY_URL=https://g8e.local:8443
+      # The gateway's plain-HTTP bootstrap surface for app enrollment and
+      # CA bundle fetch. The enrollment service (AppEnrollmentService) reads
+      # this at startup to self-enroll before the operator clients connect.
+      - G8E_GATEWAY_HTTP_URL=http://g8e.local:8080
       # The ensemble's DB/KV/PubSub/Blob clients connect to the gateway's
       # document store API (the env var is named G8E_OPERATOR_URL for historical
       # reasons — in "Operator Gateway mode" the operator proxies these APIs,
       # but in this deployment the gateway exposes them directly at g8e.local:8443).
-      # Without this env var the clients default to localhost:8443 (the ensemble
-      # container itself) and fail to connect.
       - G8E_OPERATOR_URL=https://g8e.local:8443
       - G8E_OPERATOR_PUBSUB_URL=wss://g8e.local:8443
-      # The gateway's working_dir is /root and it calls paths.Init() which
-      # sets RuntimeDir = cwd + "/.g8e" = /root/.g8e. The volume is mounted at
-      # /root/.g8e, so the gateway's runtime tree is /root/.g8e/. The ensemble
-      # must point at the same runtime tree to find the gateway's PKI certs.
+      # The ensemble's own runtime directory inside its own volume. PATHS
+      # resolution derives pki_dir and secrets_dir from this, so the
+      # enrollment service writes to /root/.g8e/pki/... inside the ensemble's
+      # own g8e-ensemble-data volume.
       - G8E_RUNTIME_DIR=/root/.g8e
-      - G8E_PKI_DIR=/root/.g8e/pki
-      # The gateway produces its trust bundle at pki/trust/g8eg-ca-bundle.pem
-      # inside its runtime tree. Override the ensemble's ca_cert_path so mTLS
-      # verification uses the gateway's CA bundle. See EnvVar.CA_CERT_PATH and
-      # paths._load_paths().
-      - G8E_CA_CERT_PATH=/root/.g8e/pki/trust/g8eg-ca-bundle.pem
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     restart: "no"
     deploy:
       resources:
@@ -154,6 +155,12 @@ services:
     environment:
       - GATEWAY_HEALTH_URL=http://g8edb:8080
       - GATEWAY_HEALTH_PATH=/api/v1/health
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     restart: "no"
     deploy:
       resources:

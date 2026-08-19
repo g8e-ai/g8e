@@ -297,9 +297,9 @@ jobs:
         working-directory: ensemble
         run: pyright app
 
-      - name: Run ensemble unit tests
+      - name: Run ensemble unit + in-process integration tests
         working-directory: ensemble
-        run: python -m pytest tests/unit/ -q
+        run: python -m pytest tests/unit/ tests/integration/ -q -m "not ai_integration and not requires_web_search and not requires_api"
 
   dashboard-tests:
     name: Dashboard (g8ed) Tests

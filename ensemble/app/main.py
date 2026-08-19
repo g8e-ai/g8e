@@ -80,6 +80,7 @@ from .routers import chat_router, health_router
 from .routers.internal_router import router as internal_router
 from .middleware.exception_handlers import setup_exception_handlers
 from .services.cache.cache_aside import CacheAsideService
+from .services.infra.app_enrollment_service import AppEnrollmentService
 from .services.infra.settings_service import SettingsService
 from .services.service_factory import ServiceFactory
 from .llm.factory import set_settings
@@ -151,11 +152,23 @@ async def lifespan(app: FastAPI):
         setup_logging(settings, component_name="g8ee")
         logger.info("Bootstrap settings loaded")
 
+        # -- Phase 0.25: Self-enroll app identity with the gateway --
+        # The ensemble authenticates to the gateway exclusively via its mTLS
+        # app cert. Enrollment runs before the operator clients connect so the
+        # TLS config below points at the ensemble's own enrolled credentials.
+        enrollment_service = AppEnrollmentService()
+        app_identity = await enrollment_service.enroll_if_needed()
+        logger.info(
+            "App identity ready (app_id=%s, cert=%s)",
+            app_identity.app_id,
+            app_identity.cert_path,
+        )
+
         # -- Phase 0.5: Create TLS config for all clients --
         tls_config = TLSConfig(
-            ca_cert_path=settings.ca_cert_path,
-            client_cert_path=settings.client_cert_path,
-            client_key_path=settings.client_key_path,
+            ca_cert_path=app_identity.ca_cert_path,
+            client_cert_path=app_identity.cert_path,
+            client_key_path=app_identity.key_path,
         )
 
         # -- Phase 1: Core operator clients (db, kv, pubsub, blob) --

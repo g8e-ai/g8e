@@ -193,7 +193,8 @@ help:
 	@echo "  python-build  Copy constants and build the Python protocol package"
 	@echo ""
 	@echo "Ensemble (g8ee):"
-	@echo "  ensemble-test   Run the ensemble pytest unit suite (requires protocol/python installed)"
+	@echo "  ensemble-test   Run the ensemble pytest unit + in-process integration suite (Tier 1 + Tier 2)"
+	@echo "  test-external   Run the ensemble external test suite (Tier 4: real LLM/API, gated on credentials)"
 	@echo "  ensemble-lint   Run ruff + pyright on the ensemble"
 	@echo "  build-ensemble  Build the ensemble Docker image"
 	@echo ""
@@ -602,8 +603,13 @@ ENSEMBLE_PYRIGHT := $(shell if [ -f .venv/bin/pyright ]; then echo $(CURDIR)/.ve
 
 .PHONY: ensemble-test
 ensemble-test:
-	@echo "Running ensemble (g8ee) pytest unit suite..."
-	@cd ensemble && $(ENSEMBLE_PY) -m pytest tests/unit/ -q
+	@echo "Running ensemble (g8ee) pytest unit + in-process integration suite (Tier 1 + Tier 2)..."
+	@cd ensemble && $(ENSEMBLE_PY) -m pytest tests/unit/ tests/integration/ -q -m "not ai_integration and not requires_web_search and not requires_api"
+
+.PHONY: test-external
+test-external:
+	@echo "Running ensemble (g8ee) external test suite (Tier 4: real LLM/API calls)..."
+	@cd ensemble && $(ENSEMBLE_PY) -m pytest tests/integration/ -q -m "ai_integration or requires_web_search or requires_api"
 
 .PHONY: ensemble-lint
 ensemble-lint:
