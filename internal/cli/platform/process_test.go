@@ -418,7 +418,7 @@ func TestGetLogPath(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	expectedPath := filepath.Join(fileSvc.Resolve(constants.LogDirname), constants.OperatorLogFilename)
+	expectedPath := filepath.Join(fileSvc.Resolve(constants.LogDirname), constants.G8eLogFilename)
 	actualPath := pm.GetLogPath()
 
 	if actualPath != expectedPath {
@@ -533,13 +533,22 @@ func TestTailLog(t *testing.T) {
 		t.Fatalf("failed to create log file: %v", err)
 	}
 
-	// Test tailing a non-existent file
-	err := TailLog(filepath.Join(tmpDir, "nonexistent.log"), false)
-	if err == nil {
-		t.Error("expected error for non-existent log file")
+	// TailLog now takes an io.ReadSeeker opened by the caller. The
+	// nonexistent-file case is handled by the caller via LogFileExists /
+	// OpenLogForRead returning constants.ErrNotFound (covered by
+	// TestLogService_OpenLogForRead_NotFound in the logging package), so
+	// TailLog no longer handles os.Open errors.
+	f, err := os.Open(logFile)
+	if err != nil {
+		t.Fatalf("failed to open log file: %v", err)
+	}
+	defer f.Close()
+
+	if err := TailLog(f, false); err != nil {
+		t.Fatalf("TailLog returned error: %v", err)
 	}
 
-	// Note: We cannot test the actual tailing behavior in a unit test
+	// Note: We cannot test the follow-mode tailing behavior in a unit test
 	// as it would block waiting for input. Integration tests would be needed
 	// to verify the full tailing functionality.
 }
@@ -549,8 +558,8 @@ func TestConstants(t *testing.T) {
 	if constants.OperatorPIDFilename == "" {
 		t.Error("constants.OperatorPIDFilename should not be empty")
 	}
-	if constants.OperatorLogFilename == "" {
-		t.Error("constants.OperatorLogFilename should not be empty")
+	if constants.G8eLogFilename == "" {
+		t.Error("constants.G8eLogFilename should not be empty")
 	}
 	if ShutdownTimeout == 0 {
 		t.Error("ShutdownTimeout should not be zero")

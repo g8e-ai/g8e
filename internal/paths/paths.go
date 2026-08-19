@@ -78,8 +78,8 @@ var Infra struct {
 	BootstrapDigestPath string
 
 	// Log paths
-	LogDir          string
-	OperatorLogFile string
+	LogDir     string
+	G8eLogFile string
 
 	// PID paths
 	PidDir              string
@@ -154,8 +154,8 @@ var Infra struct {
 	SessionEncKeyPath   string
 	BootstrapDigestPath string
 
-	LogDir          string
-	OperatorLogFile string
+	LogDir     string
+	G8eLogFile string
 
 	PidDir              string
 	OperatorPostureFile string
@@ -223,7 +223,7 @@ var Infra struct {
 	BootstrapDigestPath: constants.RuntimeDirname + "/" + constants.SecretsDirname + "/" + constants.SecretsFileBootstrapDigest,
 
 	LogDir:              constants.RuntimeDirname + "/" + constants.LogDirname,
-	OperatorLogFile:     constants.RuntimeDirname + "/" + constants.LogDirname + "/" + constants.OperatorLogFilename,
+	G8eLogFile:          constants.RuntimeDirname + "/" + constants.LogDirname + "/" + constants.G8eLogFilename,
 	PidDir:              constants.RuntimeDirname + "/" + constants.PidDirname,
 	OperatorPostureFile: constants.RuntimeDirname + "/" + constants.PidDirname + "/" + constants.OperatorPostureFilename,
 	OperatorPIDFile:     constants.RuntimeDirname + "/" + constants.PidDirname + "/" + constants.OperatorPIDFilename,
@@ -255,7 +255,7 @@ var (
 	PeerChainPath       = constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PeerSubdir + "/" + constants.PeerChainFilename
 	PkiGatewayKeyPath   = constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirIssued + "/" + constants.PkiSubdirHub + "/" + constants.PkiFileGatewayKey
 	SwaggerFilePath     = constants.DocsDirname + "/" + constants.SwaggerFilename
-	OperatorLogPath     = constants.OperatorLogFilename
+	G8eLogPath          = constants.G8eLogFilename
 )
 
 // Init initializes paths relative to the current working directory.
@@ -325,7 +325,7 @@ func InitWithBase(baseDir string) error {
 	Infra.BootstrapDigestPath = pathutil.SafeJoin(Infra.SecretsDir, constants.SecretsFileBootstrapDigest)
 
 	Infra.LogDir = pathutil.SafeJoin(Infra.RuntimeDir, constants.LogDirname)
-	Infra.OperatorLogFile = pathutil.SafeJoin(Infra.LogDir, constants.OperatorLogFilename)
+	Infra.G8eLogFile = pathutil.SafeJoin(Infra.LogDir, constants.G8eLogFilename)
 	Infra.PidDir = pathutil.SafeJoin(Infra.RuntimeDir, constants.PidDirname)
 	Infra.OperatorPostureFile = pathutil.SafeJoin(Infra.PidDir, constants.OperatorPostureFilename)
 	Infra.OperatorPIDFile = pathutil.SafeJoin(Infra.PidDir, constants.OperatorPIDFilename)

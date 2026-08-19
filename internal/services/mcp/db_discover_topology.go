@@ -45,9 +45,7 @@ func (t *DBDiscoverTopologyTool) InputSchema() *InputSchema {
 
 // Execute implements the tool logic.
 func (t *DBDiscoverTopologyTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		DatabasePath string `json:"database_path"`
-	}
+	var req DBDiscoverTopologyRequest
 	if err := json.Unmarshal(args, &req); err != nil {
 		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
 	}
@@ -108,9 +106,7 @@ func (t *DBDiscoverTopologyTool) Execute(ctx context.Context, args json.RawMessa
 		columns.Close()
 	}
 
-	result := map[string]interface{}{
-		"schema": schema,
-	}
+	result := DBDiscoverTopologyResult{Schema: schema}
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
 		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)

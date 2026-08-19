@@ -94,6 +94,9 @@ func TestConvertToFieldValue_Array(t *testing.T) {
 func TestConvertToFieldValue_Object(t *testing.T) {
 	t.Parallel()
 
+	// map[string]interface{} is the schema-less input type for ConvertToFieldValue,
+	// which type-switches on arbitrary JSON shapes (see field_parser.go). The test
+	// must pass a map to exercise the object branch; a typed struct would not match.
 	v := ConvertToFieldValue(map[string]interface{}{
 		"name":  "test",
 		"count": float64(42),
@@ -107,6 +110,8 @@ func TestConvertToFieldValue_Object(t *testing.T) {
 func TestConvertToFieldValue_NestedArrayInObject(t *testing.T) {
 	t.Parallel()
 
+	// map[string]interface{} is the schema-less input type for ConvertToFieldValue
+	// (see field_parser.go); a typed struct would not exercise the object+array branch.
 	v := ConvertToFieldValue(map[string]interface{}{
 		"items": []interface{}{"x", "y"},
 	})
@@ -134,6 +139,8 @@ func TestConvertToFieldValue_EmptyArray(t *testing.T) {
 func TestConvertToFieldValue_EmptyObject(t *testing.T) {
 	t.Parallel()
 
+	// map[string]interface{} is the schema-less input type for ConvertToFieldValue
+	// (see field_parser.go); an empty map exercises the empty-object branch.
 	v := ConvertToFieldValue(map[string]interface{}{})
 	assert.Empty(t, v.Object)
 }
@@ -214,10 +221,10 @@ func TestCloudMetadataTool_Execute_InvalidOperation(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, result.Content, 1)
 
-	var payload map[string]interface{}
+	var payload CloudMetadataErrorResponse
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
-	assert.Equal(t, "bogus", payload["operation"])
-	assert.Contains(t, payload["error"], "invalid operation")
+	assert.Equal(t, "bogus", payload.Operation)
+	assert.Contains(t, payload.Error, "invalid operation")
 }
 
 func TestCloudMetadataTool_Execute_DefaultOperation(t *testing.T) {
@@ -230,10 +237,10 @@ func TestCloudMetadataTool_Execute_DefaultOperation(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, result.Content, 1)
 
-	var payload map[string]interface{}
+	var payload CloudMetadataErrorResponse
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
-	assert.Equal(t, "detect", payload["operation"])
-	assert.Equal(t, "unknown", payload["provider"])
+	assert.Equal(t, "detect", payload.Operation)
+	assert.Equal(t, "unknown", payload.Provider)
 }
 
 func TestCloudMetadataTool_Execute_DetectAWS(t *testing.T) {
@@ -246,9 +253,9 @@ func TestCloudMetadataTool_Execute_DetectAWS(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, result.Content, 1)
 
-	var payload map[string]interface{}
+	var payload CloudMetadataDetectResult
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
-	assert.Equal(t, "aws", payload["provider"])
+	assert.Equal(t, "aws", payload.Provider)
 }
 
 func TestCloudMetadataTool_Execute_AWSInstance(t *testing.T) {
@@ -267,10 +274,10 @@ func TestCloudMetadataTool_Execute_AWSInstance(t *testing.T) {
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{"operation":"instance"}`))
 	require.NoError(t, err)
 
-	var payload map[string]interface{}
+	var payload CloudMetadataInstanceResult
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
-	assert.Equal(t, "aws", payload["provider"])
-	assert.Equal(t, "i-1234567890abcdef0", payload["instance_id"])
+	assert.Equal(t, "aws", payload.Provider)
+	assert.Equal(t, "i-1234567890abcdef0", payload.InstanceID)
 }
 
 func TestCloudMetadataTool_Execute_AWSRegion(t *testing.T) {
@@ -292,10 +299,10 @@ func TestCloudMetadataTool_Execute_AWSRegion(t *testing.T) {
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{"operation":"region"}`))
 	require.NoError(t, err)
 
-	var payload map[string]interface{}
+	var payload CloudMetadataRegionResult
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
-	assert.Equal(t, "aws", payload["provider"])
-	assert.Equal(t, "us-west-2", payload["region"])
+	assert.Equal(t, "aws", payload.Provider)
+	assert.Equal(t, "us-west-2", payload.Region)
 }
 
 func TestCloudMetadataTool_Execute_AWSRegionFallbackToAZ(t *testing.T) {
@@ -320,9 +327,9 @@ func TestCloudMetadataTool_Execute_AWSRegionFallbackToAZ(t *testing.T) {
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{"operation":"region"}`))
 	require.NoError(t, err)
 
-	var payload map[string]interface{}
+	var payload CloudMetadataRegionResult
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
-	assert.Equal(t, "us-east-1", payload["region"], "region should be derived from AZ by stripping last char")
+	assert.Equal(t, "us-east-1", payload.Region, "region should be derived from AZ by stripping last char")
 }
 
 func TestCloudMetadataTool_Execute_AWSAvailabilityZone(t *testing.T) {
@@ -341,10 +348,10 @@ func TestCloudMetadataTool_Execute_AWSAvailabilityZone(t *testing.T) {
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{"operation":"availability_zone"}`))
 	require.NoError(t, err)
 
-	var payload map[string]interface{}
+	var payload CloudMetadataAvailabilityZoneResult
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
-	assert.Equal(t, "aws", payload["provider"])
-	assert.Equal(t, "us-west-2a", payload["availability_zone"])
+	assert.Equal(t, "aws", payload.Provider)
+	assert.Equal(t, "us-west-2a", payload.AvailabilityZone)
 }
 
 func TestCloudMetadataTool_Execute_AWSInstanceType(t *testing.T) {
@@ -363,10 +370,10 @@ func TestCloudMetadataTool_Execute_AWSInstanceType(t *testing.T) {
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{"operation":"instance_type"}`))
 	require.NoError(t, err)
 
-	var payload map[string]interface{}
+	var payload CloudMetadataInstanceTypeResult
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
-	assert.Equal(t, "aws", payload["provider"])
-	assert.Equal(t, "t3.medium", payload["instance_type"])
+	assert.Equal(t, "aws", payload.Provider)
+	assert.Equal(t, "t3.medium", payload.InstanceType)
 }
 
 func TestCloudMetadataTool_Execute_GCPInstance(t *testing.T) {
@@ -391,11 +398,11 @@ func TestCloudMetadataTool_Execute_GCPInstance(t *testing.T) {
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{"operation":"instance"}`))
 	require.NoError(t, err)
 
-	var payload map[string]interface{}
+	var payload CloudMetadataInstanceResult
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
-	assert.Equal(t, "gcp", payload["provider"])
-	assert.Equal(t, "1234567890", payload["instance_id"])
-	assert.Equal(t, "my-vm", payload["name"])
+	assert.Equal(t, "gcp", payload.Provider)
+	assert.Equal(t, "1234567890", payload.InstanceID)
+	assert.Equal(t, "my-vm", payload.Name)
 }
 
 func TestCloudMetadataTool_Execute_GCPRegion(t *testing.T) {
@@ -414,10 +421,10 @@ func TestCloudMetadataTool_Execute_GCPRegion(t *testing.T) {
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{"operation":"region"}`))
 	require.NoError(t, err)
 
-	var payload map[string]interface{}
+	var payload CloudMetadataRegionResult
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
-	assert.Equal(t, "gcp", payload["provider"])
-	assert.Equal(t, "us-central1", payload["region"], "region should be last path segment")
+	assert.Equal(t, "gcp", payload.Provider)
+	assert.Equal(t, "us-central1", payload.Region, "region should be last path segment")
 }
 
 func TestCloudMetadataTool_Execute_GCPAvailabilityZone(t *testing.T) {
@@ -436,10 +443,10 @@ func TestCloudMetadataTool_Execute_GCPAvailabilityZone(t *testing.T) {
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{"operation":"availability_zone"}`))
 	require.NoError(t, err)
 
-	var payload map[string]interface{}
+	var payload CloudMetadataAvailabilityZoneResult
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
-	assert.Equal(t, "gcp", payload["provider"])
-	assert.Equal(t, "us-central1-a", payload["availability_zone"])
+	assert.Equal(t, "gcp", payload.Provider)
+	assert.Equal(t, "us-central1-a", payload.AvailabilityZone)
 }
 
 func TestCloudMetadataTool_Execute_GCPInstanceType(t *testing.T) {
@@ -458,10 +465,10 @@ func TestCloudMetadataTool_Execute_GCPInstanceType(t *testing.T) {
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{"operation":"instance_type"}`))
 	require.NoError(t, err)
 
-	var payload map[string]interface{}
+	var payload CloudMetadataInstanceTypeResult
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
-	assert.Equal(t, "gcp", payload["provider"])
-	assert.Equal(t, "e2-medium", payload["instance_type"])
+	assert.Equal(t, "gcp", payload.Provider)
+	assert.Equal(t, "e2-medium", payload.InstanceType)
 }
 
 func TestCloudMetadataTool_Execute_AzureInstance(t *testing.T) {
@@ -480,9 +487,9 @@ func TestCloudMetadataTool_Execute_AzureInstance(t *testing.T) {
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{"operation":"instance"}`))
 	require.NoError(t, err)
 
-	var payload map[string]interface{}
+	var payload CloudMetadataInstanceResult
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
-	assert.Equal(t, "azure", payload["provider"])
+	assert.Equal(t, "azure", payload.Provider)
 }
 
 func TestCloudMetadataTool_Execute_AzureRegion(t *testing.T) {
@@ -501,10 +508,10 @@ func TestCloudMetadataTool_Execute_AzureRegion(t *testing.T) {
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{"operation":"region"}`))
 	require.NoError(t, err)
 
-	var payload map[string]interface{}
+	var payload CloudMetadataRegionResult
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
-	assert.Equal(t, "azure", payload["provider"])
-	assert.Equal(t, "westus2", payload["region"])
+	assert.Equal(t, "azure", payload.Provider)
+	assert.Equal(t, "westus2", payload.Region)
 }
 
 func TestCloudMetadataTool_Execute_AzureRegionMissingCompute(t *testing.T) {
@@ -523,10 +530,10 @@ func TestCloudMetadataTool_Execute_AzureRegionMissingCompute(t *testing.T) {
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{"operation":"region"}`))
 	require.NoError(t, err)
 
-	var payload map[string]interface{}
+	var payload CloudMetadataRegionResult
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
-	assert.Equal(t, "azure", payload["provider"])
-	assert.Equal(t, "unknown", payload["region"])
+	assert.Equal(t, "azure", payload.Provider)
+	assert.Equal(t, "unknown", payload.Region)
 }
 
 func TestCloudMetadataTool_Execute_AzureAvailabilityZone(t *testing.T) {
@@ -545,10 +552,10 @@ func TestCloudMetadataTool_Execute_AzureAvailabilityZone(t *testing.T) {
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{"operation":"availability_zone"}`))
 	require.NoError(t, err)
 
-	var payload map[string]interface{}
+	var payload CloudMetadataAvailabilityZoneResult
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
-	assert.Equal(t, "azure", payload["provider"])
-	assert.Equal(t, "2", payload["availability_zone"])
+	assert.Equal(t, "azure", payload.Provider)
+	assert.Equal(t, "2", payload.AvailabilityZone)
 }
 
 func TestCloudMetadataTool_Execute_AzureInstanceType(t *testing.T) {
@@ -567,10 +574,10 @@ func TestCloudMetadataTool_Execute_AzureInstanceType(t *testing.T) {
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{"operation":"instance_type"}`))
 	require.NoError(t, err)
 
-	var payload map[string]interface{}
+	var payload CloudMetadataInstanceTypeResult
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
-	assert.Equal(t, "azure", payload["provider"])
-	assert.Equal(t, "Standard_D4s_v3", payload["instance_type"])
+	assert.Equal(t, "azure", payload.Provider)
+	assert.Equal(t, "Standard_D4s_v3", payload.InstanceType)
 }
 
 func TestCloudMetadataTool_Execute_AzureInstanceTypeError(t *testing.T) {
@@ -589,10 +596,10 @@ func TestCloudMetadataTool_Execute_AzureInstanceTypeError(t *testing.T) {
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{"operation":"instance_type"}`))
 	require.NoError(t, err)
 
-	var payload map[string]interface{}
+	var payload CloudMetadataErrorResponse
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
-	assert.Equal(t, "azure", payload["provider"])
-	assert.Contains(t, payload["error"], "connection refused")
+	assert.Equal(t, "azure", payload.Provider)
+	assert.Contains(t, payload.Error, "connection refused")
 }
 
 func TestCloudMetadataTool_Execute_AllAWS(t *testing.T) {
@@ -622,17 +629,11 @@ func TestCloudMetadataTool_Execute_AllAWS(t *testing.T) {
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{"operation":"all"}`))
 	require.NoError(t, err)
 
-	var payload map[string]interface{}
+	var payload CloudMetadataAllResult
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
-	assert.Equal(t, "aws", payload["provider"])
-
-	instance, ok := payload["instance"].(map[string]interface{})
-	require.True(t, ok)
-	assert.Equal(t, "i-abc123", instance["instance_id"])
-
-	region, ok := payload["region"].(map[string]interface{})
-	require.True(t, ok)
-	assert.Equal(t, "eu-west-1", region["region"])
+	assert.Equal(t, "aws", payload.Provider)
+	assert.Equal(t, "i-abc123", payload.Instance.InstanceID)
+	assert.Equal(t, "eu-west-1", payload.Region.Region)
 }
 
 func TestCloudMetadataTool_Execute_UnsupportedProvider(t *testing.T) {
@@ -651,10 +652,10 @@ func TestCloudMetadataTool_Execute_UnsupportedProvider(t *testing.T) {
 	result, err := tool.Execute(context.Background(), json.RawMessage(`{"operation":"instance"}`))
 	require.NoError(t, err)
 
-	var payload map[string]interface{}
+	var payload CloudMetadataErrorResponse
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
-	assert.Equal(t, "digitalocean", payload["provider"])
-	assert.Contains(t, payload["error"], "unsupported provider")
+	assert.Equal(t, "digitalocean", payload.Provider)
+	assert.Contains(t, payload.Error, "unsupported provider")
 }
 
 func TestGetInstanceMetadata_UnsupportedProvider(t *testing.T) {

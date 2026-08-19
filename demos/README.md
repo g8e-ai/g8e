@@ -305,7 +305,7 @@ This reflects real deployment: the Operator on a remote air-gapped host has no f
 
 ## Observability
 
-The observability container mounts audit vault and state volumes read-only, providing out-of-band inspection of the audit trail and actuator state without requiring live network connections to services. In the `healthcare`, `finance`, `dhs`, and `frontend` demos it actively tails the gateway operator log; the `fedramp` observability container exposes the mounted volumes for manual `docker compose exec` inspection.
+The observability container mounts audit vault and state volumes read-only, providing out-of-band inspection of the audit trail and actuator state without requiring live network connections to services. In the `healthcare`, `finance`, `dhs`, and `frontend` demos it actively tails the gateway platform log (`/data/gateway/logs/g8e.log`); the `fedramp` observability container exposes the mounted volumes for manual `docker compose exec` inspection.
 
 ## Troubleshooting
 

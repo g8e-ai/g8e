@@ -212,6 +212,12 @@ func (m *mockFileSvc) EnforceFilePermissions(ctx context.Context, relPath string
 }
 func (m *mockFileSvc) Rel(absPath string) (string, error)        { return absPath, nil }
 func (m *mockFileSvc) RelFromAbs(absPath string) (string, error) { return absPath, nil }
+func (m *mockFileSvc) OpenForAppend(ctx context.Context, relPath string, mode os.FileMode) (*os.File, error) {
+	return nil, constants.ErrFileOpenFailed
+}
+func (m *mockFileSvc) OpenForRead(ctx context.Context, relPath string) (*os.File, error) {
+	return nil, constants.ErrNotFound
+}
 
 // newTestAdapter creates an Adapter with mock gRPC clients and file service,
 // bypassing the real dialLattice. The caller sets taskHandler and

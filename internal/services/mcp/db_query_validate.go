@@ -50,10 +50,7 @@ func (t *DBQueryValidateTool) InputSchema() *InputSchema {
 
 // Execute implements the tool logic.
 func (t *DBQueryValidateTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		DatabasePath string `json:"database_path"`
-		Query        string `json:"query"`
-	}
+	var req DBQueryValidateRequest
 	if err := json.Unmarshal(args, &req); err != nil {
 		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
 	}

@@ -47,10 +47,7 @@ func (t *SysEnvVarsTool) InputSchema() *InputSchema {
 
 // Execute implements the tool logic.
 func (t *SysEnvVarsTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		Pattern       string `json:"pattern,omitempty"`
-		RedactSecrets bool   `json:"redact_secrets,omitempty"`
-	}
+	var req SysEnvVarsRequest
 	if err := json.Unmarshal(args, &req); err != nil {
 		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
 	}
@@ -84,9 +81,9 @@ func (t *SysEnvVarsTool) Execute(ctx context.Context, args json.RawMessage) (Cal
 		filteredVars[key] = value
 	}
 
-	result := map[string]interface{}{
-		"count":     len(filteredVars),
-		"variables": filteredVars,
+	result := SysEnvVarsResult{
+		Count:     len(filteredVars),
+		Variables: filteredVars,
 	}
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
