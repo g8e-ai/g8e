@@ -548,6 +548,18 @@ type RunShellCommandResult struct {
 	Hostname string `json:"hostname,omitempty"`
 }
 
+// SysEnvVarsRequest is the params for the "sys_env_vars" tool.
+type SysEnvVarsRequest struct {
+	Pattern       string `json:"pattern,omitempty"`
+	RedactSecrets bool   `json:"redact_secrets,omitempty"`
+}
+
+// SysEnvVarsResult is the result for the "sys_env_vars" tool.
+type SysEnvVarsResult struct {
+	Count     int               `json:"count"`
+	Variables map[string]string `json:"variables"`
+}
+
 // SysInfoRequest is the params for the "sys_info" tool.
 type SysInfoRequest struct{}
 
@@ -574,6 +586,32 @@ type SysTimeClockRequest struct{}
 type SysTimeClockResult struct {
 	SystemTime SystemTimeInfo `json:"system_time"`
 	NTP        NTPStatus      `json:"ntp"`
+}
+
+// ProcTreeRequest is the params for the "proc_tree" tool.
+type ProcTreeRequest struct {
+	PID      int `json:"pid,omitempty"`
+	MaxDepth int `json:"max_depth,omitempty"`
+}
+
+// TLSCertInspectRequest is the params for the "tls_cert_inspect" tool.
+type TLSCertInspectRequest struct {
+	CertPath string `json:"cert_path,omitempty"`
+	Host     string `json:"host,omitempty"`
+	Port     int    `json:"port,omitempty"`
+}
+
+// SysContainerStatusRequest is the params for the "sys_container_status" tool.
+type SysContainerStatusRequest struct {
+	ContainerName string `json:"container_name"`
+}
+
+// GitOpsRequest is the params for the "git_ops" tool.
+type GitOpsRequest struct {
+	Operation string `json:"operation"`
+	RepoPath  string `json:"repo_path,omitempty"`
+	Limit     int    `json:"limit,omitempty"`
+	Ref       string `json:"ref,omitempty"`
 }
 
 // SystemTimeInfo represents system time information.
