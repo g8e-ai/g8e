@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/serve"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/fs"
+	"github.com/g8e-ai/g8e/internal/services/logging"
 )
 
 const (
@@ -62,6 +63,7 @@ type OperatorStartOptions struct {
 
 type ProcessManager struct {
 	fileSvc fs.RuntimeFileService
+	logSvc  *logging.LogService
 	// findOperatorProcessFn allows mocking for tests
 	findOperatorProcessFn func() int
 	// Windows-specific dependencies for testing (used in process_windows.go)
@@ -81,7 +83,15 @@ func NewProcessManager(fileSvc fs.RuntimeFileService) (*ProcessManager, error) {
 
 	return &ProcessManager{
 		fileSvc: fileSvc,
+		logSvc:  logging.NewLogService(fileSvc),
 	}, nil
+}
+
+// LogService returns the ProcessManager's LogService. Used by the g8e logs
+// command to check log file existence and open the log for read via the
+// file service rather than raw os calls.
+func (pm *ProcessManager) LogService() *logging.LogService {
+	return pm.logSvc
 }
 
 func (pm *ProcessManager) CreateDirectories() error {
@@ -395,11 +405,11 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 		return err
 	}
 
-	logPath := pm.fileSvc.Resolve(filepath.Join(constants.LogDirname, constants.OperatorLogFilename))
-	logHandle, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, constants.PermFilePrivate)
+	logHandle, err := pm.logSvc.OpenLogForAppend(context.Background())
 	if err != nil {
 		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 	}
+	logPath := pm.logSvc.LogFilePath()
 
 	opts.HTTPPort = availableHTTPPort
 	opts.HTTPSPort = availableHTTPSPort
@@ -540,7 +550,7 @@ func (pm *ProcessManager) OperatorStatus() (bool, int, error) {
 }
 
 func (pm *ProcessManager) GetLogPath() string {
-	return pm.fileSvc.Resolve(filepath.Join(constants.LogDirname, constants.OperatorLogFilename))
+	return pm.logSvc.LogFilePath()
 }
 
 func (pm *ProcessManager) Clean() error {

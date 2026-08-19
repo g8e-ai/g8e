@@ -517,6 +517,12 @@ func TestScrubbingService_ValidateNoLeakage(t *testing.T) {
 	})
 }
 
+// TestScrubbingService_ScrubMap exercises the schema-less ScrubMap boundary. The
+// map[string]interface{} test fixtures and nested type assertions below mirror
+// ScrubMap's production signature, which deliberately uses map[string]interface{}
+// because it handles arbitrary JSON payloads from external sources where the
+// schema is unknown by design (see boundary.go ScrubMap NOTE). This is the
+// schema-less passthrough exception to the "no map[string]interface{}" rule.
 func TestScrubbingService_ScrubMap(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
@@ -999,7 +1005,10 @@ func TestScrubbingService_RehydratePayload(t *testing.T) {
 		payload := []byte(`{"key": "value ` + token + `", "nested": {"data": "` + token + `"}}`)
 		result, err := service.RehydratePayload(context.Background(), payload)
 		require.NoError(t, err)
-		// Parse the result to verify rehydration
+		// Parse the result to verify rehydration. parsed is map[string]interface{}
+		// because RehydratePayload returns arbitrary JSON whose schema is unknown by
+		// design (see boundary.go RehydratePayload doc comment) - schema-less
+		// passthrough exception to the "no map[string]interface{}" rule.
 		var parsed map[string]interface{}
 		err = json.Unmarshal(result, &parsed)
 		require.NoError(t, err)

@@ -51,6 +51,17 @@ type RuntimeFileService interface {
 	// directories if needed.
 	WriteFile(ctx context.Context, relPath string, data []byte, mode os.FileMode) error
 
+	// OpenForAppend opens a file for appending (O_CREATE|O_WRONLY|O_APPEND).
+	// Creates parent directories if needed. Returns the raw *os.File — the
+	// caller must Close it. Used for log files that require streaming append
+	// (WriteFile's atomic tmp+rename is wrong for logs).
+	OpenForAppend(ctx context.Context, relPath string, mode os.FileMode) (*os.File, error)
+
+	// OpenForRead opens an existing file for streaming read. Returns
+	// constants.ErrNotFound if the file does not exist. The caller must Close
+	// the returned handle. Used for tail/follow operations on log files.
+	OpenForRead(ctx context.Context, relPath string) (*os.File, error)
+
 	// Remove deletes a file. No-op if file doesn't exist.
 	Remove(ctx context.Context, relPath string) error
 

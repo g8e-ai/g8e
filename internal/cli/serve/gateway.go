@@ -16,7 +16,6 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -32,6 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	gateway "github.com/g8e-ai/g8e/internal/services/gateway"
 	govsvc "github.com/g8e-ai/g8e/internal/services/governance"
+	"github.com/g8e-ai/g8e/internal/services/logging"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
@@ -85,22 +85,12 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		return fmt.Errorf("gateway: create runtime tree: %w", err)
 	}
 
-	// Create log directory and file
-	if err := fileSvc.MkdirAll(context.Background(), constants.LogDirname, constants.PermDirPrivate); err != nil {
-		return fmt.Errorf("gateway: create log directory: %w", err)
-	}
-
-	logFilePath := fileSvc.Resolve(filepath.Join(constants.LogDirname, constants.OperatorLogFilename))
-	logHandle, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, constants.PermFilePrivate)
-	if err != nil {
-		return fmt.Errorf("gateway: open log file: %w", err)
-	}
-	defer logHandle.Close()
-
-	logger, err := ConfigureLoggerWithOutput(cfg.LogLevel, logHandle)
+	logSvc := logging.NewLogService(fileSvc)
+	logger, logHandle, err := logSvc.ConfigureFileLogger(context.Background(), cfg.LogLevel)
 	if err != nil {
 		return fmt.Errorf("gateway: configure logger: %w", err)
 	}
+	defer logHandle.Close()
 
 	// Apply defaults for empty directory flags
 	if cfg.DataDir == "" {
