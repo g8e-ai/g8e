@@ -1,0 +1,22 @@
+Retrieve git version history for a file from the Operator's Ledger. Only files modified by the Operator have history. Use commit hashes with restore_file to revert.
+
+<parameters>
+- file_path: REQUIRED - absolute path
+- limit: default 50 | target_operator: operator_id or hostname - REQUIRED when multiple operators bound (prefer hostname when available)
+</parameters>
+
+<returns>
+- file_path, history[]: commit_hash, timestamp, message
+</returns>
+
+<when_to_use>
+- User asks "what changes were made to this file?"
+- Need restore points before calling restore_file
+- Debugging when/how a config was changed
+</when_to_use>
+
+<examples>
+<example>User: "What's the history of nginx.conf?" → fetch_file_history(file_path="/etc/nginx/nginx.conf")</example>
+<example>User: "Show me recent changes to app.py" → fetch_file_history(file_path="/app/app.py", limit=10)</example>
+<example>User: "What's the history of nginx.conf on g8eo?" → fetch_file_history(file_path="/etc/nginx/nginx.conf", target_operator="g8eo")</example>
+</examples>

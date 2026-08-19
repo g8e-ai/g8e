@@ -87,6 +87,11 @@ def channel(name: str) -> str:
     return CHANNELS["channels"][name]["value"]
 
 
+def document_id(name: str) -> str:
+    """Get the wire value for a document ID by key. e.g. document_id("platform_settings") -> "platform_settings" """
+    return DOCUMENT_IDS["document_ids"][name]["value"]
+
+
 def intent(name: str) -> str:
     """Get the wire value for an intent by key."""
     return INTENTS["intents"][name]["value"]

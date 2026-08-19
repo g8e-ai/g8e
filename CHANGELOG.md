@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## v2.0.x
+
+| Version | Date | Description | Notes |
+|---------|------|-------------|-------|
+| 2.0.0 | 2026-08-19 | Ensemble and dashboard reunification: re-unifies DropOps as the complete g8e platform by bringing the first g8e-compatible agentic ensemble (g8ee, Python/FastAPI) and the operator dashboard (g8ed, Node.js/Express) back into the g8e repo as first-party in-tree components, growing the repo from a Go platform into a polyglot monorepo (Go + Python + Node.js). Imports exactly two source trees and the Docker compose wiring from the sauvren scratch-pad fork (the sauvren Go fork is ignored entirely — its modifications were already re-implemented in g8e). Adds `ensemble/Dockerfile` and `dashboard/Dockerfile` rooted at the g8e repo, extends the repo-root `docker-compose.yml` with `ensemble` and `dashboard` services (env-var paths re-derived for g8e's `/root/.g8e` layout), applies BSL 1.1 across all imported source (replacing sauvren's Apache 2.0 ensemble LICENSE and creating the missing dashboard LICENSE), adds Makefile targets and CI jobs for the polyglot lint/test matrix, adds a Tier 3 E2E for the unified compose, ports the `document_id` accessor into `protocol/python/g8e/constants.py`, and updates the architecture docs and README to present the platform as protocol + gateway/operator + ensemble + dashboard. `make release` is unchanged — the Go binary remains the only release artifact for v2.0.0; ensemble/dashboard Docker images are build-only this release. | [v2.0.0](docs/release_notes/v2.0.x/v2.0.0.md) |
+
 ## v1.7.x
 
 | Version | Date | Description | Notes |

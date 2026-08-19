@@ -124,6 +124,14 @@ ENV/
 __pypackages__/
 .Python
 
+# --- Node.js Dashboard (g8ed) ---
+node_modules/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.nyc_output/
+
 
 # --- Deployment ---
 .dockerignore

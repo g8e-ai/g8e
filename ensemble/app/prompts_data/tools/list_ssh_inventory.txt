@@ -1,0 +1,5 @@
+Retrieve the available SSH fleet inventory (hostnames, aliases, and metadata). 
+
+Use this tool to discover which remote hosts you can reach via 'stream_operator_to_ssh_fleet'. The inventory is derived from the host's SSH configuration and known_hosts.
+
+You should use this tool when you need to understand the landscape of the SSH fleet before planning a multi-host operation.

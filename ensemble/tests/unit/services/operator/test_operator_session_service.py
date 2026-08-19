@@ -1,0 +1,285 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Use of this source code is governed by the Business Source License
+# included in the LICENSE file.
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+
+"""Unit tests for OperatorSessionService."""
+
+from unittest.mock import AsyncMock, MagicMock
+import pytest
+
+from app.constants import (
+    DB_COLLECTION_OPERATOR_SESSIONS,
+    SessionType,
+    SessionEndReason,
+)
+from app.models.sessions import OperatorSessionDocument
+from app.services.cache.cache_aside import CacheAsideService
+from app.services.operator.operator_session_service import OperatorSessionService
+from app.utils.timestamp import now, add_seconds
+
+pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
+
+
+class TestOperatorSessionService:
+    @pytest.fixture
+    def mock_cache(self):
+        return AsyncMock(spec=CacheAsideService)
+
+    @pytest.fixture
+    def session_service(self, mock_cache):
+        return OperatorSessionService(cache_aside=mock_cache)
+
+    async def test_create_operator_session_happy(self, session_service, mock_cache):
+        # Setup
+        session_data = {
+            "user_id": "user-123",
+            "organization_id": "org-456",
+            "user_data": {"name": "Test User"},
+            "api_key": "g8e_test_key",
+            "operator_id": "op-789",
+            "operator_status": "offline",
+            "metadata": {"version": "1.0.0"},
+        }
+        request_context = {
+            "ip": "1.2.3.4",
+            "user_agent": "g8e-daemon/1.0",
+            "login_method": "api_key",
+        }
+
+        mock_cache.create_document.return_value = MagicMock(success=True)
+
+        # Execute
+        operator_session = await session_service.create_operator_session(
+            "session-uuid-123", session_data=session_data, request_context=request_context
+        )
+
+        # Assert
+        assert operator_session.id == "session-uuid-123"
+        assert operator_session.user_id == "user-123"
+        assert operator_session.operator_id == "op-789"
+        assert operator_session.client_ip == "1.2.3.4"
+        assert operator_session.user_agent == "g8e-daemon/1.0"
+        assert operator_session.is_active is True
+
+        mock_cache.create_document.assert_called_once_with(
+            collection=DB_COLLECTION_OPERATOR_SESSIONS,
+            document_id=operator_session.id,
+            data=operator_session,
+        )
+
+    async def test_create_operator_session_custom_ttl(self, session_service, mock_cache):
+        # Setup
+        session_data = {"user_id": "u1", "operator_id": "o1"}
+        mock_cache.create_document.return_value = MagicMock(success=True)
+        ttl = 300
+
+        # Execute
+        operator_session = await session_service.create_operator_session(
+            "session-uuid-456", session_data=session_data, ttl_seconds=ttl
+        )
+
+        # Assert
+        # absolute_expires_at and idle_expires_at should be roughly now + 300
+        expected_expiry = add_seconds(operator_session.created_at, ttl)
+        assert operator_session.absolute_expires_at == expected_expiry
+        assert operator_session.idle_expires_at == expected_expiry
+
+    async def test_create_operator_session_failure(self, session_service, mock_cache):
+        # Setup
+        session_data = {"user_id": "u1", "operator_id": "o1"}
+        mock_cache.create_document.return_value = MagicMock(success=False, error="DB Error")
+
+        # Execute & Assert
+        with pytest.raises(Exception) as exc:
+            await session_service.create_operator_session(
+                "session-uuid-789", session_data=session_data
+            )
+        assert "Failed to persist operator session" in str(exc.value)
+
+    async def test_validate_session_happy(self, session_service, mock_cache):
+        # Setup
+        operator_session_id = "ops_123"
+        ts = now()
+        session_dict = {
+            "id": operator_session_id,
+            "session_type": SessionType.OPERATOR,
+            "user_id": "u1",
+            "operator_id": "o1",
+            "is_active": True,
+            "created_at": ts.isoformat(),
+            "absolute_expires_at": add_seconds(ts, 3600).isoformat(),
+            "idle_expires_at": add_seconds(ts, 3600).isoformat(),
+            "last_activity": ts.isoformat(),
+        }
+        mock_cache.get_document_with_cache.return_value = session_dict
+
+        # Execute
+        operator_session = await session_service.validate_operator_session(operator_session_id)
+
+        # Assert
+        assert operator_session is not None
+        assert operator_session.id == operator_session_id
+        assert operator_session.is_active is True
+
+    async def test_validate_session_not_found(self, session_service, mock_cache):
+        mock_cache.get_document_with_cache.return_value = None
+        assert await session_service.validate_operator_session("missing") is None
+
+    async def test_validate_session_empty_id(self, session_service):
+        assert await session_service.validate_operator_session("") is None
+
+    async def test_validate_session_inactive(self, session_service, mock_cache):
+        # Setup
+        operator_session_id = "ops_123"
+        session_dict = {
+            "id": operator_session_id,
+            "session_type": SessionType.OPERATOR,
+            "user_id": "u1",
+            "operator_id": "o1",
+            "is_active": False,
+            "absolute_expires_at": add_seconds(now(), 3600).isoformat(),
+            "idle_expires_at": add_seconds(now(), 3600).isoformat(),
+        }
+        mock_cache.get_document_with_cache.return_value = session_dict
+
+        # Execute & Assert
+        assert await session_service.validate_operator_session(operator_session_id) is None
+
+    async def test_validate_session_absolute_timeout(self, session_service, mock_cache):
+        # Setup
+        operator_session_id = "ops_123"
+        ts = now()
+        # Expired in the past
+        session_dict = {
+            "id": operator_session_id,
+            "session_type": SessionType.OPERATOR,
+            "user_id": "u1",
+            "operator_id": "o1",
+            "is_active": True,
+            "absolute_expires_at": add_seconds(ts, -60).isoformat(),
+            "idle_expires_at": add_seconds(ts, 3600).isoformat(),
+        }
+        mock_cache.get_document_with_cache.return_value = session_dict
+        mock_cache.delete_document.return_value = MagicMock(success=True)
+
+        # Execute
+        operator_session = await session_service.validate_operator_session(operator_session_id)
+
+        # Assert
+        assert operator_session is None
+        mock_cache.delete_document.assert_called_once_with(
+            collection=DB_COLLECTION_OPERATOR_SESSIONS, document_id=operator_session_id
+        )
+
+    async def test_validate_operator_session_idle_timeout(self, session_service, mock_cache):
+        # Setup
+        operator_session_id = "ops_123"
+        ts = now()
+        # Idle timeout in the past
+        session_dict = {
+            "id": operator_session_id,
+            "session_type": SessionType.OPERATOR,
+            "user_id": "u1",
+            "operator_id": "o1",
+            "is_active": True,
+            "absolute_expires_at": add_seconds(ts, 3600).isoformat(),
+            "idle_expires_at": add_seconds(ts, -60).isoformat(),
+        }
+        mock_cache.get_document_with_cache.return_value = session_dict
+        mock_cache.delete_document.return_value = MagicMock(success=True)
+
+        # Execute
+        operator_session = await session_service.validate_operator_session(operator_session_id)
+
+        # Assert
+        assert operator_session is None
+        mock_cache.delete_document.assert_called_once_with(
+            collection=DB_COLLECTION_OPERATOR_SESSIONS, document_id=operator_session_id
+        )
+
+    async def test_refresh_operator_session_happy(self, session_service, mock_cache):
+        # Setup
+        operator_session_id = "ops_123"
+        mock_cache.update_document.return_value = MagicMock(success=True)
+
+        # We need an operator_session object to pass or it will call validate_operator_session
+        operator_session = MagicMock(spec=OperatorSessionDocument)
+
+        # Execute
+        success = await session_service.refresh_operator_session(
+            operator_session_id, operator_session=operator_session
+        )
+
+        # Assert
+        assert success is True
+        mock_cache.update_document.assert_called_once()
+        call_args = mock_cache.update_document.call_args[1]
+        assert call_args["collection"] == DB_COLLECTION_OPERATOR_SESSIONS
+        assert call_args["document_id"] == operator_session_id
+        assert "last_activity" in call_args["data"]
+        assert "idle_expires_at" in call_args["data"]
+
+    async def test_refresh_operator_session_via_validation(self, session_service, mock_cache):
+        # Setup
+        operator_session_id = "ops_123"
+        ts = now()
+        session_dict = {
+            "id": operator_session_id,
+            "session_type": SessionType.OPERATOR,
+            "user_id": "u1",
+            "operator_id": "o1",
+            "is_active": True,
+            "absolute_expires_at": add_seconds(ts, 3600).isoformat(),
+            "idle_expires_at": add_seconds(ts, 3600).isoformat(),
+        }
+        mock_cache.get_document_with_cache.return_value = session_dict
+        mock_cache.update_document.return_value = MagicMock(success=True)
+
+        # Execute
+        success = await session_service.refresh_operator_session(operator_session_id)
+
+        # Assert
+        assert success is True
+        mock_cache.get_document_with_cache.assert_called_once()
+        mock_cache.update_document.assert_called_once()
+
+    async def test_refresh_operator_session_invalid_session(self, session_service, mock_cache):
+        # Setup
+        operator_session_id = "ops_123"
+        mock_cache.get_document_with_cache.return_value = None
+
+        # Execute
+        success = await session_service.refresh_operator_session(operator_session_id)
+
+        # Assert
+        assert success is False
+
+    async def test_end_session_happy(self, session_service, mock_cache):
+        # Setup
+        operator_session_id = "ops_123"
+        mock_cache.delete_document.return_value = MagicMock(success=True)
+
+        # Execute
+        success = await session_service.end_session(
+            operator_session_id, reason=SessionEndReason.LOGOUT
+        )
+
+        # Assert
+        assert success is True
+        mock_cache.delete_document.assert_called_once_with(
+            collection=DB_COLLECTION_OPERATOR_SESSIONS, document_id=operator_session_id
+        )
+
+    async def test_end_session_failure(self, session_service, mock_cache):
+        # Setup
+        operator_session_id = "ops_123"
+        mock_cache.delete_document.return_value = MagicMock(success=False)
+
+        # Execute
+        success = await session_service.end_session(operator_session_id)
+
+        # Assert
+        assert success is False
