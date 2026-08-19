@@ -72,11 +72,11 @@ func TestHeartbeatService_SendAutomatic_PersistsReceiptAgainstRealAuditStore(t *
 	}
 	actuatorPrivKey := ed25519.NewKeyFromSeed(make([]byte, 32))
 	actuator := &governance.L5Actuator{
-		Logger:            logger,
-		SQLAuditStore:     auditStore,
-		ExecutionHandler:  mockHandler,
-		SigningKey:        actuatorPrivKey,
-		KeyID:             "test-actuator-key",
+		Logger:           logger,
+		SQLAuditStore:    auditStore,
+		ExecutionHandler: mockHandler,
+		SigningKey:       actuatorPrivKey,
+		KeyID:            "test-actuator-key",
 	}
 
 	svc := NewHeartbeatService(cfg, logger, nil)
