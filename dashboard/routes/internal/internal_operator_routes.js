@@ -12,10 +12,9 @@ import { ErrorResponse, OperatorListResponse, OperatorSlotsResponse } from '../.
 /**
  * @param {Object} options
  * @param {Object} options.operatorService - OperatorDataService instance
- * @param {Object} options.dropPodOperatorService - DropPodOperatorService instance
  * @param {Object} options.authorizationMiddleware - Authorization middleware object
  */
-export function createInternalOperatorRouter({ operatorService, dropPodOperatorService, authorizationMiddleware }) {
+export function createInternalOperatorRouter({ operatorService, authorizationMiddleware }) {
     const { requireInternalOrigin } = authorizationMiddleware;
     const router = express.Router();
 
@@ -121,40 +120,6 @@ export function createInternalOperatorRouter({ operatorService, dropPodOperatorS
             return res.status(500).json(new ErrorResponse({
                 error: error.message || 'Failed to reset operator'
             }).forWire());
-        }
-    });
-
-    /**
-     * POST /api/internal/operators/user/:userId/reauth
-     */
-    router.post('/user/:userId/reauth', requireInternalOrigin, async (req, res, next) => {
-        const { userId } = req.params;
-
-        logger.info('[INTERNAL-HTTP] Drop-pod operator reauth requested', { user_id: userId });
-
-        try {
-            const result = await dropPodOperatorService.relaunchDropPodOperatorForUser(userId);
-
-            if (!result.success) {
-                logger.warn('[INTERNAL-HTTP] Drop-pod operator reauth failed', {
-                    user_id: userId,
-                    error: result.error,
-                });
-                return res.status(404).json(new ErrorResponse({ error: result.error }).forWire());
-            }
-
-            logger.info('[INTERNAL-HTTP] Drop-pod operator reauth completed', {
-                user_id: userId,
-                operator_id: result.operator_id,
-            });
-
-            return res.json({ success: true, user_id: userId, operator_id: result.operator_id });
-        } catch (error) {
-            logger.error('[INTERNAL-HTTP] Drop-pod operator reauth error', {
-                error: error.message,
-                user_id: userId,
-            });
-            return res.status(500).json(new ErrorResponse({ error: error.message || 'Reauth failed' }).forWire());
         }
     });
 

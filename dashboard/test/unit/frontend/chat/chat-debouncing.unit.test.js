@@ -285,8 +285,8 @@ describe('ChatComponent debouncing behavior with fake timers [FRONTEND - jsdom]'
                 { type: EventType.LLM_LIFECYCLE_STARTED, delay: 0 },
                 { type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, content: 'Thinking', delay: 10 },
                 { type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, content: 'Thinking...', delay: 20 },
-                { type: 'LLM_TOOL_DROPOPS_WEB_SEARCH_REQUESTED', query: 'test', delay: 30 },
-                { type: 'LLM_TOOL_DROPOPS_WEB_SEARCH_COMPLETED', delay: 50 },
+                { type: 'LLM_TOOL_G8E_WEB_SEARCH_REQUESTED', query: 'test', delay: 30 },
+                { type: 'LLM_TOOL_G8E_WEB_SEARCH_COMPLETED', delay: 50 },
                 { type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, content: 'Based on search', delay: 60 },
                 { type: EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED, delay: 200 },
                 { type: EventType.LLM_LIFECYCLE_COMPLETED, delay: 220 }
@@ -300,7 +300,7 @@ describe('ChatComponent debouncing behavior with fake timers [FRONTEND - jsdom]'
                             investigation_id: INVESTIGATION_ID,
                             content: event.content
                         });
-                    } else if (event.type === 'LLM_TOOL_DROPOPS_WEB_SEARCH_REQUESTED') {
+                    } else if (event.type === 'LLM_TOOL_G8E_WEB_SEARCH_REQUESTED') {
                         eventBus.emit(event.type, {
                             web_session_id: WEB_SESSION_ID,
                             investigation_id: INVESTIGATION_ID,

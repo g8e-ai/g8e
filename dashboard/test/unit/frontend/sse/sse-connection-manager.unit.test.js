@@ -288,7 +288,7 @@ describe('SSEConnectionManager.handleSSEEvent — eventBus dispatch [FRONTEND - 
         expect(emitted[0].payload.grounding_metadata.sources[0].citation_num).toBe(1);
     });
 
-    it('emits LLM_TOOL_DROPOPS_WEB_SEARCH_REQUESTED with the data payload', () => {
+    it('emits LLM_TOOL_G8E_WEB_SEARCH_REQUESTED with the data payload', () => {
         const { manager, eventBus } = makeManager();
         const payload = {
             investigation_id: 'inv_001',
@@ -299,17 +299,17 @@ describe('SSEConnectionManager.handleSSEEvent — eventBus dispatch [FRONTEND - 
         };
 
         manager.handleSSEEvent({
-            type: EventType.LLM_TOOL_DROPOPS_WEB_SEARCH_REQUESTED,
+            type: EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED,
             data: payload,
         });
 
-        const emitted = eventBus.getEmittedEvents(EventType.LLM_TOOL_DROPOPS_WEB_SEARCH_REQUESTED);
+        const emitted = eventBus.getEmittedEvents(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED);
         expect(emitted).toHaveLength(1);
         expect(emitted[0].payload.query).toBe('disk usage');
         expect(emitted[0].payload.execution_id).toBe('exec_001');
     });
 
-    it('emits LLM_TOOL_DROPOPS_WEB_SEARCH_COMPLETED with the data payload', () => {
+    it('emits LLM_TOOL_G8E_WEB_SEARCH_COMPLETED with the data payload', () => {
         const { manager, eventBus } = makeManager();
         const payload = {
             investigation_id: 'inv_001',
@@ -320,16 +320,16 @@ describe('SSEConnectionManager.handleSSEEvent — eventBus dispatch [FRONTEND - 
         };
 
         manager.handleSSEEvent({
-            type: EventType.LLM_TOOL_DROPOPS_WEB_SEARCH_COMPLETED,
+            type: EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED,
             data: payload,
         });
 
-        const emitted = eventBus.getEmittedEvents(EventType.LLM_TOOL_DROPOPS_WEB_SEARCH_COMPLETED);
+        const emitted = eventBus.getEmittedEvents(EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED);
         expect(emitted).toHaveLength(1);
         expect(emitted[0].payload.execution_id).toBe('exec_001');
     });
 
-    it('emits LLM_TOOL_DROPOPS_WEB_SEARCH_FAILED with the data payload', () => {
+    it('emits LLM_TOOL_G8E_WEB_SEARCH_FAILED with the data payload', () => {
         const { manager, eventBus } = makeManager();
         const payload = {
             investigation_id: 'inv_001',
@@ -339,11 +339,11 @@ describe('SSEConnectionManager.handleSSEEvent — eventBus dispatch [FRONTEND - 
         };
 
         manager.handleSSEEvent({
-            type: EventType.LLM_TOOL_DROPOPS_WEB_SEARCH_FAILED,
+            type: EventType.LLM_TOOL_G8E_WEB_SEARCH_FAILED,
             data: payload,
         });
 
-        const emitted = eventBus.getEmittedEvents(EventType.LLM_TOOL_DROPOPS_WEB_SEARCH_FAILED);
+        const emitted = eventBus.getEmittedEvents(EventType.LLM_TOOL_G8E_WEB_SEARCH_FAILED);
         expect(emitted).toHaveLength(1);
         expect(emitted[0].payload.execution_id).toBe('exec_fail_001');
     });

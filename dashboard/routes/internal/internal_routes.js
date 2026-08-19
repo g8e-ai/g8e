@@ -34,7 +34,6 @@ import { createInternalSettingsRouter } from './internal_settings_routes.js';
  * @param {Object} options.passkeyAuthService - PasskeyAuthService instance
  * @param {Object} options.deviceLinkService - DeviceLinkService instance
  * @param {Object} options.settingsService - SettingsService instance
- * @param {Object} options.dropPodOperatorService - DropPodOperatorService instance
  * @param {Object} options.authorizationMiddleware - Authorization middleware object
  */
 export function createInternalRouter({
@@ -45,7 +44,6 @@ export function createInternalRouter({
     passkeyAuthService,
     deviceLinkService,
     settingsService,
-    dropPodOperatorService,
     authorizationMiddleware
 }) {
     const { requireInternalOrigin } = authorizationMiddleware;
@@ -53,7 +51,7 @@ export function createInternalRouter({
 
     // Mount sub-routers
     router.use('/sse', createInternalSSERouter({ sseService, authorizationMiddleware, operatorService }));
-    router.use('/operators', createInternalOperatorRouter({ operatorService, dropPodOperatorService, authorizationMiddleware }));
+    router.use('/operators', createInternalOperatorRouter({ operatorService, authorizationMiddleware }));
     router.use('/users', createInternalUserRouter({ userService, webSessionService, passkeyAuthService, authorizationMiddleware }));
     router.use('/session', createInternalSessionRouter({ webSessionService, userService, authorizationMiddleware }));
     router.use('/device-links', createInternalDeviceLinkRouter({ deviceLinkService, authorizationMiddleware }));

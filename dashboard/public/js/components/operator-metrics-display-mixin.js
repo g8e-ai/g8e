@@ -267,7 +267,7 @@ export const OperatorMetricsDisplayMixin = {
                 this.apiKeyInput.value = apiKey;
                 this._panelApiKey = apiKey;
 
-                const command = `./dropops-operator -k ${apiKey}`;
+                const command = `./g8e-operator -k ${apiKey}`;
                 if (this.commandInput) {
                     this.commandInput.value = command;
                     this._panelCommand = command;

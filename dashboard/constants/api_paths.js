@@ -117,7 +117,6 @@ const Operator = {
     REFRESH_API_KEY:   'refresh-api-key',
     DOWNLOAD:          'download',
     HEALTH:            'health',
-    DROP_POD:          'drop-pod',
     REAUTH:            'reauth',
     PARAM:             ':operatorId',
 };
@@ -311,7 +310,6 @@ export const OperatorPaths = Object.freeze({
     DOWNLOAD:          `/${Operator.DOWNLOAD}/${':os'}/${':arch'}`,
     DOWNLOAD_SHA256:   `/${Operator.DOWNLOAD}/${':os'}/${':arch'}/sha256`,
     HEALTH:            `/${Operator.HEALTH}`,
-    DROP_POD_REAUTH:   `/${Operator.DROP_POD}/${Operator.REAUTH}`,
 });
 
 export const AuthPaths = Object.freeze({
@@ -498,7 +496,6 @@ export const apiPaths = {
         download:       (os, arch)   => `${OperatorBin.BASE}/${Operator.DOWNLOAD}/${os}/${arch}`,
         downloadSha256: (os, arch)   => `${OperatorBin.BASE}/${Operator.DOWNLOAD}/${os}/${arch}/sha256`,
         health:         () => `${OperatorBin.BASE}/${Operator.HEALTH}`,
-        dropPodReauth:  () => `${Operator.BASE}/${Operator.DROP_POD}/${Operator.REAUTH}`,
     },
     auth: {
         webSession:          () => `${Auth.BASE}/${Auth.WEB_SESSION}`,

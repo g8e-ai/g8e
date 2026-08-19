@@ -12,7 +12,7 @@ import { _DOCUMENT_IDS } from './shared.js';
 // ---------------------------------------------------------------------------
 // First-Run Admin
 // ---------------------------------------------------------------------------
-export const FIRST_RUN_ADMIN_EMAIL = 'admin@dropops.local';
+export const FIRST_RUN_ADMIN_EMAIL = 'admin@g8e.local';
 
 // ---------------------------------------------------------------------------
 // DB Service Bootstrap
@@ -36,7 +36,7 @@ export const DEVICE_LINK_MAX_USES_MAX = 10000;
 // ---------------------------------------------------------------------------
 // Operator Binary
 // ---------------------------------------------------------------------------
-export const BINARY_NAME = 'dropops-operator';
+export const BINARY_NAME = 'g8e-operator';
 export const OPERATOR_BINARY_BLOB_NAMESPACE = 'operator-binary';
 export const PLATFORMS = [
     { os: 'linux', arch: 'amd64' },
@@ -50,8 +50,8 @@ export const BinaryStatus = Object.freeze({
 });
 
 export const OperatorRouteError = Object.freeze({
-    UNSUPPORTED_OS:          'DropOps Operator only supports Linux',
-    BINARY_NOT_AVAILABLE:    'DropOps Operator binary not available',
+    UNSUPPORTED_OS:          'g8e Operator only supports Linux',
+    BINARY_NOT_AVAILABLE:    'g8e Operator binary not available',
     DOWNLOAD_FAILED:         'Failed to download Operator binary',
     CHECKSUM_FAILED:         'Failed to generate checksum',
 });
@@ -67,9 +67,9 @@ export const ContentType = Object.freeze({
 export const CLIENT_CERT_VALIDITY_DAYS = 365;
 export const DEFAULT_CERT_DIR = '/g8edb/.g8e/pki/issued/hub';
 export const DEFAULT_SSL_DIR = '/g8edb/.g8e/pki';
-export const CERT_SUBJECT_ORG = 'DropOps Operator';
+export const CERT_SUBJECT_ORG = 'g8e Operator';
 export const CERT_SUBJECT_COUNTRY = 'US';
-export const CRL_ISSUER = 'DropOps Operator CA';
+export const CRL_ISSUER = 'g8e Operator CA';
 
 // ---------------------------------------------------------------------------
 // Attachment Limits
@@ -119,13 +119,6 @@ export const MAX_EVENTBUS_LISTENERS = 5;
 // Docs
 // ---------------------------------------------------------------------------
 export const DEFAULT_DOCS_DIR = '/docs';
-
-// ---------------------------------------------------------------------------
-// Drop Pod Operator
-// ---------------------------------------------------------------------------
-export const DROP_POD_CONTAINER_NAME = 'drop-pod';
-export const DROP_POD_OPERATOR_BINARY_PATH = '/home/dropops/dropops-operator';
-export const DROP_POD_OPERATOR_LAUNCH_TIMEOUT_MS = 10000;
 
 // ---------------------------------------------------------------------------
 // Version

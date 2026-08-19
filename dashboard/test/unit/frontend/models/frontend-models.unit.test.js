@@ -267,13 +267,13 @@ describe('InvestigationHistoryEntry [UNIT]', () => {
         expect(InvestigationHistoryEntry.parse(minimal).getSenderDisplayName()).toBe('You');
     });
 
-    it('getSenderDisplayName() returns "DropOps" for AI', () => {
-        const m = InvestigationHistoryEntry.parse({ 
+    it('getSenderDisplayName() returns "g8e" for AI', () => {
+        const m = InvestigationHistoryEntry.parse({
             event_type: EventType.INVESTIGATION_CHAT_MESSAGE_AI,
             actor: EventType.EVENT_SOURCE_AI_PRIMARY,
             summary: 'hi'
         });
-        expect(m.getSenderDisplayName()).toBe('DropOps');
+        expect(m.getSenderDisplayName()).toBe('g8e');
     });
 });
 

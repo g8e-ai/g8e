@@ -41,7 +41,7 @@ export class TerminalOutputMixin {
 
         const sender = document.createElement('span');
         sender.className = 'anchored-terminal__ai-response-sender';
-        sender.textContent = 'DropOps';
+        sender.textContent = 'g8e';
 
         const time = document.createElement('span');
         time.className = 'anchored-terminal__ai-response-time';
@@ -129,7 +129,7 @@ export class TerminalOutputMixin {
 
         const sender = document.createElement('span');
         sender.className = 'anchored-terminal__ai-response-sender';
-        sender.textContent = 'DropOps';
+        sender.textContent = 'g8e';
 
         const time = document.createElement('span');
         time.className = 'anchored-terminal__ai-response-time';
@@ -228,7 +228,7 @@ export class TerminalOutputMixin {
 
         const sender = document.createElement('span');
         sender.className = 'anchored-terminal__ai-response-sender';
-        sender.textContent = 'DropOps';
+        sender.textContent = 'g8e';
 
         const time = document.createElement('span');
         time.className = 'anchored-terminal__ai-response-time';

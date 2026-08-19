@@ -248,7 +248,7 @@ export const OperatorDeviceLinkMixin = {
         const copyCmdBtn = el.querySelector('.device-link-copy-cmd-btn');
         if (copyCmdBtn) {
             copyCmdBtn.addEventListener('click', () => {
-                this.copyCurlCommand(token.operator_command || `dropops-operator --device-token ${token.token}`, copyCmdBtn);
+                this.copyCurlCommand(token.operator_command || `g8e-operator --device-token ${token.token}`, copyCmdBtn);
             });
         }
 

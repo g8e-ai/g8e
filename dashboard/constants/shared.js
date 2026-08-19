@@ -109,7 +109,6 @@ function transformStatus(raw) {
 
   // Fallback: add missing inner keys if not in protocol JSON
   if (result['user.role'] && !result['user.role'].superadmin) result['user.role'].superadmin = 'superadmin';
-  if (result['cloud.subtype'] && !result['cloud.subtype'].drop_pod) result['cloud.subtype'].drop_pod = 'drop_pod';
   if (result['component.name']) {
     if (!result['component.name'].vse) result['component.name'].vse = 'vse';
     if (!result['component.name'].vsa) result['component.name'].vsa = 'vsa';
@@ -282,7 +281,6 @@ assertPath(_STATUS, ['session.key.prefix', 'web'], '_STATUS.session.key.prefix.w
 assertPath(_STATUS, ['session.event.type', 'operator.bound'], '_STATUS.session.event.type.operator.bound');
 assertPath(_STATUS, ['history.event.type', 'created'], '_STATUS.history.event.type.created');
 assertPath(_STATUS, ['command.error.type', 'operator.resolution.error'], '_STATUS.command.error.type.operator.resolution.error');
-assertPath(_STATUS, ['cloud.subtype', 'drop_pod'], '_STATUS.cloud.subtype.drop_pod');
 assertPath(_STATUS, ['component.name', 'vse'], '_STATUS.component.name.vse');
 assertPath(_STATUS, ['device.link.status', 'active'], '_STATUS.device.link.status.active');
 assertPath(_MSG, ['message', 'sender', 'user', 'chat'], '_MSG.message.sender.user.chat');

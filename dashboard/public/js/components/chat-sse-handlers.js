@@ -49,15 +49,15 @@ export const ChatSSEHandlersMixin = {
             this.handleChatStopped(data);
         });
 
-        this.eventBus.on(EventType.LLM_TOOL_DROPOPS_WEB_SEARCH_REQUESTED, (data) => {
+        this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, (data) => {
             this.handleSearchWebIndicator(data);
         });
 
-        this.eventBus.on(EventType.LLM_TOOL_DROPOPS_WEB_SEARCH_COMPLETED, (data) => {
+        this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED, (data) => {
             this.handleSearchWebCompleted(data);
         });
 
-        this.eventBus.on(EventType.LLM_TOOL_DROPOPS_WEB_SEARCH_FAILED, (data) => {
+        this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_FAILED, (data) => {
             this.handleSearchWebFailed(data);
         });
 

@@ -185,9 +185,9 @@ class MessageRenderer {
                 className: 'user-message'
             },
             [EventType.EVENT_SOURCE_AI_PRIMARY]: {
-                label: 'DropOps',
+                label: 'g8e',
                 icon: '',
-                className: 'dropops_ai_agent'
+                className: 'g8e_ai_agent'
             },
             [EventType.EVENT_SOURCE_SYSTEM]: {
                 label: 'SYSTEM',

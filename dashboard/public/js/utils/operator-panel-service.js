@@ -57,10 +57,6 @@ class OperatorPanelService {
         return this._getClient().post(ServiceName.g8ed, ApiPaths.operator.stop(operatorId), {});
     }
 
-    dropPodReauth() {
-        return this._getClient().post(ServiceName.g8ed, ApiPaths.operator.dropPodReauth(), {});
-    }
-
     // -------------------------------------------------------------------------
     // Operator details & API keys
     // -------------------------------------------------------------------------

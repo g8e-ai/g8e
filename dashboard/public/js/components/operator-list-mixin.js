@@ -36,7 +36,6 @@ export const OperatorListMixin = {
         devLogger.log(`[OPERATOR] Operators to render: ${operators.length}`);
 
         const statusPriority = (op) => {
-            if (op.is_drop_pod) return 0;
             const isBoundToMe = op.status === OperatorStatus.BOUND && op.web_session_id === currentWebSessionId;
             const isBoundElsewhere = op.status === OperatorStatus.BOUND && !isBoundToMe;
             if (isBoundToMe) return 1;
@@ -129,9 +128,6 @@ export const OperatorListMixin = {
                     <button class="operator-action-btn device-link-btn" title="Get Device Link Token" data-operator-id="${operator.operator_id}">
                         <span class="material-symbols-outlined">dns</span>
                     </button>
-                    <button class="operator-action-btn drop-pod-reauth-btn" title="Restart Drop-Pod Operator" data-operator-id="${operator.operator_id}">
-                        <span class="material-symbols-outlined">restart_alt</span>
-                    </button>
                     <button class="operator-action-btn api-key-btn" title="Copy API Key" data-operator-id="${operator.operator_id}">
                         <span class="material-symbols-outlined">vpn_key</span>
                     </button>
@@ -216,14 +212,6 @@ export const OperatorListMixin = {
                 deviceLinkBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     await this.generateDeviceLink(deviceLinkBtn.dataset.operatorId, deviceLinkBtn);
-                });
-            }
-
-            const dropPodReauthBtn = item.querySelector('.drop-pod-reauth-btn');
-            if (dropPodReauthBtn) {
-                dropPodReauthBtn.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    await this.restartDropPodOperator(dropPodReauthBtn);
                 });
             }
 
@@ -522,49 +510,6 @@ export const OperatorListMixin = {
         } catch (error) {
             devLogger.error('[OPERATOR] Failed to generate device link:', error);
             alert(`Failed to generate device link: ${error.message}`);
-        }
-    },
-
-    async restartDropPodOperator(buttonElement) {
-        const icon = buttonElement?.querySelector('.material-symbols-outlined');
-        const originalIcon = icon?.textContent;
-
-        try {
-            if (icon) {
-                icon.textContent = 'sync';
-                icon.classList.add('rotating');
-                buttonElement.disabled = true;
-            }
-
-            devLogger.log('[OPERATOR] Restarting drop-pod operator');
-
-            const response = await operatorPanelService.dropPodReauth();
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Failed to restart drop-pod operator');
-            }
-
-            const result = await response.json();
-            devLogger.log('[OPERATOR] Drop-pod operator restarted:', result);
-
-            if (icon) {
-                icon.textContent = 'check';
-                icon.classList.remove('rotating');
-                setTimeout(() => {
-                    if (icon) icon.textContent = originalIcon;
-                    if (buttonElement) buttonElement.disabled = false;
-                }, 2000);
-            }
-
-        } catch (error) {
-            devLogger.error('[OPERATOR] Failed to restart drop-pod operator:', error);
-            if (icon) {
-                icon.textContent = originalIcon;
-                icon.classList.remove('rotating');
-            }
-            if (buttonElement) buttonElement.disabled = false;
-            alert(`Failed to restart drop-pod operator: ${error.message}`);
         }
     },
 

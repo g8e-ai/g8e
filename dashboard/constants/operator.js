@@ -58,7 +58,6 @@ export const CloudOperatorSubtype = Object.freeze({
     AWS:      _STATUS['cloud.subtype']['aws'],
     GCP:      _STATUS['cloud.subtype']['gcp'],
     AZURE:    _STATUS['cloud.subtype']['azure'],
-    DROP_POD: _STATUS['cloud.subtype']['drop_pod'],
 });
 
 /**

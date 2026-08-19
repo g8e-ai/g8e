@@ -83,7 +83,7 @@ vi.mock('@g8ed/public/js/utils/operator-session-service.js', () => ({
     operatorSessionService: {},
 }));
 
-import DropOpsApp from '@g8ed/public/js/app.js';
+import G8eDashboardApp from '@g8ed/public/js/app.js';
 import { notificationService } from '@g8ed/public/js/utils/notification-service.js';
 import { AuthManager } from '@g8ed/public/js/components/auth.js';
 import { ChatComponent } from '@g8ed/public/js/components/chat.js';
@@ -92,7 +92,7 @@ import { Header } from '@g8ed/public/js/components/header.js';
 import { Footer } from '@g8ed/public/js/components/footer.js';
 import { SSEConnectionManager } from '@g8ed/public/js/utils/sse-connection-manager.js';
 
-describe('DropOpsApp [FRONTEND - jsdom]', () => {
+describe('G8eDashboardApp [FRONTEND - jsdom]', () => {
     let eventBus;
     let serviceClient;
     let authState;
@@ -110,7 +110,7 @@ describe('DropOpsApp [FRONTEND - jsdom]', () => {
         window.webSessionService = {};
         window.operatorSessionService = {};
         window.operatorPanel = null;
-        window.dropOpsApp = null;
+        window.g8eDashboardApp = null;
 
         delete window.location;
         window.location = {
@@ -133,53 +133,53 @@ describe('DropOpsApp [FRONTEND - jsdom]', () => {
         delete window.webSessionService;
         delete window.operatorSessionService;
         delete window.operatorPanel;
-        delete window.dropOpsApp;
+        delete window.g8eDashboardApp;
     });
 
     describe('constructor', () => {
         it('initializes eventBus', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             expect(app.eventBus).toBeDefined();
         });
 
         it('initializes serviceClient as null', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             expect(app.serviceClient).toBeNull();
         });
 
         it('initializes auth as null', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             expect(app.auth).toBeNull();
         });
 
         it('initializes sseConnectionManager as null', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             expect(app.sseConnectionManager).toBeNull();
         });
 
         it('initializes header as null', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             expect(app.header).toBeNull();
         });
 
         it('initializes chat as null', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             expect(app.chat).toBeNull();
         });
 
         it('initializes operatorPanel as null', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             expect(app.operatorPanel).toBeNull();
         });
 
         it('initializes footer as null', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             expect(app.footer).toBeNull();
         });
 
         it('creates new EventBus instance', () => {
-            app = new DropOpsApp();
-            app2 = new DropOpsApp();
+            app = new G8eDashboardApp();
+            app2 = new G8eDashboardApp();
             expect(app.eventBus).not.toBe(app2.eventBus);
         });
     });
@@ -192,133 +192,133 @@ describe('DropOpsApp [FRONTEND - jsdom]', () => {
         });
 
         it('sets serviceClient from window.serviceClient', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(app.serviceClient).toBe(serviceClient);
         });
 
         it('calls notificationService.init', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(notificationService.init).toHaveBeenCalledTimes(1);
         });
 
         it('creates AuthManager', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(app.auth).toBeDefined();
             expect(window.authState).toBe(app.auth);
         });
 
         it('sets window.webSessionService', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(window.webSessionService).toBeDefined();
         });
 
         it('sets window.operatorSessionService', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(window.operatorSessionService).toBeDefined();
         });
 
         it('creates SSEConnectionManager with eventBus', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(app.sseConnectionManager).toBeDefined();
             expect(window.sseConnectionManager).toBe(app.sseConnectionManager);
         });
 
         it('creates Header', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(app.header).toBeDefined();
         });
 
         it('creates ChatComponent', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(app.chat).toBeDefined();
         });
 
         it('creates OperatorPanel and sets window.operatorPanel', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(app.operatorPanel).toBeDefined();
             expect(window.operatorPanel).toBe(app.operatorPanel);
         });
 
         it('does not call OperatorPanel.init in init()', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(app.operatorPanel.init).not.toHaveBeenCalled();
         });
 
         it('creates Footer', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(app.footer).toBeDefined();
         });
 
         it('calls auth.init', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(app.auth.init).toHaveBeenCalledTimes(1);
         });
 
         it('calls header.init', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(app.header.init).toHaveBeenCalledTimes(1);
         });
 
         it('calls chat.init', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(app.chat.init).toHaveBeenCalledTimes(1);
         });
 
         it('calls footer.init', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(app.footer.init).toHaveBeenCalledTimes(1);
         });
 
         it('creates new EventBus instance on each app instance', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
-            app2 = new DropOpsApp();
+            app2 = new G8eDashboardApp();
             app2.init();
             expect(app.eventBus).not.toBe(app2.eventBus);
         });
 
         it('does not throw when window.serviceClient is undefined', () => {
             delete window.serviceClient;
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             expect(() => app.init()).not.toThrow();
             expect(app.serviceClient).toBeUndefined();
         });
 
         it('sets window.sseConnectionManager', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(window.sseConnectionManager).toBe(app.sseConnectionManager);
         });
 
         it('sets window.authState', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(window.authState).toBe(app.auth);
         });
 
         it('sets window.operatorPanel', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(window.operatorPanel).toBe(app.operatorPanel);
         });
 
         it('can be initialized multiple times', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             expect(() => {
                 app.init();
                 app.init();
@@ -327,7 +327,7 @@ describe('DropOpsApp [FRONTEND - jsdom]', () => {
 
         it('does not throw when init called without DOM elements', () => {
             document.body.innerHTML = '';
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             expect(() => app.init()).not.toThrow();
         });
 
@@ -335,14 +335,14 @@ describe('DropOpsApp [FRONTEND - jsdom]', () => {
 
     describe('setupUI', () => {
         it('calls handleUrlCallbacks', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             const handleUrlCallbacksSpy = vi.spyOn(app, 'handleUrlCallbacks');
             app.setupUI();
             expect(handleUrlCallbacksSpy).toHaveBeenCalledTimes(1);
         });
 
         it('can be called multiple times', () => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             expect(() => {
                 app.setupUI();
                 app.setupUI();
@@ -355,7 +355,7 @@ describe('DropOpsApp [FRONTEND - jsdom]', () => {
             document.body.innerHTML = `
                 <div data-component="terminal" class="${CssClass.INITIALLY_HIDDEN}"></div>
             `;
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             const setupEventListenersSpy = vi.spyOn(app, 'setupEventListeners');
             app.init();
             expect(setupEventListenersSpy).toHaveBeenCalledTimes(1);
@@ -363,7 +363,7 @@ describe('DropOpsApp [FRONTEND - jsdom]', () => {
 
         it('PLATFORM_TERMINAL_OPENED does not throw when terminal element does not exist', () => {
             document.body.innerHTML = '';
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(() => {
                 eventBus.emit(EventType.PLATFORM_TERMINAL_OPENED);
@@ -372,7 +372,7 @@ describe('DropOpsApp [FRONTEND - jsdom]', () => {
 
         it('PLATFORM_TERMINAL_MINIMIZED does not throw when terminal element does not exist', () => {
             document.body.innerHTML = '';
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(() => {
                 eventBus.emit(EventType.PLATFORM_TERMINAL_MINIMIZED);
@@ -381,7 +381,7 @@ describe('DropOpsApp [FRONTEND - jsdom]', () => {
 
         it('PLATFORM_TERMINAL_MAXIMIZED does not throw when terminal element does not exist', () => {
             document.body.innerHTML = '';
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
             app.init();
             expect(() => {
                 eventBus.emit(EventType.PLATFORM_TERMINAL_MAXIMIZED);
@@ -391,7 +391,7 @@ describe('DropOpsApp [FRONTEND - jsdom]', () => {
 
     describe('handleUrlCallbacks', () => {
         beforeEach(() => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
         });
 
         it('does nothing when URL has no error parameter', () => {
@@ -459,7 +459,7 @@ describe('DropOpsApp [FRONTEND - jsdom]', () => {
 
     describe('fileToBase64', () => {
         beforeEach(() => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
         });
 
         it('converts file to base64 string', async () => {
@@ -516,7 +516,7 @@ describe('DropOpsApp [FRONTEND - jsdom]', () => {
 
     describe('showCriticalError', () => {
         beforeEach(() => {
-            app = new DropOpsApp();
+            app = new G8eDashboardApp();
         });
 
         it('logs error to console', () => {
@@ -569,65 +569,65 @@ describe('DropOpsApp [FRONTEND - jsdom]', () => {
         });
 
         it('initializes app on DOMContentLoaded', () => {
-            expect(window.dropOpsApp).toBeNull();
+            expect(window.g8eDashboardApp).toBeNull();
             const event = new Event('DOMContentLoaded');
             document.dispatchEvent(event);
-            expect(window.dropOpsApp).toBeInstanceOf(DropOpsApp);
+            expect(window.g8eDashboardApp).toBeInstanceOf(G8eDashboardApp);
         });
 
         it('calls init on the app instance', () => {
-            const initSpy = vi.spyOn(DropOpsApp.prototype, 'init');
+            const initSpy = vi.spyOn(G8eDashboardApp.prototype, 'init');
             const event = new Event('DOMContentLoaded');
             document.dispatchEvent(event);
             expect(initSpy).toHaveBeenCalled();
             initSpy.mockRestore();
         });
 
-        it('skips initialization if window.dropOpsApp already exists', () => {
-            window.dropOpsApp = {};
+        it('skips initialization if window.g8eDashboardApp already exists', () => {
+            window.g8eDashboardApp = {};
             const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-            const initSpy = vi.spyOn(DropOpsApp.prototype, 'init');
+            const initSpy = vi.spyOn(G8eDashboardApp.prototype, 'init');
             const event = new Event('DOMContentLoaded');
             document.dispatchEvent(event);
-            expect(consoleWarnSpy).toHaveBeenCalledWith('[DropOpsApp] App already initialized, skipping duplicate initialization');
+            expect(consoleWarnSpy).toHaveBeenCalledWith('[G8eDashboardApp] App already initialized, skipping duplicate initialization');
             expect(initSpy).not.toHaveBeenCalled();
             consoleWarnSpy.mockRestore();
             initSpy.mockRestore();
         });
 
         it('logs error when initialization fails', () => {
-            vi.spyOn(DropOpsApp.prototype, 'init').mockImplementation(() => {
+            vi.spyOn(G8eDashboardApp.prototype, 'init').mockImplementation(() => {
                 throw new Error('Init failed');
             });
             const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
             const event = new Event('DOMContentLoaded');
             document.dispatchEvent(event);
-            expect(consoleErrorSpy).toHaveBeenCalledWith('[DropOpsApp] Failed to initialize DropOpsApp:', expect.any(Error));
+            expect(consoleErrorSpy).toHaveBeenCalledWith('[G8eDashboardApp] Failed to initialize G8eDashboardApp:', expect.any(Error));
             consoleErrorSpy.mockRestore();
         });
 
-        it('sets window.dropOpsApp after successful initialization', () => {
+        it('sets window.g8eDashboardApp after successful initialization', () => {
             const event = new Event('DOMContentLoaded');
             document.dispatchEvent(event);
-            expect(window.dropOpsApp).toBeDefined();
-            expect(window.dropOpsApp).toBeInstanceOf(DropOpsApp);
+            expect(window.g8eDashboardApp).toBeDefined();
+            expect(window.g8eDashboardApp).toBeInstanceOf(G8eDashboardApp);
         });
 
-        it('does not overwrite window.dropOpsApp if already exists', () => {
-            window.dropOpsApp = { existing: true };
+        it('does not overwrite window.g8eDashboardApp if already exists', () => {
+            window.g8eDashboardApp = { existing: true };
             const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
             const event = new Event('DOMContentLoaded');
             document.dispatchEvent(event);
-            expect(window.dropOpsApp).toEqual({ existing: true });
+            expect(window.g8eDashboardApp).toEqual({ existing: true });
             consoleWarnSpy.mockRestore();
         });
 
         it('handles multiple DOMContentLoaded events', () => {
             const event = new Event('DOMContentLoaded');
             document.dispatchEvent(event);
-            const firstApp = window.dropOpsApp;
+            const firstApp = window.g8eDashboardApp;
             document.dispatchEvent(event);
-            expect(window.dropOpsApp).toBe(firstApp);
+            expect(window.g8eDashboardApp).toBe(firstApp);
         });
     });
 });

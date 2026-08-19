@@ -328,7 +328,6 @@ export class OperatorDocument extends VSOIdentifiableModel {
         claimed:                      { type: F.boolean, default: false },
         operator_type:                { type: F.string,  default: OperatorType.SYSTEM },
         cloud_subtype:                { type: F.string,  default: null },
-        is_drop_pod:                  { type: F.boolean, default: false },
         slot_cost:                    { type: F.number,  default: 1 },
         consumed_by_operator_id:      { type: F.string,  default: null },
         case_id:                      { type: F.string,  default: null },

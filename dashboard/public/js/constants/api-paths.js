@@ -50,8 +50,6 @@ const Seg = {
         STOP:            'stop',
         API_KEY:         'api-key',
         REFRESH_API_KEY: 'refresh-api-key',
-        DROP_POD:        'drop-pod',
-        REAUTH:          'reauth',
     },
     auth: {
         LOGOUT:     'logout',
@@ -150,7 +148,6 @@ export const ApiPaths = {
         stop:          (operatorId) => `${BASE.OPERATORS}/${operatorId}/${Seg.operator.STOP}`,
         apiKey:        (operatorId) => `${BASE.OPERATORS}/${operatorId}/${Seg.operator.API_KEY}`,
         refreshApiKey: (operatorId) => `${BASE.OPERATORS}/${operatorId}/${Seg.operator.REFRESH_API_KEY}`,
-        dropPodReauth: () => `${BASE.OPERATORS}/${Seg.operator.DROP_POD}/${Seg.operator.REAUTH}`,
     },
     auth: {
         // Gateway-direct auth paths (ServiceName.GATEWAY).

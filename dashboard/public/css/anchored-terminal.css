@@ -1192,7 +1192,7 @@
 }
 
 
-/* Waiting indicator - DropOps header with blinking cursor */
+/* Waiting indicator - g8e header with blinking cursor */
 .anchored-terminal__ai-response.waiting .anchored-terminal__ai-response-sender::after {
     content: '';
     display: inline-block;

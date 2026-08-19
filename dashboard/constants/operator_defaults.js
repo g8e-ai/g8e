@@ -20,10 +20,10 @@ export const DEFAULT_OPERATOR_CONFIG = {
 };
 
 /**
- * Required prefix for all DropOps API keys.
+ * Required prefix for all g8e API keys.
  * Used for format validation before hitting the database.
  */
-export const API_KEY_PREFIX = 'dropops_';
+export const API_KEY_PREFIX = 'g8e_';
 
 /**
  * Valid intent permission names for cloud operators.

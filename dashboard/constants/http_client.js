@@ -43,7 +43,7 @@ export const g8edB_HTTP_TIMEOUT_MS = 30000;
 // g8edB PubSub WebSocket Client (g8ed -> g8edB)
 // ---------------------------------------------------------------------------
 export const g8edB_INTERNAL_PUBSUB_URL = 'wss://g8edb:8443';
-export const g8edB_OPERATOR_PUBSUB_URL = 'wss://dropops.local';
+export const g8edB_OPERATOR_PUBSUB_URL = 'wss://g8e.local';
 export const g8edB_PUBSUB_PATH = ApiPaths.gateway.pubsubWebsocket();
 export const g8edB_PUBSUB_PUBLISH_PATH = '/publish';
 

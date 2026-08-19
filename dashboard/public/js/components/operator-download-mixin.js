@@ -235,7 +235,7 @@ export const OperatorDownloadMixin = {
 
         const downloadUrl = `${window.location.origin}/operator/download/${os}/${arch}`;
         const checksumUrl = `${window.location.origin}/operator/download/${os}/${arch}/sha256`;
-        const filename = os === 'windows' ? 'dropops-operator.exe' : 'dropops-operator';
+        const filename = os === 'windows' ? 'g8e-operator.exe' : 'g8e-operator';
 
         const cloudFlag = '';
 
@@ -378,7 +378,7 @@ export const OperatorDownloadMixin = {
 
         const directMethodNote = overlay.querySelector('.download-method-panel[data-method="direct"] .method-note');
         if (directMethodNote) {
-            directMethodNote.innerHTML = `After downloading, open terminal and run: <code>chmod +x dropops-operator && ./dropops-operator</code>`;
+            directMethodNote.innerHTML = `After downloading, open terminal and run: <code>chmod +x g8e-operator && ./g8e-operator</code>`;
         }
 
         setTimeout(() => this.updatePlatformIcons(), 10);
@@ -443,8 +443,8 @@ export const OperatorDownloadMixin = {
         const apiKey = webSessionService.getApiKey() || 'YOUR_API_KEY';
 
         const downloadUrl = `${window.location.origin}/operator/download/${os}/${arch}`;
-        const filename = os === 'windows' ? 'dropops-operator.exe' : 'dropops-operator';
-        const curlCommand = `curl -fsSL ${downloadUrl} -H "Authorization: Bearer $DROPOPS_OPERATOR_API_KEY" -o ${filename} && chmod +x ${filename}`;
+        const filename = os === 'windows' ? 'g8e-operator.exe' : 'g8e-operator';
+        const curlCommand = `curl -fsSL ${downloadUrl} -H "Authorization: Bearer $G8E_OPERATOR_API_KEY" -o ${filename} && chmod +x ${filename}`;
 
         const osNames = { mac: 'macOS', linux: 'Linux' };
         const osName = osNames[os] || os;

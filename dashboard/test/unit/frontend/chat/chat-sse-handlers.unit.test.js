@@ -954,14 +954,14 @@ describe('ChatComponent — handleSearchWebIndicator / handleSearchWebCompleted 
     it('SEARCH_WEB event bus wiring: REQUESTED → COMPLETED completes the indicator', () => {
         chat.setupSSEListeners();
 
-        eventBus.emit(EventType.LLM_TOOL_DROPOPS_WEB_SEARCH_REQUESTED, {
+        eventBus.emit(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, {
             investigation_id: INVESTIGATION_ID,
             web_session_id: WEB_SESSION_ID,
             execution_id: EXECUTION_ID,
             query: 'test query',
         });
 
-        eventBus.emit(EventType.LLM_TOOL_DROPOPS_WEB_SEARCH_COMPLETED, {
+        eventBus.emit(EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED, {
             investigation_id: INVESTIGATION_ID,
             web_session_id: WEB_SESSION_ID,
             execution_id: EXECUTION_ID,
@@ -974,14 +974,14 @@ describe('ChatComponent — handleSearchWebIndicator / handleSearchWebCompleted 
     it('SEARCH_WEB event bus wiring: REQUESTED → FAILED completes the indicator', () => {
         chat.setupSSEListeners();
 
-        eventBus.emit(EventType.LLM_TOOL_DROPOPS_WEB_SEARCH_REQUESTED, {
+        eventBus.emit(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, {
             investigation_id: INVESTIGATION_ID,
             web_session_id: WEB_SESSION_ID,
             execution_id: EXECUTION_ID,
             query: 'test query',
         });
 
-        eventBus.emit(EventType.LLM_TOOL_DROPOPS_WEB_SEARCH_FAILED, {
+        eventBus.emit(EventType.LLM_TOOL_G8E_WEB_SEARCH_FAILED, {
             investigation_id: INVESTIGATION_ID,
             web_session_id: WEB_SESSION_ID,
             execution_id: EXECUTION_ID,

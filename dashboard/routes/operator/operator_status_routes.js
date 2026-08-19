@@ -13,7 +13,6 @@ import { OperatorStatus } from '../../constants/operator.js';
  * @param {Object} options
  * @param {Object} options.operatorService - OperatorDataService instance
  * @param {Object} options.sseService - SSEService instance
- * @param {Object} options.dropPodOperatorService - DropPodOperatorService instance
  * @param {Object} options.BindOperatorsService - BindOperatorsService instance
  * @param {Object} options.internalHttpClient - InternalHttpClient instance
  * @param {Object} options.authMiddleware - Auth middleware object
@@ -21,7 +20,6 @@ import { OperatorStatus } from '../../constants/operator.js';
  */
 export function createOperatorStatusRouter({
     operatorService,
-    dropPodOperatorService,
     internalHttpClient,
     authMiddleware,
     authorizationMiddleware
@@ -29,42 +27,6 @@ export function createOperatorStatusRouter({
     const { requireAuth } = authMiddleware;
     const { requireOperatorOwnership } = authorizationMiddleware;
     const router = express.Router();
-
-    router.post(OperatorPaths.DROP_POD_REAUTH, requireAuth, async (req, res, next) => {
-        const userId = req.userId;
-
-        logger.info('[OPERATOR-DROP-POD-REAUTH] Drop-pod operator reauth requested', { user_id: userId });
-
-        try {
-            const result = await dropPodOperatorService.relaunchDropPodOperatorForUser(userId);
-
-            if (!result.success) {
-                logger.warn('[OPERATOR-DROP-POD-REAUTH] Drop-pod operator reauth failed', {
-                    user_id: userId,
-                    error: result.error,
-                });
-                return res.status(404).json(new ErrorResponse({ error: result.error }).forClient());
-            }
-
-            logger.info('[OPERATOR-DROP-POD-REAUTH] Drop-pod operator reauth completed', {
-                user_id: userId,
-                operator_id: result.operator_id,
-            });
-
-            return res.json({
-                success: true,
-                message: 'Drop-pod reauth initiated',
-                operator_id: result.operator_id
-            });
-
-        } catch (error) {
-            logger.error('[OPERATOR-DROP-POD-REAUTH] Drop-pod operator reauth error', {
-                user_id: userId,
-                error: error.message,
-            });
-            return res.status(500).json(new ErrorResponse({ error: error.message || 'Reauth failed' }).forClient());
-        }
-    });
 
     router.get(OperatorPaths.DETAILS, requireAuth, requireOperatorOwnership, async (req, res, next) => {
         try {

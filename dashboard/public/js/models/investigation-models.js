@@ -144,7 +144,7 @@ export class InvestigationHistoryEntry extends FrontendIdentifiableModel {
 
     getSenderDisplayName() {
         if (this.isUserMessage()) return 'You';
-        if (this.isAIResponse()) return 'DropOps';
+        if (this.isAIResponse()) return 'g8e';
         return 'System';
     }
 

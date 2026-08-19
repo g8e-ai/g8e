@@ -25,7 +25,7 @@
     const VALID_THEMES = ['dark', 'light'];
     const COOKIE_NAME = 'theme';
     const COOKIE_MAX_AGE = 31536000;
-    const EVENT_NAME = 'dropops:themechange';
+    const EVENT_NAME = 'g8e:themechange';
 
     function getBodyTheme() {
         return document.body ? document.body.getAttribute('data-theme') : null;
@@ -53,7 +53,7 @@
     function broadcastToIframes(theme) {
         document.querySelectorAll('iframe').forEach(function (iframe) {
             try {
-                iframe.contentWindow.postMessage({ type: 'dropops-theme-change', theme: theme }, '*');
+                iframe.contentWindow.postMessage({ type: 'g8e-theme-change', theme: theme }, '*');
             } catch (_) {}
         });
     }

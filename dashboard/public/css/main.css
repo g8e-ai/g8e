@@ -1046,7 +1046,7 @@ body {
     }
 }
 
-/* Order for dropops_ai_agent messages: confidence, timestamp, sender */
+/* Order for g8e_ai_agent messages: confidence, timestamp, sender */
 
 
 .message-right-section .message-timestamp {
@@ -1250,7 +1250,7 @@ body {
         margin-right: auto;
     }
 
-    .dropops_ai_agent-message {
+    .g8e_ai_agent-message {
         margin-left: auto;
         margin-right: 1rem;
     }

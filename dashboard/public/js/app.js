@@ -14,7 +14,7 @@ import { CssClass } from './constants/ui-constants.js';
 import { webSessionService } from './utils/web-session-service.js';
 import { operatorSessionService } from './utils/operator-session-service.js';
 
-class DropOpsApp {
+class G8eDashboardApp {
     constructor() {
         this.eventBus = new EventBus();
         this.serviceClient = null;
@@ -44,28 +44,28 @@ class DropOpsApp {
             this.header = new Header(this.eventBus);
             this.header.init();
         } catch (error) {
-            console.error('[DropOpsApp] Failed to create Header:', error);
+            console.error('[G8eDashboardApp] Failed to create Header:', error);
         }
 
         try {
             this.chat = new ChatComponent(this.eventBus);
             this.chat.init();
         } catch (error) {
-            console.error('[DropOpsApp] Failed to create ChatComponent:', error);
+            console.error('[G8eDashboardApp] Failed to create ChatComponent:', error);
         }
 
         try {
             this.operatorPanel = new OperatorPanel(this.eventBus);
             window.operatorPanel = this.operatorPanel;
         } catch (error) {
-            console.error('[DropOpsApp] Failed to create OperatorPanel:', error);
+            console.error('[G8eDashboardApp] Failed to create OperatorPanel:', error);
         }
 
         try {
             this.footer = new Footer(this.eventBus);
             this.footer.init();
         } catch (error) {
-            console.error('[DropOpsApp] Failed to create Footer:', error);
+            console.error('[G8eDashboardApp] Failed to create Footer:', error);
         }
 
         this.setupEventListeners();
@@ -87,7 +87,7 @@ class DropOpsApp {
         this.eventBus.once(EventType.AUTH_COMPONENT_INITIALIZED_CHAT, () => {
             if (this.operatorPanel) {
                 this.operatorPanel.init().catch(error => {
-                    console.error('[DropOpsApp] Failed to initialize OperatorPanel:', error);
+                    console.error('[G8eDashboardApp] Failed to initialize OperatorPanel:', error);
                 });
             }
         });
@@ -152,17 +152,17 @@ class DropOpsApp {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (window.dropOpsApp) {
-        console.warn('[DropOpsApp] App already initialized, skipping duplicate initialization');
+    if (window.g8eDashboardApp) {
+        console.warn('[G8eDashboardApp] App already initialized, skipping duplicate initialization');
         return;
     }
 
     try {
-        window.dropOpsApp = new DropOpsApp();
-        window.dropOpsApp.init();
+        window.g8eDashboardApp = new G8eDashboardApp();
+        window.g8eDashboardApp.init();
     } catch (error) {
-        console.error('[DropOpsApp] Failed to initialize DropOpsApp:', error);
+        console.error('[G8eDashboardApp] Failed to initialize G8eDashboardApp:', error);
     }
 });
 
-export default DropOpsApp;
+export default G8eDashboardApp;
