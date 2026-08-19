@@ -11,7 +11,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -367,7 +366,8 @@ func (hs *HeartbeatService) SendAutomatic() error {
 	hs.logger.Info("[HEARTBEAT] Sending automatic heartbeat")
 	heartbeat := hs.Build(models.HeartbeatTypeAutomatic)
 
-	data, err := json.Marshal(heartbeat)
+	protoHeartbeat := hs.buildProtoHeartbeat(heartbeat)
+	data, err := proto.Marshal(protoHeartbeat)
 	if err != nil {
 		return fmt.Errorf("heartbeat: failed to marshal heartbeat: %w", err)
 	}

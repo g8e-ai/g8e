@@ -1219,10 +1219,16 @@ func TestOperatorPubSubService_SendAutomaticHeartbeat(t *testing.T) {
 	t.Run("sends automatic heartbeat via heartbeat service", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		privKey := ed25519.NewKeyFromSeed(make([]byte, 32))
+		mockPublisher := &mockResultsPublisher{}
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
-			Config:       cfg,
-			Logger:       testutil.NewTestLogger(),
-			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
+			Config:             cfg,
+			Logger:             logger,
+			PubSubClient:       pubsubtest.NewMockOperatorPubSubClient(),
+			ResultsService:     mockPublisher,
+			ActuatorSigningKey: privKey,
+			ActuatorKeyID:      "test-key",
 		}, GovernanceDeps{
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
@@ -1231,9 +1237,9 @@ func TestOperatorPubSubService_SendAutomaticHeartbeat(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		// Should not panic
 		err = svc.SendAutomaticHeartbeat()
 		assert.NoError(t, err)
+		assert.True(t, mockPublisher.publishHeartbeatCalled, "automatic heartbeat must be published through the results publisher")
 	})
 }
 

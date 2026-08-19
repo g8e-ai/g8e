@@ -193,10 +193,8 @@ The binary is available for linux, darwin, and windows on amd64 and arm64 archit
 
 ```bash
 # Bring up the full platform: gateway + operator + ensemble (g8ee) + dashboard (g8ed)
-docker compose up
-
-# Start the Gateway alone
-./g8e gw start
+docker compose up -d
+```
 
 ```bash
 # Start the Gateway

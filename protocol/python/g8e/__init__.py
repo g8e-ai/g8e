@@ -5,4 +5,4 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-__version__ = "1.7.8"
+__version__ = "2.0.0"

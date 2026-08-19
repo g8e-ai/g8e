@@ -10,6 +10,7 @@ package pubsub
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/rand"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -18,6 +19,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/governance"
+	pubsubtest "github.com/g8e-ai/g8e/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
@@ -529,6 +531,52 @@ func TestHeartbeatService_SendAutomatic(t *testing.T) {
 		err := svc.SendAutomatic()
 		assert.NoError(t, err)
 		// Should not panic, should log warning
+	})
+}
+
+// TestNewOperatorPubSubService_HeartbeatActuatorWired asserts that
+// NewOperatorPubSubService wires the heartbeat service's actuator during
+// construction, without the caller needing to invoke SetActuator manually.
+//
+// Regression: previously SetActuator was called before initializeGovernance
+// assigned rs.actuator, so the heartbeat service received a nil actuator and
+// every automatic heartbeat was silently dropped (logged "Actuator service not
+// set, skipping receipted heartbeat dispatch") with no audit record or
+// pub/sub publish.
+func TestNewOperatorPubSubService_HeartbeatActuatorWired(t *testing.T) {
+	t.Run("heartbeat actuator is non-nil after construction", func(t *testing.T) {
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		db := pubsubtest.NewMockOperatorPubSubClient()
+
+		pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+		signerStore := &governance.FailClosedSignerStore{
+			Signers: map[string]ed25519.PublicKey{"test-key": pub},
+		}
+
+		svc, err := NewOperatorPubSubService(CommandServiceConfig{
+			Config:             cfg,
+			Logger:             logger,
+			PubSubClient:       db,
+			ActuatorSigningKey: priv,
+			ActuatorKeyID:      "Actuator-key",
+		}, GovernanceDeps{
+			ReplayStore:          &testutil.MockReplayStore{},
+			StateRootProvider:    testutil.NewMockStateRootProvider("test-state-root"),
+			TransactionAudit:     &testutil.MockTransactionAudit{},
+			L3Notary:             &testutil.MockL3Notary{},
+			SignerStore:          signerStore,
+			ConsensusPolicyStore: testConsensusStore(),
+			Doctrine:             governance.NewL1Doctrine(),
+		})
+		require.NoError(t, err)
+		require.NotNil(t, svc)
+
+		// The heartbeat service must be wired with the same actuator instance
+		// the parent service constructed in initializeGovernance. No manual
+		// SetActuator call is performed here.
+		require.NotNil(t, svc.heartbeat.actuator, "heartbeat actuator must be wired by the constructor; automatic heartbeats are silently dropped when nil")
+		assert.Same(t, svc.actuator, svc.heartbeat.actuator, "heartbeat actuator must reference the parent service's actuator")
 	})
 }
 

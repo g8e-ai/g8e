@@ -1,0 +1,18 @@
+# Per-Dockerfile build-context filter for the g8e Dashboard image.
+#
+# Takes precedence over the root .dockerignore under BuildKit. The dashboard
+# Dockerfile only needs the dashboard/ source tree (package*.json for the dep
+# install step, then the full dashboard/ copy). Everything else in the monorepo
+# is excluded via the leading wildcard, then dashboard/ is re-included.
+
+# Exclude everything by default, then re-include only the dashboard source.
+*
+!dashboard/
+
+# Within dashboard/, drop installed deps, build output, and caches — the
+# Dockerfile installs node_modules in a builder stage and copies them in.
+dashboard/node_modules/
+dashboard/coverage/
+dashboard/dist/
+dashboard/.vitest-cache/
+dashboard/.cache/

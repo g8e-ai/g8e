@@ -201,7 +201,6 @@ func NewOperatorPubSubService(c CommandServiceConfig, govDeps GovernanceDeps) (*
 	rs.heartbeat = NewHeartbeatService(c.Config, c.Logger, &rs.wg)
 	rs.heartbeat.ctx = serviceCtx
 	rs.heartbeat.results = c.ResultsService
-	rs.heartbeat.SetActuator(rs.actuator)
 
 	rs.commands = NewCommandService(c.Config, c.Logger, c.Execution)
 	rs.commands.results = c.ResultsService
@@ -255,6 +254,10 @@ func NewOperatorPubSubService(c CommandServiceConfig, govDeps GovernanceDeps) (*
 	if err := rs.initializeGovernance(c, govDeps); err != nil {
 		return nil, err
 	}
+	// Wire the heartbeat service's actuator after initializeGovernance has
+	// constructed it. Calling SetActuator earlier passes nil and silently
+	// drops every automatic heartbeat (no audit record, no pub/sub publish).
+	rs.heartbeat.SetActuator(rs.actuator)
 
 	c.Logger.Info("g8e connectivity initialized")
 	if c.Config.OperatorID != "" {
