@@ -242,10 +242,18 @@ def _web_search_settings_from_env():
 
 
 async def _load_settings_from_operator(timeout: float = 5.0):
-    """Load platform settings via SettingsService with a timeout."""
+    """Probe the operator for platform settings.
+
+    Returns ``(settings, status)`` where ``status`` is ``"ok"`` when the
+    operator round-trip succeeded or ``"down"`` when it did not (timeout,
+    connection refused, etc.). In the ``"down"`` case ``settings`` is the
+    local bootstrap fallback. Per-client connection errors are silenced
+    during the probe so the caller can emit a single concise status line
+    instead of three stacked error traces.
+    """
     from app.clients.db_client import DBClient
     from app.clients.kv_cache_client import KVCacheClient
-    
+
     from app.db.db_service import DBService
     from app.db.kv_service import KVService
     from app.models.settings import G8eeAppSettings, TLSConfig
@@ -253,12 +261,27 @@ async def _load_settings_from_operator(timeout: float = 5.0):
     from app.services.infra.settings_service import SettingsService
 
     import asyncio
+    import logging as _logging
 
     settings_service = SettingsService()
     bootstrap_settings = settings_service.get_local_settings()
 
+    # Silence the per-client "Connection failed" error logs while we probe.
+    # The probe itself reports a single ok/down status; the stacked traces
+    # are noise for the common case of running the unit suite with no
+    # operator running.
+    noisy_loggers = (
+        "app.clients.db_client",
+        "app.clients.kv_cache_client",
+        "app.services.infra.settings_service",
+    )
+    saved_levels = {}
+    for name in noisy_loggers:
+        noisy_logger = _logging.getLogger(name)
+        saved_levels[name] = noisy_logger.level
+        noisy_logger.setLevel(_logging.CRITICAL)
+
     try:
-        # Wrap the entire setup and fetch in a timeout
         async with asyncio.timeout(timeout):
             tls_config = TLSConfig(
                 ca_cert_path=bootstrap_settings.ca_cert_path,
@@ -280,16 +303,18 @@ async def _load_settings_from_operator(timeout: float = 5.0):
             settings_service._cache_aside = cache_aside
 
             try:
-                return await settings_service.get_app_settings()
+                settings = await settings_service.get_app_settings()
+                return settings, "ok"
             finally:
                 await kv_client.close()
                 await db_client.close()
     except TimeoutError:
-        logger.warning("Timed out loading platform settings from operator (limit %ds)", timeout)
-        return bootstrap_settings
-    except Exception as e:
-        logger.warning("Failed to load platform settings from operator: %s", e)
-        return bootstrap_settings
+        return bootstrap_settings, "down"
+    except Exception:
+        return bootstrap_settings, "down"
+    finally:
+        for name, level in saved_levels.items():
+            _logging.getLogger(name).setLevel(level)
 
 
 def pytest_configure(config):
@@ -297,16 +322,18 @@ def pytest_configure(config):
 
     import asyncio
 
-    logger.info("Pytest configure started.")
-
-    # Load settings from gateway if available, fall back to local settings on failure
+    # Probe the operator for platform settings. Prints a single concise
+    # status line (operator: ok | down) so the test runner output starts
+    # with a readable signal instead of three stacked connection errors.
     try:
-        settings = asyncio.run(_load_settings_from_operator())
-    except Exception as e:
-        logger.warning(f"Failed to load settings from operator: {e}")
+        settings, status = asyncio.run(_load_settings_from_operator())
+    except Exception:
         from app.services.infra.settings_service import SettingsService
 
         settings = SettingsService().get_local_settings()
+        status = "down"
+
+    print(f"\noperator: {status}")
 
     set_settings(settings)
 
