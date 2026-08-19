@@ -178,7 +178,22 @@ class TestInternalRouterMountedAppPaths:
 
         app = FastAPI()
         app.include_router(internal_router)
-        return {route.path for route in app.routes}
+        # FastAPI 0.140 / Starlette 1.6 wrap included routers in _IncludedRouter
+        # objects that have no .path attribute; traverse the route tree to reach
+        # the underlying APIRoute paths.
+        paths = set()
+
+        def walk(routes):
+            for route in routes:
+                if type(route).__name__ == "_IncludedRouter":
+                    walk(route.original_router.routes)
+                elif hasattr(route, "path"):
+                    paths.add(route.path)
+                elif hasattr(route, "routes"):
+                    walk(route.routes)
+
+        walk(app.routes)
+        return paths
 
     def test_no_double_prefix_on_any_internal_route(self):
         bad = [p for p in self._mounted_paths() if p.startswith("/api/internal/api/internal")]

@@ -73,7 +73,7 @@ docs = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = [".", "evals"]
 include = ["app*", "config*", "reports*", "g8e_evals*"]
 
 # ============================================================================
@@ -95,7 +95,7 @@ testpaths = ["tests", "evals/tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-pythonpath = ["."]
+pythonpath = [".", "evals"]
 
 # Async configuration
 asyncio_mode = "auto"
@@ -143,9 +143,6 @@ filterwarnings = [
 # Timeout for tests (prevents hanging)
 timeout = 60
 timeout_method = "signal"
-
-# Cache directory - relative path works in both container and host contexts
-cache_dir = ".pytest_cache"
 
 # ============================================================================
 # Coverage Configuration
