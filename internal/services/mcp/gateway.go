@@ -829,7 +829,7 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 // @Tags			a2a
 // @Accept			json
 // @Produce		json
-// @Success		200	{object}	map[string]interface{}
+// @Success		200	{object}	mcp.A2ASuccessResponse,mcp.A2ASuspensionResponse
 // @Router			/api/v1/a2a/call [post]
 func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
 	if g.envProc == nil {
