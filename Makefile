@@ -593,18 +593,24 @@ demo-verify: build
 # The ensemble depends on the in-tree protocol/python package. Install it first:
 #   pip install -e protocol/python
 #   pip install -e 'ensemble[test]'
+# The targets prefer the repo-root .venv if present (development), falling back
+# to system python3 (CI installs protocol/python + ensemble into system python).
+
+ENSEMBLE_PY := $(shell if [ -f .venv/bin/python ]; then echo $(CURDIR)/.venv/bin/python; else echo python3; fi)
+ENSEMBLE_RUFF := $(shell if [ -f .venv/bin/ruff ]; then echo $(CURDIR)/.venv/bin/ruff; else command -v ruff 2>/dev/null || echo ruff; fi)
+ENSEMBLE_PYRIGHT := $(shell if [ -f .venv/bin/pyright ]; then echo $(CURDIR)/.venv/bin/pyright; else command -v pyright 2>/dev/null || echo pyright; fi)
 
 .PHONY: ensemble-test
 ensemble-test:
 	@echo "Running ensemble (g8ee) pytest unit suite..."
-	@cd ensemble && python3 -m pytest tests/unit/ -q
+	@cd ensemble && $(ENSEMBLE_PY) -m pytest tests/unit/ -q
 
 .PHONY: ensemble-lint
 ensemble-lint:
 	@echo "Running ruff on ensemble..."
-	@cd ensemble && ruff check app
+	@cd ensemble && $(ENSEMBLE_RUFF) check app
 	@echo "Running pyright on ensemble..."
-	@cd ensemble && pyright app
+	@cd ensemble && $(ENSEMBLE_PYRIGHT) app
 
 .PHONY: build-ensemble
 build-ensemble:

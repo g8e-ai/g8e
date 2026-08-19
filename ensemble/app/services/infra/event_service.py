@@ -64,7 +64,7 @@ class EventService(EventServiceProtocol):
         """Publish an investigation-related event."""
         from app.models.events import SessionEvent
         from app.models.http_context import RequestContext
-        
+
 
         ctx = RequestContext(
             web_session_id=web_session_id,

@@ -112,7 +112,7 @@ class BackgroundTaskManager:
         if (web_session_id or cli_session_id) and case_id and event_service:
             try:
                 from app.models.http_context import RequestContext
-                
+
 
                 ctx = RequestContext(
                     web_session_id=web_session_id,

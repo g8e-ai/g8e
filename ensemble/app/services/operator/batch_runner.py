@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING
 from collections.abc import Callable
 
 from app.models.settings import BatchExecutionSettings
@@ -24,12 +24,10 @@ from app.models.tool_results import BatchExecutionMeta, PerOperatorResultBase
 if TYPE_CHECKING:
     from app.models.operators import OperatorDocument
 
-T = TypeVar("T", bound=PerOperatorResultBase)
-
 logger = logging.getLogger(__name__)
 
 
-class BatchRunResult(BatchExecutionMeta):
+class BatchRunResult[T: PerOperatorResultBase](BatchExecutionMeta):
     """Result of a batch execution run.
 
     Carries per-operator results and aggregated batch metadata.
@@ -68,7 +66,7 @@ class LifecycleEmitter:
         """Emitted when per-operator execution begins."""
         raise NotImplementedError("LifecycleEmitter.emit_started must be implemented by subclasses")
 
-    async def emit_completed(
+    async def emit_completed[T: PerOperatorResultBase](
         self, operator_id: str, hostname: str, execution_id: str, batch_id: str, result: T
     ) -> None:
         """Emitted when per-operator execution succeeds."""
@@ -99,7 +97,7 @@ class BatchRunner:
         self._settings = batch_settings
         self._logger = logging.getLogger(__name__)
 
-    async def run(
+    async def run[T: PerOperatorResultBase](
         self,
         *,
         targets: list[OperatorDocument],

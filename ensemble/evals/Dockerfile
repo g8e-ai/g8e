@@ -1,7 +1,7 @@
 # Reproducibility wrapper for the g8e ensemble evals harness (g8e-powered).
 #
-# Build context is the repo root so the local g8e package is in scope:
-#   docker build -f evals/Dockerfile -t g8e-evals:local .
+# Build context is the repo root so the in-tree g8e protocol package is in scope:
+#   docker build -f ensemble/evals/Dockerfile -t g8e-evals:local .
 #
 # The Gateway (g8eg) stays host-native. This image only carries the harness.
 # At runtime the container needs trust material and an authenticated session:
@@ -13,7 +13,7 @@
 #     -e OPENAI_API_KEY \
 #     g8e-evals:local \
 #     run --suite ifeval --provider openai --model gpt-4o
-FROM python:3.14-slim
+FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -22,12 +22,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /opt/g8e
 
-COPY vendor/g8e/protocol/python /opt/g8e/protocol/python
-COPY evals /opt/g8e/evals
+COPY protocol/python /opt/g8e/protocol/python
+COPY ensemble/evals /opt/g8e/ensemble/evals
 
 RUN pip install /opt/g8e/protocol/python \
- && pip install /opt/g8e/evals
+ && pip install /opt/g8e/ensemble/evals
 
-WORKDIR /opt/g8e/evals
+WORKDIR /opt/g8e/ensemble/evals
 
 ENTRYPOINT ["python", "-m", "g8e_evals"]

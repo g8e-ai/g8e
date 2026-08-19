@@ -414,7 +414,7 @@ class HeartbeatSnapshotService:
                 operator.bound_web_session_id,
             )
             from app.models.http_context import RequestContext
-            
+
 
             ctx = RequestContext(
                 web_session_id=operator.bound_web_session_id,
