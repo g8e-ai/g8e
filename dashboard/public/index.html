@@ -91,6 +91,72 @@
                     <span>Bound Operator</span>
                 </div>
             </div>
+
+            <div class="getting-started" id="getting-started" hidden>
+                <div class="getting-started-header">
+                    <span class="material-symbols-outlined getting-started-header-icon">rocket_launch</span>
+                    <span class="getting-started-header-text">Getting Started</span>
+                </div>
+
+                <p class="getting-started-intro">
+                    Remote workstations must enroll with the gateway before the browser can authenticate. Download the g8e binary, run <code>auth enroll</code> to install the gateway root CA, then sign in with your passkey.
+                </p>
+
+                <div class="getting-started-steps" id="getting-started-steps">
+                    <div class="getting-started-step">
+                        <div class="getting-started-step-number">
+                            <span class="getting-started-step-badge">1</span>
+                        </div>
+                        <div class="getting-started-step-content">
+                            <div class="getting-started-step-title">Download the g8e binary</div>
+                            <div class="getting-started-step-desc">
+                                Detected platform: <span id="gs-platform-label">—</span>.
+                                Binary URL: <span class="getting-started-binary-url" id="gs-binary-url">—</span>
+                            </div>
+                            <div class="getting-started-code">
+                                <code id="gs-download-cmd">—</code>
+                                <button type="button" class="getting-started-copy-btn" data-copy-target="gs-download-cmd" aria-label="Copy download command">
+                                    <span class="material-symbols-outlined">content_copy</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="getting-started-step">
+                        <div class="getting-started-step-number">
+                            <span class="getting-started-step-badge">2</span>
+                        </div>
+                        <div class="getting-started-step-content">
+                            <div class="getting-started-step-title">Enroll your workstation</div>
+                            <div class="getting-started-step-desc">
+                                Installs the gateway root CA into the OS trust store and opens a browser for the passkey ceremony. Restart your browser after the trust install prompt before completing the passkey.
+                            </div>
+                            <div class="getting-started-code">
+                                <code id="gs-enroll-cmd">—</code>
+                                <button type="button" class="getting-started-copy-btn" data-copy-target="gs-enroll-cmd" aria-label="Copy enroll command">
+                                    <span class="material-symbols-outlined">content_copy</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="getting-started-step">
+                        <div class="getting-started-step-number">
+                            <span class="getting-started-step-badge">3</span>
+                        </div>
+                        <div class="getting-started-step-content">
+                            <div class="getting-started-step-title">Sign in</div>
+                            <div class="getting-started-step-desc">
+                                After enrollment completes, click <strong>Sign in</strong> at the top right to authenticate with your passkey.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <p class="getting-started-degraded" id="getting-started-degraded" hidden>
+                    Configure <code>G8E_GATEWAY_URL</code> on the dashboard host to enable remote enrollment instructions.
+                </p>
+            </div>
         </div>
     </main>
 
@@ -114,6 +180,7 @@
     <script type="module" src="/js/utils/error-handler.js"></script>
     <script type="module" src="/js/components/hamburger-menu.js"></script>
     <script type="module" src="/js/app.js"></script>
+    <script type="module" src="/js/components/getting-started.js"></script>
 </body>
 
 </html>
