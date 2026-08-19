@@ -97,6 +97,23 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	return controller, cfg, db
 }
 
+// setupMinimalPKIController creates a PKIController with only config, logger,
+// and responder — no database, no PKI authority, no enrollment or registration
+// services. Use this for handler tests that do not touch the database (e.g.
+// deploy script rendering). Avoiding OpenCanonicalDBService eliminates the
+// two-SQLite-DB teardown whose WAL-checkpoint fsync can block indefinitely
+// under CI I/O contention.
+func setupMinimalPKIController(t *testing.T) *PKIController {
+	t.Helper()
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+	resp := response.NewWriter(logger)
+	if err := scripts.Init(logger); err != nil {
+		t.Fatalf("Failed to initialize script templates: %v", err)
+	}
+	return newPKIController(PKIControllerDeps{Cfg: cfg, Logger: logger, Responder: resp})
+}
+
 func runHTTPTest(t *testing.T, tc httpTestCase, handler func(*httptest.ResponseRecorder, *http.Request)) {
 	t.Helper()
 
@@ -556,7 +573,7 @@ func TestPKIController_HandleNodeBinaryDownload_InvalidName(t *testing.T) {
 func TestPKIController_HandleDeployScriptLinux(t *testing.T) {
 
 	t.Run("Failure - POST method not allowed", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
+		c := setupMinimalPKIController(t)
 		req := httptest.NewRequest(http.MethodPost, "/g8e-deploy.sh", nil)
 		rr := httptest.NewRecorder()
 		c.handleDeployScriptLinux(rr, req)
@@ -564,7 +581,7 @@ func TestPKIController_HandleDeployScriptLinux(t *testing.T) {
 	})
 
 	t.Run("Success - GET returns Linux deploy script with GATEWAY_HOST", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
+		c := setupMinimalPKIController(t)
 		req := httptest.NewRequest(http.MethodGet, "/g8e-deploy.sh", nil)
 		req.Host = "test.example.com"
 		rr := httptest.NewRecorder()
@@ -581,7 +598,7 @@ func TestPKIController_HandleDeployScriptLinux(t *testing.T) {
 func TestPKIController_HandleDeployScriptWindows(t *testing.T) {
 
 	t.Run("Failure - POST method not allowed", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
+		c := setupMinimalPKIController(t)
 		req := httptest.NewRequest(http.MethodPost, "/g8e-deploy.ps1", nil)
 		rr := httptest.NewRecorder()
 		c.handleDeployScriptWindows(rr, req)
@@ -589,7 +606,7 @@ func TestPKIController_HandleDeployScriptWindows(t *testing.T) {
 	})
 
 	t.Run("Success - GET with X-Forwarded-Host uses external host", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
+		c := setupMinimalPKIController(t)
 		req := httptest.NewRequest(http.MethodGet, "/g8e-deploy.ps1", nil)
 		req.Header.Set("X-Forwarded-Host", "external.host")
 		rr := httptest.NewRecorder()
@@ -601,7 +618,7 @@ func TestPKIController_HandleDeployScriptWindows(t *testing.T) {
 	})
 
 	t.Run("Success - GET with localhost uses LocalAddrContextKey IP", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
+		c := setupMinimalPKIController(t)
 		req := httptest.NewRequest(http.MethodGet, "/g8e-deploy.ps1", nil)
 		req.Host = "localhost:8080"
 		// Set LocalAddrContextKey to simulate a non-loopback server address
