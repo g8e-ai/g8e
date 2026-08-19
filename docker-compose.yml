@@ -125,7 +125,10 @@ services:
       # own g8e-ensemble-data volume.
       - G8E_RUNTIME_DIR=/root/.g8e
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      # The ensemble runtime image is python:3.12-slim, which has no wget or
+      # curl. Python is already present, so the healthcheck uses a stdlib
+      # urllib one-liner instead of adding packages to the image.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
       timeout: 5s
       retries: 5

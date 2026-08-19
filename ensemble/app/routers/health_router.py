@@ -60,7 +60,7 @@ async def detailed_health_check(
         else "down",
         "operator_kv": "up" if hasattr(state, "pubsub_client") and state.pubsub_client else "down",
         "internal_http_client": "up"
-        if hasattr(state, "internal_http_client") and state.internal_http_client
+        if services and getattr(services, "internal_http_client", None)
         else "down",
         "operator_command_service": "up"
         if services and getattr(services, "operator_command_service", None)

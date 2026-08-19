@@ -36,14 +36,18 @@ import (
 // It tests black-box observable gateway and operator behaviors — HTTP health, CA bundle
 // discovery, operator liveness, and external mTLS handshakes using enrolled client credentials.
 type DockerE2EFixture struct {
-	GatewayHTTPURL  string // http://localhost:<httpPort>
-	GatewayHTTPSURL string // https://localhost:<httpsPort> (no client cert for these tests)
-	ComposeFile     string
-	ProjectDir      string
-	ProjectName     string // unique docker compose project name
-	ContainerPrefix string // unique container name prefix
-	HTTPPort        int    // allocated host HTTP port
-	HTTPSPort       int    // allocated host HTTPS port
+	GatewayHTTPURL   string // http://localhost:<httpPort>
+	GatewayHTTPSURL  string // https://localhost:<httpsPort> (no client cert for these tests)
+	EnsembleHTTPURL  string // http://localhost:<ensemblePort>
+	DashboardHTTPURL string // http://localhost:<dashboardPort>
+	ComposeFile      string
+	ProjectDir       string
+	ProjectName      string // unique docker compose project name
+	ContainerPrefix  string // unique container name prefix
+	HTTPPort         int    // allocated host HTTP port
+	HTTPSPort        int    // allocated host HTTPS port
+	EnsemblePort     int    // allocated host ensemble port
+	DashboardPort    int    // allocated host dashboard port
 }
 
 // setupSharedE2EFixture performs the Docker Compose setup without requiring
@@ -75,54 +79,72 @@ func setupSharedE2EFixture(composeFile string) (*DockerE2EFixture, error) {
 		return nil, fmt.Errorf("compose file not found: %s", composePath)
 	}
 
-	// Allocate available ports sequentially starting from 8080/8443
-	httpPort, httpsPort := 8080, 8443
+	// Allocate available ports sequentially starting from 8080/8443/8000/3000.
+	// The four ports share a single offset so the gateway, ensemble, and dashboard
+	// in any given run all use the same offset — this keeps the per-run port set
+	// contiguous and avoids collisions between concurrent E2E runs.
+	httpPort, httpsPort, ensemblePort, dashboardPort := 8080, 8443, 8000, 3000
 	for offset := 0; offset < 1000; offset++ {
-		candidateHTTP := 8080 + offset
-		candidateHTTPS := 8443 + offset
-		lnHTTP, errHTTP := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", candidateHTTP))
-		if errHTTP == nil {
-			lnHTTP.Close()
-			lnHTTPS, errHTTPS := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", candidateHTTPS))
-			if errHTTPS == nil {
-				lnHTTPS.Close()
-				httpPort, httpsPort = candidateHTTP, candidateHTTPS
+		candidates := []int{8080 + offset, 8443 + offset, 8000 + offset, 3000 + offset}
+		lns := make([]*net.TCPListener, 0, len(candidates))
+		ok := true
+		for _, p := range candidates {
+			ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p))
+			if err != nil {
+				ok = false
 				break
 			}
+			lns = append(lns, ln.(*net.TCPListener))
+		}
+		for _, ln := range lns {
+			ln.Close()
+		}
+		if ok {
+			httpPort, httpsPort, ensemblePort, dashboardPort = candidates[0], candidates[1], candidates[2], candidates[3]
+			break
 		}
 	}
 	if httpPort == 8080 {
 		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", httpPort))
 		if err != nil {
-			return nil, fmt.Errorf("no available port pair found in range 8080-9080")
+			return nil, fmt.Errorf("no available port set found in range 8080-9080")
 		}
 		ln.Close()
 	}
 	containerPrefix := fmt.Sprintf("g8e-%d", httpPort)
 	projectName := containerPrefix
 
-	log.Printf("E2E: Allocated ports HTTP=%d HTTPS=%d (prefix=%s)", httpPort, httpsPort, containerPrefix)
+	log.Printf("E2E: Allocated ports HTTP=%d HTTPS=%d Ensemble=%d Dashboard=%d (prefix=%s)",
+		httpPort, httpsPort, ensemblePort, dashboardPort, containerPrefix)
 
 	// Build env for docker-compose (overrides defaults in compose file)
 	composeEnv := []string{
 		"DOCKER_BUILDKIT=1",
 		fmt.Sprintf("G8E_HTTP_PORT=%d", httpPort),
 		fmt.Sprintf("G8E_HTTPS_PORT=%d", httpsPort),
+		fmt.Sprintf("G8E_ENSEMBLE_PORT=%d", ensemblePort),
+		fmt.Sprintf("G8E_DASHBOARD_PORT=%d", dashboardPort),
 		fmt.Sprintf("G8E_PREFIX=%s", containerPrefix),
 	}
 
 	httpURL := fmt.Sprintf("http://localhost:%d", httpPort)
 	httpsURL := fmt.Sprintf("https://localhost:%d", httpsPort)
+	ensembleURL := fmt.Sprintf("http://localhost:%d", ensemblePort)
+	dashboardURL := fmt.Sprintf("http://localhost:%d", dashboardPort)
 
 	fixture := &DockerE2EFixture{
-		GatewayHTTPURL:  httpURL,
-		GatewayHTTPSURL: httpsURL,
-		ComposeFile:     composePath,
-		ProjectDir:      repoRoot,
-		ProjectName:     projectName,
-		ContainerPrefix: containerPrefix,
-		HTTPPort:        httpPort,
-		HTTPSPort:       httpsPort,
+		GatewayHTTPURL:   httpURL,
+		GatewayHTTPSURL:  httpsURL,
+		EnsembleHTTPURL:  ensembleURL,
+		DashboardHTTPURL: dashboardURL,
+		ComposeFile:      composePath,
+		ProjectDir:       repoRoot,
+		ProjectName:      projectName,
+		ContainerPrefix:  containerPrefix,
+		HTTPPort:         httpPort,
+		HTTPSPort:        httpsPort,
+		EnsemblePort:     ensemblePort,
+		DashboardPort:    dashboardPort,
 	}
 
 	// Spin up docker-compose with `--wait`, which blocks until every service
@@ -156,6 +178,8 @@ func (f *DockerE2EFixture) teardown() error {
 	composeEnv := []string{
 		fmt.Sprintf("G8E_HTTP_PORT=%d", f.HTTPPort),
 		fmt.Sprintf("G8E_HTTPS_PORT=%d", f.HTTPSPort),
+		fmt.Sprintf("G8E_ENSEMBLE_PORT=%d", f.EnsemblePort),
+		fmt.Sprintf("G8E_DASHBOARD_PORT=%d", f.DashboardPort),
 		fmt.Sprintf("G8E_PREFIX=%s", f.ContainerPrefix),
 	}
 	downCmd := exec.Command("docker", "compose", "-p", f.ProjectName, "-f", f.ComposeFile, "down", "-v", "--remove-orphans")
@@ -213,6 +237,8 @@ func (f *DockerE2EFixture) captureDiagnostics(msg func(format string, args ...an
 
 	gatewayContainer := f.ContainerPrefix + "-gateway"
 	operatorContainer := f.ContainerPrefix + "-operator"
+	ensembleContainer := f.ContainerPrefix + "-ensemble"
+	dashboardContainer := f.ContainerPrefix + "-dashboard"
 
 	captures := []struct {
 		name string
@@ -220,6 +246,8 @@ func (f *DockerE2EFixture) captureDiagnostics(msg func(format string, args ...an
 	}{
 		{"gateway.log", exec.Command("docker", "logs", gatewayContainer)},
 		{"operator.log", exec.Command("docker", "logs", operatorContainer)},
+		{"ensemble.log", exec.Command("docker", "logs", ensembleContainer)},
+		{"dashboard.log", exec.Command("docker", "logs", dashboardContainer)},
 		{"compose-ps.txt", exec.Command("docker", "compose", "-p", f.ProjectName, "-f", f.ComposeFile, "ps")},
 	}
 
@@ -515,4 +543,130 @@ func (f *DockerE2EFixture) DialGatewayMTLS(t *testing.T) {
 	state := conn.ConnectionState()
 	require.True(t, state.HandshakeComplete, "TLS handshake did not complete")
 	require.NotEmpty(t, state.PeerCertificates, "No peer certificates received from gateway")
+}
+
+// ensembleEnrolledMarkerRe matches the AppEnrollmentService success log line
+// emitted from ensemble/app/services/infra/app_enrollment_service.py. Either
+// the fresh-enrollment marker ("enrolled successfully") or the reuse marker
+// ("reusing existing valid app cert") indicates the ensemble reached the
+// identity-ready state. The "app cert saved" marker from _write_credentials is
+// also accepted — it fires on every fresh enrollment before the success line.
+var ensembleEnrolledMarkerRe = regexp.MustCompile(
+	`AppEnrollmentService: (enrolled successfully|reusing existing valid app cert|app cert saved)`)
+
+// GetEnsembleHealth queries the ensemble's public /health endpoint and asserts
+// a 200 with status == "ok". The endpoint is served by FastAPI once the
+// lifespan completes — including the AppEnrollmentService phase — so reaching
+// it with status "ok" is indirect proof that enrollment succeeded and the app
+// is serving.
+func (f *DockerE2EFixture) GetEnsembleHealth(t *testing.T) map[string]interface{} {
+	t.Helper()
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(f.EnsembleHTTPURL + "/health")
+	require.NoError(t, err, "Failed to query ensemble /health")
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode, "ensemble /health returned non-200")
+
+	var health map[string]interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&health), "Failed to decode ensemble /health body")
+	require.Equal(t, "ok", health["status"], "ensemble /health status != ok")
+	return health
+}
+
+// GetEnsembleDetailedHealth queries the ensemble's /health/details endpoint and
+// asserts a 200 with status == "ok". The `clients` map in the response reports
+// service-object existence on app.state — `up` means the startup phase that
+// creates the service object completed without raising, not that the underlying
+// mTLS connection is live. Reaching this endpoint with all services `up` is
+// indirect proof that enrollment succeeded (the lifespan exception handler
+// re-raises on enrollment failure, so FastAPI never starts serving and this
+// endpoint would be unreachable). For a direct mTLS connection probe, a future
+// workstream could add a live connectivity check to the health endpoint.
+func (f *DockerE2EFixture) GetEnsembleDetailedHealth(t *testing.T) map[string]interface{} {
+	t.Helper()
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(f.EnsembleHTTPURL + "/health/details")
+	require.NoError(t, err, "Failed to query ensemble /health/details")
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode, "ensemble /health/details returned non-200")
+
+	var detailed map[string]interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&detailed), "Failed to decode ensemble /health/details body")
+	require.Equal(t, "ok", detailed["status"], "ensemble /health/details status != ok")
+	return detailed
+}
+
+// CheckEnsembleContainer inspects the ensemble container, asserts it is
+// running, and checks the container logs (windowed to the current container
+// start) for an AppEnrollmentService success marker. The marker proves the
+// ensemble completed self-enrollment against the gateway's public PKI app
+// enrollment endpoint.
+func (f *DockerE2EFixture) CheckEnsembleContainer(t *testing.T) {
+	t.Helper()
+
+	ensembleContainer := f.ContainerPrefix + "-ensemble"
+
+	cmd := exec.Command("docker", "inspect", "-f", "{{.State.Status}}", ensembleContainer)
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "Failed to inspect ensemble container")
+	status := strings.TrimSpace(string(output))
+	require.Equal(t, "running", status, "Ensemble container is not running")
+
+	startedAt := f.EnsembleStartedAt(t)
+	logs := f.EnsembleLogsSince(t, startedAt)
+	require.True(t,
+		ensembleEnrolledMarkerRe.MatchString(logs),
+		"Ensemble logs since %s do not contain an AppEnrollmentService success marker; logs:\n%s",
+		startedAt, logs,
+	)
+}
+
+// EnsembleStartedAt returns the ensemble container's State.StartedAt timestamp
+// (RFC3339) for use as a `docker logs --since` argument.
+func (f *DockerE2EFixture) EnsembleStartedAt(t *testing.T) string {
+	t.Helper()
+
+	ensembleContainer := f.ContainerPrefix + "-ensemble"
+	cmd := exec.Command("docker", "inspect", "-f", "{{.State.StartedAt}}", ensembleContainer)
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "Failed to inspect ensemble container start time")
+	return strings.TrimSpace(string(output))
+}
+
+// EnsembleLogsSince returns the ensemble container logs since the given
+// RFC3339 timestamp (as returned by EnsembleStartedAt).
+func (f *DockerE2EFixture) EnsembleLogsSince(t *testing.T, sinceTS string) string {
+	t.Helper()
+
+	ensembleContainer := f.ContainerPrefix + "-ensemble"
+	logsCmd := exec.Command("docker", "logs", "--since", sinceTS, ensembleContainer)
+	logsOutput, err := logsCmd.CombinedOutput()
+	require.NoError(t, err, "Failed to get ensemble logs since %s", sinceTS)
+	return string(logsOutput)
+}
+
+// CheckDashboardContainer inspects the dashboard container, asserts it is
+// running, and verifies the dashboard serves its index page via a single GET
+// to the dashboard URL. Because the dashboard has a compose healthcheck, the
+// `docker compose up --wait` in setupSharedE2EFixture has already confirmed
+// the dashboard is serving before any test runs, so this is a single request
+// without require.Eventually retry.
+func (f *DockerE2EFixture) CheckDashboardContainer(t *testing.T) {
+	t.Helper()
+
+	dashboardContainer := f.ContainerPrefix + "-dashboard"
+
+	cmd := exec.Command("docker", "inspect", "-f", "{{.State.Status}}", dashboardContainer)
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "Failed to inspect dashboard container")
+	status := strings.TrimSpace(string(output))
+	require.Equal(t, "running", status, "Dashboard container is not running")
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(f.DashboardHTTPURL + "/")
+	require.NoError(t, err, "Failed to GET dashboard index page")
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode, "Dashboard index page returned non-200")
 }

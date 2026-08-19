@@ -27,9 +27,9 @@ See [AI Agents and the g8e Governance Boundary](./agents.md) for the client surf
 
 ## Connection Model
 
-g8ee connects to the gateway over mTLS using an app workload identity. In the unified Docker stack (repo-root `docker-compose.yml`), the ensemble container mounts the gateway's data volume read-only at `/root/.g8e` so it can read the gateway's issued app cert/key (`pki/issued/apps/g8ee.crt`, `g8ee.key`) and the trust bundle (`pki/trust/g8eg-ca-bundle.pem`). The ensemble's `G8E_GATEWAY_URL`, `G8E_OPERATOR_URL`, `G8E_OPERATOR_PUBSUB_URL`, `G8E_RUNTIME_DIR`, `G8E_PKI_DIR`, and `G8E_CA_CERT_PATH` environment variables point at the gateway's network alias and runtime tree.
+g8ee connects to the gateway over mTLS using an app workload identity. In the unified Docker stack (repo-root `docker-compose.yml`), the ensemble container has its own `g8e-ensemble-data` volume mounted at `/root/.g8e` (read-write). The ensemble self-enrolls at startup via the gateway's public PKI app enrollment endpoint (`POST /api/v1/pki/apps/enroll` on the plain-HTTP bootstrap surface), receives its own signed app cert, cert chain, trust bundle, app_id, and expiry, and stores them in its own runtime tree (`pki/issued/apps/g8ee.crt`, `g8ee.key`, `pki/trust/hub-bundle.pem`). No gateway volume is mounted — the ensemble is a proper enrolled app, not a volume-mount shortcut. The ensemble's `G8E_GATEWAY_HTTP_URL`, `G8E_OPERATOR_URL`, `G8E_OPERATOR_PUBSUB_URL`, and `G8E_RUNTIME_DIR` environment variables point at the gateway's network alias and the ensemble's own runtime directory.
 
-The ensemble does not enroll itself. The gateway issues the app cert during its own PKI bootstrap, and the ensemble reads it from the shared volume at startup. This is the same model the sauvren scratch pad used, re-derived for g8e's `/root/.g8e` layout.
+The enrollment is idempotent: on restart with an existing valid cert, the `AppEnrollmentService` (`ensemble/app/services/infra/app_enrollment_service.py`) short-circuits the reuse path and the ensemble proceeds directly to startup. The enrollment runs as Phase 0.25 of the `lifespan` in `ensemble/app/main.py`, before the TLS config is constructed and the operator clients connect. If enrollment fails, the lifespan exception handler re-raises and FastAPI fails to start, so Docker's healthcheck and restart policy surface the failure. See [Build Apps](../guides/build_apps.md) § Identity and Authentication and [Connect Apps to Gateway](../guides/connect_apps_to_gateway.md) § Application Enrollment for the public enrollment contract.
 
 ## In-Tree Protocol Dependency
 
@@ -39,11 +39,12 @@ g8ee depends on the g8e Python protocol package (`g8e>=1.7.8`). In the monorepo 
 
 The ensemble ships with its own Dockerfile (`ensemble/Dockerfile`), rooted at the g8e repo root so it can `COPY protocol/python` and `COPY ensemble`. The Makefile provides:
 
-- `make ensemble-test` — runs the ensemble pytest unit suite (`ensemble/tests/unit/`).
+- `make ensemble-test` — runs the ensemble pytest unit and in-process integration suites (`ensemble/tests/unit/` and `ensemble/tests/integration/`, excluding Tier 4 external tests).
+- `make test-external` — runs the ensemble Tier 4 external tests (`ensemble/tests/integration/` with the `ai_integration`, `requires_web_search`, or `requires_api` markers). Not in CI; gated on credentials.
 - `make ensemble-lint` — runs ruff and pyright on the ensemble.
 - `make build-ensemble` — builds the ensemble Docker image.
 
-The ensemble test suite is co-located under `ensemble/tests/` and `ensemble/evals/`. It is not moved under the repo-root `test/` directory, which remains Go-specific. The polyglot tests map onto the 3-tier test model as Tier 1 (unit, in-component) and Tier 3 (Docker E2E against the unified compose). See the [Unified Docker Stack guide](../guides/unified_stack.md) for bringing up the whole platform.
+The ensemble test suite is co-located under `ensemble/tests/` and `ensemble/evals/`. It is not moved under the repo-root `test/` directory, which remains Go-specific. The polyglot tests map onto the 4-tier test model as Tier 1 (unit, in-component), Tier 2 (in-process integration), Tier 3 (Docker E2E against the unified compose), and Tier 4 (external, real LLM/API). See [Ensemble Tests](../ensemble/tests.md) and the [Unified Docker Stack guide](../guides/unified_stack.md) for bringing up the whole platform.
 
 ## License
 
