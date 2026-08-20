@@ -11,8 +11,12 @@
     - [L2Vote](#g8e-common-v1-L2Vote)
     - [L3Metadata](#g8e-common-v1-L3Metadata)
     - [L3Proof](#g8e-common-v1-L3Proof)
+    - [PlatformEnrollmentFingerprints](#g8e-common-v1-PlatformEnrollmentFingerprints)
+    - [PlatformEnrollmentGovernancePayload](#g8e-common-v1-PlatformEnrollmentGovernancePayload)
   
     - [Component](#g8e-common-v1-Component)
+    - [PlatformComponentKind](#g8e-common-v1-PlatformComponentKind)
+    - [PlatformEnrollmentDecision](#g8e-common-v1-PlatformEnrollmentDecision)
   
     - [File-level Extensions](#g8e_common_v1_common-proto-extensions)
   
@@ -171,6 +175,47 @@ should be populated per instance.
 
 
 
+
+<a name="g8e-common-v1-PlatformEnrollmentFingerprints"></a>
+
+### PlatformEnrollmentFingerprints
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| app | [string](#string) |  |  |
+| operator | [string](#string) |  |  |
+| cli | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-common-v1-PlatformEnrollmentGovernancePayload"></a>
+
+### PlatformEnrollmentGovernancePayload
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| action | [string](#string) |  |  |
+| intent | [string](#string) |  |  |
+| request_id | [string](#string) |  |  |
+| component_kind | [PlatformComponentKind](#g8e-common-v1-PlatformComponentKind) |  |  |
+| instance_id | [string](#string) |  |  |
+| actor_user_id | [string](#string) |  |  |
+| decision | [PlatformEnrollmentDecision](#g8e-common-v1-PlatformEnrollmentDecision) |  |  |
+| fingerprints | [PlatformEnrollmentFingerprints](#g8e-common-v1-PlatformEnrollmentFingerprints) |  |  |
+| target_collection | [string](#string) |  |  |
+| target_document_id | [string](#string) |  |  |
+
+
+
+
+
  
 
 
@@ -185,6 +230,33 @@ Source component identifier
 | COMPONENT_AGENT | 1 |  |
 | COMPONENT_G8EO | 2 |  |
 | COMPONENT_CLIENT | 3 |  |
+
+
+
+<a name="g8e-common-v1-PlatformComponentKind"></a>
+
+### PlatformComponentKind
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| PLATFORM_COMPONENT_KIND_UNSPECIFIED | 0 |  |
+| PLATFORM_COMPONENT_KIND_DASHBOARD | 1 |  |
+| PLATFORM_COMPONENT_KIND_ENSEMBLE | 2 |  |
+| PLATFORM_COMPONENT_KIND_OPERATOR | 3 |  |
+
+
+
+<a name="g8e-common-v1-PlatformEnrollmentDecision"></a>
+
+### PlatformEnrollmentDecision
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| PLATFORM_ENROLLMENT_DECISION_UNSPECIFIED | 0 |  |
+| PLATFORM_ENROLLMENT_DECISION_APPROVE | 1 |  |
+| PLATFORM_ENROLLMENT_DECISION_DENY | 2 |  |
 
 
  

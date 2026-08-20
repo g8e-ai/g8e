@@ -125,3 +125,35 @@ message GovernanceEnvelope {
   string tenant_id = 23;
   string binding_persona = 24;
 }
+
+enum PlatformComponentKind {
+  PLATFORM_COMPONENT_KIND_UNSPECIFIED = 0;
+  PLATFORM_COMPONENT_KIND_DASHBOARD = 1;
+  PLATFORM_COMPONENT_KIND_ENSEMBLE = 2;
+  PLATFORM_COMPONENT_KIND_OPERATOR = 3;
+}
+
+enum PlatformEnrollmentDecision {
+  PLATFORM_ENROLLMENT_DECISION_UNSPECIFIED = 0;
+  PLATFORM_ENROLLMENT_DECISION_APPROVE = 1;
+  PLATFORM_ENROLLMENT_DECISION_DENY = 2;
+}
+
+message PlatformEnrollmentFingerprints {
+  string app = 1;
+  string operator = 2;
+  string cli = 3;
+}
+
+message PlatformEnrollmentGovernancePayload {
+  string action = 1;
+  string intent = 2;
+  string request_id = 3;
+  PlatformComponentKind component_kind = 4;
+  string instance_id = 5;
+  string actor_user_id = 6;
+  PlatformEnrollmentDecision decision = 7;
+  PlatformEnrollmentFingerprints fingerprints = 8;
+  string target_collection = 9;
+  string target_document_id = 10;
+}

@@ -78,6 +78,11 @@ var APIPaths = struct {
 	AuthBootstrap                            string `json:"auth_bootstrap"`
 	AuthBootstrapStatus                      string `json:"auth_bootstrap_status"`
 	AuthOperatorEnroll                       string `json:"auth_operator_enroll"`
+	AuthPlatformEnrollmentRequest            string `json:"auth_platform_enrollment_request"`
+	AuthPlatformEnrollmentStatus             string `json:"auth_platform_enrollment_status"`
+	AuthPlatformEnrollmentComplete           string `json:"auth_platform_enrollment_complete"`
+	AuthPlatformEnrollmentPending            string `json:"auth_platform_enrollment_pending"`
+	AuthPlatformEnrollmentDecision           string `json:"auth_platform_enrollment_decision"`
 	AuthCLIRecoveryRequest                   string `json:"auth_cli_recovery_request"`
 	AuthCLIRecoveryStatus                    string `json:"auth_cli_recovery_status"`
 	AuthCLIRecoveryApprove                   string `json:"auth_cli_recovery_approve"`
@@ -217,6 +222,11 @@ var APIPaths = struct {
 	AuthBootstrap:                            "/api/v1/auth/bootstrap",
 	AuthBootstrapStatus:                      "/api/v1/auth/bootstrap/status",
 	AuthOperatorEnroll:                       "/api/v1/auth/operator/enroll",
+	AuthPlatformEnrollmentRequest:            "/api/v1/auth/platform-enrollments/request",
+	AuthPlatformEnrollmentStatus:             "/api/v1/auth/platform-enrollments/status",
+	AuthPlatformEnrollmentComplete:           "/api/v1/auth/platform-enrollments/complete",
+	AuthPlatformEnrollmentPending:            "/api/v1/auth/platform-enrollments/pending",
+	AuthPlatformEnrollmentDecision:           "/api/v1/auth/platform-enrollments/decision",
 	AuthCLIRecoveryRequest:                   "/api/v1/auth/cli/recovery/request",
 	AuthCLIRecoveryStatus:                    "/api/v1/auth/cli/recovery/status",
 	AuthCLIRecoveryApprove:                   "/api/v1/auth/cli/recovery/approve",

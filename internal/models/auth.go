@@ -494,15 +494,20 @@ type TrustedSigner struct {
 // AppPolicy defines the authorization rules for an external application identity.
 // Under the Phase 1 fail-closed model, any app lacking an active policy gets deny-all.
 type AppPolicy struct {
-	AppID              string    `json:"app_id"`
-	AllowedCollections []string  `json:"allowed_collections"`
-	AllowedEventTypes  []string  `json:"allowed_event_types"`
-	AllowedIntents     []string  `json:"allowed_intents"`
-	RateLimitRPS       int       `json:"rate_limit_rps"`
-	MaxPayloadBytes    int64     `json:"max_payload_bytes"`
-	RequireL3Approval  bool      `json:"require_l3_approval"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	AppID                  string    `json:"app_id"`
+	OwnerUserID            string    `json:"owner_user_id,omitempty"`
+	ApprovedByUserID       string    `json:"approved_by_user_id,omitempty"`
+	EnrollmentRequestID    string    `json:"enrollment_request_id,omitempty"`
+	CertificateSerial      string    `json:"certificate_serial,omitempty"`
+	CertificateFingerprint string    `json:"certificate_fingerprint,omitempty"`
+	AllowedCollections     []string  `json:"allowed_collections"`
+	AllowedEventTypes      []string  `json:"allowed_event_types"`
+	AllowedIntents         []string  `json:"allowed_intents"`
+	RateLimitRPS           int       `json:"rate_limit_rps"`
+	MaxPayloadBytes        int64     `json:"max_payload_bytes"`
+	RequireL3Approval      bool      `json:"require_l3_approval"`
+	CreatedAt              time.Time `json:"created_at"`
+	UpdatedAt              time.Time `json:"updated_at"`
 }
 
 // Persona defines a declarative persona manifest for role-based access control.

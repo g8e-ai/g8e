@@ -1,0 +1,39 @@
+{
+  "_comment": "Canonical owner-approved platform workload enrollment wire and persistence shapes.",
+  "_authority": "gateway (SQLite)",
+  "_collection": "platform_enrollments",
+  "component_kind": {
+    "type": "string",
+    "values": ["dashboard", "ensemble", "operator"]
+  },
+  "state": {
+    "type": "string",
+    "values": ["pending", "approved", "issuing", "completed", "denied", "expired"]
+  },
+  "decision": {
+    "type": "string",
+    "values": ["approve", "deny"]
+  },
+  "create_request": {
+    "component_kind": "component_kind",
+    "instance_id": "string",
+    "hostname": "string",
+    "system_fingerprint": "string?",
+    "app": {
+      "csr_pem": "string"
+    },
+    "operator": {
+      "operator_csr_pem": "string",
+      "cli_csr_pem": "string"
+    }
+  },
+  "identifiers": {
+    "request_id": "Non-secret UUID used by approvers and audit records.",
+    "token": "Requester-only 32-byte opaque bearer token returned once.",
+    "token_hash": "Persisted SHA-256 hash of token; never exposed by administrative APIs."
+  },
+  "governance": {
+    "actions": ["PLATFORM_ENROLLMENT_CREATE", "PLATFORM_ENROLLMENT_DECIDE", "PLATFORM_ENROLLMENT_ISSUE", "PLATFORM_ENROLLMENT_PERSIST_POLICY", "PLATFORM_ENROLLMENT_CREATE_SESSION"],
+    "intents": ["platform_enrollment.request", "platform_enrollment.approve", "platform_enrollment.deny", "platform_enrollment.issue"]
+  }
+}

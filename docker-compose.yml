@@ -7,6 +7,7 @@
 
 networks:
   g8e-net:
+    name: g8e-net
     driver: bridge
 
 volumes:
@@ -21,6 +22,7 @@ volumes:
 
 services:
   g8e-gateway:
+    image: g8e-gateway
     build:
       context: .
       dockerfile: Dockerfile
@@ -81,6 +83,7 @@ services:
     #   docker compose --profile activated up -d
     profiles:
       - activated
+    image: g8e-operator
     build:
       context: .
       dockerfile: Dockerfile
