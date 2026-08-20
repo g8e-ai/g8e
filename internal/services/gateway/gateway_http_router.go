@@ -84,7 +84,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// CLI-initiated enrollment: the enrollment token is the single
 	// authorization primitive. No enforceFirstCredentialOnly (the token
 	// already vouches for the user), no createUserOnBootstrap (the user
-	// exists — the CLI created it via `auth enroll`), no
+	// exists — the CLI created it via `auth enroll user`), no
 	// requireAuthenticatedUser (the token is the credential).
 	enrollmentRegisterCfg := passkeyHandlerConfig{source: sourceEnrollmentToken, requireEnrollmentToken: true, createWebSession: true, setCookie: true}
 

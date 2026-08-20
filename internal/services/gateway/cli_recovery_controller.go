@@ -249,7 +249,7 @@ func (c *CLIRecoveryController) handleRecoveryApprove(w http.ResponseWriter, r *
 // handleRecoveryApproveCLI is the mTLS counterpart to handleRecoveryApprove.
 // It is called by an already-enrolled CLI (via `g8e auth approve-recovery
 // <token>`) to approve or deny a pending recovery request created by another
-// CLI's `auth enroll --headless` run. The approver user ID is derived from the
+// CLI's `auth enroll user --headless` run. The approver user ID is derived from the
 // verified CLI certificate URI SAN — stamped into the request context by the
 // unified auth middleware (handleMTLSAuth → handleCLIAuth). The request body
 // carries only the token and approve/deny flag; no identity fields.

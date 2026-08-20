@@ -94,11 +94,43 @@ func stdinContinue(prompt string) bool {
 	return true
 }
 
+// enrollCmd is the parent command for enrollment. It has no RunE, so cobra
+// prints help and exits non-zero when invoked without a subcommand, forcing
+// explicit session-type selection (user vs operator).
 func enrollCmd() *cobra.Command {
-	return enrollCmdWithConfig(loadConfig, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
+	cmd := &cobra.Command{
+		Use:   "enroll",
+		Short: "Enroll a CLI user or remote operator with the running Gateway",
+		Long: `Enroll a CLI user or remote operator with the running Gateway.
+
+Two distinct enrollment paths exist as subcommands:
+
+  user      Local human CLI/user enrollment. Drives the EnrollmentCoordinator
+            state machine (bootstrap, recovery, rotation, reuse), installs the
+            gateway root CA into the OS trust store, and runs the browser-based
+            WebAuthn passkey ceremony. Produces a CLI session bound to a user
+            identity.
+
+  operator  Remote operator/device enrollment. Generates an operator CSR and
+            enrolls with the gateway to obtain Operator mTLS certificates.
+            Headless and operator-only: no OS trust installation, no passkey
+            ceremony, no CLI session.
+
+Bare ` + "`auth enroll`" + ` (no subcommand) prints this help and exits non-zero.`,
+	}
+	cmd.AddCommand(
+		enrollUserCmd(),
+		enrollOperatorCmd(),
+		guiCmd(),
+	)
+	return cmd
 }
 
-func enrollCmdWithConfig(
+func enrollUserCmd() *cobra.Command {
+	return enrollUserCmdWithConfig(loadConfig, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
+}
+
+func enrollUserCmdWithConfig(
 	configLoader func(string) (*config.Config, error),
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 	checkOperatorRunning func(*config.Config) error,
@@ -110,8 +142,8 @@ func enrollCmdWithConfig(
 		headless      bool
 	)
 	cmd := &cobra.Command{
-		Use:   "enroll",
-		Short: "Enroll CLI session with the running Gateway and register a passkey",
+		Use:   "user",
+		Short: "Enroll a local CLI user session with the running Gateway and register a passkey",
 		Long: `Enroll a CLI session with the running Gateway via CSR-based enrollment, then register a passkey for secure authentication.
 
 The coordinator inspects the local CLI identity and chooses the correct action:
@@ -126,6 +158,9 @@ OS trust installation runs BEFORE the browser-based passkey ceremony by default.
 system trust installation fails, the browser phase is not started. Use --no-system-trust
 to skip the installer when an administrator has pre-installed the gateway root CA; the
 passkey ceremony still runs and runtime mTLS/trust-bundle errors still fail enrollment.
+
+For the remote operator/device enrollment path (CSR-only, no passkey, no CLI session),
+use ` + "`auth enroll operator`" + ` instead.
 
 The Gateway must already be running (use './g8e gw start' first).`,
 		RunE: func(cmd *cobra.Command, args []string) error {

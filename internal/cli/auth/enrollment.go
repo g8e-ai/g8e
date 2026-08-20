@@ -181,9 +181,9 @@ type EnrollmentCoordinatorDeps struct {
 //   - Browser: a defaultBrowserOpener wrapping platform.OpenBrowser.
 //   - Passkey: a defaultPasskeyRegistrar wrapping the hardened passkeyRegistrar.
 //   - Confirm: an auto-confirm stub (always returns true). The interactive
-//     `auth enroll` command overrides this with a stdin-reading impl.
+//     `auth enroll user` command overrides this with a stdin-reading impl.
 //   - Continue: an auto-continue stub (always returns true). The interactive
-//     `auth enroll` command overrides this with a stdin-reading impl.
+//     `auth enroll user` command overrides this with a stdin-reading impl.
 //   - Clock: time.Now.
 //   - Logger: slog.Default().
 //   - Out: a no-op writer (the command layer should always supply this).
@@ -222,7 +222,7 @@ func NewEnrollmentCoordinator(deps EnrollmentCoordinatorDeps) *EnrollmentCoordin
 	}
 	confirm := deps.Confirm
 	if confirm == nil {
-		// Default: auto-confirm. The interactive `auth enroll` command layer
+		// Default: auto-confirm. The interactive `auth enroll user` command layer
 		// overrides this with a stdin-reading implementation. Internal callers
 		// (e.g., mcp agent run) that don't supply a ConfirmFunc get the
 		// auto-confirm default so they don't block on missing stdin.
@@ -230,7 +230,7 @@ func NewEnrollmentCoordinator(deps EnrollmentCoordinatorDeps) *EnrollmentCoordin
 	}
 	continueFn := deps.Continue
 	if continueFn == nil {
-		// Default: auto-continue. The interactive `auth enroll` command layer
+		// Default: auto-continue. The interactive `auth enroll user` command layer
 		// overrides this with a stdin-reading implementation. Internal callers
 		// (e.g., mcp agent run, demos) that don't supply a ContinueFunc get
 		// the auto-continue default so they don't block on missing stdin.
@@ -501,7 +501,7 @@ func (c *EnrollmentCoordinator) handleBootstrap(ctx context.Context, opts Enroll
 		return EnrollmentArtifacts{}, err
 	}
 	// No operator CSR for local CLI enrollment (per §5.1: do not make
-	// auth enroll depend on an operator certificate it does not need).
+	// auth enroll user depend on an operator certificate it does not need).
 	return c.gateway.Bootstrap(ctx, csrPEM, cliKey, "", opts.CAFingerprint, "")
 }
 

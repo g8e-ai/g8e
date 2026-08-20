@@ -185,7 +185,7 @@ Use --json for machine-readable output suitable for scripting.`,
 			if len(enrollment.Origins) == 0 {
 				cmd.Println("No frontend applications enrolled.")
 				cmd.Println("\nTo enroll a frontend application:")
-				cmd.Printf("  g8e gui enroll --origin https://your-app.example.com\n")
+				cmd.Printf("  g8e auth enroll gui enroll --origin https://your-app.example.com\n")
 				return nil
 			}
 
@@ -323,7 +323,7 @@ CORS preflight.`,
 
 			if !enrolled {
 				cmd.Printf("Warning: origin %s is not in the enrollment list.\n", origin)
-				cmd.Println("Run 'g8e gui enroll --origin <origin>' first.")
+				cmd.Println("Run 'g8e auth enroll gui enroll --origin <origin>' first.")
 			}
 
 			httpsURL := network.LocalhostHTTPSURL(constants.Ports.OperatorHttps)

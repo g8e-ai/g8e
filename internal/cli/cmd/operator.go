@@ -393,7 +393,7 @@ func operatorDeployCmdWithConfig(configLoader func(string) (*config.Config, erro
 	cmd := &cobra.Command{
 		Use:   "deploy",
 		Short: "Deploy the operator binary to remote hosts and start it",
-		Long:  `Deploy the g8e operator binary to remote hosts via SSH and start it in the background. Uses your existing SSH config for authentication. Requires './g8e auth enroll' first.`,
+		Long:  `Deploy the g8e operator binary to remote hosts via SSH and start it in the background. Uses your existing SSH config for authentication. Requires './g8e auth enroll user' first.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -407,7 +407,7 @@ func operatorDeployCmdWithConfig(configLoader func(string) (*config.Config, erro
 
 			creds, err := auth.LoadCredentials(fileSvc, cfg)
 			if err != nil || creds == nil {
-				return fmt.Errorf("%w: Please run './g8e auth enroll' first", constants.ErrNotAuthenticated)
+				return fmt.Errorf("%w: Please run './g8e auth enroll user' first", constants.ErrNotAuthenticated)
 			}
 
 			if hosts == "" {

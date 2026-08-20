@@ -9,7 +9,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"crypto/x509"
 	"errors"
 	"fmt"
@@ -20,10 +19,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/g8e-ai/g8e/internal/cli/auth"
-	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/pkg/certutil"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
@@ -36,7 +32,6 @@ func securityCmd() *cobra.Command {
 
 	cmd.AddCommand(
 		securityValidateCmd(),
-		securityPKICmd(),
 	)
 
 	return cmd
@@ -241,186 +236,6 @@ and confirms that the CA bundle is properly configured for mTLS.`,
 
 	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", "PKI directory (default: "+constants.RuntimeDirname+"/"+constants.PkiDirname+")")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", "", "Secrets directory (default: "+constants.RuntimeDirname+"/"+constants.SecretsDirname+")")
-
-	return cmd
-}
-
-func securityPKICmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "pki",
-		Short: "PKI management",
-		Long:  `Manage PKI certificates and enrollment.`,
-	}
-
-	cmd.AddCommand(
-		securityPKIEnrollCmd(),
-	)
-
-	return cmd
-}
-
-// remoteOperatorEnroller is the subset of auth.EnrollmentClient used by
-// `security pki enroll`. Injectable for tests.
-type remoteOperatorEnroller interface {
-	EnrollRemoteOperator(ctx context.Context, gatewayEndpoint, operatorCSR string, operatorKey *ecdsa.PrivateKey, cliCSR string, cliKey *ecdsa.PrivateKey, caFingerprint string) (auth.EnrollmentArtifacts, error)
-}
-
-// defaultRemoteOperatorEnroller builds the production enrollment client for
-// `security pki enroll`. The client uses plain HTTP (no mTLS) and performs no
-// OS trust installation or passkey registration — `security pki enroll` is a
-// headless operator-only enrollment path.
-func defaultRemoteOperatorEnroller(cfg *config.Config) remoteOperatorEnroller {
-	return auth.NewEnrollmentClient(cfg, nil)
-}
-
-func securityPKIEnrollCmd() *cobra.Command {
-	return securityPKIEnrollCmdWithConfig(loadConfig, defaultRemoteOperatorEnroller, newFileSvc)
-}
-
-func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, error), enrollerFactory func(*config.Config) remoteOperatorEnroller, fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
-	var outputDir string
-
-	cmd := &cobra.Command{
-		Use:   "enroll",
-		Short: "Enroll an operator with the Gateway via CSR",
-		Long:  `Generate a CSR and enroll with the Gateway to obtain Operator mTLS certificates.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			endpoint, _ := cmd.Flags().GetString("endpoint")
-			if endpoint == "" {
-				return fmt.Errorf("security: enroll: %w", constants.ErrEndpointRequired)
-			}
-
-			cfg, err := configLoader("")
-			if err != nil {
-				return fmt.Errorf("security: load config: %w", err)
-			}
-
-			fileSvc, err := fileSvcFactory("", slog.Default())
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
-			}
-			ctx := context.Background()
-
-			var pkiDir string
-			if outputDir != "" {
-				pkiDir = filepath.Join(outputDir, constants.RuntimeDirname, constants.PkiDirname)
-			} else {
-				pkiDir = fileSvc.Resolve(constants.PkiDirname)
-			}
-
-			cmd.Println("Generating CSR for enrollment...")
-			hostname, err := os.Hostname()
-			if err != nil {
-				return fmt.Errorf("security: get hostname: %w: %w", constants.ErrNetworkGetHostname, err)
-			}
-			opCSR, opKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
-			if err != nil {
-				return fmt.Errorf("security: generate CSR: %w", err)
-			}
-
-			// Append default HTTP port
-			gatewayEndpoint := fmt.Sprintf("%s:%d", endpoint, constants.Ports.OperatorHttp)
-			cmd.Printf("Enrolling with Gateway at %s...\n", gatewayEndpoint)
-			enroller := enrollerFactory(cfg)
-			// security pki enroll is a headless operator-only path: no CLI CSR,
-			// no OS trust installation, no passkey ceremony. The enrollment
-			// client validates the operator cert and (when present) the trust
-			// bundle / CA fingerprint pin.
-			artifacts, err := enroller.EnrollRemoteOperator(ctx, gatewayEndpoint, opCSR, opKey, "", nil, "")
-			if err != nil {
-				return fmt.Errorf("security: enroll: %w", err)
-			}
-
-			if artifacts.OperatorCertPEM == "" {
-				return fmt.Errorf("security: enroll: %w", constants.ErrMissingCertificate)
-			}
-
-			if outputDir == "" {
-				if err := fileSvc.MkdirAll(ctx, constants.PkiDirname, constants.PermDirPrivate); err != nil {
-					return fmt.Errorf("security: create PKI dir: %w: %w", constants.ErrDirCreateFailed, err)
-				}
-			} else {
-				if err := os.MkdirAll(pkiDir, constants.PermDirPrivate); err != nil {
-					return fmt.Errorf("security: create PKI dir: %w: %w", constants.ErrDirCreateFailed, err)
-				}
-			}
-
-			certPath := filepath.Join(pkiDir, constants.PkiFileOperatorCert)
-			keyPath := filepath.Join(pkiDir, constants.PkiFileOperatorKey)
-			chainPath := filepath.Join(pkiDir, constants.PkiFileOperatorChain)
-
-			if outputDir == "" {
-				certRel, err := fileSvc.RelFromAbs(certPath)
-				if err != nil {
-					return fmt.Errorf("security: save cert and key: %w: %w", constants.ErrCertSaveFailed, err)
-				}
-				keyRel, err := fileSvc.RelFromAbs(keyPath)
-				if err != nil {
-					return fmt.Errorf("security: save cert and key: %w: %w", constants.ErrCertSaveFailed, err)
-				}
-				if err := auth.SaveCertAndKey(fileSvc, artifacts.OperatorCertPEM, artifacts.OperatorCertChainPEM, opKey, certRel, keyRel); err != nil {
-					return fmt.Errorf("security: save cert and key: %w", err)
-				}
-			} else {
-				certBytes, keyBytes, err := certutil.EncodeCertAndKey(artifacts.OperatorCertPEM, artifacts.OperatorCertChainPEM, opKey)
-				if err != nil {
-					return fmt.Errorf("security: save cert and key: %w: %w", constants.ErrCertSaveFailed, err)
-				}
-				if err := os.WriteFile(keyPath, keyBytes, constants.PermFilePrivate); err != nil {
-					return fmt.Errorf("security: save key: %w: %w", constants.ErrCertSaveFailed, err)
-				}
-				if err := os.WriteFile(certPath, certBytes, constants.PermFilePrivate); err != nil {
-					return fmt.Errorf("security: save cert: %w: %w", constants.ErrCertSaveFailed, err)
-				}
-			}
-
-			if outputDir == "" {
-				chainRelPath := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorChain)
-				if err := fileSvc.WriteFile(ctx, chainRelPath, []byte(artifacts.OperatorCertChainPEM), constants.PermFilePrivate); err != nil {
-					return fmt.Errorf("security: save chain: %w: %w", constants.ErrChainSaveFailed, err)
-				}
-			} else {
-				if err := os.WriteFile(chainPath, []byte(artifacts.OperatorCertChainPEM), constants.PermFilePrivate); err != nil {
-					return fmt.Errorf("security: save chain: %w: %w", constants.ErrChainSaveFailed, err)
-				}
-			}
-
-			if artifacts.TrustBundlePEM != "" {
-				trustDir := filepath.Join(pkiDir, constants.PkiSubdirTrust)
-				if outputDir == "" {
-					trustRelDir := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust)
-					if err := fileSvc.MkdirAll(ctx, trustRelDir, constants.PermDirPrivate); err != nil {
-						return fmt.Errorf("security: create trust dir: %w: %w", constants.ErrDirCreateFailed, err)
-					}
-					bundleRelPath := filepath.Join(trustRelDir, constants.PkiFileGatewayBundle)
-					if err := fileSvc.WriteFile(ctx, bundleRelPath, []byte(artifacts.TrustBundlePEM), constants.PermFilePublic); err != nil {
-						return fmt.Errorf("security: save trust bundle: %w: %w", constants.ErrTrustSaveFailed, err)
-					}
-				} else {
-					if err := os.MkdirAll(trustDir, constants.PermDirPrivate); err != nil {
-						return fmt.Errorf("security: create trust dir: %w: %w", constants.ErrDirCreateFailed, err)
-					}
-					bundlePath := filepath.Join(trustDir, constants.PkiFileGatewayBundle)
-					if err := os.WriteFile(bundlePath, []byte(artifacts.TrustBundlePEM), constants.PermFilePublic); err != nil {
-						return fmt.Errorf("security: save trust bundle: %w: %w", constants.ErrTrustSaveFailed, err)
-					}
-				}
-			}
-
-			cmd.Printf("\nEnrollment complete\n")
-			cmd.Printf("Operator ID: %s\n", artifacts.OperatorID)
-			cmd.Printf("Operator Session ID: %s\n", artifacts.OperatorSessionID)
-			cmd.Printf("Certificate saved to: %s\n", certPath)
-			cmd.Printf("Key saved to: %s\n", keyPath)
-			if artifacts.TrustBundlePEM != "" {
-				cmd.Printf("Trust bundle saved to: %s\n", filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle))
-			}
-
-			return nil
-		},
-	}
-
-	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Output directory for certificates (default: project root)")
 
 	return cmd
 }

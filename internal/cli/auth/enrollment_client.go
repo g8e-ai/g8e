@@ -302,7 +302,7 @@ func (c *EnrollmentClient) Rotate(ctx context.Context, fileSvc fs.RuntimeFileSer
 
 // EnrollRemoteOperator performs remote operator/device enrollment
 // (POST /api/v1/auth/device/enroll over plain HTTP). This is the
-// headless path used by `security pki enroll`; it is NOT a local human
+// headless path used by `auth enroll operator`; it is NOT a local human
 // enrollment and must not trigger OS trust installation or passkey
 // registration.
 //
@@ -355,7 +355,7 @@ func (c *EnrollmentClient) EnrollRemoteOperator(ctx context.Context, gatewayEndp
 	// When a CLI CSR was supplied, validate the full local-CLI artifact set
 	// (session/user/cert/trust bundle/fingerprint/cert-key match). When the
 	// caller passed an empty CLI CSR (headless operator-only enrollment, e.g.
-	// `security pki enroll`), the gateway does not issue CLI credentials, so
+	// `auth enroll operator`), the gateway does not issue CLI credentials, so
 	// only the operator cert is required and the trust bundle/fingerprint pin
 	// are validated opportunistically when present.
 	if cliCSR != "" {

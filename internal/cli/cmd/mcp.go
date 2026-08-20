@@ -168,7 +168,7 @@ directly (e.g. from an IDE MCP config), credentials resolve in order:
 
 This command is a credential CONSUMER, not an enrollment UI. It does NOT enroll,
 open a browser, install OS trust, or run a passkey ceremony. If credentials are
-absent, run 'g8e auth enroll' or 'g8e mcp agent run' first to obtain them.
+absent, run 'g8e auth enroll user' or 'g8e mcp agent run' first to obtain them.
 
 Cert and key must be supplied as a pair per tier; supplying only one half fails closed.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -1434,7 +1434,7 @@ func launchAgentWithGovernance(agentID string, extraArgs []string, verify bool, 
 
 	// Use the shared interactive enrollment coordinator. mcp agent run is an
 	// interactive user-facing caller, so it uses the same trust and passkey
-	// policy as `auth enroll`. The coordinator inspects local state and
+	// policy as `auth enroll user`. The coordinator inspects local state and
 	// bootstraps, recovers, rotates, or reuses as needed. If a passkey
 	// already exists, the coordinator's passkey ceremony is still run (it
 	// is idempotent for an existing passkey); if no passkey exists, the

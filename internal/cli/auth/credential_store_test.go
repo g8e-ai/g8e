@@ -248,7 +248,7 @@ func TestCredentialStore_ClearRetainsTrustBundle(t *testing.T) {
 // bundle written by `gw start` (with no CLI identity artifacts present)
 // does not promote the local identity state from Absent to Partial. The
 // trust bundle is a shared gateway artifact (§4.3) and is not part of the
-// CLI identity set. Without this, `auth enroll` on a freshly-started but
+// CLI identity set. Without this, `auth enroll user` on a freshly-started but
 // unbootstrapped gateway would route to the recovery endpoint and receive
 // a 403 ("CLI recovery only available after bootstrap").
 func TestCredentialStore_InspectBundleOnlyIsAbsent(t *testing.T) {
