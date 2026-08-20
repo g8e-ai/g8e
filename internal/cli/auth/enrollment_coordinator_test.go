@@ -912,6 +912,7 @@ func TestEnroll_NoSystemTrust_SkipsInstaller(t *testing.T) {
 	gw.bootstrapStatus = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	gw.discoveryFingerprint = "test-live-fp"
 
 	result, err := coord.Enroll(context.Background(), EnrollmentOptions{NoSystemTrust: true})
 	require.NoError(t, err)
@@ -1226,6 +1227,7 @@ func TestEnroll_StaleAnchors_Confirmed_RemovesAndInstalls(t *testing.T) {
 	gw.bootstrapStatus = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	gw.discoveryFingerprint = "test-live-fp"
 	trust.staleAnchors = []platform.StaleAnchor{
 		{Fingerprint: "stale-fp-1", CommonName: constants.RootCACommonName, Handle: "/path/stale1"},
 		{Fingerprint: "stale-fp-2", CommonName: constants.RootCACommonName, Handle: "/path/stale2"},
@@ -1262,6 +1264,7 @@ func TestEnroll_StaleAnchors_Declined_AbortsBeforeInstall(t *testing.T) {
 	gw.bootstrapStatus = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	gw.discoveryFingerprint = "test-live-fp"
 	trust.staleAnchors = []platform.StaleAnchor{
 		{Fingerprint: "stale-fp-1", CommonName: constants.RootCACommonName, Handle: "/path/stale1"},
 	}
@@ -1286,6 +1289,7 @@ func TestEnroll_StaleAnchors_None_NoPrompt(t *testing.T) {
 	gw.bootstrapStatus = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	gw.discoveryFingerprint = "test-live-fp"
 	trust.staleAnchors = nil
 	// IsTrusted returns false (default), InstallRoot succeeds (default) → installed.
 
@@ -1313,6 +1317,7 @@ func TestEnroll_StaleAnchors_RemovalError_Aborts(t *testing.T) {
 	gw.bootstrapStatus = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	gw.discoveryFingerprint = "test-live-fp"
 	trust.staleAnchors = []platform.StaleAnchor{
 		{Fingerprint: "stale-fp-1", CommonName: constants.RootCACommonName, Handle: "/path/stale1"},
 	}
@@ -1338,6 +1343,7 @@ func TestEnroll_StaleAnchors_ListError_ProceedsAsBestEffort(t *testing.T) {
 	gw.bootstrapStatus = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	gw.discoveryFingerprint = "test-live-fp"
 	trust.staleErr = fmt.Errorf("enumeration failed")
 	// IsTrusted returns false (default), InstallRoot succeeds (default) → installed.
 
@@ -1366,6 +1372,7 @@ func TestEnroll_StaleAnchors_Unsupported_SkipsDetection(t *testing.T) {
 	gw.bootstrapStatus = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	gw.discoveryFingerprint = "test-live-fp"
 	trust.staleErr = constants.ErrSystemTrustUnsupported
 	// IsTrusted returns false (default), InstallRoot succeeds (default) → installed.
 
@@ -1539,25 +1546,19 @@ func TestEnroll_ReusedIdentity_DiscoveryUnreachable_WarnsAndProceeds(t *testing.
 }
 
 // TestEnroll_StaleAnchorNotDetectedWhenDiscoveryFails is the R5 regression
-// guard. On the pre-fix code, when discovery was unreachable on the reuse
-// path, ensureSystemTrust fell back to the local (possibly stale) trust
-// bundle fingerprint for ListStaleAnchors, so the old OS anchor matched
-// the "keep" fingerprint and was NOT reported as stale. EnsureSystemTrust
-// then reported "already trusted" with the stale fingerprint, and the
-// passkey ceremony proceeded against a root the browser did not trust.
-//
-// After R2, installSystemTrust surfaces a diagnosable R5 warning when
-// discovery is unreachable AND reuse is attempted, BEFORE bundle
-// resolution. This test asserts the warning IS printed — it would have
-// failed on the old ensureSystemTrust which did not print a warning in
-// the unreachable-reuse path.
+// guard. When discovery is unreachable on the reuse path, the coordinator
+// cannot obtain the live fingerprint, so cleanupStaleAnchors is skipped
+// (it cannot determine which anchors are stale without the live
+// fingerprint). installSystemTrust then surfaces a diagnosable R5 warning
+// so the user knows the local bundle may be stale. This test asserts the
+// warning IS printed and ListStaleAnchors is NOT called.
 func TestEnroll_StaleAnchorNotDetectedWhenDiscoveryFails(t *testing.T) {
 	t.Parallel()
 	coord, gw, _, trust, _, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
 
-	_, _, localFP, _ := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	_, _, _, _ = writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
 	// Discovery is unreachable — the coordinator cannot obtain the live
-	// fingerprint, so it falls back to the local bundle.
+	// fingerprint, so cleanupStaleAnchors is skipped.
 	gw.discoveryErr = constants.ErrServiceUnavailable
 
 	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
@@ -1568,13 +1569,11 @@ func TestEnroll_StaleAnchorNotDetectedWhenDiscoveryFails(t *testing.T) {
 	assert.True(t, recorder.contains("could not reach the gateway discovery endpoint"),
 		"R5 warning must be printed when discovery is unreachable on the reuse path")
 
-	// ListStaleAnchors is called with the LOCAL fingerprint (the only one
-	// available when discovery fails). This means a stale OS anchor
-	// matching the local fingerprint would NOT be detected — the R5
-	// warning is the user's only signal that something may be wrong.
-	assert.Equal(t, 1, trust.staleListCalls)
-	assert.Equal(t, localFP, trust.lastStaleFingerprint,
-		"ListStaleAnchors should receive the local fingerprint when discovery is unreachable")
+	// ListStaleAnchors is NOT called — without the live fingerprint,
+	// cleanupStaleAnchors cannot determine which anchors are stale. The
+	// R5 warning is the user's only signal that something may be wrong.
+	assert.Equal(t, 0, trust.staleListCalls,
+		"ListStaleAnchors should NOT be called when discovery is unreachable")
 
 	// Passkey should still run (best-effort, user may be intentionally offline).
 	assert.Equal(t, 1, passkey.calls)
@@ -1651,6 +1650,7 @@ func TestEnroll_NoSystemTrust_StillRunsStaleDetection(t *testing.T) {
 	gw.bootstrapStatus = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	gw.discoveryFingerprint = "test-live-fp"
 	trust.staleAnchors = []platform.StaleAnchor{
 		{Fingerprint: "stale-fp-1", CommonName: constants.RootCACommonName, Handle: "/path/stale1"},
 	}
@@ -1838,6 +1838,7 @@ func TestEnroll_NoBrowserRestartPrompt_WhenNoSystemTrustAndNoStaleAnchors(t *tes
 	gw.bootstrapStatus = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	gw.discoveryFingerprint = "test-live-fp"
 	trust.staleAnchors = nil // no stale anchors → browserRestartNeeded=false
 
 	continueCalled := false
@@ -1866,6 +1867,7 @@ func TestEnroll_BrowserRestartPrompt_WhenNoSystemTrustButStaleAnchorsRemoved(t *
 	gw.bootstrapStatus = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	gw.discoveryFingerprint = "test-live-fp"
 	trust.staleAnchors = []platform.StaleAnchor{
 		{Fingerprint: "stale-fp-1", CommonName: constants.RootCACommonName, Handle: "/path/stale1"},
 	}
