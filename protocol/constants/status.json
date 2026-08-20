@@ -128,6 +128,35 @@
         "_python_const": "MCP_RESOURCE_READ",
         "value": "MCP_RESOURCE_READ"
       },
+      "PLATFORM_ENROLLMENT_CREATE": {
+        "_go_const": "ActionTypePlatformEnrollmentCreate",
+        "_python_const": "PLATFORM_ENROLLMENT_CREATE",
+        "value": "PLATFORM_ENROLLMENT_CREATE"
+      },
+      "PLATFORM_ENROLLMENT_DECIDE": {
+        "_go_const": "ActionTypePlatformEnrollmentDecide",
+        "_mutation": true,
+        "_python_const": "PLATFORM_ENROLLMENT_DECIDE",
+        "value": "PLATFORM_ENROLLMENT_DECIDE"
+      },
+      "PLATFORM_ENROLLMENT_ISSUE": {
+        "_go_const": "ActionTypePlatformEnrollmentIssue",
+        "_mutation": true,
+        "_python_const": "PLATFORM_ENROLLMENT_ISSUE",
+        "value": "PLATFORM_ENROLLMENT_ISSUE"
+      },
+      "PLATFORM_ENROLLMENT_PERSIST_POLICY": {
+        "_go_const": "ActionTypePlatformEnrollmentPersistPolicy",
+        "_mutation": true,
+        "_python_const": "PLATFORM_ENROLLMENT_PERSIST_POLICY",
+        "value": "PLATFORM_ENROLLMENT_PERSIST_POLICY"
+      },
+      "PLATFORM_ENROLLMENT_CREATE_SESSION": {
+        "_go_const": "ActionTypePlatformEnrollmentCreateSession",
+        "_mutation": true,
+        "_python_const": "PLATFORM_ENROLLMENT_CREATE_SESSION",
+        "value": "PLATFORM_ENROLLMENT_CREATE_SESSION"
+      },
       "PORT_CHECK": {
         "_go_const": "ActionTypePortCheck",
         "_python_const": "PORT_CHECK",

@@ -20,6 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	govtypes "github.com/g8e-ai/g8e/internal/governance"
 	"github.com/g8e-ai/g8e/internal/services/system"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
@@ -431,6 +432,19 @@ func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payl
 	case constants.ActionTypeInvestigationCreate:
 		// No typed payload for investigation create, it uses raw bytes
 		return nil, nil
+
+	case constants.ActionTypePlatformEnrollmentCreate,
+		constants.ActionTypePlatformEnrollmentDecide,
+		constants.ActionTypePlatformEnrollmentIssue,
+		constants.ActionTypePlatformEnrollmentPersistPolicy,
+		constants.ActionTypePlatformEnrollmentCreateSession:
+		// All five platform enrollment actions share the same
+		// PlatformEnrollmentGovernancePayload proto. The action field
+		// inside the payload distinguishes them; L1 doctrine validates
+		// the payload shape and the handler layer enforces per-action
+		// semantics. CSR PEM, token hashes, and private keys are never
+		// placed in the audited envelope payload.
+		msg = &commonv1.PlatformEnrollmentGovernancePayload{}
 
 	default:
 		// Known action type without a typed proto decode case (e.g.

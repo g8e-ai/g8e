@@ -40,10 +40,15 @@ const (
 	ActionTypeMcpPromptGet        ActionType = "MCP_PROMPT_GET"
 	ActionTypeMcpPromptList       ActionType = "MCP_PROMPT_LIST"
 	ActionTypeMcpResourceList     ActionType = "MCP_RESOURCE_LIST"
-	ActionTypeMcpResourceRead     ActionType = "MCP_RESOURCE_READ"
-	ActionTypePortCheck           ActionType = "PORT_CHECK"
-	ActionTypeRestoreFile         ActionType = "RESTORE_FILE"
-	ActionTypeShutdown            ActionType = "SHUTDOWN"
+	ActionTypeMcpResourceRead                ActionType = "MCP_RESOURCE_READ"
+	ActionTypePlatformEnrollmentCreate        ActionType = "PLATFORM_ENROLLMENT_CREATE"
+	ActionTypePlatformEnrollmentDecide        ActionType = "PLATFORM_ENROLLMENT_DECIDE"
+	ActionTypePlatformEnrollmentIssue         ActionType = "PLATFORM_ENROLLMENT_ISSUE"
+	ActionTypePlatformEnrollmentPersistPolicy ActionType = "PLATFORM_ENROLLMENT_PERSIST_POLICY"
+	ActionTypePlatformEnrollmentCreateSession ActionType = "PLATFORM_ENROLLMENT_CREATE_SESSION"
+	ActionTypePortCheck                       ActionType = "PORT_CHECK"
+	ActionTypeRestoreFile                     ActionType = "RESTORE_FILE"
+	ActionTypeShutdown                        ActionType = "SHUTDOWN"
 )
 
 // AllActionTypes is the canonical slice of all valid action types.
@@ -68,6 +73,11 @@ var AllActionTypes = []ActionType{
 	ActionTypeMcpPromptList,
 	ActionTypeMcpResourceList,
 	ActionTypeMcpResourceRead,
+	ActionTypePlatformEnrollmentCreate,
+	ActionTypePlatformEnrollmentDecide,
+	ActionTypePlatformEnrollmentIssue,
+	ActionTypePlatformEnrollmentPersistPolicy,
+	ActionTypePlatformEnrollmentCreateSession,
 	ActionTypePortCheck,
 	ActionTypeRestoreFile,
 	ActionTypeShutdown,
@@ -82,6 +92,10 @@ func (a ActionType) IsMutation() bool {
 		ActionTypeExecuteBash,
 		ActionTypeFileEdit,
 		ActionTypeMcpCall,
+		ActionTypePlatformEnrollmentDecide,
+		ActionTypePlatformEnrollmentIssue,
+		ActionTypePlatformEnrollmentPersistPolicy,
+		ActionTypePlatformEnrollmentCreateSession,
 		ActionTypeRestoreFile,
 		ActionTypeShutdown:
 		return true

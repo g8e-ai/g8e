@@ -82,6 +82,11 @@ type OperatorPubSubService struct {
 
 	// MCP gateway for protocol translation egress
 	mcpGateway *mcp.GatewayService
+
+	// platformEnrollment dispatches the five platform enrollment
+	// governance actions. Nil in outbound (operator) mode; the handlers
+	// are not registered when this is nil.
+	platformEnrollment *PlatformEnrollmentHandler
 }
 
 // GovernanceDeps holds the governance dependencies required for transaction
@@ -176,6 +181,11 @@ type GatewayCommandServiceConfig struct {
 	L2ConsensusDeliberator  mcp.L2ConsensusDeliberator
 	EnvProcAdapter          *GatewayEnvProcAdapter
 	SessionValidatorAdapter *GatewaySessionValidatorAdapter
+	// PlatformEnrollmentDeps provides the gateway-side services required
+	// by the five platform enrollment governance handlers. Required in
+	// gateway mode; nil in outbound (operator) mode, where the handlers
+	// are never registered.
+	PlatformEnrollmentDeps *PlatformEnrollmentDeps
 }
 
 // NewOperatorPubSubService creates the dispatcher and all first-class sub-services using the provided config.
@@ -282,6 +292,15 @@ func NewGatewayOperatorPubSubService(c GatewayCommandServiceConfig) (*OperatorPu
 	}
 
 	rs.mcpGateway = c.MCPGateway
+
+	// Wire the platform enrollment handler when gateway-side dependencies
+	// are provided. The handler is constructed after the base service so
+	// it can share the logger. When PlatformEnrollmentDeps is nil the
+	// handlers are not registered and dispatch fails closed with
+	// ErrTxUnknownActionType.
+	if c.PlatformEnrollmentDeps != nil {
+		rs.platformEnrollment = newPlatformEnrollmentHandler(*c.PlatformEnrollmentDeps, c.Logger)
+	}
 
 	// Wire the MCP gateway's runtime governance dependencies. This is the single
 	// owner of runtime-phase wiring; config-phase fields (A2A downstream and the

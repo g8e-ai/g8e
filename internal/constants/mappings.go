@@ -27,7 +27,12 @@ var eventToAction = map[EventType]ActionType{
 	Event.Operator.Mcp.CallRequested:          ActionTypeMcpCall,
 	Event.Operator.A2a.CallRequested:          ActionTypeA2aCall,
 	Event.Operator.PortCheck.Requested:        ActionTypePortCheck,
-	EventAppInvestigationCreated:              ActionTypeInvestigationCreate,
+	EventAppInvestigationCreated:                              ActionTypeInvestigationCreate,
+	EventPlatformEnrollmentCreateRequested:                    ActionTypePlatformEnrollmentCreate,
+	EventPlatformEnrollmentDecideRequested:                    ActionTypePlatformEnrollmentDecide,
+	EventPlatformEnrollmentIssueRequested:                     ActionTypePlatformEnrollmentIssue,
+	EventPlatformEnrollmentPersistPolicyRequested:             ActionTypePlatformEnrollmentPersistPolicy,
+	EventPlatformEnrollmentCreateSessionRequested:             ActionTypePlatformEnrollmentCreateSession,
 }
 
 var actionToEvent map[ActionType]EventType

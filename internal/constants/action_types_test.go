@@ -22,6 +22,10 @@ func TestActionTypeIsMutation_MutationTypesReturnTrue(t *testing.T) {
 		ActionTypeExecuteBash,
 		ActionTypeFileEdit,
 		ActionTypeMcpCall,
+		ActionTypePlatformEnrollmentDecide,
+		ActionTypePlatformEnrollmentIssue,
+		ActionTypePlatformEnrollmentPersistPolicy,
+		ActionTypePlatformEnrollmentCreateSession,
 		ActionTypeRestoreFile,
 		ActionTypeShutdown,
 	}
@@ -53,6 +57,7 @@ func TestActionTypeIsMutation_ReadTypesReturnFalse(t *testing.T) {
 		ActionTypeMcpPromptList,
 		ActionTypeMcpResourceList,
 		ActionTypeMcpResourceRead,
+		ActionTypePlatformEnrollmentCreate,
 		ActionTypePortCheck,
 	}
 
@@ -101,6 +106,11 @@ func TestAllActionTypes_ContainsAllConstants(t *testing.T) {
 		ActionTypeMcpPromptList,
 		ActionTypeMcpResourceList,
 		ActionTypeMcpResourceRead,
+		ActionTypePlatformEnrollmentCreate,
+		ActionTypePlatformEnrollmentDecide,
+		ActionTypePlatformEnrollmentIssue,
+		ActionTypePlatformEnrollmentPersistPolicy,
+		ActionTypePlatformEnrollmentCreateSession,
 		ActionTypePortCheck,
 		ActionTypeRestoreFile,
 		ActionTypeShutdown,

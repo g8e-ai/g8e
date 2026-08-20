@@ -273,6 +273,18 @@ const EventPlatformTelemetryErrorLogged EventType = "g8e.v1.platform.telemetry.e
 const EventPlatformTelemetryAuditLogged EventType = "g8e.v1.platform.telemetry.audit.logged"
 const EventPlatformConsoleLogEntryReceived EventType = "g8e.v1.platform.console.log.entry.received"
 const EventPlatformConsoleLogConnectedConfirmed EventType = "g8e.v1.platform.console.log.connected.confirmed"
+
+// Platform enrollment governance events. Each event maps 1:1 to a
+// PlatformEnrollmentGovernanceAction via eventToAction in mappings.go.
+// The five actions cover the full control-plane lifecycle: create
+// (write pending request), decide (approve/deny), issue (sign
+// certificates), persist_policy (write app policy with ownership),
+// and create_session (write operator/CLI sessions).
+const EventPlatformEnrollmentCreateRequested EventType = "g8e.v1.platform.enrollment.create.requested"
+const EventPlatformEnrollmentDecideRequested EventType = "g8e.v1.platform.enrollment.decide.requested"
+const EventPlatformEnrollmentIssueRequested EventType = "g8e.v1.platform.enrollment.issue.requested"
+const EventPlatformEnrollmentPersistPolicyRequested EventType = "g8e.v1.platform.enrollment.persist_policy.requested"
+const EventPlatformEnrollmentCreateSessionRequested EventType = "g8e.v1.platform.enrollment.create_session.requested"
 const EventSourceUserChat EventType = "g8e.v1.source.user.chat"
 const EventSourceUserTerminal EventType = "g8e.v1.source.user.terminal"
 const EventSourceAiPrimary EventType = "g8e.v1.source.ai.primary"
