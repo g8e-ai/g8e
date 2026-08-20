@@ -25,6 +25,16 @@ export const g8edEnvConfig = {
     G8E_SESSION_ENCRYPTION_KEY: process.env.G8E_SESSION_ENCRYPTION_KEY || null,
     g8eg_VOLUME_PATH: process.env.g8eg_VOLUME_PATH || '/g8eg',
 
+    // App Enrollment (server-to-server mTLS identity)
+    // The gateway's plain-HTTP bootstrap surface for AppEnrollmentService
+    // (CA bundle fetch + /api/v1/pki/apps/enroll). Required — fail closed
+    // if unset. Compose sets http://g8eg:8080.
+    G8E_GATEWAY_HTTP_URL: process.env.G8E_GATEWAY_HTTP_URL || null,
+    // The dashboard's own runtime directory. The enrollment service writes
+    // pki/issued/apps/g8ed.crt and friends under here. Compose sets
+    // /root/.g8e (the g8e-dashboard-data volume mount root).
+    G8E_RUNTIME_DIR: process.env.G8E_RUNTIME_DIR || null,
+
     // Network Configuration
     g8ed_HOST: process.env.g8ed_HOST || '0.0.0.0',
     g8ed_PORT: parseInt(process.env.g8ed_PORT || '3000', 10),

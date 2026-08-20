@@ -115,6 +115,52 @@ export function createApp({ gatewayOrigin }) {
     return app;
 }
 
+/**
+ * Run the startup enrollment phase: resolve the dashboard's mTLS app
+ * identity before the Express server listens. Try to load an existing
+ * valid cert from disk first; if none is available (missing, expired, or
+ * near-expiry), enroll with the gateway to obtain a fresh one.
+ *
+ * Fail-closed: on an unexpected (non-ConfigurationError) load failure or
+ * on enrollment failure, the callback is invoked with the error so the
+ * caller can `process.exit(1)`. On success, the resolved `AppIdentity` is
+ * stored via `app-identity.js` and returned.
+ *
+ * Extracted from the entrypoint block so the startup phase is unit-testable
+ * without spawning a process: tests construct a mock `AppEnrollmentService`
+ * and assert the load-then-enroll decision and the fail-closed exit paths.
+ *
+ * @param {Object} deps
+ * @param {import('./services/infra/app-enrollment-service.js').AppEnrollmentService} deps.enrollmentService
+ * @param {function(Error): void} deps.onFatalError - Invoked when the caller
+ *   should exit(1). Decoupled from `process.exit` so tests can assert the
+ *   fail-closed behavior without terminating the test process.
+ * @returns {Promise<import('./services/infra/app-enrollment-service.js').AppIdentity | null>}
+ *   The resolved identity, or null if `onFatalError` was invoked.
+ */
+export async function runStartupEnrollment({ enrollmentService, onFatalError }) {
+    const { ConfigurationError } = await import('./services/infra/app-enrollment-service.js');
+    const { setAppIdentity } = await import('./services/infra/app-identity.js');
+
+    let appIdentity;
+    try {
+        appIdentity = await enrollmentService.loadIdentity();
+    } catch (err) {
+        if (!(err instanceof ConfigurationError)) {
+            onFatalError(err);
+            return null;
+        }
+        try {
+            appIdentity = await enrollmentService.enroll();
+        } catch (enrollErr) {
+            onFatalError(enrollErr);
+            return null;
+        }
+    }
+    setAppIdentity(appIdentity);
+    return appIdentity;
+}
+
 const isEntryPoint = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isEntryPoint) {
     const gatewayOrigin = process.env.G8E_GATEWAY_URL;
@@ -123,6 +169,28 @@ if (isEntryPoint) {
         process.exit(1);
     }
     const PORT = parseInt(process.env.PORT || '3000', 10);
+
+    // -- Startup enrollment phase --
+    // Resolve the dashboard's mTLS app identity before listening. See
+    // `runStartupEnrollment` for the load-then-enroll decision and the
+    // fail-closed exit paths. The stored identity is consumed by future
+    // backend service wiring (g8eg mTLS clients).
+    const { AppEnrollmentService } = await import('./services/infra/app-enrollment-service.js');
+    const enrollmentService = new AppEnrollmentService();
+    const appIdentity = await runStartupEnrollment({
+        enrollmentService,
+        onFatalError: (err) => {
+            console.error(`[g8ed] AppEnrollmentService: ${err.message}`);
+            process.exit(1);
+        },
+    });
+    if (appIdentity === null) {
+        // onFatalError already called process.exit(1); this is unreachable
+        // in production but keeps static analysis happy in tests that stub
+        // onFatalError without exiting.
+        throw new Error('unreachable: runStartupEnrollment returned null without exiting');
+    }
+
     const app = createApp({ gatewayOrigin });
     app.listen(PORT, () => {
         console.log(`g8ed serving on http://localhost:${PORT} (gateway: ${gatewayOrigin})`);

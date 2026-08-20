@@ -16,6 +16,8 @@ volumes:
     driver: local
   g8e-ensemble-data:
     driver: local
+  g8e-dashboard-data:
+    driver: local
 
 services:
   g8e-gateway:
@@ -155,6 +157,15 @@ services:
     depends_on:
       g8e-gateway:
         condition: service_healthy
+    volumes:
+      # The dashboard has its own runtime volume. It self-enrolls at startup
+      # via the gateway's public PKI app enrollment endpoint (same contract
+      # the ensemble uses) and stores its enrolled cert/key/trust-bundle in
+      # its own runtime tree. No gateway volume is mounted — the dashboard
+      # is a proper enrolled app, not a volume-mount shortcut. The browser
+      # still authenticates via WebAuthn passkeys; this credential is for
+      # the container's server-to-server mTLS calls.
+      - g8e-dashboard-data:/root/.g8e
     environment:
       - GATEWAY_HEALTH_URL=http://g8eg:8080
       - GATEWAY_HEALTH_PATH=/api/v1/health
@@ -163,6 +174,15 @@ services:
       # internal service name). No fallback — the SPA host fails closed if
       # this is unset.
       - G8E_GATEWAY_URL=https://localhost:${G8E_HTTPS_PORT:-8443}
+      # The gateway's plain-HTTP bootstrap surface for app enrollment and CA
+      # bundle fetch. The AppEnrollmentService reads this at startup to
+      # self-enroll before the Express server listens. Uses the gateway's
+      # docker network alias on the plain-HTTP port (same surface as
+      # GATEWAY_HEALTH_URL). No fallback — fail closed if unset.
+      - G8E_GATEWAY_HTTP_URL=http://g8eg:8080
+      # The dashboard's own runtime directory inside its own volume. The
+      # enrollment service writes pki/issued/apps/g8ed.crt and friends here.
+      - G8E_RUNTIME_DIR=/root/.g8e
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
       interval: 10s

@@ -32,7 +32,7 @@ export default defineConfig({
         provider: 'v8',
         reporter: ['text', 'html', 'lcov'],
         reportsDirectory: 'coverage',
-        include: ['public/js/**/*.js'],
+        include: ['public/js/**/*.js', 'services/**/*.js'],
         exclude: [
           'node_modules/',
           'test/',

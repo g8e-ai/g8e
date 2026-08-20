@@ -25,14 +25,20 @@ class g8egPubSubClient {
      * @param {object} config
      * @param {string} config.pubsubUrl - WSS URL for pub/sub
      * @param {string} [config.caCertPath] - Path to CA certificate for WSS connections
+     * @param {string} [config.clientCertPath] - Path to the mTLS client cert (PEM). When
+     *   provided alongside `clientKeyPath`, the `ws` library presents the enrolled
+     *   app cert to the gateway during the WSS handshake.
+     * @param {string} [config.clientKeyPath] - Path to the mTLS client private key (PEM).
      * @param {string} [config.internalAuthToken] - Shared secret for g8eg authentication
      */
-    constructor({ pubsubUrl, caCertPath, internalAuthToken = null } = {}) {
+    constructor({ pubsubUrl, caCertPath, clientCertPath = null, clientKeyPath = null, internalAuthToken = null } = {}) {
         if (!pubsubUrl) {
             throw new Error('g8egPubSubClient: pubsubUrl is required');
         }
         this.pubsubUrl = pubsubUrl.replace(/\/$/, '');
         this.caCertPath = caCertPath || null;
+        this.clientCertPath = clientCertPath || null;
+        this.clientKeyPath = clientKeyPath || null;
         this.internalAuthToken = internalAuthToken;
         this._terminated = false;
         this._ws = null;
@@ -41,11 +47,28 @@ class g8egPubSubClient {
         this._pmessageHandlers = [];
     }
 
+    /**
+     * Build the `ws` TLS options from the configured cert/key/ca paths.
+     *
+     * The `ws` library accepts `cert`, `key`, and `ca` as direct TLS options
+     * (file contents, not paths). When mTLS cert/key are provided and present
+     * on disk, both are read and returned so the dashboard presents its
+     * enrolled app cert. The CA bundle is included when present so the gateway
+     * cert is verified. Returns `{}` when no TLS material is configured
+     * (non-mTLS deployment falls back to the internal auth token header).
+     *
+     * @returns {object}
+     */
     _buildTLSOptions() {
-        if (this.caCertPath && existsSync(this.caCertPath)) {
-            return { ca: readFileSync(this.caCertPath) };
+        const opts = {};
+        if (this.clientCertPath && this.clientKeyPath && existsSync(this.clientCertPath) && existsSync(this.clientKeyPath)) {
+            opts.cert = readFileSync(this.clientCertPath);
+            opts.key = readFileSync(this.clientKeyPath);
         }
-        return {};
+        if (this.caCertPath && existsSync(this.caCertPath)) {
+            opts.ca = readFileSync(this.caCertPath);
+        }
+        return opts;
     }
 
     // =========================================================================
@@ -157,6 +180,8 @@ class g8egPubSubClient {
         return new g8egPubSubClient({
             pubsubUrl: this.pubsubUrl,
             caCertPath: this.caCertPath,
+            clientCertPath: this.clientCertPath,
+            clientKeyPath: this.clientKeyPath,
             internalAuthToken: this.internalAuthToken,
         });
     }

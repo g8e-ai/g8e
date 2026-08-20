@@ -13,6 +13,8 @@
  *   DB operations are never routed over WebSocket.
  */
 
+import { readFileSync, existsSync } from 'node:fs';
+import { Agent } from 'undici';
 import { logger } from '../../utils/logger.js';
 import { g8eg_HTTP_TIMEOUT_MS } from '../../constants/http_client.js';
 import { HTTP_INTERNAL_AUTH_HEADER, HTTP_CONTENT_TYPE_HEADER } from '../../constants/headers.js';
@@ -31,8 +33,16 @@ class g8egHttpClient {
      * @param {string} config.listenUrl - Base URL of g8eg (e.g. $G8E_INTERNAL_HTTP_URL)
      * @param {string} [config.component] - Client component name for log prefixes
      * @param {string} [config.internalAuthToken] - Shared secret for g8eg authentication
+     * @param {string} [config.clientCertPath] - Path to the mTLS client cert (PEM). When
+     *   provided alongside `clientKeyPath`, an undici `Agent` is constructed with
+     *   `connect: { cert, key, ca }` and passed as the `dispatcher` option on each
+     *   `fetch` call so the dashboard presents its enrolled app cert and verifies the
+     *   gateway's CA. The internal auth token header is still sent when set (coexistence).
+     * @param {string} [config.clientKeyPath] - Path to the mTLS client private key (PEM).
+     * @param {string} [config.caCertPath] - Path to the gateway CA bundle (PEM) for
+     *   verifying the gateway's presented cert.
      */
-    constructor({ listenUrl, component = 'g8eg-HTTP', internalAuthToken = null } = {}) {
+    constructor({ listenUrl, component = 'g8eg-HTTP', internalAuthToken = null, clientCertPath = null, clientKeyPath = null, caCertPath = null } = {}) {
         if (!listenUrl) {
             throw new Error('g8egHttpClient: listenUrl is required');
         }
@@ -40,6 +50,35 @@ class g8egHttpClient {
         this.component = component;
         this.internalAuthToken = internalAuthToken;
         this._terminated = false;
+        this._dispatcher = this._buildDispatcher(clientCertPath, clientKeyPath, caCertPath);
+    }
+
+    /**
+     * Build an undici `Agent` dispatcher for mTLS when both cert and key paths
+     * are provided and exist on disk. Returns `null` when mTLS config is absent
+     * (non-mTLS deployment falls back to plain HTTP + internal auth token).
+     *
+     * @param {string|null} certPath
+     * @param {string|null} keyPath
+     * @param {string|null} caPath
+     * @returns {import('undici').Agent | null}
+     */
+    _buildDispatcher(certPath, keyPath, caPath) {
+        if (!certPath || !keyPath) {
+            return null;
+        }
+        if (!existsSync(certPath) || !existsSync(keyPath)) {
+            logger.warn(`[${this.component}] mTLS cert/key not found on disk (cert=${certPath}, key=${keyPath}); falling back to non-mTLS`);
+            return null;
+        }
+        const connect = {
+            cert: readFileSync(certPath, 'utf8'),
+            key: readFileSync(keyPath, 'utf8'),
+        };
+        if (caPath && existsSync(caPath)) {
+            connect.ca = readFileSync(caPath, 'utf8');
+        }
+        return new Agent({ connect });
     }
 
     _headers() {
@@ -75,6 +114,9 @@ class g8egHttpClient {
                 signal: timeoutController.signal,
                 headers: { ...this._headers(), ...options.headers },
             };
+            if (this._dispatcher) {
+                fetchOptions.dispatcher = this._dispatcher;
+            }
 
             const res = await fetch(url, fetchOptions);
             clearTimeout(timeoutId);
