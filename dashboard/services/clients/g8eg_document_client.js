@@ -2,13 +2,13 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 /**
- * g8edBDocumentClient — g8edB Document Store HTTP client.
+ * g8egDocumentClient — g8eg Document Store HTTP client.
  * 
- * Purpose-built client for g8edB document store operations (/db/...).
+ * Purpose-built client for g8eg document store operations (/db/...).
  * Mirrors VSE's DBClient (components/vse/app/db/client.py) in scope
  * and responsibility — document CRUD only, no KV, no pub/sub.
  * 
- * g8edB endpoints:
+ * g8eg endpoints:
  *   GET    /db/{collection}/{id}       - get document
  *   PUT    /db/{collection}/{id}       - set (create/replace) document
  *   PATCH  /db/{collection}/{id}       - update (merge) document
@@ -17,13 +17,13 @@
  */
 
 import { randomUUID } from 'crypto';
-import { g8edBHttpClient, g8edBHttpError } from './vsodb_http_client.js';
+import { g8egHttpClient, g8egHttpError } from './g8eg_http_client.js';
 import { ApiPaths } from '../../constants/api_paths.js';
 import { VSOBaseModel } from '../../models/base.js';
 import { logger } from '../../utils/logger.js';
 import { nowISOString } from '../../utils/timestamp.js';
 
-const LOG_PREFIX = '[g8edB-DOC]';
+const LOG_PREFIX = '[g8eg-DOC]';
 const CLIENT_TERMINATED_ERROR = 'Client terminated';
 
 const FieldOp = {
@@ -34,7 +34,7 @@ const FieldOp = {
     SERVER_TIMESTAMP: '__SERVER_TIMESTAMP__',
 };
 
-class g8edBFieldValue {
+class g8egFieldValue {
     static serverTimestamp() {
         return nowISOString();
     }
@@ -62,20 +62,20 @@ function isFieldValueOp(val) {
     return val && typeof val === 'object' && '__op' in val;
 }
 
-class g8edBDocumentClient {
-    static FieldValue = g8edBFieldValue;
+class g8egDocumentClient {
+    static FieldValue = g8egFieldValue;
 
     /**
      * @param {object} config
-     * @param {string} config.listenUrl - Base URL of g8edB (e.g. $G8E_INTERNAL_HTTP_URL)
-     * @param {string} [config.internalAuthToken] - Shared secret for g8edB authentication
+     * @param {string} config.listenUrl - Base URL of g8eg (e.g. $G8E_INTERNAL_HTTP_URL)
+     * @param {string} [config.internalAuthToken] - Shared secret for g8eg authentication
      */
     constructor({ listenUrl, internalAuthToken = null } = {}) {
-        this._http = new g8edBHttpClient({ listenUrl, component: 'g8edB-DOC', internalAuthToken });
+        this._http = new g8egHttpClient({ listenUrl, component: 'g8eg-DOC', internalAuthToken });
     }
 
     get FieldValue() {
-        return g8edBDocumentClient.FieldValue;
+        return g8egDocumentClient.FieldValue;
     }
 
     // =========================================================================
@@ -89,7 +89,7 @@ class g8edBDocumentClient {
             const data = await this._http.get(ApiPaths.data.document(collection, documentId));
             return { success: true, data, error: null };
         } catch (error) {
-            if (error instanceof g8edBHttpError && error.status === 404) {
+            if (error instanceof g8egHttpError && error.status === 404) {
                 return { success: true, data: null, error: 'Document not found' };
             }
             logger.error(`${LOG_PREFIX} getDocument failed: ${error.message}`);
@@ -180,7 +180,7 @@ class g8edBDocumentClient {
             await this._http.delete(ApiPaths.data.document(collection, documentId));
             return { success: true, notFound: false, error: null };
         } catch (error) {
-            const notFound = error instanceof g8edBHttpError && error.status === 404;
+            const notFound = error instanceof g8egHttpError && error.status === 404;
             if (!notFound) {
                 logger.error(`${LOG_PREFIX} deleteDocument failed: ${error.message}`);
             }
@@ -257,4 +257,4 @@ class g8edBDocumentClient {
     }
 }
 
-export { g8edBDocumentClient, g8edBFieldValue };
+export { g8egDocumentClient, g8egFieldValue };

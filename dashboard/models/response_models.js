@@ -204,7 +204,7 @@ export class MetricsHealthResponse extends VSOBaseModel {
         success:   { type: F.boolean, required: true },
         status:    { type: F.string,  required: true },
         service:   { type: F.string,  required: true },
-        g8edb:     { type: F.object,  default: () => ({}) },
+        g8eg:     { type: F.object,  default: () => ({}) },
         timestamp: { type: F.date,    default: () => now() },
         error:     { type: F.string,  default: null },
     };
@@ -593,7 +593,7 @@ export class RealTimeMetricsResponse extends VSOBaseModel {
         success: { type: F.boolean, required: true },
         message: { type: F.string,  default: null },
         timestamp: { type: F.date,   required: true },
-        g8edb: { type: F.object,  required: true },
+        g8eg: { type: F.object,  required: true },
         cache: { type: F.object,  required: true },
     };
 }
@@ -751,7 +751,7 @@ export class InternalHealthResponse extends VSOBaseModel {
     static fields = {
         success: { type: F.boolean, required: true },
         message: { type: F.string,  required: true },
-        g8edb_status: { type: F.string,  default: 'unknown' },
+        g8eg_status: { type: F.string,  default: 'unknown' },
         vse_status: { type: F.string,  default: 'unknown' },
         vsa_status: { type: F.string,  default: 'unknown' },
         uptime_seconds: { type: F.number,  default: 0 },

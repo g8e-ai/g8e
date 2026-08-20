@@ -65,8 +65,8 @@ export const ContentType = Object.freeze({
 // Certificate Paths
 // ---------------------------------------------------------------------------
 export const CLIENT_CERT_VALIDITY_DAYS = 365;
-export const DEFAULT_CERT_DIR = '/g8edb/.g8e/pki/issued/hub';
-export const DEFAULT_SSL_DIR = '/g8edb/.g8e/pki';
+export const DEFAULT_CERT_DIR = '/g8eg/.g8e/pki/issued/hub';
+export const DEFAULT_SSL_DIR = '/g8eg/.g8e/pki';
 export const CERT_SUBJECT_ORG = 'g8e Operator';
 export const CERT_SUBJECT_COUNTRY = 'US';
 export const CRL_ISSUER = 'g8e Operator CA';

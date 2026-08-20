@@ -24,7 +24,7 @@ export class PubSubSubscribeMessage extends VSOBaseModel {
 
 // ---------------------------------------------------------------------------
 // PubSubPublishMessage  (publish wire message — data is a plain object, serialized
-// as json.RawMessage by the g8edB broker; see components/vsa/services/listen/listen_pubsub.go)
+// as json.RawMessage by the g8eg broker; see components/vsa/services/listen/listen_pubsub.go)
 // ---------------------------------------------------------------------------
 
 export class PubSubPublishMessage extends VSOBaseModel {
@@ -42,7 +42,7 @@ export class PubSubPublishMessage extends VSOBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// PubSubInboundMessage  (inbound message event from g8edB WebSocket)
+// PubSubInboundMessage  (inbound message event from g8eg WebSocket)
 // ---------------------------------------------------------------------------
 
 export class PubSubInboundMessage extends VSOBaseModel {
@@ -60,7 +60,7 @@ export class PubSubInboundMessage extends VSOBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// PubSubInboundPMessage  (inbound pmessage event from g8edB WebSocket)
+// PubSubInboundPMessage  (inbound pmessage event from g8eg WebSocket)
 // ---------------------------------------------------------------------------
 
 export class PubSubInboundPMessage extends VSOBaseModel {

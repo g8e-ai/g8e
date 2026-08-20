@@ -385,16 +385,16 @@
             banner.className = 'console-health-banner ' + (healthy ? 'healthy' : 'degraded');
             icon.textContent = healthy ? 'check_circle' : 'warning';
 
-            const g8edb = system.g8edb?.status === 'healthy'
-                ? `g8edB ${system.g8edb.latencyMs}ms`
-                : `g8edB ${system.g8edb?.status || 'unknown'}`;
+            const g8eg = system.g8eg?.status === 'healthy'
+                ? `g8eg ${system.g8eg.latencyMs}ms`
+                : `g8eg ${system.g8eg?.status || 'unknown'}`;
             const db = system.db?.status === 'healthy'
                 ? `DB ${system.db.latencyMs}ms`
                 : `DB ${system.db?.status || 'unknown'}`;
 
             text.textContent = healthy
-                ? `All systems healthy — ${g8edb} | ${db}`
-                : `System degraded — ${g8edb} | ${db}`;
+                ? `All systems healthy — ${g8eg} | ${db}`
+                : `System degraded — ${g8eg} | ${db}`;
         }
 
         function renderStats(data) {

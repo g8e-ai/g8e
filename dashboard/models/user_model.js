@@ -4,7 +4,7 @@
 /**
  * User Domain Model
  *
- * Pure data class for user documents stored in g8edB document store + g8edB KV cache.
+ * Pure data class for user documents stored in g8eg document store + g8eg KV cache.
  * All business logic lives in UserService (services/platform/user_service.js).
  */
 
@@ -27,7 +27,7 @@ export class PasskeyCredential extends VSOBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// UserDocument  (user record stored in g8edB document store + g8edB KV cache)
+// UserDocument  (user record stored in g8eg document store + g8eg KV cache)
 // ---------------------------------------------------------------------------
 
 export class UserDocument extends VSOIdentifiableModel {

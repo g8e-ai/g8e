@@ -6,7 +6,7 @@ import { ApiKeyStatus, AuthMethod, DeviceLinkStatus } from '../constants/auth.js
 import { SessionType } from '../constants/session.js';
 
 // ---------------------------------------------------------------------------
-// AuthAdminAuditEntry  (auth admin access audit record stored in g8edB)
+// AuthAdminAuditEntry  (auth admin access audit record stored in g8eg)
 // ---------------------------------------------------------------------------
 
 export class AuthAdminAuditEntry extends VSOIdentifiableModel {
@@ -26,7 +26,7 @@ export class AuthAdminAuditEntry extends VSOIdentifiableModel {
 }
 
 // ---------------------------------------------------------------------------
-// DownloadTokenData  (one-time download token payload stored in g8edB KV)
+// DownloadTokenData  (one-time download token payload stored in g8eg KV)
 // ---------------------------------------------------------------------------
 
 export class DownloadTokenData extends VSOBaseModel {
@@ -42,7 +42,7 @@ export class DownloadTokenData extends VSOBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// DownloadAuditEntry  (operator binary download token audit record stored in g8edB)
+// DownloadAuditEntry  (operator binary download token audit record stored in g8eg)
 // ---------------------------------------------------------------------------
 
 export class DownloadAuditEntry extends VSOBaseModel {
@@ -71,7 +71,7 @@ export class LoginAttemptEntry extends VSOBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// AccountLockData  (persisted to KV + g8edB document store on account lockout)
+// AccountLockData  (persisted to KV + g8eg document store on account lockout)
 // ---------------------------------------------------------------------------
 
 export class AccountLockData extends VSOIdentifiableModel {
@@ -109,7 +109,7 @@ export class IpTrackEntry extends VSOBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// LoginAuditEntry  (login audit log record stored in g8edB)
+// LoginAuditEntry  (login audit log record stored in g8eg)
 // ---------------------------------------------------------------------------
 
 export class LoginAuditEntry extends VSOIdentifiableModel {
@@ -126,7 +126,7 @@ export class LoginAuditEntry extends VSOIdentifiableModel {
 }
 
 // ---------------------------------------------------------------------------
-// AuthAuditEntry  (operator auth audit log record stored in g8edB)
+// AuthAuditEntry  (operator auth audit log record stored in g8eg)
 // ---------------------------------------------------------------------------
 
 export class AuthAuditEntry extends VSOIdentifiableModel {
@@ -144,7 +144,7 @@ export class AuthAuditEntry extends VSOIdentifiableModel {
 }
 
 // ---------------------------------------------------------------------------
-// ApiKeyDocument  (API key record stored in g8edB document store + g8edB KV)
+// ApiKeyDocument  (API key record stored in g8eg document store + g8eg KV)
 // ---------------------------------------------------------------------------
 
 export class ApiKeyDocument extends VSOIdentifiableModel {
@@ -245,7 +245,7 @@ export class DeviceLinkClaim extends VSOBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// DeviceLinkData  (device link record stored in g8edB KV)
+// DeviceLinkData  (device link record stored in g8eg KV)
 // ---------------------------------------------------------------------------
 
 export class DeviceLinkData extends VSOBaseModel {

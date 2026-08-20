@@ -10,9 +10,9 @@ import { VSOIdentifiableModel, F, now } from './base.js';
  * one or more operator sessions.
  *
  * Document identity: id === web_session_id (natural key — one record per web session).
- * Stored in the bound_sessions collection in g8edB document store.
+ * Stored in the bound_sessions collection in g8eg document store.
  *
- * The authoritative bind table is the g8edB KV store (fast lookup path):
+ * The authoritative bind table is the g8eg KV store (fast lookup path):
  *   sessionBindOperators(operatorSessionId) → webSessionId  (STRING)
  *   sessionWebBind(webSessionId)            → {operatorSessionId, ...}  (SET)
  *

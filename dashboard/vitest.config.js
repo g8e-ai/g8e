@@ -20,7 +20,7 @@ export default defineConfig({
       environment: 'node',
   
       setupFiles: ['./test/setup.js'],
-      // Run tests sequentially to avoid g8edB KV flushdb() conflicts
+      // Run tests sequentially to avoid g8eg KV flushdb() conflicts
       pool: 'forks',
       forks: {
         singleFork: true

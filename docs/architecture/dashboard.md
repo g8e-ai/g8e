@@ -27,7 +27,7 @@ The dashboard does not mutate hosts or submit governed intents directly. It is a
 
 ## Connection Model
 
-g8ed connects to the gateway over HTTP from the browser (CORS-enabled) and over the internal Docker network from the server-side Express process. In the unified Docker stack (repo-root `docker-compose.yml`), the dashboard container probes the gateway's health endpoint at `http://g8edb:8080/api/v1/health` (the `g8edb` network alias) before starting. The gateway is configured with `--cors-origin`, `--passkey-rp-origin`, `--passkey-rp-id`, and `--passkey-rp-name` so it accepts browser cross-origin requests and WebAuthn passkey registrations from the dashboard origin.
+g8ed connects to the gateway over HTTP from the browser (CORS-enabled) and over the internal Docker network from the server-side Express process. In the unified Docker stack (repo-root `docker-compose.yml`), the dashboard container probes the gateway's health endpoint at `http://g8eg:8080/api/v1/health` (the `g8eg` network alias) before starting. The gateway is configured with `--cors-origin`, `--passkey-rp-origin`, `--passkey-rp-id`, and `--passkey-rp-name` so it accepts browser cross-origin requests and WebAuthn passkey registrations from the dashboard origin.
 
 The dashboard's `GATEWAY_HEALTH_URL` and `GATEWAY_HEALTH_PATH` environment variables point at the gateway's network alias and health path. The dashboard does not require direct access to the gateway's PKI volume; it authenticates through the browser via passkeys and through the server-side internal routes via the gateway's HTTP API.
 

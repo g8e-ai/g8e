@@ -2,10 +2,10 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 /**
- * Cache Metrics - Track g8edB KV Cache Performance
+ * Cache Metrics - Track g8eg KV Cache Performance
  * 
  * Monitors cache hit/miss ratios and estimates cost savings from reduced DB reads.
- * Used to measure effectiveness of the g8edB KV caching strategy.
+ * Used to measure effectiveness of the g8eg KV caching strategy.
  */
 
 import { logger } from './logger.js';
@@ -23,7 +23,7 @@ class CacheMetrics {
     }
 
     /**
-     * Record cache hit (data found in g8edB KV)
+     * Record cache hit (data found in g8eg KV)
      */
     recordHit(cacheType = 'unknown') {
         this.hits++;

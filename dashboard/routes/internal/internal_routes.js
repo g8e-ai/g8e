@@ -64,7 +64,7 @@ export function createInternalRouter({
         res.json(new InternalHealthResponse({
             success: true,
             message: 'Internal API healthy',
-            g8edb_status: SystemHealth.HEALTHY,
+            g8eg_status: SystemHealth.HEALTHY,
             vse_status: SystemHealth.HEALTHY,
             vsa_status: SystemHealth.HEALTHY,
             uptime_seconds: Math.floor(process.uptime()),

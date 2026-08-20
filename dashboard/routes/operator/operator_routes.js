@@ -108,7 +108,7 @@ export function createOperatorRouter({ settings, operatorDownloadService, downlo
                 key_type:        keyType,
             });
 
-            logger.info('[OPERATOR-DOWNLOAD] Fetching binary from g8edB...', { os, arch, platform });
+            logger.info('[OPERATOR-DOWNLOAD] Fetching binary from g8eg...', { os, arch, platform });
             const binary = await operatorDownloadService.getBinary(os, arch);
 
             res.setHeader('Content-Type', ContentType.OCTET_STREAM);

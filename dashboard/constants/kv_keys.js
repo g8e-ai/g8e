@@ -2,7 +2,7 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 /**
- * g8edB KV Key Constants
+ * g8eg KV Key Constants
  * Single source of truth for ALL KV store keys used across the platform (g8ed + VSE).
  *
  * All keys are built via KVKey.* functions. Never construct key strings manually.

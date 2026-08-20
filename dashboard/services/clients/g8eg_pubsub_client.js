@@ -2,9 +2,9 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 /**
- * g8edBPubSubClient — g8edB Pub/Sub WebSocket client.
+ * g8egPubSubClient — g8eg Pub/Sub WebSocket client.
  * 
- * Handles pub/sub messaging over WebSocket to g8edB ($G8E_INTERNAL_PUBSUB_URL/ws/pubsub).
+ * Handles pub/sub messaging over WebSocket to g8eg ($G8E_INTERNAL_PUBSUB_URL/ws/pubsub).
  * Used by Auth Service (auth response channels) and any service needing real-time messaging.
  * 
  * Architecture (from docs/architecture/cases-and-chat-data-flows.md):
@@ -15,21 +15,21 @@
 import { readFileSync, existsSync } from 'fs';
 import WebSocket from 'ws';
 import { logger } from '../../utils/logger.js';
-import { PUBSUB_RECONNECT_DELAY_MS, g8edB_PUBSUB_PATH } from '../../constants/http_client.js';
+import { PUBSUB_RECONNECT_DELAY_MS, g8eg_PUBSUB_PATH } from '../../constants/http_client.js';
 import { PubSubAction, PubSubMessageType } from '../../constants/channels.js';
 import { HTTP_INTERNAL_AUTH_HEADER } from '../../constants/headers.js';
 import { PubSubSubscribeMessage, PubSubPublishMessage, PubSubInboundMessage, PubSubInboundPMessage } from '../../models/pubsub_models.js';
 
-class g8edBPubSubClient {
+class g8egPubSubClient {
     /**
      * @param {object} config
      * @param {string} config.pubsubUrl - WSS URL for pub/sub
      * @param {string} [config.caCertPath] - Path to CA certificate for WSS connections
-     * @param {string} [config.internalAuthToken] - Shared secret for g8edB authentication
+     * @param {string} [config.internalAuthToken] - Shared secret for g8eg authentication
      */
     constructor({ pubsubUrl, caCertPath, internalAuthToken = null } = {}) {
         if (!pubsubUrl) {
-            throw new Error('g8edBPubSubClient: pubsubUrl is required');
+            throw new Error('g8egPubSubClient: pubsubUrl is required');
         }
         this.pubsubUrl = pubsubUrl.replace(/\/$/, '');
         this.caCertPath = caCertPath || null;
@@ -53,9 +53,9 @@ class g8edBPubSubClient {
     // =========================================================================
 
     _connectWS() {
-        const wsUrl = new URL(this.pubsubUrl + g8edB_PUBSUB_PATH);
+        const wsUrl = new URL(this.pubsubUrl + g8eg_PUBSUB_PATH);
         if (!wsUrl.protocol.startsWith('wss')) {
-            logger.warn(`[g8edB-CLIENT] Protocol override: forcing WSS for ${this.pubsubUrl}`);
+            logger.warn(`[g8eg-CLIENT] Protocol override: forcing WSS for ${this.pubsubUrl}`);
             wsUrl.protocol = 'wss:';
         }
         
@@ -67,7 +67,7 @@ class g8edBPubSubClient {
         this._ws = new WebSocket(wsUrl.toString(), wsOptions);
 
         this._ws.on('open', () => {
-            logger.info('[g8edB-CLIENT] Pub/sub WebSocket connected');
+            logger.info('[g8eg-CLIENT] Pub/sub WebSocket connected');
         });
 
         this._ws.on('message', (raw) => {
@@ -131,13 +131,13 @@ class g8edBPubSubClient {
 
     async publish(channel, data) {
         if (data === null || typeof data !== 'object' || Array.isArray(data)) {
-            throw new Error(`g8edBPubSubClient.publish: data must be a plain object, got ${typeof data}`);
+            throw new Error(`g8egPubSubClient.publish: data must be a plain object, got ${typeof data}`);
         }
         try {
             this._wsSend(new PubSubPublishMessage({ action: PubSubAction.PUBLISH, channel, data }));
             return 1;
         } catch (error) {
-            logger.error(`[g8edB-PUBSUB] publish failed: ${error.message}`);
+            logger.error(`[g8eg-PUBSUB] publish failed: ${error.message}`);
             return 0;
         }
     }
@@ -154,7 +154,7 @@ class g8edBPubSubClient {
      * Create an independent pub/sub connection for isolated subscriptions.
      */
     duplicate() {
-        return new g8edBPubSubClient({
+        return new g8egPubSubClient({
             pubsubUrl: this.pubsubUrl,
             caCertPath: this.caCertPath,
             internalAuthToken: this.internalAuthToken,
@@ -175,7 +175,7 @@ class g8edBPubSubClient {
             this._ws = null;
         }
 
-        logger.info('[g8edB-PUBSUB] Client terminated');
+        logger.info('[g8eg-PUBSUB] Client terminated');
     }
 
     async disconnect() {
@@ -191,4 +191,4 @@ class g8edBPubSubClient {
     }
 }
 
-export { g8edBPubSubClient };
+export { g8egPubSubClient };

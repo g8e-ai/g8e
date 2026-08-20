@@ -35,7 +35,7 @@ export class TeamMember extends VSOBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// OrganizationDocument  (persistent document stored in g8edB)
+// OrganizationDocument  (persistent document stored in g8eg)
 // ---------------------------------------------------------------------------
 
 export class OrganizationDocument extends VSOIdentifiableModel {

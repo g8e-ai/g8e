@@ -20,10 +20,10 @@ export const g8edEnvConfig = {
     ENABLE_CONSOLE_LOGGING: process.env.ENABLE_CONSOLE_LOGGING !== 'false',
     ENABLE_FILE_LOGGING: process.env.ENABLE_FILE_LOGGING !== 'false',
 
-    // g8edB Configuration
-    G8E_INTERNAL_HTTP_URL: process.env.G8E_INTERNAL_HTTP_URL || 'https://g8edb:8443',
+    // g8eg Configuration
+    G8E_INTERNAL_HTTP_URL: process.env.G8E_INTERNAL_HTTP_URL || 'https://g8eg:8443',
     G8E_SESSION_ENCRYPTION_KEY: process.env.G8E_SESSION_ENCRYPTION_KEY || null,
-    g8edB_VOLUME_PATH: process.env.g8edB_VOLUME_PATH || '/g8edb',
+    g8eg_VOLUME_PATH: process.env.g8eg_VOLUME_PATH || '/g8eg',
 
     // Network Configuration
     g8ed_HOST: process.env.g8ed_HOST || '0.0.0.0',
@@ -31,9 +31,9 @@ export const g8edEnvConfig = {
     ENABLE_CORS: process.env.ENABLE_CORS !== 'false',
 
     // Security Configuration
-    SSL_CERT_PATH: process.env.SSL_CERT_PATH || '/g8edb/.g8e/pki/issued/hub/g8eg.crt',
-    SSL_KEY_PATH: process.env.SSL_KEY_PATH || '/g8edb/.g8e/pki/issued/hub/g8eg.key',
-    CA_CERT_PATH: process.env.CA_CERT_PATH || '/g8edb/.g8e/pki/trust/g8eg-ca-bundle.pem',
+    SSL_CERT_PATH: process.env.SSL_CERT_PATH || '/g8eg/.g8e/pki/issued/hub/g8eg.crt',
+    SSL_KEY_PATH: process.env.SSL_KEY_PATH || '/g8eg/.g8e/pki/issued/hub/g8eg.key',
+    CA_CERT_PATH: process.env.CA_CERT_PATH || '/g8eg/.g8e/pki/trust/g8eg-ca-bundle.pem',
 
     // Development Configuration
     ENABLE_DEV_LOGS: process.env.ENABLE_DEV_LOGS === 'true',

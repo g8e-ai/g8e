@@ -12,8 +12,8 @@ import { MAX_ATTACHMENT_SIZE, MAX_TOTAL_ATTACHMENT_SIZE, ALLOWED_ATTACHMENT_CONT
 export class AttachmentService {
     /**
      * @param {Object} options
-     * @param {Object} options.cacheAside - g8edB KV/cache-aside client
-     * @param {import('./vsodb_blob_client.js').g8edBBlobClient} options.blobStorage
+     * @param {Object} options.cacheAside - g8eg KV/cache-aside client
+     * @param {import('./g8eg_blob_client.js').g8egBlobClient} options.blobStorage
      */
     constructor({ cacheAside, blobStorage } = {}) {
         this.cacheAside  = cacheAside;
@@ -179,7 +179,7 @@ export class AttachmentService {
      * Retrieve attachment metadata and hydrate base64_data from the blob store.
      * Used by VSE when it needs the raw binary for LLM processing.
      *
-     * @param {string} attachmentKey - g8edB KV key
+     * @param {string} attachmentKey - g8eg KV key
      * @returns {Promise<{record: AttachmentRecord, base64_data: string}|null>}
      */
     async getAttachmentWithData(attachmentKey) {

@@ -6,15 +6,15 @@
  * 
  * Handles file attachments entirely on the client side until message send.
  * Files are read as base64 locally for instant preview and sent with the
- * chat message payload. g8ed backend stores them securely in g8edB KV.
+ * chat message payload. g8ed backend stores them securely in g8eg KV.
  * 
  * Flow:
  * 1. User selects file -> file read as base64 via FileReader (non-blocking)
  * 2. Image preview via data: URI from base64 (CSP-compliant, no blob: URLs)
  * 3. Attachment stored in local Map with preview + base64 data
  * 4. On send: getFormattedForBackend() returns base64 payloads with metadata
- * 5. g8ed stores in g8edB KV, forwards metadata to VSE
- * 6. VSE retrieves from g8edB KV for AI processing
+ * 5. g8ed stores in g8eg KV, forwards metadata to VSE
+ * 6. VSE retrieves from g8eg KV for AI processing
  */
 
 import { MAX_ATTACHMENT_SIZE, MAX_ATTACHMENT_FILES, ALLOWED_ATTACHMENT_CONTENT_TYPES } from '../constants/service-client-constants.js';
@@ -173,7 +173,7 @@ export class AttachmentsManager {
 
     /**
      * Get attachments formatted for the backend.
-     * Includes base64 data so g8ed can store in g8edB KV.
+     * Includes base64 data so g8ed can store in g8eg KV.
      */
     getFormattedForBackend() {
         return this.getAll().map(attachment => ({

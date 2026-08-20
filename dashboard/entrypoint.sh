@@ -14,7 +14,7 @@ set -e
 echo "[g8ed-ENTRYPOINT] Waiting for gateway health check..."
 MAX_RETRIES=30
 RETRY_COUNT=0
-GATEWAY_HEALTH_URL="${GATEWAY_HEALTH_URL:-http://g8edb:8080}"
+GATEWAY_HEALTH_URL="${GATEWAY_HEALTH_URL:-http://g8eg:8080}"
 GATEWAY_HEALTH_PATH="${GATEWAY_HEALTH_PATH:-/api/v1/health}"
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do

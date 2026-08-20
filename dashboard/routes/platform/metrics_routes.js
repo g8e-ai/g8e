@@ -22,13 +22,13 @@ export function createMetricsRouter({
 
     router.get(MetricsPaths.HEALTH, requireInternalOrigin, async (req, res, next) => {
         try {
-            // Check g8edB KV health via cache-aside
+            // Check g8eg KV health via cache-aside
             let kvHealthy = false;
             try {
                 await cacheAsideService.kvGet('__health_check__');
                 kvHealthy = true;
             } catch (e) {
-                logger.error('[METRICS] g8edB KV health check failed', { error: e.message });
+                logger.error('[METRICS] g8eg KV health check failed', { error: e.message });
             }
             
             const isHealthy = kvHealthy;
@@ -37,7 +37,7 @@ export function createMetricsRouter({
                 success: isHealthy,
                 status: isHealthy ? SystemHealth.HEALTHY : SystemHealth.DEGRADED,
                 service: SourceComponent.g8ed,
-                g8edb: {
+                g8eg: {
                     healthy: kvHealthy
                 },
                 timestamp: now()

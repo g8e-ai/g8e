@@ -140,7 +140,7 @@ export function createConsoleRouter({
                 success: true, 
                 message: 'Real-time metrics fetched successfully',
                 timestamp: data.timestamp,
-                g8edb: data.g8edb,
+                g8eg: data.g8eg,
                 cache: data.cache
             }).forClient());
         } catch (error) {

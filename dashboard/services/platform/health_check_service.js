@@ -72,17 +72,17 @@ export class HealthCheckService {
         const checks = {};
         let isReady = true;
 
-        // Check g8edB KV connectivity
+        // Check g8eg KV connectivity
         try {
-            const g8edbHealthy = this.webSessionService.isHealthy();
-            if (g8edbHealthy) {
-                checks.g8edb = 'up';
+            const g8egHealthy = this.webSessionService.isHealthy();
+            if (g8egHealthy) {
+                checks.g8eg = 'up';
             } else {
-                checks.g8edb = 'down';
+                checks.g8eg = 'down';
                 isReady = false;
             }
         } catch (e) {
-            checks.g8edb = `down: ${e.message}`;
+            checks.g8eg = `down: ${e.message}`;
             isReady = false;
         }
 
@@ -127,8 +127,8 @@ export class HealthCheckService {
         // Storage check removed - file storage decommissioned
         healthStatus.checks.storage = { status: 'skipped', message: 'File storage decommissioned' };
 
-        // g8edB KV check
-        await this._checkg8edBKV(healthStatus);
+        // g8eg KV check
+        await this._checkg8egKV(healthStatus);
 
         // Database check via cache-aside
         await this._checkDatabase(healthStatus);
@@ -155,7 +155,7 @@ export class HealthCheckService {
                 cache_performance: stats.overall,
                 cache_by_type: stats.byType,
                 cost_savings: stats.costSavings,
-                message: 'Cache statistics showing g8edB KV performance and DB read reduction'
+                message: 'Cache statistics showing g8eg KV performance and DB read reduction'
             };
         } catch (error) {
             logger.error('Cache stats failed:', error);
@@ -164,24 +164,24 @@ export class HealthCheckService {
     }
 
     /**
-     * Check g8edB KV connectivity and health
+     * Check g8eg KV connectivity and health
      * @private
      */
-    async _checkg8edBKV(healthStatus) {
+    async _checkg8egKV(healthStatus) {
         try {
-            const g8edbHealthy = this.webSessionService.isHealthy();
-            if (g8edbHealthy) {
+            const g8egHealthy = this.webSessionService.isHealthy();
+            if (g8egHealthy) {
                 const sessionCount = await this.webSessionService.getSessionCount();
-                healthStatus.checks.g8edb = { 
+                healthStatus.checks.g8eg = { 
                     status: SystemHealth.HEALTHY, 
-                    message: 'g8edB KV connection is healthy',
+                    message: 'g8eg KV connection is healthy',
                     activeSessions: sessionCount
                 };
             } else {
-                healthStatus.checks.g8edb = { status: SystemHealth.UNHEALTHY, message: 'g8edB KV connection is down' };
+                healthStatus.checks.g8eg = { status: SystemHealth.UNHEALTHY, message: 'g8eg KV connection is down' };
             }
         } catch (e) {
-            healthStatus.checks.g8edb = { status: SystemHealth.UNHEALTHY, message: `g8edB KV error: ${e.message}` };
+            healthStatus.checks.g8eg = { status: SystemHealth.UNHEALTHY, message: `g8eg KV error: ${e.message}` };
         }
     }
 
@@ -193,9 +193,9 @@ export class HealthCheckService {
         try {
             const configDoc = await this.cacheAsideService.getDocument(Collections.PLATFORM_SETTINGS, 'platform_settings');
             if (configDoc !== null) {
-                healthStatus.checks.database = { status: SystemHealth.HEALTHY, message: 'g8edB document store is OK.' };
+                healthStatus.checks.database = { status: SystemHealth.HEALTHY, message: 'g8eg document store is OK.' };
             } else {
-                healthStatus.checks.database = { status: SystemHealth.UNHEALTHY, message: 'Failed to query g8edB: document not found' };
+                healthStatus.checks.database = { status: SystemHealth.UNHEALTHY, message: 'Failed to query g8eg: document not found' };
             }
         } catch (e) {
             healthStatus.checks.database = { status: SystemHealth.UNHEALTHY, message: `DB error: ${e.message}` };

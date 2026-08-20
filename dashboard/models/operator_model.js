@@ -296,7 +296,7 @@ export class OperatorStatusInfo extends VSOBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// OperatorDocument  (full Operator record stored in g8edB document store)
+// OperatorDocument  (full Operator record stored in g8eg document store)
 // ---------------------------------------------------------------------------
 
 export class OperatorDocument extends VSOIdentifiableModel {

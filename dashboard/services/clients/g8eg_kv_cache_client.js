@@ -2,13 +2,13 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 /**
- * KVCacheClient — g8edB KV Store HTTP client.
+ * KVCacheClient — g8eg KV Store HTTP client.
  *
- * Purpose-built client for g8edB KV store operations (/kv/...).
+ * Purpose-built client for g8eg KV store operations (/kv/...).
  * Handles all key-value, hash, list, set, sorted set, and stream operations.
  * No document store, no pub/sub — those are separate clients.
  *
- * g8edB endpoints:
+ * g8eg endpoints:
  *   GET    /kv/{key}           - get value
  *   PUT    /kv/{key}           - set value (with optional TTL)
  *   DELETE /kv/{key}           - delete key
@@ -18,7 +18,7 @@
  *   POST   /kv/_scan           - cursor-based scan
  *
  * CONCURRENCY WARNING
- * g8edB exposes no atomic increment, compare-and-swap, or server-side scripting.
+ * g8eg exposes no atomic increment, compare-and-swap, or server-side scripting.
  * All compound operations in this client (incr, decr, set-NX, hset, hdel, rpush,
  * lpush, ltrim, sadd, srem, zadd, zrem, xadd) are implemented as read-modify-write
  * cycles over HTTP and are NOT atomic under concurrent access.
@@ -30,10 +30,10 @@
  * compensating logic on failure paths rather than relying on exact counts.
  */
 
-import { g8edBHttpClient } from './vsodb_http_client.js';
+import { g8egHttpClient } from './g8eg_http_client.js';
 import { ApiPaths } from '../../constants/api_paths.js';
 import { logger } from '../../utils/logger.js';
-import { g8edB_KV_CLIENT_STATUS_READY, KV_SCAN_DEFAULT_COUNT } from '../../constants/http_client.js';
+import { g8eg_KV_CLIENT_STATUS_READY, KV_SCAN_DEFAULT_COUNT } from '../../constants/http_client.js';
 import { KVHash, KVList, KVSet, KVSortedSet, KVStream } from '../../models/kv_models.js';
 
 class KVOperationError extends Error {
@@ -49,11 +49,11 @@ class KVOperationError extends Error {
 class KVCacheClient {
     /**
      * @param {object} config
-     * @param {string} config.listenUrl - Base URL of g8edB (e.g. $G8E_INTERNAL_HTTP_URL)
-     * @param {string} [config.internalAuthToken] - Shared secret for g8edB authentication
+     * @param {string} config.listenUrl - Base URL of g8eg (e.g. $G8E_INTERNAL_HTTP_URL)
+     * @param {string} [config.internalAuthToken] - Shared secret for g8eg authentication
      */
     constructor({ listenUrl, internalAuthToken = null } = {}) {
-        this._http = new g8edBHttpClient({ listenUrl, component: 'g8edB-KV', internalAuthToken });
+        this._http = new g8egHttpClient({ listenUrl, component: 'g8eg-KV', internalAuthToken });
     }
 
     // =========================================================================
@@ -150,7 +150,7 @@ class KVCacheClient {
     }
 
     get status() {
-        return g8edB_KV_CLIENT_STATUS_READY;
+        return g8eg_KV_CLIENT_STATUS_READY;
     }
 
     async exists(key) {
@@ -434,7 +434,7 @@ class KVCacheClient {
     async terminate() {
         if (this._http.isTerminated()) return;
         this._http.terminate();
-        logger.info('[g8edB-KV] Client terminated');
+        logger.info('[g8eg-KV] Client terminated');
     }
 
     isTerminated() {

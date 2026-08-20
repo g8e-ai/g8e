@@ -4,7 +4,7 @@
 /**
  * Cache-Aside Service
  *
- * All writes go to the g8edB document store first (authoritative), then the
+ * All writes go to the g8eg document store first (authoritative), then the
  * cache is updated in place with the new value.
  *
  * WRITE:  DB write  →  setex (cache updated in place)
@@ -41,7 +41,7 @@ class CacheAsideService {
      * Initialize cache-aside service.
      * 
      * @param {Object} kvClient - KV client for caching
-     * @param {Object} dbClient - g8edB document client (authoritative data store)
+     * @param {Object} dbClient - g8eg document client (authoritative data store)
      * @param {string} componentName - Component name for key prefixing
      * @param {number} defaultTTL - Default TTL for cached items (seconds)
      */
@@ -51,7 +51,7 @@ class CacheAsideService {
         this.componentName = componentName;
         this.defaultTTL = defaultTTL;
         
-        logger.info(`[${componentName.toUpperCase()}-CACHE-ASIDE] Service initialized (g8edB document store writes, g8edB KV cache)`);
+        logger.info(`[${componentName.toUpperCase()}-CACHE-ASIDE] Service initialized (g8eg document store writes, g8eg KV cache)`);
     }
 
     /**
@@ -79,14 +79,14 @@ class CacheAsideService {
         return TTL_STRATEGIES[collection] || this.defaultTTL;
     }
 
-    // ===== WRITE OPERATIONS (g8edB document store) =====
+    // ===== WRITE OPERATIONS (g8eg document store) =====
 
     /**
      * Create document using cache-aside pattern.
      *
      * Flow:
-     * 1. Write to g8edB document store (authoritative)
-     * 2. Update g8edB KV cache synchronously
+     * 1. Write to g8eg document store (authoritative)
+     * 2. Update g8eg KV cache synchronously
      * 3. Return success
      *
      * @param {string} collection - Collection name
@@ -112,7 +112,7 @@ class CacheAsideService {
                 };
             }
 
-            logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Document created in g8edB`, {
+            logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Document created in g8eg`, {
                 collection,
                 documentId: documentId.substring(0, 12) + '...'
             });
@@ -126,13 +126,13 @@ class CacheAsideService {
             try {
                 await this.kvClient.set_json(key, flat, cacheTTL);
                 cacheSuccess = true;
-                logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Document cached in g8edB KV`, {
+                logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Document cached in g8eg KV`, {
                     collection,
                     documentId: documentId.substring(0, 12) + '...',
                     ttl: cacheTTL
                 });
             } catch (cacheError) {
-                logger.warn(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] g8edB KV cache update failed (non-critical)`, {
+                logger.warn(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] g8eg KV cache update failed (non-critical)`, {
                     collection,
                     documentId: documentId.substring(0, 12) + '...',
                     error: cacheError.message
@@ -256,15 +256,15 @@ class CacheAsideService {
         }
     }
 
-    // ===== READ OPERATIONS (Cache-aside: g8edB KV → g8edB document store fallback) =====
+    // ===== READ OPERATIONS (Cache-aside: g8eg KV → g8eg document store fallback) =====
 
     /**
      * Get document using cache-aside pattern.
      * 
      * Flow:
-     * 1. Check g8edB KV cache (~1-5ms)
-     * 2. If miss, read from g8edB document store
-     * 3. Populate g8edB KV cache
+     * 1. Check g8eg KV cache (~1-5ms)
+     * 2. If miss, read from g8eg document store
+     * 3. Populate g8eg KV cache
      * 4. Return data
      * 
      * @param {string} collection - Collection name
@@ -275,18 +275,18 @@ class CacheAsideService {
         const key = this._makeKey(collection, documentId);
         
         try {
-            // 1. Check g8edB KV cache first
+            // 1. Check g8eg KV cache first
             const cached = await this.kvClient.get_json(key);
             if (cached !== null) {
-                logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Cache HIT (g8edB KV)`, {
+                logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Cache HIT (g8eg KV)`, {
                     collection,
                     documentId: documentId.substring(0, 12) + '...'
                 });
                 return cached;
             }
 
-            // 2. Cache MISS - read from g8edB document store (authoritative)
-            logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Cache MISS - reading from g8edB`, {
+            // 2. Cache MISS - read from g8eg document store (authoritative)
+            logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Cache MISS - reading from g8eg`, {
                 collection,
                 documentId: documentId.substring(0, 12) + '...',
                 dbClientComponent: this.db._http?.component || 'unknown'
@@ -295,9 +295,9 @@ class CacheAsideService {
             const dbResponse = await this.db.getDocument(collection, documentId);
 
             if (!dbResponse.success || !dbResponse.data) {
-                // Enhanced logging for g8edB connectivity issues
+                // Enhanced logging for g8eg connectivity issues
                 if (dbResponse.error && dbResponse.error.includes('fetch failed')) {
-                    logger.warn(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] g8edB connectivity issue during read`, {
+                    logger.warn(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] g8eg connectivity issue during read`, {
                         collection,
                         documentId: documentId.substring(0, 12) + '...',
                         error: dbResponse.error,
@@ -305,7 +305,7 @@ class CacheAsideService {
                         fallbackBehavior: 'treating as document not found'
                     });
                 } else {
-                    logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Document not found in g8edB`, {
+                    logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Document not found in g8eg`, {
                         collection,
                         documentId: documentId.substring(0, 12) + '...',
                         dbError: dbResponse.error
@@ -316,11 +316,11 @@ class CacheAsideService {
 
             const data = dbResponse.data;
 
-            // 3. Populate g8edB KV cache for next read
+            // 3. Populate g8eg KV cache for next read
             const ttl = this._getTTLForCollection(collection);
             try {
                 await this.kvClient.set_json(key, data, ttl);
-                logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Cache warmed from g8edB`, {
+                logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Cache warmed from g8eg`, {
                     collection,
                     documentId: documentId.substring(0, 12) + '...',
                     ttl
