@@ -229,11 +229,6 @@ const (
 	// EnrollmentSourceRotation is the mTLS CLI rotation path
 	// (POST /api/v1/auth/cli/rotate).
 	EnrollmentSourceRotation
-
-	// EnrollmentSourceRemoteOperator is the remote operator
-	// enrollment path (POST /api/v1/auth/operator/enroll), used by
-	// `auth enroll operator`. It is NOT a local human enrollment.
-	EnrollmentSourceRemoteOperator
 )
 
 // String returns a human-readable label for the enrollment source.
@@ -245,17 +240,13 @@ func (s EnrollmentSource) String() string {
 		return "recovery"
 	case EnrollmentSourceRotation:
 		return "rotation"
-	case EnrollmentSourceRemoteOperator:
-		return "remote-operator"
 	default:
 		return "unknown"
 	}
 }
 
 // IsLocalCLI reports whether the source is a local human CLI enrollment
-// path (bootstrap, recovery, or rotation). Remote operator enrollment is
-// not a local CLI path and must not trigger OS trust installation or
-// passkey registration.
+// path (bootstrap, recovery, or rotation).
 func (s EnrollmentSource) IsLocalCLI() bool {
 	switch s {
 	case EnrollmentSourceBootstrap, EnrollmentSourceRecovery, EnrollmentSourceRotation:

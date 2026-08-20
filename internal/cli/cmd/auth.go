@@ -100,10 +100,8 @@ func stdinContinue(prompt string) bool {
 func enrollCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "enroll",
-		Short: "Enroll a CLI user or remote operator with the running Gateway",
-		Long: `Enroll a CLI user or remote operator with the running Gateway.
-
-Two distinct enrollment paths exist as subcommands:
+		Short: "Enroll a CLI user with the running Gateway",
+		Long: `Enroll a CLI user with the running Gateway.
 
   user      Local human CLI/user enrollment. Drives the EnrollmentCoordinator
             state machine (bootstrap, recovery, rotation, reuse), installs the
@@ -111,16 +109,10 @@ Two distinct enrollment paths exist as subcommands:
             WebAuthn passkey ceremony. Produces a CLI session bound to a user
             identity.
 
-  operator  Remote operator enrollment. Generates an operator CSR and
-            enrolls with the gateway to obtain Operator mTLS certificates.
-            Headless and operator-only: no OS trust installation, no passkey
-            ceremony, no CLI session.
-
 Bare ` + "`auth enroll`" + ` (no subcommand) prints this help and exits non-zero.`,
 	}
 	cmd.AddCommand(
 		enrollUserCmd(),
-		enrollOperatorCmd(),
 		guiCmd(),
 	)
 	return cmd
