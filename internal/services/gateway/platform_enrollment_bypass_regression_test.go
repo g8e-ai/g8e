@@ -7,33 +7,28 @@
 
 //go:build integration
 
-// Phase 0 regression tests for the platform-activation-approval-sequence plan.
+// Regression tests proving the certificate-issuance bypasses closed by the
+// owner-approved platform enrollment protocol (Phase 4). Each test asserts
+// fail-closed behavior: the bypass route is gone, the handler rejects
+// unauthenticated callers, or the retained path refuses reserved platform
+// identities. The tests live in the gateway package because they exercise
+// real PKI, real SQLite, real handler code paths, and the real auth
+// middleware chain — they are not unit tests.
 //
-// These tests demonstrate the certificate-issuance bypasses that the
-// owner-approved platform enrollment protocol must close. Each test asserts
-// the CURRENT (insecure) behavior so the Phase 4 rip-and-replace can flip
-// these expectations to fail-closed and prove the bypasses are gone. The
-// tests live in the gateway package because they exercise real PKI, real
-// SQLite, and real handler code paths — they are not unit tests.
-//
-// Bypasses covered:
-//   1. Pre-activation app issuance: POST /api/v1/pki/apps/enroll issues a
-//      long-lived app certificate (including the reserved dashboard name
-//      "g8ed") before any human has activated the gateway.
+// Bypasses proven closed:
+//   1. Pre-activation app issuance: POST /api/v1/pki/apps/enroll is removed
+//      from both routers; the auth middleware fail-closes the unclassified
+//      path to RouteAuthMTLS, returning 401 without a client certificate.
 //   2. Post-activation direct operator issuance: POST
-//      /api/v1/auth/operator/enroll signs operator and CLI CSRs immediately
-//      after activation, with no per-request owner approval.
-//   3. Reserved-name issuance through generic app enrollment: the dashboard
-//      ("g8ed") and ensemble ("g8ee") canonical names are accepted by the
-//      generic app enrollment endpoint with no reservation check.
-//   4. Privileged generic CSR signing: POST /api/v1/pki/csr/sign will sign
-//      an operator leaf certificate from an unauthenticated caller because
-//      the handler performs no authorization on the requested leaf type.
-//
-// When Phase 4 lands, these tests will be rewritten to assert the secure
-// behavior (HTTP 403 / 401 / typed error) and renamed accordingly. They are
-// intentionally kept together here so the bypass inventory is visible in
-// one place during the transition.
+//      /api/v1/auth/operator/enroll is removed from both routers; same
+//      fail-closed 401.
+//   3. Reserved-name issuance through the retained delegated path:
+//      EnrollDelegatedApp rejects g8ed/g8ee/g8eo with
+//      ErrPlatformEnrollmentReservedIdentity.
+//   4. Privileged generic CSR signing: handlePKICSRSign rejects callers
+//      with no client certificate (401) via the defense-in-depth mTLS check.
+//   5. Plain HTTP router no longer registers the CSR signing bypass route;
+//      the catch-all redirects unregistered paths to HTTPS (301).
 
 package gateway
 
@@ -50,10 +45,20 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/marshaler"
-	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
+
+// removedAppEnrollPath is the path of the removed unauthenticated app
+// enrollment route. The constant was deleted from api_paths.go when the
+// route was removed; the literal is retained here so the regression test
+// can prove the route is gone.
+const removedAppEnrollPath = "/api/v1/pki/apps/enroll"
+
+// removedOperatorEnrollPath is the path of the removed unauthenticated
+// operator enrollment route. The constant was deleted from api_paths.go
+// when the route was removed; the literal is retained here so the
+// regression test can prove the route is gone.
+const removedOperatorEnrollPath = "/api/v1/auth/operator/enroll"
 
 // extractURISANs returns the URI SAN strings from a PEM-encoded certificate.
 func extractURISANs(t *testing.T, certPEM string) []string {
@@ -69,18 +74,17 @@ func extractURISANs(t *testing.T, certPEM string) []string {
 	return uris
 }
 
-// TestPlatformEnrollmentBypass_PreActivationAppIssuance proves that the
-// generic app enrollment endpoint issues a long-lived app certificate
-// before the gateway has been activated by the first human. This is the
-// dashboard/ensemble startup path: an unactivated gateway mints the g8ed
-// identity on demand.
-func TestPlatformEnrollmentBypass_PreActivationAppIssuance(t *testing.T) {
-	c, _, _ := setupTestPKIController(t)
+// TestPlatformEnrollmentBypassClosed_AppEnrollRouteRemoved proves that the
+// unauthenticated app enrollment route is gone. The route is removed from
+// both routers and no longer explicitly classified in the RouteAuthRegistry,
+// so the auth middleware fail-closes it to RouteAuthMTLS. A POST with no
+// client certificate returns 401 — no certificate is issued, regardless of
+// activation state. This closes the pre-activation app issuance bypass
+// (invariant 1) and the reserved-name issuance bypass (invariant 3).
+func TestPlatformEnrollmentBypassClosed_AppEnrollRouteRemoved(t *testing.T) {
+	h, _, _ := setupTestHTTPHandler(t)
+	router := h.buildPublicRouter()
 
-	// No user is created: the gateway is NOT activated. The plan's
-	// invariant 1 is "a gateway with no users never issues a dashboard,
-	// ensemble, or operator certificate." This test demonstrates the
-	// current violation of that invariant.
 	body := map[string]string{
 		"csr_pem":  testutil.GenerateTestCSRP256(t, "g8ed"),
 		"app_name": "g8ed",
@@ -88,78 +92,29 @@ func TestPlatformEnrollmentBypass_PreActivationAppIssuance(t *testing.T) {
 	}
 	b, err := json.Marshal(body)
 	require.NoError(t, err)
-	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.PKIAppsEnroll, bytes.NewReader(b))
+	req := httptest.NewRequest(http.MethodPost, removedAppEnrollPath, bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req.TLS = nil
 	rr := httptest.NewRecorder()
 
-	c.handlePKIAppsEnroll(rr, req)
+	router.ServeHTTP(rr, req)
 
-	// CURRENT (insecure) behavior: HTTP 201 with a long-lived cert.
-	// After Phase 4 this must become HTTP 403 with
-	// ErrOperatorEnrollmentRequiresActivation (or a new
-	// ErrPlatformEnrollmentRequiresActivation) and no cert.
-	assert.Equal(t, http.StatusCreated, rr.Code, "Phase 0: app enrollment currently succeeds pre-activation (the bypass)")
-	var resp AppEnrollResponse
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-	assert.True(t, resp.Success, "Phase 0: app enrollment currently returns success pre-activation (the bypass)")
-	assert.NotEmpty(t, resp.AppCert, "Phase 0: a certificate is currently issued pre-activation (the bypass)")
-	uris := extractURISANs(t, resp.AppCert)
-	assert.Contains(t, uris, "spiffe://g8e.local/app/g8ed", "Phase 0: the issued cert carries the reserved dashboard SPIFFE URI (the bypass)")
+	assert.Equal(t, http.StatusUnauthorized, rr.Code,
+		"the removed app enrollment route must fail-closed to 401 (RouteAuthMTLS default) without a client certificate")
+	assert.NotContains(t, rr.Body.String(), "certificate_pem",
+		"no certificate must be issued from the removed route")
 }
 
-// TestPlatformEnrollmentBypass_ReservedNameIssuance proves that the generic
-// app enrollment endpoint accepts the reserved platform component names
-// "g8ed" (dashboard) and "g8ee" (ensemble) with no reservation check. After
-// activation this remains a bypass because any caller can mint the
-// dashboard or ensemble identity.
-func TestPlatformEnrollmentBypass_ReservedNameIssuance(t *testing.T) {
-	c, _, _ := setupTestPKIController(t)
-
-	// The generic app enrollment path has no activation gate today, so
-	// the reserved-name bypass is demonstrable without activation. The
-	// point of this test is that even after Phase 4 adds an activation
-	// gate, the reserved-name guard must also exist: activation alone
-	// does not prevent an attacker from minting the dashboard or
-	// ensemble identity via the generic path.
-
-	reservedNames := []string{"g8ed", "g8ee"}
-	for _, name := range reservedNames {
-		t.Run(name, func(t *testing.T) {
-			body := map[string]string{
-				"csr_pem":  testutil.GenerateTestCSRP256(t, name),
-				"app_name": name,
-				"app_type": "mcp-client",
-			}
-			b, err := json.Marshal(body)
-			require.NoError(t, err)
-			req := httptest.NewRequest(http.MethodPost, constants.APIPaths.PKIAppsEnroll, bytes.NewReader(b))
-			rr := httptest.NewRecorder()
-
-			c.handlePKIAppsEnroll(rr, req)
-
-			// CURRENT (insecure) behavior: HTTP 201 with the reserved
-			// platform identity. After Phase 4 this must become HTTP
-			// 403 with a typed reserved-name error and no cert.
-			assert.Equal(t, http.StatusCreated, rr.Code, "Phase 0: reserved name %q is currently accepted (the bypass)", name)
-			var resp AppEnrollResponse
-			require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-			uris := extractURISANs(t, resp.AppCert)
-			assert.Contains(t, uris, "spiffe://g8e.local/app/"+name, "Phase 0: the issued cert carries the reserved %q SPIFFE URI (the bypass)", name)
-		})
-	}
-}
-
-// TestPlatformEnrollmentBypass_PostActivationDirectOperatorIssuance proves
-// that the dedicated operator enrollment endpoint signs operator and CLI
-// CSRs immediately after activation, with no per-request owner approval.
-// This is the bypass that the new platform enrollment protocol replaces:
-// the endpoint must be removed (Phase 4) and the operator must enroll
-// through the approved request/complete flow.
-func TestPlatformEnrollmentBypass_PostActivationDirectOperatorIssuance(t *testing.T) {
-	c, _ := setupTestBootstrapController(t)
-
-	// Activate the gateway by creating the first real user (the owner).
-	_, err := c.userSvc.CreateUser()
-	require.NoError(t, err)
+// TestPlatformEnrollmentBypassClosed_OperatorEnrollRouteRemoved proves
+// that the unauthenticated operator enrollment route is gone. The route is
+// removed from both routers and no longer classified, so the auth
+// middleware fail-closes it to RouteAuthMTLS. A POST with no client
+// certificate returns 401 — no operator or CLI certificate is issued,
+// even after activation. This closes the post-activation direct operator
+// issuance bypass (invariant 2).
+func TestPlatformEnrollmentBypassClosed_OperatorEnrollRouteRemoved(t *testing.T) {
+	h, _, _ := setupTestHTTPHandler(t)
+	router := h.buildPublicRouter()
 
 	body := map[string]string{
 		"csr_pem":            testutil.GenerateTestCSRP256(t, "operator"),
@@ -169,42 +124,53 @@ func TestPlatformEnrollmentBypass_PostActivationDirectOperatorIssuance(t *testin
 	}
 	b, err := json.Marshal(body)
 	require.NoError(t, err)
-	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.AuthOperatorEnroll, bytes.NewReader(b))
+	req := httptest.NewRequest(http.MethodPost, removedOperatorEnrollPath, bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req.TLS = nil
 	rr := httptest.NewRecorder()
 
-	c.handleOperatorEnrollment(rr, req)
+	router.ServeHTTP(rr, req)
 
-	// CURRENT (insecure) behavior: HTTP 201 with operator and CLI certs
-	// and no approval record. After Phase 4 this endpoint must be removed
-	// and this test must assert HTTP 404 (handler gone) or that the
-	// request is rejected without an approval reference.
-	assert.Equal(t, http.StatusCreated, rr.Code, "Phase 0: operator enrollment currently issues certs with no approval (the bypass)")
-	var resp models.OperatorEnrollmentResponse
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-	assert.True(t, resp.Success)
-	assert.NotEmpty(t, resp.OperatorCert, "Phase 0: an operator cert is currently issued with no approval (the bypass)")
-	assert.NotEmpty(t, resp.CLICert, "Phase 0: a CLI cert is currently issued with no approval (the bypass)")
-	assert.NotEmpty(t, resp.OperatorID)
-	assert.NotEmpty(t, resp.OperatorSessionID)
-	assert.NotEmpty(t, resp.CLISessionID)
-
-	// The persisted operator document has no approval provenance.
-	opDoc, err := c.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), resp.OperatorID)
-	require.NoError(t, err)
-	require.NotNil(t, opDoc)
-	dataBytes, err := json.Marshal(opDoc.Data)
-	require.NoError(t, err)
-	var op models.OperatorDocumentGo
-	require.NoError(t, json.Unmarshal(dataBytes, &op))
-	assert.Empty(t, op.UserID, "Phase 0: operator doc has no approving user (the bypass)")
+	assert.Equal(t, http.StatusUnauthorized, rr.Code,
+		"the removed operator enrollment route must fail-closed to 401 (RouteAuthMTLS default) without a client certificate")
+	assert.NotContains(t, rr.Body.String(), "operator_cert",
+		"no operator certificate must be issued from the removed route")
 }
 
-// TestPlatformEnrollmentBypass_PrivilegedGenericCSRSign proves that the
-// generic CSR signing endpoint signs an operator leaf certificate with no
-// authorization on the requested leaf type. The handler is registered on
-// both the plain HTTP router and the HTTPS router, so an unauthenticated
-// caller on the discovery router can mint an operator identity.
-func TestPlatformEnrollmentBypass_PrivilegedGenericCSRSign(t *testing.T) {
+// TestPlatformEnrollmentBypassClosed_ReservedNameRejectedByDelegatedPath
+// proves that the retained authenticated delegated app enrollment path
+// rejects the reserved platform component names (g8ed, g8ee, g8eo). Those
+// identities are issued only through the owner-approved platform enrollment
+// protocol. This closes the reserved-name issuance bypass (invariant 3) on
+// the one path that remains.
+func TestPlatformEnrollmentBypassClosed_ReservedNameRejectedByDelegatedPath(t *testing.T) {
+	c, _, _ := setupTestPKIController(t)
+
+	reservedNames := []string{"g8ed", "g8ee", "g8eo"}
+	for _, name := range reservedNames {
+		t.Run(name, func(t *testing.T) {
+			resp, err := c.appEnrollment.EnrollDelegatedApp(AppEnrollRequest{
+				CSR:     testutil.GenerateTestCSRP256(t, name),
+				AppName: name,
+				AppType: "mcp-client",
+			}, "user-approver-1")
+			require.NoError(t, err)
+			assert.False(t, resp.Success, "reserved name %q must be rejected", name)
+			assert.Contains(t, resp.Error, constants.ErrPlatformEnrollmentReservedIdentity.Error(),
+				"reserved name %q must be rejected with ErrPlatformEnrollmentReservedIdentity", name)
+			assert.Empty(t, resp.AppCert, "no certificate must be issued for reserved name %q", name)
+		})
+	}
+}
+
+// TestPlatformEnrollmentBypassClosed_PrivilegedGenericCSRSignRequiresMTLS
+// proves that the generic CSR signing endpoint rejects callers with no
+// client certificate. The handler enforces mTLS directly (defense-in-depth)
+// and the route auth registry classifies the endpoint as RouteAuthMTLS. A
+// request with no TLS state returns 401 — no privileged platform leaf type
+// (operator, CLI, app, gateway-peer) is minted. This closes the privileged
+// generic CSR signing bypass (invariant 16).
+func TestPlatformEnrollmentBypassClosed_PrivilegedGenericCSRSignRequiresMTLS(t *testing.T) {
 	c, _, _ := setupTestPKIController(t)
 
 	body := map[string]string{
@@ -214,23 +180,15 @@ func TestPlatformEnrollmentBypass_PrivilegedGenericCSRSign(t *testing.T) {
 	b, err := json.Marshal(body)
 	require.NoError(t, err)
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.PKICSRSign, bytes.NewReader(b))
-	// No TLS state, no auth context: the caller is unauthenticated.
 	req.TLS = nil
 	rr := httptest.NewRecorder()
 
 	c.handlePKICSRSign(rr, req)
 
-	// CURRENT (insecure) behavior: HTTP 200 with an operator leaf cert.
-	// After Phase 4 this must become HTTP 401/403 with a typed
-	// unauthorized-leaf-type error and no cert.
-	assert.Equal(t, http.StatusOK, rr.Code, "Phase 0: generic CSR sign currently mints an operator leaf with no auth (the bypass)")
-	var resp models.PKICSRSignResponse
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-	assert.NotEmpty(t, resp.CertificatePEM, "Phase 0: an operator cert is currently minted with no auth (the bypass)")
-	uris := extractURISANs(t, resp.CertificatePEM)
-	// The operator SPIFFE URI is generated by SignCSR for the operator
-	// leaf type; any operator URI here proves the bypass.
-	assert.NotEmpty(t, uris, "Phase 0: the minted operator cert carries an operator SPIFFE URI (the bypass)")
+	assert.Equal(t, http.StatusUnauthorized, rr.Code,
+		"generic CSR sign must reject unauthenticated callers with 401 (mTLS required)")
+	assert.Contains(t, rr.Body.String(), constants.ErrMissingCertificate.Error(),
+		"the 401 must carry the typed ErrMissingCertificate error")
 }
 
 // TestPlatformEnrollmentBypass_DelegatedAppIsShortLived documents the
@@ -238,12 +196,10 @@ func TestPlatformEnrollmentBypass_PrivilegedGenericCSRSign(t *testing.T) {
 // implementation can be contrasted against it. Delegated credentials are
 // 1-hour, client-auth-only, dual-SAN. The new platform app signer must use
 // normal platform workload validity and server+client auth, not reuse this
-// 1-hour path.
+// 1-hour path. This is a reference characterization, not a bypass.
 func TestPlatformEnrollmentBypass_DelegatedAppIsShortLived(t *testing.T) {
 	c, _, _ := setupTestPKIController(t)
 
-	// The delegated path requires mTLS; this test documents the signer
-	// behavior, not the route auth, so call the service directly.
 	resp, err := c.appEnrollment.EnrollDelegatedApp(AppEnrollRequest{
 		CSR:     testutil.GenerateTestCSRP256(t, "delegated-app"),
 		AppName: "delegated-app",
@@ -257,44 +213,27 @@ func TestPlatformEnrollmentBypass_DelegatedAppIsShortLived(t *testing.T) {
 	cert, err := x509.ParseCertificate(block.Bytes)
 	require.NoError(t, err)
 
-	// Document the 1-hour validity so the Phase 2 signer does not reuse it.
 	assert.Less(t, cert.NotAfter.Sub(cert.NotBefore).Hours(), float64(2),
-		"Phase 0: SignDelegatedCSR is short-lived (~1h); the new SignPlatformAppCSR must NOT reuse this validity")
-	// Document the client-auth-only EKU so the Phase 2 signer adds server auth.
+		"SignDelegatedCSR is short-lived (~1h); the new SignPlatformAppCSR must NOT reuse this validity")
 	assert.ElementsMatch(t, []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}, cert.ExtKeyUsage,
-		"Phase 0: SignDelegatedCSR is client-auth-only; the new SignPlatformAppCSR must add server auth for the dashboard/ensemble")
-	// Document the dual-SAN ordering (app first, user second) so Phase 2
-	// preserves the app-first invariant.
+		"SignDelegatedCSR is client-auth-only; the new SignPlatformAppCSR must add server auth for the dashboard/ensemble")
 	uris := extractURISANs(t, resp.AppCert)
 	require.Len(t, uris, 2)
-	assert.Equal(t, "spiffe://g8e.local/app/delegated-app", uris[0], "Phase 0: app SAN is first; Phase 2 must preserve app-first ordering")
-	assert.Equal(t, "spiffe://g8e.local/user/user-approver-1", uris[1], "Phase 0: user SAN is second; Phase 2 must bind the approving user")
+	assert.Equal(t, "spiffe://g8e.local/app/delegated-app", uris[0], "app SAN is first; Phase 2 must preserve app-first ordering")
+	assert.Equal(t, "spiffe://g8e.local/user/user-approver-1", uris[1], "user SAN is second; Phase 2 must bind the approving user")
 }
 
-// TestPlatformEnrollmentBypass_PlainHTTPRouterRegistersBypassHandlers
-// proves that the plain HTTP discovery router (buildHTTPRouter) registers
-// the operator enrollment, app enrollment, and generic CSR signing
-// handlers without applying the auth middleware. This is the transport
-// layer of the bypass: even though the RouteAuthRegistry classifies these
-// routes as RouteAuthMTLS (fail-closed default) or RouteAuthNone, the plain
-// HTTP router does not consult the registry at all — it registers the
-// handlers directly behind only pathTraversalGuard and rateLimitMiddleware.
-//
-// After Phase 4, the plain HTTP router must not register the removed
-// bypass routes. The new platform enrollment request/status/complete
-// routes will be registered on plain HTTP (token-scoped, like CLI
-// recovery), but pending/decision will be HTTPS-only.
-func TestPlatformEnrollmentBypass_PlainHTTPRouterRegistersBypassHandlers(t *testing.T) {
+// TestPlatformEnrollmentBypassClosed_PlainHTTPRouterDoesNotRegisterBypassRoutes
+// proves that the plain HTTP discovery router no longer registers the CSR
+// signing bypass route. The catch-all redirects unregistered paths to HTTPS
+// (301), so the handler is never reached on plain HTTP. The operator-enroll
+// and app-enroll routes are likewise gone (they redirect too). This closes
+// the transport-layer bypass where the plain HTTP router registered
+// handlers without the auth middleware.
+func TestPlatformEnrollmentBypassClosed_PlainHTTPRouterDoesNotRegisterBypassRoutes(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
 	router := h.buildHTTPRouter()
 
-	// The plain HTTP router must not apply auth middleware. The bypass
-	// routes are reachable without mTLS. We prove this by sending a POST
-	// to each bypass route with no TLS state and asserting the response
-	// is NOT a 401/403 from the auth middleware (i.e., the handler was
-	// reached). We use deliberately invalid bodies so the handler
-	// returns a 400 (bad request) rather than a 201 (successful
-	// enrollment), proving the handler was invoked without auth.
 	bypassRoutes := []struct {
 		name string
 		path string
@@ -302,12 +241,12 @@ func TestPlatformEnrollmentBypass_PlainHTTPRouterRegistersBypassHandlers(t *test
 	}{
 		{
 			name: "operator enrollment",
-			path: constants.APIPaths.AuthOperatorEnroll,
+			path: removedOperatorEnrollPath,
 			body: `{"csr_pem":"","system_fingerprint":"","hostname":""}`,
 		},
 		{
 			name: "app enrollment",
-			path: constants.APIPaths.PKIAppsEnroll,
+			path: removedAppEnrollPath,
 			body: `{"csr_pem":"","app_name":"","app_type":""}`,
 		},
 		{
@@ -321,19 +260,17 @@ func TestPlatformEnrollmentBypass_PlainHTTPRouterRegistersBypassHandlers(t *test
 		t.Run(route.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, route.path, bytes.NewReader([]byte(route.body)))
 			req.Header.Set("Content-Type", "application/json")
-			// No TLS state: the caller is unauthenticated.
 			req.TLS = nil
 			rr := httptest.NewRecorder()
 
 			router.ServeHTTP(rr, req)
 
-			// The handler was reached (not blocked by auth middleware)
-			// if the response is anything other than 401. A 400 means
-			// the handler validated the body and rejected it; a 401
-			// would mean the auth middleware blocked it. Phase 0
-			// expects the handler to be reached (the bypass).
-			assert.NotEqual(t, http.StatusUnauthorized, rr.Code,
-				"Phase 0: plain HTTP router reaches the %s handler without auth (the bypass); Phase 4 must remove or secure this registration", route.name)
+			// The catch-all redirects unregistered paths to HTTPS (301).
+			// A 400 would mean the handler was reached without auth (the
+			// old bypass); a 301 proves the route is not registered on
+			// plain HTTP.
+			assert.Equal(t, http.StatusMovedPermanently, rr.Code,
+				"plain HTTP router must not register the %s bypass route; the catch-all redirects to HTTPS", route.name)
 		})
 	}
 }

@@ -667,8 +667,6 @@ var (
 	// App enrollment service errors
 	ErrAppEnrollCSRRequired       = errors.New("csr_pem is required")
 	ErrAppEnrollAppNameRequired   = errors.New("app_name is required")
-	ErrAppEnrollAppTypeRequired   = errors.New("app_type is required")
-	ErrAppEnrollInvalidAppType    = errors.New("invalid app_type")
 	ErrAppEnrollInvalidAppName    = errors.New("app_name must contain only alphanumeric characters")
 	ErrAppEnrollInvalidCSRPEM     = errors.New("invalid CSR PEM format")
 	ErrAppEnrollParseCSR          = errors.New("failed to parse CSR")

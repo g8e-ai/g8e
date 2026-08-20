@@ -89,7 +89,7 @@ HTTP route paths for the Gateway REST API, defined as a struct `APIPaths` with J
 - KV: `KV` (`/api/v1/kv/`), `KVPrefix` (`/api/v1/kv/`)
 - PubSub: `PubSubPublish`, `PubSubStream`, `PubSubWebSocket` (`/ws/pubsub`)
 - SSE: `SSEPush`, `SSEEvents`, `SSEStream`
-- PKI: `PKICSRSign`, `PKIDevicesEnroll`, `PKIAppsEnroll`, `PKIAppsDelegated`, `PKICertificatesRevoke`, `PKIRevocationBundle`, `PKICRL`, `PKICABundle`, `PKIFingerprint`
+- PKI: `PKICSRSign`, `PKIDevicesEnroll`, `PKIAppsDelegated`, `PKICertificatesRevoke`, `PKIRevocationBundle`, `PKICRL`, `PKICABundle`, `PKIFingerprint`
 - Audit: `AuditReceipts`, `AuditReceiptsExport`, `AuditEvents`, `AuditSummary`, `AuditReport`, `AuditStream`
 - User: `Users`, `UsersMe`, `UsersPrefix`
 - Auth: `AuthLogout`, `AuthBootstrap`, `AuthBootstrapStatus`, `AuthCLIRecoveryRequest`, `AuthCLIRecoveryStatus`, `AuthCLIRecoveryApprove`, `AuthCLIRecoveryApproveCLI`, `AuthCLIRecoveryComplete`, `AuthCLIRotate`, `AuthDeviceEnroll`, `AuthPasskeys`, `AuthPasskeysByID`, `AuthPasskeysJITRegisterChallenge`, `AuthPasskeysJITRegisterVerify`, `AuthPasskeysJITPrefix`, `AuthPasskeysPrefix`, `AuthPasskeysCLIStatus`, `AuthPasskeysConsoleRegisterChallenge`, `AuthPasskeysConsoleRegisterVerify`, `AuthPasskeysConsoleAuthenticateChallenge`, `AuthPasskeysConsoleAuthenticateVerify`, `AuthPasskeysConsolePrefix`, `AuthPasskeysEnrollmentRegisterChallenge`, `AuthPasskeysEnrollmentRegisterVerify`, `AuthPasskeysEnrollmentPrefix`, `AuthSessionsMe`, `AuthSessionsPrefix`, `AuthEnrollmentTokenGenerate`, `AuthEnrollmentTokenValidate`
