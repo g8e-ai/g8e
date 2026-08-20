@@ -12,6 +12,7 @@ let deriveEnrollContext;
 let buildCommands;
 let platformLabel;
 let initGettingStarted;
+let copyToClipboard;
 
 beforeEach(async () => {
     vi.resetModules();
@@ -23,11 +24,15 @@ beforeEach(async () => {
     buildCommands = mod.buildCommands;
     platformLabel = mod.platformLabel;
     initGettingStarted = mod.initGettingStarted;
+    copyToClipboard = mod.copyToClipboard;
 });
 
 afterEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();
+    // Restore jsdom default location hostname in case a test overrode
+    // window.location to simulate navigating to a non-localhost host.
+    Object.defineProperty(window, 'location', { value: { hostname: 'localhost' }, configurable: true });
 });
 
 describe('GettingStarted [UNIT - jsdom]', () => {
@@ -155,6 +160,35 @@ describe('GettingStarted [UNIT - jsdom]', () => {
         it('returns null when gatewayUrl is unparseable', () => {
             expect(deriveEnrollContext('not a url', 'Linux x86_64', 'Mozilla/5.0 (X11; Linux x86_64)')).toBeNull();
         });
+
+        it('overrides the gateway URL hostname with browserHost when provided', () => {
+            const ctx = deriveEnrollContext('https://localhost:8443', 'Win32', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'dev.g8e.local');
+            expect(ctx.host).toBe('dev.g8e.local');
+            expect(ctx.httpsPort).toBe('8443');
+            expect(ctx.downloadUrl).toBe('http://dev.g8e.local:8080/.well-known/g8e/bin/g8e-windows-amd64.exe');
+        });
+
+        it('preserves a non-default gateway https port when browserHost overrides the hostname', () => {
+            const ctx = deriveEnrollContext('https://localhost:9443', 'Linux x86_64', 'Mozilla/5.0 (X11; Linux x86_64)', 'dev.g8e.local');
+            expect(ctx.host).toBe('dev.g8e.local');
+            expect(ctx.httpsPort).toBe('9443');
+            expect(ctx.downloadUrl).toBe('http://dev.g8e.local:8080/.well-known/g8e/bin/g8e-linux-amd64');
+        });
+
+        it('falls back to the gateway URL hostname when browserHost is empty', () => {
+            const ctx = deriveEnrollContext('https://localhost:8443', 'Linux x86_64', 'Mozilla/5.0 (X11; Linux x86_64)', '');
+            expect(ctx.host).toBe('localhost');
+        });
+
+        it('falls back to the gateway URL hostname when browserHost is whitespace-only', () => {
+            const ctx = deriveEnrollContext('https://localhost:8443', 'Linux x86_64', 'Mozilla/5.0 (X11; Linux x86_64)', '   ');
+            expect(ctx.host).toBe('localhost');
+        });
+
+        it('falls back to the gateway URL hostname when browserHost is undefined', () => {
+            const ctx = deriveEnrollContext('https://localhost:8443', 'Linux x86_64', 'Mozilla/5.0 (X11; Linux x86_64)', undefined);
+            expect(ctx.host).toBe('localhost');
+        });
     });
 
     describe('buildCommands', () => {
@@ -162,21 +196,21 @@ describe('GettingStarted [UNIT - jsdom]', () => {
             const ctx = deriveEnrollContext('https://localhost:8443', 'Linux x86_64', 'Mozilla/5.0 (X11; Linux x86_64)');
             const cmds = buildCommands(ctx);
             expect(cmds.downloadCmd).toBe('curl -fsSL http://localhost:8080/.well-known/g8e/bin/g8e-linux-amd64 -o g8e && chmod +x g8e');
-            expect(cmds.enrollCmd).toBe('./g8e auth enroll -e localhost --port 8443');
+            expect(cmds.enrollCmd).toBe('./g8e auth enroll user -e localhost --port 8443');
         });
 
         it('builds curl download command on darwin', () => {
             const ctx = deriveEnrollContext('https://dev.example.com', 'MacIntel', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)');
             const cmds = buildCommands(ctx);
             expect(cmds.downloadCmd).toBe('curl -fsSL http://dev.example.com:8080/.well-known/g8e/bin/g8e-darwin-amd64 -o g8e && chmod +x g8e');
-            expect(cmds.enrollCmd).toBe('./g8e auth enroll -e dev.example.com --port 8443');
+            expect(cmds.enrollCmd).toBe('./g8e auth enroll user -e dev.example.com --port 8443');
         });
 
         it('builds iwr download command and .\\g8e.exe enroll command on windows', () => {
             const ctx = deriveEnrollContext('https://10.0.0.5:8443', 'Win32', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
             const cmds = buildCommands(ctx);
-            expect(cmds.downloadCmd).toBe('iwr -Uri http://10.0.0.5:8080/.well-known/g8e/bin/g8e-windows-amd64.exe -OutFile g8e-windows-amd64.exe');
-            expect(cmds.enrollCmd).toBe('.\\g8e.exe auth enroll -e 10.0.0.5 --port 8443');
+            expect(cmds.downloadCmd).toBe('iwr -Uri http://10.0.0.5:8080/.well-known/g8e/bin/g8e-windows-amd64.exe -OutFile g8e.exe');
+            expect(cmds.enrollCmd).toBe('.\\g8e.exe auth enroll user -e 10.0.0.5 --port 8443');
         });
 
         it('returns null when context is null', () => {
@@ -240,19 +274,34 @@ describe('GettingStarted [UNIT - jsdom]', () => {
             expect(document.getElementById('gs-platform-label').textContent).toBe('Linux x86_64');
             expect(document.getElementById('gs-binary-url').textContent).toBe('http://localhost:8080/.well-known/g8e/bin/g8e-linux-amd64');
             expect(document.getElementById('gs-download-cmd').textContent).toBe('curl -fsSL http://localhost:8080/.well-known/g8e/bin/g8e-linux-amd64 -o g8e && chmod +x g8e');
-            expect(document.getElementById('gs-enroll-cmd').textContent).toBe('./g8e auth enroll -e localhost --port 8443');
+            expect(document.getElementById('gs-enroll-cmd').textContent).toBe('./g8e auth enroll user -e localhost --port 8443');
         });
 
         it('populates windows iwr command and .\\g8e.exe enroll command', () => {
             setupDom();
             setNavigator('Win32', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
             window.G8E_GATEWAY_URL = 'https://10.0.0.5:8443';
+            Object.defineProperty(window, 'location', { value: { hostname: '10.0.0.5' }, configurable: true });
 
             initGettingStarted();
 
             expect(document.getElementById('gs-platform-label').textContent).toBe('Windows x86_64');
-            expect(document.getElementById('gs-download-cmd').textContent).toBe('iwr -Uri http://10.0.0.5:8080/.well-known/g8e/bin/g8e-windows-amd64.exe -OutFile g8e-windows-amd64.exe');
-            expect(document.getElementById('gs-enroll-cmd').textContent).toBe('.\\g8e.exe auth enroll -e 10.0.0.5 --port 8443');
+            expect(document.getElementById('gs-download-cmd').textContent).toBe('iwr -Uri http://10.0.0.5:8080/.well-known/g8e/bin/g8e-windows-amd64.exe -OutFile g8e.exe');
+            expect(document.getElementById('gs-enroll-cmd').textContent).toBe('.\\g8e.exe auth enroll user -e 10.0.0.5 --port 8443');
+        });
+
+        it('uses window.location.hostname instead of the configured gateway host when the browser navigated to a different host', () => {
+            setupDom();
+            setNavigator('Win32', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
+            window.G8E_GATEWAY_URL = 'https://localhost:8443';
+            // Simulate the browser navigating to http://dev.g8e.local:3000
+            Object.defineProperty(window, 'location', { value: { hostname: 'dev.g8e.local' }, configurable: true });
+
+            initGettingStarted();
+
+            expect(document.getElementById('gs-binary-url').textContent).toBe('http://dev.g8e.local:8080/.well-known/g8e/bin/g8e-windows-amd64.exe');
+            expect(document.getElementById('gs-download-cmd').textContent).toBe('iwr -Uri http://dev.g8e.local:8080/.well-known/g8e/bin/g8e-windows-amd64.exe -OutFile g8e.exe');
+            expect(document.getElementById('gs-enroll-cmd').textContent).toBe('.\\g8e.exe auth enroll user -e dev.g8e.local --port 8443');
         });
 
         it('shows the graceful-degradation message and hides steps when G8E_GATEWAY_URL is unset', () => {
@@ -315,7 +364,7 @@ describe('GettingStarted [UNIT - jsdom]', () => {
             btn.click();
 
             await new Promise((resolve) => setTimeout(resolve, 0));
-            expect(writeText).toHaveBeenCalledWith('./g8e auth enroll -e localhost --port 8443');
+            expect(writeText).toHaveBeenCalledWith('./g8e auth enroll user -e localhost --port 8443');
         });
 
         it('adds the copied class and swaps the icon to check after a successful copy', async () => {
@@ -339,6 +388,90 @@ describe('GettingStarted [UNIT - jsdom]', () => {
             await vi.advanceTimersByTimeAsync(1500);
             expect(btn.classList.contains('copied')).toBe(false);
             expect(icon.textContent).toBe('content_copy');
+        });
+
+        it('copies the download command via execCommand fallback when navigator.clipboard is undefined (non-secure HTTP context)', async () => {
+            setupDom();
+            setNavigator('Linux x86_64', 'Mozilla/5.0 (X11; Linux x86_64)');
+            window.G8E_GATEWAY_URL = 'https://localhost:8443';
+            // Simulate a non-secure context (HTTP on non-localhost host):
+            // navigator.clipboard is undefined in that case.
+            delete navigator.clipboard;
+            const execCommand = vi.fn().mockReturnValue(true);
+            Object.defineProperty(document, 'execCommand', { value: execCommand, configurable: true });
+
+            initGettingStarted();
+
+            const btn = document.querySelector('.getting-started-copy-btn[data-copy-target="gs-download-cmd"]');
+            btn.click();
+
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            expect(execCommand).toHaveBeenCalledWith('copy');
+            expect(btn.classList.contains('copied')).toBe(true);
+        });
+
+        it('copies the enroll command via execCommand fallback when navigator.clipboard is undefined (non-secure HTTP context)', async () => {
+            setupDom();
+            setNavigator('Linux x86_64', 'Mozilla/5.0 (X11; Linux x86_64)');
+            window.G8E_GATEWAY_URL = 'https://localhost:8443';
+            delete navigator.clipboard;
+            const execCommand = vi.fn().mockReturnValue(true);
+            Object.defineProperty(document, 'execCommand', { value: execCommand, configurable: true });
+
+            initGettingStarted();
+
+            const btn = document.querySelector('.getting-started-copy-btn[data-copy-target="gs-enroll-cmd"]');
+            btn.click();
+
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            expect(execCommand).toHaveBeenCalledWith('copy');
+            expect(btn.classList.contains('copied')).toBe(true);
+        });
+    });
+
+    describe('copyToClipboard', () => {
+        it('uses navigator.clipboard.writeText when available (secure context)', async () => {
+            const writeText = vi.fn().mockResolvedValue(undefined);
+            Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+
+            const ok = await copyToClipboard('hello world');
+
+            expect(ok).toBe(true);
+            expect(writeText).toHaveBeenCalledWith('hello world');
+        });
+
+        it('falls back to document.execCommand("copy") when navigator.clipboard is undefined (non-secure HTTP context)', async () => {
+            delete navigator.clipboard;
+            const execCommand = vi.fn().mockReturnValue(true);
+            Object.defineProperty(document, 'execCommand', { value: execCommand, configurable: true });
+
+            const ok = await copyToClipboard('hello world');
+
+            expect(ok).toBe(true);
+            expect(execCommand).toHaveBeenCalledWith('copy');
+            // The temporary textarea must be removed from the DOM after copy.
+            expect(document.querySelector('textarea')).toBeNull();
+        });
+
+        it('returns false when both navigator.clipboard and execCommand fail', async () => {
+            delete navigator.clipboard;
+            const execCommand = vi.fn().mockReturnValue(false);
+            Object.defineProperty(document, 'execCommand', { value: execCommand, configurable: true });
+
+            const ok = await copyToClipboard('hello world');
+
+            expect(ok).toBe(false);
+            expect(document.querySelector('textarea')).toBeNull();
+        });
+
+        it('returns false when navigator.clipboard.writeText rejects and execCommand is unavailable', async () => {
+            const writeText = vi.fn().mockRejectedValue(new Error('perm denied'));
+            Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+            delete document.execCommand;
+
+            const ok = await copyToClipboard('hello world');
+
+            expect(ok).toBe(false);
         });
     });
 });

@@ -507,7 +507,7 @@ The dashboard's enrollment is configured via two env vars set by `docker-compose
 | Variable | Default | Description |
 | --- | --- | --- |
 | `G8E_GATEWAY_HTTP_URL` | none (required) | Gateway plain-HTTP bootstrap surface URL (e.g., `http://g8eg:8080`). Used for the CA bundle fetch and the enrollment POST. Fail-closed if unset — no derivation from `G8E_GATEWAY_URL` (which is browser-facing `localhost`). |
-| `G8E_RUNTIME_DIR` | none (compose sets `/root/.g8e`) | Dashboard runtime directory root. Credentials are written under `${G8E_RUNTIME_DIR}/pki/issued/apps/g8ed.crt`, `g8ed.key`, and `${G8E_RUNTIME_DIR}/pki/trust/hub-bundle.pem`. Fail-closed if unset. |
+| `G8E_RUNTIME_DIR` | none (compose sets `/data`) | Dashboard runtime directory root. Credentials are written under `${G8E_RUNTIME_DIR}/pki/issued/apps/g8ed.crt`, `g8ed.key`, and `${G8E_RUNTIME_DIR}/pki/trust/hub-bundle.pem`. Fail-closed if unset. The dashboard container runs as the non-root `g8e` user (UID 1001), so compose mounts the `g8e-dashboard-data` volume at `/data` (created and chowned to `g8e:g8e` in the Dockerfile) rather than `/root/.g8e`. |
 
 ### Credential Path Layout
 

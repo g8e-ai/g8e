@@ -32,7 +32,9 @@ export const g8edEnvConfig = {
     G8E_GATEWAY_HTTP_URL: process.env.G8E_GATEWAY_HTTP_URL || null,
     // The dashboard's own runtime directory. The enrollment service writes
     // pki/issued/apps/g8ed.crt and friends under here. Compose sets
-    // /root/.g8e (the g8e-dashboard-data volume mount root).
+    // /data (the g8e-dashboard-data volume mount root). The dashboard
+    // container runs as the non-root g8e user (UID 1001), so /data is used
+    // instead of /root/.g8e (which is not writable by the g8e user).
     G8E_RUNTIME_DIR: process.env.G8E_RUNTIME_DIR || null,
 
     // Network Configuration

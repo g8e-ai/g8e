@@ -254,6 +254,17 @@ func SetHTTPSEndpointOverride(endpoint string) {
 	httpsEndpointOverride = endpoint
 }
 
+// HasHTTPSEndpointOverride reports whether the HTTPS endpoint override was set
+// by the -e/--endpoint flag (optionally combined with --port). Callers use this
+// to decide whether to rewrite a gateway-returned URL (e.g., the recovery
+// approval URL) to match the user-supplied endpoint instead of the gateway's
+// own PublicBaseURL.
+func HasHTTPSEndpointOverride() bool {
+	endpointMu.RLock()
+	defer endpointMu.RUnlock()
+	return httpsEndpointOverride != ""
+}
+
 // OperatorPublicURL returns the HTTPS URL for mTLS API and public surface.
 // When cfg.Paths.Host is a full URL (contains "://"), it is returned directly,
 // matching OperatorHTTPURL behavior for test overrides.

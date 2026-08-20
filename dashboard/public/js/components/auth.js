@@ -97,7 +97,6 @@ export class AuthManager {
     constructor(eventBus) {
         this.eventBus = eventBus;
         this.session = null;
-        this.bootstrapped = null;
         this.subscribers = new Set();
         this.initialized = false;
 
@@ -113,38 +112,11 @@ export class AuthManager {
         } catch (error) {
             console.error('[AUTH] Initialization error:', error.message);
         }
-
-        const onLoginPage = window.location.pathname === '/' || window.location.pathname === '/login';
-        if (!this.isAuthenticated() && onLoginPage) {
-            this._handleUnauthenticatedInit();
-        }
-    }
-
-    async _handleUnauthenticatedInit() {
-        const bootstrapped = await this._fetchBootstrapStatus();
-        if (bootstrapped === false) {
-            this.showPasskeyRegistrationModal();
-        } else {
-            this.showPasskeyLoginModal();
-        }
     }
 
     // =========================================================================
     // Session validation (gateway-direct)
     // =========================================================================
-
-    async _fetchBootstrapStatus() {
-        try {
-            const response = await window.serviceClient.get(ServiceName.GATEWAY, ApiPaths.auth.bootstrapStatus());
-            if (!response.ok) return null;
-            const data = await response.json();
-            this.bootstrapped = data?.bootstrapped === true;
-            return this.bootstrapped;
-        } catch (error) {
-            console.warn('[AUTH] Bootstrap status check failed:', error.message);
-            return null;
-        }
-    }
 
     async _fetchUser() {
         const response = await window.serviceClient.get(ServiceName.GATEWAY, ApiPaths.user.me());

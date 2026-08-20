@@ -16,6 +16,14 @@
  * OS/arch from navigator, populates the static #getting-started block in
  * index.html, and wires copy-to-clipboard buttons. If the gateway URL is
  * unset or unparseable, the section shows a graceful-degradation message.
+ *
+ * The hostname used in the download URL and enroll command reflects the
+ * origin the browser actually navigated to (`window.location.hostname`), not
+ * the configured gateway URL's hostname. The dashboard and gateway share the
+ * same host (different ports), so a user visiting http://dev.g8e.local:3000
+ * gets commands pointing at dev.g8e.local rather than the configured
+ * G8E_GATEWAY_URL host (which may default to localhost). The HTTPS port is
+ * still taken from the gateway URL so non-default port configurations hold.
  */
 
 /** Fixed HTTP discovery port — the gateway hardcodes 8080 for plain-HTTP binary/CA serving. */
@@ -63,13 +71,19 @@ export function binaryName(os, arch) {
 
 /**
  * Derive the enrollment context (host, ports, binary, download URL) from the
- * gateway origin. Returns null if the URL is unset or unparseable.
+ * gateway origin. The hostname is overridden by `browserHost` when provided
+ * (non-empty), so the commands reflect the origin the browser actually
+ * navigated to rather than the configured gateway URL's hostname. The HTTPS
+ * port always comes from the gateway URL so non-default port configurations
+ * are preserved. Returns null if the URL is unset or unparseable.
  * @param {string} gatewayUrl - window.G8E_GATEWAY_URL value.
  * @param {string} platform - navigator.platform value.
  * @param {string} userAgent - navigator.userAgent value.
+ * @param {string} [browserHost] - window.location.hostname; overrides the
+ *   gateway URL hostname when non-empty.
  * @returns {{host:string,httpsPort:string,binary:string,downloadUrl:string,os:string,arch:string}|null}
  */
-export function deriveEnrollContext(gatewayUrl, platform, userAgent) {
+export function deriveEnrollContext(gatewayUrl, platform, userAgent, browserHost) {
     if (!gatewayUrl) return null;
     let url;
     try {
@@ -78,7 +92,7 @@ export function deriveEnrollContext(gatewayUrl, platform, userAgent) {
         return null;
     }
     if (!url.hostname) return null;
-    const host = url.hostname;
+    const host = (browserHost && browserHost.trim()) || url.hostname;
     const httpsPort = url.port || DEFAULT_HTTPS_PORT;
     const os = detectOS(platform);
     const arch = detectArch(userAgent);
@@ -96,11 +110,11 @@ export function buildCommands(ctx) {
     if (!ctx) return null;
     const isWindows = ctx.os === 'windows';
     const downloadCmd = isWindows
-        ? `iwr -Uri ${ctx.downloadUrl} -OutFile ${ctx.binary}`
+        ? `iwr -Uri ${ctx.downloadUrl} -OutFile g8e.exe`
         : `curl -fsSL ${ctx.downloadUrl} -o g8e && chmod +x g8e`;
     const enrollCmd = isWindows
-        ? `.\\g8e.exe auth enroll -e ${ctx.host} --port ${ctx.httpsPort}`
-        : `./g8e auth enroll -e ${ctx.host} --port ${ctx.httpsPort}`;
+        ? `.\\g8e.exe auth enroll user -e ${ctx.host} --port ${ctx.httpsPort}`
+        : `./g8e auth enroll user -e ${ctx.host} --port ${ctx.httpsPort}`;
     return { downloadCmd, enrollCmd };
 }
 
@@ -118,7 +132,54 @@ export function platformLabel(ctx) {
 const COPIED_RESET_MS = 1500;
 
 /**
- * Wire a copy button to its target <code> element via navigator.clipboard.
+ * Copy text to the clipboard, preferring the async Clipboard API
+ * (navigator.clipboard.writeText) and falling back to the legacy
+ * document.execCommand('copy') path with a temporary textarea.
+ *
+ * The fallback is required because the dashboard is served over plain HTTP
+ * on non-localhost hosts (e.g. http://dev.g8e.local:3000), which browsers
+ * classify as a non-secure context. In non-secure contexts navigator.clipboard
+ * is undefined, so without the fallback the copy buttons silently no-op.
+ * @param {string} text - The text to copy.
+ * @returns {Promise<boolean>} true if the copy succeeded, false otherwise.
+ */
+export async function copyToClipboard(text) {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch {
+            // Permission denied or other clipboard error — fall through to
+            // the execCommand fallback rather than giving up silently.
+        }
+    }
+    if (typeof document.execCommand === 'function') {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.top = '0';
+        textarea.style.left = '0';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        let ok = false;
+        try {
+            ok = document.execCommand('copy');
+        } catch {
+            ok = false;
+        }
+        document.body.removeChild(textarea);
+        return ok;
+    }
+    return false;
+}
+
+/**
+ * Wire a copy button to its target <code> element. Uses copyToClipboard, which
+ * prefers navigator.clipboard and falls back to document.execCommand for
+ * non-secure (plain-HTTP, non-localhost) contexts where the async Clipboard
+ * API is unavailable.
  * @param {HTMLButtonElement} btn - Copy button with data-copy-target attribute.
  * @param {() => string} getText - Returns the text to copy (re-read each click).
  */
@@ -126,11 +187,8 @@ function wireCopyButton(btn, getText) {
     btn.addEventListener('click', async () => {
         const text = getText();
         if (!text) return;
-        try {
-            await navigator.clipboard.writeText(text);
-        } catch {
-            return;
-        }
+        const ok = await copyToClipboard(text);
+        if (!ok) return;
         btn.classList.add('copied');
         const icon = btn.querySelector('.material-symbols-outlined');
         const original = icon ? icon.textContent : null;
@@ -154,8 +212,9 @@ export function initGettingStarted() {
     const gatewayUrl = typeof window !== 'undefined' ? window.G8E_GATEWAY_URL : null;
     const platform = typeof navigator !== 'undefined' ? navigator.platform : '';
     const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const browserHost = typeof window !== 'undefined' && window.location ? window.location.hostname : '';
 
-    const ctx = deriveEnrollContext(gatewayUrl, platform, userAgent);
+    const ctx = deriveEnrollContext(gatewayUrl, platform, userAgent, browserHost);
     const steps = document.getElementById('getting-started-steps');
     const degraded = document.getElementById('getting-started-degraded');
 

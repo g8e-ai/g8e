@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -522,6 +523,14 @@ func (c *EnrollmentCoordinator) handleRecovery(ctx context.Context, opts Enrollm
 	}
 	c.out("Recovery request created (expires at %s).", expiresAt.Format(time.RFC3339))
 
+	// The gateway builds the approval URL from its own PublicBaseURL config,
+	// which defaults to localhost. When the user supplied -e/--endpoint (with
+	// optional --port), the CLI's HTTPS endpoint override reflects the address
+	// the user's browser can actually reach, so rewrite the approval URL base
+	// to match. Without this, a remote user who passed -e dev.g8e.local would
+	// see an approval URL pointing at localhost and be unable to open it.
+	approvalURL = c.rewriteApprovalURLBase(approvalURL)
+
 	if opts.Headless {
 		// Headless path: do not open a browser. Print the approve-recovery
 		// command for an already-enrolled CLI to run via mTLS. The polling
@@ -545,6 +554,29 @@ func (c *EnrollmentCoordinator) handleRecovery(ctx context.Context, opts Enrollm
 	}
 	c.out("Recovery request approved. Completing enrollment...")
 	return c.gateway.CompleteRecovery(ctx, requestID, token, csrPEM, cliKey, opts.CAFingerprint, "")
+}
+
+// rewriteApprovalURLBase replaces the scheme and host:port of the gateway-
+// returned approval URL with the CLI's OperatorPublicURL when the user supplied
+// -e/--endpoint (with optional --port). The path and fragment (which carries
+// the opaque recovery token) are preserved. When no endpoint override is set,
+// the approval URL is returned unchanged so the gateway's own PublicBaseURL
+// configuration is respected.
+func (c *EnrollmentCoordinator) rewriteApprovalURLBase(approvalURL string) string {
+	if !config.HasHTTPSEndpointOverride() {
+		return approvalURL
+	}
+	parsed, err := url.Parse(approvalURL)
+	if err != nil {
+		return approvalURL
+	}
+	base, err := url.Parse(c.cfg.OperatorPublicURL())
+	if err != nil {
+		return approvalURL
+	}
+	parsed.Scheme = base.Scheme
+	parsed.Host = base.Host
+	return parsed.String()
 }
 
 // handleRotation generates a new CLI CSR and rotates the existing CLI

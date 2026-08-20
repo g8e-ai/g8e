@@ -539,6 +539,62 @@ func TestEnroll_AbsentBootstrapped_PerformsRecovery(t *testing.T) {
 	assert.True(t, recorder.contains("recovery"))
 }
 
+// TestEnroll_Recovery_RewritesApprovalURLWithEndpointOverride verifies that
+// when the user supplies -e/--endpoint (setting the HTTPS endpoint override),
+// the coordinator rewrites the gateway-returned approval URL base to match the
+// user's endpoint instead of the gateway's own PublicBaseURL (which defaults to
+// localhost). Without this, a remote user who passed -e dev.g8e.local would
+// receive an approval URL pointing at localhost and be unable to open it.
+func TestEnroll_Recovery_RewritesApprovalURLWithEndpointOverride(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, _, browser, _, _, _, _ := setupCoordinatorTest(t)
+
+	artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
+	gw.bootstrapStatus = true
+	gw.recoveryRequestID = "req-ep"
+	gw.recoveryToken = "token-ep"
+	// Gateway returns a localhost-based URL (its own PublicBaseURL default).
+	gw.recoveryApprovalURL = "https://localhost:8443/console/#recovery=token-ep"
+	gw.recoveryStates = []models.CLIRecoveryState{models.CLIRecoveryStateApproved}
+	gw.recoveryCompleteArtifact = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+
+	// Simulate -e dev.g8e.local --port 8443 from the root PersistentPreRunE.
+	config.SetHTTPSEndpointOverride("dev.g8e.local:8443")
+	t.Cleanup(func() { config.SetHTTPSEndpointOverride("") })
+
+	_, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+
+	require.Len(t, browser.urls, 1, "browser should be opened once")
+	assert.Contains(t, browser.urls[0], "dev.g8e.local:8443")
+	assert.NotContains(t, browser.urls[0], "localhost")
+	assert.Contains(t, browser.urls[0], "/console/#recovery=token-ep")
+}
+
+// TestEnroll_Recovery_PreservesApprovalURLWithoutOverride verifies that when
+// no endpoint override is set, the coordinator passes the gateway-returned
+// approval URL through unchanged, respecting the gateway's PublicBaseURL config.
+func TestEnroll_Recovery_PreservesApprovalURLWithoutOverride(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, _, browser, _, _, _, _ := setupCoordinatorTest(t)
+
+	artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
+	gw.bootstrapStatus = true
+	gw.recoveryRequestID = "req-noep"
+	gw.recoveryToken = "token-noep"
+	gw.recoveryApprovalURL = "https://gateway.example.com:8443/console/#recovery=token-noep"
+	gw.recoveryStates = []models.CLIRecoveryState{models.CLIRecoveryStateApproved}
+	gw.recoveryCompleteArtifact = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+
+	_, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+
+	require.Len(t, browser.urls, 1, "browser should be opened once")
+	assert.Equal(t, "https://gateway.example.com:8443/console/#recovery=token-noep", browser.urls[0])
+}
+
 func TestEnroll_CompleteHealthy_ReusesIdentity(t *testing.T) {
 	t.Parallel()
 	coord, gw, _, trust, browser, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
