@@ -105,7 +105,6 @@ func TestUserService_CreateUser(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.NotNil(t, user)
-		assert.False(t, user.IsBootstrap)
 		assert.Equal(t, constants.UserStatusActive, user.Status)
 		assert.NotEmpty(t, user.ID)
 		assert.NotEmpty(t, user.WebAuthnUserID)
@@ -113,33 +112,43 @@ func TestUserService_CreateUser(t *testing.T) {
 	})
 }
 
-func TestUserService_CreateBootstrapUser(t *testing.T) {
-	t.Run("Success - creates bootstrap user", func(t *testing.T) {
+func TestUserService_CreateUserWithOSUser(t *testing.T) {
+	t.Run("Success - attaches provided local OS user info", func(t *testing.T) {
 		mockDB := newTestCanonicalDBService(t)
 		logger := newNoopLogger()
 		userSvc := NewUserService(mockDB, logger)
 
-		user, err := userSvc.CreateBootstrapUserWithOSUser(nil)
+		osUser := &models.LocalOSUser{
+			Domain:   "CORP",
+			Username: "alice",
+			UID:      "1001",
+			GID:      "1001",
+		}
 
-		assert.NoError(t, err)
-		assert.NotNil(t, user)
-		assert.True(t, user.IsBootstrap)
+		user, err := userSvc.CreateUserWithOSUser(osUser)
+
+		require.NoError(t, err)
+		require.NotNil(t, user)
 		assert.Equal(t, constants.UserStatusActive, user.Status)
+		assert.NotEmpty(t, user.ID)
+		require.NotNil(t, user.LocalOSUser, "LocalOSUser should be attached when provided")
+		assert.Equal(t, "CORP", user.LocalOSUser.Domain)
+		assert.Equal(t, "alice", user.LocalOSUser.Username)
+		assert.Equal(t, "1001", user.LocalOSUser.UID)
 	})
 
-	t.Run("Error - bootstrap user already exists", func(t *testing.T) {
+	t.Run("Success - falls back to gateway local OS user when nil", func(t *testing.T) {
 		mockDB := newTestCanonicalDBService(t)
 		logger := newNoopLogger()
 		userSvc := NewUserService(mockDB, logger)
 
-		// Create first bootstrap user
-		_, err := userSvc.CreateBootstrapUserWithOSUser(nil)
-		require.NoError(t, err)
+		user, err := userSvc.CreateUserWithOSUser(nil)
 
-		// Try to create second bootstrap user
-		_, err = userSvc.CreateBootstrapUserWithOSUser(nil)
-		assert.Error(t, err)
-		assert.Equal(t, constants.ErrAlreadyExists, err)
+		require.NoError(t, err)
+		require.NotNil(t, user)
+		// createUser falls back to getLocalOSUser() when nil is passed;
+		// the test runner's OS user info is attached (non-nil on Unix/Windows).
+		assert.NotNil(t, user.LocalOSUser, "LocalOSUser should fall back to the gateway's local OS user")
 	})
 }
 
@@ -184,32 +193,62 @@ func TestUserService_Disable(t *testing.T) {
 	})
 }
 
-func TestUserService_FindBootstrapUser(t *testing.T) {
-	t.Run("Success - finds bootstrap user", func(t *testing.T) {
+func TestUserService_IsFirstUser(t *testing.T) {
+	t.Run("True - sole user is the first user", func(t *testing.T) {
 		mockDB := newTestCanonicalDBService(t)
 		logger := newNoopLogger()
 		userSvc := NewUserService(mockDB, logger)
 
-		// Create bootstrap user
-		bootstrapUser, err := userSvc.CreateBootstrapUserWithOSUser(nil)
+		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
 
-		// Find bootstrap user
-		found, err := userSvc.FindBootstrapUser()
+		first, err := userSvc.IsFirstUser(user.ID)
 		assert.NoError(t, err)
-		assert.NotNil(t, found)
-		assert.Equal(t, bootstrapUser.ID, found.ID)
-		assert.True(t, found.IsBootstrap)
+		assert.True(t, first, "the only user in the system is the first user / admin")
 	})
 
-	t.Run("Success - returns nil when no bootstrap user", func(t *testing.T) {
+	t.Run("False - non-existent user is not the first user", func(t *testing.T) {
 		mockDB := newTestCanonicalDBService(t)
 		logger := newNoopLogger()
 		userSvc := NewUserService(mockDB, logger)
 
-		found, err := userSvc.FindBootstrapUser()
+		// No users exist at all.
+		first, err := userSvc.IsFirstUser("non-existent")
 		assert.NoError(t, err)
-		assert.Nil(t, found)
+		assert.False(t, first, "a user that does not exist cannot be the first user")
+	})
+
+	t.Run("False - second user is not the first user", func(t *testing.T) {
+		mockDB := newTestCanonicalDBService(t)
+		logger := newNoopLogger()
+		userSvc := NewUserService(mockDB, logger)
+
+		firstUser, err := userSvc.CreateUser()
+		require.NoError(t, err)
+		secondUser, err := userSvc.CreateUser()
+		require.NoError(t, err)
+
+		isFirst, err := userSvc.IsFirstUser(secondUser.ID)
+		assert.NoError(t, err)
+		assert.False(t, isFirst, "the second user is not the first user / admin")
+
+		// The original first user remains the first user (and admin) even
+		// after a second user is created — IsFirstUser reports whether the
+		// user IS the first user ever created, not whether they are the
+		// only user. The first user retains admin permanently.
+		isFirstOriginal, err := userSvc.IsFirstUser(firstUser.ID)
+		assert.NoError(t, err)
+		assert.True(t, isFirstOriginal, "the first user created remains the first user / admin even after a second user is added")
+	})
+
+	t.Run("Error - empty user ID", func(t *testing.T) {
+		mockDB := newTestCanonicalDBService(t)
+		logger := newNoopLogger()
+		userSvc := NewUserService(mockDB, logger)
+
+		_, err := userSvc.IsFirstUser("")
+		assert.Error(t, err)
+		assert.Equal(t, constants.ErrUserIDRequired, err)
 	})
 }
 

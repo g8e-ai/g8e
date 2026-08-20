@@ -138,7 +138,7 @@ func mustMarshal(t *testing.T, v any) []byte {
 // ---------------------------------------------------------------------------
 
 // enrollmentTestServer creates an httptest.Server that handles the trust bundle
-// and device enrollment endpoints. The trustStatus and enrollStatus control the
+// and operator enrollment endpoints. The trustStatus and enrollStatus control the
 // HTTP status codes returned. The enrollBody is returned as-is for the enrollment
 // endpoint. If enrollBody is nil, a valid success response is generated using the
 // CA to sign the CSR from the request. Teardown is registered via t.Cleanup.
@@ -151,7 +151,7 @@ func enrollmentTestServer(t *testing.T, caPEM []byte, caCert *x509.Certificate, 
 			if trustStatus == http.StatusOK {
 				_, _ = w.Write(caPEM)
 			}
-		case constants.APIPathAuthDeviceEnroll:
+		case constants.APIPathAuthOperatorEnroll:
 			if enrollStatus == http.StatusOK || enrollStatus == http.StatusCreated {
 				if enrollBody != nil {
 					w.WriteHeader(enrollStatus)
@@ -160,10 +160,10 @@ func enrollmentTestServer(t *testing.T, caPEM []byte, caCert *x509.Certificate, 
 				}
 				body, err := io.ReadAll(r.Body)
 				require.NoError(t, err)
-				var req models.DeviceEnrollRequest
+				var req models.OperatorEnrollRequest
 				require.NoError(t, json.Unmarshal(body, &req))
 				opCert := signCSRIntegration(t, []byte(req.CSR), caCert, caKey, "test-operator", time.Now().Add(365*24*time.Hour))
-				resp := models.DeviceEnrollmentResponse{
+				resp := models.OperatorEnrollmentResponse{
 					OperatorCert:      string(opCert),
 					OperatorID:        "op-001",
 					OperatorSessionID: "sess-001",
@@ -216,14 +216,14 @@ func TestPerformAutomaticEnrollment(t *testing.T) {
 			name:         "ErrorFieldInResponse",
 			trustStatus:  http.StatusOK,
 			enrollStatus: http.StatusOK,
-			enrollBody:   mustMarshal(t, models.DeviceEnrollmentResponse{Error: "enrollment denied"}),
+			enrollBody:   mustMarshal(t, models.OperatorEnrollmentResponse{Error: "enrollment denied"}),
 			wantErr:      constants.ErrEnrollmentFailed,
 		},
 		{
 			name:         "MissingOperatorCert",
 			trustStatus:  http.StatusOK,
 			enrollStatus: http.StatusOK,
-			enrollBody:   mustMarshal(t, models.DeviceEnrollmentResponse{OperatorID: "op-001", OperatorSessionID: "sess-001"}),
+			enrollBody:   mustMarshal(t, models.OperatorEnrollmentResponse{OperatorID: "op-001", OperatorSessionID: "sess-001"}),
 			wantErr:      constants.ErrMissingCertificate,
 		},
 	}
@@ -279,13 +279,13 @@ func TestPerformAutomaticEnrollment_ActuatorPublicKeySaved(t *testing.T) {
 		case constants.WellKnownPKICABundle:
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write(caPEM)
-		case constants.APIPathAuthDeviceEnroll:
+		case constants.APIPathAuthOperatorEnroll:
 			body, err := io.ReadAll(r.Body)
 			require.NoError(t, err)
-			var req models.DeviceEnrollRequest
+			var req models.OperatorEnrollRequest
 			require.NoError(t, json.Unmarshal(body, &req))
 			opCert := signCSRIntegration(t, []byte(req.CSR), caCert, caKey, "test-operator", time.Now().Add(365*24*time.Hour))
-			resp := models.DeviceEnrollmentResponse{
+			resp := models.OperatorEnrollmentResponse{
 				OperatorCert:      string(opCert),
 				OperatorID:        "op-001",
 				OperatorSessionID: "sess-001",
@@ -319,7 +319,7 @@ func TestPerformAutomaticEnrollment_ActuatorPublicKeySaved(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // renewalTestServer creates an httptest.Server that handles the trust bundle
-// and PKI device enrollment endpoints for RenewOperatorCertificate tests.
+// and PKI operator enrollment endpoints for RenewOperatorCertificate tests.
 // The trustStatus and enrollStatus control HTTP status codes.
 // enrollBody overrides the enrollment response; if nil, a valid response is generated.
 // trustBody overrides the trust bundle response; if nil, caPEM is used.
@@ -346,7 +346,7 @@ func renewalTestServer(t *testing.T, caPEM []byte, caCert *x509.Certificate, caK
 				}
 				body, err := io.ReadAll(r.Body)
 				require.NoError(t, err)
-				var req models.DeviceEnrollRequest
+				var req models.OperatorEnrollRequest
 				require.NoError(t, json.Unmarshal(body, &req))
 				opCert := signCSRIntegration(t, []byte(req.CSR), caCert, caKey, "test-operator", time.Now().Add(365*24*time.Hour))
 				cliCert := signCSRIntegration(t, []byte(req.CSR), caCert, caKey, "test-cli", time.Now().Add(365*24*time.Hour))
@@ -577,7 +577,7 @@ func TestSubmitRenewal(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			body, err := io.ReadAll(r.Body)
 			require.NoError(t, err)
-			var req models.DeviceEnrollRequest
+			var req models.OperatorEnrollRequest
 			require.NoError(t, json.Unmarshal(body, &req))
 			opCert := signCSRIntegration(t, []byte(req.CSR), caCert, caKey, "test-operator", time.Now().Add(365*24*time.Hour))
 			cliCert := signCSRIntegration(t, []byte(req.CLICSR), caCert, caKey, "test-cli", time.Now().Add(365*24*time.Hour))
@@ -710,13 +710,13 @@ func TestPerformAutomaticEnrollment_HubTrustBundleOverwritesCAFile(t *testing.T)
 		case constants.WellKnownPKICABundle:
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write(caPEM)
-		case constants.APIPathAuthDeviceEnroll:
+		case constants.APIPathAuthOperatorEnroll:
 			body, err := io.ReadAll(r.Body)
 			require.NoError(t, err)
-			var req models.DeviceEnrollRequest
+			var req models.OperatorEnrollRequest
 			require.NoError(t, json.Unmarshal(body, &req))
 			opCert := signCSRIntegration(t, []byte(req.CSR), caCert, caKey, "test-operator", time.Now().Add(365*24*time.Hour))
-			resp := models.DeviceEnrollmentResponse{
+			resp := models.OperatorEnrollmentResponse{
 				OperatorCert:      string(opCert),
 				OperatorID:        "op-001",
 				OperatorSessionID: "sess-001",
@@ -756,13 +756,13 @@ func TestPerformAutomaticEnrollment_CertChainAppendedToOperatorCert(t *testing.T
 		case constants.WellKnownPKICABundle:
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write(caPEM)
-		case constants.APIPathAuthDeviceEnroll:
+		case constants.APIPathAuthOperatorEnroll:
 			body, err := io.ReadAll(r.Body)
 			require.NoError(t, err)
-			var req models.DeviceEnrollRequest
+			var req models.OperatorEnrollRequest
 			require.NoError(t, json.Unmarshal(body, &req))
 			opCert := signCSRIntegration(t, []byte(req.CSR), caCert, caKey, "test-operator", time.Now().Add(365*24*time.Hour))
-			resp := models.DeviceEnrollmentResponse{
+			resp := models.OperatorEnrollmentResponse{
 				OperatorCert:      string(opCert),
 				OperatorCertChain: string(intermediatePEM),
 				OperatorID:        "op-001",
@@ -809,7 +809,7 @@ func TestPerformAutomaticEnrollment_MalformedJSONResponse(t *testing.T) {
 		case constants.WellKnownPKICABundle:
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write(caPEM)
-		case constants.APIPathAuthDeviceEnroll:
+		case constants.APIPathAuthOperatorEnroll:
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("{not valid json"))
 		default:

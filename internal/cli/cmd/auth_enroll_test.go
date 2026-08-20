@@ -128,7 +128,7 @@ func TestEnrollCmdWithConfig_GatewayDownReturnsError(t *testing.T) {
 	cmd.SetErr(&buf)
 
 	// The production coordinator factory will try to reach the gateway
-	// (CheckBootstrapStatus) and fail because the endpoint is unreachable.
+	// (CheckActivationStatus) and fail because the endpoint is unreachable.
 	// CheckOperatorRunning already fails before the coordinator is built,
 	// so this asserts the preflight check fails closed.
 	err := cmd.RunE(cmd, nil)

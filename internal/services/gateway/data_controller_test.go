@@ -588,10 +588,12 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 	resp := response.NewWriter(logger)
 	adminController := newAdminController(AdminControllerDeps{Cfg: cfg, Logger: logger, DocStore: stores.DocStore, SignerStore: stores.SignerStore, ConsensusStore: stores.ConsensusStore, UserSvc: userSvc, Responder: resp})
 
-	bootstrapUser, err := userSvc.CreateBootstrapUserWithOSUser(nil)
+	// The first user created is the gateway admin (IsFirstUser). The second
+	// user is a non-admin regular user.
+	adminUser, err := userSvc.CreateUser()
 	require.NoError(t, err)
-	require.NotNil(t, bootstrapUser)
-	t.Cleanup(func() { stores.DocStore.DocDelete("users", bootstrapUser.ID) })
+	require.NotNil(t, adminUser)
+	t.Cleanup(func() { stores.DocStore.DocDelete("users", adminUser.ID) })
 
 	regularUser, err := userSvc.CreateUser()
 	require.NoError(t, err)
@@ -655,7 +657,7 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 		reqBody := map[string]string{}
 		bodyBytes := mustMarshalJSON(t, reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/apps/revoke", bytes.NewReader(bodyBytes))
-		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, bootstrapUser.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, adminUser.ID))
 
 		rr := httptest.NewRecorder()
 		adminController.handleRevokeApp(rr, req)
@@ -685,7 +687,7 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 		reqBody := map[string]string{"app_id": appID}
 		bodyBytes := mustMarshalJSON(t, reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/apps/revoke", bytes.NewReader(bodyBytes))
-		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, bootstrapUser.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, adminUser.ID))
 
 		rr := httptest.NewRecorder()
 		adminController.handleRevokeApp(rr, req)
@@ -732,7 +734,7 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 		reqBody := map[string]string{"app_id": appID}
 		bodyBytes := mustMarshalJSON(t, reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/apps/revoke", bytes.NewReader(bodyBytes))
-		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, bootstrapUser.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, adminUser.ID))
 
 		rr := httptest.NewRecorder()
 		adminController.handleRevokeApp(rr, req)
@@ -775,7 +777,7 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 		reqBody := map[string]string{"app_id": appID}
 		bodyBytes := mustMarshalJSON(t, reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/apps/revoke", bytes.NewReader(bodyBytes))
-		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, bootstrapUser.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, adminUser.ID))
 
 		rr := httptest.NewRecorder()
 		adminController.handleRevokeApp(rr, req)
