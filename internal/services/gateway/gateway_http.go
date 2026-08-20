@@ -50,7 +50,8 @@ type HTTPHandlerDependencies struct {
 	GovernanceControllerDeps      GovernanceControllerDeps
 	MCPControllerDeps             MCPControllerDeps
 	PubSubControllerDeps          PubSubControllerDeps
-	PasskeyControllerDeps         PasskeyControllerDeps
+	PasskeyControllerDeps               PasskeyControllerDeps
+	PlatformEnrollmentControllerDeps    PlatformEnrollmentControllerDeps
 }
 
 // HTTPHandler manages the web API for the gateway service.
@@ -62,6 +63,7 @@ type HTTPHandler struct {
 	mcpController     *MCPController
 	pubsubController  *PubSubController
 	passkeyController *PasskeyController
+	platformEnrollmentController *PlatformEnrollmentController
 	// Controllers for domain-specific endpoints
 	pkiController             *PKIController
 	auditController           *AuditController
@@ -190,6 +192,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 		mcpController:             newMCPController(deps.MCPControllerDeps),
 		pubsubController:          newPubSubController(deps.PubSubControllerDeps),
 		passkeyController:         newPasskeyController(deps.PasskeyControllerDeps),
+		platformEnrollmentController: newPlatformEnrollmentController(deps.PlatformEnrollmentControllerDeps),
 		limiters:                  make(map[string]*tokenBucket),
 		limiterLastUsed:           make(map[string]time.Time),
 	}

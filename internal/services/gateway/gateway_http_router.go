@@ -65,6 +65,15 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryApproveCLI, h.cliRecoveryController.handleRecoveryApproveCLI)
 	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryComplete, h.cliRecoveryController.handleRecoveryComplete)
 
+	// Platform enrollment flow — request/status/complete are public
+	// (token-scoped, like CLI recovery); pending and decision require
+	// owner authentication (web session or mTLS CLI via RouteAuthDual).
+	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentRequest, h.platformEnrollmentController.handlePlatformEnrollmentRequest)
+	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentStatus, h.platformEnrollmentController.handlePlatformEnrollmentStatus)
+	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentComplete, h.platformEnrollmentController.handlePlatformEnrollmentComplete)
+	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentPending, h.platformEnrollmentController.handlePlatformEnrollmentPending)
+	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentDecision, h.platformEnrollmentController.handlePlatformEnrollmentDecision)
+
 	// CLI rotation — mTLS-protected; the caller's identity is derived from
 	// the verified CLI certificate. NOT registered on buildHTTPRouter
 	// (plain HTTP) because rotation requires mTLS, which the plain router
@@ -241,6 +250,16 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryRequest, h.cliRecoveryController.handleRecoveryRequest)
 	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryStatus, h.cliRecoveryController.handleRecoveryStatus)
 	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryComplete, h.cliRecoveryController.handleRecoveryComplete)
+
+	// Platform enrollment discovery surface — request/status/complete are
+	// reachable over plain HTTP so an unenrolled workload (dashboard,
+	// ensemble, operator) without a client certificate can initiate
+	// enrollment. pending and decision are intentionally NOT registered
+	// here: they require owner authentication (web session or mTLS),
+	// which is only available over HTTPS.
+	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentRequest, h.platformEnrollmentController.handlePlatformEnrollmentRequest)
+	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentStatus, h.platformEnrollmentController.handlePlatformEnrollmentStatus)
+	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentComplete, h.platformEnrollmentController.handlePlatformEnrollmentComplete)
 
 	mux.HandleFunc("/.well-known/g8e/bin/", h.pkiController.handleNodeBinaryDownload)
 	mux.HandleFunc(constants.APIPaths.DeployScriptLinux, h.pkiController.handleDeployScriptLinux)

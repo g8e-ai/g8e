@@ -134,6 +134,17 @@ var auditReconnectAttempt = 0, auditSeenIds = new Set(), auditOpenTimeout = null
 // fragment (#recovery=<token>) awaiting browser approval by an authenticated
 // existing user. It is kept only in memory after the fragment is cleared.
 var pendingRecoveryToken = null, recoveryState = null, recoveryResolved = false;
+// pendingPlatformEnrollmentID holds a non-secret platform enrollment request
+// ID read from the URL fragment (#platform-enrollment=<request_id>) awaiting
+// browser review by the authenticated owner. Unlike the recovery token, the
+// request ID is non-secret (approvers, console URLs, and audit events use it),
+// so it is safe to keep in memory after the fragment is cleared.
+var pendingPlatformEnrollmentID = null;
+// platformEnrollments is the owner-visible pending list fetched from the
+// authenticated pending endpoint. It never contains requester tokens, CSR
+// PEM, or certificates — only request ID, component kind/name, instance ID,
+// hostname, system fingerprint, CSR fingerprints, state, and timestamps.
+var platformEnrollments = [];
 
 function b64urlToBuf(s) {
   s = s.replace(/-/g,'+').replace(/_/g,'/');
@@ -389,6 +400,9 @@ async function authenticatePasskey() {
     // Refresh recovery status now that the user is authenticated, in case the
     // state changed while the sign-in ceremony was in progress.
     if (pendingRecoveryToken) await loadRecoveryStatus(pendingRecoveryToken);
+    // Load the owner-visible platform enrollment pending list now that the
+    // session is established, so the cards have data to render.
+    await loadPlatformEnrollments();
     render();
     var params = new URLSearchParams(location.hash.slice(1));
     var txHash = params.get('approve');
@@ -543,6 +557,229 @@ function renderRecoveryCard() {
   return card;
 }
 
+// ---- Platform Workload Enrollment Approval ----
+// The platform enrollment approval flow is the owner-approved path for
+// dashboard, ensemble, and operator workload identities. The URL fragment
+// carries a NON-SECRET request ID (#platform-enrollment=<request_id>); the
+// approver reviews the displayed component kind, hostname, instance ID, and
+// key fingerprints, then approves or denies. The requester token never
+// reaches the console — it is held only by the requesting workload.
+
+// loadPlatformEnrollments fetches the owner-visible pending list from the
+// authenticated pending endpoint. The response never includes requester
+// tokens, CSR PEM, or certificates. Requires an authenticated web session
+// (RouteAuthDual); if the session has lapsed, the api() helper sets user=null
+// and re-renders, surfacing the sign-in prompt again.
+async function loadPlatformEnrollments() {
+  if (!user) { platformEnrollments = []; return; }
+  try {
+    var r = await api('/api/v1/auth/platform-enrollments/pending');
+    if (!r || !r.ok) { platformEnrollments = []; return; }
+    var d = await r.json();
+    platformEnrollments = (d && d.requests) ? d.requests : [];
+  } catch (e) { platformEnrollments = []; }
+}
+
+// decidePlatformEnrollment posts an approve or deny decision to the decision
+// endpoint. Only the active first user (the persistent owner) may decide;
+// the controller enforces active-first-user authorization after the auth
+// middleware stamps the user ID from the verified web session. The body
+// carries only the request ID, typed decision, and optional bounded reason —
+// never a user ID or token.
+async function decidePlatformEnrollment(requestID, decision) {
+  var btnApprove = document.getElementById('peApproveBtn');
+  var btnDeny = document.getElementById('peDenyBtn');
+  if (btnApprove) btnApprove.disabled = true;
+  if (btnDeny) btnDeny.disabled = true;
+  showPlatformEnrollmentMsg('info', decision === 'approve' ? 'Approving platform enrollment...' : 'Denying platform enrollment...');
+  var r = await api('/api/v1/auth/platform-enrollments/decision', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ request_id: requestID, decision: decision })
+  });
+  if (r.status === 401) { user = null; if (btnApprove) btnApprove.disabled = false; if (btnDeny) btnDeny.disabled = false; render(); return; }
+  var d = await r.json().catch(function() { return {}; });
+  if (r.ok) {
+    showPlatformEnrollmentMsg('success', decision === 'approve'
+      ? 'Platform enrollment approved. The requesting workload may now complete enrollment.'
+      : 'Platform enrollment denied.');
+    // Refresh the pending list and re-render so the decided request drops out
+    // (it is no longer pending). If the focused request was the one decided,
+    // clear the focus so the detail card disappears.
+    await loadPlatformEnrollments();
+    if (pendingPlatformEnrollmentID === requestID) {
+      pendingPlatformEnrollmentID = null;
+    }
+    render();
+  } else {
+    showPlatformEnrollmentMsg('error', d.error || 'Platform enrollment decision failed.');
+    if (btnApprove) btnApprove.disabled = false;
+    if (btnDeny) btnDeny.disabled = false;
+  }
+}
+
+// showPlatformEnrollmentMsg displays a message inside the platform enrollment
+// card's dedicated message element (#peMsg), avoiding conflicts with other
+// #msg elements elsewhere on the page.
+function showPlatformEnrollmentMsg(cls, text) {
+  var m = document.getElementById('peMsg'); if (!m) return;
+  m.className = 'msg msg-' + cls; m.textContent = text; m.style.display = 'block';
+}
+
+// platformEnrollmentStateLabel maps a platform enrollment state to a
+// human-readable label. Only pending and approved are decision-eligible; the
+// others are terminal or in-flight and show a clear, final message.
+function platformEnrollmentStateLabel(s) {
+  switch (s) {
+    case 'pending':   return 'Pending — awaiting your approval';
+    case 'approved':  return 'Approved — the workload may now complete enrollment';
+    case 'issuing':   return 'Issuing — certificate issuance in progress';
+    case 'completed': return 'Completed — the workload has finished enrollment';
+    case 'denied':    return 'Denied — you rejected this request';
+    case 'expired':   return 'Expired — this request timed out';
+    default:          return s || 'Unknown';
+  }
+}
+
+// formatDateTime renders an ISO timestamp as a locale date-time string.
+function formatDateTime(ts) {
+  try { return new Date(ts).toLocaleString(); } catch (e) { return ts; }
+}
+
+// fingerprintList returns the non-empty CSR fingerprints from a pending
+// request as an array of {label, value} pairs for display. The fingerprints
+// are SHA-256 hashes of the submitted public keys; the approver compares them
+// against the values printed by the requesting workload.
+function fingerprintList(req) {
+  var fps = req.fingerprints || {};
+  var out = [];
+  if (fps.app) out.push({label: 'App key', value: fps.app});
+  if (fps.operator) out.push({label: 'Operator key', value: fps.operator});
+  if (fps.cli) out.push({label: 'CLI key', value: fps.cli});
+  return out;
+}
+
+// findPlatformEnrollment looks up a request ID in the loaded pending list.
+// Returns null if not found (the request may have been decided, expired, or
+// completed since the fragment was captured).
+function findPlatformEnrollment(requestID) {
+  for (var i = 0; i < platformEnrollments.length; i++) {
+    if (platformEnrollments[i].request_id === requestID) return platformEnrollments[i];
+  }
+  return null;
+}
+
+// renderPlatformEnrollmentDetailCard builds the focused request-detail card
+// for the request ID carried by the URL fragment. It is rendered at the TOP
+// of the main area, above all other cards, so the approver sees it first.
+// Only rendered when pendingPlatformEnrollmentID is set, the user is
+// authenticated, and the request is still in the pending list. If the request
+// is no longer pending, a terminal-state notice is shown instead.
+function renderPlatformEnrollmentDetailCard() {
+  var req = findPlatformEnrollment(pendingPlatformEnrollmentID);
+  var card = el('div', {className:'card', style:'border-color:var(--warning)'},
+    el('h2', null, 'Platform Workload Enrollment'),
+    el('p', {style:'color:var(--text);font-size:0.9rem;margin-bottom:10px'},
+      'A platform workload (dashboard, ensemble, or operator) is requesting ' +
+      'an identity certificate for this gateway. Review the component kind, ' +
+      'hostname, instance ID, and key fingerprints below. Approve only if you ' +
+      'recognize this workload and initiated this enrollment.')
+  );
+
+  if (!req) {
+    card.appendChild(el('p', {style:'color:var(--muted);font-size:0.85rem'},
+      'Request ' + pendingPlatformEnrollmentID + ' is no longer pending. It ' +
+      'may have been approved, denied, expired, or completed. See the pending ' +
+      'list below for current requests.'));
+    card.appendChild(el('div', {id:'peMsg'}));
+    return card;
+  }
+
+  var detail = el('div', {style:'font-size:0.85rem;margin-bottom:12px'});
+  detail.appendChild(el('div', {style:'margin-bottom:6px'},
+    el('span', {style:'color:var(--muted)'}, 'Component: '),
+    el('span', {style:'color:var(--text);font-weight:600'}, (req.component_kind || '') + ' (' + (req.component_name || '') + ')')));
+  detail.appendChild(el('div', {style:'margin-bottom:6px'},
+    el('span', {style:'color:var(--muted)'}, 'Instance ID: '),
+    el('span', {className:'mono'}, req.instance_id || '')));
+  detail.appendChild(el('div', {style:'margin-bottom:6px'},
+    el('span', {style:'color:var(--muted)'}, 'Hostname: '),
+    el('span', {className:'mono'}, req.hostname || '')));
+  if (req.system_fingerprint) {
+    detail.appendChild(el('div', {style:'margin-bottom:6px'},
+      el('span', {style:'color:var(--muted)'}, 'System fingerprint: '),
+      el('span', {className:'mono'}, req.system_fingerprint)));
+  }
+  detail.appendChild(el('div', {style:'margin-bottom:6px'},
+    el('span', {style:'color:var(--muted)'}, 'State: '),
+    el('span', null, platformEnrollmentStateLabel(req.state))));
+  detail.appendChild(el('div', {style:'margin-bottom:6px'},
+    el('span', {style:'color:var(--muted)'}, 'Created: '),
+    el('span', null, formatDateTime(req.created_at))));
+  detail.appendChild(el('div', {style:'margin-bottom:12px'},
+    el('span', {style:'color:var(--muted)'}, 'Expires: '),
+    el('span', null, formatDateTime(req.expires_at))));
+
+  var fps = fingerprintList(req);
+  if (fps.length > 0) {
+    detail.appendChild(el('div', {style:'color:var(--muted);margin-bottom:4px'}, 'Key fingerprints (compare with the workload output):'));
+    fps.forEach(function(fp) {
+      detail.appendChild(el('div', {style:'margin-bottom:4px'},
+        el('span', {style:'color:var(--muted)'}, fp.label + ': '),
+        el('span', {className:'mono'}, fp.value)));
+    });
+  }
+  card.appendChild(detail);
+
+  if (req.state === 'pending') {
+    card.appendChild(el('div', {className:'row'},
+      el('button', {className:'btn btn-primary', id:'peApproveBtn',
+        onclick: function() { decidePlatformEnrollment(pendingPlatformEnrollmentID, 'approve'); }},
+        'Approve'),
+      el('button', {className:'btn btn-danger', id:'peDenyBtn',
+        onclick: function() { decidePlatformEnrollment(pendingPlatformEnrollmentID, 'deny'); }},
+        'Deny')
+    ));
+  } else {
+    card.appendChild(el('p', {style:'color:var(--muted);font-size:0.8rem'},
+      'This request is no longer awaiting a decision.'));
+  }
+  card.appendChild(el('div', {id:'peMsg'}));
+  return card;
+}
+
+// renderPlatformEnrollmentsCard builds the pending-list card showing all
+// non-terminal platform enrollment requests. Each row displays the component
+// kind, instance ID, state, and an Approve button that focuses the request
+// detail card. The list never includes requester tokens, CSR PEM, or
+// certificates.
+function renderPlatformEnrollmentsCard() {
+  var card = el('div', {className:'card'}, el('h2', null, 'Platform Workload Enrollment Requests'));
+  if (platformEnrollments.length === 0) {
+    card.appendChild(el('div', {style:'color:var(--muted);font-size:0.85rem'}, 'No pending platform enrollment requests'));
+    return card;
+  }
+  platformEnrollments.forEach(function(req) {
+    var row = el('div', {className:'list-item'},
+      el('div', null,
+        el('div', null, (req.component_kind || '') + ' — ' + (req.instance_id || '')),
+        el('div', {className:'mono'}, (req.request_id || '').slice(0, 24) + '...'),
+        el('div', {style:'color:var(--muted);font-size:0.75rem'}, platformEnrollmentStateLabel(req.state))
+      ),
+      el('div', {className:'row'},
+        el('button', {className:'btn btn-primary btn-sm', onclick: function() {
+          pendingPlatformEnrollmentID = req.request_id;
+          // Update the fragment so a refresh re-focuses the same request,
+          // then re-render to surface the detail card at the top.
+          history.replaceState(null, '', location.pathname + location.search + '#platform-enrollment=' + encodeURIComponent(req.request_id));
+          render();
+        }}, 'Review')
+      )
+    );
+    card.appendChild(row);
+  });
+  return card;
+}
+
 async function revokePasskey(credId) {
   if (!confirm('Revoke this passkey?')) return;
   var r = await api('/api/v1/auth/passkeys/' + encodeURIComponent(credId) + '?user_id=' + user.id, { method: 'DELETE' });
@@ -553,7 +790,7 @@ async function revokePasskey(credId) {
 async function signOut() {
   disconnectAuditStream();
   await api('/api/v1/auth/logout', { method: 'POST' });
-  user = null; passkeys = []; approvals = []; auditEvents = []; auditSeenIds = new Set(); auditReconnectAttempt = 0; render();
+  user = null; passkeys = []; approvals = []; platformEnrollments = []; pendingPlatformEnrollmentID = null; auditEvents = []; auditSeenIds = new Set(); auditReconnectAttempt = 0; render();
 }
 
 function connectAuditStream() {
@@ -730,6 +967,15 @@ function render() {
           'Sign in with your passkey below to review and approve or deny the request.')
       ));
     }
+    if (pendingPlatformEnrollmentID) {
+      m.appendChild(el('div', {className:'card', style:'border-color:var(--warning)'},
+        el('h2', null, 'Platform Workload Enrollment'),
+        el('p', {style:'color:var(--text);font-size:0.9rem;margin-bottom:10px'},
+          'A platform workload is requesting an identity certificate for this ' +
+          'gateway. Sign in with your passkey below to review the request and ' +
+          'approve or deny it.')
+      ));
+    }
     if (!bootstrapped) {
       m.appendChild(el('div', {className:'card'},
         el('h2', null, 'Enroll Passkey'),
@@ -772,10 +1018,12 @@ function render() {
   var v = health ? (health.version || '') : '';
 
   if (pendingRecoveryToken) m.appendChild(renderRecoveryCard());
+  if (pendingPlatformEnrollmentID) m.appendChild(renderPlatformEnrollmentDetailCard());
 
   m.appendChild(el('div', {className:'row'},
     el('div', {className:'stat'}, el('div', {className:'num', style:'color:var(--accent)'}, '' + passkeys.length), el('div', {className:'label'}, 'Passkeys')),
     el('div', {className:'stat'}, el('div', {className:'num', style:'color:' + (approvals.length ? 'var(--warning)' : 'var(--muted)')}, '' + approvals.length), el('div', {className:'label'}, 'Pending Approvals')),
+    el('div', {className:'stat'}, el('div', {className:'num', style:'color:' + (platformEnrollments.length ? 'var(--warning)' : 'var(--muted)')}, '' + platformEnrollments.length), el('div', {className:'label'}, 'Platform Enrollments')),
     el('div', {className:'stat'}, el('div', {className:'num', style:'color:var(--success)'}, v || '\u2014'), el('div', {className:'label'}, 'Version'))
   ));
 
@@ -814,6 +1062,10 @@ function render() {
     appCard.appendChild(el('div', {style:'color:var(--muted);font-size:0.85rem'}, 'No pending approvals'));
   }
   m.appendChild(appCard);
+
+  // Platform Workload Enrollment Requests — owner-visible pending list.
+  // The list never includes requester tokens, CSR PEM, or certificates.
+  m.appendChild(renderPlatformEnrollmentsCard());
 
   // Live Audit Stream
   var auditCard = el('div', {className:'card'},
@@ -866,6 +1118,7 @@ function render() {
   var enrollMode = hashParams.get('enroll');
   var hashToken = hashParams.get('token');
   var recoveryToken = hashParams.get('recovery');
+  var platformEnrollmentID = hashParams.get('platform-enrollment');
 
   // CLI recovery approval: the opaque token arrives in the URL fragment so it
   // never reaches server-side access logs. Clear the fragment immediately
@@ -878,7 +1131,23 @@ function render() {
     await loadRecoveryStatus(recoveryToken);
   }
 
+  // Platform workload enrollment approval: the NON-SECRET request ID arrives
+  // in the URL fragment (#platform-enrollment=<request_id>) so it never
+  // reaches server-side access logs. Unlike the recovery token, the request
+  // ID is non-secret (approvers, console URLs, and audit events use it), so
+  // it is kept in memory after the fragment is cleared. The detail card is
+  // only rendered after the pending list is loaded (so the focused request's
+  // current state is known), which happens after loadState() below.
+  if (platformEnrollmentID) {
+    pendingPlatformEnrollmentID = platformEnrollmentID;
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+
   await loadState();
+  // Load the owner-visible pending list after the session is established so
+  // the platform enrollment cards have data to render. If the user is not
+  // authenticated, loadPlatformEnrollments is a no-op.
+  await loadPlatformEnrollments();
   render();
 
   // CLI-initiated passkey enrollment: the opaque enrollment token arrives in

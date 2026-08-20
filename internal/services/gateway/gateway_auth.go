@@ -95,6 +95,14 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addExact(constants.APIPaths.AuthCLIRecoveryStatus, RouteAuthNone)
 	r.addExact(constants.APIPaths.AuthCLIRecoveryComplete, RouteAuthNone)
 
+	// Platform enrollment discovery surface — public, token-scoped.
+	// The opaque token and proof-of-possession signatures provide the
+	// authorization context; no mTLS or cookie required. The service
+	// checks activation (HasAnyUsers) before creating a request.
+	r.addExact(constants.APIPaths.AuthPlatformEnrollmentRequest, RouteAuthNone)
+	r.addExact(constants.APIPaths.AuthPlatformEnrollmentStatus, RouteAuthNone)
+	r.addExact(constants.APIPaths.AuthPlatformEnrollmentComplete, RouteAuthNone)
+
 	// Console SPA (public, no auth required)
 	r.addPrefix(constants.APIPaths.ConsolePrefix, RouteAuthNone)
 
@@ -122,6 +130,13 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	// ID is derived from the verified CLI certificate URI SAN by the unified
 	// auth middleware. This is the headless counterpart to the browser path.
 	r.addExact(constants.APIPaths.AuthCLIRecoveryApproveCLI, RouteAuthMTLS)
+
+	// Platform enrollment owner surfaces — dual auth (web session cookie
+	// for browser console, mTLS for CLI). The controller enforces
+	// active-first-user authorization after the middleware stamps the
+	// user ID from the verified session or certificate.
+	r.addExact(constants.APIPaths.AuthPlatformEnrollmentPending, RouteAuthDual)
+	r.addExact(constants.APIPaths.AuthPlatformEnrollmentDecision, RouteAuthDual)
 
 	// --- RouteAuthMTLS: mTLS-protected sub-paths under WebSession prefixes ---
 	// These exact paths must be checked before the WebSession prefix matches.

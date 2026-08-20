@@ -98,27 +98,28 @@ func TestPlatformEnrollmentBypassRouteAuth_CurrentClassifications(t *testing.T) 
 		"Phase 0: bootstrap is explicitly RouteAuthNone (creates first user); remains RouteAuthNone")
 }
 
-// TestPlatformEnrollmentBypassRouteAuth_NewRoutesNotYetClassified proves
-// that the new platform enrollment routes do not yet exist in the registry.
-// After Phase 3, this test will be replaced with assertions that the new
-// routes are classified correctly (request/status/complete as
-// RouteAuthNone, pending/decision as RouteAuthDual).
-func TestPlatformEnrollmentBypassRouteAuth_NewRoutesNotYetClassified(t *testing.T) {
+// TestPlatformEnrollmentRouteAuth_NewRoutesClassified proves that the
+// five platform enrollment routes are explicitly classified in the
+// RouteAuthRegistry. request, status, and complete are RouteAuthNone
+// (public, token-scoped — the opaque token and proof-of-possession
+// signatures provide the authorization context). pending and decision
+// are RouteAuthDual (owner: web session cookie or mTLS CLI; the
+// controller enforces active-first-user authorization after the
+// middleware stamps the user ID).
+func TestPlatformEnrollmentRouteAuth_NewRoutesClassified(t *testing.T) {
 	registry := NewRouteAuthRegistry(false)
 
-	// The new platform enrollment API paths do not exist yet. They will
-	// be added in Phase 1 (constants) and Phase 3 (registry). Until then,
-	// any path under /api/v1/auth/platform-enrollments/ falls through to
-	// the fail-closed RouteAuthMTLS default.
-	newPaths := []string{
-		"/api/v1/auth/platform-enrollments/request",
-		"/api/v1/auth/platform-enrollments/status",
-		"/api/v1/auth/platform-enrollments/complete",
-		"/api/v1/auth/platform-enrollments/pending",
-		"/api/v1/auth/platform-enrollments/decision",
-	}
-	for _, path := range newPaths {
-		assert.Equal(t, RouteAuthMTLS, registry.AuthMode(path),
-			"Phase 0: new platform enrollment path %s is not yet classified (fail-closed default); Phase 3 adds explicit classification", path)
-	}
+	// Public discovery surface — token-scoped, no mTLS or cookie required.
+	assert.Equal(t, RouteAuthNone, registry.AuthMode(constants.APIPaths.AuthPlatformEnrollmentRequest),
+		"platform enrollment request is RouteAuthNone (public, token-scoped)")
+	assert.Equal(t, RouteAuthNone, registry.AuthMode(constants.APIPaths.AuthPlatformEnrollmentStatus),
+		"platform enrollment status is RouteAuthNone (public, token-scoped)")
+	assert.Equal(t, RouteAuthNone, registry.AuthMode(constants.APIPaths.AuthPlatformEnrollmentComplete),
+		"platform enrollment complete is RouteAuthNone (public, token + proof-of-possession)")
+
+	// Owner surfaces — dual auth (web session or mTLS).
+	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.AuthPlatformEnrollmentPending),
+		"platform enrollment pending is RouteAuthDual (owner: web session or mTLS)")
+	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.AuthPlatformEnrollmentDecision),
+		"platform enrollment decision is RouteAuthDual (owner: web session or mTLS)")
 }

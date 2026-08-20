@@ -593,6 +593,13 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 		PasskeyControllerDeps: PasskeyControllerDeps{
 			Handler: passkey,
 		},
+		PlatformEnrollmentControllerDeps: PlatformEnrollmentControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			EnrollSvc: ls.platformEnrollmentSvc,
+			UserSvc:   userSvc,
+			Responder: ls.responder,
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("gateway: failed to create HTTP handler: %w", err)
