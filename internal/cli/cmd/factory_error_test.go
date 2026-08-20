@@ -9,8 +9,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
-	"crypto/ecdsa"
 	"errors"
 	"testing"
 

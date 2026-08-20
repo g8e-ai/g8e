@@ -153,6 +153,17 @@ func (c *PKIController) handlePKICSRSign(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Defense-in-depth: the route auth registry classifies this endpoint as
+	// RouteAuthMTLS, so the middleware rejects unauthenticated callers before
+	// the handler runs. The handler also enforces mTLS directly so a
+	// misconfigured router cannot mint privileged platform identities
+	// (operator, CLI, app, gateway-peer) without an authenticated client
+	// certificate.
+	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
+		c.responder.Error(w, http.StatusUnauthorized, constants.ErrMissingCertificate.Error())
+		return
+	}
+
 	body, err := c.readBody(r)
 	if err != nil {
 		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("%w: %v", constants.ErrInvalidJSONBody, err).Error())
@@ -302,50 +313,6 @@ func (c *PKIController) handlePKIDevicesEnroll(w http.ResponseWriter, r *http.Re
 	resp, err := c.registration.RegisterDeviceCSR(userID, organizationID, req)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("%w: %v", constants.ErrEnrollmentFailed, err).Error())
-		return
-	}
-
-	c.responder.JSON(w, http.StatusCreated, resp)
-}
-
-// @Summary		PKI app enrollment
-// @Description	Enrolls an external app via PKI endpoint (identity-only enrollment)
-// @Tags			pki
-// @Accept			json
-// @Produce		json
-// @Success		200	{object}	AppEnrollResponse
-// @Router			/api/v1/pki/apps/enroll [post]
-func (c *PKIController) handlePKIAppsEnroll(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
-		return
-	}
-
-	if c.appEnrollment == nil {
-		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrServiceUnavailable.Error())
-		return
-	}
-
-	body, err := c.readBody(r)
-	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("%w: %v", constants.ErrInvalidJSONBody, err).Error())
-		return
-	}
-
-	var req AppEnrollRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("%w: %v", constants.ErrInvalidJSONBody, err).Error())
-		return
-	}
-
-	resp, err := c.appEnrollment.EnrollApp(req)
-	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("%w: %v", constants.ErrEnrollmentFailed, err).Error())
-		return
-	}
-
-	if !resp.Success {
-		c.responder.Error(w, http.StatusBadRequest, resp.Error)
 		return
 	}
 

@@ -80,8 +80,13 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addExact(constants.APIPaths.DeployScriptWindows, RouteAuthNone)
 
 	// Protocol entry points (CSR enrollment, bootstrap)
-	r.addExact(constants.APIPaths.PKICSRSign, RouteAuthNone)
-	r.addExact(constants.APIPaths.PKIDevicesEnroll, RouteAuthNone)
+	// PKICSRSign signs privileged platform leaf types (operator, CLI, app,
+	// gateway-peer); it requires mTLS so only authenticated callers can mint
+	// those identities. PKIDevicesEnroll enforces mTLS internally (extracts
+	// the user ID from the client certificate); the registry classification
+	// is aligned with that enforcement.
+	r.addExact(constants.APIPaths.PKICSRSign, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.PKIDevicesEnroll, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.AuthBootstrap, RouteAuthNone)
 	r.addExact(constants.APIPaths.AuthBootstrapStatus, RouteAuthNone)
 	r.addExact(constants.APIPaths.AuthLogout, RouteAuthNone)
