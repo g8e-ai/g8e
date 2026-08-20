@@ -232,7 +232,7 @@ const (
 
 	// EnrollmentSourceRemoteOperator is the remote operator/device
 	// enrollment path (POST /api/v1/auth/device/enroll), used by
-	// `security pki enroll`. It is NOT a local human enrollment.
+	// `auth enroll operator`. It is NOT a local human enrollment.
 	EnrollmentSourceRemoteOperator
 )
 
