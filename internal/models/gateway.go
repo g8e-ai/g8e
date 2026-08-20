@@ -402,28 +402,6 @@ type CLIEnrollmentResponse struct {
 	OperatorID        string `json:"operator_id,omitempty"`
 }
 
-// OperatorEnrollmentResponse is the typed response for POST /api/v1/auth/operator/enroll.
-//
-// Operator enrollment is a certificate-only identity flow (SPIFFE URI SAN).
-// It creates NO users, binds NO user ID, and returns NO user. Operator and
-// CLI sessions are persisted with an empty user_id; user binding is a
-// separate human-only action performed later via `auth enroll user`.
-type OperatorEnrollmentResponse struct {
-	Success           bool   `json:"success"`
-	OperatorCert      string `json:"operator_cert"`
-	OperatorCertChain string `json:"operator_cert_chain"`
-	HubTrustBundle    string `json:"hub_trust_bundle"`
-	OperatorSessionID string `json:"operator_session_id"`
-	OperatorID        string `json:"operator_id"`
-	CLISessionID      string `json:"cli_session_id"`
-	CLICert           string `json:"cli_cert"`
-	CLICertChain      string `json:"cli_cert_chain"`
-	Posture           string `json:"posture,omitempty"`
-	ActuatorKeyID     string `json:"actuator_key_id,omitempty"`
-	ActuatorPubKey    string `json:"actuator_pub_key,omitempty"`
-	Error             string `json:"error,omitempty"`
-}
-
 // ActuatorPublicKeyExport is the typed JSON structure for exporting the Actuator's public key.
 type ActuatorPublicKeyExport struct {
 	KeyID     string `json:"key_id"`

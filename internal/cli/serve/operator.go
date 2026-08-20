@@ -235,39 +235,10 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	privateKey := resolveKeyPath(opts.PrivateKey, fileSvc, logger)
 	clientCert := resolveCertPath(opts.ClientCert, fileSvc, logger)
 
-	if opts.Endpoint != "" {
-		logger.Info("Performing automatic enrollment with Gateway", "endpoint", opts.Endpoint)
-		sessionID, posture, err := PerformAutomaticEnrollment(context.Background(), opts.Endpoint, fileSvc, logger)
-		if err != nil {
-			logger.Error("Automatic enrollment failed", string(constants.ConnectionStateError), err)
-			fmt.Fprintf(os.Stderr, "Automatic enrollment failed: %v\n", err)
-			fmt.Fprintf(os.Stderr, "  Ensure the Gateway is running and accessible at %s\n", opts.Endpoint)
-			os.Exit(constants.ExitConfigError)
-		}
-		os.Setenv(string(constants.EnvVar.OperatorSessionID), sessionID)
-		opts.Posture = posture
-
-		privateKey = fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiFileOperatorKey))
-		clientCert = fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert))
-
-		caBundleRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
-		pemData, err := fileSvc.ReadFile(context.Background(), caBundleRel)
-		if err != nil {
-			logger.Error("Failed to reload trust bundle after enrollment", "path", fileSvc.Resolve(caBundleRel), string(constants.ConnectionStateError), err)
-			fmt.Fprintf(os.Stderr, "%s: %v\n", constants.ErrFailedToReadTrustBundle, err)
-			os.Exit(constants.ExitConfigError)
-		}
-		trustStore.SetCA(pemData)
-		logger.Info("Trust bundle reloaded after enrollment", "path", fileSvc.Resolve(caBundleRel))
-
-		logger.Info("Automatic enrollment completed, using enrolled certificates")
-	}
-
 	if privateKey == "" {
 		fmt.Fprintf(os.Stderr, "%s (-k or --key). Expected locations:\n", constants.ErrPrivateKeyRequired)
 		fmt.Fprintf(os.Stderr, "  - %s (project directory)\n", constants.DefaultOperatorKeyDesc)
 		fmt.Fprintf(os.Stderr, "  - %s (project directory)\n", constants.DefaultClientKeyDesc)
-		fmt.Fprintf(os.Stderr, "Or provide --endpoint to perform automatic enrollment\n")
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -275,7 +246,6 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		fmt.Fprintf(os.Stderr, "%s (--cert or --client-cert). Expected locations:\n", constants.ErrClientCertRequired)
 		fmt.Fprintf(os.Stderr, "  - %s (project directory)\n", constants.DefaultOperatorCertDesc)
 		fmt.Fprintf(os.Stderr, "  - %s (project directory)\n", constants.DefaultClientCertDesc)
-		fmt.Fprintf(os.Stderr, "Or provide --endpoint to perform automatic enrollment\n")
 		os.Exit(constants.ExitConfigError)
 	}
 

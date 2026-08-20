@@ -45,18 +45,6 @@ type CLIEnrollRequest struct {
 	LocalOSUser       *LocalOSUser `json:"local_os_user,omitempty"`
 }
 
-// OperatorEnrollRequest is the inbound body for /api/v1/auth/operator/enroll.
-// Operator enrollment is a certificate-only identity flow: it carries no
-// user-management fields. The gateway refuses with
-// ErrOperatorEnrollmentRequiresActivation when no human user has enrolled
-// (the gateway is not yet activated).
-type OperatorEnrollRequest struct {
-	CSR               string `json:"csr_pem"`
-	CLICSR            string `json:"cli_csr_pem,omitempty"`
-	SystemFingerprint string `json:"system_fingerprint"`
-	Hostname          string `json:"hostname"`
-}
-
 // AppEnrollRequest is the request body for external app enrollment via /api/v1/pki/apps/delegated.
 type AppEnrollRequest struct {
 	CSR            string `json:"csr_pem"`

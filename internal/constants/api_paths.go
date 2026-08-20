@@ -77,7 +77,6 @@ var APIPaths = struct {
 	AuthLogout                               string `json:"auth_logout"`
 	AuthBootstrap                            string `json:"auth_bootstrap"`
 	AuthBootstrapStatus                      string `json:"auth_bootstrap_status"`
-	AuthOperatorEnroll                       string `json:"auth_operator_enroll"`
 	AuthPlatformEnrollmentRequest            string `json:"auth_platform_enrollment_request"`
 	AuthPlatformEnrollmentStatus             string `json:"auth_platform_enrollment_status"`
 	AuthPlatformEnrollmentComplete           string `json:"auth_platform_enrollment_complete"`
@@ -221,7 +220,6 @@ var APIPaths = struct {
 	AuthLogout:                               "/api/v1/auth/logout",
 	AuthBootstrap:                            "/api/v1/auth/bootstrap",
 	AuthBootstrapStatus:                      "/api/v1/auth/bootstrap/status",
-	AuthOperatorEnroll:                       "/api/v1/auth/operator/enroll",
 	AuthPlatformEnrollmentRequest:            "/api/v1/auth/platform-enrollments/request",
 	AuthPlatformEnrollmentStatus:             "/api/v1/auth/platform-enrollments/status",
 	AuthPlatformEnrollmentComplete:           "/api/v1/auth/platform-enrollments/complete",

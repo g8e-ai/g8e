@@ -55,7 +55,6 @@
   "auth_cli_recovery_approve_cli": "/api/v1/auth/cli/recovery/approve-cli",
   "auth_cli_recovery_complete": "/api/v1/auth/cli/recovery/complete",
   "auth_cli_rotate": "/api/v1/auth/cli/rotate",
-  "auth_operator_enroll": "/api/v1/auth/operator/enroll",
   "auth_platform_enrollment_request": "/api/v1/auth/platform-enrollments/request",
   "auth_platform_enrollment_status": "/api/v1/auth/platform-enrollments/status",
   "auth_platform_enrollment_complete": "/api/v1/auth/platform-enrollments/complete",

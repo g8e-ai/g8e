@@ -656,7 +656,6 @@ var (
 	ErrBootstrapAuthFailed                  = errors.New("bootstrap: authentication failed")
 	ErrBootstrapInitialSetupOnly            = errors.New("bootstrap only available for initial setup")
 	ErrCLIEnrollmentAfterBootstrap          = errors.New("CLI enrollment only available after bootstrap")
-	ErrOperatorEnrollmentRequiresActivation = errors.New("operator enrollment requires an activated gateway (run `auth enroll user` first)")
 	ErrCLICSRRequired                       = errors.New("cli_csr_pem is required")
 	ErrFirstCredentialOnly                  = errors.New("first-credential registration only")
 	ErrUserIDMismatch                       = errors.New("user_id mismatch")
