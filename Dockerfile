@@ -9,23 +9,28 @@
 # Multi-stage Dockerfile for g8e Gateway
 # Modern, minimal, and secure container image.
 #
-# This Dockerfile always builds with FIPS 140-3 approved mode enabled. The Go
-# Cryptographic Module v1.0.0 (CMVP Cert #5247, CAVP A6650) is linked in at
-# build time via GOFIPS140, and the binary enters approved mode on startup
-# without any runtime env var. Enforcement is a RUNTIME setting, off by default:
-# non-approved primitives (Ed25519 for consensus/receipts/PKI, ChaCha20-Poly1305
-# for SSH streaming) still work. Operators who need strict enforcement set
+# This Dockerfile runs `make build-all` to produce all platform binaries
+# (linux/amd64, linux/arm64, linux/386, windows/amd64, windows/arm64,
+# darwin/amd64, darwin/arm64). Linux binaries are built with FIPS 140-3
+# approved mode enabled via GOFIPS140 (Go Cryptographic Module v1.0.0,
+# CMVP Cert #5247, CAVP A6650); non-linux binaries are built without it.
+# The gateway serves these binaries via /.well-known/g8e/bin/{filename} so
+# operators can deploy g8e on any supported platform by fetching the
+# appropriate binary from the gateway.
+#
+# FIPS 140-3 enforcement is a RUNTIME setting, off by default: non-approved
+# primitives (Ed25519 for consensus/receipts/PKI, ChaCha20-Poly1305 for SSH
+# streaming) still work. Operators who need strict enforcement set
 # GODEBUG=fips140=only in the container environment (see `make verify-fips`).
 #
 # The FIPS 140-3 compliance claim is restricted to linux/amd64, which is the
-# tested operating environment for CMVP Cert #5247. This Dockerfile hardcodes
-# GOOS=linux GOARCH=amd64, so the restriction is satisfied. Do not build it for
-# other architectures under a FIPS compliance claim.
+# tested operating environment for CMVP Cert #5247. Do not build linux/arm64 or
+# linux/386 under a FIPS compliance claim — only linux/amd64 is tested.
 #
 # Verify the deployed binary with:  g8e version --fips
 # =============================================================================
 
-# Stage 1: Build (FIPS module linked in here)
+# Stage 1: Build (FIPS module linked in here for linux targets)
 FROM golang:1.26.6 AS builder
 
 # Install build dependencies
@@ -45,32 +50,22 @@ ENV GOFLAGS=-mod=vendor
 # Copy entire source code
 COPY . .
 
-# Build the binary with the Go Cryptographic Module v1.0.0 linked in and FIPS
-# 140-3 approved mode enabled by default. GOFIPS140 is set ONLY in the builder
-# stage — it is a build-time toolchain setting, not a runtime control. The
-# binary enters approved mode on startup without any runtime env var.
-# CGO_ENABLED=0 is intentional: the Go FIPS module is pure Go and does not
-# require CGO.
-ENV GOFIPS140=v1.0.0
-
-# Build the binary
-# Use build flags from Makefile for consistency
+# Build all platform binaries via `make build-all`. The Makefile sets
+# GOFIPS140=v1.0.0 for linux targets and explicitly unsets it for non-linux
+# targets. CGO_ENABLED=0 is intentional: the Go FIPS module is pure Go and
+# does not require CGO. Binaries are written to /build/bin/g8e-{os}-{arch}.
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -mod=vendor \
-    -ldflags "-s -w -X main.version=$(cat VERSION) -X main.buildID=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=linux_amd64" \
-    -o /build/g8e \
-    ./cmd/g8e
+    make build-all
 
-# Verify the binary built.
-RUN /build/g8e --help
+# Verify the linux/amd64 binary built and runs.
+RUN /build/bin/g8e-linux-amd64 --help
 
 # Verify FIPS 140-3 approved mode is active via the native crypto/fips140 module
 # API. This is the same self-check operators run in production
 # (`g8e version --fips`); it inspects module state, not env vars. It exits 0
 # with a warning when enforcement is off — that is the expected posture, not a
 # failure.
-RUN /build/g8e version --fips
+RUN /build/bin/g8e-linux-amd64 version --fips
 
 # =============================================================================
 # Stage 2: Runtime
@@ -98,8 +93,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl wget ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the binary from builder
-COPY --from=builder /build/g8e /g8e
+# Copy the linux/amd64 binary as the entrypoint
+COPY --from=builder /build/bin/g8e-linux-amd64 /g8e
+
+# Copy all platform binaries for node deployment via /.well-known/g8e/bin/
+COPY --from=builder /build/bin/ /opt/g8e/bin/
 
 # Copy protocol constants (required for doctrine mode)
 COPY --from=builder /build/protocol/constants /protocol/constants

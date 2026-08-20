@@ -355,7 +355,7 @@ build-compressed: build
 
 .PHONY: build-all
 build-all:
-	@echo "Building g8e Operator for all platforms..."
+	@echo "Building g8e Operator for all platforms (FIPS 140-3 for linux)..."
 	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@for platform in $(PLATFORMS); do \
@@ -366,7 +366,12 @@ build-all:
 			NODE_BINARY=$$NODE_BINARY.exe; \
 		fi; \
 		echo "Building $$platform -> $$NODE_BINARY..."; \
-		CGO_ENABLED=$(CGO_ENABLED) GOOS=$$GOOS GOARCH=$$GOARCH go build $(TRIMPATH) -tags $(BUILD_TAGS) -ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
+		if [ "$$GOOS" = "linux" ]; then \
+			FIPS_ENV="GOFIPS140=$(GOFIPS140_VERSION)"; \
+		else \
+			FIPS_ENV="-u GOFIPS140"; \
+		fi; \
+		env $$FIPS_ENV CGO_ENABLED=$(CGO_ENABLED) GOOS=$$GOOS GOARCH=$$GOARCH go build $(TRIMPATH) -tags $(BUILD_TAGS) -ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@echo "Multi-platform build complete. Checksums: $(BIN_DIR)/g8e-*.sha256"
@@ -461,7 +466,7 @@ build-darwin-docker:
 
 .PHONY: build-all-docker
 build-all-docker:
-	@echo "Building g8e for all platforms in Docker..."
+	@echo "Building g8e for all platforms in Docker (FIPS 140-3 for linux)..."
 	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
@@ -473,7 +478,12 @@ build-all-docker:
 			NODE_BINARY=$$NODE_BINARY.exe; \
 		fi; \
 		echo "Building $$platform in Docker..."; \
-		docker run --rm -e GOOS=$$GOOS -e GOARCH=$$GOARCH -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -trimpath -tags netgo,osusergo -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/g8e && cp /build/g8e /out/$$NODE_BINARY"; \
+		if [ "$$GOOS" = "linux" ]; then \
+			FIPS_ENV="-e GOFIPS140=$(GOFIPS140_VERSION)"; \
+		else \
+			FIPS_ENV=""; \
+		fi; \
+		docker run --rm $$FIPS_ENV -e GOOS=$$GOOS -e GOARCH=$$GOARCH -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -trimpath -tags netgo,osusergo -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/g8e && cp /build/g8e /out/$$NODE_BINARY"; \
 		sha256sum $(BIN_DIR)/$$NODE_BINARY > $(BIN_DIR)/$$NODE_BINARY.sha256; \
 	done
 	@echo "All-platform Docker build complete. Binaries: $(BIN_DIR)/g8e-*"

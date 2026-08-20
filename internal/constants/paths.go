@@ -276,6 +276,15 @@ const (
 	BinaryImageNameWindows = "g8e.exe"
 )
 
+// NodeBinariesDir is the image-baked directory in the Docker runtime image
+// where all platform binaries (g8e-linux-amd64, g8e-darwin-arm64, etc.) are
+// placed by the Dockerfile. The gateway serves them via the
+// /.well-known/g8e/bin/{filename} endpoint. This path is outside the .g8e/
+// volume mount so it is always present regardless of volume state.
+const (
+	NodeBinariesDir = "/opt/g8e/bin"
+)
+
 // Deploy script filenames served by the gateway.
 const (
 	DeployScriptFilenameLinux   = "g8e-deploy.sh"

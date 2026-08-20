@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -544,6 +545,31 @@ func TestPKIController_HandleNodeBinaryDownload_NotFound(t *testing.T) {
 	c.handleNodeBinaryDownload(rr, req)
 
 	assert.Equal(t, http.StatusNotFound, rr.Code)
+}
+
+func TestPKIController_HandleNodeBinaryDownload_ImageBakedBinDir(t *testing.T) {
+	c, _, _ := setupTestPKIController(t)
+
+	// Use a temp directory to simulate the image-baked /opt/g8e/bin directory
+	// where the Dockerfile copies all platform binaries. The controller's
+	// nodeBinariesDir field is overridden so the test does not require root
+	// to write to /opt/g8e.
+	binDir := t.TempDir()
+	c.nodeBinariesDir = binDir
+
+	testContent := []byte("image-baked binary content")
+	binaryPath := filepath.Join(binDir, "g8e-darwin-arm64")
+	require.NoError(t, os.WriteFile(binaryPath, testContent, constants.PermFilePublic))
+
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/bin/g8e-darwin-arm64", nil)
+	rr := httptest.NewRecorder()
+
+	c.handleNodeBinaryDownload(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "application/octet-stream", rr.Header().Get("Content-Type"))
+	assert.Equal(t, "attachment; filename=g8e-darwin-arm64", rr.Header().Get("Content-Disposition"))
+	assert.Equal(t, testContent, rr.Body.Bytes())
 }
 
 func TestPKIController_HandleNodeBinaryDownload_InvalidName(t *testing.T) {

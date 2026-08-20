@@ -30,12 +30,13 @@ import (
 
 // PKIController handles PKI and certificate management endpoints.
 type PKIController struct {
-	cfg           *config.Config
-	logger        *slog.Logger
-	pki           *PKIAuthority
-	appEnrollment *AppEnrollmentService
-	registration  *RegistrationService
-	responder     *response.Writer
+	cfg             *config.Config
+	logger          *slog.Logger
+	pki             *PKIAuthority
+	appEnrollment   *AppEnrollmentService
+	registration    *RegistrationService
+	responder       *response.Writer
+	nodeBinariesDir string
 }
 
 // PKIControllerDeps groups all dependencies for PKIController.
@@ -50,12 +51,13 @@ type PKIControllerDeps struct {
 
 func newPKIController(d PKIControllerDeps) *PKIController {
 	return &PKIController{
-		cfg:           d.Cfg,
-		logger:        d.Logger,
-		pki:           d.PKI,
-		appEnrollment: d.AppEnrollment,
-		registration:  d.Registration,
-		responder:     d.Responder,
+		cfg:             d.Cfg,
+		logger:          d.Logger,
+		pki:             d.PKI,
+		appEnrollment:   d.AppEnrollment,
+		registration:    d.Registration,
+		responder:       d.Responder,
+		nodeBinariesDir: constants.NodeBinariesDir,
 	}
 }
 
@@ -433,6 +435,11 @@ func (c *PKIController) handleNodeBinaryDownload(w http.ResponseWriter, r *http.
 	}
 
 	possiblePaths := []string{}
+
+	// Check in the image-baked node binaries directory (Docker deployments).
+	// This directory is populated by the Dockerfile with all platform binaries
+	// and lives outside the .g8e/ volume mount, so it is always available.
+	possiblePaths = append(possiblePaths, filepath.Join(c.nodeBinariesDir, filename))
 
 	// Check relative to executable
 	if execPath, err := os.Executable(); err == nil {
