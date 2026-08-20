@@ -164,7 +164,7 @@ The reference implementation currently supports:
 
 ## 6. Post-Bootstrap Workflow
 
-After completing platform bootstrap via `g8e auth enroll`, follow this workflow to begin using the Operator. Enrollment automatically registers a passkey via browser after successful CLI session enrollment.
+After completing platform bootstrap via `g8e auth enroll user`, follow this workflow to begin using the Operator. Enrollment automatically registers a passkey via browser after successful CLI session enrollment.
 
 ### 1. Verify Gateway Health
 
@@ -172,7 +172,7 @@ Confirm the Governance Gateway is running and accessible with `g8e gw status`.
 
 ### 2. Enroll Remote Operators (Multi-Host Setups)
 
-For distributed enforcement across multiple hosts, enroll each remote operator with `g8e gw security pki enroll -e <gateway-ip>`. Each Operator receives a unique SPIFFE workload identity bound to its mTLS certificate. To deploy the binary to remote hosts, use `g8e operator deploy` or `g8e operator stream`.
+For distributed enforcement across multiple hosts, enroll each remote operator with `g8e auth enroll operator -e <gateway-ip>`. Each Operator receives a unique SPIFFE workload identity bound to its mTLS certificate. To deploy the binary to remote hosts, use `g8e operator deploy` or `g8e operator stream`.
 
 ### 3. Configure AI Client Integration
 

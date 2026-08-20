@@ -407,9 +407,9 @@ The `g8e` binary (`internal/cli/cmd/main.go`) registers the following subcommand
 
 - **`gw`** (alias `gateway`): Gateway lifecycle management. Subcommands: `start` (background process; `--follow` flag runs in foreground as the re-exec target; `--interactive`/`-i` flag launches the onboarding wizard before startup), `stop`, `status`, `restart`, `logs`, `settings`, `reset`, `clean`, `setup` (interactive onboarding wizard; standalone entry point for `g8e gw setup`). Also includes `data`, `security`, and `tunnel` subcommand groups.
   - **`data`**: Administer the local platform over mTLS. Subcommands: `users`, `operators`, `settings`, `store`, `audit`.
-  - **`security`**: Security validation checks. Subcommands: `validate`, `pki` (with `enroll` subcommand).
+  - **`security`**: Security validation checks. Subcommands: `validate`.
   - **`tunnel`**: Manage Cloudflare Tunnel for public gateway access. Subcommands: `create`, `run`, `status`.
-- **`auth`**: Authentication and session management. Subcommands: `enroll` (CSR-based enrollment with passkey registration), `logout`, `approve` (interactive OOB approval of suspended transactions via passkey).
+- **`auth`**: Authentication and session management. Subcommands: `enroll` (parent; requires a subcommand), `logout`, `approve` (interactive OOB approval of suspended transactions via passkey), `approve-recovery` (mTLS approval of a pending CLI recovery request). `enroll` subcommands: `user` (local human CLI/user enrollment with passkey registration), `operator` (remote operator/device enrollment via CSR), `gui` (enroll external frontend application origins; subcommands `enroll`, `show`, `verify`, `remove`).
 - **`mcp`**: MCP protocol operations. Subcommands: `stdio` (run g8e as an MCP server over stdio), `agent` (agent integration commands for AI coding tools). `agent` subcommands: `list` (list supported agent binaries), `show` (print MCP client configuration for a specific agent), `run` (launch an agent with g8e MCP configuration and native tools disabled). The `run` subcommand includes `verifyToolInterception` pre-launch config verification via `--verify` flag, enabled by default. Supported agents: Claude Code, OpenAI Codex, Goose, Gemini CLI.
 - **`operator`**: Manage Operator instances. Subcommands: `list`, `start`, `cp`, `scp`, `deploy`, `stream`.
 - **`vault`**: Encryption vault management. Subcommands: `init`, `unlock`, `rekey`, `status`, `reset`, `export`, `import`.
@@ -420,7 +420,6 @@ The `g8e` binary (`internal/cli/cmd/main.go`) registers the following subcommand
 - **`compliance`**: FedRAMP 20x (CR26) compliance operations. Subcommands: `export` (generate OSCAL `component-definition` and `assessment-results` JSON artifacts), `ksi` (evaluate KSIs and print result set as JSON), `ksi-history` (list KSI snapshot history or filter by KSI ID), `overlay` (load and validate COSAiS overlay catalogs).
 - **`swagger`**: Manage Swagger/OpenAPI documentation. Subcommands: `init`, `serve`, `validate`.
 - **`tui`**: Launch the Tactical Governance Console (TUI). Requires a running gateway, enrolled CLI credentials, and mTLS client configuration.
-- **`gui`**: Enroll external frontend applications with the g8e Gateway. Subcommands: `enroll`, `show`, `verify`, `remove`.
 - **`version`**: Print g8e build version information (version, build ID, build time, platform). With `--fips` flag, also reports FIPS 140-3 module status via the native `crypto/fips140` package and exits non-zero if FIPS mode is not active. Used as an auditor/operator self-check for FIPS-compliant builds.
 
 ## MCP Native Tools
@@ -487,7 +486,7 @@ The reporting system operates as a self-contained, offline verification utility 
 - **`internal/cli/cmd/gateway.go`**: Gateway CLI command tree. `gatewayStartCmd` launches the gateway as a background process via `pm.StartOperator` (`ProcessManager.StartOperator`), resolving configuration from CLI flags and environment variables. With `--follow` flag, runs in foreground by calling `serve.RunGateway` directly. With `--interactive`/`-i` flag, launches the onboarding wizard (`internal/cli/wizard`) before startup; the wizard result is merged into resolved flags via `applyWizardConfig`. `gatewaySettingsCmd`, `gatewayResetCmd`, and `gatewayCleanCmd` manage gateway state over mTLS.
 - **`internal/cli/cmd/tui.go`**: `tuiCmd` launches the Tactical Governance Console (TUI). Loads config, checks operator status, loads credentials, builds an mTLS client, and constructs an SSE stream URL using the CLI session ID for real-time updates.
 - **`internal/cli/cmd/gwstdout.go`**: `printNextSteps` outputs guidance after the gateway starts, including CA trust instructions, CLI enrollment, operator deployment, and Console UI access.
-- **`internal/cli/cmd/approve_recovery.go`**: `approveRecoveryCmd` implements `g8e auth approve-recovery <token>` and `approveRecoveryCmdWithConfig`. Uses the local enrolled CLI mTLS identity to approve or deny a pending CLI recovery request created by another CLI's `auth enroll --headless` run. Posts to `POST /api/v1/auth/cli/recovery/approve-cli` (`RouteAuthMTLS`) with the token and `--deny` flag, prints the resulting approved/denied state, and wraps `ErrCLIRecoveryRequestFailed` for any other state. Follows the `approveCmdWithConfig` pattern with `configLoader`, `apiClientFactory`, and `fileSvcFactory` injection.
+- **`internal/cli/cmd/approve_recovery.go`**: `approveRecoveryCmd` implements `g8e auth approve-recovery <token>` and `approveRecoveryCmdWithConfig`. Uses the local enrolled CLI mTLS identity to approve or deny a pending CLI recovery request created by another CLI's `auth enroll user --headless` run. Posts to `POST /api/v1/auth/cli/recovery/approve-cli` (`RouteAuthMTLS`) with the token and `--deny` flag, prints the resulting approved/denied state, and wraps `ErrCLIRecoveryRequestFailed` for any other state. Follows the `approveCmdWithConfig` pattern with `configLoader`, `apiClientFactory`, and `fileSvcFactory` injection.
 - **`internal/services/gateway/cli_cert.go`**: `ExtractUserIDFromCert` extracts the user ID from a CLI mTLS certificate's SPIFFE URI SAN.
 - **Test Coverage**: `cert_test.go` covers `PerformAutomaticEnrollment` (6 tests), `RenewOperatorCertificate` (9 tests), `RunClientCertRenewalLoop` (1 test) with hermetic `httptest.Server` and real certificate generation. `operator_test.go` covers extracted helpers at 100%. `gateway_test.go` covers gateway boot sequence. `internal/cli/serve` overall at 49.6% coverage.
 
@@ -498,7 +497,7 @@ The reporting system operates as a self-contained, offline verification utility 
 ### Caller Graph
 
 ```text
-cmd.enrollCmdWithConfig / cmd.agentRunCmdWithConfig
+cmd.enrollUserCmdWithConfig / cmd.agentRunCmdWithConfig
   └── enrollerFactory (injected parameter; newDefaultEnrollmentCoordinator in production)
       └── auth.NewEnrollmentCoordinator(deps)
           ├── EnrollmentGateway (interface; *EnrollmentClient in production)

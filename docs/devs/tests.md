@@ -118,13 +118,13 @@ Full state machine coverage:
 ### Command-Layer Tests (`internal/cli/cmd/auth_enroll_test.go`)
 
 Tests inject a `mockEnroller` via `mockEnrollerFactory(mock)` + `noopCheckOperatorRunning` stub:
-- `TestEnrollCmd_OptionPropagation` — defaults, `--no-system-trust`, `--rotate-cli`, both flags
-- `TestEnrollCmd_CoordinatorErrorPropagates` — command surfaces `ErrSystemTrustInstallFailed`
-- `TestEnrollCmd_HealthyReusedIdentityNoRotate` — Reused=true, RotateCLI=false
-- `TestEnrollCmd_RotateCLIFlagForcesRotation` — `--rotate-cli` wiring
-- `TestEnrollCmd_NoSystemTrustFlagWired` — `--no-system-trust` wiring
-- `TestEnrollCmd_SystemTrustInstalledOutput` — browser-close guidance printed
-- `TestEnrollCmd_StdinContinueInjected` — interactive `auth enroll` supplies a stdin-reading `ContinueFunc` for the browser-restart gate
+- `TestEnrollUserCmd_OptionPropagation` — defaults, `--no-system-trust`, `--rotate-cli`, both flags
+- `TestEnrollUserCmd_CoordinatorErrorPropagates` — command surfaces `ErrSystemTrustInstallFailed`
+- `TestEnrollUserCmd_HealthyReusedIdentityNoRotate` — Reused=true, RotateCLI=false
+- `TestEnrollUserCmd_RotateCLIFlagForcesRotation` — `--rotate-cli` wiring
+- `TestEnrollUserCmd_NoSystemTrustFlagWired` — `--no-system-trust` wiring
+- `TestEnrollUserCmd_SystemTrustInstalledOutput` — browser-close guidance printed
+- `TestEnrollUserCmd_StdinContinueInjected` — interactive `auth enroll user` supplies a stdin-reading `ContinueFunc` for the browser-restart gate
 - `TestLogoutCmd_OSRootCARetained` — OS root CA retained on logout
 - `TestMCPStdio_DoesNotInvokeEnrollment` — stdio never calls the coordinator factory
 
@@ -247,14 +247,14 @@ make lint              # golangci-lint + lint-no-embedded-newlines + vulncheck +
 make test-docker
 
 # 4. Authenticate (required for non-demo mTLS tests; demo runs enroll inline)
-./g8e auth enroll
+./g8e auth enroll user
 ```
 
 **First-time setup**: if no users exist, the first login bootstraps the platform:
 
 ```bash
 ./g8e gw start
-./g8e auth enroll
+./g8e auth enroll user
 ```
 
 ### Demo Scenarios
@@ -263,7 +263,7 @@ The demo scenarios tool (`g8e demos scenarios run`) impersonates arbitrary AI to
 
 **26 scenarios total**: 7 MCP + 3 A2A + 5 governance + 5 DHS + 1 finance + 5 FedRAMP.
 
-The interactive demo runner (`g8e demos run <org> [scenario]`) provides 14 numbered platform demos across 5 environments: healthcare (4), finance (1), dhs (4), fedramp (4), frontend (1). These drive the real Gateway and Operator with posture switching. For notary demos (dhs, fedramp), `demos run` enrolls a host CLI session and registers a WebAuthn passkey inline before running scenarios. A browser window opens automatically for the passkey ceremony, with no separate terminal or manual `auth enroll` step. The enrolled `user_id` and `cli_session_id` are threaded into the harness so the suspended transaction and the browser approver share the same user identity.
+The interactive demo runner (`g8e demos run <org> [scenario]`) provides 14 numbered platform demos across 5 environments: healthcare (4), finance (1), dhs (4), fedramp (4), frontend (1). These drive the real Gateway and Operator with posture switching. For notary demos (dhs, fedramp), `demos run` enrolls a host CLI session and registers a WebAuthn passkey inline before running scenarios. A browser window opens automatically for the passkey ceremony, with no separate terminal or manual `auth enroll user` step. The enrolled `user_id` and `cli_session_id` are threaded into the harness so the suspended transaction and the browser approver share the same user identity.
 
 **Testing postures**:
 - **Doctrine**: L1 enforced, L2/L3 audited
@@ -312,7 +312,7 @@ ls -la .g8e/pki/trust/g8eg-ca-bundle.pem
 ./g8e gw stop
 rm -rf .g8e/pki
 ./g8e gw start
-./g8e auth enroll
+./g8e auth enroll user
 
 # 3. Verify bundle parses
 openssl crl2pkcs7 -nocrl -certfile .g8e/pki/trust/g8eg-ca-bundle.pem

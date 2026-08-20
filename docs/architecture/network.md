@@ -93,9 +93,9 @@ Clients enroll in the platform using a Certificate Signing Request (CSR) bootstr
 
 ### Trusting the Self-Signed Root CA
 
-Since the Governance Gateway acts as a self-signed CA, clients must explicitly trust the platform Root CA to allow secure HTTPS communication, especially for browser-based WebAuthn registration. The `auth enroll` command installs the platform Root CA into the OS trust store as part of the interactive enrollment flow, before opening the browser for the passkey ceremony.
+Since the Governance Gateway acts as a self-signed CA, clients must explicitly trust the platform Root CA to allow secure HTTPS communication, especially for browser-based WebAuthn registration. The `auth enroll user` command installs the platform Root CA into the OS trust store as part of the interactive enrollment flow, before opening the browser for the passkey ceremony.
 
-If automatic OS trust installation fails, `auth enroll` stops before opening the browser and returns actionable remediation. Use `--no-system-trust` only when an administrator has already installed the Root CA on the host; it does not skip the passkey ceremony.
+If automatic OS trust installation fails, `auth enroll user` stops before opening the browser and returns actionable remediation. Use `--no-system-trust` only when an administrator has already installed the Root CA on the host; it does not skip the passkey ceremony.
 
 After installing the Root CA (or removing stale anchors from a previous gateway instance), close all open browser windows before clicking the enrollment link so the new trust anchor is recognized. Firefox and other browser-private trust stores may require separate handling.
 
@@ -128,7 +128,7 @@ When the gateway's HTTP and HTTPS ports are mapped to different host ports, such
 | `--endpoint` (`-e`) | HTTP discovery endpoint (host or host:port) for remote enrollment | empty (uses `localhost` via the configured HTTP port) |
 | `--port` (`-p`) | HTTPS/mTLS port (overrides default 8443; use with `--endpoint`) | `0` (uses the configured HTTPS port, normally `8443`) |
 
-When both flags are used together without a scheme in `--endpoint`, the CLI splits the overrides: `--endpoint` controls the HTTP discovery URL and `--port` controls the HTTPS/mTLS port. For example, running `g8e auth enroll -e localhost:8085 --port 8448` directs HTTP discovery to port `8085` and HTTPS mTLS operations to port `8448`.
+When both flags are used together without a scheme in `--endpoint`, the CLI splits the overrides: `--endpoint` controls the HTTP discovery URL and `--port` controls the HTTPS/mTLS port. For example, running `g8e auth enroll user -e localhost:8085 --port 8448` directs HTTP discovery to port `8085` and HTTPS mTLS operations to port `8448`.
 
 ### `mcp stdio` Credential Flags
 
@@ -151,7 +151,7 @@ The platform supports setup without requiring `/etc/hosts` changes or DNS config
 
 ### Windows Certificate Store Enrollment
 
-On Windows, `g8e auth enroll` auto-detects the platform and imports the signed CLI certificate into the CurrentUser Personal store for Windows Hello and CNG access. This is part of the same `auth enroll` flow that installs the gateway root CA and registers a passkey; it is not a separate enrollment mode.
+On Windows, `g8e auth enroll user` auto-detects the platform and imports the signed CLI certificate into the CurrentUser Personal store for Windows Hello and CNG access. This is part of the same `auth enroll user` flow that installs the gateway root CA and registers a passkey; it is not a separate enrollment mode.
 
 1. The CLI generates an ECDSA P-256 key pair and CSR.
 2. The CSR is submitted to the Governance Gateway, and a signed certificate with a SPIFFE URI SAN is returned.
@@ -173,7 +173,7 @@ Default ports:
 
 ### Port Constraints
 
-- **HTTP Surface** (`8080`): Serves plain HTTP for health checks, state endpoint, CA bundle and fingerprint discovery, bootstrap, CSR signing, CLI recovery request/status/complete (token-scoped, no mTLS required), deploy scripts, and node binary distribution. The old trust-script routes (`/web-cert.sh`, `/web-cert.ps1`, `/.well-known/g8e/pki/trust-windows`) and `handleCLIEnrollment` (`/api/v1/auth/cli/enroll`) are removed; trust installation is now handled by `auth enroll` directly, and enrollment is handled by the recovery/rotation flow.
+- **HTTP Surface** (`8080`): Serves plain HTTP for health checks, state endpoint, CA bundle and fingerprint discovery, bootstrap, CSR signing, CLI recovery request/status/complete (token-scoped, no mTLS required), deploy scripts, and node binary distribution. The old trust-script routes (`/web-cert.sh`, `/web-cert.ps1`, `/.well-known/g8e/pki/trust-windows`) and `handleCLIEnrollment` (`/api/v1/auth/cli/enroll`) are removed; trust installation is now handled by `auth enroll user` directly, and enrollment is handled by the recovery/rotation flow.
 - **HTTPS Surface** (`8443`): Accepts optional client certificates at the transport layer, allowing public access to browser-based assets while requiring application-layer mTLS verification for all governed execution routes. All governed execution endpoints and operator routes require a verified SPIFFE identity via client certificate, while public routes (the Console SPA, static assets, CA bundle, CRL, and WebAuthn browser endpoints) are accessible directly. When JWKS is configured, MCP and A2A endpoints accept JWT authentication as an alternative to mTLS for BYO clients.
 - **Collision Prevention**: The gateway fails startup if multiple logical surfaces are assigned to the same port, ensuring no downgrade of the mTLS execution boundary.
 

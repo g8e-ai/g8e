@@ -19,7 +19,7 @@ Authentication is how you prove your identity to the platform. The g8e platform 
 
 ### 1.1 CLI Authentication
 
-The CLI uses mTLS certificates for authentication. When you run `g8e auth enroll`, the command inspects the local credential state and chooses the appropriate path: reuse an existing healthy identity, bootstrap a new one, recover a partial or corrupt one, or rotate a certificate. The passkey ceremony is run through a browser to prove that a human controls the enrolling identity.
+The CLI uses mTLS certificates for authentication. When you run `g8e auth enroll user`, the command inspects the local credential state and chooses the appropriate path: reuse an existing healthy identity, bootstrap a new one, recover a partial or corrupt one, or rotate a certificate. The passkey ceremony is run through a browser to prove that a human controls the enrolling identity.
 
 **Key Concepts:**
 
@@ -40,7 +40,7 @@ The CLI classifies the local identity on disk into one of four states and takes 
 | **Partial** | Some credential files present but others missing | **Recovery** - initiates the one-time human-approved recovery flow. Does NOT silently overwrite. |
 | **Corrupt** | Credential files present but fail validation (for example expired cert, key mismatch) | **Recovery** or **Rotation** depending on the nature of the corruption. |
 
-Healthy `auth enroll` runs with a complete identity do not rotate credentials unexpectedly. The `--rotate-cli` flag forces rotation even when the identity is complete.
+Healthy `auth enroll user` runs with a complete identity do not rotate credentials unexpectedly. The `--rotate-cli` flag forces rotation even when the identity is complete.
 
 **Enrollment Scenarios:**
 
@@ -50,7 +50,7 @@ Healthy `auth enroll` runs with a complete identity do not rotate credentials un
 | **New CLI on existing gateway** | Gateway exists, no local credentials | CLI bootstraps, generates an enrollment token, opens browser for passkey ceremony. |
 | **Recovery (partial/corrupt)** | Some credentials missing or invalid | One-time human-approved recovery flow via the Console SPA, or via the mTLS approve-cli endpoint under `--headless`. |
 | **Recovery (stale bundle)** | Credentials complete but local trust bundle does not match the live gateway root CA (for example after `gw clean` regenerated the gateway PKI) | One-time human-approved recovery flow - the old CLI cert cannot authenticate to the new gateway via mTLS, so rotation is impossible. Recovery issues a fresh cert signed by the new CA. |
-| **Headless** | `--headless` flag used on `auth enroll` (any of the above recovery scenarios, or bootstrap on a bootstrapped gateway) | CLI-only identity: passkey ceremony skipped, OS trust installation skipped, recovery approval delegated to an already-enrolled CLI via `g8e auth approve-recovery <token>` over the mTLS approve-cli endpoint. The resulting identity is mTLS-only and cannot authenticate to the Console SPA. See [Headless CLI Enrollment (mTLS-Only)](#headless-cli-enrollment-mtls-only). |
+| **Headless** | `--headless` flag used on `auth enroll user` (any of the above recovery scenarios, or bootstrap on a bootstrapped gateway) | CLI-only identity: passkey ceremony skipped, OS trust installation skipped, recovery approval delegated to an already-enrolled CLI via `g8e auth approve-recovery <token>` over the mTLS approve-cli endpoint. The resulting identity is mTLS-only and cannot authenticate to the Console SPA. See [Headless CLI Enrollment (mTLS-Only)](#headless-cli-enrollment-mtls-only). |
 | **Rotation** | Credentials valid but `--rotate-cli` flag used, or cert near expiry | mTLS-protected rotation: one replacement certificate per run. |
 | **Reuse** | Credentials complete and valid, and the local trust bundle matches the live gateway root CA | No new certificate is issued - existing identity is reused. The local trust bundle is refreshed from the live gateway if intermediates differ but the root is unchanged. |
 
@@ -104,7 +104,7 @@ This ensures that sensitive session identifiers are never exposed in browser his
 
 **System Trust Installation:**
 
-By default, `auth enroll` installs the gateway Root CA into the OS trust store **before** opening the browser for the passkey ceremony. This ensures the browser recognizes the gateway's TLS certificate during the WebAuthn flow.
+By default, `auth enroll user` installs the gateway Root CA into the OS trust store **before** opening the browser for the passkey ceremony. This ensures the browser recognizes the gateway's TLS certificate during the WebAuthn flow.
 
 - Before installation, the CLI checks for stale g8e Root CA anchors from previous gateway instances (for example after `gw clean` regenerated the CA). The active fingerprint used to filter the stale list is the live gateway root fingerprint from the discovery step - NOT the local bundle's fingerprint. Using the local bundle as the source of truth was the original bug on the reused-identity path: the local bundle and the OS store are stale in lockstep, so they agreed with each other and the detector saw nothing wrong. On the new-enrollment paths (bootstrap/recovery/rotation), the artifacts' bundle IS the live bundle, so the behavior is unchanged. When discovery was unreachable, the CLI falls back to the bundle's own fingerprint (preserving the pre-discovery behavior) after printing the diagnostic warning.
 - If stale anchors are found, the user is prompted to confirm removal. Declining aborts enrollment before browser launch.
@@ -148,7 +148,7 @@ On Windows, the signed CLI certificate is imported into the Windows Certificate 
 
 #### Headless CLI Enrollment (mTLS-Only)
 
-The `--headless` flag on `g8e auth enroll` opts into a CLI-only identity that completes enrollment without a browser. It is the user-facing counterpart to the internal `SkipPasskey` field: `--headless` sets `SkipPasskey: true` and additionally switches the recovery branch from the browser-approval path to the mTLS-approval path. Internal callers (`mcp agent run`, `demos`) set `SkipPasskey` directly and must NOT set `Headless`, because Headless also changes recovery output, which those callers do not want.
+The `--headless` flag on `g8e auth enroll user` opts into a CLI-only identity that completes enrollment without a browser. It is the user-facing counterpart to the internal `SkipPasskey` field: `--headless` sets `SkipPasskey: true` and additionally switches the recovery branch from the browser-approval path to the mTLS-approval path. Internal callers (`mcp agent run`, `demos`) set `SkipPasskey` directly and must NOT set `Headless`, because Headless also changes recovery output, which those callers do not want.
 
 **What `--headless` does:**
 
@@ -168,7 +168,7 @@ The headless path adds a parallel recovery-approve endpoint that derives the app
 
 **`g8e auth approve-recovery <token>` CLI subcommand:**
 
-The CLI-side counterpart to the browser Console SPA approve action. It uses the local enrolled CLI identity (mTLS) to approve or deny a pending recovery request created by another CLI's `auth enroll --headless` run. It posts to the mTLS approve-cli endpoint with `Approve: true` (default) or `Approve: false` (`--deny`), then prints the resulting state.
+The CLI-side counterpart to the browser Console SPA approve action. It uses the local enrolled CLI identity (mTLS) to approve or deny a pending recovery request created by another CLI's `auth enroll user --headless` run. It posts to the mTLS approve-cli endpoint with `Approve: true` (default) or `Approve: false` (`--deny`), then prints the resulting state.
 
 **Unchanged security properties:**
 
@@ -375,9 +375,9 @@ The vault is required. On first run, the gateway auto-initializes a new vault wi
 ### 6.1 First-Time Setup
 
 1. Start the Gateway.
-2. Run `g8e auth enroll` to enroll your CLI.
-   - For default ports: `g8e auth enroll`.
-   - For Docker demos with split ports: `g8e auth enroll -e localhost:<httpPort> --port <httpsPort>`.
+2. Run `g8e auth enroll user` to enroll your CLI.
+   - For default ports: `g8e auth enroll user`.
+   - For Docker demos with split ports: `g8e auth enroll user -e localhost:<httpPort> --port <httpsPort>`.
    - The CLI installs the gateway Root CA into the OS trust store automatically before opening the browser.
    - If trust installation fails, the browser does not open - resolve the trust issue and re-run.
    - Use `--no-system-trust` only if an administrator has already installed the Root CA.
@@ -389,7 +389,7 @@ The vault is required. On first run, the gateway auto-initializes a new vault wi
 
 If your local CLI credentials are partial, corrupt, or the local trust bundle is stale against the live gateway (for example files were accidentally deleted, cert expired, or the gateway PKI was regenerated via `gw clean`):
 
-1. Run `g8e auth enroll` - the CLI detects the partial/corrupt/stale-bundle state.
+1. Run `g8e auth enroll user` - the CLI detects the partial/corrupt/stale-bundle state.
 2. The CLI initiates the recovery flow and opens the browser.
 3. An authenticated user approves the recovery in the Console SPA.
 4. The CLI receives a new CLI certificate and commits it atomically.
@@ -398,7 +398,7 @@ If your local CLI credentials are partial, corrupt, or the local trust bundle is
 
 To manually rotate your CLI certificate (for example before expiry):
 
-1. Run `g8e auth enroll --rotate-cli`.
+1. Run `g8e auth enroll user --rotate-cli`.
 2. The CLI uses your existing mTLS certificate to request rotation.
 3. A replacement certificate is issued and the old one is revoked.
 4. Only one replacement is issued per run.
@@ -407,8 +407,8 @@ To manually rotate your CLI certificate (for example before expiry):
 
 **CLI:**
 - Your enrolled certificate handles authentication automatically.
-- Run `g8e auth enroll` again - if your identity is complete and valid, and the local trust bundle matches the live gateway root CA, it is reused without rotation.
-- Run `g8e auth enroll --rotate-cli` to force certificate rotation.
+- Run `g8e auth enroll user` again - if your identity is complete and valid, and the local trust bundle matches the live gateway root CA, it is reused without rotation.
+- Run `g8e auth enroll user --rotate-cli` to force certificate rotation.
 - If credentials are partial or corrupt, or the local trust bundle is stale against the live gateway (for example after `gw clean`), the CLI automatically initiates the recovery flow.
 
 **Browser:**

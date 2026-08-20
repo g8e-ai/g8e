@@ -147,18 +147,18 @@ The gateway requires explicit authentication before it can be used. After starti
 
 ```bash
 ./g8e gw start
-./g8e auth enroll
+./g8e auth enroll user
 ```
 
 If authentication fails, check the following:
 - Ensure the gateway is running via `./g8e gw status`.
 - Verify the external IP displayed during gateway start matches your network interface.
 - For passkey authentication, ensure your hardware security key or platform authenticator is available.
-- For certificate-based authentication, ensure `.g8e/cli.crt` and `.g8e/cli.key` exist. The `auth enroll` command generates these files via the `EnrollmentCoordinator`, which drives CSR-based enrollment with the gateway CA. On all platforms (including Windows), CLI keys are file-backed EC P-256; the `--tpm` flag was removed in v1.7.2.
+- For certificate-based authentication, ensure `.g8e/cli.crt` and `.g8e/cli.key` exist. The `auth enroll user` command generates these files via the `EnrollmentCoordinator`, which drives CSR-based enrollment with the gateway CA. On all platforms (including Windows), CLI keys are file-backed EC P-256; the `--tpm` flag was removed in v1.7.2.
 
 ### CLI recovery (new CLI against an existing gateway)
 
-If you are enrolling a new CLI against an already-bootstrapped gateway (e.g. a second workstation, or replacing a lost CLI), `auth enroll` detects that the gateway is already bootstrapped and uses the **recovery flow** instead of bootstrap. The recovery flow requires a one-time human approval from an existing enrolled user, via either a browser or an already-enrolled CLI:
+If you are enrolling a new CLI against an already-bootstrapped gateway (e.g. a second workstation, or replacing a lost CLI), `auth enroll user` detects that the gateway is already bootstrapped and uses the **recovery flow** instead of bootstrap. The recovery flow requires a one-time human approval from an existing enrolled user, via either a browser or an already-enrolled CLI:
 
 1. The new CLI posts a CSR to the gateway and receives an opaque one-time token plus a browser approval URL.
 2. An existing user approves (or denies) the request via one of two paths:
@@ -167,15 +167,15 @@ If you are enrolling a new CLI against an already-bootstrapped gateway (e.g. a s
 3. The new CLI completes the recovery by proving possession of the CSR private key (signing the request ID) and receives a new CLI certificate.
 
 If recovery fails:
-- The token expires after a bounded TTL. If the approving user does not act in time, re-run `auth enroll` to get a fresh token.
-- The opaque token is only returned once. If you lose it, re-run `auth enroll`.
+- The token expires after a bounded TTL. If the approving user does not act in time, re-run `auth enroll user` to get a fresh token.
+- The opaque token is only returned once. If you lose it, re-run `auth enroll user`.
 - On the browser path, the approving user must have an active web session (cookie-based auth). If approval fails with 401, the approving user should re-authenticate in their browser.
 - On the headless path, the approver CLI must hold a valid, non-revoked CLI certificate bound to an active user. A revoked cert is rejected by the mTLS middleware (401) before the handler runs; a deactivated user is rejected by the handler (403).
 - Recovery is not available on an unbootstrapped gateway. Use the bootstrap endpoint instead.
 
 ### `--headless` flag
 
-`--headless` on `auth enroll` opts into a CLI-only identity that completes enrollment without a browser. It skips the passkey ceremony and OS trust installation (the `--no-system-trust` behavior is implied), and on the recovery branch it prints `g8e auth approve-recovery <token>` for an already-enrolled CLI to run instead of opening a browser. The resulting identity is mTLS-only: it can do everything the CLI could do before (MCP, A2A, governance, SSE, rotation) but cannot authenticate to the Console SPA because no browser passkey was registered. A browser passkey can be registered later from a browser if console access is desired.
+`--headless` on `auth enroll user` opts into a CLI-only identity that completes enrollment without a browser. It skips the passkey ceremony and OS trust installation (the `--no-system-trust` behavior is implied), and on the recovery branch it prints `g8e auth approve-recovery <token>` for an already-enrolled CLI to run instead of opening a browser. The resulting identity is mTLS-only: it can do everything the CLI could do before (MCP, A2A, governance, SSE, rotation) but cannot authenticate to the Console SPA because no browser passkey was registered. A browser passkey can be registered later from a browser if console access is desired.
 
 `--headless` is distinct from the internal `SkipPasskey` field used by `mcp agent run` and demos: those callers set `SkipPasskey` directly and must NOT set `Headless`, because `Headless` also changes recovery output (printing the approve-recovery command instead of opening a browser), which those callers do not want.
 
@@ -187,9 +187,9 @@ As of v1.7.2, **stale-anchor detection still runs under `--no-system-trust`** �
 
 ### Browser CA trust and WebAuthn failures
 
-The gateway uses self-signed certificates. Browser-based WebAuthn registration and console access require the platform Root CA to be trusted by the operating system. The `auth enroll` command installs the Root CA into the OS trust store before opening the browser for the passkey ceremony. If automatic OS trust installation fails, `auth enroll` stops before opening the browser and returns actionable remediation. Use `--no-system-trust` only when an administrator has already installed the Root CA on the host; it does not skip the passkey ceremony.
+The gateway uses self-signed certificates. Browser-based WebAuthn registration and console access require the platform Root CA to be trusted by the operating system. The `auth enroll user` command installs the Root CA into the OS trust store before opening the browser for the passkey ceremony. If automatic OS trust installation fails, `auth enroll user` stops before opening the browser and returns actionable remediation. Use `--no-system-trust` only when an administrator has already installed the Root CA on the host; it does not skip the passkey ceremony.
 
-After installing the Root CA (or removing stale anchors), `auth enroll` **blocks until the user closes all open browser windows and presses Enter**. Browsers cache certificate trust state, and WebAuthn registration will fail if the browser does not yet recognize the new platform CA. The blocking prompt ensures the browser restart happens before the passkey ceremony opens a fresh browser session. Firefox and other browser-private trust stores may require separate handling. This is the most common cause of console access failures on fresh setups.
+After installing the Root CA (or removing stale anchors), `auth enroll user` **blocks until the user closes all open browser windows and presses Enter**. Browsers cache certificate trust state, and WebAuthn registration will fail if the browser does not yet recognize the new platform CA. The blocking prompt ensures the browser restart happens before the passkey ceremony opens a fresh browser session. Firefox and other browser-private trust stores may require separate handling. This is the most common cause of console access failures on fresh setups.
 
 ### Certificate expiry and rotation
 
@@ -200,13 +200,13 @@ signed before the old session is deactivated, and the old certificate is revoked
 To force rotation of a healthy CLI certificate (e.g. after a key compromise concern), use the `--rotate-cli` flag:
 
 ```bash
-./g8e auth enroll --rotate-cli
+./g8e auth enroll user --rotate-cli
 ```
 
 If the CLI certificate has already expired and rotation is not possible, re-enroll from scratch:
 
 ```bash
-./g8e auth logout && ./g8e auth enroll
+./g8e auth logout && ./g8e auth enroll user
 ```
 
 The gateway serving certificate has a 90-day validity period and is auto-rotated by the PKI authority. Operator certificates require manual re-enrollment after expiry.
@@ -230,7 +230,7 @@ The CLI SSE client in `internal/cli/auth/approval_sse.go` waits for `approval.co
 
 Common causes of approval failures:
 - The user did not complete the passkey ceremony in time.
-- The browser was not restarted after the Root CA was installed by `auth enroll` (`auth enroll` now blocks until the user closes all browser windows and presses Enter, but if the user dismissed the prompt or restarted into a stale browser session, the WebAuthn ceremony will fail with a TLS error).
+- The browser was not restarted after the Root CA was installed by `auth enroll user` (`auth enroll user` now blocks until the user closes all browser windows and presses Enter, but if the user dismissed the prompt or restarted into a stale browser session, the WebAuthn ceremony will fail with a TLS error).
 - The SSE stream was not accessible due to network or authentication issues.
 - The gateway posture was changed to `notary` without a configured L3 notary.
 
@@ -363,7 +363,7 @@ When accessing via a Cloudflare tunnel, set `--passkey-rp-id` to the tunnel host
 
 ## Stale trust bundle after PKI regeneration
 
-If the gateway PKI is regenerated (`gw clean`, PKI rotation, or gateway migration to a new host with a fresh CA) while a workstation holds a complete CLI identity from the old gateway, the local trust bundle and OS trust store are both stale in lockstep. Re-running `auth enroll` previously failed with a raw TLS error during the passkey ceremony:
+If the gateway PKI is regenerated (`gw clean`, PKI rotation, or gateway migration to a new host with a fresh CA) while a workstation holds a complete CLI identity from the old gateway, the local trust bundle and OS trust store are both stale in lockstep. Re-running `auth enroll user` previously failed with a raw TLS error during the passkey ceremony:
 
 ```
 tls: failed to verify certificate: x509: certificate signed by unknown
@@ -373,26 +373,26 @@ tls: failed to verify certificate: x509: certificate signed by unknown
 
 …with no diagnosable cause, because the coordinator trusted the local bundle as the source of truth and the OS store matched it.
 
-As of v1.7.2, `auth enroll` now fetches the **live** gateway root CA from the unauthenticated discovery endpoint (`GET /.well-known/g8e/pki/ca-bundle` on the plain-HTTP port) before the reuse decision. When the live root fingerprint does not match the local bundle, the coordinator automatically:
+As of v1.7.2, `auth enroll user` now fetches the **live** gateway root CA from the unauthenticated discovery endpoint (`GET /.well-known/g8e/pki/ca-bundle` on the plain-HTTP port) before the reuse decision. When the live root fingerprint does not match the local bundle, the coordinator automatically:
 
 1. Prints `Local trust bundle does not match the live gateway root CA; using recovery flow.`
 2. Routes to the **recovery flow** (human-approved, plain-HTTP, token-scoped), which issues a fresh CLI certificate signed by the new CA. Rotation is impossible here because the old CLI cert cannot authenticate to the new gateway via mTLS.
 3. Detects the stale OS root anchor using the **live** fingerprint (not the stale local one), prompts for removal, and reinstalls the new root CA.
 
-So in the common case you no longer need to log out first — just re-run `auth enroll` and approve the recovery in the browser:
+So in the common case you no longer need to log out first — just re-run `auth enroll user` and approve the recovery in the browser:
 
 ```bash
-./g8e auth enroll
+./g8e auth enroll user
 ```
 
 If the discovery endpoint is unreachable (e.g., the gateway is only reachable on the HTTPS port, or you are intentionally offline), the coordinator prints a diagnostic warning naming the `gw clean` scenario and the `--endpoint` flag, then proceeds. If the bundle is in fact stale, the subsequent mTLS call surfaces a TLS error — but with prior context. In that case, fall back to the manual flow:
 
 ```bash
-./g8e auth logout && ./g8e auth enroll
+./g8e auth logout && ./g8e auth enroll user
 ```
 
 Note: `auth logout` removes local CLI credential material (CLI cert,
-CLI key, credentials JSON) but does **not** remove the shared OS root CA. This is intentional — the OS root CA is a shared system resource that may be trusted by other applications. If the root CA itself is stale (PKI was regenerated) and the automatic recovery routing did not remove it, remove it manually from the OS trust store before re-enrolling, or rely on `auth enroll` which will detect the stale anchor via the live fingerprint and prompt for removal.
+CLI key, credentials JSON) but does **not** remove the shared OS root CA. This is intentional — the OS root CA is a shared system resource that may be trusted by other applications. If the root CA itself is stale (PKI was regenerated) and the automatic recovery routing did not remove it, remove it manually from the OS trust store before re-enrolling, or rely on `auth enroll user` which will detect the stale anchor via the live fingerprint and prompt for removal.
 
 ## Cloudflare tunnel issues
 
@@ -464,7 +464,7 @@ differentiation.
 
 ### CLI enrollment and file-backed keys
 
-On all platforms (including Windows), `g8e auth enroll` uses file-backed EC P-256 keys for the CLI identity. The `--tpm` flag was removed in v1.7.2. The `EnrollmentCoordinator` handles the full enrollment state machine (bootstrap, recovery, rotation, reuse) and installs the gateway root CA into the OS trust store before opening the browser for the passkey ceremony. On Windows, trust installation uses the Windows Certificate Store via PowerShell. This is distinct from the browser-based WebAuthn passkey flow, which uses a cookie-based web session.
+On all platforms (including Windows), `g8e auth enroll user` uses file-backed EC P-256 keys for the CLI identity. The `--tpm` flag was removed in v1.7.2. The `EnrollmentCoordinator` handles the full enrollment state machine (bootstrap, recovery, rotation, reuse) and installs the gateway root CA into the OS trust store before opening the browser for the passkey ceremony. On Windows, trust installation uses the Windows Certificate Store via PowerShell. This is distinct from the browser-based WebAuthn passkey flow, which uses a cookie-based web session.
 
 ### Keystore file-based fallback
 

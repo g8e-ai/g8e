@@ -373,7 +373,7 @@ Run security validation checks on the local PKI and secrets directories:
 Enroll an operator with the gateway via CSR to obtain mTLS certificates:
 
 ```bash
-./g8e gw security pki enroll -e <gateway-ip>
+./g8e auth enroll operator -e <gateway-ip>
 ```
 
 ---

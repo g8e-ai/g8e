@@ -110,7 +110,7 @@ Requires Python 3.10+. Set `G8E_PROTOCOL_DIR` to override the default protocol c
 Generate an mTLS client certificate from the Gateway via CSR-based enrollment:
 
 ```bash
-./g8e auth enroll
+./g8e auth enroll user
 ```
 
 This generates a local keypair, submits a CSR to the Gateway CA, and stores the signed certificate in `.g8e/cli.crt` with the private key in `.g8e/cli.key`. CLI keys are file-backed ECDSA P-256 on all platforms. The Gateway must be running before enrollment (`./g8e gw start`).

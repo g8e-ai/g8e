@@ -397,7 +397,7 @@ The Gateway enforces strict session separation to prevent cross-tenant data leak
 Generate a client certificate for CLI operations:
 
 ```bash
-./g8e auth enroll
+./g8e auth enroll user
 ```
 
 This:
@@ -422,7 +422,7 @@ Web sessions use WebAuthn signatures as L3 proof.
 
 CSR-based enrollment is cryptographic identity proof. Instead of sharing a secret, a client generates its own key pair and asks the Gateway to sign a certificate attesting the identity. The Gateway acts as a Certificate Authority (CA). Starting the Gateway is itself the Platform Owner's authorization; there are no invite codes, pre-shared keys, or manual approval steps. The client proves its identity on every subsequent call via mTLS. No shared secrets, no API keys to leak.
 
-All authentication to the Gateway uses CSR-based enrollment. The first human to authenticate via `./g8e auth enroll` becomes the Platform Owner. All other entities (operators, MCP servers, AI clients, applications) enroll via the same CSR flow.
+All authentication to the Gateway uses CSR-based enrollment. The first human to authenticate via `./g8e auth enroll user` becomes the Platform Owner. All other entities (operators, MCP servers, AI clients, applications) enroll via the same CSR flow.
 
 #### Enrollment Flow
 
@@ -444,7 +444,7 @@ Applications enroll via the `/api/v1/pki/apps/enroll` endpoint to obtain an app 
 
 ## GUI Enrollment
 
-The `g8e gui` command manages external frontend application enrollment (React, Lovable, custom apps) with the g8e Gateway. Enrollment persists the frontend's origin in a local enrollment file and verifies that the running gateway was started with the correct `--cors-origin` and `--passkey-rp-origin` flags for that origin. The gateway is not restarted during enrollment; it must be started with the right flags beforehand.
+The `g8e auth enroll gui` command manages external frontend application enrollment (React, Lovable, custom apps) with the g8e Gateway. Enrollment persists the frontend's origin in a local enrollment file and verifies that the running gateway was started with the correct `--cors-origin` and `--passkey-rp-origin` flags for that origin. The gateway is not restarted during enrollment; it must be started with the right flags beforehand.
 
 After enrollment, the frontend can:
 - Authenticate users via WebAuthn passkeys
@@ -458,12 +458,12 @@ After enrollment, the frontend can:
 
 ### Commands
 
-#### `g8e gui enroll`
+#### `g8e auth enroll gui enroll`
 
 Enroll a frontend application origin with the gateway.
 
 ```bash
-g8e gui enroll --origin <url> [flags]
+g8e auth enroll gui enroll --origin <url> [flags]
 ```
 
 Flags:
@@ -481,22 +481,22 @@ The command:
 
 If the gateway is not running or does not have the origin configured, the command fails with an error indicating which flags to use when starting the gateway.
 
-#### `g8e gui show`
+#### `g8e auth enroll gui show`
 
 Display all enrolled frontend origins and configuration snippets.
 
 ```bash
-g8e gui show
-g8e gui show --json    # machine-readable JSON output for scripting
-g8e gui list           # alias for "show"
+g8e auth enroll gui show
+g8e auth enroll gui show --json    # machine-readable JSON output for scripting
+g8e auth enroll gui list           # alias for "show"
 ```
 
-#### `g8e gui remove`
+#### `g8e auth enroll gui remove`
 
 Remove an enrolled frontend application origin from the enrollment file.
 
 ```bash
-g8e gui remove --origin <url>
+g8e auth enroll gui remove --origin <url>
 ```
 
 Flags:
@@ -510,12 +510,12 @@ The gateway's CORS and passkey RP configuration is unchanged. To stop accepting 
 
 Returns `not found` error if the origin is not enrolled.
 
-#### `g8e gui verify`
+#### `g8e auth enroll gui verify`
 
 Verify gateway connectivity and CORS configuration for a frontend origin.
 
 ```bash
-g8e gui verify --origin <url>
+g8e auth enroll gui verify --origin <url>
 ```
 
 Checks enrollment status and prints a verification checklist with gateway endpoint URLs for manual testing, including health, CORS preflight, SSE, and WebAuthn passkey endpoints.
@@ -547,7 +547,7 @@ After enrollment, the frontend developer must:
 
 ```bash
 # Enroll a Lovable app
-g8e gui enroll --origin https://my-app.lovable.app
+g8e auth enroll gui enroll --origin https://my-app.lovable.app
 
 # The command outputs a TypeScript snippet:
 # const API_BASE_URL = 'https://localhost:8443';
@@ -561,10 +561,10 @@ Paste the configuration snippet into your Lovable project and follow the [Lovabl
 
 ```bash
 # Enroll a local React dev server
-g8e gui enroll --origin http://localhost:3000
+g8e auth enroll gui enroll --origin http://localhost:3000
 
 # Verify connectivity
-g8e gui verify --origin http://localhost:3000
+g8e auth enroll gui verify --origin http://localhost:3000
 ```
 
 ### GUI Enrollment Troubleshooting
@@ -572,7 +572,7 @@ g8e gui verify --origin http://localhost:3000
 #### CORS Errors
 
 If the browser blocks requests with CORS errors:
-- Verify the origin is enrolled: `g8e gui show`
+- Verify the origin is enrolled: `g8e auth enroll gui show`
 - Verify the gateway was started with `--cors-origin` and `--passkey-rp-origin` flags for this origin
 - Check that `credentials: 'include'` is set on all fetch calls
 
@@ -580,7 +580,7 @@ If the browser blocks requests with CORS errors:
 
 If WebAuthn registration fails with "RP ID does not match":
 - The RP ID must be a registrable domain suffix of the origin's hostname
-- Use `--passkey-rp-id` to set a custom RP ID (e.g., `g8e gui enroll --origin https://app.example.com --passkey-rp-id example.com`)
+- Use `--passkey-rp-id` to set a custom RP ID (e.g., `g8e auth enroll gui enroll --origin https://app.example.com --passkey-rp-id example.com`)
 
 #### SSE Connection Refused
 
@@ -753,7 +753,7 @@ ls -la .g8e/pki/client.crt
 Re-run login if certificate is missing or expired:
 
 ```bash
-./g8e auth enroll
+./g8e auth enroll user
 ```
 
 ### Operator Connection Issues

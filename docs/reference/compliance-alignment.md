@@ -650,7 +650,7 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 - **EnrollmentCoordinator** replacing the scattered CLI enrollment transport (`BootstrapWithURL`/`CLIEnroll`/`ReEnroll`/`EnrollWithGateway`/`AutoRenewCertificate`) with a single state machine owning the enrollment lifecycle
 - **Human-approved CLI recovery flow** for new CLIs against an existing gateway, using a one-time approval (browser Console SPA or mTLS-enrolled CLI via `g8e auth approve-recovery`) and opaque proof-of-possession token
 - **mTLS-protected CLI certificate rotation endpoint** enabling in-band certificate renewal without re-enrollment
-- **OS trust-store installation before browser launch** during `auth enroll`, with a blocking browser-restart gate after trust-store changes
+- **OS trust-store installation before browser launch** during `auth enroll user`, with a blocking browser-restart gate after trust-store changes
 - **Posture-aware passkey enrollment** requiring passkeys only for notary posture (optional for doctrine and consensus)
 - **Audit store hard dependency** for the MCP gateway, making audit recording a construction-time requirement rather than a late-bound optional
 - **Passkey proof verification decoupling** from the L3 notary interface, separating proof verification from notary authorization logic

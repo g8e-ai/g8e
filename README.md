@@ -204,7 +204,7 @@ docker compose up -d
 ./g8e gw start --interactive
 
 # Authenticate the CLI
-./g8e auth enroll
+./g8e auth enroll user
 
 # Deploy an Operator to remote hosts
 ./g8e operator deploy --hosts <host1,host2> --background

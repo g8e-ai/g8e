@@ -20,7 +20,7 @@ For the guide on building a g8e-compatible frontend (enrollment commands, API re
 
 1. **[Configure the Cloudflare Tunnel](./cloudflare_tunnel.md)** - Expose the local g8e Gateway to the internet via `console.g8e.ai`
 2. **[Configure the Gateway](./build_frontend.md#gateway-side-configuration)** - Set CORS origins, passkey RP ID/name/origins (see [Build a g8e-Compatible Frontend](./build_frontend.md))
-3. **[Enroll the Frontend](./build_frontend.md#frontend-enrollment-commands)** - Run `g8e gui enroll` to validate CORS and generate a TypeScript config snippet
+3. **[Enroll the Frontend](./build_frontend.md#frontend-enrollment-commands)** - Run `g8e auth enroll gui enroll` to validate CORS and generate a TypeScript config snippet
 4. **[Review the API Reference](./build_frontend.md#api-reference)** - Understand the public and authenticated endpoints (see [Build a g8e-Compatible Frontend](./build_frontend.md))
 5. **[Review API Data Types](./build_frontend.md#api-data-types)** - Use the Swagger spec for request and response schemas (see [Build a g8e-Compatible Frontend](./build_frontend.md))
 6. **[Build Pages and Components](#6-pages-and-components)** - AuthContext, Login, Dashboard, ApprovalFlow, URL hash handling
@@ -75,12 +75,12 @@ Use `lovable.app` as the `--passkey-rp-id` so passkeys work across Lovable subdo
 
 ## 3. Frontend Enrollment
 
-For the full `g8e gui` command reference (enroll, show, verify, remove), see [Build a g8e-Compatible Frontend: Frontend Enrollment Commands](./build_frontend.md#frontend-enrollment-commands).
+For the full `g8e auth enroll gui` command reference (enroll, show, verify, remove), see [Build a g8e-Compatible Frontend: Frontend Enrollment Commands](./build_frontend.md#frontend-enrollment-commands).
 
 ### Enroll the Lovable App Origin
 
 ```bash
-g8e gui enroll --origin https://your-app.lovable.app --public-base-url https://console.g8e.ai
+g8e auth enroll gui enroll --origin https://your-app.lovable.app --public-base-url https://console.g8e.ai
 ```
 
 Copy the outputted TypeScript config snippet into the Lovable project as the starting point for API integration.
@@ -101,7 +101,7 @@ After the Lovable AI agent generates the app, verify:
 - [ ] **Approvals**: If a suspended transaction exists, confirm the "Approve" button triggers WebAuthn and the transaction is approved.
 - [ ] **Logout**: Click "Sign Out" and confirm redirect to login page and cookie cleared.
 - [ ] **URL hash handling**: Navigate to `#approve={txHash}` and confirm auto-approval flow triggers.
-- [ ] **`g8e gui verify`**: Run `g8e gui verify --origin https://your-app.lovable.app` and confirm all checklist items pass.
+- [ ] **`g8e auth enroll gui verify`**: Run `g8e auth enroll gui verify --origin https://your-app.lovable.app` and confirm all checklist items pass.
 
 ---
 

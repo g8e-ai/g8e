@@ -74,7 +74,7 @@ The cookie has a 24-hour TTL. The gateway validates the cookie on every authenti
 
 Enroll your frontend with the gateway to validate CORS and generate a configuration snippet:
 
-`g8e gui enroll --origin https://your-app.example.com`
+`g8e auth enroll gui enroll --origin https://your-app.example.com`
 
 Optional flags:
 
@@ -94,7 +94,7 @@ This command:
 
 ### Verify Enrollment
 
-`g8e gui verify --origin https://your-app.example.com`
+`g8e auth enroll gui verify --origin https://your-app.example.com`
 
 This prints a verification checklist covering CORS headers, passkey registration, passkey authentication, session cookie attributes, SSE stream connectivity, and authenticated API calls.
 
@@ -102,7 +102,7 @@ This prints a verification checklist covering CORS headers, passkey registration
 
 ## Step 3: Add the API Configuration
 
-Take the TypeScript snippet from `g8e gui enroll` and add it to your frontend project. The key elements are:
+Take the TypeScript snippet from `g8e auth enroll gui enroll` and add it to your frontend project. The key elements are:
 
 ### API Base URL and Fetch Wrapper
 
@@ -277,7 +277,7 @@ Trigger the same registration flow as Step 4 from an authenticated state.
 
 Run the verification command:
 
-`g8e gui verify --origin https://your-app.example.com`
+`g8e auth enroll gui verify --origin https://your-app.example.com`
 
 Then manually verify in the browser:
 
@@ -305,7 +305,7 @@ Then manually verify in the browser:
 
 **Fix**: Restart the gateway with the correct flags: `g8e gw start --cors-origin https://your-app.example.com --passkey-rp-origin https://your-app.example.com`
 
-Then run `g8e gui enroll --origin https://your-app.example.com` to verify.
+Then run `g8e auth enroll gui enroll --origin https://your-app.example.com` to verify.
 
 ### Passkey RP Mismatch
 
@@ -337,7 +337,7 @@ Then run `g8e gui enroll --origin https://your-app.example.com` to verify.
 
 **Cause**: Token expired (5-minute TTL), already used (one-time-use), or invalid.
 
-**Fix**: Generate a new enrollment token from the CLI (`g8e auth enroll`). Handle 410 (expired), 409 (already used), and 401 (invalid) with specific user-facing error messages.
+**Fix**: Generate a new enrollment token from the CLI (`g8e auth enroll user`). Handle 410 (expired), 409 (already used), and 401 (invalid) with specific user-facing error messages.
 
 ---
 

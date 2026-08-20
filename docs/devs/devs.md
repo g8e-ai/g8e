@@ -30,8 +30,9 @@ make build          # Build the g8e Operator binary
 |---|---|
 | `./g8e gw start` | Start the Gateway (`--doctrine-dir` loads JSON doctrine files for L1 threat detection) |
 | `./g8e gw status` | Gateway health and status |
-| `./g8e auth enroll` | Authenticate the local CLI |
-| `./g8e gui enroll` | Enroll an external frontend application origin with the Gateway |
+| `./g8e auth enroll user` | Authenticate the local CLI |
+| `./g8e auth enroll operator` | Enroll a remote operator/device with the Gateway via CSR |
+| `./g8e auth enroll gui enroll` | Enroll an external frontend application origin with the Gateway |
 | `./g8e compliance` | FedRAMP 20x KSI evaluation and OSCAL export |
 | `./g8e test` | Run test suites |
 

@@ -30,7 +30,7 @@ In an air-gapped deployment, the g8e Gateway operates as the central Policy Deci
 
 The gateway exposes two logical communication surfaces:
 
-- **HTTP (port 8080)**: Serves health checks, local trust bundles, CA discovery, CLI recovery request/status/complete (token-scoped), device and app enrollment, deploy scripts, and binary downloads. Unregistered paths redirect to the HTTPS port. OS trust installation is handled by `auth enroll` directly.
+- **HTTP (port 8080)**: Serves health checks, local trust bundles, CA discovery, CLI recovery request/status/complete (token-scoped), device and app enrollment, deploy scripts, and binary downloads. Unregistered paths redirect to the HTTPS port. OS trust installation is handled by `auth enroll user` directly.
 - **HTTPS (port 8443)**: Receives governance envelope mutation payloads, handles persistence, runs WebSocket pub/sub and SSE event streaming, serves MCP and A2A ingress, provides WebAuthn passkey authentication, and hosts the browser management console.
 
 Surfaces with conflicting TLS client-authentication requirements do not share a network port. The initialization sequence validates port isolation and fails if configurations overlap.
@@ -123,7 +123,7 @@ Implementing an air-gapped deployment requires a connected staging host to resol
    ```
 3. **Establish Local Session**: Log in to establish local credentials:
    ```bash
-   ./g8e auth enroll
+   ./g8e auth enroll user
    ```
 4. **Optional Remote Management**: Use operator remote management CLI commands (`cp`, `scp`, `deploy`, `stream`) to manage remote hosts within the air-gapped environment. See [Connect Operator to Gateway](connect_operator_to_gateway.md) for details.
 5. **Verify Air-Gap Readiness**: Run the air-gap verification target to confirm vendored builds, image pinning, and script integrity:
