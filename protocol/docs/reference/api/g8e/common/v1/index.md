@@ -232,6 +232,13 @@ should be populated per instance.
 | fingerprints | [PlatformEnrollmentFingerprints](#g8e-common-v1-PlatformEnrollmentFingerprints) |  |  |
 | target_collection | [string](#string) |  |  |
 | target_document_id | [string](#string) |  |  |
+| operator_id | [string](#string) |  | Public identifiers and attribution metadata carried forward between handlers. These are all public values (no credentials, token hashes, CSR PEM, or private keys); placing them in the audited payload keeps the handlers stateless with respect to each other. |
+| operator_session_id | [string](#string) |  |  |
+| cli_session_id | [string](#string) |  |  |
+| policy_id | [string](#string) |  |  |
+| certificate_serial | [string](#string) |  |  |
+| certificate_fingerprint | [string](#string) |  |  |
+| owner_user_id | [string](#string) |  |  |
 
 
 

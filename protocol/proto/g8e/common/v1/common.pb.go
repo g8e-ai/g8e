@@ -879,8 +879,19 @@ type PlatformEnrollmentGovernancePayload struct {
 	Fingerprints     *PlatformEnrollmentFingerprints `protobuf:"bytes,8,opt,name=fingerprints,proto3" json:"fingerprints,omitempty"`
 	TargetCollection string                          `protobuf:"bytes,9,opt,name=target_collection,json=targetCollection,proto3" json:"target_collection,omitempty"`
 	TargetDocumentId string                          `protobuf:"bytes,10,opt,name=target_document_id,json=targetDocumentId,proto3" json:"target_document_id,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Public identifiers and attribution metadata carried forward between
+	// handlers. These are all public values (no credentials, token hashes,
+	// CSR PEM, or private keys); placing them in the audited payload keeps
+	// the handlers stateless with respect to each other.
+	OperatorId             string `protobuf:"bytes,11,opt,name=operator_id,json=operatorId,proto3" json:"operator_id,omitempty"`
+	OperatorSessionId      string `protobuf:"bytes,12,opt,name=operator_session_id,json=operatorSessionId,proto3" json:"operator_session_id,omitempty"`
+	CliSessionId           string `protobuf:"bytes,13,opt,name=cli_session_id,json=cliSessionId,proto3" json:"cli_session_id,omitempty"`
+	PolicyId               string `protobuf:"bytes,14,opt,name=policy_id,json=policyId,proto3" json:"policy_id,omitempty"`
+	CertificateSerial      string `protobuf:"bytes,15,opt,name=certificate_serial,json=certificateSerial,proto3" json:"certificate_serial,omitempty"`
+	CertificateFingerprint string `protobuf:"bytes,16,opt,name=certificate_fingerprint,json=certificateFingerprint,proto3" json:"certificate_fingerprint,omitempty"`
+	OwnerUserId            string `protobuf:"bytes,17,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *PlatformEnrollmentGovernancePayload) Reset() {
@@ -979,6 +990,55 @@ func (x *PlatformEnrollmentGovernancePayload) GetTargetCollection() string {
 func (x *PlatformEnrollmentGovernancePayload) GetTargetDocumentId() string {
 	if x != nil {
 		return x.TargetDocumentId
+	}
+	return ""
+}
+
+func (x *PlatformEnrollmentGovernancePayload) GetOperatorId() string {
+	if x != nil {
+		return x.OperatorId
+	}
+	return ""
+}
+
+func (x *PlatformEnrollmentGovernancePayload) GetOperatorSessionId() string {
+	if x != nil {
+		return x.OperatorSessionId
+	}
+	return ""
+}
+
+func (x *PlatformEnrollmentGovernancePayload) GetCliSessionId() string {
+	if x != nil {
+		return x.CliSessionId
+	}
+	return ""
+}
+
+func (x *PlatformEnrollmentGovernancePayload) GetPolicyId() string {
+	if x != nil {
+		return x.PolicyId
+	}
+	return ""
+}
+
+func (x *PlatformEnrollmentGovernancePayload) GetCertificateSerial() string {
+	if x != nil {
+		return x.CertificateSerial
+	}
+	return ""
+}
+
+func (x *PlatformEnrollmentGovernancePayload) GetCertificateFingerprint() string {
+	if x != nil {
+		return x.CertificateFingerprint
+	}
+	return ""
+}
+
+func (x *PlatformEnrollmentGovernancePayload) GetOwnerUserId() string {
+	if x != nil {
+		return x.OwnerUserId
 	}
 	return ""
 }
@@ -1158,7 +1218,7 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"\x1ePlatformEnrollmentFingerprints\x12\x10\n" +
 	"\x03app\x18\x01 \x01(\tR\x03app\x12\x1a\n" +
 	"\boperator\x18\x02 \x01(\tR\boperator\x12\x10\n" +
-	"\x03cli\x18\x03 \x01(\tR\x03cli\"\xfb\x03\n" +
+	"\x03cli\x18\x03 \x01(\tR\x03cli\"\x9b\x06\n" +
 	"#PlatformEnrollmentGovernancePayload\x12\x16\n" +
 	"\x06action\x18\x01 \x01(\tR\x06action\x12\x16\n" +
 	"\x06intent\x18\x02 \x01(\tR\x06intent\x12\x1d\n" +
@@ -1172,7 +1232,15 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"\ffingerprints\x18\b \x01(\v2-.g8e.common.v1.PlatformEnrollmentFingerprintsR\ffingerprints\x12+\n" +
 	"\x11target_collection\x18\t \x01(\tR\x10targetCollection\x12,\n" +
 	"\x12target_document_id\x18\n" +
-	" \x01(\tR\x10targetDocumentId\"\xd2\x02\n" +
+	" \x01(\tR\x10targetDocumentId\x12\x1f\n" +
+	"\voperator_id\x18\v \x01(\tR\n" +
+	"operatorId\x12.\n" +
+	"\x13operator_session_id\x18\f \x01(\tR\x11operatorSessionId\x12$\n" +
+	"\x0ecli_session_id\x18\r \x01(\tR\fcliSessionId\x12\x1b\n" +
+	"\tpolicy_id\x18\x0e \x01(\tR\bpolicyId\x12-\n" +
+	"\x12certificate_serial\x18\x0f \x01(\tR\x11certificateSerial\x127\n" +
+	"\x17certificate_fingerprint\x18\x10 \x01(\tR\x16certificateFingerprint\x12\"\n" +
+	"\rowner_user_id\x18\x11 \x01(\tR\vownerUserId\"\xd2\x02\n" +
 	"&PlatformEnrollmentCompletionTranscript\x12)\n" +
 	"\x10protocol_version\x18\x01 \x01(\tR\x0fprotocolVersion\x12\x1d\n" +
 	"\n" +

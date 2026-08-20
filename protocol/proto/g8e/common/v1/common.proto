@@ -156,6 +156,17 @@ message PlatformEnrollmentGovernancePayload {
   PlatformEnrollmentFingerprints fingerprints = 8;
   string target_collection = 9;
   string target_document_id = 10;
+  // Public identifiers and attribution metadata carried forward between
+  // handlers. These are all public values (no credentials, token hashes,
+  // CSR PEM, or private keys); placing them in the audited payload keeps
+  // the handlers stateless with respect to each other.
+  string operator_id = 11;
+  string operator_session_id = 12;
+  string cli_session_id = 13;
+  string policy_id = 14;
+  string certificate_serial = 15;
+  string certificate_fingerprint = 16;
+  string owner_user_id = 17;
 }
 
 message PlatformEnrollmentCompletionTranscript {

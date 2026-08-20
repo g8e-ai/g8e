@@ -242,6 +242,8 @@ type PlatformEnrollmentRequest struct {
 	OperatorSessionID      string                              `json:"operator_session_id,omitempty"`
 	CLISessionID           string                              `json:"cli_session_id,omitempty"`
 	PolicyID               string                              `json:"policy_id,omitempty"`
+	CertificateSerial      string                              `json:"certificate_serial,omitempty"`
+	CertificateFingerprint string                              `json:"certificate_fingerprint,omitempty"`
 	Issued                 *PlatformEnrollmentCompleteResponse `json:"issued,omitempty"`
 	CompletedAt            *time.Time                          `json:"completed_at,omitempty"`
 	FailureReason          string                              `json:"failure_reason,omitempty"`

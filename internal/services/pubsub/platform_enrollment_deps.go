@@ -24,8 +24,8 @@ import (
 // so the handler layer does not import the gateway package (which would
 // invert the dependency direction: gateway already imports pubsub).
 type PlatformEnrollmentDocStore interface {
-	DocSet(collection, id string, data []byte) error
-	DocGet(collection, id string) ([]byte, error)
+	DocSet(collection, id string, data json.RawMessage) error
+	DocGet(collection, id string) (*models.Document, error)
 	DocConditionalUpdate(collection, id string, setFields map[string]interface{}, conditionField string, conditionValue interface{}) (bool, error)
 }
 
@@ -92,12 +92,18 @@ func loadPlatformEnrollmentRequest(ctx context.Context, deps PlatformEnrollmentD
 	if requestID == "" {
 		return nil, nil
 	}
-	data, err := deps.DocStore.DocGet(platformEnrollmentCollection(), requestID)
+	doc, err := deps.DocStore.DocGet(platformEnrollmentCollection(), requestID)
 	if err != nil {
 		return nil, fmt.Errorf("platform enrollment: load request %s: %w", requestID, err)
 	}
-	if data == nil {
+	if doc == nil {
 		return nil, nil
+	}
+	// Re-marshal the document's field map back to a JSON object so the
+	// typed model can be decoded with a single json.Unmarshal call.
+	data, err := json.Marshal(doc.Data)
+	if err != nil {
+		return nil, fmt.Errorf("platform enrollment: marshal doc %s: %w", requestID, err)
 	}
 	var req models.PlatformEnrollmentRequest
 	if err := json.Unmarshal(data, &req); err != nil {

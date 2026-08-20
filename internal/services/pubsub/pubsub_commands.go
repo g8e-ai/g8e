@@ -808,6 +808,26 @@ func (rs *OperatorPubSubService) ExecuteVerifiedTransaction(ctx context.Context,
 		return rs.handleA2aCallRequestSync(ctx, pubsubMsg)
 	}
 
+	// Platform enrollment actions are synchronous: each handler performs a
+	// typed mutation and returns a receipt summary string for the L5
+	// actuator to stamp into the signed final receipt. When
+	// platformEnrollment is nil (outbound/operator mode), dispatch fails
+	// closed with ErrTxUnknownActionType.
+	if rs.platformEnrollment != nil {
+		switch eventType {
+		case constants.EventPlatformEnrollmentCreateRequested:
+			return rs.platformEnrollment.HandleCreate(ctx, pubsubMsg)
+		case constants.EventPlatformEnrollmentDecideRequested:
+			return rs.platformEnrollment.HandleDecide(ctx, pubsubMsg)
+		case constants.EventPlatformEnrollmentIssueRequested:
+			return rs.platformEnrollment.HandleIssue(ctx, pubsubMsg)
+		case constants.EventPlatformEnrollmentPersistPolicyRequested:
+			return rs.platformEnrollment.HandlePersistPolicy(ctx, pubsubMsg)
+		case constants.EventPlatformEnrollmentCreateSessionRequested:
+			return rs.platformEnrollment.HandleCreateSession(ctx, pubsubMsg)
+		}
+	}
+
 	handler(ctx, pubsubMsg)
 	return "", nil
 }

@@ -104,6 +104,15 @@ func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 		return []byte(`{"test": "data"}`)
 	case constants.ActionTypeCancel:
 		msg = &operatorv1.CommandCancelRequested{ExecutionId: "exec-1"}
+	case constants.ActionTypePlatformEnrollmentCreate,
+		constants.ActionTypePlatformEnrollmentDecide,
+		constants.ActionTypePlatformEnrollmentIssue,
+		constants.ActionTypePlatformEnrollmentPersistPolicy,
+		constants.ActionTypePlatformEnrollmentCreateSession:
+		msg = &commonv1.PlatformEnrollmentGovernancePayload{
+			Action:    string(actionType),
+			RequestId: "test-request",
+		}
 	default:
 		t.Fatalf("unsupported action type: %v", actionType)
 	}

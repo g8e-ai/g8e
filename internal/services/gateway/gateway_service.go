@@ -657,6 +657,26 @@ func (ls *GatewayModeService) GetDocStore() *DocumentStoreService {
 	return ls.docStore
 }
 
+// GetPKI returns the PKI authority service.
+func (ls *GatewayModeService) GetPKI() *PKIAuthority {
+	return ls.pki
+}
+
+// GetCLISessionService returns the CLI session service.
+func (ls *GatewayModeService) GetCLISessionService() *CLISessionService {
+	return ls.cliSessionSvc
+}
+
+// GetOperatorSessionService returns the operator session service.
+func (ls *GatewayModeService) GetOperatorSessionService() *OperatorSessionService {
+	return ls.operatorSessionSvc
+}
+
+// GetUserService returns the user service.
+func (ls *GatewayModeService) GetUserService() *UserService {
+	return ls.userSvc
+}
+
 // GetConsensusStore returns the consensus store service.
 func (ls *GatewayModeService) GetConsensusStore() *ConsensusStoreService {
 	return ls.consensusStore
