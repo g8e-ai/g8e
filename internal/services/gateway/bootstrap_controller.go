@@ -135,8 +135,9 @@ func (c *BootstrapController) handleLocalBootstrapWithURL(w http.ResponseWriter,
 
 	// Create the first real user with client-provided OS user information.
 	// Zero-PII: the user is created with only a generated ID and OS user info.
-	// This user IS the first human enrollee and the gateway admin; there is no
-	// ephemeral bootstrap-user concept and no retirement flow.
+	// This user IS the first human enrollee and the gateway owner (assigned the
+	// owner role); there is no ephemeral bootstrap-user concept and no
+	// retirement flow.
 	user, err := c.userSvc.CreateUserWithOSUser(req.LocalOSUser)
 	if err != nil {
 		c.logger.Error("Failed to create user", "error", err)

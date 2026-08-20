@@ -55,15 +55,16 @@ func (s *UserService) SetAuthService(authSvc authCacheInvalidator) {
 // The LocalOSUser field is left nil; callers that need to attach OS user info
 // (the bootstrap path) use CreateUserWithOSUser.
 func (s *UserService) CreateUser() (*models.User, error) {
-	return s.createUser(nil)
+	return s.createUser(nil, nil)
 }
 
-// CreateUserWithOSUser creates a new active user with a generated ID and the
-// provided local OS user info attached. Used by the CLI bootstrap path
-// (handleLocalBootstrapWithURL) so the first human enrollee carries the
-// zero-PII OS-user metadata from the enrollment request.
+// CreateUserWithOSUser creates a new active user with a generated ID, the
+// provided local OS user info attached, and the owner role. Used by the CLI
+// bootstrap path (handleLocalBootstrapWithURL) so the first human enrollee
+// carries the zero-PII OS-user metadata from the enrollment request and is
+// marked as the gateway owner.
 func (s *UserService) CreateUserWithOSUser(localOSUser *models.LocalOSUser) (*models.User, error) {
-	return s.createUser(localOSUser)
+	return s.createUser(localOSUser, []string{string(constants.UserRoleOwner)})
 }
 
 // CreateUserWithSub creates a user with the provided subject (JWT sub) as their ID.
@@ -131,7 +132,7 @@ func getLocalOSUser() *models.LocalOSUser {
 	}
 }
 
-func (s *UserService) createUser(localOSUser *models.LocalOSUser) (*models.User, error) {
+func (s *UserService) createUser(localOSUser *models.LocalOSUser, roles []string) (*models.User, error) {
 	userID := uuid.NewString()
 
 	// Use provided OS user info, or fall back to gateway's local OS user
@@ -151,6 +152,7 @@ func (s *UserService) createUser(localOSUser *models.LocalOSUser) (*models.User,
 		Status:             constants.UserStatusActive,
 		LocalOSUser:        localOSUser,
 		WebAuthnUserID:     webAuthnUserID,
+		Roles:              roles,
 	}
 
 	data, err := json.Marshal(user)

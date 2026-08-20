@@ -135,6 +135,7 @@ func TestUserService_CreateUserWithOSUser(t *testing.T) {
 		assert.Equal(t, "CORP", user.LocalOSUser.Domain)
 		assert.Equal(t, "alice", user.LocalOSUser.Username)
 		assert.Equal(t, "1001", user.LocalOSUser.UID)
+		assert.Equal(t, []string{string(constants.UserRoleOwner)}, user.Roles, "first user created via bootstrap gets the owner role")
 	})
 
 	t.Run("Success - falls back to gateway local OS user when nil", func(t *testing.T) {
@@ -149,6 +150,7 @@ func TestUserService_CreateUserWithOSUser(t *testing.T) {
 		// createUser falls back to getLocalOSUser() when nil is passed;
 		// the test runner's OS user info is attached (non-nil on Unix/Windows).
 		assert.NotNil(t, user.LocalOSUser, "LocalOSUser should fall back to the gateway's local OS user")
+		assert.Equal(t, []string{string(constants.UserRoleOwner)}, user.Roles, "first user created via bootstrap gets the owner role")
 	})
 }
 
