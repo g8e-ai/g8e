@@ -440,6 +440,13 @@ For device enrollment, use the `/api/v1/pki/devices/enroll` endpoint (see PKI se
 
 Applications enroll via the `/api/v1/pki/apps/enroll` endpoint to obtain an app identity (`spiffe://g8e.local/app/<appname>`). For delegated credential enrollment (where a human CLI session vouches for the app), use the `/api/v1/pki/apps/delegated` endpoint with mTLS authentication.
 
+Two in-tree components self-enroll via this endpoint at startup using the same idempotent load-then-enroll pattern (try to load an existing valid cert; enroll only when the cert is missing, expired, or near-expiry):
+
+- **Ensemble (g8ee)** — `ensemble/app/services/infra/app_enrollment_service.py` enrolls as app name `g8ee` to obtain `spiffe://g8e.local/app/g8ee`. Runs as Phase 0.25 of the FastAPI lifespan. Credentials persist in the `g8e-ensemble-data` volume. See [Ensemble (g8ee)](../architecture/ensemble.md).
+- **Dashboard (g8ed)** — `dashboard/services/infra/app-enrollment-service.js` enrolls as app name `g8ed` to obtain `spiffe://g8e.local/app/g8ed`. Runs as an async startup phase before `app.listen()`. Credentials persist in the `g8e-dashboard-data` volume. The dashboard's browser SPA still authenticates via WebAuthn passkeys; the container's mTLS identity is for server-to-server gateway calls. See [Dashboard (g8ed)](../architecture/dashboard.md) and [Build a g8e-Compatible Frontend](./build_frontend.md) § In-Tree Dashboard Server-to-Server mTLS Enrollment.
+
+Both consume the same public enrollment contract: fetch the CA bundle from `GET /.well-known/g8e/pki/ca-bundle`, generate an ECDSA P-256 CSR, POST it to `POST /api/v1/pki/apps/enroll` with `{ csr_pem, app_name, app_type: "custom" }`, and write the returned app cert, cert chain, private key, and trust bundle to the app's own runtime tree under `pki/issued/apps/<name>.crt`, `<name>.key`, and `pki/trust/hub-bundle.pem`.
+
 ---
 
 ## GUI Enrollment

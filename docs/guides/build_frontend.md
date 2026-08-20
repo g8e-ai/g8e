@@ -484,3 +484,41 @@ Then run `g8e auth enroll gui enroll --origin https://your-app.example.com` to v
 - [Connect Apps to Gateway](./connect_apps_to_gateway.md) - General application connectivity patterns
 - [Architecture: Auth](../architecture/auth.md) - WebAuthn passkey authentication architecture
 - [Architecture: Gateway](../architecture/gateway.md) - Gateway service architecture
+
+---
+
+## In-Tree Dashboard (g8ed) Server-to-Server mTLS Enrollment
+
+The previous sections cover browser-based frontends that authenticate via WebAuthn passkeys and session cookies. The in-tree dashboard (`g8ed`, `dashboard/`) is a special case: its **browser SPA** still authenticates via WebAuthn passkeys (unchanged), but its **container** also holds its own mTLS app identity for server-to-server gateway calls, mirroring the ensemble's enrollment model. The two identity surfaces are independent — the browser never presents the container's mTLS cert, and the container never holds the browser's session cookie.
+
+### Enrollment
+
+The dashboard container self-enrolls at startup via the gateway's public PKI app enrollment endpoint (`POST /api/v1/pki/apps/enroll` on the plain-HTTP bootstrap surface), the same endpoint the ensemble uses. The `AppEnrollmentService` (`dashboard/services/infra/app-enrollment-service.js`) implements the same two-operation contract as the ensemble's `ensemble/app/services/infra/app_enrollment_service.py`:
+
+- `loadIdentity()` — read path. Loads an existing cert/key from the dashboard's PKI tree, parses the cert to check expiry (rejects if within 7 days of expiry), extracts the SPIFFE `app_id` from the URI SAN. Throws on missing files, parse failure, near-expiry, or missing URI SAN. Does not touch the network.
+- `enroll()` — write path. Generates an ECDSA P-256 CSR, fetches the CA bundle from `GET /.well-known/g8e/pki/ca-bundle`, POSTs the CSR to the enrollment endpoint with `{ csr_pem, app_name: "g8ed", app_type: "custom" }`, writes the returned app cert, cert chain, private key, and trust bundle to the dashboard's runtime tree. Always contacts the gateway; never reads cached state.
+
+The enrollment is idempotent: on restart with a valid, non-near-expiry cert, the reuse path short-circuits. On missing/expired/near-expiry cert, the dashboard re-enrolls. On enrollment failure, the dashboard container exits non-zero (fail-closed) so Docker's healthcheck and restart policy surface the failure. The enrolled credentials persist across container restarts in the `g8e-dashboard-data` named volume.
+
+### Environment Variables
+
+The dashboard's enrollment is configured via two env vars set by `docker-compose.yml`:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `G8E_GATEWAY_HTTP_URL` | none (required) | Gateway plain-HTTP bootstrap surface URL (e.g., `http://g8eg:8080`). Used for the CA bundle fetch and the enrollment POST. Fail-closed if unset — no derivation from `G8E_GATEWAY_URL` (which is browser-facing `localhost`). |
+| `G8E_RUNTIME_DIR` | none (compose sets `/root/.g8e`) | Dashboard runtime directory root. Credentials are written under `${G8E_RUNTIME_DIR}/pki/issued/apps/g8ed.crt`, `g8ed.key`, and `${G8E_RUNTIME_DIR}/pki/trust/hub-bundle.pem`. Fail-closed if unset. |
+
+### Credential Path Layout
+
+The dashboard's runtime tree mirrors the ensemble's layout so the gateway-side cert directory structure is consistent across enrolled apps:
+
+- `${G8E_RUNTIME_DIR}/pki/issued/apps/g8ed.crt` — enrolled app certificate (permissions `0600`)
+- `${G8E_RUNTIME_DIR}/pki/issued/apps/g8ed.key` — ECDSA P-256 private key (permissions `0600`)
+- `${G8E_RUNTIME_DIR}/pki/trust/hub-bundle.pem` — trust bundle (permissions `0644`)
+
+### Browser vs Container Identity
+
+The dashboard's browser SPA authenticates via WebAuthn passkeys exactly as described in the rest of this guide — the container's mTLS enrollment does not change the browser auth model. The container's mTLS identity is consumed by future backend service wiring (governance, SSE, document store) that makes server-to-server gateway calls; `server.js` is currently a static SPA host and does not yet construct g8eg clients with the enrolled credential. The mTLS constructor params on `g8eg_http_client.js` and `g8eg_pubsub_client.js` (`clientCertPath`, `clientKeyPath`, `caCertPath`) are forward-compatible preparation for that wiring.
+
+See [Dashboard (g8ed)](../architecture/dashboard.md) for the dashboard architecture and [Ensemble (g8ee)](../architecture/ensemble.md) for the parallel ensemble enrollment implementation.
