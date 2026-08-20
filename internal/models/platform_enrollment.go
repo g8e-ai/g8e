@@ -272,16 +272,3 @@ func (r PlatformEnrollmentRequest) ValidateStoredIdentity() error {
 	}
 	return nil
 }
-
-type PlatformEnrollmentGovernancePayload struct {
-	Action           constants.PlatformEnrollmentGovernanceAction `json:"action"`
-	Intent           constants.PlatformEnrollmentGovernanceIntent `json:"intent"`
-	RequestID        string                                       `json:"request_id"`
-	ComponentKind    PlatformComponentKind                        `json:"component_kind"`
-	InstanceID       string                                       `json:"instance_id"`
-	ActorUserID      string                                       `json:"actor_user_id,omitempty"`
-	Decision         PlatformEnrollmentDecision                   `json:"decision,omitempty"`
-	Fingerprints     PlatformEnrollmentCSRFingerprints            `json:"fingerprints"`
-	TargetCollection constants.CollectionName                     `json:"target_collection"`
-	TargetDocumentID string                                       `json:"target_document_id"`
-}

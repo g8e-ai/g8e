@@ -157,3 +157,12 @@ message PlatformEnrollmentGovernancePayload {
   string target_collection = 9;
   string target_document_id = 10;
 }
+
+message PlatformEnrollmentCompletionTranscript {
+  string protocol_version = 1;
+  string request_id = 2;
+  string token_hash = 3;
+  PlatformComponentKind component_kind = 4;
+  string instance_id = 5;
+  PlatformEnrollmentFingerprints fingerprints = 6;
+}

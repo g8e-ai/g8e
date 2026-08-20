@@ -1,0 +1,36 @@
+{
+  "platform_enrollment": {
+    "component_kind": {
+      "dashboard": "dashboard",
+      "ensemble": "ensemble",
+      "operator": "operator"
+    },
+    "state": {
+      "pending": "pending",
+      "approved": "approved",
+      "issuing": "issuing",
+      "completed": "completed",
+      "denied": "denied",
+      "expired": "expired"
+    },
+    "decision": {
+      "approve": "approve",
+      "deny": "deny"
+    },
+    "governance_action": {
+      "create": "PLATFORM_ENROLLMENT_CREATE",
+      "decide": "PLATFORM_ENROLLMENT_DECIDE",
+      "issue": "PLATFORM_ENROLLMENT_ISSUE",
+      "persist_policy": "PLATFORM_ENROLLMENT_PERSIST_POLICY",
+      "create_session": "PLATFORM_ENROLLMENT_CREATE_SESSION"
+    },
+    "governance_intent": {
+      "request": "platform_enrollment.request",
+      "approve": "platform_enrollment.approve",
+      "deny": "platform_enrollment.deny",
+      "issue": "platform_enrollment.issue"
+    },
+    "protocol_version": "1",
+    "request_ttl_seconds": 1800
+  }
+}

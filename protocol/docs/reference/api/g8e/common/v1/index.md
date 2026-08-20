@@ -11,6 +11,7 @@
     - [L2Vote](#g8e-common-v1-L2Vote)
     - [L3Metadata](#g8e-common-v1-L3Metadata)
     - [L3Proof](#g8e-common-v1-L3Proof)
+    - [PlatformEnrollmentCompletionTranscript](#g8e-common-v1-PlatformEnrollmentCompletionTranscript)
     - [PlatformEnrollmentFingerprints](#g8e-common-v1-PlatformEnrollmentFingerprints)
     - [PlatformEnrollmentGovernancePayload](#g8e-common-v1-PlatformEnrollmentGovernancePayload)
   
@@ -170,6 +171,26 @@ should be populated per instance.
 | credential_id | [string](#string) |  | WebAuthn: credential ID used for the assertion |
 | mtls_cert_fingerprint | [string](#string) |  | CLI/mTLS: SHA-256 fingerprint of the CLI certificate used for authentication |
 | cli_signature | [string](#string) |  | CLI/mTLS: Ed25519 signature over transaction_hash using the operator private key |
+
+
+
+
+
+
+<a name="g8e-common-v1-PlatformEnrollmentCompletionTranscript"></a>
+
+### PlatformEnrollmentCompletionTranscript
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| protocol_version | [string](#string) |  |  |
+| request_id | [string](#string) |  |  |
+| token_hash | [string](#string) |  |  |
+| component_kind | [PlatformComponentKind](#g8e-common-v1-PlatformComponentKind) |  |  |
+| instance_id | [string](#string) |  |  |
+| fingerprints | [PlatformEnrollmentFingerprints](#g8e-common-v1-PlatformEnrollmentFingerprints) |  |  |
 
 
 
