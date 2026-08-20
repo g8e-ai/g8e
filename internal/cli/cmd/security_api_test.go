@@ -47,13 +47,17 @@ func (m *mockRemoteOperatorEnroller) EnrollRemoteOperator(_ context.Context, _, 
 	return m.artifacts, m.err
 }
 
-// enrollCmdWithRoot wraps the enroll command under a root command that defines
-// the persistent --endpoint flag, matching the real CLI structure so that
-// cmd.Flags().GetString("endpoint") can find the inherited flag in tests.
+// enrollCmdWithRoot wraps the operator enroll command under a root command
+// that defines the persistent --endpoint flag, matching the real CLI structure
+// so that cmd.Flags().GetString("endpoint") can find the inherited flag in
+// tests. The operator command is attached directly to the synthetic root (no
+// 3-level auth → enroll → operator tree) because the real --endpoint
+// inheritance works the same way regardless of tree depth and the test only
+// needs cmd.Flags().GetString("endpoint") to resolve.
 func enrollCmdWithRoot(configLoader func(string) (*config.Config, error), enroller remoteOperatorEnroller) *cobra.Command {
 	root := &cobra.Command{Use: "g8e"}
 	root.PersistentFlags().StringP("endpoint", "e", "", "Gateway endpoint (host or host:port)")
-	enrollCmd := securityPKIEnrollCmdWithConfig(configLoader, func(*config.Config) remoteOperatorEnroller { return enroller }, newFileSvc)
+	enrollCmd := enrollOperatorCmdWithConfig(configLoader, func(*config.Config) remoteOperatorEnroller { return enroller }, newFileSvc)
 	root.AddCommand(enrollCmd)
 	// Trigger cobra's persistent flag merging so cmd.Flags() can see the inherited --endpoint flag
 	_ = enrollCmd.ParseFlags([]string{})
@@ -104,7 +108,7 @@ func generateTestPEMCert(t *testing.T) []byte {
 
 // --- PKI Enroll ---
 
-func TestSecurityPKIEnrollCmd_API_MockHappyPath(t *testing.T) {
+func TestEnrollOperatorCmd_API_MockHappyPath(t *testing.T) {
 	_, cfg := setupTestConfig(t, testutil.TempDir(t))
 	tmpDir := testutil.TempDir(t)
 
@@ -134,7 +138,7 @@ func TestSecurityPKIEnrollCmd_API_MockHappyPath(t *testing.T) {
 	assert.Contains(t, buf.String(), "sess-test-456")
 }
 
-func TestSecurityPKIEnrollCmd_API_MockHappyPathWithTrustBundle(t *testing.T) {
+func TestEnrollOperatorCmd_API_MockHappyPathWithTrustBundle(t *testing.T) {
 	_, cfg := setupTestConfig(t, testutil.TempDir(t))
 	tmpDir := testutil.TempDir(t)
 
@@ -163,7 +167,7 @@ func TestSecurityPKIEnrollCmd_API_MockHappyPathWithTrustBundle(t *testing.T) {
 	assert.Contains(t, buf.String(), "Trust bundle saved")
 }
 
-func TestSecurityPKIEnrollCmd_API_MissingEndpoint(t *testing.T) {
+func TestEnrollOperatorCmd_API_MissingEndpoint(t *testing.T) {
 	_, cfg := setupTestConfig(t, testutil.TempDir(t))
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
@@ -181,7 +185,7 @@ func TestSecurityPKIEnrollCmd_API_MissingEndpoint(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrEndpointRequired)
 }
 
-func TestSecurityPKIEnrollCmd_API_ConfigLoadError(t *testing.T) {
+func TestEnrollOperatorCmd_API_ConfigLoadError(t *testing.T) {
 	loader := func(string) (*config.Config, error) {
 		return nil, constants.ErrConfigLoadFailed
 	}
@@ -200,7 +204,7 @@ func TestSecurityPKIEnrollCmd_API_ConfigLoadError(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrConfigLoadFailed)
 }
 
-func TestSecurityPKIEnrollCmd_API_EnrollError(t *testing.T) {
+func TestEnrollOperatorCmd_API_EnrollError(t *testing.T) {
 	_, cfg := setupTestConfig(t, testutil.TempDir(t))
 
 	enroller := &mockRemoteOperatorEnroller{err: errMockEnroll}
@@ -218,7 +222,7 @@ func TestSecurityPKIEnrollCmd_API_EnrollError(t *testing.T) {
 	assert.ErrorIs(t, err, errMockEnroll)
 }
 
-func TestSecurityPKIEnrollCmd_API_MissingCertInResponse(t *testing.T) {
+func TestEnrollOperatorCmd_API_MissingCertInResponse(t *testing.T) {
 	_, cfg := setupTestConfig(t, testutil.TempDir(t))
 
 	enroller := &mockRemoteOperatorEnroller{
@@ -242,25 +246,25 @@ func TestSecurityPKIEnrollCmd_API_MissingCertInResponse(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrMissingCertificate)
 }
 
-func TestSecurityPKIEnrollCmd_API_PKICommandStructure(t *testing.T) {
-	t.Run("pki command has correct use", func(t *testing.T) {
-		cmd := securityPKICmd()
-		assert.Equal(t, "pki", cmd.Use)
+func TestEnrollOperatorCmd_CommandStructure(t *testing.T) {
+	t.Run("operator command has correct use", func(t *testing.T) {
+		cmd := enrollOperatorCmd()
+		assert.Equal(t, "operator", cmd.Use)
 	})
 
-	t.Run("enroll command has endpoint and output-dir flags", func(t *testing.T) {
+	t.Run("operator command has endpoint and output-dir flags", func(t *testing.T) {
 		root := &cobra.Command{Use: "g8e"}
 		root.PersistentFlags().StringP("endpoint", "e", "", "Gateway endpoint (host or host:port)")
-		root.AddCommand(securityCmd())
-		enrollCmd := findSubCmd(root, "security", "pki", "enroll")
-		require.NotNil(t, enrollCmd)
-		_ = enrollCmd.ParseFlags([]string{})
+		root.AddCommand(enrollOperatorCmd())
+		operatorCmd := findSubCmd(root, "operator")
+		require.NotNil(t, operatorCmd)
+		_ = operatorCmd.ParseFlags([]string{})
 
-		epFlag := enrollCmd.Flags().Lookup("endpoint")
+		epFlag := operatorCmd.Flags().Lookup("endpoint")
 		require.NotNil(t, epFlag)
 		assert.Equal(t, "e", epFlag.Shorthand)
 
-		odFlag := enrollCmd.Flags().Lookup("output-dir")
+		odFlag := operatorCmd.Flags().Lookup("output-dir")
 		require.NotNil(t, odFlag)
 	})
 }

@@ -413,10 +413,10 @@ func TestVaultImportCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 
 // --- Auth/enroll command (session 17) ---
 
-func TestEnrollCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+func TestEnrollUserCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 	stubCheckOperatorRunning := func(*config.Config) error { return nil }
-	cmd := enrollCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory), stubCheckOperatorRunning, newDefaultEnrollmentCoordinator)
+	cmd := enrollUserCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory), stubCheckOperatorRunning, newDefaultEnrollmentCoordinator)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -465,9 +465,9 @@ func TestSecurityValidateCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	assert.ErrorIs(t, err, errFactory)
 }
 
-func TestSecurityPKIEnrollCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+func TestEnrollOperatorCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
-	cmd := securityPKIEnrollCmdWithConfig(configLoaderFor(cfg), panickingRemoteOperatorEnrollerFactory(), failingFileSvcFactory(errFactory))
+	cmd := enrollOperatorCmdWithConfig(configLoaderFor(cfg), panickingRemoteOperatorEnrollerFactory(), failingFileSvcFactory(errFactory))
 	cmd.Flags().StringP("endpoint", "e", "localhost:8080", "Gateway endpoint")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
