@@ -63,6 +63,14 @@ services:
       "--cors-origin", "http://localhost:3003"]
 
   operator:
+    # Part of the `activated` profile — the gateway refuses operator
+    # enrollment until a human has bootstrapped it via `auth enroll user`.
+    # Two-step flow:
+    #   docker compose up -d gateway
+    #   ./g8e auth enroll user -e <gateway>
+    #   docker compose --profile activated up -d
+    profiles:
+      - activated
     build:
       context: ../..
       dockerfile: Dockerfile

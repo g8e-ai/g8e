@@ -82,13 +82,13 @@ func (c *AdminController) handleAppPolicySigner(w http.ResponseWriter, r *http.R
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	user, err := c.userSvc.GetByID(userID)
+	isFirst, err := c.userSvc.IsFirstUser(userID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
 		return
 	}
-	if user == nil || !user.IsBootstrap {
-		c.responder.Error(w, http.StatusForbidden, "admin-only: bootstrap user required")
+	if !isFirst {
+		c.responder.Error(w, http.StatusForbidden, "admin-only: first user required")
 		return
 	}
 
@@ -159,13 +159,13 @@ func (c *AdminController) handleRevokeApp(w http.ResponseWriter, r *http.Request
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	user, err := c.userSvc.GetByID(userID)
+	isFirst, err := c.userSvc.IsFirstUser(userID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
 		return
 	}
-	if user == nil || !user.IsBootstrap {
-		c.responder.Error(w, http.StatusForbidden, "admin-only: bootstrap user required")
+	if !isFirst {
+		c.responder.Error(w, http.StatusForbidden, "admin-only: first user required")
 		return
 	}
 
@@ -211,13 +211,13 @@ func (c *AdminController) handleConsensus(w http.ResponseWriter, r *http.Request
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	user, err := c.userSvc.GetByID(userID)
+	isFirst, err := c.userSvc.IsFirstUser(userID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
 		return
 	}
-	if user == nil || !user.IsBootstrap {
-		c.responder.Error(w, http.StatusForbidden, "admin-only: bootstrap user required")
+	if !isFirst {
+		c.responder.Error(w, http.StatusForbidden, "admin-only: first user required")
 		return
 	}
 
@@ -266,13 +266,13 @@ func (c *AdminController) handleDeleteConsensus(w http.ResponseWriter, r *http.R
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	user, err := c.userSvc.GetByID(userID)
+	isFirst, err := c.userSvc.IsFirstUser(userID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
 		return
 	}
-	if user == nil || !user.IsBootstrap {
-		c.responder.Error(w, http.StatusForbidden, "admin-only: bootstrap user required")
+	if !isFirst {
+		c.responder.Error(w, http.StatusForbidden, "admin-only: first user required")
 		return
 	}
 

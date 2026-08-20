@@ -91,6 +91,14 @@ services:
     command: ["sh", "-c", "exec /g8e gw start -f --posture $${G8E_GATEWAY_POSTURE} --consensus-id dhs-consensus --consensus-bootstrap /etc/g8e/consensus-bootstrap.json --doctrine-dir /etc/g8e/doctrine --public-base-url https://localhost:8450 --passkey-rp-origin http://localhost:8087 --passkey-rp-origin https://localhost:8450"]
 
   operator:
+    # Part of the `activated` profile — the gateway refuses operator
+    # enrollment until a human has bootstrapped it via `auth enroll user`.
+    # Two-step flow:
+    #   docker compose up -d gateway
+    #   ./g8e auth enroll user -e <gateway>
+    #   docker compose --profile activated up -d
+    profiles:
+      - activated
     build:
       context: ../..
       dockerfile: Dockerfile
@@ -124,6 +132,9 @@ services:
   # operator's enrolled mTLS creds via operator_state:ro.
 
   agent-coalition:
+    # Part of the `activated` profile — depends on the operator.
+    profiles:
+      - activated
     build:
       context: ../..
       dockerfile: Dockerfile
@@ -149,6 +160,9 @@ services:
   # ── Display-only source connectors (narrative, no real g8e identity) ────────
 
   connector-dhs:
+    # Part of the `activated` profile — depends on the operator.
+    profiles:
+      - activated
     image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: dhs-connector-dhs
     networks:
@@ -160,6 +174,9 @@ services:
     command: ["sh", "-c", "while true; do echo '[DHS-CBP] NIPR feed active.'; sleep 30; done"]
 
   connector-mil:
+    # Part of the `activated` profile — depends on the operator.
+    profiles:
+      - activated
     image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: dhs-connector-mil
     networks:
@@ -171,6 +188,9 @@ services:
     command: ["sh", "-c", "while true; do echo '[MIL-ISR] SIPR feed active.'; sleep 30; done"]
 
   connector-ic:
+    # Part of the `activated` profile — depends on the operator.
+    profiles:
+      - activated
     image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: dhs-connector-ic
     networks:

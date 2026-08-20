@@ -33,7 +33,7 @@ const (
 	sessionBindSuffix         = ":bind"
 )
 
-// RegistrationService handles Gateway-native device enrollment via CSR-based authentication.
+// RegistrationService handles Gateway-native operator enrollment via CSR-based authentication.
 type RegistrationService struct {
 	docStore           *DocumentStoreService
 	kvStore            *KVStoreService
@@ -216,23 +216,6 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 	resp, err := s.completeRegistration(operator, userID, organizationID, req, sanitizedFingerprint)
 	if err != nil {
 		return nil, err
-	}
-
-	// Retire bootstrap user if this is a real login
-	if s.userSvc != nil && userID != "" {
-		bootstrapUser, err := s.userSvc.FindBootstrapUser()
-		if err != nil {
-			s.logger.Error("[REGISTRATION] Failed to check for bootstrap user", "error", err)
-		} else if bootstrapUser != nil && bootstrapUser.ID != userID {
-			s.logger.Info("[REGISTRATION] Retiring bootstrap user on real login",
-				"bootstrap_user_id", bootstrapUser.ID,
-				"new_user_id", userID,
-				"operator_id", operator.ID)
-			if err := s.userSvc.Disable(bootstrapUser.ID, "retired_by_real_login", userID, operator.ID); err != nil {
-				s.logger.Error("[REGISTRATION] Failed to retire bootstrap user", "error", err)
-				return nil, fmt.Errorf("%w: %w", constants.ErrRegistrationBootstrapRetirementFailed, err)
-			}
-		}
 	}
 
 	s.logger.Info("[REGISTRATION] CSR-based enrollment complete",

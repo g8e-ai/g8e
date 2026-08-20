@@ -45,8 +45,12 @@ type CLIEnrollRequest struct {
 	LocalOSUser       *LocalOSUser `json:"local_os_user,omitempty"`
 }
 
-// DeviceEnrollRequest is the inbound body for /api/v1/auth/device/enroll.
-type DeviceEnrollRequest struct {
+// OperatorEnrollRequest is the inbound body for /api/v1/auth/operator/enroll.
+// Operator enrollment is a certificate-only identity flow: it carries no
+// user-management fields. The gateway refuses with
+// ErrOperatorEnrollmentRequiresActivation when no human user has enrolled
+// (the gateway is not yet activated).
+type OperatorEnrollRequest struct {
 	CSR               string `json:"csr_pem"`
 	CLICSR            string `json:"cli_csr_pem,omitempty"`
 	SystemFingerprint string `json:"system_fingerprint"`
@@ -427,11 +431,10 @@ type LocalOSUser struct {
 // Email and name are NOT stored - users are identified solely by their
 // cryptographic credentials.
 //
-// IsBootstrap identifies the ephemeral local-owner identity created by
-// `./g8e gw start -a` over loopback. It is *not* a privilege tier - it
-// marks an identity that exists purely to make a fresh local install usable
-// without ceremony, and that is retired automatically the first time a real
-// mTLS login completes.
+// The first user created via `auth enroll user` (POST /api/v1/auth/bootstrap)
+// is the gateway owner and admin. Admin authorization is enforced via
+// UserService.IsFirstUser (the first human enrollee is the admin); there is
+// no ephemeral bootstrap-user concept.
 type User struct {
 	ID                 string              `json:"id"`
 	PasskeyCredentials []PasskeyCredential `json:"passkey_credentials,omitempty"`
@@ -440,8 +443,7 @@ type User struct {
 	OrganizationID string   `json:"organization_id,omitempty"`
 	Roles          []string `json:"roles,omitempty"`
 
-	Status      constants.UserStatus `json:"status,omitempty"`
-	IsBootstrap bool                 `json:"is_bootstrap,omitempty"`
+	Status constants.UserStatus `json:"status,omitempty"`
 
 	LocalOSUser    *LocalOSUser `json:"local_os_user,omitempty"`
 	WebAuthnUserID string       `json:"webauthn_user_id,omitempty"` // GUID for WebAuthn v4 compliance (Windows Hello)

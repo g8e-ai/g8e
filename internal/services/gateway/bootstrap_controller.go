@@ -60,8 +60,8 @@ type BootstrapControllerDeps struct {
 	ActuatorKeyReader  actuatorKeyReader
 }
 
-// BootstrapController handles system bootstrap, CLI enrollment, device enrollment,
-// and bootstrap status endpoints.
+// BootstrapController handles system bootstrap, CLI enrollment, operator
+// enrollment, and bootstrap status endpoints.
 type BootstrapController struct {
 	cfg                *config.Config
 	logger             *slog.Logger
@@ -117,54 +117,31 @@ func (c *BootstrapController) handleLocalBootstrapWithURL(w http.ResponseWriter,
 	// to avoid conflating CLI identity with operator identity.
 	csrRequested := req.CSRPEM != ""
 
-	// Check for existing bootstrap user (plan §4.2, §9.1 rotation carve-out)
-	bootstrapUser, err := c.userSvc.FindBootstrapUser()
+	// Defense-in-depth: refuse if any user already exists, so bootstrap can
+	// only run on a genuinely empty system. The first `auth enroll user`
+	// creates the first real (admin) user; no other path creates the first
+	// user.
+	hasUsers, err := c.userSvc.HasAnyUsers()
 	if err != nil {
-		c.logger.Error("Failed to check for existing bootstrap user", "error", err)
+		c.logger.Error("Failed to check for existing users during bootstrap", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "bootstrap check failed")
 		return
 	}
+	if hasUsers {
+		c.logger.Warn("Bootstrap attempted on non-empty system", "remote_addr", r.RemoteAddr)
+		c.responder.Error(w, http.StatusForbidden, constants.ErrBootstrapInitialSetupOnly.Error())
+		return
+	}
 
-	var user *models.User
-	if bootstrapUser != nil {
-		// Bootstrap user exists - check if rotation is allowed
-		if !bootstrapUser.IsActive() {
-			c.logger.Warn("Bootstrap user is disabled, refusing rotation", "user_id", bootstrapUser.ID)
-			c.responder.Error(w, http.StatusConflict, "bootstrap user is disabled, cannot rotate")
-			return
-		}
-		if !csrRequested {
-			c.logger.Warn("Bootstrap user exists but no CSR requested", "user_id", bootstrapUser.ID)
-			c.responder.Error(w, http.StatusForbidden, "bootstrap already exists, CSR required for rotation")
-			return
-		}
-		// Rotation allowed: active bootstrap user + CSR + loopback
-		user = bootstrapUser
-		c.logger.Info("[BOOTSTRAP] Rotating existing bootstrap user", "user_id", user.ID)
-	} else {
-		// No bootstrap user exists - create one.
-		// Defense-in-depth: refuse if any user already exists, so bootstrap can
-		// only run on a genuinely empty system.
-		hasUsers, err := c.userSvc.HasAnyUsers()
-		if err != nil {
-			c.logger.Error("Failed to check for existing users during bootstrap", "error", err)
-			c.responder.Error(w, http.StatusInternalServerError, "bootstrap check failed")
-			return
-		}
-		if hasUsers {
-			c.logger.Warn("Bootstrap attempted on non-empty system", "remote_addr", r.RemoteAddr)
-			c.responder.Error(w, http.StatusForbidden, "bootstrap only available for initial setup")
-			return
-		}
-
-		// Create the bootstrap user with client-provided OS user information
-		// Zero-PII: Bootstrap user created with only generated ID and OS user info
-		user, err = c.userSvc.CreateBootstrapUserWithOSUser(req.LocalOSUser)
-		if err != nil {
-			c.logger.Error("Failed to create bootstrap user", "error", err)
-			c.responder.Error(w, http.StatusInternalServerError, "failed to create user")
-			return
-		}
+	// Create the first real user with client-provided OS user information.
+	// Zero-PII: the user is created with only a generated ID and OS user info.
+	// This user IS the first human enrollee and the gateway admin; there is no
+	// ephemeral bootstrap-user concept and no retirement flow.
+	user, err := c.userSvc.CreateUserWithOSUser(req.LocalOSUser)
+	if err != nil {
+		c.logger.Error("Failed to create user", "error", err)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to create user")
+		return
 	}
 
 	response := models.BootstrapResponse{
@@ -173,10 +150,10 @@ func (c *BootstrapController) handleLocalBootstrapWithURL(w http.ResponseWriter,
 		UserID:  user.ID,
 	}
 
-	// If CSR is requested and loopback, sign and return cert (plan §4.2)
+	// If CSR is requested, sign and return the operator cert
 	var operatorID, operatorSessionID, orgID string
 	if csrRequested {
-		// Create Operator slot for the bootstrap user
+		// Create Operator slot for the first user
 		operatorID = uuid.NewString()
 		operatorSessionID = uuid.NewString()
 		orgID = user.ID // Use user ID as org ID for bootstrap
@@ -291,17 +268,30 @@ func (c *BootstrapController) handleLocalBootstrapWithURL(w http.ResponseWriter,
 			c.responder.Error(w, http.StatusInternalServerError, "failed to persist operator session")
 			return
 		}
-		c.logger.Info("[BOOTSTRAP] System initialized with bootstrap user, operator and CLI session", "user_id", user.ID, "operator_id", operatorID, "cli_session_id_prefix", cliSessionID[:8])
+		c.logger.Info("[BOOTSTRAP] System initialized with user, operator and CLI session", "user_id", user.ID, "operator_id", operatorID, "cli_session_id_prefix", cliSessionID[:8])
 	} else if req.CLICSRPEM != "" {
-		c.logger.Info("[BOOTSTRAP] System initialized with bootstrap user and CLI cert (no operator)", "user_id", user.ID, "cli_session_id_prefix", cliSessionID[:8])
+		c.logger.Info("[BOOTSTRAP] System initialized with user and CLI cert (no operator)", "user_id", user.ID, "cli_session_id_prefix", cliSessionID[:8])
 	} else {
-		c.logger.Info("[BOOTSTRAP] System initialized with bootstrap user and CLI session (no CSR)", "user_id", user.ID, "cli_session_id_prefix", cliSessionID[:8])
+		c.logger.Info("[BOOTSTRAP] System initialized with user and CLI session (no CSR)", "user_id", user.ID, "cli_session_id_prefix", cliSessionID[:8])
 	}
 
 	c.responder.JSON(w, http.StatusCreated, response)
 }
 
-func (c *BootstrapController) handleDeviceEnrollment(w http.ResponseWriter, r *http.Request) {
+// handleOperatorEnrollment handles POST /api/v1/auth/operator/enroll.
+//
+// Operator enrollment is a certificate-only identity flow (SPIFFE URI SAN).
+// It creates NO users, binds NO user ID, and returns NO user. Operator and
+// CLI sessions are persisted with an empty user_id; user binding is a
+// separate human-only action performed later via `auth enroll user`.
+//
+// The gateway refuses with ErrOperatorEnrollmentRequiresActivation (HTTP
+// 403) when no human user exists (HasAnyUsers is false). Operator
+// enrollment is only available once a human owner has bootstrapped the
+// gateway via `auth enroll user`. This inverts the previous "initial setup
+// only" gate (which refused on non-empty systems) with a "not yet
+// activated" gate that refuses on empty systems.
+func (c *BootstrapController) handleOperatorEnrollment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -324,7 +314,7 @@ func (c *BootstrapController) handleDeviceEnrollment(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Validate required fields for device enrollment
+	// Validate required fields for operator enrollment
 	if req.CSRPEM == "" {
 		c.responder.Error(w, http.StatusBadRequest, "csr_pem is required")
 		return
@@ -338,57 +328,35 @@ func (c *BootstrapController) handleDeviceEnrollment(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Check for existing bootstrap user (plan §4.2, §9.1 rotation carve-out)
-	bootstrapUser, err := c.userSvc.FindBootstrapUser()
+	// Activation gate: refuse when no human user has enrolled. The gateway
+	// is not available for operator enrollment until a human owner has
+	// bootstrapped it via `auth enroll user`. This makes "no automated
+	// operator start with a made-up user" hold: the docker-compose operator
+	// service and any `operator start -e` caller is rejected until
+	// activated: true.
+	hasUsers, err := c.userSvc.HasAnyUsers()
 	if err != nil {
-		c.logger.Error("Failed to check for existing bootstrap user", "error", err)
-		c.responder.Error(w, http.StatusInternalServerError, "bootstrap check failed")
+		c.logger.Error("Failed to check for existing users during operator enrollment", "error", err)
+		c.responder.Error(w, http.StatusInternalServerError, "activation check failed")
+		return
+	}
+	if !hasUsers {
+		c.logger.Warn("Operator enrollment attempted before activation", "remote_addr", r.RemoteAddr)
+		c.responder.Error(w, http.StatusForbidden, constants.ErrOperatorEnrollmentRequiresActivation.Error())
 		return
 	}
 
-	var user *models.User
-	if bootstrapUser != nil {
-		// Bootstrap user exists - check if rotation is allowed
-		if !bootstrapUser.IsActive() {
-			c.logger.Warn("Bootstrap user is disabled, refusing device enrollment", "user_id", bootstrapUser.ID)
-			c.responder.Error(w, http.StatusConflict, constants.ErrBootstrapUserDisabledEnroll.Error())
-			return
-		}
-		user = bootstrapUser
-		c.logger.Info("[DEVICE_ENROLLMENT] Using existing bootstrap user", "user_id", user.ID)
-	} else {
-		// No bootstrap user exists - create one
-		hasUsers, err := c.userSvc.HasAnyUsers()
-		if err != nil {
-			c.logger.Error("Failed to check for existing users during device enrollment", "error", err)
-			c.responder.Error(w, http.StatusInternalServerError, "bootstrap check failed")
-			return
-		}
-		if hasUsers {
-			c.logger.Warn("Device enrollment attempted on non-empty system", "remote_addr", r.RemoteAddr)
-			c.responder.Error(w, http.StatusForbidden, "device enrollment only available for initial setup")
-			return
-		}
-
-		user, err = c.userSvc.CreateBootstrapUserWithOSUser(nil)
-		if err != nil {
-			c.logger.Error("Failed to create bootstrap user for device enrollment", "error", err)
-			c.responder.Error(w, http.StatusInternalServerError, "failed to create user")
-			return
-		}
-	}
-
-	// Create Operator slot for the device
+	// Operator enrollment creates NO users and binds NO user ID. Operator
+	// and CLI sessions are persisted with an empty user_id; user binding is
+	// a separate human-only action performed later.
 	operatorID := uuid.NewString()
 	operatorSessionID := uuid.NewString()
 	cliSessionID := uuid.NewString()
-	orgID := user.ID
 	now := time.Now().UTC()
 
 	operator := &models.OperatorDocumentGo{
 		ID:                operatorID,
-		UserID:            user.ID,
-		OrganizationID:    orgID,
+		OrganizationID:    "",
 		Component:         constants.ComponentNameG8EO,
 		Name:              req.Hostname,
 		Status:            constants.OperatorStatusActive,
@@ -401,10 +369,11 @@ func (c *BootstrapController) handleDeviceEnrollment(w http.ResponseWriter, r *h
 		UpdatedAt:         now,
 	}
 
-	// Sign the CSR
-	certPEM, chainPEM, err := c.pki.SignCSR(req.CSRPEM, constants.LeafTypeOperator, orgID, operatorID, user.ID, operatorSessionID, "")
+	// Sign the CSR. The user_id argument is empty: operator identity is
+	// certificate-based (SPIFFE URI SAN), not user-bound.
+	certPEM, chainPEM, err := c.pki.SignCSR(req.CSRPEM, constants.LeafTypeOperator, "", operatorID, "", operatorSessionID, "")
 	if err != nil {
-		c.logger.Error("Failed to sign device enrollment CSR", "error", err, "user_id", user.ID)
+		c.logger.Error("Failed to sign operator enrollment CSR", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to sign CSR")
 		return
 	}
@@ -413,14 +382,14 @@ func (c *BootstrapController) handleDeviceEnrollment(w http.ResponseWriter, r *h
 
 	// CLI certificate generation (mandatory)
 	if req.CLICSRPEM == "" {
-		c.logger.Error("Device enrollment request missing mandatory CLI CSR", "user_id", user.ID)
-		c.responder.Error(w, http.StatusBadRequest, "cli_csr_pem is mandatory")
+		c.logger.Error("Operator enrollment request missing mandatory CLI CSR")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrCLICSRRequired.Error())
 		return
 	}
 
-	cliCertPEM, cliCertChainPEM, err := c.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID, "")
+	cliCertPEM, cliCertChainPEM, err := c.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", "", cliSessionID, "")
 	if err != nil {
-		c.logger.Error("Failed to sign device enrollment CLI CSR", "error", err, "user_id", user.ID)
+		c.logger.Error("Failed to sign operator enrollment CLI CSR", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to sign CLI CSR")
 		return
 	}
@@ -449,38 +418,38 @@ func (c *BootstrapController) handleDeviceEnrollment(w http.ResponseWriter, r *h
 		// Non-fatal - continue without bundle
 	}
 
-	// Persist CLI session
+	// Persist CLI session with an empty user_id (operator enrollment is
+	// not user-bound).
 	err = c.cliSessionSvc.PersistCLISession(
 		cliSessionID,
 		operatorSessionID,
-		user.ID,
+		"",
 		req.SystemFingerprint,
 		cliCertFingerprint,
 		cliCertSerial,
 		string(constants.HeartbeatTypeBootstrap),
 	)
 	if err != nil {
-		c.logger.Error("Failed to persist CLI session during device enrollment", "error", err)
+		c.logger.Error("Failed to persist CLI session during operator enrollment", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to persist CLI session")
 		return
 	}
-	// Persist operator session
+	// Persist operator session with an empty user_id.
 	err = c.operatorSessionSvc.PersistOperatorSession(
 		operatorSessionID,
-		user.ID,
-		orgID,
+		"",
+		"",
 		operatorID,
 		string(constants.HeartbeatTypeBootstrap),
 	)
 	if err != nil {
-		c.logger.Error("Failed to persist operator session during device enrollment", "error", err)
+		c.logger.Error("Failed to persist operator session during operator enrollment", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to persist operator session")
 		return
 	}
 
-	response := models.DeviceEnrollmentResponse{
+	response := models.OperatorEnrollmentResponse{
 		Success:           true,
-		User:              user,
 		OperatorCert:      certPEM,
 		OperatorCertChain: chainPEM,
 		HubTrustBundle:    string(hubBundle),
@@ -489,7 +458,6 @@ func (c *BootstrapController) handleDeviceEnrollment(w http.ResponseWriter, r *h
 		CLISessionID:      cliSessionID,
 		CLICert:           cliCertPEM,
 		CLICertChain:      cliCertChainPEM,
-		UserID:            user.ID,
 		Posture:           string(c.cfg.Gateway.Posture),
 	}
 
@@ -501,7 +469,7 @@ func (c *BootstrapController) handleDeviceEnrollment(w http.ResponseWriter, r *h
 		}
 	}
 
-	c.logger.Info("[DEVICE_ENROLLMENT] Device enrolled successfully", "user_id", user.ID, "operator_id", operatorID, "hostname", req.Hostname)
+	c.logger.Info("[OPERATOR_ENROLLMENT] Operator enrolled successfully", "operator_id", operatorID, "hostname", req.Hostname)
 	c.responder.JSON(w, http.StatusCreated, response)
 }
 
@@ -518,7 +486,11 @@ func (c *BootstrapController) handleBootstrapStatus(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// bootstrapped is always true when the endpoint responds (the listener
+	// being up IS the proof). activated is the decision signal: true when at
+	// least one user exists (HasAnyUsers).
 	c.responder.JSON(w, http.StatusOK, models.BootstrapStatusResponse{
-		Bootstrapped: hasUsers,
+		Bootstrapped: true,
+		Activated:    hasUsers,
 	})
 }

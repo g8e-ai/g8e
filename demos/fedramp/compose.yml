@@ -35,6 +35,14 @@ services:
     command: ["sh", "-c", "exec /g8e gw start -f --posture $${G8E_GATEWAY_POSTURE} --consensus-id fedramp-consensus --consensus-bootstrap /etc/g8e/consensus-bootstrap.json --doctrine-dir /etc/g8e/doctrine --public-base-url https://localhost:8451 --passkey-rp-origin http://localhost:8088 --passkey-rp-origin https://localhost:8451"]
 
   operator:
+    # Part of the `activated` profile — the gateway refuses operator
+    # enrollment until a human has bootstrapped it via `auth enroll user`.
+    # Two-step flow:
+    #   docker compose up -d gateway
+    #   ./g8e auth enroll user -e <gateway>
+    #   docker compose --profile activated up -d
+    profiles:
+      - activated
     build:
       context: ../..
       dockerfile: Dockerfile
@@ -63,6 +71,9 @@ services:
     command: ["operator", "start", "-e", "10.72.0.10", "--execution-vault"]
 
   agent-runtime:
+    # Part of the `activated` profile — depends on the operator.
+    profiles:
+      - activated
     build:
       context: ../..
       dockerfile: Dockerfile

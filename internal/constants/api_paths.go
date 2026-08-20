@@ -77,7 +77,7 @@ var APIPaths = struct {
 	AuthLogout                               string `json:"auth_logout"`
 	AuthBootstrap                            string `json:"auth_bootstrap"`
 	AuthBootstrapStatus                      string `json:"auth_bootstrap_status"`
-	AuthDeviceEnroll                         string `json:"auth_device_enroll"`
+	AuthOperatorEnroll                       string `json:"auth_operator_enroll"`
 	AuthCLIRecoveryRequest                   string `json:"auth_cli_recovery_request"`
 	AuthCLIRecoveryStatus                    string `json:"auth_cli_recovery_status"`
 	AuthCLIRecoveryApprove                   string `json:"auth_cli_recovery_approve"`
@@ -216,7 +216,7 @@ var APIPaths = struct {
 	AuthLogout:                               "/api/v1/auth/logout",
 	AuthBootstrap:                            "/api/v1/auth/bootstrap",
 	AuthBootstrapStatus:                      "/api/v1/auth/bootstrap/status",
-	AuthDeviceEnroll:                         "/api/v1/auth/device/enroll",
+	AuthOperatorEnroll:                       "/api/v1/auth/operator/enroll",
 	AuthCLIRecoveryRequest:                   "/api/v1/auth/cli/recovery/request",
 	AuthCLIRecoveryStatus:                    "/api/v1/auth/cli/recovery/status",
 	AuthCLIRecoveryApprove:                   "/api/v1/auth/cli/recovery/approve",

@@ -295,9 +295,19 @@ type AuthLoginChallengeResponse struct {
 	Options *protocol.CredentialAssertion `json:"options,omitempty"`
 }
 
-// BootstrapStatusResponse is the typed response for GET /api/auth/bootstrap/status.
+// BootstrapStatusResponse is the typed response for GET /api/v1/auth/bootstrap/status.
+//
+// The gateway exposes a two-state model:
+//   - bootstrapped is always true when the endpoint responds (the listener
+//     being up IS the proof). It is retained for backward compatibility but
+//     is no longer the decision signal.
+//   - activated is true when at least one user exists (HasAnyUsers). This is
+//     the decision signal the CLI coordinator uses to choose between
+//     bootstrap (first `auth enroll user` creates the first real user) and
+//     recovery (human-approved flow).
 type BootstrapStatusResponse struct {
 	Bootstrapped bool `json:"bootstrapped"`
+	Activated    bool `json:"activated"`
 }
 
 // UserMeResponse is the typed response for GET /api/user/me.
@@ -392,10 +402,14 @@ type CLIEnrollmentResponse struct {
 	OperatorID        string `json:"operator_id,omitempty"`
 }
 
-// DeviceEnrollmentResponse is the typed response for POST /api/auth/device/enroll.
-type DeviceEnrollmentResponse struct {
+// OperatorEnrollmentResponse is the typed response for POST /api/v1/auth/operator/enroll.
+//
+// Operator enrollment is a certificate-only identity flow (SPIFFE URI SAN).
+// It creates NO users, binds NO user ID, and returns NO user. Operator and
+// CLI sessions are persisted with an empty user_id; user binding is a
+// separate human-only action performed later via `auth enroll user`.
+type OperatorEnrollmentResponse struct {
 	Success           bool   `json:"success"`
-	User              *User  `json:"user,omitempty"`
 	OperatorCert      string `json:"operator_cert"`
 	OperatorCertChain string `json:"operator_cert_chain"`
 	HubTrustBundle    string `json:"hub_trust_bundle"`
@@ -404,7 +418,6 @@ type DeviceEnrollmentResponse struct {
 	CLISessionID      string `json:"cli_session_id"`
 	CLICert           string `json:"cli_cert"`
 	CLICertChain      string `json:"cli_cert_chain"`
-	UserID            string `json:"user_id"`
 	Posture           string `json:"posture,omitempty"`
 	ActuatorKeyID     string `json:"actuator_key_id,omitempty"`
 	ActuatorPubKey    string `json:"actuator_pub_key,omitempty"`

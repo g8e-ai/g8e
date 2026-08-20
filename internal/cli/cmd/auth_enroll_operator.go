@@ -50,8 +50,8 @@ func enrollOperatorCmdWithConfig(configLoader func(string) (*config.Config, erro
 		Short: "Enroll an operator with the Gateway via CSR",
 		Long: `Generate a CSR and enroll with the Gateway to obtain Operator mTLS certificates.
 
-This is the remote operator/device enrollment path: it generates an operator
-CSR, calls the gateway's device enrollment endpoint, and writes the resulting
+This is the remote operator enrollment path: it generates an operator
+CSR, calls the gateway's operator enrollment endpoint, and writes the resulting
 operator cert/key/chain (and optional trust bundle) to the PKI directory. It is
 headless and operator-only — it does not install OS trust, register a passkey,
 or produce a CLI session. For the local human CLI/user enrollment path

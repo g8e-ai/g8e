@@ -43,7 +43,7 @@ type EnrollmentGateway interface {
 	RecoveryStatus(ctx context.Context, token, baseURL string) (models.CLIRecoveryState, error)
 	CompleteRecovery(ctx context.Context, requestID, token string, cliCSR string, cliKey *ecdsa.PrivateKey, caFingerprint, baseURL string) (EnrollmentArtifacts, error)
 	Rotate(ctx context.Context, fileSvc fs.RuntimeFileService, cliCSR string, cliKey *ecdsa.PrivateKey, caFingerprint string) (EnrollmentArtifacts, error)
-	CheckBootstrapStatus(ctx context.Context, baseURL string) (bool, error)
+	CheckActivationStatus(ctx context.Context, baseURL string) (bool, error)
 
 	// DiscoverGatewayCA fetches the live gateway root CA bundle from the
 	// unauthenticated discovery surface (plain-HTTP
@@ -483,35 +483,36 @@ func (c *EnrollmentCoordinator) Enroll(ctx context.Context, opts EnrollmentOptio
 }
 
 // handleAbsent handles the LocalStateAbsent case. It checks whether the
-// gateway has been bootstrapped: if not, it bootstraps (the first CLI
-// creates the first user/session); if so, it creates a CLI recovery
-// request and waits for human approval.
+// gateway has been activated (a human user exists): if not, it bootstraps
+// (the first `auth enroll user` creates the first real user/session); if
+// so, it creates a CLI recovery request and waits for human approval.
 func (c *EnrollmentCoordinator) handleAbsent(ctx context.Context, _ LocalIdentity, opts EnrollmentOptions) (EnrollmentArtifacts, error) {
-	bootstrapped, err := c.gateway.CheckBootstrapStatus(ctx, "")
+	activated, err := c.gateway.CheckActivationStatus(ctx, "")
 	if err != nil {
-		return EnrollmentArtifacts{}, fmt.Errorf("%w: check bootstrap status: %w", constants.ErrEnrollmentFailed, err)
+		return EnrollmentArtifacts{}, fmt.Errorf("%w: check activation status: %w", constants.ErrEnrollmentFailed, err)
 	}
-	if !bootstrapped {
-		c.out("Gateway not bootstrapped; performing initial CLI bootstrap.")
+	if !activated {
+		c.out("Gateway not activated; performing initial CLI bootstrap.")
 		return c.handleBootstrap(ctx, opts)
 	}
-	c.out("Gateway already bootstrapped; creating CLI recovery request.")
+	c.out("Gateway already activated; creating CLI recovery request.")
 	return c.handleRecovery(ctx, opts)
 }
 
 // handlePartialOrCorrupt handles the LocalStatePartial and
 // LocalStateCorrupt cases. It checks whether the gateway has been
-// bootstrapped: if not, it bootstraps (the gateway's recovery endpoint
-// rejects unbootstrapped gateways with 403, so we must not attempt
-// recovery); if so, it creates a CLI recovery request and waits for
-// human approval, just like handleAbsent on a bootstrapped gateway.
+// activated (a human user exists): if not, it bootstraps (the gateway's
+// recovery endpoint rejects unactivated gateways with 403, so we must
+// not attempt recovery); if so, it creates a CLI recovery request and
+// waits for human approval, just like handleAbsent on an activated
+// gateway.
 func (c *EnrollmentCoordinator) handlePartialOrCorrupt(ctx context.Context, local LocalIdentity, opts EnrollmentOptions) (EnrollmentArtifacts, error) {
-	bootstrapped, err := c.gateway.CheckBootstrapStatus(ctx, "")
+	activated, err := c.gateway.CheckActivationStatus(ctx, "")
 	if err != nil {
-		return EnrollmentArtifacts{}, fmt.Errorf("%w: check bootstrap status: %w", constants.ErrEnrollmentFailed, err)
+		return EnrollmentArtifacts{}, fmt.Errorf("%w: check activation status: %w", constants.ErrEnrollmentFailed, err)
 	}
-	if !bootstrapped {
-		c.out("Gateway not bootstrapped; performing initial CLI bootstrap despite %s local state.", local.State)
+	if !activated {
+		c.out("Gateway not activated; performing initial CLI bootstrap despite %s local state.", local.State)
 		return c.handleBootstrap(ctx, opts)
 	}
 	c.out("Local identity is %s; using human-approved recovery flow.", local.State)

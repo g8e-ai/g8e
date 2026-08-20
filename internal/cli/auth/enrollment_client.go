@@ -56,7 +56,7 @@ type EnrollmentClient struct {
 }
 
 // NewEnrollmentClient returns an enrollment client using a plain HTTP
-// client (no mTLS) for bootstrap, recovery, and remote operator/device
+// client (no mTLS) for bootstrap, recovery, and remote operator
 // enrollment. The CLI rotation method builds its own mTLS client from the
 // local identity via BuildMTLSClient.
 //
@@ -300,14 +300,17 @@ func (c *EnrollmentClient) Rotate(ctx context.Context, fileSvc fs.RuntimeFileSer
 	return artifacts, nil
 }
 
-// EnrollRemoteOperator performs remote operator/device enrollment
-// (POST /api/v1/auth/device/enroll over plain HTTP). This is the
+// EnrollRemoteOperator performs remote operator enrollment
+// (POST /api/v1/auth/operator/enroll over plain HTTP). This is the
 // headless path used by `auth enroll operator`; it is NOT a local human
 // enrollment and must not trigger OS trust installation or passkey
 // registration.
 //
 // gatewayEndpoint is the host:port of the remote gateway. The caller
 // supplies the operator and CLI CSRs and their private keys for staging.
+// Operator enrollment is certificate-based and not user-bound: the
+// gateway returns an empty UserID, and the persisted CLI/operator
+// sessions carry an empty user_id until a human binds them later.
 func (c *EnrollmentClient) EnrollRemoteOperator(ctx context.Context, gatewayEndpoint, operatorCSR string, operatorKey *ecdsa.PrivateKey, cliCSR string, cliKey *ecdsa.PrivateKey, caFingerprint string) (EnrollmentArtifacts, error) {
 	systemFp, err := c.systemFingerprint()
 	if err != nil {
@@ -319,16 +322,16 @@ func (c *EnrollmentClient) EnrollRemoteOperator(ctx context.Context, gatewayEndp
 		return EnrollmentArtifacts{}, fmt.Errorf("%w: %w", constants.ErrNetworkGetHostname, herr)
 	}
 
-	req := models.DeviceEnrollRequest{
+	req := models.OperatorEnrollRequest{
 		CSR:               operatorCSR,
 		CLICSR:            cliCSR,
 		SystemFingerprint: systemFp,
 		Hostname:          hostname,
 	}
 
-	url := fmt.Sprintf("http://%s%s", gatewayEndpoint, constants.APIPaths.AuthDeviceEnroll)
+	url := fmt.Sprintf("http://%s%s", gatewayEndpoint, constants.APIPaths.AuthOperatorEnroll)
 
-	var resp models.DeviceEnrollmentResponse
+	var resp models.OperatorEnrollmentResponse
 	if err := postJSON(ctx, c.httpClient, url, req, &resp); err != nil {
 		return EnrollmentArtifacts{}, err
 	}
@@ -339,7 +342,6 @@ func (c *EnrollmentClient) EnrollRemoteOperator(ctx context.Context, gatewayEndp
 	artifacts := EnrollmentArtifacts{
 		Source:               EnrollmentSourceRemoteOperator,
 		CLISessionID:         resp.CLISessionID,
-		UserID:               resp.UserID,
 		OperatorSessionID:    resp.OperatorSessionID,
 		OperatorID:           resp.OperatorID,
 		CLICertPEM:           resp.CLICert,
@@ -353,13 +355,14 @@ func (c *EnrollmentClient) EnrollRemoteOperator(ctx context.Context, gatewayEndp
 		artifacts.OperatorKeyPEM = encodePrivateKeyPEM(operatorKey)
 	}
 	// When a CLI CSR was supplied, validate the full local-CLI artifact set
-	// (session/user/cert/trust bundle/fingerprint/cert-key match). When the
+	// (session/cert/trust bundle/fingerprint/cert-key match). When the
 	// caller passed an empty CLI CSR (headless operator-only enrollment, e.g.
 	// `auth enroll operator`), the gateway does not issue CLI credentials, so
 	// only the operator cert is required and the trust bundle/fingerprint pin
-	// are validated opportunistically when present.
+	// are validated opportunistically when present. Operator enrollment is
+	// not user-bound, so UserID is intentionally empty and is not validated.
 	if cliCSR != "" {
-		if err := validateLocalCLI(artifacts, caFingerprint); err != nil {
+		if err := validateRemoteOperatorWithCLI(artifacts, caFingerprint); err != nil {
 			return EnrollmentArtifacts{}, err
 		}
 	} else {
@@ -368,6 +371,38 @@ func (c *EnrollmentClient) EnrollRemoteOperator(ctx context.Context, gatewayEndp
 		}
 	}
 	return artifacts, nil
+}
+
+// validateRemoteOperatorWithCLI validates the artifact set returned when
+// EnrollRemoteOperator is called with a CLI CSR. Operator enrollment is
+// certificate-based and not user-bound, so UserID is intentionally empty
+// and is not validated. The required fields are the CLI session, CLI cert,
+// operator cert, and trust bundle; the fingerprint pin and cert/key match
+// are validated as in validateLocalCLI.
+func validateRemoteOperatorWithCLI(a EnrollmentArtifacts, caFingerprint string) error {
+	if a.CLISessionID == "" || a.CLICertPEM == "" || a.OperatorCertPEM == "" {
+		return constants.ErrMissingRequiredField
+	}
+	if a.TrustBundlePEM == "" {
+		return constants.ErrEmptyTrustBundle
+	}
+	bundle, err := ParseTrustBundle([]byte(a.TrustBundlePEM), time.Now())
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrValidationFailed, err)
+	}
+	if err := bundle.VerifyFingerprintPin(caFingerprint); err != nil {
+		return err
+	}
+	if a.CLIKey != nil {
+		cert, err := parseCertPEMBytes([]byte(a.CLICertPEM))
+		if err != nil {
+			return fmt.Errorf("%w: staged CLI cert: %w", constants.ErrValidationFailed, err)
+		}
+		if !pubKeyMatchesCert(cert, &a.CLIKey.PublicKey) {
+			return fmt.Errorf("%w: CLI cert/key mismatch", constants.ErrValidationFailed)
+		}
+	}
+	return nil
 }
 
 // validateRemoteOperator validates the operator-only enrollment artifact set
@@ -391,12 +426,14 @@ func validateRemoteOperator(a EnrollmentArtifacts, caFingerprint string) error {
 	return nil
 }
 
-// CheckBootstrapStatus reports whether the gateway has been bootstrapped
-// (has any users). Used by the coordinator to choose between bootstrap
-// and recovery for an absent local identity.
+// CheckActivationStatus reports whether the gateway has been activated
+// (at least one human user exists). Used by the coordinator to choose
+// between bootstrap and recovery for an absent local identity. The
+// `bootstrapped` field is always true when the endpoint responds (the
+// listener being up IS the proof), so only `activated` is decision-relevant.
 //
 // baseURL, when non-empty, overrides the discovery URL.
-func (c *EnrollmentClient) CheckBootstrapStatus(ctx context.Context, baseURL string) (bool, error) {
+func (c *EnrollmentClient) CheckActivationStatus(ctx context.Context, baseURL string) (bool, error) {
 	discoveryURL := c.cfg.OperatorDiscoveryURL()
 	if baseURL != "" {
 		discoveryURL = baseURL
@@ -419,7 +456,7 @@ func (c *EnrollmentClient) CheckBootstrapStatus(ctx context.Context, baseURL str
 	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
 		return false, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
-	return status.Bootstrapped, nil
+	return status.Activated, nil
 }
 
 // DiscoverGatewayCA fetches the live gateway root CA bundle from the

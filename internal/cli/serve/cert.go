@@ -134,7 +134,7 @@ func PerformAutomaticEnrollment(ctx context.Context, gatewayIP string, fileSvc f
 		return "", "", fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
-	// Generate CLI CSR (required by device enrollment endpoint even for operator-only deployment)
+	// Generate CLI CSR (required by operator enrollment endpoint even for operator-only deployment)
 	cliCSR, _, err := GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
 	if err != nil {
 		return "", "", fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
@@ -144,9 +144,9 @@ func PerformAutomaticEnrollment(ctx context.Context, gatewayIP string, fileSvc f
 	gatewayEndpoint := fmt.Sprintf("%s:%d", gatewayIP, constants.Ports.OperatorHttp)
 	logger.Info("Enrolling with Gateway", "endpoint", gatewayEndpoint)
 
-	// Use the HTTP device enrollment endpoint (not PKI mTLS endpoint)
-	enrollURL := fmt.Sprintf("http://%s%s", gatewayEndpoint, constants.APIPathAuthDeviceEnroll)
-	reqBody := models.DeviceEnrollRequest{
+	// Use the HTTP operator enrollment endpoint (not PKI mTLS endpoint)
+	enrollURL := fmt.Sprintf("http://%s%s", gatewayEndpoint, constants.APIPathAuthOperatorEnroll)
+	reqBody := models.OperatorEnrollRequest{
 		CSR:               opCSR,
 		CLICSR:            cliCSR,
 		SystemFingerprint: systemFp.Fingerprint,
@@ -179,7 +179,7 @@ func PerformAutomaticEnrollment(ctx context.Context, gatewayIP string, fileSvc f
 		return "", "", fmt.Errorf("%w: HTTP %d: %s", constants.ErrHTTPStatusError, resp.StatusCode, string(respBody))
 	}
 
-	var enrollResp models.DeviceEnrollmentResponse
+	var enrollResp models.OperatorEnrollmentResponse
 	if err := json.Unmarshal(respBody, &enrollResp); err != nil {
 		return "", "", fmt.Errorf("%w: %w", constants.ErrResponseParseFailed, err)
 	}
@@ -311,7 +311,7 @@ func buildMTLSClient(caPEM []byte, cliCert tls.Certificate) (*http.Client, error
 
 // submitRenewal POSTs a re-enrollment request and returns the parsed response.
 func submitRenewal(ctx context.Context, client *http.Client, enrollURL, opCSR, cliCSR, hostname string) (*models.OperatorRegistrationResponse, error) {
-	reqBody := models.DeviceEnrollRequest{
+	reqBody := models.OperatorEnrollRequest{
 		CSR:               opCSR,
 		CLICSR:            cliCSR,
 		SystemFingerprint: fmt.Sprintf("g8e-operator-%s", hostname),

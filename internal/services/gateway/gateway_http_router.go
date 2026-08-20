@@ -52,7 +52,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthLogout, h.sessionController.handlePublicAuthLogout)
 	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.bootstrapController.handleLocalBootstrapWithURL)
 	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.bootstrapController.handleBootstrapStatus)
-	mux.HandleFunc(constants.APIPaths.AuthDeviceEnroll, h.bootstrapController.handleDeviceEnrollment)
+	mux.HandleFunc(constants.APIPaths.AuthOperatorEnroll, h.bootstrapController.handleOperatorEnrollment)
 	mux.HandleFunc(constants.APIPaths.PKIAppsEnroll, h.pkiController.handlePKIAppsEnroll)
 	mux.HandleFunc(constants.APIPaths.PKIDevicesEnroll, h.pkiController.handlePKIDevicesEnroll)
 
@@ -228,7 +228,7 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	// Bootstrap routes - plain HTTP for initial CA discovery and bootstrap
 	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.bootstrapController.handleLocalBootstrapWithURL)
 	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.bootstrapController.handleBootstrapStatus)
-	mux.HandleFunc(constants.APIPaths.AuthDeviceEnroll, h.bootstrapController.handleDeviceEnrollment)
+	mux.HandleFunc(constants.APIPaths.AuthOperatorEnroll, h.bootstrapController.handleOperatorEnrollment)
 	mux.HandleFunc(constants.APIPaths.PKIAppsEnroll, h.pkiController.handlePKIAppsEnroll)
 	mux.HandleFunc(constants.APIPaths.PKICSRSign, h.pkiController.handlePKICSRSign)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)

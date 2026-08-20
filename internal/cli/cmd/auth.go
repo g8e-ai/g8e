@@ -111,7 +111,7 @@ Two distinct enrollment paths exist as subcommands:
             WebAuthn passkey ceremony. Produces a CLI session bound to a user
             identity.
 
-  operator  Remote operator/device enrollment. Generates an operator CSR and
+  operator  Remote operator enrollment. Generates an operator CSR and
             enrolls with the gateway to obtain Operator mTLS certificates.
             Headless and operator-only: no OS trust installation, no passkey
             ceremony, no CLI session.
@@ -159,7 +159,7 @@ system trust installation fails, the browser phase is not started. Use --no-syst
 to skip the installer when an administrator has pre-installed the gateway root CA; the
 passkey ceremony still runs and runtime mTLS/trust-bundle errors still fail enrollment.
 
-For the remote operator/device enrollment path (CSR-only, no passkey, no CLI session),
+For the remote operator enrollment path (CSR-only, no passkey, no CLI session),
 use ` + "`auth enroll operator`" + ` instead.
 
 The Gateway must already be running (use './g8e gw start' first).`,

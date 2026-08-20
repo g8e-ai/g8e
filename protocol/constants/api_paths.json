@@ -57,7 +57,7 @@
   "auth_cli_recovery_approve_cli": "/api/v1/auth/cli/recovery/approve-cli",
   "auth_cli_recovery_complete": "/api/v1/auth/cli/recovery/complete",
   "auth_cli_rotate": "/api/v1/auth/cli/rotate",
-  "auth_device_enroll": "/api/v1/auth/device/enroll",
+  "auth_operator_enroll": "/api/v1/auth/operator/enroll",
   "auth_passkeys": "/api/v1/auth/passkeys",
   "auth_passkeys_by_id": "/api/v1/auth/passkeys/",
   "auth_passkeys_jit_register_challenge": "/api/v1/auth/passkeys/jit-register/challenge",

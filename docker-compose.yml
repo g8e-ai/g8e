@@ -71,6 +71,16 @@ services:
           memory: 256M
 
   g8e-operator:
+    # The operator tier is opt-in via the `activated` compose profile. The
+    # gateway starts with zero users and refuses operator enrollment until a
+    # human has bootstrapped it via `auth enroll user` (activated: true). The
+    # default `docker compose up` starts only the gateway and dashboard; bring
+    # up the operator + ensemble after enrolling:
+    #   docker compose up -d
+    #   ./g8e auth enroll user -e <gateway>
+    #   docker compose --profile activated up -d
+    profiles:
+      - activated
     build:
       context: .
       dockerfile: Dockerfile
@@ -96,6 +106,10 @@ services:
           memory: 256M
 
   ensemble:
+    # Part of the `activated` profile — brought up alongside the operator
+    # after the gateway is activated. See g8e-operator above for the flow.
+    profiles:
+      - activated
     build:
       context: .
       dockerfile: ensemble/Dockerfile

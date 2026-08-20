@@ -359,9 +359,9 @@ const (
 
 // API path constants for enrollment and well-known endpoints.
 const (
-	APIPathAuthDeviceEnroll = "/api/v1/auth/device/enroll"
-	APIPathPKIDevicesEnroll = "/api/v1/pki/devices/enroll"
-	WellKnownPKICABundle    = "/.well-known/g8e/pki/ca-bundle"
+	APIPathAuthOperatorEnroll = "/api/v1/auth/operator/enroll"
+	APIPathPKIDevicesEnroll   = "/api/v1/pki/devices/enroll"
+	WellKnownPKICABundle      = "/.well-known/g8e/pki/ca-bundle"
 )
 
 // CLI default paths for config and help text (derived from primitives).

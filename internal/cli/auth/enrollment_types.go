@@ -153,7 +153,7 @@ func (i LocalIdentity) NeedsRecovery() bool {
 
 // EnrollmentArtifacts is the coordinator's internal result type for a
 // successful credential-preparation step (bootstrap, recovery completion,
-// rotation, or remote operator/device enrollment). It replaces the
+// rotation, or remote operator enrollment). It replaces the
 // catch-all auth.RegistrationResponse union that callers previously used.
 //
 // Wire models in internal/models are mapped into this type by the
@@ -188,7 +188,7 @@ type EnrollmentArtifacts struct {
 
 	// CLIKey is the CLI private key. The coordinator owns this in-memory
 	// only for the duration of staging; it is never logged. Nil for remote
-	// operator/device enrollment where the CLI key was generated elsewhere.
+	// operator enrollment where the CLI key was generated elsewhere.
 	CLIKey *ecdsa.PrivateKey
 
 	// TrustBundlePEM is the full gateway runtime trust bundle PEM. Used by
@@ -197,7 +197,7 @@ type EnrollmentArtifacts struct {
 	TrustBundlePEM string
 
 	// OperatorCertPEM is the operator certificate PEM, when the enrollment
-	// path produced one (remote operator/device enrollment). Empty for
+	// path produced one (remote operator enrollment). Empty for
 	// local CLI enrollment.
 	OperatorCertPEM string
 
@@ -230,8 +230,8 @@ const (
 	// (POST /api/v1/auth/cli/rotate).
 	EnrollmentSourceRotation
 
-	// EnrollmentSourceRemoteOperator is the remote operator/device
-	// enrollment path (POST /api/v1/auth/device/enroll), used by
+	// EnrollmentSourceRemoteOperator is the remote operator
+	// enrollment path (POST /api/v1/auth/operator/enroll), used by
 	// `auth enroll operator`. It is NOT a local human enrollment.
 	EnrollmentSourceRemoteOperator
 )

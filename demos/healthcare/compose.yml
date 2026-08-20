@@ -61,6 +61,14 @@ services:
     command: ["gw", "start", "-f", "--doctrine-dir", "/etc/g8e/doctrine", "--passkey-rp-origin", "http://localhost:8081", "--passkey-rp-origin", "https://localhost:8444"]
 
   operator:
+    # Part of the `activated` profile — the gateway refuses operator
+    # enrollment until a human has bootstrapped it via `auth enroll user`.
+    # Two-step flow:
+    #   docker compose up -d gateway
+    #   ./g8e auth enroll user -e <gateway>
+    #   docker compose --profile activated up -d
+    profiles:
+      - activated
     build:
       context: ../..
       dockerfile: Dockerfile
@@ -157,6 +165,9 @@ services:
 
   # Authorized AI agent simulating a payer system submitting PA requests through the g8e gateway.
   agent-runtime:
+    # Part of the `activated` profile — depends on the operator.
+    profiles:
+      - activated
     build:
       context: ../..
       dockerfile: Dockerfile

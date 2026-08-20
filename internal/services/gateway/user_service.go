@@ -51,17 +51,18 @@ func (s *UserService) SetAuthService(authSvc authCacheInvalidator) {
 
 // CreateUser creates a new active user with a generated ID.
 // Zero-PII: No email or name is stored - only the user ID and passkey credentials.
+// The LocalOSUser field is left nil; callers that need to attach OS user info
+// (the bootstrap path) use CreateUserWithOSUser.
 func (s *UserService) CreateUser() (*models.User, error) {
-	return s.createUser(false, nil)
+	return s.createUser(nil)
 }
 
-// CreateBootstrapUserWithOSUser creates the ephemeral local-owner identity used by
-// `./g8e gw start -a`. The resulting user carries IsBootstrap=true so
-// the CSR-based registration path can identify and retire it the first time
-// a real identity is provisioned.
-// If localOSUser is nil, it falls back to the gateway's local OS user.
-func (s *UserService) CreateBootstrapUserWithOSUser(localOSUser *models.LocalOSUser) (*models.User, error) {
-	return s.createUser(true, localOSUser)
+// CreateUserWithOSUser creates a new active user with a generated ID and the
+// provided local OS user info attached. Used by the CLI bootstrap path
+// (handleLocalBootstrapWithURL) so the first human enrollee carries the
+// zero-PII OS-user metadata from the enrollment request.
+func (s *UserService) CreateUserWithOSUser(localOSUser *models.LocalOSUser) (*models.User, error) {
+	return s.createUser(localOSUser)
 }
 
 // CreateUserWithSub creates a user with the provided subject (JWT sub) as their ID.
@@ -84,7 +85,6 @@ func (s *UserService) CreateUserWithSub(sub string) (*models.User, error) {
 		PasskeyCredentials: []models.PasskeyCredential{},
 		Provider:           string(constants.AuthProviderJWT),
 		Status:             constants.UserStatusActive,
-		IsBootstrap:        false,
 		WebAuthnUserID:     uuid.NewString(),
 	}
 
@@ -130,19 +130,7 @@ func getLocalOSUser() *models.LocalOSUser {
 	}
 }
 
-func (s *UserService) createUser(isBootstrap bool, localOSUser *models.LocalOSUser) (*models.User, error) {
-	s.logger.Info("[USER-SERVICE] Creating new user", "is_bootstrap", isBootstrap)
-
-	if isBootstrap {
-		existingBootstrap, err := s.FindBootstrapUser()
-		if err != nil {
-			return nil, fmt.Errorf("user service: failed to find bootstrap user: %w", err)
-		}
-		if existingBootstrap != nil {
-			return nil, constants.ErrAlreadyExists
-		}
-	}
-
+func (s *UserService) createUser(localOSUser *models.LocalOSUser) (*models.User, error) {
 	userID := uuid.NewString()
 
 	// Use provided OS user info, or fall back to gateway's local OS user
@@ -160,7 +148,6 @@ func (s *UserService) createUser(isBootstrap bool, localOSUser *models.LocalOSUs
 		PasskeyCredentials: []models.PasskeyCredential{},
 		Provider:           string(constants.AuthProviderPasskey),
 		Status:             constants.UserStatusActive,
-		IsBootstrap:        isBootstrap,
 		LocalOSUser:        localOSUser,
 		WebAuthnUserID:     webAuthnUserID,
 	}
@@ -174,7 +161,7 @@ func (s *UserService) createUser(isBootstrap bool, localOSUser *models.LocalOSUs
 		return nil, fmt.Errorf("user service: failed to store user: %w", err)
 	}
 
-	s.logger.Info("[USER-SERVICE] User created", "user_id", userID, "is_bootstrap", isBootstrap)
+	s.logger.Info("[USER-SERVICE] User created", "user_id", userID)
 	return user, nil
 }
 
@@ -238,24 +225,23 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 	return nil
 }
 
-// FindBootstrapUser returns the single bootstrap user, if any. Multiple
-// bootstrap users is a Gateway invariant violation; if more than one row
-// is found the call fails closed so callers can refuse to proceed.
-func (s *UserService) FindBootstrapUser() (*models.User, error) {
-	filters := []models.DocFilter{
-		{Field: "is_bootstrap", Op: "==", Value: json.RawMessage("true")},
+// IsFirstUser reports whether the given userID is the only user in the
+// system (the first human enrollee). The first user created via
+// `auth enroll user` is the gateway owner and admin; admin endpoints gate
+// on this check instead of the removed IsBootstrap flag. Returns false when
+// the user does not exist or when more than one user is present.
+func (s *UserService) IsFirstUser(userID string) (bool, error) {
+	if userID == "" {
+		return false, constants.ErrUserIDRequired
 	}
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionUsers), filters, "", 2)
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{}, "", 2)
 	if err != nil {
-		return nil, fmt.Errorf("user service: failed to query bootstrap users: %w", err)
+		return false, fmt.Errorf("user service: failed to query users for first-user check: %w", err)
 	}
-	if len(docs) == 0 {
-		return nil, nil
+	if len(docs) != 1 {
+		return false, nil
 	}
-	if len(docs) > 1 {
-		return nil, fmt.Errorf("%w: %d bootstrap users found, expected at most 1", constants.ErrConstraintViolation, len(docs))
-	}
-	return s.docToUser(docs[0])
+	return docs[0].ID == userID, nil
 }
 
 func (s *UserService) appendAdminAudit(entry models.AdminAuditEntry) error {
