@@ -147,16 +147,15 @@ func setupSharedE2EFixture(composeFile string) (*DockerE2EFixture, error) {
 		DashboardPort:    dashboardPort,
 	}
 
-	// Spin up docker-compose with `--wait`, which blocks until every service
-	// with a healthcheck reaches `healthy` (and services without one reach
-	// `running`). Docker performs the readiness wait natively — there is no
-	// Go-side health polling. The gateway's compose healthcheck hits
-	// /api/v1/health, and the operator's `depends_on: condition:
-	// service_healthy` ensures it only starts once the gateway is healthy.
-	// `--wait-timeout` caps the total wait at 120s; on timeout or healthcheck
-	// failure `up` exits non-zero, we tear down any partial stack, and R1's
-	// fail-fast turns the returned error into a fatal suite exit.
-	log.Printf("E2E: Starting docker-compose (project: %s), waiting for services to be healthy", projectName)
+	// Two-step activation flow: the operator and ensemble are in the
+	// `activated` compose profile and cannot start until the gateway is
+	// activated (a human has enrolled as the first user). Step 1 brings up
+	// the default profile (gateway + dashboard) and waits for health. Step 2
+	// bootstraps the first user via POST /api/v1/auth/bootstrap, flipping
+	// activated to true. Step 3 brings up the activated profile (operator +
+	// ensemble), which now enrolls successfully against the activated
+	// gateway.
+	log.Printf("E2E: Starting docker-compose default profile (project: %s), waiting for gateway + dashboard", projectName)
 	upCmd := exec.Command("docker", "compose", "-p", projectName, "-f", composePath, "up", "-d", "--build", "--wait", "--wait-timeout", "120")
 	upCmd.Dir = repoRoot
 	upCmd.Env = append(os.Environ(), composeEnv...)
@@ -167,9 +166,58 @@ func setupSharedE2EFixture(composeFile string) (*DockerE2EFixture, error) {
 		}
 		return nil, fmt.Errorf("docker compose up failed (services did not become healthy within 120s): %w\nOutput: %s", err, string(upOutput))
 	}
-	log.Printf("E2E: Docker compose stack is healthy: %s", string(upOutput))
+	log.Printf("E2E: Default profile is healthy: %s", string(upOutput))
+
+	// Bootstrap the first user to activate the gateway. The bootstrap
+	// endpoint creates the first real user (assigned the owner role) and
+	// flips activated to true. Operator enrollment is rejected with
+	// ErrOperatorEnrollmentRequiresActivation until this completes.
+	if err := fixture.bootstrapFirstUser(); err != nil {
+		if tdErr := fixture.teardown(); tdErr != nil {
+			log.Printf("E2E: teardown after bootstrap failure also failed: %v", tdErr)
+		}
+		return nil, fmt.Errorf("bootstrap first user failed: %w", err)
+	}
+	log.Printf("E2E: Gateway activated (first user bootstrapped)")
+
+	// Bring up the activated profile (operator + ensemble). The operator's
+	// `operator start -e g8e.local` enrollment now succeeds because the
+	// gateway is activated.
+	log.Printf("E2E: Starting docker-compose activated profile (operator + ensemble)")
+	activatedCmd := exec.Command("docker", "compose", "-p", projectName, "-f", composePath, "--profile", "activated", "up", "-d", "--build", "--wait", "--wait-timeout", "120")
+	activatedCmd.Dir = repoRoot
+	activatedCmd.Env = append(os.Environ(), composeEnv...)
+	activatedOutput, err := activatedCmd.CombinedOutput()
+	if err != nil {
+		if tdErr := fixture.teardown(); tdErr != nil {
+			log.Printf("E2E: teardown after activated-profile-up failure also failed: %v", tdErr)
+		}
+		return nil, fmt.Errorf("docker compose --profile activated up failed (services did not become healthy within 120s): %w\nOutput: %s", err, string(activatedOutput))
+	}
+	log.Printf("E2E: Activated profile is healthy: %s", string(activatedOutput))
 
 	return fixture, nil
+}
+
+// bootstrapFirstUser creates the first user via POST /api/v1/auth/bootstrap,
+// activating the gateway. The bootstrap endpoint is on the plain-HTTP router
+// (no TLS required). The request body omits CSR fields — no operator cert is
+// needed here; the operator enrolls separately via the activated profile. The
+// name field is not stored on the zero-PII User model; the user is assigned the
+// owner role by CreateUserWithOSUser.
+func (f *DockerE2EFixture) bootstrapFirstUser() error {
+	body := strings.NewReader(`{}`)
+	reqURL := f.GatewayHTTPURL + constants.APIPaths.AuthBootstrap
+	resp, err := http.Post(reqURL, "application/json", body)
+	if err != nil {
+		return fmt.Errorf("bootstrap request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("bootstrap returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+	return nil
 }
 
 // teardown stops the Docker Compose stack and removes volumes and orphans.

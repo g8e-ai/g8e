@@ -545,8 +545,16 @@ func TestEnroll_AbsentActivated_PerformsRecovery(t *testing.T) {
 // user's endpoint instead of the gateway's own PublicBaseURL (which defaults to
 // localhost). Without this, a remote user who passed -e dev.g8e.local would
 // receive an approval URL pointing at localhost and be unable to open it.
+// TestEnroll_Recovery_RewritesApprovalURLWithEndpointOverride verifies that
+// when the user supplies -e/--endpoint (setting the HTTPS endpoint override),
+// the coordinator rewrites the gateway-returned approval URL base to match the
+// user's endpoint instead of the gateway's own PublicBaseURL (which defaults to
+// localhost). Without this, a remote user who passed -e dev.g8e.local would
+// receive an approval URL pointing at localhost and be unable to open it.
+//
+// Not parallel: mutates the global config.SetHTTPSEndpointOverride, which
+// leaks to other tests via the process-wide config singleton.
 func TestEnroll_Recovery_RewritesApprovalURLWithEndpointOverride(t *testing.T) {
-	t.Parallel()
 	coord, gw, keys, _, browser, _, _, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
@@ -575,8 +583,14 @@ func TestEnroll_Recovery_RewritesApprovalURLWithEndpointOverride(t *testing.T) {
 // TestEnroll_Recovery_PreservesApprovalURLWithoutOverride verifies that when
 // no endpoint override is set, the coordinator passes the gateway-returned
 // approval URL through unchanged, respecting the gateway's PublicBaseURL config.
+// TestEnroll_Recovery_PreservesApprovalURLWithoutOverride verifies that when
+// no endpoint override is set, the coordinator passes the gateway-returned
+// approval URL through unchanged, respecting the gateway's PublicBaseURL config.
+//
+// Not parallel: the companion RewritesApprovalURLWithEndpointOverride test
+// mutates the global config.SetHTTPSEndpointOverride; running in parallel
+// would leak that override into this test.
 func TestEnroll_Recovery_PreservesApprovalURLWithoutOverride(t *testing.T) {
-	t.Parallel()
 	coord, gw, keys, _, browser, _, _, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
