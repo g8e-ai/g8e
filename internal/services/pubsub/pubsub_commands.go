@@ -781,18 +781,53 @@ func (rs *OperatorPubSubService) HeartbeatService() *HeartbeatService {
 // ExecuteVerifiedTransaction implements governance.ExecutionHandler.
 // This is called by Actuator to execute verified transactions, making Actuator the execution boundary.
 func (rs *OperatorPubSubService) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
-	handler, ok := rs.handlers[eventType]
-	if !ok {
-		rs.logger.Error("No handler registered for event type", "event_type", string(eventType))
-		return "", fmt.Errorf("no handler for event type %s: %w", string(eventType), constants.ErrTxUnknownActionType)
-	}
-
 	pubsubMsg, ok := cmdMsg.(*PubSubCommandMessage)
 	if !ok {
 		rs.logger.Error("Invalid cmdMsg type", "expected", "*PubSubCommandMessage", "got", fmt.Sprintf("%T", cmdMsg))
 		return "", fmt.Errorf("invalid cmdMsg type %T: %w", cmdMsg, constants.ErrTxPayloadDecodeFailed)
 	}
 	rs.logger.Info("Executing verified transaction through Actuator", "event_type", eventType)
+
+	// Platform enrollment actions are synchronous: each handler performs a
+	// typed mutation and returns a receipt summary string for the L5
+	// actuator to stamp into the signed final receipt. These event types
+	// are not registered in the handlers map (they use a different
+	// signature), so they must be dispatched before the handler lookup.
+	// When platformEnrollment is nil (outbound/operator mode), dispatch
+	// fails closed with ErrTxUnknownActionType.
+	switch eventType {
+	case constants.EventPlatformEnrollmentCreateRequested:
+		if rs.platformEnrollment == nil {
+			break
+		}
+		return rs.platformEnrollment.HandleCreate(ctx, pubsubMsg)
+	case constants.EventPlatformEnrollmentDecideRequested:
+		if rs.platformEnrollment == nil {
+			break
+		}
+		return rs.platformEnrollment.HandleDecide(ctx, pubsubMsg)
+	case constants.EventPlatformEnrollmentIssueRequested:
+		if rs.platformEnrollment == nil {
+			break
+		}
+		return rs.platformEnrollment.HandleIssue(ctx, pubsubMsg)
+	case constants.EventPlatformEnrollmentPersistPolicyRequested:
+		if rs.platformEnrollment == nil {
+			break
+		}
+		return rs.platformEnrollment.HandlePersistPolicy(ctx, pubsubMsg)
+	case constants.EventPlatformEnrollmentCreateSessionRequested:
+		if rs.platformEnrollment == nil {
+			break
+		}
+		return rs.platformEnrollment.HandleCreateSession(ctx, pubsubMsg)
+	}
+
+	handler, ok := rs.handlers[eventType]
+	if !ok {
+		rs.logger.Error("No handler registered for event type", "event_type", string(eventType))
+		return "", fmt.Errorf("no handler for event type %s: %w", string(eventType), constants.ErrTxUnknownActionType)
+	}
 
 	// Special case for EVAL_ANSWER which is synchronous and returns the answer as summary
 	if eventType == constants.Event.Operator.Eval.AnswerRequested {
@@ -806,26 +841,6 @@ func (rs *OperatorPubSubService) ExecuteVerifiedTransaction(ctx context.Context,
 	}
 	if eventType == constants.Event.Operator.A2a.CallRequested {
 		return rs.handleA2aCallRequestSync(ctx, pubsubMsg)
-	}
-
-	// Platform enrollment actions are synchronous: each handler performs a
-	// typed mutation and returns a receipt summary string for the L5
-	// actuator to stamp into the signed final receipt. When
-	// platformEnrollment is nil (outbound/operator mode), dispatch fails
-	// closed with ErrTxUnknownActionType.
-	if rs.platformEnrollment != nil {
-		switch eventType {
-		case constants.EventPlatformEnrollmentCreateRequested:
-			return rs.platformEnrollment.HandleCreate(ctx, pubsubMsg)
-		case constants.EventPlatformEnrollmentDecideRequested:
-			return rs.platformEnrollment.HandleDecide(ctx, pubsubMsg)
-		case constants.EventPlatformEnrollmentIssueRequested:
-			return rs.platformEnrollment.HandleIssue(ctx, pubsubMsg)
-		case constants.EventPlatformEnrollmentPersistPolicyRequested:
-			return rs.platformEnrollment.HandlePersistPolicy(ctx, pubsubMsg)
-		case constants.EventPlatformEnrollmentCreateSessionRequested:
-			return rs.platformEnrollment.HandleCreateSession(ctx, pubsubMsg)
-		}
 	}
 
 	handler(ctx, pubsubMsg)

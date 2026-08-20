@@ -54,26 +54,19 @@ type PlatformEnrollmentOperatorSessions interface {
 	PersistOperatorSession(operatorSessionID, userID, orgID, operatorID, loginMethod string) error
 }
 
-// PlatformEnrollmentUsers is the user-service subset required by the
-// platform enrollment handlers. Implemented natively by
-// gateway.UserService.
-type PlatformEnrollmentUsers interface {
-	IsFirstUser(userID string) (bool, error)
-	HasAnyUsers() (bool, error)
-}
-
 // PlatformEnrollmentDeps bundles the gateway-side dependencies required
 // by the five platform enrollment handlers registered in buildHandlers.
 // All fields are required in gateway mode; the pubsub service fails
 // closed at handler dispatch if any is nil. Outbound (operator) mode
 // never constructs platform enrollment handlers, so nil is acceptable
-// there.
+// there. Owner authorization (IsFirstUser) is enforced by the
+// enrollment service before submitting the DECIDE envelope, not by the
+// handlers, so UserService is not part of this bundle.
 type PlatformEnrollmentDeps struct {
 	DocStore         PlatformEnrollmentDocStore
 	PKI              PlatformEnrollmentPKI
 	CLISessions      PlatformEnrollmentCLISessions
 	OperatorSessions PlatformEnrollmentOperatorSessions
-	Users            PlatformEnrollmentUsers
 }
 
 // platformEnrollmentCollection is the canonical collection name for

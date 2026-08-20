@@ -77,6 +77,7 @@ type GatewayModeService struct {
 	mcpGateway              *mcp.GatewayService
 	envProcAdapter          *pubsub.GatewayEnvProcAdapter
 	sessionValidatorAdapter *pubsub.GatewaySessionValidatorAdapter
+	platformEnrollmentSvc   *PlatformEnrollmentService
 	consensusSvc            atomic.Pointer[consensus.ConsensusService]
 	dispatchSvc             *DispatchService
 	responder               *response.Writer
@@ -291,6 +292,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		mcpGateway:              mcpGateway,
 		envProcAdapter:          envProcAdapter,
 		sessionValidatorAdapter: sessionValidatorAdapter,
+		platformEnrollmentSvc:   NewPlatformEnrollmentService(stores.DocStore, userSvc, envProcAdapter, stores.StateRootSvc, logger),
 		dispatchSvc:             NewDispatchService(logger, wsHandler, stores.StateRootSvc, auth),
 		responder:               res,
 	}
@@ -717,6 +719,12 @@ func (ls *GatewayModeService) GetEnvProcAdapter() *pubsub.GatewayEnvProcAdapter 
 	return ls.envProcAdapter
 }
 
+// GetPlatformEnrollmentService returns the platform enrollment service
+// that owns the owner-approved workload enrollment lifecycle.
+func (ls *GatewayModeService) GetPlatformEnrollmentService() *PlatformEnrollmentService {
+	return ls.platformEnrollmentSvc
+}
+
 // GetSessionValidatorAdapter returns the lazy adapter for mcp.SessionValidator.
 func (ls *GatewayModeService) GetSessionValidatorAdapter() *pubsub.GatewaySessionValidatorAdapter {
 	return ls.sessionValidatorAdapter
@@ -834,6 +842,10 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 
 	// Start background enrollment token cleanup
 	go ls.runEnrollmentTokenCleanup(ctx)
+
+	// Start managed cleanup for platform enrollment (expired lease
+	// reconciliation and terminal request retention cleanup).
+	ls.platformEnrollmentSvc.StartCleanup(ctx)
 
 	errChan := make(chan error, 5)
 	readyChan := make(chan struct{}, 5)
@@ -979,6 +991,9 @@ func (ls *GatewayModeService) Stop(ctx context.Context) error {
 // All close methods are idempotent, so this is safe to call even if some
 // resources have already been closed.
 func (ls *GatewayModeService) closeResources() {
+	if ls.platformEnrollmentSvc != nil {
+		ls.platformEnrollmentSvc.StopCleanup()
+	}
 	if ls.pubsub != nil {
 		ls.pubsub.Close()
 	}

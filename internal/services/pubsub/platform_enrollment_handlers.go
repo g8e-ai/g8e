@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -22,7 +23,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/uuid"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	"google.golang.org/protobuf/proto"
 )
 
 // PlatformEnrollmentHandler dispatches the five platform enrollment
@@ -189,14 +189,15 @@ func (h *PlatformEnrollmentHandler) HandleDecide(ctx context.Context, msg *PubSu
 		requestID, string(decision), actorUserID), nil
 }
 
-// HandleIssue loads the request, verifies it is in the approved state,
-// acquires the issuing transition, reads the CSR PEM from the stored
-// document, calls the PKI signer, stores the issued cert material and
-// generated IDs, and performs the issuing -> completed transition. The
-// envelope/receipt ID (msg.ID) is stamped as issuance_envelope_id and
-// issuance_receipt_id. Operator issuance signs both the operator and
-// CLI CSRs and persists the operator document; app issuance uses
-// SignPlatformAppCSR for the dual-SAN app certificate.
+// HandleIssue loads the request, verifies it is in the issuing state
+// (the enrollment service acquires the issuance lease by transitioning
+// approved -> issuing before submitting this envelope), reads the CSR
+// PEM from the stored document, calls the PKI signer, stores the issued
+// cert material and generated IDs, and performs the issuing -> completed
+// transition. The envelope/receipt ID (msg.ID) is stamped as
+// issuance_envelope_id and issuance_receipt_id. Operator issuance signs
+// both the operator and CLI CSRs and persists the operator document;
+// app issuance uses SignPlatformAppCSR for the dual-SAN app certificate.
 func (h *PlatformEnrollmentHandler) HandleIssue(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	_ = ctx
 	payload, err := h.decodePayload(msg)
@@ -223,36 +224,14 @@ func (h *PlatformEnrollmentHandler) HandleIssue(ctx context.Context, msg *PubSub
 	if req == nil {
 		return "", constants.ErrPlatformEnrollmentRequestNotFound
 	}
-	if req.State != models.PlatformEnrollmentStateApproved {
-		return "", constants.ErrPlatformEnrollmentNotApproved
-	}
-
-	// Acquire the issuing transition (approved -> issuing). A concurrent
-	// issuer loses the conditional update and fails closed.
-	now := time.Now().UTC()
-	applied, err := h.deps.DocStore.DocConditionalUpdate(
-		platformEnrollmentCollection(), requestID,
-		map[string]interface{}{
-			"state":              string(models.PlatformEnrollmentStateIssuing),
-			"last_transition_at": now,
-		},
-		"state", string(models.PlatformEnrollmentStateApproved),
-	)
-	if err != nil {
-		return "", fmt.Errorf("platform enrollment: acquire issuing %s: %w", requestID, err)
-	}
-	if !applied {
+	// The enrollment service acquires the issuance lease (approved ->
+	// issuing) before submitting the ISSUE envelope. The handler starts
+	// from the issuing state and performs the signing + issuing ->
+	// completed transition. A request still in the approved state means
+	// the lease was never acquired; a request in any other state is a
+	// concurrent or stale call.
+	if req.State != models.PlatformEnrollmentStateIssuing {
 		return "", constants.ErrPlatformEnrollmentIssuanceInProgress
-	}
-
-	// Reload the request after the conditional update so the stored
-	// document reflects the issuing state for the completion transition.
-	req, err = loadPlatformEnrollmentRequest(context.Background(), h.deps, requestID)
-	if err != nil {
-		return "", err
-	}
-	if req == nil {
-		return "", constants.ErrPlatformEnrollmentRequestNotFound
 	}
 
 	issued, operatorID, operatorSessionID, cliSessionID, certSerial, certFingerprint, err := h.signComponent(req, actorUserID)
@@ -296,7 +275,7 @@ func (h *PlatformEnrollmentHandler) HandleIssue(ctx context.Context, msg *PubSub
 		completionFields["cli_session_id"] = cliSessionID
 	}
 
-	applied, err = h.deps.DocStore.DocConditionalUpdate(
+	applied, err := h.deps.DocStore.DocConditionalUpdate(
 		platformEnrollmentCollection(), requestID, completionFields,
 		"state", string(models.PlatformEnrollmentStateIssuing),
 	)
@@ -574,18 +553,7 @@ func fingerprintsSummary(f models.PlatformEnrollmentCSRFingerprints) string {
 	if f.CLI != "" {
 		parts = append(parts, "cli="+f.CLI)
 	}
-	return fmt.Sprintf("[%s]", joinStrings(parts, ","))
-}
-
-func joinStrings(parts []string, sep string) string {
-	out := ""
-	for i, p := range parts {
-		if i > 0 {
-			out += sep
-		}
-		out += p
-	}
-	return out
+	return fmt.Sprintf("[%s]", strings.Join(parts, ","))
 }
 
 // fingerprintFromPEM computes the SHA-256 fingerprint of the DER-encoded
@@ -631,9 +599,3 @@ func expiryFromPEM(certPEM string) time.Time {
 	}
 	return cert.NotAfter
 }
-
-// Ensure the proto import is retained even when future edits remove the
-// direct proto.Unmarshal call (the unmarshalPayload helper performs the
-// unmarshal). This prevents a confusing "imported and not used" error
-// during incremental edits.
-var _ = proto.Unmarshal
