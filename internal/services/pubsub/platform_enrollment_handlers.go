@@ -352,11 +352,13 @@ func (h *PlatformEnrollmentHandler) signAppComponent(req *models.PlatformEnrollm
 }
 
 // signOperatorComponent signs both the operator and CLI CSRs, persists
-// the operator document, and builds the operator credentials response.
-// Operator and session identities remain non-user-bound; the approving
-// user is recorded on the enrollment request, not on the operator doc.
+// the operator document stamped with the approving owner's user_id, and
+// builds the operator credentials response. The operator document is
+// user-owned (user_id = actorUserID) so the approving owner can discover
+// and manage it through ListUserOperators. is_slot remains false:
+// platform-enrolled operators are not user-created slots, but they are
+// user-owned.
 func (h *PlatformEnrollmentHandler) signOperatorComponent(req *models.PlatformEnrollmentRequest, actorUserID string, trustBundle []byte) (*models.PlatformEnrollmentCompleteResponse, string, string, string, string, string, error) {
-	_ = actorUserID
 	if req.Operator == nil {
 		return nil, "", "", "", "", "", constants.ErrPlatformEnrollmentInvalidPayload
 	}
@@ -381,9 +383,11 @@ func (h *PlatformEnrollmentHandler) signOperatorComponent(req *models.PlatformEn
 	cliCertSerial := serialFromPEM(cliCertPEM)
 
 	// Persist the operator document idempotently. The operator identity
-	// is certificate-based; user_id is empty by design.
+	// is certificate-based; user_id is the approving owner so the owner
+	// can discover and manage the platform-enrolled operator.
 	operatorDoc := &models.OperatorDocumentGo{
 		ID:                operatorID,
+		UserID:            actorUserID,
 		Component:         constants.ComponentNameG8EO,
 		Name:              req.Hostname,
 		Status:            constants.OperatorStatusActive,
@@ -485,7 +489,9 @@ func (h *PlatformEnrollmentHandler) HandlePersistPolicy(ctx context.Context, msg
 // OperatorSessionService using the session IDs carried in the payload.
 // The handler writes nothing to the doc store directly; the session
 // services own their persistence. This handler is only invoked for the
-// operator component (dashboard and ensemble have no sessions).
+// operator component (dashboard and ensemble have no sessions). Both
+// sessions are bound to the approving owner's user_id (the actor) so the
+// owner can discover and manage the platform-enrolled operator.
 func (h *PlatformEnrollmentHandler) HandleCreateSession(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	_ = ctx
 	payload, err := h.decodePayload(msg)
@@ -502,20 +508,23 @@ func (h *PlatformEnrollmentHandler) HandleCreateSession(ctx context.Context, msg
 	if operatorID == "" || operatorSessionID == "" || cliSessionID == "" {
 		return "", constants.ErrPlatformEnrollmentInvalidPayload
 	}
+	actorUserID := payload.GetActorUserId()
+	if actorUserID == "" {
+		return "", constants.ErrPlatformEnrollmentInvalidDecision
+	}
 
-	// Persist the CLI session with an empty user_id (operator enrollment
-	// is not user-bound). The cert fingerprint/serial come from the
-	// payload (populated by the enrollment service from the ISSUE
-	// handler outputs).
+	// Persist the CLI session bound to the approving owner's user_id.
+	// The cert fingerprint/serial come from the payload (populated by
+	// the enrollment service from the ISSUE handler outputs).
 	if err := h.deps.CLISessions.PersistCLISession(
-		cliSessionID, operatorSessionID, "",
+		cliSessionID, operatorSessionID, actorUserID,
 		"", payload.GetCertificateFingerprint(), payload.GetCertificateSerial(),
 		string(constants.HeartbeatTypeBootstrap),
 	); err != nil {
 		return "", fmt.Errorf("platform enrollment: persist cli session: %w", err)
 	}
 	if err := h.deps.OperatorSessions.PersistOperatorSession(
-		operatorSessionID, "", "", operatorID,
+		operatorSessionID, actorUserID, "", operatorID,
 		string(constants.HeartbeatTypeBootstrap),
 	); err != nil {
 		return "", fmt.Errorf("platform enrollment: persist operator session: %w", err)
@@ -525,9 +534,10 @@ func (h *PlatformEnrollmentHandler) HandleCreateSession(ctx context.Context, msg
 		"request_id", requestID,
 		"operator_id", operatorID,
 		"operator_session_id", operatorSessionID,
-		"cli_session_id", cliSessionID)
-	return fmt.Sprintf("platform enrollment create_session request_id=%s operator_id=%s operator_session=%s cli_session=%s",
-		requestID, operatorID, operatorSessionID, cliSessionID), nil
+		"cli_session_id", cliSessionID,
+		"actor_user_id", actorUserID)
+	return fmt.Sprintf("platform enrollment create_session request_id=%s operator_id=%s operator_session=%s cli_session=%s actor=%s",
+		requestID, operatorID, operatorSessionID, cliSessionID, actorUserID), nil
 }
 
 // fingerprintsFromPayload converts the proto fingerprints message into

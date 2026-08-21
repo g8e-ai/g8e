@@ -709,6 +709,8 @@ func TestEnroll_CompleteExpired_UsesRecoveryNotRotation(t *testing.T) {
 	_, _, bundleFP, _ := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(-time.Hour))
 	gw.discoveryFingerprint = bundleFP
 
+	// Gateway is activated — recovery is the correct path for an expired cert.
+	gw.activated = true
 	artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
 	gw.recoveryRequestID = "req-exp"
 	gw.recoveryToken = "token-exp"
@@ -1472,6 +1474,8 @@ func TestEnroll_ReusedIdentity_StaleBundle_RoutesToRecovery(t *testing.T) {
 	gw.discoveryFingerprint = "different-live-fp"
 	gw.discoveryBundlePEM = []byte("live-bundle")
 
+	// Gateway is activated — recovery is the correct path for a stale bundle.
+	gw.activated = true
 	// Configure recovery flow.
 	artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
 	gw.recoveryRequestID = "req-stale"
@@ -1609,6 +1613,9 @@ func TestEnroll_ReusedIdentity_StaleBundle_DetectsStaleOSAnchors(t *testing.T) {
 	gw.discoveryFingerprint = newFP
 	gw.discoveryBundlePEM = []byte("live-bundle-new-fp")
 
+	// Gateway is activated — recovery is the correct path for a stale bundle.
+	gw.activated = true
+
 	// The OS store has the OLD root anchor — it should be detected as stale.
 	trust.staleAnchors = []platform.StaleAnchor{
 		{Fingerprint: oldFP, CommonName: constants.RootCACommonName, Handle: "/path/old"},
@@ -1649,6 +1656,63 @@ func TestEnroll_ReusedIdentity_StaleBundle_DetectsStaleOSAnchors(t *testing.T) {
 	assert.Equal(t, 1, browser.calls)
 
 	assert.True(t, recorder.contains("does not match the live gateway"))
+}
+
+// TestEnroll_ReusedIdentity_StaleBundle_UnactivatedGateway_Bootstraps is
+// the regression test for the brand-new-gateway 403 bug. When the local CLI
+// has a complete identity with a stale trust bundle (left over from a
+// previous gateway CA) but the live gateway is NOT activated (no users yet
+// — a fresh `docker compose up`), the coordinator must NOT route through
+// recovery. The recovery endpoint returns 403 on an unactivated gateway, so
+// recovery is impossible. Instead, the coordinator must bootstrap, creating
+// the first owner just like an absent identity on a fresh gateway.
+func TestEnroll_ReusedIdentity_StaleBundle_UnactivatedGateway_Bootstraps(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, trust, browser, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
+
+	// Write a complete identity with a known bundle root fingerprint.
+	writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+
+	// Inject a MISMATCHING live fingerprint — simulates a fresh gateway
+	// with a brand-new CA (e.g. `docker compose down -v && docker compose up`).
+	gw.discoveryFingerprint = "different-live-fp"
+	gw.discoveryBundlePEM = []byte("live-bundle")
+
+	// Gateway is NOT activated — no users exist yet. Recovery would 403.
+	gw.activated = false
+	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
+	gw.bootstrapArtifacts = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+
+	// Use a bounded context so the test fails fast on the buggy code
+	// (which routes to recovery and polls forever since the mock returns
+	// pending). On the fixed code, bootstrap completes immediately.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result, err := coord.Enroll(ctx, EnrollmentOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, EnrollmentSourceBootstrap, result.Source)
+	assert.False(t, result.Reused, "must NOT reuse when bundle is stale")
+
+	// Bootstrap should be called, not recovery.
+	assert.Equal(t, 1, gw.bootstrapCalls, "bootstrap should be called on an unactivated gateway")
+	assert.Equal(t, 0, gw.recoveryRequestCalls, "recovery must NOT be called — gateway is not activated (would 403)")
+	assert.Equal(t, 0, gw.recoveryCompleteCalls)
+	assert.Equal(t, 0, gw.rotateCalls)
+
+	// Browser should NOT open — bootstrap does not require human approval.
+	assert.Equal(t, 0, browser.calls, "bootstrap does not open a browser for approval")
+
+	// System trust should be installed (new root CA from the fresh gateway).
+	assert.Equal(t, 1, trust.isTrustedCalls)
+	assert.Equal(t, 1, trust.installCalls)
+
+	// Passkey ceremony should run (first owner registration).
+	assert.Equal(t, 1, passkey.calls)
+
+	assert.True(t, recorder.contains("does not match the live gateway"))
+	assert.True(t, recorder.contains("bootstrap"))
 }
 
 // TestEnroll_NoSystemTrust_StillRunsStaleDetection verifies that

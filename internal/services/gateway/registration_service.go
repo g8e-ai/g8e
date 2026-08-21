@@ -92,6 +92,34 @@ func (s *RegistrationService) ListOperatorSlots(userID string) ([]models.Operato
 	return slots, nil
 }
 
+// ListUserOperators returns every operator document owned by userID,
+// including both user-created slots (is_slot=true) and platform-enrolled
+// operators (is_slot=false). Platform enrollment stamps the approving
+// owner's user_id on the operator document so the owner can discover and
+// manage it through this method. ListOperatorSlots remains limited to
+// slots for callers that only want user-created slots.
+func (s *RegistrationService) ListUserOperators(userID string) ([]models.OperatorDocumentGo, error) {
+	if userID == "" {
+		return nil, constants.ErrRegistrationUserIDRequired
+	}
+	filters := []models.DocFilter{
+		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
+	}
+	docs, err := s.docStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "created_at", 0)
+	if err != nil {
+		return nil, err
+	}
+	operators := make([]models.OperatorDocumentGo, 0, len(docs))
+	for _, doc := range docs {
+		op, err := s.toOperatorDoc(doc)
+		if err != nil {
+			continue
+		}
+		operators = append(operators, *op)
+	}
+	return operators, nil
+}
+
 func (s *RegistrationService) TerminateOperator(operatorID, userID, reason string) error {
 	if operatorID == "" {
 		return constants.ErrRegistrationOperatorIDRequired

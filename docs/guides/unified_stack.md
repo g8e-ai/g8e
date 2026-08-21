@@ -20,17 +20,21 @@ The gateway and operator share the same Go binary (the repo-root `Dockerfile`), 
 
 ## Quick Start
 
+The unified stack uses a two-phase startup. Only the gateway starts by default; the operator, dashboard, and ensemble are in the `activated` profile and require a human to enroll the first owner before they can start. Nothing else starts until enrollment is complete.
+
+### Phase 1: Start the gateway
+
 From the repository root:
 
 ```bash
 docker compose up -d --build
 ```
 
-This builds all four images and starts the stack. The gateway boots first; the operator, ensemble, and dashboard start once the gateway's health check passes (`/api/v1/health`). All four containers start, but the operator, ensemble, and dashboard remain not-ready until their owner-approved platform enrollment requests are approved. Do not use `docker compose up --wait` before approval; it is expected to time out while enrollment is pending.
+This builds the gateway image and starts only the gateway. The gateway becomes healthy immediately. No other containers start — the operator, dashboard, and ensemble are gated behind the `activated` profile because they all require owner-approved platform enrollment.
 
-### Owner-approved platform activation
+### Phase 2: Enroll the first owner
 
-After `docker compose up -d --build`, the gateway is healthy but the platform workloads are not. Activate them by enrolling the first owner and approving each pending enrollment request:
+After the gateway is healthy, enroll the first owner. This creates the first user and a usable CLI mTLS identity:
 
 ```bash
 # 1. Wait for the gateway to be healthy.
@@ -40,16 +44,27 @@ until curl -fsS http://localhost:8080/api/v1/health >/dev/null 2>&1; do sleep 2;
 #    -e is the gateway HTTP discovery endpoint (host or host:port); the coordinator
 #    derives the HTTP port. --port defaults to 8443 for mTLS and does not need to be set.
 ./g8e auth enroll user -e localhost
+```
 
-# 3. List pending platform enrollment requests (operator, dashboard, ensemble).
+If the local CLI has a stale trust bundle from a previous gateway instance (e.g. after `docker compose down -v`), the coordinator detects that the gateway is not yet activated and bootstraps instead of attempting recovery (which would fail with 403 on a fresh gateway).
+
+### Phase 3: Start the platform workloads
+
+Once the first owner is enrolled, start the operator, dashboard, and ensemble:
+
+```bash
+# 3. Start the activated-profile workloads.
+docker compose --profile activated up -d
+
+# 4. List pending platform enrollment requests (operator, dashboard, ensemble).
 ./g8e auth pending-platform-enrollments
 
-# 4. Approve each request by exact request ID. The recommended order is operator, dashboard, ensemble.
+# 5. Approve each request by exact request ID. The recommended order is operator, dashboard, ensemble.
 ./g8e auth approve-platform-enrollment <operator-request-id> --yes
 ./g8e auth approve-platform-enrollment <dashboard-request-id> --yes
 ./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
 
-# 5. Wait for the workloads to become healthy.
+# 6. Wait for the workloads to become healthy.
 docker compose ps
 ```
 

@@ -686,6 +686,11 @@ func (ls *GatewayModeService) GetUserService() *UserService {
 	return ls.userSvc
 }
 
+// GetRegistrationService returns the registration service.
+func (ls *GatewayModeService) GetRegistrationService() *RegistrationService {
+	return ls.reg
+}
+
 // GetConsensusStore returns the consensus store service.
 func (ls *GatewayModeService) GetConsensusStore() *ConsensusStoreService {
 	return ls.consensusStore

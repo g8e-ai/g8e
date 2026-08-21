@@ -369,20 +369,43 @@ func (c *EnrollmentCoordinator) Enroll(ctx context.Context, opts EnrollmentOptio
 	case LocalStateComplete:
 		if local.NeedsRecovery() {
 			// Complete-but-expired: an expired cert cannot authenticate via
-			// mTLS, so rotation is impossible. Route through recovery.
-			c.out("CLI certificate has expired; using recovery flow.")
-			artifacts, err = c.handleRecovery(ctx, opts)
+			// mTLS, so rotation is impossible. Route through recovery — but
+			// only if the gateway is activated. On a fresh gateway (no
+			// users), the recovery endpoint returns 403, so we must
+			// bootstrap instead. This mirrors handleAbsent/handlePartialOrCorrupt.
+			activated, actErr := c.gateway.CheckActivationStatus(ctx, "")
+			if actErr != nil {
+				return nil, fmt.Errorf("%w: check activation status: %w", constants.ErrEnrollmentFailed, actErr)
+			}
+			if !activated {
+				c.out("CLI certificate has expired but gateway is not activated; performing initial CLI bootstrap.")
+				artifacts, err = c.handleBootstrap(ctx, opts)
+			} else {
+				c.out("CLI certificate has expired; using recovery flow.")
+				artifacts, err = c.handleRecovery(ctx, opts)
+			}
 		} else if local.BundleStale {
 			// Complete-but-stale-bundle: the local CLI cert was issued by
 			// the old gateway CA and cannot authenticate to the new
 			// gateway via mTLS, so rotation is impossible (rotation uses
-			// mTLS). The only valid path is recovery (human-approved,
-			// plain-HTTP, token-scoped), which issues a fresh cert signed
-			// by the new CA. This mirrors the CertExpired → recovery
-			// routing: a stale bundle is functionally equivalent to an
-			// expired cert for mTLS purposes.
-			c.out("Local trust bundle does not match the live gateway root CA; using recovery flow.")
-			artifacts, err = c.handleRecovery(ctx, opts)
+			// mTLS). The only valid path on an activated gateway is
+			// recovery (human-approved, plain-HTTP, token-scoped), which
+			// issues a fresh cert signed by the new CA. On a fresh
+			// gateway (no users), the recovery endpoint returns 403, so
+			// we must bootstrap instead. This mirrors the CertExpired →
+			// recovery routing: a stale bundle is functionally equivalent
+			// to an expired cert for mTLS purposes.
+			activated, actErr := c.gateway.CheckActivationStatus(ctx, "")
+			if actErr != nil {
+				return nil, fmt.Errorf("%w: check activation status: %w", constants.ErrEnrollmentFailed, actErr)
+			}
+			if !activated {
+				c.out("Local trust bundle does not match the live gateway root CA but gateway is not activated; performing initial CLI bootstrap.")
+				artifacts, err = c.handleBootstrap(ctx, opts)
+			} else {
+				c.out("Local trust bundle does not match the live gateway root CA; using recovery flow.")
+				artifacts, err = c.handleRecovery(ctx, opts)
+			}
 		} else if local.NeedsRotation() || opts.RotateCLI {
 			artifacts, err = c.handleRotation(ctx, opts)
 		} else {

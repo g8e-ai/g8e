@@ -5,10 +5,11 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-# Full-stack default: all four services start unprofiled. The gateway becomes
-# healthy immediately; the operator, dashboard, and ensemble submit platform
-# enrollment requests and remain not-ready until the owner approves them. See
-# docs/guides/unified_stack.md for the activation flow and
+# Two-phase startup: only the gateway starts by default (no profile). The
+# operator, dashboard, and ensemble are in the `activated` profile and require
+# a human to enroll the first owner before they can start. After enrolling,
+# run `docker compose --profile activated up -d` to bring up the workloads.
+# See docs/guides/unified_stack.md for the full activation flow and
 # docs/guides/docker_gateway.md for the per-service details.
 
 networks:
@@ -77,6 +78,8 @@ services:
 
   g8e-operator:
     # Policy Execution Point: outbound-only mTLS to the gateway. Same image as the gateway.
+    # Requires owner enrollment before starting — use `docker compose --profile activated up -d`.
+    profiles: [activated]
     image: g8e-gateway
     container_name: ${G8E_PREFIX:-g8e}-operator
     working_dir: /root
@@ -106,6 +109,8 @@ services:
 
   ensemble:
     # First-party agentic ensemble (g8ee): Python/FastAPI. Submits governed intents via MCP.
+    # Requires owner enrollment before starting — use `docker compose --profile activated up -d`.
+    profiles: [activated]
     build:
       context: .
       dockerfile: ensemble/Dockerfile
@@ -144,6 +149,8 @@ services:
 
   dashboard:
     # Operator dashboard (g8ed): Node.js/Express browser UI. Runs as non-root g8e user (UID 1001).
+    # Requires owner enrollment before starting — use `docker compose --profile activated up -d`.
+    profiles: [activated]
     build:
       context: .
       dockerfile: dashboard/Dockerfile

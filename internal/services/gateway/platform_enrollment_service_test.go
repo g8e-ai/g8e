@@ -456,8 +456,12 @@ func TestPlatformEnrollmentService_EnsembleIssuanceProducesDualSANAndOwnershipPo
 
 // TestPlatformEnrollmentService_OperatorIssuanceSignsBothCSRsAndPersistsOperator
 // proves that operator enrollment signs both the operator and CLI CSRs,
-// persists the operator document, and creates CLI and operator sessions. The
-// operator identity remains non-user-bound (invariant 7).
+// persists the operator document stamped with the approving owner's user_id,
+// and creates CLI and operator sessions bound to that same user_id. The
+// approving owner is the actor recorded on the enrollment request; that
+// user_id propagates to the operator document and both session documents so
+// the owner can discover and manage the platform-enrolled operator through
+// ListUserOperators.
 func TestPlatformEnrollmentService_OperatorIssuanceSignsBothCSRsAndPersistsOperator(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
@@ -480,7 +484,10 @@ func TestPlatformEnrollmentService_OperatorIssuanceSignsBothCSRsAndPersistsOpera
 	assert.NotEmpty(t, resp.Operator.CLISessionID)
 	assert.NotEmpty(t, resp.Operator.HubTrustBundle)
 
-	// Verify the operator document was persisted with no user_id (non-user-bound).
+	// Verify the operator document was persisted with the approving
+	// owner's user_id so the owner can discover it via ListUserOperators.
+	// is_slot remains false: platform-enrolled operators are not
+	// user-created slots, but they are user-owned.
 	opDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), resp.Operator.OperatorID)
 	require.NoError(t, err)
 	require.NotNil(t, opDoc)
@@ -492,9 +499,30 @@ func TestPlatformEnrollmentService_OperatorIssuanceSignsBothCSRsAndPersistsOpera
 	// separately in the documents table), so op.ID is empty. The operator
 	// document was found by resp.Operator.OperatorID, which proves the ID
 	// was correctly generated and used as the document key.
-	assert.Empty(t, op.UserID, "operator doc must not carry a user_id (non-user-bound by design)")
+	assert.Equal(t, env.ownerID, op.UserID, "operator doc must carry the approving owner's user_id")
+	assert.False(t, op.IsSlot, "platform-enrolled operators are not slots")
 	assert.Equal(t, constants.OperatorStatusActive, op.Status)
 	assert.True(t, op.Claimed)
+
+	// Verify the CLI session is bound to the approving owner's user_id.
+	cliDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), resp.Operator.CLISessionID)
+	require.NoError(t, err)
+	require.NotNil(t, cliDoc)
+	cliBytes, err := json.Marshal(cliDoc.Data)
+	require.NoError(t, err)
+	var cliSession models.CLISession
+	require.NoError(t, json.Unmarshal(cliBytes, &cliSession))
+	assert.Equal(t, env.ownerID, cliSession.UserID, "CLI session must carry the approving owner's user_id")
+
+	// Verify the operator session is bound to the approving owner's user_id.
+	opSessDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), resp.Operator.OperatorSessionID)
+	require.NoError(t, err)
+	require.NotNil(t, opSessDoc)
+	opSessBytes, err := json.Marshal(opSessDoc.Data)
+	require.NoError(t, err)
+	var opSession models.OperatorSession
+	require.NoError(t, json.Unmarshal(opSessBytes, &opSession))
+	assert.Equal(t, env.ownerID, opSession.UserID, "operator session must carry the approving owner's user_id")
 
 	// Verify the stored request is completed with approval provenance.
 	stored := loadStoredRequest(t, env, requestID)
@@ -503,6 +531,49 @@ func TestPlatformEnrollmentService_OperatorIssuanceSignsBothCSRsAndPersistsOpera
 	assert.NotEmpty(t, stored.OperatorID)
 	assert.NotEmpty(t, stored.OperatorSessionID)
 	assert.NotEmpty(t, stored.CLISessionID)
+}
+
+// TestPlatformEnrollmentService_OperatorIssuanceIsDiscoverableViaListUserOperators
+// proves that after a platform-enrolled operator is issued, the approving
+// owner can discover it through RegistrationService.ListUserOperators. This
+// is the production fix for the E2E defect where ListOperatorSlots filtered
+// by is_slot=true hid platform-enrolled operators (which carry is_slot=false)
+// from the owner's operator list.
+func TestPlatformEnrollmentService_OperatorIssuanceIsDiscoverableViaListUserOperators(t *testing.T) {
+	env := setupPlatformEnrollmentEnv(t, true)
+
+	operatorCSR, operatorKey, cliCSR, cliKey := generateOperatorCSRsAndKeys(t)
+	_, token, approved := createAndApproveRequest(t, env,
+		models.PlatformComponentOperator, "operator-1", "operator.local",
+		"", operatorCSR, cliCSR)
+
+	proof := models.PlatformEnrollmentProofs{
+		Operator: signCompletionTranscript(t, approved, operatorKey),
+		CLI:      signCompletionTranscript(t, approved, cliKey),
+	}
+	resp, err := env.enrollSvc.Complete(context.Background(), token, proof)
+	require.NoError(t, err)
+	require.NotNil(t, resp.Operator)
+
+	// The owner can discover the platform-enrolled operator via
+	// ListUserOperators, which filters by user_id only (no is_slot
+	// requirement).
+	regSvc := env.svc.GetRegistrationService()
+	operators, err := regSvc.ListUserOperators(env.ownerID)
+	require.NoError(t, err)
+	require.NotEmpty(t, operators, "owner must see the platform-enrolled operator")
+
+	var found *models.OperatorDocumentGo
+	for i := range operators {
+		if operators[i].ID == resp.Operator.OperatorID {
+			found = &operators[i]
+			break
+		}
+	}
+	require.NotNil(t, found, "platform-enrolled operator must appear in ListUserOperators")
+	assert.Equal(t, env.ownerID, found.UserID)
+	assert.False(t, found.IsSlot, "platform-enrolled operator is not a slot")
+	assert.Equal(t, constants.OperatorStatusActive, found.Status)
 }
 
 // ============================================================================
