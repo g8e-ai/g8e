@@ -18,10 +18,11 @@ import (
 // TestEnsembleGatewayOperator_E2E exercises the ensemble -> gateway -> operator
 // path end to end against the unified docker-compose stack. The shared fixture
 // (TestMain in main_test.go) brings up all 4 services (gateway, operator,
-// ensemble, dashboard) and `docker compose up --wait` blocks until every
-// service with a healthcheck reaches `healthy`. With the ensemble and dashboard
-// healthchecks added in WS3, the test body can assume a healthy stack without
-// require.Eventually retry logic.
+// ensemble, dashboard) via the owner-approved platform enrollment activation
+// flow: docker compose up, wait for gateway health, bootstrap the first user
+// with CLI mTLS credentials, approve operator/dashboard/ensemble platform
+// enrollment requests, then wait for workload health. The test body can assume
+// a healthy stack without require.Eventually retry logic.
 //
 // This is a Tier 3 (Docker E2E) test. It does NOT exercise a full
 // chat -> consensus -> command -> execution roundtrip, because that requires an

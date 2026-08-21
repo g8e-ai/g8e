@@ -59,14 +59,17 @@ services:
     command: ["gw", "start", "-f", "--doctrine-dir", "/etc/g8e/doctrine", "--passkey-rp-origin", "http://localhost:8082", "--passkey-rp-origin", "https://localhost:8445"]
 
   operator:
-    # Part of the `activated` profile — the gateway refuses operator
-    # enrollment until a human has bootstrapped it via `auth enroll user`.
-    # Two-step flow:
-    #   docker compose up -d gateway
+    # Full-stack default: the operator starts with the gateway. The gateway
+    # starts with zero users, so the operator submits a platform enrollment
+    # request and waits for owner approval before it becomes ready. The
+    # operator healthcheck (operator.crt existence) stays not-ready until
+    # the enrollment completes, so dependent services (target-system,
+    # agent-runtime) wait via depends_on: condition: service_healthy. The
+    # activation flow is:
+    #   docker compose up -d
     #   ./g8e auth enroll user -e <gateway>
-    #   docker compose --profile activated up -d
-    profiles:
-      - activated
+    #   ./g8e auth pending-platform-enrollments
+    #   ./g8e auth approve-platform-enrollment <request-id> --yes
     build:
       context: ../..
       dockerfile: Dockerfile
@@ -93,9 +96,7 @@ services:
     command: ["operator", "start", "-e", "10.22.0.10"]
 
   target-system:
-    # Part of the `activated` profile — depends on the operator.
-    profiles:
-      - activated
+    # Depends on the operator (which waits for owner approval).
     image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: finance-target
     networks:
@@ -110,9 +111,7 @@ services:
     command: ["sh", "-c", "while true; do sleep 3600; done"]
 
   agent-runtime:
-    # Part of the `activated` profile — depends on the operator.
-    profiles:
-      - activated
+    # Depends on the operator (which waits for owner approval).
     build:
       context: ../..
       dockerfile: Dockerfile

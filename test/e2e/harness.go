@@ -10,9 +10,15 @@
 package e2e
 
 import (
+	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"log"
@@ -48,6 +54,11 @@ type DockerE2EFixture struct {
 	HTTPSPort        int    // allocated host HTTPS port
 	EnsemblePort     int    // allocated host ensemble port
 	DashboardPort    int    // allocated host dashboard port
+
+	// cliMTLSConfig is the owner CLI identity created during bootstrap.
+	// It is used for authenticated mTLS calls to the platform enrollment
+	// pending and decision endpoints during fixture setup.
+	cliMTLSConfig *tls.Config
 }
 
 // setupSharedE2EFixture performs the Docker Compose setup without requiring
@@ -147,16 +158,19 @@ func setupSharedE2EFixture(composeFile string) (*DockerE2EFixture, error) {
 		DashboardPort:    dashboardPort,
 	}
 
-	// Two-step activation flow: the operator and ensemble are in the
-	// `activated` compose profile and cannot start until the gateway is
-	// activated (a human has enrolled as the first user). Step 1 brings up
-	// the default profile (gateway + dashboard) and waits for health. Step 2
-	// bootstraps the first user via POST /api/v1/auth/bootstrap, flipping
-	// activated to true. Step 3 brings up the activated profile (operator +
-	// ensemble), which now enrolls successfully against the activated
-	// gateway.
-	log.Printf("E2E: Starting docker-compose default profile (project: %s), waiting for gateway + dashboard", projectName)
-	upCmd := exec.Command("docker", "compose", "-p", projectName, "-f", composePath, "up", "-d", "--build", "--wait", "--wait-timeout", "120")
+	// Owner-approved platform enrollment activation flow. All four services
+	// (gateway, dashboard, ensemble, operator) start together as the
+	// full-stack default. The gateway becomes healthy immediately, but the
+	// operator, dashboard, and ensemble submit platform enrollment requests
+	// and stay not-ready until the owner approves them. The flow is:
+	//   1. docker compose up -d --build (no --wait: workloads are not ready)
+	//   2. Poll the gateway health endpoint until it is healthy.
+	//   3. Bootstrap the first user WITH a CLI CSR to obtain mTLS credentials.
+	//   4. Wait for pending platform enrollment requests to appear.
+	//   5. Approve operator, dashboard, and ensemble in the recommended order.
+	//   6. Wait for workload health (operator, dashboard, ensemble).
+	log.Printf("E2E: Starting docker-compose full-stack (project: %s), no --wait (workloads pending approval)", projectName)
+	upCmd := exec.Command("docker", "compose", "-p", projectName, "-f", composePath, "up", "-d", "--build")
 	upCmd.Dir = repoRoot
 	upCmd.Env = append(os.Environ(), composeEnv...)
 	upOutput, err := upCmd.CombinedOutput()
@@ -164,60 +178,356 @@ func setupSharedE2EFixture(composeFile string) (*DockerE2EFixture, error) {
 		if tdErr := fixture.teardown(); tdErr != nil {
 			log.Printf("E2E: teardown after compose-up failure also failed: %v", tdErr)
 		}
-		return nil, fmt.Errorf("docker compose up failed (services did not become healthy within 120s): %w\nOutput: %s", err, string(upOutput))
+		return nil, fmt.Errorf("docker compose up failed: %w\nOutput: %s", err, string(upOutput))
 	}
-	log.Printf("E2E: Default profile is healthy: %s", string(upOutput))
+	log.Printf("E2E: Compose stack started, waiting for gateway health")
 
-	// Bootstrap the first user to activate the gateway. The bootstrap
-	// endpoint creates the first real user (assigned the owner role) and
-	// flips activated to true. Operator enrollment is rejected with
-	// ErrOperatorEnrollmentRequiresActivation until this completes.
-	if err := fixture.bootstrapFirstUser(); err != nil {
+	// Step 2: poll the gateway health endpoint. The gateway becomes healthy
+	// quickly (it has no enrollment dependency), but the workloads do not.
+	if err := fixture.waitForGatewayHealth(120 * time.Second); err != nil {
+		if tdErr := fixture.teardown(); tdErr != nil {
+			log.Printf("E2E: teardown after gateway-health-wait failure also failed: %v", tdErr)
+		}
+		return nil, fmt.Errorf("gateway did not become healthy within 120s: %w", err)
+	}
+	log.Printf("E2E: Gateway is healthy")
+
+	// Step 3: bootstrap the first user with a CLI CSR. This creates the
+	// owner (first user) and returns a CLI certificate that the harness uses
+	// for authenticated mTLS calls to the platform enrollment pending and
+	// decision endpoints. No operator CSR is submitted here — the operator
+	// enrolls via the platform enrollment protocol, not via bootstrap.
+	if err := fixture.bootstrapFirstUserWithCLICert(); err != nil {
 		if tdErr := fixture.teardown(); tdErr != nil {
 			log.Printf("E2E: teardown after bootstrap failure also failed: %v", tdErr)
 		}
-		return nil, fmt.Errorf("bootstrap first user failed: %w", err)
+		return nil, fmt.Errorf("bootstrap first user with CLI cert failed: %w", err)
 	}
-	log.Printf("E2E: Gateway activated (first user bootstrapped)")
+	log.Printf("E2E: First user bootstrapped with CLI mTLS credentials")
 
-	// Bring up the activated profile (operator + ensemble). The operator's
-	// `operator start -e g8e.local` enrollment now succeeds because the
-	// gateway is activated.
-	log.Printf("E2E: Starting docker-compose activated profile (operator + ensemble)")
-	activatedCmd := exec.Command("docker", "compose", "-p", projectName, "-f", composePath, "--profile", "activated", "up", "-d", "--build", "--wait", "--wait-timeout", "120")
-	activatedCmd.Dir = repoRoot
-	activatedCmd.Env = append(os.Environ(), composeEnv...)
-	activatedOutput, err := activatedCmd.CombinedOutput()
-	if err != nil {
+	// Step 4 + 5: wait for pending platform enrollment requests to appear,
+	// then approve operator, dashboard, and ensemble in the recommended
+	// order. The recommended order is operator, dashboard, then ensemble.
+	if err := fixture.approvePlatformEnrollments(); err != nil {
 		if tdErr := fixture.teardown(); tdErr != nil {
-			log.Printf("E2E: teardown after activated-profile-up failure also failed: %v", tdErr)
+			log.Printf("E2E: teardown after approval failure also failed: %v", tdErr)
 		}
-		return nil, fmt.Errorf("docker compose --profile activated up failed (services did not become healthy within 120s): %w\nOutput: %s", err, string(activatedOutput))
+		return nil, fmt.Errorf("approve platform enrollments failed: %w", err)
 	}
-	log.Printf("E2E: Activated profile is healthy: %s", string(activatedOutput))
+	log.Printf("E2E: All platform enrollments approved")
+
+	// Step 6: wait for workload health. The operator, dashboard, and ensemble
+	// healthchecks transition to healthy once their enrollment completes and
+	// their services start listening.
+	if err := fixture.waitForWorkloadHealth(180 * time.Second); err != nil {
+		if tdErr := fixture.teardown(); tdErr != nil {
+			log.Printf("E2E: teardown after workload-health-wait failure also failed: %v", tdErr)
+		}
+		return nil, fmt.Errorf("workloads did not become healthy within 180s: %w", err)
+	}
+	log.Printf("E2E: All workloads are healthy")
 
 	return fixture, nil
 }
 
-// bootstrapFirstUser creates the first user via POST /api/v1/auth/bootstrap,
-// activating the gateway. The bootstrap endpoint is on the plain-HTTP router
-// (no TLS required). The request body omits CSR fields — no operator cert is
-// needed here; the operator enrolls separately via the activated profile. The
-// name field is not stored on the zero-PII User model; the user is assigned the
-// owner role by CreateUserWithOSUser.
-func (f *DockerE2EFixture) bootstrapFirstUser() error {
-	body := strings.NewReader(`{}`)
+// bootstrapFirstUserWithCLICert creates the first user via POST
+// /api/v1/auth/bootstrap, activating the gateway. Unlike the old
+// bootstrapFirstUser (which sent an empty body), this generates a P-256 key
+// pair and CLI CSR, submits it with the bootstrap request, and receives back a
+// signed CLI certificate and trust bundle. The CLI certificate is stored on
+// the fixture as cliMTLSConfig so subsequent calls to the platform enrollment
+// pending and decision endpoints can authenticate as the owner via mTLS. No
+// operator CSR is submitted — the operator enrolls via the platform enrollment
+// protocol, not via bootstrap.
+func (f *DockerE2EFixture) bootstrapFirstUserWithCLICert() error {
+	cliKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return fmt.Errorf("generate CLI key: %w", err)
+	}
+
+	csrTemplate := x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName:   "e2e-owner",
+			Organization: []string{"g8e"},
+		},
+	}
+	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &csrTemplate, cliKey)
+	if err != nil {
+		return fmt.Errorf("create CLI CSR: %w", err)
+	}
+	csrPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE REQUEST",
+		Bytes: csrBytes,
+	})
+
+	reqBody, err := json.Marshal(map[string]string{
+		"cli_csr_pem": string(csrPEM),
+	})
+	if err != nil {
+		return fmt.Errorf("marshal bootstrap body: %w", err)
+	}
+
 	reqURL := f.GatewayHTTPURL + constants.APIPaths.AuthBootstrap
-	resp, err := http.Post(reqURL, "application/json", body)
+	resp, err := http.Post(reqURL, "application/json", bytes.NewReader(reqBody))
 	if err != nil {
 		return fmt.Errorf("bootstrap request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read bootstrap response: %w", err)
+	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return fmt.Errorf("bootstrap returned status %d: %s", resp.StatusCode, string(respBody))
 	}
+
+	var bootResp models.BootstrapResponse
+	if err := json.Unmarshal(respBody, &bootResp); err != nil {
+		return fmt.Errorf("decode bootstrap response: %w", err)
+	}
+	if bootResp.CLICert == "" {
+		return fmt.Errorf("bootstrap response missing cli_cert")
+	}
+
+	cliCert, err := tls.X509KeyPair([]byte(bootResp.CLICert), mustEncodeECDSAPrivateKey(cliKey))
+	if err != nil {
+		return fmt.Errorf("parse CLI X509 key pair: %w", err)
+	}
+
+	caCertPool := x509.NewCertPool()
+	caBundle := bootResp.HubTrustBundle
+	if caBundle == "" {
+		caBundle = f.GetCABundleRaw()
+	}
+	if !caCertPool.AppendCertsFromPEM([]byte(caBundle)) {
+		return fmt.Errorf("failed to parse CA bundle into cert pool")
+	}
+
+	f.cliMTLSConfig = &tls.Config{
+		Certificates:       []tls.Certificate{cliCert},
+		RootCAs:            caCertPool,
+		InsecureSkipVerify: true, // Verification handled via VerifyConnection
+		VerifyConnection: func(cs tls.ConnectionState) error {
+			if len(cs.PeerCertificates) == 0 {
+				return fmt.Errorf("no peer certificates returned by gateway")
+			}
+			_, err := cs.PeerCertificates[0].Verify(x509.VerifyOptions{Roots: caCertPool})
+			if err != nil {
+				return fmt.Errorf("gateway certificate failed verification: %w", err)
+			}
+			return nil
+		},
+	}
 	return nil
+}
+
+// approvePlatformEnrollments waits for pending platform enrollment requests to
+// appear, then approves operator, dashboard, and ensemble in the recommended
+// order. The harness discovers request IDs via the authenticated pending
+// endpoint (GET /api/v1/auth/platform-enrollments/pending) using the owner CLI
+// mTLS identity, then posts approve decisions via the decision endpoint (POST
+// /api/v1/auth/platform-enrollments/decision). The recommended order is
+// operator, dashboard, then ensemble. The order is operational, not a security
+// invariant — the gateway does not enforce prerequisite state between
+// component approvals.
+func (f *DockerE2EFixture) approvePlatformEnrollments() error {
+	// Wait for pending requests to appear. The operator, dashboard, and
+	// ensemble submit their requests shortly after the gateway becomes
+	// healthy, but there is a startup race. Poll up to 60 seconds.
+	var pending models.PlatformEnrollmentPendingResponse
+	deadline := time.Now().Add(60 * time.Second)
+	for {
+		pending = f.fetchPendingEnrollments()
+		if len(pending.Requests) > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("no pending platform enrollment requests appeared within 60s")
+		}
+		time.Sleep(2 * time.Second)
+	}
+	log.Printf("E2E: Discovered %d pending platform enrollment requests", len(pending.Requests))
+
+	// Approve in the recommended order: operator, dashboard, ensemble.
+	order := []models.PlatformComponentKind{
+		models.PlatformComponentOperator,
+		models.PlatformComponentDashboard,
+		models.PlatformComponentEnsemble,
+	}
+	approved := 0
+	for _, kind := range order {
+		for _, req := range pending.Requests {
+			if req.ComponentKind != kind {
+				continue
+			}
+			if req.State != models.PlatformEnrollmentStatePending {
+				continue
+			}
+			if err := f.approveEnrollment(req.RequestID); err != nil {
+				return fmt.Errorf("approve %s enrollment %s: %w", kind, req.RequestID, err)
+			}
+			log.Printf("E2E: Approved %s enrollment (request %s)", kind, req.RequestID)
+			approved++
+		}
+	}
+	if approved == 0 {
+		return fmt.Errorf("no pending platform enrollment requests were in the pending state")
+	}
+	return nil
+}
+
+// fetchPendingEnrollments calls the authenticated pending endpoint and returns
+// the typed response. Uses the owner CLI mTLS identity. Returns an empty
+// response (no error) if the endpoint returns no requests yet.
+func (f *DockerE2EFixture) fetchPendingEnrollments() models.PlatformEnrollmentPendingResponse {
+	if f.cliMTLSConfig == nil {
+		return models.PlatformEnrollmentPendingResponse{}
+	}
+	client := &http.Client{
+		Timeout:   10 * time.Second,
+		Transport: &http.Transport{TLSClientConfig: f.cliMTLSConfig},
+	}
+	reqURL := f.GatewayHTTPSURL + constants.APIPaths.AuthPlatformEnrollmentPending
+	resp, err := client.Get(reqURL)
+	if err != nil {
+		return models.PlatformEnrollmentPendingResponse{}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return models.PlatformEnrollmentPendingResponse{}
+	}
+	var pending models.PlatformEnrollmentPendingResponse
+	if err := json.NewDecoder(resp.Body).Decode(&pending); err != nil {
+		return models.PlatformEnrollmentPendingResponse{}
+	}
+	return pending
+}
+
+// approveEnrollment posts an approve decision for the given request ID via the
+// authenticated decision endpoint. Uses the owner CLI mTLS identity.
+func (f *DockerE2EFixture) approveEnrollment(requestID string) error {
+	if f.cliMTLSConfig == nil {
+		return fmt.Errorf("no CLI mTLS credentials available")
+	}
+	body, err := json.Marshal(models.PlatformEnrollmentDecisionRequest{
+		RequestID: requestID,
+		Decision:  models.PlatformEnrollmentDecisionApprove,
+	})
+	if err != nil {
+		return fmt.Errorf("marshal decision body: %w", err)
+	}
+	client := &http.Client{
+		Timeout:   10 * time.Second,
+		Transport: &http.Transport{TLSClientConfig: f.cliMTLSConfig},
+	}
+	reqURL := f.GatewayHTTPSURL + constants.APIPaths.AuthPlatformEnrollmentDecision
+	resp, err := client.Post(reqURL, "application/json", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("decision request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("decision returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+	return nil
+}
+
+// waitForGatewayHealth polls the gateway health endpoint until it returns 200
+// or the timeout elapses. The gateway has no enrollment dependency and becomes
+// healthy quickly, but the poll accounts for image build + startup time.
+func (f *DockerE2EFixture) waitForGatewayHealth(timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	client := &http.Client{Timeout: 5 * time.Second}
+	for {
+		resp, err := client.Get(f.GatewayHTTPURL + "/api/v1/health")
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return nil
+			}
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("gateway health endpoint not ready after %s", timeout)
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
+// waitForWorkloadHealth polls the operator, dashboard, and ensemble containers
+// until their healthchecks report healthy, or the timeout elapses. The
+// healthchecks are truthful: the operator checks operator.crt existence, the
+// dashboard checks its Express server, and the ensemble checks its FastAPI
+// /health endpoint. All three transition to healthy only after platform
+// enrollment completes.
+func (f *DockerE2EFixture) waitForWorkloadHealth(timeout time.Duration) error {
+	containers := []string{
+		f.ContainerPrefix + "-operator",
+		f.ContainerPrefix + "-dashboard",
+		f.ContainerPrefix + "-ensemble",
+	}
+	deadline := time.Now().Add(timeout)
+	for {
+		allHealthy := true
+		for _, c := range containers {
+			state, err := f.containerHealthState(c)
+			if err != nil || state != "healthy" {
+				allHealthy = false
+				break
+			}
+		}
+		if allHealthy {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			// Report which containers are not healthy for diagnostics.
+			for _, c := range containers {
+				state, _ := f.containerHealthState(c)
+				log.Printf("E2E: %s health=%s (expected healthy)", c, state)
+			}
+			return fmt.Errorf("workloads not healthy after %s", timeout)
+		}
+		time.Sleep(3 * time.Second)
+	}
+}
+
+// containerHealthState returns the Docker healthcheck state for a container
+// ("healthy", "starting", "unhealthy", or "none").
+func (f *DockerE2EFixture) containerHealthState(container string) (string, error) {
+	cmd := exec.Command("docker", "inspect", "-f", "{{.State.Health.Status}}", container)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+// GetCABundleRaw fetches the CA bundle from the gateway's well-known endpoint
+// without a *testing.T (for use from setupSharedE2EFixture). Returns the raw
+// PEM string.
+func (f *DockerE2EFixture) GetCABundleRaw() string {
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(f.GatewayHTTPURL + "/.well-known/g8e/pki/ca-bundle")
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	bundle, _ := io.ReadAll(resp.Body)
+	return string(bundle)
+}
+
+// mustEncodeECDSAPrivateKey encodes an ECDSA private key to SEC1 PEM. Used
+// during bootstrap to build the CLI mTLS key pair from the bootstrap-returned
+// cert and the locally-generated key.
+func mustEncodeECDSAPrivateKey(key *ecdsa.PrivateKey) []byte {
+	der, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		panic(fmt.Sprintf("marshal ECDSA private key: %v", err))
+	}
+	return pem.EncodeToMemory(&pem.Block{
+		Type:  "EC PRIVATE KEY",
+		Bytes: der,
+	})
 }
 
 // teardown stops the Docker Compose stack and removes volumes and orphans.

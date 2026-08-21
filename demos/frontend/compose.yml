@@ -63,14 +63,15 @@ services:
       "--cors-origin", "http://localhost:3003"]
 
   operator:
-    # Part of the `activated` profile — the gateway refuses operator
-    # enrollment until a human has bootstrapped it via `auth enroll user`.
-    # Two-step flow:
-    #   docker compose up -d gateway
+    # Full-stack default: the operator starts with the gateway. The gateway
+    # starts with zero users, so the operator submits a platform enrollment
+    # request and waits for owner approval before it becomes ready. The
+    # operator healthcheck (operator.crt existence) stays not-ready until
+    # the enrollment completes. The activation flow is:
+    #   docker compose up -d
     #   ./g8e auth enroll user -e <gateway>
-    #   docker compose --profile activated up -d
-    profiles:
-      - activated
+    #   ./g8e auth pending-platform-enrollments
+    #   ./g8e auth approve-platform-enrollment <request-id> --yes
     build:
       context: ../..
       dockerfile: Dockerfile
