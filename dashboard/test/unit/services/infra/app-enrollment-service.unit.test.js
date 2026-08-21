@@ -25,7 +25,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { AppEnrollmentService, ConfigurationError } from '../../../../services/infra/app-enrollment-service.js';
+import { AppEnrollmentService, ConfigurationError, _buildCompletionTranscript } from '../../../../services/infra/app-enrollment-service.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -490,6 +490,35 @@ describe('AppEnrollmentService', () => {
             const pendingPath = path.join(_runtimeDir, 'pki', 'pending-enrollment', 'dashboard.json');
             const pendingData = JSON.parse(await fs.readFile(pendingPath, 'utf8'));
             expect(pendingData.request_id).toBe('deny-req-1');
+        });
+    });
+
+    // -------------------------------------------------------------------------
+    // Completion transcript parity (cross-language golden vector)
+    // -------------------------------------------------------------------------
+
+    describe('completion transcript parity', () => {
+        it('produces byte-identical output to the shared parity vector', () => {
+            // Inputs from
+            // protocol/constants/platform_enrollment_completion_transcript_vectors.json
+            // (dashboard vector). The Go (operator) and Python (ensemble)
+            // clients assert against the same vector file for their respective
+            // component kinds.
+            const transcript = _buildCompletionTranscript(
+                'parity-req-001',
+                'aabbccdd',
+                'parity-host',
+                'parity-app-fp',
+            );
+
+            // Expected hex from the shared parity vector (dashboard, component_kind=1).
+            const expectedHex =
+                '0a0131120e7061726974792d7265712d3030311a086161626263636464' +
+                '20012a0b7061726974792d686f7374320f0a0d7061726974792d617070' +
+                '2d6670';
+
+            const actualHex = Buffer.from(transcript).toString('hex');
+            expect(actualHex).toBe(expectedHex);
         });
     });
 

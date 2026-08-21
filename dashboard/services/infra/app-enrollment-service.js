@@ -1161,3 +1161,7 @@ export class AppEnrollmentService {
         };
     }
 }
+
+// Exported for cross-language parity vector testing. See
+// protocol/constants/platform_enrollment_completion_transcript_vectors.json.
+export { _buildCompletionTranscript };
