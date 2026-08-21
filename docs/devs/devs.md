@@ -30,13 +30,15 @@ make build          # Build the g8e Operator binary
 |---|---|
 | `./g8e gw start` | Start the Gateway (`--doctrine-dir` loads JSON doctrine files for L1 threat detection) |
 | `./g8e gw status` | Gateway health and status |
-| `./g8e auth enroll user` | Authenticate the local CLI |
+| `./g8e auth enroll user` | Enroll the first owner / local CLI session with the running Gateway and register a passkey |
 | `./g8e auth enroll operator` | Enroll a remote operator/device with the Gateway via CSR |
-| `./g8e auth enroll gui enroll` | Enroll an external frontend application origin with the Gateway |
+| `./g8e auth enroll gui` | Enroll an external frontend application origin with the Gateway |
+| `./g8e auth pending-platform-enrollments` | List pending platform workload enrollment requests (operator, dashboard, ensemble) via authenticated mTLS |
+| `./g8e auth approve-platform-enrollment <request-id>` | Approve or deny (`--deny`) a pending platform workload enrollment request by exact request ID via authenticated mTLS |
 | `./g8e compliance` | FedRAMP 20x KSI evaluation and OSCAL export |
 | `./g8e test` | Run test suites |
 
-Startup sequence: binary check/build → root of trust generation (first boot) → service convergence via health checks.
+Startup sequence: binary check/build → root of trust generation (first boot) → service convergence via health checks. Platform workloads (operator, dashboard, ensemble) start not-ready and require owner-approved platform enrollment: the gateway starts with zero users, the first owner enrolls via `auth enroll user`, each workload submits a platform enrollment request at startup, and the owner approves each request by exact request ID via `auth approve-platform-enrollment` before the workload becomes ready. See [auth.md](../architecture/auth.md) and the [Docker Gateway Guide](../guides/docker_gateway.md) for the full activation flow.
 
 ## Paths & State
 

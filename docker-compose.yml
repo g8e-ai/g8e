@@ -96,6 +96,12 @@ services:
     depends_on:
       g8e-gateway:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     # g8e.local resolves to the gateway container via the g8e-net network alias
     command: ["operator", "start", "-e", "g8e.local"]
     restart: "no"

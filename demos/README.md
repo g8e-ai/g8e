@@ -177,6 +177,26 @@ g8e demos run <org> <scenario> --tui
 g8e demos pull
 ```
 
+### Owner-approved platform activation
+
+Every demo boots the gateway with zero users. The operator (and any service that depends on it) starts not-ready and remains not-ready until its owner-approved platform enrollment request is approved. After `g8e demos start <org>` completes, the CLI prints the activation instructions: enroll the first owner, list pending platform enrollment requests, and approve the operator's request by exact request ID.
+
+```bash
+# 1. Enroll the first owner (the demo gateway port is printed by `g8e demos start <org>`).
+./g8e auth enroll user -e https://localhost:<demo-https-port>
+
+# 2. List pending platform enrollment requests.
+./g8e auth pending-platform-enrollments
+
+# 3. Approve the operator's request by exact request ID.
+./g8e auth approve-platform-enrollment <operator-request-id> --yes
+
+# 4. Wait for the operator and its dependents to become healthy.
+g8e demos status <org>
+```
+
+`g8e demos run <org>` warns if the operator is not yet enrolled and prints the activation instructions before attempting to run scenarios. Do not use `docker compose up --wait` before approval; it is expected to time out while enrollment is pending. See the [Docker Gateway Guide](../docs/guides/docker_gateway.md) for the full activation flow and the headless deployment mode.
+
 ### Audit Commands
 
 Audit commands are top-level, not nested under `demos`. They query the running Gateway's audit store:

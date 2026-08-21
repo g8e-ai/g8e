@@ -177,7 +177,7 @@ The CLI-side counterpart to the browser Console SPA approve action. It uses the 
 - The approver must be an active user with a valid, non-revoked CLI certificate. A revoked cert is rejected by the middleware's `VerifyCertificate` (401, `ErrMTLSCertRevoked`) before the handler runs; a deactivated user is rejected by the handler's active-user check (403).
 - Fail-closed: the mTLS approve endpoint is `RouteAuthMTLS`. Unknown routes default to `RouteAuthMTLS`. No auth-bypass path is introduced.
 
-This is distinct from the operator-side "Headless Enrollment" subsection in §1.5 (which covers `POST /api/v1/auth/device/enroll` for automated operator deployment); the two are cross-linked here but address different identity surfaces.
+This is distinct from the operator-side platform enrollment in §1.5 (which covers owner-approved platform enrollment for operator, dashboard, and ensemble components); the two are cross-linked here but address different identity surfaces.
 
 ### 1.2 Browser Authentication (Passkeys)
 
@@ -209,16 +209,34 @@ The platform supports authentication via external Identity Providers (IdPs) for 
 
 ### 1.5 Operator Authentication
 
-Operators (remote execution containers) authenticate via mTLS certificates. The operator enrollment process:
+Operators (remote execution containers) authenticate via mTLS certificates. The operator does not self-enroll. Starting the gateway with zero users issues no operator certificate. The owner must explicitly approve the operator's platform enrollment request before the operator receives credentials.
 
-1. Creates an operator document in the database.
-2. Persists an operator session.
-3. Signs a certificate with the session ID embedded in the identity.
-4. Writes credentials to the platform PKI directory (`.g8e/pki/`).
+**Owner-Approved Platform Enrollment:**
 
-**Headless Enrollment:**
+The operator enrollment process requires an explicit owner decision at every step:
 
-For automated deployments, operators can use the `POST /api/v1/auth/device/enroll` endpoint for headless enrollment without manual interaction.
+1. The gateway starts with zero users. No operator certificate is issued at startup.
+2. The owner enrolls as the first user via `g8e auth enroll user -e <gateway>`, creating the first user identity and CLI mTLS credentials.
+3. The operator submits a platform enrollment request (operator + CLI CSRs, system fingerprint) to the gateway's platform enrollment request endpoint.
+4. The owner inspects pending requests via the Console SPA or `g8e auth pending-platform-enrollments` and approves the operator's request by request ID via `g8e auth approve-platform-enrollment <request-id> --yes`.
+5. The operator polls its request status, signs the canonical completion transcript with both private keys (operator + CLI proof-of-possession), and submits completion.
+6. The gateway validates the proofs, signs an operator certificate with the session ID embedded in the identity, writes credentials to the platform PKI directory (`.g8e/pki/`), and returns them to the operator.
+7. The operator atomically writes its cert, key, trust bundle, and actuator public key, then removes its pending state.
+
+The requester token is hashed at rest and absent from logs, URLs, pending lists, approval commands, and audit records. Approval and pending discovery use request IDs over authenticated HTTPS. The completion is idempotent after success: a lost completion response returns the same artifacts on retry without issuing a second identity. The operator persists pending state (private keys, requester token, request ID, CSR fingerprints) to `pki/pending-enrollment/g8eo.json` with 0600 permissions, so a restart during pending enrollment resumes the same request and key material rather than generating a new request.
+
+The same owner-approved platform enrollment protocol applies to the dashboard and ensemble components. Each submits its own platform enrollment request and waits for owner approval before its service becomes ready. The recommended approval order is operator, dashboard, then ensemble — this is an operational recommendation, not a security invariant. The gateway does not enforce prerequisite state between component approvals.
+
+**Headless Gateway Deployment:**
+
+For headless deployments that only need the gateway without platform workloads, use explicit gateway service selection:
+
+```bash
+docker compose up -d --no-deps g8e-gateway
+./g8e auth enroll user --headless -e <gateway>
+```
+
+This starts only the gateway while preserving full-stack default behavior. No platform enrollment requests are submitted because no workloads are running.
 
 **Cert Sharing:**
 

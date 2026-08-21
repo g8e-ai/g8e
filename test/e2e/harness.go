@@ -66,6 +66,105 @@ type DockerE2EFixture struct {
 // starts the stack, waits for health, and returns the fixture. On failure it
 // tears down any partially-started stack before returning the error.
 func setupSharedE2EFixture(composeFile string) (*DockerE2EFixture, error) {
+	fixture, err := allocateE2EFixture(composeFile)
+	if err != nil {
+		return nil, err
+	}
+
+	// Owner-approved platform enrollment activation flow. All four services
+	// (gateway, dashboard, ensemble, operator) start together as the
+	// full-stack default. The gateway becomes healthy immediately, but the
+	// operator, dashboard, and ensemble submit platform enrollment requests
+	// and stay not-ready until the owner approves them. The flow is:
+	//   1. docker compose up -d --build (no --wait: workloads are not ready)
+	//   2. Poll the gateway health endpoint until it is healthy.
+	//   3. Bootstrap the first user WITH a CLI CSR to obtain mTLS credentials.
+	//   4. Wait for pending platform enrollment requests to appear.
+	//   5. Approve operator, dashboard, and ensemble in the recommended order.
+	//   6. Wait for workload health (operator, dashboard, ensemble).
+	if err := fixture.composeUpAndWait(); err != nil {
+		fixture.teardownOnErr("compose-up", err)
+		return nil, err
+	}
+
+	if err := fixture.bootstrapFirstUserWithCLICert(); err != nil {
+		fixture.teardownOnErr("bootstrap", err)
+		return nil, err
+	}
+	log.Printf("E2E: First user bootstrapped with CLI mTLS credentials")
+
+	if err := fixture.approvePlatformEnrollments(); err != nil {
+		fixture.teardownOnErr("approval", err)
+		return nil, err
+	}
+	log.Printf("E2E: All platform enrollments approved")
+
+	if err := fixture.waitForWorkloadHealth(180 * time.Second); err != nil {
+		fixture.teardownOnErr("workload-health", err)
+		return nil, err
+	}
+	log.Printf("E2E: All workloads are healthy")
+
+	return fixture, nil
+}
+
+// setupE2EFixtureUpToBootstrap allocates a fixture, starts the full stack,
+// waits for gateway health, and bootstraps the first user with CLI mTLS
+// credentials — but does NOT approve any platform enrollment requests. The
+// returned fixture has pending requests that the caller can approve, deny, or
+// inspect. Used by tests that need to exercise the pre-approval state (denial,
+// pending discovery). The caller is responsible for teardown via
+// fixture.teardown().
+func setupE2EFixtureUpToBootstrap(composeFile string) (*DockerE2EFixture, error) {
+	fixture, err := allocateE2EFixture(composeFile)
+	if err != nil {
+		return nil, err
+	}
+	if err := fixture.composeUpAndWait(); err != nil {
+		fixture.teardownOnErr("compose-up", err)
+		return nil, err
+	}
+	if err := fixture.bootstrapFirstUserWithCLICert(); err != nil {
+		fixture.teardownOnErr("bootstrap", err)
+		return nil, err
+	}
+	log.Printf("E2E: Fixture ready up to bootstrap (no approvals) — pending requests available")
+	return fixture, nil
+}
+
+// setupE2EFixtureGatewayOnly allocates a fixture and starts only the gateway
+// service (via --no-deps g8e-gateway), then waits for gateway health. No
+// workloads are started, so no platform enrollment requests are submitted.
+// Used by headless deployment tests. The caller is responsible for teardown.
+func setupE2EFixtureGatewayOnly(composeFile string) (*DockerE2EFixture, error) {
+	fixture, err := allocateE2EFixture(composeFile)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Printf("E2E: Starting gateway-only (project: %s)", fixture.ProjectName)
+	upCmd := exec.Command("docker", "compose", "-p", fixture.ProjectName, "-f", fixture.ComposeFile, "up", "-d", "--build", "--no-deps", "g8e-gateway")
+	upCmd.Dir = fixture.ProjectDir
+	upCmd.Env = append(os.Environ(), fixture.composeEnv()...)
+	upOutput, err := upCmd.CombinedOutput()
+	if err != nil {
+		fixture.teardownOnErr("gateway-only-up", err)
+		return nil, fmt.Errorf("docker compose up (gateway only) failed: %w\nOutput: %s", err, string(upOutput))
+	}
+
+	if err := fixture.waitForGatewayHealth(120 * time.Second); err != nil {
+		fixture.teardownOnErr("gateway-health", err)
+		return nil, err
+	}
+	log.Printf("E2E: Gateway-only fixture ready (no workloads)")
+	return fixture, nil
+}
+
+// allocateE2EFixture resolves the compose file, allocates a unique port set
+// and container prefix, and returns an initialized fixture without starting
+// any containers. The caller starts containers via composeUpAndWait,
+// composeUpGatewayOnly, or a custom docker compose command.
+func allocateE2EFixture(composeFile string) (*DockerE2EFixture, error) {
 	// Resolve repository root via go list -m
 	repoCmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}")
 	repoOutput, err := repoCmd.Output()
@@ -91,9 +190,6 @@ func setupSharedE2EFixture(composeFile string) (*DockerE2EFixture, error) {
 	}
 
 	// Allocate available ports sequentially starting from 8080/8443/8000/3000.
-	// The four ports share a single offset so the gateway, ensemble, and dashboard
-	// in any given run all use the same offset — this keeps the per-run port set
-	// contiguous and avoids collisions between concurrent E2E runs.
 	httpPort, httpsPort, ensemblePort, dashboardPort := 8080, 8443, 8000, 3000
 	for offset := 0; offset < 1000; offset++ {
 		candidates := []int{8080 + offset, 8443 + offset, 8000 + offset, 3000 + offset}
@@ -128,26 +224,11 @@ func setupSharedE2EFixture(composeFile string) (*DockerE2EFixture, error) {
 	log.Printf("E2E: Allocated ports HTTP=%d HTTPS=%d Ensemble=%d Dashboard=%d (prefix=%s)",
 		httpPort, httpsPort, ensemblePort, dashboardPort, containerPrefix)
 
-	// Build env for docker-compose (overrides defaults in compose file)
-	composeEnv := []string{
-		"DOCKER_BUILDKIT=1",
-		fmt.Sprintf("G8E_HTTP_PORT=%d", httpPort),
-		fmt.Sprintf("G8E_HTTPS_PORT=%d", httpsPort),
-		fmt.Sprintf("G8E_ENSEMBLE_PORT=%d", ensemblePort),
-		fmt.Sprintf("G8E_DASHBOARD_PORT=%d", dashboardPort),
-		fmt.Sprintf("G8E_PREFIX=%s", containerPrefix),
-	}
-
-	httpURL := fmt.Sprintf("http://localhost:%d", httpPort)
-	httpsURL := fmt.Sprintf("https://localhost:%d", httpsPort)
-	ensembleURL := fmt.Sprintf("http://localhost:%d", ensemblePort)
-	dashboardURL := fmt.Sprintf("http://localhost:%d", dashboardPort)
-
-	fixture := &DockerE2EFixture{
-		GatewayHTTPURL:   httpURL,
-		GatewayHTTPSURL:  httpsURL,
-		EnsembleHTTPURL:  ensembleURL,
-		DashboardHTTPURL: dashboardURL,
+	return &DockerE2EFixture{
+		GatewayHTTPURL:   fmt.Sprintf("http://localhost:%d", httpPort),
+		GatewayHTTPSURL:  fmt.Sprintf("https://localhost:%d", httpsPort),
+		EnsembleHTTPURL:  fmt.Sprintf("http://localhost:%d", ensemblePort),
+		DashboardHTTPURL: fmt.Sprintf("http://localhost:%d", dashboardPort),
 		ComposeFile:      composePath,
 		ProjectDir:       repoRoot,
 		ProjectName:      projectName,
@@ -156,78 +237,48 @@ func setupSharedE2EFixture(composeFile string) (*DockerE2EFixture, error) {
 		HTTPSPort:        httpsPort,
 		EnsemblePort:     ensemblePort,
 		DashboardPort:    dashboardPort,
-	}
+	}, nil
+}
 
-	// Owner-approved platform enrollment activation flow. All four services
-	// (gateway, dashboard, ensemble, operator) start together as the
-	// full-stack default. The gateway becomes healthy immediately, but the
-	// operator, dashboard, and ensemble submit platform enrollment requests
-	// and stay not-ready until the owner approves them. The flow is:
-	//   1. docker compose up -d --build (no --wait: workloads are not ready)
-	//   2. Poll the gateway health endpoint until it is healthy.
-	//   3. Bootstrap the first user WITH a CLI CSR to obtain mTLS credentials.
-	//   4. Wait for pending platform enrollment requests to appear.
-	//   5. Approve operator, dashboard, and ensemble in the recommended order.
-	//   6. Wait for workload health (operator, dashboard, ensemble).
-	log.Printf("E2E: Starting docker-compose full-stack (project: %s), no --wait (workloads pending approval)", projectName)
-	upCmd := exec.Command("docker", "compose", "-p", projectName, "-f", composePath, "up", "-d", "--build")
-	upCmd.Dir = repoRoot
-	upCmd.Env = append(os.Environ(), composeEnv...)
+// composeEnv returns the docker-compose environment variables for this
+// fixture's allocated ports and container prefix.
+func (f *DockerE2EFixture) composeEnv() []string {
+	return []string{
+		"DOCKER_BUILDKIT=1",
+		fmt.Sprintf("G8E_HTTP_PORT=%d", f.HTTPPort),
+		fmt.Sprintf("G8E_HTTPS_PORT=%d", f.HTTPSPort),
+		fmt.Sprintf("G8E_ENSEMBLE_PORT=%d", f.EnsemblePort),
+		fmt.Sprintf("G8E_DASHBOARD_PORT=%d", f.DashboardPort),
+		fmt.Sprintf("G8E_PREFIX=%s", f.ContainerPrefix),
+	}
+}
+
+// composeUpAndWait starts the full stack via docker compose up -d --build and
+// waits for the gateway health endpoint to return 200. Workloads are NOT
+// healthy at this point — they are pending platform enrollment approval.
+func (f *DockerE2EFixture) composeUpAndWait() error {
+	log.Printf("E2E: Starting docker-compose full-stack (project: %s), no --wait (workloads pending approval)", f.ProjectName)
+	upCmd := exec.Command("docker", "compose", "-p", f.ProjectName, "-f", f.ComposeFile, "up", "-d", "--build")
+	upCmd.Dir = f.ProjectDir
+	upCmd.Env = append(os.Environ(), f.composeEnv()...)
 	upOutput, err := upCmd.CombinedOutput()
 	if err != nil {
-		if tdErr := fixture.teardown(); tdErr != nil {
-			log.Printf("E2E: teardown after compose-up failure also failed: %v", tdErr)
-		}
-		return nil, fmt.Errorf("docker compose up failed: %w\nOutput: %s", err, string(upOutput))
+		return fmt.Errorf("docker compose up failed: %w\nOutput: %s", err, string(upOutput))
 	}
 	log.Printf("E2E: Compose stack started, waiting for gateway health")
-
-	// Step 2: poll the gateway health endpoint. The gateway becomes healthy
-	// quickly (it has no enrollment dependency), but the workloads do not.
-	if err := fixture.waitForGatewayHealth(120 * time.Second); err != nil {
-		if tdErr := fixture.teardown(); tdErr != nil {
-			log.Printf("E2E: teardown after gateway-health-wait failure also failed: %v", tdErr)
-		}
-		return nil, fmt.Errorf("gateway did not become healthy within 120s: %w", err)
+	if err := f.waitForGatewayHealth(120 * time.Second); err != nil {
+		return fmt.Errorf("gateway did not become healthy within 120s: %w", err)
 	}
 	log.Printf("E2E: Gateway is healthy")
+	return nil
+}
 
-	// Step 3: bootstrap the first user with a CLI CSR. This creates the
-	// owner (first user) and returns a CLI certificate that the harness uses
-	// for authenticated mTLS calls to the platform enrollment pending and
-	// decision endpoints. No operator CSR is submitted here — the operator
-	// enrolls via the platform enrollment protocol, not via bootstrap.
-	if err := fixture.bootstrapFirstUserWithCLICert(); err != nil {
-		if tdErr := fixture.teardown(); tdErr != nil {
-			log.Printf("E2E: teardown after bootstrap failure also failed: %v", tdErr)
-		}
-		return nil, fmt.Errorf("bootstrap first user with CLI cert failed: %w", err)
+// teardownOnErr logs a teardown failure after a setup step fails. Used during
+// fixture setup where a partial stack may be running.
+func (f *DockerE2EFixture) teardownOnErr(step string, err error) {
+	if tdErr := f.teardown(); tdErr != nil {
+		log.Printf("E2E: teardown after %s failure also failed: %v", step, tdErr)
 	}
-	log.Printf("E2E: First user bootstrapped with CLI mTLS credentials")
-
-	// Step 4 + 5: wait for pending platform enrollment requests to appear,
-	// then approve operator, dashboard, and ensemble in the recommended
-	// order. The recommended order is operator, dashboard, then ensemble.
-	if err := fixture.approvePlatformEnrollments(); err != nil {
-		if tdErr := fixture.teardown(); tdErr != nil {
-			log.Printf("E2E: teardown after approval failure also failed: %v", tdErr)
-		}
-		return nil, fmt.Errorf("approve platform enrollments failed: %w", err)
-	}
-	log.Printf("E2E: All platform enrollments approved")
-
-	// Step 6: wait for workload health. The operator, dashboard, and ensemble
-	// healthchecks transition to healthy once their enrollment completes and
-	// their services start listening.
-	if err := fixture.waitForWorkloadHealth(180 * time.Second); err != nil {
-		if tdErr := fixture.teardown(); tdErr != nil {
-			log.Printf("E2E: teardown after workload-health-wait failure also failed: %v", tdErr)
-		}
-		return nil, fmt.Errorf("workloads did not become healthy within 180s: %w", err)
-	}
-	log.Printf("E2E: All workloads are healthy")
-
-	return fixture, nil
 }
 
 // bootstrapFirstUserWithCLICert creates the first user via POST
@@ -403,15 +454,48 @@ func (f *DockerE2EFixture) fetchPendingEnrollments() models.PlatformEnrollmentPe
 	return pending
 }
 
+// fetchPendingRaw calls the authenticated pending endpoint and returns the
+// raw JSON body as a string. Used by tests that need to verify the wire
+// payload does not contain secret fields (token_hash, csr_pem, etc.).
+func (f *DockerE2EFixture) fetchPendingRaw(t *testing.T) string {
+	t.Helper()
+	require.NotNil(t, f.cliMTLSConfig, "CLI mTLS credentials required for pending endpoint")
+	client := &http.Client{
+		Timeout:   10 * time.Second,
+		Transport: &http.Transport{TLSClientConfig: f.cliMTLSConfig},
+	}
+	reqURL := f.GatewayHTTPSURL + constants.APIPaths.AuthPlatformEnrollmentPending
+	resp, err := client.Get(reqURL)
+	require.NoError(t, err, "Failed to fetch pending list")
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode, "Pending endpoint returned non-200")
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err, "Failed to read pending list body")
+	return string(body)
+}
+
 // approveEnrollment posts an approve decision for the given request ID via the
 // authenticated decision endpoint. Uses the owner CLI mTLS identity.
 func (f *DockerE2EFixture) approveEnrollment(requestID string) error {
+	return f.postEnrollmentDecision(requestID, models.PlatformEnrollmentDecisionApprove)
+}
+
+// denyEnrollment posts a deny decision for the given request ID via the
+// authenticated decision endpoint. Uses the owner CLI mTLS identity.
+func (f *DockerE2EFixture) denyEnrollment(requestID string) error {
+	return f.postEnrollmentDecision(requestID, models.PlatformEnrollmentDecisionDeny)
+}
+
+// postEnrollmentDecision posts a decision (approve or deny) for the given
+// request ID via the authenticated decision endpoint. Uses the owner CLI mTLS
+// identity.
+func (f *DockerE2EFixture) postEnrollmentDecision(requestID string, decision models.PlatformEnrollmentDecision) error {
 	if f.cliMTLSConfig == nil {
 		return fmt.Errorf("no CLI mTLS credentials available")
 	}
 	body, err := json.Marshal(models.PlatformEnrollmentDecisionRequest{
 		RequestID: requestID,
-		Decision:  models.PlatformEnrollmentDecisionApprove,
+		Decision:  decision,
 	})
 	if err != nil {
 		return fmt.Errorf("marshal decision body: %w", err)
@@ -502,6 +586,85 @@ func (f *DockerE2EFixture) containerHealthState(container string) (string, error
 	return strings.TrimSpace(string(output)), nil
 }
 
+// waitForContainerHealth polls a single container until its healthcheck reports
+// healthy, or the timeout elapses.
+func (f *DockerE2EFixture) waitForContainerHealth(container string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		state, err := f.containerHealthState(container)
+		if err == nil && state == "healthy" {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("%s not healthy after %s (last state: %s)", container, timeout, state)
+		}
+		time.Sleep(3 * time.Second)
+	}
+}
+
+// waitForContainerUnhealthy polls a single container until its healthcheck
+// reports unhealthy, or the timeout elapses. Used by denial tests to confirm
+// a denied component never becomes ready.
+func (f *DockerE2EFixture) waitForContainerUnhealthy(container string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		state, err := f.containerHealthState(container)
+		if err == nil && state == "unhealthy" {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("%s not unhealthy after %s (last state: %s)", container, timeout, state)
+		}
+		time.Sleep(3 * time.Second)
+	}
+}
+
+// pendingRequestByKind returns the first pending platform enrollment request
+// matching the given component kind, or false if none is found. Uses the
+// authenticated pending endpoint.
+func (f *DockerE2EFixture) pendingRequestByKind(kind models.PlatformComponentKind) (models.PlatformEnrollmentPendingRequest, bool) {
+	pending := f.fetchPendingEnrollments()
+	for _, req := range pending.Requests {
+		if req.ComponentKind == kind && req.State == models.PlatformEnrollmentStatePending {
+			return req, true
+		}
+	}
+	return models.PlatformEnrollmentPendingRequest{}, false
+}
+
+// waitForPendingRequestByKind polls the authenticated pending endpoint until a
+// pending request matching the given component kind appears, or the timeout
+// elapses.
+func (f *DockerE2EFixture) waitForPendingRequestByKind(kind models.PlatformComponentKind, timeout time.Duration) (models.PlatformEnrollmentPendingRequest, error) {
+	deadline := time.Now().Add(timeout)
+	for {
+		if req, ok := f.pendingRequestByKind(kind); ok {
+			return req, nil
+		}
+		if time.Now().After(deadline) {
+			return models.PlatformEnrollmentPendingRequest{}, fmt.Errorf("no pending %s request appeared within %s", kind, timeout)
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
+// restartContainer restarts a Docker container by name and returns the
+// post-restart StartedAt timestamp (RFC3339). Used by restart-during-pending
+// and lost-completion-response tests.
+func (f *DockerE2EFixture) restartContainer(container string) (string, error) {
+	restartCmd := exec.Command("docker", "restart", container)
+	output, err := restartCmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("restart %s: %w: %s", container, err, string(output))
+	}
+	startedAtCmd := exec.Command("docker", "inspect", "-f", "{{.State.StartedAt}}", container)
+	startedAtOutput, err := startedAtCmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("inspect StartedAt for %s: %w", container, err)
+	}
+	return strings.TrimSpace(string(startedAtOutput)), nil
+}
+
 // GetCABundleRaw fetches the CA bundle from the gateway's well-known endpoint
 // without a *testing.T (for use from setupSharedE2EFixture). Returns the raw
 // PEM string.
@@ -572,6 +735,58 @@ func NewDockerE2EFixture(t *testing.T, composeFile string) *DockerE2EFixture {
 	// Failure-capture cleanup: registered AFTER teardown so it runs FIRST
 	// (t.Cleanup is LIFO), while the containers are still up. Only captures
 	// when the test actually failed, avoiding diagnostic noise on success.
+	t.Cleanup(func() {
+		if t.Failed() {
+			fixture.captureDiagnostics(t.Logf)
+		}
+	})
+
+	return fixture
+}
+
+// NewDockerE2EFixtureUpToBootstrap creates a per-test fixture that starts the
+// full stack and bootstraps the first user with CLI mTLS credentials, but does
+// NOT approve any platform enrollment requests. The returned fixture has
+// pending requests that the test can approve, deny, or inspect. Cleanup is
+// registered via t.Cleanup.
+func NewDockerE2EFixtureUpToBootstrap(t *testing.T, composeFile string) *DockerE2EFixture {
+	t.Helper()
+
+	fixture, err := setupE2EFixtureUpToBootstrap(composeFile)
+	if err != nil {
+		t.Fatalf("Failed to set up Docker E2E fixture (up to bootstrap): %v", err)
+	}
+
+	t.Cleanup(func() {
+		if err := fixture.teardown(); err != nil {
+			t.Logf("Warning: failed to stop docker-compose: %v", err)
+		}
+	})
+	t.Cleanup(func() {
+		if t.Failed() {
+			fixture.captureDiagnostics(t.Logf)
+		}
+	})
+
+	return fixture
+}
+
+// NewDockerE2EFixtureGatewayOnly creates a per-test fixture that starts only
+// the gateway service (headless mode) and waits for gateway health. No
+// workloads are started. Cleanup is registered via t.Cleanup.
+func NewDockerE2EFixtureGatewayOnly(t *testing.T, composeFile string) *DockerE2EFixture {
+	t.Helper()
+
+	fixture, err := setupE2EFixtureGatewayOnly(composeFile)
+	if err != nil {
+		t.Fatalf("Failed to set up Docker E2E fixture (gateway only): %v", err)
+	}
+
+	t.Cleanup(func() {
+		if err := fixture.teardown(); err != nil {
+			t.Logf("Warning: failed to stop docker-compose: %v", err)
+		}
+	})
 	t.Cleanup(func() {
 		if t.Failed() {
 			fixture.captureDiagnostics(t.Logf)
@@ -791,9 +1006,9 @@ var operatorSessionIDRe = regexp.MustCompile(`operator_session_id:\s*([0-9a-f]{8
 
 // GetOperatorSessionID extracts the operator session ID from the operator's
 // bootstrap logs. The session ID is logged as a structured field on the
-// "Enrollment successful" line during automatic enrollment. Uses windowed
-// logs (since the container's current start) so a restart cannot surface a
-// stale session ID from a previous start.
+// "Enrollment successful" line during platform enrollment completion. Uses
+// windowed logs (since the container's current start) so a restart cannot
+// surface a stale session ID from a previous start.
 func (f *DockerE2EFixture) GetOperatorSessionID(t *testing.T) string {
 	t.Helper()
 
@@ -959,8 +1174,8 @@ func (f *DockerE2EFixture) GetEnsembleDetailedHealth(t *testing.T) map[string]in
 // CheckEnsembleContainer inspects the ensemble container, asserts it is
 // running, and checks the container logs (windowed to the current container
 // start) for an AppEnrollmentService success marker. The marker proves the
-// ensemble completed self-enrollment against the gateway's public PKI app
-// enrollment endpoint.
+// ensemble completed platform enrollment (owner-approved) and has valid
+// credentials.
 func (f *DockerE2EFixture) CheckEnsembleContainer(t *testing.T) {
 	t.Helper()
 
@@ -1007,10 +1222,9 @@ func (f *DockerE2EFixture) EnsembleLogsSince(t *testing.T, sinceTS string) strin
 
 // CheckDashboardContainer inspects the dashboard container, asserts it is
 // running, and verifies the dashboard serves its index page via a single GET
-// to the dashboard URL. Because the dashboard has a compose healthcheck, the
-// `docker compose up --wait` in setupSharedE2EFixture has already confirmed
-// the dashboard is serving before any test runs, so this is a single request
-// without require.Eventually retry.
+// to the dashboard URL. The shared fixture's waitForWorkloadHealth has already
+// confirmed the dashboard healthcheck is healthy before any test runs, so this
+// is a single request without require.Eventually retry.
 func (f *DockerE2EFixture) CheckDashboardContainer(t *testing.T) {
 	t.Helper()
 

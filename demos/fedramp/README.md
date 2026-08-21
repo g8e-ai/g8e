@@ -107,6 +107,26 @@ g8e demos clean fedramp
 
 `g8e demos run` runs every scenario end-to-end with no human interaction. The gateway boots in consensus posture and stays there for the whole run; no posture switching, no host-CLI enrollment, no passkey ceremony. Notary scenarios (`fedramp-escalate`) remain in the harness registry for manual testing via `g8e demos scenarios run fedramp-escalate` against a manually-started demo with a manually-enrolled passkey, but the automated `demos run` orchestration excludes them.
 
+### Owner-approved platform activation
+
+After `g8e demos start fedramp`, the gateway is healthy but the operator and its dependent service (`agent-runtime`) remain not-ready until the operator's platform enrollment request is approved. `g8e demos start` prints the activation instructions automatically, including the demo gateway port and the exact `g8e auth approve-platform-enrollment <request-id>` command to run. The activation flow is:
+
+```bash
+# 1. Enroll the first owner (the demo gateway port is printed by `g8e demos start fedramp`).
+./g8e auth enroll user -e https://localhost:<demo-https-port>
+
+# 2. List pending platform enrollment requests.
+./g8e auth pending-platform-enrollments
+
+# 3. Approve the operator's request by exact request ID.
+./g8e auth approve-platform-enrollment <operator-request-id> --yes
+
+# 4. Wait for the operator and its dependents to become healthy.
+g8e demos status fedramp
+```
+
+`g8e demos run fedramp` warns if the operator is not yet enrolled and prints the activation instructions before attempting to run scenarios.
+
 ## FIPS 140-3 mode
 
 The standard `./g8e demos start fedramp` invocation already builds with FIPS 140-3 approved mode enabled. The repo-root `Dockerfile` sets `GOFIPS140=v1.0.0` in the builder stage, linking the Go Cryptographic Module v1.0.0 (CMVP Cert #5247) into the binary. The runtime image is pinned to Debian GNU/Linux 12 (vendor-affirmed OE per CMVP Cert #5247 Table 3). There is no separate FIPS compose variant or FIPS Dockerfile — every demo and production deployment gets a FIPS-capable binary by default.

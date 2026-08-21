@@ -1,6 +1,6 @@
 # Unified Docker Stack Guide
 
-Last Updated: 2026-08-19
+Last Updated: 2026-08-20
 Version: v2.0.0
 
 This guide describes how to bring up the complete g8e platform — gateway, operator, ensemble (g8ee), and dashboard (g8ed) — as a single Docker Compose stack from the repository root.
@@ -23,10 +23,35 @@ The gateway and operator share the same Go binary (the repo-root `Dockerfile`), 
 From the repository root:
 
 ```bash
-docker compose up
+docker compose up -d --build
 ```
 
-This builds all four images and starts the stack. The gateway boots first; the operator, ensemble, and dashboard start once the gateway's health check passes (`/api/v1/health`).
+This builds all four images and starts the stack. The gateway boots first; the operator, ensemble, and dashboard start once the gateway's health check passes (`/api/v1/health`). All four containers start, but the operator, ensemble, and dashboard remain not-ready until their owner-approved platform enrollment requests are approved. Do not use `docker compose up --wait` before approval; it is expected to time out while enrollment is pending.
+
+### Owner-approved platform activation
+
+After `docker compose up -d --build`, the gateway is healthy but the platform workloads are not. Activate them by enrolling the first owner and approving each pending enrollment request:
+
+```bash
+# 1. Wait for the gateway to be healthy.
+until curl -fsS http://localhost:8080/api/v1/health >/dev/null 2>&1; do sleep 2; done
+
+# 2. Enroll the first owner. This creates the first user and a usable CLI mTLS identity.
+./g8e auth enroll user -e https://localhost:8443
+
+# 3. List pending platform enrollment requests (operator, dashboard, ensemble).
+./g8e auth pending-platform-enrollments
+
+# 4. Approve each request by exact request ID. The recommended order is operator, dashboard, ensemble.
+./g8e auth approve-platform-enrollment <operator-request-id> --yes
+./g8e auth approve-platform-enrollment <dashboard-request-id> --yes
+./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
+
+# 5. Wait for the workloads to become healthy.
+docker compose ps
+```
+
+Alternatively, use the gateway console at `https://localhost:8443/console/` to list pending requests and approve them in a browser. The console signs in via the same first-owner WebAuthn passkey created in step 2.
 
 Once the stack is healthy:
 
@@ -57,9 +82,11 @@ G8E_HTTP_PORT=18080 G8E_HTTPS_PORT=18443 G8E_DASHBOARD_PORT=13000 docker compose
 
 ## mTLS and PKI
 
-The gateway generates its own CA on startup and initializes its PKI under the `g8e-gateway-data` named volume at `/root/.g8e`. The operator enrolls over mTLS and receives its identity certificate, stored in the `g8e-operator-data` named volume. The ensemble has its own `g8e-ensemble-data` named volume mounted at `/root/.g8e` (read-write) and self-enrolls at startup via the gateway's public PKI app enrollment endpoint (`POST /api/v1/pki/apps/enroll` on the plain-HTTP bootstrap surface). The `AppEnrollmentService` (`ensemble/app/services/infra/app_enrollment_service.py`) fetches the CA bundle from `GET /.well-known/g8e/pki/ca-bundle`, generates an ECDSA P-256 CSR, submits it to the enrollment endpoint, and writes the returned app cert, cert chain, private key, and trust bundle to the ensemble's own runtime tree (`pki/issued/apps/g8ee.crt`, `g8ee.key`, `pki/trust/hub-bundle.pem`). The enrollment is idempotent: on restart with a valid, non-near-expiry cert, the reuse path short-circuits and the ensemble proceeds directly to startup. The dashboard follows the same model: it has its own `g8e-dashboard-data` named volume mounted at `/data` (the dashboard container runs as the non-root `g8e` user, so the volume is mounted at `/data`, which is created and chowned to `g8e:g8e` in the Dockerfile, rather than `/root/.g8e`) and self-enrolls at startup via the same endpoint using `dashboard/services/infra/app-enrollment-service.js`, obtaining `spiffe://g8e.local/app/g8ed` and writing credentials to `pki/issued/apps/g8ed.crt`, `g8ed.key`, `pki/trust/hub-bundle.pem`. The dashboard's **container** holds an mTLS app identity for server-to-server gateway calls, while the dashboard's **browser SPA** still authenticates via WebAuthn passkeys (the two identity surfaces are independent). See [Dashboard (g8ed)](../architecture/dashboard.md) for the dashboard architecture.
+The gateway generates its own CA on startup and initializes its PKI under the `g8e-gateway-data` named volume at `/root/.g8e`. The gateway starts with zero users and issues no platform certificates until the first owner enrolls and approves pending enrollment requests. The operator, ensemble, and dashboard each enroll via the owner-approved platform enrollment protocol: they submit a platform enrollment request (with a CSR and system fingerprint) to the gateway's plain-HTTP discovery surface, the owner approves the request by exact request ID via authenticated mTLS, and the component signs a canonical completion transcript and receives its enrolled credentials. See [auth.md](../architecture/auth.md) §1.5 for the full protocol.
 
-The ensemble's `G8E_GATEWAY_HTTP_URL` points at the gateway's plain-HTTP bootstrap surface (`http://g8e.local:8080`) for enrollment and CA bundle fetch. `G8E_OPERATOR_URL` and `G8E_OPERATOR_PUBSUB_URL` point at the gateway's HTTPS mTLS surface (`https://g8e.local:8443` and `wss://g8e.local:8443`) for the operator clients that connect after enrollment. `G8E_RUNTIME_DIR` points at `/root/.g8e` inside the ensemble's own volume. The dashboard's `G8E_GATEWAY_HTTP_URL` points at the gateway's plain-HTTP bootstrap surface (`http://g8eg:8080`, using the gateway's docker network alias) and `G8E_RUNTIME_DIR` points at `/data` inside the dashboard's own volume (the dashboard runs as the non-root `g8e` user, so `/data` is used instead of `/root/.g8e`). See [Network Architecture](../architecture/network.md) for the full PKI hierarchy and [Build Apps](./build_apps.md) § Identity and Authentication for the public app enrollment contract.
+The operator stores its enrolled identity certificate in the `g8e-operator-data` named volume. The ensemble has its own `g8e-ensemble-data` named volume mounted at `/root/.g8e` (read-write) and writes its enrolled cert, key, and trust bundle to its own runtime tree (`pki/issued/apps/g8ee.crt`, `g8ee.key`, `pki/trust/hub-bundle.pem`) after the owner approves its platform enrollment request. The `AppEnrollmentService` (`ensemble/app/services/infra/app_enrollment_service.py`) implements the nine-step resumable enrollment sequence: load-or-validate installed identity, load persisted pending attempt, generate a P-256 key and CSR, submit the platform enrollment request, poll status with bounded backoff, sign the canonical completion transcript, validate the response, write credentials atomically, and return the app identity. Pending state (private key, requester token, request ID, CSR fingerprint, expiry) is persisted to `pki/pending-enrollment/g8ee.json` with 0600 permissions so the ensemble resumes the same request and key material on restart. The dashboard follows the same model: it has its own `g8e-dashboard-data` named volume mounted at `/data` (the dashboard container runs as the non-root `g8e` user, so the volume is mounted at `/data`, which is created and chowned to `g8e:g8e` in the Dockerfile, rather than `/root/.g8e`) and enrolls via `dashboard/services/infra/app-enrollment-service.js`, obtaining `spiffe://g8e.local/app/g8ed` and writing credentials to `pki/issued/apps/g8ed.crt`, `g8ed.key`, `pki/trust/hub-bundle.pem`. The dashboard's **container** holds an mTLS app identity for server-to-server gateway calls, while the dashboard's **browser SPA** still authenticates via WebAuthn passkeys (the two identity surfaces are independent). See [Dashboard (g8ed)](../architecture/dashboard.md) for the dashboard architecture.
+
+The ensemble's `G8E_GATEWAY_HTTP_URL` points at the gateway's plain-HTTP discovery surface (`http://g8e.local:8080`) for platform enrollment request submission and CA bundle fetch. `G8E_OPERATOR_URL` and `G8E_OPERATOR_PUBSUB_URL` point at the gateway's HTTPS mTLS surface (`https://g8e.local:8443` and `wss://g8e.local:8443`) for the operator clients that connect after enrollment. `G8E_RUNTIME_DIR` points at `/root/.g8e` inside the ensemble's own volume. The dashboard's `G8E_GATEWAY_HTTP_URL` points at the gateway's plain-HTTP discovery surface (`http://g8eg:8080`, using the gateway's docker network alias) and `G8E_RUNTIME_DIR` points at `/data` inside the dashboard's own volume (the dashboard runs as the non-root `g8e` user, so `/data` is used instead of `/root/.g8e`). See [Network Architecture](../architecture/network.md) for the full PKI hierarchy and [Build Apps](./build_apps.md) § Identity and Authentication for the public app enrollment contract.
 
 ## Relationship to Per-Demo Composes
 
@@ -75,7 +102,7 @@ docker compose down
 docker compose down -v
 ```
 
-Removing volumes destroys the gateway's PKI and audit state. The next `docker compose up` re-bootstrap the CA and re-enroll the operator.
+Removing volumes destroys the gateway's PKI and audit state. The next `docker compose up` re-bootstraps the CA and requires the owner to re-enroll and re-approve the platform workloads.
 
 ## Related Documentation
 
