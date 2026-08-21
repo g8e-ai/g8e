@@ -23,6 +23,8 @@ class InfraPaths(TypedDict):
     secrets_dir: str
     docs_dir: str
     ssh_config_path: str
+    pending_enrollment_dir: str
+    pending_enrollment_file: str
 
 
 class G8eePaths(TypedDict):
@@ -70,6 +72,7 @@ def _load_paths() -> PathsDict:
 
     default_ca_cert_path = str(Path(default_pki_dir) / "trust" / "hub-bundle.pem")
     ca_cert_path = os.environ.get(EnvVar.CA_CERT_PATH) or default_ca_cert_path
+    pending_enrollment_dir = str(Path(default_pki_dir) / "pending-enrollment")
 
     paths = {
         "infra": {
@@ -80,6 +83,8 @@ def _load_paths() -> PathsDict:
             "secrets_dir": os.environ.get(EnvVar.SECRETS_DIR, default_secrets_dir),
             "docs_dir": str(project_root / "docs"),
             "ssh_config_path": str(project_root / ".g8e" / "ssh_config"),
+            "pending_enrollment_dir": pending_enrollment_dir,
+            "pending_enrollment_file": "g8ee.json",
         },
         "ports": {
             "operator_http": PortConstants.PORT_OPERATOR_HTTP,

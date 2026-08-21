@@ -193,6 +193,8 @@ class InfraPaths(G8eBaseModel):
     secrets_dir: str
     docs_dir: str
     ssh_config_path: str
+    pending_enrollment_dir: str = ""
+    pending_enrollment_file: str = ""
 
 
 class G8eePaths(G8eBaseModel):
