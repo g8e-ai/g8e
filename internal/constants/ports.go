@@ -16,3 +16,12 @@ var Ports = struct {
 	OperatorHttp:  8080,
 	OperatorHttps: 8443,
 }
+
+// Deployment default ports for auxiliary services that are not part of the
+// gateway protocol but are started by docker-compose.yml. These are
+// Go-only constants (not mirrored in protocol/constants/ports.json) because
+// they are deployment defaults, not protocol-level ports.
+const (
+	EnsembleDefaultPort  = 8000
+	DashboardDefaultPort = 3000
+)

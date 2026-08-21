@@ -57,23 +57,19 @@ The Makefile provides several build targets:
 
 ### Build in Docker (no local Go required)
 
-If a local Go toolchain is not available, the binary can be compiled inside Docker. Requires Docker 24.0+.
+If a local Go toolchain is not available, the binary is compiled inside Docker as part of the standard compose workflow. Requires Docker 24.0+.
 
 ```bash
-make build-docker
+make up
 ```
 
-This builds a `g8e-builder` image from the `builder` stage of the Dockerfile and runs the Go compiler inside it. The output binary is placed in `bin/g8e-linux-amd64`.
+This runs `docker compose up -d --build`, which builds the `g8e-gateway` image from the repo-root `Dockerfile` (the builder stage runs `make build-all` and produces all platform binaries inside the image) and starts the full stack. To obtain a host-side CLI binary without a local Go toolchain, copy it out of the running gateway container:
 
-Additional Docker build targets:
+```bash
+docker cp g8e-gateway:/g8e ./g8e
+```
 
-- `make build-docker` - Linux amd64 only.
-- `make build-linux-docker` - Linux: amd64, arm64, 386.
-- `make build-darwin-docker` - macOS: amd64, arm64.
-- `make build-windows-docker` - Windows: amd64, arm64.
-- `make build-all-docker` - All platforms.
-
-All Docker build outputs are placed in `bin/` with a `.sha256` checksum file alongside each binary.
+The Dockerfile builder stage produces all platform binaries (linux/amd64, linux/arm64, linux/386, windows/amd64, windows/arm64, darwin/amd64, darwin/arm64); the gateway serves them via `/.well-known/g8e/bin/{filename}` for node deployment. Linux binaries are built with FIPS 140-3 approved mode enabled via `GOFIPS140=v1.0.0`.
 
 ### Cross-Compilation
 

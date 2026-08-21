@@ -148,25 +148,27 @@ GOOS=windows GOARCH=amd64 make build
 
 Requires only Docker 24.0+. No local Go installation needed.
 
-Build the binary for Linux (amd64):
+Build and start the full stack (the Dockerfile builder stage compiles all platform binaries inside the image):
 
 ```bash
-make build-docker
+make up
 ```
 
-This builds a `g8e-builder` Docker image and runs the Go compiler inside it. The output binary lands in `bin/g8e-linux-amd64`.
+To obtain a host-side CLI binary without a local Go toolchain, copy it out of the running gateway container:
 
-Additional Docker build targets:
+```bash
+docker cp g8e-gateway:/g8e ./g8e
+```
+
+The Dockerfile builder stage produces all platform binaries (linux/amd64, linux/arm64, linux/386, windows/amd64, windows/arm64, darwin/amd64, darwin/arm64); the gateway serves them via `/.well-known/g8e/bin/{filename}` for node deployment. Linux binaries are built with FIPS 140-3 approved mode enabled via `GOFIPS140=v1.0.0`.
+
+Related Docker Compose lifecycle targets:
 
 | Target | Description |
 |---|---|
-| `make build-docker` | Linux amd64 only |
-| `make build-linux-docker` | Linux: amd64, arm64, 386 |
-| `make build-darwin-docker` | macOS: amd64, arm64 |
-| `make build-windows-docker` | Windows: amd64, arm64 |
-| `make build-all-docker` | All platforms |
-
-Binaries are placed in `bin/` with `.sha256` checksums alongside each one.
+| `make up` | Build and start the full stack (`docker compose up -d --build`) |
+| `make down` | Stop the stack, preserving volumes (`docker compose down`) |
+| `make clean-docker` | Stop the stack and remove volumes (`docker compose down -v`) |
 
 ---
 

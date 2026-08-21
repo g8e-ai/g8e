@@ -491,22 +491,6 @@ func TestSecurityValidateCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	assert.ErrorIs(t, err, errFactory)
 }
 
-// --- Test command (session 18) ---
-
-func TestTestE2ECmdWithConfig_FileSvcFactoryError(t *testing.T) {
-	_, cfg := newCmdTestEnv(t)
-	config.SetEndpointOverride("127.0.0.1:1")
-	defer config.SetEndpointOverride("")
-	cmd := testE2ECmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-	err := cmd.RunE(cmd, nil)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
-	assert.ErrorIs(t, err, errFactory)
-}
-
 // --- MCP commands (session 18) ---
 
 func TestMcpStdioCmdWithConfig_FileSvcFactoryError(t *testing.T) {

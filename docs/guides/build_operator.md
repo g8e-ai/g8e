@@ -90,13 +90,12 @@ The Makefile provides several build targets:
 - `make build-windows`, Builds the g8e binary for Windows (amd64, arm64).
 - `make build-darwin`, Builds the g8e binary for Darwin (amd64, arm64).
 - `make build-compressed`, Builds the g8e binary for the current platform and compresses it with UPX (requires UPX installed).
-- `make build-docker`, Builds the g8e binary for linux/amd64 inside a Docker container.
-- `make build-linux-docker`, Builds the g8e binary for Linux (amd64, arm64, 386) inside a Docker container.
-- `make build-windows-docker`, Builds the g8e binary for Windows (amd64, arm64) inside a Docker container.
-- `make build-darwin-docker`, Builds the g8e binary for Darwin (amd64, arm64) inside a Docker container.
-- `make build-all-docker`, Builds all platform binaries using Docker.
 - `make build-fips`, Builds the g8e binary with FIPS 140-3 approved mode (linux/amd64, GOFIPS140 v1.0.0).
 - `make verify-fips`, Builds the FIPS variant and runs the `g8e version --fips` self-check.
+- `make fmt`, Formats all Go source files (`gofmt -w .`).
+- `make up`, Builds and starts the full Docker Compose stack (`docker compose up -d --build`).
+- `make down`, Stops the stack, preserving volumes (`docker compose down`).
+- `make clean-docker`, Stops the stack and removes volumes (`docker compose down -v`).
 - `make clean`, Removes compiled binaries, test artifacts, and `.g8e/` runtime state.
 
 ### Cross-Compilation

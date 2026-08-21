@@ -10,86 +10,105 @@
 package e2e
 
 import (
+	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// TestEnsembleGatewayOperator_E2E exercises the ensemble -> gateway -> operator
-// path end to end against the unified docker-compose stack. The shared fixture
-// (TestMain in main_test.go) brings up all 4 services (gateway, operator,
-// ensemble, dashboard) via the owner-approved platform enrollment activation
-// flow: docker compose up, wait for gateway health, bootstrap the first user
-// with CLI mTLS credentials, approve operator/dashboard/ensemble platform
-// enrollment requests, then wait for workload health. The test body can assume
-// a healthy stack without require.Eventually retry logic.
-//
-// This is a Tier 3 (Docker E2E) test. It does NOT exercise a full
-// chat -> consensus -> command -> execution roundtrip, because that requires an
-// LLM provider (API keys) which the E2E environment does not have. That
-// roundtrip is a Tier 4 (External) test, not Tier 3. The v2.0.0 success
-// criterion is that the unified stack comes up healthy with all 4 services
-// connected — the ensemble enrolled and its operator clients up, the dashboard
-// serving — not that a full agentic loop runs.
-func TestEnsembleGatewayOperator_E2E(t *testing.T) {
-	if sharedFixture == nil {
-		t.Skip("Docker E2E fixture not available")
+// ensembleDetailedHealthResponse is the typed model for the ensemble
+// /health/details endpoint. The ensemble returns a status field and a clients
+// map whose keys are service names (cache_aside_service, operator_kv,
+// internal_http_client, operator_command_service, chat_pipeline) and whose
+// values are "up" or "down". This replaces the prior map[string]interface{}
+// assertion with a typed decode path.
+type ensembleDetailedHealthResponse struct {
+	Status  string            `json:"status"`
+	Clients map[string]string `json:"clients"`
+}
+
+// expectedEnsembleClients are the service keys the ensemble health router
+// reports when its startup phases complete without raising. Each key checks
+// service-object existence on app.state via getattr; a value of "up" means
+// the startup phase that creates the service object completed. If enrollment
+// had failed, the lifespan exception handler would re-raise and FastAPI would
+// never start serving, so /health/details would be unreachable. Reaching this
+// endpoint with all services "up" is indirect proof that enrollment succeeded
+// and the startup phases completed.
+var expectedEnsembleClients = []string{
+	"cache_aside_service",
+	"operator_kv",
+	"internal_http_client",
+	"operator_command_service",
+	"chat_pipeline",
+}
+
+// TestEnsemble_Health verifies the ensemble service is reachable and reports
+// a healthy status. The ensemble runs on its own port alongside the gateway;
+// its URL is derived from the gateway HTTP URL by port replacement. This
+// replaces the prior container-running check with an API-visible health
+// assertion.
+func TestEnsemble_Health(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultClientTimeout)
+	defer cancel()
+
+	body, err := e2eClient.GetEnsembleHealth(ctx, e2eCfg.ensembleURL)
+	require.NoError(t, err, "ensemble /health must be reachable on an approved stack")
+	require.True(t, isEnsembleHealthy(body),
+		"ensemble /health must report status ok, got: %s", string(body))
+	t.Logf("ensemble health: %s", string(body))
+}
+
+// TestEnsemble_DetailedHealth verifies the ensemble /health/details endpoint
+// reports all expected operator clients as up. This is the typed replacement
+// for the prior map[string]interface{} assertion: the response is decoded
+// into ensembleDetailedHealthResponse and each expected client key is checked
+// for the "up" value.
+func TestEnsemble_DetailedHealth(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultClientTimeout)
+	defer cancel()
+
+	body, err := e2eClient.GetEnsembleDetailedHealth(ctx, e2eCfg.ensembleURL)
+	require.NoError(t, err, "ensemble /health/details must be reachable on an approved stack")
+
+	detailed, err := decodeJSON[ensembleDetailedHealthResponse](body, "ensemble detailed health")
+	require.NoError(t, err, "ensemble /health/details must decode as a typed response")
+
+	require.NotNil(t, detailed.Clients, "ensemble /health/details must include a clients map")
+	for _, key := range expectedEnsembleClients {
+		val, present := detailed.Clients[key]
+		require.True(t, present, "clients map must include key %q: %v", key, detailed.Clients)
+		assert.Equal(t, "up", val, "ensemble client %q must be up, got %q", key, val)
 	}
-	f := sharedFixture
+	t.Logf("ensemble detailed health: %d clients all up", len(expectedEnsembleClients))
+}
 
-	t.Run("ensemble container is running", func(t *testing.T) {
-		f.CheckEnsembleContainer(t)
-		t.Log("Ensemble container is running and enrollment completed (log marker present)")
-	})
+// TestDashboard_Index verifies the dashboard service is reachable and serves
+// its index page over HTTP. The dashboard runs on its own port alongside the
+// gateway; its URL is derived from the gateway HTTP URL by port replacement.
+// This replaces the prior container-running check with an API-visible HTTP
+// assertion.
+func TestDashboard_Index(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultClientTimeout)
+	defer cancel()
 
-	t.Run("ensemble health endpoint returns ok", func(t *testing.T) {
-		health := f.GetEnsembleHealth(t)
-		require.Equal(t, "ok", health["status"], "ensemble /health status != ok")
-		t.Logf("Ensemble health: %v", health)
-	})
+	body, err := e2eClient.GetDashboardIndex(ctx, e2eCfg.dashboardURL)
+	require.NoError(t, err, "dashboard index must be reachable on an approved stack")
+	require.NotEmpty(t, body, "dashboard index must serve non-empty content")
+	t.Logf("dashboard index served: %d bytes", len(body))
+}
 
-	t.Run("ensemble operator clients are connected", func(t *testing.T) {
-		detailed := f.GetEnsembleDetailedHealth(t)
-		clients, ok := detailed["clients"].(map[string]interface{})
-		require.True(t, ok, "ensemble /health/details response missing 'clients' map: %v", detailed)
+// TestEnsemble_GatewayStillHealthy verifies the gateway remains healthy while
+// the ensemble is connected, proving the ensemble enrollment did not disrupt
+// gateway operation.
+func TestEnsemble_GatewayStillHealthy(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultClientTimeout)
+	defer cancel()
 
-		// The clients map keys are defined in
-		// ensemble/app/routers/health_router.py: cache_aside_service,
-		// operator_kv (which checks state.pubsub_client, not the KV client —
-		// mislabeled in the health router), internal_http_client,
-		// operator_command_service, and chat_pipeline. Each key checks
-		// service-object existence on app.state via getattr, not live mTLS
-		// connection state. A value of "up" means the startup phase that
-		// creates the service object completed without raising. If enrollment
-		// had failed, the lifespan exception handler would re-raise and FastAPI
-		// would never start serving, so /health/details would be unreachable.
-		// Reaching this endpoint with all services "up" is therefore indirect
-		// proof that enrollment succeeded and the startup phases completed. A
-		// future workstream could add a live mTLS connectivity probe to the
-		// health endpoint for a direct connection check.
-		expectedClients := []string{
-			"cache_aside_service",
-			"operator_kv",
-			"internal_http_client",
-			"operator_command_service",
-			"chat_pipeline",
-		}
-		for _, key := range expectedClients {
-			val, present := clients[key]
-			require.True(t, present, "clients map missing key %q: %v", key, clients)
-			require.Equal(t, "up", val, "client %q is not up: %v", key, clients)
-		}
-		t.Logf("Ensemble detailed health clients: %v", clients)
-	})
-
-	t.Run("dashboard container is running", func(t *testing.T) {
-		f.CheckDashboardContainer(t)
-		t.Log("Dashboard container is running and serving its index page")
-	})
-
-	t.Run("gateway still healthy with ensemble connected", func(t *testing.T) {
-		health := f.GetHealth(t)
-		require.Equal(t, "ok", health["status"], "gateway health check failed after ensemble connected")
-		t.Logf("Gateway health with ensemble connected: %v", health)
-	})
+	health, err := e2eClient.GetHealth(ctx, e2eCfg.gatewayHTTPURL)
+	require.NoError(t, err, "gateway health must succeed while ensemble is connected")
+	assert.Equal(t, constants.GatewayModeStatusOK, health.Status, "gateway must report ok status with ensemble connected")
 }

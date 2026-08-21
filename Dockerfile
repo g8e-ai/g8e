@@ -41,14 +41,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set working directory
 WORKDIR /build
 
-# Copy go mod files and vendored dependencies for air-gapped builds
-COPY go.mod go.sum vendor/ ./
+# Copy go mod files and vendored dependencies for air-gapped builds.
+# vendor/ must be copied as a directory (COPY vendor/ ./vendor/), not flattened
+# into the workspace root — the Go toolchain expects vendor/modules.txt at
+# ./vendor/modules.txt when GOFLAGS=-mod=vendor is set.
+COPY go.mod go.sum ./
+COPY vendor/ ./vendor/
 
 # Use vendored modules — no network access required
 ENV GOFLAGS=-mod=vendor
 
-# Copy entire source code
-COPY . .
+# Copy only the source the Go build needs. vendor/ was already copied above;
+# don't re-copy it. This keeps the layer minimal and prevents unrelated file
+# changes (tests, docs, scripts) from invalidating the build cache.
+COPY Makefile ./
+COPY cmd/ ./cmd/
+COPY internal/ ./internal/
+COPY protocol/ ./protocol/
+COPY docs/reference/ ./docs/reference/
 
 # Build all platform binaries via `make build-all`. The Makefile sets
 # GOFIPS140=v1.0.0 for linux targets and explicitly unsets it for non-linux

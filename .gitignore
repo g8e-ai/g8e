@@ -64,6 +64,7 @@ g8e.sha256
 # --- Secrets & PKI ---
 .env
 .env.*
+!.env.example
 *.key
 *.pem
 *.crt

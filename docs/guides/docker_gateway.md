@@ -46,18 +46,27 @@ The operator, ensemble, and dashboard services each depend on the gateway health
 
 ### Environment Variables
 
-The compose file supports the following environment variable overrides:
+The compose file supports the following environment variable overrides. A `.env.example` file at the repository root documents all six with defaults and one-line descriptions; copy it to `.env` and edit, or set the variables inline.
 
-- **`G8E_PREFIX`**: Prefix for container names (default: `g8e`). Containers are named `${G8E_PREFIX}-gateway` and `${G8E_PREFIX}-operator`.
-- **`G8E_HTTP_PORT`**: Host port mapped to the gateway HTTP port 8080 (default: `8080`).
-- **`G8E_HTTPS_PORT`**: Host port mapped to the gateway HTTPS port 8443 (default: `8443`).
+- **`G8E_PREFIX`**: Prefix for container names (default: `g8e`). Containers are named `${G8E_PREFIX}-gateway`, `${G8E_PREFIX}-operator`, `${G8E_PREFIX}-ensemble`, and `${G8E_PREFIX}-dashboard`.
+- **`G8E_HTTP_PORT`**: Host port mapped to the gateway HTTP discovery surface, container port 8080 (default: `8080`). Used for health checks, CA bundle fetch, and platform enrollment submission.
+- **`G8E_HTTPS_PORT`**: Host port mapped to the gateway HTTPS/mTLS surface, container port 8443 (default: `8443`). Used for MCP, A2A, governance envelopes, document store, WebSocket pub/sub, and the console SPA.
+- **`G8E_ENSEMBLE_PORT`**: Host port mapped to the ensemble FastAPI API, container port 8000 (default: `8000`).
+- **`G8E_DASHBOARD_PORT`**: Host port mapped to the dashboard Express server, container port 3000 (default: `3000`).
+- **`G8E_HOSTNAME`**: Public hostname the gateway advertises in approval links, host-header validation, CORS, and passkey RP origins (default: `localhost`). Set to a real hostname (e.g. `dev.g8e.local`) when the browser reaches the gateway via that hostname instead of localhost.
 
 ### Resource Limits
 
-Both services define CPU and memory constraints in the compose file:
+All four services define CPU and memory constraints in the compose file:
 
-- **Limits**: 2 CPUs, 1G memory per service.
-- **Reservations**: 0.5 CPUs, 256M memory per service.
+| Service | CPU limit | Memory limit | CPU reservation | Memory reservation |
+| --- | --- | --- | --- | --- |
+| `g8e-gateway` | 2 | 1G | 0.5 | 256M |
+| `g8e-operator` | 2 | 1G | 0.5 | 256M |
+| `ensemble` | 2 | 2G | 0.5 | 512M |
+| `dashboard` | 1 | 512M | 0.25 | 128M |
+
+These limits document expected resource needs for the development stack. Adjust them for production workloads or move them to a production override file (`docker-compose.prod.yml`) if a slimmer root compose file is preferred.
 
 ### Execution
 
@@ -84,7 +93,9 @@ After `docker compose up -d --build`, the gateway is healthy but the platform wo
 until curl -fsS http://localhost:8080/api/v1/health >/dev/null 2>&1; do sleep 2; done
 
 # 2. Enroll the first owner. This creates the first user and a usable CLI mTLS identity.
-./g8e auth enroll user -e https://localhost:8443
+#    -e is the gateway HTTP discovery endpoint (host or host:port); the coordinator
+#    derives the HTTP port. --port defaults to 8443 for mTLS and does not need to be set.
+./g8e auth enroll user -e localhost
 
 # 3. List pending platform enrollment requests (authenticated via the CLI mTLS identity).
 ./g8e auth pending-platform-enrollments
@@ -110,7 +121,7 @@ To start only the gateway while preserving the full-stack default behavior, sele
 
 ```bash
 docker compose up -d --build --no-deps g8e-gateway
-./g8e auth enroll user --headless -e https://localhost:8443
+./g8e auth enroll user --headless -e localhost
 ```
 
 `--no-deps g8e-gateway` starts only the gateway service without its dependents. Docker Compose profiles are additive and cannot exclude unprofiled services that start by default, so headless deployment uses explicit service selection rather than a `headless` profile. The `--headless` flag on `auth enroll user` skips the browser-based passkey flow and is suitable for SSH or automation environments.
@@ -280,7 +291,7 @@ docker exec g8e-gateway /g8e gw status
 ## Production Considerations
 
 - **Base Image**: The image uses Debian Bookworm. Maintain regular updates to the base image for security patches.
-- **Resource Constraints**: The root `docker-compose.yml` defines CPU and memory limits (2 CPUs / 1G per service with 0.5 CPU / 256M reservations). Adjust these for production workloads.
+- **Resource Constraints**: The root `docker-compose.yml` defines per-service CPU and memory limits (see the Resource Limits section above). Adjust these for production workloads.
 - **Vault Management**: The vault auto-initializes on first run with a generated key. Use `G8E_VAULT_KEY` to override the default key file path, or `--vault-key` to specify it via CLI. The vault must be unlocked at startup; if the key cannot be read, the gateway fails to start.
 - **Certificates**: By default, the gateway generates self-signed certificates. For production, provide valid certificates via the `--pki-dir` volume or use `--cert-mode full` with appropriate hostnames.
 - **Operator Connectivity**: The operator connects to the gateway via `g8e.local`, resolved through the Docker network alias on the shared bridge network. Ensure this hostname matches the gateway certificate SANs in production deployments. On first start with no installed credentials, the operator performs owner-approved platform enrollment against this endpoint and waits for approval before it becomes ready. See the Owner-Approved Platform Activation section above.

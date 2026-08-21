@@ -65,9 +65,16 @@ func TestTestE2ECmd(t *testing.T) {
 		cmd := testE2ECmd()
 		assert.Equal(t, "e2e", cmd.Use)
 		assert.Contains(t, cmd.Short, "Tier 3")
-		assert.Contains(t, cmd.Long, "running g8e gateway")
+		assert.Contains(t, cmd.Long, "running production platform")
 		assert.NotNil(t, cmd.RunE)
 	})
+}
+
+func TestTestE2ECmd_RunFlagDefaultsEmpty(t *testing.T) {
+	cmd := testE2ECmd()
+	flag := cmd.Flags().Lookup("run")
+	require.NotNil(t, flag)
+	assert.Equal(t, "", flag.DefValue)
 }
 
 func TestTestCoverageCmd(t *testing.T) {

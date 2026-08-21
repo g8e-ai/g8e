@@ -5,6 +5,12 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+# Full-stack default: all four services start unprofiled. The gateway becomes
+# healthy immediately; the operator, dashboard, and ensemble submit platform
+# enrollment requests and remain not-ready until the owner approves them. See
+# docs/guides/unified_stack.md for the activation flow and
+# docs/guides/docker_gateway.md for the per-service details.
+
 networks:
   g8e-net:
     name: g8e-net
@@ -22,6 +28,7 @@ volumes:
 
 services:
   g8e-gateway:
+    # Policy Decision Point: admits transactions, manages PKI, enforces L1-L3 governance.
     image: g8e-gateway
     build:
       context: .
@@ -45,10 +52,6 @@ services:
       retries: 5
       start_period: 5s
     environment:
-      # Public base URL the gateway advertises in approval links, host-header
-      # validation, and other browser-facing surfaces. Defaults to localhost;
-      # set G8E_HOSTNAME in .env (e.g. dev.g8e.local) when the browser reaches
-      # the gateway via a real hostname.
       - G8E_PUBLIC_BASE_URL=https://${G8E_HOSTNAME:-localhost}:${G8E_HTTPS_PORT:-8443}
     command:
       - "gw"
@@ -73,20 +76,8 @@ services:
           memory: 256M
 
   g8e-operator:
-    # Full-stack default: the operator starts with the gateway and dashboard.
-    # The gateway starts with zero users, so the operator submits a platform
-    # enrollment request and waits for owner approval before it becomes ready.
-    # The operator healthcheck (operator.crt existence) stays not-ready until
-    # the enrollment completes, so `docker compose up --wait` without prior
-    # approval is expected to wait or time out. The activation flow is:
-    #   docker compose up -d
-    #   ./g8e auth enroll user -e <gateway>
-    #   ./g8e auth pending-platform-enrollments
-    #   ./g8e auth approve-platform-enrollment <request-id> --yes
-    image: g8e-operator
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # Policy Execution Point: outbound-only mTLS to the gateway. Same image as the gateway.
+    image: g8e-gateway
     container_name: ${G8E_PREFIX:-g8e}-operator
     working_dir: /root
     networks:
@@ -102,9 +93,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    # g8e.local resolves to the gateway container via the g8e-net network alias
     command: ["operator", "start", "-e", "g8e.local"]
-    restart: "no"
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -115,11 +105,7 @@ services:
           memory: 256M
 
   ensemble:
-    # Full-stack default: the ensemble starts with the gateway, dashboard, and
-    # operator. The ensemble submits a platform enrollment request and waits
-    # for owner approval before its FastAPI lifespan completes, so its
-    # healthcheck stays not-ready until the enrollment is approved. See
-    # g8e-operator above for the activation flow.
+    # First-party agentic ensemble (g8ee): Python/FastAPI. Submits governed intents via MCP.
     build:
       context: .
       dockerfile: ensemble/Dockerfile
@@ -134,39 +120,19 @@ services:
     ports:
       - "${G8E_ENSEMBLE_PORT:-8000}:8000"
     volumes:
-      # The ensemble has its own runtime volume. It enrolls via the
-      # owner-approved platform enrollment protocol at startup and stores its
-      # enrolled cert/key/trust-bundle in its own runtime tree. No gateway
-      # volume is mounted — the ensemble is a proper enrolled app, not a
-      # volume-mount shortcut.
       - g8e-ensemble-data:/root/.g8e
     environment:
-      # The gateway's plain-HTTP discovery surface for CA bundle fetch and
-      # platform enrollment request submission. The enrollment service
-      # (AppEnrollmentService) reads this at startup to submit its platform
-      # enrollment request before the operator clients connect.
       - G8E_GATEWAY_HTTP_URL=http://g8e.local:8080
-      # The ensemble's DB/KV/PubSub/Blob clients connect to the gateway's
-      # document store API (the env var is named G8E_OPERATOR_URL for historical
-      # reasons — in "Operator Gateway mode" the operator proxies these APIs,
-      # but in this deployment the gateway exposes them directly at g8e.local:8443).
       - G8E_OPERATOR_URL=https://g8e.local:8443
       - G8E_OPERATOR_PUBSUB_URL=wss://g8e.local:8443
-      # The ensemble's own runtime directory inside its own volume. PATHS
-      # resolution derives pki_dir and secrets_dir from this, so the
-      # enrollment service writes to /root/.g8e/pki/... inside the ensemble's
-      # own g8e-ensemble-data volume.
       - G8E_RUNTIME_DIR=/root/.g8e
     healthcheck:
-      # The ensemble runtime image is python:3.12-slim, which has no wget or
-      # curl. Python is already present, so the healthcheck uses a stdlib
-      # urllib one-liner instead of adding packages to the image.
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 15s
-    restart: "no"
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -177,6 +143,7 @@ services:
           memory: 512M
 
   dashboard:
+    # Operator dashboard (g8ed): Node.js/Express browser UI. Runs as non-root g8e user (UID 1001).
     build:
       context: .
       dockerfile: dashboard/Dockerfile
@@ -189,39 +156,12 @@ services:
       g8e-gateway:
         condition: service_healthy
     volumes:
-      # The dashboard has its own runtime volume. It enrolls at startup via
-      # the owner-approved platform enrollment protocol and stores its
-      # enrolled cert/key/trust-bundle in its own runtime tree. No gateway
-      # volume is mounted — the dashboard is a proper enrolled app, not a
-      # volume-mount shortcut. The browser still authenticates via WebAuthn
-      # passkeys; this credential is for the container's server-to-server
-      # mTLS calls.
-      #
-      # Mounted at /data (not /root/.g8e) because the dashboard container
-      # runs as the non-root g8e user (UID 1001); /data is created and
-      # chowned to g8e:g8e in the Dockerfile, so the named volume inherits
-      # that ownership on first creation. /root/.g8e is root's home and not
-      # writable by the g8e user.
       - g8e-dashboard-data:/data
     environment:
       - GATEWAY_HEALTH_URL=http://g8eg:8080
       - GATEWAY_HEALTH_PATH=/api/v1/health
-      # Browser-facing gateway origin. The browser resolves this against its
-      # own host, so it must be the host-accessible address (not the docker
-      # internal service name). No fallback — the SPA host fails closed if
-      # this is unset.
       - G8E_GATEWAY_URL=https://${G8E_HOSTNAME:-localhost}:${G8E_HTTPS_PORT:-8443}
-      # The gateway's plain-HTTP discovery surface for CA bundle fetch and
-      # platform enrollment request submission. The AppEnrollmentService
-      # reads this at startup to submit its platform enrollment request
-      # before the Express server listens. Uses the gateway's docker network
-      # alias on the plain-HTTP port (same surface as GATEWAY_HEALTH_URL).
-      # No fallback — fail closed if unset.
       - G8E_GATEWAY_HTTP_URL=http://g8eg:8080
-      # The dashboard's own runtime directory inside its own volume. The
-      # enrollment service writes the enrolled platform cert/key and trust
-      # bundle here. /data is owned by the g8e user (UID 1001) per the
-      # Dockerfile; the volume is mounted there.
       - G8E_RUNTIME_DIR=/data
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
@@ -229,7 +169,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
-    restart: "no"
+    restart: unless-stopped
     deploy:
       resources:
         limits:

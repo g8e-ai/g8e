@@ -37,7 +37,9 @@ After `docker compose up -d --build`, the gateway is healthy but the platform wo
 until curl -fsS http://localhost:8080/api/v1/health >/dev/null 2>&1; do sleep 2; done
 
 # 2. Enroll the first owner. This creates the first user and a usable CLI mTLS identity.
-./g8e auth enroll user -e https://localhost:8443
+#    -e is the gateway HTTP discovery endpoint (host or host:port); the coordinator
+#    derives the HTTP port. --port defaults to 8443 for mTLS and does not need to be set.
+./g8e auth enroll user -e localhost
 
 # 3. List pending platform enrollment requests (operator, dashboard, ensemble).
 ./g8e auth pending-platform-enrollments
@@ -69,10 +71,13 @@ The compose file supports the following environment variable overrides:
 | Variable | Default | Description |
 | --- | --- | --- |
 | `G8E_PREFIX` | `g8e` | Prefix for container names. |
-| `G8E_HTTP_PORT` | `8080` | Host port for the gateway HTTP port. |
-| `G8E_HTTPS_PORT` | `8443` | Host port for the gateway HTTPS port. |
+| `G8E_HTTP_PORT` | `8080` | Host port for the gateway HTTP discovery surface. |
+| `G8E_HTTPS_PORT` | `8443` | Host port for the gateway HTTPS/mTLS surface. |
 | `G8E_ENSEMBLE_PORT` | `8000` | Host port for the ensemble API. |
 | `G8E_DASHBOARD_PORT` | `3000` | Host port for the dashboard. |
+| `G8E_HOSTNAME` | `localhost` | Public hostname the gateway advertises in approval links, CORS, and passkey RP origins. Set to a real hostname when the browser reaches the gateway via that hostname. |
+
+A `.env.example` file at the repository root documents all six variables with defaults and one-line descriptions; copy it to `.env` and edit, or set the variables inline.
 
 Example: run the stack on alternate ports:
 
