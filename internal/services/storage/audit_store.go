@@ -258,7 +258,7 @@ CREATE TABLE IF NOT EXISTS receipts (
 	transaction_id TEXT PRIMARY KEY,
 	transaction_hash TEXT NOT NULL,
 	operator_id TEXT NOT NULL,
-	operator_session_id TEXT NOT NULL,
+	operator_session_id TEXT,
 	action_type TEXT NOT NULL,
 	target_resource TEXT,
 	status TEXT NOT NULL,
@@ -568,7 +568,12 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 	defer ass.muWrites.Done()
 
 	// Gateway mode never pre-populates sessions; auto-create a row so the FK is satisfied.
+	// When OperatorSessionID is empty (e.g. platform enrollment governance actions
+	// that are not bound to an operator session), insert NULL so the nullable
+	// operator_session_id column accepts the row without violating the FK.
+	var sessionID sql.NullString
 	if record.OperatorSessionID != "" {
+		sessionID = sql.NullString{String: record.OperatorSessionID, Valid: true}
 		_, _ = ass.db.ExecWithRetry(
 			`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`,
 			record.OperatorSessionID, string(constants.SessionTypeOperator), record.OperatorSessionID, record.OperatorID,
@@ -595,7 +600,7 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 		record.TransactionID,
 		record.TransactionHash,
 		record.OperatorID,
-		record.OperatorSessionID,
+		sessionID,
 		record.ActionType,
 		record.TargetResource,
 		record.Status,
@@ -653,12 +658,14 @@ func (ass *SQLAuditStore) GetActionReceipt(transactionID string) (*models.Action
 	var r models.ActionReceiptRecord
 	var executedAtMs int64
 	var timestampStr string
+	var sessionID sql.NullString
 	err := ass.db.QueryRowWithRetry(query, transactionID).Scan(
-		&r.TransactionID, &r.TransactionHash, &r.OperatorID, &r.OperatorSessionID,
+		&r.TransactionID, &r.TransactionHash, &r.OperatorID, &sessionID,
 		&r.ActionType, &r.TargetResource, &r.Status, &r.ResultSummary,
 		&r.StateRootBefore, &r.StateRootAfter, &executedAtMs,
 		&r.SignerKeyID, &r.Signature, &timestampStr,
 	)
+	r.OperatorSessionID = sessionID.String
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -704,16 +711,18 @@ func (ass *SQLAuditStore) ListActionReceipts(operatorSessionID string, limit, of
 		record       models.ActionReceiptRecord
 		executedAtMs int64
 		timestampStr string
+		sessionID    sql.NullString
 	}
 
 	rows, err := sqliteutil.MaterializeRows(ass.db, query.String(), args, func(r *sql.Rows) (receiptRow, error) {
 		var row receiptRow
 		err := r.Scan(
-			&row.record.TransactionID, &row.record.TransactionHash, &row.record.OperatorID, &row.record.OperatorSessionID,
+			&row.record.TransactionID, &row.record.TransactionHash, &row.record.OperatorID, &row.sessionID,
 			&row.record.ActionType, &row.record.TargetResource, &row.record.Status, &row.record.ResultSummary,
 			&row.record.StateRootBefore, &row.record.StateRootAfter, &row.executedAtMs,
 			&row.record.SignerKeyID, &row.record.Signature, &row.timestampStr,
 		)
+		row.record.OperatorSessionID = row.sessionID.String
 		return row, err
 	})
 	if err != nil {
@@ -755,16 +764,18 @@ func (ass *SQLAuditStore) ListActionReceiptsSince(since time.Time, limit int) ([
 		record       models.ActionReceiptRecord
 		executedAtMs int64
 		timestampStr string
+		sessionID    sql.NullString
 	}
 
 	rows, err := sqliteutil.MaterializeRows(ass.db, query, []interface{}{timesvc.FormatTimestamp(since), limit}, func(r *sql.Rows) (receiptRow, error) {
 		var row receiptRow
 		err := r.Scan(
-			&row.record.TransactionID, &row.record.TransactionHash, &row.record.OperatorID, &row.record.OperatorSessionID,
+			&row.record.TransactionID, &row.record.TransactionHash, &row.record.OperatorID, &row.sessionID,
 			&row.record.ActionType, &row.record.TargetResource, &row.record.Status, &row.record.ResultSummary,
 			&row.record.StateRootBefore, &row.record.StateRootAfter, &row.executedAtMs,
 			&row.record.SignerKeyID, &row.record.Signature, &row.timestampStr,
 		)
+		row.record.OperatorSessionID = row.sessionID.String
 		return row, err
 	})
 	if err != nil {

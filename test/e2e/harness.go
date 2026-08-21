@@ -59,6 +59,12 @@ type DockerE2EFixture struct {
 	// It is used for authenticated mTLS calls to the platform enrollment
 	// pending and decision endpoints during fixture setup.
 	cliMTLSConfig *tls.Config
+	// cliSessionID is the CLI session ID returned by bootstrap. The gateway's
+	// dual-auth middleware routes CLI-cert mTLS requests through handleCLIAuth,
+	// which requires the X-G8E-CLI-Session-ID header to load the session doc
+	// and verify the cert's SPIFFE URI SAN binding. Without this header the
+	// request falls through to app-auth and is rejected with 401.
+	cliSessionID string
 }
 
 // setupSharedE2EFixture performs the Docker Compose setup without requiring
@@ -339,6 +345,9 @@ func (f *DockerE2EFixture) bootstrapFirstUserWithCLICert() error {
 	if bootResp.CLICert == "" {
 		return fmt.Errorf("bootstrap response missing cli_cert")
 	}
+	if bootResp.CLISessionID == "" {
+		return fmt.Errorf("bootstrap response missing cli_session_id")
+	}
 
 	cliCert, err := tls.X509KeyPair([]byte(bootResp.CLICert), mustEncodeECDSAPrivateKey(cliKey))
 	if err != nil {
@@ -369,6 +378,7 @@ func (f *DockerE2EFixture) bootstrapFirstUserWithCLICert() error {
 			return nil
 		},
 	}
+	f.cliSessionID = bootResp.CLISessionID
 	return nil
 }
 
@@ -428,10 +438,17 @@ func (f *DockerE2EFixture) approvePlatformEnrollments() error {
 }
 
 // fetchPendingEnrollments calls the authenticated pending endpoint and returns
-// the typed response. Uses the owner CLI mTLS identity. Returns an empty
-// response (no error) if the endpoint returns no requests yet.
+// the typed response. Uses the owner CLI mTLS identity with the
+// X-G8E-CLI-Session-ID header required by the gateway's dual-auth middleware.
+// Returns an empty response (no error) if the endpoint returns no requests yet;
+// logs transport and non-200 failures so the setup loop does not fail silently.
 func (f *DockerE2EFixture) fetchPendingEnrollments() models.PlatformEnrollmentPendingResponse {
 	if f.cliMTLSConfig == nil {
+		log.Printf("E2E: fetchPendingEnrollments: no CLI mTLS credentials available")
+		return models.PlatformEnrollmentPendingResponse{}
+	}
+	if f.cliSessionID == "" {
+		log.Printf("E2E: fetchPendingEnrollments: no CLI session ID available")
 		return models.PlatformEnrollmentPendingResponse{}
 	}
 	client := &http.Client{
@@ -439,16 +456,26 @@ func (f *DockerE2EFixture) fetchPendingEnrollments() models.PlatformEnrollmentPe
 		Transport: &http.Transport{TLSClientConfig: f.cliMTLSConfig},
 	}
 	reqURL := f.GatewayHTTPSURL + constants.APIPaths.AuthPlatformEnrollmentPending
-	resp, err := client.Get(reqURL)
+	req, err := http.NewRequest(http.MethodGet, reqURL, nil)
 	if err != nil {
+		log.Printf("E2E: fetchPendingEnrollments: build request: %v", err)
+		return models.PlatformEnrollmentPendingResponse{}
+	}
+	req.Header.Set(constants.HeaderCLISessionID, f.cliSessionID)
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("E2E: fetchPendingEnrollments: request failed: %v", err)
 		return models.PlatformEnrollmentPendingResponse{}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("E2E: fetchPendingEnrollments: status %d: %s", resp.StatusCode, string(body))
 		return models.PlatformEnrollmentPendingResponse{}
 	}
 	var pending models.PlatformEnrollmentPendingResponse
 	if err := json.NewDecoder(resp.Body).Decode(&pending); err != nil {
+		log.Printf("E2E: fetchPendingEnrollments: decode: %v", err)
 		return models.PlatformEnrollmentPendingResponse{}
 	}
 	return pending
@@ -460,12 +487,16 @@ func (f *DockerE2EFixture) fetchPendingEnrollments() models.PlatformEnrollmentPe
 func (f *DockerE2EFixture) fetchPendingRaw(t *testing.T) string {
 	t.Helper()
 	require.NotNil(t, f.cliMTLSConfig, "CLI mTLS credentials required for pending endpoint")
+	require.NotEmpty(t, f.cliSessionID, "CLI session ID required for pending endpoint")
 	client := &http.Client{
 		Timeout:   10 * time.Second,
 		Transport: &http.Transport{TLSClientConfig: f.cliMTLSConfig},
 	}
 	reqURL := f.GatewayHTTPSURL + constants.APIPaths.AuthPlatformEnrollmentPending
-	resp, err := client.Get(reqURL)
+	req, err := http.NewRequest(http.MethodGet, reqURL, nil)
+	require.NoError(t, err, "Failed to build pending list request")
+	req.Header.Set(constants.HeaderCLISessionID, f.cliSessionID)
+	resp, err := client.Do(req)
 	require.NoError(t, err, "Failed to fetch pending list")
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode, "Pending endpoint returned non-200")
@@ -493,6 +524,9 @@ func (f *DockerE2EFixture) postEnrollmentDecision(requestID string, decision mod
 	if f.cliMTLSConfig == nil {
 		return fmt.Errorf("no CLI mTLS credentials available")
 	}
+	if f.cliSessionID == "" {
+		return fmt.Errorf("no CLI session ID available")
+	}
 	body, err := json.Marshal(models.PlatformEnrollmentDecisionRequest{
 		RequestID: requestID,
 		Decision:  decision,
@@ -505,7 +539,13 @@ func (f *DockerE2EFixture) postEnrollmentDecision(requestID string, decision mod
 		Transport: &http.Transport{TLSClientConfig: f.cliMTLSConfig},
 	}
 	reqURL := f.GatewayHTTPSURL + constants.APIPaths.AuthPlatformEnrollmentDecision
-	resp, err := client.Post(reqURL, "application/json", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, reqURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("build decision request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(constants.HeaderCLISessionID, f.cliSessionID)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("decision request failed: %w", err)
 	}

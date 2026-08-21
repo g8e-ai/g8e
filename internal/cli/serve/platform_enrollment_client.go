@@ -29,6 +29,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -49,6 +50,17 @@ const (
 	operatorEnrollPollMax         = 30 * time.Second
 	operatorEnrollPollJitter      = 500 * time.Millisecond
 	operatorEnrollDefaultDeadline = 30 * time.Minute
+
+	// Request submission retry. The gateway starts with zero users; workloads
+	// start immediately after the gateway becomes healthy and may submit their
+	// enrollment request before the owner has bootstrapped the first user. The
+	// gateway returns 403 "platform enrollment requires an activated gateway"
+	// until activation. The client retries with bounded backoff so the workload
+	// waits for activation without exiting.
+	operatorEnrollSubmitInitial   = 3 * time.Second
+	operatorEnrollSubmitMax       = 30 * time.Second
+	operatorEnrollSubmitJitter    = 1 * time.Second
+	operatorEnrollSubmitDeadline  = 30 * time.Minute
 )
 
 // OperatorEnrollmentResult is the resolved operator identity after a
@@ -339,31 +351,68 @@ func (c *OperatorPlatformEnrollmentClient) submitRequest(ctx context.Context, op
 	if err != nil {
 		return nil, fmt.Errorf("operator enrollment: marshal request: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("operator enrollment: create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := doHTTPRequest(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("operator enrollment: submit request: %w", err)
-	}
-	defer resp.Body.Close()
+	// Retry with bounded backoff until the gateway is activated. The gateway
+	// starts with zero users and returns 403 "platform enrollment requires an
+	// activated gateway" until the owner bootstraps the first user. Workloads
+	// start immediately after the gateway becomes healthy, so the first submit
+	// attempt may race with activation.
+	delay := operatorEnrollSubmitInitial
+	deadline := time.Now().Add(operatorEnrollSubmitDeadline)
+	for {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("operator enrollment: read response: %w", err)
-	}
-	if resp.StatusCode != http.StatusCreated {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+		if err != nil {
+			return nil, fmt.Errorf("operator enrollment: create request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := doHTTPRequest(ctx, req)
+		if err != nil {
+			// Network error: back off and retry.
+			if waitErr := c.sleep(ctx, delay); waitErr != nil {
+				return nil, waitErr
+			}
+			delay = time.Duration(math.Min(float64(delay*2), float64(operatorEnrollSubmitMax)))
+			if time.Now().After(deadline) {
+				return nil, fmt.Errorf("operator enrollment: submit request: %w", err)
+			}
+			continue
+		}
+
+		respBody, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			return nil, fmt.Errorf("operator enrollment: read response: %w", readErr)
+		}
+
+		if resp.StatusCode == http.StatusCreated {
+			var createResp models.PlatformEnrollmentCreateResponse
+			if err := json.Unmarshal(respBody, &createResp); err != nil {
+				return nil, fmt.Errorf("operator enrollment: parse response: %w", err)
+			}
+			return &createResp, nil
+		}
+
+		// 403 "requires an activated gateway": the gateway is not yet
+		// activated. Back off and retry until activation.
+		if resp.StatusCode == http.StatusForbidden && strings.Contains(string(respBody), constants.ErrPlatformEnrollmentRequiresActivation.Error()) {
+			c.logger.Info("operator enrollment: gateway not yet activated, retrying", "delay", delay.String())
+			if waitErr := c.sleep(ctx, delay); waitErr != nil {
+				return nil, waitErr
+			}
+			delay = time.Duration(math.Min(float64(delay*2), float64(operatorEnrollSubmitMax)))
+			if time.Now().After(deadline) {
+				return nil, fmt.Errorf("operator enrollment: gateway not activated within %s: HTTP %d: %s", operatorEnrollSubmitDeadline, resp.StatusCode, string(respBody))
+			}
+			continue
+		}
+
 		return nil, fmt.Errorf("operator enrollment: request rejected: HTTP %d: %s", resp.StatusCode, string(respBody))
 	}
-
-	var createResp models.PlatformEnrollmentCreateResponse
-	if err := json.Unmarshal(respBody, &createResp); err != nil {
-		return nil, fmt.Errorf("operator enrollment: parse response: %w", err)
-	}
-	return &createResp, nil
 }
 
 func (c *OperatorPlatformEnrollmentClient) pollUntilApproved(ctx context.Context, token string, deadline time.Duration) error {

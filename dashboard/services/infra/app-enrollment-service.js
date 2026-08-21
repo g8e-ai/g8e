@@ -71,6 +71,16 @@ const _HTTP_TIMEOUT_MS = 10_000;
 const _POLL_INITIAL_DELAY_MS = 2_000;
 const _POLL_MAX_DELAY_MS = 30_000;
 const _POLL_JITTER_MS = 500;
+// Request submission retry. The gateway starts with zero users and returns
+// 403 "platform enrollment requires an activated gateway" until the owner
+// bootstraps the first user. Workloads start immediately after the gateway
+// becomes healthy, so the first submit attempt may race with activation.
+const _SUBMIT_INITIAL_DELAY_MS = 3_000;
+const _SUBMIT_MAX_DELAY_MS = 30_000;
+const _SUBMIT_JITTER_MS = 1_000;
+const _SUBMIT_DEADLINE_MS = 30 * 60 * 1_000;
+// Error string the gateway returns when not yet activated.
+const _REQUIRES_ACTIVATION_ERR = 'platform enrollment requires an activated gateway';
 // Protocol version for the completion transcript.
 const _PROTOCOL_VERSION = '1';
 // Well-known paths on the gateway's public HTTP bootstrap surface.
@@ -448,36 +458,70 @@ async function _submitEnrollmentRequest(baseUrl, csrPem, instanceId, hostname, s
         app: { csr_pem: csrPem },
     };
     console.log(`AppEnrollmentService: submitting platform enrollment request for ${instanceId}`);
-    let resp;
-    try {
-        resp = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-            signal,
-        });
-    } catch (err) {
-        throw new ConfigurationError(
-            `AppEnrollmentService: enrollment request POST to ${baseUrl} failed: ${err.message}`,
-            { cause: err }
-        );
-    }
-    let data;
-    try {
-        data = await resp.json();
-    } catch (err) {
-        throw new ConfigurationError(
-            `AppEnrollmentService: enrollment request returned non-JSON response (HTTP ${resp.status}): ${err.message}`,
-            { cause: err }
-        );
-    }
-    if (!resp.ok) {
+
+    // Retry with bounded backoff until the gateway is activated. The gateway
+    // starts with zero users and returns 403 "platform enrollment requires an
+    // activated gateway" until the owner bootstraps the first user. Workloads
+    // start immediately after the gateway becomes healthy, so the first submit
+    // attempt may race with activation.
+    let delay = _SUBMIT_INITIAL_DELAY_MS;
+    const deadline = Date.now() + _SUBMIT_DEADLINE_MS;
+    for (;;) {
+        if (signal?.aborted) {
+            throw new ConfigurationError('AppEnrollmentService: operation cancelled');
+        }
+        let resp;
+        try {
+            resp = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                signal,
+            });
+        } catch (err) {
+            if (signal?.aborted) {
+                throw new ConfigurationError('AppEnrollmentService: operation cancelled');
+            }
+            if (Date.now() > deadline) {
+                throw new ConfigurationError(
+                    `AppEnrollmentService: enrollment request POST to ${baseUrl} failed: ${err.message}`,
+                    { cause: err }
+                );
+            }
+            await _sleep(delay, signal);
+            delay = Math.min(delay * 2, _SUBMIT_MAX_DELAY_MS);
+            continue;
+        }
+        let data;
+        try {
+            data = await resp.json();
+        } catch (err) {
+            throw new ConfigurationError(
+                `AppEnrollmentService: enrollment request returned non-JSON response (HTTP ${resp.status}): ${err.message}`,
+                { cause: err }
+            );
+        }
+        if (resp.ok) {
+            return data;
+        }
+        // 403 "requires an activated gateway": the gateway is not yet
+        // activated. Back off and retry until activation.
         const errMsg = data.error || `HTTP ${resp.status}`;
+        if (resp.status === 403 && errMsg.includes(_REQUIRES_ACTIVATION_ERR)) {
+            if (Date.now() > deadline) {
+                throw new ConfigurationError(
+                    `AppEnrollmentService: gateway not activated within ${_SUBMIT_DEADLINE_MS}ms: ${errMsg}`
+                );
+            }
+            console.log(`AppEnrollmentService: gateway not yet activated, retrying in ${delay}ms`);
+            await _sleep(delay, signal);
+            delay = Math.min(delay * 2, _SUBMIT_MAX_DELAY_MS);
+            continue;
+        }
         throw new ConfigurationError(
             `AppEnrollmentService: enrollment request rejected by gateway: ${errMsg}`
         );
     }
-    return data;
 }
 
 /**
@@ -1036,15 +1080,22 @@ export class AppEnrollmentService {
 
             fingerprint = await _csrFingerprint(csrPem);
 
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), _HTTP_TIMEOUT_MS);
+            // The submission retry loop manages its own deadline
+            // (_SUBMIT_DEADLINE_MS) and retries on 403-requires-activation
+            // until the gateway is activated. The outer signal is for
+            // process-level cancellation only — no per-call timeout here,
+            // since the retry loop may run for minutes while waiting for
+            // the owner to bootstrap the first user.
             let createResp;
             try {
                 createResp = await _submitEnrollmentRequest(
-                    baseUrl, csrPem, this._instanceId, this._hostname, controller.signal
+                    baseUrl, csrPem, this._instanceId, this._hostname, abortSignal
                 );
-            } finally {
-                clearTimeout(timeoutId);
+            } catch (err) {
+                if (err.name === 'AbortError' || err.code === 'ABORT_ERR') {
+                    throw new ConfigurationError('AppEnrollmentService: operation cancelled');
+                }
+                throw err;
             }
 
             requestId = createResp.request_id;
