@@ -235,10 +235,64 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	privateKey := resolveKeyPath(opts.PrivateKey, fileSvc, logger)
 	clientCert := resolveCertPath(opts.ClientCert, fileSvc, logger)
 
+	// If no installed operator credentials exist and an endpoint is
+	// provided, drive the owner-approved platform enrollment protocol
+	// to obtain them. This replaces the removed bypass
+	// PerformAutomaticEnrollment. The operator submits both an operator
+	// CSR and a CLI CSR, waits for owner approval, signs the canonical
+	// completion transcript with both private keys, and writes the
+	// issued credentials atomically. Pending state is persisted to
+	// pki/pending-enrollment/g8eo.json so a kill-and-restart resumes
+	// the same request and key material.
+	if privateKey == "" && clientCert == "" && opts.Endpoint != "" {
+		logger.Info("No installed operator credentials found; starting platform enrollment", "endpoint", opts.Endpoint)
+		gatewayHTTPURL := fmt.Sprintf("http://%s:%d", opts.Endpoint, constants.Ports.OperatorHttp)
+		hostname, err := os.Hostname()
+		if err != nil {
+			logger.Error("Failed to resolve hostname for enrollment", string(constants.ConnectionStateError), err)
+			fmt.Fprintf(os.Stderr, "Enrollment failed: %v\n", err)
+			os.Exit(constants.ExitConfigError)
+		}
+		instanceID := fmt.Sprintf("operator-%s", hostname)
+		enrollClient, err := NewOperatorPlatformEnrollmentClient(gatewayHTTPURL, instanceID, hostname, fileSvc, logger)
+		if err != nil {
+			logger.Error("Failed to create enrollment client", string(constants.ConnectionStateError), err)
+			fmt.Fprintf(os.Stderr, "Enrollment failed: %v\n", err)
+			os.Exit(constants.ExitConfigError)
+		}
+		result, err := enrollClient.Enroll(context.Background())
+		if err != nil {
+			logger.Error("Platform enrollment failed", string(constants.ConnectionStateError), err)
+			fmt.Fprintf(os.Stderr, "Enrollment failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "  Ensure the Gateway is running and accessible at %s\n", opts.Endpoint)
+			fmt.Fprintf(os.Stderr, "  Pending state is persisted; restart to resume the same request.\n")
+			os.Exit(constants.ExitConfigError)
+		}
+		os.Setenv(string(constants.EnvVar.OperatorSessionID), result.OperatorSessionID)
+		if result.Posture != "" {
+			opts.Posture = result.Posture
+		}
+		privateKey = result.OperatorKeyPath
+		clientCert = result.OperatorCertPath
+
+		// Reload the trust bundle from the newly written file.
+		caBundleRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+		pemData, err := fileSvc.ReadFile(context.Background(), caBundleRel)
+		if err != nil {
+			logger.Error("Failed to reload trust bundle after enrollment", "path", fileSvc.Resolve(caBundleRel), string(constants.ConnectionStateError), err)
+			fmt.Fprintf(os.Stderr, "%s: %v\n", constants.ErrFailedToReadTrustBundle, err)
+			os.Exit(constants.ExitConfigError)
+		}
+		trustStore.SetCA(pemData)
+		logger.Info("Trust bundle reloaded after enrollment", "path", fileSvc.Resolve(caBundleRel))
+		logger.Info("Platform enrollment completed, using enrolled certificates")
+	}
+
 	if privateKey == "" {
 		fmt.Fprintf(os.Stderr, "%s (-k or --key). Expected locations:\n", constants.ErrPrivateKeyRequired)
 		fmt.Fprintf(os.Stderr, "  - %s (project directory)\n", constants.DefaultOperatorKeyDesc)
 		fmt.Fprintf(os.Stderr, "  - %s (project directory)\n", constants.DefaultClientKeyDesc)
+		fmt.Fprintf(os.Stderr, "Or provide --endpoint to perform platform enrollment\n")
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -246,6 +300,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		fmt.Fprintf(os.Stderr, "%s (--cert or --client-cert). Expected locations:\n", constants.ErrClientCertRequired)
 		fmt.Fprintf(os.Stderr, "  - %s (project directory)\n", constants.DefaultOperatorCertDesc)
 		fmt.Fprintf(os.Stderr, "  - %s (project directory)\n", constants.DefaultClientCertDesc)
+		fmt.Fprintf(os.Stderr, "Or provide --endpoint to perform platform enrollment\n")
 		os.Exit(constants.ExitConfigError)
 	}
 

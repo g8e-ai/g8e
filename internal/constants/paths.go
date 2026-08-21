@@ -139,6 +139,7 @@ const (
 	PkiSubdirGatewayPeer    = "gateway-peer"
 	PkiSubdirApps           = "apps"
 	PkiSubdirTrustedSigners = "trusted_signers"
+	PkiSubdirPendingEnroll  = "pending-enrollment"
 
 	// File extensions
 	FileExtCert = ".crt"
@@ -180,6 +181,12 @@ const (
 	CliCertFilename     = "cli.crt"
 	CliKeyFilename      = "cli.key"
 	CredentialsFilename = "credentials"
+
+	// Pending platform enrollment state filenames (one per component,
+	// persisted under pki/pending-enrollment/ with 0600 permissions).
+	PendingEnrollmentFileOperator  = "g8eo.json"
+	PendingEnrollmentFileDashboard = "g8ed.json"
+	PendingEnrollmentFileEnsemble  = "g8ee.json"
 )
 
 // Storage constants for database filenames and paths.
