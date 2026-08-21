@@ -43,25 +43,24 @@ func TestPlatformEnrollment_Denial(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
-	// Discover the pending operator request. The operator submits its
-	// enrollment request on startup; it may not be present immediately.
+	// Precondition: this test requires a platform with a pending operator
+	// enrollment request. The user starts the full stack without approving
+	// any enrollments. On an approved stack (no pending requests), fail
+	// fast with an actionable message instead of timing out.
+	pending, err := e2eClient.GetPendingEnrollments(ctx)
+	require.NoError(t, err, "pending enrollment list must succeed")
 	var operatorReq *models.PlatformEnrollmentPendingRequest
-	require.Eventually(t, func() bool {
-		pending, err := e2eClient.GetPendingEnrollments(ctx)
-		if err != nil {
-			t.Logf("pending list attempt error: %v", err)
-			return false
+	for i := range pending.Requests {
+		if pending.Requests[i].ComponentKind == models.PlatformComponentOperator {
+			operatorReq = &pending.Requests[i]
+			break
 		}
-		for i := range pending.Requests {
-			if pending.Requests[i].ComponentKind == models.PlatformComponentOperator {
-				operatorReq = &pending.Requests[i]
-				return true
-			}
-		}
-		return false
-	}, 120*time.Second, 3*time.Second,
-		"a pending operator enrollment request must appear in the pending list")
-	require.NotNil(t, operatorReq, "operator request must be discovered before denial")
+	}
+	if operatorReq == nil {
+		t.Fatalf("TestPlatformEnrollment_Denial requires a pending operator enrollment request. " +
+			"Start the full stack without approving enrollments (docker compose down -v && docker compose up -d), " +
+			"then run: ./g8e test e2e --run TestPlatformEnrollment_Denial")
+	}
 	require.NotEmpty(t, operatorReq.RequestID, "operator request must have a non-empty request ID")
 	t.Logf("discovered pending operator request: %s (instance: %s, hostname: %s)",
 		operatorReq.RequestID, operatorReq.InstanceID, operatorReq.Hostname)

@@ -43,11 +43,23 @@ func TestPlatformEnrollment_PendingDiscovery(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
+	// Precondition: this test requires a platform with pending enrollment
+	// requests from all three component kinds (operator, dashboard,
+	// ensemble). The user starts the full stack without approving any
+	// enrollments. On an approved stack (no pending requests), fail fast
+	// with an actionable message instead of timing out.
+	pending, err := e2eClient.GetPendingEnrollments(ctx)
+	require.NoError(t, err, "pending enrollment list must succeed")
+	if len(pending.Requests) == 0 {
+		t.Fatalf("TestPlatformEnrollment_PendingDiscovery requires pending enrollment requests. " +
+			"Start the full stack without approving enrollments (docker compose down -v && docker compose up -d), " +
+			"then run: ./g8e test e2e --run TestPlatformEnrollment_PendingDiscovery")
+	}
+
 	// Wait for all three component kinds to appear. The operator, dashboard,
 	// and ensemble submit enrollment requests on startup; they may not all
 	// be present immediately. A 120-second window accommodates startup
 	// jitter without being so generous that a missing component could pass.
-	var pending models.PlatformEnrollmentPendingResponse
 	require.Eventually(t, func() bool {
 		p, err := e2eClient.GetPendingEnrollments(ctx)
 		if err != nil {

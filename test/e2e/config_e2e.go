@@ -33,6 +33,7 @@ type e2eConfig struct {
 	cliKeyPath      string
 	caBundleRelPath string
 	cliSessionID    string
+	userID          string
 	fileSvc         fs.RuntimeFileService
 	cfg             *config.Config
 }
@@ -93,6 +94,7 @@ func loadE2EConfig() (*e2eConfig, error) {
 		cliKeyPath:      cfg.CLIKeyFile(),
 		caBundleRelPath: cfg.DefaultTrustBundleRelPath(),
 		cliSessionID:    creds.CLISessionID,
+		userID:          creds.UserID,
 		fileSvc:         fileSvc,
 		cfg:             cfg,
 	}, nil

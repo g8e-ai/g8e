@@ -94,6 +94,7 @@ func newE2EClient(ctx context.Context, cfg *e2eConfig) (*E2EClient, error) {
 		publicClient: publicClient,
 		mtlsClient:   mtlsClient,
 		cliSessionID: cfg.cliSessionID,
+		userID:       cfg.userID,
 		gatewayHTTPS: cfg.gatewayHTTPSURL,
 	}, nil
 }

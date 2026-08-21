@@ -12,64 +12,87 @@ package e2e
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/models"
 )
 
-// TestCompliance_AuditReceiptsRecorded verifies that the gateway's audit
-// subsystem records action receipts for governance-verified commands. After
-// the command roundtrip test (or any prior platform activity on an approved
-// stack), the audit receipts endpoint must return a typed, non-empty receipts
-// list with valid transaction IDs and L2/L3 verification flags set.
+// TestCompliance_AuditReceiptRecordedForDispatchedCommand dispatches an
+// FS_READ command through the governance gauntlet, then verifies that the
+// audit subsystem recorded a receipt for that specific transaction with L2
+// and L3 verification passed, the operator session ID, state roots, and a
+// governance signature. The test performs the action (command dispatch)
+// first, then asserts on the consequence (audit receipt) — it does not
+// assume prior platform activity produced the expected receipts.
 //
 // This replaces the prior compliance test that ran the KSI pipeline inside
-// the operator container via docker exec. The KSI/OSCAL pipeline is a CLI
-// concern tested through hermetic CLI command tests; the E2E compliance
-// assertion here covers the gateway-side audit surface that records command
-// execution evidence. Each receipt carries the L2Valid and L3Valid flags
-// from the 5-layer verification gauntlet, proving governance verification
-// ran for the recorded action.
-func TestCompliance_AuditReceiptsRecorded(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultClientTimeout)
+// the operator container via docker exec, and the intermediate version that
+// checked all receipts without first dispatching a command. The E2E
+// compliance assertion here covers the gateway-side audit surface that
+// records command execution evidence for a specific governed transaction.
+func TestCompliance_AuditReceiptRecordedForDispatchedCommand(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
-	receipts, err := e2eClient.GetAuditReceipts(ctx, "")
-	require.NoError(t, err, "audit receipts endpoint must succeed on an approved stack")
-	require.True(t, receipts.Success, "audit receipts response must report success")
-	require.NotEmpty(t, receipts.Receipts,
-		"audit receipts must be non-empty after platform activity — governance audit path may be broken")
+	// Dispatch a governed command. The dispatch response carries the
+	// transaction ID that the audit receipt will be keyed by.
+	resp := e2eClient.dispatchFsRead(t, ctx)
+	require.NotEmpty(t, resp.TransactionID, "dispatch response must carry a transaction ID")
+	t.Logf("dispatched command for audit verification: txn=%s", resp.TransactionID)
 
-	for _, receipt := range receipts.Receipts {
-		assert.NotEmpty(t, receipt.TransactionID,
-			"every audit receipt must carry a transaction ID")
-		assert.NotEmpty(t, receipt.ActionType,
-			"every audit receipt must carry an action type")
-		assert.NotEmpty(t, receipt.OperatorSessionID,
-			"every audit receipt must carry the operator session ID")
-		assert.True(t, receipt.L2Valid,
-			"audit receipt %s must have L2 verification passed", receipt.TransactionID)
-		assert.True(t, receipt.L3Valid,
-			"audit receipt %s must have L3 verification passed", receipt.TransactionID)
-		assert.NotEmpty(t, receipt.StateRootBefore,
-			"audit receipt %s must record the pre-execution state root", receipt.TransactionID)
-		assert.NotEmpty(t, receipt.StateRootAfter,
-			"audit receipt %s must record the post-execution state root", receipt.TransactionID)
-		assert.NotEmpty(t, receipt.Signature,
-			"audit receipt %s must carry the governance signature", receipt.TransactionID)
-		assert.False(t, receipt.ExecutedAt.IsZero(),
-			"audit receipt %s must have a non-zero execution timestamp", receipt.TransactionID)
-	}
-	t.Logf("audit receipts verified: %d receipts, all L2/L3 valid",
-		len(receipts.Receipts))
+	// The audit receipt for this transaction must appear in the receipts
+	// list. Poll to accommodate asynchronous audit write latency.
+	var targetReceipt *models.ActionReceiptRecord
+	require.Eventually(t, func() bool {
+		receipts, err := e2eClient.GetAuditReceipts(ctx, resp.TransactionID)
+		if err != nil {
+			t.Logf("audit receipts fetch attempt error: %v", err)
+			return false
+		}
+		for i := range receipts.Receipts {
+			if receipts.Receipts[i].TransactionID == resp.TransactionID {
+				targetReceipt = receipts.Receipts[i]
+				return true
+			}
+		}
+		return false
+	}, 60*time.Second, 2*time.Second,
+		"audit receipt for transaction %s must appear in the receipts list", resp.TransactionID)
+
+	require.NotNil(t, targetReceipt, "audit receipt for transaction %s must be found", resp.TransactionID)
+	assert.NotEmpty(t, targetReceipt.TransactionID,
+		"audit receipt must carry the transaction ID")
+	assert.NotEmpty(t, targetReceipt.ActionType,
+		"audit receipt must carry an action type")
+	assert.NotEmpty(t, targetReceipt.OperatorSessionID,
+		"audit receipt must carry the operator session ID")
+	assert.True(t, targetReceipt.L2Valid,
+		"audit receipt %s must have L2 verification passed", targetReceipt.TransactionID)
+	assert.True(t, targetReceipt.L3Valid,
+		"audit receipt %s must have L3 verification passed", targetReceipt.TransactionID)
+	assert.NotEmpty(t, targetReceipt.StateRootBefore,
+		"audit receipt %s must record the pre-execution state root", targetReceipt.TransactionID)
+	assert.NotEmpty(t, targetReceipt.StateRootAfter,
+		"audit receipt %s must record the post-execution state root", targetReceipt.TransactionID)
+	assert.NotEmpty(t, targetReceipt.Signature,
+		"audit receipt %s must carry the governance signature", targetReceipt.TransactionID)
+	assert.False(t, targetReceipt.ExecutedAt.IsZero(),
+		"audit receipt %s must have a non-zero execution timestamp", targetReceipt.TransactionID)
+	t.Logf("audit receipt verified for txn=%s: L2=%v L3=%v action=%s",
+		targetReceipt.TransactionID, targetReceipt.L2Valid, targetReceipt.L3Valid,
+		targetReceipt.ActionType)
 }
 
 // TestCompliance_AuditSummaryConsistent verifies the audit summary endpoint
-// returns a typed response whose total counts are consistent with the
-// receipts list. The summary breaks down events and receipts by type; the
-// totals must be non-negative and the receipts total must match or exceed the
-// number of receipts observable through the receipts endpoint (the receipts
-// endpoint applies a default limit, so the summary total is the upper bound).
+// returns a typed response whose total counts are non-negative. The summary
+// breaks down events and receipts by type; the totals must be non-negative
+// and the receipts total must be at least 1 after the command dispatch in
+// the receipt test above (Go runs tests alphabetically by filename, so
+// compliance_e2e_test.go runs after command_roundtrip_e2e_test.go, but this
+// test does not depend on that ordering — it only asserts non-negativity).
 func TestCompliance_AuditSummaryConsistent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultClientTimeout)
 	defer cancel()
@@ -89,8 +112,8 @@ func TestCompliance_AuditSummaryConsistent(t *testing.T) {
 
 // TestCompliance_AuditEventsRecorded verifies the audit events endpoint
 // returns a typed response with a count matching the events slice length.
-// Audit events are the raw command execution log rows; on an approved stack
-// with prior activity, at least one event must be recorded.
+// Audit events are the raw command execution log rows; after the command
+// dispatch in the receipt test, at least one event must be recorded.
 func TestCompliance_AuditEventsRecorded(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultClientTimeout)
 	defer cancel()

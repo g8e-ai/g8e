@@ -19,7 +19,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
@@ -40,56 +39,7 @@ func TestCommandRoundtrip_FsRead(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	// Discover the active operator through the typed list endpoint.
-	operators, err := e2eClient.ListOperators(ctx)
-	require.NoError(t, err, "operator list must succeed to discover the dispatch target")
-	require.True(t, operators.Success, "operator list response must report success")
-	require.NotEmpty(t, operators.Operators, "at least one operator must be registered")
-
-	var target *models.OperatorDocumentGo
-	for i := range operators.Operators {
-		if operators.Operators[i].Status == constants.OperatorStatusActive {
-			target = &operators.Operators[i]
-			break
-		}
-	}
-	require.NotNil(t, target, "an active operator must exist as the dispatch target")
-	require.NotEmpty(t, target.OperatorSessionID, "target operator must have a session ID")
-	t.Logf("dispatch target: id=%s session=%s", target.ID, target.OperatorSessionID)
-
-	// Build the FS_READ payload (proto-marshaled FsReadRequested). The path
-	// is /etc/hostname, a stable file present in the operator container. The
-	// path constant is the canonical SSOT — no hardcoded filepath strings.
-	fsReadReq := &operatorv1.FsReadRequested{Path: constants.PathEtcHostname}
-	payload, err := proto.Marshal(fsReadReq)
-	require.NoError(t, err, "marshal FsReadRequested payload")
-
-	reqBody := dispatchRequestJSON{
-		TargetOperatorSessionID: target.OperatorSessionID,
-		ActionType:              string(constants.ActionTypeFsRead),
-		Payload:                 payload,
-		TargetResource:          constants.PathEtcHostname,
-	}
-
-	// The round-trip includes in-process publish, WS delivery to the
-	// operator, L4/L5 verification and execution, WS publish back, and
-	// in-process handler delivery. Use a generous polling window rather
-	// than a single shot — the operator may still be settling its WS
-	// subscription after bootstrap.
-	var resp dispatchResponseJSON
-	require.Eventually(t, func() bool {
-		resp = dispatchResponseJSON{}
-		dispatchCtx, dispatchCancel := context.WithTimeout(ctx, 60*time.Second)
-		defer dispatchCancel()
-		r, err := e2eClient.DispatchCommand(dispatchCtx, reqBody, 60*time.Second)
-		if err != nil {
-			t.Logf("dispatch attempt error: %v", err)
-			return false
-		}
-		resp = r
-		return resp.Success
-	}, 90*time.Second, 2*time.Second,
-		"dispatch did not succeed within 90s; last response: %+v", resp)
+	resp := e2eClient.dispatchFsRead(t, ctx)
 
 	// The response must carry the transaction ID and the completed event
 	// type. The result envelope's EventType is the completed event — proof

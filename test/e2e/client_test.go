@@ -16,10 +16,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 // E2EClient owns bounded public and mTLS HTTP clients for communicating with
@@ -32,6 +37,7 @@ type E2EClient struct {
 	publicClient *http.Client // no client cert, for health/CA bundle endpoints
 	mtlsClient   *http.Client // owner CLI cert, for authenticated endpoints
 	cliSessionID string
+	userID       string
 	gatewayHTTPS string
 }
 
@@ -138,9 +144,12 @@ func (c *E2EClient) DenyEnrollment(ctx context.Context, requestID string) error 
 }
 
 // ListOperators fetches the operator list via the owner-authenticated operators
-// endpoint and returns the typed slot response.
+// endpoint and returns the typed slot response. The gateway requires the
+// owner's user_id as a query parameter to scope the operator list to the
+// authenticated user.
 func (c *E2EClient) ListOperators(ctx context.Context) (models.OperatorSlotResponse, error) {
-	req, err := c.newAuthenticatedRequest(ctx, http.MethodGet, constants.APIPaths.Operators, nil)
+	path := constants.APIPaths.Operators + "?user_id=" + c.userID
+	req, err := c.newAuthenticatedRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return models.OperatorSlotResponse{}, err
 	}
@@ -311,4 +320,59 @@ func (c *E2EClient) GetAuditEvents(ctx context.Context) (models.AuditEventsRespo
 		return models.AuditEventsResponse{}, fmt.Errorf("fetch audit events: %w", err)
 	}
 	return decodeJSON[models.AuditEventsResponse](body, "audit events")
+}
+
+// dispatchFsRead discovers the first active operator, dispatches an FS_READ
+// command for /etc/hostname, polls until the dispatch succeeds, and returns
+// the dispatch response. It is the shared action used by tests that need a
+// governed command to have executed before asserting on its consequences
+// (audit receipts, compliance state). The caller owns the context; this
+// helper uses require.Eventually for polling so it must be called from a
+// test goroutine.
+func (c *E2EClient) dispatchFsRead(t *testing.T, ctx context.Context) dispatchResponseJSON {
+	t.Helper()
+
+	operators, err := c.ListOperators(ctx)
+	require.NoError(t, err, "operator list must succeed to discover the dispatch target")
+	require.True(t, operators.Success, "operator list response must report success")
+	require.NotEmpty(t, operators.Operators, "at least one operator must be registered")
+
+	var target *models.OperatorDocumentGo
+	for i := range operators.Operators {
+		if operators.Operators[i].Status == constants.OperatorStatusActive {
+			target = &operators.Operators[i]
+			break
+		}
+	}
+	require.NotNil(t, target, "an active operator must exist as the dispatch target")
+	require.NotEmpty(t, target.OperatorSessionID, "target operator must have a session ID")
+	t.Logf("dispatch target: id=%s session=%s", target.ID, target.OperatorSessionID)
+
+	fsReadReq := &operatorv1.FsReadRequested{Path: constants.PathEtcHostname}
+	payload, err := proto.Marshal(fsReadReq)
+	require.NoError(t, err, "marshal FsReadRequested payload")
+
+	reqBody := dispatchRequestJSON{
+		TargetOperatorSessionID: target.OperatorSessionID,
+		ActionType:              string(constants.ActionTypeFsRead),
+		Payload:                 payload,
+		TargetResource:          constants.PathEtcHostname,
+	}
+
+	var resp dispatchResponseJSON
+	require.Eventually(t, func() bool {
+		resp = dispatchResponseJSON{}
+		dispatchCtx, dispatchCancel := context.WithTimeout(ctx, 60*time.Second)
+		defer dispatchCancel()
+		r, err := c.DispatchCommand(dispatchCtx, reqBody, 60*time.Second)
+		if err != nil {
+			t.Logf("dispatch attempt error: %v", err)
+			return false
+		}
+		resp = r
+		return resp.Success
+	}, 90*time.Second, 2*time.Second,
+		"dispatch did not succeed within 90s; last response: %+v", resp)
+
+	return resp
 }

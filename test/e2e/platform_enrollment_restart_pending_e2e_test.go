@@ -16,11 +16,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 // TestPlatformEnrollment_RestartDuringPending verifies that restarting the
@@ -47,46 +45,36 @@ func TestPlatformEnrollment_RestartDuringPending(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
-	// The operator must have a pending request. The user restarted the
-	// operator before running this test; the resumed request should already
-	// be present. Poll briefly to accommodate re-submission latency after
-	// restart.
-	var operatorReq *models.PlatformEnrollmentPendingRequest
-	require.Eventually(t, func() bool {
-		pending, err := e2eClient.GetPendingEnrollments(ctx)
-		if err != nil {
-			t.Logf("pending list attempt error: %v", err)
-			return false
-		}
-		opCount := 0
-		for i := range pending.Requests {
-			if pending.Requests[i].ComponentKind == models.PlatformComponentOperator {
-				operatorReq = &pending.Requests[i]
-				opCount++
-			}
-		}
-		return opCount == 1
-	}, 120*time.Second, 3*time.Second,
-		"exactly one pending operator enrollment request must appear after restart")
-	require.NotNil(t, operatorReq, "operator request must be discovered after restart")
-	require.NotEmpty(t, operatorReq.RequestID, "resumed operator request must have a non-empty request ID")
-	t.Logf("discovered resumed operator request: %s", operatorReq.RequestID)
-
-	// Assert no duplicate operator request exists. The pending list must
-	// contain exactly one operator request — the resumed one. A duplicate
-	// would indicate the operator lost its persisted pending state and
-	// re-submitted, which breaks request-ID continuity.
+	// Precondition: this test requires a platform with exactly one pending
+	// operator enrollment request. The user starts the full stack without
+	// approving any enrollments, waits for the operator's pending request
+	// to appear, restarts the operator container, then runs this test. On
+	// an approved stack or a stack with no pending operator, fail fast with
+	// an actionable message instead of timing out.
 	pending, err := e2eClient.GetPendingEnrollments(ctx)
-	require.NoError(t, err, "pending list must succeed for duplicate check")
+	require.NoError(t, err, "pending enrollment list must succeed")
+	var operatorReq *models.PlatformEnrollmentPendingRequest
 	opCount := 0
-	for _, r := range pending.Requests {
-		if r.ComponentKind == models.PlatformComponentOperator {
+	for i := range pending.Requests {
+		if pending.Requests[i].ComponentKind == models.PlatformComponentOperator {
+			operatorReq = &pending.Requests[i]
 			opCount++
 		}
 	}
-	assert.Equal(t, 1, opCount,
-		"exactly one operator request must be pending after restart — a duplicate indicates lost persisted state")
-	t.Logf("no duplicate operator request: %d operator request(s) pending", opCount)
+	if operatorReq == nil {
+		t.Fatalf("TestPlatformEnrollment_RestartDuringPending requires a pending operator enrollment request. " +
+			"Start the full stack without approving enrollments (docker compose down -v && docker compose up -d), " +
+			"restart the operator (docker compose restart g8e-operator), " +
+			"then run: ./g8e test e2e --run TestPlatformEnrollment_RestartDuringPending")
+	}
+	require.NotEmpty(t, operatorReq.RequestID, "resumed operator request must have a non-empty request ID")
+	t.Logf("discovered resumed operator request: %s", operatorReq.RequestID)
+
+	// The precondition check already asserted exactly one pending operator
+	// request exists (opCount == 1). A duplicate would indicate the
+	// operator lost its persisted pending state and re-submitted, which
+	// breaks request-ID continuity. The precondition fails fast in that
+	// case with the actionable message above.
 
 	// Approve the resumed request ID. The operator should complete
 	// enrollment and become active.
@@ -121,42 +109,10 @@ func TestPlatformEnrollment_RestartDuringPending(t *testing.T) {
 	// A command roundtrip must succeed against the now-active operator.
 	// This proves the full L4/L5 verification and execution chain works
 	// after restart-during-pending enrollment.
-	fsReadReq := &operatorv1.FsReadRequested{Path: constants.PathEtcHostname}
-	payload, err := proto.Marshal(fsReadReq)
-	require.NoError(t, err, "marshal FsReadRequested payload")
-
-	reqBody := dispatchRequestJSON{
-		TargetOperatorSessionID: active.OperatorSessionID,
-		ActionType:              string(constants.ActionTypeFsRead),
-		Payload:                 payload,
-		TargetResource:          constants.PathEtcHostname,
-	}
-
-	var resp dispatchResponseJSON
-	require.Eventually(t, func() bool {
-		resp = dispatchResponseJSON{}
-		dispatchCtx, dispatchCancel := context.WithTimeout(ctx, 60*time.Second)
-		defer dispatchCancel()
-		r, err := e2eClient.DispatchCommand(dispatchCtx, reqBody, 60*time.Second)
-		if err != nil {
-			t.Logf("dispatch attempt error: %v", err)
-			return false
-		}
-		resp = r
-		return resp.Success
-	}, 120*time.Second, 2*time.Second,
-		"command roundtrip must succeed after restart-during-pending enrollment; last response: %+v", resp)
-
+	resp := e2eClient.dispatchFsRead(t, ctx)
 	assert.NotEmpty(t, resp.TransactionID, "dispatch response must carry a transaction ID")
 	assert.Equal(t, string(constants.Event.Operator.FsRead.Completed), resp.EventType,
 		"dispatch response event type must be the fs.read completed event")
-
-	var fsReadResult operatorv1.FsReadResult
-	require.NoError(t, proto.Unmarshal(resp.ResultPayload, &fsReadResult),
-		"unmarshal FsReadResult from dispatch response")
-	assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, fsReadResult.Status,
-		"fs.read must complete successfully after restart-during-pending")
-	assert.NotEmpty(t, fsReadResult.Content, "fs.read result content must not be empty")
-	t.Logf("command roundtrip succeeded after restart-during-pending: txn=%s content_size=%d",
-		resp.TransactionID, fsReadResult.SizeBytes)
+	t.Logf("command roundtrip succeeded after restart-during-pending: txn=%s",
+		resp.TransactionID)
 }

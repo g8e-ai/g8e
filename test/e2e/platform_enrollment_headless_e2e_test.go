@@ -44,6 +44,23 @@ func TestPlatformEnrollment_Headless(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultClientTimeout)
 	defer cancel()
 
+	// Precondition: this test requires a gateway-only deployment (headless
+	// mode). The user starts only the gateway service and bootstraps the
+	// owner identity. If the ensemble or dashboard is reachable, the
+	// platform is not in headless mode and this test would produce false
+	// results — fail fast with an actionable message.
+	endpointCtx, endpointCancel := context.WithTimeout(ctx, 3*time.Second)
+	defer endpointCancel()
+	probeClient := &http.Client{Timeout: 3 * time.Second}
+	ensembleProbeReq, _ := http.NewRequestWithContext(endpointCtx, http.MethodGet, e2eCfg.ensembleURL+"/health", nil)
+	if _, ensembleErr := probeClient.Do(ensembleProbeReq); ensembleErr == nil {
+		t.Fatalf("TestPlatformEnrollment_Headless requires a gateway-only deployment. " +
+			"The ensemble is reachable, which means the full stack is running. " +
+			"Start only the gateway (docker compose down && docker compose up -d g8e-gateway), " +
+			"bootstrap the owner (./g8e auth enroll user --headless), " +
+			"then run: ./g8e test e2e --run TestPlatformEnrollment_Headless")
+	}
+
 	// Gateway health must succeed in headless mode. The gateway is the only
 	// running service and must be reachable on its HTTP port.
 	health, err := e2eClient.GetHealth(ctx, e2eCfg.gatewayHTTPURL)
@@ -87,18 +104,32 @@ func TestPlatformEnrollment_Headless(t *testing.T) {
 	// not running in headless mode, so connecting to their ports must fail.
 	// A short timeout ensures the test fails fast rather than hanging on
 	// a connection attempt to a non-listening port.
+	assertEnsembleUnreachable(t, ctx, e2eCfg.ensembleURL)
+	assertDashboardUnreachable(t, ctx, e2eCfg.dashboardURL)
+}
+
+// assertEnsembleUnreachable verifies the ensemble endpoint is not reachable,
+// proving the ensemble service is not running in headless mode.
+func assertEnsembleUnreachable(t *testing.T, ctx context.Context, ensembleURL string) {
+	t.Helper()
 	endpointCtx, endpointCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer endpointCancel()
-
-	ensembleReq, err := http.NewRequestWithContext(endpointCtx, http.MethodGet, e2eCfg.ensembleURL+"/health", nil)
+	ensembleReq, err := http.NewRequestWithContext(endpointCtx, http.MethodGet, ensembleURL+"/health", nil)
 	require.NoError(t, err, "build ensemble health request must succeed")
 	ensembleClient := &http.Client{Timeout: 5 * time.Second}
 	_, ensembleErr := ensembleClient.Do(ensembleReq)
 	assert.Error(t, ensembleErr,
 		"ensemble endpoint must be unreachable in headless mode — the ensemble service is not running")
 	t.Logf("ensemble endpoint correctly absent in headless mode: %v", ensembleErr)
+}
 
-	dashboardReq, err := http.NewRequestWithContext(endpointCtx, http.MethodGet, e2eCfg.dashboardURL+"/", nil)
+// assertDashboardUnreachable verifies the dashboard endpoint is not reachable,
+// proving the dashboard service is not running in headless mode.
+func assertDashboardUnreachable(t *testing.T, ctx context.Context, dashboardURL string) {
+	t.Helper()
+	endpointCtx, endpointCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer endpointCancel()
+	dashboardReq, err := http.NewRequestWithContext(endpointCtx, http.MethodGet, dashboardURL+"/", nil)
 	require.NoError(t, err, "build dashboard index request must succeed")
 	dashboardClient := &http.Client{Timeout: 5 * time.Second}
 	_, dashboardErr := dashboardClient.Do(dashboardReq)

@@ -170,7 +170,7 @@ help:
 	@echo "  test                  Run all tests (unit + integration)"
 	@echo "  test-coverage         Run tests with coverage (enforces $(COVERAGE_THRESHOLD)% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output"
 	@echo "  test-integration      Run Tier 2 (In-Process Integration) tests - no external dependencies"
-	@echo "  test-docker           Run Tier 3 (Docker E2E) tests against a running platform"
+	@echo "  test-docker           Run Tier 3 (Docker E2E) steady-state tests against an approved platform"
 	@echo ""
 	@echo "Lint & Quality:"
 	@echo "  lint          Run all linting and quality checks"
@@ -474,14 +474,24 @@ test-integration:
 	@go test -p=1 -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./...
 
 # Tier 3: Docker E2E Tests - requires a running platform.
-# Start the platform first (docker compose up or ./g8e gw start), then run
-# this target. The test binary connects to the running platform and fails
-# fast if it is not reachable. Per docs/devs/devs.md, platform tests run
-# through ./g8e test, never go test directly.
+# Start the platform first (docker compose up or ./g8e gw start), approve all
+# enrollment requests, then run this target. The test binary connects to the
+# running platform and fails fast if it is not reachable. Per docs/devs/devs.md,
+# platform tests run through ./g8e test, never go test directly.
+#
+# The default target runs the steady-state suite: tests that exercise an
+# approved stack (gateway, auth, operator registry, heartbeat, command
+# roundtrip, ensemble, dashboard, compliance, approved-restart). Stateful
+# scenario tests (pending-discovery, denial, restart-during-pending, headless)
+# require specific platform states and are run individually via:
+#   ./g8e test e2e --run TestPlatformEnrollment_PendingDiscovery
+#   ./g8e test e2e --run TestPlatformEnrollment_Denial
+#   ./g8e test e2e --run TestPlatformEnrollment_RestartDuringPending
+#   ./g8e test e2e --run TestPlatformEnrollment_Headless
 .PHONY: test-docker
 test-docker:
-	@echo "Running Tier 3 (Docker E2E) tests..."
-	@./g8e test e2e
+	@echo "Running Tier 3 (Docker E2E) steady-state tests..."
+	@./g8e test e2e --run 'TestGateway|TestAuth|TestOperatorRegistry|TestPubSub|TestCommandRoundtrip|TestEnsemble|TestDashboard|TestCompliance|TestApprovedRestart'
 
 
 # Air-Gap Verification: verify vendored build works without network access
