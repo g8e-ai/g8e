@@ -49,6 +49,8 @@ func authCmd() *cobra.Command {
 		logoutCmd(),
 		approveCmd(),
 		approveRecoveryCmd(),
+		approvePlatformEnrollmentCmd(),
+		pendingPlatformEnrollmentCmd(),
 	)
 
 	return cmd

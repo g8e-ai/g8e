@@ -56,6 +56,34 @@ func TestApproveRecoveryCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	assert.ErrorIs(t, err, errFactory)
 }
 
+func TestApprovePlatformEnrollmentCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+
+	cmd := approvePlatformEnrollmentCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), failingFileSvcFactory(errFactory))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, []string{"req-001"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestPendingPlatformEnrollmentCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+
+	cmd := pendingPlatformEnrollmentCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), failingFileSvcFactory(errFactory))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
 func TestLogoutCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 
