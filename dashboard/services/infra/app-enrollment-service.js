@@ -700,11 +700,14 @@ function _tokenHash(token) {
  * @returns {Promise<string>} Base64url-encoded ASN.1 signature.
  */
 async function _signTranscript(privateKey, transcript) {
-    const digest = createHash('sha256').update(transcript).digest();
+    // WebCrypto's subtle.sign with { hash: 'SHA-256' } hashes the message
+    // internally and signs the digest. Pass the raw transcript (not a
+    // pre-computed digest) to avoid double-hashing — the gateway verifies
+    // against SHA-256(transcript), not SHA-256(SHA-256(transcript)).
     const signature = await webcrypto.subtle.sign(
         { name: 'ECDSA', hash: 'SHA-256' },
         privateKey,
-        digest,
+        transcript,
     );
     // WebCrypto returns the signature in raw R||S format, but the gateway
     // expects ASN.1 DER (ECDSA-Sig-Value). Convert R||S to DER.

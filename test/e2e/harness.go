@@ -609,6 +609,20 @@ func (f *DockerE2EFixture) waitForWorkloadHealth(timeout time.Duration) error {
 				state, _ := f.containerHealthState(c)
 				log.Printf("E2E: %s health=%s (expected healthy)", c, state)
 			}
+			// Dump the last 40 lines of each unhealthy container's logs so the
+			// failure reason is visible without a manual `docker logs` invocation.
+			for _, c := range containers {
+				state, _ := f.containerHealthState(c)
+				if state == "healthy" {
+					continue
+				}
+				logs, err := exec.Command("docker", "logs", "--tail", "40", c).CombinedOutput()
+				if err != nil {
+					log.Printf("E2E: %s logs: <failed to capture: %v>", c, err)
+					continue
+				}
+				log.Printf("E2E: %s logs (last 40 lines):\n%s", c, string(logs))
+			}
 			return fmt.Errorf("workloads not healthy after %s", timeout)
 		}
 		time.Sleep(3 * time.Second)

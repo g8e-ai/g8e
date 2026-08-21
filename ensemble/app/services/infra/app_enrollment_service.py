@@ -347,12 +347,14 @@ class AppEnrollmentService:
 
         The cryptography library produces ASN.1 DER signatures directly via
         ``sign()``, so no raw R||S to DER conversion is needed (unlike
-        WebCrypto in the dashboard JS client).
+        WebCrypto in the dashboard JS client). The gateway decodes with Go's
+        ``base64.RawURLEncoding`` (no padding), so strip the ``=`` padding
+        that Python's ``urlsafe_b64encode`` appends.
         """
         import base64
 
         signature = private_key.sign(transcript, ec.ECDSA(hashes.SHA256()))
-        return base64.urlsafe_b64encode(signature).decode("ascii")
+        return base64.urlsafe_b64encode(signature).decode("ascii").rstrip("=")
 
     async def _fetch_ca_bundle(self, client: httpx.AsyncClient, base_url: str) -> str:
         """Fetch the gateway CA bundle from the public well-known endpoint."""
