@@ -278,7 +278,7 @@ A custom Operator implementation must pass the platform test suite to claim g8e 
 
 - `make test-unit`, Runs Tier 1 unit tests.
 - `make test-integration`, Runs Tier 2 in-process integration tests.
-- `make test-docker`, Runs Tier 3 E2E tests requiring Docker.
+- `make test-docker`, Runs Tier 3 E2E tests against a running platform. Start the platform first (`docker compose up` or `./g8e gw start`), then run `make test-docker`. The low-level executor is `./g8e test e2e`, which connects to the running platform and fails fast if it is not reachable. Use `./g8e test e2e --run <pattern>` to select specific scenario tests.
 - `make ci`, Runs the full CI pipeline.
 
 ---

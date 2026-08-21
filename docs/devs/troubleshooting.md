@@ -1,6 +1,6 @@
 # Developer Troubleshooting
 
-Last Updated: 2026-08-18
+Last Updated: 2026-08-21
 Version: v1.7.7
 
 This page covers common setup failures, runtime friction, and operational caveats for contributors working on g8e from a fresh checkout. The platform runs host-native. For architecture-level context, see [Authentication & Authorization](../architecture/auth.md), [Encryption Architecture](../architecture/encryption.md), [Gateway Architecture](../architecture/gateway.md), [Governance](../architecture/governance.md), and [Network Architecture](../architecture/network.md).
@@ -97,11 +97,33 @@ The test suite uses a tiered structure with different infrastructure requirement
 
 - **Tier 1 (Unit tests)**: Run immediately without external dependencies via `make test-unit`.
 - **Tier 2 (In-Process Integration)**: No external dependencies. Integration tests use in-process gateway fixtures (`test/fixtures/gateway_fixture.go`) that spin up the gateway within the test process. Run via `make test-integration`.
-- **Tier 3 (Docker E2E)**: Requires Docker. Run via `make test-docker`.
+- **Tier 3 (Docker E2E)**: Requires a running platform. Start the platform first (`docker compose up` or `./g8e gw start`), then run `make test-docker` or `./g8e test e2e`. The test binary connects to the running platform and fails fast if it is not reachable. Use `./g8e test e2e --run <pattern>` to select specific scenario tests that require particular platform states (pending, denied, headless, approved-restart).
 
 Tier 2 integration tests do not require a running external gateway. They construct the gateway in-process via `GatewayFixture`, which handles PKI enrollment and mTLS configuration automatically. If these tests fail, the cause is typically a port conflict or missing build dependencies, not a missing gateway process.
 
 If a test failure mentions missing trust bundles or client certificates, confirm that the test fixture has not been modified to skip enrollment. The `EnrollClientIdentity` helper in `test/fixtures/gateway_fixture.go` generates test PKI material at runtime.
+
+### Tier 3 E2E preflight failures
+
+Tier 3 E2E tests (`./g8e test e2e` or `make test-docker`) require a running platform. The test binary's `TestMain` performs a bounded HTTP health check against the gateway and exits non-zero with `FATAL: E2E preflight failed` if the platform is not reachable. There is no skip and no false-green.
+
+Common causes:
+- The platform is not running. Start it first: `docker compose up` or `./g8e gw start`.
+- The gateway is running but the health endpoint is not responding. Check `./g8e gw status` and `./g8e gw logs`.
+- Owner credentials are missing or expired. Run `./g8e auth enroll user` to obtain a fresh CLI session. The test binary reads the owner CLI certificate, key, and session ID from the local `.g8e/` runtime tree.
+- The CLI session has expired (1-hour TTL). Authenticated tests fail with `CLI session expired` (401). Re-enroll to obtain a fresh session.
+
+### Tier 3 scenario selection
+
+Stateful E2E tests require specific platform states. Use `./g8e test e2e --run <pattern>` to select the tests that match the current platform state:
+
+- `TestGateway|TestEnsemble|TestDashboard` — public-surface tests, any running platform with the full stack
+- `TestAuth|TestOperatorRegistry|TestPubSub|TestCommandRoundtrip|TestCompliance` — authenticated tests, approved stack with valid owner session
+- `TestPlatformEnrollment_PendingDiscovery` — full stack running, owner bootstrapped, no approvals
+- `TestPlatformEnrollment_Denial` — full stack running, owner bootstrapped, no approvals
+- `TestPlatformEnrollment_RestartDuringPending` — full stack running, owner bootstrapped, no approvals, operator restarted by user before running
+- `TestPlatformEnrollment_Headless` — gateway only, owner bootstrapped, no operator/dashboard/ensemble
+- `TestApprovedRestart` — full approved stack, operator restarted by user before running
 
 ## Vault and encryption failures
 

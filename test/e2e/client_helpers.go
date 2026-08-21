@@ -120,23 +120,3 @@ func decodeJSON[T any](body []byte, label string) (T, error) {
 type ensembleHealthResponse struct {
 	Status string `json:"status"`
 }
-
-// dispatchRequestJSON is the typed JSON body for POST
-// /api/v1/operators/commands. Mirrors gateway.OperatorCommandRequest. Defined
-// locally to keep the E2E package decoupled from internal gateway types.
-type dispatchRequestJSON struct {
-	TargetOperatorSessionID string `json:"target_operator_session_id"`
-	ActionType              string `json:"action_type"`
-	Payload                 []byte `json:"payload"`
-	TargetResource          string `json:"target_resource,omitempty"`
-}
-
-// dispatchResponseJSON mirrors gateway.DispatchResponse.
-type dispatchResponseJSON struct {
-	Success       bool   `json:"success"`
-	TransactionID string `json:"transaction_id"`
-	EventType     string `json:"event_type,omitempty"`
-	ActionType    string `json:"action_type,omitempty"`
-	ResultPayload []byte `json:"result_payload,omitempty"`
-	Error         string `json:"error,omitempty"`
-}

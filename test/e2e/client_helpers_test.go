@@ -180,7 +180,7 @@ func TestDoRequest(t *testing.T) {
 		checkStatus    int // the actual status code we expect from the server
 	}{
 		{
-			name:        "successful 200 response",
+			name: "successful 200 response",
 			setupServer: func() *httptest.Server {
 				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusOK)
@@ -405,9 +405,9 @@ func TestDecodeJSON(t *testing.T) {
 			errorContains: "decode widget",
 		},
 		{
-			name:  "type mismatch returns wrapped error",
-			body:  []byte(`{"name":"alpha","count":"not-a-number"}`),
-			label: "widget",
+			name:          "type mismatch returns wrapped error",
+			body:          []byte(`{"name":"alpha","count":"not-a-number"}`),
+			label:         "widget",
 			expectError:   true,
 			errorContains: "decode widget",
 		},
@@ -422,9 +422,9 @@ func TestDecodeJSON(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:  "label appears in error message",
-			body:  []byte(`{`),
-			label: "health response",
+			name:          "label appears in error message",
+			body:          []byte(`{`),
+			label:         "health response",
 			expectError:   true,
 			errorContains: "decode health response",
 		},

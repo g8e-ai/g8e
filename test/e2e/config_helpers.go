@@ -13,30 +13,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
-	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/fs"
 )
-
-// e2eConfig holds resolved platform endpoints and owner credentials loaded
-// from the local .g8e/ runtime tree. It is constructed once by loadE2EConfig
-// and shared across all E2E test functions via the package-level e2eCfg
-// variable set in TestMain.
-type e2eConfig struct {
-	gatewayHTTPURL  string
-	gatewayHTTPSURL string
-	ensembleURL     string
-	dashboardURL    string
-	cliCertPath     string
-	cliKeyPath      string
-	caBundleRelPath string
-	cliSessionID    string
-	fileSvc         fs.RuntimeFileService
-	cfg             *config.Config
-}
 
 // resolveRepoRoot finds the repository root using go list -m, matching the
 // pattern used by the integration test helpers.
@@ -99,8 +79,3 @@ func validateCredentials(creds *auth.Credentials) error {
 	}
 	return nil
 }
-
-// healthCheckTimeout is the bounded timeout for the TestMain preflight health
-// check. A single GET to the gateway health endpoint must complete within this
-// window or the suite fails closed.
-const healthCheckTimeout = 10 * time.Second

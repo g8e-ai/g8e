@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-08-19
+Last Updated: 2026-08-21
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -144,9 +144,26 @@ Tests inject a `mockEnroller` via `mockEnrollerFactory(mock)` + `noopCheckOperat
 
 ### E2E Tests (`test/e2e/`)
 
-- `command_roundtrip_e2e_test.go` — end-to-end operator command dispatch via `POST /api/v1/operators/commands`: CLI enrolls, submits a command, operator receives and executes it, result is recorded
-- `operator_registry_e2e_test.go` — operator registration, listing, and session lookup over the Docker Compose stack
-- `pubsub_heartbeat_e2e_test.go` — operator heartbeat liveness via the pub/sub channel; verifies the gateway detects operator presence and absence
+Tier 3 E2E tests are pure network assertion tests. The user starts the production platform (`docker compose up` or `./g8e gw start`), then runs `./g8e test e2e` or `make test-docker`. The test binary connects to the running platform and fails fast if it is not reachable. The test binary owns API requests and assertions only; it does not start, stop, restart, or inspect containers.
+
+`TestMain` loads configuration from the local `.g8e/` runtime tree, performs a bounded HTTP health check against the gateway, and exits non-zero if the platform is not reachable. There is no `t.Skip`, no `sharedFixture`, no Docker lifecycle, and no Compose override. A typed `E2EClient` owns bounded public and mTLS HTTP clients with strict TLS verification (no `InsecureSkipVerify`); the owner CLI certificate, CA bundle, and `ServerName` are resolved from the runtime tree.
+
+Stateful scenarios require specific platform states that the user prepares manually before running the selected tests via `./g8e test e2e --run <pattern>`:
+
+- `gateway_e2e_test.go` — typed gateway health and CA bundle responses, health stability across probes
+- `auth_e2e_test.go` — owner mTLS authentication, missing-session-header rejection
+- `operator_registry_e2e_test.go` — active operator discovery via the typed list endpoint, heartbeat timestamp baseline
+- `pubsub_heartbeat_e2e_test.go` — heartbeat advancement proof via two typed `UpdatedAt` observations
+- `command_roundtrip_e2e_test.go` — full gateway-to-operator command dispatch roundtrip with typed `FsReadResult` protobuf decode
+- `ensemble_e2e_test.go` — ensemble health, detailed health with typed client map, dashboard index, gateway stability
+- `compliance_e2e_test.go` — typed audit receipts, summary, and events responses
+- `platform_enrollment_pending_e2e_test.go` — pending discovery: all three component kinds appear, request IDs are unique, raw JSON excludes tokens and secret material
+- `platform_enrollment_denial_e2e_test.go` — denial: deny an exact request ID, verify terminal state, gateway remains healthy, no active operator
+- `platform_enrollment_restart_pending_e2e_test.go` — restart-during-pending: request-ID continuity after restart, no duplicate, approval succeeds, command roundtrip works
+- `platform_enrollment_headless_e2e_test.go` — headless: gateway-only deployment, health and CA bundle succeed, pending list and operator list are empty, ensemble and dashboard endpoints are absent
+- `approved_restart_e2e_test.go` — approved-restart: operator identity persists after restart, heartbeat advances, command roundtrip succeeds
+
+MCP config-output assertions (`mcp agent show` JSON structure, TLS fields, transport type) are covered by hermetic CLI command tests in `internal/cli/cmd/mcp_config_output_test.go` as Tier 1 unit tests, not Tier 3 E2E tests.
 
 ---
 
@@ -200,7 +217,7 @@ The `adapterFixture` struct in `test/protocol_test_helpers_test.go` bundles a `G
 | --- | --- | --- | --- | --- | --- |
 | **Tier 1** | **Unit Tests** | `internal/...` & `pkg/...` | *No tags* | None (stub-only, no files/network/DB) | < 10ms per test |
 | **Tier 2** | **In-Process Integration** | `internal/...` & `test/` | `//go:build integration` | On-disk SQLite, local PKI, local pubsub (gateway in-process) | < 2s per suite |
-| **Tier 3** | **Docker E2E** | `test/e2e/` | `//go:build e2e` | Docker containers (gateway + operator via docker-compose) | < 30s per suite |
+| **Tier 3** | **Docker E2E** | `test/e2e/` | `//go:build e2e` | Running platform (user starts `docker compose up` or `./g8e gw start` first) | < 30s per suite |
 | **Tier 4** | **External** | `ensemble/tests/integration/` (and any future component tests with external deps) | `pytest.mark.ai_integration`, `pytest.mark.requires_web_search`, `pytest.mark.requires_api` | Real LLM providers, web search APIs, third-party services | seconds to minutes per test |
 
 ### Tier 4 (External)
@@ -227,7 +244,7 @@ Tier 4 covers tests that depend on resources outside the platform's own infrastr
 make test              # Tier 1 + Tier 2
 make test-unit         # Tier 1 only
 make test-integration  # Tier 2 only (integration build tag)
-make test-docker       # Tier 3 (e2e build tag, requires Docker)
+make test-docker       # Tier 3 (e2e build tag, requires running platform)
 make test-coverage     # Coverage with -coverprofile and -covermode=atomic
 make test-airgap       # Verify vendored build works without network access
 make ci                # Full CI pipeline (proto, swagger, lint, vulncheck, tests)
@@ -243,8 +260,9 @@ make lint              # golangci-lint + lint-no-embedded-newlines + vulncheck +
 # 2. In-process integration tests (no separately running gateway required)
 ./g8e test integration
 
-# 3. Docker E2E tests (requires Docker)
-make test-docker
+# 3. Docker E2E tests (start the platform first, then run tests)
+docker compose up     # or: ./g8e gw start
+make test-docker      # connects to the running platform
 
 # 4. Authenticate (required for non-demo mTLS tests; demo runs enroll inline)
 ./g8e auth enroll user
@@ -294,11 +312,15 @@ Each consensus member signs with its own distinct key derived from `member_seeds
 
 Key fixture methods: `NewGatewayFixture`, `EnrollClientIdentity`, `CreateMTLSClient`, `CreateCLIMTLSClient`, `CreateNoCertClient`, `SetupConsensus`, `WaitForReady`. `PublicBaseURL` is set via `GatewayFixtureOptions` at construction time.
 
-### Docker E2E Fixture (Tier 3)
+### Docker E2E Architecture (Tier 3)
 
-`TestMain` in `test/e2e/main_test.go` spins up a single Docker Compose stack (gateway + operator) once for all E2E tests, then tears it down after `m.Run()`. The shared fixture is stored in the package-level `sharedFixture` variable. Tests that require Docker check for nil and skip if unavailable; tests that do not require Docker (e.g. MCP config output) run regardless. E2E tests are Tier 3 and require Docker — there is no opt-out. A fixture-setup failure exits non-zero with a `FATAL: E2E fixture setup failed` message so a broken Docker environment can never produce a green build with zero tests run. On any non-zero exit, container logs and compose state are captured to a temp dir before teardown.
+The user owns Docker lifecycle; the Go test binary owns API requests and assertions. The user starts the production platform (`docker compose up` or `./g8e gw start`), then runs `./g8e test e2e` or `make test-docker`. The test binary connects to the running platform and fails fast if it is not reachable.
 
-The Dockerfile uses a BuildKit cache mount (`--mount=type=cache,target=/root/.cache/go-build`) to preserve the Go build cache across Docker image rebuilds. The harness sets `DOCKER_BUILDKIT=1` to enable this. First run after code changes rebuilds from scratch (~100s); subsequent runs with warm cache complete in ~25s.
+`TestMain` in `test/e2e/main_test.go` loads configuration from the local `.g8e/` runtime tree, performs a bounded HTTP health check against the gateway, and exits non-zero with a concise error if the platform is not reachable. There is no `t.Skip`, no `sharedFixture`, no Docker lifecycle, and no Compose override. The test binary does not start, stop, restart, or inspect containers.
+
+Stateful scenarios (pending discovery, denial, restart-during-pending, headless, approved-restart) require specific platform states that the user prepares manually before running the selected tests via `./g8e test e2e --run <pattern>`. The scenario matrix is documented in the plan file (`.local.dev/docs/plans/in-progress/e2e-cleanup.md`).
+
+The `test/e2e/` package contains no Docker, Compose, process-control, dynamic-port-allocation, container-log, or container-filesystem code. All assertions are through typed gateway and workload APIs with strict mTLS. The `E2EClient` reads gateway URL and owner credentials from the local `.g8e/` runtime tree via `config.Load` and `RuntimeFileService`, same as the CLI.
 
 ### Trust Bundle Troubleshooting
 

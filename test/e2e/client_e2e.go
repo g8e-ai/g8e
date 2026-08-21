@@ -19,6 +19,26 @@ import (
 	"github.com/g8e-ai/g8e/internal/httpclient"
 )
 
+// dispatchRequestJSON is the typed JSON body for POST
+// /api/v1/operators/commands. Mirrors gateway.OperatorCommandRequest. Defined
+// locally to keep the E2E package decoupled from internal gateway types.
+type dispatchRequestJSON struct {
+	TargetOperatorSessionID string `json:"target_operator_session_id"`
+	ActionType              string `json:"action_type"`
+	Payload                 []byte `json:"payload"`
+	TargetResource          string `json:"target_resource,omitempty"`
+}
+
+// dispatchResponseJSON mirrors gateway.DispatchResponse.
+type dispatchResponseJSON struct {
+	Success       bool   `json:"success"`
+	TransactionID string `json:"transaction_id"`
+	EventType     string `json:"event_type,omitempty"`
+	ActionType    string `json:"action_type,omitempty"`
+	ResultPayload []byte `json:"result_payload,omitempty"`
+	Error         string `json:"error,omitempty"`
+}
+
 // newE2EClient constructs an E2EClient from the resolved e2eConfig. It loads
 // the owner CLI certificate and key from disk, reads the CA bundle from the
 // runtime tree, and builds strict mTLS HTTP clients using ServerName derived

@@ -12,12 +12,35 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
+
+// e2eConfig holds resolved platform endpoints and owner credentials loaded
+// from the local .g8e/ runtime tree. It is constructed once by loadE2EConfig
+// and shared across all E2E test functions via the package-level e2eCfg
+// variable set in TestMain.
+type e2eConfig struct {
+	gatewayHTTPURL  string
+	gatewayHTTPSURL string
+	ensembleURL     string
+	dashboardURL    string
+	cliCertPath     string
+	cliKeyPath      string
+	caBundleRelPath string
+	cliSessionID    string
+	fileSvc         fs.RuntimeFileService
+	cfg             *config.Config
+}
+
+// healthCheckTimeout is the bounded timeout for the TestMain preflight health
+// check. A single GET to the gateway health endpoint must complete within this
+// window or the suite fails closed.
+const healthCheckTimeout = 10 * time.Second
 
 // loadE2EConfig resolves the repository root, loads CLI configuration from the
 // local .g8e/ runtime tree, and reads the owner CLI session ID from stored
