@@ -114,13 +114,36 @@ func resolveCertPath(clientCert string, fileSvc fs.RuntimeFileService, logger *s
 }
 
 // loadClientCertPair reads the cert and key PEM files and returns the TLS certificate
-// along with the raw cert PEM bytes for logging.
+// along with the raw cert PEM bytes for logging. It uses os.ReadFile directly,
+// so certPath and keyPath must be absolute or resolvable against the process
+// working directory (CLI flag paths, project-directory discovery paths).
 func loadClientCertPair(certPath, keyPath string) (tls.Certificate, []byte, error) {
 	certPEM, err := os.ReadFile(certPath)
 	if err != nil {
 		return tls.Certificate{}, nil, fmt.Errorf("%w: %w", constants.ErrReadClientCert, err)
 	}
 	keyPEM, err := os.ReadFile(keyPath)
+	if err != nil {
+		return tls.Certificate{}, nil, fmt.Errorf("%w: %w", constants.ErrReadPrivateKey, err)
+	}
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		return tls.Certificate{}, nil, fmt.Errorf("%w: %w", constants.ErrLoadCertKeyPair, err)
+	}
+	return cert, certPEM, nil
+}
+
+// loadClientCertPairViaFileSvc reads the cert and key PEM files from the .g8e/
+// runtime tree via RuntimeFileService and returns the TLS certificate along
+// with the raw cert PEM bytes for logging. certPath and keyPath must be
+// relative to the runtime tree root (as returned by the platform enrollment
+// client). Use loadClientCertPair for arbitrary user-supplied paths instead.
+func loadClientCertPairViaFileSvc(ctx context.Context, fileSvc fs.RuntimeFileService, certPath, keyPath string) (tls.Certificate, []byte, error) {
+	certPEM, err := fileSvc.ReadFile(ctx, certPath)
+	if err != nil {
+		return tls.Certificate{}, nil, fmt.Errorf("%w: %w", constants.ErrReadClientCert, err)
+	}
+	keyPEM, err := fileSvc.ReadFile(ctx, keyPath)
 	if err != nil {
 		return tls.Certificate{}, nil, fmt.Errorf("%w: %w", constants.ErrReadPrivateKey, err)
 	}
@@ -234,6 +257,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 
 	privateKey := resolveKeyPath(opts.PrivateKey, fileSvc, logger)
 	clientCert := resolveCertPath(opts.ClientCert, fileSvc, logger)
+	enrolled := false
 
 	// If no installed operator credentials exist and an endpoint is
 	// provided, drive the owner-approved platform enrollment protocol
@@ -274,6 +298,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		}
 		privateKey = result.OperatorKeyPath
 		clientCert = result.OperatorCertPath
+		enrolled = true
 
 		// Reload the trust bundle from the newly written file.
 		caBundleRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
@@ -306,7 +331,13 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 
 	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
 
-	cert, certPEM, err := loadClientCertPair(clientCert, privateKey)
+	var cert tls.Certificate
+	var certPEM []byte
+	if enrolled {
+		cert, certPEM, err = loadClientCertPairViaFileSvc(context.Background(), fileSvc, clientCert, privateKey)
+	} else {
+		cert, certPEM, err = loadClientCertPair(clientCert, privateKey)
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(constants.ExitConfigError)

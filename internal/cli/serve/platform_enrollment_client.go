@@ -57,10 +57,10 @@ const (
 	// gateway returns 403 "platform enrollment requires an activated gateway"
 	// until activation. The client retries with bounded backoff so the workload
 	// waits for activation without exiting.
-	operatorEnrollSubmitInitial   = 3 * time.Second
-	operatorEnrollSubmitMax       = 30 * time.Second
-	operatorEnrollSubmitJitter    = 1 * time.Second
-	operatorEnrollSubmitDeadline  = 30 * time.Minute
+	operatorEnrollSubmitInitial  = 3 * time.Second
+	operatorEnrollSubmitMax      = 30 * time.Second
+	operatorEnrollSubmitJitter   = 1 * time.Second
+	operatorEnrollSubmitDeadline = 30 * time.Minute
 )
 
 // OperatorEnrollmentResult is the resolved operator identity after a
@@ -293,7 +293,9 @@ func (c *OperatorPlatformEnrollmentClient) Enroll(ctx context.Context) (*Operato
 		"cli_session_id", creds.CLISessionID,
 	)
 
-	// Step 9: Return the resolved identity.
+	// Step 9: Return the resolved identity. Paths are relative to the
+	// runtime tree root; the caller loads them via the fileSvc-aware
+	// cert loader (loadClientCertPairViaFileSvc), not os.ReadFile.
 	return &OperatorEnrollmentResult{
 		OperatorCertPath:  c.operatorCertPath(),
 		OperatorKeyPath:   c.operatorKeyPath(),
