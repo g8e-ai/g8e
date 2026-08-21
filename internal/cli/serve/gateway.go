@@ -275,6 +275,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 			PKI:              svc.GetPKI(),
 			CLISessions:      svc.GetCLISessionService(),
 			OperatorSessions: svc.GetOperatorSessionService(),
+			Posture:          string(cfg.Posture),
 		},
 	}
 

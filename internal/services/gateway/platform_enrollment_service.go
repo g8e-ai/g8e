@@ -28,6 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/timesvc"
 	"github.com/g8e-ai/g8e/internal/uuid"
+	"github.com/g8e-ai/g8e/protocol"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
@@ -586,7 +587,7 @@ func (s *PlatformEnrollmentService) submitDownstreamEnvelopes(ctx context.Contex
 			ComponentKind:          payloadComponentKind(req.ComponentKind),
 			ActorUserId:            req.ApprovedByUserID,
 			TargetCollection:       marshaler.CollectionName(constants.CollectionAppPolicies),
-			TargetDocumentId:       req.ComponentName,
+			TargetDocumentId:       protocol.NewWorkloadIdentity().AppSPIFFEID(req.ComponentName),
 			PolicyId:               policyID,
 			CertificateSerial:      req.CertificateSerial,
 			CertificateFingerprint: req.CertificateFingerprint,

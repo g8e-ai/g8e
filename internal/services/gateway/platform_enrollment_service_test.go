@@ -131,6 +131,7 @@ func setupPlatformEnrollmentEnv(t *testing.T, createOwner bool) *platformEnrollm
 			PKI:              ls.GetPKI(),
 			CLISessions:      ls.GetCLISessionService(),
 			OperatorSessions: ls.GetOperatorSessionService(),
+			Posture:          string(cfg.Gateway.Posture),
 		},
 	})
 	require.NoError(t, err)
@@ -402,14 +403,14 @@ func TestPlatformEnrollmentService_DashboardIssuanceProducesDualSANAndOwnershipP
 	assert.NotNil(t, stored.Issued)
 
 	// Verify the app policy was persisted with ownership and approval provenance.
-	policyDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), "g8ed")
+	policyDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), "spiffe://g8e.local/app/g8ed")
 	require.NoError(t, err)
 	require.NotNil(t, policyDoc)
 	dataBytes, err := json.Marshal(policyDoc.Data)
 	require.NoError(t, err)
 	var policy models.AppPolicy
 	require.NoError(t, json.Unmarshal(dataBytes, &policy))
-	assert.Equal(t, "g8ed", policy.AppID)
+	assert.Equal(t, "spiffe://g8e.local/app/g8ed", policy.AppID)
 	assert.Equal(t, env.ownerID, policy.OwnerUserID)
 	assert.Equal(t, env.ownerID, policy.ApprovedByUserID)
 	assert.Equal(t, requestID, policy.EnrollmentRequestID)
@@ -441,7 +442,7 @@ func TestPlatformEnrollmentService_EnsembleIssuanceProducesDualSANAndOwnershipPo
 	assert.Equal(t, "spiffe://g8e.local/user/"+env.ownerID, uris[1])
 
 	// Verify the ensemble app policy.
-	policyDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), "g8ee")
+	policyDoc, err := env.docStore.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), "spiffe://g8e.local/app/g8ee")
 	require.NoError(t, err)
 	require.NotNil(t, policyDoc)
 

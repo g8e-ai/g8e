@@ -151,7 +151,7 @@ func TestPlatformEnrollmentFailureInjection_AfterSigning(t *testing.T) {
 
 	// Verify the policy was persisted on retry.
 	policyDoc, err := env.docStore.DocGet(
-		marshaler.CollectionName(constants.CollectionAppPolicies), "g8ed")
+		marshaler.CollectionName(constants.CollectionAppPolicies), "spiffe://g8e.local/app/g8ed")
 	require.NoError(t, err)
 	require.NotNil(t, policyDoc, "policy must be persisted after retry")
 }

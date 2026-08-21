@@ -67,6 +67,7 @@ type PlatformEnrollmentDeps struct {
 	PKI              PlatformEnrollmentPKI
 	CLISessions      PlatformEnrollmentCLISessions
 	OperatorSessions PlatformEnrollmentOperatorSessions
+	Posture          string
 }
 
 // platformEnrollmentCollection is the canonical collection name for

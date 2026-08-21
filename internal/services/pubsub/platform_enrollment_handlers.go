@@ -414,6 +414,7 @@ func (h *PlatformEnrollmentHandler) signOperatorComponent(req *models.PlatformEn
 		CLISessionID:      cliSessionID,
 		CLICert:           cliCertPEM,
 		CLICertChain:      cliCertChainPEM,
+		Posture:           h.deps.Posture,
 	}
 	resp := &models.PlatformEnrollmentCompleteResponse{
 		RequestID:     req.ID,
