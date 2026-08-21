@@ -29,9 +29,9 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -673,4 +673,3 @@ func repeatChar(c string, n int) string {
 	}
 	return result
 }
-

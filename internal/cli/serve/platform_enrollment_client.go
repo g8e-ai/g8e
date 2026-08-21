@@ -44,10 +44,10 @@ import (
 // component that submits two CSRs (operator + CLI) and signs the
 // completion transcript with both private keys.
 const (
-	operatorEnrollHTTPTimeout    = 10 * time.Second
-	operatorEnrollPollInitial    = 2 * time.Second
-	operatorEnrollPollMax        = 30 * time.Second
-	operatorEnrollPollJitter     = 500 * time.Millisecond
+	operatorEnrollHTTPTimeout     = 10 * time.Second
+	operatorEnrollPollInitial     = 2 * time.Second
+	operatorEnrollPollMax         = 30 * time.Second
+	operatorEnrollPollJitter      = 500 * time.Millisecond
 	operatorEnrollDefaultDeadline = 30 * time.Minute
 )
 
@@ -56,15 +56,15 @@ const (
 // to the G8E_OPERATOR_SESSION_ID env var and sets OperatorID/Posture
 // on the config before constructing the g8eo service.
 type OperatorEnrollmentResult struct {
-	OperatorCertPath string
-	OperatorKeyPath  string
-	CLICertPath      string
-	CLIKeyPath       string
-	TrustBundlePath  string
-	OperatorID       string
+	OperatorCertPath  string
+	OperatorKeyPath   string
+	CLICertPath       string
+	CLIKeyPath        string
+	TrustBundlePath   string
+	OperatorID        string
 	OperatorSessionID string
-	CLISessionID     string
-	Posture          string
+	CLISessionID      string
+	Posture           string
 }
 
 // operatorPendingState is the resumable pending enrollment attempt,
@@ -135,10 +135,10 @@ func (c *OperatorPlatformEnrollmentClient) Enroll(ctx context.Context) (*Operato
 	}
 
 	var (
-		token, requestID              string
-		operatorFP, cliFP             string
-		operatorKeyPEM, cliKeyPEM     string
-		operatorKey, cliKey           *ecdsa.PrivateKey
+		token, requestID          string
+		operatorFP, cliFP         string
+		operatorKeyPEM, cliKeyPEM string
+		operatorKey, cliKey       *ecdsa.PrivateKey
 	)
 
 	if pending != nil && pending.Token != "" && pending.RequestID != "" {
@@ -712,7 +712,7 @@ func encodeECPrivateKeyPEM(key *ecdsa.PrivateKey) (string, error) {
 }
 
 func (c *OperatorPlatformEnrollmentClient) sleep(ctx context.Context, base time.Duration) error {
-	jitter := time.Duration(mathrand.Int64N(int64(operatorEnrollPollJitter)))
+	jitter := time.Duration(mathrand.Int64N(int64(operatorEnrollPollJitter))) //nolint:gosec // poll jitter, not security-sensitive; keys use crypto/rand
 	total := base + jitter
 	select {
 	case <-ctx.Done():

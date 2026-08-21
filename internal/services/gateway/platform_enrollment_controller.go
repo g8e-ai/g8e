@@ -43,11 +43,11 @@ import (
 // and the plain HTTP discovery router (an unenrolled workload has no
 // client certificate). pending and decision are registered on HTTPS only.
 type PlatformEnrollmentController struct {
-	cfg         *config.Config
-	logger      *slog.Logger
-	enrollSvc   *PlatformEnrollmentService
-	userSvc     *UserService
-	responder   *response.Writer
+	cfg       *config.Config
+	logger    *slog.Logger
+	enrollSvc *PlatformEnrollmentService
+	userSvc   *UserService
+	responder *response.Writer
 }
 
 // PlatformEnrollmentControllerDeps groups all dependencies for

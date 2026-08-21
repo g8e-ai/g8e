@@ -63,9 +63,9 @@ type PlatformEnrollmentService struct {
 	logger    *slog.Logger
 
 	cancel  context.CancelFunc
-	wg     sync.WaitGroup
+	wg      sync.WaitGroup
 	running bool
-	mu     sync.Mutex
+	mu      sync.Mutex
 }
 
 // NewPlatformEnrollmentService creates a new PlatformEnrollmentService.
@@ -214,20 +214,20 @@ func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req model
 	expiresAt := now.Add(constants.PlatformEnrollmentRequestTTL)
 
 	persistedReq := &models.PlatformEnrollmentRequest{
-		ID:               requestID,
-		TokenHash:        tokenHash,
-		ComponentKind:    req.ComponentKind,
-		ComponentName:    componentName,
-		InstanceID:       req.InstanceID,
-		Hostname:         req.Hostname,
+		ID:                requestID,
+		TokenHash:         tokenHash,
+		ComponentKind:     req.ComponentKind,
+		ComponentName:     componentName,
+		InstanceID:        req.InstanceID,
+		Hostname:          req.Hostname,
 		SystemFingerprint: req.SystemFingerprint,
-		App:              req.App,
-		Operator:         req.Operator,
-		Fingerprints:     fingerprints,
-		State:            models.PlatformEnrollmentStatePending,
-		CreatedAt:        now,
-		ExpiresAt:        expiresAt,
-		LastTransitionAt: now,
+		App:               req.App,
+		Operator:          req.Operator,
+		Fingerprints:      fingerprints,
+		State:             models.PlatformEnrollmentStatePending,
+		CreatedAt:         now,
+		ExpiresAt:         expiresAt,
+		LastTransitionAt:  now,
 	}
 
 	// Write the pending request document directly. CREATE is classified
@@ -362,12 +362,12 @@ func (s *PlatformEnrollmentService) Decide(ctx context.Context, actorUserID stri
 	}
 
 	if _, err := s.submitEnvelope(ctx, constants.PlatformEnrollmentActionDecide, intent, &commonv1.PlatformEnrollmentGovernancePayload{
-		Action:       string(constants.PlatformEnrollmentActionDecide),
-		Intent:       string(intent),
-		RequestId:    req.RequestID,
+		Action:        string(constants.PlatformEnrollmentActionDecide),
+		Intent:        string(intent),
+		RequestId:     req.RequestID,
 		ComponentKind: payloadComponentKind(existing.ComponentKind),
-		ActorUserId:  actorUserID,
-		Decision:     payloadDecision(req.Decision),
+		ActorUserId:   actorUserID,
+		Decision:      payloadDecision(req.Decision),
 	}); err != nil {
 		return nil, fmt.Errorf("platform enrollment: decide envelope: %w", err)
 	}
@@ -580,17 +580,17 @@ func (s *PlatformEnrollmentService) submitDownstreamEnvelopes(ctx context.Contex
 			policyID = uuid.NewString()
 		}
 		if _, err := s.submitEnvelope(ctx, constants.PlatformEnrollmentActionPersistPolicy, constants.PlatformEnrollmentIntentIssue, &commonv1.PlatformEnrollmentGovernancePayload{
-			Action:                string(constants.PlatformEnrollmentActionPersistPolicy),
-			Intent:                string(constants.PlatformEnrollmentIntentIssue),
-			RequestId:             req.ID,
-			ComponentKind:         payloadComponentKind(req.ComponentKind),
-			ActorUserId:           req.ApprovedByUserID,
-			TargetCollection:      marshaler.CollectionName(constants.CollectionAppPolicies),
-			TargetDocumentId:      req.ComponentName,
-			PolicyId:              policyID,
-			CertificateSerial:     req.CertificateSerial,
+			Action:                 string(constants.PlatformEnrollmentActionPersistPolicy),
+			Intent:                 string(constants.PlatformEnrollmentIntentIssue),
+			RequestId:              req.ID,
+			ComponentKind:          payloadComponentKind(req.ComponentKind),
+			ActorUserId:            req.ApprovedByUserID,
+			TargetCollection:       marshaler.CollectionName(constants.CollectionAppPolicies),
+			TargetDocumentId:       req.ComponentName,
+			PolicyId:               policyID,
+			CertificateSerial:      req.CertificateSerial,
 			CertificateFingerprint: req.CertificateFingerprint,
-			OwnerUserId:           req.ApprovedByUserID,
+			OwnerUserId:            req.ApprovedByUserID,
 		}); err != nil {
 			return fmt.Errorf("platform enrollment: persist policy envelope: %w", err)
 		}
@@ -600,16 +600,16 @@ func (s *PlatformEnrollmentService) submitDownstreamEnvelopes(ctx context.Contex
 			return constants.ErrPlatformEnrollmentInvalidPayload
 		}
 		if _, err := s.submitEnvelope(ctx, constants.PlatformEnrollmentActionCreateSession, constants.PlatformEnrollmentIntentIssue, &commonv1.PlatformEnrollmentGovernancePayload{
-			Action:              string(constants.PlatformEnrollmentActionCreateSession),
-			Intent:              string(constants.PlatformEnrollmentIntentIssue),
-			RequestId:           req.ID,
-			ComponentKind:       payloadComponentKind(req.ComponentKind),
-			ActorUserId:         req.ApprovedByUserID,
-			OperatorId:          req.OperatorID,
-			OperatorSessionId:   req.OperatorSessionID,
-			CliSessionId:        req.CLISessionID,
+			Action:                 string(constants.PlatformEnrollmentActionCreateSession),
+			Intent:                 string(constants.PlatformEnrollmentIntentIssue),
+			RequestId:              req.ID,
+			ComponentKind:          payloadComponentKind(req.ComponentKind),
+			ActorUserId:            req.ApprovedByUserID,
+			OperatorId:             req.OperatorID,
+			OperatorSessionId:      req.OperatorSessionID,
+			CliSessionId:           req.CLISessionID,
 			CertificateFingerprint: req.CertificateFingerprint,
-			CertificateSerial:   req.CertificateSerial,
+			CertificateSerial:      req.CertificateSerial,
 		}); err != nil {
 			return fmt.Errorf("platform enrollment: create session envelope: %w", err)
 		}
@@ -758,8 +758,7 @@ func (s *PlatformEnrollmentService) findLiveRequest(kind models.PlatformComponen
 func (s *PlatformEnrollmentService) checkQuota(kind models.PlatformComponentKind) error {
 	docs, err := s.db.DocQuery(
 		platformEnrollmentCollectionName(),
-		[]models.DocFilter{{Field: "component_kind", Op: "==", Value: json.RawMessage(`"` + string(kind) + `"`)},
-		},
+		[]models.DocFilter{{Field: "component_kind", Op: "==", Value: json.RawMessage(`"` + string(kind) + `"`)}},
 		"", 0,
 	)
 	if err != nil {
@@ -899,8 +898,7 @@ func (s *PlatformEnrollmentService) loadByToken(token string) (*models.PlatformE
 	tokenHash := platformEnrollmentTokenHash(token)
 	docs, err := s.db.DocQuery(
 		platformEnrollmentCollectionName(),
-		[]models.DocFilter{{Field: "token_hash", Op: "==", Value: json.RawMessage(`"` + tokenHash + `"`)},
-		},
+		[]models.DocFilter{{Field: "token_hash", Op: "==", Value: json.RawMessage(`"` + tokenHash + `"`)}},
 		"", 1,
 	)
 	if err != nil {

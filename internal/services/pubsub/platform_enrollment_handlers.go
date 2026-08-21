@@ -256,13 +256,13 @@ func (h *PlatformEnrollmentHandler) HandleIssue(ctx context.Context, msg *PubSub
 	// Persist the issued response, generated IDs, cert metadata, and
 	// transition issuing -> completed in a single conditional update.
 	completionFields := map[string]interface{}{
-		"state":                  string(models.PlatformEnrollmentStateCompleted),
-		"issued":                 issued,
-		"completed_at":           time.Now().UTC(),
-		"last_transition_at":     time.Now().UTC(),
-		"issuance_envelope_id":   msg.ID,
-		"issuance_receipt_id":    msg.ID,
-		"certificate_serial":     certSerial,
+		"state":                   string(models.PlatformEnrollmentStateCompleted),
+		"issued":                  issued,
+		"completed_at":            time.Now().UTC(),
+		"last_transition_at":      time.Now().UTC(),
+		"issuance_envelope_id":    msg.ID,
+		"issuance_receipt_id":     msg.ID,
+		"certificate_serial":      certSerial,
 		"certificate_fingerprint": certFingerprint,
 	}
 	if operatorID != "" {

@@ -123,8 +123,8 @@ func setupPlatformEnrollmentEnv(t *testing.T, createOwner bool) *platformEnrollm
 			FieldReader:          govDeps.FieldReader,
 			Doctrine:             govDeps.Doctrine,
 		},
-		MCPGateway:             mcpGateway,
-		EnvProcAdapter:         ls.GetEnvProcAdapter(),
+		MCPGateway:              mcpGateway,
+		EnvProcAdapter:          ls.GetEnvProcAdapter(),
 		SessionValidatorAdapter: ls.GetSessionValidatorAdapter(),
 		PlatformEnrollmentDeps: &pubsub.PlatformEnrollmentDeps{
 			DocStore:         ls.GetDocStore(),

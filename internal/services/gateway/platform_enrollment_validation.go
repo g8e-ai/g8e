@@ -101,11 +101,6 @@ func platformEnrollmentTokenHash(token string) string {
 	return hex.EncodeToString(digest[:])
 }
 
-func platformEnrollmentTokenMatches(token, expectedHash string) bool {
-	actual := platformEnrollmentTokenHash(token)
-	return subtle.ConstantTimeCompare([]byte(actual), []byte(expectedHash)) == 1
-}
-
 func platformEnrollmentCompletionTranscript(request *models.PlatformEnrollmentRequest) ([]byte, error) {
 	componentKind, err := platformComponentProto(request.ComponentKind)
 	if err != nil {

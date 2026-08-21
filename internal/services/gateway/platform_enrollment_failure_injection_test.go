@@ -42,12 +42,12 @@ import (
 // injected failure) succeed normally, simulating a transient crash or
 // persistence failure that is recovered on retry.
 type failureInjectingProcessor struct {
-	inner        governanceEnvelopeProcessor
-	failAfter    string // action type to fail after
-	failOnCount  int32  // fail when the call count for failAfter reaches this value
-	callCount    int32  // atomic counter for the failAfter action
-	injectedErr  error  // error to return on the injected failure
-	totalCalls   int32  // total calls across all actions (for assertions)
+	inner       governanceEnvelopeProcessor
+	failAfter   string // action type to fail after
+	failOnCount int32  // fail when the call count for failAfter reaches this value
+	callCount   int32  // atomic counter for the failAfter action
+	injectedErr error  // error to return on the injected failure
+	totalCalls  int32  // total calls across all actions (for assertions)
 }
 
 // governanceEnvelopeProcessor is the minimal interface used by the
@@ -187,11 +187,15 @@ func TestPlatformEnrollmentFailureInjection_AfterPolicyWrite(t *testing.T) {
 	restore := injectFailureAfterAction(t, env,
 		string(constants.PlatformEnrollmentActionPersistPolicy), 2,
 		errors.New("simulated crash after policy write"))
-	_, err = env.enrollSvc.Complete(context.Background(), token, proof)
-	restore()
 	// The retry path re-submits downstream envelopes; a failure there
 	// is returned to the caller but does not corrupt the completed state.
 	// The certificate was already returned successfully on the first call.
+	// The error is intentionally discarded: when the request is already
+	// completed, Complete short-circuits and returns the stored response
+	// without re-running the downstream envelopes, so the injected failure
+	// may or may not surface depending on timing.
+	_, _ = env.enrollSvc.Complete(context.Background(), token, proof)
+	restore()
 
 	// Another retry must succeed and return the same certificate.
 	secondResp, err := env.enrollSvc.Complete(context.Background(), token, proof)
@@ -278,7 +282,13 @@ func TestPlatformEnrollmentFailureInjection_AfterCLISessionWrite(t *testing.T) {
 	restore := injectFailureAfterAction(t, env,
 		string(constants.PlatformEnrollmentActionCreateSession), 2,
 		errors.New("simulated crash after CLI session write"))
-	_, err = env.enrollSvc.Complete(context.Background(), token, proof)
+	// The retry path re-submits downstream envelopes; a failure there
+	// is returned to the caller but does not corrupt the completed state.
+	// The error is intentionally discarded: when the request is already
+	// completed, Complete short-circuits and returns the stored response
+	// without re-running the downstream envelopes, so the injected failure
+	// may or may not surface depending on timing.
+	_, _ = env.enrollSvc.Complete(context.Background(), token, proof)
 	restore()
 
 	// Another retry must succeed and return the same operator identity.

@@ -743,8 +743,8 @@ func TestPlatformEnrollmentRouter_MethodEnforcement(t *testing.T) {
 	env := setupPlatformEnrollmentRouterEnv(t)
 
 	cases := []struct {
-		name      string
-		path      string
+		name        string
+		path        string
 		wrongMethod string
 	}{
 		{"request rejects GET", constants.APIPaths.AuthPlatformEnrollmentRequest, http.MethodGet},

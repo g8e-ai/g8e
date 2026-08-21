@@ -37,8 +37,8 @@ import (
 // mockGateway records every call and returns configurable responses.
 type mockGateway struct {
 	mu                       sync.Mutex
-	activated          bool
-	activatedErr       error
+	activated                bool
+	activatedErr             error
 	bootstrapArtifacts       EnrollmentArtifacts
 	bootstrapErr             error
 	bootstrapCalls           int

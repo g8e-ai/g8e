@@ -105,19 +105,6 @@ func loadPlatformEnrollmentRequest(ctx context.Context, deps PlatformEnrollmentD
 	return &req, nil
 }
 
-// persistPlatformEnrollmentRequest writes the typed request back to the
-// document store as canonical JSON.
-func persistPlatformEnrollmentRequest(deps PlatformEnrollmentDeps, req *models.PlatformEnrollmentRequest) error {
-	data, err := json.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("platform enrollment: marshal request %s: %w", req.ID, err)
-	}
-	if err := deps.DocStore.DocSet(platformEnrollmentCollection(), req.ID, data); err != nil {
-		return fmt.Errorf("platform enrollment: persist request %s: %w", req.ID, err)
-	}
-	return nil
-}
-
 // platformEnrollmentLogger is a typed alias for the slog.Logger used by
 // the handler, kept here so the handler struct in
 // platform_enrollment_handlers.go does not re-import slog.
