@@ -314,6 +314,18 @@ func (s *PlatformEnrollmentService) Decide(ctx context.Context, actorUserID stri
 	}
 
 	// Invariant 8: only the active first user may approve or deny.
+	// The controller's requireActiveFirstUser enforces this at the
+	// transport layer; the service enforces it independently so a
+	// direct caller (e.g. a future internal admin path) cannot bypass
+	// the active-owner check. A disabled first user fails closed with
+	// the same typed authorization error as a non-owner.
+	user, err := s.userSvc.GetByID(actorUserID)
+	if err != nil {
+		return nil, fmt.Errorf("platform enrollment: authorize decision: %w", err)
+	}
+	if user == nil || !user.IsActive() {
+		return nil, constants.ErrPlatformEnrollmentInvalidDecision
+	}
 	isFirst, err := s.userSvc.IsFirstUser(actorUserID)
 	if err != nil {
 		return nil, fmt.Errorf("platform enrollment: authorize decision: %w", err)

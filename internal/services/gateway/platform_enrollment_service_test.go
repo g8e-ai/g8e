@@ -824,12 +824,17 @@ func TestPlatformEnrollmentService_ConcurrentApproveDeny(t *testing.T) {
 	wg.Wait()
 
 	// Exactly one decision succeeds; the other fails. The losing decision
-	// can fail with either ErrPlatformEnrollmentAlreadyDecided (if the
-	// handler runs and finds the state already changed) or
+	// can fail with ErrPlatformEnrollmentAlreadyDecided (if the handler
+	// runs and finds the state already changed),
 	// ErrPlatformEnrollmentGovernanceRejected (if the L4 warden rejects
 	// the stale state root before the handler runs, because the first
-	// decision changed the state merkle root). Both are correct fail-closed
-	// behavior; the invariant is that exactly one decision wins.
+	// decision changed the state merkle root),
+	// ErrPlatformEnrollmentRequestDenied (if the losing goroutine loads
+	// the request after the winner has already transitioned it to the
+	// denied terminal state), or ErrPlatformEnrollmentRequestExpired
+	// (analogous for the expired terminal state). All are correct
+	// fail-closed behavior; the invariant is that exactly one decision
+	// wins.
 	stored := loadStoredRequest(t, env, createResp.RequestID)
 	assert.True(t, stored.State == models.PlatformEnrollmentStateApproved || stored.State == models.PlatformEnrollmentStateDenied,
 		"exactly one decision must win; state=%s", stored.State)
@@ -841,8 +846,10 @@ func TestPlatformEnrollmentService_ConcurrentApproveDeny(t *testing.T) {
 	}
 	assert.True(t,
 		errors.Is(loserErr, constants.ErrPlatformEnrollmentAlreadyDecided) ||
-			errors.Is(loserErr, constants.ErrPlatformEnrollmentGovernanceRejected),
-		"losing decision must fail closed with AlreadyDecided or GovernanceRejected; got %v", loserErr)
+			errors.Is(loserErr, constants.ErrPlatformEnrollmentGovernanceRejected) ||
+			errors.Is(loserErr, constants.ErrPlatformEnrollmentRequestDenied) ||
+			errors.Is(loserErr, constants.ErrPlatformEnrollmentRequestExpired),
+		"losing decision must fail closed with AlreadyDecided, GovernanceRejected, RequestDenied, or RequestExpired; got %v", loserErr)
 }
 
 // TestPlatformEnrollmentService_ConcurrentComplete proves that concurrent
