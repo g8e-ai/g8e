@@ -28,7 +28,7 @@ import (
 // Auth classification (enforced by the unified auth middleware via
 // NewRouteAuthRegistry):
 //   - request   (POST /api/v1/auth/platform-enrollments/request):    RouteAuthNone
-//     (public discovery surface; activation is checked by the service)
+//     (public discovery surface; bootstrap state is checked by the service)
 //   - status    (GET  /api/v1/auth/platform-enrollments/status):     RouteAuthNone
 //     (public; the opaque token is the lookup key)
 //   - complete  (POST /api/v1/auth/platform-enrollments/complete):   RouteAuthNone
@@ -73,7 +73,7 @@ func newPlatformEnrollmentController(deps PlatformEnrollmentControllerDeps) *Pla
 // handlePlatformEnrollmentRequest creates a new pending platform
 // enrollment request. The requester (dashboard, ensemble, or operator)
 // generates its key pair(s), builds a CSR, and posts the typed request.
-// The gateway validates activation and CSRs, deduplicates a live request,
+// The gateway validates bootstrap state and CSRs, deduplicates a live request,
 // and returns the request ID, requester token, approval URL, fingerprints,
 // and expiry. The raw token is returned once and never persisted.
 //

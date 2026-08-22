@@ -460,7 +460,7 @@ func setupCoordinatorTest(t *testing.T) (*EnrollmentCoordinator, *mockGateway, *
 
 // --- State classification tests ---
 
-func TestEnroll_AbsentNotActivated_PerformsBootstrap(t *testing.T) {
+func TestEnroll_AbsentNotBootstrapped_PerformsBootstrap(t *testing.T) {
 	t.Parallel()
 	coord, gw, keys, trust, _, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
 
@@ -498,7 +498,7 @@ func TestEnroll_AbsentNotActivated_PerformsBootstrap(t *testing.T) {
 	assert.True(t, recorder.contains("bootstrap"))
 }
 
-func TestEnroll_AbsentActivated_PerformsRecovery(t *testing.T) {
+func TestEnroll_AbsentBootstrapped_PerformsRecovery(t *testing.T) {
 	t.Parallel()
 	coord, gw, keys, trust, browser, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
 
