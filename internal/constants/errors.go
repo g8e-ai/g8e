@@ -1124,4 +1124,9 @@ var (
 	ErrKSIHistoryReadFailed  = errors.New("KSI history: read failed")
 	ErrKSIHistoryParseFailed = errors.New("KSI history: parse failed")
 	ErrKSIHistoryEmpty       = errors.New("KSI history: no snapshots found")
+
+	// Docker interactive enrollment walkthrough errors
+	ErrDockerStartEnrollmentFailed = errors.New("docker start: owner enrollment failed")
+	ErrDockerStartApprovalFailed   = errors.New("docker start: platform enrollment approval failed")
+	ErrDockerStartNoPendingRequest = errors.New("docker start: no pending platform enrollment request found for component")
 )

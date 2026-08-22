@@ -8,15 +8,24 @@
 package cmd
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"log/slog"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/internal/cli/auth"
+	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
 // dockerComposePath resolves the root unified-stack compose file relative to
@@ -109,8 +118,32 @@ func resolveDockerProfile(full bool, profile string) string {
 }
 
 func dockerStartCmd() *cobra.Command {
+	return dockerStartCmdWithConfig(loadConfig, newFileSvc, defaultAPIClientFactory, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
+}
+
+// dockerStartDeps holds the injectable dependencies for the interactive docker
+// start walkthrough. Production wires real factories; tests wire stubs. The
+// cfg and fileSvc fields are pre-resolved by the command RunE before containers
+// start so a factory failure aborts early.
+type dockerStartDeps struct {
+	clientFactory         apiClientFactory
+	checkOperatorRunning  func(*config.Config) error
+	enrollerFactory       enrollerFactory
+	waitGatewayHealthy    func(*cobra.Command) error
+	cfg                   *config.Config
+	fileSvc               fs.RuntimeFileService
+}
+
+func dockerStartCmdWithConfig(
+	configLoader func(string) (*config.Config, error),
+	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
+	clientFactory apiClientFactory,
+	checkOperatorRunning func(*config.Config) error,
+	enrollerFactory enrollerFactory,
+) *cobra.Command {
 	var full bool
 	var profile string
+	var skipEnroll bool
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -119,7 +152,17 @@ func dockerStartCmd() *cobra.Command {
 
 By default only the gateway starts. Pass --full (or --profile activated) to
 also start the operator, ensemble, and dashboard workloads, which require
-owner enrollment before they become ready.`,
+owner enrollment before they become ready.
+
+When --full is set, the command walks the owner through interactive enrollment:
+  1. Enrolls the CLI user (the first owner) with the gateway.
+  2. Prompts to approve the Ensemble platform enrollment request.
+  3. Prompts to approve the Dashboard platform enrollment request.
+  4. Prompts to approve the Operator platform enrollment request.
+
+Each component prompt accepts y to approve or n (or any other input) to skip.
+Use --skip-enroll to start the activated profile without the interactive
+walkthrough (the workloads will block waiting for manual approval).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := checkDockerComposeFileExists(); err != nil {
 				return err
@@ -129,6 +172,30 @@ owner enrollment before they become ready.`,
 			if resolved != "" {
 				scope = fmt.Sprintf("full stack (profile %s)", resolved)
 			}
+
+			// When the interactive walkthrough is active, resolve config and
+			// fileSvc BEFORE starting containers so a factory failure aborts
+			// early without leaving half-started containers.
+			var walkthroughDeps *dockerStartDeps
+			if resolved != "" && !skipEnroll {
+				cfg, err := configLoader("")
+				if err != nil {
+					return err
+				}
+				fileSvc, err := fileSvcFactory("", slog.Default())
+				if err != nil {
+					return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+				}
+				walkthroughDeps = &dockerStartDeps{
+					clientFactory:        clientFactory,
+					checkOperatorRunning: checkOperatorRunning,
+					enrollerFactory:      enrollerFactory,
+					waitGatewayHealthy:   waitForDockerGatewayHealthy,
+					cfg:                  cfg,
+					fileSvc:              fileSvc,
+				}
+			}
+
 			cmd.Printf("Starting Docker Compose %s...\n", scope)
 			if err := runDockerCompose([]string{"up", "-d"}, resolved); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
@@ -136,17 +203,195 @@ owner enrollment before they become ready.`,
 			cmd.Printf("\nDocker Compose %s started successfully.\n", scope)
 			cmd.Println("Run 'g8e docker status' to check service status.")
 			cmd.Println("Run 'g8e docker logs' to follow logs.")
+
 			if resolved == "" {
 				cmd.Println()
 				cmd.Println("To bring up the operator, ensemble, and dashboard after enrolling")
 				cmd.Println("the first owner, run 'g8e docker start --full'.")
+				return nil
 			}
-			return nil
+
+			if skipEnroll {
+				cmd.Println()
+				cmd.Println("--skip-enroll set: workloads are started but will block waiting")
+				cmd.Println("for manual platform enrollment approval. Run:")
+				cmd.Println("  g8e auth pending-platform-enrollments")
+				cmd.Println("  g8e auth approve-platform-enrollment <request-id>")
+				return nil
+			}
+
+			return runDockerStartWalkthrough(cmd, *walkthroughDeps)
 		},
 	}
 	cmd.Flags().BoolVar(&full, "full", false, "Start the full stack (gateway + operator + ensemble + dashboard)")
 	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to activate (e.g. activated)")
+	cmd.Flags().BoolVar(&skipEnroll, "skip-enroll", false, "Start the activated profile without the interactive enrollment walkthrough")
 	return cmd
+}
+
+// runDockerStartWalkthrough drives the interactive enrollment walkthrough after
+// the activated profile containers are up. It enrolls the CLI owner, waits for
+// the gateway to be reachable, then prompts the owner to approve each
+// component's platform enrollment request in order: ensemble, dashboard,
+// operator. Each prompt is skippable (any answer other than y skips that
+// component without aborting the walkthrough).
+func runDockerStartWalkthrough(cmd *cobra.Command, deps dockerStartDeps) error {
+	ctx := cmd.Context()
+
+	cmd.Println()
+	cmd.Println("=== Interactive enrollment walkthrough ===")
+	cmd.Println()
+
+	waitHealthy := deps.waitGatewayHealthy
+	if waitHealthy == nil {
+		waitHealthy = waitForDockerGatewayHealthy
+	}
+	if err := waitHealthy(cmd); err != nil {
+		return err
+	}
+
+	cfg := deps.cfg
+	fileSvc := deps.fileSvc
+
+	cmd.Println("Step 1: Enroll the CLI owner with the gateway.")
+	cmd.Println("  This creates the first user/session and registers a passkey.")
+	if err := deps.checkOperatorRunning(cfg); err != nil {
+		cmd.Printf("  Gateway not reachable for enrollment: %v\n", err)
+		return fmt.Errorf("%w: %w", constants.ErrDockerStartEnrollmentFailed, err)
+	}
+
+	coordinator := deps.enrollerFactory(func(format string, a ...any) {
+		cmd.Printf(format+"\n", a...)
+	}, fileSvc, cfg)
+	result, err := coordinator.Enroll(ctx, auth.EnrollmentOptions{})
+	if err != nil {
+		cmd.Printf("  Owner enrollment failed: %v\n", err)
+		return fmt.Errorf("%w: %w", constants.ErrDockerStartEnrollmentFailed, err)
+	}
+	if result.Reused {
+		cmd.Printf("  Reusing existing CLI identity (no new certificate issued).\n")
+	} else {
+		cmd.Printf("  CLI session %s complete\n", result.Source)
+	}
+	cmd.Printf("  User ID: %s\n", result.UserID)
+	cmd.Printf("  CLI Session ID: %s\n", result.CLISessionID)
+	cmd.Println()
+
+	client, err := deps.clientFactory(fileSvc, cfg)
+	if err != nil {
+		return fmt.Errorf("%w: create API client: %w", constants.ErrDockerStartApprovalFailed, err)
+	}
+
+	components := []models.PlatformComponentKind{
+		models.PlatformComponentEnsemble,
+		models.PlatformComponentDashboard,
+		models.PlatformComponentOperator,
+	}
+	for i, component := range components {
+		step := i + 2
+		cmd.Printf("Step %d: Approve the %s platform enrollment request.\n", step, component)
+		if err := promptApproveComponent(cmd, ctx, client, component); err != nil {
+			cmd.Printf("  %s enrollment step failed: %v\n", component, err)
+		}
+		cmd.Println()
+	}
+
+	cmd.Println("Interactive enrollment walkthrough complete.")
+	cmd.Println("Run 'g8e docker status' to check service status.")
+	cmd.Println("Run 'g8e docker logs' to follow logs.")
+	return nil
+}
+
+// waitForDockerGatewayHealthy polls the gateway HTTP health endpoint until it
+// responds 200 or the timeout elapses. The gateway container publishes 8080.
+func waitForDockerGatewayHealthy(cmd *cobra.Command) error {
+	cmd.Println("Waiting for the gateway container to become healthy...")
+	healthURL := fmt.Sprintf("http://127.0.0.1:%d/api/v1/health", constants.Ports.OperatorHttp)
+	plainClient := &http.Client{Timeout: 2 * time.Second} //nolint:gosec
+	const (
+		maxAttempts  = 60
+		pollInterval = 500 * time.Millisecond
+	)
+	for i := 0; i < maxAttempts; i++ {
+		resp, err := plainClient.Get(healthURL) //nolint:noctx
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				cmd.Println("Gateway is healthy.")
+				return nil
+			}
+		}
+		if i == maxAttempts-1 {
+			return fmt.Errorf("%w: gateway did not become healthy after %v",
+				constants.ErrGatewayNotReady, time.Duration(maxAttempts)*pollInterval)
+		}
+		time.Sleep(pollInterval)
+	}
+	return nil
+}
+
+// promptApproveComponent fetches pending platform enrollment requests, finds
+// the one matching the given component kind, displays it, and prompts the owner
+// to approve (y) or skip (any other input). When approved it posts the
+// decision. A missing pending request is reported but not fatal — the
+// component may already be enrolled, or its container may not have submitted
+// its request yet.
+func promptApproveComponent(cmd *cobra.Command, ctx context.Context, client apiClient, component models.PlatformComponentKind) error {
+	pendingBody, err := client.Get(constants.APIPaths.AuthPlatformEnrollmentPending)
+	if err != nil {
+		return fmt.Errorf("fetch pending list: %w", err)
+	}
+
+	var pendingResp models.PlatformEnrollmentPendingResponse
+	if err := json.Unmarshal(pendingBody, &pendingResp); err != nil {
+		return fmt.Errorf("parse pending list: %w", err)
+	}
+
+	req := findPendingRequestByComponent(pendingResp.Requests, component)
+	if req == nil {
+		cmd.Printf("  No pending %s enrollment request found (it may already be enrolled\n", component)
+		cmd.Printf("  or its container has not submitted a request yet). Skipping.\n")
+		return nil
+	}
+
+	printPlatformEnrollmentRequestDetails(cmd, req)
+
+	if !confirmAction(cmd, fmt.Sprintf("Approve this %s enrollment request?", component)) {
+		cmd.Printf("  Skipped %s enrollment. You can approve it later with:\n", component)
+		cmd.Printf("  g8e auth approve-platform-enrollment %s\n", req.RequestID)
+		return nil
+	}
+
+	decisionReq := models.PlatformEnrollmentDecisionRequest{
+		RequestID: req.RequestID,
+		Decision:  models.PlatformEnrollmentDecisionApprove,
+	}
+	if err := decisionReq.Validate(); err != nil {
+		return fmt.Errorf("validate decision: %w", err)
+	}
+
+	respBody, err := client.Post(constants.APIPaths.AuthPlatformEnrollmentDecision, decisionReq)
+	if err != nil {
+		return fmt.Errorf("%w: post decision: %w", constants.ErrDockerStartApprovalFailed, err)
+	}
+
+	var resp models.PlatformEnrollmentDecisionResponse
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return fmt.Errorf("parse decision response: %w", err)
+	}
+	cmd.Printf("  %s enrollment request %s.\n", component, string(resp.State))
+	return nil
+}
+
+// findPendingRequestByComponent returns the first pending request matching the
+// given component kind, or nil if none match.
+func findPendingRequestByComponent(requests []models.PlatformEnrollmentPendingRequest, component models.PlatformComponentKind) *models.PlatformEnrollmentPendingRequest {
+	for i := range requests {
+		if requests[i].ComponentKind == component {
+			return &requests[i]
+		}
+	}
+	return nil
 }
 
 func dockerStopCmd() *cobra.Command {
