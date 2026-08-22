@@ -72,15 +72,15 @@ const _POLL_INITIAL_DELAY_MS = 2_000;
 const _POLL_MAX_DELAY_MS = 30_000;
 const _POLL_JITTER_MS = 500;
 // Request submission retry. The gateway starts with zero users and returns
-// 403 "platform enrollment requires an activated gateway" until the owner
+// 403 "platform enrollment requires a bootstrapped gateway" until the owner
 // bootstraps the first user. Workloads start immediately after the gateway
-// becomes healthy, so the first submit attempt may race with activation.
+// becomes healthy, so the first submit attempt may race with bootstrap.
 const _SUBMIT_INITIAL_DELAY_MS = 3_000;
 const _SUBMIT_MAX_DELAY_MS = 30_000;
 const _SUBMIT_JITTER_MS = 1_000;
 const _SUBMIT_DEADLINE_MS = 30 * 60 * 1_000;
-// Error string the gateway returns when not yet activated.
-const _REQUIRES_ACTIVATION_ERR = 'platform enrollment requires an activated gateway';
+// Error string the gateway returns when not yet bootstrapped.
+const _REQUIRES_BOOTSTRAP_ERR = 'platform enrollment requires a bootstrapped gateway';
 // Protocol version for the completion transcript.
 const _PROTOCOL_VERSION = '1';
 // Well-known paths on the gateway's public HTTP bootstrap surface.
@@ -459,11 +459,11 @@ async function _submitEnrollmentRequest(baseUrl, csrPem, instanceId, hostname, s
     };
     console.log(`AppEnrollmentService: submitting platform enrollment request for ${instanceId}`);
 
-    // Retry with bounded backoff until the gateway is activated. The gateway
-    // starts with zero users and returns 403 "platform enrollment requires an
-    // activated gateway" until the owner bootstraps the first user. Workloads
+    // Retry with bounded backoff until the gateway is bootstrapped. The gateway
+    // starts with zero users and returns 403 "platform enrollment requires a
+    // bootstrapped gateway" until the owner bootstraps the first user. Workloads
     // start immediately after the gateway becomes healthy, so the first submit
-    // attempt may race with activation.
+    // attempt may race with bootstrap.
     let delay = _SUBMIT_INITIAL_DELAY_MS;
     const deadline = Date.now() + _SUBMIT_DEADLINE_MS;
     for (;;) {
@@ -504,16 +504,16 @@ async function _submitEnrollmentRequest(baseUrl, csrPem, instanceId, hostname, s
         if (resp.ok) {
             return data;
         }
-        // 403 "requires an activated gateway": the gateway is not yet
-        // activated. Back off and retry until activation.
+        // 403 "requires a bootstrapped gateway": the gateway is not yet
+        // bootstrapped. Back off and retry until bootstrap.
         const errMsg = data.error || `HTTP ${resp.status}`;
-        if (resp.status === 403 && errMsg.includes(_REQUIRES_ACTIVATION_ERR)) {
+        if (resp.status === 403 && errMsg.includes(_REQUIRES_BOOTSTRAP_ERR)) {
             if (Date.now() > deadline) {
                 throw new ConfigurationError(
-                    `AppEnrollmentService: gateway not activated within ${_SUBMIT_DEADLINE_MS}ms: ${errMsg}`
+                    `AppEnrollmentService: gateway not bootstrapped within ${_SUBMIT_DEADLINE_MS}ms: ${errMsg}`
                 );
             }
-            console.log(`AppEnrollmentService: gateway not yet activated, retrying in ${delay}ms`);
+            console.log(`AppEnrollmentService: gateway not yet bootstrapped, retrying in ${delay}ms`);
             await _sleep(delay, signal);
             delay = Math.min(delay * 2, _SUBMIT_MAX_DELAY_MS);
             continue;
@@ -1084,8 +1084,8 @@ export class AppEnrollmentService {
             fingerprint = await _csrFingerprint(csrPem);
 
             // The submission retry loop manages its own deadline
-            // (_SUBMIT_DEADLINE_MS) and retries on 403-requires-activation
-            // until the gateway is activated. The outer signal is for
+            // (_SUBMIT_DEADLINE_MS) and retries on 403-requires-bootstrap
+            // until the gateway is bootstrapped. The outer signal is for
             // process-level cancellation only — no per-call timeout here,
             // since the retry loop may run for minutes while waiting for
             // the owner to bootstrap the first user.

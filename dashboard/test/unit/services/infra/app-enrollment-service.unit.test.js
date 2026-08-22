@@ -430,7 +430,7 @@ describe('AppEnrollmentService', () => {
                 if (urlStr.includes('/platform-enrollments/request')) {
                     return {
                         ok: false, status: 403,
-                        json: async () => ({ error: 'gateway not activated' }),
+                        json: async () => ({ error: 'request rejected' }),
                         headers: new Map(),
                     };
                 }

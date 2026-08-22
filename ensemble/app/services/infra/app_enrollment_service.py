@@ -89,15 +89,15 @@ _POLL_INITIAL_DELAY_SECONDS = 2.0
 _POLL_MAX_DELAY_SECONDS = 30.0
 _POLL_JITTER_SECONDS = 0.5
 # Request submission retry. The gateway starts with zero users and returns
-# 403 "platform enrollment requires an activated gateway" until the owner
+# 403 "platform enrollment requires a bootstrapped gateway" until the owner
 # bootstraps the first user. Workloads start immediately after the gateway
-# becomes healthy, so the first submit attempt may race with activation.
+# becomes healthy, so the first submit attempt may race with bootstrap.
 _SUBMIT_INITIAL_DELAY_SECONDS = 3.0
 _SUBMIT_MAX_DELAY_SECONDS = 30.0
 _SUBMIT_JITTER_SECONDS = 1.0
 _SUBMIT_DEADLINE_SECONDS = 30 * 60.0
-# Error string the gateway returns when not yet activated.
-_REQUIRES_ACTIVATION_ERR = "platform enrollment requires an activated gateway"
+# Error string the gateway returns when not yet bootstrapped.
+_REQUIRES_BOOTSTRAP_ERR = "platform enrollment requires a bootstrapped gateway"
 # Protocol version for the completion transcript.
 _PROTOCOL_VERSION = "1"
 # PlatformComponentKind enum values (match common.proto).
@@ -375,11 +375,11 @@ class AppEnrollmentService:
         is returned once and never persisted by the gateway; the client must
         persist it atomically with the private key.
 
-        Retries with bounded backoff until the gateway is activated. The
+        Retries with bounded backoff until the gateway is bootstrapped. The
         gateway starts with zero users and returns 403 "platform enrollment
-        requires an activated gateway" until the owner bootstraps the first
+        requires a bootstrapped gateway" until the owner bootstraps the first
         user. Workloads start immediately after the gateway becomes healthy,
-        so the first submit attempt may race with activation.
+        so the first submit attempt may race with bootstrap.
         """
         url = base_url + _ENROLLMENT_REQUEST_PATH
         payload = {
@@ -400,16 +400,16 @@ class AppEnrollmentService:
             if resp.is_success:
                 return data
             err_msg = data.get("error", f"HTTP {resp.status_code}")
-            # 403 "requires an activated gateway": the gateway is not yet
-            # activated. Back off and retry until activation.
-            if resp.status_code == 403 and _REQUIRES_ACTIVATION_ERR in err_msg:
+            # 403 "requires a bootstrapped gateway": the gateway is not yet
+            # bootstrapped. Back off and retry until bootstrap.
+            if resp.status_code == 403 and _REQUIRES_BOOTSTRAP_ERR in err_msg:
                 if time.monotonic() > deadline:
                     raise ConfigurationError(
-                        f"AppEnrollmentService: gateway not activated within "
+                        f"AppEnrollmentService: gateway not bootstrapped within "
                         f"{_SUBMIT_DEADLINE_SECONDS}s: {err_msg}"
                     )
                 logger.info(
-                    "AppEnrollmentService: gateway not yet activated, retrying in %.1fs",
+                    "AppEnrollmentService: gateway not yet bootstrapped, retrying in %.1fs",
                     delay,
                 )
                 await self._sleep(delay)

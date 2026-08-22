@@ -177,9 +177,9 @@ g8e demos run <org> <scenario> --tui
 g8e demos pull
 ```
 
-### Owner-approved platform activation
+### Owner-approved platform bootstrap
 
-Every demo boots the gateway with zero users. The operator (and any service that depends on it) starts not-ready and remains not-ready until its owner-approved platform enrollment request is approved. After `g8e demos start <org>` completes, the CLI prints the activation instructions: enroll the first owner, list pending platform enrollment requests, and approve the operator's request by exact request ID.
+Every demo boots the gateway with zero users. The operator (and any service that depends on it) starts not-ready and remains not-ready until its owner-approved platform enrollment request is approved. After `g8e demos start <org>` completes, the CLI prints the bootstrap instructions: enroll the first owner, list pending platform enrollment requests, and approve the operator's request by exact request ID.
 
 ```bash
 # 1. Enroll the first owner (the demo gateway port is printed by `g8e demos start <org>`).
@@ -195,7 +195,7 @@ Every demo boots the gateway with zero users. The operator (and any service that
 g8e demos status <org>
 ```
 
-`g8e demos run <org>` warns if the operator is not yet enrolled and prints the activation instructions before attempting to run scenarios. Do not use `docker compose up --wait` before approval; it is expected to time out while enrollment is pending. See the [Docker Gateway Guide](../docs/guides/docker_gateway.md) for the full activation flow and the headless deployment mode.
+`g8e demos run <org>` warns if the operator is not yet enrolled and prints the bootstrap instructions before attempting to run scenarios. Do not use `docker compose up --wait` before approval; it is expected to time out while enrollment is pending. See the [Docker Gateway Guide](../docs/guides/docker_gateway.md) for the full bootstrap flow and the headless deployment mode.
 
 ### Audit Commands
 

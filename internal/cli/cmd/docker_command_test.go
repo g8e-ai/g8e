@@ -305,8 +305,8 @@ func TestDockerReset_WithComposeFileButNoDocker(t *testing.T) {
 
 func TestResolveDockerProfile(t *testing.T) {
 	assert.Equal(t, "", resolveDockerProfile(false, ""))
-	assert.Equal(t, constants.DockerActivatedProfile, resolveDockerProfile(true, ""))
-	assert.Equal(t, constants.DockerActivatedProfile, resolveDockerProfile(false, constants.DockerActivatedProfile))
+	assert.Equal(t, constants.DockerBootstrappedProfile, resolveDockerProfile(true, ""))
+	assert.Equal(t, constants.DockerBootstrappedProfile, resolveDockerProfile(false, constants.DockerBootstrappedProfile))
 	assert.Equal(t, "custom", resolveDockerProfile(true, "custom"), "explicit profile overrides --full")
 }
 

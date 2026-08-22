@@ -6,7 +6,7 @@
 // released under the Apache License, Version 2.0.
 
 // Route auth classification inventory for the
-// platform-activation-approval-sequence plan.
+// platform-enrollment-approval-sequence plan.
 //
 // These tests document the route auth classifications of every
 // certificate-issuance path after Phase 4. The tests are Tier 1 (no infra)

@@ -6,10 +6,10 @@
 # released under the Apache License, Version 2.0.
 
 # Two-phase startup: only the gateway starts by default (no profile). The
-# operator, dashboard, and ensemble are in the `activated` profile and require
+# operator, dashboard, and ensemble are in the `bootstrapped` profile and require
 # a human to enroll the first owner before they can start. After enrolling,
-# run `docker compose --profile activated up -d` to bring up the workloads.
-# See docs/guides/unified_stack.md for the full activation flow and
+# run `docker compose --profile bootstrapped up -d` to bring up the workloads.
+# See docs/guides/unified_stack.md for the full bootstrap flow and
 # docs/guides/docker_gateway.md for the per-service details.
 
 networks:
@@ -78,8 +78,8 @@ services:
 
   g8e-operator:
     # Policy Execution Point: outbound-only mTLS to the gateway. Same image as the gateway.
-    # Requires owner enrollment before starting — use `docker compose --profile activated up -d`.
-    profiles: [activated]
+    # Requires owner enrollment before starting — use `docker compose --profile bootstrapped up -d`.
+    profiles: [bootstrapped]
     image: g8e-gateway
     container_name: ${G8E_PREFIX:-g8e}-operator
     working_dir: /root
@@ -109,8 +109,8 @@ services:
 
   ensemble:
     # First-party agentic ensemble (g8ee): Python/FastAPI. Submits governed intents via MCP.
-    # Requires owner enrollment before starting — use `docker compose --profile activated up -d`.
-    profiles: [activated]
+    # Requires owner enrollment before starting — use `docker compose --profile bootstrapped up -d`.
+    profiles: [bootstrapped]
     build:
       context: .
       dockerfile: ensemble/Dockerfile
@@ -149,8 +149,8 @@ services:
 
   dashboard:
     # Operator dashboard (g8ed): Node.js/Express browser UI. Runs as non-root g8e user (UID 1001).
-    # Requires owner enrollment before starting — use `docker compose --profile activated up -d`.
-    profiles: [activated]
+    # Requires owner enrollment before starting — use `docker compose --profile bootstrapped up -d`.
+    profiles: [bootstrapped]
     build:
       context: .
       dockerfile: dashboard/Dockerfile

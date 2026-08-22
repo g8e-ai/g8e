@@ -672,13 +672,13 @@ func TestPlatformEnrollmentRouter_PendingNoStoreHeader(t *testing.T) {
 		"pending endpoint must set Cache-Control: no-store")
 }
 
-// TestPlatformEnrollmentRouter_PreActivationRequestRejected proves that the
+// TestPlatformEnrollmentRouter_PreBootstrapRequestRejected proves that the
 // request endpoint rejects enrollment requests before the gateway is
-// activated (no users exist). This is invariant 1: a gateway with no users
+// bootstrapped (no users exist). This is invariant 1: a gateway with no users
 // never issues a platform certificate. The test creates a fresh gateway
 // without an owner and asserts the request is rejected with 403.
-func TestPlatformEnrollmentRouter_PreActivationRequestRejected(t *testing.T) {
-	// Build a gateway with NO owner (not activated).
+func TestPlatformEnrollmentRouter_PreBootstrapRequestRejected(t *testing.T) {
+	// Build a gateway with NO owner (not bootstrapped).
 	env := setupPlatformEnrollmentEnv(t, false)
 	h := env.svc.GetHTTPHandler()
 	require.NotNil(t, h)
@@ -687,8 +687,8 @@ func TestPlatformEnrollmentRouter_PreActivationRequestRejected(t *testing.T) {
 	csr, _ := generateAppCSRAndKey(t)
 	body, err := json.Marshal(models.PlatformEnrollmentCreateRequest{
 		ComponentKind: models.PlatformComponentDashboard,
-		InstanceID:    "dashboard-pre-activation-1",
-		Hostname:      "dashboard-pre-activation.local",
+		InstanceID:    "dashboard-pre-bootstrap-1",
+		Hostname:      "dashboard-pre-bootstrap.local",
 		App:           &models.PlatformAppCSRPayload{CSRPEM: csr},
 	})
 	require.NoError(t, err)
@@ -699,9 +699,9 @@ func TestPlatformEnrollmentRouter_PreActivationRequestRejected(t *testing.T) {
 	httpsRouter.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusForbidden, rr.Code,
-		"pre-activation request must be rejected with 403 (invariant 1)")
-	assert.Contains(t, rr.Body.String(), constants.ErrPlatformEnrollmentRequiresActivation.Error(),
-		"the typed activation-required error must be returned")
+		"pre-bootstrap request must be rejected with 403 (invariant 1)")
+	assert.Contains(t, rr.Body.String(), constants.ErrPlatformEnrollmentRequiresBootstrap.Error(),
+		"the typed bootstrap-required error must be returned")
 }
 
 // TestPlatformEnrollmentRouter_CSRValidationRejectsInvalidBody proves that

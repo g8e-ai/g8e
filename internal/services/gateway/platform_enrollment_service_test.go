@@ -67,7 +67,7 @@ type platformEnrollmentTestEnv struct {
 // PlatformEnrollmentDeps, and returns the env. The gateway is NOT started
 // (no port binding); the enrollment service operates through the wired
 // envProcAdapter without an HTTP listener. If createOwner is true, a first
-// user is created to activate the gateway and the owner ID is returned.
+// user is created to bootstrap the gateway and the owner ID is returned.
 func setupPlatformEnrollmentEnv(t *testing.T, createOwner bool) *platformEnrollmentTestEnv {
 	t.Helper()
 
@@ -255,13 +255,13 @@ func extractURISANsFromCert(t *testing.T, certPEM string) []string {
 }
 
 // ============================================================================
-// Pre-activation and activation tests
+// Pre-bootstrap and bootstrap tests
 // ============================================================================
 
-// TestPlatformEnrollmentService_RejectsRequestBeforeActivation proves that a
+// TestPlatformEnrollmentService_RejectsRequestBeforeBootstrap proves that a
 // gateway with no users rejects platform enrollment requests. This is
 // invariant 1: a gateway with no users never issues a platform certificate.
-func TestPlatformEnrollmentService_RejectsRequestBeforeActivation(t *testing.T) {
+func TestPlatformEnrollmentService_RejectsRequestBeforeBootstrap(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, false)
 
 	csr, _ := generateAppCSRAndKey(t)
@@ -272,13 +272,13 @@ func TestPlatformEnrollmentService_RejectsRequestBeforeActivation(t *testing.T) 
 		App:           &models.PlatformAppCSRPayload{CSRPEM: csr},
 	}, "https://gateway.local/console")
 
-	assert.ErrorIs(t, err, constants.ErrPlatformEnrollmentRequiresActivation)
+	assert.ErrorIs(t, err, constants.ErrPlatformEnrollmentRequiresBootstrap)
 }
 
-// TestPlatformEnrollmentService_ActivationEnablesRequestCreation proves that
+// TestPlatformEnrollmentService_BootstrapEnablesRequestCreation proves that
 // after the first user is created, request creation succeeds but no
 // certificate is issued until the owner approves.
-func TestPlatformEnrollmentService_ActivationEnablesRequestCreation(t *testing.T) {
+func TestPlatformEnrollmentService_BootstrapEnablesRequestCreation(t *testing.T) {
 	env := setupPlatformEnrollmentEnv(t, true)
 
 	csr, _ := generateAppCSRAndKey(t)

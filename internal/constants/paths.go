@@ -231,9 +231,9 @@ const (
 
 // Docker constants for the root unified-stack compose deployment.
 const (
-	DockerComposeFile        = "docker-compose.yml"
-	DockerActivatedProfile   = "activated"
-	DockerGatewayContainer   = "g8e-gateway"
+	DockerComposeFile         = "docker-compose.yml"
+	DockerBootstrappedProfile = "bootstrapped"
+	DockerGatewayContainer    = "g8e-gateway"
 	DockerOperatorContainer  = "g8e-operator"
 	DockerEnsembleContainer  = "ensemble"
 	DockerDashboardContainer = "dashboard"

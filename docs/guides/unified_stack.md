@@ -20,7 +20,7 @@ The gateway and operator share the same Go binary (the repo-root `Dockerfile`), 
 
 ## Quick Start
 
-The unified stack uses a two-phase startup. Only the gateway starts by default; the operator, dashboard, and ensemble are in the `activated` profile and require a human to enroll the first owner before they can start. Nothing else starts until enrollment is complete.
+The unified stack uses a two-phase startup. Only the gateway starts by default; the operator, dashboard, and ensemble are in the `bootstrapped` profile and require a human to enroll the first owner before they can start. Nothing else starts until enrollment is complete.
 
 ### Phase 1: Start the gateway
 
@@ -30,7 +30,7 @@ From the repository root:
 docker compose up -d --build
 ```
 
-This builds the gateway image and starts only the gateway. The gateway becomes healthy immediately. No other containers start — the operator, dashboard, and ensemble are gated behind the `activated` profile because they all require owner-approved platform enrollment.
+This builds the gateway image and starts only the gateway. The gateway becomes healthy immediately. No other containers start — the operator, dashboard, and ensemble are gated behind the `bootstrapped` profile because they all require owner-approved platform enrollment.
 
 ### Phase 2: Enroll the first owner
 
@@ -46,15 +46,15 @@ until curl -fsS http://localhost:8080/api/v1/health >/dev/null 2>&1; do sleep 2;
 ./g8e auth enroll user -e localhost
 ```
 
-If the local CLI has a stale trust bundle from a previous gateway instance (e.g. after `docker compose down -v`), the coordinator detects that the gateway is not yet activated and bootstraps instead of attempting recovery (which would fail with 403 on a fresh gateway).
+If the local CLI has a stale trust bundle from a previous gateway instance (e.g. after `docker compose down -v`), the coordinator detects that the gateway is not yet bootstrapped and bootstraps instead of attempting recovery (which would fail with 403 on a fresh gateway).
 
 ### Phase 3: Start the platform workloads
 
 Once the first owner is enrolled, start the operator, dashboard, and ensemble:
 
 ```bash
-# 3. Start the activated-profile workloads.
-docker compose --profile activated up -d
+# 3. Start the bootstrapped-profile workloads.
+docker compose --profile bootstrapped up -d
 
 # 4. List pending platform enrollment requests (operator, dashboard, ensemble).
 ./g8e auth pending-platform-enrollments

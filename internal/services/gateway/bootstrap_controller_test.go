@@ -131,7 +131,7 @@ func TestHandleBootstrapWithURL(t *testing.T) {
 }
 
 func TestHandleBootstrapStatus(t *testing.T) {
-	t.Run("Fresh gateway is bootstrapped but not activated", func(t *testing.T) {
+	t.Run("Fresh gateway is not bootstrapped", func(t *testing.T) {
 		c, _ := setupTestBootstrapController(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/status", nil)
 		rr := httptest.NewRecorder()
@@ -141,14 +141,11 @@ func TestHandleBootstrapStatus(t *testing.T) {
 		var resp models.BootstrapStatusResponse
 		err := json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		// bootstrapped is always true when the listener responds; the
-		// endpoint existing IS the proof of infrastructure being up.
-		assert.True(t, resp.Bootstrapped, "bootstrapped is always true when the endpoint responds")
-		// activated is false until a human enrolls as the first user.
-		assert.False(t, resp.Activated, "activated is false on a fresh gateway with no users")
+		// bootstrapped is false until a human enrolls as the first owner.
+		assert.False(t, resp.Bootstrapped, "bootstrapped is false on a fresh gateway with no users")
 	})
 
-	t.Run("Activated after creating the first user", func(t *testing.T) {
+	t.Run("Bootstrapped after creating the first user", func(t *testing.T) {
 		c, _ := setupTestBootstrapController(t)
 		_, err := c.userSvc.CreateUser()
 		require.NoError(t, err)
@@ -161,7 +158,6 @@ func TestHandleBootstrapStatus(t *testing.T) {
 		var resp models.BootstrapStatusResponse
 		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.True(t, resp.Bootstrapped)
-		assert.True(t, resp.Activated, "activated flips to true once the first user exists")
+		assert.True(t, resp.Bootstrapped, "bootstrapped flips to true once the first user exists")
 	})
 }

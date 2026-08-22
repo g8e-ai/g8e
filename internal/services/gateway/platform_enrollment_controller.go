@@ -333,7 +333,7 @@ func (c *PlatformEnrollmentController) writeEnrollmentError(w http.ResponseWrite
 		return
 	}
 	switch err {
-	case constants.ErrPlatformEnrollmentRequiresActivation:
+	case constants.ErrPlatformEnrollmentRequiresBootstrap:
 		c.responder.Error(w, http.StatusForbidden, err.Error())
 	case constants.ErrPlatformEnrollmentInvalidComponent:
 		c.responder.Error(w, http.StatusBadRequest, err.Error())

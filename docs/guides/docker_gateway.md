@@ -33,7 +33,7 @@ The `-f` flag runs the gateway in the foreground instead of spawning a backgroun
 
 ## Docker Compose Deployment
 
-The repository includes a root `docker-compose.yml` that deploys the full platform stack: the Gateway, the Dashboard, the Ensemble, and the Operator. The gateway and operator use the same `Dockerfile`; the dashboard and ensemble have their own images built from `dashboard/Dockerfile` and `ensemble/Dockerfile`. All four services are unprofiled and start together as the full-stack default. The platform workloads (operator, dashboard, ensemble) start in a not-ready state and remain not-ready until their owner-approved platform enrollment requests are approved. There is no `activated` Compose profile; full-stack startup is the default.
+The repository includes a root `docker-compose.yml` that deploys the full platform stack: the Gateway, the Dashboard, the Ensemble, and the Operator. The gateway and operator use the same `Dockerfile`; the dashboard and ensemble have their own images built from `dashboard/Dockerfile` and `ensemble/Dockerfile`. All four services are unprofiled and start together as the full-stack default. The platform workloads (operator, dashboard, ensemble) start in a not-ready state and remain not-ready until their owner-approved platform enrollment requests are approved. There is no `bootstrapped` Compose profile; full-stack startup is the default.
 
 ### Core Services
 
@@ -82,11 +82,11 @@ To use custom ports or a container name prefix:
 G8E_HTTP_PORT=3000 G8E_HTTPS_PORT=3443 G8E_PREFIX=myg8e docker compose up -d --build
 ```
 
-All four containers start, but the operator, dashboard, and ensemble remain not-ready until their platform enrollment requests are approved. Do not use `docker compose up --wait` before approval; that command waits for all services to become healthy and is expected to time out while enrollment is pending. Wait for the gateway health endpoint only, then complete the activation flow below.
+All four containers start, but the operator, dashboard, and ensemble remain not-ready until their platform enrollment requests are approved. Do not use `docker compose up --wait` before approval; that command waits for all services to become healthy and is expected to time out while enrollment is pending. Wait for the gateway health endpoint only, then complete the bootstrap flow below.
 
-### Owner-Approved Platform Activation
+### Owner-Approved Platform Bootstrap
 
-After `docker compose up -d --build`, the gateway is healthy but the platform workloads are not. Activate them by enrolling the first owner and approving each pending enrollment request:
+After `docker compose up -d --build`, the gateway is healthy but the platform workloads are not. Bootstrap them by enrolling the first owner and approving each pending enrollment request:
 
 ```bash
 # 1. Wait for the gateway to be healthy (poll the health endpoint).
@@ -109,7 +109,7 @@ until curl -fsS http://localhost:8080/api/v1/health >/dev/null 2>&1; do sleep 2;
 docker compose ps
 ```
 
-The operator → dashboard → ensemble order is an operational recommendation, not a security invariant. The gateway does not enforce a prerequisite ordering between component approvals. If strict ordering becomes a product requirement, add explicit singleton activation records and reject out-of-order decisions; do not rely on documentation or compose timing.
+The operator → dashboard → ensemble order is an operational recommendation, not a security invariant. The gateway does not enforce a prerequisite ordering between component approvals. If strict ordering becomes a product requirement, add explicit singleton bootstrap records and reject out-of-order decisions; do not rely on documentation or compose timing.
 
 The approval commands operate on request IDs only. They never print or accept requester tokens, token hashes, CSR PEM, or certificates. Pending discovery and approval both go through authenticated HTTPS using the CLI mTLS identity created in step 2.
 
@@ -145,7 +145,7 @@ docker compose up -d --build
 
 Each demo uses its own `compose.yml` file with isolated networks, volumes, and doctrine bind mounts. Demos build from the repo-root `Dockerfile` (the same production image, always-FIPS) via `context: ../..` in each compose `build` stanza; the image compiles from source in-container, so no pre-built binary is required. See [demos/README.md](../../demos/README.md) for the full demo environment guide.
 
-Demo stacks use the same owner-approved platform enrollment activation flow as the root compose file. The operator and any services that depend on it start unprofiled and remain not-ready until the operator's platform enrollment request is approved. Services with `depends_on: operator: condition: service_healthy` wait for the operator healthcheck, which stays not-ready until the operator is enrolled. After `docker compose up -d --build`, enroll the first owner against the demo gateway and approve the operator's pending request before the dependent services can become ready. The `g8e demos start` and `g8e demos run` commands print the exact activation instructions, including the demo gateway port and the `g8e auth approve-platform-enrollment <request-id>` command to run.
+Demo stacks use the same owner-approved platform enrollment bootstrap flow as the root compose file. The operator and any services that depend on it start unprofiled and remain not-ready until the operator's platform enrollment request is approved. Services with `depends_on: operator: condition: service_healthy` wait for the operator healthcheck, which stays not-ready until the operator is enrolled. After `docker compose up -d --build`, enroll the first owner against the demo gateway and approve the operator's pending request before the dependent services can become ready. The `g8e demos start` and `g8e demos run` commands print the exact bootstrap instructions, including the demo gateway port and the `g8e auth approve-platform-enrollment <request-id>` command to run.
 
 ### Consensus Bootstrap Files
 
@@ -259,7 +259,7 @@ Or set `G8E_PROTOCOL_DIR=/protocol` to point the Python package at the bundled c
 
 The `Dockerfile` does not define an image-level health check. The same image runs as both the gateway (an HTTP server on port 8080) and the operator (an outbound client that listens on nothing), so a baked-in health check would always fail for the operator. Health checks are declared per-service in `docker-compose.yml`, where each service expresses its own readiness signal. The root compose file defines a `wget` probe against the `/api/v1/health` endpoint for the gateway service, an `operator.crt` existence check for the operator, a FastAPI `/health` probe for the ensemble, and an Express `/` probe for the dashboard.
 
-The operator, ensemble, and dashboard healthchecks are readiness checks, not liveness checks. They stay not-ready while platform enrollment is pending and become healthy only after the owner approves the enrollment request and the component completes enrollment. This is truthful readiness: `docker compose ps` shows the workloads as unhealthy until activation is complete.
+The operator, ensemble, and dashboard healthchecks are readiness checks, not liveness checks. They stay not-ready while platform enrollment is pending and become healthy only after the owner approves the enrollment request and the component completes enrollment. This is truthful readiness: `docker compose ps` shows the workloads as unhealthy until bootstrap is complete.
 
 ```bash
 docker inspect --format='{{.State.Health.Status}}' g8e-gateway
@@ -294,4 +294,4 @@ docker exec g8e-gateway /g8e gw status
 - **Resource Constraints**: The root `docker-compose.yml` defines per-service CPU and memory limits (see the Resource Limits section above). Adjust these for production workloads.
 - **Vault Management**: The vault auto-initializes on first run with a generated key. Use `G8E_VAULT_KEY` to override the default key file path, or `--vault-key` to specify it via CLI. The vault must be unlocked at startup; if the key cannot be read, the gateway fails to start.
 - **Certificates**: By default, the gateway generates self-signed certificates. For production, provide valid certificates via the `--pki-dir` volume or use `--cert-mode full` with appropriate hostnames.
-- **Operator Connectivity**: The operator connects to the gateway via `g8e.local`, resolved through the Docker network alias on the shared bridge network. Ensure this hostname matches the gateway certificate SANs in production deployments. On first start with no installed credentials, the operator performs owner-approved platform enrollment against this endpoint and waits for approval before it becomes ready. See the Owner-Approved Platform Activation section above.
+- **Operator Connectivity**: The operator connects to the gateway via `g8e.local`, resolved through the Docker network alias on the shared bridge network. Ensure this hostname matches the gateway certificate SANs in production deployments. On first start with no installed credentials, the operator performs owner-approved platform enrollment against this endpoint and waits for approval before it becomes ready. See the Owner-Approved Platform Bootstrap section above.

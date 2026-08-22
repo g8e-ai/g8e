@@ -144,7 +144,7 @@ func (s *PlatformEnrollmentService) runCleanup(ctx context.Context) {
 	}
 }
 
-// CreateRequest validates activation and CSRs, deduplicates a live
+// CreateRequest validates bootstrap state and CSRs, deduplicates a live
 // request for the same component kind, instance ID, and key fingerprint
 // set, writes the pending request document directly via DocSet (CREATE
 // is classified as non-mutation), submits a PLATFORM_ENROLLMENT_CREATE
@@ -153,13 +153,13 @@ func (s *PlatformEnrollmentService) runCleanup(ctx context.Context) {
 // is returned once and never persisted; only its SHA-256 hash is stored.
 func (s *PlatformEnrollmentService) CreateRequest(ctx context.Context, req models.PlatformEnrollmentCreateRequest, approvalURLBase string) (*models.PlatformEnrollmentCreateResponse, error) {
 	// Invariant 1: a gateway with no users never issues a platform
-	// certificate. Request creation requires an activated gateway.
+	// certificate. Request creation requires a bootstrapped gateway.
 	hasUsers, err := s.userSvc.HasAnyUsers()
 	if err != nil {
-		return nil, fmt.Errorf("platform enrollment: check activation: %w", err)
+		return nil, fmt.Errorf("platform enrollment: check bootstrap: %w", err)
 	}
 	if !hasUsers {
-		return nil, constants.ErrPlatformEnrollmentRequiresActivation
+		return nil, constants.ErrPlatformEnrollmentRequiresBootstrap
 	}
 
 	fingerprints, err := validatePlatformEnrollmentRequest(req)

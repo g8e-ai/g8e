@@ -97,7 +97,7 @@ services:
     # operator healthcheck (operator.crt existence) stays not-ready until
     # the enrollment completes, so dependent services (agent-coalition,
     # connector-*) wait via depends_on: condition: service_healthy. The
-    # activation flow is:
+    # bootstrap flow is:
     #   docker compose up -d
     #   ./g8e auth enroll user -e <gateway>
     #   ./g8e auth pending-platform-enrollments

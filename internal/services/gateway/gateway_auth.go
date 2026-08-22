@@ -105,7 +105,7 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	// Platform enrollment discovery surface — public, token-scoped.
 	// The opaque token and proof-of-possession signatures provide the
 	// authorization context; no mTLS or cookie required. The service
-	// checks activation (HasAnyUsers) before creating a request.
+	// checks bootstrap state (HasAnyUsers) before creating a request.
 	r.addExact(constants.APIPaths.AuthPlatformEnrollmentRequest, RouteAuthNone)
 	r.addExact(constants.APIPaths.AuthPlatformEnrollmentStatus, RouteAuthNone)
 	r.addExact(constants.APIPaths.AuthPlatformEnrollmentComplete, RouteAuthNone)

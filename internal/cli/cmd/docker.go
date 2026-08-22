@@ -57,7 +57,7 @@ func checkDockerComposeFileExists() error {
 
 // runDockerCompose builds and runs a `docker compose` command against the root
 // compose file, streaming stdout/stderr to the console. The optional profile
-// activates the operator/dashboard/ensemble workloads.
+// starts the operator/dashboard/ensemble workloads.
 func runDockerCompose(args []string, profile string) error {
 	composePath, err := dockerComposePath()
 	if err != nil {
@@ -86,8 +86,8 @@ func dockerCmd() *cobra.Command {
 
 The root ` + "`" + `docker-compose.yml` + "`" + ` deploys the full platform. Only the gateway starts
 by default; the operator, ensemble, and dashboard are gated behind the
-` + "`" + `activated` + "`" + ` profile and require owner enrollment before they can start. Pass
---profile activated (or --full) to bring up the workloads after enrolling.
+` + "`" + `bootstrapped` + "`" + ` profile and require owner enrollment before they can start. Pass
+--profile bootstrapped (or --full) to bring up the workloads after enrolling.
 
 Run these commands from the repository root where ` + "`" + `docker-compose.yml` + "`" + ` lives.`,
 	}
@@ -104,7 +104,7 @@ Run these commands from the repository root where ` + "`" + `docker-compose.yml`
 	return cmd
 }
 
-// resolveDockerProfile returns the activated profile name when full is true,
+// resolveDockerProfile returns the bootstrapped profile name when full is true,
 // or the explicit profile override when set, otherwise the empty string
 // (gateway-only startup).
 func resolveDockerProfile(full bool, profile string) string {
@@ -112,7 +112,7 @@ func resolveDockerProfile(full bool, profile string) string {
 		return profile
 	}
 	if full {
-		return constants.DockerActivatedProfile
+		return constants.DockerBootstrappedProfile
 	}
 	return ""
 }
@@ -150,7 +150,7 @@ func dockerStartCmdWithConfig(
 		Short: "Start the Docker Compose unified stack",
 		Long: `Start the Docker Compose unified stack in the background.
 
-By default only the gateway starts. Pass --full (or --profile activated) to
+By default only the gateway starts. Pass --full (or --profile bootstrapped) to
 also start the operator, ensemble, and dashboard workloads, which require
 owner enrollment before they become ready.
 
@@ -161,7 +161,7 @@ When --full is set, the command walks the owner through interactive enrollment:
   4. Prompts to approve the Operator platform enrollment request.
 
 Each component prompt accepts y to approve or n (or any other input) to skip.
-Use --skip-enroll to start the activated profile without the interactive
+Use --skip-enroll to start the bootstrapped profile without the interactive
 walkthrough (the workloads will block waiting for manual approval).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := checkDockerComposeFileExists(); err != nil {
@@ -224,13 +224,13 @@ walkthrough (the workloads will block waiting for manual approval).`,
 		},
 	}
 	cmd.Flags().BoolVar(&full, "full", false, "Start the full stack (gateway + operator + ensemble + dashboard)")
-	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to activate (e.g. activated)")
-	cmd.Flags().BoolVar(&skipEnroll, "skip-enroll", false, "Start the activated profile without the interactive enrollment walkthrough")
+	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to start (e.g. bootstrapped)")
+	cmd.Flags().BoolVar(&skipEnroll, "skip-enroll", false, "Start the bootstrapped profile without the interactive enrollment walkthrough")
 	return cmd
 }
 
 // runDockerStartWalkthrough drives the interactive enrollment walkthrough after
-// the activated profile containers are up. It enrolls the CLI owner, waits for
+// the bootstrapped profile containers are up. It enrolls the CLI owner, waits for
 // the gateway to be reachable, then prompts the owner to approve each
 // component's platform enrollment request in order: ensemble, dashboard,
 // operator. Each prompt is skippable (any answer other than y skips that
@@ -413,7 +413,7 @@ func dockerStopCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to target (e.g. activated)")
+	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to target (e.g. bootstrapped)")
 	return cmd
 }
 
@@ -433,7 +433,7 @@ func dockerStatusCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to target (e.g. activated)")
+	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to target (e.g. bootstrapped)")
 	return cmd
 }
 
@@ -462,13 +462,12 @@ func dockerBuildCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&noCache, "no-cache", false, "Build without using the Docker cache")
-	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to target (e.g. activated)")
+	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to target (e.g. bootstrapped)")
 	return cmd
 }
 
 func dockerCleanCmd() *cobra.Command {
 	var skipConfirm bool
-	var profile string
 
 	cmd := &cobra.Command{
 		Use:   "clean",
@@ -476,7 +475,11 @@ func dockerCleanCmd() *cobra.Command {
 		Long: `Remove containers, volumes, and networks for the Docker Compose unified stack.
 
 This is a destructive operation that removes all associated Docker volumes and
-networks, including the gateway data volume. Use --yes=false to confirm first.`,
+networks, including the gateway data volume. Use --yes=false to confirm first.
+
+Clean always targets the bootstrapped profile so that operator, ensemble, and
+dashboard containers are removed alongside the gateway, not just the
+default-profile gateway container.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := checkDockerComposeFileExists(); err != nil {
 				return err
@@ -493,7 +496,12 @@ networks, including the gateway data volume. Use --yes=false to confirm first.`,
 				return nil
 			}
 			cmd.Println("Cleaning Docker Compose stack...")
-			if err := runDockerCompose([]string{"down", "-v", "--remove-orphans", "-t", "0"}, profile); err != nil {
+			// Always pass the bootstrapped profile so operator, ensemble, and
+			// dashboard containers are removed together with the gateway.
+			// Without it, down only touches default-profile services and the
+			// bootstrapped-profile containers keep running, holding their volumes
+			// and the shared network open.
+			if err := runDockerCompose([]string{"down", "-v", "--remove-orphans", "-t", "0"}, constants.DockerBootstrappedProfile); err != nil {
 				cmd.Printf("Warning: compose down had issues: %v\n", err)
 			}
 			forceRemoveLeftovers(cmd, constants.DockerProjectPrefix)
@@ -502,7 +510,6 @@ networks, including the gateway data volume. Use --yes=false to confirm first.`,
 		},
 	}
 	cmd.Flags().BoolVar(&skipConfirm, "yes", true, "Skip interactive confirmation (default: true)")
-	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to target (e.g. activated)")
 	return cmd
 }
 
@@ -537,7 +544,7 @@ func dockerResetCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&full, "full", false, "Start the full stack (gateway + operator + ensemble + dashboard)")
-	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to activate (e.g. activated)")
+	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to start (e.g. bootstrapped)")
 	return cmd
 }
 
@@ -583,7 +590,7 @@ Use --no-cache=false to reuse the Docker build cache.`,
 	}
 	cmd.Flags().BoolVar(&noCache, "no-cache", true, "Rebuild without using the Docker cache")
 	cmd.Flags().BoolVar(&full, "full", false, "Start the full stack (gateway + operator + ensemble + dashboard)")
-	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to activate (e.g. activated)")
+	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to start (e.g. bootstrapped)")
 	return cmd
 }
 
@@ -614,7 +621,7 @@ func dockerLogsCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Follow log output")
-	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to target (e.g. activated)")
+	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to target (e.g. bootstrapped)")
 	return cmd
 }
 

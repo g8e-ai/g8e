@@ -107,9 +107,9 @@ g8e demos clean dhs
 
 `g8e demos run` runs every scenario end-to-end with no human interaction. The gateway boots in consensus posture and stays there for the whole run; no posture switching, no host-CLI enrollment, no passkey ceremony. Notary scenarios (`dhs-release`) remain in the harness registry for manual testing via `g8e demos scenarios run dhs-release` against a manually-started demo with a manually-enrolled passkey, but the automated `demos run` orchestration excludes them.
 
-### Owner-approved platform activation
+### Owner-approved platform bootstrap
 
-After `g8e demos start dhs`, the gateway is healthy but the operator and its dependent services (`agent-coalition`, `connector-dhs`, `connector-mil`, `connector-ic`) remain not-ready until the operator's platform enrollment request is approved. `g8e demos start` prints the activation instructions automatically, including the demo gateway port and the exact `g8e auth approve-platform-enrollment <request-id>` command to run. The activation flow is:
+After `g8e demos start dhs`, the gateway is healthy but the operator and its dependent services (`agent-coalition`, `connector-dhs`, `connector-mil`, `connector-ic`) remain not-ready until the operator's platform enrollment request is approved. `g8e demos start` prints the bootstrap instructions automatically, including the demo gateway port and the exact `g8e auth approve-platform-enrollment <request-id>` command to run. The bootstrap flow is:
 
 ```bash
 # 1. Enroll the first owner (the demo gateway port is printed by `g8e demos start dhs`).
@@ -125,7 +125,7 @@ After `g8e demos start dhs`, the gateway is healthy but the operator and its dep
 g8e demos status dhs
 ```
 
-`g8e demos run dhs` warns if the operator is not yet enrolled and prints the activation instructions before attempting to run scenarios.
+`g8e demos run dhs` warns if the operator is not yet enrolled and prints the bootstrap instructions before attempting to run scenarios.
 
 ## Scenarios
 

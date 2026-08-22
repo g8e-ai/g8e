@@ -54,9 +54,9 @@ const (
 	// Request submission retry. The gateway starts with zero users; workloads
 	// start immediately after the gateway becomes healthy and may submit their
 	// enrollment request before the owner has bootstrapped the first user. The
-	// gateway returns 403 "platform enrollment requires an activated gateway"
-	// until activation. The client retries with bounded backoff so the workload
-	// waits for activation without exiting.
+	// gateway returns 403 "platform enrollment requires a bootstrapped gateway"
+	// until bootstrap. The client retries with bounded backoff so the workload
+	// waits for bootstrap without exiting.
 	operatorEnrollSubmitInitial  = 3 * time.Second
 	operatorEnrollSubmitMax      = 30 * time.Second
 	operatorEnrollSubmitJitter   = 1 * time.Second
@@ -354,11 +354,11 @@ func (c *OperatorPlatformEnrollmentClient) submitRequest(ctx context.Context, op
 		return nil, fmt.Errorf("operator enrollment: marshal request: %w", err)
 	}
 
-	// Retry with bounded backoff until the gateway is activated. The gateway
-	// starts with zero users and returns 403 "platform enrollment requires an
-	// activated gateway" until the owner bootstraps the first user. Workloads
+	// Retry with bounded backoff until the gateway is bootstrapped. The gateway
+	// starts with zero users and returns 403 "platform enrollment requires a
+	// bootstrapped gateway" until the owner bootstraps the first user. Workloads
 	// start immediately after the gateway becomes healthy, so the first submit
-	// attempt may race with activation.
+	// attempt may race with bootstrap.
 	delay := operatorEnrollSubmitInitial
 	deadline := time.Now().Add(operatorEnrollSubmitDeadline)
 	for {
@@ -399,16 +399,16 @@ func (c *OperatorPlatformEnrollmentClient) submitRequest(ctx context.Context, op
 			return &createResp, nil
 		}
 
-		// 403 "requires an activated gateway": the gateway is not yet
-		// activated. Back off and retry until activation.
-		if resp.StatusCode == http.StatusForbidden && strings.Contains(string(respBody), constants.ErrPlatformEnrollmentRequiresActivation.Error()) {
-			c.logger.Info("operator enrollment: gateway not yet activated, retrying", "delay", delay.String())
+		// 403 "requires a bootstrapped gateway": the gateway is not yet
+		// bootstrapped. Back off and retry until bootstrap.
+		if resp.StatusCode == http.StatusForbidden && strings.Contains(string(respBody), constants.ErrPlatformEnrollmentRequiresBootstrap.Error()) {
+			c.logger.Info("operator enrollment: gateway not yet bootstrapped, retrying", "delay", delay.String())
 			if waitErr := c.sleep(ctx, delay); waitErr != nil {
 				return nil, waitErr
 			}
 			delay = time.Duration(math.Min(float64(delay*2), float64(operatorEnrollSubmitMax)))
 			if time.Now().After(deadline) {
-				return nil, fmt.Errorf("operator enrollment: gateway not activated within %s: HTTP %d: %s", operatorEnrollSubmitDeadline, resp.StatusCode, string(respBody))
+				return nil, fmt.Errorf("operator enrollment: gateway not bootstrapped within %s: HTTP %d: %s", operatorEnrollSubmitDeadline, resp.StatusCode, string(respBody))
 			}
 			continue
 		}

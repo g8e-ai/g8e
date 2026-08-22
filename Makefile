@@ -707,8 +707,8 @@ clean-harness:
 up:
 	@echo "Building and starting the full stack..."
 	@docker compose up -d --build
-	@echo "Stack started. The gateway is healthy; workloads remain not-ready until activated."
-	@echo "Activate the platform with: ./g8e auth enroll user -e localhost"
+	@echo "Stack started. The gateway is healthy; workloads remain not-ready until bootstrapped."
+	@echo "Bootstrap the platform with: ./g8e auth enroll user -e localhost"
 	@echo "Then: ./g8e auth pending-platform-enrollments && ./g8e auth approve-platform-enrollment <id> --yes"
 
 .PHONY: down

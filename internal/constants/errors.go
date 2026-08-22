@@ -470,7 +470,7 @@ var (
 	ErrCLIRecoveryCSRMismatch     = errors.New("CLI recovery CSR does not match the original request")
 	ErrCLIRecoveryNotApproved     = errors.New("CLI recovery request has not been approved")
 
-	ErrPlatformEnrollmentRequiresActivation   = errors.New("platform enrollment requires an activated gateway")
+	ErrPlatformEnrollmentRequiresBootstrap   = errors.New("platform enrollment requires a bootstrapped gateway")
 	ErrPlatformEnrollmentInvalidComponent     = errors.New("invalid platform component kind")
 	ErrPlatformEnrollmentInstanceIDRequired   = errors.New("platform enrollment instance_id is required")
 	ErrPlatformEnrollmentInvalidInstanceID    = errors.New("invalid platform enrollment instance_id")

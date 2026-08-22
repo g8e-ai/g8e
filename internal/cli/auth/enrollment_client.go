@@ -300,14 +300,12 @@ func (c *EnrollmentClient) Rotate(ctx context.Context, fileSvc fs.RuntimeFileSer
 	return artifacts, nil
 }
 
-// CheckActivationStatus reports whether the gateway has been activated
-// (at least one human user exists). Used by the coordinator to choose
-// between bootstrap and recovery for an absent local identity. The
-// `bootstrapped` field is always true when the endpoint responds (the
-// listener being up IS the proof), so only `activated` is decision-relevant.
+// CheckBootstrapStatus reports whether the gateway has been bootstrapped
+// (started and at least one owner user exists). Used by the coordinator to
+// choose between bootstrap and recovery for an absent local identity.
 //
 // baseURL, when non-empty, overrides the discovery URL.
-func (c *EnrollmentClient) CheckActivationStatus(ctx context.Context, baseURL string) (bool, error) {
+func (c *EnrollmentClient) CheckBootstrapStatus(ctx context.Context, baseURL string) (bool, error) {
 	discoveryURL := c.cfg.OperatorDiscoveryURL()
 	if baseURL != "" {
 		discoveryURL = baseURL
@@ -330,7 +328,7 @@ func (c *EnrollmentClient) CheckActivationStatus(ctx context.Context, baseURL st
 	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
 		return false, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
-	return status.Activated, nil
+	return status.Bootstrapped, nil
 }
 
 // DiscoverGatewayCA fetches the live gateway root CA bundle from the

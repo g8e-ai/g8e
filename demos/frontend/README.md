@@ -71,9 +71,9 @@ docker compose up -d --build
 
 All services start, but the operator remains not-ready until its owner-approved platform enrollment request is approved. Do not use `docker compose up --wait` before approval; it is expected to time out while enrollment is pending.
 
-#### Owner-approved platform activation
+#### Owner-approved platform bootstrap
 
-After `docker compose up -d --build`, the gateway is healthy but the operator is not. Activate it by enrolling the first owner and approving the operator's pending enrollment request:
+After `docker compose up -d --build`, the gateway is healthy but the operator is not. Bootstrap it by enrolling the first owner and approving the operator's pending enrollment request:
 
 ```bash
 # 1. Wait for the gateway to be healthy (the frontend demo gateway listens on port 8083).
@@ -92,7 +92,7 @@ until curl -fsS http://localhost:8083/api/v1/health >/dev/null 2>&1; do sleep 2;
 docker compose ps
 ```
 
-The `g8e demos start frontend` CLI path prints these activation instructions automatically, including the demo gateway port and the exact `g8e auth approve-platform-enrollment <request-id>` command to run.
+The `g8e demos start frontend` CLI path prints these bootstrap instructions automatically, including the demo gateway port and the exact `g8e auth approve-platform-enrollment <request-id>` command to run.
 
 > **Note**: The frontend demo uses ports 8083 and 8446, which overlap with the `secure-data` (source) demo. Do not run both simultaneously.
 

@@ -56,15 +56,14 @@ func TestBootstrapFlow(t *testing.T) {
 	require.NoError(t, err)
 	cliCsrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCsrBytes})
 
-	// 1. Initial status - bootstrapped (listener up) but not activated (no users)
+	// 1. Initial status - not bootstrapped (no users yet)
 	req := httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/status", nil)
 	rr := httptest.NewRecorder()
 	h.bootstrapController.handleBootstrapStatus(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 	var statusResp models.BootstrapStatusResponse
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &statusResp))
-	assert.True(t, statusResp.Bootstrapped, "bootstrapped is always true when the endpoint responds")
-	assert.False(t, statusResp.Activated, "activated is false on a fresh gateway with no users")
+	assert.False(t, statusResp.Bootstrapped, "bootstrapped is false on a fresh gateway with no users")
 
 	// 2. Perform bootstrap (creates the first real user, the gateway admin)
 	bootstrapBody := map[string]string{
@@ -97,14 +96,13 @@ func TestBootstrapFlow(t *testing.T) {
 	require.NotEqual(t, bootstrapSessionID, cliSessionID,
 		"cli_session_id MUST be a distinct identifier from operator_session_id - session types are strictly disjoint")
 
-	// 3. Status - now activated (the first user exists)
+	// 3. Status - now bootstrapped (the first user exists)
 	req = httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/status", nil)
 	rr = httptest.NewRecorder()
 	h.bootstrapController.handleBootstrapStatus(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &statusResp))
-	assert.True(t, statusResp.Bootstrapped)
-	assert.True(t, statusResp.Activated, "activated flips to true once the first user exists")
+	assert.True(t, statusResp.Bootstrapped, "bootstrapped flips to true once the first user exists")
 
 	// 4. Verify the first user is active and is the admin (first user). There
 	// is no ephemeral bootstrap-user concept and no retirement flow: the user

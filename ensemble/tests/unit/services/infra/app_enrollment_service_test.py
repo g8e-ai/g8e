@@ -650,7 +650,7 @@ class TestEnrollPlatformEnrollment:
             if path == "/.well-known/g8e/pki/ca-bundle":
                 return httpx.Response(200, text="CA-BUNDLE-PEM")
             if path == "/api/v1/auth/platform-enrollments/request":
-                return httpx.Response(403, json={"error": "activation required"})
+                return httpx.Response(403, json={"error": "request rejected"})
             return httpx.Response(404)
 
         _patch_httpx_with_mock_transport(monkeypatch, handler)

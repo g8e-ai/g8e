@@ -292,11 +292,10 @@ func (c *BootstrapController) handleBootstrapStatus(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// bootstrapped is always true when the endpoint responds (the listener
-	// being up IS the proof). activated is the decision signal: true when at
-	// least one user exists (HasAnyUsers).
+	// bootstrapped is true when the gateway has been started and at least one
+	// owner user exists (HasAnyUsers). The endpoint responding proves the
+	// gateway is started; HasAnyUsers proves an owner has been enrolled.
 	c.responder.JSON(w, http.StatusOK, models.BootstrapStatusResponse{
-		Bootstrapped: true,
-		Activated:    hasUsers,
+		Bootstrapped: hasUsers,
 	})
 }

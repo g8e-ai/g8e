@@ -16,10 +16,10 @@
 // middleware chain — they are not unit tests.
 //
 // Bypasses proven closed:
-//   1. Pre-activation app issuance: POST /api/v1/pki/apps/enroll is removed
+//   1. Pre-bootstrap app issuance: POST /api/v1/pki/apps/enroll is removed
 //      from both routers; the auth middleware fail-closes the unclassified
 //      path to RouteAuthMTLS, returning 401 without a client certificate.
-//   2. Post-activation direct operator issuance: POST
+//   2. Post-bootstrap direct operator issuance: POST
 //      /api/v1/auth/operator/enroll is removed from both routers; same
 //      fail-closed 401.
 //   3. Reserved-name issuance through the retained delegated path:
@@ -79,7 +79,7 @@ func extractURISANs(t *testing.T, certPEM string) []string {
 // both routers and no longer explicitly classified in the RouteAuthRegistry,
 // so the auth middleware fail-closes it to RouteAuthMTLS. A POST with no
 // client certificate returns 401 — no certificate is issued, regardless of
-// activation state. This closes the pre-activation app issuance bypass
+// bootstrap state. This closes the pre-bootstrap app issuance bypass
 // (invariant 1) and the reserved-name issuance bypass (invariant 3).
 func TestPlatformEnrollmentBypassClosed_AppEnrollRouteRemoved(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)
@@ -110,7 +110,7 @@ func TestPlatformEnrollmentBypassClosed_AppEnrollRouteRemoved(t *testing.T) {
 // removed from both routers and no longer classified, so the auth
 // middleware fail-closes it to RouteAuthMTLS. A POST with no client
 // certificate returns 401 — no operator or CLI certificate is issued,
-// even after activation. This closes the post-activation direct operator
+// even after bootstrap. This closes the post-bootstrap direct operator
 // issuance bypass (invariant 2).
 func TestPlatformEnrollmentBypassClosed_OperatorEnrollRouteRemoved(t *testing.T) {
 	h, _, _ := setupTestHTTPHandler(t)

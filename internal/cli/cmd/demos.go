@@ -542,9 +542,9 @@ func runDemosStart(cmd *cobra.Command, args []string) error {
 	// Print endpoint information
 	printDemoEndpoints(cmd, org)
 
-	// Print platform activation instructions. The operator and its dependents
+	// Print platform enrollment instructions. The operator and its dependents
 	// stay not-ready until the owner approves their platform enrollment.
-	printPlatformActivationInstructions(cmd, org)
+	printPlatformEnrollmentInstructions(cmd, org)
 
 	return nil
 }
@@ -583,7 +583,7 @@ func printDemoEndpoints(cmd *cobra.Command, org string) {
 }
 
 // demoGatewayHTTPPort maps each demo org to its gateway HTTP discovery port,
-// used for the platform enrollment activation instructions.
+// used for the platform enrollment instructions.
 var demoGatewayHTTPPort = map[string]string{
 	constants.DemosOrgHealthcare: "8081",
 	constants.DemosOrgFinance:    "8082",
@@ -602,20 +602,20 @@ var demoOperatorContainer = map[string]string{
 	constants.DemosOrgFrontend:   "frontend-operator",
 }
 
-// printPlatformActivationInstructions prints the owner-approved platform
-// enrollment activation flow for a demo org. The gateway starts with zero
+// printPlatformEnrollmentInstructions prints the owner-approved platform
+// enrollment flow for a demo org. The gateway starts with zero
 // users, so platform workloads (operator and its dependents) stay not-ready
 // until the owner enrolls and approves their platform enrollment requests.
-func printPlatformActivationInstructions(cmd *cobra.Command, org string) {
+func printPlatformEnrollmentInstructions(cmd *cobra.Command, org string) {
 	port, ok := demoGatewayHTTPPort[org]
 	if !ok {
 		return
 	}
 	cmd.Println()
-	cmd.Println("Platform activation required:")
+	cmd.Println("Platform enrollment required:")
 	cmd.Println("  The gateway starts with zero users. The operator and its dependents stay")
 	cmd.Println("  not-ready until the owner approves their platform enrollment requests.")
-	cmd.Println("  Complete the activation flow:")
+	cmd.Println("  Complete the enrollment flow:")
 	cmd.Println()
 	cmd.Println("  1. Enroll the first owner (creates CLI mTLS credentials):")
 	cmd.Printf("     ./g8e auth enroll user -e localhost:%s\n", port)
@@ -1041,7 +1041,7 @@ func runDemosRebuild(cmd *cobra.Command, args []string, noCache bool) error {
 
 	cmd.Printf("\nDemo environment '%s' rebuilt and started successfully.\n", org)
 	printDemoEndpoints(cmd, org)
-	printPlatformActivationInstructions(cmd, org)
+	printPlatformEnrollmentInstructions(cmd, org)
 
 	return nil
 }
@@ -1164,7 +1164,7 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool) error {
 		cmd.Println()
 		cmd.Printf("Warning: the '%s' operator is not healthy. Scenarios require the operator\n", org)
 		cmd.Println("to be enrolled and approved before they can run. If the demo was just")
-		cmd.Println("started, complete the platform activation flow printed above, then re-run")
+		cmd.Println("started, complete the platform enrollment flow printed above, then re-run")
 		cmd.Printf("this command. Run 'g8e demos status %s' to check readiness.\n", org)
 	}
 

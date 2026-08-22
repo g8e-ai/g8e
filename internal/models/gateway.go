@@ -297,17 +297,12 @@ type AuthLoginChallengeResponse struct {
 
 // BootstrapStatusResponse is the typed response for GET /api/v1/auth/bootstrap/status.
 //
-// The gateway exposes a two-state model:
-//   - bootstrapped is always true when the endpoint responds (the listener
-//     being up IS the proof). It is retained for backward compatibility but
-//     is no longer the decision signal.
-//   - activated is true when at least one user exists (HasAnyUsers). This is
-//     the decision signal the CLI coordinator uses to choose between
-//     bootstrap (first `auth enroll user` creates the first real user) and
-//     recovery (human-approved flow).
+// The gateway is bootstrapped when it has been started and at least one owner
+// user exists (HasAnyUsers). This is the decision signal the CLI coordinator
+// uses to choose between bootstrap (first `auth enroll user` creates the first
+// real user) and recovery (human-approved flow).
 type BootstrapStatusResponse struct {
 	Bootstrapped bool `json:"bootstrapped"`
-	Activated    bool `json:"activated"`
 }
 
 // UserMeResponse is the typed response for GET /api/user/me.
