@@ -94,6 +94,10 @@ func (c *capturingConsoleAuditStore) DocSet(_, _ string, data json.RawMessage) e
 	return nil
 }
 
+func (c *capturingConsoleAuditStore) DocDelete(_, _ string) error {
+	return nil
+}
+
 func TestNewHeartbeatService(t *testing.T) {
 	t.Run("returns non-nil service with config and logger", func(t *testing.T) {
 		t.Parallel()

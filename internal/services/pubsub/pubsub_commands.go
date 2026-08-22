@@ -416,9 +416,44 @@ func (rs *OperatorPubSubService) buildHandlers() {
 				rs.logger.Error("A2A call request handler failed", "error", err)
 			}
 		},
+		constants.EventAppCaseCreated: func(ctx context.Context, msg *PubSubCommandMessage) {
+			if _, err := rs.handleDocumentUpdateSync(ctx, msg); err != nil {
+				rs.logger.Error("Document update handler failed (case created)", "error", err)
+			}
+		},
+		constants.EventAppCaseUpdated: func(ctx context.Context, msg *PubSubCommandMessage) {
+			if _, err := rs.handleDocumentUpdateSync(ctx, msg); err != nil {
+				rs.logger.Error("Document update handler failed (case updated)", "error", err)
+			}
+		},
+		constants.EventAppCaseDeleted: func(ctx context.Context, msg *PubSubCommandMessage) {
+			if _, err := rs.handleDocumentDeleteSync(ctx, msg); err != nil {
+				rs.logger.Error("Document delete handler failed (case deleted)", "error", err)
+			}
+		},
+		constants.EventAppMemoryCreated: func(ctx context.Context, msg *PubSubCommandMessage) {
+			if _, err := rs.handleDocumentUpdateSync(ctx, msg); err != nil {
+				rs.logger.Error("Document update handler failed (memory created)", "error", err)
+			}
+		},
+		constants.EventAppMemoryUpdated: func(ctx context.Context, msg *PubSubCommandMessage) {
+			if _, err := rs.handleDocumentUpdateSync(ctx, msg); err != nil {
+				rs.logger.Error("Document update handler failed (memory updated)", "error", err)
+			}
+		},
 		constants.EventAppInvestigationCreated: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if _, err := rs.handleAppInvestigationCreatedSync(ctx, msg); err != nil {
-				rs.logger.Error("App investigation creation handler failed", "error", err)
+			if _, err := rs.handleDocumentUpdateSync(ctx, msg); err != nil {
+				rs.logger.Error("Document update handler failed (investigation created)", "error", err)
+			}
+		},
+		constants.EventAppInvestigationUpdated: func(ctx context.Context, msg *PubSubCommandMessage) {
+			if _, err := rs.handleDocumentUpdateSync(ctx, msg); err != nil {
+				rs.logger.Error("Document update handler failed (investigation updated)", "error", err)
+			}
+		},
+		constants.EventAppInvestigationDeleted: func(ctx context.Context, msg *PubSubCommandMessage) {
+			if _, err := rs.handleDocumentDeleteSync(ctx, msg); err != nil {
+				rs.logger.Error("Document delete handler failed (investigation deleted)", "error", err)
 			}
 		},
 	}
@@ -932,22 +967,83 @@ func (rs *OperatorPubSubService) handleA2aCallRequestSync(ctx context.Context, m
 	return summary, nil
 }
 
-func (rs *OperatorPubSubService) handleAppInvestigationCreatedSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
-	rs.logger.Info("App investigation creation request received", "investigation_id", msg.ID)
-
+// handleDocumentUpdateSync unmarshals a DocumentUpdateRequested payload from
+// the pub/sub message, converts the updates Struct to JSON, and persists the
+// document via ConsoleAuditStore.DocSet. Fail-closed: returns an error if the
+// actuator or audit store is missing, if the payload fails to unmarshal, if
+// the Struct-to-JSON conversion fails, or if DocSet fails.
+func (rs *OperatorPubSubService) handleDocumentUpdateSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	if rs.actuator == nil || rs.actuator.ConsoleAuditStore == nil {
 		return "", constants.ErrPubSubActuatorOrAuditStore
 	}
 
-	// DocSet expects collection, id, and data.
-	// For APP_INVESTIGATION_CREATED, the ID is the investigation ID from the envelope.
-	if err := rs.actuator.ConsoleAuditStore.DocSet(string(constants.CollectionInvestigations), msg.ID, msg.Payload); err != nil {
-		rs.logger.Error("Failed to create investigation document", string(constants.ConnectionStateError), err, "investigation_id", msg.ID)
-		return "", fmt.Errorf("%w: %w", constants.ErrAuditRecordUserMsg, err)
+	var req operatorv1.DocumentUpdateRequested
+	if err := proto.Unmarshal(msg.Payload, &req); err != nil {
+		rs.logger.Error("Failed to unmarshal DocumentUpdateRequested", string(constants.ConnectionStateError), err)
+		return "", fmt.Errorf("pubsub: document update: unmarshal: %w", err)
 	}
 
-	rs.logger.Info("Investigation document created successfully", "investigation_id", msg.ID)
-	return "investigation created", nil
+	if req.Collection == "" || req.DocumentId == "" {
+		rs.logger.Error("DocumentUpdateRequested missing collection or document_id",
+			"collection", req.Collection, "document_id", req.DocumentId)
+		return "", fmt.Errorf("pubsub: document update: %w", constants.ErrTxPayloadMissing)
+	}
+
+	var data json.RawMessage
+	if req.Updates != nil {
+		jsonBytes, err := protojson.Marshal(req.Updates)
+		if err != nil {
+			rs.logger.Error("Failed to convert updates Struct to JSON", string(constants.ConnectionStateError), err)
+			return "", fmt.Errorf("pubsub: document update: struct to json: %w", err)
+		}
+		data = json.RawMessage(jsonBytes)
+	} else {
+		data = json.RawMessage(`{}`)
+	}
+
+	if err := rs.actuator.ConsoleAuditStore.DocSet(req.Collection, req.DocumentId, data); err != nil {
+		rs.logger.Error("Failed to persist document update",
+			string(constants.ConnectionStateError), err,
+			"collection", req.Collection, "document_id", req.DocumentId)
+		return "", fmt.Errorf("pubsub: document update: doc set: %w", err)
+	}
+
+	rs.logger.Info("Document update persisted",
+		"collection", req.Collection, "document_id", req.DocumentId, "merge", req.Merge)
+	return fmt.Sprintf("document updated: %s/%s", req.Collection, req.DocumentId), nil
+}
+
+// handleDocumentDeleteSync unmarshals a DocumentDeleteRequested payload from
+// the pub/sub message and removes the document via ConsoleAuditStore.DocDelete.
+// Fail-closed: returns an error if the actuator or audit store is missing, if
+// the payload fails to unmarshal, or if DocDelete fails.
+func (rs *OperatorPubSubService) handleDocumentDeleteSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+	if rs.actuator == nil || rs.actuator.ConsoleAuditStore == nil {
+		return "", constants.ErrPubSubActuatorOrAuditStore
+	}
+
+	var req operatorv1.DocumentDeleteRequested
+	if err := proto.Unmarshal(msg.Payload, &req); err != nil {
+		rs.logger.Error("Failed to unmarshal DocumentDeleteRequested", string(constants.ConnectionStateError), err)
+		return "", fmt.Errorf("pubsub: document delete: unmarshal: %w", err)
+	}
+
+	if req.Collection == "" || req.DocumentId == "" {
+		rs.logger.Error("DocumentDeleteRequested missing collection or document_id",
+			"collection", req.Collection, "document_id", req.DocumentId)
+		return "", fmt.Errorf("pubsub: document delete: %w", constants.ErrTxPayloadMissing)
+	}
+
+	if err := rs.actuator.ConsoleAuditStore.DocDelete(req.Collection, req.DocumentId); err != nil {
+		rs.logger.Error("Failed to delete document",
+			string(constants.ConnectionStateError), err,
+			"collection", req.Collection, "document_id", req.DocumentId)
+		return "", fmt.Errorf("pubsub: document delete: doc delete: %w", err)
+	}
+
+	rs.logger.Info("Document deleted",
+		"collection", req.Collection, "document_id", req.DocumentId)
+	return fmt.Sprintf("document deleted: %s/%s", req.Collection, req.DocumentId), nil
 }
 
 func (rs *OperatorPubSubService) handleShutdownRequest(msg *PubSubCommandMessage) {

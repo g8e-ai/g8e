@@ -101,23 +101,23 @@ func TestL5ActuatorExecuteHappyPath(t *testing.T) {
 
 	// Verify audit store was called twice (initial EXECUTING receipt + final COMPLETED receipt)
 	consoleAuditStore := actuator.ConsoleAuditStore.(*testutil.ConfigurableMockAuditStore)
-	require.Len(t, consoleAuditStore.Calls, 2)
+	require.Len(t, consoleAuditStore.DocSetCalls, 2)
 
 	// Verify both calls were to console_audit collection
-	for _, call := range consoleAuditStore.Calls {
+	for _, call := range consoleAuditStore.DocSetCalls {
 		require.Equal(t, marshaler.CollectionName(constants.CollectionConsoleAudit), call.Collection)
 		require.Equal(t, envelope.Id, call.ID)
 	}
 
 	// Verify initial receipt has EXECUTING status
 	var initialRecord models.ActionReceiptRecord
-	err = json.Unmarshal(consoleAuditStore.Calls[0].Data, &initialRecord)
+	err = json.Unmarshal(consoleAuditStore.DocSetCalls[0].Data, &initialRecord)
 	require.NoError(t, err)
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING, initialRecord.Status)
 
 	// Verify final receipt has COMPLETED status
 	var finalRecord models.ActionReceiptRecord
-	err = json.Unmarshal(consoleAuditStore.Calls[1].Data, &finalRecord)
+	err = json.Unmarshal(consoleAuditStore.DocSetCalls[1].Data, &finalRecord)
 	require.NoError(t, err)
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, finalRecord.Status)
 }
@@ -166,11 +166,11 @@ func TestL5ActuatorExecuteHandlerError(t *testing.T) {
 
 	// Verify console audit store was called twice
 	consoleAuditStore := actuator.ConsoleAuditStore.(*testutil.ConfigurableMockAuditStore)
-	require.Len(t, consoleAuditStore.Calls, 2)
+	require.Len(t, consoleAuditStore.DocSetCalls, 2)
 
 	// Verify final receipt has FAILED status
 	var finalRecord models.ActionReceiptRecord
-	err = json.Unmarshal(consoleAuditStore.Calls[1].Data, &finalRecord)
+	err = json.Unmarshal(consoleAuditStore.DocSetCalls[1].Data, &finalRecord)
 	require.NoError(t, err)
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, finalRecord.Status)
 }

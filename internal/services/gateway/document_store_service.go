@@ -237,8 +237,18 @@ func (s *DocumentStoreService) DocConditionalUpdate(collection, id string, setFi
 	return n > 0, nil
 }
 
-// DocDelete removes a document. Returns (true, nil) if deleted, (false, nil) if not found.
-func (s *DocumentStoreService) DocDelete(collection, id string) (bool, error) {
+// DocDelete removes a document, returning only an error. It satisfies the
+// governance.TransactionAuditStore interface. A not-found result is not an
+// error — the document is simply already absent. Callers that need the
+// deleted/not-found distinction should use DocDeleteWithResult.
+func (s *DocumentStoreService) DocDelete(collection, id string) error {
+	_, err := s.DocDeleteWithResult(collection, id)
+	return err
+}
+
+// DocDeleteWithResult removes a document. Returns (true, nil) if deleted,
+// (false, nil) if not found.
+func (s *DocumentStoreService) DocDeleteWithResult(collection, id string) (bool, error) {
 	result, err := s.db.ExecWithRetry(
 		"DELETE FROM documents WHERE collection = ? AND id = ?",
 		collection, id,

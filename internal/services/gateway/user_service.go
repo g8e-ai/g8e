@@ -336,7 +336,7 @@ func (s *UserService) HasAnyUsers() (bool, error) {
 
 // DeleteUser removes a user by ID.
 func (s *UserService) DeleteUser(userID string) error {
-	deleted, err := s.db.DocDelete(marshaler.CollectionName(constants.CollectionUsers), userID)
+	deleted, err := s.db.DocDeleteWithResult(marshaler.CollectionName(constants.CollectionUsers), userID)
 	if err != nil {
 		return err
 	}

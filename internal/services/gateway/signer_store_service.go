@@ -124,7 +124,7 @@ func (s *SignerStoreService) ListTrustedSigners() ([]models.TrustedSigner, error
 
 // DeleteTrustedSigner removes a trusted L2 signer from the database.
 func (s *SignerStoreService) DeleteTrustedSigner(keyID string) (bool, error) {
-	return s.docSvc.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), keyID)
+	return s.docSvc.DocDeleteWithResult(marshaler.CollectionName(constants.CollectionTrustedSigners), keyID)
 }
 
 // HasTrustedSigners returns true if at least one trusted L2 signer is provisioned in the database.

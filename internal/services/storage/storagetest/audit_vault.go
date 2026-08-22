@@ -1513,3 +1513,11 @@ func (avs *TestSQLAuditStore) DocSet(collection, id string, data json.RawMessage
 	avs.logger.Debug("DocSet called (no-op in test audit store)", "collection", collection, "id", id)
 	return nil
 }
+
+// DocDelete implements the TransactionAuditStore interface for test purposes.
+// No-op for test infrastructure — the test audit store does not persist
+// governed documents.
+func (avs *TestSQLAuditStore) DocDelete(collection, id string) error {
+	avs.logger.Debug("DocDelete called (no-op in test audit store)", "collection", collection, "id", id)
+	return nil
+}

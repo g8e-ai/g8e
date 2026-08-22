@@ -32,7 +32,6 @@ from app.models.command_request_payloads import (
     FsListRequestPayload,
     FsReadRequestPayload,
     HeartbeatRequestPayload,
-    InvestigationCreateRequestPayload,
     RestoreFileRequestPayload,
 )
 from app.models.pubsub_messages import G8eOutboundPayload
@@ -68,7 +67,6 @@ class TestOutboundPayloadUnionContract:
             RestoreFileRequestPayload,
             DirectCommandAuditRequestPayload,
             HeartbeatRequestPayload,
-            InvestigationCreateRequestPayload,
             DocumentUpdateRequestPayload,
             DocumentDeleteRequestPayload,
         }

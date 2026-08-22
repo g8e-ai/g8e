@@ -262,7 +262,11 @@ func (tv *L4Warden) verifyStateless(envelope *govtypes.GovernanceEnvelope) (prot
 		return nil, "", constants.ErrTxPayloadDecodeFailed
 	}
 
-	// INVESTIGATION_CREATE has no typed payload (returns nil), skip L1 validation
+	// All governed document mutations (DOCUMENT_UPDATE, DOCUMENT_DELETE) and
+	// every other known action type carry a typed protobuf payload that goes
+	// through L1 doctrine validation. Only adapter-specific action types that
+	// fall through to the default case in decodePayloadForAction return nil
+	// and skip L1 validation.
 	if decodedPayload != nil {
 		if violations := tv.doctrine.ValidatePayload(decodedPayload); len(violations) > 0 {
 			tv.logger.Error("Doctrine (L1Doctrine) validation failed", "action_type", envelope.ActionType, "violations", violations)
@@ -429,10 +433,10 @@ func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payl
 		msg = &operatorv1.HeartbeatRequested{}
 	case constants.ActionTypeCancel:
 		msg = &operatorv1.CommandCancelRequested{}
-	case constants.ActionTypeInvestigationCreate:
-		// No typed payload for investigation create, it uses raw bytes
-		return nil, nil
-
+	case constants.ActionTypeDocumentUpdate:
+		msg = &operatorv1.DocumentUpdateRequested{}
+	case constants.ActionTypeDocumentDelete:
+		msg = &operatorv1.DocumentDeleteRequested{}
 	case constants.ActionTypePlatformEnrollmentCreate,
 		constants.ActionTypePlatformEnrollmentDecide,
 		constants.ActionTypePlatformEnrollmentIssue,
@@ -448,9 +452,9 @@ func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payl
 
 	default:
 		// Known action type without a typed proto decode case (e.g.
-		// adapter-specific action types). Treat payload as raw bytes,
-		// same as INVESTIGATION_CREATE. Unknown action types are
-		// rejected before reaching this function (knownActionTypes check).
+		// adapter-specific action types). Treat payload as raw bytes.
+		// Unknown action types are rejected before reaching this
+		// function (knownActionTypes check).
 		return nil, nil
 	}
 	if err := proto.Unmarshal(payload, msg); err != nil {

@@ -64,9 +64,8 @@ PAYLOAD_TYPE_MAPPING = {
     "restore_file": "RestoreFileRequested",
     "check_port": "CheckPortRequested",
     "heartbeat": "HeartbeatRequested",
-    "investigation_create": "AuditMsgRequested",
-    "document_update": "FileEditRequested",
-    "document_delete": "FileEditRequested",
+    "document_update": "DocumentUpdateRequested",
+    "document_delete": "DocumentDeleteRequested",
     "direct_command_audit": "DirectCommandAuditRequested",
 }
 

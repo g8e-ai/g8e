@@ -58,7 +58,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
     async def create_investigation(self, request: InvestigationCreateRequest) -> InvestigationModel:
         """Low-level persistence for a new investigation document via governance envelope."""
-        from app.models.command_request_payloads import InvestigationCreateRequestPayload
+        from app.models.command_request_payloads import DocumentUpdateRequestPayload
         from app.models.pubsub_messages import G8eMessage
         from app.constants import AITaskId
 
@@ -88,7 +88,10 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             summary=f"Investigation created for case {request.case_id}",
         )
 
-        # Use governance envelope for governed collection writes
+        # Use governance envelope for governed collection writes.
+        # All governed document mutations (case/investigation/memory create/update/delete)
+        # route through DocumentUpdateRequestPayload, matching the Go-side
+        # DOCUMENT_UPDATE/DOCUMENT_DELETE action types and handleDocumentUpdateSync.
         message = G8eMessage(
             id=investigation.id,
             source_component=G8EE_COMPONENT,
@@ -98,17 +101,11 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             investigation_id=investigation.id,
             web_session_id=request.web_session_id,
             user_id=request.user_id,
-            payload=InvestigationCreateRequestPayload(
-                case_id=request.case_id,
-                case_title=request.case_title,
-                case_description=request.case_description,
-                web_session_id=request.web_session_id,
-                user_id=request.user_id,
-                user_email=request.user_email,
-                priority=str(request.priority.value) if request.priority else "MEDIUM",
-                created_with_case=request.created_with_case,
-                case_source=request.case_source,
-                sentinel_mode=request.sentinel_mode,
+            payload=DocumentUpdateRequestPayload(
+                collection=self.collection,
+                document_id=investigation.id,
+                updates=investigation.model_dump(mode="json"),
+                merge=False,
             ),
         )
         await self._governance_client.submit_envelope(message)

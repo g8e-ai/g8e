@@ -220,7 +220,7 @@ func (s *EnrollmentTokenService) CleanupExpiredTokens() error {
 
 	var deleted int
 	for _, doc := range docs {
-		_, err := s.db.DocDelete(marshaler.CollectionName(constants.CollectionEnrollmentTokens), doc.ID)
+		err := s.db.DocDelete(marshaler.CollectionName(constants.CollectionEnrollmentTokens), doc.ID)
 		if err != nil {
 			s.logger.Warn("Failed to delete expired enrollment token", "token_id", doc.ID, "error", err)
 			continue

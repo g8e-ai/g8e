@@ -187,13 +187,13 @@ func (c *AdminController) handleRevokeApp(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	_, err = c.docStore.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), req.AppID)
+	err = c.docStore.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), req.AppID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to delete app policy")
 		return
 	}
 
-	_, err = c.docStore.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), req.AppID)
+	err = c.docStore.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), req.AppID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to delete trusted signer")
 		return

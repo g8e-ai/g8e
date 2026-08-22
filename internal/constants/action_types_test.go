@@ -19,6 +19,8 @@ func TestActionTypeIsMutation_MutationTypesReturnTrue(t *testing.T) {
 	mutations := []ActionType{
 		ActionTypeA2aCall,
 		ActionTypeCancel,
+		ActionTypeDocumentDelete,
+		ActionTypeDocumentUpdate,
 		ActionTypeExecuteBash,
 		ActionTypeFileEdit,
 		ActionTypeMcpCall,
@@ -52,7 +54,6 @@ func TestActionTypeIsMutation_ReadTypesReturnFalse(t *testing.T) {
 		ActionTypeFsList,
 		ActionTypeFsRead,
 		ActionTypeHeartbeat,
-		ActionTypeInvestigationCreate,
 		ActionTypeMcpPromptGet,
 		ActionTypeMcpPromptList,
 		ActionTypeMcpResourceList,
@@ -89,6 +90,8 @@ func TestAllActionTypes_ContainsAllConstants(t *testing.T) {
 	allConsts := []ActionType{
 		ActionTypeA2aCall,
 		ActionTypeCancel,
+		ActionTypeDocumentDelete,
+		ActionTypeDocumentUpdate,
 		ActionTypeEvalAnswer,
 		ActionTypeExecuteBash,
 		ActionTypeFetchFileDiff,
@@ -100,7 +103,6 @@ func TestAllActionTypes_ContainsAllConstants(t *testing.T) {
 		ActionTypeFsList,
 		ActionTypeFsRead,
 		ActionTypeHeartbeat,
-		ActionTypeInvestigationCreate,
 		ActionTypeMcpCall,
 		ActionTypeMcpPromptGet,
 		ActionTypeMcpPromptList,

@@ -640,6 +640,13 @@ func (ass *SQLAuditStore) DocSet(collection, id string, data json.RawMessage) er
 	return ass.RecordActionReceipt(&receipt)
 }
 
+// DocDelete implements governance.TransactionAuditStore for outbound mode.
+// The outbound operator does not persist governed documents — document
+// mutations are a gateway-side concern. This is a no-op that returns nil.
+func (ass *SQLAuditStore) DocDelete(collection, id string) error {
+	return nil
+}
+
 // GetActionReceipt retrieves a single action receipt by transaction ID.
 func (ass *SQLAuditStore) GetActionReceipt(transactionID string) (*models.ActionReceiptRecord, error) {
 	if ass == nil || ass.db == nil {

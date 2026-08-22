@@ -154,24 +154,44 @@ func (m *MockTransactionAudit) DocSet(collection, id string, data json.RawMessag
 	return nil
 }
 
+func (m *MockTransactionAudit) DocDelete(collection, id string) error {
+	return nil
+}
+
 // ConfigurableMockAuditStore implements TransactionAuditStore with configurable behavior and call tracking.
 type ConfigurableMockAuditStore struct {
-	DocSetFunc func(collection, id string, data json.RawMessage) error
-	Calls      []struct {
+	DocSetFunc    func(collection, id string, data json.RawMessage) error
+	DocDeleteFunc func(collection, id string) error
+	DocSetCalls   []struct {
 		Collection string
 		ID         string
 		Data       json.RawMessage
 	}
+	DocDeleteCalls []struct {
+		Collection string
+		ID         string
+	}
 }
 
 func (m *ConfigurableMockAuditStore) DocSet(collection, id string, data json.RawMessage) error {
-	m.Calls = append(m.Calls, struct {
+	m.DocSetCalls = append(m.DocSetCalls, struct {
 		Collection string
 		ID         string
 		Data       json.RawMessage
 	}{collection, id, data})
 	if m.DocSetFunc != nil {
 		return m.DocSetFunc(collection, id, data)
+	}
+	return nil
+}
+
+func (m *ConfigurableMockAuditStore) DocDelete(collection, id string) error {
+	m.DocDeleteCalls = append(m.DocDeleteCalls, struct {
+		Collection string
+		ID         string
+	}{collection, id})
+	if m.DocDeleteFunc != nil {
+		return m.DocDeleteFunc(collection, id)
 	}
 	return nil
 }

@@ -198,7 +198,7 @@ func (s *dbSessionStore) GetSession(userID string) (*webauthn.SessionData, error
 }
 
 func (s *dbSessionStore) DeleteSession(userID string) error {
-	_, err := s.db.DocDelete(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID)
+	err := s.db.DocDelete(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID)
 	return err
 }
 

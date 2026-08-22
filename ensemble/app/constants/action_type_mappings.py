@@ -30,6 +30,19 @@ def map_event_type_to_action_type(event_type: str) -> str:
         EventType.OPERATOR_MCP_CALL_REQUESTED: "MCP_CALL",
         EventType.OPERATOR_A2A_CALL_REQUESTED: "A2A_CALL",
         EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED: "PORT_CHECK",
+        # App-level document mutations route through DOCUMENT_UPDATE/DOCUMENT_DELETE,
+        # matching the Go eventToAction map in internal/constants/mappings.go.
+        # All case/investigation/memory create/update events map to DOCUMENT_UPDATE;
+        # all delete events map to DOCUMENT_DELETE. This unifies governed document
+        # mutations through one action type pair with typed protobuf payloads.
+        EventType.APP_CASE_CREATED: "DOCUMENT_UPDATE",
+        EventType.APP_CASE_UPDATED: "DOCUMENT_UPDATE",
+        EventType.APP_CASE_DELETED: "DOCUMENT_DELETE",
+        EventType.APP_MEMORY_CREATED: "DOCUMENT_UPDATE",
+        EventType.APP_MEMORY_UPDATED: "DOCUMENT_UPDATE",
+        EventType.APP_INVESTIGATION_CREATED: "DOCUMENT_UPDATE",
+        EventType.APP_INVESTIGATION_UPDATED: "DOCUMENT_UPDATE",
+        EventType.APP_INVESTIGATION_DELETED: "DOCUMENT_DELETE",
     }
     return mapping.get(event_type, event_type)
 

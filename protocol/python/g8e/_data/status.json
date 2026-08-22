@@ -97,10 +97,17 @@
         "_python_const": "HEARTBEAT",
         "value": "HEARTBEAT"
       },
-      "INVESTIGATION_CREATE": {
-        "_go_const": "ActionTypeInvestigationCreate",
-        "_python_const": "INVESTIGATION_CREATE",
-        "value": "INVESTIGATION_CREATE"
+      "DOCUMENT_UPDATE": {
+        "_go_const": "ActionTypeDocumentUpdate",
+        "_mutation": true,
+        "_python_const": "DOCUMENT_UPDATE",
+        "value": "DOCUMENT_UPDATE"
+      },
+      "DOCUMENT_DELETE": {
+        "_go_const": "ActionTypeDocumentDelete",
+        "_mutation": true,
+        "_python_const": "DOCUMENT_DELETE",
+        "value": "DOCUMENT_DELETE"
       },
       "MCP_CALL": {
         "_go_const": "ActionTypeMcpCall",

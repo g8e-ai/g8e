@@ -229,7 +229,7 @@ func (s *CLISessionService) ReplaceCLISession(oldSessionID, newSessionID string,
 		// The new session was persisted but we could not deactivate the old
 		// one due to a store error. Clean up the orphaned new session so we
 		// do not leave an active session with no matching deactivated old one.
-		if _, delErr := s.db.DocDelete(marshaler.CollectionName(constants.CollectionCLISessions), newSessionID); delErr != nil {
+		if delErr := s.db.DocDelete(marshaler.CollectionName(constants.CollectionCLISessions), newSessionID); delErr != nil {
 			s.logger.Error("ReplaceCLISession: failed to clean up orphaned new session after deactivate error",
 				"error", delErr,
 				"new_session_id_prefix", safeTruncateID(newSessionID, 8),
@@ -241,7 +241,7 @@ func (s *CLISessionService) ReplaceCLISession(oldSessionID, newSessionID string,
 		// A concurrent caller already deactivated the old session. Delete the
 		// orphaned new session we just wrote so an active session document is
 		// not left in the collection with no corresponding deactivated old one.
-		if _, delErr := s.db.DocDelete(marshaler.CollectionName(constants.CollectionCLISessions), newSessionID); delErr != nil {
+		if delErr := s.db.DocDelete(marshaler.CollectionName(constants.CollectionCLISessions), newSessionID); delErr != nil {
 			s.logger.Error("ReplaceCLISession: failed to clean up orphaned new session after race loss",
 				"error", delErr,
 				"new_session_id_prefix", safeTruncateID(newSessionID, 8),

@@ -706,7 +706,7 @@ func (s *PlatformEnrollmentService) cleanupFiltered(filters []models.DocFilter) 
 	}
 	var deleted int
 	for _, doc := range docs {
-		_, err := s.db.DocDelete(platformEnrollmentCollectionName(), doc.ID)
+		err := s.db.DocDelete(platformEnrollmentCollectionName(), doc.ID)
 		if err != nil {
 			s.logger.Warn("platform enrollment: cleanup: delete failed", "doc_id", doc.ID, "error", err)
 			continue

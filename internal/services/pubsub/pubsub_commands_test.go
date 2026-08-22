@@ -12,6 +12,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -35,6 +36,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -451,19 +453,19 @@ func TestOperatorPubSubService_handleA2aCallRequestSync(t *testing.T) {
 	})
 }
 
-func TestOperatorPubSubService_handleAppInvestigationCreatedSync(t *testing.T) {
+func TestOperatorPubSubService_handleDocumentUpdateSync(t *testing.T) {
 	t.Run("rejects when Actuator not configured", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
 		f.Svc.SetActuator(nil)
 		msg := &PubSubCommandMessage{
-			EventType: constants.EventAppInvestigationCreated,
+			EventType: constants.EventAppCaseCreated,
 			ID:        "msg-1",
-			Payload:   mustMarshalJSON(t, map[string]string{"test": "data"}),
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{Collection: "cases", DocumentId: "case-1"}),
 		}
-		_, err := f.Svc.handleAppInvestigationCreatedSync(context.Background(), msg)
+		_, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "actuator or ConsoleAuditStore not configured")
+		assert.ErrorIs(t, err, constants.ErrPubSubActuatorOrAuditStore)
 	})
 
 	t.Run("rejects when ConsoleAuditStore not configured", func(t *testing.T) {
@@ -472,27 +474,200 @@ func TestOperatorPubSubService_handleAppInvestigationCreatedSync(t *testing.T) {
 		f.Svc.SetActuator(&governance.L5Actuator{})
 		f.Svc.Actuator().ConsoleAuditStore = nil
 		msg := &PubSubCommandMessage{
-			EventType: constants.EventAppInvestigationCreated,
+			EventType: constants.EventAppCaseCreated,
 			ID:        "msg-1",
-			Payload:   mustMarshalJSON(t, map[string]string{"test": "data"}),
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{Collection: "cases", DocumentId: "case-1"}),
 		}
-		_, err := f.Svc.handleAppInvestigationCreatedSync(context.Background(), msg)
+		_, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "actuator or ConsoleAuditStore not configured")
+		assert.ErrorIs(t, err, constants.ErrPubSubActuatorOrAuditStore)
 	})
 
-	t.Run("creates investigation document successfully", func(t *testing.T) {
+	t.Run("rejects malformed protobuf payload", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		f.Svc.Actuator().ConsoleAuditStore = &testutil.MockTransactionAudit{}
+		f.Svc.Actuator().ConsoleAuditStore = &testutil.ConfigurableMockAuditStore{}
 		msg := &PubSubCommandMessage{
-			EventType: constants.EventAppInvestigationCreated,
-			ID:        "investigation-1",
-			Payload:   mustMarshalJSON(t, map[string]string{"title": "test investigation"}),
+			EventType: constants.EventAppCaseCreated,
+			ID:        "msg-1",
+			Payload:   []byte("not-a-protobuf"),
 		}
-		summary, err := f.Svc.handleAppInvestigationCreatedSync(context.Background(), msg)
+		_, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "pubsub: document update: unmarshal")
+	})
+
+	t.Run("rejects empty collection or document_id", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		f.Svc.Actuator().ConsoleAuditStore = &testutil.ConfigurableMockAuditStore{}
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseCreated,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{Collection: "", DocumentId: ""}),
+		}
+		_, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrTxPayloadMissing)
+	})
+
+	t.Run("rejects when DocSet fails", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		f.Svc.Actuator().ConsoleAuditStore = &testutil.ConfigurableMockAuditStore{
+			DocSetFunc: func(collection, id string, data json.RawMessage) error {
+				return fmt.Errorf("disk full")
+			},
+		}
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseCreated,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{Collection: "cases", DocumentId: "case-1"}),
+		}
+		_, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "pubsub: document update: doc set")
+	})
+
+	t.Run("persists document update via DocSet with canonical protojson", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		updates, err := structpb.NewStruct(map[string]interface{}{
+			"title":  "test case",
+			"status": "open",
+		})
 		require.NoError(t, err)
-		assert.Equal(t, "investigation created", summary)
+		mock := &testutil.ConfigurableMockAuditStore{}
+		f.Svc.Actuator().ConsoleAuditStore = mock
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseCreated,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{Collection: "cases", DocumentId: "case-1", Updates: updates, Merge: false}),
+		}
+		summary, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
+		require.NoError(t, err)
+		assert.Equal(t, "document updated: cases/case-1", summary)
+		require.Len(t, mock.DocSetCalls, 1)
+		call := mock.DocSetCalls[0]
+		assert.Equal(t, "cases", call.Collection)
+		assert.Equal(t, "case-1", call.ID)
+		// Canonical protojson preserves field names from the Struct.
+		var parsed map[string]interface{}
+		require.NoError(t, json.Unmarshal(call.Data, &parsed))
+		assert.Equal(t, "test case", parsed["title"])
+		assert.Equal(t, "open", parsed["status"])
+	})
+
+	t.Run("persists document update with empty updates as empty object", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		mock := &testutil.ConfigurableMockAuditStore{}
+		f.Svc.Actuator().ConsoleAuditStore = mock
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseCreated,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{Collection: "cases", DocumentId: "case-1", Updates: nil}),
+		}
+		summary, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
+		require.NoError(t, err)
+		assert.Equal(t, "document updated: cases/case-1", summary)
+		require.Len(t, mock.DocSetCalls, 1)
+		assert.Equal(t, json.RawMessage("{}"), mock.DocSetCalls[0].Data)
+	})
+}
+
+func TestOperatorPubSubService_handleDocumentDeleteSync(t *testing.T) {
+	t.Run("rejects when Actuator not configured", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		f.Svc.SetActuator(nil)
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseDeleted,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentDeleteRequested{Collection: "cases", DocumentId: "case-1"}),
+		}
+		_, err := f.Svc.handleDocumentDeleteSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrPubSubActuatorOrAuditStore)
+	})
+
+	t.Run("rejects when ConsoleAuditStore not configured", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		f.Svc.SetActuator(&governance.L5Actuator{})
+		f.Svc.Actuator().ConsoleAuditStore = nil
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseDeleted,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentDeleteRequested{Collection: "cases", DocumentId: "case-1"}),
+		}
+		_, err := f.Svc.handleDocumentDeleteSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrPubSubActuatorOrAuditStore)
+	})
+
+	t.Run("rejects malformed protobuf payload", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		f.Svc.Actuator().ConsoleAuditStore = &testutil.ConfigurableMockAuditStore{}
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseDeleted,
+			ID:        "msg-1",
+			Payload:   []byte("not-a-protobuf"),
+		}
+		_, err := f.Svc.handleDocumentDeleteSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "pubsub: document delete: unmarshal")
+	})
+
+	t.Run("rejects empty collection or document_id", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		f.Svc.Actuator().ConsoleAuditStore = &testutil.ConfigurableMockAuditStore{}
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseDeleted,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentDeleteRequested{Collection: "", DocumentId: ""}),
+		}
+		_, err := f.Svc.handleDocumentDeleteSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrTxPayloadMissing)
+	})
+
+	t.Run("rejects when DocDelete fails", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		f.Svc.Actuator().ConsoleAuditStore = &testutil.ConfigurableMockAuditStore{
+			DocDeleteFunc: func(collection, id string) error {
+				return fmt.Errorf("disk full")
+			},
+		}
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseDeleted,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentDeleteRequested{Collection: "cases", DocumentId: "case-1"}),
+		}
+		_, err := f.Svc.handleDocumentDeleteSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "pubsub: document delete: doc delete")
+	})
+
+	t.Run("deletes document via DocDelete with correct collection and id", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		mock := &testutil.ConfigurableMockAuditStore{}
+		f.Svc.Actuator().ConsoleAuditStore = mock
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseDeleted,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentDeleteRequested{Collection: "cases", DocumentId: "case-1"}),
+		}
+		summary, err := f.Svc.handleDocumentDeleteSync(context.Background(), msg)
+		require.NoError(t, err)
+		assert.Equal(t, "document deleted: cases/case-1", summary)
+		require.Len(t, mock.DocDeleteCalls, 1)
+		assert.Equal(t, "cases", mock.DocDeleteCalls[0].Collection)
+		assert.Equal(t, "case-1", mock.DocDeleteCalls[0].ID)
 	})
 }
 

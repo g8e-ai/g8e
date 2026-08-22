@@ -24,6 +24,8 @@ type ActionType string
 const (
 	ActionTypeA2aCall                         ActionType = "A2A_CALL"
 	ActionTypeCancel                          ActionType = "CANCEL"
+	ActionTypeDocumentDelete                  ActionType = "DOCUMENT_DELETE"
+	ActionTypeDocumentUpdate                  ActionType = "DOCUMENT_UPDATE"
 	ActionTypeEvalAnswer                      ActionType = "EVAL_ANSWER"
 	ActionTypeExecuteBash                     ActionType = "EXECUTE_BASH"
 	ActionTypeFetchFileDiff                   ActionType = "FETCH_FILE_DIFF"
@@ -35,7 +37,6 @@ const (
 	ActionTypeFsList                          ActionType = "FS_LIST"
 	ActionTypeFsRead                          ActionType = "FS_READ"
 	ActionTypeHeartbeat                       ActionType = "HEARTBEAT"
-	ActionTypeInvestigationCreate             ActionType = "INVESTIGATION_CREATE"
 	ActionTypeMcpCall                         ActionType = "MCP_CALL"
 	ActionTypeMcpPromptGet                    ActionType = "MCP_PROMPT_GET"
 	ActionTypeMcpPromptList                   ActionType = "MCP_PROMPT_LIST"
@@ -56,6 +57,8 @@ const (
 var AllActionTypes = []ActionType{
 	ActionTypeA2aCall,
 	ActionTypeCancel,
+	ActionTypeDocumentDelete,
+	ActionTypeDocumentUpdate,
 	ActionTypeEvalAnswer,
 	ActionTypeExecuteBash,
 	ActionTypeFetchFileDiff,
@@ -67,7 +70,6 @@ var AllActionTypes = []ActionType{
 	ActionTypeFsList,
 	ActionTypeFsRead,
 	ActionTypeHeartbeat,
-	ActionTypeInvestigationCreate,
 	ActionTypeMcpCall,
 	ActionTypeMcpPromptGet,
 	ActionTypeMcpPromptList,
@@ -89,6 +91,8 @@ func (a ActionType) IsMutation() bool {
 	switch a {
 	case ActionTypeA2aCall,
 		ActionTypeCancel,
+		ActionTypeDocumentDelete,
+		ActionTypeDocumentUpdate,
 		ActionTypeExecuteBash,
 		ActionTypeFileEdit,
 		ActionTypeMcpCall,

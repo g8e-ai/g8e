@@ -17,6 +17,9 @@ protocol/proto/operator.proto.
 
 from typing import Literal, Union
 
+from google.protobuf.json_format import ParseDict
+from google.protobuf.struct_pb2 import Struct
+
 from app.constants import FileOperation
 from app.models.base import G8eBaseModel, Field
 from app.proto import operator_pb2
@@ -38,7 +41,6 @@ __all__ = [
     "FsReadRequestPayload",
     "G8eCommandPayload",
     "HeartbeatRequestPayload",
-    "InvestigationCreateRequestPayload",
     "RestoreFileRequestPayload",
     "TargetedOperatorBase",
 ]
@@ -447,26 +449,6 @@ class HeartbeatRequestPayload(G8eBaseModel):
         return operator_pb2.HeartbeatRequested()
 
 
-class InvestigationCreateRequestPayload(G8eBaseModel):
-    """Payload for governed investigation creation via POST /api/v1/governance/envelopes."""
-
-    payload_type: Literal["investigation_create"] = Field(
-        default="investigation_create", description="Payload type discriminator"
-    )
-    case_id: str = Field(..., description="Associated case ID")
-    case_title: str = Field(..., description="Associated case title")
-    case_description: str = Field(..., description="Associated case description")
-    web_session_id: str | None = Field(default=None, description="Web session ID")
-    user_id: str = Field(..., description="User ID")
-    user_email: str | None = Field(default=None, description="User email")
-    priority: str = Field(default="MEDIUM", description="Investigation priority")
-    created_with_case: bool = Field(
-        default=False, description="Whether investigation was created with a case"
-    )
-    case_source: str | None = Field(default=None, description="Case source")
-    sentinel_mode: bool = Field(default=True, description="Sentinel mode for data scrubbing")
-
-
 class DocumentUpdateRequestPayload(G8eBaseModel):
     """Payload for governed document update via POST /api/v1/governance/envelopes."""
 
@@ -480,6 +462,17 @@ class DocumentUpdateRequestPayload(G8eBaseModel):
         default=True, description="If True, use PATCH (merge); if False, use PUT (replace)"
     )
 
+    def to_protobuf(self) -> operator_pb2.DocumentUpdateRequested:
+        """Convert to protobuf DocumentUpdateRequested message."""
+        proto = operator_pb2.DocumentUpdateRequested()
+        proto.collection = self.collection
+        proto.document_id = self.document_id
+        updates_struct = Struct()
+        ParseDict(self.updates, updates_struct)
+        proto.updates.CopyFrom(updates_struct)
+        proto.merge = self.merge
+        return proto
+
 
 class DocumentDeleteRequestPayload(G8eBaseModel):
     """Payload for governed document deletion via POST /api/v1/governance/envelopes."""
@@ -489,6 +482,13 @@ class DocumentDeleteRequestPayload(G8eBaseModel):
     )
     collection: str = Field(..., description="Target collection name")
     document_id: str = Field(..., description="Document ID to delete")
+
+    def to_protobuf(self) -> operator_pb2.DocumentDeleteRequested:
+        """Convert to protobuf DocumentDeleteRequested message."""
+        proto = operator_pb2.DocumentDeleteRequested()
+        proto.collection = self.collection
+        proto.document_id = self.document_id
+        return proto
 
 
 # Union type for all outbound command payloads to g8eo
