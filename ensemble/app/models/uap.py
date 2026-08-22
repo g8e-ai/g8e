@@ -8,6 +8,7 @@
 from datetime import datetime, UTC
 from typing import Any
 from app.models.base import BaseModel, Field
+from pydantic import field_serializer
 
 
 class L1Metadata(BaseModel):
@@ -104,3 +105,20 @@ class UAPEnvelope(BaseModel):
     acting_app_id: str | None = None
     tenant_id: str | None = None
     binding_persona: str | None = None
+
+    @field_serializer("payload", when_used="json-unless-none")
+    def _serialize_payload_b64(self, value: bytes | None) -> str | None:
+        """Serialize the raw protobuf payload as base64 for JSON output.
+
+        The GovernanceEnvelope proto defines payload as ``bytes`` (field 9),
+        which protojson encodes as base64. Pydantic's default ``bytes`` JSON
+        serializer attempts UTF-8 decoding, which fails on raw protobuf bytes
+        (invalid UTF-8 sequences). Base64-encoding matches the protojson
+        convention and what the Go gateway's JSON decoder expects for the
+        ``bytes payload`` field.
+        """
+        if value is None:
+            return None
+        import base64
+
+        return base64.b64encode(value).decode("ascii")

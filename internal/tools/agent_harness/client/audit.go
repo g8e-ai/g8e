@@ -42,7 +42,7 @@ type Receipt struct {
 
 // GetReceipt retrieves a single receipt by transaction ID.
 func (c *Client) GetReceipt(ctx context.Context, transactionID string, persona ...Persona) (*Receipt, []byte, error) {
-	p := Persona{ID: "agent-harness-auditor"}
+	p := c.auditorPersona()
 	if len(persona) > 0 {
 		p = persona[0]
 	}
@@ -65,6 +65,18 @@ func (c *Client) GetReceipt(ctx context.Context, transactionID string, persona .
 	return &rec, body, nil
 }
 
+// auditorPersona builds a persona carrying the config's CLI session and user
+// identity so authenticated audit endpoints accept the request. The harness
+// dials these endpoints with the owner CLI cert, so the gateway requires the
+// X-CLI-Session-ID header to bind the mTLS cert to an active session.
+func (c *Client) auditorPersona() Persona {
+	return Persona{
+		ID:           "agent-harness-auditor",
+		CLISessionID: c.cfg.CLISessionID,
+		UserID:       c.cfg.UserID,
+	}
+}
+
 // AuditReceipts pulls signed receipts from the Operator's local audit vault via
 // the Gateway, optionally scoped to an Operator session.
 func (c *Client) AuditReceipts(ctx context.Context, operatorSessionID string) ([]Receipt, []byte, error) {
@@ -72,7 +84,7 @@ func (c *Client) AuditReceipts(ctx context.Context, operatorSessionID string) ([
 	if operatorSessionID != "" {
 		u += "?" + url.Values{"operator_session_id": {operatorSessionID}}.Encode()
 	}
-	_, body, err := c.do(ctx, Persona{ID: "agent-harness-auditor"}, http.MethodGet, u, nil)
+	_, body, err := c.do(ctx, c.auditorPersona(), http.MethodGet, u, nil)
 	if err != nil {
 		return nil, body, err
 	}
@@ -86,7 +98,7 @@ func (c *Client) ExportReceipts(ctx context.Context, operatorSessionID string) (
 	if operatorSessionID != "" {
 		u += "?" + url.Values{"operator_session_id": {operatorSessionID}}.Encode()
 	}
-	_, body, err := c.do(ctx, Persona{ID: "agent-harness-auditor"}, http.MethodGet, u, nil)
+	_, body, err := c.do(ctx, c.auditorPersona(), http.MethodGet, u, nil)
 	return body, err
 }
 
@@ -145,11 +157,22 @@ func (c *Client) DiscoverOperator(ctx context.Context) (operatorID, operatorSess
 	}
 
 	url := c.cfg.MTLSBaseURL + constants.APIPaths.Operators
-	if userID != "" {
-		url += "?user_id=" + userID
+	// Prefer the user_id from explicit config flags (--user-id) over the
+	// CLI credentials lookup, since the harness may be pointed at a
+	// gateway whose CLI credentials differ from the local .g8e/ tree.
+	effectiveUserID := c.cfg.UserID
+	if effectiveUserID == "" {
+		effectiveUserID = userID
+	}
+	if effectiveUserID != "" {
+		url += "?user_id=" + effectiveUserID
 	}
 
-	_, body, err := c.do(ctx, Persona{ID: "agent-harness"}, http.MethodGet, url, nil)
+	_, body, err := c.do(ctx, Persona{
+		ID:           "agent-harness",
+		CLISessionID: c.cfg.CLISessionID,
+		UserID:       effectiveUserID,
+	}, http.MethodGet, url, nil)
 	if err != nil || !json.Valid(body) {
 		return "", ""
 	}

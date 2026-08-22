@@ -1070,6 +1070,11 @@ var (
 	ErrHarnessGovKitNotInit     = errors.New("gov kit not initialized (call SetGovKit)")
 	ErrHarnessGovKitMissingSign = errors.New("gov kit not initialized (need ensemble + principal)")
 
+	// Agent harness ensemble scenario errors
+	ErrHarnessEnsembleChatFailed      = errors.New("ensemble chat request returned success=false")
+	ErrHarnessEnsembleReceiptTimeout  = errors.New("timed out waiting for expected audit receipt")
+	ErrHarnessEnsembleReceiptFailed   = errors.New("expected audit receipt found but execution status is FAILED")
+
 	// Browser errors
 	ErrBrowserURLEmpty = errors.New("browser URL cannot be empty")
 

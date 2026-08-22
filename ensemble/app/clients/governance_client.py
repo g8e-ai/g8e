@@ -33,7 +33,7 @@ from app.models.settings import GatewaySettings, TLSConfig
 from app.services.infra.settings_service import SettingsService
 from app.constants import AUTHORIZATION, GatewayAPIPaths
 from app.constants.paths import PATHS
-from app.errors import NetworkError, ValidationError, ErrorCode
+from app.errors import G8eError, NetworkError, ValidationError, ErrorCode, ErrorCategory
 from app.utils.aiohttp_session import create_component_http_session
 
 logger = logging.getLogger(__name__)
@@ -185,17 +185,19 @@ class GovernanceClient:
 
                 if resp.status == 403:
                     # Governance verification failed (L1/L2/L3 gates)
-                    raise ValidationError(
+                    raise G8eError(
                         f"Governance verification failed: {text}",
-                        component="g8ee",
                         code=ErrorCode.GOVERNANCE_REJECTED,
+                        category=ErrorCategory.PERMISSION,
+                        component="g8ee",
                     )
                 if resp.status == 400:
                     # Malformed envelope
-                    raise ValidationError(
+                    raise G8eError(
                         f"Invalid envelope: {text}",
-                        component="g8ee",
                         code=ErrorCode.INVALID_INPUT,
+                        category=ErrorCategory.VALIDATION,
+                        component="g8ee",
                     )
                 if resp.status == 503:
                     # Gateway not ready

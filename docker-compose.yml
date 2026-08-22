@@ -126,11 +126,21 @@ services:
       - "${G8E_ENSEMBLE_PORT:-8000}:8000"
     volumes:
       - g8e-ensemble-data:/root/.g8e
+      # Read-only mount of the operator's enrolled mTLS credentials so the
+      # ensemble can submit governance envelopes using the operator's cert
+      # (whose SPIFFE URI carries the operator session ID, bypassing the
+      # gateway's PrivilegedRouteRegistry block on app certs). See
+      # docs/guides/unified_stack.md and the v1.2.2 "Operator Cert Sharing"
+      # release notes. Mounted at /operator-state to avoid colliding with the
+      # ensemble's own /root/.g8e runtime tree.
+      - g8e-operator-data:/operator-state:ro
     environment:
       - G8E_GATEWAY_HTTP_URL=http://g8e.local:8080
       - G8E_OPERATOR_URL=https://g8e.local:8443
       - G8E_OPERATOR_PUBSUB_URL=wss://g8e.local:8443
       - G8E_RUNTIME_DIR=/root/.g8e
+      - G8E_GOVERNANCE_OPERATOR_CERT=/operator-state/pki/operator.crt
+      - G8E_GOVERNANCE_OPERATOR_KEY=/operator-state/pki/operator.key
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s

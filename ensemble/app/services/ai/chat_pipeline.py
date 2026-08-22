@@ -42,6 +42,7 @@ from app.llm.providers.anthropic import AnthropicProvider
 from app.llm.providers.gemini import GeminiProvider
 from app.llm.providers.ollama import OllamaProvider
 from app.llm.providers.llama_cpp import LlamaCppProvider
+from app.llm.providers.fake import FakeProvider
 from app.models.agent import AgentInputs, AgentStreamState
 from app.models.attachments import AttachmentMetadata, ProcessedAttachment
 from app.models.http_context import G8eHttpContext, RequestContext
@@ -149,6 +150,7 @@ class ChatPipelineService:
             LLMProvider.GEMINI.value: GeminiProvider,
             LLMProvider.OLLAMA.value: OllamaProvider,
             LLMProvider.LLAMACPP.value: LlamaCppProvider,
+            LLMProvider.FAKE.value: FakeProvider,
         }
 
         def check_tier(

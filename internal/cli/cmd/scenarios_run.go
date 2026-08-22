@@ -25,23 +25,24 @@ import (
 )
 
 var (
-	harnessConfigPath   string
-	harnessMTLSURL      string
-	harnessPublicURL    string
-	harnessApprovalURL  string
-	harnessCert         string
-	harnessKey          string
-	harnessCA           string
-	harnessAPIKey       string
-	harnessCLICert      string
-	harnessCLIKey       string
-	harnessCLICA        string
-	harnessSessionID    string
-	harnessUserID       string
-	harnessCLISessionID string
-	harnessOutDir       string
-	harnessVerbose      bool
-	harnessPhase        string
+	harnessConfigPath    string
+	harnessMTLSURL       string
+	harnessPublicURL     string
+	harnessApprovalURL   string
+	harnessEnsembleURL   string
+	harnessCert          string
+	harnessKey           string
+	harnessCA            string
+	harnessAPIKey        string
+	harnessCLICert       string
+	harnessCLIKey        string
+	harnessCLICA         string
+	harnessSessionID     string
+	harnessUserID        string
+	harnessCLISessionID  string
+	harnessOutDir        string
+	harnessVerbose       bool
+	harnessPhase         string
 )
 
 func demosScenariosRunCmd() *cobra.Command {
@@ -55,6 +56,7 @@ func demosScenariosRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&harnessMTLSURL, "mtls-url", "", "Gateway mTLS surface")
 	cmd.Flags().StringVar(&harnessPublicURL, "public-url", "", "Gateway public surface for OOB approve (must be reachable from the harness process)")
 	cmd.Flags().StringVar(&harnessApprovalURL, "approval-url", "", "Host-reachable base URL for the printed human approval link (defaults to --public-url)")
+	cmd.Flags().StringVar(&harnessEnsembleURL, "ensemble-url", "", "Ensemble (g8ee) HTTP surface for ensemble chat scenarios")
 	cmd.Flags().StringVar(&harnessCert, "cert", "", "client cert PEM")
 	cmd.Flags().StringVar(&harnessKey, "key", "", "client key PEM")
 	cmd.Flags().StringVar(&harnessCA, "ca", "", "gateway CA bundle PEM")
@@ -147,6 +149,9 @@ func applyAgentHarnessFlags(cfg *config.Config) {
 	if harnessApprovalURL != "" {
 		cfg.ApprovalDisplayURL = harnessApprovalURL
 	}
+	if harnessEnsembleURL != "" {
+		cfg.EnsembleBaseURL = harnessEnsembleURL
+	}
 	if harnessCert != "" {
 		cfg.Auth.ClientCert = harnessCert
 	}
@@ -223,7 +228,8 @@ func selectAgentHarnessScenarios(phase string, names []string) []scenarios.Scena
 func needsGovKit(ss []scenarios.Scenario) bool {
 	for _, s := range ss {
 		if s.RequiresPosture == scenarios.Consensus || s.RequiresPosture == scenarios.Notary ||
-			strings.HasPrefix(s.Name, scenarios.DhsScenarioPrefix) || strings.HasPrefix(s.Name, scenarios.FedRAMPScenarioPrefix) {
+			strings.HasPrefix(s.Name, scenarios.DhsScenarioPrefix) || strings.HasPrefix(s.Name, scenarios.FedRAMPScenarioPrefix) ||
+			strings.HasPrefix(s.Name, scenarios.EnsembleScenarioPrefix) {
 			return true
 		}
 	}

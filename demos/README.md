@@ -246,6 +246,61 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 **Frontend Demo Scenarios:**
 - `g8e demos run frontend 1` - Third-Party Frontend Enrollment
 
+### Ensemble Demo Scenarios
+
+Ensemble scenarios exercise the core product path: a user sends a chat message to the ensemble (g8ee), the AI reasons about the request and submits governed tool calls through the operator to the gateway for admission. The gateway runs the 5-layer governance gauntlet (L1 doctrine, L2 consensus, L3 notary, L4 warden, L5 actuator), and the operator executes the admitted command. The scenarios verify the end-to-end flow by polling the audit vault for signed ActionReceipts.
+
+Ensemble scenarios require the **unified platform compose** (`docker-compose.yml` at the repo root), not the per-demo composes (which do not include the ensemble). Bring up the full stack with the two-phase bootstrap profile:
+
+```bash
+# 1. Start the gateway (default profile).
+docker compose up -d g8e-gateway
+
+# 2. Enroll the first owner.
+./g8e auth enroll user -e https://localhost:8443
+
+# 3. Bring up the bootstrapped workloads (operator, ensemble, dashboard).
+docker compose --profile bootstrapped up -d
+
+# 4. Approve the operator and ensemble enrollment requests.
+./g8e auth pending-platform-enrollments
+./g8e auth approve-platform-enrollment <operator-request-id> --yes
+./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
+```
+
+Run ensemble scenarios via the agent harness:
+
+```bash
+g8e demos scenarios run ensemble-chat-file-create \
+  --mtls-url https://localhost:8443 \
+  --public-url http://localhost:8080 \
+  --ensemble-url http://localhost:8000 \
+  --user-id <user-id> \
+  --cli-session-id <cli-session-id>
+```
+
+The `--ensemble-url` flag points the harness at the ensemble (g8ee) HTTP surface. Ensemble scenarios use the `GovKit` pattern for identity binding (operator session, user ID, CLI session ID) and poll the audit vault for signed receipts.
+
+**Available ensemble scenarios:**
+
+- `ensemble-chat-file-create` - AI creates a governed file via the `file_create` tool. Verifies a `FILE_EDIT` receipt with `COMPLETED` status appears in the audit vault.
+- `ensemble-chat-file-write` - AI writes content to an existing file via the `file_write` tool. Verifies a `FILE_EDIT` receipt.
+- `ensemble-document-update` - AI triggers a case/investigation create via the ensemble. Verifies a `DOCUMENT_UPDATE` envelope was admitted by L1 and persisted via the document store handler.
+- `ensemble-document-delete` - AI triggers a document delete. Verifies a `DOCUMENT_DELETE` envelope was admitted and the document was removed.
+
+**LLM provider selection:**
+
+Ensemble scenarios default to the `fake` LLM provider for CI determinism (no external LLM dependency). The `FakeProvider` (`ensemble/app/llm/providers/fake.py`) returns deterministic tool-call responses by pattern-matching the user message — no network calls, no API keys required.
+
+For local dev with a real LLM (e.g., ollama), set env vars before running the harness:
+
+```bash
+export G8E_HARNESS_LLM_PROVIDER=ollama
+export G8E_HARNESS_LLM_MODEL=gemma4:12b
+export G8E_HARNESS_LLM_ENDPOINT=http://192.168.1.2:11434
+g8e demos scenarios run ensemble-chat-file-create --ensemble-url http://localhost:8000 ...
+```
+
 ### Demo Output Format
 
 By default, `g8e demos run` produces concise output: each scenario prints its PASS/FAIL result line. After all scenarios complete, a results table summarizes scenario numbers, names, statuses, and key metrics.

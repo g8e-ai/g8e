@@ -42,6 +42,7 @@ from .providers.gemini import GeminiProvider
 from .providers.anthropic import AnthropicProvider
 from .providers.llama_cpp import LlamaCppProvider
 from .providers.ollama import OllamaProvider, _normalize_ollama_host
+from .providers.fake import FakeProvider
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +173,11 @@ def get_llm_provider(
         )
     elif provider_type == LLMProvider.LLAMACPP:
         provider = LlamaCppProvider(
+            endpoint=endpoint,
+            api_key=api_key,
+        )
+    elif provider_type == LLMProvider.FAKE:
+        provider = FakeProvider(
             endpoint=endpoint,
             api_key=api_key,
         )

@@ -55,6 +55,12 @@ type Config struct {
 	// link falls back to PublicBaseURL.
 	ApprovalDisplayURL string `json:"approval_display_url"`
 
+	// EnsembleBaseURL is the g8ee (ensemble) HTTP surface used by the
+	// ensemble chat scenarios. The ensemble is a Python/FastAPI app on
+	// its own port; the harness dials POST /api/v1/chat directly. When
+	// empty, ensemble scenarios fail closed with a clear error.
+	EnsembleBaseURL string `json:"ensemble_base_url"`
+
 	Auth Auth `json:"auth"`
 
 	// UseCLIConfig uses the CLI credentials directory for all paths.

@@ -24,6 +24,7 @@ Bootstrap responsibilities (this file):
 """
 
 import logging
+import os
 from typing import cast
 from contextlib import asynccontextmanager
 
@@ -70,6 +71,7 @@ from .constants import (
     G8EE_APP_TITLE,
 )
 from .constants.generated_paths import PathConstants, PortConstants
+from .constants.env_vars import EnvVar
 from .models.state import G8eeAppState
 from .models.settings import TLSConfig
 from .db.blob_service import BlobService
@@ -209,8 +211,36 @@ async def lifespan(app: FastAPI):
         logger.info("Platform settings merged: port=%s", settings.port)
 
         # -- Phase 4.5: GovernanceClient for governed collection writes --
+        # The gateway's PrivilegedRouteRegistry blocks app certificates from
+        # the governance envelope endpoint. The ensemble must use the
+        # operator's mTLS cert (whose SPIFFE URI carries the operator session
+        # ID) to submit governance envelopes. The operator cert is shared via
+        # a read-only volume mount (see docker-compose.yml). When the env vars
+        # are not set, fall back to the app tls_config (which will fail-closed
+        # at the gateway with ErrPrivilegedEndpointAccess).
+        gov_operator_cert = os.environ.get(EnvVar.GOVERNANCE_OPERATOR_CERT)
+        gov_operator_key = os.environ.get(EnvVar.GOVERNANCE_OPERATOR_KEY)
+        if gov_operator_cert and gov_operator_key:
+            governance_tls_config = TLSConfig(
+                ca_cert_path=app_identity.ca_cert_path,
+                client_cert_path=gov_operator_cert,
+                client_key_path=gov_operator_key,
+            )
+            logger.info(
+                "GovernanceClient using operator mTLS cert for governance "
+                "submissions (cert=%s)",
+                gov_operator_cert,
+            )
+        else:
+            governance_tls_config = tls_config
+            logger.warning(
+                "GovernanceClient falling back to app cert for governance "
+                "submissions — gateway will reject with ErrPrivilegedEndpointAccess "
+                "unless G8E_GOVERNANCE_OPERATOR_CERT/G8E_GOVERNANCE_OPERATOR_KEY "
+                "are set"
+            )
         governance_client = GovernanceClient(
-            tls_config=tls_config,
+            tls_config=governance_tls_config,
             operator_session_id=settings.auth.operator_session_id,
             gateway_settings=settings.gateway,
         )
