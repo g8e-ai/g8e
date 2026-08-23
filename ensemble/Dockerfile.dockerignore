@@ -11,9 +11,12 @@
 !ensemble/
 !protocol/
 
-# Within protocol/, only the Python package is required.
+# Within protocol/, the Python package and the constants JSON source are
+# required (constants/ is synced into _data/ at build time so JSON changes
+# invalidate the layer cache — see E.9).
 protocol/*
 !protocol/python/
+!protocol/constants/
 
 # Within ensemble/, drop venvs, caches, test sources, and evals — none are
 # needed for `pip install /build/ensemble` (which reads pyproject.toml + app).

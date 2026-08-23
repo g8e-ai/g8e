@@ -181,11 +181,11 @@ help:
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean         Remove all build artifacts and runtime state"
-	@echo "  clean-docker  Stop the compose stack and remove volumes (docker compose down -v)"
+	@echo "  clean-docker  Stop all profile containers and remove volumes (--profile bootstrapped down -v --remove-orphans)"
 	@echo ""
 	@echo "Docker Compose:"
 	@echo "  up            Build and start the full stack (docker compose up -d --build)"
-	@echo "  down          Stop the stack, keep volumes (docker compose down)"
+	@echo "  down          Stop all profile containers, keep volumes (--profile bootstrapped down --remove-orphans)"
 	@echo ""
 	@echo "Demos:"
 	@echo "  demo-verify         Build and run all 5 demo environments (requires Docker)"
@@ -713,14 +713,14 @@ up:
 
 .PHONY: down
 down:
-	@echo "Stopping the stack (volumes preserved)..."
-	@docker compose down
+	@echo "Stopping the full stack including bootstrapped workloads (volumes preserved)..."
+	@docker compose --profile bootstrapped down --remove-orphans
 	@echo "Stack stopped. Volumes preserved; rerun 'make up' to resume."
 
 .PHONY: clean-docker
 clean-docker:
-	@echo "Stopping the stack and removing volumes..."
-	@docker compose down -v
+	@echo "Stopping the full stack (all profiles) and removing volumes..."
+	@docker compose --profile bootstrapped down -v --remove-orphans
 	@echo "Stack stopped and volumes removed. The next 'make up' re-bootstraps the CA and requires re-enrollment."
 
 

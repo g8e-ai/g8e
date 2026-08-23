@@ -20,10 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/cli/auth"
-	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/fs"
+	harnessconfig "github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
 )
 
 // Receipt is a lenient view of an Operator-signed ActionReceipt as exposed by
@@ -142,19 +140,17 @@ func (c *Client) DiscoverOperator(ctx context.Context) (operatorID, operatorSess
 		}
 	}
 
-	// Try to load user_id and operator_session_id from CLI credentials
+	// Try to load user_id and operator_session_id from CLI credentials via
+	// the shared helper so this path and config.Default() cannot drift on
+	// the identity source (E.5).
 	userID := ""
 	if c.cfg.UseCLIConfig {
-		cliCfg, err := config.Load("")
-		if err == nil && cliCfg != nil {
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
-			if err == nil {
-				creds, err := auth.LoadCredentials(fileSvc, cliCfg)
-				if err == nil && creds != nil {
-					userID = creds.UserID
-					operatorSessionID = creds.OperatorSessionID
-				}
-			}
+		identity, err := harnessconfig.LoadCLIIdentity("")
+		if err != nil {
+			slog.Warn("agent_harness: CLI identity load failed during operator discovery", "error", err)
+		} else {
+			userID = identity.UserID
+			operatorSessionID = identity.OperatorSessionID
 		}
 	}
 

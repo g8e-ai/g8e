@@ -25,24 +25,24 @@ import (
 )
 
 var (
-	harnessConfigPath    string
-	harnessMTLSURL       string
-	harnessPublicURL     string
-	harnessApprovalURL   string
-	harnessEnsembleURL   string
-	harnessCert          string
-	harnessKey           string
-	harnessCA            string
-	harnessAPIKey        string
-	harnessCLICert       string
-	harnessCLIKey        string
-	harnessCLICA         string
-	harnessSessionID     string
-	harnessUserID        string
-	harnessCLISessionID  string
-	harnessOutDir        string
-	harnessVerbose       bool
-	harnessPhase         string
+	harnessConfigPath   string
+	harnessMTLSURL      string
+	harnessPublicURL    string
+	harnessApprovalURL  string
+	harnessEnsembleURL  string
+	harnessCert         string
+	harnessKey          string
+	harnessCA           string
+	harnessAPIKey       string
+	harnessCLICert      string
+	harnessCLIKey       string
+	harnessCLICA        string
+	harnessSessionID    string
+	harnessUserID       string
+	harnessCLISessionID string
+	harnessOutDir       string
+	harnessVerbose      bool
+	harnessPhase        string
 )
 
 func demosScenariosRunCmd() *cobra.Command {

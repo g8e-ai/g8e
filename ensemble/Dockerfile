@@ -21,7 +21,24 @@ WORKDIR /build
 # This makes the `g8e` dependency resolvable from the local package instead
 # of PyPI, matching the [tool.uv.sources] path override in ensemble/pyproject.toml.
 COPY protocol/python /build/protocol/python
+
+# Copy protocol/constants/ and sync into the bundled _data/ directory so changes
+# to the JSON files invalidate the Docker layer cache (the COPY protocol/python
+# layer only hashes protocol/python/ content). This also ensures the build
+# always uses fresh constants even if _data/ was not re-synced via make
+# python-build before the Docker build (E.9 staleness guard).
+COPY protocol/constants /build/protocol/constants
+RUN cp /build/protocol/constants/*.json /build/protocol/python/g8e/_data/ \
+ && rm -rf /build/protocol/python/g8e/_data/doctrine \
+ && cp -r /build/protocol/constants/doctrine /build/protocol/python/g8e/_data/
+
 RUN pip install --no-cache-dir /build/protocol/python
+
+# Build-time startup smoke test: import g8e.constants and resolve STATUS["status"]
+# so a broken or stale constants bundle fails the image build, not the container
+# runtime. This guards against the E.1 KeyError: 'status' crash that only
+# surfaced at container startup.
+RUN python3 -c "from g8e.constants import STATUS; assert 'status' in STATUS and STATUS['status'], 'broken constants bundle: STATUS[\"status\"] missing or empty'"
 
 # Copy the ensemble and install runtime dependencies only (no dev/test extras).
 COPY ensemble /build/ensemble

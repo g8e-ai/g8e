@@ -305,10 +305,10 @@ func TestRunDockerStartWalkthrough_OperatorNotRunningWrapsEnrollmentFailed(t *te
 		checkOperatorRunning: func(*config.Config) error {
 			return errors.New("connection refused")
 		},
-		enrollerFactory:   panickingEnrollerFactory(),
+		enrollerFactory:    panickingEnrollerFactory(),
 		waitGatewayHealthy: func(*cobra.Command) error { return nil },
-		cfg:               cfg,
-		fileSvc:           fileSvc,
+		cfg:                cfg,
+		fileSvc:            fileSvc,
 	}
 
 	cmd := dockerStartCmd()

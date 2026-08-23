@@ -701,10 +701,10 @@ func TestRegistryPostureDeclarations(t *testing.T) {
 		"notary-oob":       Notary,    // Ensemble + Authenticator suspend flow
 
 		// Ensemble scenarios — EnsembleChat via g8ee, GovKit identity binding, polls audit vault
-		"ensemble-chat-file-create": Doctrine,  // Chat -> file_create tool -> FILE_EDIT receipt
-		"ensemble-chat-file-write":  Doctrine,  // Chat -> file_write tool -> FILE_EDIT receipt
-		"ensemble-document-update":  Doctrine,  // Chat -> case create -> DOCUMENT_UPDATE receipt
-		"ensemble-document-delete":  Doctrine,  // Chat -> document delete -> DOCUMENT_DELETE receipt
+		"ensemble-chat-file-create": Doctrine, // Chat -> file_create tool -> FILE_EDIT receipt
+		"ensemble-chat-file-write":  Doctrine, // Chat -> file_write tool -> FILE_EDIT receipt
+		"ensemble-document-update":  Doctrine, // Direct DOCUMENT_UPDATE create + merge=true patch + read-back (Bug 10 regression)
+		"ensemble-document-delete":  Doctrine, // Direct DOCUMENT_UPDATE create + DOCUMENT_DELETE + verify absence
 
 		// DHS scenarios
 		"dhs-ingest":         Consensus, // Ensemble + Authenticator inline, expects admission

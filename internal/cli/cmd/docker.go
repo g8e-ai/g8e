@@ -16,7 +16,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -126,12 +125,12 @@ func dockerStartCmd() *cobra.Command {
 // cfg and fileSvc fields are pre-resolved by the command RunE before containers
 // start so a factory failure aborts early.
 type dockerStartDeps struct {
-	clientFactory         apiClientFactory
-	checkOperatorRunning  func(*config.Config) error
-	enrollerFactory       enrollerFactory
-	waitGatewayHealthy    func(*cobra.Command) error
-	cfg                   *config.Config
-	fileSvc               fs.RuntimeFileService
+	clientFactory        apiClientFactory
+	checkOperatorRunning func(*config.Config) error
+	enrollerFactory      enrollerFactory
+	waitGatewayHealthy   func(*cobra.Command) error
+	cfg                  *config.Config
+	fileSvc              fs.RuntimeFileService
 }
 
 func dockerStartCmdWithConfig(
@@ -623,19 +622,4 @@ func dockerLogsCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Follow log output")
 	cmd.Flags().StringVar(&profile, "profile", "", "Compose profile to target (e.g. bootstrapped)")
 	return cmd
-}
-
-// dockerStackRunning reports whether any containers for the root compose
-// project are currently running.
-func dockerStackRunning() bool {
-	composePath, err := dockerComposePath()
-	if err != nil {
-		return false
-	}
-	c := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "ps", "-q")
-	out, err := c.Output()
-	if err != nil {
-		return false
-	}
-	return len(strings.TrimSpace(string(out))) > 0
 }

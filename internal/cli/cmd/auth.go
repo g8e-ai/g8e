@@ -51,6 +51,7 @@ func authCmd() *cobra.Command {
 		approveRecoveryCmd(),
 		approvePlatformEnrollmentCmd(),
 		pendingPlatformEnrollmentCmd(),
+		refreshCmd(),
 	)
 
 	return cmd

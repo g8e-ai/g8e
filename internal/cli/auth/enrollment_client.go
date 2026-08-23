@@ -300,6 +300,46 @@ func (c *EnrollmentClient) Rotate(ctx context.Context, fileSvc fs.RuntimeFileSer
 	return artifacts, nil
 }
 
+// Refresh performs the mTLS CLI session refresh
+// (POST /api/v1/auth/cli/refresh over the public HTTPS surface). The
+// caller's existing CLI cert is used to build the mTLS client; the
+// gateway derives the user from the authenticated certificate context.
+// The request body is empty — the cert is the proof of identity. A new
+// CLI session is issued bound to the same user, with a fresh TTL. The
+// cert is NOT rotated.
+//
+// This is the recovery path for an expired CLI session with a still-valid
+// cert. The caller must hold a valid (non-expired) cert; an expired cert
+// cannot authenticate via mTLS and must use the recovery flow instead.
+func (c *EnrollmentClient) Refresh(ctx context.Context, fileSvc fs.RuntimeFileService) (CLISessionRefresh, error) {
+	mtlsClient, err := BuildMTLSClient(fileSvc, c.cfg, httpTimeout)
+	if err != nil {
+		return CLISessionRefresh{}, err
+	}
+
+	publicURL := c.cfg.OperatorPublicURL()
+	var resp models.CLIRefreshResponse
+	if err := postJSON(ctx, mtlsClient, publicURL+constants.APIPaths.AuthCLIRefresh, models.CLIRefreshRequest{}, &resp); err != nil {
+		return CLISessionRefresh{}, err
+	}
+	if !resp.Success {
+		return CLISessionRefresh{}, fmt.Errorf("%w: refresh unsuccessful", constants.ErrCLIRefreshFailed)
+	}
+	if resp.CLISessionID == "" || resp.UserID == "" {
+		return CLISessionRefresh{}, constants.ErrMissingRequiredField
+	}
+	return CLISessionRefresh{
+		CLISessionID: resp.CLISessionID,
+		UserID:       resp.UserID,
+	}, nil
+}
+
+// CLISessionRefresh is the result of a successful CLI session refresh.
+type CLISessionRefresh struct {
+	CLISessionID string
+	UserID       string
+}
+
 // CheckBootstrapStatus reports whether the gateway has been bootstrapped
 // (started and at least one owner user exists). Used by the coordinator to
 // choose between bootstrap and recovery for an absent local identity.

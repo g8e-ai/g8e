@@ -640,3 +640,19 @@ type CLIRotationResponse struct {
 	HubTrustBundle string `json:"hub_trust_bundle"`
 	UserID         string `json:"user_id"`
 }
+
+// CLIRefreshRequest is the wire request for POST /api/v1/auth/cli/refresh.
+// This is an mTLS-protected endpoint; the current user and CLI session are
+// derived from the authenticated certificate context. The request body is
+// empty — the cert is the proof of identity. A new CLI session is issued
+// bound to the same user, with a fresh TTL. The cert itself is NOT rotated;
+// the caller continues to use the same cert. This is the recovery path for
+// an expired CLI session with a still-valid cert.
+type CLIRefreshRequest struct{}
+
+// CLIRefreshResponse is the wire response for POST /api/v1/auth/cli/refresh.
+type CLIRefreshResponse struct {
+	Success      bool   `json:"success"`
+	CLISessionID string `json:"cli_session_id"`
+	UserID       string `json:"user_id"`
+}

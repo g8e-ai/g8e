@@ -102,22 +102,22 @@ func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 		msg = &operatorv1.McpPromptGetRequested{Name: "test", ExecutionId: "exec-1"}
 	case constants.ActionTypeDocumentUpdate:
 		updates, err := structpb.NewStruct(map[string]interface{}{
-			"title": "test-case",
+			"title":  "test-case",
 			"status": "open",
 		})
 		if err != nil {
 			t.Fatalf("failed to build updates struct: %v", err)
 		}
 		msg = &operatorv1.DocumentUpdateRequested{
-			Collection:  "cases",
-			DocumentId:  "case-1",
-			Updates:     updates,
-			Merge:       false,
+			Collection: "cases",
+			DocumentId: "case-1",
+			Updates:    updates,
+			Merge:      false,
 		}
 	case constants.ActionTypeDocumentDelete:
 		msg = &operatorv1.DocumentDeleteRequested{
-			Collection:  "cases",
-			DocumentId:  "case-1",
+			Collection: "cases",
+			DocumentId: "case-1",
 		}
 	case constants.ActionTypeCancel:
 		msg = &operatorv1.CommandCancelRequested{ExecutionId: "exec-1"}

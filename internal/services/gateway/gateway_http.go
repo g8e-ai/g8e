@@ -39,6 +39,7 @@ type HTTPHandlerDependencies struct {
 	BootstrapControllerDeps          BootstrapControllerDeps
 	CLIRecoveryControllerDeps        CLIRecoveryControllerDeps
 	CLIRotationControllerDeps        CLIRotationControllerDeps
+	CLIRefreshControllerDeps         CLIRefreshControllerDeps
 	EnrollmentTokenControllerDeps    EnrollmentTokenControllerDeps
 	UserControllerDeps               UserControllerDeps
 	SessionControllerDeps            SessionControllerDeps
@@ -72,6 +73,7 @@ type HTTPHandler struct {
 	bootstrapController       *BootstrapController
 	cliRecoveryController     *CLIRecoveryController
 	cliRotationController     *CLIRotationController
+	cliRefreshController      *CLIRefreshController
 	enrollmentTokenController *EnrollmentTokenController
 	userController            *UserController
 	sessionController         *SessionController
@@ -168,6 +170,25 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 		deps.CLIRotationControllerDeps.Responder = responder
 	}
 
+	// CLIRefreshController shares the same shared services as rotation
+	// (CLISessionSvc, UserSvc). Defaults are filled from the bootstrap
+	// deps so callers only need to set overrides.
+	if deps.CLIRefreshControllerDeps.Cfg == nil {
+		deps.CLIRefreshControllerDeps.Cfg = deps.Cfg
+	}
+	if deps.CLIRefreshControllerDeps.Logger == nil {
+		deps.CLIRefreshControllerDeps.Logger = deps.Logger
+	}
+	if deps.CLIRefreshControllerDeps.CLISessionSvc == nil {
+		deps.CLIRefreshControllerDeps.CLISessionSvc = deps.BootstrapControllerDeps.CLISessionSvc
+	}
+	if deps.CLIRefreshControllerDeps.UserSvc == nil {
+		deps.CLIRefreshControllerDeps.UserSvc = deps.BootstrapControllerDeps.UserSvc
+	}
+	if deps.CLIRefreshControllerDeps.Responder == nil {
+		deps.CLIRefreshControllerDeps.Responder = responder
+	}
+
 	h := &HTTPHandler{
 		cfg:                          deps.Cfg,
 		logger:                       deps.Logger,
@@ -180,6 +201,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 		bootstrapController:          newBootstrapController(deps.BootstrapControllerDeps),
 		cliRecoveryController:        newCLIRecoveryController(deps.CLIRecoveryControllerDeps),
 		cliRotationController:        newCLIRotationController(deps.CLIRotationControllerDeps),
+		cliRefreshController:         newCLIRefreshController(deps.CLIRefreshControllerDeps),
 		enrollmentTokenController:    newEnrollmentTokenController(deps.EnrollmentTokenControllerDeps),
 		userController:               newUserController(deps.UserControllerDeps),
 		sessionController:            newSessionController(deps.SessionControllerDeps),

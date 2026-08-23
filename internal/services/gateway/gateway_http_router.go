@@ -78,6 +78,14 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// does not provide.
 	mux.HandleFunc(constants.APIPaths.AuthCLIRotate, h.cliRotationController.handleRotate)
 
+	// CLI session refresh — mTLS-protected; the caller's identity is
+	// derived from the verified CLI certificate. The cert is the proof of
+	// identity; the session may be expired or missing (the condition being
+	// recovered from). NOT registered on buildHTTPRouter (plain HTTP)
+	// because refresh requires mTLS, which the plain router does not
+	// provide.
+	mux.HandleFunc(constants.APIPaths.AuthCLIRefresh, h.cliRefreshController.handleRefresh)
+
 	// Enrollment token validation (public — the token itself is the credential)
 	mux.HandleFunc(constants.APIPaths.AuthEnrollmentTokenValidate, h.enrollmentTokenController.handleEnrollmentTokenValidate)
 

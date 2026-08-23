@@ -76,9 +76,9 @@ type OperatorPubSubService struct {
 	reconnectBaseDelay time.Duration
 
 	// governance services
-	actuator        *governance.L5Actuator
-	l4warden        *governance.L4Warden
-	signerStore     governance.SignerStore
+	actuator         *governance.L5Actuator
+	l4warden         *governance.L4Warden
+	signerStore      governance.SignerStore
 	governedDocStore governance.GovernedDocumentStore
 
 	// MCP gateway for protocol translation egress

@@ -140,10 +140,10 @@ func TestHandleDocumentUpdateSync_MergePreservesUntouchedFields(t *testing.T) {
 		EventType: constants.EventAppInvestigationCreated,
 		ID:        "msg-create",
 		Payload: mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{
-			Collection:  "investigations",
-			DocumentId:  "inv-001",
-			Updates:     fullUpdates,
-			Merge:       false,
+			Collection: "investigations",
+			DocumentId: "inv-001",
+			Updates:    fullUpdates,
+			Merge:      false,
 		}),
 	}
 	summary, err := f.Svc.handleDocumentUpdateSync(context.Background(), createMsg)
@@ -161,10 +161,10 @@ func TestHandleDocumentUpdateSync_MergePreservesUntouchedFields(t *testing.T) {
 		EventType: constants.EventAppInvestigationUpdated,
 		ID:        "msg-merge",
 		Payload: mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{
-			Collection:  "investigations",
-			DocumentId:  "inv-001",
-			Updates:     mergeUpdates,
-			Merge:       true,
+			Collection: "investigations",
+			DocumentId: "inv-001",
+			Updates:    mergeUpdates,
+			Merge:      true,
 		}),
 	}
 	_, err = f.Svc.handleDocumentUpdateSync(context.Background(), mergeMsg)
@@ -211,10 +211,10 @@ func TestHandleDocumentUpdateSync_ReplaceOverwritesAllFields(t *testing.T) {
 		EventType: constants.EventAppCaseCreated,
 		ID:        "msg-1",
 		Payload: mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{
-			Collection:  "cases",
-			DocumentId:  "case-001",
-			Updates:     initial,
-			Merge:       false,
+			Collection: "cases",
+			DocumentId: "case-001",
+			Updates:    initial,
+			Merge:      false,
 		}),
 	}
 	_, err = f.Svc.handleDocumentUpdateSync(context.Background(), createMsg)
@@ -229,10 +229,10 @@ func TestHandleDocumentUpdateSync_ReplaceOverwritesAllFields(t *testing.T) {
 		EventType: constants.EventAppCaseUpdated,
 		ID:        "msg-2",
 		Payload: mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{
-			Collection:  "cases",
-			DocumentId:  "case-001",
-			Updates:     replacement,
-			Merge:       false,
+			Collection: "cases",
+			DocumentId: "case-001",
+			Updates:    replacement,
+			Merge:      false,
 		}),
 	}
 	_, err = f.Svc.handleDocumentUpdateSync(context.Background(), replaceMsg)
@@ -266,10 +266,10 @@ func TestHandleDocumentDeleteSync_RemovesDocument(t *testing.T) {
 		EventType: constants.EventAppCaseCreated,
 		ID:        "msg-1",
 		Payload: mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{
-			Collection:  "cases",
-			DocumentId:  "case-del-001",
-			Updates:     updates,
-			Merge:       false,
+			Collection: "cases",
+			DocumentId: "case-del-001",
+			Updates:    updates,
+			Merge:      false,
 		}),
 	}
 	_, err = f.Svc.handleDocumentUpdateSync(context.Background(), createMsg)
@@ -284,8 +284,8 @@ func TestHandleDocumentDeleteSync_RemovesDocument(t *testing.T) {
 		EventType: constants.EventAppCaseDeleted,
 		ID:        "msg-2",
 		Payload: mustMarshalProto(t, &operatorv1.DocumentDeleteRequested{
-			Collection:  "cases",
-			DocumentId:  "case-del-001",
+			Collection: "cases",
+			DocumentId: "case-del-001",
 		}),
 	}
 	summary, err := f.Svc.handleDocumentDeleteSync(context.Background(), deleteMsg)
@@ -313,10 +313,10 @@ func TestHandleDocumentUpdateSync_MergeFailsOnMissingDocument(t *testing.T) {
 		EventType: constants.EventAppInvestigationUpdated,
 		ID:        "msg-1",
 		Payload: mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{
-			Collection:  "investigations",
-			DocumentId:  "nonexistent-inv",
-			Updates:     mergeUpdates,
-			Merge:       true,
+			Collection: "investigations",
+			DocumentId: "nonexistent-inv",
+			Updates:    mergeUpdates,
+			Merge:      true,
 		}),
 	}
 	_, err = f.Svc.handleDocumentUpdateSync(context.Background(), mergeMsg)

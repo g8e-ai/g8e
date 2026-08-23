@@ -205,9 +205,9 @@ func NewConfigurableMockAuditStore(docSetFunc func(collection, id string, data j
 // with configurable behavior and call tracking. Used by unit tests that need
 // to verify the handler dispatches to DocReplace vs DocMerge correctly.
 type ConfigurableMockGovernedDocStore struct {
-	DocReplaceFunc func(collection, id string, data json.RawMessage) error
-	DocMergeFunc   func(collection, id string, fields json.RawMessage) error
-	DocDeleteFunc  func(collection, id string) error
+	DocReplaceFunc  func(collection, id string, data json.RawMessage) error
+	DocMergeFunc    func(collection, id string, fields json.RawMessage) error
+	DocDeleteFunc   func(collection, id string) error
 	DocReplaceCalls []struct {
 		Collection string
 		ID         string

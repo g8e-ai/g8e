@@ -99,6 +99,7 @@ var (
 	ErrInvalidKeyType           = errors.New("private key is not Ed25519")
 	ErrCertReadFailed           = errors.New("failed to read CLI certificate")
 	ErrCertParseFailed          = errors.New("failed to parse certificate")
+	ErrCertRevocationCheckFailed = errors.New("certificate revocation check failed")
 	ErrRequestMarshalFailed     = errors.New("failed to marshal request")
 	ErrTransactionApproveFailed = errors.New("failed to approve transaction")
 	ErrResponseParseFailed      = errors.New("failed to parse response")
@@ -471,7 +472,7 @@ var (
 	ErrCLIRecoveryCSRMismatch     = errors.New("CLI recovery CSR does not match the original request")
 	ErrCLIRecoveryNotApproved     = errors.New("CLI recovery request has not been approved")
 
-	ErrPlatformEnrollmentRequiresBootstrap   = errors.New("platform enrollment requires a bootstrapped gateway")
+	ErrPlatformEnrollmentRequiresBootstrap    = errors.New("platform enrollment requires a bootstrapped gateway")
 	ErrPlatformEnrollmentInvalidComponent     = errors.New("invalid platform component kind")
 	ErrPlatformEnrollmentInstanceIDRequired   = errors.New("platform enrollment instance_id is required")
 	ErrPlatformEnrollmentInvalidInstanceID    = errors.New("invalid platform enrollment instance_id")
@@ -509,6 +510,8 @@ var (
 	ErrCLIRotationCSRRequired       = errors.New("cli_csr_pem is required for rotation")
 	ErrCLISessionNotFound           = errors.New("CLI session not found")
 	ErrCLISessionAlreadyDeactivated = errors.New("CLI session already deactivated")
+	ErrCLIRefreshFailed             = errors.New("CLI session refresh failed")
+	ErrCLIRefreshCertExpired        = errors.New("CLI certificate expired; use recovery flow instead of refresh")
 
 	// Passkey credential validation errors
 	ErrPasskeyCredentialInvalidID          = errors.New("passkey credential ID is empty")

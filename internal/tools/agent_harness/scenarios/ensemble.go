@@ -46,6 +46,13 @@ func uniqueSmokeContent() string {
 	return fmt.Sprintf("%s run=%s", ensembleSmokeContent, uniqueRunID())
 }
 
+// uniqueDocumentID returns a per-run unique document ID so document scenarios
+// cannot collide with prior runs (C.4). The ID is namespaced with the scenario
+// kind so update and delete runs are distinguishable in the document store.
+func uniqueDocumentID(kind string) string {
+	return fmt.Sprintf("%s-%s-%s", harnessDocIDPrefix, kind, uniqueRunID())
+}
+
 // The ensemble (g8ee) scenarios exercise the core product path: a user sends
 // a chat message to the ensemble, the AI reasons about the request and submits
 // governed tool calls (file_create, file_write, document_update, etc.) through
@@ -87,6 +94,12 @@ const ensembleSmokeFileDir = "/tmp"
 // AI to write. A per-run unique suffix is appended so the read-back assertion
 // can distinguish this run's content from any prior run's.
 const ensembleSmokeContent = "g8e ensemble governed file write smoke test"
+
+// harnessDocIDPrefix is the prefix for per-run unique document IDs created by
+// the document-update and document-delete scenarios (C.3/C.4). The prefix
+// namespaces harness-created documents so they are distinguishable from
+// ensemble-created cases/investigations in the document store.
+const harnessDocIDPrefix = "harness"
 
 // ensembleLLMOverrides reads LLM provider config from env vars and returns
 // the override fields for the EnsembleChatRequest. Defaults to the "fake"
@@ -166,28 +179,20 @@ func ensembleChatRequest(persona clientpkg.Persona, message, caseTitle string) c
 // ErrHarnessEnsembleReceiptFailed so the scenario reports the failure rather
 // than waiting for the timeout.
 type ReceiptCorrelation struct {
-	NotBefore        time.Time
+	NotBefore         time.Time
 	OperatorSessionID string
-	ActionType       string
-	CaseID           string
+	ActionType        string
+	CaseID            string
 }
 
-// pollForReceipt polls the audit vault for a receipt matching the correlation
-// criteria with a COMPLETED status. Returns the matching receipt, or an error
-// if the timeout expires. If a matching receipt is found but its status is
-// FAILED, returns ErrHarnessEnsembleReceiptFailed with the result summary.
-// Stale, unrelated, or unsigned receipts are skipped (with a note) rather than
-// accepted, so a historical receipt cannot produce a false pass.
-func pollForReceipt(ctx context.Context, c *clientpkg.Client, r *Result, opSessionID, actionType string) (*clientpkg.Receipt, error) {
-	return pollForReceiptWithCorrelation(ctx, c, r, ReceiptCorrelation{
-		OperatorSessionID: opSessionID,
-		ActionType:        actionType,
-	})
-}
-
-// pollForReceiptWithCorrelation is the correlated form of pollForReceipt. The
-// caller captures NotBefore before sending the chat request and passes it here
-// so stale receipts from prior runs are rejected.
+// pollForReceiptWithCorrelation polls the audit vault for a receipt matching
+// the correlation criteria with a COMPLETED status. Returns the matching
+// receipt, or an error if the timeout expires. If a matching receipt is found
+// but its status is FAILED, returns ErrHarnessEnsembleReceiptFailed with the
+// result summary. Stale, unrelated, or unsigned receipts are skipped (with a
+// note) rather than accepted, so a historical receipt cannot produce a false
+// pass. The caller captures NotBefore before sending the chat request and
+// passes it here so stale receipts from prior runs are rejected.
 func pollForReceiptWithCorrelation(ctx context.Context, c *clientpkg.Client, r *Result, corr ReceiptCorrelation) (*clientpkg.Receipt, error) {
 	deadline := time.Now().Add(ensemblePollTimeout)
 	ticker := time.NewTicker(ensemblePollInterval)
@@ -364,6 +369,95 @@ func governedReadBack(ctx context.Context, c *clientpkg.Client, r *Result, perso
 	return cr.Content[0].Text, nil
 }
 
+// governedDocumentReadBack retrieves a governed document from the gateway's
+// document store via GET /api/v1/data/{collection}/{id}. This is the read-back
+// path for document scenarios (C.3): the harness verifies the actual stored
+// document, not just a receipt claiming the mutation occurred. Returns
+// (nil, nil) when the document does not exist (HTTP 404) so callers can
+// verify absence after a delete.
+func governedDocumentReadBack(ctx context.Context, c *clientpkg.Client, r *Result, persona clientpkg.Persona, collection, documentID string) (clientpkg.DocumentResponse, error) {
+	r.note("governed document read-back: GET %s/%s", collection, documentID)
+	doc, _, err := c.GetDocument(ctx, persona, collection, documentID)
+	if err != nil {
+		return nil, fmt.Errorf("governed document read-back: %w", err)
+	}
+	if doc == nil {
+		r.note("governed document read-back: %s/%s not found (404)", collection, documentID)
+		return nil, nil
+	}
+	r.note("governed document read-back: %s/%s found", collection, documentID)
+	return doc, nil
+}
+
+// submitDocumentUpdateAndCorrelate submits a governed DOCUMENT_UPDATE envelope
+// directly to the admission API (bypassing the AI/ensemble layer), captures
+// NotBefore before submission, polls for the correlated COMPLETED receipt, and
+// verifies the receipt identity. This is the deterministic document-mutation
+// path for C.3: no reliance on the LLM choosing the right tool call. The
+// caller passes the current state root (fetched via StateRootFromMTLS just
+// before submission to close the TOCTOU gap).
+func submitDocumentUpdateAndCorrelate(ctx context.Context, c *clientpkg.Client, r *Result, persona clientpkg.Persona, req clientpkg.DocumentUpdateRequest) (*clientpkg.Receipt, time.Time, error) {
+	notBefore := time.Now()
+	r.note("submitting DOCUMENT_UPDATE envelope: %s/%s merge=%v", req.Collection, req.DocumentID, req.Merge)
+
+	txHash, status, body, err := c.SubmitDocumentUpdate(ctx, persona, req)
+	if err != nil {
+		return nil, notBefore, fmt.Errorf("submit document update: %w", err)
+	}
+	if status >= 400 {
+		return nil, notBefore, fmt.Errorf("submit document update: gateway returned status %d: %s", status, string(body))
+	}
+	r.note("DOCUMENT_UPDATE envelope admitted: tx=%s status=%d", short(txHash), status)
+
+	receipt, err := pollForReceiptWithCorrelation(ctx, c, r, ReceiptCorrelation{
+		NotBefore:         notBefore,
+		OperatorSessionID: req.OperatorSessionID,
+		ActionType:        string(constants.ActionTypeDocumentUpdate),
+	})
+	if err != nil {
+		return nil, notBefore, err
+	}
+	r.note("correlated DOCUMENT_UPDATE receipt: tx=%s signature_len=%d", short(receipt.TransactionID), len(receipt.Signature))
+
+	if err := verifyReceiptIdentity(r, receipt); err != nil {
+		return nil, notBefore, err
+	}
+	return receipt, notBefore, nil
+}
+
+// submitDocumentDeleteAndCorrelate submits a governed DOCUMENT_DELETE envelope
+// directly to the admission API, captures NotBefore, polls for the correlated
+// COMPLETED receipt, and verifies the receipt identity. This is the
+// deterministic document-deletion path for C.3.
+func submitDocumentDeleteAndCorrelate(ctx context.Context, c *clientpkg.Client, r *Result, persona clientpkg.Persona, req clientpkg.DocumentDeleteRequest) (*clientpkg.Receipt, time.Time, error) {
+	notBefore := time.Now()
+	r.note("submitting DOCUMENT_DELETE envelope: %s/%s", req.Collection, req.DocumentID)
+
+	txHash, status, body, err := c.SubmitDocumentDelete(ctx, persona, req)
+	if err != nil {
+		return nil, notBefore, fmt.Errorf("submit document delete: %w", err)
+	}
+	if status >= 400 {
+		return nil, notBefore, fmt.Errorf("submit document delete: gateway returned status %d: %s", status, string(body))
+	}
+	r.note("DOCUMENT_DELETE envelope admitted: tx=%s status=%d", short(txHash), status)
+
+	receipt, err := pollForReceiptWithCorrelation(ctx, c, r, ReceiptCorrelation{
+		NotBefore:         notBefore,
+		OperatorSessionID: req.OperatorSessionID,
+		ActionType:        string(constants.ActionTypeDocumentDelete),
+	})
+	if err != nil {
+		return nil, notBefore, err
+	}
+	r.note("correlated DOCUMENT_DELETE receipt: tx=%s signature_len=%d", short(receipt.TransactionID), len(receipt.Signature))
+
+	if err := verifyReceiptIdentity(r, receipt); err != nil {
+		return nil, notBefore, err
+	}
+	return receipt, notBefore, nil
+}
+
 func ensembleScenarios() []Scenario {
 	return []Scenario{
 		{
@@ -459,68 +553,189 @@ func ensembleScenarios() []Scenario {
 			},
 		},
 		{
-			Name: "ensemble-document-update", Title: "Ensemble chat: governed document update (case/investigation create) via DOCUMENT_UPDATE", Persona: ensembleProducer, RequiresPosture: Doctrine,
+			Name: "ensemble-document-update", Title: "Governed document update: create with merge=false, then merge=true partial update proving untouched fields survive (Bug 10 regression)", Persona: ensembleProducer, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil {
 					return constants.ErrHarnessGovKitNotInit
 				}
 				persona := withCLIIdentity(ensembleProducer)
-				message := "Create a new investigation note documenting this smoke test run."
+				collection := string(constants.CollectionInvestigations)
+				documentID := uniqueDocumentID("update")
+				r.note("per-run artifact: collection=%s document_id=%s", collection, documentID)
 
-				chatResp, notBefore, err := ensembleChat(ctx, c, r, persona, message)
+				// Step 1: Fetch the current state root just before
+				// submission to close the TOCTOU gap. The operator rejects
+				// envelopes bound to a stale state root.
+				stateRoot, err := c.StateRootFromMTLS(ctx)
 				if err != nil {
-					return err
+					return fmt.Errorf("document update: fetch state root: %w", err)
 				}
-				// Case creation itself triggers a DOCUMENT_UPDATE envelope
-				// (EventAppCaseCreated -> ActionTypeDocumentUpdate). Verify it
-				// was admitted by L1 and the document store handler
-				// (handleDocumentUpdateSync) persisted it.
-				if chatResp.CaseID == "" {
-					return fmt.Errorf("ensemble document update: case_id is empty — case creation did not produce a DOCUMENT_UPDATE")
+
+				// Step 2: Create the initial document with merge=false (full
+				// model). All required fields are set so the merge=true patch
+				// in step 3 can prove they survive.
+				initialTitle := fmt.Sprintf("Initial investigation %s", uniqueRunID())
+				initialFields := map[string]any{
+					"case_title":    initialTitle,
+					"case_id":       uniqueRunID(),
+					"user_id":       kit.UserID,
+					"sentinel_mode": true,
+					"status":        "open",
 				}
-				receipt, err := pollForReceiptWithCorrelation(ctx, c, r, ReceiptCorrelation{
-					NotBefore:         notBefore,
+				createReq := clientpkg.DocumentUpdateRequest{
+					OperatorID:        kit.OperatorID,
 					OperatorSessionID: kit.OperatorSessionID,
-					ActionType:        string(constants.ActionTypeDocumentUpdate),
-					CaseID:            chatResp.CaseID,
-				})
+					RequestorUserID:   kit.UserID,
+					Collection:        collection,
+					DocumentID:        documentID,
+					Updates:           initialFields,
+					Merge:             false,
+					StateRoot:         stateRoot,
+				}
+				if _, _, err := submitDocumentUpdateAndCorrelate(ctx, c, r, persona, createReq); err != nil {
+					return err
+				}
+
+				// Step 3: Read back the initial document and verify all
+				// fields were persisted.
+				doc, err := governedDocumentReadBack(ctx, c, r, persona, collection, documentID)
 				if err != nil {
 					return err
 				}
-				r.note("correlated DOCUMENT_UPDATE receipt: tx=%s case=%s signature_len=%d", short(receipt.TransactionID), short(chatResp.CaseID), len(receipt.Signature))
-				r.note("DOCUMENT_UPDATE envelope admitted by L1; case %s persisted via handleDocumentUpdateSync", short(chatResp.CaseID))
+				if doc == nil {
+					return fmt.Errorf("document update: initial document not found after create — read-back returned 404")
+				}
+				if got := doc.GetString("case_title"); got != initialTitle {
+					return fmt.Errorf("document update: initial case_title mismatch — expected %q, got %q", initialTitle, got)
+				}
+				if got := doc.GetString("status"); got != "open" {
+					return fmt.Errorf("document update: initial status mismatch — expected %q, got %q", "open", got)
+				}
+				if !doc.GetBool("sentinel_mode") {
+					return fmt.Errorf("document update: initial sentinel_mode mismatch — expected true, got false")
+				}
+				r.note("initial document verified: case_title=%q status=open sentinel_mode=true", initialTitle)
+
+				// Step 4: Apply a title-only patch with merge=true. Only
+				// case_title is sent; all other fields must survive the merge
+				// (Bug 10 regression at the scenario layer).
+				stateRoot, err = c.StateRootFromMTLS(ctx)
+				if err != nil {
+					return fmt.Errorf("document update: fetch state root for merge: %w", err)
+				}
+				refinedTitle := fmt.Sprintf("Refined investigation %s", uniqueRunID())
+				mergeReq := clientpkg.DocumentUpdateRequest{
+					OperatorID:        kit.OperatorID,
+					OperatorSessionID: kit.OperatorSessionID,
+					RequestorUserID:   kit.UserID,
+					Collection:        collection,
+					DocumentID:        documentID,
+					Updates:           map[string]any{"case_title": refinedTitle},
+					Merge:             true,
+					StateRoot:         stateRoot,
+				}
+				if _, _, err := submitDocumentUpdateAndCorrelate(ctx, c, r, persona, mergeReq); err != nil {
+					return err
+				}
+
+				// Step 5: Read back the merged document and verify the title
+				// was updated AND all untouched fields survived (Bug 10).
+				docAfter, err := governedDocumentReadBack(ctx, c, r, persona, collection, documentID)
+				if err != nil {
+					return err
+				}
+				if docAfter == nil {
+					return fmt.Errorf("document update: document not found after merge — read-back returned 404")
+				}
+				if got := docAfter.GetString("case_title"); got != refinedTitle {
+					return fmt.Errorf("document update: merged case_title mismatch — expected %q, got %q", refinedTitle, got)
+				}
+				if got := docAfter.GetString("status"); got != "open" {
+					return fmt.Errorf("document update: status did not survive merge — expected %q, got %q", "open", got)
+				}
+				if !docAfter.GetBool("sentinel_mode") {
+					return fmt.Errorf("document update: sentinel_mode did not survive merge — expected true, got false")
+				}
+				if got := docAfter.GetString("user_id"); got != kit.UserID {
+					return fmt.Errorf("document update: user_id did not survive merge — expected %q, got %q", kit.UserID, got)
+				}
+				r.note("merge=true field survival verified: case_title updated, status/sentinel_mode/user_id preserved (Bug 10 regression clear)")
 				return nil
 			},
 		},
 		{
-			Name: "ensemble-document-delete", Title: "Ensemble chat: governed document delete via DOCUMENT_DELETE", Persona: ensembleProducer, RequiresPosture: Doctrine,
+			Name: "ensemble-document-delete", Title: "Governed document delete: create then delete via DOCUMENT_DELETE, verify absence from document store", Persona: ensembleProducer, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil {
 					return constants.ErrHarnessGovKitNotInit
 				}
 				persona := withCLIIdentity(ensembleProducer)
-				// C.3: the document-delete scenario must actually submit a
-				// DOCUMENT_DELETE envelope. The fake provider has no
-				// document-delete tool path, so instruct the AI to delete the
-				// case created by the document-update scenario. The per-run
-				// unique case title ensures the AI targets a specific case.
-				message := "Delete the investigation note created in the previous smoke test run."
+				collection := string(constants.CollectionInvestigations)
+				documentID := uniqueDocumentID("delete")
+				r.note("per-run artifact: collection=%s document_id=%s", collection, documentID)
 
-				chatResp, notBefore, err := ensembleChat(ctx, c, r, persona, message)
+				// Step 1: Create a document to delete. Without a prior
+				// create, a delete would be a no-op and prove nothing.
+				stateRoot, err := c.StateRootFromMTLS(ctx)
 				if err != nil {
-					return err
+					return fmt.Errorf("document delete: fetch state root for create: %w", err)
 				}
-				receipt, err := pollForReceiptWithCorrelation(ctx, c, r, ReceiptCorrelation{
-					NotBefore:         notBefore,
+				createReq := clientpkg.DocumentUpdateRequest{
+					OperatorID:        kit.OperatorID,
 					OperatorSessionID: kit.OperatorSessionID,
-					ActionType:        string(constants.ActionTypeDocumentDelete),
-					CaseID:            chatResp.CaseID,
-				})
+					RequestorUserID:   kit.UserID,
+					Collection:        collection,
+					DocumentID:        documentID,
+					Updates: map[string]any{
+						"case_title": fmt.Sprintf("Delete target %s", uniqueRunID()),
+						"status":     "open",
+					},
+					Merge:     false,
+					StateRoot: stateRoot,
+				}
+				if _, _, err := submitDocumentUpdateAndCorrelate(ctx, c, r, persona, createReq); err != nil {
+					return err
+				}
+
+				// Step 2: Verify the document exists before deletion.
+				docBefore, err := governedDocumentReadBack(ctx, c, r, persona, collection, documentID)
 				if err != nil {
 					return err
 				}
-				r.note("correlated DOCUMENT_DELETE receipt: tx=%s signature_len=%d", short(receipt.TransactionID), len(receipt.Signature))
-				r.note("DOCUMENT_DELETE envelope admitted by L1; document removed via handleDocumentDeleteSync")
+				if docBefore == nil {
+					return fmt.Errorf("document delete: document not found after create — cannot prove deletion of a non-existent document")
+				}
+				r.note("document exists before deletion: case_title=%q", docBefore.GetString("case_title"))
+
+				// Step 3: Submit the DOCUMENT_DELETE envelope and correlate
+				// the receipt.
+				stateRoot, err = c.StateRootFromMTLS(ctx)
+				if err != nil {
+					return fmt.Errorf("document delete: fetch state root for delete: %w", err)
+				}
+				deleteReq := clientpkg.DocumentDeleteRequest{
+					OperatorID:        kit.OperatorID,
+					OperatorSessionID: kit.OperatorSessionID,
+					RequestorUserID:   kit.UserID,
+					Collection:        collection,
+					DocumentID:        documentID,
+					StateRoot:         stateRoot,
+				}
+				if _, _, err := submitDocumentDeleteAndCorrelate(ctx, c, r, persona, deleteReq); err != nil {
+					return err
+				}
+
+				// Step 4: Verify the document is absent from the document
+				// store. A COMPLETED receipt alone does not prove the
+				// document was removed — the read-back must return 404.
+				docAfter, err := governedDocumentReadBack(ctx, c, r, persona, collection, documentID)
+				if err != nil {
+					return err
+				}
+				if docAfter != nil {
+					return fmt.Errorf("document delete: document still exists after DOCUMENT_DELETE — read-back returned a document, expected 404")
+				}
+				r.note("document absence verified: %s/%s returned 404 after DOCUMENT_DELETE", collection, documentID)
 				return nil
 			},
 		},
