@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -457,4 +458,56 @@ func TestResolveCertPath_OnlyClientCertExists(t *testing.T) {
 
 	result := resolveCertPath("", fileSvc, testLogger())
 	assert.Equal(t, fileSvc.Resolve(cliCertRel), result)
+}
+
+// ---------------------------------------------------------------------------
+// classifyConfigLoadError — integration with real config.Load
+// ---------------------------------------------------------------------------
+
+// TestClassifyConfigLoadError_RealConfigLoadPostureRequired verifies the
+// integration between config.Load (which returns ErrPostureRequired when no
+// posture is supplied) and classifyConfigLoadError (which maps that to
+// ExitEnrollmentPending with an actionable message). This simulates the
+// operator startup path where credentials exist but the gateway has not
+// approved the platform enrollment posture: config.Load fails, and the
+// operator must exit with a clear recovery instruction rather than a
+// generic crash-loop.
+func TestClassifyConfigLoadError_RealConfigLoadPostureRequired(t *testing.T) {
+	opts := ServeOperatorOptions{
+		Endpoint:   "127.0.0.1",
+		WorkingDir: t.TempDir(),
+	}
+	loadOpts := buildOperatorLoadOptions(opts, resolveOperatorEndpoint(opts.Endpoint), opts.WorkingDir)
+	assert.Empty(t, loadOpts.Posture, "precondition: no posture supplied (enrollment pending)")
+
+	_, err := config.Load(loadOpts)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrPostureRequired),
+		"config.Load with empty posture should return ErrPostureRequired, got: %v", err)
+
+	exitCode, actionable := classifyConfigLoadError(err)
+	assert.Equal(t, constants.ExitEnrollmentPending, exitCode,
+		"real config.Load posture-required error should classify as ExitEnrollmentPending")
+	assert.NotEmpty(t, actionable)
+	assert.Contains(t, actionable, "pending-platform-enrollments")
+	assert.Contains(t, actionable, "approve-platform-enrollment")
+}
+
+// TestClassifyConfigLoadError_RealConfigLoadWithPosture_Succeeds verifies
+// the positive half of the pending-then-approved flow: when a posture IS
+// supplied (simulating post-approval restart), config.Load succeeds and
+// classifyConfigLoadError is never reached.
+func TestClassifyConfigLoadError_RealConfigLoadWithPosture_Succeeds(t *testing.T) {
+	opts := ServeOperatorOptions{
+		Endpoint:   "127.0.0.1",
+		WorkingDir: t.TempDir(),
+		Posture:    "doctrine",
+	}
+	loadOpts := buildOperatorLoadOptions(opts, resolveOperatorEndpoint(opts.Endpoint), opts.WorkingDir)
+	assert.NotEmpty(t, loadOpts.Posture, "precondition: posture supplied (enrollment approved)")
+
+	cfg, err := config.Load(loadOpts)
+	require.NoError(t, err, "config.Load with a posture should succeed (post-approval restart)")
+	require.NotNil(t, cfg)
+	assert.Equal(t, config.GatewayPosture("doctrine"), cfg.Posture)
 }

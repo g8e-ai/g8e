@@ -93,17 +93,17 @@ var (
 	LedgerStatusFileDeleted = "file deleted"
 
 	// CLI approval errors
-	ErrKeyReadFailed            = errors.New("failed to read CLI private key")
-	ErrKeyWriteFailed           = errors.New("failed to write CLI private key")
-	ErrKeyParseFailed           = errors.New("failed to parse private key")
-	ErrInvalidKeyType           = errors.New("private key is not Ed25519")
-	ErrCertReadFailed           = errors.New("failed to read CLI certificate")
-	ErrCertParseFailed          = errors.New("failed to parse certificate")
+	ErrKeyReadFailed             = errors.New("failed to read CLI private key")
+	ErrKeyWriteFailed            = errors.New("failed to write CLI private key")
+	ErrKeyParseFailed            = errors.New("failed to parse private key")
+	ErrInvalidKeyType            = errors.New("private key is not Ed25519")
+	ErrCertReadFailed            = errors.New("failed to read CLI certificate")
+	ErrCertParseFailed           = errors.New("failed to parse certificate")
 	ErrCertRevocationCheckFailed = errors.New("certificate revocation check failed")
-	ErrRequestMarshalFailed     = errors.New("failed to marshal request")
-	ErrTransactionApproveFailed = errors.New("failed to approve transaction")
-	ErrResponseParseFailed      = errors.New("failed to parse response")
-	ErrJSONMarshalFailed        = errors.New("failed to marshal JSON")
+	ErrRequestMarshalFailed      = errors.New("failed to marshal request")
+	ErrTransactionApproveFailed  = errors.New("failed to approve transaction")
+	ErrResponseParseFailed       = errors.New("failed to parse response")
+	ErrJSONMarshalFailed         = errors.New("failed to marshal JSON")
 
 	// Notary errors
 	ErrTransactionExpired = errors.New("transaction approval expired")
@@ -512,6 +512,7 @@ var (
 	ErrCLISessionAlreadyDeactivated = errors.New("CLI session already deactivated")
 	ErrCLIRefreshFailed             = errors.New("CLI session refresh failed")
 	ErrCLIRefreshCertExpired        = errors.New("CLI certificate expired; use recovery flow instead of refresh")
+	ErrCLISessionRefreshRequired    = errors.New("CLI session expired or invalid; run 'auth refresh' to obtain a new session")
 
 	// Passkey credential validation errors
 	ErrPasskeyCredentialInvalidID          = errors.New("passkey credential ID is empty")

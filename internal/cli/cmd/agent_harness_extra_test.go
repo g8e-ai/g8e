@@ -185,14 +185,18 @@ func TestApplyAgentHarnessFlags_IdentityFields(t *testing.T) {
 		assert.Equal(t, "test-session", cfg.CLISessionID)
 	})
 
-	t.Run("leaves identity empty when flags unset", func(t *testing.T) {
+	t.Run("preserves identity when flags unset", func(t *testing.T) {
 		harnessUserID = ""
 		harnessCLISessionID = ""
 
 		cfg := config.Default()
+		beforeUserID := cfg.UserID
+		beforeCLISessionID := cfg.CLISessionID
 		applyAgentHarnessFlags(&cfg)
-		assert.Empty(t, cfg.UserID)
-		assert.Empty(t, cfg.CLISessionID)
+		assert.Equal(t, beforeUserID, cfg.UserID,
+			"applyAgentHarnessFlags should not modify UserID when flag unset")
+		assert.Equal(t, beforeCLISessionID, cfg.CLISessionID,
+			"applyAgentHarnessFlags should not modify CLISessionID when flag unset")
 	})
 
 	t.Run("propagates ensemble-url to config", func(t *testing.T) {

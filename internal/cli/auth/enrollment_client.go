@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/certs"
@@ -338,6 +339,54 @@ func (c *EnrollmentClient) Refresh(ctx context.Context, fileSvc fs.RuntimeFileSe
 type CLISessionRefresh struct {
 	CLISessionID string
 	UserID       string
+}
+
+// ProbeCLISession issues a lightweight authenticated mTLS GET to
+// ApprovalsCLIList (/api/v1/approvals/pending) to determine whether the
+// local CLI session is still valid server-side. The coordinator calls
+// this on the complete-reuse path to detect an expired or invalidated
+// session before printing "Reusing existing CLI identity".
+//
+// Returns nil when the session is healthy (HTTP 200). Returns
+// constants.ErrCLISessionExpired or constants.ErrCLISessionInvalid when
+// the gateway rejects the session with 401. Returns a wrapped
+// constants.ErrHTTPRequestExecuteFailed on network failure.
+func (c *EnrollmentClient) ProbeCLISession(ctx context.Context, fileSvc fs.RuntimeFileService) error {
+	mtlsClient, err := BuildMTLSClient(fileSvc, c.cfg, httpTimeout)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
+	}
+
+	publicURL := c.cfg.OperatorPublicURL()
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, publicURL+constants.APIPaths.ApprovalsCLIList, nil)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
+	}
+
+	resp, err := mtlsClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		return nil
+	}
+	if resp.StatusCode == http.StatusUnauthorized {
+		respBytes, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, readErr)
+		}
+		body := string(respBytes)
+		if strings.Contains(body, constants.ErrCLISessionExpired.Error()) {
+			return constants.ErrCLISessionExpired
+		}
+		if strings.Contains(body, constants.ErrCLISessionInvalid.Error()) {
+			return constants.ErrCLISessionInvalid
+		}
+		return constants.ErrCLISessionInvalid
+	}
+	return fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
 }
 
 // CheckBootstrapStatus reports whether the gateway has been bootstrapped

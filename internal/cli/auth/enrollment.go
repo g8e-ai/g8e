@@ -61,6 +61,25 @@ type EnrollmentGateway interface {
 	// truth for the pin, so pinning against the local bundle would be
 	// circular.
 	DiscoverGatewayCA(ctx context.Context) (bundlePEM []byte, fingerprint string, err error)
+
+	// ProbeCLISession issues a lightweight authenticated mTLS GET to a
+	// read-only gateway endpoint (ApprovalsCLIList) to determine whether
+	// the local CLI session is still valid server-side. The coordinator
+	// calls this on the complete-reuse path (after DiscoverGatewayCA
+	// succeeds) to detect an expired or invalidated session before
+	// printing "Reusing existing CLI identity".
+	//
+	// Return values:
+	//   - nil: the session is healthy (HTTP 200).
+	//   - constants.ErrCLISessionExpired: the session is expired
+	//     (HTTP 401, gateway returned ErrCLISessionExpired).
+	//   - constants.ErrCLISessionInvalid: the session is missing or
+	//     invalidated server-side (HTTP 401, gateway returned
+	//     ErrCLISessionInvalid).
+	//   - constants.ErrHTTPRequestExecuteFailed (wrapped): network error
+	//     (gateway unreachable, TLS handshake failure, etc.). The
+	//     coordinator treats this as best-effort — warn and proceed.
+	ProbeCLISession(ctx context.Context, fileSvc fs.RuntimeFileService) error
 }
 
 // KeyProvider generates CLI key pairs and CSRs. Section 7 will replace the
@@ -411,6 +430,31 @@ func (c *EnrollmentCoordinator) Enroll(ctx context.Context, opts EnrollmentOptio
 		} else {
 			// Reuse the existing identity. No enrollment request, no new
 			// certificate. The passkey ceremony still runs.
+			//
+			// Before declaring reuse, probe the gateway to verify the CLI
+			// session is still valid server-side. An expired or invalidated
+			// session (e.g., gateway restart with volume reset, manual
+			// deactivation, or TTL expiry) would leave the CLI unable to
+			// make authenticated calls, but the local cert is still valid
+			// — the recovery path is `auth refresh`, not full re-enrollment.
+			// The probe is best-effort: when discovery is unreachable
+			// (offline/air-gapped), the probe is skipped and reuse
+			// proceeds as before.
+			if discoveryReachable {
+				probeErr := c.gateway.ProbeCLISession(ctx, c.fileSvc)
+				if probeErr != nil {
+					if errors.Is(probeErr, constants.ErrCLISessionExpired) || errors.Is(probeErr, constants.ErrCLISessionInvalid) {
+						c.out("CLI session %s is %s.", local.Credentials.CLISessionID, probeErr)
+						c.out("Run './g8e auth refresh' to obtain a new session using the still-valid certificate.")
+						return nil, fmt.Errorf("%w: %w", constants.ErrCLISessionRefreshRequired, probeErr)
+					}
+					// Network error or unexpected status — warn and proceed.
+					// The user may be intentionally offline, or the gateway
+					// may have restarted between discovery and probe.
+					c.out("Warning: could not verify CLI session validity (%v). Proceeding with reuse.", probeErr)
+				}
+			}
+
 			result.Reused = true
 			result.UserID = local.Credentials.UserID
 			result.CLISessionID = local.Credentials.CLISessionID

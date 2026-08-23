@@ -62,6 +62,10 @@ type mockGateway struct {
 	discoveryFingerprint string
 	discoveryErr         error
 	discoveryCalls       int
+
+	// ProbeCLISession mock fields.
+	probeErr   error
+	probeCalls int
 }
 
 func (m *mockGateway) CheckBootstrapStatus(ctx context.Context, baseURL string) (bool, error) {
@@ -125,6 +129,18 @@ func (m *mockGateway) DiscoverGatewayCA(ctx context.Context) ([]byte, string, er
 		return nil, "", m.discoveryErr
 	}
 	return m.discoveryBundlePEM, m.discoveryFingerprint, nil
+}
+
+// ProbeCLISession returns the configured mock probe response. By default
+// (zero-value mockGateway), probeErr is nil, which the coordinator treats
+// as "session healthy" and proceeds with reuse. Tests that want to
+// simulate an expired or invalid session set probeErr to
+// constants.ErrCLISessionExpired or constants.ErrCLISessionInvalid.
+func (m *mockGateway) ProbeCLISession(ctx context.Context, fileSvc fs.RuntimeFileService) error {
+	m.mu.Lock()
+	m.probeCalls++
+	m.mu.Unlock()
+	return m.probeErr
 }
 
 // mockKeyProvider returns a pre-generated CSR + key.
@@ -1972,4 +1988,117 @@ func TestEnroll_BrowserRestartPrompt_WhenNoSystemTrustButStaleAnchorsRemoved(t *
 
 func pemEncode(blockType string, der []byte) string {
 	return string(pem.EncodeToMemory(&pem.Block{Type: blockType, Bytes: der}))
+}
+
+// --- E.3: CLI session probe on the reuse path ---
+
+// TestEnroll_ReusedIdentity_HealthyProbe_ProceedsWithReuse verifies that
+// when the session probe returns nil (session is healthy), the coordinator
+// proceeds with reuse as before — prints "Reusing existing CLI identity"
+// and runs the passkey ceremony. The probe is called exactly once.
+func TestEnroll_ReusedIdentity_HealthyProbe_ProceedsWithReuse(t *testing.T) {
+	t.Parallel()
+	coord, gw, _, _, _, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
+
+	_, _, bundleFP, liveBundlePEM := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	gw.discoveryFingerprint = bundleFP
+	gw.discoveryBundlePEM = []byte(liveBundlePEM)
+	// probeErr is nil (zero value) — session is healthy.
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+	assert.True(t, result.Reused)
+	assert.Equal(t, 1, gw.probeCalls, "probe should be called exactly once on the reuse path")
+	assert.True(t, recorder.contains("Reusing existing CLI identity"), "should print reuse message")
+	assert.Equal(t, 1, passkey.calls, "passkey ceremony should run")
+}
+
+// TestEnroll_ReusedIdentity_ExpiredSession_PrintsActionableMessageAndExits
+// verifies that when the session probe returns ErrCLISessionExpired, the
+// coordinator prints an actionable message pointing to 'auth refresh' and
+// returns ErrCLISessionRefreshRequired — it does NOT proceed with reuse or
+// run the passkey ceremony.
+func TestEnroll_ReusedIdentity_ExpiredSession_PrintsActionableMessageAndExits(t *testing.T) {
+	t.Parallel()
+	coord, gw, _, _, _, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
+
+	_, _, bundleFP, liveBundlePEM := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	gw.discoveryFingerprint = bundleFP
+	gw.discoveryBundlePEM = []byte(liveBundlePEM)
+	gw.probeErr = constants.ErrCLISessionExpired
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.Error(t, err)
+	assert.Nil(t, result)
+	assert.ErrorIs(t, err, constants.ErrCLISessionRefreshRequired)
+	assert.ErrorIs(t, err, constants.ErrCLISessionExpired)
+	assert.Equal(t, 1, gw.probeCalls, "probe should be called exactly once")
+	assert.False(t, recorder.contains("Reusing existing CLI identity"), "should NOT print reuse message on expired session")
+	assert.True(t, recorder.contains("auth refresh"), "should print actionable 'auth refresh' message")
+	assert.Equal(t, 0, passkey.calls, "passkey ceremony should NOT run on expired session")
+}
+
+// TestEnroll_ReusedIdentity_InvalidSession_PrintsActionableMessageAndExits
+// verifies that when the session probe returns ErrCLISessionInvalid (e.g.,
+// gateway volume reset wiped CLI sessions), the coordinator prints an
+// actionable message pointing to 'auth refresh' and returns
+// ErrCLISessionRefreshRequired.
+func TestEnroll_ReusedIdentity_InvalidSession_PrintsActionableMessageAndExits(t *testing.T) {
+	t.Parallel()
+	coord, gw, _, _, _, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
+
+	_, _, bundleFP, liveBundlePEM := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	gw.discoveryFingerprint = bundleFP
+	gw.discoveryBundlePEM = []byte(liveBundlePEM)
+	gw.probeErr = constants.ErrCLISessionInvalid
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.Error(t, err)
+	assert.Nil(t, result)
+	assert.ErrorIs(t, err, constants.ErrCLISessionRefreshRequired)
+	assert.ErrorIs(t, err, constants.ErrCLISessionInvalid)
+	assert.True(t, recorder.contains("auth refresh"), "should print actionable 'auth refresh' message")
+	assert.Equal(t, 0, passkey.calls, "passkey ceremony should NOT run on invalid session")
+}
+
+// TestEnroll_ReusedIdentity_ProbeNetworkError_WarnsAndProceeds verifies
+// that when the session probe fails with a network error (not an expired/
+// invalid session), the coordinator prints a warning and proceeds with
+// reuse — the user may be intentionally offline or the gateway may have
+// restarted between discovery and probe.
+func TestEnroll_ReusedIdentity_ProbeNetworkError_WarnsAndProceeds(t *testing.T) {
+	t.Parallel()
+	coord, gw, _, _, _, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
+
+	_, _, bundleFP, liveBundlePEM := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	gw.discoveryFingerprint = bundleFP
+	gw.discoveryBundlePEM = []byte(liveBundlePEM)
+	gw.probeErr = fmt.Errorf("%w: connection refused", constants.ErrHTTPRequestExecuteFailed)
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+	assert.True(t, result.Reused, "should proceed with reuse on probe network error")
+	assert.True(t, recorder.contains("could not verify CLI session validity"), "should print probe-failure warning")
+	assert.True(t, recorder.contains("Reusing existing CLI identity"), "should still print reuse message")
+	assert.Equal(t, 1, passkey.calls, "passkey ceremony should run")
+}
+
+// TestEnroll_ReusedIdentity_DiscoveryUnreachable_ProbeNotCalled verifies
+// that when discovery is unreachable, the probe is NOT called — the
+// coordinator skips the probe and proceeds with reuse as before.
+func TestEnroll_ReusedIdentity_DiscoveryUnreachable_ProbeNotCalled(t *testing.T) {
+	t.Parallel()
+	coord, gw, _, _, _, passkey, _, fileSvc, cfg := setupCoordinatorTest(t)
+
+	writeCompleteIdentity(t, fileSvc, cfg)
+	gw.discoveryErr = constants.ErrServiceUnavailable
+	// probeErr is set to an expired error, but the probe should NOT be
+	// called, so this should not affect the outcome.
+	gw.probeErr = constants.ErrCLISessionExpired
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+	assert.True(t, result.Reused, "should proceed with reuse when discovery is unreachable")
+	assert.Equal(t, 0, gw.probeCalls, "probe should NOT be called when discovery is unreachable")
+	assert.Equal(t, 1, passkey.calls, "passkey ceremony should run")
 }

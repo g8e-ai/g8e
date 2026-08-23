@@ -10,6 +10,7 @@ package serve
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -111,6 +112,25 @@ func resolveCertPath(clientCert string, fileSvc fs.RuntimeFileService, logger *s
 		return cliCertPath
 	}
 	return ""
+}
+
+// classifyConfigLoadError inspects a config.Load error and returns the
+// appropriate exit code and an actionable user-facing message. When the
+// error is a posture-required failure (credentials exist but the gateway
+// has not approved the platform enrollment posture), it returns a clear
+// recovery instruction and ExitEnrollmentPending so the container
+// orchestrator can distinguish it from a generic config error and avoid
+// a crash-loop restart. All other config.Load errors return
+// ExitConfigError with no actionable message.
+func classifyConfigLoadError(err error) (exitCode int, actionable string) {
+	if errors.Is(err, constants.ErrPostureRequired) {
+		return constants.ExitEnrollmentPending,
+			"Platform enrollment pending owner approval.\n" +
+				"Run './g8e auth pending-platform-enrollments' and\n" +
+				"'./g8e auth approve-platform-enrollment <request-id> --yes' on the host,\n" +
+				"then restart the operator."
+	}
+	return constants.ExitConfigError, ""
 }
 
 // loadClientCertPair reads the cert and key PEM files and returns the TLS certificate
@@ -354,8 +374,12 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 
 	cfg, err := config.Load(buildOperatorLoadOptions(opts, operatorEndpoint, effectiveWorkDir))
 	if err != nil {
+		exitCode, actionable := classifyConfigLoadError(err)
 		logger.Error("Failed to load configuration", string(constants.ConnectionStateError), err)
-		os.Exit(constants.ExitConfigError)
+		if actionable != "" {
+			fmt.Fprintln(os.Stderr, actionable)
+		}
+		os.Exit(exitCode)
 	}
 
 	cfg.Version = vi.Version
