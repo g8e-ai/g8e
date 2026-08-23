@@ -177,9 +177,16 @@ func (c *SSEController) handleInternalSSEPush(w http.ResponseWriter, r *http.Req
 
 	// Authorization: Enforce producer-to-target ownership.
 	// The app identity extracted from the peer certificate must be associated with the target.
+	// The ensemble (g8ee) is the centralized event broker and is always
+	// authorized to push events to any session, so the per-operator ownership
+	// check is skipped for it.
 	// NOTE: SSEEventsAppend is called AFTER authorization (R15) so that an
 	// unauthorized push never durably persists an event that would later be
 	// replayed to consumers.
+	wid := protocol.NewWorkloadIdentity()
+	if wid.IsEnsembleApp(appID) {
+		goto authorized
+	}
 	if route.WebSessionID != "" {
 		webBindKey := sessionWebBindKey(route.WebSessionID)
 		raw, ok := c.kvStore.KVGet(webBindKey)
@@ -210,7 +217,6 @@ func (c *SSEController) handleInternalSSEPush(w http.ResponseWriter, r *http.Req
 			// Alternative: check if the app is explicitly allowed by the operator's policy or if it's the engine
 			// For now, we'll keep it simple: if the app is spiffe://g8e.local/app/<operator_id>, it's authorized.
 			// MatchesApp(spiffeID, operatorID) from workload_identity.go
-			wid := protocol.NewWorkloadIdentity()
 			if wid.MatchesApp(appID, opDoc.ID) {
 				authorized = true
 				break
@@ -250,7 +256,6 @@ func (c *SSEController) handleInternalSSEPush(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		wid := protocol.NewWorkloadIdentity()
 		if !wid.MatchesApp(appID, opDoc.ID) {
 			c.logger.Warn("SSE push: app not authorized for target CLI session", "app_id", appID, "cli_session_id", route.CLISessionID)
 			c.responder.Error(w, http.StatusForbidden, "unauthorized for target session")
@@ -258,6 +263,7 @@ func (c *SSEController) handleInternalSSEPush(w http.ResponseWriter, r *http.Req
 		}
 	}
 
+authorized:
 	// Persist the event AFTER authorization (R15) and wrap the payload in a
 	// models.SSEPublishedEvent envelope stamped with the DB row ID (R1). The
 	// stream handler unmarshals this envelope to deduplicate live events

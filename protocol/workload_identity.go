@@ -59,6 +59,20 @@ func (w *WorkloadIdentity) AppSPIFFEURL(operatorID string) (*url.URL, error) {
 	return url.Parse(w.AppSPIFFEID(operatorID))
 }
 
+// EnsembleAppID is the SPIFFE ID of the g8e ensemble (g8ee), the centralized
+// event broker that pushes SSE events to browser and CLI clients on behalf of
+// any operator. Unlike per-operator app identities
+// (spiffe://g8e.local/app/<operator_id>), the ensemble serves all operators
+// and is always authorized to push events to any session.
+const EnsembleAppID = "spiffe://" + TrustDomain + "/app/g8ee"
+
+// IsEnsembleApp reports whether the given SPIFFE ID is the ensemble (g8ee)
+// app identity. The ensemble is the centralized event broker and is authorized
+// to push SSE events to any session regardless of operator binding.
+func (w *WorkloadIdentity) IsEnsembleApp(spiffeID string) bool {
+	return spiffeID == EnsembleAppID
+}
+
 // UserSPIFFEID generates the SPIFFE ID for a user (human delegator).
 // Format: spiffe://g8e.local/user/<user_id>
 func (w *WorkloadIdentity) UserSPIFFEID(userID string) string {

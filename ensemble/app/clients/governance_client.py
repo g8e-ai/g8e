@@ -48,6 +48,11 @@ class GovernanceClient:
     a signed ActionReceipt as proof of execution.
     """
 
+    # Maximum number of TX_STATE_MISMATCH retries before giving up. The state
+    # root may change between fetch and submit when concurrent envelopes are
+    # in flight; retrying with a fresh state root resolves the race.
+    _STATE_ROOT_MAX_RETRIES = 3
+
     def __init__(
         self,
         tls_config: TLSConfig | None = None,
@@ -77,6 +82,11 @@ class GovernanceClient:
         self._actuator_key_id: str | None = None
         self._actuator_pub_key: bytes | None = None
         self._actuator_key_loaded = False
+
+        # Cached operator transport identity parsed from the client cert's
+        # SPIFFE URI SAN. Resolved lazily on the first submit_envelope call
+        # that needs it. Format: spiffe://g8e.local/operator/<org_id>/<operator_id>/<operator_session_id>
+        self._operator_identity_cache: tuple[str | None, str | None] | None = None
 
     async def connect(self) -> bool:
         """Verify connectivity to the Gateway governance endpoint."""
@@ -138,6 +148,77 @@ class GovernanceClient:
             )
         return self._session
 
+    def _read_cert_spiffe_uri(self) -> str | None:
+        """Read the SPIFFE URI SAN from the client certificate.
+
+        Returns the first URI SAN found in the cert at
+        ``self._client_cert_path``, or None when no cert is configured or
+        the cert has no URI SAN.
+        """
+        if not self._client_cert_path:
+            return None
+        try:
+            from cryptography import x509
+
+            with open(self._client_cert_path, "rb") as f:
+                cert = x509.load_pem_x509_certificate(f.read())
+            for ext in cert.extensions:
+                if isinstance(ext.value, x509.SubjectAlternativeName):
+                    for name in ext.value:
+                        if isinstance(name, x509.UniformResourceIdentifier):
+                            return name.value
+        except Exception as e:
+            logger.warning("[GOVERNANCE-CLIENT] Failed to read cert SPIFFE URI: %s", e)
+        return None
+
+    def _resolve_operator_identity_from_cert(self) -> tuple[str | None, str | None]:
+        """Resolve (operator_id, operator_session_id) from the client cert's SPIFFE URI SAN.
+
+        The operator mTLS cert carries a SPIFFE URI of the form
+        ``spiffe://g8e.local/operator/<org_id>/<operator_id>/<operator_session_id>``.
+        The gateway's ``verifyEnvelopeIdentityBinding`` checks that both
+        ``operator_id`` and ``operator_session_id`` match the cert's SPIFFE
+        URI suffix. This method parses them from the cert so every
+        submitted envelope is bound to the operator transport identity.
+
+        The result is cached after the first successful parse. Returns
+        ``(None, None)`` when no client cert is configured or the cert has
+        no operator SPIFFE URI SAN.
+        """
+        if self._operator_identity_cache is not None:
+            return self._operator_identity_cache
+
+        spiffe_uri = self._read_cert_spiffe_uri()
+        if not spiffe_uri:
+            self._operator_identity_cache = (None, None)
+            return self._operator_identity_cache
+
+        # Format: spiffe://g8e.local/operator/<org_id>/<operator_id>/<operator_session_id>
+        parts = spiffe_uri.split("/")
+        if (
+            len(parts) >= 7
+            and parts[0] == "spiffe:"
+            and parts[2] == "g8e.local"
+            and parts[3] == "operator"
+        ):
+            operator_id = parts[5]
+            operator_session_id = parts[6]
+            self._operator_identity_cache = (operator_id, operator_session_id)
+            logger.info(
+                "[GOVERNANCE-CLIENT] Resolved operator identity from cert "
+                "(operator_id=%s, session=%s...)",
+                operator_id,
+                operator_session_id[:8] if operator_session_id else "unknown",
+            )
+        else:
+            logger.warning(
+                "[GOVERNANCE-CLIENT] Cert SPIFFE URI is not an operator identity: %s",
+                spiffe_uri,
+            )
+            self._operator_identity_cache = (None, None)
+
+        return self._operator_identity_cache
+
     async def submit_envelope(
         self,
         message: G8eMessage,
@@ -153,6 +234,14 @@ class GovernanceClient:
         - Submits to Gateway for L1/L2/L3 verification
         - Returns signed ActionReceipt
 
+        The L4 warden compares the envelope's state_merkle_root to the gateway's
+        current state root. When concurrent envelopes are in flight, the state
+        root may change between fetch and submit, producing TX_STATE_MISMATCH.
+        This method retries up to _STATE_ROOT_MAX_RETRIES times by re-fetching
+        the state root and rebuilding the envelope. The caller-provided
+        state_merkle_root is honored on the first attempt but not on retries
+        (the caller's value is stale by definition on retry).
+
         Args:
             message: The G8eMessage to wrap in a governance envelope
             agent_ids: Optional list of Tribunal agent IDs for L2 metadata
@@ -165,77 +254,116 @@ class GovernanceClient:
             NetworkError: If the HTTP request fails
             ValidationError: If the envelope is rejected by governance gates
         """
-        # Fetch state root from Gateway if not provided (g8e compliance requirement)
-        if not state_merkle_root:
-            state_merkle_root = await self.fetch_state_root()
-
-        # Inject the operator session ID from the governance client when the
-        # message omits it. The gateway's verifyEnvelopeIdentityBinding checks
-        # operator_id/operator_session_id against the mTLS certificate's SPIFFE
-        # URI SAN. When both are empty the binding is skipped, which allows an
-        # unbound envelope through. The GovernanceClient is initialized with
-        # the operator session ID from platform settings; stamping it here
-        # ensures every submitted envelope is bound to the operator transport.
-        if not message.operator_session_id and self._operator_session_id:
-            message = message.model_copy(update={"operator_session_id": self._operator_session_id})
-
-        # Build the envelope using envelope_builder with g8e compliance
-        envelope_json = build_uap_envelope_json(
-            message,
-            agent_ids=agent_ids,
-            state_merkle_root=state_merkle_root,
-            client_cert_path=self._client_cert_path,
-        )
-
-        session = await self._get_http_session()
-        url = f"{self._base_url}{GatewayAPIPaths.GOVERNANCE_ENVELOPES}"
-
-        try:
-            async with session.post(url, data=envelope_json) as resp:
-                text = await resp.text()
-
-                if resp.status == 403:
-                    # Governance verification failed (L1/L2/L3 gates)
-                    raise G8eError(
-                        f"Governance verification failed: {text}",
-                        code=ErrorCode.GOVERNANCE_REJECTED,
-                        category=ErrorCategory.PERMISSION,
-                        component="g8ee",
-                    )
-                if resp.status == 400:
-                    # Malformed envelope
-                    raise G8eError(
-                        f"Invalid envelope: {text}",
-                        code=ErrorCode.INVALID_INPUT,
-                        category=ErrorCategory.VALIDATION,
-                        component="g8ee",
-                    )
-                if resp.status == 503:
-                    # Gateway not ready
-                    raise NetworkError(
-                        f"Gateway not ready: {text}",
-                        component="g8ee",
-                    )
-                if resp.status >= 400:
-                    raise NetworkError(
-                        f"Gateway HTTP {resp.status}: {text}",
-                        component="g8ee",
-                    )
-
-                # Success - parse the receipt
-                receipt = json.loads(text)
-                logger.info(
-                    "[GOVERNANCE-CLIENT] Envelope submitted successfully, status=%s",
-                    receipt.get("status", "unknown"),
+        # Inject the operator transport identity (operator_id +
+        # operator_session_id) when the message omits either field. The
+        # gateway's verifyEnvelopeIdentityBinding rejects mutation actions
+        # (DOCUMENT_UPDATE, DOCUMENT_DELETE, FILE_EDIT) with
+        # ErrIdentityBindingFailed when both are empty. The identity is
+        # resolved from the operator mTLS cert's SPIFFE URI SAN, which
+        # guarantees the stamped values match the transport identity the
+        # gateway verifies against. Resolution is lazy (first submission)
+        # and cached so the cert is read at most once.
+        if not message.operator_id or not message.operator_session_id:
+            cert_op_id, cert_op_session = self._resolve_operator_identity_from_cert()
+            updates: dict[str, str | None] = {}
+            if not message.operator_id and cert_op_id:
+                updates["operator_id"] = cert_op_id
+            if not message.operator_session_id and cert_op_session:
+                updates["operator_session_id"] = cert_op_session
+            if updates:
+                message = message.model_copy(update=updates)
+            elif not message.operator_session_id and self._operator_session_id:
+                # Fall back to the constructor-provided session ID when the
+                # cert has no SPIFFE URI SAN (e.g. app cert fallback path).
+                message = message.model_copy(
+                    update={"operator_session_id": self._operator_session_id}
                 )
-                return receipt
 
-        except aiohttp.ClientError as e:
-            raise NetworkError(
-                f"Gateway request failed: {e}",
-                component="g8ee",
-                cause=e,
-            ) from e
+        # Retry loop: re-fetch the state root on TX_STATE_MISMATCH. The state
+        # root may change between fetch and submit when concurrent envelopes
+        # are in flight (e.g. case creation + investigation creation + chat
+        # message append all submitting in quick succession).
+        current_root = state_merkle_root
+        for attempt in range(self._STATE_ROOT_MAX_RETRIES + 1):
+            if not current_root:
+                current_root = await self.fetch_state_root()
+
+            envelope_json = build_uap_envelope_json(
+                message,
+                agent_ids=agent_ids,
+                state_merkle_root=current_root,
+                client_cert_path=self._client_cert_path,
+            )
+
+            session = await self._get_http_session()
+            url = f"{self._base_url}{GatewayAPIPaths.GOVERNANCE_ENVELOPES}"
+
+            try:
+                async with session.post(url, data=envelope_json) as resp:
+                    text = await resp.text()
+
+                    if resp.status == 403:
+                        # Governance verification failed (L1/L2/L3 gates).
+                        # TX_STATE_MISMATCH is returned as a 403 with the
+                        # error string in the body. Retry by re-fetching the
+                        # state root.
+                        if "TX_STATE_MISMATCH" in text and attempt < self._STATE_ROOT_MAX_RETRIES:
+                            logger.warning(
+                                "[GOVERNANCE-CLIENT] TX_STATE_MISMATCH on attempt %d/%d, re-fetching state root",
+                                attempt + 1,
+                                self._STATE_ROOT_MAX_RETRIES + 1,
+                            )
+                            current_root = ""  # force re-fetch on next iteration
+                            continue
+                        raise G8eError(
+                            f"Governance verification failed: {text}",
+                            code=ErrorCode.GOVERNANCE_REJECTED,
+                            category=ErrorCategory.PERMISSION,
+                            component="g8ee",
+                        )
+                    if resp.status == 400:
+                        # Malformed envelope
+                        raise G8eError(
+                            f"Invalid envelope: {text}",
+                            code=ErrorCode.INVALID_INPUT,
+                            category=ErrorCategory.VALIDATION,
+                            component="g8ee",
+                        )
+                    if resp.status == 503:
+                        # Gateway not ready
+                        raise NetworkError(
+                            f"Gateway not ready: {text}",
+                            component="g8ee",
+                        )
+                    if resp.status >= 400:
+                        raise NetworkError(
+                            f"Gateway HTTP {resp.status}: {text}",
+                            component="g8ee",
+                        )
+
+                    # Success - parse the receipt
+                    receipt = json.loads(text)
+                    logger.info(
+                        "[GOVERNANCE-CLIENT] Envelope submitted successfully, status=%s",
+                        receipt.get("status", "unknown"),
+                    )
+                    return receipt
+
+            except aiohttp.ClientError as e:
+                raise NetworkError(
+                    f"Gateway request failed: {e}",
+                    component="g8ee",
+                    cause=e,
+                ) from e
+
+        # Exhausted retries — the final attempt's 403 is raised inside the loop.
+        # This line is unreachable but satisfies the type checker.
+        raise G8eError(
+            "Governance verification failed: TX_STATE_MISMATCH after retries",
+            code=ErrorCode.GOVERNANCE_REJECTED,
+            category=ErrorCategory.PERMISSION,
+            component="g8ee",
+        )
 
     def _load_actuator_public_key(self) -> bool:
         """Load the actuator public key from the PKI directory.

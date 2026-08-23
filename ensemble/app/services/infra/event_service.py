@@ -27,7 +27,21 @@ class EventService(EventServiceProtocol):
 
         Raises the underlying exception on failure so callers can propagate
         push errors to the user instead of silently logging success.
+
+        Events with no routing target (no web_session_id and no cli_session_id)
+        are skipped: the gateway's SSE push endpoint requires exactly one
+        routing target and rejects targetless events with 400, which trips
+        the circuit breaker and blocks all subsequent SSE pushes (including
+        approval requests for file edits). There is no connected client to
+        deliver to when there is no routing target, so skipping is correct.
         """
+        if not getattr(event, "web_session_id", None) and not getattr(event, "cli_session_id", None):
+            logger.debug(
+                "Skipping SSE push for targetless %s (event_type=%s)",
+                type(event).__name__,
+                getattr(event, "event_type", "unknown"),
+            )
+            return getattr(event, "id", "event-id")
         await self._internal_http_client.push_sse_event(event)
         return getattr(event, "id", "event-id")
 

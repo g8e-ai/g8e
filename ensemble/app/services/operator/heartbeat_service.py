@@ -376,6 +376,26 @@ class HeartbeatSnapshotService:
     ) -> None:
         event = self._build_heartbeat_event(envelope, payload, operator)
         event_type_str = "SessionEvent" if isinstance(event, SessionEvent) else "BackgroundEvent"
+
+        # Skip SSE push for unbound operators (BackgroundEvent with no routing
+        # target). The gateway's SSE push endpoint requires exactly one of
+        # web_session_id or cli_session_id; a BackgroundEvent with neither is
+        # rejected with 400, which trips the circuit breaker and blocks all
+        # subsequent SSE pushes (including approval requests for file edits).
+        # There is no connected client to deliver to when the operator is
+        # unbound, so skipping the push is correct.
+        if isinstance(event, BackgroundEvent) and not event.web_session_id and not event.cli_session_id:
+            logger.debug(
+                "[HEARTBEAT] Skipping SSE push for unbound operator %s (no routing target)",
+                operator.id,
+                extra={
+                    "operator_id": operator.id,
+                    "operator_status": operator.status,
+                    "user_id": operator.user_id,
+                },
+            )
+            return
+
         logger.info(
             "[HEARTBEAT] Publishing SSE event (%s) for operator %s",
             event_type_str,
