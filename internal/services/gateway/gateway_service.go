@@ -520,11 +520,12 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Responder:     ls.responder,
 		},
 		CLIRefreshControllerDeps: CLIRefreshControllerDeps{
-			Cfg:           cfg,
-			Logger:        logger,
-			CLISessionSvc: cliSessionSvc,
-			UserSvc:       userSvc,
-			Responder:     ls.responder,
+			Cfg:                cfg,
+			Logger:             logger,
+			CLISessionSvc:      cliSessionSvc,
+			OperatorSessionSvc: operatorSessionSvc,
+			UserSvc:            userSvc,
+			Responder:          ls.responder,
 		},
 		EnrollmentTokenControllerDeps: EnrollmentTokenControllerDeps{
 			Cfg:                cfg,

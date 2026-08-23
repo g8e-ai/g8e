@@ -23,11 +23,12 @@ import (
 
 // CLIRefreshControllerDeps groups all dependencies for CLIRefreshController.
 type CLIRefreshControllerDeps struct {
-	Cfg           *config.Config
-	Logger        *slog.Logger
-	CLISessionSvc *CLISessionService
-	UserSvc       *UserService
-	Responder     *response.Writer
+	Cfg                *config.Config
+	Logger             *slog.Logger
+	CLISessionSvc      *CLISessionService
+	OperatorSessionSvc *OperatorSessionService
+	UserSvc            *UserService
+	Responder          *response.Writer
 }
 
 // CLIRefreshController handles the mTLS-protected CLI session refresh
@@ -46,20 +47,22 @@ type CLIRefreshControllerDeps struct {
 // cert. An expired cert cannot authenticate via mTLS, so it can never
 // reach this endpoint — the caller must use the recovery flow instead.
 type CLIRefreshController struct {
-	cfg           *config.Config
-	logger        *slog.Logger
-	cliSessionSvc *CLISessionService
-	userSvc       *UserService
-	responder     *response.Writer
+	cfg                *config.Config
+	logger             *slog.Logger
+	cliSessionSvc      *CLISessionService
+	operatorSessionSvc *OperatorSessionService
+	userSvc            *UserService
+	responder          *response.Writer
 }
 
 func newCLIRefreshController(deps CLIRefreshControllerDeps) *CLIRefreshController {
 	return &CLIRefreshController{
-		cfg:           deps.Cfg,
-		logger:        deps.Logger,
-		cliSessionSvc: deps.CLISessionSvc,
-		userSvc:       deps.UserSvc,
-		responder:     deps.Responder,
+		cfg:                deps.Cfg,
+		logger:             deps.Logger,
+		cliSessionSvc:      deps.CLISessionSvc,
+		operatorSessionSvc: deps.OperatorSessionSvc,
+		userSvc:            deps.UserSvc,
+		responder:          deps.Responder,
 	}
 }
 
@@ -137,10 +140,12 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Derive the operator binding and cert fingerprint for the new session.
-	// When the old session exists, inherit its binding. When it does not,
-	// use empty operator binding (the caller can re-bind via the operator
-	// bind endpoint) and empty cert fingerprint (the cert is verified by
-	// the mTLS handshake, not by the session record).
+	// When the old session exists, inherit its binding. When it does not
+	// (e.g., after a gateway volume reset that wiped CLI sessions but left
+	// operator sessions intact), look up the user's active operator session
+	// to inherit its binding. If no active operator session exists, return
+	// a clear actionable error — the caller must re-enroll to establish a
+	// fresh operator binding.
 	var operatorSessionID, systemFingerprint, certFingerprint, certSerial, loginMethod string
 	if oldSession != nil {
 		operatorSessionID = oldSession.OperatorSessionID
@@ -148,6 +153,28 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 		certFingerprint = oldSession.CertFingerprint
 		certSerial = oldSession.CertSerial
 		loginMethod = oldSession.LoginMethod
+	} else if c.operatorSessionSvc != nil {
+		opSession, opErr := c.operatorSessionSvc.GetActiveSessionForUser(userID)
+		if opErr != nil {
+			c.logger.Error("CLI refresh: failed to look up active operator session",
+				"error", opErr,
+				"user_id", userID,
+			)
+			c.responder.Error(w, http.StatusInternalServerError, "failed to look up operator session")
+			return
+		}
+		if opSession != nil {
+			operatorSessionID = opSession.ID
+			loginMethod = opSession.LoginMethod
+		}
+	}
+	if operatorSessionID == "" {
+		c.logger.Warn("CLI refresh: no operator session binding available",
+			"user_id", userID,
+			"old_cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
+		)
+		c.responder.Error(w, http.StatusConflict, "no active operator session found for user; re-enroll with 'auth enroll user' to establish a fresh operator binding")
+		return
 	}
 
 	newCLISessionID := uuid.NewString()
