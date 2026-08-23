@@ -11,7 +11,6 @@ import pytest
 from datetime import datetime, UTC
 
 from app.utils.envelope_builder import (
-    compute_transaction_hash,
     generate_nonce,
     get_certificate_fingerprint,
     map_to_canonical_payload_type,
@@ -24,106 +23,6 @@ from app.models.command_request_payloads import CommandRequestPayload
 from app.models.uap import UAPEnvelope
 
 pytestmark = [pytest.mark.unit]
-
-
-class TestComputeTransactionHash:
-    """Test deterministic transaction hash computation per g8e protocol."""
-
-    def test_hash_is_deterministic(self):
-        """Same inputs produce same hash."""
-        payload_type = "ShellExecuteRequested"
-        payload = {"command": "ls -la", "working_directory": "/tmp"}
-        nonce = "abc123"
-        expires_at = "2026-05-30T10:00:00Z"
-        state_merkle_root = "root123"
-
-        hash1 = compute_transaction_hash(
-            payload_type, payload, nonce, expires_at, state_merkle_root
-        )
-        hash2 = compute_transaction_hash(
-            payload_type, payload, nonce, expires_at, state_merkle_root
-        )
-
-        assert hash1 == hash2
-        assert len(hash1) == 64  # SHA256 hex string
-
-    def test_hash_changes_with_payload_type(self):
-        """Different payload_type produces different hash."""
-        payload = {"command": "ls -la"}
-        nonce = "abc123"
-        expires_at = "2026-05-30T10:00:00Z"
-        state_merkle_root = "root123"
-
-        hash1 = compute_transaction_hash(
-            "ShellExecuteRequested", payload, nonce, expires_at, state_merkle_root
-        )
-        hash2 = compute_transaction_hash(
-            "FileReadRequested", payload, nonce, expires_at, state_merkle_root
-        )
-
-        assert hash1 != hash2
-
-    def test_hash_changes_with_payload(self):
-        """Different payload content produces different hash."""
-        payload_type = "ShellExecuteRequested"
-        nonce = "abc123"
-        expires_at = "2026-05-30T10:00:00Z"
-        state_merkle_root = "root123"
-
-        hash1 = compute_transaction_hash(
-            payload_type, {"command": "ls -la"}, nonce, expires_at, state_merkle_root
-        )
-        hash2 = compute_transaction_hash(
-            payload_type, {"command": "pwd"}, nonce, expires_at, state_merkle_root
-        )
-
-        assert hash1 != hash2
-
-    def test_hash_changes_with_nonce(self):
-        """Different nonce produces different hash (replay defense)."""
-        payload_type = "ShellExecuteRequested"
-        payload = {"command": "ls -la"}
-        expires_at = "2026-05-30T10:00:00Z"
-        state_merkle_root = "root123"
-
-        hash1 = compute_transaction_hash(
-            payload_type, payload, "nonce1", expires_at, state_merkle_root
-        )
-        hash2 = compute_transaction_hash(
-            payload_type, payload, "nonce2", expires_at, state_merkle_root
-        )
-
-        assert hash1 != hash2
-
-    def test_hash_changes_with_state_root(self):
-        """Different state root produces different hash (state binding)."""
-        payload_type = "ShellExecuteRequested"
-        payload = {"command": "ls -la"}
-        nonce = "abc123"
-        expires_at = "2026-05-30T10:00:00Z"
-
-        hash1 = compute_transaction_hash(payload_type, payload, nonce, expires_at, "root1")
-        hash2 = compute_transaction_hash(payload_type, payload, nonce, expires_at, "root2")
-
-        assert hash1 != hash2
-
-    def test_hash_uses_canonical_json(self):
-        """Hash is computed from canonical JSON (sorted keys, no whitespace)."""
-        payload_type = "ShellExecuteRequested"
-        payload = {"z": 1, "a": 2, "m": 3}
-        nonce = "abc123"
-        expires_at = "2026-05-30T10:00:00Z"
-        state_merkle_root = "root123"
-
-        # Different key order should produce same hash (canonical JSON)
-        hash1 = compute_transaction_hash(
-            payload_type, {"a": 2, "m": 3, "z": 1}, nonce, expires_at, state_merkle_root
-        )
-        hash2 = compute_transaction_hash(
-            payload_type, {"z": 1, "a": 2, "m": 3}, nonce, expires_at, state_merkle_root
-        )
-
-        assert hash1 == hash2
 
 
 class TestGenerateNonce:

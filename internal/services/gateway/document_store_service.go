@@ -237,10 +237,28 @@ func (s *DocumentStoreService) DocConditionalUpdate(collection, id string, setFi
 	return n > 0, nil
 }
 
+// DocReplace creates or replaces a document. It satisfies the
+// governance.GovernedDocumentStore interface. Delegates to DocSet which
+// upserts with managed timestamps.
+func (s *DocumentStoreService) DocReplace(collection, id string, data json.RawMessage) error {
+	return s.DocSet(collection, id, data)
+}
+
+// DocMerge merges fields into an existing document, preserving untouched
+// fields. It satisfies the governance.GovernedDocumentStore interface.
+// Returns constants.ErrNotFound if the document does not exist. Null values
+// in fields remove the corresponding key from the document. Delegates to
+// DocUpdate and discards the returned Document.
+func (s *DocumentStoreService) DocMerge(collection, id string, fields json.RawMessage) error {
+	_, err := s.DocUpdate(collection, id, fields)
+	return err
+}
+
 // DocDelete removes a document, returning only an error. It satisfies the
-// governance.TransactionAuditStore interface. A not-found result is not an
-// error — the document is simply already absent. Callers that need the
-// deleted/not-found distinction should use DocDeleteWithResult.
+// governance.TransactionAuditStore and governance.GovernedDocumentStore
+// interfaces. A not-found result is not an error — the document is simply
+// already absent. Callers that need the deleted/not-found distinction should
+// use DocDeleteWithResult.
 func (s *DocumentStoreService) DocDelete(collection, id string) error {
 	_, err := s.DocDeleteWithResult(collection, id)
 	return err

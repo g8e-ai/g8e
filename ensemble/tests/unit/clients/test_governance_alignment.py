@@ -10,7 +10,6 @@
 Verifies:
 - ``GovernanceClient`` uses ``GatewayAPIPaths.GOVERNANCE_ENVELOPES`` (no hardcoded URL)
 - ``GovernanceClient`` passes mTLS cert paths to the HTTP session
-- ``compute_transaction_hash`` uses SHA256 of canonical JSON
 - ``canonical_json`` produces sorted, no-whitespace output
 - ``PubSubGovernanceClient.submit_envelope`` serializes dict correctly (not re-wrapping)
 - All business-critical data services route writes through governance envelopes
@@ -22,7 +21,6 @@ import json
 import pytest
 
 from app.constants.api_paths import GatewayAPIPaths
-from app.utils.envelope_builder import compute_transaction_hash
 from app.utils.ledger_hash import canonical_json
 
 pytestmark = pytest.mark.unit
@@ -68,67 +66,6 @@ class TestGovernanceClientMTLS:
         assert "client_cert_path" in source
         assert "client_key_path" in source
         assert "create_component_http_session" in source
-
-
-class TestTransactionHashAlgorithm:
-    """Verify transaction hash uses SHA256 of canonical JSON."""
-
-    def test_compute_transaction_hash_is_sha256(self):
-        result = compute_transaction_hash(
-            payload_type="CommandRequested",
-            payload={"command": "ls"},
-            nonce="abc123",
-            expires_at="2026-01-01T00:00:00+00:00",
-            state_merkle_root="root123",
-        )
-        assert len(result) == 64
-        assert all(c in "0123456789abcdef" for c in result)
-
-    def test_compute_transaction_hash_is_deterministic(self):
-        kwargs = {
-            "payload_type": "CommandRequested",
-            "payload": {"command": "ls", "args": ["-la"]},
-            "nonce": "abc123",
-            "expires_at": "2026-01-01T00:00:00+00:00",
-            "state_merkle_root": "root123",
-        }
-        h1 = compute_transaction_hash(**kwargs)
-        h2 = compute_transaction_hash(**kwargs)
-        assert h1 == h2
-
-    def test_compute_transaction_hash_different_inputs_different_hashes(self):
-        common = {
-            "nonce": "abc123",
-            "expires_at": "2026-01-01T00:00:00+00:00",
-            "state_merkle_root": "root123",
-        }
-        h1 = compute_transaction_hash(payload_type="CommandRequested", payload={"a": 1}, **common)
-        h2 = compute_transaction_hash(payload_type="FileEditRequested", payload={"a": 1}, **common)
-        assert h1 != h2
-
-    def test_compute_transaction_hash_key_order_independent(self):
-        common = {
-            "payload_type": "CommandRequested",
-            "nonce": "abc123",
-            "expires_at": "2026-01-01T00:00:00+00:00",
-            "state_merkle_root": "root123",
-        }
-        h1 = compute_transaction_hash(payload={"a": 1, "b": 2}, **common)
-        h2 = compute_transaction_hash(payload={"b": 2, "a": 1}, **common)
-        assert h1 == h2
-
-    def test_compute_transaction_hash_matches_manual_sha256(self):
-        fields = {
-            "payload_type": "CommandRequested",
-            "payload": {"cmd": "ls"},
-            "nonce": "n1",
-            "expires_at": "2026-01-01T00:00:00+00:00",
-            "state_merkle_root": "root",
-        }
-        canonical = canonical_json(fields)
-        expected = hashlib.sha256(canonical).hexdigest()
-        actual = compute_transaction_hash(**fields)
-        assert actual == expected
 
 
 class TestCanonicalJson:

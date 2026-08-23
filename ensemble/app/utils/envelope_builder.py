@@ -28,6 +28,7 @@ from app.models.base import ValidationError as PydanticValidationError
 
 from app.constants.proto_mappings import protobuf_execution_status_to_python
 from app.constants.action_type_mappings import map_event_type_to_action_type
+from app.constants.config import G8EE_COMPONENT
 from app.errors import ValidationError
 from app.models.pubsub_messages import (
     G8eMessage,
@@ -38,7 +39,7 @@ from app.models.pubsub_messages import (
 )
 from app.models.uap import UAPEnvelope
 from app.proto import common_pb2
-from app.utils.ledger_hash import canonical_json
+from g8e.models.governance import compute_transaction_hash as compute_canonical_transaction_hash
 from google.protobuf.json_format import MessageToDict, ParseDict
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,45 @@ PAYLOAD_TYPE_MAPPING = {
 }
 
 
+# Mapping from internal source_component strings to proto Component enum value
+# names. The Go gateway decodes GovernanceEnvelope.source_component as the
+# g8e.common.v1.Component proto enum via protojson, which expects enum value
+# names (e.g. "COMPONENT_AGENT"), not the internal lowercase strings the
+# ensemble uses for routing and validation (e.g. "g8ee", "client").
+#
+# The gateway component ("g8eo-gateway") is not a valid source for governed
+# outbound mutations from the ensemble and is intentionally absent. Unknown
+# or empty values raise a typed ValidationError rather than silently
+# defaulting to COMPONENT_AGENT — a misclassified identity could attribute a
+# governed action to the wrong component and bypass identity binding.
+_COMPONENT_TO_PROTO_ENUM = {
+    "g8ee": "COMPONENT_AGENT",
+    "client": "COMPONENT_CLIENT",
+    "g8eo": "COMPONENT_G8EO",
+}
+
+
+def _source_component_to_proto_enum(internal: str) -> str:
+    """Translate an internal source_component string to a proto Component enum value name.
+
+    Fail-closed: raises ValidationError for unknown or empty values. A
+    misclassified source component could attribute a governed action to the
+    wrong component and silently bypass transport-to-envelope identity binding.
+    """
+    if not internal:
+        raise ValidationError(
+            "source_component is required for governance envelope construction",
+            component="g8ee",
+        )
+    try:
+        return _COMPONENT_TO_PROTO_ENUM[internal]
+    except KeyError as exc:
+        raise ValidationError(
+            f"unknown source_component {internal!r}: cannot map to proto Component enum",
+            component="g8ee",
+        ) from exc
+
+
 def map_to_canonical_payload_type(internal_payload_type: str) -> str:
     """Map internal g8ee payload type to canonical g8e protocol payload type.
 
@@ -84,39 +124,6 @@ def map_to_canonical_payload_type(internal_payload_type: str) -> str:
         Canonical g8e protocol payload type (e.g., "CommandRequested")
     """
     return PAYLOAD_TYPE_MAPPING.get(internal_payload_type, internal_payload_type)
-
-
-def compute_transaction_hash(
-    payload_type: str,
-    payload: dict[str, Any],
-    nonce: str,
-    expires_at: str,
-    state_merkle_root: str,
-) -> str:
-    """Compute deterministic transaction hash from envelope fields.
-
-    Per g8e protocol specification, the transaction hash is the SHA256 of
-    canonical JSON (sorted keys, no whitespace) of the core envelope fields.
-
-    Args:
-        payload_type: Typed payload identifier (e.g., "ShellExecuteRequested")
-        payload: Typed payload content according to protocol schema
-        nonce: Unique value for replay defense
-        expires_at: ISO 8601 timestamp for expiry enforcement
-        state_merkle_root: Current state root from Gateway
-
-    Returns:
-        Hexadecimal SHA256 hash string (64 characters)
-    """
-    fields = {
-        "payload_type": payload_type,
-        "payload": payload,
-        "nonce": nonce,
-        "expires_at": expires_at,
-        "state_merkle_root": state_merkle_root,
-    }
-    canonical = canonical_json(fields)
-    return hashlib.sha256(canonical).hexdigest()
 
 
 def generate_nonce() -> str:
@@ -192,17 +199,32 @@ def build_uap_envelope(
     # Compute L3 notary proof (mTLS certificate fingerprint)
     cert_fingerprint = get_certificate_fingerprint(client_cert_path)
 
-    # Compute deterministic transaction hash
-    # Use the payload_type from the payload model if available, otherwise use event_type
-    # Map to canonical g8e protocol payload type
-    internal_payload_type = getattr(message.payload, "payload_type", message.event_type)
-    canonical_payload_type = map_to_canonical_payload_type(internal_payload_type)
-    transaction_hash = compute_transaction_hash(
-        payload_type=canonical_payload_type,
-        payload=payload_dict,
+    # Compute deterministic transaction hash using the canonical g8e algorithm
+    # (matches Go's GenerateMessageID exactly). The hash is computed over
+    # action_type, target_resource, payload (base64), state_merkle_root, nonce,
+    # expires_at, intent_data, requestor_user_id, acting_app_id in proto field
+    # order. See g8e.models.governance.compute_transaction_hash.
+    import base64
+
+    # Bind identity: the human user who authorized the action (requestor) and
+    # the app acting on their behalf (acting_app). Both are included in the
+    # canonical transaction hash so they are cryptographically tamper-evident
+    # and verified by the gateway's identity binding check. The acting app is
+    # always the ensemble (g8ee) for envelopes built here.
+    requestor_user_id = message.user_id or ""
+    acting_app_id = G8EE_COMPONENT
+
+    payload_b64 = base64.b64encode(payload_bytes).decode("ascii") if payload_bytes else ""
+    transaction_hash = compute_canonical_transaction_hash(
+        action_type=action_type,
+        target_resource="localhost",
+        payload=payload_b64,
+        state_merkle_root=state_merkle_root,
         nonce=nonce,
         expires_at=expires_at.isoformat(),
-        state_merkle_root=state_merkle_root,
+        intent_data=payload_dict,
+        requestor_user_id=requestor_user_id,
+        acting_app_id=acting_app_id,
     )
 
     envelope = UAPEnvelope(
@@ -210,7 +232,7 @@ def build_uap_envelope(
         id=transaction_hash,
         timestamp=message.timestamp or now_utc,
         expires_at=expires_at,
-        source_component=message.source_component,
+        source_component=_source_component_to_proto_enum(message.source_component),
         action_type=action_type,
         target_resource="localhost",
         operator_id=message.operator_id or "",
@@ -225,6 +247,8 @@ def build_uap_envelope(
         investigation_id=message.investigation_id,
         task_id=message.task_id,
         payload=payload_bytes,
+        requestor_user_id=requestor_user_id or None,
+        acting_app_id=acting_app_id,
     )
 
     # L2 Metadata - tribunal_id only; votes/signatures handled by Gateway

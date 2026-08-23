@@ -134,6 +134,11 @@ func newPubsubFixture(t *testing.T) *pubsubFixture {
 	}
 	svc.SetActuator(mockActuator)
 
+	// Default governed document store is a no-op mock; tests that exercise
+	// document handlers override f.Svc.governedDocStore with a configurable
+	// mock or real document store.
+	svc.governedDocStore = &testutil.ConfigurableMockGovernedDocStore{}
+
 	return &pubsubFixture{
 		Cfg:        cfg,
 		Logger:     logger,

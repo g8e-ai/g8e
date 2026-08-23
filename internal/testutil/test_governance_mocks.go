@@ -200,3 +200,61 @@ func (m *ConfigurableMockAuditStore) DocDelete(collection, id string) error {
 func NewConfigurableMockAuditStore(docSetFunc func(collection, id string, data json.RawMessage) error) *ConfigurableMockAuditStore {
 	return &ConfigurableMockAuditStore{DocSetFunc: docSetFunc}
 }
+
+// ConfigurableMockGovernedDocStore implements governance.GovernedDocumentStore
+// with configurable behavior and call tracking. Used by unit tests that need
+// to verify the handler dispatches to DocReplace vs DocMerge correctly.
+type ConfigurableMockGovernedDocStore struct {
+	DocReplaceFunc func(collection, id string, data json.RawMessage) error
+	DocMergeFunc   func(collection, id string, fields json.RawMessage) error
+	DocDeleteFunc  func(collection, id string) error
+	DocReplaceCalls []struct {
+		Collection string
+		ID         string
+		Data       json.RawMessage
+	}
+	DocMergeCalls []struct {
+		Collection string
+		ID         string
+		Fields     json.RawMessage
+	}
+	DocDeleteCalls []struct {
+		Collection string
+		ID         string
+	}
+}
+
+func (m *ConfigurableMockGovernedDocStore) DocReplace(collection, id string, data json.RawMessage) error {
+	m.DocReplaceCalls = append(m.DocReplaceCalls, struct {
+		Collection string
+		ID         string
+		Data       json.RawMessage
+	}{collection, id, data})
+	if m.DocReplaceFunc != nil {
+		return m.DocReplaceFunc(collection, id, data)
+	}
+	return nil
+}
+
+func (m *ConfigurableMockGovernedDocStore) DocMerge(collection, id string, fields json.RawMessage) error {
+	m.DocMergeCalls = append(m.DocMergeCalls, struct {
+		Collection string
+		ID         string
+		Fields     json.RawMessage
+	}{collection, id, fields})
+	if m.DocMergeFunc != nil {
+		return m.DocMergeFunc(collection, id, fields)
+	}
+	return nil
+}
+
+func (m *ConfigurableMockGovernedDocStore) DocDelete(collection, id string) error {
+	m.DocDeleteCalls = append(m.DocDeleteCalls, struct {
+		Collection string
+		ID         string
+	}{collection, id})
+	if m.DocDeleteFunc != nil {
+		return m.DocDeleteFunc(collection, id)
+	}
+	return nil
+}

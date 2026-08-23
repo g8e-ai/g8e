@@ -360,6 +360,7 @@ class ChatPipelineService:
                 sender=MessageSender.USER_CHAT,
                 content=message,
                 metadata=ConversationMessageMetadata(attachment_filenames=attachment_filenames),
+                context=RequestContext.from_app_context(g8e_context),
             )
 
         conversation_history = (

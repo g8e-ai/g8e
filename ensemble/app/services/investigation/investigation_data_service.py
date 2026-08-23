@@ -218,8 +218,14 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         sender: str,
         content: str,
         metadata: ConversationMessageMetadata,
+        context: RequestContext | None = None,
     ) -> bool:
-        """Persist a chat message to the investigation's conversation history."""
+        """Persist a chat message to the investigation's conversation history.
+
+        Routes through the governance envelope pipeline (DOCUMENT_UPDATE with
+        merge=true) so the gateway enforces L1-L5 verification on every chat
+        message append. Direct DB PATCH is rejected by the gateway with 409.
+        """
         if not investigation_id:
             return True
 
@@ -253,13 +259,43 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             computed_hash = compute_entry_hash(entry_dict, prev_hash)
             message = message.model_copy(update={"entry_hash": computed_hash})
 
-            await self.cache.append_to_array(
-                collection=self.collection,
-                document_id=investigation_id,
-                array_field="conversation_history",
-                items_to_add=[message.model_dump(mode="json")],
-                additional_updates={"created_at": now()},
-            )
+            # Build the updated conversation_history array (existing + new message)
+            updated_history = [
+                e.model_dump(mode="json") for e in investigation.conversation_history
+            ] + [message.model_dump(mode="json")]
+
+            updates = {
+                "conversation_history": updated_history,
+                "created_at": now().isoformat(),
+            }
+
+            if context is not None:
+                await self._governance_client.update_governed_doc(
+                    collection=self.collection,
+                    document_id=investigation_id,
+                    updates=updates,
+                    event_type=EventType.APP_INVESTIGATION_UPDATED,
+                    case_id=context.case_id,
+                    investigation_id=investigation_id,
+                    web_session_id=context.web_session_id,
+                    user_id=context.user_id,
+                    operator_id=context.operator_id,
+                    operator_session_id=context.operator_session_id,
+                    merge=True,
+                )
+            else:
+                # Fallback: construct a minimal context from the investigation
+                await self._governance_client.update_governed_doc(
+                    collection=self.collection,
+                    document_id=investigation_id,
+                    updates=updates,
+                    event_type=EventType.APP_INVESTIGATION_UPDATED,
+                    case_id=investigation.case_id,
+                    investigation_id=investigation_id,
+                    web_session_id=investigation.web_session_id,
+                    user_id=investigation.user_id,
+                    merge=True,
+                )
 
         return True
 
@@ -319,6 +355,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             sender=MessageSender.SYSTEM,
             content=summary,
             metadata=metadata,
+            context=context,
         )
 
         return await self.add_history_entry(

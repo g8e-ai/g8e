@@ -76,9 +76,10 @@ type OperatorPubSubService struct {
 	reconnectBaseDelay time.Duration
 
 	// governance services
-	actuator    *governance.L5Actuator
-	l4warden    *governance.L4Warden
-	signerStore governance.SignerStore
+	actuator        *governance.L5Actuator
+	l4warden        *governance.L4Warden
+	signerStore     governance.SignerStore
+	governedDocStore governance.GovernedDocumentStore
 
 	// MCP gateway for protocol translation egress
 	mcpGateway *mcp.GatewayService
@@ -99,6 +100,7 @@ type GovernanceDeps struct {
 	ReplayStore          governance.ReplayStore
 	StateRootProvider    governance.StateRootProvider
 	TransactionAudit     governance.TransactionAuditStore
+	GovernedDocStore     governance.GovernedDocumentStore
 	L3Notary             governance.L3Notary
 	SignerStore          governance.SignerStore
 	ConsensusPolicyStore governance.L2ConsensusPolicyStore
@@ -241,6 +243,8 @@ func NewOperatorPubSubService(c CommandServiceConfig, govDeps GovernanceDeps) (*
 	rs.history.auditStore = c.AuditStore
 
 	rs.buildHandlers()
+
+	rs.governedDocStore = govDeps.GovernedDocStore
 
 	rs.signerStore = govDeps.SignerStore
 	if rs.signerStore == nil {
@@ -969,12 +973,15 @@ func (rs *OperatorPubSubService) handleA2aCallRequestSync(ctx context.Context, m
 
 // handleDocumentUpdateSync unmarshals a DocumentUpdateRequested payload from
 // the pub/sub message, converts the updates Struct to JSON, and persists the
-// document via ConsoleAuditStore.DocSet. Fail-closed: returns an error if the
-// actuator or audit store is missing, if the payload fails to unmarshal, if
-// the Struct-to-JSON conversion fails, or if DocSet fails.
+// document via GovernedDocumentStore. When merge is false, the document is
+// replaced (DocReplace); when merge is true, the fields are merged into the
+// existing document (DocMerge), preserving untouched fields. Fail-closed:
+// returns an error if the governed document store is missing (outbound mode),
+// if the payload fails to unmarshal, if the Struct-to-JSON conversion fails,
+// or if the document mutation fails.
 func (rs *OperatorPubSubService) handleDocumentUpdateSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
-	if rs.actuator == nil || rs.actuator.ConsoleAuditStore == nil {
-		return "", constants.ErrPubSubActuatorOrAuditStore
+	if rs.governedDocStore == nil {
+		return "", constants.ErrGovernedDocStoreNotConfigured
 	}
 
 	var req operatorv1.DocumentUpdateRequested
@@ -1001,11 +1008,20 @@ func (rs *OperatorPubSubService) handleDocumentUpdateSync(ctx context.Context, m
 		data = json.RawMessage(`{}`)
 	}
 
-	if err := rs.actuator.ConsoleAuditStore.DocSet(req.Collection, req.DocumentId, data); err != nil {
-		rs.logger.Error("Failed to persist document update",
-			string(constants.ConnectionStateError), err,
-			"collection", req.Collection, "document_id", req.DocumentId)
-		return "", fmt.Errorf("pubsub: document update: doc set: %w", err)
+	if req.Merge {
+		if err := rs.governedDocStore.DocMerge(req.Collection, req.DocumentId, data); err != nil {
+			rs.logger.Error("Failed to merge document update",
+				string(constants.ConnectionStateError), err,
+				"collection", req.Collection, "document_id", req.DocumentId)
+			return "", fmt.Errorf("pubsub: document update: doc merge: %w", err)
+		}
+	} else {
+		if err := rs.governedDocStore.DocReplace(req.Collection, req.DocumentId, data); err != nil {
+			rs.logger.Error("Failed to persist document update",
+				string(constants.ConnectionStateError), err,
+				"collection", req.Collection, "document_id", req.DocumentId)
+			return "", fmt.Errorf("pubsub: document update: doc replace: %w", err)
+		}
 	}
 
 	rs.logger.Info("Document update persisted",
@@ -1014,12 +1030,12 @@ func (rs *OperatorPubSubService) handleDocumentUpdateSync(ctx context.Context, m
 }
 
 // handleDocumentDeleteSync unmarshals a DocumentDeleteRequested payload from
-// the pub/sub message and removes the document via ConsoleAuditStore.DocDelete.
-// Fail-closed: returns an error if the actuator or audit store is missing, if
-// the payload fails to unmarshal, or if DocDelete fails.
+// the pub/sub message and removes the document via GovernedDocumentStore.
+// Fail-closed: returns an error if the governed document store is missing
+// (outbound mode), if the payload fails to unmarshal, or if DocDelete fails.
 func (rs *OperatorPubSubService) handleDocumentDeleteSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
-	if rs.actuator == nil || rs.actuator.ConsoleAuditStore == nil {
-		return "", constants.ErrPubSubActuatorOrAuditStore
+	if rs.governedDocStore == nil {
+		return "", constants.ErrGovernedDocStoreNotConfigured
 	}
 
 	var req operatorv1.DocumentDeleteRequested
@@ -1034,7 +1050,7 @@ func (rs *OperatorPubSubService) handleDocumentDeleteSync(ctx context.Context, m
 		return "", fmt.Errorf("pubsub: document delete: %w", constants.ErrTxPayloadMissing)
 	}
 
-	if err := rs.actuator.ConsoleAuditStore.DocDelete(req.Collection, req.DocumentId); err != nil {
+	if err := rs.governedDocStore.DocDelete(req.Collection, req.DocumentId); err != nil {
 		rs.logger.Error("Failed to delete document",
 			string(constants.ConnectionStateError), err,
 			"collection", req.Collection, "document_id", req.DocumentId)

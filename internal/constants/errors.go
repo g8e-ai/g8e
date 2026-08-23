@@ -366,6 +366,7 @@ var (
 	ErrPubSubA2AGateway                   = errors.New("A2A gateway not configured")
 	ErrPubSubA2AMissingSkillName          = errors.New("A2A call missing skill_name")
 	ErrPubSubActuatorOrAuditStore         = errors.New("actuator or ConsoleAuditStore not configured")
+	ErrGovernedDocStoreNotConfigured      = errors.New("governed document store not configured (outbound mode has no governed document store)")
 	ErrPubSubResultsPublisher             = errors.New("results publisher not configured")
 	ErrPubSubPublishExecutionResult       = errors.New("failed to publish execution result")
 	ErrPubSubPublishCancellationResult    = errors.New("failed to publish cancellation result")

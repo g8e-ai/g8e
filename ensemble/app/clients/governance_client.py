@@ -32,6 +32,7 @@ from app.models.pubsub_messages import G8eMessage
 from app.models.settings import GatewaySettings, TLSConfig
 from app.services.infra.settings_service import SettingsService
 from app.constants import AUTHORIZATION, GatewayAPIPaths
+from app.constants.config import G8EE_COMPONENT
 from app.constants.paths import PATHS
 from app.errors import G8eError, NetworkError, ValidationError, ErrorCode, ErrorCategory
 from app.utils.aiohttp_session import create_component_http_session
@@ -167,6 +168,16 @@ class GovernanceClient:
         # Fetch state root from Gateway if not provided (g8e compliance requirement)
         if not state_merkle_root:
             state_merkle_root = await self.fetch_state_root()
+
+        # Inject the operator session ID from the governance client when the
+        # message omits it. The gateway's verifyEnvelopeIdentityBinding checks
+        # operator_id/operator_session_id against the mTLS certificate's SPIFFE
+        # URI SAN. When both are empty the binding is skipped, which allows an
+        # unbound envelope through. The GovernanceClient is initialized with
+        # the operator session ID from platform settings; stamping it here
+        # ensures every submitted envelope is bound to the operator transport.
+        if not message.operator_session_id and self._operator_session_id:
+            message = message.model_copy(update={"operator_session_id": self._operator_session_id})
 
         # Build the envelope using envelope_builder with g8e compliance
         envelope_json = build_uap_envelope_json(
@@ -401,7 +412,7 @@ class GovernanceClient:
 
         message = G8eMessage(
             id=document_id,
-            source_component="g8ee",
+            source_component=G8EE_COMPONENT,
             event_type=event_type,
             case_id=case_id,
             investigation_id=investigation_id,
@@ -460,7 +471,7 @@ class GovernanceClient:
 
         message = G8eMessage(
             id=document_id,
-            source_component="g8ee",
+            source_component=G8EE_COMPONENT,
             event_type=event_type,
             case_id=case_id,
             investigation_id=investigation_id,

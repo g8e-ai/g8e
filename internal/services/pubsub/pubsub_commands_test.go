@@ -454,10 +454,10 @@ func TestOperatorPubSubService_handleA2aCallRequestSync(t *testing.T) {
 }
 
 func TestOperatorPubSubService_handleDocumentUpdateSync(t *testing.T) {
-	t.Run("rejects when Actuator not configured", func(t *testing.T) {
+	t.Run("rejects when GovernedDocStore not configured", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		f.Svc.SetActuator(nil)
+		f.Svc.governedDocStore = nil
 		msg := &PubSubCommandMessage{
 			EventType: constants.EventAppCaseCreated,
 			ID:        "msg-1",
@@ -465,28 +465,13 @@ func TestOperatorPubSubService_handleDocumentUpdateSync(t *testing.T) {
 		}
 		_, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
 		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrPubSubActuatorOrAuditStore)
-	})
-
-	t.Run("rejects when ConsoleAuditStore not configured", func(t *testing.T) {
-		t.Parallel()
-		f := newPubsubFixture(t)
-		f.Svc.SetActuator(&governance.L5Actuator{})
-		f.Svc.Actuator().ConsoleAuditStore = nil
-		msg := &PubSubCommandMessage{
-			EventType: constants.EventAppCaseCreated,
-			ID:        "msg-1",
-			Payload:   mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{Collection: "cases", DocumentId: "case-1"}),
-		}
-		_, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
-		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrPubSubActuatorOrAuditStore)
+		assert.ErrorIs(t, err, constants.ErrGovernedDocStoreNotConfigured)
 	})
 
 	t.Run("rejects malformed protobuf payload", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		f.Svc.Actuator().ConsoleAuditStore = &testutil.ConfigurableMockAuditStore{}
+		f.Svc.governedDocStore = &testutil.ConfigurableMockGovernedDocStore{}
 		msg := &PubSubCommandMessage{
 			EventType: constants.EventAppCaseCreated,
 			ID:        "msg-1",
@@ -500,7 +485,7 @@ func TestOperatorPubSubService_handleDocumentUpdateSync(t *testing.T) {
 	t.Run("rejects empty collection or document_id", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		f.Svc.Actuator().ConsoleAuditStore = &testutil.ConfigurableMockAuditStore{}
+		f.Svc.governedDocStore = &testutil.ConfigurableMockGovernedDocStore{}
 		msg := &PubSubCommandMessage{
 			EventType: constants.EventAppCaseCreated,
 			ID:        "msg-1",
@@ -511,11 +496,11 @@ func TestOperatorPubSubService_handleDocumentUpdateSync(t *testing.T) {
 		assert.ErrorIs(t, err, constants.ErrTxPayloadMissing)
 	})
 
-	t.Run("rejects when DocSet fails", func(t *testing.T) {
+	t.Run("rejects when DocReplace fails", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		f.Svc.Actuator().ConsoleAuditStore = &testutil.ConfigurableMockAuditStore{
-			DocSetFunc: func(collection, id string, data json.RawMessage) error {
+		f.Svc.governedDocStore = &testutil.ConfigurableMockGovernedDocStore{
+			DocReplaceFunc: func(collection, id string, data json.RawMessage) error {
 				return fmt.Errorf("disk full")
 			},
 		}
@@ -526,10 +511,30 @@ func TestOperatorPubSubService_handleDocumentUpdateSync(t *testing.T) {
 		}
 		_, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "pubsub: document update: doc set")
+		assert.Contains(t, err.Error(), "pubsub: document update: doc replace")
 	})
 
-	t.Run("persists document update via DocSet with canonical protojson", func(t *testing.T) {
+	t.Run("rejects when DocMerge fails", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		f.Svc.governedDocStore = &testutil.ConfigurableMockGovernedDocStore{
+			DocMergeFunc: func(collection, id string, fields json.RawMessage) error {
+				return fmt.Errorf("document not found")
+			},
+		}
+		updates, err := structpb.NewStruct(map[string]interface{}{"title": "updated"})
+		require.NoError(t, err)
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseCreated,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{Collection: "cases", DocumentId: "case-1", Updates: updates, Merge: true}),
+		}
+		_, err = f.Svc.handleDocumentUpdateSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "pubsub: document update: doc merge")
+	})
+
+	t.Run("persists document replace via DocReplace with canonical protojson when merge is false", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
 		updates, err := structpb.NewStruct(map[string]interface{}{
@@ -537,8 +542,8 @@ func TestOperatorPubSubService_handleDocumentUpdateSync(t *testing.T) {
 			"status": "open",
 		})
 		require.NoError(t, err)
-		mock := &testutil.ConfigurableMockAuditStore{}
-		f.Svc.Actuator().ConsoleAuditStore = mock
+		mock := &testutil.ConfigurableMockGovernedDocStore{}
+		f.Svc.governedDocStore = mock
 		msg := &PubSubCommandMessage{
 			EventType: constants.EventAppCaseCreated,
 			ID:        "msg-1",
@@ -547,8 +552,9 @@ func TestOperatorPubSubService_handleDocumentUpdateSync(t *testing.T) {
 		summary, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
 		require.NoError(t, err)
 		assert.Equal(t, "document updated: cases/case-1", summary)
-		require.Len(t, mock.DocSetCalls, 1)
-		call := mock.DocSetCalls[0]
+		require.Len(t, mock.DocReplaceCalls, 1)
+		require.Len(t, mock.DocMergeCalls, 0)
+		call := mock.DocReplaceCalls[0]
 		assert.Equal(t, "cases", call.Collection)
 		assert.Equal(t, "case-1", call.ID)
 		// Canonical protojson preserves field names from the Struct.
@@ -558,11 +564,38 @@ func TestOperatorPubSubService_handleDocumentUpdateSync(t *testing.T) {
 		assert.Equal(t, "open", parsed["status"])
 	})
 
+	t.Run("persists document merge via DocMerge when merge is true", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		updates, err := structpb.NewStruct(map[string]interface{}{
+			"title": "updated title",
+		})
+		require.NoError(t, err)
+		mock := &testutil.ConfigurableMockGovernedDocStore{}
+		f.Svc.governedDocStore = mock
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseUpdated,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{Collection: "cases", DocumentId: "case-1", Updates: updates, Merge: true}),
+		}
+		summary, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
+		require.NoError(t, err)
+		assert.Equal(t, "document updated: cases/case-1", summary)
+		require.Len(t, mock.DocMergeCalls, 1)
+		require.Len(t, mock.DocReplaceCalls, 0)
+		call := mock.DocMergeCalls[0]
+		assert.Equal(t, "cases", call.Collection)
+		assert.Equal(t, "case-1", call.ID)
+		var parsed map[string]interface{}
+		require.NoError(t, json.Unmarshal(call.Fields, &parsed))
+		assert.Equal(t, "updated title", parsed["title"])
+	})
+
 	t.Run("persists document update with empty updates as empty object", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		mock := &testutil.ConfigurableMockAuditStore{}
-		f.Svc.Actuator().ConsoleAuditStore = mock
+		mock := &testutil.ConfigurableMockGovernedDocStore{}
+		f.Svc.governedDocStore = mock
 		msg := &PubSubCommandMessage{
 			EventType: constants.EventAppCaseCreated,
 			ID:        "msg-1",
@@ -571,16 +604,16 @@ func TestOperatorPubSubService_handleDocumentUpdateSync(t *testing.T) {
 		summary, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
 		require.NoError(t, err)
 		assert.Equal(t, "document updated: cases/case-1", summary)
-		require.Len(t, mock.DocSetCalls, 1)
-		assert.Equal(t, json.RawMessage("{}"), mock.DocSetCalls[0].Data)
+		require.Len(t, mock.DocReplaceCalls, 1)
+		assert.Equal(t, json.RawMessage("{}"), mock.DocReplaceCalls[0].Data)
 	})
 }
 
 func TestOperatorPubSubService_handleDocumentDeleteSync(t *testing.T) {
-	t.Run("rejects when Actuator not configured", func(t *testing.T) {
+	t.Run("rejects when GovernedDocStore not configured", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		f.Svc.SetActuator(nil)
+		f.Svc.governedDocStore = nil
 		msg := &PubSubCommandMessage{
 			EventType: constants.EventAppCaseDeleted,
 			ID:        "msg-1",
@@ -588,28 +621,13 @@ func TestOperatorPubSubService_handleDocumentDeleteSync(t *testing.T) {
 		}
 		_, err := f.Svc.handleDocumentDeleteSync(context.Background(), msg)
 		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrPubSubActuatorOrAuditStore)
-	})
-
-	t.Run("rejects when ConsoleAuditStore not configured", func(t *testing.T) {
-		t.Parallel()
-		f := newPubsubFixture(t)
-		f.Svc.SetActuator(&governance.L5Actuator{})
-		f.Svc.Actuator().ConsoleAuditStore = nil
-		msg := &PubSubCommandMessage{
-			EventType: constants.EventAppCaseDeleted,
-			ID:        "msg-1",
-			Payload:   mustMarshalProto(t, &operatorv1.DocumentDeleteRequested{Collection: "cases", DocumentId: "case-1"}),
-		}
-		_, err := f.Svc.handleDocumentDeleteSync(context.Background(), msg)
-		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrPubSubActuatorOrAuditStore)
+		assert.ErrorIs(t, err, constants.ErrGovernedDocStoreNotConfigured)
 	})
 
 	t.Run("rejects malformed protobuf payload", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		f.Svc.Actuator().ConsoleAuditStore = &testutil.ConfigurableMockAuditStore{}
+		f.Svc.governedDocStore = &testutil.ConfigurableMockGovernedDocStore{}
 		msg := &PubSubCommandMessage{
 			EventType: constants.EventAppCaseDeleted,
 			ID:        "msg-1",
@@ -623,7 +641,7 @@ func TestOperatorPubSubService_handleDocumentDeleteSync(t *testing.T) {
 	t.Run("rejects empty collection or document_id", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		f.Svc.Actuator().ConsoleAuditStore = &testutil.ConfigurableMockAuditStore{}
+		f.Svc.governedDocStore = &testutil.ConfigurableMockGovernedDocStore{}
 		msg := &PubSubCommandMessage{
 			EventType: constants.EventAppCaseDeleted,
 			ID:        "msg-1",
@@ -637,7 +655,7 @@ func TestOperatorPubSubService_handleDocumentDeleteSync(t *testing.T) {
 	t.Run("rejects when DocDelete fails", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		f.Svc.Actuator().ConsoleAuditStore = &testutil.ConfigurableMockAuditStore{
+		f.Svc.governedDocStore = &testutil.ConfigurableMockGovernedDocStore{
 			DocDeleteFunc: func(collection, id string) error {
 				return fmt.Errorf("disk full")
 			},
@@ -655,8 +673,8 @@ func TestOperatorPubSubService_handleDocumentDeleteSync(t *testing.T) {
 	t.Run("deletes document via DocDelete with correct collection and id", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		mock := &testutil.ConfigurableMockAuditStore{}
-		f.Svc.Actuator().ConsoleAuditStore = mock
+		mock := &testutil.ConfigurableMockGovernedDocStore{}
+		f.Svc.governedDocStore = mock
 		msg := &PubSubCommandMessage{
 			EventType: constants.EventAppCaseDeleted,
 			ID:        "msg-1",
