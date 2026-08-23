@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -29,15 +30,21 @@ import (
 // /api/audit/receipts. The Operator is the source of truth; these are the real,
 // signed records of what actually executed on the host.
 type Receipt struct {
-	TransactionID   string          `json:"transaction_id"`
-	TransactionHash string          `json:"transaction_hash"`
-	ActionType      string          `json:"action_type"`
-	TargetResource  string          `json:"target_resource"`
-	Status          string          `json:"status"`
-	StateRootBefore string          `json:"state_root_before"`
-	StateRootAfter  string          `json:"state_root_after"`
-	Signature       string          `json:"signature"`
-	Raw             json.RawMessage `json:"-"`
+	TransactionID     string          `json:"transaction_id"`
+	TransactionHash   string          `json:"transaction_hash"`
+	OperatorID        string          `json:"operator_id"`
+	OperatorSessionID string          `json:"operator_session_id"`
+	RequestorUserID   string          `json:"requestor_user_id"`
+	ActingAppID       string          `json:"acting_app_id"`
+	ActionType        string          `json:"action_type"`
+	TargetResource    string          `json:"target_resource"`
+	Status            string          `json:"status"`
+	StateRootBefore   string          `json:"state_root_before"`
+	StateRootAfter    string          `json:"state_root_after"`
+	ExecutedAt        time.Time       `json:"executed_at"`
+	SignerKeyID       string          `json:"signer_key_id"`
+	Signature         string          `json:"signature"`
+	Raw               json.RawMessage `json:"-"`
 }
 
 // GetReceipt retrieves a single receipt by transaction ID.

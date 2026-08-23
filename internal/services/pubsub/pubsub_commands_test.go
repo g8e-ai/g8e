@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -963,6 +964,113 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "transaction verifier not configured")
 	})
+}
+
+// TestOperatorPubSubService_ProcessEnvelope_DocumentDispatchDeterminism
+// asserts the EventType stamped on the emitted PubSubCommandMessage and the
+// EventType derived by the L5 actuator for the signed receipt are stable
+// across repeated ProcessEnvelope calls for both DOCUMENT_UPDATE and
+// DOCUMENT_DELETE. The constants-level test (mappings_test.go) covers the
+// MapActionTypeToEventType choke point in isolation; this test covers the
+// wire-stamped value end to end through the pubsub execution path.
+func TestOperatorPubSubService_ProcessEnvelope_DocumentDispatchDeterminism(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		actionType constants.ActionType
+		wantEvent  constants.EventType
+		payload    func() []byte
+	}{
+		{
+			name:       "DOCUMENT_UPDATE resolves to canonical document update requested event",
+			actionType: constants.ActionTypeDocumentUpdate,
+			wantEvent:  constants.EventAppDocumentUpdateRequested,
+			payload: func() []byte {
+				return mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{Collection: "cases", DocumentId: "case-det-1"})
+			},
+		},
+		{
+			name:       "DOCUMENT_DELETE resolves to canonical document delete requested event",
+			actionType: constants.ActionTypeDocumentDelete,
+			wantEvent:  constants.EventAppDocumentDeleteRequested,
+			payload: func() []byte {
+				return mustMarshalProto(t, &operatorv1.DocumentDeleteRequested{Collection: "cases", DocumentId: "case-det-1"})
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			f := newPubsubFixture(t)
+
+			// Captured per-call: the actuator-derived eventType and the
+			// PubSubCommandMessage's stamped EventType. Both must be stable
+			// across iterations and equal the canonical event.
+			var capturedActuatorEvent constants.EventType
+			var capturedMsgEvent constants.EventType
+			var capturedMu sync.Mutex
+
+			mockHandler := &mockExecutionHandler{
+				ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
+					pubsubMsg, ok := cmdMsg.(*PubSubCommandMessage)
+					if !ok {
+						t.Fatalf("expected *PubSubCommandMessage, got %T", cmdMsg)
+					}
+					capturedMu.Lock()
+					capturedActuatorEvent = eventType
+					capturedMsgEvent = pubsubMsg.EventType
+					capturedMu.Unlock()
+					return "determinism-test-summary", nil
+				},
+			}
+			f.Svc.actuator.ExecutionHandler = mockHandler
+
+			const iterations = 25
+			for i := 0; i < iterations; i++ {
+				payload := tc.payload()
+				env := &commonv1.GovernanceEnvelope{
+					Id:              fmt.Sprintf("tx-det-%s-%d", tc.actionType, i),
+					TransactionHash: fmt.Sprintf("hash-det-%s-%d", tc.actionType, i),
+					ProtocolVersion: "1.0",
+					Timestamp:       timestamppb.Now(),
+					ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+					ActionType:      string(tc.actionType),
+					TargetResource:  "localhost",
+					Payload:         payload,
+					StateMerkleRoot: "test-state-root",
+					Nonce:           fmt.Sprintf("nonce-det-%s-%d", tc.actionType, i),
+					Governance: &commonv1.GovernanceMetadata{
+						L2: &commonv1.L2Metadata{
+							ConsensusSetId: "test-consensus",
+							Votes: []*commonv1.L2Vote{
+								{SignerKeyId: "test-key", Decision: true},
+							},
+						},
+						L3: &commonv1.L3Metadata{
+							Proof: &commonv1.L3Proof{Signature: "human-proof"},
+						},
+					},
+				}
+				env.TransactionHash, _ = govpkg.GenerateMessageID(env)
+				env.Id = env.TransactionHash
+				l2Payload := fmt.Sprintf("%s|true", env.TransactionHash)
+				sig := ed25519.Sign(f.SignerPriv, []byte(l2Payload))
+				env.Governance.L2.Votes[0].ConsensusSignature = hex.EncodeToString(sig)
+				envelopeBytes, _ := (protojson.MarshalOptions{}).Marshal(env)
+
+				receipt, err := f.Svc.ProcessEnvelope(context.Background(), envelopeBytes)
+				require.NoError(t, err, "iteration %d", i)
+				require.NotNil(t, receipt, "iteration %d", i)
+
+				capturedMu.Lock()
+				assert.Equal(t, tc.wantEvent, capturedActuatorEvent, "iteration %d: actuator-derived EventType must be the canonical event", i)
+				assert.Equal(t, tc.wantEvent, capturedMsgEvent, "iteration %d: PubSubCommandMessage EventType must be the canonical event", i)
+				capturedMu.Unlock()
+			}
+		})
+	}
 }
 
 // failingAuditStore is a mock audit store that always fails

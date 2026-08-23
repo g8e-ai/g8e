@@ -35,6 +35,8 @@ var eventToAction = map[EventType]ActionType{
 	EventAppInvestigationCreated:                   ActionTypeDocumentUpdate,
 	EventAppInvestigationUpdated:                   ActionTypeDocumentUpdate,
 	EventAppInvestigationDeleted:                   ActionTypeDocumentDelete,
+	EventAppDocumentUpdateRequested:               ActionTypeDocumentUpdate,
+	EventAppDocumentDeleteRequested:               ActionTypeDocumentDelete,
 	EventPlatformEnrollmentCreateRequested:        ActionTypePlatformEnrollmentCreate,
 	EventPlatformEnrollmentDecideRequested:        ActionTypePlatformEnrollmentDecide,
 	EventPlatformEnrollmentIssueRequested:         ActionTypePlatformEnrollmentIssue,
@@ -44,15 +46,40 @@ var eventToAction = map[EventType]ActionType{
 
 var actionToEvent map[ActionType]EventType
 
+// canonicalActionEvent pins a deterministic EventType for action types whose
+// reverse mapping in actionToEvent is ambiguous. Document mutations are emitted
+// under several app-level event names (case/investigation/memory
+// create/update/delete) that all collapse to DOCUMENT_UPDATE/DOCUMENT_DELETE, so
+// the derived reverse map is many-to-one and its Go-map iteration would pick a
+// nondeterministic EventType per process start. Pinning the canonical
+// document-request events here keeps handler dispatch and the EventType stamped
+// on the command message and signed receipt stable across repeated calls. This
+// map takes precedence over the derived reverse map.
+var canonicalActionEvent = map[ActionType]EventType{
+	ActionTypeDocumentUpdate: EventAppDocumentUpdateRequested,
+	ActionTypeDocumentDelete: EventAppDocumentDeleteRequested,
+}
+
 func init() {
 	actionToEvent = make(map[ActionType]EventType, len(eventToAction))
 	for e, a := range eventToAction {
 		actionToEvent[a] = e
 	}
+	// Enforce the canonical pins so the derived reverse map cannot shadow them
+	// with a nondeterministically chosen app-level event.
+	for a, e := range canonicalActionEvent {
+		actionToEvent[a] = e
+	}
 }
 
-// MapActionTypeToEventType maps GovernanceEnvelope action types back to protobuf event types.
+// MapActionTypeToEventType maps GovernanceEnvelope action types back to protobuf
+// event types. Action types with a canonical pin (document mutations) resolve
+// deterministically; all others use the reverse map derived from eventToAction.
+// Unmapped action types pass through as-is.
 func MapActionTypeToEventType(actionType ActionType) EventType {
+	if e, ok := canonicalActionEvent[actionType]; ok {
+		return e
+	}
 	if e, ok := actionToEvent[actionType]; ok {
 		return e
 	}

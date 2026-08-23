@@ -315,9 +315,47 @@ func (avs *TestSQLAuditStore) initDatabase() error {
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreInitSchemaFailed, err)
 	}
 
+	if err := migrateReceiptsColumns(db, avs.logger); err != nil {
+		db.Close()
+		return fmt.Errorf("%w: %w", constants.ErrAuditStoreInitSchemaFailed, err)
+	}
+
 	avs.db = db
 
 	avs.logger.Info("Database schema initialized")
+	return nil
+}
+
+// migrateReceiptsColumns adds requestor_user_id and acting_app_id columns to
+// the receipts table for databases created before these columns existed.
+func migrateReceiptsColumns(db *sqliteutil.DB, logger *slog.Logger) error {
+	cols, err := db.QueryWithRetry("PRAGMA table_info(receipts)")
+	if err != nil {
+		return fmt.Errorf("audit_vault: migrate receipts: pragma: %w", err)
+	}
+	defer cols.Close()
+
+	existing := make(map[string]bool)
+	for cols.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := cols.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return fmt.Errorf("audit_vault: migrate receipts: scan: %w", err)
+		}
+		existing[name] = true
+	}
+
+	for _, col := range []string{"requestor_user_id", "acting_app_id"} {
+		if existing[col] {
+			continue
+		}
+		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE receipts ADD COLUMN %s TEXT", col)); err != nil {
+			return fmt.Errorf("audit_vault: migrate receipts: add column %s: %w", col, err)
+		}
+		logger.Info("Audit vault migration: added column", "column", col)
+	}
 	return nil
 }
 
@@ -365,6 +403,8 @@ CREATE TABLE IF NOT EXISTS receipts (
 	transaction_hash TEXT NOT NULL,
 	operator_id TEXT NOT NULL,
 	operator_session_id TEXT,
+	requestor_user_id TEXT,
+	acting_app_id TEXT,
 	action_type TEXT NOT NULL,
 	target_resource TEXT,
 	status TEXT NOT NULL,
@@ -764,10 +804,11 @@ func (avs *TestSQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRe
 	query := `
 	INSERT INTO receipts (
 		transaction_id, transaction_hash, operator_id, operator_session_id,
+		requestor_user_id, acting_app_id,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
 		signer_key_id, signature, timestamp
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(transaction_id) DO UPDATE SET
 		status = excluded.status,
 		result_summary = excluded.result_summary,
@@ -782,6 +823,8 @@ func (avs *TestSQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRe
 		record.TransactionHash,
 		record.OperatorID,
 		sessionID,
+		record.RequestorUserID,
+		record.ActingAppID,
 		record.ActionType,
 		record.TargetResource,
 		record.Status,
@@ -812,6 +855,7 @@ func (avs *TestSQLAuditStore) GetActionReceipt(transactionID string) (*models.Ac
 
 	query := `
 	SELECT transaction_id, transaction_hash, operator_id, operator_session_id,
+		requestor_user_id, acting_app_id,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
 		signer_key_id, signature, timestamp
@@ -825,6 +869,7 @@ func (avs *TestSQLAuditStore) GetActionReceipt(transactionID string) (*models.Ac
 	var sessionID sql.NullString
 	err := avs.db.QueryRowWithRetry(query, transactionID).Scan(
 		&r.TransactionID, &r.TransactionHash, &r.OperatorID, &sessionID,
+		&r.RequestorUserID, &r.ActingAppID,
 		&r.ActionType, &r.TargetResource, &r.Status, &r.ResultSummary,
 		&r.StateRootBefore, &r.StateRootAfter, &executedAtMs,
 		&r.SignerKeyID, &r.Signature, &timestampStr,
@@ -856,6 +901,7 @@ func (avs *TestSQLAuditStore) ListActionReceipts(operatorSessionID string, limit
 	var query strings.Builder
 	query.WriteString(`
 	SELECT transaction_id, transaction_hash, operator_id, operator_session_id,
+		requestor_user_id, acting_app_id,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
 		signer_key_id, signature, timestamp
@@ -882,6 +928,7 @@ func (avs *TestSQLAuditStore) ListActionReceipts(operatorSessionID string, limit
 		var row receiptRow
 		err := r.Scan(
 			&row.record.TransactionID, &row.record.TransactionHash, &row.record.OperatorID, &row.sessionID,
+			&row.record.RequestorUserID, &row.record.ActingAppID,
 			&row.record.ActionType, &row.record.TargetResource, &row.record.Status, &row.record.ResultSummary,
 			&row.record.StateRootBefore, &row.record.StateRootAfter, &row.executedAtMs,
 			&row.record.SignerKeyID, &row.record.Signature, &row.timestampStr,
@@ -915,6 +962,7 @@ func (avs *TestSQLAuditStore) ListActionReceiptsSince(since time.Time, limit int
 
 	query := `
 	SELECT transaction_id, transaction_hash, operator_id, operator_session_id,
+		requestor_user_id, acting_app_id,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
 		signer_key_id, signature, timestamp
@@ -935,6 +983,7 @@ func (avs *TestSQLAuditStore) ListActionReceiptsSince(since time.Time, limit int
 		var row receiptRow
 		err := r.Scan(
 			&row.record.TransactionID, &row.record.TransactionHash, &row.record.OperatorID, &row.sessionID,
+			&row.record.RequestorUserID, &row.record.ActingAppID,
 			&row.record.ActionType, &row.record.TargetResource, &row.record.Status, &row.record.ResultSummary,
 			&row.record.StateRootBefore, &row.record.StateRootAfter, &row.executedAtMs,
 			&row.record.SignerKeyID, &row.record.Signature, &row.timestampStr,

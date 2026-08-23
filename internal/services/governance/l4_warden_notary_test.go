@@ -119,6 +119,28 @@ func TestL4Warden_Notary_FailClosedProofs(t *testing.T) {
 	}
 }
 
+// TestL4Warden_Notary_ForgedActingAppID_RejectedByHashBinding asserts the
+// payload-hash binding guarantee: acting_app_id is included in the
+// transaction hash (GenerateMessageID field 9), so tampering it after the
+// envelope is signed produces a hash mismatch and the envelope is rejected.
+// The shared operator-cert model means g8ee is payload-hash-bound, not
+// transport-bound — this test asserts that guarantee explicitly.
+func TestL4Warden_Notary_ForgedActingAppID_RejectedByHashBinding(t *testing.T) {
+	t.Parallel()
+	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "notary")
+	env := signedEnvelope(t, constants.ActionTypeFileEdit, typedPayload(t, constants.ActionTypeFileEdit), privKey)
+	env.ActingAppId = "g8ee-original"
+	rehash(t, env)
+
+	// Forge: tamper acting_app_id after signing without rehashing.
+	env.ActingAppId = "g8ee-forged"
+
+	_, err := verifier.VerifyEnvelope(context.Background(), env)
+	if !errors.Is(err, ErrTransactionHashMismatch) {
+		t.Fatalf("expected ErrTransactionHashMismatch for forged acting_app_id, got: %v", err)
+	}
+}
+
 // TestNotary_MutationRequiresRealL3Proof guards the AutoApproved removal:
 // a mutation under notary with no L3 proof must fail closed. There is no
 // bypass field to set. This pairs with TestNoSelfSign_ConsensusWithoutDeliberator

@@ -420,44 +420,20 @@ func (rs *OperatorPubSubService) buildHandlers() {
 				rs.logger.Error("A2A call request handler failed", "error", err)
 			}
 		},
-		constants.EventAppCaseCreated: func(ctx context.Context, msg *PubSubCommandMessage) {
+		// Governed document mutations dispatch through the canonical
+		// document-request events. MapActionTypeToEventType resolves both
+		// DOCUMENT_UPDATE and DOCUMENT_DELETE deterministically to these two
+		// events regardless of which app-level event (case/investigation/memory)
+		// originated the envelope, so a single handler per action type is
+		// sufficient and dispatch is stable across repeated calls.
+		constants.EventAppDocumentUpdateRequested: func(ctx context.Context, msg *PubSubCommandMessage) {
 			if _, err := rs.handleDocumentUpdateSync(ctx, msg); err != nil {
-				rs.logger.Error("Document update handler failed (case created)", "error", err)
+				rs.logger.Error("Document update handler failed", "error", err)
 			}
 		},
-		constants.EventAppCaseUpdated: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if _, err := rs.handleDocumentUpdateSync(ctx, msg); err != nil {
-				rs.logger.Error("Document update handler failed (case updated)", "error", err)
-			}
-		},
-		constants.EventAppCaseDeleted: func(ctx context.Context, msg *PubSubCommandMessage) {
+		constants.EventAppDocumentDeleteRequested: func(ctx context.Context, msg *PubSubCommandMessage) {
 			if _, err := rs.handleDocumentDeleteSync(ctx, msg); err != nil {
-				rs.logger.Error("Document delete handler failed (case deleted)", "error", err)
-			}
-		},
-		constants.EventAppMemoryCreated: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if _, err := rs.handleDocumentUpdateSync(ctx, msg); err != nil {
-				rs.logger.Error("Document update handler failed (memory created)", "error", err)
-			}
-		},
-		constants.EventAppMemoryUpdated: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if _, err := rs.handleDocumentUpdateSync(ctx, msg); err != nil {
-				rs.logger.Error("Document update handler failed (memory updated)", "error", err)
-			}
-		},
-		constants.EventAppInvestigationCreated: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if _, err := rs.handleDocumentUpdateSync(ctx, msg); err != nil {
-				rs.logger.Error("Document update handler failed (investigation created)", "error", err)
-			}
-		},
-		constants.EventAppInvestigationUpdated: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if _, err := rs.handleDocumentUpdateSync(ctx, msg); err != nil {
-				rs.logger.Error("Document update handler failed (investigation updated)", "error", err)
-			}
-		},
-		constants.EventAppInvestigationDeleted: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if _, err := rs.handleDocumentDeleteSync(ctx, msg); err != nil {
-				rs.logger.Error("Document delete handler failed (investigation deleted)", "error", err)
+				rs.logger.Error("Document delete handler failed", "error", err)
 			}
 		},
 	}

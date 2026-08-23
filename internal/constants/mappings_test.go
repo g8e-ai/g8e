@@ -89,34 +89,30 @@ func TestMapActionTypeToEventType(t *testing.T) {
 		assert.Equal(t, Event.Operator.PortCheck.Requested, result)
 	})
 
-	t.Run("maps document update to a known app-level event", func(t *testing.T) {
+	t.Run("maps document update deterministically to the canonical update event", func(t *testing.T) {
 		// ActionTypeDocumentUpdate is the canonical action for all app-level
-		// document create/update events. The reverse map (actionToEvent) is
-		// many-to-one, so MapActionTypeToEventType returns one of the valid
-		// app-level events. Verify the result is one of the canonical events
-		// mapped to ActionTypeDocumentUpdate in eventToAction.
+		// document create/update events. Its reverse mapping is pinned to the
+		// canonical EventAppDocumentUpdateRequested event so dispatch is stable
+		// across process restarts, not one of the ambiguous app-level events.
 		result := MapActionTypeToEventType(ActionTypeDocumentUpdate)
-		validEvents := map[EventType]bool{
-			EventAppCaseCreated:              true,
-			EventAppCaseUpdated:              true,
-			EventAppMemoryCreated:            true,
-			EventAppMemoryUpdated:            true,
-			EventAppInvestigationCreated:     true,
-			EventAppInvestigationUpdated:     true,
-		}
-		assert.Contains(t, validEvents, result, "ActionTypeDocumentUpdate must map to a known app-level create/update event")
+		assert.Equal(t, EventAppDocumentUpdateRequested, result)
 	})
 
-	t.Run("maps document delete to a known app-level event", func(t *testing.T) {
-		// ActionTypeDocumentDelete is the canonical action for all app-level
-		// document delete events. The reverse map is many-to-one, so verify
-		// the result is one of the canonical delete events.
+	t.Run("maps document delete deterministically to the canonical delete event", func(t *testing.T) {
+		// ActionTypeDocumentDelete is pinned to the canonical
+		// EventAppDocumentDeleteRequested event for the same determinism reason.
 		result := MapActionTypeToEventType(ActionTypeDocumentDelete)
-		validEvents := map[EventType]bool{
-			EventAppCaseDeleted:          true,
-			EventAppInvestigationDeleted: true,
+		assert.Equal(t, EventAppDocumentDeleteRequested, result)
+	})
+
+	t.Run("document action mapping is stable across many calls", func(t *testing.T) {
+		// Regression guard for the nondeterministic reverse-map defect: repeated
+		// calls must always return the same canonical event for both document
+		// action types.
+		for i := 0; i < 1000; i++ {
+			assert.Equal(t, EventAppDocumentUpdateRequested, MapActionTypeToEventType(ActionTypeDocumentUpdate))
+			assert.Equal(t, EventAppDocumentDeleteRequested, MapActionTypeToEventType(ActionTypeDocumentDelete))
 		}
-		assert.Contains(t, validEvents, result, "ActionTypeDocumentDelete must map to a known app-level delete event")
 	})
 
 	t.Run("eventToAction maps all app-level document create/update events to ActionTypeDocumentUpdate", func(t *testing.T) {

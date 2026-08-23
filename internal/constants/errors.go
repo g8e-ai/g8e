@@ -1072,9 +1072,12 @@ var (
 	ErrHarnessGovKitMissingSign = errors.New("gov kit not initialized (need ensemble + principal)")
 
 	// Agent harness ensemble scenario errors
-	ErrHarnessEnsembleChatFailed      = errors.New("ensemble chat request returned success=false")
-	ErrHarnessEnsembleReceiptTimeout  = errors.New("timed out waiting for expected audit receipt")
-	ErrHarnessEnsembleReceiptFailed   = errors.New("expected audit receipt found but execution status is FAILED")
+	ErrHarnessEnsembleChatFailed       = errors.New("ensemble chat request returned success=false")
+	ErrHarnessEnsembleReceiptTimeout   = errors.New("timed out waiting for expected audit receipt")
+	ErrHarnessEnsembleReceiptFailed    = errors.New("expected audit receipt found but execution status is FAILED")
+	ErrHarnessEnsembleReceiptStale     = errors.New("audit receipt predates the current run (not-before boundary violation)")
+	ErrHarnessEnsembleReceiptUnrelated = errors.New("audit receipt does not correlate to the current run (identity or case/investigation mismatch)")
+	ErrHarnessEnsembleReceiptUnsigned  = errors.New("audit receipt is missing a valid signature")
 
 	// Browser errors
 	ErrBrowserURLEmpty = errors.New("browser URL cannot be empty")

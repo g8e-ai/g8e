@@ -326,6 +326,18 @@ const EventAppMemoryCreated EventType = "g8e.v1.app.memory.created"
 const EventAppMemoryUpdated EventType = "g8e.v1.app.memory.updated"
 const EventOperatorPortCheckRequested EventType = "g8e.v1.operator.port.check.requested"
 
+// Canonical governed-document request events. These are the deterministic
+// EventType values that MapActionTypeToEventType returns for the
+// DOCUMENT_UPDATE and DOCUMENT_DELETE action types. The app-level
+// case/investigation/memory create/update/delete events all collapse to those
+// two action types (see eventToAction in mappings.go), which makes the derived
+// reverse map many-to-one and its result nondeterministic per process start.
+// Dispatching document mutations through these canonical events keeps the
+// EventType stamped on the command message and used for handler dispatch stable
+// across repeated calls.
+const EventAppDocumentUpdateRequested EventType = "g8e.v1.app.document.update.requested"
+const EventAppDocumentDeleteRequested EventType = "g8e.v1.app.document.delete.requested"
+
 // Event.Operator provides hierarchical access to Operator event constants
 type _EventOperatorA2a struct {
 	CallRequested EventType

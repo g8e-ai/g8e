@@ -354,6 +354,8 @@ func buildReceiptRecord(env *govtypes.GovernanceEnvelope, r *operatorv1.ActionRe
 		TransactionHash:   r.TransactionHash,
 		OperatorID:        env.OperatorId,
 		OperatorSessionID: env.OperatorSessionId,
+		RequestorUserID:   env.RequestorUserId,
+		ActingAppID:       env.ActingAppId,
 		ActionType:        constants.ActionType(env.ActionType),
 		TargetResource:    env.TargetResource,
 		Status:            r.Status,
