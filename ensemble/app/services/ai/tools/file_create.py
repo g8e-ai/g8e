@@ -61,6 +61,7 @@ async def handle(
         args=args,
         g8e_context=g8e_context,
         investigation=investigation,
+        request_settings=request_settings,
     )
     logger.info("[FILE_CREATE] Result: %s", result)
     return result

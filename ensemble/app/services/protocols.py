@@ -892,6 +892,7 @@ class FileServiceProtocol(Protocol):
         args: FileEditRequestPayload,
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
+        request_settings: G8eeUserSettings | None = None,
     ) -> FileEditResult:
         raise NotImplementedError
 

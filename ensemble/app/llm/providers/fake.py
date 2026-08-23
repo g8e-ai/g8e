@@ -316,14 +316,90 @@ class FakeProvider(LLMProvider):
                 "lite_llm_settings": lite_llm_settings,
             }
         )
+        text = self._build_lite_response_text(lite_llm_settings)
         return GenerateContentResponse(
             candidates=[
                 Candidate(
-                    content=Content(role="model", parts=[Part(text="Fake lite response.")]),
+                    content=Content(role="model", parts=[Part(text=text)]),
                     finish_reason="STOP",
                 )
             ]
         )
+
+    @staticmethod
+    def _build_lite_response_text(lite_llm_settings: LiteLLMSettings) -> str:
+        """Build a deterministic lite-tier response.
+
+        When a structured ``response_format`` is provided, return a JSON object
+        that satisfies the schema. The schema is inspected for known models
+        (FileOperationRiskAnalysis, ErrorAnalysisResult, CommandRiskAnalysis)
+        and a permissive, low-risk response is produced. When no
+        ``response_format`` is set, return a plain-text fallback.
+        """
+        import json
+
+        rf = getattr(lite_llm_settings, "response_format", None)
+        if rf is None:
+            return "Fake lite response."
+
+        schema = getattr(rf.json_schema, "json_schema_dict", None) or {}
+        properties = schema.get("properties", {}) if isinstance(schema, dict) else {}
+        prop_names = set(properties.keys()) if isinstance(properties, dict) else set()
+
+        # FileOperationRiskAnalysis: risk_level, is_system_file, safe_to_proceed,
+        # blocking_issues, approval_prompt
+        if {"risk_level", "safe_to_proceed"}.issubset(prop_names):
+            return json.dumps(
+                {
+                    "risk_level": "LOW",
+                    "is_system_file": False,
+                    "safe_to_proceed": True,
+                    "blocking_issues": [],
+                    "approval_prompt": None,
+                }
+            )
+
+        # ErrorAnalysisResult: error_category, root_cause, can_auto_fix,
+        # suggested_fix, suggested_command, should_escalate, reasoning, user_message
+        if {"error_category", "root_cause"}.issubset(prop_names):
+            return json.dumps(
+                {
+                    "error_category": "system",
+                    "root_cause": "Fake provider deterministic response",
+                    "can_auto_fix": False,
+                    "suggested_fix": None,
+                    "suggested_command": None,
+                    "should_escalate": False,
+                    "reasoning": "Fake provider does not perform real analysis.",
+                    "user_message": "No action needed.",
+                }
+            )
+
+        # CommandRiskAnalysis and other structured schemas: return a permissive
+        # minimal object with any required enum fields set to their first value
+        # and required bool fields set to False. This is a best-effort fallback
+        # for unknown schemas; callers should add a dedicated branch above when
+        # a specific schema needs a non-default value.
+        fallback: dict[str, Any] = {}
+        required = schema.get("required", []) if isinstance(schema, dict) else []
+        for field_name in required:
+            field_schema = properties.get(field_name, {}) if isinstance(properties, dict) else {}
+            field_type = field_schema.get("type") if isinstance(field_schema, dict) else None
+            if field_type == "boolean":
+                fallback[field_name] = False
+            elif field_type == "integer":
+                fallback[field_name] = 0
+            elif field_type == "number":
+                fallback[field_name] = 0.0
+            elif field_type == "array":
+                fallback[field_name] = []
+            elif field_type == "object":
+                fallback[field_name] = {}
+            elif field_schema.get("enum"):
+                fallback[field_name] = field_schema["enum"][0]
+            else:
+                fallback[field_name] = "fake"
+        return json.dumps(fallback)
 
     async def generate_content(
         self,

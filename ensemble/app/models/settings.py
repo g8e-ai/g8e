@@ -373,7 +373,13 @@ class LLMSettings(_ProtocolLLMSettings):
 
     @property
     def resolved_lite_model(self) -> str | None:
-        """Return the configured lite model, or assistant_model/provider default as fallback."""
+        """Return the configured lite model, or assistant/primary model as fallback.
+
+        The fallback chain is: lite_model → lite_provider default → resolved_assistant_model
+        → resolved_primary_model. This aligns with resolve_model's fallback chain in
+        tribunal/utils.py and means "use the best available model for lite tasks" when
+        neither lite nor assistant is explicitly configured.
+        """
         if self.lite_model:
             return self.lite_model
 
@@ -390,8 +396,8 @@ class LLMSettings(_ProtocolLLMSettings):
             if provider_default:
                 return provider_default
 
-        # Fall back to assistant model (which already falls back to provider default)
-        return self.resolved_assistant_model
+        # Fall back to assistant model, then primary model (best available model for lite tasks)
+        return self.resolved_assistant_model or self.resolved_primary_model
 
     def resolve(
         self,
@@ -478,6 +484,17 @@ class LLMSettings(_ProtocolLLMSettings):
                 endpoint = p_endpoint
             if not model:
                 model = p_model
+
+        # Lite role falls back to assistant then primary when lite is not
+        # configured (no provider and no override). This aligns with
+        # resolved_lite_model's fallback chain and means "use the best available
+        # model for lite tasks." The caller's model_override is honored when
+        # present; otherwise the fallback role's model is used.
+        if role == "lite" and not effective_provider:
+            for fallback_role in ("assistant", "primary"):
+                fb_provider, fb_api_key, fb_endpoint, fb_model = self.resolve(fallback_role)
+                if fb_provider:
+                    return fb_provider, fb_api_key, fb_endpoint, model or fb_model
 
         return effective_provider, api_key, endpoint, model
 

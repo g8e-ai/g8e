@@ -384,7 +384,7 @@ class HeartbeatSnapshotService:
         # subsequent SSE pushes (including approval requests for file edits).
         # There is no connected client to deliver to when the operator is
         # unbound, so skipping the push is correct.
-        if isinstance(event, BackgroundEvent) and not event.web_session_id and not event.cli_session_id:
+        if isinstance(event, BackgroundEvent) and not getattr(event, "web_session_id", None) and not getattr(event, "cli_session_id", None):
             logger.debug(
                 "[HEARTBEAT] Skipping SSE push for unbound operator %s (no routing target)",
                 operator.id,

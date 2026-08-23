@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 
 from app.llm.llm_dataclasses import Content, Part
-from app.llm.llm_types import PrimaryLLMSettings
+from app.llm.llm_types import LiteLLMSettings, PrimaryLLMSettings
 from app.llm.providers.fake import FakeProvider
 
 
@@ -173,3 +173,86 @@ class TestFakeProviderFactoryWiring:
 
         assert LLMProvider.FAKE.value == "fake"
         assert LLMProvider("fake") == LLMProvider.FAKE
+
+
+class TestFakeProviderLiteStructuredResponse:
+    """Verify the fake provider returns schema-valid JSON for lite structured calls."""
+
+    @pytest.mark.asyncio
+    async def test_lite_returns_plain_text_without_response_format(self, provider):
+        settings = LiteLLMSettings()
+        response = await provider.generate_content_lite(
+            "fake-model", _user_content("summarize"), settings
+        )
+        text = response.candidates[0].content.parts[0].text
+        assert text == "Fake lite response."
+
+    @pytest.mark.asyncio
+    async def test_lite_returns_file_risk_analysis_json(self, provider):
+        from app.llm.llm_dataclasses import ResponseFormat
+        from app.models.tool_results import FileOperationRiskAnalysis
+
+        schema = FileOperationRiskAnalysis.model_json_schema()
+        settings = LiteLLMSettings(
+            response_format=ResponseFormat.from_pydantic_schema(schema)
+        )
+        response = await provider.generate_content_lite(
+            "fake-model", _user_content("analyze risk"), settings
+        )
+        text = response.candidates[0].content.parts[0].text
+        import json
+
+        parsed = json.loads(text)
+        assert parsed["risk_level"] == "LOW"
+        assert parsed["safe_to_proceed"] is True
+        assert parsed["blocking_issues"] == []
+        # Round-trip through the pydantic model to confirm schema validity
+        FileOperationRiskAnalysis.model_validate(parsed)
+
+    @pytest.mark.asyncio
+    async def test_lite_returns_error_analysis_json(self, provider):
+        from app.llm.llm_dataclasses import ResponseFormat
+        from app.models.tool_results import ErrorAnalysisResult
+
+        schema = ErrorAnalysisResult.model_json_schema()
+        settings = LiteLLMSettings(
+            response_format=ResponseFormat.from_pydantic_schema(schema)
+        )
+        response = await provider.generate_content_lite(
+            "fake-model", _user_content("analyze error"), settings
+        )
+        text = response.candidates[0].content.parts[0].text
+        import json
+
+        parsed = json.loads(text)
+        assert parsed["error_category"] == "system"
+        assert parsed["can_auto_fix"] is False
+        ErrorAnalysisResult.model_validate(parsed)
+
+    @pytest.mark.asyncio
+    async def test_lite_fallback_for_unknown_schema(self, provider):
+        from app.llm.llm_dataclasses import ResponseFormat
+
+        unknown_schema = {
+            "type": "object",
+            "properties": {
+                "category": {"type": "string", "enum": ["a", "b", "c"]},
+                "count": {"type": "integer"},
+                "enabled": {"type": "boolean"},
+                "tags": {"type": "array"},
+            },
+            "required": ["category", "count", "enabled"],
+        }
+        settings = LiteLLMSettings(
+            response_format=ResponseFormat.from_pydantic_schema(unknown_schema)
+        )
+        response = await provider.generate_content_lite(
+            "fake-model", _user_content("analyze"), settings
+        )
+        text = response.candidates[0].content.parts[0].text
+        import json
+
+        parsed = json.loads(text)
+        assert parsed["category"] == "a"
+        assert parsed["count"] == 0
+        assert parsed["enabled"] is False

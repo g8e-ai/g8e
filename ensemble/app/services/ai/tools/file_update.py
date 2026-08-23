@@ -60,6 +60,7 @@ async def handle(
         args=args,
         g8e_context=g8e_context,
         investigation=investigation,
+        request_settings=request_settings,
     )
     logger.info("[FILE_UPDATE] Result: %s", result)
     return result

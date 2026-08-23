@@ -109,7 +109,7 @@ async def answer_triage_question(
         llm_lite_provider=None,
         llm_primary_model=user_settings.llm.primary_model,
         llm_assistant_model=user_settings.llm.resolved_assistant_model,
-        llm_lite_model=user_settings.llm.resolved_lite_model,
+        llm_lite_model=None,
         _task_manager=chat_task_manager,
         user_settings=user_settings,
     )
@@ -171,7 +171,7 @@ async def skip_triage_questions(
         llm_lite_provider=None,
         llm_primary_model=user_settings.llm.primary_model,
         llm_assistant_model=user_settings.llm.resolved_assistant_model,
-        llm_lite_model=user_settings.llm.resolved_lite_model,
+        llm_lite_model=None,
         _task_manager=chat_task_manager,
         user_settings=user_settings,
     )

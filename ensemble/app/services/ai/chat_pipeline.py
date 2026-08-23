@@ -921,7 +921,7 @@ class ChatPipelineService:
                 }
             )
 
-        lite_provider, lite_api_key, lite_endpoint, lite_model = user_settings.llm.resolve(
+        lite_provider, lite_api_key, lite_endpoint, lite_model = resolved_settings.llm.resolve(
             "lite",
             provider_override=llm_lite_provider,
             api_key_override=llm_lite_api_key,

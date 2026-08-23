@@ -717,8 +717,11 @@ class OperatorCommandService:
         args: FileEditRequestPayload,
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
+        request_settings: G8eeUserSettings | None = None,
     ) -> FileEditResult:
-        return await self._file_service.execute_file_edit(args, g8e_context, investigation)
+        return await self._file_service.execute_file_edit(
+            args, g8e_context, investigation, request_settings=request_settings
+        )
 
     async def execute_port_check(
         self,

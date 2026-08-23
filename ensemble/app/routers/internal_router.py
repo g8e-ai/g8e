@@ -396,7 +396,7 @@ async def internal_chat(
             llm_lite_provider=request.llm_lite_provider,
             llm_primary_model=request.llm_primary_model,
             llm_assistant_model=request.llm_assistant_model,
-            llm_lite_model=request.llm_lite_model or user_settings.llm.resolved_lite_model,
+            llm_lite_model=request.llm_lite_model,
             llm_primary_api_key=request.llm_primary_api_key,
             llm_primary_endpoint=request.llm_primary_endpoint,
             llm_assistant_api_key=request.llm_assistant_api_key,
@@ -493,7 +493,7 @@ async def internal_triage_answer(
         llm_lite_provider=None,
         llm_primary_model=user_settings.llm.primary_model,
         llm_assistant_model=user_settings.llm.resolved_assistant_model,
-        llm_lite_model=user_settings.llm.resolved_lite_model,
+        llm_lite_model=None,
         _task_manager=chat_task_manager,
         user_settings=user_settings,
     )
@@ -565,7 +565,7 @@ async def internal_triage_skip(
         llm_lite_provider=None,
         llm_primary_model=user_settings.llm.primary_model,
         llm_assistant_model=user_settings.llm.resolved_assistant_model,
-        llm_lite_model=user_settings.llm.resolved_lite_model,
+        llm_lite_model=None,
         _task_manager=chat_task_manager,
         user_settings=user_settings,
     )

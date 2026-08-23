@@ -109,6 +109,7 @@ class OperatorFileService:
         args: FileEditRequestPayload,
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
+        request_settings: G8eeUserSettings | None = None,
     ) -> FileEditResult:
         """Orchestrate file operation: resolution -> risk -> approval -> execution."""
         try:
@@ -212,7 +213,7 @@ class OperatorFileService:
                         file_path=file_path,
                         content=args.content or args.new_content,
                         context=FileOperationRiskContext(backup_available=args.create_backup),
-                        settings=G8eeUserSettings(llm=LLMSettings()),
+                        settings=request_settings or G8eeUserSettings(llm=LLMSettings()),
                     )
                     if risk_analysis and not risk_analysis.safe_to_proceed:
                         # Broadcast Warden block to UI
