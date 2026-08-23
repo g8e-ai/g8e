@@ -14,6 +14,7 @@ from app.constants.collections import (
     PLATFORM_SETTINGS_DOC,
     USER_SETTINGS_DOC_PREFIX,
 )
+from app.constants.env_vars import EnvVar
 from app.constants.generated_paths import PathConstants, PortConstants
 from app.models.settings import G8eeAppSettings
 from app.services.infra.settings_service import SettingsService
@@ -22,6 +23,15 @@ from app.services.infra.settings_service import SettingsService
 @pytest.mark.asyncio
 class TestG8eeSettingsOverlayIntegration:
     """Deep integration tests for g8ee settings loading and overlay logic."""
+
+    @pytest.fixture(autouse=True)
+    def _clean_llm_env(self, monkeypatch):
+        """Remove LLM env vars before each test so .env leakage from
+        app.main import does not affect overlay integration tests."""
+        for attr in dir(EnvVar):
+            val = getattr(EnvVar, attr)
+            if isinstance(val, str) and val.startswith("G8E_LLM_"):
+                monkeypatch.delenv(val, raising=False)
 
     @pytest.fixture
     def cache_service(self):

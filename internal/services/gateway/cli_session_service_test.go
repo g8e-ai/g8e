@@ -94,10 +94,10 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 		assert.False(t, stored.AbsoluteExpiresAt.IsZero())
 		assert.False(t, stored.IdleExpiresAt.IsZero())
 
-		// Verify expiry is approximately 1 hour from now
-		expectedExpiry := time.Now().UTC().Add(1 * time.Hour)
+		// Verify expiry is approximately CLISessionTTL from now
+		expectedExpiry := time.Now().UTC().Add(constants.CLISessionTTL)
 		timeDiff := stored.ExpiresAt.Sub(expectedExpiry)
-		assert.Less(t, timeDiff.Abs(), 5*time.Second, "expiry should be approximately 1 hour from now")
+		assert.Less(t, timeDiff.Abs(), 5*time.Second, "expiry should be approximately CLISessionTTL from now")
 	})
 
 	t.Run("Empty SessionID", func(t *testing.T) {

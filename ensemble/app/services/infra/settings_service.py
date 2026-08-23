@@ -10,15 +10,19 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+import os
+
 from app.constants import (
     ErrorCode,
     LogLevel,
+    LLMProvider,
 )
 from app.constants.collections import (
     DB_COLLECTION_SETTINGS,
     PLATFORM_SETTINGS_DOC,
     USER_SETTINGS_DOC_PREFIX,
 )
+from app.constants.env_vars import EnvVar
 from app.constants.generated_paths import PathConstants, PortConstants
 from app.constants.paths import PATHS
 from app.errors import ConfigurationError
@@ -114,7 +118,75 @@ class SettingsService:
         # container boundary (per docs/g8e/guides/build_apps.md § Identity
         # and Authentication).
 
+        # Apply LLM env-var bootstrap defaults (lowest priority). A fresh
+        # deployment can serve chat via env vars alone, without platform DB
+        # configuration or per-request overrides. Priority order:
+        # platform DB settings > per-request overrides > env-var defaults.
+        self._apply_llm_env_defaults(settings.llm)
+
         return settings
+
+    def _apply_llm_env_defaults(self, llm: LLMSettings) -> None:
+        """Populate LLMSettings fields from environment variables.
+
+        This is the lowest-priority bootstrap source. Each field is set only
+        when the env var is present and non-empty; unset env vars leave the
+        field at its model default (None). The platform DB overlay
+        (overlay_platform_data) and per-request overrides both take
+        precedence over these values.
+        """
+        env = os.environ.get
+
+        # Role-specific provider/model/endpoint/api-key
+        provider_str = env(EnvVar.LLM_PRIMARY_PROVIDER)
+        if provider_str:
+            llm.primary_provider = LLMProvider(provider_str)
+        if env(EnvVar.LLM_PRIMARY_MODEL):
+            llm.primary_model = env(EnvVar.LLM_PRIMARY_MODEL)
+        if env(EnvVar.LLM_PRIMARY_ENDPOINT):
+            llm.primary_endpoint = env(EnvVar.LLM_PRIMARY_ENDPOINT)
+        if env(EnvVar.LLM_PRIMARY_API_KEY):
+            llm.primary_api_key = env(EnvVar.LLM_PRIMARY_API_KEY)
+
+        assistant_str = env(EnvVar.LLM_ASSISTANT_PROVIDER)
+        if assistant_str:
+            llm.assistant_provider = LLMProvider(assistant_str)
+        if env(EnvVar.LLM_ASSISTANT_MODEL):
+            llm.assistant_model = env(EnvVar.LLM_ASSISTANT_MODEL)
+        if env(EnvVar.LLM_ASSISTANT_ENDPOINT):
+            llm.assistant_endpoint = env(EnvVar.LLM_ASSISTANT_ENDPOINT)
+        if env(EnvVar.LLM_ASSISTANT_API_KEY):
+            llm.assistant_api_key = env(EnvVar.LLM_ASSISTANT_API_KEY)
+
+        lite_str = env(EnvVar.LLM_LITE_PROVIDER)
+        if lite_str:
+            llm.lite_provider = LLMProvider(lite_str)
+        if env(EnvVar.LLM_LITE_MODEL):
+            llm.lite_model = env(EnvVar.LLM_LITE_MODEL)
+        if env(EnvVar.LLM_LITE_ENDPOINT):
+            llm.lite_endpoint = env(EnvVar.LLM_LITE_ENDPOINT)
+        if env(EnvVar.LLM_LITE_API_KEY):
+            llm.lite_api_key = env(EnvVar.LLM_LITE_API_KEY)
+
+        # Provider-specific endpoint/api-key defaults
+        if env(EnvVar.LLM_OPENAI_API_KEY):
+            llm.openai_api_key = env(EnvVar.LLM_OPENAI_API_KEY)
+        if env(EnvVar.LLM_OPENAI_ENDPOINT):
+            llm.openai_endpoint = env(EnvVar.LLM_OPENAI_ENDPOINT)
+        if env(EnvVar.LLM_OLLAMA_API_KEY):
+            llm.ollama_api_key = env(EnvVar.LLM_OLLAMA_API_KEY)
+        if env(EnvVar.LLM_OLLAMA_ENDPOINT):
+            llm.ollama_endpoint = env(EnvVar.LLM_OLLAMA_ENDPOINT)
+        if env(EnvVar.LLM_ANTHROPIC_API_KEY):
+            llm.anthropic_api_key = env(EnvVar.LLM_ANTHROPIC_API_KEY)
+        if env(EnvVar.LLM_ANTHROPIC_ENDPOINT):
+            llm.anthropic_endpoint = env(EnvVar.LLM_ANTHROPIC_ENDPOINT)
+        if env(EnvVar.LLM_GEMINI_API_KEY):
+            llm.gemini_api_key = env(EnvVar.LLM_GEMINI_API_KEY)
+        if env(EnvVar.LLM_LLAMACPP_API_KEY):
+            llm.llamacpp_api_key = env(EnvVar.LLM_LLAMACPP_API_KEY)
+        if env(EnvVar.LLM_LLAMACPP_ENDPOINT):
+            llm.llamacpp_endpoint = env(EnvVar.LLM_LLAMACPP_ENDPOINT)
 
     def overlay_platform_data(
         self, settings: G8eeAppSettings, app_settings: G8eeAppSettings
@@ -122,15 +194,20 @@ class SettingsService:
         """Overlay platform DB settings onto local bootstrap settings.
 
         Model-driven by design: each nested settings model is overlaid as a
-        whole object, except for AuthSettings which merges. This ensures
-        any new fields or nested models added to G8eeAppSettings
+        whole object, except for AuthSettings and LLMSettings which merge.
+        This ensures any new fields or nested models added to G8eeAppSettings
         automatically flow through without manual code updates here.
 
-        Auth is the only sub-model that merges instead of being replaced,
-        because bootstrap-loaded secrets (verified against the on-disk
-        SecretManager digest) must take precedence over whatever the
-        platform document carries; the DB only fills gaps when the
-        bootstrap volume hasn't surfaced a value yet.
+        Auth merges with bootstrap-wins semantics: bootstrap-loaded secrets
+        (verified against the on-disk SecretManager digest) take precedence
+        over whatever the platform document carries; the DB only fills gaps
+        when the bootstrap volume hasn't surfaced a value yet.
+
+        LLM merges with platform-DB-wins semantics: platform DB values take
+        precedence when present, and env-var bootstrap defaults (lowest
+        priority, already applied in get_local_settings) fill gaps the
+        platform DB leaves unset. Priority order:
+        platform DB settings > per-request overrides > env-var defaults.
         """
         for field_name in type(settings).model_fields:
             if field_name.startswith("_"):
@@ -145,10 +222,26 @@ class SettingsService:
 
             if isinstance(local_value, AuthSettings):
                 # Auth: bootstrap value wins when present; platform DB fills gaps.
-                for auth_field in type(local_value).model_fields:
-                    p_val = getattr(platform_value, auth_field, None)
-                    if p_val and not getattr(local_value, auth_field, None):
-                        setattr(local_value, auth_field, p_val)
+                for sub_field in type(local_value).model_fields:
+                    p_val = getattr(platform_value, sub_field, None)
+                    if p_val and not getattr(local_value, sub_field, None):
+                        setattr(local_value, sub_field, p_val)
+            elif isinstance(local_value, LLMSettings):
+                # LLM: platform DB wins when explicitly set; env-var defaults
+                # (already applied in get_local_settings) fill gaps. LLMSettings
+                # has non-None defaults for endpoint fields (e.g.
+                # ollama_endpoint defaults to OLLAMA_DEFAULT_ENDPOINT), so a
+                # platform DB document that omits LLM still carries those
+                # defaults. Only override the local/env value when the
+                # platform value differs from the model default — a platform
+                # value equal to the default means the DB didn't set it.
+                # Priority: platform DB > per-request overrides > env-var defaults.
+                llm_defaults = LLMSettings()
+                for sub_field in type(local_value).model_fields:
+                    p_val = getattr(platform_value, sub_field, None)
+                    default_val = getattr(llm_defaults, sub_field, None)
+                    if p_val is not None and p_val != default_val:
+                        setattr(local_value, sub_field, p_val)
             else:
                 # Whole-object overlay for all other nested models.
                 setattr(settings, field_name, platform_value)

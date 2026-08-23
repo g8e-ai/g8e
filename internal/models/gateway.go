@@ -226,24 +226,24 @@ type SSETruncationEvent struct {
 	Limit   int    `json:"limit"`
 }
 
-// SSEPushResponse is the typed response for POST /api/internal/sse/push.
+// SSEPushResponse is the typed response for POST /api/v1/sse/push.
 type SSEPushResponse struct {
 	Success   bool `json:"success"`
 	Delivered int  `json:"delivered"`
 }
 
-// SSEEventsResponse is the typed response for GET /api/internal/sse/events.
+// SSEEventsResponse is the typed response for GET /api/v1/sse/events.
 type SSEEventsResponse struct {
 	Events []SSEEventRow `json:"events"`
 	Count  int           `json:"count"`
 }
 
-// SSEEventsCountResponse is the typed response for GET /api/internal/sse/events/count.
+// SSEEventsCountResponse is the typed response for GET /api/v1/sse/events/count.
 type SSEEventsCountResponse struct {
 	Count int64 `json:"count"`
 }
 
-// SSEEventsWipeResponse is the typed response for DELETE /api/internal/sse/events.
+// SSEEventsWipeResponse is the typed response for DELETE /api/v1/sse/events.
 type SSEEventsWipeResponse struct {
 	Deleted int64 `json:"deleted"`
 }
