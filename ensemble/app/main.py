@@ -28,8 +28,11 @@ import os
 from typing import cast
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+load_dotenv(override=False)
 
 from .clients.blob_client import BlobClient
 from .clients.db_client import DBClient
@@ -81,6 +84,7 @@ from .logging import setup_logging
 from .routers import chat_router, health_router
 from .routers.internal_router import router as internal_router
 from .middleware.exception_handlers import setup_exception_handlers
+from .middleware.http_context import G8eHttpContextMiddleware
 from .services.cache.cache_aside import CacheAsideService
 from .errors import ConfigurationError
 from .services.infra.app_enrollment_service import AppEnrollmentService
@@ -327,6 +331,8 @@ def _build_app() -> FastAPI:
     )
 
     setup_exception_handlers(application)
+
+    application.add_middleware(G8eHttpContextMiddleware)
 
     application.add_middleware(
         CORSMiddleware,

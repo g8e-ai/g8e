@@ -95,6 +95,15 @@ func ensembleChatRequest(persona clientpkg.Persona, message string) clientpkg.En
 		UserID:          persona.UserID,
 		SourceComponent: "CLIENT",
 	}
+	if kit != nil && kit.OperatorID != "" && kit.OperatorSessionID != "" {
+		ctx.BoundOperators = []clientpkg.EnsembleBoundOperator{
+			{
+				OperatorID:        kit.OperatorID,
+				OperatorSessionID: kit.OperatorSessionID,
+				Status:            string(constants.OperatorStatusBound),
+			},
+		}
+	}
 	return clientpkg.EnsembleChatRequest{
 		Context:            ctx,
 		Message:            message,

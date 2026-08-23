@@ -47,6 +47,9 @@ class EventService(EventServiceProtocol):
             event_type=event_type,
             payload=data,
             task_id=task_id,
+            user_id=getattr(g8e_context, "user_id", "") or "",
+            investigation_id=getattr(g8e_context, "investigation_id", None),
+            case_id=getattr(g8e_context, "case_id", None),
         )
         await self.publish(event)
 

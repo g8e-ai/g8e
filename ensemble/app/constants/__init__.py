@@ -361,10 +361,12 @@ from g8e.constants import (
     PROXY_USER_ID_HEADER as X_PROXY_USER_ID,
 )
 
-# X_PROXY_USER_EMAIL is ensemble-local; the g8e protocol package does not
-# define a proxy user email header. The ensemble's AuthService reads it from
-# reverse-proxy headers when present.
+# X_PROXY_USER_EMAIL, X_PROXY_CLI_SESSION_ID, and X_PROXY_WEB_SESSION_ID are ensemble-local;
+# the g8e protocol package does not define these proxy header constants.
+# The ensemble's AuthService reads them from reverse-proxy headers when present.
 X_PROXY_USER_EMAIL = "X-Proxy-User-Email"
+X_PROXY_CLI_SESSION_ID = "X-Proxy-CLI-Session-Id"
+X_PROXY_WEB_SESSION_ID = "X-Proxy-Web-Session-Id"
 
 __all__ = [
     "ACCEPT",
@@ -554,9 +556,11 @@ __all__ = [
     "WEB_SESSION_ID",
     "X_ACCEL_BUFFERING",
     "X_FORWARDED_FOR",
+    "X_PROXY_CLI_SESSION_ID",
     "X_PROXY_ORGANIZATION_ID",
     "X_PROXY_USER_EMAIL",
     "X_PROXY_USER_ID",
+    "X_PROXY_WEB_SESSION_ID",
     "AISource",
     "AITaskId",
     "APIKeyStatus",

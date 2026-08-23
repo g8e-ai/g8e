@@ -32,18 +32,28 @@ type EnsembleChatRequest struct {
 	LLMPrimaryEndpoint string `json:"llm_primary_endpoint,omitempty"`
 }
 
+// EnsembleBoundOperator mirrors the Python BoundOperator model in the
+// RequestContext. The harness passes bound operators explicitly as an intent
+// signal scoping which operators the AI can act through.
+type EnsembleBoundOperator struct {
+	OperatorID        string `json:"operator_id"`
+	OperatorSessionID string `json:"operator_session_id,omitempty"`
+	Status            string `json:"status,omitempty"`
+}
+
 // EnsembleRequestContext is the typed RequestContext the ensemble expects in
 // the chat body. source_component is always "CLIENT" for harness-driven
 // requests; the validator requires user_id and either web_session_id or
 // cli_session_id for that source.
 type EnsembleRequestContext struct {
-	WebSessionID    string `json:"web_session_id,omitempty"`
-	CLISessionID    string `json:"cli_session_id,omitempty"`
-	UserID          string `json:"user_id,omitempty"`
-	OrganizationID  string `json:"organization_id,omitempty"`
-	CaseID          string `json:"case_id,omitempty"`
-	InvestigationID string `json:"investigation_id,omitempty"`
-	SourceComponent string `json:"source_component"`
+	WebSessionID    string                  `json:"web_session_id,omitempty"`
+	CLISessionID    string                  `json:"cli_session_id,omitempty"`
+	UserID          string                  `json:"user_id,omitempty"`
+	OrganizationID  string                  `json:"organization_id,omitempty"`
+	CaseID          string                  `json:"case_id,omitempty"`
+	InvestigationID string                  `json:"investigation_id,omitempty"`
+	BoundOperators  []EnsembleBoundOperator `json:"bound_operators,omitempty"`
+	SourceComponent string                  `json:"source_component"`
 }
 
 // EnsembleResourceCreation controls inline case/investigation creation. When

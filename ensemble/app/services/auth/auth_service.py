@@ -17,9 +17,12 @@ from app.constants import (
     AuthMethod,
     CLI_SESSION_ID,
     G8EE_COMPONENT,
+    WEB_SESSION_ID,
+    X_PROXY_CLI_SESSION_ID,
     X_PROXY_ORGANIZATION_ID,
     X_PROXY_USER_EMAIL,
     X_PROXY_USER_ID,
+    X_PROXY_WEB_SESSION_ID,
 )
 from app.errors import AuthenticationError
 from app.models.auth import AuthenticatedUser
@@ -57,12 +60,23 @@ class AuthService:
         user = None
 
         if proxy_user_id and proxy_user_email:
+            proxy_cli_session_id = request.headers.get(X_PROXY_CLI_SESSION_ID) or request.headers.get(CLI_SESSION_ID)
+            proxy_web_session_id = request.headers.get(X_PROXY_WEB_SESSION_ID) or request.headers.get(WEB_SESSION_ID)
+            g8e_context = getattr(request.state, "g8e_context", None)
+            if g8e_context:
+                if not proxy_cli_session_id and g8e_context.cli_session_id:
+                    proxy_cli_session_id = g8e_context.cli_session_id
+                if not proxy_web_session_id and g8e_context.web_session_id:
+                    proxy_web_session_id = g8e_context.web_session_id
+
             logger.debug(
                 "[AuthService] Authenticated via proxy headers",
                 extra={
                     "user_id": proxy_user_id,
                     "email": proxy_user_email,
                     "organization_id": proxy_org_id,
+                    "cli_session_id": proxy_cli_session_id,
+                    "web_session_id": proxy_web_session_id,
                 },
             )
             user = AuthenticatedUser(
@@ -70,6 +84,8 @@ class AuthService:
                 user_id=proxy_user_id,
                 email=proxy_user_email,
                 organization_id=proxy_org_id,
+                cli_session_id=proxy_cli_session_id,
+                web_session_id=proxy_web_session_id,
                 auth_method=AuthMethod.PROXY,
             )
         else:
@@ -105,9 +121,9 @@ class AuthService:
             raise AuthenticationError("Authentication required", component=G8EE_COMPONENT)
 
         # [PIVOT] Validate session bindings for CLI sessions (Plan §4.6)
-        # If a CLI session ID is provided, it must be bound to the authenticated
-        # operator session. This prevents cross-session routing leaks.
-        if user.cli_session_id:
+        # If a CLI session ID is provided for an operator session, it must be bound to the
+        # authenticated operator session. This prevents cross-session routing leaks.
+        if user.auth_method == AuthMethod.OPERATOR_SESSION and user.cli_session_id:
             if not user.operator_session_id:
                 raise AuthenticationError(
                     "CLI session requires operator session", component=G8EE_COMPONENT
