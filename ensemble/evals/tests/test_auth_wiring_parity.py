@@ -30,7 +30,7 @@ from pathlib import Path
 
 import pytest
 
-from g8e.generated_paths import PathConstants, PortConstants
+from app.constants.generated_paths import PathConstants, PortConstants
 from g8e_evals.transport import (
     SESSION_COOKIE_NAME,
     SOURCE_COMPONENT_CLIENT,
@@ -38,7 +38,7 @@ from g8e_evals.transport import (
 )
 from app.models.http_context import BoundOperator
 from app.constants import G8EE_COMPONENT
-from app.constants.api_paths import API_PATHS
+from app.constants.api_paths import API_PATHS, GatewayAPIPaths
 
 
 import sys
@@ -147,13 +147,19 @@ def test_api_path_parity_g8ee_chat(fake_pki):
     assert proto_path == py_path
 
 
-def test_api_path_parity_client_sse_stream(fake_pki):
-    """Ensure Python InternalAPIPaths matches protocol constants for CLIENT_SSE_STREAM."""
-    py_path = InternalAPIPaths.CLIENT_SSE_STREAM
-    proto_path = API_PATHS["client_full"]["sse_stream"]
+def test_api_path_parity_gateway_sse_stream():
+    """SSE stream path must match the gateway's canonical route."""
+    assert GatewayAPIPaths.SSE_STREAM == "/api/v1/sse/stream"
 
-    assert py_path == "/api/internal/sse/stream"
-    assert proto_path == py_path
+
+def test_api_path_parity_gateway_sse_events():
+    """SSE events path must match the gateway's canonical route."""
+    assert GatewayAPIPaths.SSE_EVENTS == "/api/v1/sse/events"
+
+
+def test_api_path_parity_gateway_sse_push():
+    """SSE push path must match the gateway's canonical route."""
+    assert GatewayAPIPaths.SSE_PUSH == "/api/v1/sse/push"
 
 
 def test_configurable_contexts_match_when_set(fake_pki):

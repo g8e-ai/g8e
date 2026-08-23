@@ -3,9 +3,7 @@
   "operator_prefix": "/api",
   "client": {
     "chat": "/api/v1/chat",
-    "health": "/api/v1/health",
-    "sse_events": "/api/v1/internal/sse/events",
-    "sse_stream": "/api/v1/internal/sse/stream"
+    "health": "/api/v1/health"
   },
   "mcp_endpoint": "/mcp",
   "a2a_call": "/api/v1/a2a/call",

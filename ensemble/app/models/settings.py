@@ -95,11 +95,13 @@ class AuthSettings(G8eBaseModel):
 class ComponentURLsSettings(G8eBaseModel):
     """Internal and external component URL configuration.
 
-    The internal SSE bridge (`/api/internal/sse/push`, `/api/internal/sse/events`)
-    lives on the Operator's mTLS HTTP gateway (default from paths.json), so ``client_url``
-    defaults to that gateway. The CLI / BYO frontends consume events from the
-    same host. Override with the ``G8E_DASHBOARD_URL`` env var if you front the
-    Operator behind a different ingress.
+    The SSE event bridge (`/api/v1/sse/push`, `/api/v1/sse/events`,
+    `/api/v1/sse/stream`) lives on the Governance Gateway's HTTPS surface.
+    ``client_url`` is the base URL the internal HTTP client uses for SSE push,
+    intent grant/revoke, and operator-link creation — all gateway endpoints.
+    It defaults to the gateway's HTTPS port. Override with the
+    ``G8E_GATEWAY_URL`` env var when the gateway is behind a different ingress
+    or hostname (e.g. ``https://g8e.local:8443`` in the unified Docker stack).
     """
 
     g8ee_url: str = Field(
@@ -114,7 +116,7 @@ class ComponentURLsSettings(G8eBaseModel):
     client_url: str = Field(
         default_factory=lambda: (
             os.environ.get(
-                EnvVar.DASHBOARD_URL,
+                EnvVar.GATEWAY_URL,
                 f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}",
             )
             or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}"

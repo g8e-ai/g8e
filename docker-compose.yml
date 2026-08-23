@@ -136,6 +136,7 @@ services:
       - g8e-operator-data:/operator-state:ro
     environment:
       - G8E_GATEWAY_HTTP_URL=http://g8e.local:8080
+      - G8E_GATEWAY_URL=https://g8e.local:8443
       - G8E_OPERATOR_URL=https://g8e.local:8443
       - G8E_OPERATOR_PUBSUB_URL=wss://g8e.local:8443
       - G8E_RUNTIME_DIR=/root/.g8e

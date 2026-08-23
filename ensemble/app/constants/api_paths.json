@@ -4,20 +4,14 @@
     "create_operator_link": "/operators/device-link/create",
     "grant_intent": "/operators/{operator_id}/intents/grant",
     "health": "/health",
-    "revoke_intent": "/operators/{operator_id}/intents/revoke",
-    "sse_events": "/internal/sse/events",
-    "sse_push": "/internal/sse/push",
-    "sse_stream": "/internal/sse/stream"
+    "revoke_intent": "/operators/{operator_id}/intents/revoke"
   },
   "client_full": {
     "chat": "/api/chat",
     "create_operator_link": "/api/operators/device-link/create",
     "grant_intent": "/api/operators/{operator_id}/intents/grant",
     "health": "/api/health",
-    "revoke_intent": "/api/operators/{operator_id}/intents/revoke",
-    "sse_events": "/api/internal/sse/events",
-    "sse_push": "/api/internal/sse/push",
-    "sse_stream": "/api/internal/sse/stream"
+    "revoke_intent": "/api/operators/{operator_id}/intents/revoke"
   },
   "g8ee": {
     "auth_generate_key": "/auth/api-key/generate",

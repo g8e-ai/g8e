@@ -108,19 +108,28 @@ async def deliver_via_sse(
 
         Centralizes the (investigation_id, web_session_id, cli_session_id, case_id, user_id)
         binding so new events can't accidentally drop a routing field.
-        No-op when both session IDs are None.
+        No-op when both session IDs are None. SSE push failures are logged as
+        warnings — SSE is a side-channel for UI updates and a push failure
+        during streaming must not abort the chat.
         """
         if not has_sse:
             return
-        await event_service.publish_investigation_event(
-            investigation_id=investigation_id,
-            event_type=event_type,
-            payload=payload,
-            web_session_id=web_session_id,
-            cli_session_id=cli_session_id,
-            case_id=case_id,
-            user_id=user_id,
-        )
+        try:
+            await event_service.publish_investigation_event(
+                investigation_id=investigation_id,
+                event_type=event_type,
+                payload=payload,
+                web_session_id=web_session_id,
+                cli_session_id=cli_session_id,
+                case_id=case_id,
+                user_id=user_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "[SSE] Push failed for %s (non-blocking): %s",
+                event_type,
+                exc,
+            )
 
     if has_sse:
         logger.info(

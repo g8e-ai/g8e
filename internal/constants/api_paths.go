@@ -150,10 +150,8 @@ var APIPaths = struct {
 	InternalPrefix: "/api/v1",
 	OperatorPrefix: "/api",
 	Client: map[string]string{
-		"chat":       "/api/v1/chat",
-		"health":     "/api/v1/health",
-		"sse_events": "/api/v1/internal/sse/events",
-		"sse_stream": "/api/v1/internal/sse/stream",
+		"chat":   "/api/v1/chat",
+		"health": "/api/v1/health",
 	},
 	// MCP routes
 	MCPEndpoint: "/mcp",

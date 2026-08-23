@@ -10,8 +10,8 @@
 Verifies that:
 - ``GatewayAPIPaths`` values match ``g8e.constants.API_PATHS`` exactly
 - ``InternalAPIPaths`` client paths are all accessible
-- Previously-missing client paths (``sse_push``, ``grant_intent``,
-  ``revoke_intent``, ``create_operator_link``) are now defined
+- SSE paths are sourced from ``GatewayAPIPaths`` (the gateway's canonical
+  routes at ``/api/v1/sse/*``), not from the stale ``client`` map
 - ``governance_client.py`` no longer hardcodes the governance envelopes URL
 """
 
@@ -59,10 +59,22 @@ def test_gateway_api_paths_sse_push_value():
     assert GatewayAPIPaths.SSE_PUSH == "/api/v1/sse/push"
 
 
-def test_internal_api_paths_client_sse_push_exists():
-    """CLIENT_SSE_PUSH must be accessible (was previously missing)."""
-    assert InternalAPIPaths.CLIENT_SSE_PUSH == "/api/internal/sse/push"
-    assert InternalAPIPaths.FULL_CLIENT_SSE_PUSH == "/api/internal/sse/push"
+def test_gateway_api_paths_sse_events_value():
+    assert GatewayAPIPaths.SSE_EVENTS == "/api/v1/sse/events"
+
+
+def test_gateway_api_paths_sse_stream_value():
+    assert GatewayAPIPaths.SSE_STREAM == "/api/v1/sse/stream"
+
+
+def test_internal_api_paths_client_sse_paths_removed():
+    """SSE paths must not be in the client map — they are gateway routes."""
+    assert "sse_push" not in API_PATHS["client"]
+    assert "sse_events" not in API_PATHS["client"]
+    assert "sse_stream" not in API_PATHS["client"]
+    assert "sse_push" not in API_PATHS.get("client_full", {})
+    assert "sse_events" not in API_PATHS.get("client_full", {})
+    assert "sse_stream" not in API_PATHS.get("client_full", {})
 
 
 def test_internal_api_paths_client_grant_intent_exists():
@@ -109,7 +121,7 @@ def test_validate_api_paths_sync_passes():
 def test_api_paths_json_client_section_has_all_expected_keys():
     """api_paths.json client section must contain all keys referenced by internal_http_client."""
     client_keys = set(API_PATHS["client"].keys())
-    expected = {"chat", "health", "sse_events", "sse_stream", "sse_push",
+    expected = {"chat", "health",
                 "grant_intent", "revoke_intent", "create_operator_link"}
     assert expected.issubset(client_keys), (
         f"Missing client paths in api_paths.json: {expected - client_keys}"

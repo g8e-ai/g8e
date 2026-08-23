@@ -23,13 +23,13 @@ class EventService(EventServiceProtocol):
         self._internal_http_client = internal_http_client
 
     async def publish(self, event: SessionEvent | BackgroundEvent) -> str:
-        """Publish a session or background event."""
-        try:
-            await self._internal_http_client.push_sse_event(event)
-            return getattr(event, "id", "event-id")
-        except Exception as e:
-            logger.error(f"Failed to publish event: {e}")
-            return "error-id"
+        """Publish a session or background event.
+
+        Raises the underlying exception on failure so callers can propagate
+        push errors to the user instead of silently logging success.
+        """
+        await self._internal_http_client.push_sse_event(event)
+        return getattr(event, "id", "event-id")
 
     async def publish_command_event(
         self,

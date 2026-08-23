@@ -13,6 +13,7 @@ from app.constants import (
     DEFAULT_HTTP_CLIENT_TIMEOUT,
     DEFAULT_MAX_RETRIES,
     G8EE_COMPONENT,
+    GatewayAPIPaths,
     InternalAPIPaths,
     UNKNOWN_ERROR_MESSAGE,
 )
@@ -135,7 +136,7 @@ class InternalHttpClient:
         self._ensure_mtls()
         try:
             response = await self._http.post(
-                InternalAPIPaths.CLIENT_SSE_PUSH,
+                GatewayAPIPaths.SSE_PUSH,
                 json_data=wire_model,
             )
         except Exception as e:

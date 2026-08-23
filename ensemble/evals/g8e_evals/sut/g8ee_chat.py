@@ -23,7 +23,7 @@ the same code paths a real user hits via `./g8e chat send` - no shortcuts.
 Event Streaming
 ---------------
 This SUT consumes agent events via a real Server-Sent Events (SSE) stream
-from the Operator's `/api/internal/sse/stream` endpoint. The stream:
+from the gateway's `/api/v1/sse/stream` endpoint. The stream:
 
   - Replays historical events from the buffer (via `since_id` cursor).
   - Pushes new events in real-time via the Operator's PubSub broker.
@@ -55,7 +55,7 @@ from app.models.internal_api import (
 )
 from app.models.http_context import RequestContext
 from app.models.settings import G8eeUserSettings
-from app.constants.api_paths import API_PATHS
+from app.constants.api_paths import API_PATHS, GatewayAPIPaths
 from g8e_evals.harness import BindingType, Response, SUTConfig, Task
 from g8e_evals.models import ActionReceipt
 from g8e_evals.sut.wire import SSEWireEnvelope
@@ -331,7 +331,7 @@ class G8eeChatSUT:
 
     async def _current_cursor(self, client: httpx.AsyncClient) -> int:
         """Return the highest SSE event id currently in the operator buffer for our session."""
-        path = API_PATHS["client_full"]["sse_events"]
+        path = GatewayAPIPaths.SSE_EVENTS
         try:
             resp = await client.get(
                 f"{self.env.operator_url}{path}",
@@ -372,7 +372,7 @@ class G8eeChatSUT:
             "since_id": since_id,
         }
 
-        path = API_PATHS["client_full"]["sse_stream"]
+        path = GatewayAPIPaths.SSE_STREAM
 
         logger.info("[SSE] Draining events for investigation_id=%s since_id=%d", investigation_id, since_id)
 
