@@ -9,7 +9,6 @@ package serve
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -616,41 +615,15 @@ func TestResolveLatticeOpt(t *testing.T) {
 	})
 }
 
-func TestClassifyConfigLoadError_PostureRequired_ReturnsEnrollmentPendingExitCode(t *testing.T) {
-	wrapped := fmt.Errorf("config: %w", constants.ErrPostureRequired)
-	exitCode, actionable := classifyConfigLoadError(wrapped)
-	assert.Equal(t, constants.ExitEnrollmentPending, exitCode,
-		"posture-required errors should return ExitEnrollmentPending, not ExitConfigError")
-	assert.NotEmpty(t, actionable, "posture-required errors should produce an actionable message")
-	assert.Contains(t, actionable, "pending-platform-enrollments")
-	assert.Contains(t, actionable, "approve-platform-enrollment")
-	assert.Contains(t, actionable, "<request-id>")
-}
-
-func TestClassifyConfigLoadError_PostureRequired_UnwrappableFromDeepWrap(t *testing.T) {
-	deepWrap := fmt.Errorf("operator startup: load config: %w",
-		fmt.Errorf("inner: %w", constants.ErrPostureRequired))
-	exitCode, actionable := classifyConfigLoadError(deepWrap)
-	assert.Equal(t, constants.ExitEnrollmentPending, exitCode)
-	assert.NotEmpty(t, actionable)
-}
-
 func TestClassifyConfigLoadError_NonPostureError_ReturnsConfigError(t *testing.T) {
 	exitCode, actionable := classifyConfigLoadError(errors.New("some other config error"))
 	assert.Equal(t, constants.ExitConfigError, exitCode,
-		"non-posture errors should return ExitConfigError")
-	assert.Empty(t, actionable, "non-posture errors should not produce an actionable message")
+		"all config.Load errors should return ExitConfigError")
+	assert.Empty(t, actionable, "config errors should not produce an actionable message")
 }
 
 func TestClassifyConfigLoadError_NilError_ReturnsConfigError(t *testing.T) {
 	exitCode, actionable := classifyConfigLoadError(nil)
 	assert.Equal(t, constants.ExitConfigError, exitCode)
 	assert.Empty(t, actionable)
-}
-
-func TestClassifyConfigLoadError_PostureRequired_MessageIsActionable(t *testing.T) {
-	wrapped := fmt.Errorf("config: %w", constants.ErrPostureRequired)
-	_, actionable := classifyConfigLoadError(wrapped)
-	assert.Contains(t, actionable, "Platform enrollment pending owner approval")
-	assert.Contains(t, actionable, "restart the operator")
 }

@@ -464,39 +464,28 @@ func TestResolveCertPath_OnlyClientCertExists(t *testing.T) {
 // classifyConfigLoadError — integration with real config.Load
 // ---------------------------------------------------------------------------
 
-// TestClassifyConfigLoadError_RealConfigLoadPostureRequired verifies the
-// integration between config.Load (which returns ErrPostureRequired when no
-// posture is supplied) and classifyConfigLoadError (which maps that to
-// ExitEnrollmentPending with an actionable message). This simulates the
-// operator startup path where credentials exist but the gateway has not
-// approved the platform enrollment posture: config.Load fails, and the
-// operator must exit with a clear recovery instruction rather than a
-// generic crash-loop.
-func TestClassifyConfigLoadError_RealConfigLoadPostureRequired(t *testing.T) {
+// TestClassifyConfigLoadError_RealConfigLoadNoPosture_Succeeds verifies that
+// the operator no longer requires config posture to start. config.Load with
+// an empty posture succeeds (the operator reads posture per-envelope from
+// GovernanceEnvelope.Posture at L4 verification time). classifyConfigLoadError
+// is never reached on this path.
+func TestClassifyConfigLoadError_RealConfigLoadNoPosture_Succeeds(t *testing.T) {
 	opts := ServeOperatorOptions{
 		Endpoint:   "127.0.0.1",
 		WorkingDir: t.TempDir(),
 	}
 	loadOpts := buildOperatorLoadOptions(opts, resolveOperatorEndpoint(opts.Endpoint), opts.WorkingDir)
-	assert.Empty(t, loadOpts.Posture, "precondition: no posture supplied (enrollment pending)")
+	assert.Empty(t, loadOpts.Posture, "precondition: no posture supplied (operator reads posture per-envelope)")
 
-	_, err := config.Load(loadOpts)
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrPostureRequired),
-		"config.Load with empty posture should return ErrPostureRequired, got: %v", err)
-
-	exitCode, actionable := classifyConfigLoadError(err)
-	assert.Equal(t, constants.ExitEnrollmentPending, exitCode,
-		"real config.Load posture-required error should classify as ExitEnrollmentPending")
-	assert.NotEmpty(t, actionable)
-	assert.Contains(t, actionable, "pending-platform-enrollments")
-	assert.Contains(t, actionable, "approve-platform-enrollment")
+	cfg, err := config.Load(loadOpts)
+	require.NoError(t, err, "config.Load with empty posture should succeed (operator reads posture per-envelope)")
+	require.NotNil(t, cfg)
+	assert.Empty(t, cfg.Posture, "cfg.Posture should be empty when no posture was supplied")
 }
 
 // TestClassifyConfigLoadError_RealConfigLoadWithPosture_Succeeds verifies
-// the positive half of the pending-then-approved flow: when a posture IS
-// supplied (simulating post-approval restart), config.Load succeeds and
-// classifyConfigLoadError is never reached.
+// the positive half: when a posture IS supplied (informational, e.g. from
+// reauth), config.Load succeeds and the posture is preserved on the config.
 func TestClassifyConfigLoadError_RealConfigLoadWithPosture_Succeeds(t *testing.T) {
 	opts := ServeOperatorOptions{
 		Endpoint:   "127.0.0.1",
@@ -504,10 +493,10 @@ func TestClassifyConfigLoadError_RealConfigLoadWithPosture_Succeeds(t *testing.T
 		Posture:    "doctrine",
 	}
 	loadOpts := buildOperatorLoadOptions(opts, resolveOperatorEndpoint(opts.Endpoint), opts.WorkingDir)
-	assert.NotEmpty(t, loadOpts.Posture, "precondition: posture supplied (enrollment approved)")
+	assert.NotEmpty(t, loadOpts.Posture, "precondition: posture supplied (informational)")
 
 	cfg, err := config.Load(loadOpts)
-	require.NoError(t, err, "config.Load with a posture should succeed (post-approval restart)")
+	require.NoError(t, err, "config.Load with a posture should succeed")
 	require.NotNil(t, cfg)
 	assert.Equal(t, config.GatewayPosture("doctrine"), cfg.Posture)
 }
