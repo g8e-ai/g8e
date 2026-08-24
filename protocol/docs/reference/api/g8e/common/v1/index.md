@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [g8e/common/v1/common.proto](#g8e_common_v1_common-proto)
+    - [CommandIntent](#g8e-common-v1-CommandIntent)
     - [GovernanceEnvelope](#g8e-common-v1-GovernanceEnvelope)
     - [GovernanceMetadata](#g8e-common-v1-GovernanceMetadata)
     - [L1Metadata](#g8e-common-v1-L1Metadata)
@@ -29,6 +30,37 @@
 <p align="right"><a href="#top">Top</a></p>
 
 ## g8e/common/v1/common.proto
+
+
+
+<a name="g8e-common-v1-CommandIntent"></a>
+
+### CommandIntent
+CommandIntent is the pre-governance command intent published by an app
+workload (e.g. the ensemble) to a cmd:&lt;operator_id&gt;:&lt;operator_session_id&gt;
+channel. The gateway decodes it via protojson, validates the target
+operator session, fetches the current state Merkle root, and constructs
+the governed GovernanceEnvelope. Co-located with GovernanceEnvelope in
+commonv1 so all core transaction lifecycle models share one package.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| operator_id | [string](#string) |  | Identity &amp; routing |
+| operator_session_id | [string](#string) |  |  |
+| requestor_user_id | [string](#string) |  |  |
+| event_type | [string](#string) |  | Intent classification |
+| action_type | [string](#string) |  |  |
+| target_resource | [string](#string) |  |  |
+| payload | [bytes](#bytes) |  | Payload: serialized operator protobuf bytes (e.g., CommandRequested, FileEditRequested) |
+| case_id | [string](#string) |  | Application context |
+| investigation_id | [string](#string) |  |  |
+| task_id | [string](#string) |  |  |
+| web_session_id | [string](#string) |  |  |
+| cli_session_id | [string](#string) |  |  |
+
+
+
 
 
 

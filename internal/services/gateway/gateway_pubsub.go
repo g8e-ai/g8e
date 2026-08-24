@@ -8,7 +8,6 @@
 package gateway
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -21,22 +20,12 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/protocol"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
 )
-
-// publishACLValidator resolves an operator session ID to the operator
-// document. AuthService implements this; the interface makes the pubsub
-// handler's dependency on auth explicit and testable. It mirrors
-// operatorSessionValidator in dispatch_service.go but is declared here so
-// the pubsub package does not import the dispatch service's private
-// interface.
-type publishACLValidator interface {
-	ValidateOperatorSession(operatorSessionID string) (*models.OperatorDocumentGo, error)
-}
 
 // GatewayWebSocketHandler manages WebSocket-based publish/subscribe channels.
 type GatewayWebSocketHandler struct {
@@ -67,7 +56,7 @@ type GatewayWebSocketHandler struct {
 
 	// sessionValidator resolves operator session IDs for command intent
 	// relay. Nil disables the cmd: relay path.
-	sessionValidator publishACLValidator
+	sessionValidator operatorSessionValidator
 }
 
 // dropOldestBuf is a bounded buffer that enforces drop-oldest back-pressure
@@ -202,7 +191,7 @@ func NewGatewayWebSocketHandler(logger *slog.Logger) *GatewayWebSocketHandler {
 // disabled and publishes to cmd: are rejected fail-closed. Called once
 // during gateway startup after the auth service and state root service
 // are constructed.
-func (b *GatewayWebSocketHandler) SetCommandRelayDeps(stateRootProvider governance.StateRootProvider, sessionValidator publishACLValidator) {
+func (b *GatewayWebSocketHandler) SetCommandRelayDeps(stateRootProvider governance.StateRootProvider, sessionValidator operatorSessionValidator) {
 	b.mu.Lock()
 	b.stateRootProvider = stateRootProvider
 	b.sessionValidator = sessionValidator
@@ -504,14 +493,17 @@ func (h *pubSubSessionHandler) relayCommandIntent(channel string, data []byte) {
 		return
 	}
 
-	// 1. Decode the command intent payload.
-	var intent commandIntent
-	if err := json.Unmarshal(data, &intent); err != nil {
+	// 1. Decode the command intent payload as protojson into the typed
+	// commonv1.CommandIntent. The ensemble publishes a CommandIntent
+	// protojson object; raw G8eMessage JSON or any other shape is
+	// rejected fail-closed by the unmarshaler.
+	intent := &commonv1.CommandIntent{}
+	if err := protojson.Unmarshal(data, intent); err != nil {
 		b.logger.Warn("PubSub cmd: relay: failed to decode command intent",
 			"channel", channel, "error", err.Error())
 		return
 	}
-	if intent.OperatorID == "" || intent.OperatorSessionID == "" {
+	if intent.OperatorId == "" || intent.OperatorSessionId == "" {
 		b.logger.Warn("PubSub cmd: relay: command intent missing operator identifiers",
 			"channel", channel)
 		return
@@ -532,22 +524,22 @@ func (h *pubSubSessionHandler) relayCommandIntent(channel string, data []byte) {
 	// must target the same operator and session. This prevents an
 	// authorized app from publishing to one operator's channel while
 	// claiming to target another.
-	expectedChannel := pubsub.CmdChannel(intent.OperatorID, intent.OperatorSessionID)
+	expectedChannel := pubsub.CmdChannel(intent.OperatorId, intent.OperatorSessionId)
 	if channel != expectedChannel {
 		b.logger.Warn("PubSub cmd: relay: channel does not match command intent operator identifiers",
 			"channel", channel,
 			"expected", expectedChannel,
-			"intent_operator_id", intent.OperatorID,
-			"intent_session_id", intent.OperatorSessionID)
+			"intent_operator_id", intent.OperatorId,
+			"intent_session_id", intent.OperatorSessionId)
 		return
 	}
 
 	// 3. Validate the target operator session.
-	op, err := sessionValidator.ValidateOperatorSession(intent.OperatorSessionID)
+	op, err := sessionValidator.ValidateOperatorSession(intent.OperatorSessionId)
 	if err != nil {
 		b.logger.Warn("PubSub cmd: relay: operator session validation failed",
 			"channel", channel,
-			"operator_session_id", intent.OperatorSessionID,
+			"operator_session_id", intent.OperatorSessionId,
 			"error", err.Error())
 		return
 	}
@@ -562,7 +554,8 @@ func (h *pubSubSessionHandler) relayCommandIntent(channel string, data []byte) {
 
 	// 5. Build the governed GovernanceEnvelope. The acting app identity
 	// is extracted from the mTLS certificate's SPIFFE ID; the requestor
-	// user identity is supplied by the command intent.
+	// user identity and application context are supplied by the command
+	// intent.
 	actingAppID := h.sub.identitySPIFFEID
 	env, err := BuildGovernanceEnvelope(BuildEnvelopeParams{
 		OperatorID:        op.ID,
@@ -570,9 +563,14 @@ func (h *pubSubSessionHandler) relayCommandIntent(channel string, data []byte) {
 		ActionType:        intent.ActionType,
 		Payload:           intent.Payload,
 		TargetResource:    intent.TargetResource,
-		RequestorUserID:   intent.RequestorUserID,
+		RequestorUserID:   intent.RequestorUserId,
 		ActingAppID:       actingAppID,
 		StateMerkleRoot:   stateRoot,
+		CaseID:            intent.CaseId,
+		InvestigationID:   intent.InvestigationId,
+		TaskID:            intent.TaskId,
+		WebSessionID:      intent.WebSessionId,
+		CliSessionID:      intent.CliSessionId,
 	})
 	if err != nil {
 		b.logger.Warn("PubSub cmd: relay: failed to build governance envelope",
@@ -595,21 +593,6 @@ func (h *pubSubSessionHandler) relayCommandIntent(channel string, data []byte) {
 		"transaction_id", env.Id,
 		"action_type", env.ActionType,
 		"delivered", delivered)
-}
-
-// commandIntent is the typed wire format for app-published command intent
-// on cmd: channels. The ensemble publishes this JSON object directly; the
-// gateway decodes it, validates the target operator session, fetches the
-// state root, and constructs the governed GovernanceEnvelope. The
-// ensemble does not build partial GovernanceEnvelope structures for
-// command channels.
-type commandIntent struct {
-	OperatorID        string `json:"operator_id"`
-	OperatorSessionID string `json:"operator_session_id"`
-	ActionType        string `json:"action_type"`
-	Payload           []byte `json:"payload"`
-	TargetResource    string `json:"target_resource,omitempty"`
-	RequestorUserID   string `json:"requestor_user_id"`
 }
 
 func (h *pubSubSessionHandler) cleanup() {

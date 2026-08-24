@@ -177,3 +177,31 @@ message PlatformEnrollmentCompletionTranscript {
   string instance_id = 5;
   PlatformEnrollmentFingerprints fingerprints = 6;
 }
+
+// CommandIntent is the pre-governance command intent published by an app
+// workload (e.g. the ensemble) to a cmd:<operator_id>:<operator_session_id>
+// channel. The gateway decodes it via protojson, validates the target
+// operator session, fetches the current state Merkle root, and constructs
+// the governed GovernanceEnvelope. Co-located with GovernanceEnvelope in
+// commonv1 so all core transaction lifecycle models share one package.
+message CommandIntent {
+  // Identity & routing
+  string operator_id = 1;
+  string operator_session_id = 2;
+  string requestor_user_id = 3;
+
+  // Intent classification
+  string event_type = 4;
+  string action_type = 5;
+  string target_resource = 6;
+
+  // Payload: serialized operator protobuf bytes (e.g., CommandRequested, FileEditRequested)
+  bytes payload = 7;
+
+  // Application context
+  string case_id = 8;
+  string investigation_id = 9;
+  string task_id = 10;
+  string web_session_id = 11;
+  string cli_session_id = 12;
+}

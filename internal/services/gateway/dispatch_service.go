@@ -43,6 +43,10 @@ const EnvelopeExpiry = 5 * time.Minute
 // BuildEnvelopeParams is the input to BuildGovernanceEnvelope. The gateway
 // owns the state Merkle root and governance posture; callers supply the
 // command intent fields and the resolved operator/session identifiers.
+// Application context fields (CaseID, InvestigationID, TaskID,
+// WebSessionID, CliSessionID) are propagated from the command intent on
+// the pubsub path and from the HTTP request on the dispatch path,
+// ensuring uniform context propagation across transports.
 type BuildEnvelopeParams struct {
 	OperatorID        string
 	OperatorSessionID string
@@ -52,6 +56,11 @@ type BuildEnvelopeParams struct {
 	RequestorUserID   string
 	ActingAppID       string
 	StateMerkleRoot   string
+	CaseID            string
+	InvestigationID   string
+	TaskID            string
+	WebSessionID      string
+	CliSessionID      string
 }
 
 // BuildGovernanceEnvelope constructs a canonical GovernanceEnvelope with
@@ -83,6 +92,11 @@ func BuildGovernanceEnvelope(params BuildEnvelopeParams) (*commonv1.GovernanceEn
 		Nonce:             hex.EncodeToString(nonce),
 		RequestorUserId:   params.RequestorUserID,
 		ActingAppId:       params.ActingAppID,
+		CaseId:            params.CaseID,
+		InvestigationId:   params.InvestigationID,
+		TaskId:            params.TaskID,
+		WebSessionId:      params.WebSessionID,
+		CliSessionId:      params.CliSessionID,
 		Governance: &commonv1.GovernanceMetadata{
 			L1: &commonv1.L1Metadata{Validated: true},
 		},
@@ -106,6 +120,11 @@ type DispatchRequest struct {
 	TargetResource          string
 	RequestorUserID         string
 	ActingAppID             string
+	CaseID                  string
+	InvestigationID         string
+	TaskID                  string
+	WebSessionID            string
+	CliSessionID            string
 }
 
 // DispatchResult is the output of a successful command dispatch.
@@ -178,6 +197,11 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 		RequestorUserID:   req.RequestorUserID,
 		ActingAppID:       req.ActingAppID,
 		StateMerkleRoot:   stateRoot,
+		CaseID:            req.CaseID,
+		InvestigationID:   req.InvestigationID,
+		TaskID:            req.TaskID,
+		WebSessionID:      req.WebSessionID,
+		CliSessionID:      req.CliSessionID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("dispatch: %w", err)
@@ -308,6 +332,11 @@ type OperatorCommandRequest struct {
 	ActionType              string `json:"action_type"`
 	Payload                 []byte `json:"payload"`
 	TargetResource          string `json:"target_resource,omitempty"`
+	CaseID                  string `json:"case_id,omitempty"`
+	InvestigationID         string `json:"investigation_id,omitempty"`
+	TaskID                  string `json:"task_id,omitempty"`
+	WebSessionID            string `json:"web_session_id,omitempty"`
+	CliSessionID            string `json:"cli_session_id,omitempty"`
 }
 
 // Validate returns an error if the request is missing required fields.
@@ -375,6 +404,11 @@ func (c *DispatchController) HandleDispatch(w http.ResponseWriter, r *http.Reque
 		Payload:                 req.Payload,
 		TargetResource:          req.TargetResource,
 		RequestorUserID:         requestorUserID,
+		CaseID:                  req.CaseID,
+		InvestigationID:         req.InvestigationID,
+		TaskID:                  req.TaskID,
+		WebSessionID:            req.WebSessionID,
+		CliSessionID:            req.CliSessionID,
 	})
 	if err != nil {
 		c.logger.Error("dispatch: command dispatch failed", "error", err)
