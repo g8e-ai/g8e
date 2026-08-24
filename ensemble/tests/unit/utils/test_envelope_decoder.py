@@ -11,11 +11,11 @@ import pytest
 import json
 
 from app.constants import ExecutionStatus, EventType
+from app.constants.proto_mappings import protobuf_execution_status_to_python
 from app.proto import operator_pb2
-from app.utils.envelope_builder import (
+from app.utils.result_decoder import (
     decode_uap_envelope,
     decode_g8eo_result_envelope,
-    protobuf_execution_status_to_python,
 )
 
 pytestmark = [pytest.mark.unit]

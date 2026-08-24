@@ -17,9 +17,13 @@ See: .local.dev/docs/plans/engine_gateway_secure_link.md
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import logging
 import json
 import binascii
+import secrets
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +31,7 @@ import aiohttp
 from nacl.signing import VerifyKey
 from nacl.exceptions import BadSignatureError
 
-from app.utils.envelope_builder import build_uap_envelope_json
+from app.constants.action_type_mappings import map_event_type_to_action_type
 from app.models.pubsub_messages import G8eMessage
 from app.models.settings import GatewaySettings, TLSConfig
 from app.services.infra.settings_service import SettingsService
@@ -36,8 +40,251 @@ from app.constants.config import G8EE_COMPONENT
 from app.constants.paths import PATHS
 from app.errors import G8eError, NetworkError, ValidationError, ErrorCode, ErrorCategory
 from app.utils.aiohttp_session import create_component_http_session
+from g8e.models.governance import (
+    GovernanceEnvelope,
+    GovernanceL2,
+    GovernanceL3,
+    GovernanceL3Proof,
+    GovernanceMetadata,
+    compute_transaction_hash,
+)
 
 logger = logging.getLogger(__name__)
+
+
+# Mapping from internal g8ee payload types to canonical g8e protocol payload types
+PAYLOAD_TYPE_MAPPING = {
+    "command": "CommandRequested",
+    "command_cancel": "CommandCancelRequested",
+    "file_edit": "FileEditRequested",
+    "fs_list": "FsListRequested",
+    "fs_grep": "FsGrepRequested",
+    "fs_read": "FsReadRequested",
+    "fetch_logs": "FetchLogsRequested",
+    "fetch_history": "FetchHistoryRequested",
+    "fetch_file_history": "FetchFileHistoryRequested",
+    "fetch_file_diff": "FetchFileDiffRequested",
+    "restore_file": "RestoreFileRequested",
+    "check_port": "CheckPortRequested",
+    "heartbeat": "HeartbeatRequested",
+    "document_update": "DocumentUpdateRequested",
+    "document_delete": "DocumentDeleteRequested",
+    "direct_command_audit": "DirectCommandAuditRequested",
+}
+
+
+# Mapping from internal source_component strings to proto Component enum value
+# names. The Go gateway decodes GovernanceEnvelope.source_component as the
+# g8e.common.v1.Component proto enum via protojson, which expects enum value
+# names (e.g. "COMPONENT_AGENT"), not the internal lowercase strings the
+# ensemble uses for routing and validation (e.g. "g8ee", "client").
+#
+# The gateway component ("g8eo-gateway") is not a valid source for governed
+# outbound mutations from the ensemble and is intentionally absent. Unknown
+# or empty values raise a typed ValidationError rather than silently
+# defaulting to COMPONENT_AGENT — a misclassified identity could attribute a
+# governed action to the wrong component and bypass identity binding.
+_COMPONENT_TO_PROTO_ENUM = {
+    "g8ee": "COMPONENT_AGENT",
+    "client": "COMPONENT_CLIENT",
+    "g8eo": "COMPONENT_G8EO",
+}
+
+
+def _source_component_to_proto_enum(internal: str) -> str:
+    """Translate an internal source_component string to a proto Component enum value name.
+
+    Fail-closed: raises ValidationError for unknown or empty values. A
+    misclassified source component could attribute a governed action to the
+    wrong component and silently bypass transport-to-envelope identity binding.
+    """
+    if not internal:
+        raise ValidationError(
+            "source_component is required for governance envelope construction",
+            component="g8ee",
+        )
+    try:
+        return _COMPONENT_TO_PROTO_ENUM[internal]
+    except KeyError as exc:
+        raise ValidationError(
+            f"unknown source_component {internal!r}: cannot map to proto Component enum",
+            component="g8ee",
+        ) from exc
+
+
+def map_to_canonical_payload_type(internal_payload_type: str) -> str:
+    """Map internal g8ee payload type to canonical g8e protocol payload type.
+
+    Per g8e protocol specification, applications must use canonical typed payload
+    identifiers for envelope construction. This function translates internal
+    payload naming to the canonical protocol schema.
+
+    Args:
+        internal_payload_type: Internal payload type (e.g., "command", "file_edit")
+
+    Returns:
+        Canonical g8e protocol payload type (e.g., "CommandRequested")
+    """
+    return PAYLOAD_TYPE_MAPPING.get(internal_payload_type, internal_payload_type)
+
+
+def generate_nonce() -> str:
+    """Generate a cryptographically secure random nonce for replay defense.
+
+    Returns:
+        Hexadecimal string (32 bytes = 64 hex characters)
+    """
+    return secrets.token_hex(32)
+
+
+def get_certificate_fingerprint(cert_path: str | None) -> str:
+    """Compute SHA256 fingerprint of mTLS client certificate.
+
+    Args:
+        cert_path: Path to client certificate file
+
+    Returns:
+        Hexadecimal SHA256 fingerprint string, or empty string if cert not found
+    """
+    if not cert_path or not Path(cert_path).exists():
+        return ""
+
+    try:
+        cert_bytes = Path(cert_path).read_bytes()
+        return hashlib.sha256(cert_bytes).hexdigest()
+    except Exception as e:
+        logger.warning("Failed to compute certificate fingerprint: %s", e)
+        return ""
+
+
+def build_governance_envelope(
+    message: G8eMessage,
+    *,
+    agent_ids: list[str] | None = None,
+    state_merkle_root: str = "",
+    client_cert_path: str | None = None,
+) -> GovernanceEnvelope:
+    """Build a g8e-compliant GovernanceEnvelope with structured intent data.
+
+    Constructs a ``g8e.models.governance.GovernanceEnvelope`` per the g8e
+    protocol specification:
+    - Uses canonical JSON wire format (protojson-compatible)
+    - Generates deterministic transaction hash (SHA256 of canonical fields)
+    - Includes nonce for replay defense
+    - Includes L3 notary proof (mTLS certificate fingerprint)
+    - Uses typed payload identifiers per protocol schema
+
+    Args:
+        message: The G8eMessage to wrap in a governance envelope
+        agent_ids: Optional list of Tribunal agent IDs for L2 metadata
+        state_merkle_root: Current state Merkle root for replay protection
+        client_cert_path: Path to mTLS client certificate for L3 proof
+
+    Returns:
+        A g8e-compliant GovernanceEnvelope with transaction hash and governance metadata
+    """
+    if message.payload is None:
+        raise ValueError("G8eMessage.payload is required to build GovernanceEnvelope")
+
+    # Serialize the protobuf payload to bytes for the envelope's payload field
+    proto_payload = message.payload.to_protobuf()
+    payload_bytes = proto_payload.SerializeToString()
+    payload_dict = message.payload.model_dump(mode="json")
+
+    action_type = map_event_type_to_action_type(message.event_type)
+
+    now_utc = datetime.now(UTC)
+    expires_at = now_utc + timedelta(minutes=5)
+
+    # Generate nonce for replay defense
+    nonce = generate_nonce()
+
+    # Compute L3 notary proof (mTLS certificate fingerprint)
+    cert_fingerprint = get_certificate_fingerprint(client_cert_path)
+
+    # Bind identity: the human user who authorized the action (requestor) and
+    # the app acting on their behalf (acting_app). Both are included in the
+    # canonical transaction hash so they are cryptographically tamper-evident
+    # and verified by the gateway's identity binding check. The acting app is
+    # always the ensemble (g8ee) for envelopes built here.
+    requestor_user_id = message.user_id or ""
+    acting_app_id = G8EE_COMPONENT
+
+    payload_b64 = base64.b64encode(payload_bytes).decode("ascii") if payload_bytes else ""
+    transaction_hash = compute_transaction_hash(
+        action_type=action_type,
+        target_resource="localhost",
+        payload=payload_b64,
+        state_merkle_root=state_merkle_root,
+        nonce=nonce,
+        expires_at=expires_at.isoformat(),
+        intent_data=payload_dict,
+        requestor_user_id=requestor_user_id,
+        acting_app_id=acting_app_id,
+    )
+
+    # L2 Metadata - consensus_set_id only; votes/signatures handled by Gateway
+    l2 = GovernanceL2()
+    if agent_ids:
+        l2.consensus_set_id = agent_ids[0]
+
+    # L3 Metadata - notary proof (mTLS certificate fingerprint)
+    l3 = GovernanceL3()
+    if cert_fingerprint:
+        l3.proof = GovernanceL3Proof(mtls_cert_fingerprint=cert_fingerprint)
+
+    return GovernanceEnvelope(
+        protocol_version="1.0",
+        id=transaction_hash,
+        timestamp=message.timestamp or now_utc,
+        expires_at=expires_at,
+        source_component=_source_component_to_proto_enum(message.source_component),
+        event_type=message.event_type,
+        action_type=action_type,
+        target_resource="localhost",
+        operator_id=message.operator_id or "",
+        operator_session_id=message.operator_session_id or "",
+        web_session_id=message.web_session_id or "",
+        cli_session_id=message.cli_session_id or "",
+        state_merkle_root=state_merkle_root,
+        nonce=nonce,
+        transaction_hash=transaction_hash,
+        intent_data=payload_dict,
+        case_id=message.case_id,
+        investigation_id=message.investigation_id,
+        task_id=message.task_id,
+        payload=payload_b64,
+        requestor_user_id=requestor_user_id or None,
+        acting_app_id=acting_app_id,
+        governance=GovernanceMetadata(l2=l2, l3=l3),
+    )
+
+
+def build_governance_envelope_json(
+    message: G8eMessage,
+    *,
+    agent_ids: list[str] | None = None,
+    state_merkle_root: str = "",
+    client_cert_path: str | None = None,
+) -> str:
+    """Build a g8e-compliant GovernanceEnvelope and return it as a JSON string.
+
+    Args:
+        message: The G8eMessage to wrap in a governance envelope
+        agent_ids: Optional list of Tribunal agent IDs for L2 metadata
+        state_merkle_root: Current state Merkle root for replay protection
+        client_cert_path: Path to mTLS client certificate for L3 proof
+
+    Returns:
+        Canonical JSON string representation of the envelope
+    """
+    envelope = build_governance_envelope(
+        message,
+        agent_ids=agent_ids,
+        state_merkle_root=state_merkle_root,
+        client_cert_path=client_cert_path,
+    )
+    return envelope.model_dump_json(exclude_none=True)
 
 
 class GovernanceClient:
@@ -288,7 +535,7 @@ class GovernanceClient:
             if not current_root:
                 current_root = await self.fetch_state_root()
 
-            envelope_json = build_uap_envelope_json(
+            envelope_json = build_governance_envelope_json(
                 message,
                 agent_ids=agent_ids,
                 state_merkle_root=current_root,

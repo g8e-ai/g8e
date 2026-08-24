@@ -20,7 +20,7 @@ from app.models.operators import (
 from app.models.pubsub_messages import G8eoHeartbeatPayload
 from app.security.request_timestamp import RequestValidationResult, validate_timestamp
 from app.services.protocols import OperatorDataServiceProtocol, EventServiceProtocol
-from app.utils.envelope_builder import decode_and_validate_uap_heartbeat
+from app.utils.result_decoder import decode_and_validate_uap_heartbeat
 
 logger = logging.getLogger(__name__)
 

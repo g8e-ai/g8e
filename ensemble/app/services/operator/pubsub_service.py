@@ -25,7 +25,7 @@ from app.constants.channels import OperatorChannel
 
 from app.errors import ValidationError
 from app.models.pubsub_messages import G8eoResultEnvelope, G8eMessage
-from app.utils.envelope_builder import decode_and_validate_uap_result
+from app.utils.result_decoder import decode_and_validate_uap_result
 
 logger = logging.getLogger(__name__)
 

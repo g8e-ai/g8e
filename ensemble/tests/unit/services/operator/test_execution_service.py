@@ -279,8 +279,9 @@ class TestOperatorExecutionServiceDispatch:
             payload=None,
         )
         g8e_context = build_g8e_http_context()
-        # Since payload is Optional in Pydantic but required by envelope_builder,
-        # dispatch_command should fail gracefully or the builder will raise ValueError.
+        # Since payload is Optional in Pydantic but required by governance_client's
+        # build_governance_envelope, dispatch_command should fail gracefully or the
+        # builder will raise ValueError.
         with pytest.raises(
             Exception
         ):  # Catching general Exception for now as it might be ValueError from builder

@@ -136,12 +136,12 @@ class TestPubSubClientDoesNotConstructEnvelopes:
     """Regression: PubSubClient must not construct governance envelopes.
 
     The gateway is the relay and enforcement point for operator command
-    dispatch. The ensemble publishes raw command intent to ``cmd:`` and the
-    gateway intercepts, validates authorization, constructs the governed
-    GovernanceEnvelope with the current state Merkle root, and forwards it
-    to the operator. The ensemble must not import or call
-    ``build_uap_envelope_json`` and must not expose
-    ``check_operator_online`` or ``publish_storage_request``.
+    dispatch. The ensemble publishes a ``CommandIntent`` (protojson) to
+    ``cmd:`` and the gateway intercepts, validates authorization, decodes
+    the ``CommandIntent``, constructs the governed GovernanceEnvelope with
+    the current state Merkle root, and forwards it to the operator. The
+    ensemble must not import or call ``build_uap_envelope_json`` and must
+    not expose ``check_operator_online`` or ``publish_storage_request``.
     """
 
     def test_pubsub_client_does_not_import_build_uap_envelope_json(self):
@@ -162,6 +162,46 @@ class TestPubSubClientDoesNotConstructEnvelopes:
         from app.clients.pubsub_client import PubSubClient
 
         assert not hasattr(PubSubClient, "publish_storage_request")
+
+    def test_pubsub_client_sources_command_intent_from_g8e_models(self):
+        """PubSubClient must source CommandIntent from g8e.models.governance."""
+        import inspect
+
+        import app.clients.pubsub_client as mod
+
+        source = inspect.getsource(mod)
+        assert "from g8e.models.governance import CommandIntent" in source
+
+
+class TestDeadAbstractionsRemoved:
+    """Regression: ``app.models.uap`` and ``app.utils.envelope_builder`` must stay deleted.
+
+    These modules were removed in the Command Intent Protocol refactor.
+    Envelope construction for the HTTP governance path now lives in
+    ``app.clients.governance_client`` (using ``g8e.models.governance``
+    directly), and inbound result decoding lives in
+    ``app.utils.result_decoder``. They must not be reintroduced.
+    """
+
+    def test_uap_module_is_not_importable(self):
+        import importlib
+
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module("app.models.uap")
+
+    def test_envelope_builder_module_is_not_importable(self):
+        import importlib
+
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module("app.utils.envelope_builder")
+
+    def test_command_intent_sourced_from_g8e_models_governance(self):
+        """CommandIntent must be sourced from g8e.models.governance, not redefined locally."""
+        from g8e.models.governance import CommandIntent
+
+        assert CommandIntent is not None
+        assert hasattr(CommandIntent, "from_payload_bytes")
+        assert hasattr(CommandIntent, "payload_bytes")
 
 
 class TestDataServicesUseGovernanceEnvelopes:

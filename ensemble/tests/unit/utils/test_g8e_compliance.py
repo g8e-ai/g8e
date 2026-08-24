@@ -5,22 +5,31 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Tests for g8e protocol compliance in envelope construction."""
+"""Tests for g8e protocol compliance in envelope construction.
+
+The envelope construction functions (``build_governance_envelope``,
+``build_governance_envelope_json``, ``generate_nonce``,
+``get_certificate_fingerprint``, ``map_to_canonical_payload_type``)
+were moved from ``app.utils.envelope_builder`` (deleted) into
+``app.clients.governance_client`` and now build
+``g8e.models.governance.GovernanceEnvelope`` directly instead of the
+removed ``app.models.uap.UAPEnvelope``.
+"""
 
 import pytest
 from datetime import datetime, UTC
 
-from app.utils.envelope_builder import (
+from app.clients.governance_client import (
     generate_nonce,
     get_certificate_fingerprint,
     map_to_canonical_payload_type,
-    build_uap_envelope,
-    build_uap_envelope_json,
+    build_governance_envelope,
+    build_governance_envelope_json,
 )
 from app.models.pubsub_messages import G8eMessage
 from app.constants import EventType, G8EE_COMPONENT
 from app.models.command_request_payloads import CommandRequestPayload
-from app.models.uap import UAPEnvelope
+from g8e.models.governance import GovernanceEnvelope
 
 pytestmark = [pytest.mark.unit]
 
@@ -89,8 +98,8 @@ class TestMapToCanonicalPayloadType:
         assert map_to_canonical_payload_type("unknown.type") == "unknown.type"
 
 
-class TestBuildUapEnvelope:
-    """Test g8e-compliant envelope construction."""
+class TestBuildGovernanceEnvelope:
+    """Test g8e-compliant GovernanceEnvelope construction."""
 
     def test_envelope_has_transaction_hash(self):
         """Envelope includes deterministic transaction hash as id."""
@@ -105,8 +114,9 @@ class TestBuildUapEnvelope:
             payload=payload,
         )
 
-        envelope = build_uap_envelope(message, state_merkle_root="test-root")
+        envelope = build_governance_envelope(message, state_merkle_root="test-root")
 
+        assert isinstance(envelope, GovernanceEnvelope)
         assert envelope.id is not None
         assert len(envelope.id) == 64  # SHA256 hex string
         assert envelope.transaction_hash == envelope.id
@@ -124,7 +134,7 @@ class TestBuildUapEnvelope:
             payload=payload,
         )
 
-        envelope = build_uap_envelope(message, state_merkle_root="test-root")
+        envelope = build_governance_envelope(message, state_merkle_root="test-root")
 
         assert envelope.nonce is not None
         assert len(envelope.nonce) == 64  # 32 bytes = 64 hex characters
@@ -142,7 +152,7 @@ class TestBuildUapEnvelope:
             payload=payload,
         )
 
-        envelope = build_uap_envelope(message, state_merkle_root="test-root-123")
+        envelope = build_governance_envelope(message, state_merkle_root="test-root-123")
 
         assert envelope.state_merkle_root == "test-root-123"
 
@@ -160,14 +170,14 @@ class TestBuildUapEnvelope:
         )
 
         # With a non-existent cert path, should still set empty string
-        envelope = build_uap_envelope(
+        envelope = build_governance_envelope(
             message,
             state_merkle_root="test-root",
             client_cert_path="/nonexistent/cert.pem",
         )
 
         # Certificate fingerprint is empty for non-existent cert, so L3 proof is not set
-        assert envelope.governance.l3.proof.mtls_cert_fingerprint is None
+        assert envelope.governance.l3.proof is None
 
     def test_envelope_without_cert_no_l3_proof(self):
         """Envelope without certificate path has no L3 proof."""
@@ -182,9 +192,9 @@ class TestBuildUapEnvelope:
             payload=payload,
         )
 
-        envelope = build_uap_envelope(message, state_merkle_root="test-root")
+        envelope = build_governance_envelope(message, state_merkle_root="test-root")
 
-        assert envelope.governance.l3.proof.mtls_cert_fingerprint is None
+        assert envelope.governance.l3.proof is None
 
     def test_envelope_uses_canonical_payload_type(self):
         """Envelope uses canonical g8e protocol payload type for hash computation."""
@@ -199,7 +209,7 @@ class TestBuildUapEnvelope:
             payload=payload,
         )
 
-        envelope = build_uap_envelope(message, state_merkle_root="test-root")
+        envelope = build_governance_envelope(message, state_merkle_root="test-root")
 
         # The transaction hash should be computed using "CommandRequested"
         # not the internal "command" type
@@ -219,7 +229,7 @@ class TestBuildUapEnvelope:
         )
 
         now = datetime.now(UTC)
-        envelope = build_uap_envelope(message, state_merkle_root="test-root")
+        envelope = build_governance_envelope(message, state_merkle_root="test-root")
 
         assert envelope.expires_at is not None
         # Should be approximately 5 minutes in the future
@@ -244,7 +254,7 @@ class TestBuildUapEnvelope:
             payload=payload,
         )
 
-        envelope_json = build_uap_envelope_json(message, state_merkle_root="test-root")
+        envelope_json = build_governance_envelope_json(message, state_merkle_root="test-root")
 
         assert isinstance(envelope_json, str)
         assert len(envelope_json) > 0

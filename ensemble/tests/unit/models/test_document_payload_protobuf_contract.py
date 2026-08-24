@@ -15,7 +15,7 @@ handleDocumentUpdateSync/handleDocumentDeleteSync pubsub handlers:
 1. Every payload in the G8eCommandPayload union plus DocumentUpdateRequestPayload
    and DocumentDeleteRequestPayload has a working to_protobuf() method that
    returns the correct protobuf message type.
-2. PAYLOAD_TYPE_MAPPING in envelope_builder.py maps every payload_type
+2. PAYLOAD_TYPE_MAPPING in governance_client.py maps every payload_type
    discriminator to the correct canonical protobuf message name.
 3. map_event_type_to_action_type maps all app-level document events to
    DOCUMENT_UPDATE or DOCUMENT_DELETE, matching the Go eventToAction map.
@@ -31,7 +31,7 @@ from app.models.command_request_payloads import (
     G8eCommandPayload,
 )
 from app.proto import operator_pb2
-from app.utils.envelope_builder import PAYLOAD_TYPE_MAPPING
+from app.clients.governance_client import PAYLOAD_TYPE_MAPPING
 from typing import get_args
 
 

@@ -43,7 +43,7 @@ Model categories:
 - tool_results.py: Tool result models
 - triage_api.py: Triage API models
 - tribunal_commands.py: Tribunal command models
-- uap.py: User agent platform models
+- uap.py: (removed) envelope construction now uses g8e.models.governance directly
 - version.py: Version information
 - whitelist.py: Whitelist models
 """

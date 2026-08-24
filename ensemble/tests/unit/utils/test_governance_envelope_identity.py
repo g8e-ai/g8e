@@ -3,10 +3,10 @@
 # included in the LICENSE file.
 #
 # As of the Change Date listed in the LICENSE file, this software is
-# released under the Apache License, Version.0.
+# released under the Apache License, Version 2.0.
 
 """Tests for source component fail-closed mapping (Bug 8) and envelope
-identity binding (Bug 11) in ``envelope_builder.build_uap_envelope``.
+identity binding (Bug 11) in ``governance_client.build_governance_envelope``.
 
 Bug 8: ``_source_component_to_proto_enum`` must reject unknown and empty
 values with a typed ValidationError rather than silently defaulting to
@@ -14,9 +14,9 @@ COMPONENT_AGENT. A misclassified source component could attribute a governed
 action to the wrong component and bypass transport-to-envelope identity
 binding.
 
-Bug 11: ``build_uap_envelope`` must populate ``requestor_user_id`` and
-``acting_app_id`` and include them in the canonical transaction hash so they
-are cryptographically tamper-evident and verified by the gateway.
+Bug 11: ``build_governance_envelope`` must populate ``requestor_user_id``
+and ``acting_app_id`` and include them in the canonical transaction hash so
+they are cryptographically tamper-evident and verified by the gateway.
 """
 
 import json
@@ -28,10 +28,10 @@ from app.constants import EventType, G8EE_COMPONENT
 from app.errors import ValidationError
 from app.models.command_request_payloads import CommandRequestPayload
 from app.models.pubsub_messages import G8eMessage
-from app.utils.envelope_builder import (
+from app.clients.governance_client import (
     _source_component_to_proto_enum,
-    build_uap_envelope,
-    build_uap_envelope_json,
+    build_governance_envelope,
+    build_governance_envelope_json,
 )
 
 pytestmark = [pytest.mark.unit]
@@ -82,15 +82,15 @@ class TestSourceComponentToProtoEnum:
         with pytest.raises(ValidationError, match="unknown source_component"):
             _source_component_to_proto_enum("rogue-component")
 
-    def test_build_uap_envelope_rejects_empty_source_component(self):
+    def test_build_governance_envelope_rejects_empty_source_component(self):
         message = _make_message(source_component="")
         with pytest.raises(ValidationError, match="source_component is required"):
-            build_uap_envelope(message, state_merkle_root="root")
+            build_governance_envelope(message, state_merkle_root="root")
 
-    def test_build_uap_envelope_rejects_unknown_source_component(self):
+    def test_build_governance_envelope_rejects_unknown_source_component(self):
         message = _make_message(source_component="rogue")
         with pytest.raises(ValidationError, match="unknown source_component"):
-            build_uap_envelope(message, state_merkle_root="root")
+            build_governance_envelope(message, state_merkle_root="root")
 
 
 class TestEnvelopeIdentityBinding:
@@ -98,17 +98,17 @@ class TestEnvelopeIdentityBinding:
 
     def test_envelope_populates_requestor_user_id_from_message(self):
         message = _make_message(user_id="user-abc")
-        envelope = build_uap_envelope(message, state_merkle_root="root")
+        envelope = build_governance_envelope(message, state_merkle_root="root")
         assert envelope.requestor_user_id == "user-abc"
 
     def test_envelope_populates_acting_app_id_as_g8ee(self):
         message = _make_message()
-        envelope = build_uap_envelope(message, state_merkle_root="root")
+        envelope = build_governance_envelope(message, state_merkle_root="root")
         assert envelope.acting_app_id == G8EE_COMPONENT
 
     def test_envelope_json_includes_identity_fields(self):
         message = _make_message(user_id="user-xyz")
-        envelope_json = build_uap_envelope_json(message, state_merkle_root="root")
+        envelope_json = build_governance_envelope_json(message, state_merkle_root="root")
         parsed = json.loads(envelope_json)
         assert parsed["requestor_user_id"] == "user-xyz"
         assert parsed["acting_app_id"] == G8EE_COMPONENT
@@ -116,8 +116,8 @@ class TestEnvelopeIdentityBinding:
     def test_hash_changes_when_requestor_user_id_changes(self):
         msg_a = _make_message(user_id="user-a")
         msg_b = _make_message(user_id="user-b")
-        env_a = build_uap_envelope(msg_a, state_merkle_root="root")
-        env_b = build_uap_envelope(msg_b, state_merkle_root="root")
+        env_a = build_governance_envelope(msg_a, state_merkle_root="root")
+        env_b = build_governance_envelope(msg_b, state_merkle_root="root")
         assert env_a.transaction_hash != env_b.transaction_hash
 
     def test_hash_includes_acting_app_id(self):
@@ -129,7 +129,7 @@ class TestEnvelopeIdentityBinding:
         from g8e.models.governance import compute_transaction_hash
 
         message = _make_message(user_id="user-1")
-        envelope = build_uap_envelope(message, state_merkle_root="root")
+        envelope = build_governance_envelope(message, state_merkle_root="root")
 
         # Recompute without acting_app_id to prove it was included
         import base64
@@ -153,12 +153,12 @@ class TestEnvelopeIdentityBinding:
 
     def test_requestor_user_id_none_when_message_has_no_user(self):
         message = _make_message(user_id=None)
-        envelope = build_uap_envelope(message, state_merkle_root="root")
+        envelope = build_governance_envelope(message, state_merkle_root="root")
         assert envelope.requestor_user_id is None
 
     def test_acting_app_id_always_set_even_without_user(self):
         message = _make_message(user_id=None)
-        envelope = build_uap_envelope(message, state_merkle_root="root")
+        envelope = build_governance_envelope(message, state_merkle_root="root")
         assert envelope.acting_app_id == G8EE_COMPONENT
 
 

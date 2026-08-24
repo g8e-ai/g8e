@@ -736,20 +736,25 @@ class TestPubSubClientCoverage:
 
 
 @pytest.mark.asyncio
-class TestPublishCommandRawIntent:
-    """publish_command serializes the G8eMessage as raw command intent JSON.
+class TestPublishCommandCommandIntent:
+    """publish_command serializes a CommandIntent (protojson) to the cmd: channel.
 
-    The ensemble must not construct governance envelopes for operator command
-    dispatch. The Gateway intercepts the publish on the ``cmd:`` channel,
-    validates authorization, constructs the governed GovernanceEnvelope with
-    the current state Merkle root, and forwards it to the operator. These
-    tests pin the contract: the wire payload is the canonical JSON of the
-    G8eMessage itself, with no UAP/GovernanceEnvelope wrapping, no state
-    Merkle root, and no transaction hash.
+    The ensemble translates the G8eMessage into a
+    ``g8e.models.governance.CommandIntent`` at the publish boundary:
+    ``action_type`` is resolved from ``event_type``, the typed payload is
+    serialized to protobuf bytes and base64-encoded, and routing/context
+    fields are populated. The Gateway intercepts the publish on the ``cmd:``
+    channel, decodes the CommandIntent via protojson, validates
+    authorization, constructs the governed GovernanceEnvelope with the
+    current state Merkle root, and forwards it to the operator. These tests
+    pin the contract: the wire payload is a CommandIntent protojson object,
+    with no GovernanceEnvelope wrapping, no state Merkle root, and no
+    transaction hash.
     """
 
-    async def test_publish_command_serializes_raw_g8e_message_json(self, connected_client):
-        """The published payload is the G8eMessage model_dump_json, not a UAP envelope."""
+    async def test_publish_command_serializes_command_intent_protojson(self, connected_client):
+        """The published payload is a CommandIntent protojson object, not a GovernanceEnvelope."""
+        import base64
         import json
 
         from app.models.pubsub_messages import G8eMessage
@@ -784,14 +789,26 @@ class TestPublishCommandRawIntent:
         assert len(captured) == 1
 
         decoded = json.loads(captured[0].decode("utf-8"))
-        # Raw command intent fields are present verbatim...
-        assert decoded["id"] == "msg-1"
-        assert decoded["event_type"] == EventType.OPERATOR_COMMAND_REQUESTED.value
+        # CommandIntent routing and classification fields are present...
         assert decoded["operator_id"] == op_id
         assert decoded["operator_session_id"] == sess_id
-        assert decoded["source_component"] == G8EE_COMPONENT
-        assert decoded["payload"]["command"] == "echo hi"
-        assert decoded["payload"]["execution_id"] == "exec-1"
+        assert decoded["action_type"] == "EXECUTE_BASH"
+        assert decoded["event_type"] == EventType.OPERATOR_COMMAND_REQUESTED.value
+        assert decoded["target_resource"] == "localhost"
+        # ...payload is base64-encoded protobuf bytes...
+        assert "payload" in decoded
+        proto_bytes = base64.b64decode(decoded["payload"])
+        from app.proto import operator_pb2
+
+        cmd = operator_pb2.CommandRequested()
+        cmd.ParseFromString(proto_bytes)
+        assert cmd.command == "echo hi"
+        assert cmd.execution_id == "exec-1"
+        # ...context fields propagate...
+        assert decoded["case_id"] == "case-1"
+        assert decoded["task_id"] == "task-1"
+        assert decoded["investigation_id"] == "inv-1"
+        assert decoded["web_session_id"] == "web-1"
         # ...and no governance envelope fields are injected by the ensemble.
         assert "state_merkle_root" not in decoded
         assert "transaction_hash" not in decoded
@@ -816,7 +833,7 @@ class TestPublishCommandRawIntent:
     async def test_publish_command_returns_zero_on_serialization_failure(
         self, connected_client
     ):
-        """If G8eMessage serialization raises, publish_command returns 0 and does not publish."""
+        """If CommandIntent construction raises, publish_command returns 0 and does not publish."""
         from app.models.pubsub_messages import G8eMessage
         from app.constants import EventType
 
@@ -832,9 +849,6 @@ class TestPublishCommandRawIntent:
         )
 
         with (
-            patch.object(
-                G8eMessage, "model_dump_json", side_effect=RuntimeError("boom")
-            ),
             patch.object(connected_client, "publish") as mock_publish,
             patch("app.clients.pubsub_client.logger") as mock_logger,
         ):

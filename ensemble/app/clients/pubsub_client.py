@@ -12,14 +12,15 @@ Talks to the Gateway via WebSocket (constants.APIPaths.PubSubStream = "/api/v1/p
 Supports: subscribe, psubscribe, publish,
 publish_command, subscribe_execution_results, subscribe_heartbeats.
 
-The ensemble publishes raw command intent (a serialized G8eMessage) to the
-operator's ``cmd:`` channel. The Gateway intercepts the publish, validates
-authorization, constructs the governed GovernanceEnvelope with the current
-state Merkle root, and forwards it to the operator. The ensemble never
-constructs governance envelopes for operator command dispatch and never
-fetches state roots. Operator online status is not the ensemble's
-responsibility; operators announce health on ``heartbeat:<operator_id>``
-and the ensemble subscribes to that channel.
+The ensemble publishes a ``CommandIntent`` (protojson) to the operator's
+``cmd:`` channel. The Gateway intercepts the publish, validates
+authorization, decodes the ``CommandIntent`` via protojson, constructs the
+governed GovernanceEnvelope with the current state Merkle root, and
+forwards it to the operator. The ensemble never constructs governance
+envelopes for operator command dispatch and never fetches state roots.
+Operator online status is not the ensemble's responsibility; operators
+announce health on ``heartbeat:<operator_id>`` and the ensemble subscribes
+to that channel.
 """
 
 import asyncio
@@ -41,7 +42,9 @@ from app.constants import (
     PubSubAction,
     PubSubWireEventType,
 )
+from app.constants.action_type_mappings import map_event_type_to_action_type
 from app.models.pubsub_messages import G8eMessage
+from g8e.models.governance import CommandIntent
 
 logger = logging.getLogger(__name__)
 
@@ -557,14 +560,18 @@ class PubSubClient:
     async def publish_command(
         self, operator_id: str, operator_session_id: str, command_data: G8eMessage
     ) -> int:
-        """Publish raw command intent to the operator's ``cmd:`` channel.
+        """Publish a ``CommandIntent`` (protojson) to the operator's ``cmd:`` channel.
 
-        The ensemble serializes the G8eMessage as canonical JSON and publishes
-        it verbatim. The Gateway intercepts the publish, validates
-        authorization, constructs the governed GovernanceEnvelope with the
-        current state Merkle root, and forwards it to the operator. The
-        ensemble does not build governance envelopes for operator command
-        dispatch.
+        The ensemble translates the ``G8eMessage`` into a
+        ``g8e.models.governance.CommandIntent`` at the publish boundary:
+        ``action_type`` is resolved from ``event_type`` via
+        ``map_event_type_to_action_type``, the typed payload is serialized to
+        protobuf bytes and base64-encoded, and routing/context fields are
+        populated. The Gateway intercepts the publish, validates
+        authorization, decodes the ``CommandIntent`` via protojson,
+        constructs the governed GovernanceEnvelope with the current state
+        Merkle root, and forwards it to the operator. The ensemble does not
+        build governance envelopes for operator command dispatch.
         """
         channel = OperatorChannel.cmd(operator_id, operator_session_id)
 
@@ -583,15 +590,32 @@ class PubSubClient:
         )
 
         try:
-            payload_bytes = command_data.model_dump_json(
-                exclude_none=True
-            ).encode("utf-8")
-            logger.debug("[PUBSUB-CLIENT] Publishing raw command intent JSON")
+            if command_data.payload is None:
+                raise ValueError("G8eMessage.payload is required to build CommandIntent")
+
+            action_type = map_event_type_to_action_type(command_data.event_type)
+            payload_bytes = command_data.payload.to_protobuf().SerializeToString()
+            intent = CommandIntent.from_payload_bytes(
+                operator_id=operator_id,
+                operator_session_id=operator_session_id,
+                action_type=action_type,
+                payload_bytes=payload_bytes,
+                requestor_user_id=command_data.user_id,
+                event_type=command_data.event_type,
+                target_resource="localhost",
+                case_id=command_data.case_id,
+                investigation_id=command_data.investigation_id,
+                task_id=command_data.task_id,
+                web_session_id=command_data.web_session_id,
+                cli_session_id=command_data.cli_session_id,
+            )
+            payload = intent.model_dump_json(exclude_none=True).encode("utf-8")
+            logger.debug("[PUBSUB-CLIENT] Publishing CommandIntent protojson")
         except Exception as e:
             logger.error("[PUBSUB-CLIENT] Failed to serialize command intent: %s", e)
             return 0
 
-        result = await self.publish(channel, payload_bytes)
+        result = await self.publish(channel, payload)
 
         if result > 0:
             logger.info(

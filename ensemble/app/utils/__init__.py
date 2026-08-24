@@ -19,7 +19,8 @@ Utility modules:
 - command.py: Command processing utilities
 - config_loader.py: Configuration loading utilities
 - csv_commands.py: CSV command parsing
-- envelope_builder.py: Envelope building for messages
+- envelope_builder.py: (removed) envelope construction now lives in governance_client.py; inbound decoding in result_decoder.py
+- result_decoder.py: Inbound g8eo result/heartbeat envelope decoding
 - ids.py: ID generation and validation
 - interrogation.py: Interrogation utilities
 - json_utils.py: JSON processing utilities
