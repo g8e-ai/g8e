@@ -15,6 +15,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // EnsembleChatRequest is the typed body for POST /api/v1/chat against the
@@ -86,7 +88,7 @@ type EnsembleChatResponse struct {
 // an error if EnsembleBaseURL is not configured.
 func (c *Client) EnsembleChat(ctx context.Context, p Persona, req EnsembleChatRequest) (*EnsembleChatResponse, error) {
 	if c.cfg.EnsembleBaseURL == "" {
-		return nil, fmt.Errorf("ensemble chat: %w", ErrEnsembleURLNotConfigured)
+		return nil, fmt.Errorf("ensemble chat: %w", constants.ErrEnsembleURLNotConfigured)
 	}
 
 	body, err := json.Marshal(req)
@@ -180,11 +182,6 @@ const HeaderProxyUserEmail = "X-Proxy-User-Email"
 // enrollment produces none). The ensemble does not validate the email against
 // the gateway, so a synthetic value is safe.
 const ProxyUserEmailSyntheticDomain = "@g8e.local"
-
-// ErrEnsembleURLNotConfigured is returned when an ensemble scenario runs but
-// EnsembleBaseURL is empty. Scenarios fail closed rather than dialing a
-// default that may not exist.
-var ErrEnsembleURLNotConfigured = fmt.Errorf("ensemble base URL not configured (pass --ensemble-url)")
 
 // truncateResp returns a shortened representation of body bytes for error
 // messages, capped at 512 characters. Shared with client_helpers but kept

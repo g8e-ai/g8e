@@ -596,7 +596,16 @@ func extractMTLSIdentity(r *http.Request) (string, string) {
 // verifyChannelACL enforces topic ACLs (Plan §5).
 // Subscribers can only subscribe to channels matching their mTLS workload identity.
 // Channel format: results:<operator_id>:<cli_session_id> or heartbeat:<operator_id>
+// The ensemble (g8ee) is the centralized event broker that subscribes to result
+// channels for any operator to relay command results back to callers, so the
+// per-operator ownership check is skipped for it (mirroring the SSE push
+// authorization in sse_controller.go).
 func verifyChannelACL(channel, operatorID, identitySPIFFEID string) error {
+	wid := protocol.NewWorkloadIdentity()
+	if wid.IsEnsembleApp(identitySPIFFEID) {
+		return nil
+	}
+
 	if operatorID == "" {
 		// If no operator_id in cert, reject subscription
 		return constants.ErrPubSubCertificateMissingOperatorID
@@ -625,8 +634,15 @@ func verifyChannelACL(channel, operatorID, identitySPIFFEID string) error {
 // without it a subscriber could PSUBSCRIBE heartbeat:* and receive every
 // operator's heartbeats. The wildcard is permitted only at the operator_id
 // segment position (parts[1]); cross-operator patterns such as
-// heartbeat:op-other:* are rejected.
+// heartbeat:op-other:* are rejected. The ensemble (g8ee) is the centralized
+// event broker and is authorized to subscribe to patterns for any operator,
+// so the per-operator check is skipped for it.
 func verifyPatternACL(pattern, operatorID, identitySPIFFEID string) error {
+	wid := protocol.NewWorkloadIdentity()
+	if wid.IsEnsembleApp(identitySPIFFEID) {
+		return nil
+	}
+
 	if operatorID == "" {
 		return constants.ErrPubSubCertificateMissingOperatorID
 	}

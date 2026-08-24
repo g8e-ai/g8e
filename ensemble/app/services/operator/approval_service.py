@@ -513,6 +513,27 @@ class OperatorApprovalService:
                 correlation_id=correlation_id,
             )
 
+            # Register the pending approval BEFORE publishing the SSE event
+            # so that an immediate approval response (e.g., from an
+            # auto-approver in CI/headless mode) is matched to the pending
+            # entry rather than rejected as "unknown approval_id". The
+            # previous ordering (publish → audit → register) created a race
+            # where a fast approval response arrived before the pending
+            # entry existed. On publish failure the pending entry is cleaned
+            # up so it does not leak.
+            pending = PendingApproval(
+                approval_id=approval_id,
+                approval_type=ApprovalType.STREAM,
+                requested_at=now(),
+                case_id=g8e_context.case_id,
+                investigation_id=g8e_context.investigation_id,
+                user_id=user_id,
+                operator_id=None,
+                operator_session_id=None,
+            )
+            self._register_pending(approval_id, pending)
+            logger.info("[STREAM_APPROVAL] Stored pending (key=%s)", approval_id)
+
             try:
                 await self.event_service.publish(
                     SessionEvent.from_context(
@@ -523,6 +544,7 @@ class OperatorApprovalService:
                 )
                 logger.info("[STREAM_APPROVAL] Published to client")
             except Exception as publish_error:
+                self._pending_approvals.pop(approval_id, None)
                 error_msg = f"Failed to publish stream approval request to client: {publish_error}"
                 logger.error("[STREAM_APPROVAL-PUBLISH-FAILURE] %s", error_msg, exc_info=True)
                 return ApprovalResult(
@@ -546,21 +568,7 @@ class OperatorApprovalService:
                 log_tag="STREAM_APPROVAL",
             )
 
-            pending = PendingApproval(
-                approval_id=approval_id,
-                approval_type=ApprovalType.STREAM,
-                requested_at=now(),
-                case_id=g8e_context.case_id,
-                investigation_id=g8e_context.investigation_id,
-                user_id=user_id,
-                operator_id=None,
-                operator_session_id=None,
-            )
-            self._register_pending(approval_id, pending)
-            logger.info(
-                "[STREAM_APPROVAL] Stored pending (key=%s); awaiting user response", approval_id
-            )
-
+            logger.info("[STREAM_APPROVAL] Awaiting user response")
             await pending.wait()
             self._pending_approvals.pop(approval_id, None)
             logger.info("[STREAM_APPROVAL] Response received: approved=%s", pending.approved)
@@ -675,6 +683,28 @@ class OperatorApprovalService:
                 for ts in approval_event.target_systems:
                     logger.info("[APPROVAL]   - %s (%s)", ts.hostname, ts.operator_type)
 
+            # Register the pending approval BEFORE publishing the SSE event
+            # so that an immediate approval response (e.g., from an
+            # auto-approver in CI/headless mode) is matched to the pending
+            # entry rather than rejected as "unknown approval_id". The
+            # previous ordering (publish → audit → register) created a race
+            # where a fast approval response arrived before the pending
+            # entry existed. On publish failure the pending entry is cleaned
+            # up so it does not leak.
+            pending = PendingApproval(
+                approval_id=approval_id,
+                approval_type=ApprovalType.COMMAND,
+                command=command,
+                requested_at=now(),
+                case_id=g8e_context.case_id,
+                investigation_id=g8e_context.investigation_id,
+                user_id=user_id,
+                operator_id=operator_id,
+                operator_session_id=operator_session_id,
+            )
+            self._register_pending(approval_id, pending)
+            logger.info("[APPROVAL] Stored pending (key=%s)", approval_id)
+
             try:
                 await self.event_service.publish(
                     SessionEvent.from_context(
@@ -685,6 +715,7 @@ class OperatorApprovalService:
                 )
                 logger.info("[APPROVAL] Published to client")
             except Exception as publish_error:
+                self._pending_approvals.pop(approval_id, None)
                 error_msg = f"Failed to publish approval request to client: {publish_error}"
                 logger.error("[APPROVAL-PUBLISH-FAILURE] %s", error_msg, exc_info=True)
                 return ApprovalResult(
@@ -710,20 +741,6 @@ class OperatorApprovalService:
                 context=RequestContext.from_app_context(g8e_context),
                 log_tag="APPROVAL",
             )
-
-            pending = PendingApproval(
-                approval_id=approval_id,
-                approval_type=ApprovalType.COMMAND,
-                command=command,
-                requested_at=now(),
-                case_id=g8e_context.case_id,
-                investigation_id=g8e_context.investigation_id,
-                user_id=user_id,
-                operator_id=operator_id,
-                operator_session_id=operator_session_id,
-            )
-            self._register_pending(approval_id, pending)
-            logger.info("[APPROVAL] Stored pending (key=%s)", approval_id)
 
             logger.info("[APPROVAL] Awaiting user response")
             await pending.wait()
@@ -850,6 +867,27 @@ class OperatorApprovalService:
                 correlation_id=correlation_id,
             )
 
+            # Register the pending approval BEFORE publishing the SSE event
+            # so that an immediate approval response (e.g., from an
+            # auto-approver in CI/headless mode) is matched to the pending
+            # entry rather than rejected as "unknown approval_id". The
+            # previous ordering (publish → audit → register) created a race
+            # where the near-instant fake provider's approval response
+            # arrived before the pending entry existed.
+            pending = PendingApproval(
+                approval_id=approval_id,
+                approval_type=ApprovalType.FILE_EDIT,
+                file_path=file_path,
+                operation=operation,
+                requested_at=now(),
+                case_id=g8e_context.case_id,
+                investigation_id=g8e_context.investigation_id,
+                user_id=user_id,
+                operator_id=operator_id,
+                operator_session_id=operator_session_id,
+            )
+            self._register_pending(approval_id, pending)
+
             try:
                 await self.event_service.publish(
                     SessionEvent.from_context(
@@ -860,6 +898,7 @@ class OperatorApprovalService:
                 )
                 logger.info("[FILE_EDIT_APPROVAL] Published to client")
             except Exception as publish_error:
+                self._pending_approvals.pop(approval_id, None)
                 error_msg = (
                     f"Failed to publish file edit approval request to client: {publish_error}"
                 )
@@ -885,20 +924,6 @@ class OperatorApprovalService:
                 context=RequestContext.from_app_context(g8e_context),
                 log_tag="FILE_EDIT_APPROVAL",
             )
-
-            pending = PendingApproval(
-                approval_id=approval_id,
-                approval_type=ApprovalType.FILE_EDIT,
-                file_path=file_path,
-                operation=operation,
-                requested_at=now(),
-                case_id=g8e_context.case_id,
-                investigation_id=g8e_context.investigation_id,
-                user_id=user_id,
-                operator_id=operator_id,
-                operator_session_id=operator_session_id,
-            )
-            self._register_pending(approval_id, pending)
 
             logger.info("[FILE_EDIT_APPROVAL] Awaiting user response")
             await pending.wait()

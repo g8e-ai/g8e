@@ -85,6 +85,14 @@ const ensemblePollTimeout = 90 * time.Second
 // ensemblePollInterval is the delay between audit vault polls.
 const ensemblePollInterval = 3 * time.Second
 
+// ensembleApprovalConnectTimeout is the max time to wait for the
+// auto-approver's SSE subscription to establish its first HTTP connection
+// before sending the chat request. The SSE handshake against the local
+// gateway is fast; 15s is generous and bounds the wait when the gateway is
+// unreachable so the scenario fails fast with a clear message rather than
+// hanging on the approval gate.
+const ensembleApprovalConnectTimeout = 15 * time.Second
+
 // ensembleSmokeFileDir is the directory under which per-run unique smoke-test
 // files are created. The filename is unique per run (C.4) so retries cannot
 // collide with prior state.
@@ -472,6 +480,30 @@ func ensembleScenarios() []Scenario {
 				message := fmt.Sprintf("Create a new file at %s with the content: %s", filePath, fileContent)
 				r.note("per-run artifact: file=%s", filePath)
 
+				// The ensemble's file_create tool requires human approval before
+				// executing the write. In CI/headless mode there is no human to
+				// approve, so start an auto-approver that subscribes to the
+				// gateway SSE stream and approves file edit approval requests on
+				// behalf of the harness persona. The auto-approver runs in a
+				// background goroutine and is stopped after the receipt is
+				// correlated.
+				ap := c.StartApprovalAutoApprover(ctx, persona)
+				if ap != nil {
+					defer ap.Stop()
+					// Block the chat request until the SSE subscription is
+					// established. The fake provider is near-instant; without
+					// this gate the approval request is pushed before the
+					// subscription connects and the gateway delivers it to zero
+					// listeners (BLOCKER 6 timing race).
+					connectCtx, cancelConnect := context.WithTimeout(ctx, ensembleApprovalConnectTimeout)
+					if err := ap.WaitForConnection(connectCtx); err != nil {
+						cancelConnect()
+						return fmt.Errorf("approval auto-approver SSE connection: %w", err)
+					}
+					cancelConnect()
+					r.note("approval auto-approver SSE subscription connected")
+				}
+
 				chatResp, notBefore, err := ensembleChat(ctx, c, r, persona, message)
 				if err != nil {
 					return err
@@ -518,6 +550,25 @@ func ensembleScenarios() []Scenario {
 				fileContent := uniqueSmokeContent()
 				message := fmt.Sprintf("Write the following content to the file at %s: %s", filePath, fileContent)
 				r.note("per-run artifact: file=%s", filePath)
+
+				// Same auto-approval pattern as ensemble-chat-file-create: the
+				// file_write tool also goes through the approval gate.
+				ap := c.StartApprovalAutoApprover(ctx, persona)
+				if ap != nil {
+					defer ap.Stop()
+					// Block the chat request until the SSE subscription is
+					// established. The fake provider is near-instant; without
+					// this gate the approval request is pushed before the
+					// subscription connects and the gateway delivers it to zero
+					// listeners (BLOCKER 6 timing race).
+					connectCtx, cancelConnect := context.WithTimeout(ctx, ensembleApprovalConnectTimeout)
+					if err := ap.WaitForConnection(connectCtx); err != nil {
+						cancelConnect()
+						return fmt.Errorf("approval auto-approver SSE connection: %w", err)
+					}
+					cancelConnect()
+					r.note("approval auto-approver SSE subscription connected")
+				}
 
 				chatResp, notBefore, err := ensembleChat(ctx, c, r, persona, message)
 				if err != nil {

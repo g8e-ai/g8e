@@ -554,9 +554,15 @@ class TestPushHeartbeatSSE:
         assert event.event_type == EventType.OPERATOR_HEARTBEAT_RECEIVED
         assert event.web_session_id == "web-999"
 
-    async def test_publishes_background_event_when_unbound_but_has_user_id(
+    async def test_skips_sse_push_when_unbound_and_no_routing_target(
         self, service, mock_event_service
     ):
+        """Unbound operators (no web_session_id, no cli_session_id) produce a
+        BackgroundEvent with no routing target. The gateway's SSE push endpoint
+        rejects targetless events with 400, which trips the circuit breaker and
+        blocks all subsequent SSE pushes (including approval requests). The
+        heartbeat service skips the push for unbound operators — there is no
+        connected client to deliver to."""
         operator = OperatorDocument(
             id="op-222",
             status=OperatorStatus.ACTIVE,
@@ -571,15 +577,15 @@ class TestPushHeartbeatSSE:
 
         await service.push_heartbeat_sse(envelope, _make_payload(), operator)
 
-        mock_event_service.publish.assert_called_once()
-        event = mock_event_service.publish.call_args.args[0]
-        assert isinstance(event, BackgroundEvent)
-        assert event.user_id == "user-7"
-        assert event.investigation_id is None
+        mock_event_service.publish.assert_not_called()
 
-    async def test_background_event_preserves_investigation_id_when_present(
+    async def test_skips_sse_push_when_unbound_but_preserves_investigation_id_in_event(
         self, service, mock_event_service
     ):
+        """When the operator is unbound, the push is skipped (no routing
+        target), but the BackgroundEvent is still built with the
+        investigation_id from the payload for logging/diagnostics. This test
+        verifies the skip behavior; the event is never published."""
         operator = OperatorDocument(
             id="op-222",
             status=OperatorStatus.ACTIVE,
@@ -596,9 +602,7 @@ class TestPushHeartbeatSSE:
             envelope, _make_payload(investigation_id="inv-42"), operator
         )
 
-        event = mock_event_service.publish.call_args.args[0]
-        assert isinstance(event, BackgroundEvent)
-        assert event.investigation_id == "inv-42"
+        mock_event_service.publish.assert_not_called()
 
     async def test_sse_exception_does_not_propagate(self, service, mock_event_service):
         operator = OperatorDocument(

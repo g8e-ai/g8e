@@ -1082,6 +1082,7 @@ var (
 	ErrHarnessEnsembleReceiptStale     = errors.New("audit receipt predates the current run (not-before boundary violation)")
 	ErrHarnessEnsembleReceiptUnrelated = errors.New("audit receipt does not correlate to the current run (identity or case/investigation mismatch)")
 	ErrHarnessEnsembleReceiptUnsigned  = errors.New("audit receipt is missing a valid signature")
+	ErrEnsembleURLNotConfigured        = errors.New("ensemble base URL not configured (pass --ensemble-url)")
 
 	// Browser errors
 	ErrBrowserURLEmpty = errors.New("browser URL cannot be empty")

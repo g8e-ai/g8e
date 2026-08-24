@@ -27,6 +27,7 @@ from app.models.operators import (
     FileEditApprovalRequest,
     IntentApprovalRequest,
     PendingApproval,
+    StreamApprovalRequest,
 )
 from app.models.tool_results import RiskLevel
 from app.services.operator.approval_service import OperatorApprovalService
@@ -1050,3 +1051,363 @@ class TestAudit:
         assert (
             call_args.kwargs["metadata"].event_type == EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED
         )
+
+
+class TestApprovalPreRegistrationOrdering:
+    """Assert pending approval is registered in _pending_approvals BEFORE
+    event_service.publish is called.
+
+    The previous ordering (publish -> audit -> register) created a race where
+    a fast approval response (e.g., from an auto-approver in CI/headless mode)
+    arrived before the pending entry existed, producing "unknown approval_id"
+    warnings and never resolving the file write. The fix registers the pending
+    entry before publishing the SSE event, with cleanup on publish failure.
+
+    These tests use a publish side effect that inspects _pending_approvals at
+    publish time. If the approval_id is absent at publish time, the test fails,
+    proving the registration ordering invariant holds for each approval path.
+    """
+
+    def _build_service(self) -> tuple[OperatorApprovalService, dict[str, list[str]]]:
+        """Build a service whose event_service.publish asserts the approval_id
+        is already registered in _pending_approvals at publish time.
+
+        Returns the service and a dict mapping approval_id -> [event_type, ...]
+        recording the order of publish calls so tests can assert publish was
+        called exactly once.
+        """
+        event_service = MagicMock(spec=EventServiceProtocol)
+        operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
+        investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
+        publish_log: dict[str, list[str]] = {}
+
+        async def _publish_asserting_pre_registration(event):
+            # The SessionEvent carries event_type and a payload whose
+            # approval_id identifies the pending entry. Extract approval_id
+            # from the payload to look it up in _pending_approvals.
+            approval_id = getattr(event.payload, "approval_id", None)
+            if approval_id is not None:
+                publish_log.setdefault(approval_id, []).append(event.event_type)
+                assert approval_id in service._pending_approvals, (
+                    f"approval_id {approval_id} not registered in _pending_approvals "
+                    f"before publish of {event.event_type} — pre-registration ordering violated"
+                )
+
+        event_service.publish = AsyncMock(side_effect=_publish_asserting_pre_registration)
+
+        service = OperatorApprovalService(
+            event_service=event_service,
+            operator_data_service=operator_data_service,
+            investigation_data_service=investigation_data_service,
+        )
+        return service, publish_log
+
+    def _base_context(self) -> G8eHttpContext:
+        return G8eHttpContext(
+            case_id="case-1",
+            investigation_id="inv-1",
+            web_session_id="session-1",
+            user_id="user-1",
+            source_component="g8ee",
+        )
+
+    @patch("app.services.operator.approval_service.generate_approval_id")
+    @patch("app.services.operator.approval_service.PendingApproval")
+    async def test_request_file_edit_approval_registers_before_publish(
+        self, mock_pending_class, mock_generate_id
+    ):
+        """request_file_edit_approval registers pending before event_service.publish."""
+        service, publish_log = self._build_service()
+        approval_id = "file-edit-app-1"
+        mock_generate_id.return_value = approval_id
+        mock_pending = MagicMock()
+        mock_pending.wait = AsyncMock()
+        mock_pending.approved = True
+        mock_pending.reason = "Approved"
+        mock_pending.operator_id = "op-1"
+        mock_pending.operator_session_id = "session-1"
+        mock_pending.responded_at = MagicMock()
+        mock_pending.feedback = False
+        mock_pending_class.return_value = mock_pending
+
+        request = FileEditApprovalRequest(
+            g8e_context=self._base_context(),
+            timeout_seconds=30,
+            justification="test",
+            execution_id="exec-1",
+            operator_session_id="session-1",
+            operator_id="op-1",
+            file_path="/etc/config.conf",
+            operation=FileOperation.WRITE,
+            risk_analysis=None,
+        )
+        result = await service.request_file_edit_approval(request)
+
+        assert result.approved is True
+        assert approval_id in publish_log, "publish was never called"
+        assert (
+            publish_log[approval_id][0]
+            == EventType.OPERATOR_FILE_EDIT_APPROVAL_REQUESTED
+        )
+
+    @patch("app.services.operator.approval_service.generate_approval_id")
+    @patch("app.services.operator.approval_service.PendingApproval")
+    async def test_request_command_approval_registers_before_publish(
+        self, mock_pending_class, mock_generate_id
+    ):
+        """request_command_approval registers pending before event_service.publish."""
+        service, publish_log = self._build_service()
+        approval_id = "command-app-1"
+        mock_generate_id.return_value = approval_id
+        mock_pending = MagicMock()
+        mock_pending.wait = AsyncMock()
+        mock_pending.approved = True
+        mock_pending.reason = "Approved"
+        mock_pending.operator_id = "op-1"
+        mock_pending.operator_session_id = "session-1"
+        mock_pending.responded_at = MagicMock()
+        mock_pending.feedback = False
+        mock_pending_class.return_value = mock_pending
+
+        request = CommandApprovalRequest(
+            g8e_context=self._base_context(),
+            timeout_seconds=30,
+            justification="test",
+            execution_id="exec-1",
+            operator_session_id="session-1",
+            operator_id="op-1",
+            command="ls -la",
+            risk_analysis=None,
+            target_systems=[],
+            task_id="task-1",
+        )
+        result = await service.request_command_approval(request)
+
+        assert result.approved is True
+        assert approval_id in publish_log, "publish was never called"
+        assert (
+            publish_log[approval_id][0]
+            == EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED
+        )
+
+    @patch("app.services.operator.approval_service.generate_approval_id")
+    @patch("app.services.operator.approval_service.PendingApproval")
+    async def test_request_stream_approval_registers_before_publish(
+        self, mock_pending_class, mock_generate_id
+    ):
+        """request_stream_approval registers pending before event_service.publish."""
+        service, publish_log = self._build_service()
+        approval_id = "stream-app-1"
+        mock_generate_id.return_value = approval_id
+        mock_pending = MagicMock()
+        mock_pending.wait = AsyncMock()
+        mock_pending.approved = True
+        mock_pending.reason = "Approved"
+        mock_pending.operator_id = None
+        mock_pending.operator_session_id = None
+        mock_pending.responded_at = MagicMock()
+        mock_pending.feedback = False
+        mock_pending_class.return_value = mock_pending
+
+        request = StreamApprovalRequest(
+            g8e_context=self._base_context(),
+            timeout_seconds=30,
+            justification="test",
+            execution_id="exec-1",
+            operator_session_id="session-1",
+            operator_id="op-1",
+            hosts=["host-1"],
+            arch="amd64",
+            endpoint="https://client.example/handshake",
+            device_token="dlk_test_token",
+            concurrency=5,
+            timeout=300,
+        )
+        result = await service.request_stream_approval(request)
+
+        assert result.approved is True
+        assert approval_id in publish_log, "publish was never called"
+        assert (
+            publish_log[approval_id][0]
+            == EventType.OPERATOR_STREAM_APPROVAL_REQUESTED
+        )
+
+    @patch("app.services.operator.approval_service.generate_approval_id")
+    @patch("app.services.operator.approval_service.PendingApproval")
+    async def test_request_file_edit_approval_publish_failure_cleans_up_pending(
+        self, mock_pending_class, mock_generate_id
+    ):
+        """On publish failure, the pending entry is removed from _pending_approvals
+        so it does not leak and block future approvals with the same id."""
+        event_service = MagicMock(spec=EventServiceProtocol)
+        operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
+        investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
+        service = OperatorApprovalService(
+            event_service=event_service,
+            operator_data_service=operator_data_service,
+            investigation_data_service=investigation_data_service,
+        )
+        approval_id = "file-edit-fail-1"
+        mock_generate_id.return_value = approval_id
+        mock_pending = MagicMock()
+        mock_pending.wait = AsyncMock()
+        mock_pending_class.return_value = mock_pending
+        event_service.publish = AsyncMock(side_effect=RuntimeError("SSE push failed"))
+
+        request = FileEditApprovalRequest(
+            g8e_context=self._base_context(),
+            timeout_seconds=30,
+            justification="test",
+            execution_id="exec-1",
+            operator_session_id="session-1",
+            operator_id="op-1",
+            file_path="/etc/config.conf",
+            operation=FileOperation.WRITE,
+            risk_analysis=None,
+        )
+        result = await service.request_file_edit_approval(request)
+
+        assert result.approved is False
+        assert result.error is True
+        assert approval_id not in service._pending_approvals, (
+            "pending entry should be cleaned up on publish failure"
+        )
+
+    @patch("app.services.operator.approval_service.generate_approval_id")
+    @patch("app.services.operator.approval_service.PendingApproval")
+    async def test_request_command_approval_publish_failure_cleans_up_pending(
+        self, mock_pending_class, mock_generate_id
+    ):
+        """On publish failure, the command-approval pending entry is removed."""
+        event_service = MagicMock(spec=EventServiceProtocol)
+        operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
+        investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
+        service = OperatorApprovalService(
+            event_service=event_service,
+            operator_data_service=operator_data_service,
+            investigation_data_service=investigation_data_service,
+        )
+        approval_id = "command-fail-1"
+        mock_generate_id.return_value = approval_id
+        mock_pending = MagicMock()
+        mock_pending.wait = AsyncMock()
+        mock_pending_class.return_value = mock_pending
+        event_service.publish = AsyncMock(side_effect=RuntimeError("SSE push failed"))
+
+        request = CommandApprovalRequest(
+            g8e_context=self._base_context(),
+            timeout_seconds=30,
+            justification="test",
+            execution_id="exec-1",
+            operator_session_id="session-1",
+            operator_id="op-1",
+            command="ls -la",
+            risk_analysis=None,
+            target_systems=[],
+            task_id="task-1",
+        )
+        result = await service.request_command_approval(request)
+
+        assert result.approved is False
+        assert result.error is True
+        assert approval_id not in service._pending_approvals, (
+            "pending entry should be cleaned up on publish failure"
+        )
+
+    @patch("app.services.operator.approval_service.generate_approval_id")
+    @patch("app.services.operator.approval_service.PendingApproval")
+    async def test_request_stream_approval_publish_failure_cleans_up_pending(
+        self, mock_pending_class, mock_generate_id
+    ):
+        """On publish failure, the stream-approval pending entry is removed."""
+        event_service = MagicMock(spec=EventServiceProtocol)
+        operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
+        investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
+        service = OperatorApprovalService(
+            event_service=event_service,
+            operator_data_service=operator_data_service,
+            investigation_data_service=investigation_data_service,
+        )
+        approval_id = "stream-fail-1"
+        mock_generate_id.return_value = approval_id
+        mock_pending = MagicMock()
+        mock_pending.wait = AsyncMock()
+        mock_pending_class.return_value = mock_pending
+        event_service.publish = AsyncMock(side_effect=RuntimeError("SSE push failed"))
+
+        request = StreamApprovalRequest(
+            g8e_context=self._base_context(),
+            timeout_seconds=30,
+            justification="test",
+            execution_id="exec-1",
+            operator_session_id="session-1",
+            operator_id="op-1",
+            hosts=["host-1"],
+            arch="amd64",
+            endpoint="https://client.example/handshake",
+            device_token="dlk_test_token",
+            concurrency=5,
+            timeout=300,
+        )
+        result = await service.request_stream_approval(request)
+
+        assert result.approved is False
+        assert result.error is True
+        assert approval_id not in service._pending_approvals, (
+            "pending entry should be cleaned up on publish failure"
+        )
+
+    async def test_handle_approval_response_resolves_immediately_after_publish(self):
+        """Simulates the CI/headless race: an auto-approver responds during
+        event_service.publish (before publish returns). The pending entry must
+        already be registered so handle_approval_response finds it and resolves
+        the pending.wait() instead of logging 'unknown approval_id'."""
+        event_service = MagicMock(spec=EventServiceProtocol)
+        operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
+        investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
+        service = OperatorApprovalService(
+            event_service=event_service,
+            operator_data_service=operator_data_service,
+            investigation_data_service=investigation_data_service,
+        )
+        approval_id = "race-app-1"
+        resolved_during_publish: list[bool] = []
+
+        async def _publish_then_auto_respond(event):
+            # Simulate the auto-approver responding while publish is in flight.
+            # The pending entry MUST already exist at this point.
+            if event.payload.approval_id not in service._pending_approvals:
+                resolved_during_publish.append(False)
+                return
+            # Resolve the pending entry as if the auto-approver POSTed an
+            # approval response. This unblocks pending.wait() in the caller.
+            pending = service._pending_approvals[event.payload.approval_id]
+            pending.resolve(
+                approved=True,
+                reason="Auto-approved",
+                responded_at=MagicMock(),
+            )
+            resolved_during_publish.append(True)
+
+        event_service.publish = AsyncMock(side_effect=_publish_then_auto_respond)
+
+        with patch("app.services.operator.approval_service.generate_approval_id", return_value=approval_id):
+            request = FileEditApprovalRequest(
+                g8e_context=self._base_context(),
+                timeout_seconds=30,
+                justification="test",
+                execution_id="exec-1",
+                operator_session_id="session-1",
+                operator_id="op-1",
+                file_path="/etc/config.conf",
+                operation=FileOperation.WRITE,
+                risk_analysis=None,
+            )
+            result = await service.request_file_edit_approval(request)
+
+        assert resolved_during_publish == [True], (
+            "pending entry was not registered before publish — auto-approver "
+            "response would have been rejected as 'unknown approval_id'"
+        )
+        assert result.approved is True
+
